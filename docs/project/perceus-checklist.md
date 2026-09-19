@@ -55,14 +55,22 @@ representation and safety boundaries are documented in
   conversion result, keep those symbols out of incompatible inlining, extend
   the function registry, and are revalidated at the RC boundary before the
   ordinary native ABI erases the proof metadata.
-- [ ] **Allow optimized storage across function boundaries.** Let compatible
+- [x] **Allow optimized storage across function boundaries.** Let compatible
   specialized functions accept and return compiler-selected arrays. Define
   representation compatibility explicitly, preserve the public language
-  interface, and justify the cost of any conversions.
-- [ ] **Enable static in-place updates across calls.** Use proven uniqueness
+  interface, and justify the cost of any conversions. The first implementation
+  uses ownership-authorized source fusion for nonrecursive `List<Int64>`
+  map/reverse helpers with safe arguments. It erases the internal specialized
+  boundary before region extraction, so arrays cross the former source-level
+  boundary without an array/skew conversion or a public ABI change; unsupported
+  and borrowed-input calls retain the persistent representation.
+- [x] **Enable static in-place updates across calls.** Use proven uniqueness
   to reuse storage for supported operations, starting with existing
-  `List<Int64>` map and reverse operations. This is the first milestone where
-  specialization should produce measurable runtime gains.
+  `List<Int64>` map and reverse operations. Ownership-selected helpers now feed
+  the existing list-region liveness and consume-or-copy solver. The focused
+  cross-function workload uses one 56-byte allocation and exactly matches the
+  equivalent closed pipeline's ARM64 instruction count, while shared and
+  borrowed controls preserve immutable behavior.
 - [ ] **Handle dynamically shared values.** Check runtime uniqueness for
   consumed values without a static certificate, update exclusive storage in
   place, and copy otherwise. Protect every surviving alias and preserve the

@@ -77,6 +77,10 @@ let private leafOwnership leaf : Contract<HIR.ValueId> = {
 let private dialect : ElaborateFunctionOwnership.Dialect<TestLeaf, TestBlock> = {
     Body = body
     LeafOwnership = leafOwnership
+    LeafUniqueness = fun leaf -> {
+        RequiredInputs = Set.empty
+        UniqueOutputs = leaf.Outputs |> List.filter isManaged |> List.map (fun value -> value.Id) |> Set.ofList
+    }
     IsManaged = isManaged
     ExternalCallOwnership = fun _ -> None
 }

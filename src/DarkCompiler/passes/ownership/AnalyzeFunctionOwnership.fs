@@ -87,9 +87,20 @@ let analyze
             let contract = ConstructHIRFunctions.primitiveContract primitive
             ({
                 Inputs =
-                    contract.Inputs
-                    |> List.choose (fun value ->
-                        if isManaged context value then Some (OwnedIR.Borrowed value.Id) else None)
+                    match primitive with
+                    | ConstructHIRFunctions.ListTransform (_, input, _) ->
+                        contract.Inputs
+                        |> List.choose (fun value ->
+                            if value.Id = input.Id then Some (OwnedIR.Consumed input.Id)
+                            elif isManaged context value then Some (OwnedIR.Borrowed value.Id)
+                            else None)
+                    | ConstructHIRFunctions.Literal _
+                    | ConstructHIRFunctions.Unary _
+                    | ConstructHIRFunctions.Binary _
+                    | ConstructHIRFunctions.FreshManaged _ ->
+                        contract.Inputs
+                        |> List.choose (fun value ->
+                            if isManaged context value then Some (OwnedIR.Borrowed value.Id) else None)
                 Outputs =
                     contract.Outputs
                     |> List.choose (fun output ->
@@ -98,6 +109,22 @@ let analyze
         let dialect : ElaborateFunctionOwnership.Dialect<ConstructHIRFunctions.Primitive, ConstructHIRFunctions.Block> = {
             Body = ConstructHIRFunctions.body
             LeafOwnership = leafOwnership
+            LeafUniqueness = fun primitive ->
+                match primitive with
+                | ConstructHIRFunctions.FreshManaged (output, _) -> {
+                    RequiredInputs = Set.empty
+                    UniqueOutputs = Set.singleton output.Id
+                  }
+                | ConstructHIRFunctions.ListTransform (output, _, _) -> {
+                    RequiredInputs = Set.empty
+                    UniqueOutputs = Set.singleton output.Id
+                  }
+                | ConstructHIRFunctions.Literal _
+                | ConstructHIRFunctions.Unary _
+                | ConstructHIRFunctions.Binary _ -> {
+                    RequiredInputs = Set.empty
+                    UniqueOutputs = Set.empty
+                  }
             IsManaged = isManaged context
             ExternalCallOwnership = fun _ -> None
         }

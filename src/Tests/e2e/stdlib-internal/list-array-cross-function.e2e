@@ -1,0 +1,12 @@
+// list-array-cross-function.e2e - Ownership-authorized array fusion across a helper call.
+let mapReverse (xs: List<Int64>) : List<Int64> = let ys = Stdlib.List.map<Int64, Int64> xs (fun x -> x + 1L) in Stdlib.List.reverse<Int64> ys
+let crossFunctionPipeline () : Int64 = let xs = [1L, 2L, 3L] in let ys = mapReverse xs in Stdlib.List.fold<Int64, Int64> ys 0L (fun acc x -> acc * 10L + x)
+let crossFunctionShared () : Int64 = let xs = [1L, 2L, 3L] in let alias = xs in let ys = mapReverse xs in let before = Stdlib.List.fold<Int64, Int64> alias 0L (fun acc x -> acc * 10L + x) in let after = Stdlib.List.fold<Int64, Int64> ys 0L (fun acc x -> acc * 10L + x) in before * 1000L + after
+let crossFunctionBorrowed (xs: List<Int64>) : Int64 = let ys = mapReverse xs in Stdlib.List.fold<Int64, Int64> ys 0L (fun acc x -> acc * 10L + x)
+let identityList (xs: List<Int64>) : List<Int64> = xs
+let specializedPersistentControl () : Int64 = let xs = [1L, 2L, 3L] in let ys = identityList xs in Stdlib.List.fold<Int64, Int64> ys 0L (fun acc x -> acc + x)
+
+crossFunctionPipeline () = 432L
+crossFunctionShared () = 123432L
+crossFunctionBorrowed [1L, 2L, 3L] = 432L
+specializedPersistentControl () = 6L

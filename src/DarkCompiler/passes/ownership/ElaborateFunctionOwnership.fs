@@ -8,6 +8,7 @@ open OwnedIR
 type Dialect<'leaf, 'block> = {
     Body: 'block -> HIR.Block<HIR.Operation<'leaf, 'block>>
     LeafOwnership: 'leaf -> Contract<HIR.ValueId>
+    LeafUniqueness: 'leaf -> UniquenessContract<HIR.ValueId>
     IsManaged: HIR.Value -> bool
     ExternalCallOwnership: HIR.FunctionCall -> CallSignature option
 }
@@ -350,7 +351,7 @@ let elaborateFunctions
         |> Result.map (fun functions ->
             let ownershipSemantics : Semantics<'leaf, HIR.ValueId> = {
                 Leaf = dialect.LeafOwnership
-                LeafUniqueness = fun _ -> { RequiredInputs = Set.empty; UniqueOutputs = Set.empty }
+                LeafUniqueness = dialect.LeafUniqueness
                 CallOwnership = ownership
                 ScalarUses = fun operand ->
                     operand.Inputs |> Map.values |> Seq.choose (managedId dialect) |> Set.ofSeq

@@ -139,6 +139,7 @@ let private testLowersSpecializedCallsAndContracts () =
             (ScheduleOwnershipVariants.materialization scheduled)
             [identity; caller]
             (ANF.VarGen 100)
+            Set.empty
         |> Result.mapError (sprintf "%A")
         |> Result.bind (fun lowered ->
             let cloneContracts = lowered.Contracts |> Map.toList
