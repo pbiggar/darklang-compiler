@@ -126,6 +126,15 @@ preserves internal dependencies and external targets, and retains all
 nondominated variants for later call-site selection. Calls across groups use
 the already registered ownership boundary during proof; inference does not
 silently select a callee specialization.
+`SelectOwnershipVariants` builds a function-to-group catalog and assigns each
+candidate a structural identity from the complete group boundary, ordered by
+function name and independent of local ownership identities. A
+call site supplies its established transfer contract and the argument positions
+proven unique by ownership analysis. Selection preserves the transfer shape,
+prefers stronger result uniqueness and then fewer unique-input requirements,
+and returns the complete candidate for recursive groups. An inapplicable
+inferred candidate leaves the established verified contract in place; this
+stage does not inspect runtime reference counts or materialize specialized functions.
 Resolved direct-call nodes use a typed HIR signature registry and a separate
 ownership signature registry. HIR still requires the call's ordinary primitive
 effect and alias contract; an ownership signature cannot supply either fact.
