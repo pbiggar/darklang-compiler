@@ -181,6 +181,26 @@ let private testBranchStateIsolation () =
     analyze [external yesCall [BorrowedCallParameter] UnmanagedCallResult] Map.empty [caller]
     |> expect [at yesCall []; at noCall [0]; at after [0]]
 
+let private testBranchEscapeIntersectsUniqueness () =
+    let input = managed 0
+    let after = call "inspect" [input] (scalar 12)
+    let condition : HIR.Operand = {
+        Expression = CheckedAST.BoolLiteral true
+        Type = AST.TBool
+        Inputs = Map.empty
+    }
+    let escape : HIR.Operand = {
+        Expression = CheckedAST.UnitLiteral
+        Type = AST.TUnit
+        Inputs = Map.ofList [AST.bindingId 0, input]
+    }
+    let yes = block [] [Evaluate (HIR.ScalarBinding (scalar 13, escape))] unitValue
+    let no = block [] [] unitValue
+    let caller = unitFunction "caller" [input, UniqueParameter input.Id]
+                     [Evaluate (HIR.Branch (scalar 14, condition, yes, no)); invoke after; Drop input.Id]
+    analyze [external after [BorrowedCallParameter] UnmanagedCallResult] Map.empty [caller]
+    |> expect [at after []]
+
 let private testAliasedArguments () =
     let input, alias = managed 0, managed 1
     let borrow = call "borrow" [input] alias
@@ -336,6 +356,7 @@ let tests = [
     "Call facts intersect uniqueness at managed joins", testBranchJoins false
     "Call facts retain uniqueness when both managed arms are unique", testBranchJoins true
     "Call facts keep sibling ownership states independent", testBranchStateIsolation
+    "Call facts intersect exclusivity when one unmanaged branch escapes", testBranchEscapeIntersectsUniqueness
     "Call facts account for aliases passed to the same call", testAliasedArguments
     "Call verification rejects unique arguments aliased in the same call", testRejectsUniqueAliasedArgument
     "Call analysis returns no partial facts after validation failure", testFailureDiscardsFacts
