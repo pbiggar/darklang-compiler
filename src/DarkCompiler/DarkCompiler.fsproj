@@ -65,6 +65,7 @@
     <Compile Include="ir/owned/OwnedIR.fs" />
     <Compile Include="passes/ownership/VerifyOwnership.fs" />
     <Compile Include="passes/ownership/InferOwnershipUniqueness.fs" />
+    <Compile Include="passes/ownership/InferRecursiveOwnership.fs" />
     <Compile Include="passes/ownership/VerifyOwnedHIR.fs" />
     <Compile Include="ir/hir/ListRegion.fs" />
     <Compile Include="passes/ownership/ListAllocationBudget.fs" />

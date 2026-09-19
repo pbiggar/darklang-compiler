@@ -15,6 +15,7 @@ type InferenceError<'id when 'id: comparison> =
     | VariantLimitExceeded of refinableModes: int * maximumVariants: int
     | RecursiveFunctionRequiresGroupInference of functionName: string
     | NoVerifiedBoundary of VerificationError<'id>
+    | NoVerifiedFunctionGroup of VerificationError<'id>
 
 let maximumVariants = 256
 
@@ -28,7 +29,7 @@ let private resultVariants = function
     | ProducedResult id -> [ProducedResult id; UniqueProducedResult id]
     | ownership -> [ownership]
 
-let private refinableModeCount (signature: FunctionSignature<'id>) =
+let internal refinableModeCount (signature: FunctionSignature<'id>) =
     let parameters =
         signature.Parameters
         |> List.sumBy (function ConsumedParameter _ -> 1 | _ -> 0)
@@ -36,14 +37,14 @@ let private refinableModeCount (signature: FunctionSignature<'id>) =
     | ProducedResult _ -> parameters + 1
     | _ -> parameters
 
-let private withinVariantLimit refinableModes =
+let internal withinVariantLimit refinableModes =
     let rec doubleWithinLimit remaining variants =
         if remaining = 0 then true
         elif variants > maximumVariants / 2 then false
         else doubleWithinLimit (remaining - 1) (variants * 2)
     doubleWithinLimit refinableModes 1
 
-let private signatures (signature: FunctionSignature<'id>) : FunctionSignature<'id> list =
+let internal signatures (signature: FunctionSignature<'id>) : FunctionSignature<'id> list =
     let parameters =
         signature.Parameters
         |> List.fold (fun combinations ownership ->
@@ -64,9 +65,7 @@ let private resultStrength = function
     | ProducedResult _ -> 1
     | UniqueProducedResult _ -> 2
 
-/// A boundary dominates another when it requires no stronger parameter modes
-/// and promises no weaker result mode, with at least one strict improvement.
-let private dominates
+let internal boundaryRelation
     (first: FunctionSignature<'id>)
     (second: FunctionSignature<'id>) =
     let rec compareParameters noStronger strictlyBetter first second =
@@ -85,7 +84,14 @@ let private dominates
     let strictlyBetter =
         strictlyWeakerParameters
         || resultStrength first.Result > resultStrength second.Result
-    parametersNoStronger && resultNoWeaker && strictlyBetter
+    parametersNoStronger && resultNoWeaker, strictlyBetter
+
+/// A boundary dominates another when it requires no stronger parameter modes
+/// and promises no weaker result mode, with at least one strict improvement.
+let private dominates first second =
+    match boundaryRelation first second with
+    | true, true -> true
+    | _ -> false
 
 let rec private callsTarget target (block: Block<'leaf, 'id>) =
     block.Body.Operations
@@ -102,7 +108,8 @@ let rec private callsTarget target (block: Block<'leaf, 'id>) =
 /// separate from proof: for example, a weaker input requirement and a stronger
 /// result guarantee can both remain useful boundaries. Typed HIR, primitive
 /// contracts, and non-recursive call ownership remain independent prerequisites;
-/// recursive boundaries require a later group solver.
+/// recursive boundaries use `InferRecursiveOwnership.infer` so calls are
+/// checked against the same group-wide candidate.
 let infer
     (semantics: Semantics<'leaf, 'id>)
     (functionDefinition: Function<'leaf, 'id>)
@@ -131,7 +138,7 @@ let infer
             verified
             |> List.filter (fun candidate ->
                 verified
-                |> List.exists (fun other -> other <> candidate && dominates other candidate)
+                |> List.exists (fun other -> dominates other candidate)
                 |> not)
         match nondominated, firstFailure with
         | head :: tail, _ -> Ok (Candidates (head, tail))
