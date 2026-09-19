@@ -255,10 +255,16 @@ type BinderStructure =
 type BindingId = private BindingId of int
 
 [<Struct; StructuralEquality; StructuralComparison>]
-type FunctionId = private FunctionId of int
+type FunctionId =
+    private
+    | FunctionOrdinal of ordinal:int
+    | FunctionName of name:string
 
 [<Struct; StructuralEquality; StructuralComparison>]
-type TypeId = private TypeId of int
+type TypeId =
+    private
+    | TypeOrdinal of ordinal:int
+    | TypeName of name:string
 
 [<Struct; StructuralEquality; StructuralComparison>]
 type ConstructorId = private ConstructorId of identity:int * tag:int
@@ -276,15 +282,13 @@ type RecursiveGroupId = private RecursiveGroupId of int
 type RecursiveMemberId = private RecursiveMemberId of int
 
 let bindingId ordinal = BindingId ordinal
-let functionId ordinal = FunctionId ordinal
-let typeId ordinal = TypeId ordinal
-let semanticNameIdentity (name: string) : int =
-    name
-    |> Seq.fold (fun hash character -> (hash ^^^ uint32 character) * 16777619u) 2166136261u
-    |> fun hash -> int (hash &&& 0x7fffffffu)
-let functionIdForName name = FunctionId (semanticNameIdentity name)
-let functionIdValue (FunctionId identity) = identity
-let typeIdForName name = TypeId (semanticNameIdentity name)
+let functionId ordinal = FunctionOrdinal ordinal
+let typeId ordinal = TypeOrdinal ordinal
+let functionIdForName name = FunctionName name
+let functionIdValue = function
+    | FunctionOrdinal ordinal -> $"ordinal:{ordinal}"
+    | FunctionName name -> name
+let typeIdForName name = TypeName name
 let constructorId identity tag = ConstructorId (identity, tag)
 let constructorTag (ConstructorId (_, tag)) = tag
 let fieldId identity index = FieldId (identity, index)

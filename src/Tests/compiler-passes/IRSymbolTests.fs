@@ -10,6 +10,14 @@ open LIR
 /// Test result type
 type TestResult = Result<unit, string>
 
+/// Semantic identities retain the complete source name. These two names
+/// collide under the former 31-bit FNV representation.
+let testFunctionIdentitiesDoNotHashCollide () : TestResult =
+    let generated = AST.functionIdForName "e2eBatchde340de328b830e8_Check5"
+    let stdlib = AST.functionIdForName "Darklang.Stdlib.Int64.__digitToString"
+    if generated <> stdlib then Ok ()
+    else Error "Distinct function names received the same semantic identity"
+
 let testMirToLirSymbolicOperands () : TestResult =
     let label = MIR.Label "entry"
     let instrs = [
@@ -171,6 +179,7 @@ let testMirToLirUsesImmediateMaskForListToRawPtr () : TestResult =
     | Ok _ -> Error "Expected a single LIR function"
 
 let tests = [
+    ("function identities preserve colliding names", testFunctionIdentitiesDoNotHashCollide)
     ("mir → lir symbolic operands", testMirToLirSymbolicOperands)
     ("mir → lir reports missing entry block", testMirToLirReportsMissingEntryBlock)
     ("mir → lir uses native Int64 shift mask", testMirToLirUsesNativeInt64ShiftMask)
