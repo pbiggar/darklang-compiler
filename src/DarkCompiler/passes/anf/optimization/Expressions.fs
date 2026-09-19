@@ -291,6 +291,97 @@ let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExp
                 resultBody
             )
         )
+    | Call ("Darklang.Stdlib.String.__getByteAtInt64", [value; index]),
+      Let (
+          tagTid,
+          TupleGet (Var optionTid, 0),
+          Let (
+              conditionTid,
+              Prim (Eq, Var projectedTagTid, IntLiteral (Int64 0L)),
+              If (Var branchConditionTid, someBranch, noneBranch)
+          )
+      )
+        when optionTid = tid
+             && projectedTagTid = tagTid
+             && branchConditionTid = conditionTid
+             && not (aExprUsesTemp tid someBranch)
+             && not (aExprUsesTemp tid noneBranch)
+             && not (aExprUsesTemp tagTid someBranch)
+             && not (aExprUsesTemp tagTid noneBranch)
+             && not (aExprUsesTemp conditionTid someBranch)
+             && not (aExprUsesTemp conditionTid noneBranch) ->
+        // When the Some payload is dead, materializing Option<UInt8> only to
+        // inspect its tag is equivalent to the byte-index bounds check.
+        Some (
+            Let (
+                tid,
+                Call ("Darklang.Stdlib.String.__byteLength", [value]),
+                Let (
+                    tagTid,
+                    Prim (Gte, index, IntLiteral (Int64 0L)),
+                    If (
+                        Var tagTid,
+                        Let (
+                            conditionTid,
+                            Prim (Lt, index, Var tid),
+                            If (Var conditionTid, someBranch, noneBranch)
+                        ),
+                        noneBranch
+                    )
+                )
+            )
+        )
+    | Call ("Darklang.Stdlib.String.__getByteAtInt64", [value; index]),
+      Let (
+          tagTid,
+          TupleGet (Var optionTid, 0),
+          Let (
+              conditionTid,
+              Prim (Eq, Var projectedTagTid, IntLiteral (Int64 0L)),
+              If (
+                  Var branchConditionTid,
+                  Let (payloadTid, TupleGet (Var payloadOptionTid, 1), payloadBody),
+                  noneBranch
+              )
+          )
+      )
+        when optionTid = tid
+             && projectedTagTid = tagTid
+             && branchConditionTid = conditionTid
+             && payloadOptionTid = tid
+             && not (aExprUsesTemp tid payloadBody)
+             && not (aExprUsesTemp tid noneBranch)
+             && not (aExprUsesTemp tagTid payloadBody)
+             && not (aExprUsesTemp tagTid noneBranch)
+             && not (aExprUsesTemp conditionTid payloadBody)
+             && not (aExprUsesTemp conditionTid noneBranch) ->
+        // Preserve the Option match's control flow while replacing its boxed
+        // payload with the unchecked byte load guarded by the same bounds.
+        let loadedPayload =
+            Let (
+                payloadTid,
+                Call ("Darklang.Stdlib.String.__byteAtUnchecked", [value; index]),
+                payloadBody
+            )
+        Some (
+            Let (
+                tid,
+                Call ("Darklang.Stdlib.String.__byteLength", [value]),
+                Let (
+                    tagTid,
+                    Prim (Gte, index, IntLiteral (Int64 0L)),
+                    If (
+                        Var tagTid,
+                        Let (
+                            conditionTid,
+                            Prim (Lt, index, Var tid),
+                            If (Var conditionTid, loadedPayload, noneBranch)
+                        ),
+                        noneBranch
+                    )
+                )
+            )
+        )
     | UnaryPrim (Not, source), If (Var conditionTid, thenBranch, elseBranch)
         when conditionTid = tid
              && not (aExprUsesTemp tid thenBranch)

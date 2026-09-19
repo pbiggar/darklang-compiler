@@ -170,6 +170,12 @@ Stdlib.String.getByteAt "9" 0 = Some 57uy
 Stdlib.String.getByteAt "abc" (-1) = None
 Stdlib.String.getByteAt "abc" 3 = None
 
+// Presence-only byte matches preserve negative, in-range, and end-boundary behavior.
+let hasByte (value: String) (index: Int64) : Bool = match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with | Some _ -> true | None -> false let result = Stdlib.Bool.not (hasByte "abc" (-1L)) && hasByte "abc" 0L && hasByte "abc" 2L && Stdlib.Bool.not (hasByte "abc" 3L) in result = stdout="true\n" stderr=""
+
+// Payload-consuming byte matches load the byte only for an in-range index.
+let byteOr (value: String) (index: Int64) (fallback: UInt8) : UInt8 = match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with | Some byte -> byte | None -> fallback let result = byteOr "abc" (-1L) 7uy == 7uy && byteOr "abc" 1L 7uy == 98uy && byteOr "abc" 3L 7uy == 7uy in result = stdout="true\n" stderr=""
+
 // =============================================================================
 // Stdlib.String.startsWith Tests
 // =============================================================================
