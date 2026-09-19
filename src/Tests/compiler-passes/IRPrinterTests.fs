@@ -95,7 +95,7 @@ let testFormatMIRDumpSummary () : TestResult =
             Map.empty
         )
     let actual = formatMIRDump (Some "map") true program
-    let expected = "Functions: 1\nStdlib.List.map: 1 blocks, 0 instructions"
+    let expected = "Functions: 1\nDarklang.Stdlib.List.map: 1 blocks, 0 instructions"
     expectFormatted "formatMIRDump summary" expected actual
 
 let testFormatMIRDumpReportsNoMatches () : TestResult =
