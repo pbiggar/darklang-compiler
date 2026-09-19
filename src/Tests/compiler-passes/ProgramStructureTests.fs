@@ -71,6 +71,26 @@ let testLastFunctionDeclarationWins (stdlib: CompilationContexts.StdlibResult) (
             if output.ExitCode = 0 && output.Stdout = "42\n" then Ok ()
             else Error $"Unexpected overlay output: exit={output.ExitCode}; stdout={output.Stdout}; stderr={output.Stderr}"
 
+let testNestedModuleUsesInterpreterRelativeCandidates (stdlib: CompilationContexts.StdlibResult) () : TestResult =
+    let report =
+        compile
+            stdlib
+            CompilerOptions.TestExpression
+            [ source "parent.dark" NameSyntax.SourceUnitPurpose.Library
+                "module Darklang.Relative.Parent\n\nlet answer (x: Int64): Int64 = x + 1L"
+              source "child.dark" NameSyntax.SourceUnitPurpose.Library
+                "module Darklang.Relative.Parent.Child\n\nlet callParent (x: Int64): Int64 = Parent.answer x"
+              source "entry.dark" NameSyntax.SourceUnitPurpose.Executable
+                "Darklang.Relative.Parent.Child.callParent 41L" ]
+    match report.Result with
+    | Error error -> Error error
+    | Ok binary ->
+        match execute report binary with
+        | Error error -> Error $"Relative-name program did not execute: {error}"
+        | Ok output ->
+            if output.ExitCode = 0 && output.Stdout = "42\n" then Ok ()
+            else Error $"Unexpected relative-name output: exit={output.ExitCode}; stdout={output.Stdout}; stderr={output.Stderr}"
+
 let testDependencyEntryRejected (stdlib: CompilationContexts.StdlibResult) () : TestResult =
     compile stdlib CompilerOptions.FullProgram
         [source "dependency.dark" NameSyntax.SourceUnitPurpose.Package "1"]
@@ -154,6 +174,7 @@ let testLibraryGenericReachesStdlibSpecialization (stdlib: CompilationContexts.S
 let tests (stdlib: CompilationContexts.StdlibResult) = [
     ("compose ordered named source units", testOrderedSourceComposition stdlib)
     ("last function declaration wins", testLastFunctionDeclarationWins stdlib)
+    ("nested modules use interpreter relative candidates", testNestedModuleUsesInterpreterRelativeCandidates stdlib)
     ("a library may redeclare a function the stdlib carries", testLibraryRedeclaresStdlibCarriedFunction stdlib)
     ("a library generic reaches its stdlib specializations", testLibraryGenericReachesStdlibSpecialization stdlib)
     ("dependency entry is rejected", testDependencyEntryRejected stdlib)
