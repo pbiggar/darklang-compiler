@@ -661,7 +661,9 @@ let internal resolveProgramNames
                 match valueDef with
                 | UncheckedValueDef (name, _) -> ValueDef (UncheckedValueDef (name, body))
                 | CheckedValueDef (name, typ, _) -> ValueDef (CheckedValueDef (name, typ, body)))
-        | Expression expr -> resolveExpr None Set.empty expr |> Result.map Expression
+        | Expression (modulePath, expr) ->
+            resolveExpr None Set.empty expr
+            |> Result.map (fun resolved -> Expression (modulePath, resolved))
 
     let (Program topLevels) = program
     ResultList.traverse resolveTopLevel topLevels

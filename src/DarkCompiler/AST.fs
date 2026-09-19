@@ -507,7 +507,7 @@ type TopLevel =
     | FunctionDef of FunctionDef
     | TypeDef of TypeDef
     | ValueDef of ValueDef
-    | Expression of Expr
+    | Expression of modulePath:string list * Expr
 
 /// Program is a list of top-level definitions (functions and/or expressions)
 type Program = Program of TopLevel list

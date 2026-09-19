@@ -115,7 +115,7 @@ let private checkProgramInternalWithTrace
     |> Result.bind (fun resolvedProgram ->
         measure "TypeCheck: Semantic Checking" (fun () ->
             match baseEnv, requireEntry, resolvedProgram with
-            | Some existingEnv, true, Program [Expression expr] ->
+            | Some existingEnv, true, Program [Expression (_, expr)] ->
                 checkResolvedExpressionWithBaseEnv
                     existingEnv
                     resolutionEnv

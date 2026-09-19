@@ -2943,7 +2943,7 @@ let private validateNoInternalIdentifiers (Program items) : Result<Program, stri
         | ValueDef valueDef ->
             validateNoInternalIdentifier (valueDefName valueDef)
             |> Result.bind (fun () -> validateExpr (valueDefBody valueDef))
-        | Expression expr -> validateExpr expr
+        | Expression (_, expr) -> validateExpr expr
     items
     |> List.fold (fun acc item -> Result.bind (fun () -> validateTopLevel item) acc) (Ok ())
     |> Result.map (fun () -> Program items)

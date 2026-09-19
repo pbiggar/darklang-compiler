@@ -335,7 +335,7 @@ let ofTypedProgram (AST.Program topLevels) : Result<Program, string> =
             |> Result.map (fun checkedBody -> ValueDef { Name = name; Type = typ; Body = checkedBody })
         | AST.ValueDef (AST.UncheckedValueDef (name, _)) ->
             conversionError $"value '{name}'" "value definition was not checked"
-        | AST.Expression expr -> ofTypedExpr "entry expression" expr |> Result.map Expression
+        | AST.Expression (_, expr) -> ofTypedExpr "entry expression" expr |> Result.map Expression
     topLevels
     |> List.map convertTopLevel
     |> sequenceResults

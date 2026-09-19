@@ -77,13 +77,20 @@ let private testTopLevelExpressionFollowsFunctionDeclaration () : TestResult =
     let source =
         "let identity (value: Int64) : Int64 = value\nidentity 1L"
     match Parser.parseString false source with
-    | Ok (Program [FunctionDef definition; Expression expression]) ->
+    | Ok (Program [FunctionDef definition; Expression (_, expression)]) ->
         match definition.Body, expression with
         | Var "value", Call ("identity", args)
             when NonEmptyList.toList args = [Int64Literal 1L] -> Ok ()
         | body, result ->
             Error $"Expected a separate function body and top-level call, got {body} and {result}"
     | Ok program -> Error $"Expected a function declaration followed by an expression, got {program}"
+    | Error err -> Error err
+
+let private testModuleExpressionRetainsItsResolutionScope () : TestResult =
+    let source = "module Darklang.Example.Nested\n\n1L"
+    match Parser.parseString false source with
+    | Ok (Program [Expression (["Darklang"; "Example"; "Nested"], Int64Literal 1L)]) -> Ok ()
+    | Ok program -> Error $"Expected a module-scoped expression, got {program}"
     | Error err -> Error err
 
 let private testFlattenParamGroupsRestoresSourceOrder () : TestResult =
@@ -102,6 +109,7 @@ let tests : (string * (unit -> TestResult)) list = [
     ("Negative literals remain function arguments", testNegativeLiteralRemainsAFunctionArgument)
     ("Space application stays curried", testSpaceApplicationStaysCurried)
     ("Top-level expressions follow function declarations", testTopLevelExpressionFollowsFunctionDeclaration)
+    ("Module expressions retain their resolution scope", testModuleExpressionRetainsItsResolutionScope)
 
     ("Flattened parameter groups retain source order", testFlattenParamGroupsRestoresSourceOrder)
 ]

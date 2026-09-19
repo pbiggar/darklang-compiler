@@ -263,7 +263,7 @@ let internal checkResolvedProgramInternal
             Ok (None, topLevel)
         | ValueDef _ ->
             Ok (None, topLevel)
-        | Expression expr ->
+        | Expression (modulePath, expr) ->
             checkExprWithParamNamesAndSumTypeNames
                 funcParamNameReg
                 sumTypeNames
@@ -277,7 +277,7 @@ let internal checkResolvedProgramInternal
                 moduleRegistry
                 mergedAliasReg
                 None
-            |> Result.map (fun (exprType, expr') -> (Some exprType, Expression expr'))
+            |> Result.map (fun (exprType, expr') -> (Some exprType, Expression (modulePath, expr')))
 
     let checkAllTopLevelsWithTypes =
         topLevels
@@ -351,7 +351,7 @@ let internal checkResolvedProgramInternal
             |> List.map (function
                 | FunctionDef funcDef when List.isEmpty funcDef.TypeParams ->
                     collectTypeAppSpecs funcDef.Body
-                | Expression expr ->
+                | Expression (_, expr) ->
                     collectTypeAppSpecs expr
                 | _ ->
                     Set.empty)
@@ -478,7 +478,7 @@ let internal checkResolvedExpressionWithBaseEnv
                     baseEnv.IndexedTypeReg
                     baseEnv.VariantLookup
                     baseEnv.IndexedSumTypeReg
-                    [Expression typedExpr]
+                    [Expression ([], typedExpr)]
             let checkedEnv = {
                 baseEnv with
                     GenericFuncReg = genericFuncReg

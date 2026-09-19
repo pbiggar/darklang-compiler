@@ -109,7 +109,7 @@ let private materializeHelpersInTopLevels
             // Generic templates are retained for later specialization. Their
             // comparison plans are materialized in each concrete copy.
             Set.empty
-        | Expression expr ->
+        | Expression (_, expr) ->
             collectEqHelperTypesFromExpr aliasReg expr
         | ValueDef valueDef ->
             collectEqHelperTypesFromExpr aliasReg (valueDefBody valueDef)
@@ -121,7 +121,7 @@ let private materializeHelpersInTopLevels
         | FunctionDef funcDef when List.isEmpty funcDef.TypeParams ->
             collectCompareHelperTypesFromExpr aliasReg funcDef.Body
         | FunctionDef _ -> Set.empty
-        | Expression expr -> collectCompareHelperTypesFromExpr aliasReg expr
+        | Expression (_, expr) -> collectCompareHelperTypesFromExpr aliasReg expr
         | ValueDef valueDef -> collectCompareHelperTypesFromExpr aliasReg (valueDefBody valueDef)
         | TypeDef _ -> Set.empty
 
@@ -134,8 +134,8 @@ let private materializeHelpersInTopLevels
             }
         | FunctionDef _ ->
             topLevel
-        | Expression expr ->
-            Expression (materializeHelperCallsInExpr includeEquality aliasReg variantLookup expr)
+        | Expression (modulePath, expr) ->
+            Expression (modulePath, materializeHelperCallsInExpr includeEquality aliasReg variantLookup expr)
         | ValueDef valueDef ->
             let body = materializeHelperCallsInExpr includeEquality aliasReg variantLookup (valueDefBody valueDef)
             match valueDef with

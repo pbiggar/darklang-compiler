@@ -16,7 +16,7 @@ type TestResult = Result<unit, string>
 
 /// Helper to check that type checking succeeds with expected type
 let expectType (expr: Expr) (expectedType: Type) : TestResult =
-    let program = Program [Expression expr]
+    let program = Program [Expression ([], expr)]
     match checkProgram program with
     | Ok (actualType, _) ->
         if actualType = expectedType then
@@ -138,7 +138,7 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
             )
         )
 
-    let program = Program [sumDef; Expression eqExpr]
+    let program = Program [sumDef; Expression ([], eqExpr)]
 
     match checkProgram program with
     | Ok (actualType, CheckedAST.Program topLevels) ->
@@ -258,7 +258,7 @@ let testDuplicateNominalTypeDeclarationUsesLastOverlay () : TestResult =
     let program = Program [
         TypeDef (SumTypeDef ("DuplicateNominalTc", [], [{ Name = "A"; Fields = [] }]))
         TypeDef (SumTypeDef ("DuplicateNominalTc", [], [{ Name = "B"; Fields = [] }]))
-        Expression (Constructor (UnresolvedConstructor (Some "DuplicateNominalTc"), "B", []))
+        Expression ([], Constructor (UnresolvedConstructor (Some "DuplicateNominalTc"), "B", []))
     ]
     match checkPublicProgram program with
     | Ok (TSum ("DuplicateNominalTc", []), _) -> Ok ()
@@ -274,26 +274,26 @@ let testDuplicateConstructorDeclarationRejected () : TestResult =
                 [{ Name = "SameCaseTc"; Fields = [] }; { Name = "SameCaseTc"; Fields = [TInt64] }]
             )
         )
-        Expression UnitLiteral
+        Expression ([], UnitLiteral)
     ]
     |> fun program -> expectDeclarationError program "Duplicate constructor declaration: DuplicateCaseTc.SameCaseTc"
 
 let testDuplicateAndUndeclaredTypeParametersRejected () : TestResult =
     let duplicateProgram = Program [
         TypeDef (SumTypeDef ("DuplicateParamTc", ["a"; "a"], [{ Name = "ParamCaseTc"; Fields = [TVar "a"] }]))
-        Expression UnitLiteral
+        Expression ([], UnitLiteral)
     ]
     let undeclaredProgram = Program [
         TypeDef (SumTypeDef ("UndeclaredParamTc", ["a"], [{ Name = "ParamCaseTc"; Fields = [TVar "b"] }]))
-        Expression UnitLiteral
+        Expression ([], UnitLiteral)
     ]
     expectDeclarationError duplicateProgram "Duplicate type parameter: a in DuplicateParamTc"
     |> Result.bind (fun () ->
         expectDeclarationError undeclaredProgram "Undeclared type parameter: 'b in UndeclaredParamTc")
 
 let testEmptyNominalDeclarationsRejected () : TestResult =
-    let emptySum = Program [TypeDef (SumTypeDef ("EmptySumTc", [], [])); Expression UnitLiteral]
-    let emptyRecord = Program [TypeDef (RecordDef ("EmptyRecordTc", [], [])); Expression UnitLiteral]
+    let emptySum = Program [TypeDef (SumTypeDef ("EmptySumTc", [], [])); Expression ([], UnitLiteral)]
+    let emptyRecord = Program [TypeDef (RecordDef ("EmptyRecordTc", [], [])); Expression ([], UnitLiteral)]
     expectDeclarationError emptySum "Enum declaration must contain at least one case: EmptySumTc"
     |> Result.bind (fun () ->
         expectDeclarationError emptyRecord "Record declaration must contain at least one field: EmptyRecordTc")
@@ -307,7 +307,7 @@ let testInvalidDeclarationTypeReferencesRejected () : TestResult =
                 [{ Name = "UnknownPayloadCaseTc"; Fields = [TRecord ("MissingTypeTc", [])] }]
             )
         )
-        Expression UnitLiteral
+        Expression ([], UnitLiteral)
     ]
     let wrongArity = Program [
         TypeDef (SumTypeDef ("GenericTargetTc", ["a"], [{ Name = "GenericTargetCaseTc"; Fields = [] }]))
@@ -318,7 +318,7 @@ let testInvalidDeclarationTypeReferencesRejected () : TestResult =
                 [{ Name = "WrongArityCaseTc"; Fields = [TSum ("GenericTargetTc", [])] }]
             )
         )
-        Expression UnitLiteral
+        Expression ([], UnitLiteral)
     ]
     expectDeclarationError unknownType "Unknown type reference: MissingTypeTc in UnknownPayloadTc"
     |> Result.bind (fun () ->
@@ -328,7 +328,7 @@ let testConstructorIdentityCollisionRejected () : TestResult =
     Program [
         TypeDef (SumTypeDef ("CollisionType151Tc", [], [{ Name = "CollisionCaseTc"; Fields = [] }]))
         TypeDef (SumTypeDef ("CollisionType155Tc", [], [{ Name = "CollisionCaseTc"; Fields = [] }]))
-        Expression UnitLiteral
+        Expression ([], UnitLiteral)
     ]
     |> fun program ->
         expectDeclarationError
@@ -391,7 +391,7 @@ let testManyTopLevelFunctionsAndLetsAreStackSafe () : TestResult =
                 ))
             [0 .. programSize - 1]
             (Int64Literal 0L)
-    let program = Program (functions @ [Expression expression])
+    let program = Program (functions @ [Expression ([], expression)])
     match checkProgram program with
     | Ok (TInt64, _) -> Ok ()
     | Ok (typ, _) -> Error $"Expected Int64 result, got {typeToString typ}"

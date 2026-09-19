@@ -28,7 +28,7 @@ let private isInternalTestFile (sourceFile: string) : bool =
 let private asSingleExpression (program: Program) : Expr option =
     let (Program topLevels) = program
     match topLevels with
-    | [Expression expr] -> Some expr
+    | [Expression (_, expr)] -> Some expr
     | _ -> None
 
 let private valueFloatEpsilon : float = 0.00000000001
@@ -92,10 +92,10 @@ let private trySynthesizeValueEqualitySource
     match sourceProgramResult, rhsProgramResult with
     | Ok (Program sourceTopLevels), Ok rhsProgram ->
         match List.rev sourceTopLevels, asSingleExpression rhsProgram with
-        | Expression lhsExpr :: sourceRestRev, Some rhsAst ->
+        | Expression (_, lhsExpr) :: sourceRestRev, Some rhsAst ->
             let comparisonExpr = buildValueComparisonExpr lhsExpr rhsAst
             let directEqProgram =
-                Program (List.rev (Expression comparisonExpr :: sourceRestRev))
+                Program (List.rev (Expression ([], comparisonExpr) :: sourceRestRev))
 
             tryFormatProgramIfStable allowInternal directEqProgram
         | _ ->
@@ -529,7 +529,7 @@ let private collectProgramReferencedPreambleFuncs
                 |> List.map fst
                 |> Set.ofList
             collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions paramBoundVars funcDef.Body
-        | Expression expr ->
+        | Expression (_, expr) ->
             collectExprReferencedPreambleFuncs knownPreambleFunctions expr
         | ValueDef valueDef ->
             collectExprReferencedPreambleFuncs knownPreambleFunctions (valueDefBody valueDef)

@@ -494,6 +494,9 @@ let rewriteProgram
 
     let rewrittenTopLevels =
         topLevels
-        |> List.map (function Expression expr -> rewriteExpression expr | other -> other)
+        |> List.map (function
+            | Expression expr ->
+                rewriteExpression expr
+            | other -> other)
     let generatedFunctions = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
     Program (generatedFunctions @ rewrittenTopLevels)
