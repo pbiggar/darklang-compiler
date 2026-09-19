@@ -7,6 +7,12 @@ Verification means both, for the active development target:
 - All tests pass.
 - Benchmarks do not regress.
 
+The merge train also rejects every candidate that changes anything under
+`benchmarks/problems/`. Benchmark problem implementations and their vendored
+build inputs are integration-controlled; ordinary task branches may change
+benchmark infrastructure, profiles, and generated results, but not the source
+tree that the performance gate measures.
+
 The active target is the host unless the work explicitly declares another
 target. For ordinary host-target compiler changes, the default verification
 commands are:
