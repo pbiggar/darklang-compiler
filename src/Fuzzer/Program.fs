@@ -201,7 +201,7 @@ let generateProgram (random: Random) (maxDepth: int) : Program =
     let resultType =
         choose random observableTypes |> Option.defaultValue TInt64
     let expression, _ = generateExpr random maxDepth 0 [] resultType
-    Program [Expression expression]
+    Program [Expression ([], expression)]
 
 let private normalizeOutput (output: string) : string =
     output.TrimEnd('\r', '\n')
@@ -430,7 +430,7 @@ let private minimize
     : Result<string * CaseOutcome * int * int, string> =
     match Parser.parseString false source with
     | Error message -> Error $"Cannot parse minimizer input: {message}"
-    | Ok (Program [Expression originalExpr]) ->
+    | Ok (Program [Expression (_, originalExpr)]) ->
         match inferGeneratedType [] originalExpr with
         | None -> Error "Minimizer input is outside the generated expression subset"
         | Some originalType ->
@@ -464,7 +464,7 @@ let private minimize
                             match inferGeneratedType [] candidateExpr with
                             | Some candidateType when candidateType = originalType ->
                                 let candidateSource =
-                                    Program [Expression candidateExpr]
+                                    Program [Expression ([], candidateExpr)]
                                     |> ASTPrettyPrinter.formatProgram
                                 let candidateMetric = expressionSize candidateExpr, candidateSource.Length
                                 if candidateMetric < currentMetric then
