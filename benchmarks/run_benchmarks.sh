@@ -1,11 +1,12 @@
 #!/bin/bash
 # Main entry point for running benchmarks
-# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify|--verify-fresh] [--quiet|--verbose] [--skip-smoke] [--reset-dark-baseline] [--refresh-baseline=rust] [--jobs[=N]] [full|benchmark_name|all]
+# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify|--verify-parent|--verify-fresh] [--quiet|--verbose] [--skip-smoke] [--reset-dark-baseline] [--refresh-baseline=rust] [--jobs[=N]] [full|benchmark_name|all]
 #
 # Options:
 #   --help                   Show this help message and exit
 #   --hyperfine              Use hyperfine for timing (default: cachegrind for instruction counts)
-#   --verify                 Read-only full verification; equal or improved suites pass
+#   --verify                 Read-only verification against the canonical snapshot
+#   --verify-parent          Read-only full verification against the branch parent
 #   --verify-fresh           Read-only integration gate; an unrecorded improvement fails
 #   --quiet                  Print only phase summaries, failures, and result locations
 #   --verbose                Print per-benchmark details (verification is quiet by default)
@@ -47,6 +48,7 @@ RUN_FAILURES=()
 PROCESS_FAILURES=()
 LIST_ONLY=false
 VERIFY_RESULTS=false
+VERIFY_PARENT=false
 VERIFY_FRESH=false
 RESET_DARK_BASELINE=false
 JOB_COUNT=""
@@ -67,6 +69,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --verify)
             VERIFY_RESULTS=true
+            shift
+            ;;
+        --verify-parent)
+            VERIFY_RESULTS=true
+            VERIFY_PARENT=true
             shift
             ;;
         --verify-fresh)
@@ -137,6 +144,11 @@ run_quiet_on_success() {
 
 if [ "$VERIFY_RESULTS" = true ] && [ "$USE_CACHEGRIND" != true ]; then
     pretty_fail "--verify cannot be combined with --hyperfine"
+    exit 1
+fi
+
+if [ "$VERIFY_PARENT" = true ] && [ "$VERIFY_FRESH" = true ]; then
+    pretty_fail "--verify-parent cannot be combined with --verify-fresh"
     exit 1
 fi
 
@@ -478,16 +490,27 @@ fi
             fi
         fi
         if [ "$VERIFY_RESULTS" = true ]; then
-            VERIFY_ARGS=()
-            if [ "$VERIFY_FRESH" = true ]; then
-                VERIFY_ARGS+=(--require-recorded)
-            fi
-            if [ "$QUIET_MODE" = true ]; then
-                VERIFY_ARGS+=(--quiet)
-            fi
-            if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_verifier.py" "$OUTPUT_DIR" "$PROFILE" "${VERIFY_ARGS[@]}"; then
-                PROCESS_FAILURES+=("benchmark_verifier")
-                pretty_warn "benchmark verification failed"
+            if [ "$VERIFY_PARENT" = true ]; then
+                PARENT_ARGS=()
+                if [ "$QUIET_MODE" = true ]; then
+                    PARENT_ARGS+=(--quiet)
+                fi
+                if ! python3 "$SCRIPT_DIR/compare_with_parent.py" "$OUTPUT_DIR" "${PARENT_ARGS[@]}"; then
+                    PROCESS_FAILURES+=("parent_comparison")
+                    pretty_warn "task-parent benchmark verification failed"
+                fi
+            else
+                VERIFY_ARGS=()
+                if [ "$VERIFY_FRESH" = true ]; then
+                    VERIFY_ARGS+=(--require-recorded)
+                fi
+                if [ "$QUIET_MODE" = true ]; then
+                    VERIFY_ARGS+=(--quiet)
+                fi
+                if ! python3 "$SCRIPT_DIR/infrastructure/benchmark_verifier.py" "$OUTPUT_DIR" "$PROFILE" "${VERIFY_ARGS[@]}"; then
+                    PROCESS_FAILURES+=("benchmark_verifier")
+                    pretty_warn "benchmark verification failed"
+                fi
             fi
         elif [ "$PROFILE" = "full" ]; then
             # Only a successful full run updates canonical current-state files.

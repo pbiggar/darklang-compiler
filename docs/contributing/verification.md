@@ -14,7 +14,7 @@ commands are:
 ```bash
 ./build --ai
 ./run-tests --ai
-./benchmarks/run_benchmarks.sh --verify full
+./benchmarks/run_benchmarks.sh --verify-parent full
 ```
 
 Full verification keeps terminal output concise so automated callers do not
@@ -22,21 +22,17 @@ consume context on repeated per-workload details. Full build and measurement
 logs, the markdown report, and decision JSON remain in the reported results
 directory. Use `--verbose` when interactive diagnosis needs streamed details.
 
-The verification ratio is against the best-known compatible canonical
-snapshot. It must not be reported as the performance difference introduced by
-the task branch. After the full run, compare the retained measurements with the
-snapshot stored by the task branch's upstream merge-base:
+The benchmark command compares the retained measurements with the snapshot
+stored by the task branch's upstream merge-base and reports the aggregate
+`current/parent` ratio. Its default parent is
+`git merge-base HEAD @{upstream}`. The snapshot is the parent's canonical
+performance state, which integration keeps current by rejecting regressions and
+unrecorded improvements. If the workload contract changed, the command fails
+instead of comparing incompatible measurements.
 
-```bash
-python3 benchmarks/compare_with_parent.py benchmarks/results/<run-directory> --quiet
-```
-
-This read-only comparison does not rerun the suite. Its default parent is
-`git merge-base HEAD @{upstream}`; `--parent=<revision>` is available when a
-workflow has an explicitly recorded task base. The snapshot is the parent's
-canonical performance state, which integration keeps current by rejecting
-regressions and unrecorded improvements. If the workload contract changed, the
-command fails instead of comparing incompatible measurements.
+`./benchmarks/run_benchmarks.sh --verify full` instead compares with the
+best-known compatible canonical snapshot. It is not the task-readiness gate and
+agents must not report its ratio as the task branch's performance result.
 
 The E2E runner compiles up to 8192 compatible value-equality checks together by
 default, enough for every compatible contiguous group in the current corpus.

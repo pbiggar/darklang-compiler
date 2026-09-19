@@ -48,14 +48,12 @@ this repository and takes precedence where it is stricter.
   Likewise, do not run ARM64 tests on an x64 host unless explicitly testing
   ARM64 work.
 - Fix compiler warnings and errors before committing.
-- Treat the full benchmark run as the measurement and canonical regression
-  gate, then compare its retained results with the task branch's parent by
-  running `python3 benchmarks/compare_with_parent.py <results-dir>`. Do not
-  claim a branch-relative performance result from the canonical verification
-  ratio: `./benchmarks/run_benchmarks.sh --verify full` compares with the
-  best-known snapshot, not necessarily a snapshot attributed to the immediate
-  parent. The comparison command reads the snapshot as stored by the upstream
-  merge-base and does not rerun benchmarks.
+- Validate performance against the task branch's parent with
+  `./benchmarks/run_benchmarks.sh --verify-parent full`. This performs the full
+  benchmark measurement and fails on an aggregate regression against the
+  snapshot stored by the upstream merge-base. Do not run or report
+  `./benchmarks/run_benchmarks.sh --verify full` as a task-readiness gate: that
+  command compares with the best-known snapshot rather than the branch parent.
 - During merge-conflict recovery, never hand-merge, choose a side for, or edit
   conflict markers in generated `benchmarks/RESULTS.md`. With all source
   conflicts resolved in the rebased working tree, run
@@ -135,8 +133,7 @@ Committed: `<short hash>` — <commit subject>
 Merge train: ✅ queued `<branch>` at `<short hash>`
 Tests: ✅ <passed>/<total> passed — `<exact command>`
 Benchmarks: ✅ no regression vs task parent, ratio <ratio>
-  - Measurement/gate: `./benchmarks/run_benchmarks.sh --verify full`
-  - Parent comparison: `python3 benchmarks/compare_with_parent.py <results-dir> --quiet`
+  - Parent gate: `./benchmarks/run_benchmarks.sh --verify-parent full`
 Other validation: ✅ <result> — `<exact command>`
 Working tree: ✅ clean
 Notes: <residual risk, preserved pre-existing changes, or other useful context>
