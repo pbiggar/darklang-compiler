@@ -451,6 +451,20 @@ copyPropCSEComplex 10L 20L = 90L
 copyPropCSEComplex 5L 5L = 30L
 
 // ===================================================================
+// Partial redundancy across a conditional join
+// ===================================================================
+// The sum is computed on only one conditional path and then needed by the
+// shared continuation. Check both paths and wrapping overflow so path-sensitive
+// reuse cannot change the language result.
+let partialRedundantSum (chooseSum: Bool) (left: Int64) (right: Int64) : Int64 =
+  let selected = if chooseSum then left + right else left - right in
+  selected + (left + right)
+
+partialRedundantSum true 10L 3L = 26L
+partialRedundantSum false 10L 3L = 20L
+partialRedundantSum true 9223372036854775807L 1L = 0L
+
+// ===================================================================
 // Phi Node Copy Propagation (mutation #150 test)
 // ===================================================================
 // This test exercises buildCopyMap's handling of Phi nodes where all
