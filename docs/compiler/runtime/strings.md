@@ -61,6 +61,12 @@ Higher-level stdlib functions such as `repeat`, `join`, `trim`, `split`,
 `replace`, `first`, `last`, `dropFirst`, `dropLast`, `head`, `padStart`, and
 `padEnd` are implemented in `src/DarkCompiler/stdlib/String.dark`.
 
+Public byte-oriented traversal is available for parsers that retain UTF-8 byte
+offsets: `byteLength`, `byteSlice`, `byteRangesEqual`, and `byteIndexOfFrom`.
+`byteSlice` validates scalar boundaries and preserves NFC normalization;
+comparison and indexed search operate on the original buffers without creating
+temporary suffix strings.
+
 String equality is a representation-level compiler operation:
 
 ```fsharp

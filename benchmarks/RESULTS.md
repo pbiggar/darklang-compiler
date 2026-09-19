@@ -2,16 +2,16 @@
 
 Best-known compatible full-profile Dark performance vs audited Rust references, with diagnostic reference runtimes (instruction counts).
 
-**Snapshot timestamp:** 2026-09-19T01:58:35+00:00
+**Snapshot timestamp:** 2026-09-19T07:14:40+00:00
 **Architecture:** `arm64`
 **Profile:** `full` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs`
 **Workload contract:** `6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe`
-**Compiler commit:** `af37672ff07befde4f5328f0f1ab430f0c2dd3a9` - Merge commit 'ba37fe420324f3f05cc7c422b980ab2146341356' into HEAD
+**Compiler commit:** `90e69daa999b6eb83f81112d66aae6d8772ae7d9` - Merge commit '318c940bf0285aa98cd48d46b689d6280d89c334' into HEAD
 **Diagnostic references:** informational only; multipliers are instructions divided by Rust for the same workload.
 Every displayed diagnostic row matched the profile's expected stdout.
 
-| Benchmark | Dark (11.2x) | Rust | Darklang interpreter | Node | OCaml | Python |
+| Benchmark | Dark (10.4x) | Rust | Darklang interpreter | Node | OCaml | Python |
 |---|---:|---:|---:|---:|---:|---:|
 | ackermann | 145,114,139 (1.62x) | 89,558,784 | - | - | - | - |
 | binary_trees | 11,053,080 (0.17x) | 63,993,594 | - | - | - | - |
@@ -40,5 +40,5 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | string_equality | 1,181,233 (0.80x) | 1,479,564 | - | - | - | - |
 | sum_to_n | 62,009 (0.24x) | 260,246 | - | - | - | - |
 | tak | 48,017,024 (0.12x) | 391,110,808 | - | - | - | - |
-| tinytemplate | 5,561,197,103 (13230x) | 420,354 | - | - | - | - |
-| warden | 46,197,296 (171x) | 270,345 | - | - | - | - |
+| tinytemplate | 643,132,963 (1530x) | 420,354 | - | - | - | - |
+| warden | 45,702,576 (169x) | 270,345 | - | - | - | - |
