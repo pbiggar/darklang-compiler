@@ -245,9 +245,11 @@ bounded set of verifier-proven uniqueness variants. It upgrades only consumed
 parameters and produced results, rejects variants that fail ownership
 verification, and removes a variant only when another requires no stronger
 inputs while promising no weaker result. Keeping incomparable boundaries makes
-the later specialization policy explicit. This analysis is not yet scheduled
-in code generation and does not solve recursive groups or select call-site
-variants.
+the later specialization policy explicit. Mutually visible and recursive
+functions are inferred as one bounded candidate group, with internal call
+contracts derived from that same candidate before group verification. This
+analysis is not yet scheduled in code generation; discovering strongly
+connected groups and selecting call-site variants remain separate work.
 
 The next boundaries are:
 
