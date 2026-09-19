@@ -699,7 +699,7 @@ let private formatTopLevel (topLevel: TopLevel) : string =
     | TypeDef typeDef -> formatTypeDef typeDef
     | ValueDef valueDef ->
         $"val {formatIdentifierSegment (valueDefName valueDef)} = {formatExpr (valueDefBody valueDef)}"
-    | Expression expr -> formatExpr expr
+    | Expression (_, expr) -> formatExpr expr
 
 let private tryRestoreModuleDeclaration (topLevel: TopLevel) : (NameSyntax.QualifiedName * TopLevel) option =
     let splitName name =

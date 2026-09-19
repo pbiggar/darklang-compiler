@@ -511,8 +511,8 @@ let private knownLiteralsForAtoms (env: ValueEnv) (atoms: Atom list) : ScalarLit
 let private knownValueForCExpr (env: ValueEnv) (cexpr: CExpr) : KnownValue option =
     let words name =
         match name with
-        | "Stdlib.Int128.__fromWords" -> Some (fun low high -> Int128Value (low, high))
-        | "Stdlib.UInt128.__fromWords" -> Some (fun low high -> UInt128Value (low, high))
+        | "Darklang.Stdlib.Int128.__fromWords" -> Some (fun low high -> Int128Value (low, high))
+        | "Darklang.Stdlib.UInt128.__fromWords" -> Some (fun low high -> UInt128Value (low, high))
         | _ -> None
     match cexpr with
     | Atom atom
@@ -782,9 +782,9 @@ let private cexprForKnownValue (value: KnownValue) : CExpr =
     match value with
     | LiteralValue literal -> Atom (atomForScalarLiteral literal)
     | Int128Value (low, high) ->
-        Call ("Stdlib.Int128.__fromWords", [IntLiteral (UInt64 low); IntLiteral (UInt64 high)])
+        Call ("Darklang.Stdlib.Int128.__fromWords", [IntLiteral (UInt64 low); IntLiteral (UInt64 high)])
     | UInt128Value (low, high) ->
-        Call ("Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 low); IntLiteral (UInt64 high)])
+        Call ("Darklang.Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 low); IntLiteral (UInt64 high)])
     | TupleValue fields -> TupleAlloc (atoms fields)
     | RecordValue (descriptor, fields) -> RecordAlloc (descriptor, atoms fields)
 

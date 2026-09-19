@@ -1,6 +1,6 @@
 // Stdlib.Http.Request - frozen query accessors for canonical HTTP request values.
 
-module Stdlib.Http.Request
+module Darklang.Stdlib.Http.Request
 
 let __queryParamPair (param: String) : (String * String) =
     match Stdlib.String.split param "=" with

@@ -158,16 +158,16 @@ let tryExtract
             else None
         | _ ->
             match listCall expr with
-            | Some ("Stdlib.List.repeatUnsafe_i64", [count; value]) ->
+            | Some ("Darklang.Stdlib.List.repeatUnsafe_i64", [count; value]) ->
                 match operand state ((=) AST.TInt) count, operand state ((=) AST.TInt64) value with
                 | Some count, Some value -> Some (addList state (fun output -> Leaf (Construct (output, Repeat (count, value)))))
                 | _ -> None
-            | Some ("Stdlib.List.map_i64_i64", [input; fn]) ->
+            | Some ("Darklang.Stdlib.List.map_i64_i64", [input; fn]) ->
                 list state input
                 |> Option.bind (fun (source, next) ->
                     callback state (AST.TFunction ([AST.TInt64], AST.TInt64)) fn
                     |> Option.map (fun fn -> addList next (fun id -> Leaf (Transform (id, source, Map fn)))))
-            | Some ("Stdlib.List.reverse_i64", [input]) ->
+            | Some ("Darklang.Stdlib.List.reverse_i64", [input]) ->
                 list state input
                 |> Option.map (fun (source, next) -> addList next (fun id -> Leaf (Transform (id, source, Reverse))))
             | _ -> None
@@ -192,7 +192,7 @@ let tryExtract
 
     and bindSimpleScalar state name expr =
         match listCall expr with
-        | Some ("Stdlib.List.fold_i64_i64", [input; initial; fn]) ->
+        | Some ("Darklang.Stdlib.List.fold_i64_i64", [input; initial; fn]) ->
             list state input
             |> Option.bind (fun (source, next) ->
                 match scalar state initial, callback state (AST.TFunction ([AST.TInt64; AST.TInt64], AST.TInt64)) fn with
@@ -239,10 +239,10 @@ let tryExtract
 
     let isListOperation value =
         match listCall value with
-        | Some ("Stdlib.List.map_i64_i64", _)
-        | Some ("Stdlib.List.reverse_i64", _)
-        | Some ("Stdlib.List.repeatUnsafe_i64", _)
-        | Some ("Stdlib.List.fold_i64_i64", _) -> true
+        | Some ("Darklang.Stdlib.List.map_i64_i64", _)
+        | Some ("Darklang.Stdlib.List.reverse_i64", _)
+        | Some ("Darklang.Stdlib.List.repeatUnsafe_i64", _)
+        | Some ("Darklang.Stdlib.List.fold_i64_i64", _) -> true
         | _ -> false
     let candidate =
         match expression with

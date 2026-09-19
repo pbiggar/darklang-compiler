@@ -1,6 +1,6 @@
 // Stdlib.Cli.Process - portable process helpers over the native execution boundary.
 
-module Stdlib.Cli.Process
+module Darklang.Stdlib.Cli.Process
 
 type ProcessHandle = Int
 type Output = { exitCode: Int, stdout: String, stderr: String }

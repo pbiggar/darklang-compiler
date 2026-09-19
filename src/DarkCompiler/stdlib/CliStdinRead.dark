@@ -1,6 +1,6 @@
 // Stdlib.Cli.Stdin - terminal key input boundary.
 
-module Stdlib.Cli.Stdin
+module Darklang.Stdlib.Cli.Stdin
 
 // Replaced by the target terminal decoder during lowering.
 let __readKey () : Stdlib.Cli.Stdin.KeyRead.KeyRead =

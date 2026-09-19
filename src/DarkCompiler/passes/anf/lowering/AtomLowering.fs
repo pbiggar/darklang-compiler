@@ -91,7 +91,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                     [("currentModule", CheckedAST.ListLiteral [])]
                 ))
                 varGen env typeReg variantLookup funcReg moduleRegistry
-        else if name = "Stdlib.List.empty" || name = "Stdlib.List.empty_v0" then
+        else if name = "Darklang.Stdlib.List.empty" || name = "Darklang.Stdlib.List.empty_v0" then
             Ok (ANF.IntLiteral (ANF.Int64 0L), [], varGen)
         else
             // Variable reference: look up in environment
@@ -256,9 +256,9 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                 let (tempVar, varGen2) = ANF.freshVar varGen1
                 let cexpr =
                     match innerType with
-                    | AST.TInt -> ANF.Call ("Stdlib.Int.bitwiseNot", [innerAtom])
-                    | AST.TInt128 -> ANF.Call ("Stdlib.Int128.bitwiseNot", [innerAtom])
-                    | AST.TUInt128 -> ANF.Call ("Stdlib.UInt128.bitwiseNot", [innerAtom])
+                    | AST.TInt -> ANF.Call ("Darklang.Stdlib.Int.bitwiseNot", [innerAtom])
+                    | AST.TInt128 -> ANF.Call ("Darklang.Stdlib.Int128.bitwiseNot", [innerAtom])
+                    | AST.TUInt128 -> ANF.Call ("Darklang.Stdlib.UInt128.bitwiseNot", [innerAtom])
                     | _ -> ANF.UnaryPrim (ANF.BitNot, innerAtom)
                 (ANF.Var tempVar, innerBindings @ [(tempVar, cexpr)], varGen2)))
 
@@ -290,7 +290,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                 let bindings =
                     partBindings
                     @ [ (rawId, ANF.StringConcat (firstAtom, secondAtom, remainingAtoms))
-                        (resultId, ANF.Call ("Stdlib.String.__normalizeAfterConcat", [ANF.Var rawId])) ]
+                        (resultId, ANF.Call ("Darklang.Stdlib.String.__normalizeAfterConcat", [ANF.Var rawId])) ]
                 (ANF.Var resultId, bindings, varGen3))
 
     | CheckedAST.BinOp (op, left, right) ->
@@ -318,7 +318,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                         Ok (finalAtom, allBindings, varGen4)
                     | Ok AST.TInt ->
                         let (tempVar, varGen3) = ANF.freshVar varGen2
-                        let cexpr = ANF.Call ("Stdlib.Int.__equals", [leftAtom; rightAtom])
+                        let cexpr = ANF.Call ("Darklang.Stdlib.Int.__equals", [leftAtom; rightAtom])
                         let (finalAtom, finalBindings, varGen4) =
                             if op = AST.Neq then
                                 let (negVar, vg) = ANF.freshVar varGen3
@@ -349,8 +349,8 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                         let (tempVar, varGen3) = ANF.freshVar varGen2
                         let equalsName =
                             match wideType with
-                            | Ok AST.TInt128 -> "Stdlib.Int128.__equals"
-                            | Ok AST.TUInt128 -> "Stdlib.UInt128.__equals"
+                            | Ok AST.TInt128 -> "Darklang.Stdlib.Int128.__equals"
+                            | Ok AST.TUInt128 -> "Darklang.Stdlib.UInt128.__equals"
                             | _ -> Crash.crash "128-bit equality dispatch lost its operand type"
                         let cexpr = ANF.Call (equalsName, [leftAtom; rightAtom])
                         let (finalAtom, finalBindings, varGen4) =

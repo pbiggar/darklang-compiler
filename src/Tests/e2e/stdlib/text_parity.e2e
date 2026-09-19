@@ -9,15 +9,15 @@ Stdlib.String.length "é" = 1
 
 // Canonical Char values and indexing operate on complete EGCs.
 Stdlib.Char.toString '👩‍👩‍👧‍👦' = "👩‍👩‍👧‍👦"
-Stdlib.Char.fromCodepoint 128514 = Stdlib.Option.Option.Some '😂'
-Stdlib.String.charAt "a👩‍👩‍👧‍👦z" 1 = Stdlib.Option.Option.Some '👩‍👩‍👧‍👦'
+Stdlib.Char.fromCodepoint 128514 = Some '😂'
+Stdlib.String.charAt "a👩‍👩‍👧‍👦z" 1 = Some '👩‍👩‍👧‍👦'
 
 // Search keeps its documented UTF-16 and EGC index units distinct.
-Stdlib.String.indexOf "😀x" "x" = Stdlib.Option.Option.Some 2
-Stdlib.String.indexOfEgc "😀x" "x" = Stdlib.Option.Option.Some 1
+Stdlib.String.indexOf "😀x" "x" = Some 2
+Stdlib.String.indexOfEgc "😀x" "x" = Some 1
 
 // Regex returns full matches and advances deterministically after empty matches.
-Stdlib.Regex.find "test123" "\\d+" = Stdlib.Option.Option.Some "123"
+Stdlib.Regex.find "test123" "\\d+" = Some "123"
 Stdlib.Regex.split "a1b22c" "(\\d+)" = ["a", "1", "b", "22", "c"]
 Stdlib.Regex.replace "a1b2" "(\\d)" "$1" = "a$1b2"
 Stdlib.Regex.replaceAll "a1b2" "(\\d)" "<$1>" = "a<1>b<2>"

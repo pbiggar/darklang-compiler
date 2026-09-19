@@ -1,6 +1,6 @@
 // CliTerminalSession.dark - upstream terminal restoration values.
 
-module Stdlib.Cli.Tui.TerminalSession.Ansi
+module Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi
 
 val enterAlternateScreen = "\u001b[?1049h"
 val exitAlternateScreen = "\u001b[?1049l"

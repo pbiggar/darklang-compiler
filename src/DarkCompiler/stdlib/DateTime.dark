@@ -4,7 +4,7 @@
 // only representation casts and host-clock access are private compiler
 // intrinsics, so DateTime remains statically distinct from every integer type.
 
-module Stdlib.DateTime
+module Darklang.Stdlib.DateTime
 
 let __ticksPerMillisecond () : Int64 = 10000L
 let __ticksPerSecond () : Int64 = 10000000L

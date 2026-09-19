@@ -1,6 +1,6 @@
 // AltJsonBuilder.dark - ordered structural JSON field builder.
 
-module Stdlib.AltJson.Builder
+module Darklang.Stdlib.AltJson.Builder
 
 type Fields = List<(String * Stdlib.AltJson.Json)>
 

@@ -11,46 +11,46 @@
 // ===================================================================
 
 // Unresolved type variables are preserved during monomorphization
-Stdlib.Result.isOk (Stdlib.Result.Result.Ok 5L) = true
-Stdlib.Result.isOk (Stdlib.Result.Result.Error 99L) = false
+Stdlib.Result.isOk (Ok 5L) = true
+Stdlib.Result.isOk (Error 99L) = false
 
 // ===================================================================
 // Stdlib.Result.isError - Returns true if the result is Error
 // ===================================================================
 
 // Unresolved type variables are preserved during monomorphization
-Stdlib.Result.isError (Stdlib.Result.Result.Ok 5L) = false
-Stdlib.Result.isError (Stdlib.Result.Result.Error 99L) = true
+Stdlib.Result.isError (Ok 5L) = false
+Stdlib.Result.isError (Error 99L) = true
 
 // ===================================================================
 // Stdlib.Result.toList - Convert Ok to a singleton list and Error to an empty list
 // ===================================================================
 
-Stdlib.Result.toList (Stdlib.Result.Result.Ok "test") = ["test"]
-Stdlib.Result.toList (Stdlib.Result.Result.Error "test") = []
+Stdlib.Result.toList (Ok "test") = ["test"]
+Stdlib.Result.toList (Error "test") = []
 
 // ===================================================================
 // Stdlib.Result.fromOption - Convert Some to Ok and None to Error
 // ===================================================================
 
-Stdlib.Result.fromOption (Stdlib.Option.Option.Some 6L) "missing" = Stdlib.Result.Result.Ok 6L
-Stdlib.Result.fromOption Stdlib.Option.Option.None "missing" = Stdlib.Result.Result.Error "missing"
+Stdlib.Result.fromOption (Some 6L) "missing" = Ok 6L
+Stdlib.Result.fromOption None "missing" = Error "missing"
 
 // ===================================================================
 // Stdlib.Result.withDefault - Returns the value or a default
 // ===================================================================
 
 // Type inference from default value and constructor works
-Stdlib.Result.withDefault (Stdlib.Result.Result.Ok 5L) 0L = 5L
-Stdlib.Result.withDefault (Stdlib.Result.Result.Error 99L) 42L = 42L
+Stdlib.Result.withDefault (Ok 5L) 0L = 5L
+Stdlib.Result.withDefault (Error 99L) 42L = 42L
 
 // ===================================================================
 // Stdlib.Result.map - Apply a function to the Ok value
 // ===================================================================
 
 // Unresolved type variables are preserved during monomorphization
-Stdlib.Result.withDefault (Stdlib.Result.map (Stdlib.Result.Result.Ok 5L) (fun x -> x + 1L)) 0L = 6L
-Stdlib.Result.isError (Stdlib.Result.map (Stdlib.Result.Result.Error 99L) (fun x -> x + 1L)) = true
+Stdlib.Result.withDefault (Stdlib.Result.map (Ok 5L) (fun x -> x + 1L)) 0L = 6L
+Stdlib.Result.isError (Stdlib.Result.map (Error 99L) (fun x -> x + 1L)) = true
 
 // ===================================================================
 // Stdlib.Result.mapError - Apply a function to the Error value
@@ -58,35 +58,35 @@ Stdlib.Result.isError (Stdlib.Result.map (Stdlib.Result.Result.Error 99L) (fun x
 // When changing error type from e to f, the Error constructor gets the wrong type
 // ===================================================================
 
-// Stdlib.Result.mapError(Stdlib.Result.Result.Error(99), fun e -> e + 1)
+// Stdlib.Result.mapError(Error(99), fun e -> e + 1)
 
 // ===================================================================
 // Stdlib.Result.andThen - Chain Result computations
 // ===================================================================
 
 // Unresolved type variables are preserved during monomorphization
-Stdlib.Result.withDefault (Stdlib.Result.andThen (Stdlib.Result.Result.Ok 5L) (fun x -> Stdlib.Result.Result.Ok (x * 2L))) 0L = 10L
-Stdlib.Result.isError (Stdlib.Result.andThen (Stdlib.Result.Result.Error 99L) (fun x -> Stdlib.Result.Result.Ok (x * 2L))) = true
+Stdlib.Result.withDefault (Stdlib.Result.andThen (Ok 5L) (fun x -> Ok (x * 2L))) 0L = 10L
+Stdlib.Result.isError (Stdlib.Result.andThen (Error 99L) (fun x -> Ok (x * 2L))) = true
 // When lambda returns Error, unresolved ok type is preserved
-Stdlib.Result.isError (Stdlib.Result.andThen (Stdlib.Result.Result.Ok 5L) (fun x -> Stdlib.Result.Result.Error 99L)) = true
+Stdlib.Result.isError (Stdlib.Result.andThen (Ok 5L) (fun x -> Error 99L)) = true
 
 // ===================================================================
 // Pipe operator with Result functions
 // ===================================================================
 
 // Unresolved type variables are preserved during monomorphization
-Stdlib.Result.Result.Ok 42L |> Stdlib.Result.isOk () = true
-Stdlib.Result.Result.Ok 10L |> Stdlib.Result.map (fun x -> x * 2L) |> Stdlib.Result.withDefault 0L = 20L
+Ok 42L |> Stdlib.Result.isOk () = true
+Ok 10L |> Stdlib.Result.map (fun x -> x * 2L) |> Stdlib.Result.withDefault 0L = 20L
 
 // ===================================================================
 // Unresolved type variable resolved later by context
 // ===================================================================
 
 // Type is inferred from withDefault's second argument
-let x = Stdlib.Result.Result.Error 99L in Stdlib.Result.withDefault x 42L = 42L
+let x = Error 99L in Stdlib.Result.withDefault x 42L = 42L
 
 // Large collections follow the interpreter's stack-safe fold implementation.
-let results = Stdlib.List.repeatUnsafe 100000 (Stdlib.Result.Result.Ok 1L) in match Stdlib.Result.collect results with | Ok values -> Stdlib.List.length values | Error _ -> 0 = 100000 isolated=true
+let results = Stdlib.List.repeatUnsafe 100000 (Ok 1L) in match Stdlib.Result.collect results with | Ok values -> Stdlib.List.length values | Error _ -> 0 = 100000 isolated=true
 
 // Large value extraction follows the interpreter's fold/reverse implementation.
-let results = Stdlib.List.repeatUnsafe 100000 (Stdlib.Result.Result.Ok 1L) in match Stdlib.Result.values results with | Ok values -> Stdlib.List.length values | Error _ -> 0 = 100000 isolated=true
+let results = Stdlib.List.repeatUnsafe 100000 (Ok 1L) in match Stdlib.Result.values results with | Ok values -> Stdlib.List.length values | Error _ -> 0 = 100000 isolated=true

@@ -271,12 +271,12 @@ let rec internal collectCompareHelperTypesFromExpr (aliasReg: AliasRegistry) (ex
         let nested = collectFromExprs (NonEmptyList.toList args)
         let resolvedType = resolveType aliasReg targetType
         if containsTVar resolvedType then nested else Set.add resolvedType nested
-    | TypeApp (("Stdlib.List.sort" | "Stdlib.List.unique"), [valueType], args)
-    | TypeApp ("Stdlib.List.uniqueBy", [valueType; _], args) ->
+    | TypeApp (("Darklang.Stdlib.List.sort" | "Darklang.Stdlib.List.unique"), [valueType], args)
+    | TypeApp ("Darklang.Stdlib.List.uniqueBy", [valueType; _], args) ->
         let nested = collectFromExprs (NonEmptyList.toList args)
         let resolvedType = resolveType aliasReg valueType
         if containsTVar resolvedType then nested else Set.add resolvedType nested
-    | TypeApp ("Stdlib.List.sortBy", [valueType; keyType], args) ->
+    | TypeApp ("Darklang.Stdlib.List.sortBy", [valueType; keyType], args) ->
         let nested = collectFromExprs (NonEmptyList.toList args)
         let pairType = TTuple [resolveType aliasReg keyType; resolveType aliasReg valueType]
         if containsTVar pairType then nested else Set.add pairType nested

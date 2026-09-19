@@ -9,7 +9,7 @@ Stdlib.Cli.Tui.Text.clipMarked "\u001b[31mred\u001b[0m" 2 = "\u001b[31mr…"
 Stdlib.Cli.Tui.Text.clipToWidth "a\r\nb" 2 = "ab"
 
 Stdlib.HttpClient.bearerToken "token" = ("authorization", "bearer token")
-Stdlib.HttpClient.basicAuth "username" "password" = Stdlib.Result.Result.Ok(("authorization", "basic dXNlcm5hbWU6cGFzc3dvcmQ="))
+Stdlib.HttpClient.basicAuth "username" "password" = Ok(("authorization", "basic dXNlcm5hbWU6cGFzc3dvcmQ="))
 
 let handler = Stdlib.HttpServer.get "/ping" (fun req -> Stdlib.Http.response (Stdlib.String.toBlob "") 200) in (handler.route, handler.method) = ("/ping", "GET")
 let request = Stdlib.Http.Request { url = "/"; headers = [("X-Http-Method", "POST")]; body = Stdlib.Blob.empty } in Stdlib.HttpServer.getMethod request = "POST"

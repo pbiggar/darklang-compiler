@@ -40,20 +40,20 @@ let convertBinOp (op: AST.BinOp) : ANF.BinOp =
 let internal integerFunctionForBinOp (operandType: AST.Type) (op: AST.BinOp) : string option =
     let moduleName =
         match op, operandType with
-        | AST.Pow, AST.TInt -> Some "Stdlib.Int"
-        | AST.Pow, AST.TInt8 -> Some "Stdlib.Int8"
-        | AST.Pow, AST.TInt16 -> Some "Stdlib.Int16"
-        | AST.Pow, AST.TInt32 -> Some "Stdlib.Int32"
-        | AST.Pow, AST.TInt64 -> Some "Stdlib.Int64"
-        | AST.Pow, AST.TUInt8 -> Some "Stdlib.UInt8"
-        | AST.Pow, AST.TUInt16 -> Some "Stdlib.UInt16"
-        | AST.Pow, AST.TUInt32 -> Some "Stdlib.UInt32"
-        | AST.Pow, AST.TUInt64 -> Some "Stdlib.UInt64"
-        | AST.Pow, AST.TFloat64 -> Some "Stdlib.Float"
-        | AST.Mod, AST.TFloat64 -> Some "Stdlib.Float"
-        | _, AST.TInt -> Some "Stdlib.Int"
-        | _, AST.TInt128 -> Some "Stdlib.Int128"
-        | _, AST.TUInt128 -> Some "Stdlib.UInt128"
+        | AST.Pow, AST.TInt -> Some "Darklang.Stdlib.Int"
+        | AST.Pow, AST.TInt8 -> Some "Darklang.Stdlib.Int8"
+        | AST.Pow, AST.TInt16 -> Some "Darklang.Stdlib.Int16"
+        | AST.Pow, AST.TInt32 -> Some "Darklang.Stdlib.Int32"
+        | AST.Pow, AST.TInt64 -> Some "Darklang.Stdlib.Int64"
+        | AST.Pow, AST.TUInt8 -> Some "Darklang.Stdlib.UInt8"
+        | AST.Pow, AST.TUInt16 -> Some "Darklang.Stdlib.UInt16"
+        | AST.Pow, AST.TUInt32 -> Some "Darklang.Stdlib.UInt32"
+        | AST.Pow, AST.TUInt64 -> Some "Darklang.Stdlib.UInt64"
+        | AST.Pow, AST.TFloat64 -> Some "Darklang.Stdlib.Float"
+        | AST.Mod, AST.TFloat64 -> Some "Darklang.Stdlib.Float"
+        | _, AST.TInt -> Some "Darklang.Stdlib.Int"
+        | _, AST.TInt128 -> Some "Darklang.Stdlib.Int128"
+        | _, AST.TUInt128 -> Some "Darklang.Stdlib.UInt128"
         | _ -> None
     let functionName =
         match op, operandType with
@@ -140,8 +140,8 @@ let rec generateStructuralEquality
 
     let primitiveEquality (valueType: AST.Type) (left: ANF.Atom) (right: ANF.Atom) : ANF.CExpr =
         match valueType with
-        | AST.TInt128 -> ANF.Call ("Stdlib.Int128.__equals", [left; right])
-        | AST.TUInt128 -> ANF.Call ("Stdlib.UInt128.__equals", [left; right])
+        | AST.TInt128 -> ANF.Call ("Darklang.Stdlib.Int128.__equals", [left; right])
+        | AST.TUInt128 -> ANF.Call ("Darklang.Stdlib.UInt128.__equals", [left; right])
         | AST.TString | AST.TChar | AST.TInt -> ANF.Call ("__string_eq", [left; right])
         | _ -> ANF.Prim (ANF.Eq, left, right)
 
@@ -286,7 +286,7 @@ let rec generateStructuralEquality
             // structural-equality design boundary.
             let payloadComparison =
                 if typeName = "Uuid" then
-                    ANF.Call ("Stdlib.UInt128.__equals", [ANF.Var leftPayloadVar; ANF.Var rightPayloadVar])
+                    ANF.Call ("Darklang.Stdlib.UInt128.__equals", [ANF.Var leftPayloadVar; ANF.Var rightPayloadVar])
                 else
                     ANF.Prim (ANF.Eq, ANF.Var leftPayloadVar, ANF.Var rightPayloadVar)
 

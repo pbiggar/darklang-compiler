@@ -1,7 +1,7 @@
 // Stdlib.Cli.File.dark - Portable path-pattern matching used by CLI workflows.
 // Ported from darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
 
-module Stdlib.Cli.File
+module Darklang.Stdlib.Cli.File
 
 let __segmentMatchesNoStar (pattern: String) (path: String) (patternIndex: Int64) (pathIndex: Int64) : Bool =
     let patternLength = Stdlib.String.__byteLength pattern in

@@ -122,7 +122,7 @@ let internal bindingNeedsShapeAutomaticDec
     rcShapeNeedsAutomaticBindingDec shape
     || match typ, cexpr with
        | AST.TFunction _, ClosureAlloc _ -> true
-       | AST.TFunction _, Call (funcName, _) when not (funcName.StartsWith("Stdlib.")) -> true
+       | AST.TFunction _, Call (funcName, _) when not (funcName.StartsWith("Darklang.Stdlib.")) -> true
        | AST.TFunction _, ClosureCall _ -> true
        | _ -> false
 

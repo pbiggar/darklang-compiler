@@ -1,6 +1,6 @@
 // CliPosixError.dark - upstream POSIX errno values.
 
-module Stdlib.Cli.Posix.Errno
+module Darklang.Stdlib.Cli.Posix.Errno
 
 val einval = 22
 val esrch = 3

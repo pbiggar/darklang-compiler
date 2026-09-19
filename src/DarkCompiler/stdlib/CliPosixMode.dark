@@ -1,6 +1,6 @@
 // CliPosixMode.dark - upstream POSIX default permission values.
 
-module Stdlib.Cli.Posix.Modes
+module Darklang.Stdlib.Cli.Posix.Modes
 
 val defaultDir = 493
 val defaultFile = 420

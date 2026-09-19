@@ -2,7 +2,7 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
-module Stdlib.Option
+module Darklang.Stdlib.Option
 
 // Stdlib.Option - Optional values
 type Option<'t> = Some of t | None

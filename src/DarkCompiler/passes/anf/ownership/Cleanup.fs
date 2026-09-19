@@ -88,8 +88,8 @@ let internal functionParamReturnTransfersOwnedAccumulator
     (paramType: AST.Type)
     : bool =
     let isMapHelper =
-        funcName = "Stdlib.List.__mapHelper"
-        || funcName.StartsWith("Stdlib.List.__mapHelper_")
+        funcName = "Darklang.Stdlib.List.__mapHelper"
+        || funcName.StartsWith("Darklang.Stdlib.List.__mapHelper_")
     let returnsClosureList =
         match tryGetFuncReturnTypeFromReg ctx funcName with
         | Some (AST.TList (AST.TFunction _)) -> true
@@ -424,8 +424,8 @@ let rec internal insertOwnedAccumulatorDecsBeforeSelfTailCalls
         (Let (tempId, cexpr, body'), varGen1, types1)
 
 let private isClosureMapHelperTarget (targetFunc: string) : bool =
-    targetFunc = "Stdlib.List.__mapHelper"
-    || targetFunc.StartsWith("Stdlib.List.__mapHelper_")
+    targetFunc = "Darklang.Stdlib.List.__mapHelper"
+    || targetFunc.StartsWith("Darklang.Stdlib.List.__mapHelper_")
 
 /// Find the two rare post-RC cleanups with one allocation-free body scan.
 let rec internal requiredFunctionCleanups
@@ -465,8 +465,8 @@ let rec internal insertClosureMapSourceRetainsBeforeHelperCalls
     (types: Map<TempId, AST.Type>)
     : AExpr * VarGen * Map<TempId, AST.Type> =
     let currentIsMapHelper =
-        currentFuncName = "Stdlib.List.__mapHelper"
-        || currentFuncName.StartsWith("Stdlib.List.__mapHelper_")
+        currentFuncName = "Darklang.Stdlib.List.__mapHelper"
+        || currentFuncName.StartsWith("Darklang.Stdlib.List.__mapHelper_")
 
     let targetReturnsClosureList (targetFunc: string) : bool =
         match tryGetFuncReturnTypeFromReg ctx targetFunc with

@@ -1,6 +1,6 @@
 // Stdlib.Cli.Architecture - portable public architecture model.
 
-module Stdlib.Cli.Architecture
+module Darklang.Stdlib.Cli.Architecture
 
 type Architecture = X86_64 | Aarch64 | Arm | Arm64 | Armv7l
 

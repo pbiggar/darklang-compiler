@@ -1,6 +1,6 @@
 // Stdlib.String - NFC-normalized, extended-grapheme-cluster text operations.
 
-module Stdlib.String
+module Darklang.Stdlib.String
 
 val newline = "\n"
 

@@ -1,6 +1,6 @@
 // Stdlib.Cli.Execution - shell execution and canonical execution outcomes.
 
-module Stdlib.Cli
+module Darklang.Stdlib.Cli
 
 type ExecutionOutcome = { exitCode: Int, stdout: String, stderr: String }
 type NativeOutput = { exitCode: Int64, stdout: String, stderr: String }

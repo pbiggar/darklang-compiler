@@ -32,21 +32,21 @@ let testTypedDecodingUsesSharedViews
 
     plannedSource stdlib source
     |> Result.bind (fun planned ->
-        if not (planned.Contains "Stdlib.Json.__parseRoot") then
+        if not (planned.Contains "Darklang.Stdlib.Json.__parseRoot") then
             Error "Expected typed JSON parsing to begin with the shared reader"
-        elif planned.Contains "Stdlib.AltJson.__parseRaw" then
+        elif planned.Contains "Darklang.Stdlib.AltJson.__parseRaw" then
             Error "Typed JSON parsing still routes through the legacy RawJson tree parser"
-        elif planned.Contains "Stdlib.AltJson.InternalRawJson" then
+        elif planned.Contains "Darklang.Stdlib.AltJson.InternalRawJson" then
             Error "Typed JSON decoding still generates functions over InternalRawJson"
         elif planned.Contains "__dark_json_view_" then
             Error "Typed JSON decoding still generates per-program view-list accessors"
-        elif not (planned.Contains "Stdlib.Json.__objectFieldMap") then
+        elif not (planned.Contains "Darklang.Stdlib.Json.__objectFieldMap") then
             Error "Expected record decoding to build its field index in one source-order pass"
-        elif planned.Contains "Stdlib.Json.__matchingViews" then
+        elif planned.Contains "Darklang.Stdlib.Json.__matchingViews" then
             Error "Record decoding still scans the object once per declared field"
-        elif not (planned.Contains "Stdlib.Json.__viewIsDuplicate") then
+        elif not (planned.Contains "Darklang.Stdlib.Json.__viewIsDuplicate") then
             Error "Expected record decoding to use allocation-free duplicate markers"
-        elif not (planned.Contains "Stdlib.Json.__arrayNext") then
+        elif not (planned.Contains "Darklang.Stdlib.Json.__arrayNext") then
             Error "Expected list decoding to consume the shared streaming array cursor"
         else
             Ok ())
@@ -61,11 +61,11 @@ let testTypedEncodingUsesSharedWriter
 
     plannedSource stdlib source
     |> Result.bind (fun planned ->
-        if not (planned.Contains "Stdlib.Json.__writerEmpty") then
+        if not (planned.Contains "Darklang.Stdlib.Json.__writerEmpty") then
             Error "Expected typed JSON encoding to initialize the shared writer"
-        elif not (planned.Contains "Stdlib.Json.__writerFinish") then
+        elif not (planned.Contains "Darklang.Stdlib.Json.__writerFinish") then
             Error "Expected typed JSON encoding to finish the shared writer"
-        elif not (planned.Contains "Stdlib.Json.__writerFieldName") then
+        elif not (planned.Contains "Darklang.Stdlib.Json.__writerFieldName") then
             Error "Expected record encoding to delegate field syntax to the shared writer"
         elif planned.Contains "StringConcat" then
             Error "Typed JSON encoding still generates string-concatenation plans"

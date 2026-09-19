@@ -33,8 +33,8 @@ let private expectCalls expected instrs =
 
 let testArgMovesFunctionAddressIsReachable () : TestResult =
     expectCalls
-        ["Stdlib.List.map"]
-        [ LIR.ArgMoves [ (LIR.X0, LIR.FuncAddr "Stdlib.List.map") ] ]
+        ["Darklang.Stdlib.List.map"]
+        [ LIR.ArgMoves [ (LIR.X0, LIR.FuncAddr "Darklang.Stdlib.List.map") ] ]
 
 let testFilteredFunctionsPreserveReachableSetAndInputOrder () : TestResult =
     let userFunctions =

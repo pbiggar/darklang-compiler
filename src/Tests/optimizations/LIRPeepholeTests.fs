@@ -544,14 +544,14 @@ let private functionWithInstrs name instrs : Function =
 let testConstantReturnCallsAreRewritten () : TestResult =
     let tagFunc =
         functionWithInstrs
-            "Stdlib.__FingerTree.__TAG_SINGLE"
+            "Darklang.Stdlib.__FingerTree.__TAG_SINGLE"
             [Mov (Physical X0, Imm 1L)]
     let caller =
         functionWithInstrs
             "caller"
             [
                 SaveRegs ([X1], [])
-                Call (Virtual 1, "Stdlib.__FingerTree.__TAG_SINGLE", [])
+                Call (Virtual 1, "Darklang.Stdlib.__FingerTree.__TAG_SINGLE", [])
                 RestoreRegs ([X1], [])
                 Mov (Virtual 1, Reg (Physical X0))
                 Cmp (Virtual 2, Reg (Virtual 1))

@@ -1,6 +1,6 @@
 // JsonPathPart.dark - typed JSON path segment representation and rendering.
 
-module Stdlib.Json.ParseError.JsonPath.Part
+module Darklang.Stdlib.Json.ParseError.JsonPath.Part
 
 type Part = Root | Index of Int | Field of String
 

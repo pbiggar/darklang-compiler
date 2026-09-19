@@ -1,6 +1,6 @@
 // Stdlib.Cli.Stdin.KeyRead - decoded terminal input events.
 
-module Stdlib.Cli.Stdin.KeyRead
+module Darklang.Stdlib.Cli.Stdin.KeyRead
 
 type KeyRead = { key: Stdlib.Cli.Stdin.Key.Key, modifiers: Stdlib.Cli.Stdin.Modifiers.Modifiers, keyChar: String, repeat: Int }
 

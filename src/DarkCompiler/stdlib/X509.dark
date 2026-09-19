@@ -1,6 +1,6 @@
 // Stdlib.X509.dark - total PEM certificate SubjectPublicKeyInfo extraction.
 
-module Stdlib.X509
+module Darklang.Stdlib.X509
 
 let __readLengthBytes (blob: Blob) (index: Int64) (remaining: Int64) (acc: Int64) : Stdlib.Option.Option<(Int64 * Int64)> =
     if remaining == 0L then Some ((index, acc))

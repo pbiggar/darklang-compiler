@@ -77,12 +77,12 @@ let private emptyMIRFunction (name: string) : MIR.Function =
 let testFormatMIRDumpFiltersBeforeFormatting () : TestResult =
     let program =
         MIR.Program (
-            [emptyMIRFunction "Stdlib.List.map"; emptyMIRFunction "Stdlib.List.filter"],
+            [emptyMIRFunction "Darklang.Stdlib.List.map"; emptyMIRFunction "Darklang.Stdlib.List.filter"],
             Map.empty,
             Map.empty
         )
     let actual = formatMIRDump (Some "MAP") false program
-    if actual.Contains "Stdlib.List.map" && not (actual.Contains "Stdlib.List.filter") then
+    if actual.Contains "Darklang.Stdlib.List.map" && not (actual.Contains "Darklang.Stdlib.List.filter") then
         Ok ()
     else
         Error $"Expected case-insensitive function-scoped MIR output, got:\n{actual}"
@@ -90,16 +90,16 @@ let testFormatMIRDumpFiltersBeforeFormatting () : TestResult =
 let testFormatMIRDumpSummary () : TestResult =
     let program =
         MIR.Program (
-            [emptyMIRFunction "Stdlib.List.map"; emptyMIRFunction "Stdlib.List.filter"],
+            [emptyMIRFunction "Darklang.Stdlib.List.map"; emptyMIRFunction "Darklang.Stdlib.List.filter"],
             Map.empty,
             Map.empty
         )
     let actual = formatMIRDump (Some "map") true program
-    let expected = "Functions: 1\nStdlib.List.map: 1 blocks, 0 instructions"
+    let expected = "Functions: 1\nDarklang.Stdlib.List.map: 1 blocks, 0 instructions"
     expectFormatted "formatMIRDump summary" expected actual
 
 let testFormatMIRDumpReportsNoMatches () : TestResult =
-    let program = MIR.Program ([emptyMIRFunction "Stdlib.List.map"], Map.empty, Map.empty)
+    let program = MIR.Program ([emptyMIRFunction "Darklang.Stdlib.List.map"], Map.empty, Map.empty)
     let actual = formatMIRDump (Some "missing") false program
     expectFormatted "formatMIRDump no matches" "No functions matched 'missing'." actual
 

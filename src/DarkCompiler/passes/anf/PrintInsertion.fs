@@ -40,7 +40,7 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
             // Explicit output functions return Unit. Matching the interpreter,
             // a final Unit has no implicit textual representation.
             (Return atom, varGen)
-        | AST.TSum ("Stdlib.Option.Option", [AST.TList elemType]) ->
+        | AST.TSum ("Darklang.Stdlib.Option.Option", [AST.TList elemType]) ->
             match ListDisplay.getDisplayStringFunc elemType with
             | Some toDisplayStringName ->
                 // Keep the display helper reachable so tree shaking doesn't drop it.
@@ -67,21 +67,21 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
             // For Float64, call Float.toString first, then print the string
             let (strTmp, varGen1) = freshVar varGen
             let (printTmp, varGen2) = freshVar varGen1
-            let callExpr = Call ("Stdlib.Float.toString", [atom])
+            let callExpr = Call ("Darklang.Stdlib.Float.toString", [atom])
             let printExpr = Print (Var strTmp, AST.TString)
             (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
         | AST.TDateTime ->
             // DateTime is an opaque immediate; display it through its public formatter.
             let (strTmp, varGen1) = freshVar varGen
             let (printTmp, varGen2) = freshVar varGen1
-            let callExpr = Call ("Stdlib.DateTime.toString", [atom])
+            let callExpr = Call ("Darklang.Stdlib.DateTime.toString", [atom])
             let printExpr = Print (Var strTmp, AST.TString)
             (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
         | AST.TSum ("Uuid", []) ->
             // UUID is an ordinary sum, but public output is its canonical text.
             let (strTmp, varGen1) = freshVar varGen
             let (printTmp, varGen2) = freshVar varGen1
-            let callExpr = Call ("Stdlib.Uuid.toString", [atom])
+            let callExpr = Call ("Darklang.Stdlib.Uuid.toString", [atom])
             let printExpr = Print (Var strTmp, AST.TString)
             (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
         | _ ->

@@ -86,14 +86,14 @@ let private listHeadUnsafeFunction
     let valueViewType = AST.TString
     let jsonAccessor =
         match elementType with
-        | typ when typ = valueViewType -> Some "Stdlib.Json.__viewListHead"
+        | typ when typ = valueViewType -> Some "Darklang.Stdlib.Json.__viewListHead"
         | AST.TTuple [AST.TString; typ] when typ = valueViewType ->
-            Some "Stdlib.Json.__viewFieldListHead"
+            Some "Darklang.Stdlib.Json.__viewFieldListHead"
         | _ -> None
     match jsonAccessor with
     | Some name when Map.containsKey name funcReg -> name
-    | _ when elementType = AST.TFloat64 -> "Stdlib.List.__headUnsafeFloat"
-    | _ -> "Stdlib.List.__headUnsafe_i64"
+    | _ when elementType = AST.TFloat64 -> "Darklang.Stdlib.List.__headUnsafeFloat"
+    | _ -> "Darklang.Stdlib.List.__headUnsafe_i64"
 
 /// Pattern matching reads list payloads without taking an ownership edge.
 /// Typed accessors materialize owned return values in their callee; the erased
@@ -105,7 +105,7 @@ let internal listHeadUnsafeExpr
     (listAtom: ANF.Atom)
     : ANF.CExpr =
     let functionName = listHeadUnsafeFunction funcReg elementType
-    if functionName = "Stdlib.List.__headUnsafe_i64" then
+    if functionName = "Darklang.Stdlib.List.__headUnsafe_i64" then
         ANF.BorrowedCall (functionName, [listAtom])
     else
         ANF.Call (functionName, [listAtom])

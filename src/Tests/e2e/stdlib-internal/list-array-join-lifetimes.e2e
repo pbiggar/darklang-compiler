@@ -1,5 +1,5 @@
 // list-array-join-lifetimes.e2e - Preserve observable destruction across scalar joins.
-let lifetimeStep (state: String): Stdlib.Option.Option<(Int64 * String)> = None
+let lifetimeStep (state: String): Option<(Int64 * String)> = None
 let lifetimeDispose (state: String): Unit = Builtin.printLine (state)
 let lifetimeResource (): Stream<Int64> = Stdlib.Stream.__fromProducer<String, Int64> ("dispose") (lifetimeStep) (lifetimeDispose)
 let lifetimeScalar (): Int64 = let stream = lifetimeResource () in 1L

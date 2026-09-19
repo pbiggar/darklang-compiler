@@ -1054,7 +1054,7 @@ let testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed () : TestRe
     let nodeType = AST.TList AST.TInt64
     let funcReg : TypeRegistries.FunctionRegistry =
         Map.ofList [
-            ("Stdlib.List.__node2GetChild_i64", AST.TFunction ([nodeType; AST.TInt64], nodeType))
+            ("Darklang.Stdlib.List.__node2GetChild_i64", AST.TFunction ([nodeType; AST.TInt64], nodeType))
         ]
 
     let ctx : TypeContext = {
@@ -1073,7 +1073,7 @@ let testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed () : TestRe
     let childTemp = TempId 2
 
     let func : Function = {
-        Name = "Stdlib.List.__node2GetChild_i64"
+        Name = "Darklang.Stdlib.List.__node2GetChild_i64"
         TypedParams = [
             { Id = nodeParam; Type = nodeType }
             { Id = indexParam; Type = AST.TInt64 }

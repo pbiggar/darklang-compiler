@@ -1,6 +1,6 @@
 // Stdlib.Html - canonical, portable HTML node construction and serialization.
 
-module Stdlib.Html
+module Darklang.Stdlib.Html
 
 type Attribute = List<(String * Stdlib.Option.Option<String>)>
 type Attributes = List<(String * Stdlib.Option.Option<String>)>

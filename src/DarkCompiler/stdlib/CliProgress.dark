@@ -1,6 +1,6 @@
 // CliProgress.dark - fixed-width interpreter-compatible progress rendering.
 
-module Stdlib.Cli.UI.Progress
+module Darklang.Stdlib.Cli.UI.Progress
 
 let bar (current: Int) (total: Int) (label: String) : Unit =
     // Compiler String/List internals still take Int64. Keep that adaptation

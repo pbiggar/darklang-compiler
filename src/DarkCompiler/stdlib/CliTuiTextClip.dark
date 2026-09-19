@@ -1,6 +1,6 @@
 // CliTuiTextClip.dark - copied upstream SGR-aware terminal clipping loop.
 
-module Stdlib.Cli.Tui.Text
+module Darklang.Stdlib.Cli.Tui.Text
 
 let __clipToWidth
     (remaining: List<Char>)

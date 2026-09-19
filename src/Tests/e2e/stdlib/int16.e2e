@@ -158,7 +158,7 @@ Stdlib.Int16.sum ([10s, 20s, 30s]) = 60s
 // Stdlib.Int16.toFloat(2) = 2.0
 
 // Stdlib.Int16.parse - needs Result type (blocked by type checker bug)
-// Stdlib.Int16.parse("1") = Stdlib.Result.Result.Ok(1)
+// Stdlib.Int16.parse("1") = Ok(1)
 
 // Stdlib.Int16.remainder - needs Result type (blocked by type checker bug)
-// Stdlib.Int16.remainder(15, 6) = Stdlib.Result.Result.Ok(3)
+// Stdlib.Int16.remainder(15, 6) = Ok(3)

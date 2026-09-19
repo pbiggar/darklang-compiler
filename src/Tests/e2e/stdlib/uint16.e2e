@@ -179,7 +179,7 @@ Stdlib.UInt16.sum ([10us, 20us, 30us]) = 60us
 // Stdlib.UInt16.toFloat(2) = 2.0
 
 // Stdlib.UInt16.parse - needs Result type (blocked by type checker bug)
-// Stdlib.UInt16.parse("1") = Stdlib.Result.Result.Ok(1)
+// Stdlib.UInt16.parse("1") = Ok(1)
 
 // Stdlib.UInt16.remainder - needs Result type (blocked by type checker bug)
-// Stdlib.UInt16.remainder(15, 6) = Stdlib.Result.Result.Ok(3)
+// Stdlib.UInt16.remainder(15, 6) = Ok(3)

@@ -4,7 +4,7 @@
 // handle exposes only lifecycle transitions and callback invocation; source
 // programs cannot inspect either representation.
 
-module Stdlib.Stream
+module Darklang.Stdlib.Stream
 
 let __STATE_READY () : Int64 = 0L
 let __STATE_ADVANCING () : Int64 = 1L

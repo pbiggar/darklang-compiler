@@ -1,6 +1,6 @@
 // Stdlib.Duration.dark - Portable canonical short-duration suffix parser.
 
-module Stdlib.Duration
+module Darklang.Stdlib.Duration
 
 let parse (value: String) : Stdlib.Result.Result<Int, String> =
     let length = Stdlib.String.__byteLength value in

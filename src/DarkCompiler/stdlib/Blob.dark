@@ -1,6 +1,6 @@
 // Stdlib.Blob.dark - immutable binary values and interpreter-compatible codecs.
 
-module Stdlib.Blob
+module Darklang.Stdlib.Blob
 
 val empty = Builtin.blobEmpty
 

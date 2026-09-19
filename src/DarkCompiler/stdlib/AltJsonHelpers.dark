@@ -1,6 +1,6 @@
 // AltJsonHelpers.dark - portable first-match traversal helpers for structural JSON.
 
-module Stdlib.AltJson.Helpers
+module Darklang.Stdlib.AltJson.Helpers
 
 let getString (key: String) (fields: List<(String * Stdlib.AltJson.Json)>) : Stdlib.Option.Option<String> =
     match Stdlib.List.findFirst fields (fun pair -> Stdlib.Tuple2.first pair == key) with

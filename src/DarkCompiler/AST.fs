@@ -148,10 +148,10 @@ let constructorRuntimeIdentity (declaringType: string) (caseName: string) : int 
     match declaringType, caseName with
     // Runtime I/O and string intrinsics construct these two foundational
     // stdlib types directly. Their ABI tags predate user-defined ADTs.
-    | "Stdlib.Option.Option", "Some"
-    | "Stdlib.Result.Result", "Ok" -> 0
-    | "Stdlib.Option.Option", "None"
-    | "Stdlib.Result.Result", "Error" -> 1
+    | "Darklang.Stdlib.Option.Option", "Some"
+    | "Darklang.Stdlib.Result.Result", "Ok" -> 0
+    | "Darklang.Stdlib.Option.Option", "None"
+    | "Darklang.Stdlib.Result.Result", "Error" -> 1
     | _ ->
         $"{declaringType}.{caseName}"
         |> Seq.fold (fun hash character -> (hash ^^^ uint32 character) * 16777619u) 2166136261u
@@ -507,7 +507,7 @@ type TopLevel =
     | FunctionDef of FunctionDef
     | TypeDef of TypeDef
     | ValueDef of ValueDef
-    | Expression of Expr
+    | Expression of modulePath:string list * Expr
 
 /// Program is a list of top-level definitions (functions and/or expressions)
 type Program = Program of TopLevel list
@@ -522,7 +522,7 @@ type ModuleFunc = {
 
 /// Module definition - represents a namespace of functions
 type ModuleDef = {
-    Name: string                     // Full module path (e.g., "Stdlib.Int64")
+    Name: string                     // Full module path (e.g., "Darklang.Stdlib.Int64")
     Functions: ModuleFunc list       // Functions in this module
 }
 

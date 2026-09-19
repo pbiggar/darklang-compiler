@@ -10,7 +10,7 @@ open System.Numerics
 
 type TestResult = Result<unit, string>
 
-let private errorType = AST.TRecord ("Stdlib.Cli.Posix.Error", [])
+let private errorType = AST.TRecord ("Darklang.Stdlib.Cli.Posix.Error", [])
 
 let private customType hash typeArguments : CompilationContexts.PackageCustomType = {
     Hash = hash
@@ -26,7 +26,7 @@ let private location branches owner modules name : CompilationContexts.CatalogPa
 
 let private errorValue (errno: int) (message: string) =
     AST.RecordLiteral (
-        AST.unresolvedRecordReference "Stdlib.Cli.Posix.Error" [],
+        AST.unresolvedRecordReference "Darklang.Stdlib.Cli.Posix.Error" [],
         [
             ("errno", AST.BigIntLiteral (BigInteger errno))
             ("message", AST.StringLiteral message)

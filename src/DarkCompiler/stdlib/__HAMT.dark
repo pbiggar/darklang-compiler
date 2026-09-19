@@ -3,7 +3,7 @@
 // The public generic API lives in Dict.dark; `Stdlib.Dict.__*` functions
 // provide its persistent representation and compiler-owned extensions.
 
-module Stdlib.Dict
+module Darklang.Stdlib.Dict
 
 // Internal Hash Array Mapped Trie helpers
 // =============================================================================

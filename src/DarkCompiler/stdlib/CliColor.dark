@@ -1,6 +1,6 @@
 // CliColor.dark - upstream ANSI values and one-shot colorizers.
 
-module Stdlib.Cli.UI.Colors
+module Darklang.Stdlib.Cli.UI.Colors
 
 val reset = "\u001b[0m"
 val bold = "\u001b[1m"

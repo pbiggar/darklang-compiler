@@ -45,7 +45,7 @@ let private addSyntheticMainExpressionIfNeeded (AST.Program topLevels: AST.Progr
     if hasTopLevelExpression (AST.Program topLevels) then
         (AST.Program topLevels, false)
     else
-        (AST.Program (topLevels @ [ AST.Expression (AST.Int64Literal 0L) ]), true)
+        (AST.Program (topLevels @ [ AST.Expression ([], AST.Int64Literal 0L) ]), true)
 
 let private parseOptimizationSource (source: string) : Result<AST.Program * bool, string> =
     match Parser.parseString true source with

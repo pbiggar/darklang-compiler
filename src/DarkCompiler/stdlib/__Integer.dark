@@ -3,7 +3,7 @@
 // These `Stdlib.Int.__*` helpers keep the canonical decimal-buffer
 // representation target-independent and share it with fixed 128-bit integers.
 
-module Stdlib.Int
+module Darklang.Stdlib.Int
 
 let __text (value: Int) : String = __int_to_string value
 

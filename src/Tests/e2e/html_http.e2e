@@ -15,7 +15,7 @@ type HtmlNodeAlias = Stdlib.Html.Node let htmlAliasNode (value: String): HtmlNod
 // Serialization boundaries: fixed escape order, raw attributes/comments,
 // boolean attributes, void behavior, case sensitivity, and documents.
 Stdlib.Html.escapeHtml "&<>'\"" = "&amp;&lt;&gt;&#x27;&quot;"
-Stdlib.Html.nodeToString (Stdlib.Html.htmlTagNode "img" ([("alt", Stdlib.Option.Option.Some "<&"), ("hidden", Stdlib.Option.Option.None)]) ([Stdlib.Html.text "ignored"])) = "<img alt=\"<&\" hidden>"
+Stdlib.Html.nodeToString (Stdlib.Html.htmlTagNode "img" ([("alt", Some "<&"), ("hidden", None)]) ([Stdlib.Html.text "ignored"])) = "<img alt=\"<&\" hidden>"
 Stdlib.Html.nodeToString (Stdlib.Html.htmlTagNode "IMG" ([]) ([])) = "<IMG></IMG>"
 Stdlib.Html.nodeToString (Stdlib.Html.comment "<raw>") = "<!-- <raw> -->"
 Stdlib.Html.document ([Stdlib.Html.html ([]) ([])]) = "<!DOCTYPE html><html></html>"
@@ -34,23 +34,23 @@ Stdlib.Http.parseHeaders " A : one\r\nmalformed\r\nA: two:three\r\n : blank-name
 let req = Stdlib.Http.Request { url = "https://x", headers = [], body = Stdlib.Blob.empty } in Stdlib.Http.Request.queryParams req = [("", "")]
 let req = Stdlib.Http.Request { url = "https://x?", headers = [], body = Stdlib.Blob.empty } in Stdlib.Http.Request.queryParams req = [("", "")]
 let req = Stdlib.Http.Request { url = "https://x?a=1&a=2&bad=a=b&bare", headers = [], body = Stdlib.Blob.empty } in Stdlib.Http.Request.queryParams req = [("a", "1"), ("a", "2"), ("bad=a=b", ""), ("bare", "")]
-let req = Stdlib.Http.Request { url = "https://x?a=1&a=2", headers = [], body = Stdlib.Blob.empty } in Stdlib.Http.Request.queryParam req "a" = Stdlib.Option.Option.Some "1,2"
-let req = Stdlib.Http.Request { url = "https://x?a=1", headers = [], body = Stdlib.Blob.empty } in Stdlib.Http.Request.queryParam req "missing" = Stdlib.Option.Option.None
+let req = Stdlib.Http.Request { url = "https://x?a=1&a=2", headers = [], body = Stdlib.Blob.empty } in Stdlib.Http.Request.queryParam req "a" = Some "1,2"
+let req = Stdlib.Http.Request { url = "https://x?a=1", headers = [], body = Stdlib.Blob.empty } in Stdlib.Http.Request.queryParam req "missing" = None
 
 // Response helpers preserve status, header spelling/order, bytes, raw JSON,
 // arbitrary redirects, and duplicate ordered Set-Cookie header pairs.
-let r = Stdlib.Http.response (Stdlib.String.toBlob "ok") 201 in (r.statusCode, r.headers, Stdlib.Blob.toString r.body) = (201, [], Stdlib.Result.Result.Ok "ok")
+let r = Stdlib.Http.response (Stdlib.String.toBlob "ok") 201 in (r.statusCode, r.headers, Stdlib.Blob.toString r.body) = (201, [], Ok "ok")
 let r = Stdlib.Http.responseWithHeaders (Stdlib.String.toBlob "x") ([("Set-Cookie", "a=1"), ("Set-Cookie", "b=2")]) 202 in r.headers = [("Set-Cookie", "a=1"), ("Set-Cookie", "b=2")]
-let r = Stdlib.Http.success (Stdlib.String.toBlob "yes") in (r.statusCode, Stdlib.Blob.toString r.body) = (200, Stdlib.Result.Result.Ok "yes")
-let r = Stdlib.Http.responseWithHtml "<b>x</b>" 203 in (r.statusCode, r.headers, Stdlib.Blob.toString r.body) = (203, [("Content-Type", "text/html; charset=utf-8")], Stdlib.Result.Result.Ok "<b>x</b>")
-let r = Stdlib.Http.responseWithText "hello" 204 in (r.statusCode, r.headers, Stdlib.Blob.toString r.body) = (204, [("Content-Type", "text/plain; charset=utf-8")], Stdlib.Result.Result.Ok "hello")
-let r = Stdlib.Http.responseWithJson "{\"already\":true}" 205 in (r.statusCode, r.headers, Stdlib.Blob.toString r.body) = (205, [("Content-Type", "application/json")], Stdlib.Result.Result.Ok "{\"already\":true}")
+let r = Stdlib.Http.success (Stdlib.String.toBlob "yes") in (r.statusCode, Stdlib.Blob.toString r.body) = (200, Ok "yes")
+let r = Stdlib.Http.responseWithHtml "<b>x</b>" 203 in (r.statusCode, r.headers, Stdlib.Blob.toString r.body) = (203, [("Content-Type", "text/html; charset=utf-8")], Ok "<b>x</b>")
+let r = Stdlib.Http.responseWithText "hello" 204 in (r.statusCode, r.headers, Stdlib.Blob.toString r.body) = (204, [("Content-Type", "text/plain; charset=utf-8")], Ok "hello")
+let r = Stdlib.Http.responseWithJson "{\"already\":true}" 205 in (r.statusCode, r.headers, Stdlib.Blob.toString r.body) = (205, [("Content-Type", "application/json")], Ok "{\"already\":true}")
 let r = Stdlib.Http.redirectTo "bad url" in (r.statusCode, r.headers, Stdlib.Blob.length r.body) = (302, [("Location", "bad url")], 0)
-let r = Stdlib.Http.badRequest "bad" in (r.statusCode, Stdlib.Blob.toString r.body) = (400, Stdlib.Result.Result.Ok "bad")
+let r = Stdlib.Http.badRequest "bad" in (r.statusCode, Stdlib.Blob.toString r.body) = (400, Ok "bad")
 let r = Stdlib.Http.notFound () in (r.statusCode, r.headers, Stdlib.Blob.length r.body) = (404, [], 0)
 let r = Stdlib.Http.unauthorized () in (r.statusCode, Stdlib.Blob.length r.body) = (401, 0)
 let r = Stdlib.Http.forbidden () in (r.statusCode, Stdlib.Blob.length r.body) = (403, 0)
-let r = Stdlib.Http.serverError "boom" in (r.statusCode, Stdlib.Blob.toString r.body) = (500, Stdlib.Result.Result.Ok "boom")
+let r = Stdlib.Http.serverError "boom" in (r.statusCode, Stdlib.Blob.toString r.body) = (500, Ok "boom")
 
 // Cookie is a structural value only at the pinned revision.
 let c = Stdlib.Http.Cookie { expires = Stdlib.DateTime.fromSeconds 0, maxAge = 60, domain = "example.com", path = "/", secure = true, httpOnly = true, sameSite = "Strict" } in (c.maxAge, c.secure, c.sameSite) = (60, true, "Strict")

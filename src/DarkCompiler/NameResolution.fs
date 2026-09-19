@@ -314,14 +314,80 @@ let resolveQualified
             |> List.map (fun candidate -> candidate.Identity)
             |> fun identities -> Error (AmbiguousReference (name, context, identities))
 
+let private qualifiedNameFromList (segments: string list) : QualifiedName =
+    segments
+    |> NonEmptyList.tryFromList
+    |> Option.map QualifiedName
+    |> Option.defaultWith (fun () -> Crash.crash "Name-resolution candidate was unexpectedly empty")
+
+/// Generate the interpreter's ordered relative-name candidates. `Darklang.Stdlib`
+/// is canonical; `Stdlib` is the interpreter's explicit source shortcut.
+let private namesToTry
+    (context: ResolutionContext)
+    (currentModule: string list)
+    (given: QualifiedName)
+    : QualifiedName list =
+    let givenSegments = qualifiedNameSegments given
+    let rec relative prefixes =
+        match prefixes with
+        | [] -> [qualifiedNameFromList givenSegments]
+        | _ ->
+            qualifiedNameFromList (prefixes @ givenSegments)
+            :: relative (prefixes |> List.rev |> List.tail |> List.rev)
+    let aliases =
+        match context, givenSegments with
+        | _, "Stdlib" :: rest ->
+            [qualifiedNameFromList ("Darklang" :: "Stdlib" :: rest)]
+        | ResolutionContext.Type, ["Option"] ->
+            [qualifiedNameFromList ["Darklang"; "Stdlib"; "Option"; "Option"]]
+        | ResolutionContext.Type, ["Result"] ->
+            [qualifiedNameFromList ["Darklang"; "Stdlib"; "Result"; "Result"]]
+        | ResolutionContext.Constructor, ["Option"; ("Some" | "None" as caseName)] ->
+            [qualifiedNameFromList ["Darklang"; "Stdlib"; "Option"; "Option"; caseName]]
+        | ResolutionContext.Constructor, ["Result"; ("Ok" | "Error" as caseName)] ->
+            [qualifiedNameFromList ["Darklang"; "Stdlib"; "Result"; "Result"; caseName]]
+        | _ -> []
+    relative currentModule @ aliases
+    |> List.distinct
+
+let internal candidateSpellings
+    (context: ResolutionContext)
+    (currentModule: string list)
+    (spelling: string)
+    : string list =
+    match tryQualifiedName spelling with
+    | None -> []
+    | Some name ->
+        namesToTry context currentModule name
+        |> List.map qualifiedNameToString
+
+let resolveInModule
+    (context: ResolutionContext)
+    (currentModule: string list)
+    (spelling: string)
+    (environment: ResolutionEnvironment)
+    : Result<SuccessfulResolution, ResolutionError> =
+    match tryQualifiedName spelling with
+    | None -> Error (InvalidQualifiedName (spelling, context))
+    | Some originalName ->
+        let rec tryCandidates candidates =
+            match candidates with
+            | [] -> Error (UnresolvedName (originalName, context))
+            | candidate :: rest ->
+                match resolveQualified context candidate environment with
+                | Ok resolution -> Ok { resolution with OriginalName = originalName }
+                | Error (UnresolvedName _) -> tryCandidates rest
+                | Error (AmbiguousReference (_, _, identities)) ->
+                    Error (AmbiguousReference (originalName, context, identities))
+                | Error error -> Error error
+        namesToTry context currentModule originalName |> tryCandidates
+
 let resolve
     (context: ResolutionContext)
     (spelling: string)
     (environment: ResolutionEnvironment)
     : Result<SuccessfulResolution, ResolutionError> =
-    match tryQualifiedName spelling with
-    | Some name -> resolveQualified context name environment
-    | None -> Error (InvalidQualifiedName (spelling, context))
+    resolveInModule context [] spelling environment
 
 let contextToString (context: ResolutionContext) : string =
     match context with

@@ -1,6 +1,6 @@
 // Stdlib.Regex - portable, architecture-independent regular-expression matching.
 
-module Stdlib.Regex
+module Darklang.Stdlib.Regex
 
 type Atom =
     | Literal of Char

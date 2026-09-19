@@ -1,6 +1,6 @@
 // CliTuiTextEscape.dark - escape-sequence scanning for copied upstream terminal text helpers.
 
-module Stdlib.Cli.Tui.Text
+module Darklang.Stdlib.Cli.Tui.Text
 
 let __isCsiFinal (cluster: Char) : Bool =
     match Stdlib.Char.toCodepoint cluster with

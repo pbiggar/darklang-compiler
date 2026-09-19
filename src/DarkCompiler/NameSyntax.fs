@@ -436,7 +436,7 @@ let private assignParsedRecursiveIdentities (Program topLevels) : Program =
                 ValueDef (UncheckedValueDef (name, assignExpr path (path @ [0]) body))
             | CheckedValueDef (name, typ, body) ->
                 ValueDef (CheckedValueDef (name, typ, assignExpr path (path @ [0]) body))
-        | Expression expr -> Expression (assignExpr path (path @ [0]) expr)
+        | Expression (modulePath, expr) -> Expression (modulePath, assignExpr path (path @ [0]) expr)
         | TypeDef _ -> topLevel
 
     Program (topLevels |> List.mapi assignTopLevel)
@@ -468,7 +468,11 @@ let normalizeSource (source: ParsedSource) : Result<Program, string> =
                     let normalized = normalizeTypeName prefix identifier definition
                     declarationsToProgram (TypeDef normalized :: acc) rest
                 | SourceExpression expression :: rest ->
-                    declarationsToProgram (Expression expression :: acc) rest
+                    let modulePath =
+                        prefix
+                        |> Option.map (segments >> List.map identifierText)
+                        |> Option.defaultValue []
+                    declarationsToProgram (Expression (modulePath, expression) :: acc) rest
                 | SourceNestedModule (moduleName, body) :: rest ->
                     let nestedPrefix =
                         prefix

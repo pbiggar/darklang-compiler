@@ -105,16 +105,16 @@ let rec internal buildEqHelperExpr
         BinOp (Eq, leftExpr, rightExpr)
 
     | _, TInt ->
-        Call ("Stdlib.Int.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
+        Call ("Darklang.Stdlib.Int.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
 
     | ExpandCurrent, TDict (keyType, valueType) ->
         let entryType =
             TTuple [resolveType aliasReg keyType; resolveType aliasReg valueType]
         let listType = TList entryType
         let leftEntries =
-            TypeApp ("Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton leftExpr)
+            TypeApp ("Darklang.Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton leftExpr)
         let rightEntries =
-            TypeApp ("Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton rightExpr)
+            TypeApp ("Darklang.Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton rightExpr)
         buildEqHelperExpr
             aliasReg
             typeReg

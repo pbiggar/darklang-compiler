@@ -16,17 +16,17 @@ let private integerBitwiseFunctions (typ: Type) : ModuleFunc list =
       { Name = "bitwiseNot"; TypeParams = []; ParamTypes = [typ]; ReturnType = typ } ]
 
 let private integerBitwiseModule (name: string) (typ: Type) : ModuleDef =
-    { Name = $"Stdlib.{name}"
+    { Name = $"Darklang.Stdlib.{name}"
       Functions = integerBitwiseFunctions typ }
 
 let boolIntrinsicModule : ModuleDef =
-    { Name = "Stdlib.Bool"
+    { Name = "Darklang.Stdlib.Bool"
       Functions =
         [ { Name = "not"; TypeParams = []; ParamTypes = [TBool]; ReturnType = TBool } ] }
 
 /// Intrinsic Stdlib.Int64 functions
 let int64IntrinsicModule : ModuleDef = {
-    Name = "Stdlib.Int64"
+    Name = "Darklang.Stdlib.Int64"
     Functions =
         integerBitwiseFunctions TInt64 @ [
         // toFloat : (Int64) -> Float
@@ -36,7 +36,7 @@ let int64IntrinsicModule : ModuleDef = {
 
 /// Intrinsic Stdlib.Float functions
 let floatIntrinsicModule : ModuleDef = {
-    Name = "Stdlib.Float"
+    Name = "Darklang.Stdlib.Float"
     Functions = [
         { Name = "sqrt"; TypeParams = []; ParamTypes = [TFloat64]; ReturnType = TFloat64 }
         { Name = "negate"; TypeParams = []; ParamTypes = [TFloat64]; ReturnType = TFloat64 }
@@ -47,33 +47,33 @@ let floatIntrinsicModule : ModuleDef = {
 
 /// Helper to create Result<T, String> type
 let resultType (okType: Type) : Type =
-    TSum ("Stdlib.Result.Result", [okType; TString])
+    TSum ("Darklang.Stdlib.Result.Result", [okType; TString])
 
 /// Internal native operations supporting the public Stdlib.Cli modules.
 /// Portable policy stays in Dark; these typed effects are lowered by the compiler.
 let cliIntrinsicModule : ModuleDef = {
-    Name = "Stdlib.Cli"
+    Name = "Darklang.Stdlib.Cli"
     Functions = [
-        { Name = "__execute"; TypeParams = []; ParamTypes = [TString]; ReturnType = TRecord ("Stdlib.Cli.NativeOutput", []) }
-        { Name = "__runProcess"; TypeParams = []; ParamTypes = [TRecord ("Stdlib.Cli.NativeProcessRequest", [])]; ReturnType = TRecord ("Stdlib.Cli.NativeProcessOutput", []) }
+        { Name = "__execute"; TypeParams = []; ParamTypes = [TString]; ReturnType = TRecord ("Darklang.Stdlib.Cli.NativeOutput", []) }
+        { Name = "__runProcess"; TypeParams = []; ParamTypes = [TRecord ("Darklang.Stdlib.Cli.NativeProcessRequest", [])]; ReturnType = TRecord ("Darklang.Stdlib.Cli.NativeProcessOutput", []) }
         { Name = "__hostOSCode"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
         { Name = "__hostArchitectureCode"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
-        { Name = "__hostname"; TypeParams = []; ParamTypes = []; ReturnType = TSum ("Stdlib.Result.Result", [TString; TRecord ("Stdlib.Cli.NativePosixError", [])]) }
-        { Name = "__getenv"; TypeParams = []; ParamTypes = [TString]; ReturnType = TSum ("Stdlib.Option.Option", [TString]) }
-        { Name = "__kill"; TypeParams = []; ParamTypes = [TInt64; TInt64]; ReturnType = TSum ("Stdlib.Result.Result", [TUnit; TRecord ("Stdlib.Cli.NativePosixError", [])]) }
+        { Name = "__hostname"; TypeParams = []; ParamTypes = []; ReturnType = TSum ("Darklang.Stdlib.Result.Result", [TString; TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]) }
+        { Name = "__getenv"; TypeParams = []; ParamTypes = [TString]; ReturnType = TSum ("Darklang.Stdlib.Option.Option", [TString]) }
+        { Name = "__kill"; TypeParams = []; ParamTypes = [TInt64; TInt64]; ReturnType = TSum ("Darklang.Stdlib.Result.Result", [TUnit; TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]) }
         { Name = "__sleep"; TypeParams = []; ParamTypes = [TFloat64]; ReturnType = TUnit }
         { Name = "__getpid"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
         { Name = "__getuid"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
         { Name = "__cpuCount"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
         { Name = "__spawnProcess"; TypeParams = []; ParamTypes = [TString]; ReturnType = TInt64 }
-        { Name = "__processIO"; TypeParams = []; ParamTypes = [TInt64; TString]; ReturnType = TRecord ("Stdlib.Cli.NativeOutput", []) }
-        { Name = "__terminateProcess"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TRecord ("Stdlib.Cli.NativeOutput", []) }
+        { Name = "__processIO"; TypeParams = []; ParamTypes = [TInt64; TString]; ReturnType = TRecord ("Darklang.Stdlib.Cli.NativeOutput", []) }
+        { Name = "__terminateProcess"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TRecord ("Darklang.Stdlib.Cli.NativeOutput", []) }
     ]
 }
 
 /// Compiler-only file effects used by portable stdlib implementations.
 let fileIntrinsicModule : ModuleDef = {
-    Name = "Stdlib.File"
+    Name = "Darklang.Stdlib.File"
     Functions = [
         { Name = "readText"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TString }
     ]
@@ -81,7 +81,7 @@ let fileIntrinsicModule : ModuleDef = {
 
 /// Private entropy primitive used to implement the upstream numeric random APIs.
 let randomModule : ModuleDef = {
-    Name = "Stdlib.Int"
+    Name = "Darklang.Stdlib.Int"
     Functions = [
         { Name = "__randomInt64Word"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
     ]
@@ -89,7 +89,7 @@ let randomModule : ModuleDef = {
 
 /// Internal typed operations used by the portable Stdlib.DateTime module.
 let dateTimeModule : ModuleDef = {
-    Name = "Stdlib.DateTime"
+    Name = "Darklang.Stdlib.DateTime"
     Functions = [
         { Name = "__now"; TypeParams = []; ParamTypes = []; ReturnType = TDateTime }
         { Name = "__fromUnixTimeTicks"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TDateTime }
@@ -125,7 +125,7 @@ let packageCatalogModule : ModuleDef = {
         { Name = "pmEvaluateValue"
           TypeParams = ["a"]
           ParamTypes = [TSum ("Darklang.LanguageTools.ProgramTypes.Hash", [])]
-          ReturnType = TSum ("Stdlib.Option.Option", [TVar "a"]) }
+          ReturnType = TSum ("Darklang.Stdlib.Option.Option", [TVar "a"]) }
     ]
 }
 
@@ -250,7 +250,7 @@ let allModules : ModuleDef list = [
 ]
 
 /// Build the module registry from all modules
-/// Maps qualified function names (e.g., "Stdlib.Int64.add") to their definitions
+/// Maps qualified function names (e.g., "Darklang.Stdlib.Int64.add") to their definitions
 let buildModuleRegistry () : ModuleRegistry =
     let moduleFuncs =
         allModules

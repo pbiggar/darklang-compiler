@@ -16,7 +16,7 @@ let internal generatePlannedGenericRefCountDecHelper
     // existing single-payload sum ownership rule is preserved exactly.
     let helperFunctionName =
         if spec.OwnsSinglePayloadSum then helperLabel
-        else $"Stdlib.{helperLabel}"
+        else $"Darklang.Stdlib.{helperLabel}"
     let helperCtx = {
         ctx with
             FunctionName = helperFunctionName

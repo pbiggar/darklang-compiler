@@ -1,6 +1,6 @@
 // Stdlib.Json.dark - typed JSON AOT intrinsic declarations and numeric helpers.
 
-module Stdlib.Json
+module Darklang.Stdlib.Json
 
 // A view packs 31-bit source offsets plus single-field-object and duplicate
 // hints into an Int64. Generated codecs pass the source separately, so

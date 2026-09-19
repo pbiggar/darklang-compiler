@@ -1,6 +1,6 @@
 // Stdlib.Retry.dark - Portable retry control flow matching the interpreter.
 
-module Stdlib.Retry
+module Darklang.Stdlib.Retry
 
 let withBackoffLoop<'a> (maxAttempts: Int) (attempt: Int) (delayMs: Float) (fn: Unit -> Stdlib.Result.Result<a, String>) : Stdlib.Result.Result<a, String> =
     match fn (()) with

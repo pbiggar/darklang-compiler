@@ -439,10 +439,10 @@ match [1L, 2L, 3L] with | 1L :: rest -> 42L | _ -> 0L = 42L
 
 // List cons should preserve string element typing even when scrutinee type comes from an if-expression
 // with an unreachable runtime-error branch.
-match (if false then Stdlib.Option.Option.None |> Builtin.unwrap else ["a", "b"]) with | h :: t -> if h == "a" then 1L else 0L | _ -> 0L = 1L
+match (if false then None |> Builtin.unwrap else ["a", "b"]) with | h :: t -> if h == "a" then 1L else 0L | _ -> 0L = 1L
 
 // Guarded list cons should preserve string element typing from inferred scrutinee types.
-match (if false then Stdlib.Option.Option.None |> Builtin.unwrap else ["a", "b"]) with | h :: t when h == "a" -> 1L | _ -> 0L = 1L
+match (if false then None |> Builtin.unwrap else ["a", "b"]) with | h :: t when h == "a" -> 1L | _ -> 0L = 1L
 
 // Literal pattern in list cons - no match
 match [2L, 2L, 3L] with | 1L :: rest -> 42L | _ -> 0L = 0L
@@ -468,7 +468,7 @@ match [Some 5L, Some 6L] with | [None, _] -> 1L | [Some ((x, _)), _] -> 2L | _ -
 
 // Generic constructor payload tuple destructuring must preserve unresolved tuple element bindings.
 // Regression: lowering dropped tuple bindings for `TVar` payloads and failed with `Undefined variable: x`.
-let genericPayloadTupleBinding (v: Stdlib.Option.Option<(String * Int64)>) : String = match v with | Some ((x, _)) -> x | _ -> "" genericPayloadTupleBinding (Some (("a" ++ "", 1L))) = "a"
+let genericPayloadTupleBinding (v: Option<(String * Int64)>) : String = match v with | Some ((x, _)) -> x | _ -> "" genericPayloadTupleBinding (Some (("a" ++ "", 1L))) = "a"
 
 // Generic top-level list patterns should allow unresolved scrutinee TVars.
 // Regression: type checking rejected list-pattern bindings on TVar scrutinees before lowering.

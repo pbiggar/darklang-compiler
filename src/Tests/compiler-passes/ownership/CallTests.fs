@@ -15,8 +15,8 @@ let testBorrowedCallMaterializesOwnedLocal () : TestResult =
     let funcReg : TypeRegistries.FunctionRegistry =
         Map.ofList [
             ("consumer", AST.TFunction ([nodeType; AST.TInt64], AST.TInt64))
-            ("Stdlib.List.__node2GetChild_i64", AST.TFunction ([nodeType; AST.TInt64], nodeType))
-            ("Stdlib.List.__nodeMeasure_i64", AST.TFunction ([nodeType], AST.TInt64))
+            ("Darklang.Stdlib.List.__node2GetChild_i64", AST.TFunction ([nodeType; AST.TInt64], nodeType))
+            ("Darklang.Stdlib.List.__nodeMeasure_i64", AST.TFunction ([nodeType], AST.TInt64))
         ]
 
     let ctx : TypeContext = {
@@ -46,10 +46,10 @@ let testBorrowedCallMaterializesOwnedLocal () : TestResult =
         Body =
             Let (
                 childTemp,
-                BorrowedCall ("Stdlib.List.__node2GetChild_i64", [Var nodeParam; Var indexParam]),
+                BorrowedCall ("Darklang.Stdlib.List.__node2GetChild_i64", [Var nodeParam; Var indexParam]),
                 Let (
                     measureTemp,
-                    Call ("Stdlib.List.__nodeMeasure_i64", [Var childTemp]),
+                    Call ("Darklang.Stdlib.List.__nodeMeasure_i64", [Var childTemp]),
                     Return (Var measureTemp)
                 )
             )

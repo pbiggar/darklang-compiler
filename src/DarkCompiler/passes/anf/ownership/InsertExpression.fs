@@ -49,8 +49,8 @@ let rec insertRCWithAnalysis
             false
     let mapHelperTransfersSecondParam =
         let isMapHelper (funcName: string) : bool =
-            funcName = "Stdlib.List.__mapHelper"
-            || funcName.StartsWith("Stdlib.List.__mapHelper_")
+            funcName = "Darklang.Stdlib.List.__mapHelper"
+            || funcName.StartsWith("Darklang.Stdlib.List.__mapHelper_")
         let secondParamTransfersOwnership (funcName: string) : bool =
             match Map.tryFind funcName ctx.FuncReg with
             | Some (AST.TFunction (_ :: secondParamType :: _, _)) ->
@@ -273,8 +273,8 @@ let rec insertRCWithAnalysis
             let bodyReturned = returnedSet bodyInfo
             let consumedByImmediateI64Push =
                 let isI64Push (funcName: string) : bool =
-                    funcName = "Stdlib.List.__push_i64"
-                    || funcName = "Stdlib.List.__pushBack_i64"
+                    funcName = "Darklang.Stdlib.List.__push_i64"
+                    || funcName = "Darklang.Stdlib.List.__pushBack_i64"
                 let consumesSecondArg (args: Atom list) : bool =
                     match args with
                     | _listAtom :: Var valueTemp :: _ -> valueTemp = tempId
@@ -418,8 +418,8 @@ let rec insertRCWithAnalysis
                     match cexpr with
                     | Call (funcName, [_; Var valueTemp])
                     | TailCall (funcName, [_; Var valueTemp]) when
-                        funcName = "Stdlib.List.__push_i64"
-                        || funcName = "Stdlib.List.__pushBack_i64" ->
+                        funcName = "Darklang.Stdlib.List.__push_i64"
+                        || funcName = "Darklang.Stdlib.List.__pushBack_i64" ->
                         let transfersImmediateOwnedValue =
                             match frames with
                             | previous :: _ when previous.TempId = valueTemp ->

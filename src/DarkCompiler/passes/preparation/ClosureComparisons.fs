@@ -146,7 +146,7 @@ let private comparisonForCapturedValue
     elif typ = AST.TString then
         CheckedAST.BinOp (AST.Eq, left, right)
     elif typ = AST.TInt then
-        CheckedAST.Call ("Stdlib.Int.__equals", exprArgsFromList [left; right])
+        CheckedAST.Call ("Darklang.Stdlib.Int.__equals", exprArgsFromList [left; right])
     else
         CheckedAST.BinOp (AST.Eq, left, right)
 

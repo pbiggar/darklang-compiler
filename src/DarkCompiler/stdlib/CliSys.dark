@@ -1,6 +1,6 @@
 // Stdlib.Cli.Sys - portable system-information wrappers.
 
-module Stdlib.Cli.Sys
+module Darklang.Stdlib.Cli.Sys
 
 let __currentUserFromPasswd (lines: List<String>) (uid: String) : Stdlib.Option.Option<String> =
     match lines with

@@ -29,8 +29,8 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
             |> Result.bind (fun (argType, argExpr') ->
                 let unwrapTypeResult =
                     match resolveType aliasReg argType with
-                    | TSum ("Stdlib.Option.Option", [valueType]) -> Ok valueType
-                    | TSum ("Stdlib.Result.Result", [okType; _]) -> Ok okType
+                    | TSum ("Darklang.Stdlib.Option.Option", [valueType]) -> Ok valueType
+                    | TSum ("Darklang.Stdlib.Result.Result", [okType; _]) -> Ok okType
                     | actualType ->
                         Error (GenericError $"Can only unwrap Options and Results, yet got {typeToString actualType}")
 
@@ -84,7 +84,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
             // Freshen type params to avoid name clashes with caller's scope
             let (freshTypeParams, renaming) =
                 let scopeName =
-                    if resolvedFuncName.StartsWith "Stdlib." then None
+                    if resolvedFuncName.StartsWith "Darklang.Stdlib." then None
                     else Some resolvedFuncName
                 freshenTypeParamsAvoiding scopeName unavailableTypeVars origTypeParams
             let paramTypes = origParamTypes |> List.map (applyTypeVarRenaming renaming)

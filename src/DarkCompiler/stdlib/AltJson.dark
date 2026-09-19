@@ -4,7 +4,7 @@
 // lexeme in an internal tree. Json's AOT decoders use that tree so integer
 // conversion and path-bearing failures never depend on a rounded Float.
 
-module Stdlib.AltJson
+module Darklang.Stdlib.AltJson
 
 type Json = Null | Bool of Bool | Number of Float | String of String | Array of List<Stdlib.AltJson.Json> | Object of List<(String * Stdlib.AltJson.Json)>
 

@@ -162,7 +162,7 @@ Stdlib.UInt8.sum ([10uy, 20uy, 30uy]) = 60uy
 // Stdlib.UInt8.toFloat(2) = 2.0
 
 // Stdlib.UInt8.parse - needs Result type (blocked by type checker bug)
-// Stdlib.UInt8.parse("1") = Stdlib.Result.Result.Ok(1)
+// Stdlib.UInt8.parse("1") = Ok(1)
 
 // Stdlib.UInt8.remainder - needs Result type (blocked by type checker bug)
-// Stdlib.UInt8.remainder(15, 6) = Stdlib.Result.Result.Ok(3)
+// Stdlib.UInt8.remainder(15, 6) = Ok(3)

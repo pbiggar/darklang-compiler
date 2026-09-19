@@ -1,6 +1,6 @@
 // JsonParseError.dark - canonical typed JSON conversion failures and rendering.
 
-module Stdlib.Json.ParseError
+module Darklang.Stdlib.Json.ParseError
 
 type ParseError =
     CantMatchWithType of Darklang.LanguageTools.RuntimeTypes.TypeReference * String * List<Stdlib.Json.ParseError.JsonPath.Part.Part>

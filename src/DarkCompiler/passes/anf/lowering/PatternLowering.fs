@@ -283,7 +283,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 else
                                     // Get tail for next iteration
                                     let (tailVar, vg2) = ANF.freshVar vg'
-                                    let tailExpr = ANF.Call ("Stdlib.List.__tail_i64", [currentList])
+                                    let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
                                     let tailBinding = (tailVar, tailExpr)
                                     collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                     collectFromList innerPatterns sourceAtom env bindings vg
@@ -313,7 +313,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             collectPatternBindings p (ANF.Var headVar) elemType env (headBinding :: rawHeadBinding :: bindings) vg1'
                             |> Result.bind (fun (env', bindings', vg') ->
                                 let (rawTailVar, vg2) = ANF.freshVar vg'
-                                let rawTailExpr = ANF.Call ("Stdlib.List.__tail_i64", [currentList])
+                                let rawTailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
                                 let rawTailBinding = (rawTailVar, rawTailExpr)
                                 // Wrap tail with TypedAtom to preserve list type
                                 let (tailVar, vg2') = ANF.freshVar vg2
@@ -531,7 +531,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     else
                                         // Get tail for next iteration
                                         let (tailVar, vg2) = ANF.freshVar vg'
-                                        let tailExpr = ANF.Call ("Stdlib.List.__tail_i64", [currentList])
+                                        let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
                                         let tailBinding = (tailVar, tailExpr)
                                         collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                         collectFromList innerPatterns sourceAtom env bindings vg
@@ -561,7 +561,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 collectPatternBindings p (ANF.Var headVar) elemType env (headBinding :: rawHeadBinding :: bindings) vg1'
                                 |> Result.bind (fun (env', bindings', vg') ->
                                     let (rawTailVar, vg2) = ANF.freshVar vg'
-                                    let rawTailExpr = ANF.Call ("Stdlib.List.__tail_i64", [currentList])
+                                    let rawTailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
                                     let rawTailBinding = (rawTailVar, rawTailExpr)
                                     // Wrap tail with TypedAtom to preserve list type
                                     let (tailVar, vg2') = ANF.freshVar vg2
@@ -709,7 +709,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let (typedValueVar, vg2) = ANF.freshVar vg1
                             let typedValueExpr = ANF.TypedAtom (ANF.Var rawValueVar, elemType)
                             let (rawTailVar, vg3) = ANF.freshVar vg2
-                            let rawTailExpr = ANF.Call ("Stdlib.List.__tail_i64", [currentList])
+                            let rawTailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
                             let (typedTailVar, vg4) = ANF.freshVar vg3
                             let typedTailExpr = ANF.TypedAtom (ANF.Var rawTailVar, listType)
                             let newBindings =
@@ -773,7 +773,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let headBinding = (headVar, headExpr)
                         // Extract tail using SkewList.tail_i64
                         let (rawTailVar, vg2) = ANF.freshVar vg1'
-                        let rawTailExpr = ANF.Call ("Stdlib.List.__tail_i64", [listAtom])
+                        let rawTailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [listAtom])
                         let rawTailBinding = (rawTailVar, rawTailExpr)
                         // Wrap with TypedAtom to preserve list type for tail
                         let listType = AST.TList elemType
@@ -1057,7 +1057,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     else
                                         // Get tail for next iteration
                                         let (tailVar, vg2) = ANF.freshVar vg'
-                                        let tailExpr = ANF.Call ("Stdlib.List.__tail_i64", [currentList])
+                                        let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
                                         let tailBinding = (tailVar, tailExpr)
                                         collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                         collectFromList innerPatterns sourceAtom env bindings vg)
@@ -1094,7 +1094,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 collectBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                 |> Result.bind (fun (env', bindings', vg') ->
                                     let (tailVar, vg2) = ANF.freshVar vg'
-                                    let tailExpr = ANF.Call ("Stdlib.List.__tail_i64", [currentList])
+                                    let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
                                     let tailBinding = (tailVar, tailExpr)
                                     collectHeads rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                         collectHeads headPatterns sourceAtom env bindings vg)
@@ -1159,7 +1159,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
             | AST.PBigInt n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
-                let cmpExpr = ANF.Call ("Stdlib.Int.__equals", [scrutAtom; ANF.StringLiteral (n.ToString())])
+                let cmpExpr = ANF.Call ("Darklang.Stdlib.Int.__equals", [scrutAtom; ANF.StringLiteral (n.ToString())])
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
             | AST.PInt128Literal n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
@@ -1354,7 +1354,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                 elif patternLen = 1 then
                     let (lengthVar, vg1) = ANF.freshVar vg
-                    let lengthExpr = ANF.Call ("Stdlib.List.__length_i64", [scrutAtom])
+                    let lengthExpr = ANF.Call ("Darklang.Stdlib.List.__length_i64", [scrutAtom])
                     let (cmpVar, vg2) = ANF.freshVar vg1
                     let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 1L))
                     Ok (Some (ANF.Var cmpVar, [(lengthVar, lengthExpr); (cmpVar, cmpExpr)], vg2))
@@ -1362,7 +1362,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     // Multiple elements: check length == patternLen
                     // Use Stdlib.List.__length which handles EMPTY/SINGLE/DEEP safely
                     let (lengthVar, vg1) = ANF.freshVar vg
-                    let lengthExpr = ANF.Call ("Stdlib.List.__length_i64", [scrutAtom])
+                    let lengthExpr = ANF.Call ("Darklang.Stdlib.List.__length_i64", [scrutAtom])
                     let (cmpVar, vg2) = ANF.freshVar vg1
                     let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 patternLen)))
                     Ok (Some (ANF.Var cmpVar, [(lengthVar, lengthExpr); (cmpVar, cmpExpr)], vg2))
@@ -1374,7 +1374,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     Ok None
                 else
                     let (lengthVar, vg1) = ANF.freshVar vg
-                    let lengthExpr = ANF.Call ("Stdlib.List.__length_i64", [scrutAtom])
+                    let lengthExpr = ANF.Call ("Darklang.Stdlib.List.__length_i64", [scrutAtom])
                     let (cmpVar, vg2) = ANF.freshVar vg1
                     let cmpExpr = ANF.Prim (ANF.Gte, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 minLength)))
                     Ok (Some (ANF.Var cmpVar, [(lengthVar, lengthExpr); (cmpVar, cmpExpr)], vg2))
@@ -1627,7 +1627,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     Ok (env', bindings', vg')
                                 else
                                     let (tailVar, vg2) = ANF.freshVar vg'
-                                    let tailExpr = ANF.Call ("Stdlib.List.__tail_i64", [currentList])
+                                    let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
                                     loop rest (ANF.Var tailVar) env' (bindings' @ [(tailVar, tailExpr)]) vg2)
                     loop patterns sourceAtom env bindings vg)
             | AST.PListCons (headPatterns, tailPattern) ->
@@ -1655,7 +1655,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let (headVar, vg1) = ANF.freshVar currentVg
                             let headExpr = listHeadUnsafeExpr funcReg elemType currentList
                             let (tailVar, vg2) = ANF.freshVar vg1
-                            let tailExpr = ANF.Call ("Stdlib.List.__tail_i64", [currentList])
+                            let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
                             collectNestedPatternBindings pat (ANF.Var headVar) elemType currentEnv (currentBindings @ [(headVar, headExpr); (tailVar, tailExpr)]) vg2
                             |> Result.bind (fun (env', bindings', vg') ->
                                 collectHeads rest (ANF.Var tailVar) env' bindings' vg')
@@ -1760,7 +1760,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 elif patternLen = 1 then
                     // A singleton has one digit whose tree pointer is at offset 16.
                     let (tagVar, vg1) = ANF.freshVar vg
-                    let tagExpr = ANF.Call ("Stdlib.List.__length_i64", [listAtom])
+                    let tagExpr = ANF.Call ("Darklang.Stdlib.List.__length_i64", [listAtom])
                     let (checkVar, vg2) = ANF.freshVar vg1
                     let checkExpr = ANF.Prim (ANF.Eq, ANF.Var tagVar, ANF.IntLiteral (ANF.Int64 1L))
 
@@ -1862,8 +1862,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let (lengthVar, vg1) = ANF.freshVar vg
                     let lengthName =
                         match elemType with
-                        | AST.TFloat64 -> "Stdlib.List.__lengthFloat"
-                        | _ -> "Stdlib.List.__length_i64"
+                        | AST.TFloat64 -> "Darklang.Stdlib.List.__lengthFloat"
+                        | _ -> "Darklang.Stdlib.List.__length_i64"
                     let lengthExpr = ANF.Call (lengthName, [listAtom])
                     let (checkVar, vg2) = ANF.freshVar vg1
                     let checkExpr = ANF.Prim (ANF.Eq, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 patternLen)))
@@ -1896,8 +1896,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let (optVar, vg1) = ANF.freshVar vg
                             let getAtName =
                                 match elemType with
-                                | AST.TFloat64 -> "Stdlib.List.__getAtFloat"
-                                | _ -> "Stdlib.List.__getAtInt64"
+                                | AST.TFloat64 -> "Darklang.Stdlib.List.__getAtFloat"
+                                | _ -> "Darklang.Stdlib.List.__getAtInt64"
                             let getAtExpr = ANF.Call (getAtName, [listAtom; ANF.IntLiteral (ANF.Int64 (int64 idx))])
                             // Unwrap the Some - getAt returns tagged value with tag 1 for Some
                             let (rawValueVar, vg2) = ANF.freshVar vg1
@@ -2298,7 +2298,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                     // Call Stdlib.List.__tail to get the tail
                     let (tailResultVar, vg3) = ANF.freshVar vg2'
-                    let tailCallExpr = ANF.Call ("Stdlib.List.__tail_i64", [listAtom])
+                    let tailCallExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [listAtom])
                     // Wrap with TypedAtom to preserve correct list type in TypeMap
                     let (typedTailVar, vg3') = ANF.freshVar vg3
                     let typedTailExpr = ANF.TypedAtom (ANF.Var tailResultVar, listType)
@@ -2413,8 +2413,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 let (lengthVar, vg1) = ANF.freshVar vg
                 let lengthName =
                     match elemType with
-                    | AST.TFloat64 -> "Stdlib.List.__lengthFloat"
-                    | _ -> "Stdlib.List.__length_i64"
+                    | AST.TFloat64 -> "Darklang.Stdlib.List.__lengthFloat"
+                    | _ -> "Darklang.Stdlib.List.__length_i64"
                 let lengthExpr = ANF.Call (lengthName, [listAtom])
                 let (lengthCheckVar, vg2) = ANF.freshVar vg1
                 let lengthCheckExpr = ANF.Prim (ANF.Gte, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 numHeads)))
@@ -2441,7 +2441,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             listHeadUnsafeExpr funcReg elemType (ANF.Var currentListVar)
                         // Call tail to get rest
                         let (tailResultVar, vg2) = ANF.freshVar vg1
-                        let tailCallExpr = ANF.Call ("Stdlib.List.__tail_i64", [ANF.Var currentListVar])
+                        let tailCallExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [ANF.Var currentListVar])
                         // Preserve type information for both head and tail values.
                         let (typedHeadVar, vg2') = ANF.freshVar vg2
                         let typedHeadExpr = ANF.TypedAtom (ANF.Var headResultVar, elemType)
@@ -2742,7 +2742,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 let (lengthVar, vg1) = ANF.freshVar vg
                 let (lengthCmpVar, vg2) = ANF.freshVar vg1
                 let lengthStage =
-                    ([(lengthVar, ANF.Call ("Stdlib.List.__length_i64", [scrutAtom]))
+                    ([(lengthVar, ANF.Call ("Darklang.Stdlib.List.__length_i64", [scrutAtom]))
                       (lengthCmpVar, ANF.Prim ((if exact then ANF.Eq else ANF.Gte), ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 count))))],
                      ANF.Var lengthCmpVar)
                 let rec heads (patterns: AST.Pattern list) (current: ANF.Atom) (vg: ANF.VarGen) (acc: ((ANF.TempId * ANF.CExpr) list * ANF.Atom) list) =
@@ -2762,7 +2762,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             [(rawHeadVar, listHeadUnsafeExpr funcReg elemType current)
                              (headVar, ANF.TypedAtom (ANF.Var rawHeadVar, elemType))]
                         let tailLoads =
-                            [(rawTailVar, ANF.Call ("Stdlib.List.__tail_i64", [current]))
+                            [(rawTailVar, ANF.Call ("Darklang.Stdlib.List.__tail_i64", [current]))
                              (tailVar, ANF.TypedAtom (ANF.Var rawTailVar, listType))]
                         buildPatternStages p (ANF.Var headVar) (Some elemType) vg4
                         |> Result.bind (fun (headStages, vg5) ->

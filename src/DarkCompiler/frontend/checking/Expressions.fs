@@ -763,8 +763,8 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                 let expectedTypeArgCount = List.length typeParams
                 let typeArgs =
                     let isPublicDictFunction =
-                        (resolvedFuncName.StartsWith("Stdlib.Dict.")
-                         && not (resolvedFuncName.StartsWith("Stdlib.Dict.__")))
+                        (resolvedFuncName.StartsWith("Darklang.Stdlib.Dict.")
+                         && not (resolvedFuncName.StartsWith("Darklang.Stdlib.Dict.__")))
                         || (resolvedFuncName.StartsWith("Dict.")
                             && not (resolvedFuncName.StartsWith("Dict.__")))
                     if isPublicDictFunction
@@ -788,7 +788,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                     validateCanonicalSortableCall aliasReg typeReg indexedSumTypeReg resolvedFuncName typeArgs
                     |> Result.bind (fun () ->
                         match resolvedFuncName, typeArgs with
-                        | ("Stdlib.Json.serialize" | "Stdlib.Json.parse"), [targetType] ->
+                        | ("Darklang.Stdlib.Json.serialize" | "Darklang.Stdlib.Json.parse"), [targetType] ->
                             validateJsonTargetType
                                 aliasReg
                                 typeReg

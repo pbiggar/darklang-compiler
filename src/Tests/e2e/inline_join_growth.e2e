@@ -4,37 +4,37 @@
 // millions of ANF nodes (WIP.AI.Anthropic.Content.Citation in darklang/dark).
 
 type InlineJoinRecord =
-  { a: Stdlib.Option.Option<Int64>
-    b: Stdlib.Option.Option<String>
-    c: Stdlib.Option.Option<Int64>
-    d: Stdlib.Option.Option<Int64>
-    e: Stdlib.Option.Option<String>
-    f: Stdlib.Option.Option<Int64>
-    g: Stdlib.Option.Option<Int64>
-    h: Stdlib.Option.Option<String>
-    i: Stdlib.Option.Option<Int64>
-    j: Stdlib.Option.Option<Int64>
-    k: Stdlib.Option.Option<String>
-    l: Stdlib.Option.Option<Int64>
-    m: Stdlib.Option.Option<Int64>
-    n: Stdlib.Option.Option<String> }
+  { a: Option<Int64>
+    b: Option<String>
+    c: Option<Int64>
+    d: Option<Int64>
+    e: Option<String>
+    f: Option<Int64>
+    g: Option<Int64>
+    h: Option<String>
+    i: Option<Int64>
+    j: Option<Int64>
+    k: Option<String>
+    l: Option<Int64>
+    m: Option<Int64>
+    n: Option<String> }
 
 let inlineJoinSample (x: Int64) : InlineJoinRecord =
   InlineJoinRecord
-    { a = Stdlib.Option.Option.Some x
-      b = Stdlib.Option.Option.None
-      c = Stdlib.Option.Option.Some 3L
-      d = Stdlib.Option.Option.None
-      e = Stdlib.Option.Option.Some "e"
-      f = Stdlib.Option.Option.Some 6L
-      g = Stdlib.Option.Option.None
-      h = Stdlib.Option.Option.None
-      i = Stdlib.Option.Option.Some 9L
-      j = Stdlib.Option.Option.Some 10L
-      k = Stdlib.Option.Option.Some "k"
-      l = Stdlib.Option.Option.None
-      m = Stdlib.Option.Option.Some 13L
-      n = Stdlib.Option.Option.None }
+    { a = Some x
+      b = None
+      c = Some 3L
+      d = None
+      e = Some "e"
+      f = Some 6L
+      g = None
+      h = None
+      i = Some 9L
+      j = Some 10L
+      k = Some "k"
+      l = None
+      m = Some 13L
+      n = None }
 
 inlineJoinSample 1L == inlineJoinSample 1L = true
 inlineJoinSample 1L == inlineJoinSample 2L = false
@@ -67,17 +67,17 @@ foldFromEmpty [] = []
 // a record of Options grew from 66 to 430,000 nodes (WIP.AI.Anthropic.Content
 // in darklang/dark, every block constructor hung when called).
 type InlineJsonRecord =
-  { a: Stdlib.Option.Option<String>
-    b: Stdlib.Option.Option<String>
-    c: Stdlib.Option.Option<Int64>
-    d: Stdlib.Option.Option<String>
-    e: Stdlib.Option.Option<Int64>
-    f: Stdlib.Option.Option<String>
-    g: Stdlib.Option.Option<Int64>
-    h: Stdlib.Option.Option<String>
-    i: Stdlib.Option.Option<Int64>
-    j: Stdlib.Option.Option<String> }
-Stdlib.Json.serialize<InlineJsonRecord> (InlineJsonRecord { a = Stdlib.Option.Option.Some "a", b = Stdlib.Option.Option.None, c = Stdlib.Option.Option.Some 3L, d = Stdlib.Option.Option.None, e = Stdlib.Option.Option.None, f = Stdlib.Option.Option.Some "f", g = Stdlib.Option.Option.None, h = Stdlib.Option.Option.None, i = Stdlib.Option.Option.Some 9L, j = Stdlib.Option.Option.None }) = "{\"a\":{\"Some\":[\"a\"]},\"b\":{\"None\":[]},\"c\":{\"Some\":[3]},\"d\":{\"None\":[]},\"e\":{\"None\":[]},\"f\":{\"Some\":[\"f\"]},\"g\":{\"None\":[]},\"h\":{\"None\":[]},\"i\":{\"Some\":[9]},\"j\":{\"None\":[]}}"
+  { a: Option<String>
+    b: Option<String>
+    c: Option<Int64>
+    d: Option<String>
+    e: Option<Int64>
+    f: Option<String>
+    g: Option<Int64>
+    h: Option<String>
+    i: Option<Int64>
+    j: Option<String> }
+Stdlib.Json.serialize<InlineJsonRecord> (InlineJsonRecord { a = Some "a", b = None, c = Some 3L, d = None, e = None, f = Some "f", g = None, h = None, i = Some 9L, j = None }) = "{\"a\":{\"Some\":[\"a\"]},\"b\":{\"None\":[]},\"c\":{\"Some\":[3]},\"d\":{\"None\":[]},\"e\":{\"None\":[]},\"f\":{\"Some\":[\"f\"]},\"g\":{\"None\":[]},\"h\":{\"None\":[]},\"i\":{\"Some\":[9]},\"j\":{\"None\":[]}}"
 
 // A lambda whose body is `a != b`: the parser spells it Not (a == b), and
 // inference had no case for a unary operator (32 fns of darklang/dark's

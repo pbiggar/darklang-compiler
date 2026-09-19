@@ -788,7 +788,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
             let printE2EFailure (test: E2ETest) (failure: E2EFailure) : string list =
                 let run = failure.Run
                 let (_, stdout, stderr, compileTime, runtimeTime) = unpackRun run
-                let cleanName = test.Name.Replace("Stdlib.", "")
+                let cleanName = test.Name.Replace("Darklang.Stdlib.", "")
                 let displayName = if cleanName.Length > 60 then cleanName.Substring(0, 57) + "..." else cleanName
                 println $"  {displayName}... {Colors.red}✗ FAIL{Colors.reset} {Colors.gray}(compile: {formatTime compileTime}, run: {formatTime runtimeTime}){Colors.reset}"
                 println $"    {failure.Message}"
@@ -1517,8 +1517,8 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
 
     let writeCodegenProfileJson (path: string) : unit =
         let categoryForFunction (name: string) : string =
-            if name.StartsWith("Stdlib.Json.", StringComparison.Ordinal)
-               || name.StartsWith("Stdlib.AltJson.", StringComparison.Ordinal) then
+            if name.StartsWith("Darklang.Stdlib.Json.", StringComparison.Ordinal)
+               || name.StartsWith("Darklang.Stdlib.AltJson.", StringComparison.Ordinal) then
                 "shared_json_runtime"
             elif name.StartsWith("__dark_json_", StringComparison.Ordinal) then
                 "generated_json_codec"

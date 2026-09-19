@@ -2,7 +2,7 @@
 // Constructors establish runtime bounds. ListHIR proves physical uniqueness
 // and owns release; traversal kernels neither allocate nor release buffers.
 
-module Stdlib.List
+module Darklang.Stdlib.List
 
 // The mapping's private prefix and the common array layout cost 40 bytes.
 // Check before narrowing Int or multiplying a machine-sized length by eight.

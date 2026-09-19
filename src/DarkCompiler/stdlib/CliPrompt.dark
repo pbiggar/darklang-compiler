@@ -1,6 +1,6 @@
 // CliPrompt.dark - line-oriented terminal prompts with pinned retry behavior.
 
-module Stdlib.Cli.UI.Prompt
+module Darklang.Stdlib.Cli.UI.Prompt
 
 let ask (question: String) : String =
     let _ = Builtin.print (question ++ " ") in

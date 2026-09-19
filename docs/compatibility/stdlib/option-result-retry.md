@@ -28,9 +28,9 @@ file is deliberately source-compatible with both implementations so argument
 order, distinct payloads, callback counts, termination, and result propagation
 can be compared without separate fixtures.
 
-The portable Dark source follows the interpreter control flow directly. The
-compiler spelling uses its canonical `Stdlib.Int.add` and
-`Stdlib.Float.multiply` helpers. In `Option.and`, the `None` arm constructs the
+The portable Dark source follows the interpreter control flow directly. Its
+`Stdlib.Int.add` and `Stdlib.Float.multiply` source spellings resolve to the
+canonical `Darklang.Stdlib` identities. In `Option.and`, the `None` arm constructs the
 same payload-free `None` value instead of returning `option1`, because the
 compiler statically distinguishes `Option<a>` from the declared `Option<b>`
 result. Neither adaptation changes an accepted program's observable value.

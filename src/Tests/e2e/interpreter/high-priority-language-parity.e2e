@@ -9,8 +9,8 @@ multiplyWithLambda [1L, 2L, 3L, 4L] = 24L
 let renderPairs (pairs: List<(Int64 * String)>): List<String> = let render = fun (number, text) -> $"{Stdlib.Int64.toString number}:{text}" in Stdlib.List.map_v0 pairs render
 renderPairs [(1L, "one"), (2L, "two")] = ["1:one", "2:two"]
 
-(3L |> Stdlib.Option.Option.Some) = Stdlib.Option.Option.Some 3L
-(3L |> Stdlib.Result.Result.Ok) = Stdlib.Result.Result.Ok 3L
+(3L |> Some) = Some 3L
+(3L |> Ok) = Ok 3L
 
 type AliasInner<'a, 'b> = { first: 'a; second: 'b }
 type AliasOuter<'a> = AliasInner<String, 'a>

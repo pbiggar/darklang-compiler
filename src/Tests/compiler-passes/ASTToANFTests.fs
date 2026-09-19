@@ -137,12 +137,12 @@ let testErasedListHeadPatternLowersToBorrowedCall () : TestResult =
         let hasBorrowedErasedHead =
             anfExpr
             |> containsCExpr (function
-                | ANF.BorrowedCall ("Stdlib.List.__headUnsafe_i64", _) -> true
+                | ANF.BorrowedCall ("Darklang.Stdlib.List.__headUnsafe_i64", _) -> true
                 | _ -> false)
         let hasOwnedErasedHead =
             anfExpr
             |> containsCExpr (function
-                | ANF.Call ("Stdlib.List.__headUnsafe_i64", _) -> true
+                | ANF.Call ("Darklang.Stdlib.List.__headUnsafe_i64", _) -> true
                 | _ -> false)
 
         if not hasBorrowedErasedHead then
@@ -160,12 +160,12 @@ let testTypedListHeadPatternRemainsOwnedCall () : TestResult =
         let hasOwnedTypedHead =
             anfExpr
             |> containsCExpr (function
-                | ANF.Call ("Stdlib.List.__headUnsafeFloat", _) -> true
+                | ANF.Call ("Darklang.Stdlib.List.__headUnsafeFloat", _) -> true
                 | _ -> false)
         let hasBorrowedTypedHead =
             anfExpr
             |> containsCExpr (function
-                | ANF.BorrowedCall ("Stdlib.List.__headUnsafeFloat", _) -> true
+                | ANF.BorrowedCall ("Darklang.Stdlib.List.__headUnsafeFloat", _) -> true
                 | _ -> false)
 
         if not hasOwnedTypedHead then
@@ -176,7 +176,7 @@ let testTypedListHeadPatternRemainsOwnedCall () : TestResult =
             Ok ()
 
 let testSyntheticNullaryCallLowersToZeroArgs () : TestResult =
-    let funcName = "Stdlib.List.__TAG_SINGLE"
+    let funcName = "Darklang.Stdlib.List.__TAG_SINGLE"
     let expr = CheckedAST.Call (funcName, AST.NonEmptyList.singleton CheckedAST.UnitLiteral)
     let env : VarEnv = Map.empty
     let funcReg : FunctionRegistry =

@@ -1,6 +1,6 @@
 // HttpServer.dark - copied upstream pure HTTP route constructors and method lookup.
 
-module Stdlib.HttpServer
+module Darklang.Stdlib.HttpServer
 
 // HTTP Server functionality for Darklang
 
