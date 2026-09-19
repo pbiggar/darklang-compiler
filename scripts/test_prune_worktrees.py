@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -32,7 +34,9 @@ class PruneWorktreesTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             repo = root / "repo"
+            fake_bin = root / "bin"
             repo.mkdir()
+            fake_bin.mkdir()
             self.git(repo, "init", "-q", "-b", "main")
             self.git(repo, "config", "user.email", "worktree-test@example.invalid")
             self.git(repo, "config", "user.name", "Worktree Test")
@@ -43,7 +47,14 @@ class PruneWorktreesTests(unittest.TestCase):
 
             paths = {
                 name: root / name
-                for name in ("merged", "stale", "dirty", "locked", "unmerged")
+                for name in (
+                    "merged",
+                    "stale",
+                    "dirty",
+                    "locked",
+                    "busy",
+                    "unmerged",
+                )
             }
             for name in paths:
                 self.git(repo, "branch", name)
@@ -56,25 +67,55 @@ class PruneWorktreesTests(unittest.TestCase):
             self.git(paths["unmerged"], "commit", "-q", "-m", "unmerged")
             shutil.rmtree(paths["stale"])
 
+            fake_lsof = fake_bin / "lsof"
+            fake_lsof.write_text(
+                """#!/usr/bin/env python3
+import os
+import sys
+
+if os.environ.get("TEST_LSOF_FAIL") == "1":
+    print("permission denied while inspecting processes", file=sys.stderr)
+    raise SystemExit(1)
+
+records = [("100", "test-shell", os.environ["TEST_PRIMARY"])]
+busy = os.environ.get("TEST_BUSY_WORKTREE")
+if busy:
+    records.append(("4242", "terminal", busy))
+for pid, command, path in records:
+    fields = [f"p{pid}", f"c{command}", f"n{path}"]
+    sys.stdout.buffer.write(("\\0".join(fields) + "\\0\\n").encode())
+""",
+                encoding="utf-8",
+            )
+            fake_lsof.chmod(0o755)
+            environment = dict(os.environ)
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["TEST_PRIMARY"] = str(repo)
+            environment["TEST_BUSY_WORKTREE"] = str(paths["busy"])
+
             dry_run = subprocess.run(
-                ["python3", str(source_script), "--delete-branches"],
+                [sys.executable, str(source_script)],
                 cwd=repo,
+                env=environment,
                 check=True,
                 text=True,
                 capture_output=True,
             )
             self.assertIn(f"REMOVE {paths['merged']}", dry_run.stdout)
             self.assertIn(f"PRUNE {paths['stale']}", dry_run.stdout)
-            self.assertIn(f"KEEP  {paths['dirty']}", dry_run.stdout)
-            self.assertIn(f"KEEP  {paths['locked']}", dry_run.stdout)
             self.assertIn(f"KEEP  {paths['unmerged']}", dry_run.stdout)
             self.assertIn("Dry run: 1 checkout(s) removable", dry_run.stdout)
+            self.assertIn(f"BLOCK {paths['dirty']}", dry_run.stdout)
+            self.assertIn(f"BLOCK {paths['locked']}", dry_run.stdout)
+            self.assertIn(f"BLOCK {paths['busy']}", dry_run.stdout)
+            self.assertIn("used by PID 4242 (terminal)", dry_run.stdout)
             self.assertTrue(paths["merged"].exists())
             self.assertTrue(self.branch_exists(repo, "merged"))
 
             from_linked_worktree = subprocess.run(
-                ["python3", str(source_script)],
+                [sys.executable, str(source_script)],
                 cwd=paths["merged"],
+                env=environment,
                 check=True,
                 text=True,
                 capture_output=True,
@@ -84,21 +125,58 @@ class PruneWorktreesTests(unittest.TestCase):
                 from_linked_worktree.stdout,
             )
 
-            applied = subprocess.run(
-                [
-                    "python3",
-                    str(source_script),
-                    "--apply",
-                    "--delete-branches",
-                ],
+            failed_environment = dict(environment)
+            failed_environment["TEST_LSOF_FAIL"] = "1"
+            failed_inspection = subprocess.run(
+                [sys.executable, str(source_script), "--apply"],
                 cwd=repo,
+                env=failed_environment,
+                check=False,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(failed_inspection.returncode, 1)
+            self.assertIn(
+                "Cannot verify worktree eligibility with lsof",
+                failed_inspection.stderr,
+            )
+            self.assertIn("no changes made", failed_inspection.stderr)
+            self.assertTrue(paths["merged"].exists())
+
+            blocked_apply = subprocess.run(
+                [sys.executable, str(source_script), "--apply"],
+                cwd=repo,
+                env=environment,
+                check=False,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(blocked_apply.returncode, 1)
+            self.assertIn("failed eligibility checks", blocked_apply.stderr)
+            self.assertIn("no changes made", blocked_apply.stderr)
+            self.assertTrue(paths["merged"].exists())
+
+            self.git(paths["dirty"], "add", "untracked.txt")
+            self.git(paths["dirty"], "commit", "-q", "-m", "preserve dirty branch")
+            (paths["locked"] / "locked.txt").write_text("keep me\n", encoding="utf-8")
+            self.git(paths["locked"], "add", "locked.txt")
+            self.git(paths["locked"], "commit", "-q", "-m", "preserve locked branch")
+            eligible_environment = dict(environment)
+            eligible_environment.pop("TEST_BUSY_WORKTREE")
+
+            applied = subprocess.run(
+                [sys.executable, str(source_script), "--apply"],
+                cwd=repo,
+                env=eligible_environment,
                 check=True,
                 text=True,
                 capture_output=True,
             )
-            self.assertIn("Applied: removed 1 checkout(s)", applied.stdout)
+            self.assertIn("Applied: removed 2 checkout(s)", applied.stdout)
             self.assertFalse(paths["merged"].exists())
+            self.assertFalse(paths["busy"].exists())
             self.assertFalse(self.branch_exists(repo, "merged"))
+            self.assertFalse(self.branch_exists(repo, "busy"))
             self.assertFalse(self.branch_exists(repo, "stale"))
             registrations = self.git(repo, "worktree", "list", "--porcelain")
             self.assertNotIn(str(paths["stale"]), registrations)
