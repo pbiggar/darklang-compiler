@@ -108,14 +108,37 @@ for pid, command, path in records:
                 text=True,
                 capture_output=True,
             )
-            self.assertIn(f"REMOVE {paths['merged']}", dry_run.stdout)
-            self.assertIn(f"PRUNE {paths['stale']}", dry_run.stdout)
-            self.assertIn(f"KEEP  {paths['unmerged']}", dry_run.stdout)
+            self.assertIn(
+                "REMOVE (1) — clean, inactive, integrated checkouts",
+                dry_run.stdout,
+            )
+            self.assertIn(f"  {paths['merged']} (merged)", dry_run.stdout)
+            self.assertIn("PRUNE (1) — missing checkouts", dry_run.stdout)
+            self.assertIn(f"  {paths['stale']} (stale)", dry_run.stdout)
+            self.assertIn("KEEP (2)", dry_run.stdout)
+            self.assertIn(f"  {paths['unmerged']} (unmerged)", dry_run.stdout)
             self.assertIn("Dry run: 1 checkout(s) removable", dry_run.stdout)
-            self.assertIn(f"BLOCK {paths['dirty']}", dry_run.stdout)
-            self.assertIn(f"BLOCK {paths['locked']}", dry_run.stdout)
-            self.assertIn(f"BLOCK {paths['busy']}", dry_run.stdout)
+            self.assertIn("BLOCK (3)", dry_run.stdout)
+            self.assertIn(f"  {paths['dirty']} (dirty)", dry_run.stdout)
+            self.assertIn(f"  {paths['locked']} (locked)", dry_run.stdout)
+            self.assertIn(f"  {paths['busy']} (busy)", dry_run.stdout)
             self.assertIn("used by PID 4242 (terminal)", dry_run.stdout)
+            self.assertLess(
+                dry_run.stdout.index("REMOVE (1)"),
+                dry_run.stdout.index("PRUNE (1)"),
+            )
+            self.assertLess(
+                dry_run.stdout.index("PRUNE (1)"),
+                dry_run.stdout.index("BLOCK (3)"),
+            )
+            self.assertLess(
+                dry_run.stdout.index(f"  {paths['busy']} (busy)"),
+                dry_run.stdout.index(f"  {paths['dirty']} (dirty)"),
+            )
+            self.assertLess(
+                dry_run.stdout.index("BLOCK (3)"),
+                dry_run.stdout.index("KEEP (2)"),
+            )
             self.assertTrue(paths["merged"].exists())
             self.assertTrue(self.branch_exists(repo, "merged"))
 
@@ -128,7 +151,7 @@ for pid, command, path in records:
                 capture_output=True,
             )
             self.assertIn(
-                f"KEEP  {paths['merged']} (merged): running worktree",
+                f"  {paths['merged']} (merged)\n    running worktree",
                 from_linked_worktree.stdout,
             )
 

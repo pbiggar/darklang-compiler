@@ -28,6 +28,12 @@ class ProcessCwd:
     path: Path
 
 
+@dataclass(frozen=True)
+class PlanEntry:
+    worktree: Worktree
+    reason: str
+
+
 class EligibilityError(Exception):
     pass
 
@@ -183,6 +189,27 @@ def describe(worktree: Worktree) -> str:
     return f"{worktree.path} ({label})"
 
 
+def print_plan(groups: dict[str, list[PlanEntry]]) -> None:
+    summaries = {
+        "REMOVE": "clean, inactive, integrated checkouts",
+        "PRUNE": "missing checkouts",
+    }
+    first_group = True
+    for action in ("REMOVE", "PRUNE", "BLOCK", "KEEP"):
+        entries = groups[action]
+        if not entries:
+            continue
+        if not first_group:
+            print()
+        first_group = False
+        summary = f" — {summaries[action]}" if action in summaries else ""
+        print(f"{action} ({len(entries)}){summary}")
+        for entry in sorted(entries, key=lambda item: str(item.worktree.path)):
+            print(f"  {describe(entry.worktree)}")
+            if action not in summaries:
+                print(f"    {entry.reason}")
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         description=(
@@ -259,27 +286,37 @@ def main() -> int:
     stale: list[Worktree] = []
     blocked: list[Worktree] = []
     skipped = 0
+    plan: dict[str, list[PlanEntry]] = {
+        "REMOVE": [],
+        "PRUNE": [],
+        "BLOCK": [],
+        "KEEP": [],
+    }
 
     for worktree in worktrees:
         resolved_path = worktree.path.resolve()
         if resolved_path == primary_path:
-            print(f"KEEP  {describe(worktree)}: primary worktree")
+            plan["KEEP"].append(PlanEntry(worktree, "primary worktree"))
             skipped += 1
         elif resolved_path == current_root:
-            print(f"KEEP  {describe(worktree)}: running worktree")
+            plan["KEEP"].append(PlanEntry(worktree, "running worktree"))
             skipped += 1
         elif not is_ancestor(current_root, worktree.head, integration_commit):
-            print(
-                f"KEEP  {describe(worktree)}: "
-                f"HEAD is not contained in {args.integration_ref}"
+            plan["KEEP"].append(
+                PlanEntry(
+                    worktree,
+                    f"HEAD is not contained in {args.integration_ref}",
+                )
             )
             skipped += 1
         elif worktree.prunable or not worktree.path.exists():
             if worktree.locked:
-                print(f"BLOCK {describe(worktree)}: stale registration is locked")
+                plan["BLOCK"].append(
+                    PlanEntry(worktree, "stale registration is locked")
+                )
                 blocked.append(worktree)
             else:
-                print(f"PRUNE {describe(worktree)}: checkout is missing")
+                plan["PRUNE"].append(PlanEntry(worktree, "checkout is missing"))
                 stale.append(worktree)
         else:
             reasons: list[str] = []
@@ -293,14 +330,18 @@ def main() -> int:
                 reasons.append(f"used by PID {first.pid} ({first.command}){extra}")
 
             if reasons:
-                print(f"BLOCK {describe(worktree)}: {'; '.join(reasons)}")
+                plan["BLOCK"].append(PlanEntry(worktree, "; ".join(reasons)))
                 blocked.append(worktree)
             else:
-                print(
-                    f"REMOVE {describe(worktree)}: "
-                    f"HEAD is contained in {args.integration_ref}"
+                plan["REMOVE"].append(
+                    PlanEntry(
+                        worktree,
+                        f"HEAD is contained in {args.integration_ref}",
+                    )
                 )
                 removable.append(worktree)
+
+    print_plan(plan)
 
     branches_to_delete = {
         branch: worktree.head
