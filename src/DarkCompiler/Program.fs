@@ -21,6 +21,8 @@ module Program
 
 open System
 open System.IO
+open System.Diagnostics
+open System.Text.Json
 open Output
 
 /// Output verbosity level
@@ -38,7 +40,16 @@ type TargetSelection =
     | ExplicitTarget of Platform.Target
 
 /// One independently linked executable in a batch compiler invocation.
-type BatchCompileItem = { SourceFile: string; OutputFile: string }
+type BatchCompileItem = {
+    Kind: string
+    Name: string
+    SourceFile: string
+    OutputFile: string
+}
+
+type BatchInput =
+    | CommandLineItems of (BatchCompileItem * BatchCompileItem list)
+    | ManifestFile of string
 
 /// Batch mode shares immutable stdlib preparation while preserving a separate
 /// compilation request and executable for every source.
@@ -46,7 +57,26 @@ type BatchCliOptions = {
     Target: TargetSelection
     Verbosity: VerbosityLevel
     AllowInternal: bool
-    Items: BatchCompileItem * BatchCompileItem list
+    Input: BatchInput
+    KeepGoing: bool
+    ReportPath: string option
+}
+
+type BatchManifestItem = {
+    kind: string
+    name: string
+    source: string
+    output: string
+}
+
+type BatchReportItem = {
+    kind: string
+    name: string
+    source: string
+    output: string
+    status: string
+    error: string
+    milliseconds: float
 }
 
 /// Convert VerbosityLevel to integer for library
@@ -469,43 +499,89 @@ let parseBatchArgs (argv: string array) : Result<BatchCliOptions, string> =
                 if String.IsNullOrWhiteSpace source || String.IsNullOrWhiteSpace output then
                     Error "Batch source and output paths must be non-empty"
                 else
-                    loop ({ SourceFile = source; OutputFile = output } :: reversed) rest
+                    loop ({ Kind = "source"; Name = source; SourceFile = source; OutputFile = output } :: reversed) rest
         loop [] args
 
     let rec parseOptions
         (target: TargetSelection)
         (verbosity: VerbosityLevel)
         (allowInternal: bool)
+        (manifestPath: string option)
+        (keepGoing: bool)
+        (reportPath: string option)
         (args: string list)
         : Result<BatchCliOptions, string> =
         match args with
         | "--" :: itemArgs ->
-            parseItems itemArgs
-            |> Result.map (fun items -> {
-                Target = target
-                Verbosity = verbosity
-                AllowInternal = allowInternal
-                Items = items
-            })
-        | ("-q" | "--quiet") :: rest -> parseOptions target Quiet allowInternal rest
-        | "--allow-internal" :: rest -> parseOptions target verbosity true rest
+            match manifestPath with
+            | Some _ -> Error "Batch compilation cannot combine --manifest with SOURCE OUTPUT pairs"
+            | None ->
+                parseItems itemArgs
+                |> Result.map (fun items -> {
+                    Target = target
+                    Verbosity = verbosity
+                    AllowInternal = allowInternal
+                    Input = CommandLineItems items
+                    KeepGoing = keepGoing
+                    ReportPath = reportPath
+                })
+        | ("-q" | "--quiet") :: rest ->
+            parseOptions target Quiet allowInternal manifestPath keepGoing reportPath rest
+        | "--allow-internal" :: rest ->
+            parseOptions target verbosity true manifestPath keepGoing reportPath rest
+        | "--keep-going" :: rest ->
+            if keepGoing then Error "Keep-going specified multiple times"
+            else parseOptions target verbosity allowInternal manifestPath true reportPath rest
+        | "--manifest" :: value :: rest ->
+            if manifestPath.IsSome then Error "Batch manifest specified multiple times"
+            elif String.IsNullOrWhiteSpace value then Error "--manifest requires a non-empty path"
+            else parseOptions target verbosity allowInternal (Some value) keepGoing reportPath rest
+        | "--manifest" :: [] -> Error "Missing value for --manifest"
+        | flag :: rest when flag.StartsWith("--manifest=") ->
+            let value = flag.Substring(11)
+            if manifestPath.IsSome then Error "Batch manifest specified multiple times"
+            elif String.IsNullOrWhiteSpace value then Error "--manifest requires a non-empty path"
+            else parseOptions target verbosity allowInternal (Some value) keepGoing reportPath rest
+        | "--report" :: value :: rest ->
+            if reportPath.IsSome then Error "Batch report specified multiple times"
+            elif String.IsNullOrWhiteSpace value then Error "--report requires a non-empty path"
+            else parseOptions target verbosity allowInternal manifestPath keepGoing (Some value) rest
+        | "--report" :: [] -> Error "Missing value for --report"
+        | flag :: rest when flag.StartsWith("--report=") ->
+            let value = flag.Substring(9)
+            if reportPath.IsSome then Error "Batch report specified multiple times"
+            elif String.IsNullOrWhiteSpace value then Error "--report requires a non-empty path"
+            else parseOptions target verbosity allowInternal manifestPath keepGoing (Some value) rest
         | "--target" :: value :: rest ->
             match target with
             | ExplicitTarget _ -> Error "Target specified multiple times"
             | HostTarget ->
                 parseTargetValue value
-                |> Result.bind (fun parsedTarget -> parseOptions parsedTarget verbosity allowInternal rest)
+                |> Result.bind (fun parsedTarget ->
+                    parseOptions parsedTarget verbosity allowInternal manifestPath keepGoing reportPath rest)
         | "--target" :: [] -> Error "Missing value for --target (expected 'linux-x86_64')"
         | flag :: rest when flag.StartsWith("--target=") ->
             match target with
             | ExplicitTarget _ -> Error "Target specified multiple times"
             | HostTarget ->
                 parseTargetValue (flag.Substring(9))
-                |> Result.bind (fun parsedTarget -> parseOptions parsedTarget verbosity allowInternal rest)
-        | [] -> Error "Batch compilation requires '--' before SOURCE OUTPUT pairs"
+                |> Result.bind (fun parsedTarget ->
+                    parseOptions parsedTarget verbosity allowInternal manifestPath keepGoing reportPath rest)
+        | [] ->
+            match manifestPath with
+            | None -> Error "Batch compilation requires --manifest or '--' before SOURCE OUTPUT pairs"
+            | Some path ->
+                Ok {
+                    Target = target
+                    Verbosity = verbosity
+                    AllowInternal = allowInternal
+                    Input = ManifestFile path
+                    KeepGoing = keepGoing
+                    ReportPath = reportPath
+                }
         | flag :: _ -> Error $"Unknown batch flag: {flag}"
 
-    parseOptions HostTarget Normal false (Array.toList argv)
+    parseOptions HostTarget Normal false None false None (Array.toList argv)
 
 let parseCommand (argv: string array) : Result<CliCommand, string> =
     match Array.toList argv with
@@ -632,18 +708,61 @@ let private readSourceFile (path: string) : Result<string, string> =
         try Ok (File.ReadAllText path)
         with ex -> Error $"Failed to read file '{path}': {ex.Message}"
 
+let private readBatchManifest (path: string) : Result<BatchCompileItem * BatchCompileItem list, string> =
+    readSourceFile path
+    |> Result.bind (fun json ->
+        try
+            let entries = JsonSerializer.Deserialize<BatchManifestItem array> json
+            if isNull entries then
+                Error $"Batch manifest '{path}' must contain a JSON array"
+            else
+                entries
+                |> Array.toList
+                |> ResultList.mapResults (fun entry ->
+                    if String.IsNullOrWhiteSpace entry.kind
+                       || String.IsNullOrWhiteSpace entry.name
+                       || String.IsNullOrWhiteSpace entry.source
+                       || String.IsNullOrWhiteSpace entry.output then
+                        Error $"Batch manifest '{path}' contains an empty kind, name, source, or output"
+                    else
+                        Ok {
+                            Kind = entry.kind
+                            Name = entry.name
+                            SourceFile = entry.source
+                            OutputFile = entry.output
+                        })
+                |> Result.bind (function
+                    | [] -> Error $"Batch manifest '{path}' must contain at least one item"
+                    | first :: rest -> Ok (first, rest))
+        with ex ->
+            Error $"Failed to parse batch manifest '{path}': {ex.Message}")
+
+let private writeBatchReport
+    (path: string)
+    (reports: BatchReportItem list)
+    : Result<unit, string> =
+    try
+        let directory = Path.GetDirectoryName path
+        if not (String.IsNullOrEmpty directory) then Directory.CreateDirectory directory |> ignore
+        reports
+        |> List.map JsonSerializer.Serialize
+        |> fun lines -> File.WriteAllLines(path, lines)
+        Ok ()
+    with ex ->
+        Error $"Failed to write batch report '{path}': {ex.Message}"
+
 let compileBatch (options: BatchCliOptions) : int =
-    let items = fst options.Items :: snd options.Items
+    let itemsResult =
+        match options.Input with
+        | CommandLineItems items -> Ok items
+        | ManifestFile path -> readBatchManifest path
     let sourcesResult =
-        items
-        |> List.fold
-            (fun state item ->
-                state
-                |> Result.bind (fun reversed ->
-                    readSourceFile item.SourceFile
-                    |> Result.map (fun source -> (item, source) :: reversed)))
-            (Ok [])
-        |> Result.map List.rev
+        itemsResult
+        |> Result.bind (fun items ->
+            (fst items :: snd items)
+            |> ResultList.mapResults (fun item ->
+                readSourceFile item.SourceFile
+                |> Result.map (fun source -> item, source)))
 
     match selectedTarget options.Target, sourcesResult with
     | Error err, _ ->
@@ -658,31 +777,53 @@ let compileBatch (options: BatchCliOptions) : int =
             eprintln $"Compilation failed: {err}"
             1
         | Ok stdlib ->
-            sources
-            |> List.fold
-                (fun state (item, source) ->
-                    state
-                    |> Result.bind (fun () ->
-                        let cliOpts = {
-                            defaultOptions with
-                                Argument = Some item.SourceFile
-                                OutputFile = Some item.OutputFile
-                                Verbosity = options.Verbosity
-                                Target = options.Target
-                                AllowInternal = options.AllowInternal
-                        }
+            let rec compileItems failed reversedReports remaining =
+                match remaining with
+                | [] -> failed, List.rev reversedReports
+                | (item, source) :: rest ->
+                    let timer = Stopwatch.StartNew()
+                    let cliOpts = {
+                        defaultOptions with
+                            Argument = Some item.SourceFile
+                            OutputFile = Some item.OutputFile
+                            Verbosity = options.Verbosity
+                            Target = options.Target
+                            AllowInternal = options.AllowInternal
+                    }
+                    let result =
                         compileWithStdlib
                             stdlib
                             source
                             item.OutputFile
                             options.Verbosity
-                            cliOpts))
-                (Ok ())
-            |> function
-                | Ok () -> 0
-                | Error err ->
-                    eprintln err
-                    1
+                            cliOpts
+                    timer.Stop()
+                    let report status error =
+                        { kind = item.Kind
+                          name = item.Name
+                          source = item.SourceFile
+                          output = item.OutputFile
+                          status = status
+                          error = error
+                          milliseconds = Math.Round(timer.Elapsed.TotalMilliseconds, 3) }
+                    match result with
+                    | Ok () -> compileItems failed (report "compiled" "" :: reversedReports) rest
+                    | Error error ->
+                        eprintln $"Compilation failed for {item.Kind} {item.Name}: {error}"
+                        let reports = report "failed" error :: reversedReports
+                        if options.KeepGoing then compileItems true reports rest
+                        else true, List.rev reports
+
+            let failed, reports = compileItems false [] sources
+            let reportResult =
+                match options.ReportPath with
+                | None -> Ok ()
+                | Some path -> writeBatchReport path reports
+            match reportResult with
+            | Error error ->
+                eprintln error
+                1
+            | Ok () -> if failed then 1 else 0
 
 /// Run an expression (compile to temp and execute)
 let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int =
@@ -772,11 +913,15 @@ let printUsage () =
     println "  dark -r -e <expression>             Run expression"
     println "  dark -r -e -                        Read expression from stdin and run"
     println "  dark --batch [OPTIONS] -- SOURCE OUTPUT [SOURCE OUTPUT ...]"
+    println "  dark --batch [OPTIONS] --manifest FILE"
     println ""
     println "Flags:"
     println "  -r, --run            Run instead of compile (shows exit code)"
     println "  -e, --expression     Treat argument as expression (not filename)"
     println "  --target TARGET      Compile for linux-x86_64 instead of the host"
+    println "  --manifest FILE      Read labeled batch inputs from a JSON manifest"
+    println "  --keep-going         Continue batch compilation after individual failures"
+    println "  --report FILE        Write one JSON object per batch result"
     println "  --emit-result        Print a file's final expression result when executed"
     println "  -o, --output FILE    Output file (default: dark.out)"
     println "  -q, --quiet          Suppress compilation output"
