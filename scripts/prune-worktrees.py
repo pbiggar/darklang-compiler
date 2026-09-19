@@ -59,6 +59,9 @@ class Palette:
     def error(self, text: str) -> str:
         return self.paint("1;31", text)
 
+    def info(self, text: str) -> str:
+        return self.paint("1;36", text)
+
 
 class EligibilityError(Exception):
     pass
@@ -259,6 +262,261 @@ def format_size(size: int) -> str:
     raise AssertionError("unreachable size unit")
 
 
+def commit_description(repo: Path, head: str) -> tuple[str, str, str]:
+    result = git(
+        repo,
+        "show",
+        "-s",
+        "--format=%h%x00%cs%x00%s",
+        head,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "git show failed"
+        raise EligibilityError(f"cannot inspect commit {head}: {detail}")
+    abbreviated, date, subject = result.stdout.rstrip("\n").split("\0", 2)
+    return abbreviated, date, subject
+
+
+def prompt_delete(recommend_delete: bool, has_branch: bool) -> bool:
+    choices = "[D/k]" if recommend_delete else "[d/K]"
+    target = "checkout and local branch" if has_branch else "detached checkout"
+    while True:
+        try:
+            response = input(f"Delete {target}? {choices} ").strip().lower()
+        except EOFError as error:
+            raise EligibilityError("interactive input ended before a choice was made") from error
+        if not response:
+            return recommend_delete
+        if response in ("d", "delete"):
+            return True
+        if response in ("k", "keep"):
+            return False
+        print("Enter d to delete or k to keep.")
+
+
+def format_processes(processes: list[ProcessCwd], limit: int = 3) -> str:
+    displayed = ", ".join(
+        f"{process.pid} ({process.command})" for process in processes[:limit]
+    )
+    if len(processes) > limit:
+        displayed += f", and {len(processes) - limit} more"
+    return displayed or "none"
+
+
+def run_interactive(
+    repo: Path,
+    worktrees: list[Worktree],
+    primary_path: Path,
+    current_root: Path,
+    integration_ref: str,
+    integration_commit: str,
+    processes: list[ProcessCwd],
+    output_palette: Palette,
+    error_palette: Palette,
+) -> int:
+    deleted = 0
+    deleted_branches = 0
+    kept = 0
+    reclaimed_bytes = 0
+    errors: list[str] = []
+    stopped_early = False
+    ordered = sorted(worktrees, key=lambda worktree: str(worktree.path))
+
+    for index, worktree in enumerate(ordered, start=1):
+        resolved_path = worktree.path.resolve()
+        is_primary = resolved_path == primary_path
+        is_running = resolved_path == current_root
+        exists = worktree.path.exists() and not worktree.prunable
+        integrated = is_ancestor(repo, worktree.head, integration_commit)
+        dirty = is_dirty(worktree.path) if exists else False
+        users = processes_using(worktree, processes) if exists else []
+        abbreviated, date, subject = commit_description(repo, worktree.head)
+        branch = local_branch(worktree)
+
+        gates: list[str] = []
+        if is_primary:
+            gates.append("primary worktree")
+        if is_running:
+            gates.append("running worktree")
+        if worktree.locked:
+            gates.append("locked")
+        if dirty:
+            gates.append("tracked, untracked, or ignored files present")
+        if users:
+            gates.append(f"active processes: {format_processes(users)}")
+        if not integrated:
+            gates.append(f"HEAD is not contained in {integration_ref}")
+        if not exists:
+            gates.append("checkout directory is missing")
+
+        required_keep = is_primary or is_running
+        recommend_delete = integrated and not any(
+            (worktree.locked, dirty, bool(users), required_keep)
+        )
+        recommendation = "DELETE" if recommend_delete else "KEEP"
+        reason = "; ".join(gates) if gates else "all deletion gates passed"
+
+        if index > 1:
+            print()
+        print(output_palette.info(f"WORKTREE {index}/{len(ordered)}"))
+        print(f"  Branch: {branch or '(detached)'}")
+        print(f"  Directory: {worktree.path} ({'present' if exists else 'missing'})")
+        print(f"  Checkout: {worktree.head}")
+        print(f"  Last commit: {abbreviated} {date} — {subject}")
+        print(f"  Merged into {integration_ref}: {'yes' if integrated else 'no'}")
+        print(f"  Locked: {'yes' if worktree.locked else 'no'}")
+        local_files = (
+            "unavailable (directory missing)"
+            if not exists
+            else "changes or ignored files present"
+            if dirty
+            else "clean"
+        )
+        print(f"  Local files: {local_files}")
+        print(f"  Active processes: {format_processes(users)}")
+        styled_recommendation = (
+            output_palette.action("REMOVE", recommendation)
+            if recommend_delete
+            else output_palette.action("BLOCK", recommendation)
+        )
+        print(f"  Recommendation: {styled_recommendation} — {reason}")
+
+        if required_keep:
+            print("  Action: KEEP (required)")
+            kept += 1
+            continue
+        try:
+            delete = prompt_delete(recommend_delete, branch is not None)
+        except EligibilityError as error:
+            errors.append(str(error))
+            print(f"  Action: {error_palette.error('STOPPED')} — {error}")
+            stopped_early = True
+            break
+        if not delete:
+            print("  Action: KEEP")
+            kept += 1
+            continue
+
+        if exists:
+            current_head = git(
+                worktree.path, "rev-parse", "HEAD", check=False
+            )
+            if (
+                current_head.returncode != 0
+                or current_head.stdout.strip() != worktree.head
+            ):
+                message = "checkout HEAD changed during interactive review; kept it"
+                errors.append(f"{describe(worktree)}: {message}")
+                print(f"  Action: {error_palette.error('ERROR')} — {message}")
+                kept += 1
+                continue
+            try:
+                latest_processes = inspect_process_cwds(os.stat(repo).st_uid)
+                latest_users = processes_using(worktree, latest_processes)
+                latest_dirty = is_dirty(worktree.path)
+            except EligibilityError as error:
+                errors.append(str(error))
+                print(f"  Action: {error_palette.error('ERROR')} — {error}")
+                kept += 1
+                continue
+            original_pids = {process.pid for process in users}
+            new_users = [
+                process for process in latest_users if process.pid not in original_pids
+            ]
+            if (latest_dirty and not dirty) or new_users:
+                changes: list[str] = []
+                if latest_dirty and not dirty:
+                    changes.append("local files appeared")
+                if new_users:
+                    changes.append(f"new process: {format_processes(new_users)}")
+                message = (
+                    "state changed during interactive review "
+                    f"({'; '.join(changes)}); kept it"
+                )
+                errors.append(f"{describe(worktree)}: {message}")
+                print(f"  Action: {error_palette.error('ERROR')} — {message}")
+                kept += 1
+                continue
+        elif worktree.path.exists():
+            message = "missing checkout directory reappeared during review; kept it"
+            errors.append(f"{describe(worktree)}: {message}")
+            print(f"  Action: {error_palette.error('ERROR')} — {message}")
+            kept += 1
+            continue
+
+        checkout_size = 0
+        if exists:
+            try:
+                checkout_size = allocated_size(worktree.path)
+            except EligibilityError as error:
+                errors.append(str(error))
+                print(f"  Action: {error_palette.error('ERROR')} — {error}")
+                kept += 1
+                continue
+        if worktree.locked:
+            unlock = git(repo, "worktree", "unlock", str(worktree.path), check=False)
+            if unlock.returncode != 0:
+                detail = unlock.stderr.strip() or unlock.stdout.strip()
+                errors.append(f"Could not unlock {describe(worktree)}: {detail}")
+                print(f"  Action: {error_palette.error('ERROR')} — could not unlock")
+                kept += 1
+                continue
+
+        remove_result = git(
+            repo,
+            "worktree",
+            "remove",
+            "--force",
+            "--",
+            str(worktree.path),
+            check=False,
+        )
+        if remove_result.returncode != 0:
+            detail = remove_result.stderr.strip() or remove_result.stdout.strip()
+            errors.append(f"Could not remove {describe(worktree)}: {detail}")
+            print(f"  Action: {error_palette.error('ERROR')} — {detail}")
+            kept += 1
+            continue
+
+        deleted += 1
+        reclaimed_bytes += checkout_size
+        if branch is not None:
+            delete_branch = git(
+                repo,
+                "update-ref",
+                "-d",
+                f"refs/heads/{branch}",
+                worktree.head,
+                check=False,
+            )
+            if delete_branch.returncode != 0:
+                detail = delete_branch.stderr.strip() or delete_branch.stdout.strip()
+                errors.append(f"Could not delete branch {branch}: {detail}")
+                print(
+                    f"  Action: {output_palette.success('DELETED CHECKOUT')}; "
+                    f"{error_palette.error('branch deletion failed')}"
+                )
+                continue
+            deleted_branches += 1
+        print(f"  Action: {output_palette.success('DELETE')}")
+
+    print()
+    summary_prefix = "Interactive cleanup stopped" if stopped_early else "Interactive cleanup"
+    summary = (
+        f"{summary_prefix}: deleted {deleted} checkout(s), deleted "
+        f"{deleted_branches} branch(es), kept {kept} worktree(s)"
+    )
+    print(output_palette.warning(summary) if errors else output_palette.success(summary))
+    print(output_palette.success(f"Reclaimed checkout space: {format_size(reclaimed_bytes)}"))
+    if errors:
+        print(error_palette.error(f"ERROR ({len(errors)})"), file=sys.stderr)
+        for error in errors:
+            print(f"  {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def print_plan(groups: dict[str, list[PlanEntry]], palette: Palette) -> None:
     summaries = {
         "REMOVE": "clean, inactive, integrated checkouts",
@@ -288,13 +546,19 @@ def parser() -> argparse.ArgumentParser:
             "integration ref. By default, print the cleanup plan without changing anything."
         )
     )
-    result.add_argument(
+    mode = result.add_mutually_exclusive_group()
+    mode.add_argument(
         "--apply",
         action="store_true",
         help=(
             "remove eligible checkouts, prune stale metadata, and delete their "
             "merged local branches"
         ),
+    )
+    mode.add_argument(
+        "--interactive",
+        action="store_true",
+        help="review each worktree and choose whether to delete or keep it",
     )
     result.add_argument(
         "--integration-ref",
@@ -361,6 +625,19 @@ def main() -> int:
         return 1
 
     primary_path = worktrees[0].path.resolve()
+    if args.interactive:
+        return run_interactive(
+            current_root,
+            worktrees,
+            primary_path,
+            current_root,
+            args.integration_ref,
+            integration_commit,
+            processes,
+            output_palette,
+            error_palette,
+        )
+
     removable: list[Worktree] = []
     stale: list[Worktree] = []
     blocked: list[Worktree] = []
