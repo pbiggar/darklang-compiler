@@ -1,0 +1,146 @@
+#!/bin/bash
+# fuzz-loop - Find, minimize, and promote one compiler discrepancy to an E2E test.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if ! command -v darklang-interpreter >/dev/null 2>&1; then
+    echo "Error: darklang-interpreter is not on PATH." >&2
+    echo "Install it with './scripts/install-darklang-interpreter.sh'." >&2
+    exit 1
+fi
+
+E2E_FILE="src/Tests/e2e/fuzzer-found.e2e"
+MINIMIZED_SOURCE=""
+FUZZ_ARGS=()
+
+usage() {
+    echo "Usage: ./fuzz-loop [FUZZ_ARGS...] [--e2e-file PATH]"
+    echo "       ./fuzz-loop --promote MINIMIZED.dark [--e2e-file PATH]"
+    echo ""
+    echo "Runs the fuzzer until its first discrepancy, minimizes it, and appends"
+    echo "an interpreter-backed value expectation to the dedicated E2E corpus."
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --e2e-file)
+            if [[ $# -lt 2 ]]; then
+                echo "Error: --e2e-file requires a path." >&2
+                exit 2
+            fi
+            E2E_FILE="$2"
+            shift 2
+            ;;
+        --promote)
+            if [[ $# -lt 2 || -n "$MINIMIZED_SOURCE" ]]; then
+                echo "Error: --promote requires exactly one source path." >&2
+                exit 2
+            fi
+            MINIMIZED_SOURCE="$2"
+            shift 2
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        --artifacts|--replay|--minimize)
+            echo "Error: $1 is managed by fuzz-loop and cannot be passed through." >&2
+            exit 2
+            ;;
+        *)
+            FUZZ_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+promote() {
+    local source_path="$1"
+    if [[ ! -f "$source_path" ]]; then
+        echo "Error: minimized source does not exist: $source_path" >&2
+        return 1
+    fi
+
+    local source
+    source="$(<"$source_path")"
+    if [[ "$source" == *$'\n'* ]]; then
+        echo "Error: E2E promotion currently requires a single-line expression." >&2
+        return 1
+    fi
+
+    local interpreted
+    interpreted="$(darklang-interpreter eval "$source")"
+
+    local expected
+    case "$interpreted" in
+        true|false)
+            expected="$interpreted"
+            ;;
+        -[0-9]*|[0-9]*)
+            if [[ ! "$interpreted" =~ ^-?[0-9]+$ ]]; then
+                echo "Error: unsupported interpreter result: $interpreted" >&2
+                return 1
+            fi
+            expected="${interpreted}L"
+            ;;
+        *)
+            echo "Error: unsupported interpreter result: $interpreted" >&2
+            return 1
+            ;;
+    esac
+
+    local test_case="$source = $expected"
+    if [[ ! -f "$E2E_FILE" ]]; then
+        echo "Error: E2E destination does not exist: $E2E_FILE" >&2
+        return 1
+    fi
+
+    if rg --fixed-strings --line-regexp --quiet -- "$test_case" "$E2E_FILE"; then
+        echo "E2E case already present: $E2E_FILE"
+    else
+        printf '%s\n' "$test_case" >> "$E2E_FILE"
+        echo "Added failing E2E case: $E2E_FILE"
+    fi
+}
+
+if [[ -n "$MINIMIZED_SOURCE" ]]; then
+    if [[ ${#FUZZ_ARGS[@]} -ne 0 ]]; then
+        echo "Error: fuzzer arguments cannot be combined with --promote." >&2
+        exit 2
+    fi
+    promote "$MINIMIZED_SOURCE"
+    exit 0
+fi
+
+mkdir -p fuzz-results
+RUN_DIR="$(mktemp -d "$SCRIPT_DIR/fuzz-results/run.XXXXXX")"
+
+set +e
+./fuzz "${FUZZ_ARGS[@]}" --artifacts "$RUN_DIR"
+FUZZ_STATUS=$?
+set -e
+
+if [[ $FUZZ_STATUS -eq 0 ]]; then
+    echo "No discrepancy found; no E2E case was added."
+    exit 0
+fi
+
+shopt -s nullglob
+FINDINGS=("$RUN_DIR"/seed-*-case-*.dark)
+shopt -u nullglob
+if [[ ${#FINDINGS[@]} -ne 1 ]]; then
+    echo "Error: fuzzer failed without producing exactly one finding in $RUN_DIR." >&2
+    exit 1
+fi
+
+FINDING="${FINDINGS[0]}"
+./fuzz --minimize "$FINDING"
+MINIMIZED="${FINDING%.dark}.min.dark"
+promote "$MINIMIZED"
+
+echo "Finding: $FINDING"
+echo "Minimized: $MINIMIZED"
+echo "Next: ./build --ai && ./run-tests --ai --filter=fuzzer-found"
