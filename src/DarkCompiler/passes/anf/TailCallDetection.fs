@@ -170,22 +170,19 @@ let rec private collectMovableDecPrefix
     (expr: AExpr)
     : (TempId * CExpr) list * AExpr =
     match expr with
-    | Let (tmpId, RefCountDec (Var tid, size, kind, sourceType), rest)
-        when not (Set.contains (canonicalTempId aliasRoots tid) tailArgTemps) ->
+    | Let (tmpId, (RefCountDec (Var tid, _, _, _) as cleanup), rest) ->
         let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
-        ((tmpId, RefCountDec (Var tid, size, kind, sourceType)) :: bindings, remaining)
-    | Let (tmpId, RefCountDecString atom, rest)
-        when not (atomOverlapsTailArgs aliasRoots tailArgTemps atom) ->
+        if Set.contains (canonicalTempId aliasRoots tid) tailArgTemps then
+            (bindings, Let (tmpId, cleanup, remaining))
+        else
+            ((tmpId, cleanup) :: bindings, remaining)
+    | Let (tmpId, (RefCountDecString atom as cleanup), rest)
+    | Let (tmpId, (RefCountDecBlob atom as cleanup), rest) ->
         let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
-        ((tmpId, RefCountDecString atom) :: bindings, remaining)
-    | Let (_, RefCountDecString _, _) ->
-        ([], expr)
-    | Let (tmpId, RefCountDecBlob atom, rest)
-        when not (atomOverlapsTailArgs aliasRoots tailArgTemps atom) ->
-        let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
-        ((tmpId, RefCountDecBlob atom) :: bindings, remaining)
-    | Let (_, RefCountDecBlob _, _) ->
-        ([], expr)
+        if atomOverlapsTailArgs aliasRoots tailArgTemps atom then
+            (bindings, Let (tmpId, cleanup, remaining))
+        else
+            ((tmpId, cleanup) :: bindings, remaining)
     | _ ->
         ([], expr)
 
@@ -214,7 +211,6 @@ let rec private leadingRetainedParams
 /// ordinary recursive frame; a loop instead adopts that argument's ownership.
 let private tryTransferOwnedSelfTailArgument
     (aliasRoots: Map<TempId, TempId>)
-    (tailArgRoots: Set<TempId>)
     (ownedParams: Set<TempId>)
     (releasedTemps: Set<TempId>)
     (typedParams: TypedParam list)
@@ -234,16 +230,17 @@ let private tryTransferOwnedSelfTailArgument
     | TailCall (_, args), Some cleanups ->
         let cleanupRoots =
             cleanups
-            |> List.choose (fun (_, cleanup) ->
+            |> List.map (fun (_, cleanup) ->
                 match cleanup with
                 | RefCountDec (Var cleanupTemp, _, _, _) ->
-                    Some (canonicalTempId aliasRoots cleanupTemp)
-                | _ -> None)
-            |> Set.ofList
+                    canonicalTempId aliasRoots cleanupTemp
+                | _ ->
+                    Crash.crash "tryTransferOwnedSelfTailArgument: unexpected cleanup kind")
+        let cleanupRootSet = Set.ofList cleanupRoots
         let rec matchingOwnedParams
             (paramsRemaining: TypedParam list)
             (argsRemaining: Atom list)
-            : TempId list option =
+            : (TempId * TempId) list option =
             match paramsRemaining, argsRemaining with
             | [], [] -> Some []
             | param :: paramsRest, arg :: argsRest ->
@@ -251,23 +248,25 @@ let private tryTransferOwnedSelfTailArgument
                 |> Option.map (fun matches ->
                     match arg with
                     | Var argTemp
-                        when Set.contains (canonicalTempId aliasRoots argTemp) cleanupRoots
+                        when Set.contains (canonicalTempId aliasRoots argTemp) cleanupRootSet
                              && Set.contains param.Id ownedParams
                              && Set.contains (canonicalTempId aliasRoots param.Id) releasedTemps ->
-                        param.Id :: matches
+                        (param.Id, canonicalTempId aliasRoots argTemp) :: matches
                     | _ ->
                         matches)
             | _ -> None
         match matchingOwnedParams typedParams args with
-        | Some [_] ->
-            let movable =
-                cleanups
-                |> List.filter (fun (_, cleanup) ->
-                    match cleanup with
-                    | RefCountDec (Var cleanupTemp, _, _, _) ->
-                        not (Set.contains (canonicalTempId aliasRoots cleanupTemp) tailArgRoots)
-                    | _ -> false)
-            Some (movable, Return (Var callTempId))
+        | Some matches ->
+            let matchedRoots = matches |> List.map snd
+            let everyCleanupTransferredExactlyOnce =
+                not (List.isEmpty cleanupRoots)
+                && cleanupRoots.Length = cleanupRootSet.Count
+                && matchedRoots.Length = cleanupRoots.Length
+                && Set.ofList matchedRoots = cleanupRootSet
+            if everyCleanupTransferredExactlyOnce then
+                Some ([], Return (Var callTempId))
+            else
+                None
         | _ -> None
     | _ ->
         None
@@ -318,7 +317,6 @@ let rec detectTailCalls
                 | TailCall (targetFunc, _) when isCurrentMember targetFunc ->
                     tryTransferOwnedSelfTailArgument
                         aliasRoots
-                        tailArgTemps
                         ownedParams
                         releasedTemps
                         typedParams

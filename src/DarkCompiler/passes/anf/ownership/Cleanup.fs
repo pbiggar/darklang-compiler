@@ -16,6 +16,16 @@ open RcShapePlanning
 type internal ReturnDec =
     TempId * AST.Type * RcShape * RcKind option * RcMetadata option
 
+type internal InternalOwnedParamKind =
+    | ReturnedAccumulator
+    | NonEscapingLoopState
+
+type internal OwnedParamDec = {
+    ParamIndex: int
+    ReleaseOnTerminalReturn: bool
+    Dec: ReturnDec
+}
+
 let internal createReturnDec
     (ctx: TypeContext)
     (tempId: TempId)
@@ -100,22 +110,21 @@ let internal functionParamReturnTransfersOwnedAccumulator
     | true, 2, AST.TList _ -> true
     | _ -> false
 
-/// Recognize a managed parameter used as the sole returned accumulator of a
-/// direct self-recursive loop. The caller restricts this proof to RC-managed
-/// shapes. The function keeps its own reference to the parameter so each
-/// backedge can release the previous value before adopting its freshly-owned
-/// replacement.
-let internal isInternalOwnedTailAccumulator
+/// Recognize managed parameters that can become owned loop state. Returned
+/// accumulators transfer their final edge to the caller; non-escaping state is
+/// released at terminal returns. Both forms release obsolete values before
+/// adopting freshly owned replacements at self-recursive backedges.
+let internal internalOwnedTailParamKind
     (func: Function)
     (paramIndex: int)
     (param: TypedParam)
-    : bool =
+    : InternalOwnedParamKind option =
     let rec canonicalAlias (aliases: Map<TempId, TempId>) (tempId: TempId) : TempId =
         match Map.tryFind tempId aliases with
         | Some sourceId when sourceId <> tempId -> canonicalAlias aliases sourceId
         | _ -> tempId
 
-    let rec analyze
+    let rec analyzeReturnedAccumulator
         (aliases: Map<TempId, TempId>)
         (expr: AExpr)
         : bool * bool =
@@ -134,27 +143,122 @@ let internal isInternalOwnedTailAccumulator
                 (false, false)
         | Let (tempId, Atom (Var sourceId), body)
         | Let (tempId, TypedAtom (Var sourceId, _), body) ->
-            analyze (Map.add tempId (canonicalAlias aliases sourceId) aliases) body
+            analyzeReturnedAccumulator (Map.add tempId (canonicalAlias aliases sourceId) aliases) body
         | Let (_, Call (targetFunc, _), _) when targetFunc = func.Name ->
             (false, false)
         | Let (_, _, body) ->
-            analyze aliases body
+            analyzeReturnedAccumulator aliases body
         | If (_, thenBranch, elseBranch) ->
-            let (thenValid, thenRecurses) = analyze aliases thenBranch
-            let (elseValid, elseRecurses) = analyze aliases elseBranch
+            let (thenValid, thenRecurses) = analyzeReturnedAccumulator aliases thenBranch
+            let (elseValid, elseRecurses) = analyzeReturnedAccumulator aliases elseBranch
             (thenValid && elseValid, thenRecurses || elseRecurses)
+
+    let rec analyzeNonEscapingLoopState
+        (aliases: Map<TempId, TempId>)
+        (expr: AExpr)
+        : bool * bool * bool =
+        match expr with
+        | Join _ | Jump _ -> (false, false, false)
+        | Return (Var tempId) ->
+            (canonicalAlias aliases tempId <> param.Id, false, false)
+        | Return _ ->
+            (true, false, false)
+        | Let (callTemp, Call (targetFunc, args), Return (Var returnTemp))
+            when targetFunc = func.Name && callTemp = returnTemp ->
+            match List.tryItem paramIndex args with
+            | Some (Var replacement) ->
+                let replaced = canonicalAlias aliases replacement <> param.Id
+                (true, true, replaced)
+            | Some _ ->
+                (true, true, true)
+            | None ->
+                (false, false, false)
+        | Let (tempId, Atom (Var sourceId), body)
+        | Let (tempId, TypedAtom (Var sourceId, _), body) ->
+            analyzeNonEscapingLoopState
+                (Map.add tempId (canonicalAlias aliases sourceId) aliases)
+                body
+        | Let (_, Call (targetFunc, _), _) when targetFunc = func.Name ->
+            (false, false, false)
+        | Let (_, _, body) ->
+            analyzeNonEscapingLoopState aliases body
+        | If (_, thenBranch, elseBranch) ->
+            let (thenValid, thenRecurses, thenReplaces) =
+                analyzeNonEscapingLoopState aliases thenBranch
+            let (elseValid, elseRecurses, elseReplaces) =
+                analyzeNonEscapingLoopState aliases elseBranch
+            (thenValid && elseValid,
+             thenRecurses || elseRecurses,
+             thenReplaces || elseReplaces)
 
     let supportedAccumulator =
         match param.Type with
         | AST.TRecord _ -> true
         | _ -> func.Name.Contains("$trmo")
 
-    match func.ReturnType with
-    | returnType when supportedAccumulator && returnType = param.Type ->
-        let (valid, recurses) = analyze Map.empty func.Body
-        valid && recurses
-    | _ ->
-        false
+    if supportedAccumulator && func.ReturnType = param.Type then
+        let (valid, recurses) = analyzeReturnedAccumulator Map.empty func.Body
+        if valid && recurses then Some ReturnedAccumulator else None
+    elif func.ReturnType <> param.Type then
+        let (valid, recurses, replaces) =
+            analyzeNonEscapingLoopState Map.empty func.Body
+        if valid && recurses && replaces then Some NonEscapingLoopState else None
+    else
+        None
+
+/// An owned loop parameter may adopt a freshly produced value or another
+/// owned loop parameter. It must not adopt a projection borrowed from the old
+/// state: releasing that parent at the backedge can invalidate the projection
+/// before the next iteration starts.
+let internal internalOwnedTailParamHasSafeReplacements
+    (func: Function)
+    (paramIndex: int)
+    (ownedParamIds: Set<TempId>)
+    : bool =
+    let isBorrowedResult (cexpr: CExpr) : bool =
+        match cexpr with
+        | IfValue _
+        | TupleGet _
+        | RecordGet _
+        | RecordReuse _
+        | RawGet _
+        | StringToRawPtr _
+        | BlobToRawPtr _
+        | DictToRawPtr _
+        | ListToRawPtr _
+        | FixedBlockToRawPtr _
+        | BorrowedCall _
+        | Atom (Var _)
+        | TypedAtom (Var _, _) -> true
+        | _ -> false
+
+    let rec validate (safeTemps: Set<TempId>) (expr: AExpr) : bool =
+        match expr with
+        | Join _ | Jump _ -> false
+        | Return _ -> true
+        | Let (callTemp, Call (targetFunc, args), Return (Var returnTemp))
+            when targetFunc = func.Name && callTemp = returnTemp ->
+            match List.tryItem paramIndex args with
+            | Some (Var replacement) -> Set.contains replacement safeTemps
+            | Some _ -> true
+            | None -> false
+        | Let (_, Call (targetFunc, _), _) when targetFunc = func.Name ->
+            false
+        | Let (tempId, cexpr, body) ->
+            let safeTemps' =
+                match cexpr with
+                | Atom (Var sourceId)
+                | TypedAtom (Var sourceId, _) when Set.contains sourceId safeTemps ->
+                    Set.add tempId safeTemps
+                | _ when isBorrowedResult cexpr ->
+                    safeTemps
+                | _ ->
+                    Set.add tempId safeTemps
+            validate safeTemps' body
+        | If (_, thenBranch, elseBranch) ->
+            validate safeTemps thenBranch && validate safeTemps elseBranch
+
+    validate ownedParamIds func.Body
 
 /// Insert RefCountInc for returned parameters at a Return node
 let insertParamIncsAtReturn
@@ -360,24 +464,26 @@ let rec internal moveDecsBeforeNonSelfTailCalls (currentFuncName: string) (expr:
         | _ ->
             Let (tempId, cexpr, body')
 
-let rec internal insertOwnedAccumulatorDecsBeforeSelfTailCalls
+let internal insertOwnedAccumulatorDecsBeforeSelfTailCalls
     (ctx: TypeContext)
     (currentFuncName: string)
-    (ownedParamDecs: ReturnDec list)
+    (ownedParamDecs: OwnedParamDec list)
     (expr: AExpr)
     (varGen: VarGen)
     (types: Map<TempId, AST.Type>)
     : AExpr * VarGen * Map<TempId, AST.Type> =
     let decsForSelfTailCall (args: Atom list) : ReturnDec list =
-        let argTemps =
-            args
-            |> List.fold (fun acc atom ->
-                match atom with
-                | Var tempId -> Set.add tempId acc
-                | _ -> acc) Set.empty
-
         ownedParamDecs
-        |> List.filter (fun (tempId, _, _, _, _) -> not (Set.contains tempId argTemps))
+        |> List.choose (fun owned ->
+            let (tempId, _, _, _, _) = owned.Dec
+            match List.tryItem owned.ParamIndex args with
+            | Some (Var argumentId) when argumentId = tempId -> None
+            | _ -> Some owned.Dec)
+
+    let terminalDecs =
+        ownedParamDecs
+        |> List.choose (fun owned ->
+            if owned.ReleaseOnTerminalReturn then Some owned.Dec else None)
 
     let wrapOwnedAccumulatorDecs
         (decs: ReturnDec list)
@@ -394,34 +500,44 @@ let rec internal insertOwnedAccumulatorDecsBeforeSelfTailCalls
                 (Let (dummyId, decExpr, accExpr), varGen', Map.add dummyId AST.TUnit accTypes))
             (tailExpr, varGen, types)
 
-    match expr with
-    | Jump _ -> (expr, varGen, types)
-    | Join (parameter, continuation, entry) ->
-        let body, next, bodyTypes = insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs continuation varGen types
-        let entry', final, finalTypes = insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs entry next bodyTypes
-        (Join (parameter, body, entry'), final, finalTypes)
-    | Return _ ->
-        (expr, varGen, types)
-    | If (cond, thenBranch, elseBranch) ->
-        let (thenBranch', varGen1, types1) =
-            insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs thenBranch varGen types
-        let (elseBranch', varGen2, types2) =
-            insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs elseBranch varGen1 types1
-        (If (cond, thenBranch', elseBranch'), varGen2, types2)
-    | Let (tempId, Call (targetFunc, args), body) when isSelfTailCallTarget currentFuncName targetFunc ->
-        let (body', varGen1, types1) =
-            insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs body varGen types
-        let callExpr = Let (tempId, Call (targetFunc, args), body')
-        wrapOwnedAccumulatorDecs (decsForSelfTailCall args) callExpr varGen1 types1
-    | Let (tempId, TailCall (targetFunc, args), body) when isSelfTailCallTarget currentFuncName targetFunc ->
-        let (body', varGen1, types1) =
-            insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs body varGen types
-        let tailExpr = Let (tempId, TailCall (targetFunc, args), body')
-        wrapOwnedAccumulatorDecs (decsForSelfTailCall args) tailExpr varGen1 types1
-    | Let (tempId, cexpr, body) ->
-        let (body', varGen1, types1) =
-            insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs body varGen types
-        (Let (tempId, cexpr, body'), varGen1, types1)
+    let rec rewrite
+        (releaseTerminalState: bool)
+        (expr: AExpr)
+        (varGen: VarGen)
+        (types: Map<TempId, AST.Type>)
+        : AExpr * VarGen * Map<TempId, AST.Type> =
+        match expr with
+        | Jump _ -> (expr, varGen, types)
+        | Join (parameter, continuation, entry) ->
+            let body, next, bodyTypes = rewrite releaseTerminalState continuation varGen types
+            let entry', final, finalTypes = rewrite releaseTerminalState entry next bodyTypes
+            (Join (parameter, body, entry'), final, finalTypes)
+        | Return _ when releaseTerminalState ->
+            wrapOwnedAccumulatorDecs terminalDecs expr varGen types
+        | Return _ ->
+            (expr, varGen, types)
+        | If (cond, thenBranch, elseBranch) ->
+            let (thenBranch', varGen1, types1) =
+                rewrite releaseTerminalState thenBranch varGen types
+            let (elseBranch', varGen2, types2) =
+                rewrite releaseTerminalState elseBranch varGen1 types1
+            (If (cond, thenBranch', elseBranch'), varGen2, types2)
+        | Let (tempId, Call (targetFunc, args), body)
+            when isSelfTailCallTarget currentFuncName targetFunc ->
+            let (body', varGen1, types1) = rewrite false body varGen types
+            let callExpr = Let (tempId, Call (targetFunc, args), body')
+            wrapOwnedAccumulatorDecs (decsForSelfTailCall args) callExpr varGen1 types1
+        | Let (tempId, TailCall (targetFunc, args), body)
+            when isSelfTailCallTarget currentFuncName targetFunc ->
+            let (body', varGen1, types1) = rewrite false body varGen types
+            let tailExpr = Let (tempId, TailCall (targetFunc, args), body')
+            wrapOwnedAccumulatorDecs (decsForSelfTailCall args) tailExpr varGen1 types1
+        | Let (tempId, cexpr, body) ->
+            let (body', varGen1, types1) =
+                rewrite releaseTerminalState body varGen types
+            (Let (tempId, cexpr, body'), varGen1, types1)
+
+    rewrite true expr varGen types
 
 let private isClosureMapHelperTarget (targetFunc: string) : bool =
     targetFunc = "Darklang.Stdlib.List.__mapHelper"

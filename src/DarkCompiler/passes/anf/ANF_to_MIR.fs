@@ -726,13 +726,35 @@ let rec collectSelfTailCallCleanup
     | _ ->
         Error $"Internal error: unexpected expression after self tailcall in {builder.FuncName}"
 
-/// If a self-tailcall cleanup decrements an argument value, increment that argument first
-/// so ownership is transferred to the next loop iteration before cleanup runs.
-let refCountIncForOverlappingArgs
+/// RC insertion places owned loop-state releases immediately before the call
+/// so tail-call validation can account for them. Pull that contiguous suffix
+/// back out before lowering: arguments must be captured, and overlaps retained,
+/// before any obsolete state is released.
+let collectPreSelfTailCallCleanup
+    (instrsRev: MIR.Instr list)
+    : MIR.Instr list * MIR.Instr list =
+    let isCleanup instr =
+        match instr with
+        | MIR.RefCountDec _
+        | MIR.RefCountDecString _
+        | MIR.RefCountDecBlob _ -> true
+        | _ -> false
+
+    let rec loop cleanup remaining =
+        match remaining with
+        | instr :: rest when isCleanup instr -> loop (instr :: cleanup) rest
+        | _ -> (cleanup, remaining)
+
+    loop [] instrsRev
+
+/// Transfer cleanup-owned edges that also occur in the next argument vector.
+/// The first destination adopts the existing edge, so its decrement disappears;
+/// only additional destinations require retains.
+let transferOverlappingArgOwnership
     (argOperands: MIR.Operand list)
     (cleanupInstrs: MIR.Instr list)
     (existingInstrsRev: MIR.Instr list)
-    : MIR.Instr list =
+    : MIR.Instr list * MIR.Instr list =
     let decInfos =
         cleanupInstrs
         |> List.choose (fun instr ->
@@ -768,21 +790,45 @@ let refCountIncForOverlappingArgs
                 | None ->
                     None
 
-    let (_, incsRev) =
+    let overlapCounts =
         argOperands
-        |> List.fold (fun (seen, incsRev) argOp ->
+        |> List.fold (fun counts argOp ->
             match argOp with
             | MIR.Register vreg ->
                 match findCleanupTargetAlias vreg Set.empty with
-                | Some (targetVReg, (payloadSize, kind, sourceType)) when not (Set.contains targetVReg seen) ->
-                    (Set.add targetVReg seen, MIR.RefCountInc (targetVReg, payloadSize, kind, sourceType) :: incsRev)
+                | Some (targetVReg, _) ->
+                    counts
+                    |> Map.change targetVReg (fun count ->
+                        Some (Option.defaultValue 0 count + 1))
                 | _ ->
-                    (seen, incsRev)
+                    counts
             | _ ->
-                (seen, incsRev))
-            (Set.empty, [])
+                counts)
+            Map.empty
 
-    List.rev incsRev
+    let overlapIncs =
+        cleanupInstrs
+        |> List.collect (fun instr ->
+            match instr with
+            | MIR.RefCountDec (vreg, payloadSize, kind, sourceType) ->
+                let additionalEdges =
+                    Map.tryFind vreg overlapCounts
+                    |> Option.defaultValue 0
+                    |> fun count -> max 0 (count - 1)
+                List.replicate
+                    additionalEdges
+                    (MIR.RefCountInc (vreg, payloadSize, kind, sourceType))
+            | _ -> [])
+
+    let cleanupAfterTransfers =
+        cleanupInstrs
+        |> List.filter (fun instr ->
+            match instr with
+            | MIR.RefCountDec (vreg, _, _, _) ->
+                not (Map.containsKey vreg overlapCounts)
+            | _ -> true)
+
+    (overlapIncs, cleanupAfterTransfers)
 
 /// Only value-producing exits may be redirected into an enclosing value join.
 /// A terminal transfer has no result register or patchable return block.
@@ -867,7 +913,7 @@ let rec convertExpr
     // Phi nodes carry type info, so this works for both int and float parameters.
     | ANF.Let (callTempId, ANF.TailCall (funcName, args), rest) when funcName = builder.FuncName ->
         collectSelfTailCallCleanup builder callTempId rest
-        |> Result.bind (fun cleanupInstrs ->
+        |> Result.bind (fun postCallCleanupInstrs ->
             let argTypes = args |> List.map (atomType builder)
             args
             |> List.map (atomToOperand builder)
@@ -923,11 +969,19 @@ let rec convertExpr
                                 MIR.Mov (paramReg, argOp, Some argType))
                         ([], assigns, builder.RegGen)
 
-                let overlapArgIncs = refCountIncForOverlappingArgs argOperands cleanupInstrs currentInstrsRev
+                let (preCallCleanupInstrs, instrsBeforeCleanupRev) =
+                    collectPreSelfTailCallCleanup currentInstrsRev
+                let cleanupBeforeTransfers =
+                    preCallCleanupInstrs @ postCallCleanupInstrs
+                let (overlapArgIncs, cleanupInstrs) =
+                    transferOverlappingArgOwnership
+                        argOperands
+                        cleanupBeforeTransfers
+                        instrsBeforeCleanupRev
 
                 // Create block with accumulated instructions + arg capture + overlap incs + cleanup + param assignments + Jump
                 let instrsRev =
-                    currentInstrsRev
+                    instrsBeforeCleanupRev
                     |> appendInstrsRev captureInstrs
                     |> appendInstrsRev overlapArgIncs
                     |> appendInstrsRev cleanupInstrs

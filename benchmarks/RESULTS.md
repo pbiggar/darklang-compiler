@@ -2,12 +2,12 @@
 
 Best-known compatible full-profile Dark performance vs audited Rust references, with diagnostic reference runtimes (instruction counts).
 
-**Snapshot timestamp:** 2026-09-19T01:58:35+00:00
+**Snapshot timestamp:** 2026-09-19T12:39:07+00:00
 **Architecture:** `arm64`
 **Profile:** `full` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs`
 **Workload contract:** `6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe`
-**Compiler commit:** `af37672ff07befde4f5328f0f1ab430f0c2dd3a9` - Merge commit 'ba37fe420324f3f05cc7c422b980ab2146341356' into HEAD
+**Compiler commit:** `92952c03a906e3a6f6f1ce9408d44638201d77a2` - Clarify worktree exceptions for agent workflows
 **Diagnostic references:** informational only; multipliers are instructions divided by Rust for the same workload.
 Every displayed diagnostic row matched the profile's expected stdout.
 
@@ -27,7 +27,7 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | mandelbrot | 15,227,450 (1.21x) | 12,557,270 | - | - | - | - |
 | matmul | 42,560,591 (65.5x) | 649,416 | - | - | - | - |
 | merkletrees | 3,877,428 (1.54x) | 2,523,420 | - | - | - | - |
-| myers_diff | 2,524,084,555 (3673x) | 687,142 | - | - | - | - |
+| myers_diff | 2,524,100,302 (3673x) | 687,142 | - | - | - | - |
 | nbody | 14,537,330 (3.42x) | 4,249,498 | - | - | - | - |
 | nqueen | 7,420,425 (1.25x) | 5,914,962 | - | - | - | - |
 | nsieve | 131,101,395 (345x) | 380,354 | - | - | - | - |
@@ -41,4 +41,4 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | sum_to_n | 62,009 (0.24x) | 260,246 | - | - | - | - |
 | tak | 48,017,024 (0.12x) | 391,110,808 | - | - | - | - |
 | tinytemplate | 5,561,197,103 (13230x) | 420,354 | - | - | - | - |
-| warden | 46,197,296 (171x) | 270,345 | - | - | - | - |
+| warden | 46,195,037 (171x) | 270,345 | - | - | - | - |

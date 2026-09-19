@@ -159,6 +159,112 @@ let testOwnedTransferDeclinesMismatchedArity () : TestResult =
     | Let (_, _, Let (_, _, Let (_, Call ("caller", _), _))) -> Ok ()
     | _ -> Error "Mismatched-arity owned transfer should preserve the ordinary call cleanup path"
 
+let private ownedTransferTestFunction
+    (secondArgument: TempId)
+    (secondCleanup: (TempId * CExpr) option)
+    : Function =
+    let p0 = TempId 0
+    let p1 = TempId 1
+    let replacement0 = TempId 2
+    let replacement1 = TempId 3
+    let retain0 = TempId 4
+    let retain1 = TempId 5
+    let release0 = TempId 6
+    let release1 = TempId 7
+    let callTmp = TempId 8
+    let cleanup0 = TempId 9
+    let tupleType = AST.TTuple [AST.TInt64; AST.TInt64]
+    let releasePlan = rcReleasePlanOfType Map.empty tupleType
+    let metadata = {
+        ReleasePlanCacheKey = rcReleasePlanCacheKey tupleType releasePlan
+        ReleasePlan = Some releasePlan
+        SourceType = Some tupleType
+    }
+    let inc temp = RefCountInc (Var temp, 16, GenericHeap, Some metadata)
+    let dec temp = RefCountDec (Var temp, 16, GenericHeap, Some metadata)
+    let terminal =
+        secondCleanup
+        |> Option.map (fun (cleanupTemp, cleanup) ->
+            Let (cleanupTemp, cleanup, Return (Var callTmp)))
+        |> Option.defaultValue (Return (Var callTmp))
+    {
+        Name = "caller"
+        TypedParams = [
+            { Id = p0; Type = tupleType }
+            { Id = p1; Type = tupleType }
+        ]
+        ReturnType = AST.TInt64
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                retain0,
+                inc p0,
+                Let (
+                    retain1,
+                    inc p1,
+                    Let (
+                        release0,
+                        dec p0,
+                        Let (
+                            release1,
+                            dec p1,
+                            Let (
+                                callTmp,
+                                Call ("caller", [Var replacement0; Var secondArgument]),
+                                Let (cleanup0, dec replacement0, terminal)
+                            )
+                        )
+                    )
+                )
+            )
+    }
+
+let testOwnedTransferRequiresOneToOneCleanupAccounting () : TestResult =
+    let replacement0 = TempId 2
+    let transformed =
+        ownedTransferTestFunction replacement0 None
+        |> detectTailCallsInFunction
+    let rec containsOrdinarySelfCall expr =
+        match expr with
+        | Let (_, Call ("caller", _), _) -> true
+        | Let (_, _, body) -> containsOrdinarySelfCall body
+        | Join (_, continuation, entry)
+        | If (_, continuation, entry) ->
+            containsOrdinarySelfCall continuation || containsOrdinarySelfCall entry
+        | Return _ | Jump _ -> false
+    if containsOrdinarySelfCall transformed.Body then
+        Ok ()
+    else
+        Error "One replacement edge must not transfer into two owned loop parameters"
+
+let testOwnedTransferAcceptsMultipleExactlyMatchedCleanups () : TestResult =
+    let replacement1 = TempId 3
+    let cleanup1 = TempId 10
+    let tupleType = AST.TTuple [AST.TInt64; AST.TInt64]
+    let releasePlan = rcReleasePlanOfType Map.empty tupleType
+    let metadata = {
+        ReleasePlanCacheKey = rcReleasePlanCacheKey tupleType releasePlan
+        ReleasePlan = Some releasePlan
+        SourceType = Some tupleType
+    }
+    let transformed =
+        ownedTransferTestFunction
+            replacement1
+            (Some (cleanup1, RefCountDec (Var replacement1, 16, GenericHeap, Some metadata)))
+        |> detectTailCallsInFunction
+    let rec containsSelfTailCall expr =
+        match expr with
+        | Let (_, TailCall ("caller", _), _) -> true
+        | Let (_, _, body) -> containsSelfTailCall body
+        | Join (_, continuation, entry)
+        | If (_, continuation, entry) ->
+            containsSelfTailCall continuation || containsSelfTailCall entry
+        | Return _ | Jump _ -> false
+    if containsSelfTailCall transformed.Body then
+        Ok ()
+    else
+        Error "Two exactly matched replacement edges should transfer into two owned loop parameters"
+
 let testRetainedProjectionAllowsSelfTailCall () : TestResult =
     let current = TempId 0
     let source = TempId 1
@@ -222,5 +328,7 @@ let tests = [
     ("non-self tailcall moves dec before tailcall", testNonSelfTailCallMovesDecBeforeTailCall)
     ("indirect tailcall moves dec before tailcall", testIndirectTailCallMovesDecBeforeTailCall)
     ("owned transfer declines mismatched arity", testOwnedTransferDeclinesMismatchedArity)
+    ("owned transfer requires one-to-one cleanup accounting", testOwnedTransferRequiresOneToOneCleanupAccounting)
+    ("owned transfer accepts multiple exactly matched cleanups", testOwnedTransferAcceptsMultipleExactlyMatchedCleanups)
     ("retained projection allows self tailcall", testRetainedProjectionAllowsSelfTailCall)
 ]
