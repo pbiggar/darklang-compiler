@@ -21,6 +21,7 @@ The Dark compiler transforms source code through a series of passes, each with a
 | 2    | AST → ANF               | `passes/anf/AST_to_ANF.fs`                       | Checked AST → ANF                             |
 | 2 (regions) | List representation and ownership | `passes/hir/`, `passes/storage/`, `passes/ownership/`, `passes/anf/LowerListRegions.fs` | Closed semantic lists → storage → owned arrays → ANF |
 | 2.2  | Generated result output | `passes/anf/PrintInsertion.fs`                   | ANF → ANF                                     |
+| 2.25 | Function reachability   | `passes/anf/ANFDeadCodeElimination.fs`           | ANF → reachable ANF                           |
 | 2.3  | ANF optimizations       | `passes/anf/ANF_Optimize.fs`                                | ANF → ANF                                     |
 | 2.4  | ANF inlining            | `passes/anf/ANF_Inlining.fs`                                | ANF → ANF                                     |
 | 2.4.4 | Known closure specialization | `passes/anf/ANF_HigherOrderSpecialization.fs`       | ANF → ANF                                     |
@@ -149,6 +150,17 @@ finalizes every unrelated ownership obligation before the output effect, while
 the rendered root remains live through printing. MIR-to-LIR lowers that
 consumption to the shape-specific final release using the existing release
 registries.
+
+---
+
+## Pass 2.25: Function Reachability (`ANFDeadCodeElimination.fs`)
+
+Expression compilation removes functions that cannot be reached from the
+generated program entry before ANF optimization, then repeats the query after
+inlining and specialization. Function references and closure allocations are
+call-graph edges, so indirect calls retain every statically named target. The
+later LIR tree-shaking pass remains responsible for combining fresh and
+prebuilt functions and for selecting reachable standard-library functions.
 
 ---
 

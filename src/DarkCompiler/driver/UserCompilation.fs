@@ -279,6 +279,25 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 programEntryName
                                 boundaryProgramType
                                 userOnly.MainExpr
+                        let pruneProgramFunctions (functions: ANF.Function list) =
+                            if
+                                plan.TreeShakeUserFunctions
+                                && not plan.Options.DisableFunctionTreeShaking
+                            then
+                                let pruneStart = sw.Elapsed.TotalMilliseconds
+                                let reachableFunctions =
+                                    ANFDeadCodeElimination.filterReachableFunctions
+                                        (Set.singleton programEntryName)
+                                        functions
+                                let pruneElapsed =
+                                    sw.Elapsed.TotalMilliseconds - pruneStart
+                                recordPassTiming
+                                    plan.PassTimingRecorder
+                                    "Early Function Tree Shaking"
+                                    pruneElapsed
+                                reachableFunctions
+                            else
+                                functions
                         let prepareProgramFunctions () =
                             let functions = programEntry :: programFunctions
                             match plan.Mode with
@@ -311,6 +330,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 Error $"Function name '{programEntryName}' is reserved"
                             else
                                 prepareProgramFunctions ()
+                                |> Result.map pruneProgramFunctions
                                 |> Result.bind (fun preparedFunctions ->
                                     buildAnf
                                         plan.Verbosity
@@ -328,13 +348,15 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                         | Error err, _
                         | _, Error err -> Error err
                         | Ok allocatedDependencyFuncs, Ok (printedFunctions, programTypeMap) ->
+                                let reachableProgramFunctions =
+                                    pruneProgramFunctions printedFunctions
                                 let tcoProgramFunctions =
                                     applyTco
                                         plan.Verbosity
                                         plan.Options
                                         sw
                                         userRegistries.RecursiveMembers
-                                        printedFunctions
+                                        reachableProgramFunctions
                                         plan.PassTimingRecorder
                                 let programLirResult =
                                     lowerToAllocatedLir

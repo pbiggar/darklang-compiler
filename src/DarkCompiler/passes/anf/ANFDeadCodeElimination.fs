@@ -135,6 +135,15 @@ let buildCallGraph (funcs: ANF.Function list) : Map<string, Set<string>> =
     |> List.map (fun f -> f.Name, getCalledFunctions f)
     |> Map.ofList
 
+/// Retain functions reachable from the named roots, preserving input order.
+let filterReachableFunctions
+    (roots: Set<string>)
+    (funcs: ANF.Function list)
+    : ANF.Function list =
+    let reachable =
+        CallGraphReachability.findReachable (buildCallGraph funcs) roots
+    funcs |> List.filter (fun func -> Set.contains func.Name reachable)
+
 /// Get the set of stdlib functions reachable from user functions
 let getReachableStdlib (stdlibCallGraph: Map<string, Set<string>>)
                        (userFuncs: ANF.Function list) : Set<string> =
