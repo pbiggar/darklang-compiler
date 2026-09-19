@@ -587,7 +587,7 @@ while true; do
     fix_blocked_job)
       repair_job "$snapshot" "$daemon_output"
       ;;
-    enqueue_clean_branch|gc_available|run_daemon_when_approved)
+    enqueue_clean_branch|gc_available|run_daemon_when_approved|validate_queued_jobs)
       rm -f "$daemon_output"
       ;;
     wait_for_runner)

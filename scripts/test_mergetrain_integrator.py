@@ -3,6 +3,7 @@
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -40,6 +41,11 @@ import time
 
 command = next(arg for arg in sys.argv if arg in {"daemon", "status", "inspect", "retry"})
 if command == "daemon":
+    pass_file = os.environ.get("INTEGRATOR_TEST_DAEMON_PASS_FILE")
+    if pass_file:
+        path = pathlib.Path(pass_file)
+        pass_count = int(path.read_text(encoding="utf-8")) if path.exists() else 0
+        path.write_text(str(pass_count + 1), encoding="utf-8")
     if os.environ.get("INTEGRATOR_TEST_PROGRESS") == "1":
         progress_file = pathlib.Path(os.environ["INTEGRATOR_TEST_PROGRESS_FILE"])
         for stage in ("assembling", "gating", "deploying", "done"):
@@ -434,6 +440,46 @@ raise SystemExit(1)
             self.assertIn("1 job(s) need attention", completed.stderr)
             self.assertNotIn("daemon noise", completed.stderr)
             self.assertEqual(list(attempts.iterdir()), [])
+
+    def test_validate_queued_jobs_continues_to_the_next_daemon_pass(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo, environment = self.make_fixture(root)
+            pass_file = root / "daemon-passes"
+            environment["INTEGRATOR_TEST_DAEMON_PASS_FILE"] = str(pass_file)
+            environment["INTEGRATOR_TEST_NEXT_ACTION"] = "validate_queued_jobs"
+
+            process = subprocess.Popen(
+                [
+                    environment["INTEGRATOR_SCRIPT"],
+                    "--repo",
+                    str(repo),
+                    "--attempt-dir",
+                    str(root / "attempts"),
+                    "--interval",
+                    "1",
+                ],
+                env=environment,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            try:
+                for _ in range(50):
+                    passes = (
+                        int(pass_file.read_text(encoding="utf-8"))
+                        if pass_file.exists()
+                        else 0
+                    )
+                    if passes >= 2:
+                        break
+                    time.sleep(0.1)
+                self.assertGreaterEqual(passes, 2, "integrator stopped after one pass")
+            finally:
+                process.terminate()
+                _stdout, stderr = process.communicate(timeout=5)
+
+            self.assertNotIn("requires operator action", stderr)
 
     def test_color_mode_controls_ansi_output(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
