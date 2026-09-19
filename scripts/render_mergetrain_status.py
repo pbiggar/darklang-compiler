@@ -91,6 +91,10 @@ def active_jobs(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [by_id[job_id] for job_id in sorted(by_id)]
 
 
+def is_conflict_reason(reason: object) -> bool:
+    return isinstance(reason, str) and "conflict" in reason.casefold()
+
+
 def displayed_benchmark_ratio(contents: str) -> str | None:
     header_prefix = "| Benchmark | Dark ("
     for line in contents.splitlines():
@@ -256,7 +260,14 @@ def recent_merges(repo: Path, limit: int = 5) -> list[str]:
     return [render(line) for line in history.splitlines()]
 
 
-def render(payload: dict[str, Any], repo: Path, *, color: bool) -> str:
+def render(
+    payload: dict[str, Any],
+    repo: Path,
+    *,
+    color: bool,
+    show_conflicts: bool = False,
+    conflict_toggle_hint: bool = False,
+) -> str:
     if payload.get("contract_version") != 4:
         raise ValueError(
             f"unsupported mergetrain contract version: {payload.get('contract_version')}"
@@ -281,6 +292,7 @@ def render(payload: dict[str, Any], repo: Path, *, color: bool) -> str:
 
     lines.append(styled("in train:", BOLD, color))
     jobs = active_jobs(payload)
+    has_conflict = False
     if jobs:
         for job in jobs:
             job_state = str(job["state"])
@@ -288,11 +300,19 @@ def render(payload: dict[str, Any], repo: Path, *, color: bool) -> str:
                 f"  #{job['id']} {styled(job_state, state_style(job_state), color)} "
                 f"{job['task']} [{job['branch']}]"
             )
-            if job.get("reason"):
-                line += f" — {job['reason']}"
+            reason = job.get("reason")
+            if reason:
+                conflict_reason = is_conflict_reason(reason)
+                has_conflict = has_conflict or conflict_reason
+                if conflict_reason and not show_conflicts:
+                    reason = "conflict"
+                line += f" — {reason}"
             lines.append(line)
     else:
         lines.append("  (empty)")
+    if conflict_toggle_hint and has_conflict:
+        action = "hide" if show_conflicts else "show full"
+        lines.append(styled(f"  [c] {action} conflict details", DIM, color))
 
     now = datetime.now(timezone.utc)
     merges = recent_merges(repo)
@@ -319,10 +339,20 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", required=True, type=Path)
     parser.add_argument("--color", action="store_true")
+    parser.add_argument("--show-conflicts", action="store_true")
+    parser.add_argument("--conflict-toggle-hint", action="store_true")
     args = parser.parse_args()
     try:
         payload = json.load(sys.stdin)
-        print(render(payload, args.repo.resolve(), color=args.color))
+        print(
+            render(
+                payload,
+                args.repo.resolve(),
+                color=args.color,
+                show_conflicts=args.show_conflicts,
+                conflict_toggle_hint=args.conflict_toggle_hint,
+            )
+        )
     except (
         json.JSONDecodeError,
         KeyError,

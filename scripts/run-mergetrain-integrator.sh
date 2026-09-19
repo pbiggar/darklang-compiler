@@ -30,11 +30,11 @@ Options:
   --once               Run one daemon/status/repair pass, then exit.
   -h, --help           Show this help and exit.
 
-The integrator processes only jobs enqueued with --auto. It stops for manual
-jobs, unknown states, non-recoverable failures, or a repeated Codex repair
-attempt. Daemon and Codex output stays in log files. The console reports
-readable phase changes and bounded failure summaries, with color when attached
-to a terminal.
+The integrator processes only jobs enqueued with --auto. Problems are reported
+without stopping the loop so an operator can intervene while monitoring stays
+active.
+Daemon and Codex output stays in log files. The console reports readable phase
+changes and bounded failure summaries, with color when attached to a terminal.
 
 Example:
   $0 --repo /Users/paulbiggar/projects/c4d-for-dcb
@@ -229,7 +229,7 @@ repair_job() {
     mv "$daemon_output" "$daemon_log"
     log_error "Mergetrain requested conflict repair without a target job"
     log_info "Daemon log: $daemon_log"
-    exit 1
+    return 1
   fi
 
   inspect_log="$attempt_dir/$job_id.inspect.log"
@@ -242,7 +242,7 @@ repair_job() {
     print_log_excerpt "$inspect_log" 8 "$job_id"
     log_job log_info "$job_id" "Full inspection log: $inspect_log"
     log_job log_info "$job_id" "Daemon log: $daemon_log"
-    exit 1
+    return 1
   fi
   rm -f "$inspect_log"
   category="$(json_value outcome.failure_category <<<"$details")"
@@ -274,7 +274,7 @@ EOF
       if [[ "$failed_gate" != benchmarks ]]; then
         log_error "Job #$job_id needs operator attention ($category); refusing an automatic repair"
         log_info "Daemon log: $daemon_log"
-        exit 1
+        return 1
       fi
       failure_label="benchmark gate failure"
       repair_instructions="$(cat <<'EOF'
@@ -296,7 +296,7 @@ EOF
       if [[ "$reason" != *non-fast-forward* ]]; then
         log_job log_error "$job_id" "Non-recoverable push rejection: $reason"
         log_job log_info "$job_id" "Daemon log: $daemon_log"
-        exit 1
+        return 1
       fi
       repair_instructions="$(cat <<'EOF'
 Rebase the task branch onto the current configured integration ref, preserving
@@ -308,7 +308,7 @@ EOF
     *)
       log_job log_error "$job_id" "Needs operator attention ($category); refusing an automatic repair"
       log_job log_info "$job_id" "Daemon log: $daemon_log"
-      exit 1
+      return 1
       ;;
   esac
   log_job log_run "$job_id" "Repairing $branch after $failure_label"
@@ -317,7 +317,7 @@ EOF
   if [[ -z "$worktree" || -z "$branch" || -z "$old_head" || ! -d "$worktree" ]]; then
     log_job log_error "$job_id" "Does not identify a usable owning worktree"
     log_job log_info "$job_id" "Daemon log: $daemon_log"
-    exit 1
+    return 1
   fi
 
   attempt_marker="$attempt_dir/$job_id-$old_head.attempted"
@@ -326,7 +326,7 @@ EOF
   if [[ -e "$attempt_marker" ]]; then
     log_job log_error "$job_id" "Codex already attempted revision $old_head; operator review required"
     log_job log_info "$job_id" "Daemon log: $daemon_log"
-    exit 1
+    return 1
   fi
   touch "$attempt_marker"
 
@@ -366,7 +366,7 @@ branch unchanged and explain the blocker." >"$codex_log" 2>&1; then
     fi
     log_job log_info "$job_id" "Full execution log: $codex_log"
     log_job log_info "$job_id" "Daemon log: $daemon_log"
-    exit 1
+    return 1
   fi
 
   log_job log_run "$job_id" "Codex finished; verifying the committed repair"
@@ -378,7 +378,7 @@ branch unchanged and explain the blocker." >"$codex_log" 2>&1; then
     log_job log_info "$job_id" "Final message: $output_file"
     log_job log_info "$job_id" "Full execution log: $codex_log"
     log_job log_info "$job_id" "Daemon log: $daemon_log"
-    exit 1
+    return 1
   fi
 
   retry_log="$attempt_dir/$job_id-$new_head.retry.log"
@@ -387,7 +387,7 @@ branch unchanged and explain the blocker." >"$codex_log" 2>&1; then
     log_job log_error "$job_id" "Mergetrain retry failed"
     print_log_excerpt "$retry_log" 8 "$job_id"
     log_job log_info "$job_id" "Full retry log: $retry_log"
-    exit 1
+    return 1
   fi
   rm -f "$retry_log"
   log_job log_ok "$job_id" "Retried after Codex committed a repair"
@@ -558,7 +558,11 @@ while true; do
     log_error "Mergetrain daemon command failed"
     print_log_excerpt "$daemon_log"
     log_info "Full daemon log: $daemon_log"
-    exit 1
+    if [[ "$run_once" == true ]]; then
+      exit 0
+    fi
+    sleep "$interval_seconds"
+    continue
   fi
   status_log="$(mktemp "$attempt_dir/.status.XXXXXX.log")"
   if ! snapshot="$(mergetrain --repo "$repo_root" status --json 2>"$status_log")"; then
@@ -570,7 +574,11 @@ while true; do
     print_log_excerpt "$failed_status_log"
     log_info "Full status log: $failed_status_log"
     log_info "Daemon log: $daemon_log"
-    exit 1
+    if [[ "$run_once" == true ]]; then
+      exit 0
+    fi
+    sleep "$interval_seconds"
+    continue
   fi
   rm -f "$status_log"
   contract_version="$(json_value contract_version <<<"$snapshot")"
@@ -578,14 +586,21 @@ while true; do
 
   if [[ "$contract_version" != "4" ]]; then
     log_error "Unsupported mergetrain contract version: $contract_version"
-    exit 1
+    rm -f "$daemon_output"
+    if [[ "$run_once" == true ]]; then
+      exit 0
+    fi
+    sleep "$interval_seconds"
+    continue
   fi
   report_queue_status "$snapshot"
   report_train_progress "$snapshot"
 
   case "$next_action" in
     fix_blocked_job)
-      repair_job "$snapshot" "$daemon_output"
+      if ! repair_job "$snapshot" "$daemon_output"; then
+        log_warn "Mergetrain problem remains; monitoring will continue"
+      fi
       ;;
     enqueue_clean_branch|gc_available|run_daemon_when_approved|validate_queued_jobs)
       rm -f "$daemon_output"
@@ -596,7 +611,6 @@ while true; do
     *)
       rm -f "$daemon_output"
       log_error "Mergetrain requires operator action: $next_action"
-      exit 1
       ;;
   esac
 
