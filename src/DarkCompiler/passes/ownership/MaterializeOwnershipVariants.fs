@@ -5,10 +5,6 @@ module MaterializeOwnershipVariants
 open OwnedIR
 open SelectOwnershipVariants
 
-/// Value identities are local to a function; the result identifies a direct
-/// call even when it occurs inside a nested branch.
-type CallSiteIdentity = { Caller: AST.FunctionId; Result: HIR.ValueId }
-
 type Request<'id> = {
     Caller: AST.FunctionId
     Call: HIR.FunctionCall

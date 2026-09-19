@@ -273,9 +273,12 @@ changed boundaries or group membership, stale call requests, and symbol
 collisions also fail explicitly. The resulting program is checked again for
 typed value flow and ownership, including the actual caller's uniqueness.
 Effect and alias contracts remain independent and are forwarded from source
-targets. This pass is not yet scheduled in code generation; call-site ownership
-facts and whole-function scheduling remain the next integration work. No
-runtime or storage-selection change is enabled by materialization alone.
+targets. Ownership analysis now exposes verified, pre-transfer uniqueness facts
+for normalized call sites, accounting for duplication, aliases, escapes, and
+branches. A contract-level test feeds those facts through selection and
+materialization and rechecks the specialized boundary. Whole-function owned
+HIR construction and production scheduling remain the next integration work;
+these APIs do not yet change runtime behavior or storage selection.
 
 The [in-place mutation checklist](../../project/perceus-checklist.md) tracks
 the complete implementation sequence. The remaining architecture boundaries

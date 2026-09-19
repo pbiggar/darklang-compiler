@@ -148,6 +148,16 @@ effect, and alias contracts from the source targets. Original and materialized
 programs both cross `VerifyOwnedHIR`; a selected variant is not itself proof
 that a caller can supply unique arguments. This pass is not yet scheduled in
 code generation and does not change storage selection.
+`VerifyOwnedHIR.analyzeFunctions` exposes call-site facts only after the same
+typed and ownership checks as verification. `VerifyOwnership.analyzeFunction`
+and `analyzeFunctions` share the verifier's state transitions; each fact holds
+the caller, exact call, established boundary, and positional unique arguments
+immediately before transfer. `OwnedIR.CallSiteIdentity` scopes the call's result
+identity to its caller for later materialization requests. Facts from both
+branches are collected independently of path-local ownership state, and failed
+verification returns no partial facts. Internal and recursive contracts come
+from the analyzed definitions. Analysis is not yet scheduled over real
+whole-function owned HIR.
 Resolved direct-call nodes use a typed HIR signature registry and a separate
 ownership signature registry. HIR still requires the call's ordinary primitive
 effect and alias contract; an ownership signature cannot supply either fact.
@@ -160,8 +170,12 @@ accesses, leaf uses, explicit unit counts, fresh definitions, exact join
 agreement, exclusivity provenance, and final ownership balance. Unique use
 requires both provenance and exactly one local unit. Duplication retains
 provenance but suspends uniqueness until a balancing drop; a scalar escape
-revokes provenance. Duplication of a borrowed identity creates an owned unit
-that may be consumed, dropped, or returned, but does not establish uniqueness;
+revokes provenance. At calls, uniqueness additionally requires that no other
+argument position names the same ownership identity. An ordinary produced
+result may alias an input with ownership units remaining in the caller, so it
+revokes that input's provenance; a uniquely produced result proves independence
+and preserves it. Duplication of a borrowed identity creates an owned unit that
+may be consumed, dropped, or returned, but does not establish uniqueness;
 dropping a borrow without such a unit is invalid. `verifyClosed` supplies the
 empty managed boundary used by current list regions while explicitly covering
 their unmanaged scalar parameters. Dialects must provide scalar-use and

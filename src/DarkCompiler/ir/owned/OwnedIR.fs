@@ -2,6 +2,10 @@
 
 module OwnedIR
 
+/// Values are local to a function; together these identities locate a direct
+/// call, including one inside a nested branch.
+type CallSiteIdentity = { Caller: AST.FunctionId; Result: HIR.ValueId }
+
 type Input<'id> = Borrowed of 'id | Consumed of 'id
 
 type BlockArgument<'id> = Unmanaged | Managed of 'id
@@ -50,6 +54,20 @@ type CallResultOwnership =
 type CallSignature = {
     Parameters: CallParameterOwnership list
     Result: CallResultOwnership
+}
+
+/// Facts describe the state immediately before argument transfer under the
+/// established contract. They are valid only for the analyzed definitions.
+type CallSiteFacts = {
+    Caller: AST.FunctionId
+    Call: HIR.FunctionCall
+    Established: CallSignature
+    UniqueArguments: Set<int>
+}
+
+let callSiteIdentity (facts: CallSiteFacts) : CallSiteIdentity = {
+    Caller = facts.Caller
+    Result = facts.Call.Result.Id
 }
 
 /// Lists retain multiplicity: a duplicated unit can satisfy two consuming

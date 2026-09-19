@@ -88,6 +88,16 @@ join result is unique only when both incoming results are unique. This is a
 static Perceus-style uniqueness certificate, not a runtime RC==1 test or a
 whole-program reset/reuse implementation.
 
+Call-site facts snapshot this state before argument transfer, retaining the
+exact call and established ownership contract under a caller-scoped result
+identity. A unique argument must also be the only position naming its ownership
+identity in that call. An ordinary owned call result may alias an input still
+owned by the caller, permanently revoking that input's exclusivity; a uniquely
+owned result proves independence. Joint typed-HIR and ownership analysis returns
+facts only when the entire supplied function group verifies. Selection and
+materialization can consume these facts, but production whole-function
+scheduling is still pending.
+
 Normalized HIR can also represent a resolved direct call with ordered value
 arguments and a fresh result value. `VerifyHIR` requires an explicit typed
 signature and an independently supplied primitive effect/alias contract for

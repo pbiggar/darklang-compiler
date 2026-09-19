@@ -23,9 +23,13 @@ representation and safety boundaries are documented in
   The pass verifies both original and materialized programs. Full host tests
   and the parent-relative benchmark gate pass; production scheduling remains a
   later slice.
-- [ ] **Expose call-site ownership facts.** Report which arguments are provably
+- [x] **Expose call-site ownership facts.** Report which arguments are provably
   unique immediately before each call, accounting for aliases, branches,
-  duplication, and escapes.
+  duplication, and escapes. Implemented by the shared ownership verifier and
+  exposed through joint typed-HIR analysis, with recursive-contract, alias,
+  failure-atomicity, and specialization-handoff tests. Full host tests and the
+  parent-relative benchmark gate pass; whole-function scheduling is the next
+  slice.
 - [ ] **Schedule whole-function ownership analysis.** Produce ownership-aware
   HIR for real functions, establish borrowed and consumed parameters and
   ownership-transferring results, and insert duplication and cleanup. Preserve

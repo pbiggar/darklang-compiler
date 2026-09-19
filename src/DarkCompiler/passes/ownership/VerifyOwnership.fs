@@ -1,4 +1,4 @@
-// VerifyOwnership.fs - Verify closed structured regions using dialect ownership contracts.
+// VerifyOwnership.fs - Verify ownership and derive call facts from the same state transitions.
 
 module VerifyOwnership
 
@@ -55,7 +55,9 @@ let callSignatureOfFunction (signature: FunctionSignature<'id>) =
 /// live ownership is path-local and must agree at every shared continuation.
 /// The function signature owns boundary transfer; primitive contracts continue
 /// to own operation-local use and production without duplicating alias facts.
-let verifyFunction
+let private foldFunctionCalls
+    observeCall
+    initialFacts
     (semantics: Semantics<'leaf, 'id>)
     (signature: FunctionSignature<'id>)
     (root: Block<'leaf, 'id>) =
@@ -119,13 +121,15 @@ let verifyFunction
                     |> Result.bind (fun state -> define uniqueness.UniqueOutputs declared state contract.Outputs)))
     let leaf declared borrowed state operation =
         contract declared borrowed state (semantics.Leaf operation) (semantics.LeafUniqueness operation)
-    let call declared borrowed state (call: HIR.FunctionCall) =
+    let call facts declared borrowed state (call: HIR.FunctionCall) =
         match semantics.CallOwnership call with
         | None -> Error (UnknownCallOwnership call.Target)
         | Some signature when List.length signature.Parameters <> List.length call.Arguments ->
             Error (InconsistentCallOwnershipParameters call.Target)
         | Some signature ->
             let arguments = call.Arguments |> List.map managed
+            let occurrences = arguments |> List.choose id |> List.countBy id |> Map.ofList
+            let uniqueArgumentId id = isUnique state id && Map.tryFind id occurrences = Some 1
             let rec inputs index acc required modes values =
                 match modes, values with
                 | [], [] -> Ok (List.rev acc, required)
@@ -133,7 +137,9 @@ let verifyFunction
                 | BorrowedCallParameter :: modes, Some id :: values -> inputs (index + 1) (Borrowed id :: acc) required modes values
                 | ConsumedCallParameter :: modes, Some id :: values -> inputs (index + 1) (Consumed id :: acc) required modes values
                 | UniqueCallParameter :: modes, Some id :: values ->
-                    inputs (index + 1) (Consumed id :: acc) (Set.add id required) modes values
+                    if uniqueArgumentId id then
+                        inputs (index + 1) (Consumed id :: acc) (Set.add id required) modes values
+                    else Error (NonUniqueUse id)
                 | _ -> Error (InconsistentCallOwnershipArgument (call.Target, index))
             inputs 0 [] Set.empty signature.Parameters arguments |> Result.bind (fun (callInputs, required) ->
                 let ownership outputs uniqueOutputs =
@@ -142,7 +148,13 @@ let verifyFunction
                         { RequiredInputs = required; UniqueOutputs = uniqueOutputs }
                 match signature.Result, managed call.Result with
                 | UnmanagedCallResult, None -> ownership [] Set.empty
-                | ProducedCallResult, Some result -> ownership [result] Set.empty
+                | ProducedCallResult, Some result ->
+                    ownership [result] Set.empty
+                    |> Result.map (fun (declared, nextState) ->
+                        // An ordinary result may alias any input, including a
+                        // consumed unit with duplicates still live in the caller.
+                        let mayAlias = arguments |> List.choose id |> Set.ofList
+                        declared, { nextState with Exclusive = Set.difference nextState.Exclusive mayAlias })
                 | UniqueProducedCallResult, Some result -> ownership [result] (Set.singleton result)
                 | BorrowedCallResult index, Some result when index >= 0 ->
                     match List.tryItem index signature.Parameters, List.tryItem index arguments with
@@ -152,42 +164,52 @@ let verifyFunction
                     | _ -> Error (InvalidBorrowedCallResult (call.Target, index))
                 | BorrowedCallResult index, Some _ -> Error (InvalidBorrowedCallResult (call.Target, index))
                 | _ -> Error (InconsistentCallOwnershipResult call.Target))
-    let rec loop declared borrowed state = function
-        | [] -> Ok (declared, state)
+            |> Result.map (fun (declared, nextState) ->
+                let uniqueArgument value =
+                    match managed value with
+                    | Some id -> uniqueArgumentId id
+                    | None -> false
+                declared, nextState, observeCall facts call signature uniqueArgument)
+    let withFacts facts result =
+        result |> Result.map (fun (declared, state) -> declared, state, facts)
+    let rec loop facts declared borrowed state = function
+        | [] -> Ok (declared, state, facts)
         | step :: rest ->
             let after =
                 match step with
                 | Dup value ->
                     require borrowed state (Set.singleton value)
-                    |> Result.map (fun () -> declared, addUnit value state)
-                | Drop value -> drop state [value] |> Result.map (fun state -> declared, state)
+                    |> Result.map (fun () -> declared, addUnit value state, facts)
+                | Drop value -> drop state [value] |> Result.map (fun state -> declared, state, facts)
                 | Evaluate operation ->
                     match operation with
-                    | HIR.Leaf leafOperation -> leaf declared borrowed state leafOperation
-                    | HIR.ScalarBinding (_, value) -> scalar borrowed state value |> Result.map (fun state -> declared, state)
-                    | HIR.Call functionCall -> call declared borrowed state functionCall
+                    | HIR.Leaf leafOperation -> leaf declared borrowed state leafOperation |> withFacts facts
+                    | HIR.ScalarBinding (_, value) -> scalar borrowed state value |> Result.map (fun state -> declared, state, facts)
+                    | HIR.Call functionCall -> call facts declared borrowed state functionCall
                     | HIR.Branch (result, condition, yes, no) ->
                         scalar borrowed state condition |> Result.bind (fun branchState ->
-                            block declared borrowed branchState yes |> Result.bind (fun (afterYes, yesState, yesResult) ->
-                                block afterYes borrowed branchState no |> Result.bind (fun (afterNo, noState, noResult) ->
-                                    match managed yesResult, managed noResult, managed result with
-                                    | None, None, None ->
-                                        if yesState <> noState then Error InconsistentJoin
-                                        else Ok (afterNo, yesState)
-                                    | Some yesId, Some noId, Some resultId ->
-                                        let uniqueResult = isUnique yesState yesId && isUnique noState noId
-                                        drop yesState [yesId] |> Result.bind (fun yesRemainder ->
-                                            drop noState [noId] |> Result.bind (fun noRemainder ->
-                                                if yesRemainder <> noRemainder then Error InconsistentJoin
-                                                else
-                                                    let unique = if uniqueResult then Set.singleton resultId else Set.empty
-                                                    define unique afterNo yesRemainder [resultId]))
-                                    | _ -> Error InconsistentBlockArgument)))
-            after |> Result.bind (fun (declared, state) -> loop declared borrowed state rest)
-    and block declared borrowed state body =
-        loop declared borrowed state body.Body.Operations |> Result.bind (fun (declared, state) ->
+                            block facts declared borrowed branchState yes |> Result.bind (fun (afterYes, yesState, yesResult, yesFacts) ->
+                                block yesFacts afterYes borrowed branchState no |> Result.bind (fun (afterNo, noState, noResult, noFacts) ->
+                                    let joined =
+                                        match managed yesResult, managed noResult, managed result with
+                                        | None, None, None ->
+                                            if yesState <> noState then Error InconsistentJoin
+                                            else Ok (afterNo, yesState)
+                                        | Some yesId, Some noId, Some resultId ->
+                                            let uniqueResult = isUnique yesState yesId && isUnique noState noId
+                                            drop yesState [yesId] |> Result.bind (fun yesRemainder ->
+                                                drop noState [noId] |> Result.bind (fun noRemainder ->
+                                                    if yesRemainder <> noRemainder then Error InconsistentJoin
+                                                    else
+                                                        let unique = if uniqueResult then Set.singleton resultId else Set.empty
+                                                        define unique afterNo yesRemainder [resultId]))
+                                        | _ -> Error InconsistentBlockArgument
+                                    joined |> withFacts noFacts)))
+            after |> Result.bind (fun (declared, state, facts) -> loop facts declared borrowed state rest)
+    and block facts declared borrowed state body =
+        loop facts declared borrowed state body.Body.Operations |> Result.bind (fun (declared, state, facts) ->
             requireManaged borrowed state body.Body.Result
-            |> Result.map (fun () -> declared, state, body.Body.Result))
+            |> Result.map (fun () -> declared, state, body.Body.Result, facts))
     let parameterIds = signature.Parameters |> List.choose parameterId
     let duplicateParameter =
         parameterIds
@@ -226,8 +248,8 @@ let verifyFunction
             signature.Parameters
             |> List.choose (function UniqueParameter id -> Some id | _ -> None)
             |> List.fold (fun state id -> { state with Exclusive = Set.add id state.Exclusive }) initial
-        block (Set.ofList parameterIds) borrowed initial root
-        |> Result.bind (fun (_, state, result) ->
+        block initialFacts (Set.ofList parameterIds) borrowed initial root
+        |> Result.bind (fun (_, state, result, facts) ->
             let resultOwnership =
                 match signature.Result, managed result with
                 | UnmanagedResult, None -> Ok state
@@ -247,15 +269,34 @@ let verifyFunction
                     | Error _ -> Error (InvalidProducedResult expected)
                 | _ -> Error InconsistentFunctionResult
             resultOwnership |> Result.bind (fun state ->
-                if Map.isEmpty state.Units then Ok () else Error (UndroppedValues (owned state))))
+                if Map.isEmpty state.Units then Ok facts else Error (UndroppedValues (owned state))))
+
+let verifyFunction semantics signature root =
+    foldFunctionCalls (fun () _ _ _ -> ()) () semantics signature root
+
+let private collectCallFacts caller facts (call: HIR.FunctionCall) established isUnique =
+    let uniqueArguments =
+        call.Arguments
+        |> List.indexed
+        |> List.choose (fun (index, argument) -> if isUnique argument then Some index else None)
+        |> Set.ofList
+    { Caller = caller; Call = call; Established = established; UniqueArguments = uniqueArguments } :: facts
+
+/// Return facts only after the complete function, including its return and
+/// cleanup, verifies. Verification-only callers do not allocate fact lists.
+let analyzeFunction semantics (definition: Function<'leaf, 'id>) =
+    foldFunctionCalls (collectCallFacts definition.Definition.Id) []
+        semantics definition.Ownership definition.Definition.Body
+    |> Result.map List.rev
 
 /// Verify a mutually visible owned-function group. Internal call ownership is
 /// derived from the paired definitions, so direct and recursive calls cannot
 /// drift from their function boundaries. External registrations remain
 /// available only for targets outside the group.
-let verifyFunctions
+let private withFunctionSemantics
     (semantics: Semantics<'leaf, 'id>)
-    (functions: Function<'leaf, 'id> list) =
+    (functions: Function<'leaf, 'id> list)
+    analyze =
     let duplicateName =
         functions
         |> List.countBy (fun functionDefinition -> functionDefinition.Definition.Id)
@@ -301,14 +342,26 @@ let verifyFunctions
                             | Some signature -> Some signature
                             | None -> semantics.CallOwnership call
                 }
-                functions
-                |> List.fold (fun result functionDefinition ->
-                    result
-                    |> Result.bind (fun () ->
-                        verifyFunction
-                            programSemantics
-                            functionDefinition.Ownership
-                            functionDefinition.Definition.Body)) (Ok ()))
+                analyze programSemantics)
+
+let verifyFunctions semantics functions =
+    withFunctionSemantics semantics functions (fun programSemantics ->
+        functions
+        |> List.fold (fun result definition ->
+            result |> Result.bind (fun () ->
+                verifyFunction programSemantics definition.Ownership definition.Definition.Body)) (Ok ()))
+
+/// Internal and recursive calls use boundaries derived from this exact group.
+/// The accumulator is separate from path-local ownership: sibling branches
+/// contribute facts without contributing ownership state to one another.
+let analyzeFunctions semantics functions =
+    withFunctionSemantics semantics functions (fun programSemantics ->
+        functions
+        |> List.fold (fun result definition ->
+            result |> Result.bind (fun facts ->
+                foldFunctionCalls (collectCallFacts definition.Definition.Id) facts
+                    programSemantics definition.Ownership definition.Definition.Body)) (Ok [])
+        |> Result.map List.rev)
 
 /// Closed regions are functions with no managed parameters and an unmanaged
 /// result. Keeping this as a wrapper makes the existing boundary explicit.

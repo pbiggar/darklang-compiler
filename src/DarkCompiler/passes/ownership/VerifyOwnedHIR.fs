@@ -27,10 +27,10 @@ let private hirBody
 
 /// HIR contracts remain authoritative for types, effects, and aliases;
 /// ownership contracts account only for unit transfer and uniqueness.
-let verifyFunctions
+let private withVerifiedHIR
     (hir: HIRContracts<'leaf>)
-    (ownership: OwnedIR.Semantics<'leaf, 'id>)
-    (functions: OwnedIR.Function<'leaf, 'id> list) =
+    (functions: OwnedIR.Function<'leaf, 'id> list)
+    analyze =
     let dialect : VerifyHIR.Dialect<'leaf, OwnedIR.Block<'leaf, 'id>> = {
         Body = hirBody
         Leaf = hir.Leaf
@@ -41,5 +41,13 @@ let verifyFunctions
     VerifyHIR.verifyFunctions dialect definitions
     |> Result.mapError HIRVerificationFailed
     |> Result.bind (fun () ->
-        VerifyOwnership.verifyFunctions ownership functions
+        analyze ()
         |> Result.mapError OwnershipVerificationFailed)
+
+let verifyFunctions hir ownership functions =
+    withVerifiedHIR hir functions (fun () -> VerifyOwnership.verifyFunctions ownership functions)
+
+/// Typed identities and independent primitive contracts must verify before
+/// ownership facts may drive selection or identify calls for materialization.
+let analyzeFunctions hir ownership functions =
+    withVerifiedHIR hir functions (fun () -> VerifyOwnership.analyzeFunctions ownership functions)
