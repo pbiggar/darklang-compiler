@@ -74,7 +74,8 @@ let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
         RecordClone (descriptor, s record, substAtoms env fields)
     | RecordReuse (descriptor, record, fields) ->
         RecordReuse (descriptor, s record, substAtoms env fields)
-    | StringConcat (left, right) -> StringConcat (s left, s right)
+    | StringConcat (first, second, remaining) ->
+        StringConcat (s first, s second, List.map s remaining)
     | CanonicalBufferEq (kind, left, right) -> CanonicalBufferEq (kind, s left, s right)
     | RefCountInc (atom, size, kind, sourceType) -> RefCountInc (s atom, size, kind, sourceType)
     | RefCountDec (atom, size, kind, sourceType) -> RefCountDec (s atom, size, kind, sourceType)
@@ -178,13 +179,24 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
                 |> Option.map (fun n -> Atom (IntLiteral (Int64 n)))
             | FloatToBits (FloatLiteral f) ->
                 Some (Atom (IntLiteral (UInt64 (System.BitConverter.DoubleToUInt64Bits f))))
-            | StringConcat (StringLiteral left, StringLiteral right) ->
-                Some (Atom (StringLiteral (left + right)))
-            | StringConcat (left, StringLiteral "") -> Some (Atom left)
-            | StringConcat (StringLiteral "", right) -> Some (Atom right)
+            | StringConcat (first, second, remaining) ->
+                let parts = first :: second :: remaining
+                if parts |> List.forall (function StringLiteral _ -> true | _ -> false) then
+                    parts
+                    |> List.choose (function StringLiteral value -> Some value | _ -> None)
+                    |> String.concat ""
+                    |> StringLiteral
+                    |> Atom
+                    |> Some
+                else
+                    match parts |> List.filter (function StringLiteral "" -> false | _ -> true) with
+                    | [single] -> Some (Atom single)
+                    | _ -> None
             | Call ("Stdlib.String.__appendNormalized", [StringLiteral left; StringLiteral right]) ->
                 let normalized = (left + right).Normalize(System.Text.NormalizationForm.FormC)
                 Some (Atom (StringLiteral normalized))
+            | Call ("Stdlib.String.__normalizeAfterConcat", [StringLiteral value]) ->
+                Some (Atom (StringLiteral (value.Normalize(System.Text.NormalizationForm.FormC))))
             | Call ("Stdlib.String.__appendNormalized", [left; StringLiteral ""]) ->
                 Some (Atom left)
             | Call ("Stdlib.String.__appendNormalized", [StringLiteral ""; right]) ->

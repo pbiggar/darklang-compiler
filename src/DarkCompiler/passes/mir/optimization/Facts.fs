@@ -175,7 +175,7 @@ let getInstrDest (instr: Instr) : VReg option =
     | ClosureTailCall _ -> None  // Closure tail calls don't return here
     | HeapAlloc (dest, _) -> Some dest
     | HeapLoad (dest, _, _, _) -> Some dest
-    | StringConcat (dest, _, _) -> Some dest
+    | StringConcat (dest, _, _, _) -> Some dest
     | CanonicalBufferEq (dest, _, _, _) -> Some dest
     | StdinReadLine dest -> Some dest
     | FileReadText (dest, _) -> Some dest
@@ -252,7 +252,8 @@ let foldInstrUses (folder: 'State -> VReg -> 'State) (state: 'State) (instr: Ins
     | HeapLoad (_, addr, _, _)
     | RefCountInc (addr, _, _, _)
     | RefCountDec (addr, _, _, _) -> folder state addr
-    | StringConcat (_, left, right)
+    | StringConcat (_, first, second, remaining) ->
+        fromOperands state (first :: second :: remaining)
     | CanonicalBufferEq (_, _, left, right)
     | FileWriteText (_, left, right)
     | FileAppendText (_, left, right)

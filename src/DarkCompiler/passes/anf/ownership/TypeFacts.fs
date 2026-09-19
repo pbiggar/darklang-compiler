@@ -410,7 +410,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 Some AST.TInt64  // All closure slots are pointer-sized
             | _ -> None
         | _ -> None
-    | StringConcat (_, _) -> Some AST.TString  // String concatenation returns a string
+    | StringConcat _ -> Some AST.TString  // String concatenation returns a string
     | RefCountInc (_, _, _, _) -> Some AST.TUnit
     | RefCountDec (_, _, _, _) -> Some AST.TUnit
     | Print _ -> Some AST.TUnit

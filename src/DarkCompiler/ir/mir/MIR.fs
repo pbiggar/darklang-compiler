@@ -105,7 +105,8 @@ type Instr =
     | HeapStore of addr:VReg * offset:int * src:Operand * valueType:AST.Type option  // Store at heap[addr+offset], valueType for float/int
     | HeapLoad of dest:VReg * addr:VReg * offset:int * valueType:AST.Type option  // Load from heap[addr+offset]
     // String operations
-    | StringConcat of dest:VReg * left:Operand * right:Operand  // Concatenate strings
+    /// Concatenate at least two strings with one allocation and ordered copies.
+    | StringConcat of dest:VReg * first:Operand * second:Operand * remaining:Operand list
     | CanonicalBufferEq of dest:VReg * kind:MemoryModel.CanonicalBufferKind * left:Operand * right:Operand
     // Reference counting operations
     | RefCountInc of addr:VReg * payloadSize:int * kind:RcKind * metadata:MemoryModel.RcMetadata option   // Increment ref count at [addr + payloadSize]

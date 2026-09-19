@@ -226,7 +226,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RecordGet (_, record, _) -> maxTempIdInAtom record
     | ANF.RecordClone (_, record, fields)
     | ANF.RecordReuse (_, record, fields) -> maxTempIdWithAtoms record fields
-    | ANF.StringConcat (left, right)
+    | ANF.StringConcat (first, second, remaining) ->
+        maxTempIdInAtoms (first :: second :: remaining)
     | ANF.CanonicalBufferEq (_, left, right) ->
         max (maxTempIdInAtom left) (maxTempIdInAtom right)
     | ANF.RefCountInc (atom, _, _, _) -> maxTempIdInAtom atom
@@ -1240,12 +1241,14 @@ let rec convertExpr
                 | ANF.RuntimeErrorString message ->
                     atomToOperand builder message
                     |> Result.map (fun operand -> [MIR.RuntimeErrorString operand])
-                | ANF.StringConcat (leftAtom, rightAtom) ->
-                    atomToOperand builder leftAtom
-                    |> Result.bind (fun leftOp ->
-                        atomToOperand builder rightAtom
-                        |> Result.map (fun rightOp ->
-                            [MIR.StringConcat (destReg, leftOp, rightOp)]))
+                | ANF.StringConcat (firstAtom, secondAtom, remainingAtoms) ->
+                    ResultList.mapResults
+                        (atomToOperand builder)
+                        (firstAtom :: secondAtom :: remainingAtoms)
+                    |> Result.map (function
+                        | firstOp :: secondOp :: remainingOps ->
+                            [MIR.StringConcat (destReg, firstOp, secondOp, remainingOps)]
+                        | _ -> Crash.crash "StringConcat lost its required operands")
                 | ANF.CanonicalBufferEq (kind, leftAtom, rightAtom) ->
                     atomToOperand builder leftAtom
                     |> Result.bind (fun leftOp ->

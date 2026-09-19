@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-18T22:46:33+00:00",
+  "generated_at": "2026-09-19T00:25:19+00:00",
   "compiler": {
-    "commit": "4569b3ddc80f31015bd5283557a80b791ace0c37",
-    "subject": "Preserve PR fixes without benchmark regressions"
+    "commit": "f1044dce22da9fd61d82381c3a68dcd0709ada53",
+    "subject": "Merge commit '4e3661fa29b6f42d5ae53ba90690ce6f8c9d2258' into HEAD"
   },
   "benchmarks": [
     {
@@ -30,7 +30,7 @@
     },
     {
       "name": "edigits",
-      "instructions": 51730209
+      "instructions": 51647135
     },
     {
       "name": "factorial",
@@ -38,7 +38,7 @@
     },
     {
       "name": "fannkuch",
-      "instructions": 233405899
+      "instructions": 233405381
     },
     {
       "name": "fasta",
@@ -46,7 +46,7 @@
     },
     {
       "name": "fft",
-      "instructions": 407131151
+      "instructions": 379239729
     },
     {
       "name": "fib",
@@ -54,7 +54,7 @@
     },
     {
       "name": "huffman",
-      "instructions": 518434255
+      "instructions": 517411575
     },
     {
       "name": "leibniz",
@@ -74,7 +74,7 @@
     },
     {
       "name": "myers_diff",
-      "instructions": 4637007013
+      "instructions": 4636797057
     },
     {
       "name": "nbody",
@@ -106,15 +106,15 @@
     },
     {
       "name": "regex_lite",
-      "instructions": 77891424
+      "instructions": 77836260
     },
     {
       "name": "spectral_norm",
-      "instructions": 916603990
+      "instructions": 916369316
     },
     {
       "name": "string_equality",
-      "instructions": 1219845
+      "instructions": 1193987
     },
     {
       "name": "sum_to_n",
@@ -126,11 +126,11 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 5864163666
+      "instructions": 5861933907
     },
     {
       "name": "warden",
-      "instructions": 47043559
+      "instructions": 47028040
     }
   ]
 }

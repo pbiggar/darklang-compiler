@@ -317,6 +317,53 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
                 (bindReturns innerSetup (fun _ -> finalExpr), varGen2)))
 
+    | CheckedAST.BinOp (AST.StringConcat, left, right) ->
+        let rec collectParts expr acc =
+            match expr with
+            | CheckedAST.BinOp (AST.StringConcat, nestedLeft, nestedRight) ->
+                collectParts nestedLeft (collectParts nestedRight acc)
+            | part -> part :: acc
+
+        let rec lowerParts parts vg expressions atoms =
+            match parts with
+            | [] -> Ok (List.rev expressions, List.rev atoms, vg)
+            | part :: rest ->
+                toANFBoundAtomCore sumTypeNames inertScopes part vg env typeReg variantLookup funcReg moduleRegistry
+                |> Result.bind (fun (partExpr, partAtom, nextVg) ->
+                    let representableAtom =
+                        match partAtom with
+                        | ANF.UnitLiteral ->
+                            // RuntimeError uses Unit as its unreachable ANF return.
+                            // Concat still needs a representation-valid operand for codegen.
+                            ANF.StringLiteral ""
+                        | _ -> partAtom
+                    lowerParts rest nextVg (partExpr :: expressions) (representableAtom :: atoms))
+
+        lowerParts (collectParts left (collectParts right [])) varGen [] []
+        |> Result.map (fun (partExprs, partAtoms, varGen1) ->
+            let nonemptyAtoms =
+                partAtoms |> List.filter (function ANF.StringLiteral "" -> false | _ -> true)
+            let sequence result =
+                List.foldBack
+                    (fun partExpr continuation -> bindReturns partExpr (fun _ -> continuation))
+                    partExprs
+                    result
+            match nonemptyAtoms with
+            | [] -> (sequence (ANF.Return (ANF.StringLiteral "")), varGen1)
+            | [singleAtom] -> (sequence (ANF.Return singleAtom), varGen1)
+            | firstAtom :: secondAtom :: remainingAtoms ->
+                let (rawId, varGen2) = ANF.freshVar varGen1
+                let (resultId, varGen3) = ANF.freshVar varGen2
+                let fused =
+                    ANF.Let (
+                        rawId,
+                        ANF.StringConcat (firstAtom, secondAtom, remainingAtoms),
+                        ANF.Let (
+                            resultId,
+                            ANF.Call ("Stdlib.String.__normalizeAfterConcat", [ANF.Var rawId]),
+                            ANF.Return (ANF.Var resultId)))
+                (sequence fused, varGen3))
+
     | CheckedAST.BinOp (op, left, right) ->
         toANFBoundAtomCore sumTypeNames inertScopes left varGen env typeReg variantLookup funcReg moduleRegistry
         |> Result.bind (fun (leftExpr, leftAtom, varGen1) ->
@@ -388,10 +435,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                             let cexpr = ANF.Prim (convertBinOp op, leftAtom, rightAtom)
                             Ok (ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar)), varGen3)
                     | AST.StringConcat ->
-                        // Text concatenation is an NFC composition boundary.
-                        let (tempVar, varGen3) = ANF.freshVar varGen2
-                        let cexpr = ANF.Call ("Stdlib.String.__appendNormalized", [leftAtom; rightAtom])
-                        Ok (ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar)), varGen3)
+                        Crash.crash "StringConcat must be lowered as a fused tree"
                     // Arithmetic, bitwise, and comparison operators - use simple primitive
                     | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod | AST.Pow
                     | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor
@@ -569,7 +613,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     let errorExpr =
                         ANF.Let (
                             fullMessageVar,
-                            ANF.StringConcat (ANF.StringLiteral "Uncaught exception: ", messageAtom),
+                            ANF.StringConcat (ANF.StringLiteral "Uncaught exception: ", messageAtom, []),
                             ANF.Let (
                                 runtimeErrorVar,
                                 ANF.RuntimeErrorString (ANF.Var fullMessageVar),

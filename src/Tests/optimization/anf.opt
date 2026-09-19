@@ -2224,8 +2224,8 @@ Function f:
 return t0
 
 Main:
-let TempId 2 = f("dark")
-return t2
+let TempId 1 = f("dark")
+return t1
 
 ---NAME---
 closure_devirtualization_capture_free_local
@@ -2361,8 +2361,8 @@ Function f:
 return t0
 
 Main:
-let TempId 2 = f("dark")
-return t2
+let TempId 1 = f("dark")
+return t1
 
 ---NAME---
 tail_recursion_modulo_integer_addition

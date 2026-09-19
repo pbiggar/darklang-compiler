@@ -241,8 +241,8 @@ let internal translateInstr
     | LIR.CanonicalBufferEq (dest, _, left, right) ->
         X64EmitBuffers.emitCanonicalBufferEq ctx dest left right
 
-    | LIR.StringConcat (dest, left, right) ->
-        X64EmitBuffers.emitStringConcat ctx dest left right
+    | LIR.StringConcat (dest, first, second, remaining) ->
+        X64EmitBuffers.emitStringConcat ctx dest first second remaining
 
     | LIR.CoverageHit _ ->
         X64EmitNativeEffects.emitCoverageHit ctx

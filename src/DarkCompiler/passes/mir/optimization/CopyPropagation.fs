@@ -121,7 +121,16 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | HeapLoad (dest, addr, offset, vt) ->
         let addr' = match p (Register addr) with Register v -> v | _ -> addr
         HeapLoad (dest, addr', offset, vt)
-    | StringConcat (dest, left, right) -> StringConcat (dest, p left, p right)
+    | StringConcat (dest, first, second, remaining) ->
+        let stringOperand operand =
+            match p operand with
+            | (Register _ | StringSymbol _) as propagated -> propagated
+            | _ ->
+                // RuntimeError continuations can carry the unreachable Unit
+                // sentinel through an inlined string-typed parameter. Keep the
+                // register form so dead post-error code remains representable.
+                operand
+        StringConcat (dest, stringOperand first, stringOperand second, List.map stringOperand remaining)
     | CanonicalBufferEq (dest, kind, left, right) ->
         CanonicalBufferEq (dest, kind, p left, p right)
     | RefCountInc (addr, size, kind, sourceType) ->

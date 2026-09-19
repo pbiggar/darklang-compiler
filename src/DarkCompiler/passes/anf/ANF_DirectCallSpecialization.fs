@@ -145,8 +145,9 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
     | FloatToString atom
     | Sleep atom
     | RuntimeErrorString atom -> analyze atom analysis
+    | StringConcat (first, second, remaining) ->
+        analyzeMany (first :: second :: remaining) analysis
     | Prim (_, left, right)
-    | StringConcat (left, right)
     | CanonicalBufferEq (_, left, right)
     | FileWriteText (left, right)
     | FileAppendText (left, right)
@@ -379,7 +380,8 @@ let private rewriteCExpr
         RecordClone (descriptor, rewrite record, rewriteMany fields)
     | RecordReuse (descriptor, record, fields) ->
         RecordReuse (descriptor, rewrite record, rewriteMany fields)
-    | StringConcat (left, right) -> StringConcat (rewrite left, rewrite right)
+    | StringConcat (first, second, remaining) ->
+        StringConcat (rewrite first, rewrite second, rewriteMany remaining)
     | CanonicalBufferEq (kind, left, right) ->
         match rewrite left, rewrite right with
         | StringLiteral leftValue, StringLiteral rightValue ->

@@ -179,7 +179,7 @@ let rec private buildInto (typed: TypedShape) target state : Result<BuildState, 
     | LiteralString -> Ok (append [ LIR.Mov (physical target, LIR.StringSymbol "literal") ] state)
     | DynamicString
     | DynamicBlob ->
-        Ok (append [ LIR.StringConcat (physical target, LIR.StringSymbol "left", LIR.StringSymbol "right") ] state)
+        Ok (append [ LIR.StringConcat (physical target, LIR.StringSymbol "left", LIR.StringSymbol "right", []) ] state)
     | TupleValue _
     | RecordValue _ ->
         state

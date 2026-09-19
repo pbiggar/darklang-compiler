@@ -25,9 +25,15 @@ reclaim them.
 
 String literals are interned in `LiteralPool.StringPool`.
 
-String concatenation lowers to `LIR.StringConcat`, which allocates a new dynamic
-string, copies both inputs, initializes refcount to 1, and participates in leak
-accounting when leak checking is enabled.
+String concatenation trees lower to one variadic `LIR.StringConcat`. The
+backends first sum every operand's UTF-8 byte length, then allocate one dynamic
+string and copy each operand directly into the final buffer. The buffer starts
+with refcount 1 and participates in leak accounting when leak checking is
+enabled. A two-operand concat retains its compact specialized lowering.
+
+Public concatenation is an NFC composition boundary. A fused tree concatenates
+all bytes first and normalizes the result once; the ASCII fast path scans the
+final buffer once and returns it unchanged.
 
 Private stdlib helpers operate directly over this layout:
 

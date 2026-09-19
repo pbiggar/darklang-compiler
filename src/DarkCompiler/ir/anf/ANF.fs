@@ -171,7 +171,8 @@ type CExpr =
     | RecordClone of descriptor:RecordDescriptor * record:Atom * fields:Atom list
     | RecordReuse of descriptor:RecordDescriptor * record:Atom * fields:Atom list
     // String operations (heap-allocating)
-    | StringConcat of left:Atom * right:Atom    // Concatenate strings: s1 ++ s2
+    /// Concatenate at least two strings with one allocation and ordered copies.
+    | StringConcat of first:Atom * second:Atom * remaining:Atom list
     | CanonicalBufferEq of kind:CanonicalBufferKind * left:Atom * right:Atom
     // Reference counting operations
     | RefCountInc of Atom * payloadSize:int * kind:RcKind * metadata:RcMetadata option    // Increment ref count of heap value

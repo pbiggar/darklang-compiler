@@ -438,14 +438,14 @@ let testStringConcatLoadsStackSlotOperand () : Result<unit, string> =
     let program =
         makeSimpleProgram
             [ LIR.StringConcat
-                  (LIR.Physical LIR.X1, LIR.StringSymbol "1", LIR.StringSymbol "")
+                  (LIR.Physical LIR.X1, LIR.StringSymbol "1", LIR.StringSymbol "", [])
               LIR.Store (-8, LIR.Physical LIR.X1)
               LIR.StringConcat
-                  (LIR.Physical LIR.X2, LIR.StringSymbol "2", LIR.StringSymbol "")
+                  (LIR.Physical LIR.X2, LIR.StringSymbol "2", LIR.StringSymbol "", [])
               LIR.Store (-16, LIR.Physical LIR.X2)
               LIR.Mov (LIR.Physical LIR.X12, LIR.StackSlot -8)
               LIR.StringConcat
-                  (LIR.Physical LIR.X11, LIR.Reg (LIR.Physical LIR.X12), LIR.StackSlot -16)
+                  (LIR.Physical LIR.X11, LIR.Reg (LIR.Physical LIR.X12), LIR.StackSlot -16, [])
               LIR.Mov (LIR.Physical LIR.X0, LIR.Reg (LIR.Physical LIR.X11))
               LIR.PrintHeapStringNoNewline (LIR.Physical LIR.X0) ]
             LIR.Ret
@@ -1019,10 +1019,10 @@ let testDictRefCountDecStringCollisionKeysAndValues () : Result<unit, string> =
     let program =
         makeSimpleProgram
             [
-                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "key", LIR.StringSymbol "1")
-                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "value", LIR.StringSymbol "1")
-                LIR.StringConcat (LIR.Physical LIR.X4, LIR.StringSymbol "key", LIR.StringSymbol "2")
-                LIR.StringConcat (LIR.Physical LIR.X5, LIR.StringSymbol "value", LIR.StringSymbol "2")
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "key", LIR.StringSymbol "1", [])
+                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "value", LIR.StringSymbol "1", [])
+                LIR.StringConcat (LIR.Physical LIR.X4, LIR.StringSymbol "key", LIR.StringSymbol "2", [])
+                LIR.StringConcat (LIR.Physical LIR.X5, LIR.StringSymbol "value", LIR.StringSymbol "2", [])
                 LIR.HeapAlloc (LIR.Physical LIR.X6, 40)
                 LIR.HeapStore (LIR.Physical LIR.X6, 0, LIR.Imm 2L, None)
                 LIR.HeapStore (LIR.Physical LIR.X6, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
@@ -1049,8 +1049,8 @@ let testDictRefCountDecStringCollisionKeysAndTupleListValues () : Result<unit, s
     let program =
         makeSimpleProgram
             [
-                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "key", LIR.StringSymbol "1")
-                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "value", LIR.StringSymbol "1")
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "key", LIR.StringSymbol "1", [])
+                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "value", LIR.StringSymbol "1", [])
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 42L, None)
                 LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 2L)
@@ -1061,8 +1061,8 @@ let testDictRefCountDecStringCollisionKeysAndTupleListValues () : Result<unit, s
                 LIR.Mov (LIR.Physical LIR.X19, LIR.Reg (LIR.Physical LIR.X6))
                 LIR.Mov (LIR.Physical LIR.X20, LIR.Reg (LIR.Physical LIR.X2))
 
-                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "key", LIR.StringSymbol "2")
-                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "value", LIR.StringSymbol "2")
+                LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "key", LIR.StringSymbol "2", [])
+                LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "value", LIR.StringSymbol "2", [])
                 LIR.HeapAlloc (LIR.Physical LIR.X4, 8)
                 LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 99L, None)
                 LIR.Mov (LIR.Physical LIR.X5, LIR.Imm 2L)
@@ -1296,7 +1296,7 @@ let testTaggedListRefCountDecTuple3DynamicPayloadCombinations () : Result<unit, 
             |> List.mapi (fun index fieldType ->
                 if isDynamicField fieldType then
                     let reg = dynamicRegForIndex index
-                    Some (LIR.StringConcat (LIR.Physical reg, LIR.StringSymbol $"left{name}{index}", LIR.StringSymbol $"right{name}{index}"))
+                    Some (LIR.StringConcat (LIR.Physical reg, LIR.StringSymbol $"left{name}{index}", LIR.StringSymbol $"right{name}{index}", []))
                 else
                     None)
             |> List.choose id
@@ -1376,12 +1376,12 @@ let testTaggedListRefCountDecTuple2NestedTupleDynamicPayloadCombinations () : Re
 
     runCases
         [ ("Second", AST.TTuple [AST.TInt64; AST.TString],
-           [LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")],
+           [LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right", [])],
            [LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 7L, None)
             LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)])
           ("Both", AST.TTuple [AST.TString; AST.TBlob],
-           [LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right")
-            LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "bytes", LIR.StringSymbol "payload")],
+           [LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "left", LIR.StringSymbol "right", [])
+            LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "bytes", LIR.StringSymbol "payload", [])],
            [LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
             LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)]) ]
 
@@ -1412,7 +1412,7 @@ let testTaggedListRefCountDecRecord3DynamicPayloadCombinations () : Result<unit,
             |> List.mapi (fun index fieldType ->
                 if isDynamicField fieldType then
                     let reg = dynamicRegForIndex index
-                    Some (LIR.StringConcat (LIR.Physical reg, LIR.StringSymbol $"left{name}{index}", LIR.StringSymbol $"right{name}{index}"))
+                    Some (LIR.StringConcat (LIR.Physical reg, LIR.StringSymbol $"left{name}{index}", LIR.StringSymbol $"right{name}{index}", []))
                 else
                     None)
             |> List.choose id
@@ -1551,13 +1551,13 @@ let testTaggedListRefCountDecSumTuple2DynamicPayloadCombinations () : Result<uni
     runCases
         [ ("second",
            AST.TTuple [AST.TInt64; AST.TString],
-           [LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "leftSecond", LIR.StringSymbol "rightSecond")],
+           [LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "leftSecond", LIR.StringSymbol "rightSecond", [])],
            [LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Imm 7L, None)
             LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TString)])
           ("both",
            AST.TTuple [AST.TString; AST.TBlob],
-           [LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "leftBoth0", LIR.StringSymbol "rightBoth0")
-            LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "leftBoth1", LIR.StringSymbol "rightBoth1")],
+           [LIR.StringConcat (LIR.Physical LIR.X2, LIR.StringSymbol "leftBoth0", LIR.StringSymbol "rightBoth0", [])
+            LIR.StringConcat (LIR.Physical LIR.X3, LIR.StringSymbol "leftBoth1", LIR.StringSymbol "rightBoth1", [])],
            [LIR.HeapStore (LIR.Physical LIR.X4, 0, LIR.Reg (LIR.Physical LIR.X2), Some AST.TString)
             LIR.HeapStore (LIR.Physical LIR.X4, 8, LIR.Reg (LIR.Physical LIR.X3), Some AST.TBlob)]) ]
 
@@ -1584,7 +1584,7 @@ let testTaggedListRefCountDecSumTuple3DynamicPayloadCombinations () : Result<uni
             |> List.mapi (fun index fieldType ->
                 if isDynamicField fieldType then
                     let reg = dynamicRegForIndex index
-                    Some (LIR.StringConcat (LIR.Physical reg, LIR.StringSymbol $"left{name}{index}", LIR.StringSymbol $"right{name}{index}"))
+                    Some (LIR.StringConcat (LIR.Physical reg, LIR.StringSymbol $"left{name}{index}", LIR.StringSymbol $"right{name}{index}", []))
                 else
                     None)
             |> List.choose id
@@ -1662,7 +1662,7 @@ let testTaggedListRefCountDecSumRecord3DynamicPayloadCombinations () : Result<un
             |> List.mapi (fun index fieldType ->
                 if isDynamicField fieldType then
                     let reg = dynamicRegForIndex index
-                    Some (LIR.StringConcat (LIR.Physical reg, LIR.StringSymbol $"left{name}{index}", LIR.StringSymbol $"right{name}{index}"))
+                    Some (LIR.StringConcat (LIR.Physical reg, LIR.StringSymbol $"left{name}{index}", LIR.StringSymbol $"right{name}{index}", []))
                 else
                     None)
             |> List.choose id

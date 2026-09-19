@@ -175,7 +175,8 @@ type Instr =
     | HeapLoad of dest:Reg * addr:Reg * offset:int
     | RefCountInc of addr:Reg * payloadSize:int * kind:RcKind * metadata:MemoryModel.RcMetadata option
     | RefCountDec of addr:Reg * payloadSize:int * kind:RcKind * metadata:MemoryModel.RcMetadata option
-    | StringConcat of dest:Reg * left:Operand * right:Operand
+    /// Concatenate at least two strings with one allocation and ordered copies.
+    | StringConcat of dest:Reg * first:Operand * second:Operand * remaining:Operand list
     | CanonicalBufferEq of dest:Reg * kind:MemoryModel.CanonicalBufferKind * left:Operand * right:Operand
     | PrintHeapString of Reg
     | LoadFuncAddr of dest:Reg * funcName:string

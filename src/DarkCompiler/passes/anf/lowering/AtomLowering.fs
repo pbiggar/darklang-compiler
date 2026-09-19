@@ -262,6 +262,37 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                     | _ -> ANF.UnaryPrim (ANF.BitNot, innerAtom)
                 (ANF.Var tempVar, innerBindings @ [(tempVar, cexpr)], varGen2)))
 
+    | CheckedAST.BinOp (AST.StringConcat, left, right) ->
+        let rec collectParts expr acc =
+            match expr with
+            | CheckedAST.BinOp (AST.StringConcat, nestedLeft, nestedRight) ->
+                collectParts nestedLeft (collectParts nestedRight acc)
+            | part -> part :: acc
+
+        let rec lowerParts parts vg bindingGroups atoms =
+            match parts with
+            | [] -> Ok (List.rev atoms, bindingGroups |> List.rev |> List.concat, vg)
+            | part :: rest ->
+                toAtomCore sumTypeNames inertScopes part vg env typeReg variantLookup funcReg moduleRegistry
+                |> Result.bind (fun (partAtom, partBindings, nextVg) ->
+                    lowerParts rest nextVg (partBindings :: bindingGroups) (partAtom :: atoms))
+
+        lowerParts (collectParts left (collectParts right [])) varGen [] []
+        |> Result.map (fun (partAtoms, partBindings, varGen1) ->
+            let nonemptyAtoms =
+                partAtoms |> List.filter (function ANF.StringLiteral "" -> false | _ -> true)
+            match nonemptyAtoms with
+            | [] -> (ANF.StringLiteral "", partBindings, varGen1)
+            | [singleAtom] -> (singleAtom, partBindings, varGen1)
+            | firstAtom :: secondAtom :: remainingAtoms ->
+                let (rawId, varGen2) = ANF.freshVar varGen1
+                let (resultId, varGen3) = ANF.freshVar varGen2
+                let bindings =
+                    partBindings
+                    @ [ (rawId, ANF.StringConcat (firstAtom, secondAtom, remainingAtoms))
+                        (resultId, ANF.Call ("Stdlib.String.__normalizeAfterConcat", [ANF.Var rawId])) ]
+                (ANF.Var resultId, bindings, varGen3))
+
     | CheckedAST.BinOp (op, left, right) ->
         // Complex expression: convert operands to atoms, create binding
         toAtomCore sumTypeNames inertScopes left varGen env typeReg variantLookup funcReg moduleRegistry |> Result.bind (fun (leftAtom, leftBindings, varGen1) ->
@@ -335,10 +366,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                         let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
                         Ok (ANF.Var tempVar, allBindings, varGen3)
                 | AST.StringConcat ->
-                    let (tempVar, varGen3) = ANF.freshVar varGen2
-                    let cexpr = ANF.Call ("Stdlib.String.__appendNormalized", [leftAtom; rightAtom])
-                    let allBindings = leftBindings @ rightBindings @ [(tempVar, cexpr)]
-                    Ok (ANF.Var tempVar, allBindings, varGen3)
+                    Crash.crash "StringConcat must be lowered as a fused tree"
                 // Arithmetic, bitwise, and comparison operators - use simple primitive
                 | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod | AST.Pow
                 | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor
@@ -399,7 +427,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                             ANF.UnitLiteral,
                             messageBindings
                             @ [ (fullMessageVar,
-                                 ANF.StringConcat (ANF.StringLiteral "Uncaught exception: ", messageAtom))
+                                 ANF.StringConcat (ANF.StringLiteral "Uncaught exception: ", messageAtom, []))
                                 (runtimeErrorVar, ANF.RuntimeErrorString (ANF.Var fullMessageVar)) ],
                             varGen3
                         ))

@@ -39,7 +39,7 @@ let testGetBlockUsesCoversEveryOperandPosition () : TestResult =
         ("ClosureTailCall", ClosureTailCall (register first, [register second; Int64Const 1L; register third], [AST.TInt64; AST.TInt64; AST.TInt64]), expected [first; second; third])
         ("HeapStore", HeapStore (first, 0, register second, Some AST.TInt64), expected [first; second])
         ("HeapLoad", HeapLoad (destination, first, 0, Some AST.TInt64), expected [first])
-        ("StringConcat", StringConcat (destination, register first, register second), expected [first; second])
+        ("StringConcat", StringConcat (destination, register first, register second, []), expected [first; second])
         ("RefCountInc", RefCountInc (first, 8, GenericHeap, None), expected [first])
         ("RefCountDec", RefCountDec (first, 8, GenericHeap, None), expected [first])
         ("Print", Print (register first, AST.TInt64), expected [first])

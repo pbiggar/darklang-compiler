@@ -661,18 +661,31 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
         let (addrReg, addrLoads) = loadSpilled mapping addr LIR.X12
         addrLoads @ [LIR.RefCountDec (addrReg, payloadSize, kind, sourceType)]
 
-    | LIR.StringConcat (dest, left, right) ->
+    | LIR.StringConcat (dest, first, second, remaining) ->
         let (destReg, destAlloc) = applyToReg mapping dest
-        let (leftOp, leftLoads) = applyToOperand mapping left LIR.X12
-        let (rightOp, rightLoads) =
-            if isX86_64 arch then (applyToOperandNoLoad mapping right, [])
-            else applyToOperand mapping right LIR.X13
-        let concatInstr = LIR.StringConcat (destReg, leftOp, rightOp)
+        let (concatInstr, operandLoads) =
+            match remaining with
+            | [] ->
+                let (firstOp, firstLoads) = applyToOperand mapping first LIR.X12
+                let (secondOp, secondLoads) =
+                    if isX86_64 arch then (applyToOperandNoLoad mapping second, [])
+                    else applyToOperand mapping second LIR.X13
+                (LIR.StringConcat (destReg, firstOp, secondOp, []), firstLoads @ secondLoads)
+            | _ ->
+                // Variadic concat consumes operands sequentially, so spilled values
+                // stay in frame slots instead of competing for scratch registers.
+                let operands =
+                    first :: second :: remaining
+                    |> List.map (applyToOperandNoLoad mapping)
+                match operands with
+                | firstOp :: secondOp :: remainingOps ->
+                    (LIR.StringConcat (destReg, firstOp, secondOp, remainingOps), [])
+                | _ -> Crash.crash "StringConcat lost its required operands"
         let storeInstrs =
             match destAlloc with
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
             | _ -> []
-        leftLoads @ rightLoads @ [concatInstr] @ storeInstrs
+        operandLoads @ (concatInstr :: storeInstrs)
 
     | LIR.CanonicalBufferEq (dest, kind, left, right) ->
         let (destReg, destAlloc) = applyToReg mapping dest
