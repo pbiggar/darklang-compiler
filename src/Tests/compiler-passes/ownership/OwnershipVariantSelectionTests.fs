@@ -11,7 +11,11 @@ let private value id : HIR.Value = {
     Type = AST.TList AST.TInt64
 }
 
-let private parameter name value : HIR.Parameter = { Name = name; Value = value }
+let private binding name =
+    name |> Seq.fold (fun hash ch -> (hash * 31) + int ch) 17 |> AST.bindingId
+
+let private parameter name value : HIR.Parameter =
+    { Name = name; Binding = binding name; Value = value }
 
 let private signature parameters result : FunctionSignature<string> = {
     Parameters = parameters
@@ -27,12 +31,16 @@ let private block parameters operations result : Block<TestLeaf, string> = {
 }
 
 let private definition name ownership body : Function<TestLeaf, string> = {
-    Definition = { Name = name; Body = body }
+    Definition = { Id = AST.functionIdForName name; Name = name; Body = body }
     Ownership = ownership
 }
 
 let private call target arguments result =
-    Evaluate (HIR.Call { Target = target; Arguments = arguments; Result = result })
+    Evaluate (HIR.Call {
+        Target = AST.functionIdForName target
+        Arguments = arguments
+        Result = result
+    })
 
 let private condition : HIR.Operand = {
     Expression = CheckedAST.BoolLiteral true
