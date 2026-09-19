@@ -457,12 +457,35 @@ let private isSimpleExternalCExpr (cexpr: CExpr) : bool =
     | FloatToString _ -> true
     | _ -> false
 
-let rec private isSimpleExternalExpr (expr: AExpr) : bool =
+let private isScalarRawReadExternalCExpr (cexpr: CExpr) : bool =
+    isSimpleExternalCExpr cexpr
+    || (match cexpr with
+        | RawGet _
+        | RawGetByte _
+        | StringToRawPtr _ -> true
+        | _ -> false)
+
+let rec private isExternalExprWith
+    (isAllowed: CExpr -> bool)
+    (expr: AExpr)
+    : bool =
     match expr with
     | Let (_, cexpr, body) ->
-        isSimpleExternalCExpr cexpr && isSimpleExternalExpr body
+        isAllowed cexpr && isExternalExprWith isAllowed body
     | Return _ -> true
     | Jump _ | Join _ | If _ -> false
+
+let private isSimpleExternalExpr (expr: AExpr) : bool =
+    isExternalExprWith isSimpleExternalCExpr expr
+
+let private isScalarRawReadReturnType (typ: AST.Type) : bool =
+    match typ with
+    | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
+    | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
+    | AST.TBool | AST.TFloat64 | AST.TChar | AST.TDateTime | AST.TUnit -> true
+    | AST.TString | AST.TBlob | AST.TRuntimeError | AST.TRawPtr
+    | AST.TFunction _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _ | AST.TList _
+    | AST.TDict _ | AST.TStream _ | AST.TVar _ -> false
 
 let rec private countCallsToNames (names: Set<AST.FunctionId>) (expr: AExpr) : int =
     match expr with
@@ -480,7 +503,9 @@ let rec private countCallsToNames (names: Set<AST.FunctionId>) (expr: AExpr) : i
 let private shouldUseExternalCandidate (info: FunctionInfo) (config: InliningConfig) : bool =
     shouldInline info config 0
     && Set.isEmpty info.Calls
-    && isSimpleExternalExpr info.Func.Body
+    && (isSimpleExternalExpr info.Func.Body
+        || (isScalarRawReadReturnType info.Func.ReturnType
+            && isExternalExprWith isScalarRawReadExternalCExpr info.Func.Body))
 
 let private isZeroArgConstantReturn (func: Function) : bool =
     match func.TypedParams, func.Body with

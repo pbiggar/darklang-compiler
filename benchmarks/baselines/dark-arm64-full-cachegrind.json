@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-19T10:04:34+00:00",
+  "generated_at": "2026-09-19T10:08:11+00:00",
   "compiler": {
-    "commit": "f8c503411bbabf4593fd18786452d3a6632273ad",
-    "subject": "Support benchmark recording during merge recovery"
+    "commit": "0b298088ccd4f3b8a6642eb8d285684897646901",
+    "subject": "Merge commit '0cac94569adb98168910d7857ce61ef6ab1967d5' into ops/manual-mergetrain-103-complete"
   },
   "benchmarks": [
     {
@@ -74,7 +74,7 @@
     },
     {
       "name": "myers_diff",
-      "instructions": 2524084546
+      "instructions": 222528987
     },
     {
       "name": "nbody",
@@ -106,7 +106,7 @@
     },
     {
       "name": "regex_lite",
-      "instructions": 72586756
+      "instructions": 66667759
     },
     {
       "name": "spectral_norm",
@@ -126,11 +126,11 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 643132954
+      "instructions": 433491840
     },
     {
       "name": "warden",
-      "instructions": 45702567
+      "instructions": 44812324
     }
   ]
 }
