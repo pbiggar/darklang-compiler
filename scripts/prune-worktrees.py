@@ -430,7 +430,20 @@ def run_interactive(
     reclaimed_bytes = 0
     errors: list[str] = []
     stopped_early = False
-    ordered = sorted(worktrees, key=lambda worktree: str(worktree.path))
+    descriptions = {
+        worktree: commit_description(repo, worktree.head) for worktree in worktrees
+    }
+    recent_cutoff = time.time() - 24 * 60 * 60
+    ordered = sorted(
+        (
+            worktree
+            for worktree in worktrees
+            if local_branch(worktree) != "main"
+            and descriptions[worktree][1] < recent_cutoff
+        ),
+        key=lambda worktree: str(worktree.path),
+    )
+    omitted = len(worktrees) - len(ordered)
     subjects = integration_subjects(repo, integration_commit)
 
     for index, worktree in enumerate(ordered, start=1):
@@ -442,9 +455,7 @@ def run_interactive(
         status_entries = checkout_status(worktree.path) if exists else []
         dirty = bool(status_entries)
         users = processes_using(worktree, processes) if exists else []
-        abbreviated, commit_timestamp, date, subject = commit_description(
-            repo, worktree.head
-        )
+        abbreviated, commit_timestamp, date, subject = descriptions[worktree]
         subject_match = subjects.get(subject)
         branch = local_branch(worktree)
 
@@ -639,7 +650,8 @@ def run_interactive(
     summary_prefix = "Interactive cleanup stopped" if stopped_early else "Interactive cleanup"
     summary = (
         f"{summary_prefix}: deleted {deleted} checkout(s), deleted "
-        f"{deleted_branches} branch(es), kept {kept} worktree(s)"
+        f"{deleted_branches} branch(es), kept {kept} worktree(s), "
+        f"omitted {omitted} main/recent worktree(s)"
     )
     print(output_palette.warning(summary) if errors else output_palette.success(summary))
     print(output_palette.success(f"Reclaimed checkout space: {format_size(reclaimed_bytes)}"))
