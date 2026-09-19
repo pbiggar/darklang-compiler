@@ -97,11 +97,12 @@ let internal normalizeMirFunctionRegisterOffset
                 MIR.HeapStore (shiftReg addr, byteOffset, shiftOperand src, valueType)
             | MIR.HeapLoad (dest, addr, byteOffset, valueType) ->
                 MIR.HeapLoad (shiftReg dest, shiftReg addr, byteOffset, valueType)
-            | MIR.StringConcat (dest, left, right) ->
+            | MIR.StringConcat (dest, first, second, remaining) ->
                 MIR.StringConcat (
                     shiftReg dest,
-                    shiftOperand left,
-                    shiftOperand right)
+                    shiftOperand first,
+                    shiftOperand second,
+                    shiftOperands remaining)
             | MIR.CanonicalBufferEq (dest, kind, left, right) ->
                 MIR.CanonicalBufferEq (
                     shiftReg dest,

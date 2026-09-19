@@ -48,7 +48,8 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.RecordClone (_, record, fields)
     | ANF.RecordReuse (_, record, fields) ->
         extractFromAtom record @ extractFromAtoms fields
-    | ANF.StringConcat (left, right)
+    | ANF.StringConcat (first, second, remaining) ->
+        extractFromAtoms (first :: second :: remaining)
     | ANF.CanonicalBufferEq (_, left, right) ->
         extractFromAtom left @ extractFromAtom right
     | ANF.CliNative (_, args) -> extractFromAtoms args

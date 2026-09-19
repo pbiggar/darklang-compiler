@@ -103,8 +103,10 @@ let private prettyPrintANFCExpr = function
         $"rc_inc({prettyPrintANFAtom atom}, size={payloadSize}, kind={prettyPrintANFRcKind kind})"
     | ANF.RefCountDec (atom, payloadSize, kind, _) ->
         $"rc_dec({prettyPrintANFAtom atom}, size={payloadSize}, kind={prettyPrintANFRcKind kind})"
-    | ANF.StringConcat (left, right) ->
-        $"{prettyPrintANFAtom left} ++ {prettyPrintANFAtom right}"
+    | ANF.StringConcat (first, second, remaining) ->
+        first :: second :: remaining
+        |> List.map prettyPrintANFAtom
+        |> String.concat " ++ "
     | ANF.Print (atom, valueType) ->
         $"print({prettyPrintANFAtom atom}, type={valueType})"
     | ANF.StdoutWrite (atom, appendNewline) ->

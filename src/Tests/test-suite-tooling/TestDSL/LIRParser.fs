@@ -226,7 +226,7 @@ let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<I
         match parseRegister stringConcatMatch.Groups.[1].Value,
               parseOperand stringConcatMatch.Groups.[2].Value,
               parseOperand stringConcatMatch.Groups.[3].Value with
-        | Ok dest, Ok left, Ok right -> Ok (Choice1Of2 (StringConcat (dest, left, right)))
+        | Ok dest, Ok left, Ok right -> Ok (Choice1Of2 (StringConcat (dest, left, right, [])))
         | Error e, _, _
         | _, Error e, _
         | _, _, Error e -> Error $"Line {lineNum}: {e}"

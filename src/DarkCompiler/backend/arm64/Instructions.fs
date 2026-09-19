@@ -264,8 +264,8 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
     | LIR.CanonicalBufferEq (dest, _, left, right) ->
         ARM64EmitBuffers.emitCanonicalBufferEq ctx dest left right
 
-    | LIR.StringConcat (dest, left, right) ->
-        ARM64EmitBuffers.emitStringConcat ctx dest left right
+    | LIR.StringConcat (dest, first, second, remaining) ->
+        ARM64EmitBuffers.emitStringConcat ctx dest first second remaining
 
     | LIR.PrintHeapString reg ->
         ARM64EmitPrinting.emitPrintHeapString ctx reg

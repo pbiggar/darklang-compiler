@@ -154,7 +154,8 @@ let internal addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | RecordClone (_, record, fields)
     | RecordReuse (_, record, fields) ->
         uses |> addAtomUse record |> addAtomUses fields
-    | StringConcat (left, right)
+    | StringConcat (first, second, remaining) ->
+        uses |> addAtomUses (first :: second :: remaining)
     | CanonicalBufferEq (_, left, right) -> uses |> addAtomUse left |> addAtomUse right
     | RefCountInc (atom, _, _, _) -> addAtomUse atom uses
     | RefCountDec (atom, _, _, _) -> addAtomUse atom uses
@@ -258,8 +259,8 @@ let cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | FloatToString atom -> used atom
     | Sleep atom -> used atom
     | StdoutWrite (atom, _) -> used atom
+    | StringConcat (first, second, remaining) -> anyUsed (first :: second :: remaining)
     | Prim (_, left, right)
-    | StringConcat (left, right)
     | CanonicalBufferEq (_, left, right)
     | FileWriteText (left, right)
     | FileAppendText (left, right)

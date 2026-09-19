@@ -76,7 +76,7 @@ let internal emitCanonicalBufferEq (ctx: CodeGenContext) (dest: LIR.Reg) (left: 
                    ARM64Symbolic.Label doneLabel]
                 @ (if destReg = ARM64Symbolic.X11 then [] else [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X11)]))))
 
-let internal emitStringConcat (ctx: CodeGenContext) (dest: LIR.Reg) (left: LIR.Operand) (right: LIR.Operand) : Result<ARM64Symbolic.Instr list, string> =
+let private emitStringConcatBinary (ctx: CodeGenContext) (dest: LIR.Reg) (left: LIR.Operand) (right: LIR.Operand) : Result<ARM64Symbolic.Instr list, string> =
     // String concatenation:
     // Dynamic and literal strings share [refcount:8][length:8][data:N].
     //
@@ -202,3 +202,82 @@ let internal emitStringConcat (ctx: CodeGenContext) (dest: LIR.Reg) (left: LIR.O
 
                 leftInstrs @ rightInstrs @ calcTotal @ allocate @ storeHeader @ copyLeft @ copyRight @ moveResult @ generateLeakCounterInc ctx
             )))
+
+/// Lower a concat tree as one length pass, one allocation, and one ordered copy pass.
+let private emitStringConcatMany
+    (ctx: CodeGenContext)
+    (dest: LIR.Reg)
+    (first: LIR.Operand)
+    (second: LIR.Operand)
+    (remaining: LIR.Operand list)
+    : Result<ARM64Symbolic.Instr list, string> =
+    let operands = first :: second :: remaining
+
+    let loadOperandInfo (operand: LIR.Operand) : Result<ARM64Symbolic.Instr list, string> =
+        match operand with
+        | LIR.StringSymbol value ->
+            let labelRef = stringDataLabel value
+            Ok ([ ARM64Symbolic.ADRP (ARM64Symbolic.X9, labelRef)
+                  ARM64Symbolic.ADD_label (ARM64Symbolic.X9, ARM64Symbolic.X9, labelRef)
+                  ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 16us) ]
+                @ loadImmediate ARM64Symbolic.X10 (int64 (utf8Len value)))
+        | LIR.Reg reg ->
+            lirRegToARM64Reg reg
+            |> Result.map (fun source ->
+                [ ARM64Symbolic.LDR (ARM64Symbolic.X10, source, 8s)
+                  ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, source, 16us) ])
+        | LIR.StackSlot offset ->
+            loadStackSlot ARM64Symbolic.X9 offset
+            |> Result.map (fun loads ->
+                loads
+                @ [ ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X9, 8s)
+                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 16us) ])
+        | other -> Error $"StringConcat requires string operands, got: {other}"
+
+    lirRegToARM64Reg dest
+    |> Result.bind (fun destReg ->
+        operands
+        |> ResultList.mapResults loadOperandInfo
+        |> Result.map (fun operandLoads ->
+            let measure =
+                [ ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0us, 0) ]
+                @ (operandLoads
+                   |> List.collect (fun loads ->
+                       loads @ [ ARM64Symbolic.ADD_reg (ARM64Symbolic.X13, ARM64Symbolic.X13, ARM64Symbolic.X10) ]))
+
+            let allocate =
+                [ ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X13, 23us)
+                  ARM64Symbolic.MOVZ (ARM64Symbolic.X17, 0xFFF8us, 0)
+                  ARM64Symbolic.MOVK (ARM64Symbolic.X17, 0xFFFFus, 16)
+                  ARM64Symbolic.MOVK (ARM64Symbolic.X17, 0xFFFFus, 32)
+                  ARM64Symbolic.MOVK (ARM64Symbolic.X17, 0xFFFFus, 48)
+                  ARM64Symbolic.AND_reg (ARM64Symbolic.X15, ARM64Symbolic.X15, ARM64Symbolic.X17)
+                  ARM64Symbolic.MOV_reg (ARM64Symbolic.X14, ARM64Symbolic.X28)
+                  ARM64Symbolic.ADD_reg (ARM64Symbolic.X28, ARM64Symbolic.X28, ARM64Symbolic.X15)
+                  ARM64Symbolic.MOVZ (ARM64Symbolic.X15, 1us, 0)
+                  ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X14, 0s)
+                  ARM64Symbolic.STR (ARM64Symbolic.X13, ARM64Symbolic.X14, 8s)
+                  ARM64Symbolic.ADD_imm (ARM64Symbolic.X16, ARM64Symbolic.X14, 16us) ]
+
+            let copyOne loads =
+                loads
+                @ [ ARM64Symbolic.MOV_reg (ARM64Symbolic.X15, ARM64Symbolic.X9)
+                    ARM64Symbolic.MOV_reg (ARM64Symbolic.X13, ARM64Symbolic.X10)
+                    ARM64Symbolic.CBZ_offset (ARM64Symbolic.X13, 7)
+                    ARM64Symbolic.LDRB_imm (ARM64Symbolic.X8, ARM64Symbolic.X15, 0)
+                    ARM64Symbolic.STRB_reg (ARM64Symbolic.X8, ARM64Symbolic.X16)
+                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
+                    ARM64Symbolic.ADD_imm (ARM64Symbolic.X16, ARM64Symbolic.X16, 1us)
+                    ARM64Symbolic.SUB_imm (ARM64Symbolic.X13, ARM64Symbolic.X13, 1us)
+                    ARM64Symbolic.B (-6) ]
+
+            measure
+            @ allocate
+            @ (operandLoads |> List.collect copyOne)
+            @ [ ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X14) ]
+            @ generateLeakCounterInc ctx))
+
+let internal emitStringConcat ctx dest first second remaining =
+    match remaining with
+    | [] -> emitStringConcatBinary ctx dest first second
+    | _ -> emitStringConcatMany ctx dest first second remaining

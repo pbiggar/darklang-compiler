@@ -248,8 +248,9 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"RefCountInc({prettyPrintLIRReg addr}, {payloadSize}, {prettyPrintLIRRcKind kind})"
     | LIR.RefCountDec (addr, payloadSize, kind, _) ->
         $"RefCountDec({prettyPrintLIRReg addr}, {payloadSize}, {prettyPrintLIRRcKind kind})"
-    | LIR.StringConcat (dest, left, right) ->
-        $"{prettyPrintLIRReg dest} <- StringConcat({prettyPrintLIROperand left}, {prettyPrintLIROperand right})"
+    | LIR.StringConcat (dest, first, second, remaining) ->
+        let operands = first :: second :: remaining |> commaSeparated prettyPrintLIROperand
+        $"{prettyPrintLIRReg dest} <- StringConcat({operands})"
     | LIR.CanonicalBufferEq (dest, kind, left, right) ->
         $"{prettyPrintLIRReg dest} <- CanonicalBufferEq[{prettyPrintCanonicalBufferKind kind}]({prettyPrintLIROperand left}, {prettyPrintLIROperand right})"
     | LIR.PrintHeapString reg ->

@@ -1348,11 +1348,12 @@ let selectInstr
         | LIR.Reg register -> Ok ([LIR.RuntimeErrorString register], state)
         | _ -> Error "Internal error: dynamic runtime error message must be held in a register"
 
-    | MIR.StringConcat (dest, left, right) ->
+    | MIR.StringConcat (dest, first, second, remaining) ->
         let lirDest = vregToLIRReg dest
-        let lirLeft = convertOperand left
-        let lirRight = convertOperand right
-        Ok ([LIR.StringConcat (lirDest, lirLeft, lirRight)], state)
+        let lirFirst = convertOperand first
+        let lirSecond = convertOperand second
+        let lirRemaining = List.map convertOperand remaining
+        Ok ([LIR.StringConcat (lirDest, lirFirst, lirSecond, lirRemaining)], state)
 
     | MIR.CanonicalBufferEq (dest, kind, left, right) ->
         let lirDest = vregToLIRReg dest
@@ -1817,11 +1818,10 @@ let maxVRegIdFromInstr (instr: MIR.Instr) (currentMax: int) : int =
         currentMax |> maxVRegId addr |> maxVRegIdFromOperand src
     | MIR.HeapLoad (dest, addr, _, _) ->
         currentMax |> maxVRegId dest |> maxVRegId addr
-    | MIR.StringConcat (dest, left, right) ->
+    | MIR.StringConcat (dest, first, second, remaining) ->
         currentMax
         |> maxVRegId dest
-        |> maxVRegIdFromOperand left
-        |> maxVRegIdFromOperand right
+        |> maxVRegIdsFromOperands (first :: second :: remaining)
     | MIR.CanonicalBufferEq (dest, _, left, right) ->
         currentMax
         |> maxVRegId dest

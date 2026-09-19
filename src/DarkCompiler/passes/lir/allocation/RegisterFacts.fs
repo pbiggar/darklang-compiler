@@ -98,8 +98,8 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         regToVReg addr |> Option.toList
     | LIR.RefCountDec (addr, _, _, _) ->
         regToVReg addr |> Option.toList
-    | LIR.StringConcat (_, left, right) ->
-        (operandToVReg left |> Option.toList) @ (operandToVReg right |> Option.toList)
+    | LIR.StringConcat (_, first, second, remaining) ->
+        first :: second :: remaining |> List.collect (operandToVReg >> Option.toList)
     | LIR.CanonicalBufferEq (_, _, left, right) ->
         (operandToVReg left |> Option.toList) @ (operandToVReg right |> Option.toList)
     | LIR.PrintHeapString reg ->
@@ -202,7 +202,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.ClosureTailCall _ -> None  // Closure tail calls don't return to caller
     | LIR.HeapAlloc (dest, _) -> regToVReg dest
     | LIR.HeapLoad (dest, _, _) -> regToVReg dest
-    | LIR.StringConcat (dest, _, _) -> regToVReg dest
+    | LIR.StringConcat (dest, _, _, _) -> regToVReg dest
     | LIR.CanonicalBufferEq (dest, _, _, _) -> regToVReg dest
     | LIR.StdinReadLine (_, dest) -> regToVReg dest
     | LIR.LoadFuncAddr (dest, _) -> regToVReg dest

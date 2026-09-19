@@ -255,12 +255,14 @@ let __isAsciiAt (value: String) (index: Int64) (length: Int64) : Bool =
 let __isAscii (value: String) : Bool =
     Stdlib.String.__isAsciiAt value 0L (Stdlib.String.__byteLength value)
 
-let __appendNormalized (left: String) (right: String) : String =
-    let combined = __string_concat_raw left right in
+let __normalizeAfterConcat (combined: String) : String =
     // ASCII is closed under NFC, so avoid decoding and rebuilding the entire
-    // accumulated string in the overwhelmingly common concatenation path.
-    if Stdlib.String.__isAscii left && Stdlib.String.__isAscii right then combined
+    // result in the overwhelmingly common concatenation path.
+    if Stdlib.String.__isAscii combined then combined
     else Unicode.normalizeValid combined
+
+let __appendNormalized (left: String) (right: String) : String =
+    Stdlib.String.__normalizeAfterConcat (__string_concat_raw left right)
 
 let __joinChars (chars: List<Char>) (acc: String) : String =
     match chars with

@@ -474,7 +474,14 @@ let tryRawMemoryIntrinsic
     | "__rawptr_to_uint128", [ptrAtom] ->
         Some (ANF.RawPtrToUInt128 ptrAtom)
     | "__string_concat_raw", [leftAtom; rightAtom] ->
-        Some (ANF.StringConcat (leftAtom, rightAtom))
+        let representable atom =
+            match atom with
+            | ANF.UnitLiteral ->
+                // A preceding RuntimeError never returns, but its unreachable
+                // continuation still has the ANF Unit placeholder.
+                ANF.StringLiteral ""
+            | _ -> atom
+        Some (ANF.StringConcat (representable leftAtom, representable rightAtom, []))
     | "__int_to_string", [valueAtom]
     | "__string_to_int", [valueAtom]
     | "__int64_to_int8", [valueAtom]

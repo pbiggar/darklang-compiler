@@ -101,7 +101,7 @@ let internal emitCanonicalBufferEq (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Ope
             @ restoreInstrs
             @ (if destReg = scratch then [] else [X86_64.MOV_reg (destReg, scratch)])))
 
-let internal emitStringConcat (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Operand) (right: LIR.Operand) : Result<X86_64.Instr list, string> =
+let private emitStringConcatBinary (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Operand) (right: LIR.Operand) : Result<X86_64.Instr list, string> =
     // String concat: dest = left ++ right
     // Dynamic and literal strings share [refcount:8][length:8][data:N].
     // Strategy: load both strings' info, allocate result, copy bytes with loops.
@@ -274,3 +274,105 @@ let internal emitStringConcat (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Operand)
                        [X86_64.MOV_reg (destReg, X86_64.RBX)
                         X86_64.POP X86_64.RBX])
                 @ restoreInstrs)))
+
+/// Lower a concat tree as one length pass, one allocation, and one ordered copy pass.
+let private emitStringConcatMany
+    (ctx: FuncCtx)
+    (dest: LIR.Reg)
+    (first: LIR.Operand)
+    (second: LIR.Operand)
+    (remaining: LIR.Operand list)
+    : Result<X86_64.Instr list, string> =
+    let operands = first :: second :: remaining
+
+    let snapshotOperand (operand: LIR.Operand) : Result<X86_64.Instr list, string> =
+        match operand with
+        | LIR.Reg reg ->
+            resolveReg reg
+            |> Result.map (fun source ->
+                [ X86_64.PUSH source
+                  X86_64.MOV_load (scratch, source, 8)
+                  X86_64.PUSH scratch ])
+        | LIR.StringSymbol value ->
+            Ok (emitStringLiteralNoRefCount scratch value
+                @ [ X86_64.PUSH scratch ]
+                @ loadImm64 scratch (int64 (System.Text.Encoding.UTF8.GetByteCount value))
+                @ [ X86_64.PUSH scratch ])
+        | LIR.StackSlot stackOffset ->
+            let adjustedOffset = int32 (adjustStackOffset ctx stackOffset)
+            Ok [ X86_64.MOV_load (scratch, X86_64.RBP, adjustedOffset)
+                 X86_64.PUSH scratch
+                 X86_64.MOV_load (scratch, scratch, 8)
+                 X86_64.PUSH scratch ]
+        | other -> Error $"StringConcat requires string operands, got: {other}"
+
+    resolveReg dest
+    |> Result.bind (fun destReg ->
+        operands
+        |> ResultList.mapResults snapshotOperand
+        |> Result.map (fun snapshots ->
+            let savedRegs =
+                [ X86_64.RAX; X86_64.RDI; X86_64.RSI; X86_64.RCX
+                  X86_64.R8; X86_64.R9; X86_64.R10; X86_64.RBX ]
+            let save = savedRegs |> List.map X86_64.PUSH
+            let restore = savedRegs |> List.rev |> List.map X86_64.POP
+            let operandCount = List.length operands
+            let stackOffset index fieldOffset =
+                int32 (((2 * (operandCount - index - 1)) + fieldOffset) * 8)
+
+            let measure =
+                loadImm64 X86_64.RCX 0L
+                @ ([0 .. operandCount - 1]
+                   |> List.collect (fun index ->
+                       [ X86_64.MOV_load (scratch, X86_64.RSP, stackOffset index 0)
+                         X86_64.ADD_reg (X86_64.RCX, scratch) ]))
+
+            let allocationDone = freshLabel "strcat_many_alloc_ok"
+            let allocate =
+                [ X86_64.MOV_reg (X86_64.RBX, heapPtr)
+                  X86_64.MOV_reg (X86_64.R10, X86_64.RCX)
+                  X86_64.ADD_imm (X86_64.R10, 23)
+                  X86_64.AND_imm (X86_64.R10, -8)
+                  X86_64.ADD_reg (heapPtr, X86_64.R10)
+                  X86_64.MOV_reg (scratch, heapPtr)
+                  X86_64.SUB_reg (scratch, freeListBase)
+                  X86_64.CMP_imm (scratch, int32 heapMmapSizeBytes)
+                  X86_64.Jcc (X86_64.LE, allocationDone) ]
+                @ genOomJump ()
+                @ [ X86_64.Label allocationDone ]
+                @ loadImm64 scratch 1L
+                @ [ X86_64.MOV_store (X86_64.RBX, 0, scratch)
+                    X86_64.MOV_store (X86_64.RBX, 8, X86_64.RCX)
+                    X86_64.LEA (X86_64.RDI, X86_64.RBX, 16) ]
+
+            let copy index =
+                let loop = freshLabel $"strcat_many_copy_{index}"
+                let doneLabel = freshLabel $"strcat_many_done_{index}"
+                [ X86_64.MOV_load (X86_64.RSI, X86_64.RSP, stackOffset index 1)
+                  X86_64.MOV_load (X86_64.R10, X86_64.RSP, stackOffset index 0)
+                  X86_64.Label loop
+                  X86_64.CMP_imm (X86_64.R10, 0)
+                  X86_64.Jcc (X86_64.LE, doneLabel)
+                  X86_64.MOV_load_byte (scratch, X86_64.RSI, 0)
+                  X86_64.MOV_store_byte (X86_64.RDI, 0, scratch)
+                  X86_64.ADD_imm (X86_64.RSI, 1)
+                  X86_64.ADD_imm (X86_64.RDI, 1)
+                  X86_64.SUB_imm (X86_64.R10, 1)
+                  X86_64.JMP loop
+                  X86_64.Label doneLabel ]
+
+            save
+            @ (snapshots |> List.concat)
+            @ measure
+            @ allocate
+            @ ([0 .. operandCount - 1] |> List.collect copy)
+            @ genLeakCounterInc ctx
+            @ [ X86_64.MOV_reg (scratch, X86_64.RBX)
+                X86_64.ADD_imm (X86_64.RSP, operandCount * 16) ]
+            @ restore
+            @ (if destReg = scratch then [] else [ X86_64.MOV_reg (destReg, scratch) ])))
+
+let internal emitStringConcat ctx dest first second remaining =
+    match remaining with
+    | [] -> emitStringConcatBinary ctx dest first second
+    | _ -> emitStringConcatMany ctx dest first second remaining

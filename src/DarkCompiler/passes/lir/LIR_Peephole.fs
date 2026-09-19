@@ -1055,7 +1055,8 @@ let private foldRegUses folder state (instr: Instr) =
         captures |> List.fold (foldOperandRegUse folder) state
     | HeapStore (addr, _, src, _) ->
         foldOperandRegUse folder (folder state addr) src
-    | StringConcat (_, left, right)
+    | StringConcat (_, first, second, remaining) ->
+        first :: second :: remaining |> List.fold (foldOperandRegUse folder) state
     | CanonicalBufferEq (_, _, left, right)
     | FileWriteText (_, left, right)
     | FileAppendText (_, left, right) ->

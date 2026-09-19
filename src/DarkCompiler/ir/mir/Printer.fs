@@ -101,8 +101,9 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
     | MIR.HeapLoad (dest, addr, offset, valueType) ->
         let baseText = $"{prettyPrintMIRVReg dest} <- HeapLoad({prettyPrintMIRVReg addr}, {offset})"
         appendTypeSuffix valueType baseText
-    | MIR.StringConcat (dest, left, right) ->
-        $"{prettyPrintMIRVReg dest} <- StringConcat({prettyPrintMIROperand left}, {prettyPrintMIROperand right})"
+    | MIR.StringConcat (dest, first, second, remaining) ->
+        let operands = first :: second :: remaining |> commaSeparated prettyPrintMIROperand
+        $"{prettyPrintMIRVReg dest} <- StringConcat({operands})"
     | MIR.RefCountInc (addr, payloadSize, kind, _) ->
         $"RefCountInc({prettyPrintMIRVReg addr}, size={payloadSize}, kind={prettyPrintMIRRcKind kind})"
     | MIR.RefCountDec (addr, payloadSize, kind, _) ->

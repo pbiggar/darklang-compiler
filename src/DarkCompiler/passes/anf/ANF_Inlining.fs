@@ -341,7 +341,8 @@ let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
         RecordClone (descriptor, r record, List.map r fields)
     | RecordReuse (descriptor, record, fields) ->
         RecordReuse (descriptor, r record, List.map r fields)
-    | StringConcat (left, right) -> StringConcat (r left, r right)
+    | StringConcat (first, second, remaining) ->
+        StringConcat (r first, r second, List.map r remaining)
     | CanonicalBufferEq (kind, left, right) -> CanonicalBufferEq (kind, r left, r right)
     | RefCountInc (a, size, kind, sourceType) -> RefCountInc (r a, size, kind, sourceType)
     | RefCountDec (a, size, kind, sourceType) -> RefCountDec (r a, size, kind, sourceType)
