@@ -186,7 +186,6 @@ type Instr =
     | CanonicalBufferEq of dest:Reg * kind:MemoryModel.CanonicalBufferKind * left:Operand * right:Operand
     | PrintHeapString of Reg
     | LoadFuncAddr of dest:Reg * funcName:AST.FunctionId
-    | FileReadText of dest:Reg * path:Operand
     | FileReadBlob of dest:Reg * path:Operand
     | FileExists of dest:Reg * path:Operand
     | FileWriteBlob of dest:Reg * path:Operand * content:Operand
