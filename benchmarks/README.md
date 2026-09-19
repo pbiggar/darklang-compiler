@@ -51,13 +51,16 @@ the compiler's other Linux target.
 # Run benchmarks in parallel
 ./benchmarks/run_benchmarks.sh --jobs 4
 
-# Verify the canonical full profile without updating tracked files
+# Verify the full profile against the task branch's parent
+./benchmarks/run_benchmarks.sh --verify-parent full
+
+# Verify against the best-known canonical snapshot (not task readiness)
 ./benchmarks/run_benchmarks.sh --verify full
 
 # Stream per-workload details when diagnosing a verification run
 ./benchmarks/run_benchmarks.sh --verify --verbose full
 
-# Compare that run with the task parent's tracked performance, without rerunning
+# Compare an existing run with the task parent's tracked performance
 python3 benchmarks/compare_with_parent.py benchmarks/results/<run-directory>
 
 # Establish a Dark baseline after an intentional contract/policy reset
@@ -255,7 +258,21 @@ measurement using `record --initialize`; later complete runs use
 Recording regenerates `RESULTS.x86_64.json`, `RESULTS.x86_64.md`, and appends
 `HISTORY.x86_64.md`.
 
-### Verification Mode (`--verify`)
+### Task-parent verification (`--verify-parent`)
+
+`./benchmarks/run_benchmarks.sh --verify-parent full` is the task-readiness
+benchmark gate. It runs the complete suite, compares the measurements with the
+architecture-specific snapshot stored by the branch's upstream merge-base, and
+fails on an aggregate regression. It prints changed workload rows plus the
+aggregate `current/parent` ratio, or only the aggregate in the default quiet
+mode. It does not modify tracked benchmark files.
+
+`compare_with_parent.py` can perform the same comparison for an already-retained
+run without rebuilding or remeasuring. An explicit `--parent=<revision>`
+overrides the merge-base after the script verifies that revision is an ancestor
+of HEAD.
+
+### Canonical verification (`--verify`)
 
 `./benchmarks/run_benchmarks.sh --verify full` compares a complete successful
 run to the full snapshot using the shared aggregate rule. Equal and improved
@@ -263,13 +280,8 @@ runs pass; regressions fail. It writes only generated run artifacts (including a
 machine-readable decision) and leaves the snapshot, `RESULTS.md`, `BASELINES.md`,
 and `HISTORY.md` unchanged.
 
-That verification result is a canonical gate, not by itself a measurement of
-the task branch's effect. `compare_with_parent.py` reuses the run's Cachegrind
-files and compares them with the architecture-specific snapshot stored by the
-branch's upstream merge-base. It prints changed workload rows plus the aggregate
-`current/parent` ratio, or only the aggregate with `--quiet`; it does not build
-or measure either revision again. An explicit `--parent=<revision>` overrides
-the merge-base after the script verifies that revision is an ancestor of HEAD.
+That verification result is a canonical maintenance gate, not task-readiness
+evidence or a measurement of the task branch's effect.
 
 Normal full recording appends every valid Dark run to `HISTORY.md` with a
 unique timestamp/run identity and decision. An improvement atomically advances
