@@ -5,6 +5,38 @@ fixture formats cover repetitive syntax, encoding, algorithm, formatting, and
 small executable-backend cases without requiring a new F# test function for
 every input.
 
+## Optimization fixtures
+
+Place before/after compiler fixtures in `src/Tests/optimization/`. The file
+name selects ANF, MIR, or LIR, and each case compiles `INPUT` before pinning the
+complete optimized IR in `EXPECTED`:
+
+```text
+---NAME---
+constant integer addition
+---INPUT---
+1L + 2L
+---EXPECTED---
+return 3
+```
+
+ANF fixtures can instead select an optimized function from the prebuilt
+stdlib. This is the preferred proof for a stdlib implementation optimization:
+
+```text
+---NAME---
+stdlib power loop uses strength reduction
+---STDLIB-FUNCTION---
+Darklang.Stdlib.Int64.__powerLoop
+---EXPECTED---
+Function Darklang.Stdlib.Int64.__powerLoop:
+...
+```
+
+Use E2E tests alongside these fixtures for observable behavior. The
+optimization fixture must show that the intended optimized IR is present; a
+behavior-only test is not evidence that an optimization occurred.
+
 Value-equality E2E checks normally share a generated executable. Add
 `isolated=true` to a check that must own its process or bounded heap state; the
 runner then compiles and executes that check separately.
