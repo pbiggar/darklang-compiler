@@ -119,6 +119,13 @@ groups callee-first with source-stable ties. It records calls to earlier interna
 groups separately from external targets and marks both self-recursive and
 mutually recursive groups. Calls retained inside opaque scalar expressions do
 not acquire normalized call-graph edges.
+`InferOwnedFunctionGroups` consumes that callee-first order and dispatches
+nonrecursive singletons to boundary inference and recursive SCCs to group-wide
+inference. Its result keeps every group and candidate boundary nonempty,
+preserves internal dependencies and external targets, and retains all
+nondominated variants for later call-site selection. Calls across groups use
+the already registered ownership boundary during proof; inference does not
+silently select a callee specialization.
 Resolved direct-call nodes use a typed HIR signature registry and a separate
 ownership signature registry. HIR still requires the call's ordinary primitive
 effect and alias contract; an ownership signature cannot supply either fact.
@@ -158,10 +165,10 @@ scalar bindings. Resolved ordinary calls are
 normalized only when the group-derived or external typed signature and a
 separate effect/alias contract are available; arguments retain left-to-right
 evaluation order. It is not scheduled in code generation yet. The next
-normalization work must infer and carry unique boundary modes through loops and
-escaping boundaries. The verifier does not insert runtime uniqueness tests or
-model constructor reset tokens. General managed arguments still need lowering
-through ANF and RC insertion. ANF lifetime insertion remains authoritative
+normalization work must carry inferred unique boundary modes through loops,
+call sites, and escaping boundaries. The verifier does not insert runtime
+uniqueness tests or model constructor reset tokens. General managed arguments
+still need lowering through ANF and RC insertion. ANF lifetime insertion remains authoritative
 outside list regions. Generated result printing is an explicit consuming effect
 before that boundary; ownership insertion finalizes unrelated cleanup before
 the effect and instruction lowering emits the printed root's shape-specific

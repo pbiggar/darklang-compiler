@@ -91,6 +91,7 @@
     <Compile Include="compiler-passes/ownership/RegionContractTests.fs" />
     <Compile Include="compiler-passes/ownership/OwnershipUniquenessInferenceTests.fs" />
     <Compile Include="compiler-passes/ownership/RecursiveOwnershipInferenceTests.fs" />
+    <Compile Include="compiler-passes/ownership/OwnedFunctionGroupInferenceTests.fs" />
     <Compile Include="compiler-passes/ownership/OwnedHIRVerificationTests.fs" />
     <Compile Include="compiler-passes/RuntimeDataLayoutTests.fs" />
     <Compile Include="compiler-passes/MonomorphizationTests.fs" />

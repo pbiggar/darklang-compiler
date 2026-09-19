@@ -393,6 +393,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "Region Ownership Contracts"; Tests = RegionContractTests.tests }
         { Name = "Ownership Uniqueness Inference"; Tests = OwnershipUniquenessInferenceTests.tests }
         { Name = "Recursive Ownership Inference"; Tests = RecursiveOwnershipInferenceTests.tests }
+        { Name = "Owned Function Group Inference"; Tests = OwnedFunctionGroupInferenceTests.tests }
         { Name = "Owned HIR Verification"; Tests = OwnedHIRVerificationTests.tests }
         { Name = "Runtime Data Layout Tests"; Tests = RuntimeDataLayoutTests.tests }
         { Name = "IR Symbol Tests"; Tests = IRSymbolTests.tests }
