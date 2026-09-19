@@ -43,3 +43,16 @@ a parallel language model.
 
 Every discrepancy should be minimized and promoted to a focused E2E test
 before changing compiler behavior.
+
+Use the continuous loop to automate that workflow:
+
+```bash
+./fuzz-loop --cases 1000 --max-depth 6
+```
+
+Each campaign gets its own directory under `fuzz-results/`. A discrepancy is
+minimized deterministically and appended to `src/Tests/e2e/fuzzer-found.e2e`,
+then the next campaign starts. The loop runs until interrupted; pass
+`--campaigns N` for a bounded run. An explicit `--seed` is incremented for
+each campaign so a bounded run is reproducible without repeating one input
+stream.
