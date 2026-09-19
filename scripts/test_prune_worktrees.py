@@ -54,6 +54,9 @@ class PruneWorktreesTests(unittest.TestCase):
                     "locked",
                     "busy",
                     "ignored",
+                    "interactive_delete",
+                    "interactive_override",
+                    "interactive_stale",
                     "remove_fail",
                     "unmerged",
                 )
@@ -70,11 +73,15 @@ class PruneWorktreesTests(unittest.TestCase):
             (paths["ignored"] / "artifact.cache").write_text(
                 "keep me\n", encoding="utf-8"
             )
+            (paths["interactive_override"] / "artifact.cache").write_text(
+                "delete me\n", encoding="utf-8"
+            )
             self.git(repo, "worktree", "lock", str(paths["locked"]))
             (paths["unmerged"] / "change.txt").write_text("change\n", encoding="utf-8")
             self.git(paths["unmerged"], "add", "change.txt")
             self.git(paths["unmerged"], "commit", "-q", "-m", "unmerged")
             shutil.rmtree(paths["stale"])
+            shutil.rmtree(paths["interactive_stale"])
 
             fake_lsof = fake_bin / "lsof"
             fake_lsof.write_text(
@@ -127,6 +134,52 @@ os.execv(os.environ["TEST_REAL_GIT"], [os.environ["TEST_REAL_GIT"], *arguments])
             environment["TEST_PRIMARY"] = str(repo)
             environment["TEST_BUSY_WORKTREE"] = str(paths["busy"])
             environment["TEST_LSOF_UID"] = str(os.stat(repo).st_uid)
+
+            stopped = subprocess.run(
+                [sys.executable, str(source_script), "--interactive"],
+                cwd=repo,
+                env=environment,
+                input="",
+                check=False,
+                text=True,
+                capture_output=True,
+            )
+            self.assertEqual(stopped.returncode, 1)
+            self.assertIn("Interactive cleanup stopped", stopped.stdout)
+            self.assertIn(
+                "interactive input ended before a choice was made",
+                stopped.stderr,
+            )
+
+            interactive = subprocess.run(
+                [sys.executable, str(source_script), "--interactive"],
+                cwd=repo,
+                env=environment,
+                input="k\nk\nk\nd\nd\nd\nk\nk\nk\nk\nk\n",
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+            self.assertIn("Branch: unmerged", interactive.stdout)
+            self.assertIn(f"Directory: {paths['unmerged']} (present)", interactive.stdout)
+            self.assertIn("Checkout:", interactive.stdout)
+            self.assertIn("Last commit:", interactive.stdout)
+            self.assertIn("Merged into origin/main: no", interactive.stdout)
+            self.assertIn("Locked: yes", interactive.stdout)
+            self.assertIn("Active processes: 4242 (terminal)", interactive.stdout)
+            self.assertIn("Recommendation: KEEP", interactive.stdout)
+            self.assertIn("Recommendation: DELETE", interactive.stdout)
+            self.assertIn(
+                "Interactive cleanup: deleted 3 checkout(s), deleted 3 branch(es), "
+                "kept 9 worktree(s)",
+                interactive.stdout,
+            )
+            self.assertIn("Reclaimed checkout space:", interactive.stdout)
+            self.assertFalse(paths["interactive_delete"].exists())
+            self.assertFalse(self.branch_exists(repo, "interactive_delete"))
+            self.assertFalse(paths["interactive_override"].exists())
+            self.assertFalse(self.branch_exists(repo, "interactive_override"))
+            self.assertFalse(self.branch_exists(repo, "interactive_stale"))
 
             dry_run = subprocess.run(
                 [sys.executable, str(source_script)],
