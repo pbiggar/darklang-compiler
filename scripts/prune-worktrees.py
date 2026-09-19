@@ -34,6 +34,32 @@ class PlanEntry:
     reason: str
 
 
+@dataclass(frozen=True)
+class Palette:
+    enabled: bool
+
+    def paint(self, code: str, text: str) -> str:
+        return f"\033[{code}m{text}\033[0m" if self.enabled else text
+
+    def action(self, name: str, text: str) -> str:
+        codes = {
+            "REMOVE": "1;31",
+            "PRUNE": "1;35",
+            "BLOCK": "1;33",
+            "KEEP": "2",
+        }
+        return self.paint(codes[name], text)
+
+    def success(self, text: str) -> str:
+        return self.paint("1;32", text)
+
+    def warning(self, text: str) -> str:
+        return self.paint("1;33", text)
+
+    def error(self, text: str) -> str:
+        return self.paint("1;31", text)
+
+
 class EligibilityError(Exception):
     pass
 
@@ -190,7 +216,50 @@ def describe(worktree: Worktree) -> str:
     return f"{worktree.path} ({label})"
 
 
-def print_plan(groups: dict[str, list[PlanEntry]]) -> None:
+def color_enabled(mode: str, stream: object) -> bool:
+    if mode == "always":
+        return True
+    if mode == "never":
+        return False
+    return (
+        "NO_COLOR" not in os.environ
+        and os.environ.get("TERM") != "dumb"
+        and bool(getattr(stream, "isatty")())
+    )
+
+
+def allocated_size(path: Path) -> int:
+    total = 0
+    seen: set[tuple[int, int]] = set()
+    pending = [path]
+    while pending:
+        current = pending.pop()
+        try:
+            stat = current.stat(follow_symlinks=False)
+            identity = (stat.st_dev, stat.st_ino)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            total += stat.st_blocks * 512
+            if current.is_dir() and not current.is_symlink():
+                pending.extend(Path(entry.path) for entry in os.scandir(current))
+        except OSError as error:
+            raise EligibilityError(f"cannot measure checkout {path}: {error}") from error
+    return total
+
+
+def format_size(size: int) -> str:
+    value = float(size)
+    units = ("B", "KiB", "MiB", "GiB", "TiB")
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            precision = 0 if unit == "B" else 1
+            return f"{value:.{precision}f} {unit}"
+        value /= 1024
+    raise AssertionError("unreachable size unit")
+
+
+def print_plan(groups: dict[str, list[PlanEntry]], palette: Palette) -> None:
     summaries = {
         "REMOVE": "clean, inactive, integrated checkouts",
         "PRUNE": "missing checkouts",
@@ -204,7 +273,8 @@ def print_plan(groups: dict[str, list[PlanEntry]]) -> None:
             print()
         first_group = False
         summary = f" — {summaries[action]}" if action in summaries else ""
-        print(f"{action} ({len(entries)}){summary}")
+        heading = f"{action} ({len(entries)}){summary}"
+        print(palette.action(action, heading))
         for entry in sorted(entries, key=lambda item: str(item.worktree.path)):
             print(f"  {describe(entry.worktree)}")
             if action not in summaries:
@@ -232,11 +302,19 @@ def parser() -> argparse.ArgumentParser:
         metavar="REF",
         help="ref that must contain a worktree HEAD (default: origin/main)",
     )
+    result.add_argument(
+        "--color",
+        choices=("auto", "always", "never"),
+        default="auto",
+        help="colorize output (default: auto; also honors NO_COLOR)",
+    )
     return result
 
 
 def main() -> int:
     args = parser().parse_args()
+    output_palette = Palette(color_enabled(args.color, sys.stdout))
+    error_palette = Palette(color_enabled(args.color, sys.stderr))
     current_root_result = subprocess.run(
         ["git", "rev-parse", "--show-toplevel"],
         check=False,
@@ -377,7 +455,7 @@ def main() -> int:
                 still_removable.append(worktree)
         removable = still_removable
 
-    print_plan(plan)
+    print_plan(plan, output_palette)
 
     planned_branches = {
         branch: worktree.head
@@ -398,7 +476,13 @@ def main() -> int:
 
     removed: list[Worktree] = []
     errors: list[str] = []
+    reclaimed_bytes = 0
     for worktree in removable:
+        try:
+            checkout_size = allocated_size(worktree.path)
+        except EligibilityError as error:
+            errors.append(f"Could not remove {describe(worktree)}: {error}")
+            continue
         remove_result = git(
             current_root,
             "worktree",
@@ -409,6 +493,7 @@ def main() -> int:
         )
         if remove_result.returncode == 0:
             removed.append(worktree)
+            reclaimed_bytes += checkout_size
         else:
             detail = remove_result.stderr.strip() or remove_result.stdout.strip()
             preserved = (
@@ -465,14 +550,17 @@ def main() -> int:
         else:
             deleted_branches += 1
 
-    print(
+    summary = (
         f"Applied: removed {len(removed)} checkout(s), pruned "
         f"{len(pruned)} stale registration(s), deleted {deleted_branches} branch(es), "
         f"left {len(blocked)} blocked worktree(s)"
     )
+    print(output_palette.warning(summary) if errors else output_palette.success(summary))
+    reclaimed = f"Reclaimed checkout space: {format_size(reclaimed_bytes)}"
+    print(output_palette.success(reclaimed))
     if errors:
         print(file=sys.stderr)
-        print(f"ERROR ({len(errors)})", file=sys.stderr)
+        print(error_palette.error(f"ERROR ({len(errors)})"), file=sys.stderr)
         for error in errors:
             print(f"  {error}", file=sys.stderr)
         print("Other eligible cleanup continued", file=sys.stderr)
