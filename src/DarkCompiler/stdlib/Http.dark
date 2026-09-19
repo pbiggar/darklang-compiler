@@ -1,6 +1,6 @@
 // Stdlib.Http - canonical portable HTTP request, response, parser, and cookie values.
 
-module Stdlib.Http
+module Darklang.Stdlib.Http
 
 type Request = { url: String, headers: List<(String * String)>, body: Blob }
 

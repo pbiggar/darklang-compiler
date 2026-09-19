@@ -1,6 +1,6 @@
 // Stdlib.Cli.Args - typed positional arguments for compiled CLI programs.
 
-module Stdlib.Cli.Args
+module Darklang.Stdlib.Cli.Args
 
 let get (index: Int) : Stdlib.Result.Result<String, String> =
     if index < 0 then Error "argument index must not be negative"

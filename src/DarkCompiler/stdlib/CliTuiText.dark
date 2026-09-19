@@ -1,6 +1,6 @@
 // CliTuiText.dark - upstream terminal text width and marked clipping helpers.
 
-module Stdlib.Cli.Tui.Text
+module Darklang.Stdlib.Cli.Tui.Text
 
 /// Clip a row to a column width without splitting a grapheme cluster.
 let clipToWidth (text: String) (maxWidth: Int) : String =

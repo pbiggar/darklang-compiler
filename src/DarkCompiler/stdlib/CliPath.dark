@@ -1,7 +1,7 @@
 // Stdlib.Cli.Path.dark - Interpreter-compatible portable path operations.
 // Ported from darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
 
-module Stdlib.Cli.Path
+module Darklang.Stdlib.Cli.Path
 
 let stripTrailing (path: String) : String =
     if Stdlib.String.__byteLength path > 1L && Stdlib.String.endsWith path "/" then

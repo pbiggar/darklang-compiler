@@ -1,6 +1,6 @@
 // Stdlib.Cli.Stdin.Modifiers - terminal modifier state and rendering.
 
-module Stdlib.Cli.Stdin.Modifiers
+module Darklang.Stdlib.Cli.Stdin.Modifiers
 
 type Modifiers = { alt: Bool, ctrl: Bool, shift: Bool }
 

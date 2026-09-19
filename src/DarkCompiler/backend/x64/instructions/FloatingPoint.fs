@@ -205,6 +205,6 @@ let internal emitFloatToString (ctx: FuncCtx) (dest: LIR.Reg) (src: LIR.FReg) : 
         resolveReg dest
         |> Result.map (fun destReg ->
             (if xmm <> X86_64.XMM0 then [X86_64.MOVSD_reg (X86_64.XMM0, xmm)] else [])
-            @ [X86_64.CALL "Stdlib.Float.toString"]
+            @ [X86_64.CALL "Darklang.Stdlib.Float.toString"]
             @ (if destReg <> X86_64.RAX then [X86_64.MOV_reg (destReg, X86_64.RAX)] else []))
     | _ -> Error "FloatToString with virtual FP register"

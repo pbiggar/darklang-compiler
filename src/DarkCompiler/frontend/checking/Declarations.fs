@@ -59,6 +59,25 @@ let internal validateTopLevelTypeDeclarations
         |> List.fold (fun arities typeDef ->
             Map.add (typeDefName typeDef) (List.length (typeDefTypeParams typeDef)) arities) baseTypeArities
 
+    let declaringModule owner =
+        match NameResolution.tryQualifiedName owner with
+        | None -> []
+        | Some qualified ->
+            qualified
+            |> NameResolution.qualifiedNameSegments
+            |> List.rev
+            |> List.tail
+            |> List.rev
+
+    let resolveTypeArity owner name =
+        NameResolution.candidateSpellings
+            NameResolution.ResolutionContext.Type
+            (declaringModule owner)
+            name
+        |> List.tryPick (fun candidate ->
+            Map.tryFind candidate typeArities
+            |> Option.map (fun arity -> (candidate, arity)))
+
     let rec validateTypeReference (owner: string) (typ: Type) : Result<unit, TypeError> =
         let validateAll types =
             types
@@ -68,9 +87,9 @@ let internal validateTopLevelTypeDeclarations
         match typ with
         | TRecord (name, typeArgs)
         | TSum (name, typeArgs) ->
-            match Map.tryFind name typeArities with
+            match resolveTypeArity owner name with
             | None -> Error (GenericError $"Unknown type reference: {name} in {owner}")
-            | Some expectedArity when expectedArity <> List.length typeArgs ->
+            | Some (_, expectedArity) when expectedArity <> List.length typeArgs ->
                 Error (
                     GenericError
                         $"Type argument arity mismatch: {name} expects {expectedArity}, got {List.length typeArgs} in {owner}"

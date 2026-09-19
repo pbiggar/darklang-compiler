@@ -118,7 +118,7 @@ let private runtimeValueType =
     AST.TSum ("Darklang.LanguageTools.RuntimeTypes.ValueType", [])
 
 let private optionType (innerType: AST.Type) =
-    AST.TSum ("Stdlib.Option.Option", [innerType])
+    AST.TSum ("Darklang.Stdlib.Option.Option", [innerType])
 
 let private constructor
     (typeName: string)
@@ -134,10 +134,10 @@ let private packageHashExpr (hash: string) : AST.Expr =
         (Some (AST.StringLiteral hash))
 
 let private optionNoneExpr : AST.Expr =
-    constructor "Stdlib.Option.Option" "None" None
+    constructor "Darklang.Stdlib.Option.Option" "None" None
 
 let private optionSomeExpr (value: AST.Expr) : AST.Expr =
-    constructor "Stdlib.Option.Option" "Some" (Some value)
+    constructor "Darklang.Stdlib.Option.Option" "Some" (Some value)
 
 let private call (name: string) (args: AST.Expr list) : AST.Expr =
     AST.Call (name, AST.NonEmptyList.fromList args)

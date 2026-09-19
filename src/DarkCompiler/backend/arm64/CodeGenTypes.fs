@@ -104,8 +104,8 @@ let internal genericReleasePlanIsExpensive (releasePlan: MemoryModel.RcReleasePl
         releasePlan
 
 let internal callerOwnsSinglePayloadSum (functionName: string) : bool =
-    functionName.StartsWith("Stdlib.Dict.")
-    || not (functionName.StartsWith("Stdlib."))
+    functionName.StartsWith("Darklang.Stdlib.Dict.")
+    || not (functionName.StartsWith("Darklang.Stdlib."))
 
 let internal recursiveSumRefCountDecHelperLabel (sourceType: AST.Type) : string =
     $"__dark_recursive_sum_rc_dec_{ReleasePlanFingerprint.rcSourceTypeFingerprint sourceType}"

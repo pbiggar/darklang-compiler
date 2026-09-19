@@ -82,7 +82,7 @@ let private typeSubstitution (typeParams: string list) (typeArgs: Type list) : M
 
 let private escapedString (quote: string) (value: Expr) : Expr =
     let replace oldValue newValue input =
-        call "Stdlib.String.replaceAll" [input; StringLiteral oldValue; StringLiteral newValue]
+        call "Darklang.Stdlib.String.replaceAll" [input; StringLiteral oldValue; StringLiteral newValue]
 
     let escaped =
         value
@@ -219,7 +219,7 @@ and private ensureDictItemsRenderer
         let entryValue = TupleAccess (Var "__entry", 1)
         let (renderedKey, withKeyRenderer) =
             match keyType with
-            | TString -> (call "Stdlib.Dict.__renderKey" [entryKey], reserved)
+            | TString -> (call "Darklang.Stdlib.Dict.__renderKey" [entryKey], reserved)
             | _ -> renderCall env keyType entryKey reserved
         let separator = if keyType = TString then " = " else ": "
         let (renderedValue, withValueRenderer) = renderCall env valueType entryValue withKeyRenderer
@@ -255,23 +255,23 @@ and private renderBody
     match typ with
     | TUnit -> (StringLiteral "()", state)
     | TBool -> (If (value, StringLiteral "true", StringLiteral "false"), state)
-    | TInt8 -> (call "Stdlib.Int8.toString" [value], state)
-    | TInt16 -> (call "Stdlib.Int16.toString" [value], state)
-    | TInt32 -> (call "Stdlib.Int32.toString" [value], state)
-    | TInt64 -> (call "Stdlib.Int64.toString" [value], state)
-    | TInt -> (call "Stdlib.Int.toString" [value], state)
-    | TUInt8 -> (call "Stdlib.UInt8.toString" [value], state)
-    | TUInt16 -> (call "Stdlib.UInt16.toString" [value], state)
-    | TUInt32 -> (call "Stdlib.UInt32.toString" [value], state)
-    | TUInt64 -> (call "Stdlib.UInt64.toString" [value], state)
+    | TInt8 -> (call "Darklang.Stdlib.Int8.toString" [value], state)
+    | TInt16 -> (call "Darklang.Stdlib.Int16.toString" [value], state)
+    | TInt32 -> (call "Darklang.Stdlib.Int32.toString" [value], state)
+    | TInt64 -> (call "Darklang.Stdlib.Int64.toString" [value], state)
+    | TInt -> (call "Darklang.Stdlib.Int.toString" [value], state)
+    | TUInt8 -> (call "Darklang.Stdlib.UInt8.toString" [value], state)
+    | TUInt16 -> (call "Darklang.Stdlib.UInt16.toString" [value], state)
+    | TUInt32 -> (call "Darklang.Stdlib.UInt32.toString" [value], state)
+    | TUInt64 -> (call "Darklang.Stdlib.UInt64.toString" [value], state)
     // Fixed-block 128-bit values cross the textual boundary through their
     // limb-based decimal formatters.
-    | TInt128 -> (call "Stdlib.Int128.toString" [value], state)
-    | TUInt128 -> (call "Stdlib.UInt128.toString" [value], state)
-    | TFloat64 -> (call "Stdlib.Float.toString" [value], state)
+    | TInt128 -> (call "Darklang.Stdlib.Int128.toString" [value], state)
+    | TUInt128 -> (call "Darklang.Stdlib.UInt128.toString" [value], state)
+    | TFloat64 -> (call "Darklang.Stdlib.Float.toString" [value], state)
     | TString -> (escapedString "\"" value, state)
     | TChar -> (escapedString "'" value, state)
-    | TDateTime -> (call "Stdlib.DateTime.toString" [value], state)
+    | TDateTime -> (call "Darklang.Stdlib.DateTime.toString" [value], state)
     | TTuple elemTypes ->
         let items = elemTypes |> List.mapi (fun index elemType -> (elemType, TupleAccess (value, index)))
         let (rendered, nextState) = renderDelimited env items state
@@ -297,7 +297,7 @@ and private renderBody
     | TDict (TVar _, TVar _) -> (StringLiteral "Dict { }", state)
     | TDict (keyType, valueType) ->
         let (itemsName, nextState) = ensureDictItemsRenderer env keyType valueType state
-        let entries = TypeApp ("Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton value)
+        let entries = TypeApp ("Darklang.Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton value)
         let body =
             Let (
                 LPVariable "__dict_entries",
@@ -368,14 +368,14 @@ and private renderBody
                 If (
                     BinOp (
                         Lte,
-                        call "Stdlib.String.length" [Var shortName],
+                        call "Darklang.Stdlib.String.length" [Var shortName],
                         BigIntLiteral (System.Numerics.BigInteger 80)
                     ),
                     Var shortName,
                     long
                 )
              ), nextState)
-    | TSum ("Uuid", []) -> (call "Stdlib.Uuid.toString" [value], state)
+    | TSum ("Uuid", []) -> (call "Darklang.Stdlib.Uuid.toString" [value], state)
     | TSum (typeName, typeArgs) ->
         match Map.tryFind typeName env.Sums.Value with
         | None -> Crash.crash $"Missing sum metadata for value renderer: {typeName}"
@@ -414,7 +414,7 @@ and private renderBody
         // or process-local identities through value rendering.
         (StringLiteral "<Blob: ephemeral>", state)
     | TRawPtr ->
-        (call "Stdlib.Int64.toString" [value], state)
+        (call "Darklang.Stdlib.Int64.toString" [value], state)
     | TRuntimeError -> (StringLiteral "()", state)
     | TVar name -> Crash.crash $"Unresolved type variable in value renderer: {name}"
 
@@ -476,7 +476,7 @@ let rewriteProgram
         let rendered =
             match programType, expr, tryNamedPartialName expr with
             | TDateTime, _, _ ->
-                BoundaryRender ("Stdlib.DateTime.toString", expr)
+                BoundaryRender ("Darklang.Stdlib.DateTime.toString", expr)
             | TFunction _, _, Some name ->
                 Let (LPVariable "__rendered_named_partial", expr, StringLiteral name)
             | TFunction _, Var name, _ when Set.contains name namedFunctions.Value ->

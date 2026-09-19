@@ -461,7 +461,7 @@ let internal resolveProgramNames
                 let nonKeyIdentities =
                     identities
                     |> List.filter (function
-                        | NameResolution.ConstructorSymbol ("Stdlib.Cli.Stdin.Key.Key", _) -> false
+                        | NameResolution.ConstructorSymbol ("Darklang.Stdlib.Cli.Stdin.Key.Key", _) -> false
                         | _ -> true)
                 match nonKeyIdentities with
                 | [identity] ->

@@ -4,7 +4,7 @@
 // followed by their reference count. Decimal buffers exist only at textual
 // and arbitrary-precision conversion boundaries.
 
-module Stdlib.UInt128
+module Darklang.Stdlib.UInt128
 
 type ParseError = BadFormat | OutOfRange
 

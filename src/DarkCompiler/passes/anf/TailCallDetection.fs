@@ -389,13 +389,13 @@ let private detectTailCallsInFunctionWithRegistry
     // The process entrypoint has no caller return address. A sibling tail branch
     // from _start would make the callee's Ret jump through an invalid address.
     let isJsonOwnershipBoundary =
-        func.Name.StartsWith("Stdlib.Json.__view")
-        || func.Name = "Stdlib.Json.__stripLeadingZeroes"
-        || func.Name = "Stdlib.Json.__shiftIntegerDigits"
-        || func.Name = "Stdlib.Json.__applyIntegerExponent"
-        || func.Name = "Stdlib.Json.__unsignedIntegerLexeme"
-        || func.Name = "Stdlib.Json.__normalizeIntegerMagnitude"
-        || func.Name = "Stdlib.Json.__integerLexeme"
+        func.Name.StartsWith("Darklang.Stdlib.Json.__view")
+        || func.Name = "Darklang.Stdlib.Json.__stripLeadingZeroes"
+        || func.Name = "Darklang.Stdlib.Json.__shiftIntegerDigits"
+        || func.Name = "Darklang.Stdlib.Json.__applyIntegerExponent"
+        || func.Name = "Darklang.Stdlib.Json.__unsignedIntegerLexeme"
+        || func.Name = "Darklang.Stdlib.Json.__normalizeIntegerMagnitude"
+        || func.Name = "Darklang.Stdlib.Json.__integerLexeme"
     // These accessors and generated decoders project managed list/view payloads
     // before forwarding them. A sibling tail call would move the parent release
     // ahead of that call and invalidate the projected argument. Scanner loops

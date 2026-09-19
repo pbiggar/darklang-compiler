@@ -61,11 +61,11 @@ let rec private collectHelperTypes
         let compareTypes =
             match name, typeArgs with
             | "__compare", [targetType]
-            | ("Stdlib.List.sort" | "Stdlib.List.unique"), [targetType]
-            | "Stdlib.List.uniqueBy", [targetType; _] ->
+            | ("Darklang.Stdlib.List.sort" | "Darklang.Stdlib.List.unique"), [targetType]
+            | "Darklang.Stdlib.List.uniqueBy", [targetType; _] ->
                 let resolved = resolveType aliasReg targetType
                 if containsTVar resolved then Set.empty else Set.singleton resolved
-            | "Stdlib.List.sortBy", [valueType; keyType] ->
+            | "Darklang.Stdlib.List.sortBy", [valueType; keyType] ->
                 let pairType =
                     AST.TTuple [resolveType aliasReg keyType; resolveType aliasReg valueType]
                 if containsTVar pairType then Set.empty else Set.singleton pairType

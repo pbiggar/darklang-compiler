@@ -51,7 +51,7 @@ let internal materializeComparisonPlan (targetType: AST.Type) (args: CheckedAST.
             )
         | AST.TInt ->
             CheckedAST.Call (
-                "Stdlib.Int.__equals",
+                "Darklang.Stdlib.Int.__equals",
                 AST.NonEmptyList.fromList [leftExpr; rightExpr]
             )
         | _ -> CheckedAST.BinOp (AST.Eq, leftExpr, rightExpr)
@@ -97,19 +97,19 @@ let private int128Words (value: System.Int128) : uint64 * uint64 =
 
 let internal int128Construction (value: System.Int128) : ANF.CExpr =
     let (low, high) = int128Words value
-    ANF.Call ("Stdlib.Int128.__fromWords", [ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
+    ANF.Call ("Darklang.Stdlib.Int128.__fromWords", [ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
 
 let internal uint128Construction (value: System.UInt128) : ANF.CExpr =
     let (low, high) = uint128Words value
-    ANF.Call ("Stdlib.UInt128.__fromWords", [ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
+    ANF.Call ("Darklang.Stdlib.UInt128.__fromWords", [ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
 
 let internal int128LiteralComparison (valueAtom: ANF.Atom) (value: System.Int128) : ANF.CExpr =
     let (low, high) = int128Words value
-    ANF.Call ("Stdlib.Int128.__equalsWords", [valueAtom; ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
+    ANF.Call ("Darklang.Stdlib.Int128.__equalsWords", [valueAtom; ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
 
 let internal uint128LiteralComparison (valueAtom: ANF.Atom) (value: System.UInt128) : ANF.CExpr =
     let (low, high) = uint128Words value
-    ANF.Call ("Stdlib.UInt128.__equalsWords", [valueAtom; ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
+    ANF.Call ("Darklang.Stdlib.UInt128.__equalsWords", [valueAtom; ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
 
 /// Convert AST.Type to a string for specialization keys
 let rec typeToString (ty: AST.Type) : string =
@@ -161,42 +161,42 @@ let patternLiteralToSizedInt (pattern: AST.Pattern) : ANF.SizedInt option =
 /// Returns Some CExpr if it's a file intrinsic, None otherwise
 let tryFileIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
     match funcName, args with
-    | "Stdlib.File.readText", [pathAtom] ->
+    | "Darklang.Stdlib.File.readText", [pathAtom] ->
         Some (ANF.FileReadText pathAtom)
-    | "Stdlib.File.exists", [pathAtom] ->
+    | "Darklang.Stdlib.File.exists", [pathAtom] ->
         Some (ANF.FileExists pathAtom)
-    | "Stdlib.File.writeText", [pathAtom; contentAtom] ->
+    | "Darklang.Stdlib.File.writeText", [pathAtom; contentAtom] ->
         Some (ANF.FileWriteText (pathAtom, contentAtom))
-    | "Stdlib.File.appendText", [pathAtom; contentAtom] ->
+    | "Darklang.Stdlib.File.appendText", [pathAtom; contentAtom] ->
         Some (ANF.FileAppendText (pathAtom, contentAtom))
-    | "Stdlib.File.delete", [pathAtom] ->
+    | "Darklang.Stdlib.File.delete", [pathAtom] ->
         Some (ANF.FileDelete pathAtom)
-    | "Stdlib.File.setExecutable", [pathAtom] ->
+    | "Darklang.Stdlib.File.setExecutable", [pathAtom] ->
         Some (ANF.FileSetExecutable pathAtom)
-    | "Stdlib.File.writeFromPtr", [pathAtom; ptrAtom; lengthAtom] ->
+    | "Darklang.Stdlib.File.writeFromPtr", [pathAtom; ptrAtom; lengthAtom] ->
         Some (ANF.FileWriteFromPtr (pathAtom, ptrAtom, lengthAtom))
     | _ -> None
 
 let tryCliIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
     match funcName, args with
-    | "Stdlib.Cli.__sleep", [delayMs] -> Some (ANF.Sleep delayMs)
+    | "Darklang.Stdlib.Cli.__sleep", [delayMs] -> Some (ANF.Sleep delayMs)
     | _ ->
         let operation =
             match funcName with
-            | "Stdlib.Cli.__execute" -> Some ANF.Execute
-            | "Stdlib.Cli.__runProcess" -> Some ANF.RunProcess
-            | "Stdlib.Cli.__hostOSCode" -> Some ANF.HostOS
-            | "Stdlib.Cli.__hostArchitectureCode" -> Some ANF.HostArchitecture
-            | "Stdlib.Cli.__hostname" -> Some ANF.Hostname
-            | "Stdlib.Cli.__getenv" -> Some ANF.GetEnv
-            | "Stdlib.Cli.__argv" -> Some ANF.GetArgv
-            | "Stdlib.Cli.__kill" -> Some ANF.Kill
-            | "Stdlib.Cli.__getpid" -> Some ANF.GetPid
-            | "Stdlib.Cli.__getuid" -> Some ANF.GetUid
-            | "Stdlib.Cli.__cpuCount" -> Some ANF.CpuCount
-            | "Stdlib.Cli.__spawnProcess" -> Some ANF.SpawnProcess
-            | "Stdlib.Cli.__processIO" -> Some ANF.ProcessIO
-            | "Stdlib.Cli.__terminateProcess" -> Some ANF.TerminateProcess
+            | "Darklang.Stdlib.Cli.__execute" -> Some ANF.Execute
+            | "Darklang.Stdlib.Cli.__runProcess" -> Some ANF.RunProcess
+            | "Darklang.Stdlib.Cli.__hostOSCode" -> Some ANF.HostOS
+            | "Darklang.Stdlib.Cli.__hostArchitectureCode" -> Some ANF.HostArchitecture
+            | "Darklang.Stdlib.Cli.__hostname" -> Some ANF.Hostname
+            | "Darklang.Stdlib.Cli.__getenv" -> Some ANF.GetEnv
+            | "Darklang.Stdlib.Cli.__argv" -> Some ANF.GetArgv
+            | "Darklang.Stdlib.Cli.__kill" -> Some ANF.Kill
+            | "Darklang.Stdlib.Cli.__getpid" -> Some ANF.GetPid
+            | "Darklang.Stdlib.Cli.__getuid" -> Some ANF.GetUid
+            | "Darklang.Stdlib.Cli.__cpuCount" -> Some ANF.CpuCount
+            | "Darklang.Stdlib.Cli.__spawnProcess" -> Some ANF.SpawnProcess
+            | "Darklang.Stdlib.Cli.__processIO" -> Some ANF.ProcessIO
+            | "Darklang.Stdlib.Cli.__terminateProcess" -> Some ANF.TerminateProcess
             | _ -> None
         operation |> Option.map (fun op -> ANF.CliNative (op, args))
 
@@ -347,16 +347,16 @@ let private tryParseMangledTypeForRawIntrinsic
 /// Returns Some CExpr if it's a Float intrinsic, None otherwise
 let tryFloatIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
     match funcName, args with
-    | "Stdlib.Float.sqrt", [xAtom] ->
+    | "Darklang.Stdlib.Float.sqrt", [xAtom] ->
         Some (ANF.FloatSqrt xAtom)
-    | "Stdlib.Float.negate", [xAtom] ->
+    | "Darklang.Stdlib.Float.negate", [xAtom] ->
         Some (ANF.FloatNeg xAtom)
-    | "Stdlib.Int64.toFloat", [xAtom] ->
+    | "Darklang.Stdlib.Int64.toFloat", [xAtom] ->
         Some (ANF.Int64ToFloat xAtom)
     // NOTE: Float.toString is now implemented in Dark, not as an intrinsic
-    | "Stdlib.Float.__toBits", [xAtom] ->
+    | "Darklang.Stdlib.Float.__toBits", [xAtom] ->
         Some (ANF.FloatToBits xAtom)
-    | "Stdlib.Float.__toInt64Unchecked", [xAtom] ->
+    | "Darklang.Stdlib.Float.__toInt64Unchecked", [xAtom] ->
         Some (ANF.FloatToInt64 xAtom)
     | _ -> None
 
@@ -364,11 +364,11 @@ let tryFloatIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr optio
 /// Boolean and fixed-width integer primitives.
 let tryCanonicalPrimitiveIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
     match funcName, args with
-    | "Stdlib.Bool.not", [value] -> Some (ANF.UnaryPrim (ANF.Not, value))
+    | "Darklang.Stdlib.Bool.not", [value] -> Some (ANF.UnaryPrim (ANF.Not, value))
     | _ ->
         let fixedWidthModules =
-            set [ "Stdlib.Int8"; "Stdlib.Int16"; "Stdlib.Int32"; "Stdlib.Int64"
-                  "Stdlib.UInt8"; "Stdlib.UInt16"; "Stdlib.UInt32"; "Stdlib.UInt64" ]
+            set [ "Darklang.Stdlib.Int8"; "Darklang.Stdlib.Int16"; "Darklang.Stdlib.Int32"; "Darklang.Stdlib.Int64"
+                  "Darklang.Stdlib.UInt8"; "Darklang.Stdlib.UInt16"; "Darklang.Stdlib.UInt32"; "Darklang.Stdlib.UInt64" ]
         let nameParts = funcName.Split('.')
         let moduleName = nameParts |> Array.rev |> Array.skip 1 |> Array.rev |> String.concat "."
         let operationName = nameParts |> Array.tryLast
@@ -492,13 +492,13 @@ let tryRawMemoryIntrinsic
     | "__int64_to_uint32", [valueAtom] ->
         Some (ANF.Atom valueAtom)
     | "__int128_to_int", [valueAtom] ->
-        Some (ANF.Call ("Stdlib.Int128.__toInt", [valueAtom]))
+        Some (ANF.Call ("Darklang.Stdlib.Int128.__toInt", [valueAtom]))
     | "__uint128_to_int", [valueAtom] ->
-        Some (ANF.Call ("Stdlib.UInt128.__toInt", [valueAtom]))
+        Some (ANF.Call ("Darklang.Stdlib.UInt128.__toInt", [valueAtom]))
     | "__int_to_int128", [valueAtom] ->
-        Some (ANF.Call ("Stdlib.Int128.__fromInt", [valueAtom]))
+        Some (ANF.Call ("Darklang.Stdlib.Int128.__fromInt", [valueAtom]))
     | "__int_to_uint128", [valueAtom] ->
-        Some (ANF.Call ("Stdlib.UInt128.__fromInt", [valueAtom]))
+        Some (ANF.Call ("Darklang.Stdlib.UInt128.__fromInt", [valueAtom]))
     | "__blob_to_rawptr", [bytesAtom] ->
         Some (ANF.BlobToRawPtr bytesAtom)
     | "__rawptr_to_blob", [ptrAtom] ->
@@ -556,7 +556,7 @@ let tryRawMemoryIntrinsic
 let tryRandomIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
     let args = normalizeNullaryIntrinsicArgs args
     match funcName, args with
-    | "Stdlib.Int.__randomInt64Word", [] ->
+    | "Darklang.Stdlib.Int.__randomInt64Word", [] ->
         Some ANF.RandomInt64
     | _ -> None
 
@@ -564,11 +564,11 @@ let tryRandomIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr opti
 let tryDateTimeIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
     let args = normalizeNullaryIntrinsicArgs args
     match funcName, args with
-    | "Stdlib.DateTime.__now", [] ->
+    | "Darklang.Stdlib.DateTime.__now", [] ->
         Some ANF.DateTimeNow
-    | "Stdlib.DateTime.__fromUnixTimeTicks", [ticks] ->
+    | "Darklang.Stdlib.DateTime.__fromUnixTimeTicks", [ticks] ->
         Some (ANF.TypedAtom (ticks, AST.TDateTime))
-    | "Stdlib.DateTime.__toUnixTimeTicks", [date] ->
+    | "Darklang.Stdlib.DateTime.__toUnixTimeTicks", [date] ->
         Some (ANF.TypedAtom (date, AST.TInt64))
     | _ -> None
 

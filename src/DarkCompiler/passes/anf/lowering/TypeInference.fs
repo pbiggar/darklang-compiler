@@ -448,9 +448,9 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                 inferTypeCore sumTypeNames argExpr typeEnv typeReg variantLookup funcReg moduleRegistry
                 |> Result.bind (fun argType ->
                     match argType with
-                    | AST.TSum ("Stdlib.Option.Option", [valueType]) -> Ok valueType
-                    | AST.TSum ("Stdlib.Result.Result", [okType; _]) -> Ok okType
-                    | AST.TSum ("Stdlib.Option.Option", []) ->
+                    | AST.TSum ("Darklang.Stdlib.Option.Option", [valueType]) -> Ok valueType
+                    | AST.TSum ("Darklang.Stdlib.Result.Result", [okType; _]) -> Ok okType
+                    | AST.TSum ("Darklang.Stdlib.Option.Option", []) ->
                         match argExpr with
                         | CheckedAST.Constructor (_, "Some", [payloadExpr]) ->
                             inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg moduleRegistry
@@ -458,7 +458,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                             // Type args may be unavailable in ANF inferType.
                             // Use Unit to avoid leaking unresolved type variables into later passes.
                             Ok AST.TUnit
-                    | AST.TSum ("Stdlib.Result.Result", []) ->
+                    | AST.TSum ("Darklang.Stdlib.Result.Result", []) ->
                         match argExpr with
                         | CheckedAST.Constructor (_, "Ok", [payloadExpr]) ->
                             inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg moduleRegistry

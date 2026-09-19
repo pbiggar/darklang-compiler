@@ -1,6 +1,6 @@
 // Stdlib.Cli.Shell - portable public shell model and discovery.
 
-module Stdlib.Cli.Shell
+module Darklang.Stdlib.Cli.Shell
 
 type Shell = Bash | Zsh | Fish | PowerShell
 

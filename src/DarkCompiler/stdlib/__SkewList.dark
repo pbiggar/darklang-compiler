@@ -4,7 +4,7 @@
 // Every owned pointer slot participates in the compiler's normal typed reference
 // counting; read-only accessors return borrowed values.
 
-module Stdlib.List
+module Darklang.Stdlib.List
 
 // Low pointer tags. Empty is the null pointer rather than an allocation.
 let __TAG_EMPTY () : Int64 = 0L

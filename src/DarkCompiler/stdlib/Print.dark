@@ -1,6 +1,6 @@
 // Stdlib.Print.dark - Explicit String-only stdout helpers shared with Darklang.
 
-module Stdlib
+module Darklang.Stdlib
 
 let print (str: String) : Unit =
     let _ = Builtin.print str in

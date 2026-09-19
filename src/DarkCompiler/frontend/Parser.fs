@@ -2065,7 +2065,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             | TAt :: rest ->
                 parseListAppend rest
                 |> Result.map (fun (right, remaining') ->
-                    (Call ("Stdlib.List.append", NonEmptyList.fromList [left; right]), remaining'))
+                    (Call ("Darklang.Stdlib.List.append", NonEmptyList.fromList [left; right]), remaining'))
             | _ ->
                 Ok (left, remaining))
 

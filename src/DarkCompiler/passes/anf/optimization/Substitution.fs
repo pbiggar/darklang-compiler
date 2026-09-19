@@ -192,14 +192,14 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
                     match parts |> List.filter (function StringLiteral "" -> false | _ -> true) with
                     | [single] -> Some (Atom single)
                     | _ -> None
-            | Call ("Stdlib.String.__appendNormalized", [StringLiteral left; StringLiteral right]) ->
+            | Call ("Darklang.Stdlib.String.__appendNormalized", [StringLiteral left; StringLiteral right]) ->
                 let normalized = (left + right).Normalize(System.Text.NormalizationForm.FormC)
                 Some (Atom (StringLiteral normalized))
-            | Call ("Stdlib.String.__normalizeAfterConcat", [StringLiteral value]) ->
+            | Call ("Darklang.Stdlib.String.__normalizeAfterConcat", [StringLiteral value]) ->
                 Some (Atom (StringLiteral (value.Normalize(System.Text.NormalizationForm.FormC))))
-            | Call ("Stdlib.String.__appendNormalized", [left; StringLiteral ""]) ->
+            | Call ("Darklang.Stdlib.String.__appendNormalized", [left; StringLiteral ""]) ->
                 Some (Atom left)
-            | Call ("Stdlib.String.__appendNormalized", [StringLiteral ""; right]) ->
+            | Call ("Darklang.Stdlib.String.__appendNormalized", [StringLiteral ""; right]) ->
                 Some (Atom right)
             | TupleGet (Var tupleTid, index) ->
                 Map.tryFind tupleTid tupleEnv

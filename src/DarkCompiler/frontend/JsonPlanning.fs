@@ -60,7 +60,7 @@ type private State = { Functions: Map<string, FunctionDef> }
 let private args values = NonEmptyList.fromList values
 let private call name values = Call (name, args values)
 let private listPush elementType list value =
-    TypeApp ("Stdlib.List.push", [elementType], args [list; value])
+    TypeApp ("Darklang.Stdlib.List.push", [elementType], args [list; value])
 
 let private stableHash (value: string) : uint64 =
     value
@@ -144,28 +144,28 @@ let private constructor owner caseName payload =
     Constructor ({ TypeName = owner }, caseName, Option.toList payload)
 
 let private tuplePayload values = TupleLiteral values |> Some
-let private ok value = constructor "Stdlib.Result.Result" "Ok" (Some value)
-let private error value = constructor "Stdlib.Result.Result" "Error" (Some value)
-let private none = constructor "Stdlib.Option.Option" "None" None
-let private some value = constructor "Stdlib.Option.Option" "Some" (Some value)
+let private ok value = constructor "Darklang.Stdlib.Result.Result" "Ok" (Some value)
+let private error value = constructor "Darklang.Stdlib.Result.Result" "Error" (Some value)
+let private none = constructor "Darklang.Stdlib.Option.Option" "None" None
+let private some value = constructor "Darklang.Stdlib.Option.Option" "Some" (Some value)
 
-let private jsonErrorType = TSum ("Stdlib.Json.ParseError.ParseError", [])
+let private jsonErrorType = TSum ("Darklang.Stdlib.Json.ParseError.ParseError", [])
 let private valueViewType = TInt64
-let private pathPartType = TSum ("Stdlib.Json.ParseError.JsonPath.Part.Part", [])
+let private pathPartType = TSum ("Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part", [])
 let private pathType = TList pathPartType
-let private resultType okType = TSum ("Stdlib.Result.Result", [okType; jsonErrorType])
+let private resultType okType = TSum ("Darklang.Stdlib.Result.Result", [okType; jsonErrorType])
 let private writerType = TString
 
-let private writerEmpty = call "Stdlib.Json.__writerEmpty" [UnitLiteral]
-let private writerFinish writer = call "Stdlib.Json.__writerFinish" [writer]
-let private writerRaw writer value = call "Stdlib.Json.__writerWriteRaw" [writer; value]
-let private writerString writer value = call "Stdlib.Json.__writerWriteString" [writer; value]
-let private writerBeginArray writer = call "Stdlib.Json.__writerBeginArray" [writer]
-let private writerEndArray writer = call "Stdlib.Json.__writerEndArray" [writer]
-let private writerBeginObject writer = call "Stdlib.Json.__writerBeginObject" [writer]
-let private writerEndObject writer = call "Stdlib.Json.__writerEndObject" [writer]
-let private writerSeparator writer = call "Stdlib.Json.__writerSeparator" [writer]
-let private writerFieldName writer name = call "Stdlib.Json.__writerFieldName" [writer; name]
+let private writerEmpty = call "Darklang.Stdlib.Json.__writerEmpty" [UnitLiteral]
+let private writerFinish writer = call "Darklang.Stdlib.Json.__writerFinish" [writer]
+let private writerRaw writer value = call "Darklang.Stdlib.Json.__writerWriteRaw" [writer; value]
+let private writerString writer value = call "Darklang.Stdlib.Json.__writerWriteString" [writer; value]
+let private writerBeginArray writer = call "Darklang.Stdlib.Json.__writerBeginArray" [writer]
+let private writerEndArray writer = call "Darklang.Stdlib.Json.__writerEndArray" [writer]
+let private writerBeginObject writer = call "Darklang.Stdlib.Json.__writerBeginObject" [writer]
+let private writerEndObject writer = call "Darklang.Stdlib.Json.__writerEndObject" [writer]
+let private writerSeparator writer = call "Darklang.Stdlib.Json.__writerSeparator" [writer]
+let private writerFieldName writer name = call "Darklang.Stdlib.Json.__writerFieldName" [writer; name]
 
 let rec private typeReference typ =
     let owner = "Darklang.LanguageTools.RuntimeTypes.TypeReference"
@@ -212,7 +212,7 @@ let rec private typeReference typ =
         constructor owner "TTuple" (tuplePayload [typeReference first; typeReference second; ListLiteral (List.map typeReference rest)])
     | TFunction (parameters, result) ->
         constructor owner "TFn" (tuplePayload [ListLiteral (List.map typeReference parameters); typeReference result])
-    | TStream elementType -> custom "Stdlib.Stream.Stream" [elementType]
+    | TStream elementType -> custom "Darklang.Stdlib.Stream.Stream" [elementType]
     | TRecord (name, typeArgs)
     | TSum (name, typeArgs) -> custom name typeArgs
     | TVar name -> unary "TVariable" (StringLiteral name)
@@ -221,15 +221,15 @@ let rec private typeReference typ =
 
 let private cantMatch typ raw path =
     constructor
-        "Stdlib.Json.ParseError.ParseError"
+        "Darklang.Stdlib.Json.ParseError.ParseError"
         "CantMatchWithType"
         (tuplePayload
             [ typeReference typ
               raw
-              call "Stdlib.Json.ParseError.__copyPath" [path] ])
+              call "Darklang.Stdlib.Json.ParseError.__copyPath" [path] ])
     |> error
 
-let private rawSource source raw = call "Stdlib.Json.__copyRaw" [source; raw]
+let private rawSource source raw = call "Darklang.Stdlib.Json.__copyRaw" [source; raw]
 
 let private resultCases okName okBody errorName =
     [ makeCase (PConstructor ("Ok", [PVar okName])) okBody
@@ -453,22 +453,22 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
     | TUnit -> Ok (writerRaw writer (StringLiteral "null"), state)
     | TBool ->
         Ok (writerRaw writer (If (value, StringLiteral "true", StringLiteral "false")), state)
-    | TInt8 -> Ok (writerRaw writer (call "Stdlib.Int8.toString" [value]), state)
-    | TInt16 -> Ok (writerRaw writer (call "Stdlib.Int16.toString" [value]), state)
-    | TInt32 -> Ok (writerRaw writer (call "Stdlib.Int32.toString" [value]), state)
-    | TInt64 -> Ok (writerRaw writer (call "Stdlib.Int64.toString" [value]), state)
-    | TInt -> Ok (writerRaw writer (call "Stdlib.Int.toString" [value]), state)
-    | TUInt8 -> Ok (writerRaw writer (call "Stdlib.UInt8.toString" [value]), state)
-    | TUInt16 -> Ok (writerRaw writer (call "Stdlib.UInt16.toString" [value]), state)
-    | TUInt32 -> Ok (writerRaw writer (call "Stdlib.UInt32.toString" [value]), state)
-    | TUInt64 -> Ok (writerRaw writer (call "Stdlib.UInt64.toString" [value]), state)
-    | TInt128 -> Ok (writerRaw writer (call "Stdlib.Int128.toString" [value]), state)
-    | TUInt128 -> Ok (writerRaw writer (call "Stdlib.UInt128.toString" [value]), state)
-    | TFloat64 -> Ok (writerRaw writer (call "Stdlib.Json.__serializeFloat" [value]), state)
+    | TInt8 -> Ok (writerRaw writer (call "Darklang.Stdlib.Int8.toString" [value]), state)
+    | TInt16 -> Ok (writerRaw writer (call "Darklang.Stdlib.Int16.toString" [value]), state)
+    | TInt32 -> Ok (writerRaw writer (call "Darklang.Stdlib.Int32.toString" [value]), state)
+    | TInt64 -> Ok (writerRaw writer (call "Darklang.Stdlib.Int64.toString" [value]), state)
+    | TInt -> Ok (writerRaw writer (call "Darklang.Stdlib.Int.toString" [value]), state)
+    | TUInt8 -> Ok (writerRaw writer (call "Darklang.Stdlib.UInt8.toString" [value]), state)
+    | TUInt16 -> Ok (writerRaw writer (call "Darklang.Stdlib.UInt16.toString" [value]), state)
+    | TUInt32 -> Ok (writerRaw writer (call "Darklang.Stdlib.UInt32.toString" [value]), state)
+    | TUInt64 -> Ok (writerRaw writer (call "Darklang.Stdlib.UInt64.toString" [value]), state)
+    | TInt128 -> Ok (writerRaw writer (call "Darklang.Stdlib.Int128.toString" [value]), state)
+    | TUInt128 -> Ok (writerRaw writer (call "Darklang.Stdlib.UInt128.toString" [value]), state)
+    | TFloat64 -> Ok (writerRaw writer (call "Darklang.Stdlib.Json.__serializeFloat" [value]), state)
     | TString | TChar -> Ok (writerString writer value, state)
-    | TSum ("Uuid", []) -> Ok (writerString writer (call "Stdlib.Uuid.toString" [value]), state)
+    | TSum ("Uuid", []) -> Ok (writerString writer (call "Darklang.Stdlib.Uuid.toString" [value]), state)
     | TDateTime ->
-        Ok (writerString writer (call "Stdlib.DateTime.toString" [value]), state)
+        Ok (writerString writer (call "Darklang.Stdlib.DateTime.toString" [value]), state)
     | TTuple elementTypes ->
         elementTypes
         |> List.mapi (fun index elemType -> (elemType, TupleAccess (value, index)))
@@ -489,7 +489,7 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
         ensureDictSerializer env valueType state
         |> Result.map (fun (name, nextState) ->
             let entries =
-                TypeApp ("Stdlib.Dict.toList", [TString; valueType], NonEmptyList.singleton value)
+                TypeApp ("Darklang.Stdlib.Dict.toList", [TString; valueType], NonEmptyList.singleton value)
             let encoded = call name [Var "__entries"; writerBeginObject writer; BoolLiteral true]
             (Let (LPVariable "__entries", entries, writerEndObject encoded),
              nextState))
@@ -630,7 +630,7 @@ and private ensureListDecoder env elemType state =
             listPush
                 pathPartType
                 (Var "__path")
-                (constructor "Stdlib.Json.ParseError.JsonPath.Part.Part" "Index" (Some (call "Stdlib.Int.fromInt64" [Var "__index"])))
+                (constructor "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part" "Index" (Some (call "Darklang.Stdlib.Int.fromInt64" [Var "__index"])))
         decodeCall env elemType (Var "__head") itemPath reserved
         |> Result.map (fun (decodedHead, nextState) ->
             let decodedTail =
@@ -649,7 +649,7 @@ and private ensureListDecoder env elemType state =
             let body =
                 Let (
                     LPVariable "__head",
-                    call "Stdlib.Json.__arrayNext" [Var "__source"; Var "__array_view"; Var "__next_index"],
+                    call "Darklang.Stdlib.Json.__arrayNext" [Var "__source"; Var "__array_view"; Var "__next_index"],
                     If (
                         BinOp (Eq, Var "__head", Int64Literal -1L),
                         ok (ListLiteral []),
@@ -658,7 +658,7 @@ and private ensureListDecoder env elemType state =
                             invalid,
                             Let (
                                 LPVariable "__after_item",
-                                call "Stdlib.Json.__arrayAfter" [Var "__source"; Var "__array_view"; Var "__head"],
+                                call "Darklang.Stdlib.Json.__arrayAfter" [Var "__source"; Var "__array_view"; Var "__head"],
                                 If (
                                     BinOp (Lt, Var "__after_item", Int64Literal 0L),
                                     invalid,
@@ -698,18 +698,18 @@ and private ensureDictDecoder env valueType state =
             Recursion = None
         }
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
-        let key = call "Stdlib.Json.__viewFieldName" [Var "__entry"]
-        let fieldView = call "Stdlib.Json.__viewFieldValue" [Var "__entry"]
+        let key = call "Darklang.Stdlib.Json.__viewFieldName" [Var "__entry"]
+        let fieldView = call "Darklang.Stdlib.Json.__viewFieldValue" [Var "__entry"]
         let fieldPath =
             listPush
                 pathPartType
                 (Var "__path")
-                (constructor "Stdlib.Json.ParseError.JsonPath.Part.Part" "Field" (Some key))
+                (constructor "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part" "Field" (Some key))
         decodeCall env valueType fieldView fieldPath reserved
         |> Result.map (fun (decoded, nextState) ->
             let withValue =
                 TypeApp (
-                    "Stdlib.Dict.setOverridingDuplicates",
+                    "Darklang.Stdlib.Dict.setOverridingDuplicates",
                     [TString; valueType],
                     args [Var "__dict"; key; Var "__decoded_value"])
             let body =
@@ -744,7 +744,7 @@ and private decodeEnumCase
             pathPartType
             (Var "__path")
             (constructor
-                "Stdlib.Json.ParseError.JsonPath.Part.Part"
+                "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part"
                 "Field"
                 (Some (StringLiteral variant.Name)))
     let fieldTypes =
@@ -760,7 +760,7 @@ and private decodeEnumCase
                     pathPartType
                     casePath
                     (constructor
-                        "Stdlib.Json.ParseError.JsonPath.Part.Part"
+                        "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part"
                         "Index"
                         (Some (BigIntLiteral (bigint index))))
             (fieldType, Var rawNames[index], argumentPath, valueNames[index]))
@@ -775,7 +775,7 @@ and private decodeEnumCase
             else
                 let missing =
                     constructor
-                        "Stdlib.Json.ParseError.ParseError"
+                        "Darklang.Stdlib.Json.ParseError.ParseError"
                         "EnumMissingField"
                         (tuplePayload
                             [typeReference fieldTypes[count]
@@ -793,12 +793,12 @@ and private decodeEnumCase
                     pathPartType
                     casePath
                     (constructor
-                        "Stdlib.Json.ParseError.JsonPath.Part.Part"
+                        "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part"
                         "Index"
                         (Some (BigIntLiteral (bigint fieldTypes.Length))))
             let extra =
                 constructor
-                    "Stdlib.Json.ParseError.ParseError"
+                    "Darklang.Stdlib.Json.ParseError.ParseError"
                     "EnumExtraField"
                     (tuplePayload [rawSource (Var "__source") (Var extraName); extraPath])
                 |> error
@@ -813,7 +813,7 @@ and private decodeEnumCase
                         missing @ [exact; makeCase extraPattern extraBody])
                 let body =
                     Match (
-                        call "Stdlib.Json.__arrayItems" [Var "__source"; Var "__case_raw"],
+                        call "Darklang.Stdlib.Json.__arrayItems" [Var "__source"; Var "__case_raw"],
                         [ makeCase
                               (PConstructor ("Some", [PVar "__enum_args"]))
                               arrayBody
@@ -824,30 +824,30 @@ and private decodeBody env typ state : Result<Expr * State, string> =
     let failure = cantMatch typ (rawSource (Var "__source") (Var "__view")) (Var "__path")
     match typ with
     | TUnit ->
-        Ok (If (call "Stdlib.Json.__isNull" [Var "__source"; Var "__view"], ok UnitLiteral, failure), state)
-    | TBool -> Ok (optionDecoder typ "Stdlib.Json.__boolValue", state)
-    | TString -> Ok (optionDecoder typ "Stdlib.Json.__stringValue", state)
-    | TChar -> Ok (optionDecoder typ "Stdlib.Json.__viewChar", state)
-    | TInt8 -> Ok (optionDecoder typ "Stdlib.Json.__viewInt8", state)
-    | TInt16 -> Ok (optionDecoder typ "Stdlib.Json.__viewInt16", state)
-    | TInt32 -> Ok (optionDecoder typ "Stdlib.Json.__viewInt32", state)
-    | TInt64 -> Ok (optionDecoder typ "Stdlib.Json.__viewInt64", state)
-    | TInt128 -> Ok (optionDecoder typ "Stdlib.Json.__viewInt128", state)
-    | TInt -> Ok (optionDecoder typ "Stdlib.Json.__viewInt", state)
-    | TUInt8 -> Ok (optionDecoder typ "Stdlib.Json.__viewUInt8", state)
-    | TUInt16 -> Ok (optionDecoder typ "Stdlib.Json.__viewUInt16", state)
-    | TUInt32 -> Ok (optionDecoder typ "Stdlib.Json.__viewUInt32", state)
-    | TUInt64 -> Ok (optionDecoder typ "Stdlib.Json.__viewUInt64", state)
-    | TUInt128 -> Ok (optionDecoder typ "Stdlib.Json.__viewUInt128", state)
-    | TFloat64 -> Ok (optionDecoder typ "Stdlib.Json.__viewFloat", state)
-    | TSum ("Uuid", []) -> Ok (optionDecoder typ "Stdlib.Json.__viewUuid", state)
-    | TDateTime -> Ok (optionDecoder typ "Stdlib.Json.__viewDateTime", state)
+        Ok (If (call "Darklang.Stdlib.Json.__isNull" [Var "__source"; Var "__view"], ok UnitLiteral, failure), state)
+    | TBool -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__boolValue", state)
+    | TString -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__stringValue", state)
+    | TChar -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewChar", state)
+    | TInt8 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt8", state)
+    | TInt16 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt16", state)
+    | TInt32 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt32", state)
+    | TInt64 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt64", state)
+    | TInt128 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt128", state)
+    | TInt -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewInt", state)
+    | TUInt8 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt8", state)
+    | TUInt16 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt16", state)
+    | TUInt32 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt32", state)
+    | TUInt64 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt64", state)
+    | TUInt128 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUInt128", state)
+    | TFloat64 -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewFloat", state)
+    | TSum ("Uuid", []) -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewUuid", state)
+    | TDateTime -> Ok (optionDecoder typ "Darklang.Stdlib.Json.__viewDateTime", state)
     | TList elemType ->
         ensureListDecoder env elemType state
         |> Result.map (fun (listDecoder, nextState) ->
             (Let (
                 LPVariable "__array_start",
-                call "Stdlib.Json.__arrayStart" [Var "__source"; Var "__view"],
+                call "Darklang.Stdlib.Json.__arrayStart" [Var "__source"; Var "__view"],
                 If (
                     BinOp (Lt, Var "__array_start", Int64Literal 0L),
                     failure,
@@ -861,12 +861,12 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                 listPush
                     pathPartType
                     (Var "__path")
-                    (constructor "Stdlib.Json.ParseError.JsonPath.Part.Part" "Index" (Some (BigIntLiteral (bigint index))))
+                    (constructor "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part" "Index" (Some (BigIntLiteral (bigint index))))
             (elemType, Var names[index], path, $"__tuple_value_{index}"))
         sequenceDecoded env items (fun bindings -> ok (TupleLiteral (bindings |> List.map (fst >> Var)))) state
         |> Result.map (fun (decoded, nextState) ->
             (Match (
-                call "Stdlib.Json.__arrayItems" [Var "__source"; Var "__view"],
+                call "Darklang.Stdlib.Json.__arrayItems" [Var "__source"; Var "__view"],
                 [ makeCase (PConstructor ("Some", [PList patterns])) decoded
                   makeCase PWildcard failure ]),
              nextState))
@@ -895,20 +895,20 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                         let concrete = applySubstitution subst fieldType |> resolveJsonType env
                         let matches =
                             TypeApp (
-                                "Stdlib.Dict.get",
+                                "Darklang.Stdlib.Dict.get",
                                 [TString; valueViewType],
                                 args [Var "__object_field_map"; StringLiteral fieldName])
                         let fieldPath =
                             listPush
                                 pathPartType
                                 (Var "__path")
-                                (constructor "Stdlib.Json.ParseError.JsonPath.Part.Part" "Field" (Some (StringLiteral fieldName)))
+                                (constructor "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part" "Field" (Some (StringLiteral fieldName)))
                         decodeCall env concrete (Var "__field_raw") fieldPath current
                         |> Result.bind (fun (decoded, next) ->
                             build rest next ((fieldName, Var $"__field_{fieldName}") :: decodedFields)
                             |> Result.map (fun (tail, finalState) ->
-                                let missing = constructor "Stdlib.Json.ParseError.ParseError" "RecordMissingField" (tuplePayload [StringLiteral fieldName; Var "__path"]) |> error
-                                let duplicate = constructor "Stdlib.Json.ParseError.ParseError" "RecordDuplicateField" (tuplePayload [StringLiteral fieldName; Var "__path"]) |> error
+                                let missing = constructor "Darklang.Stdlib.Json.ParseError.ParseError" "RecordMissingField" (tuplePayload [StringLiteral fieldName; Var "__path"]) |> error
+                                let duplicate = constructor "Darklang.Stdlib.Json.ParseError.ParseError" "RecordDuplicateField" (tuplePayload [StringLiteral fieldName; Var "__path"]) |> error
                                 let one = Match (decoded, resultCases $"__field_{fieldName}" tail "__field_error")
                                 (Match (
                                     matches,
@@ -916,14 +916,14 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                                       makeCase
                                         (PConstructor ("Some", [PVar "__field_raw"]))
                                         (If (
-                                            call "Stdlib.Json.__viewIsDuplicate" [Var "__field_raw"],
+                                            call "Darklang.Stdlib.Json.__viewIsDuplicate" [Var "__field_raw"],
                                             duplicate,
                                             one)) ]),
                                  finalState)))
                 build fields state []
                 |> Result.map (fun (decoded, nextState) ->
                     (Match (
-                        call "Stdlib.Json.__objectFieldMap" [Var "__source"; Var "__view"],
+                        call "Darklang.Stdlib.Json.__objectFieldMap" [Var "__source"; Var "__view"],
                         [ makeCase (PConstructor ("Some", [PVar "__object_field_map"])) decoded
                           makeCase PWildcard failure ]),
                      nextState)))
@@ -932,7 +932,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
         |> Result.map (fun (dictDecoder, nextState) ->
             let empty = DictLiteral (TString, valueType, [])
             (Match (
-                call "Stdlib.Json.__objectFields" [Var "__source"; Var "__view"],
+                call "Darklang.Stdlib.Json.__objectFields" [Var "__source"; Var "__view"],
                 [ makeCase
                       (PConstructor ("Some", [PVar "__object_fields"]))
                       (call dictDecoder [Var "__source"; Var "__object_fields"; Var "__path"; empty])
@@ -955,7 +955,7 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                 |> Result.map (fun (caseMatches, nextState) ->
                     let invalidCase =
                         constructor
-                            "Stdlib.Json.ParseError.ParseError"
+                            "Darklang.Stdlib.Json.ParseError.ParseError"
                             "EnumInvalidCasename"
                             (tuplePayload [typeReference typ; Var "__case_name"; Var "__path"])
                         |> error
@@ -965,14 +965,14 @@ and private decodeBody env typ state : Result<Expr * State, string> =
                             caseMatches @ [makeCase PWildcard invalidCase])
                     let tooMany =
                         constructor
-                            "Stdlib.Json.ParseError.ParseError"
+                            "Darklang.Stdlib.Json.ParseError.ParseError"
                             "EnumTooManyCases"
                             (tuplePayload [typeReference typ; Var "__case_names"; Var "__path"])
                         |> error
                     let checkedOneField = oneField
                     let objectBody =
                         Match (
-                            call "Stdlib.Json.__enumCandidate" [Var "__source"; Var "__view"],
+                            call "Darklang.Stdlib.Json.__enumCandidate" [Var "__source"; Var "__view"],
                             [ makeCase (PConstructor ("EnumNoFields", [])) failure
                               makeCase
                                   (PConstructor (
@@ -1037,8 +1037,8 @@ let rewriteProgramWithSession
             let rec walk current collected =
                 let collected =
                     match current with
-                    | TypeApp ("Stdlib.Json.serialize", [typ], _) -> (typ :: fst collected, snd collected)
-                    | TypeApp ("Stdlib.Json.parse", [typ], _) -> (fst collected, typ :: snd collected)
+                    | TypeApp ("Darklang.Stdlib.Json.serialize", [typ], _) -> (typ :: fst collected, snd collected)
+                    | TypeApp ("Darklang.Stdlib.Json.parse", [typ], _) -> (fst collected, typ :: snd collected)
                     | _ -> collected
                 let capture child = walk child
                 match current with
@@ -1144,8 +1144,8 @@ let rewriteProgramWithSession
         | Error error ->
             let rewrite expr =
                 match expr with
-                | TypeApp ("Stdlib.Json.serialize", _, _)
-                | TypeApp ("Stdlib.Json.parse", _, _) -> RuntimeError error
+                | TypeApp ("Darklang.Stdlib.Json.serialize", _, _)
+                | TypeApp ("Darklang.Stdlib.Json.parse", _, _) -> RuntimeError error
                 | _ -> expr
             Program (
                 topLevels
@@ -1156,17 +1156,17 @@ let rewriteProgramWithSession
         | Ok state ->
             let rewrite expr =
                 match expr with
-                | TypeApp ("Stdlib.Json.serialize", [typ], values) ->
+                | TypeApp ("Darklang.Stdlib.Json.serialize", [typ], values) ->
                     let written =
                         call
                             (serializeName (resolveJsonType planningEnv typ))
                             (writerEmpty :: NonEmptyList.toList values)
                     writerFinish written
-                | TypeApp ("Stdlib.Json.parse", [typ], values) ->
+                | TypeApp ("Darklang.Stdlib.Json.parse", [typ], values) ->
                     let concrete = resolveJsonType planningEnv typ
                     let source = NonEmptyList.head values
-                    let parsed = call "Stdlib.Json.__parseRoot" [Var "__json_source"]
-                    let rootPath = ListLiteral [constructor "Stdlib.Json.ParseError.JsonPath.Part.Part" "Root" None]
+                    let parsed = call "Darklang.Stdlib.Json.__parseRoot" [Var "__json_source"]
+                    let rootPath = ListLiteral [constructor "Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part" "Root" None]
                     Let (
                         LPVariable "__json_source",
                         source,
@@ -1180,7 +1180,7 @@ let rewriteProgramWithSession
                                       (call (decoderName concrete) [Var "__json_source"; Var "__json_view"; rootPath])
                                   makeCase
                                       (PConstructor ("Error", [PWildcard]))
-                                      (constructor "Stdlib.Json.ParseError.ParseError" "NotJson" None |> error) ])))
+                                      (constructor "Darklang.Stdlib.Json.ParseError.ParseError" "NotJson" None |> error) ])))
                 | _ -> expr
             let rewritten =
                 topLevels

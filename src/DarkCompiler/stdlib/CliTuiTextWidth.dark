@@ -1,6 +1,6 @@
 // CliTuiTextWidth.dark - copied upstream SGR-aware terminal width loop.
 
-module Stdlib.Cli.Tui.Text
+module Darklang.Stdlib.Cli.Tui.Text
 
 let __styledWidth (remaining: List<Char>) (total: Int) : Int =
     match remaining with

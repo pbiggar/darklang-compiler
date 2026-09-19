@@ -1,6 +1,6 @@
 // Stdlib.Cli.Host - aggregate runtime host discovery.
 
-module Stdlib.Cli.Host
+module Darklang.Stdlib.Cli.Host
 
 type Host = { os: Stdlib.Cli.OS.OS, arch: Stdlib.Cli.Architecture.Architecture, defaultShell: Stdlib.Cli.Shell.Shell }
 

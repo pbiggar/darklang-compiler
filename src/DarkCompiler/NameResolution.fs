@@ -320,9 +320,8 @@ let private qualifiedNameFromList (segments: string list) : QualifiedName =
     |> Option.map QualifiedName
     |> Option.defaultWith (fun () -> Crash.crash "Name-resolution candidate was unexpectedly empty")
 
-/// Generate the interpreter's ordered relative-name candidates. The compiler's
-/// stdlib still has its pre-migration `Stdlib` identity here; the subsequent
-/// namespace migration changes only the canonical candidates, not this order.
+/// Generate the interpreter's ordered relative-name candidates. `Darklang.Stdlib`
+/// is canonical; `Stdlib` is the interpreter's explicit source shortcut.
 let private namesToTry
     (context: ResolutionContext)
     (currentModule: string list)
@@ -337,19 +336,30 @@ let private namesToTry
             :: relative (prefixes |> List.rev |> List.tail |> List.rev)
     let aliases =
         match context, givenSegments with
-        | _, "Darklang" :: "Stdlib" :: rest ->
-            [qualifiedNameFromList ("Stdlib" :: rest)]
+        | _, "Stdlib" :: rest ->
+            [qualifiedNameFromList ("Darklang" :: "Stdlib" :: rest)]
         | ResolutionContext.Type, ["Option"] ->
-            [qualifiedNameFromList ["Stdlib"; "Option"; "Option"]]
+            [qualifiedNameFromList ["Darklang"; "Stdlib"; "Option"; "Option"]]
         | ResolutionContext.Type, ["Result"] ->
-            [qualifiedNameFromList ["Stdlib"; "Result"; "Result"]]
+            [qualifiedNameFromList ["Darklang"; "Stdlib"; "Result"; "Result"]]
         | ResolutionContext.Constructor, ["Option"; ("Some" | "None" as caseName)] ->
-            [qualifiedNameFromList ["Stdlib"; "Option"; "Option"; caseName]]
+            [qualifiedNameFromList ["Darklang"; "Stdlib"; "Option"; "Option"; caseName]]
         | ResolutionContext.Constructor, ["Result"; ("Ok" | "Error" as caseName)] ->
-            [qualifiedNameFromList ["Stdlib"; "Result"; "Result"; caseName]]
+            [qualifiedNameFromList ["Darklang"; "Stdlib"; "Result"; "Result"; caseName]]
         | _ -> []
     relative currentModule @ aliases
     |> List.distinct
+
+let internal candidateSpellings
+    (context: ResolutionContext)
+    (currentModule: string list)
+    (spelling: string)
+    : string list =
+    match tryQualifiedName spelling with
+    | None -> []
+    | Some name ->
+        namesToTry context currentModule name
+        |> List.map qualifiedNameToString
 
 let resolveInModule
     (context: ResolutionContext)

@@ -1,6 +1,6 @@
 // Stdlib.Cli.Env - environment lookup support.
 
-module Stdlib.Cli.Env
+module Darklang.Stdlib.Cli.Env
 
 let get (name: String) : Stdlib.Option.Option<String> =
     Stdlib.Cli.__getenv name

@@ -3,7 +3,7 @@
 // Values are immutable fixed blocks containing a two's-complement low/high
 // UInt64 pair followed by their reference count.
 
-module Stdlib.Int128
+module Darklang.Stdlib.Int128
 
 type ParseError = BadFormat | OutOfRange
 

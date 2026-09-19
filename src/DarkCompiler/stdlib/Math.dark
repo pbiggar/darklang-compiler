@@ -1,6 +1,6 @@
 // Stdlib.Math.dark - portable deterministic Float mathematics.
 
-module Stdlib.Math
+module Darklang.Stdlib.Math
 
 val pi = 3.141592653589793
 val tau = 6.283185307179586

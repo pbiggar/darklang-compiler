@@ -3,7 +3,7 @@
 // Cryptographic hash functions: MD5, SHA-1, SHA-256, SHA-384, and HMAC variants
 // All implemented in pure Darklang without external dependencies.
 
-module Stdlib.Crypto
+module Darklang.Stdlib.Crypto
 
 // =============================================================================
 // 32-bit Arithmetic Helpers

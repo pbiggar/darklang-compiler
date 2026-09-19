@@ -1,6 +1,6 @@
 // Stdlib.Cli.OS - portable public operating-system model.
 
-module Stdlib.Cli.OS
+module Darklang.Stdlib.Cli.OS
 
 type OS = Linux | MacOS | Windows
 

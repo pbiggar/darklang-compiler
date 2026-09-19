@@ -108,7 +108,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     [("currentModule", CheckedAST.ListLiteral [])]
                 ))
                 varGen env typeReg variantLookup funcReg moduleRegistry
-        else if name = "Stdlib.List.empty" || name = "Stdlib.List.empty_v0" then
+        else if name = "Darklang.Stdlib.List.empty" || name = "Darklang.Stdlib.List.empty_v0" then
             // The empty skew-list is the null pointer with tag zero.
             Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 0L)), varGen)
         else
@@ -310,9 +310,9 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 let (tempVar, varGen2) = ANF.freshVar varGen1
                 let cexpr =
                     match innerType with
-                    | AST.TInt -> ANF.Call ("Stdlib.Int.bitwiseNot", [innerAtom])
-                    | AST.TInt128 -> ANF.Call ("Stdlib.Int128.bitwiseNot", [innerAtom])
-                    | AST.TUInt128 -> ANF.Call ("Stdlib.UInt128.bitwiseNot", [innerAtom])
+                    | AST.TInt -> ANF.Call ("Darklang.Stdlib.Int.bitwiseNot", [innerAtom])
+                    | AST.TInt128 -> ANF.Call ("Darklang.Stdlib.Int128.bitwiseNot", [innerAtom])
+                    | AST.TUInt128 -> ANF.Call ("Darklang.Stdlib.UInt128.bitwiseNot", [innerAtom])
                     | _ -> ANF.UnaryPrim (ANF.BitNot, innerAtom)
                 let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
                 (bindReturns innerSetup (fun _ -> finalExpr), varGen2)))
@@ -390,7 +390,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                             Ok (wrapBindings finalBindings (ANF.Return finalAtom), varGen4)
                         | Ok AST.TInt ->
                             let (tempVar, varGen3) = ANF.freshVar varGen2
-                            let cexpr = ANF.Call ("Stdlib.Int.__equals", [leftAtom; rightAtom])
+                            let cexpr = ANF.Call ("Darklang.Stdlib.Int.__equals", [leftAtom; rightAtom])
                             let (finalAtom, finalBindings, varGen4) =
                                 if op = AST.Neq then
                                     let (negVar, vg) = ANF.freshVar varGen3
@@ -419,8 +419,8 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                             let (tempVar, varGen3) = ANF.freshVar varGen2
                             let equalsName =
                                 match wideType with
-                                | Ok AST.TInt128 -> "Stdlib.Int128.__equals"
-                                | Ok AST.TUInt128 -> "Stdlib.UInt128.__equals"
+                                | Ok AST.TInt128 -> "Darklang.Stdlib.Int128.__equals"
+                                | Ok AST.TUInt128 -> "Darklang.Stdlib.UInt128.__equals"
                                 | _ -> Crash.crash "128-bit equality dispatch lost its operand type"
                             let cexpr = ANF.Call (equalsName, [leftAtom; rightAtom])
                             let (finalAtom, finalBindings, varGen4) =
@@ -538,12 +538,12 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         (finalExpr, vg7))
 
                 match argType with
-                | AST.TSum ("Stdlib.Option.Option", [valueType]) ->
-                    lookupVariantInfo "Stdlib.Option.Option" "Some"
+                | AST.TSum ("Darklang.Stdlib.Option.Option", [valueType]) ->
+                    lookupVariantInfo "Darklang.Stdlib.Option.Option" "Some"
                     |> Result.bind (fun (successTag, _) ->
                         buildUnwrapExpr successTag valueType "Cannot unwrap None")
-                | AST.TSum ("Stdlib.Option.Option", []) ->
-                    lookupVariantInfo "Stdlib.Option.Option" "Some"
+                | AST.TSum ("Darklang.Stdlib.Option.Option", []) ->
+                    lookupVariantInfo "Darklang.Stdlib.Option.Option" "Some"
                     |> Result.bind (fun (successTag, fieldTypes) ->
                         let payloadTypeResult =
                             match argExpr with
@@ -556,8 +556,8 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         payloadTypeResult
                         |> Result.bind (fun payloadType ->
                             buildUnwrapExpr successTag payloadType "Cannot unwrap None"))
-                | AST.TSum ("Stdlib.Result.Result", [okType; _]) ->
-                    lookupVariantInfo "Stdlib.Result.Result" "Ok"
+                | AST.TSum ("Darklang.Stdlib.Result.Result", [okType; _]) ->
+                    lookupVariantInfo "Darklang.Stdlib.Result.Result" "Ok"
                     |> Result.bind (fun (successTag, _) ->
                         let failureMessage =
                             match argExpr with
@@ -568,8 +568,8 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                             | _ ->
                                 "Cannot unwrap Error"
                         buildUnwrapExpr successTag okType failureMessage)
-                | AST.TSum ("Stdlib.Result.Result", []) ->
-                    lookupVariantInfo "Stdlib.Result.Result" "Ok"
+                | AST.TSum ("Darklang.Stdlib.Result.Result", []) ->
+                    lookupVariantInfo "Darklang.Stdlib.Result.Result" "Ok"
                     |> Result.bind (fun (successTag, fieldTypes) ->
                         let payloadTypeResult =
                             match argExpr with

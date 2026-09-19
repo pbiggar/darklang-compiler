@@ -234,48 +234,48 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | StdinReadLine -> Some AST.TString
     | CliNative (operation, _) ->
         match operation with
-        | Execute | ProcessIO | TerminateProcess -> Some (AST.TRecord ("Stdlib.Cli.NativeOutput", []))
-        | RunProcess -> Some (AST.TRecord ("Stdlib.Cli.NativeProcessOutput", []))
-        | GetEnv | GetArgv -> Some (AST.TSum ("Stdlib.Option.Option", [AST.TString]))
-        | Kill -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TUnit; AST.TRecord ("Stdlib.Cli.NativePosixError", [])]))
-        | Hostname -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TString; AST.TRecord ("Stdlib.Cli.NativePosixError", [])]))
+        | Execute | ProcessIO | TerminateProcess -> Some (AST.TRecord ("Darklang.Stdlib.Cli.NativeOutput", []))
+        | RunProcess -> Some (AST.TRecord ("Darklang.Stdlib.Cli.NativeProcessOutput", []))
+        | GetEnv | GetArgv -> Some (AST.TSum ("Darklang.Stdlib.Option.Option", [AST.TString]))
+        | Kill -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]))
+        | Hostname -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TString; AST.TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]))
         | HostOS | HostArchitecture | GetPid | GetUid | CpuCount | SpawnProcess -> Some AST.TInt64
     | IfValue (_, thenAtom, _) -> inferAtomType ctx thenAtom
     | Call (funcName, args)
     | BorrowedCall (funcName, args) ->
         // Return type from function registry (with special-case inference for stdlib list/tuple helpers)
         match funcName, args with
-        | name, [listAtom; _] when name.StartsWith("Stdlib.List.getAt") || name.StartsWith("Stdlib.List.__getAt") ->
+        | name, [listAtom; _] when name.StartsWith("Darklang.Stdlib.List.getAt") || name.StartsWith("Darklang.Stdlib.List.__getAt") ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some retType -> Some retType
             | None ->
                 match inferAtomType ctx listAtom with
                 | Some (AST.TList elemType) ->
-                    Some (AST.TSum ("Stdlib.Option.Option", [elemType]))
+                    Some (AST.TSum ("Darklang.Stdlib.Option.Option", [elemType]))
                 | _ -> None
-        | name, [listAtom] when name.StartsWith("Stdlib.List.head") || name.StartsWith("Stdlib.List.__head") ->
+        | name, [listAtom] when name.StartsWith("Darklang.Stdlib.List.head") || name.StartsWith("Darklang.Stdlib.List.__head") ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some retType -> Some retType
             | None ->
                 match inferAtomType ctx listAtom with
                 | Some (AST.TList elemType) ->
-                    Some (AST.TSum ("Stdlib.Option.Option", [elemType]))
+                    Some (AST.TSum ("Darklang.Stdlib.Option.Option", [elemType]))
                 | _ -> None
-        | name, [listAtom] when name.StartsWith("Stdlib.List.tail") || name.StartsWith("Stdlib.List.__tail") ->
+        | name, [listAtom] when name.StartsWith("Darklang.Stdlib.List.tail") || name.StartsWith("Darklang.Stdlib.List.__tail") ->
             match inferAtomType ctx listAtom with
-            | Some (AST.TList elemType) when name.StartsWith("Stdlib.List.tail") ->
-                Some (AST.TSum ("Stdlib.Option.Option", [AST.TList elemType]))
+            | Some (AST.TList elemType) when name.StartsWith("Darklang.Stdlib.List.tail") ->
+                Some (AST.TSum ("Darklang.Stdlib.Option.Option", [AST.TList elemType]))
             | Some (AST.TList elemType) ->
                 Some (AST.TList elemType)
             | _ -> tryGetFuncReturnTypeFromReg ctx funcName
-        | name, [tupleAtom] when name.StartsWith("Stdlib.Tuple2.first") ->
+        | name, [tupleAtom] when name.StartsWith("Darklang.Stdlib.Tuple2.first") ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some retType -> Some retType
             | None ->
                 match inferAtomType ctx tupleAtom with
                 | Some (AST.TTuple (firstType :: _)) -> Some firstType
                 | _ -> None
-        | name, [tupleAtom] when name.StartsWith("Stdlib.Tuple2.second") ->
+        | name, [tupleAtom] when name.StartsWith("Darklang.Stdlib.Tuple2.second") ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some retType -> Some retType
             | None ->
@@ -414,12 +414,12 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RefCountInc (_, _, _, _) -> Some AST.TUnit
     | RefCountDec (_, _, _, _) -> Some AST.TUnit
     | Print _ -> Some AST.TUnit
-    | FileReadText _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TString; AST.TString]))  // Result<String, String>
+    | FileReadText _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TString; AST.TString]))  // Result<String, String>
     | FileExists _ -> Some AST.TBool  // Bool
-    | FileWriteText _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
-    | FileAppendText _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
-    | FileDelete _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
-    | FileSetExecutable _ -> Some (AST.TSum ("Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
+    | FileWriteText _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
+    | FileAppendText _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
+    | FileDelete _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
+    | FileSetExecutable _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
     | FileWriteFromPtr _ -> Some AST.TBool  // Returns Bool (success/failure)
     // Raw memory intrinsics (no ref counting - manually managed)
     | RawAlloc _ -> Some AST.TRawPtr  // Returns raw pointer

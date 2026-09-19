@@ -188,11 +188,11 @@ let internal buildEqExprForType
     | TString ->
         BinOp (Eq, leftExpr, rightExpr)
     | TInt ->
-        Call ("Stdlib.Int.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
+        Call ("Darklang.Stdlib.Int.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
     | TInt128 ->
-        Call ("Stdlib.Int128.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
+        Call ("Darklang.Stdlib.Int128.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
     | TUInt128 ->
-        Call ("Stdlib.UInt128.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
+        Call ("Darklang.Stdlib.UInt128.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
     | TList elemType ->
         let resolvedElemType = resolveType aliasReg elemType
         makeInternalTypeApp (EqHelperDispatchTypeApp (TList resolvedElemType, leftExpr, rightExpr))
@@ -386,7 +386,7 @@ let internal validateDictKeyCall
     : Result<unit, TypeError> =
     match funcName, typeArgs with
     | name, keyType :: _ when
-        (name.StartsWith("Stdlib.Dict.") && not (name.StartsWith("Stdlib.Dict.__")))
+        (name.StartsWith("Darklang.Stdlib.Dict.") && not (name.StartsWith("Darklang.Stdlib.Dict.__")))
         || (name.StartsWith("Dict.") && not (name.StartsWith("Dict.__"))) ->
         if dictKeyAdmissibleType aliasReg typeReg indexedSumTypeReg keyType then
             Ok ()
@@ -407,10 +407,10 @@ let internal validateCanonicalSortableCall
     let requiredTypes =
         match funcName, typeArgs with
         | "__compare", [valueType]
-        | "Stdlib.List.sort", [valueType]
-        | "Stdlib.List.unique", [valueType]
-        | "Stdlib.List.uniqueBy", [valueType; _] -> [valueType]
-        | "Stdlib.List.sortBy", [valueType; keyType] -> [valueType; keyType]
+        | "Darklang.Stdlib.List.sort", [valueType]
+        | "Darklang.Stdlib.List.unique", [valueType]
+        | "Darklang.Stdlib.List.uniqueBy", [valueType; _] -> [valueType]
+        | "Darklang.Stdlib.List.sortBy", [valueType; keyType] -> [valueType; keyType]
         | _ -> []
 
     match requiredTypes |> List.tryFind (canonicalSortableType aliasReg typeReg indexedSumTypeReg >> not) with
@@ -506,10 +506,10 @@ let internal classifyComparison
 
 let private orderingFunctionName (op: BinOp) : string =
     match op with
-    | Lt -> "Stdlib.Int.lessThan"
-    | Gt -> "Stdlib.Int.greaterThan"
-    | Lte -> "Stdlib.Int.lessThanOrEqualTo"
-    | Gte -> "Stdlib.Int.greaterThanOrEqualTo"
+    | Lt -> "Darklang.Stdlib.Int.lessThan"
+    | Gt -> "Darklang.Stdlib.Int.greaterThan"
+    | Lte -> "Darklang.Stdlib.Int.lessThanOrEqualTo"
+    | Gte -> "Darklang.Stdlib.Int.greaterThanOrEqualTo"
     | _ -> Crash.crash $"Non-ordering operator has no Int comparison helper: {op}"
 
 let internal buildOrderingExprForType

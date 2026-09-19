@@ -530,7 +530,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                 | Some _
                                                     when func.Name.StartsWith("__dark_eq_")
                                                          || func.Name.StartsWith("__dark_compare_")
-                                                         || func.Name.StartsWith("Stdlib.")
+                                                         || func.Name.StartsWith("Darklang.Stdlib.")
                                                          || Set.contains func.Name prebuiltStdlibNames ->
                                                     (names, retainedRev)
                                                 | Some _ ->

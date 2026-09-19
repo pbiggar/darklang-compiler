@@ -48,11 +48,11 @@ let collectTypeApps (expr: CheckedAST.Expr) : Set<SpecKey> =
                 | [keyType] when not hasTypeVars && hasPredefinedKeyIntrinsic keyType ->
                     Set.add (funcName, typeArgs) argSpecs
                 | _ -> argSpecs
-            elif (funcName = "Stdlib.Dict.fromList" || funcName = "Dict.fromList")
+            elif (funcName = "Darklang.Stdlib.Dict.fromList" || funcName = "Dict.fromList")
                  && exprArgsToList args = [CheckedAST.ListLiteral []]
                  && not hasTypeVars then
                 // Optimization: avoid building a Dict from an empty list when types are concrete.
-                Set.add ("Stdlib.Dict.empty", typeArgs) argSpecs
+                Set.add ("Darklang.Stdlib.Dict.empty", typeArgs) argSpecs
             else
                 Set.add (funcName, typeArgs) argSpecs
         | CheckedAST.TupleLiteral elements
@@ -64,7 +64,7 @@ let collectTypeApps (expr: CheckedAST.Expr) : Set<SpecKey> =
             if List.isEmpty entries then entrySpecs
             else
                 Set.add
-                    ("Stdlib.Dict.__setOverwriting", [keyType; valueType])
+                    ("Darklang.Stdlib.Dict.__setOverwriting", [keyType; valueType])
                     entrySpecs
         | CheckedAST.RecordLiteral (_, fields) ->
             fields |> List.fold (fun acc (_, value) -> visit acc value) specs
@@ -240,11 +240,11 @@ let rec replaceTypeApps (expr: CheckedAST.Expr) : CheckedAST.Expr =
                 wrapWithIgnoredArgEvaluations
                     evaluatedArgs
                     (CheckedAST.RuntimeError "Canonical comparison remained polymorphic after monomorphization")
-        elif (funcName = "Stdlib.Dict.fromList" || funcName = "Dict.fromList")
+        elif (funcName = "Darklang.Stdlib.Dict.fromList" || funcName = "Dict.fromList")
            && exprArgsToList args = [CheckedAST.ListLiteral []]
            && not hasTypeVars then
             // Optimization: avoid building a Dict from an empty list when types are concrete.
-            let specializedName = specName "Stdlib.Dict.empty" typeArgs
+            let specializedName = specName "Darklang.Stdlib.Dict.empty" typeArgs
             CheckedAST.Call (specializedName, exprArgsFromList [])
         elif isGenericKeyIntrinsicName funcName && hasTypeVars then
             let replacedArgs = args |> exprArgsToList |> List.map replaceTypeApps
@@ -276,7 +276,7 @@ let rec replaceTypeApps (expr: CheckedAST.Expr) : CheckedAST.Expr =
             entries
             |> List.fold (fun dictExpr (key, value) ->
                 CheckedAST.TypeApp (
-                    "Stdlib.Dict.__setOverwriting",
+                    "Darklang.Stdlib.Dict.__setOverwriting",
                     [keyType; valueType],
                     AST.NonEmptyList.fromList [dictExpr; key; value]
                 )) empty
@@ -398,7 +398,7 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: CheckedAST.E
             |> Result.map (fun args' -> CheckedAST.Call (funcName, exprArgsFromList args'))
         | CheckedAST.TypeApp (funcName, typeArgs, args) ->
             let hasTypeVars = List.exists containsTypeVar typeArgs
-            let emptyDictSpec = (funcName = "Stdlib.Dict.fromList" || funcName = "Dict.fromList")
+            let emptyDictSpec = (funcName = "Darklang.Stdlib.Dict.fromList" || funcName = "Dict.fromList")
                                 && exprArgsToList args = [CheckedAST.ListLiteral []]
                                 && not hasTypeVars
             let unresolvedKeyIntrinsicSpec = isGenericKeyIntrinsicName funcName && hasTypeVars
@@ -416,10 +416,10 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: CheckedAST.E
                 elif isIntrinsicTypeAppName funcName then
                     Ok (specName funcName typeArgs)
                 elif emptyDictSpec then
-                    let key = ("Stdlib.Dict.empty", typeArgs)
+                    let key = ("Darklang.Stdlib.Dict.empty", typeArgs)
                     match Map.tryFind key specRegistry with
                     | Some name -> Ok name
-                    | None -> Error (missingSpecMessage "Stdlib.Dict.empty" typeArgs)
+                    | None -> Error (missingSpecMessage "Darklang.Stdlib.Dict.empty" typeArgs)
                 else
                     match Map.tryFind (funcName, typeArgs) specRegistry with
                     | Some name -> Ok name
@@ -483,7 +483,7 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: CheckedAST.E
                     entries
                     |> List.fold (fun dictExpr (key, value) ->
                         CheckedAST.TypeApp (
-                            "Stdlib.Dict.__setOverwriting",
+                            "Darklang.Stdlib.Dict.__setOverwriting",
                             [keyType; valueType],
                             AST.NonEmptyList.fromList [dictExpr; key; value]
                         )) (CheckedAST.DictLiteral (keyType, valueType, []))

@@ -1,6 +1,6 @@
 // Stdlib/Dict.dark - Generic persistent dictionary operations.
 
-module Stdlib.Dict
+module Darklang.Stdlib.Dict
 
 val empty = Dict { }
 

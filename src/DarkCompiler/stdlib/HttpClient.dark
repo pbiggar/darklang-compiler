@@ -1,6 +1,6 @@
 // HttpClient.dark - copied upstream pure HTTP client types and header helpers.
 
-module Stdlib.HttpClient
+module Darklang.Stdlib.HttpClient
 
 
 type BadHeader =

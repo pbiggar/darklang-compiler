@@ -1,6 +1,6 @@
 // JsonPath.dark - typed JSON path representation and root-to-leaf rendering.
 
-module Stdlib.Json.ParseError.JsonPath
+module Darklang.Stdlib.Json.ParseError.JsonPath
 
 type JsonPath = List<Stdlib.Json.ParseError.JsonPath.Part.Part>
 

@@ -2,7 +2,7 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
-module Stdlib.Tuple3
+module Darklang.Stdlib.Tuple3
 
 // Stdlib.Tuple3 - 3-tuple operations
 

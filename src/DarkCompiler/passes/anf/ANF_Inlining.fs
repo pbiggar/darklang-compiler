@@ -431,7 +431,7 @@ let rec renameExpr (mapping: Map<TempId, TempId>) (varGen: VarGen) (expr: AExpr)
 /// Check if a function should be inlined
 let shouldInline (info: FunctionInfo) (config: InliningConfig) (depth: int) : bool =
     info.Size <= config.MaxFunctionSize
-    && not (info.Func.Name.StartsWith("Stdlib.Json.__"))
+    && not (info.Func.Name.StartsWith("Darklang.Stdlib.Json.__"))
     && not info.IsRecursive
     && not info.HasClosures
     && not info.HasTailCalls

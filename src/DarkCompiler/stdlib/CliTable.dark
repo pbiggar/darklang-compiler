@@ -1,6 +1,6 @@
 // CliTable.dark - EGC-measured, two-space-separated table rendering.
 
-module Stdlib.Cli.UI.Table
+module Darklang.Stdlib.Cli.UI.Table
 
 let __pad (value: String) (width: Int) : String =
     let padding = width - Stdlib.String.length value in

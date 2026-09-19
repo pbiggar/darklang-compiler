@@ -1,6 +1,6 @@
 // Stdlib.Char - operations on one NFC-normalized extended grapheme cluster.
 
-module Stdlib.Char
+module Darklang.Stdlib.Char
 
 let toString (char: Char) : String = char
 

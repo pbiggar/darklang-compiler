@@ -2,6 +2,6 @@
 //
 // Generic function helpers.
 
-module Stdlib.Fun
+module Darklang.Stdlib.Fun
 
 let identity<'t> (value: t) : t = value

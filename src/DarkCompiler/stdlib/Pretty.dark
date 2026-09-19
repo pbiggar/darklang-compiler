@@ -12,7 +12,7 @@
 /// `group`, which says "put this on one line if it fits, otherwise break every soft line in it". Groups
 /// nest, and each decides independently, so a long outer structure can break while a short inner one
 /// stays flat.
-module Stdlib.Pretty
+module Darklang.Stdlib.Pretty
 
 /// A document: text plus the places it may be broken.
 type Doc =

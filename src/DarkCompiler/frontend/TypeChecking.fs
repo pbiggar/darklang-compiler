@@ -33,9 +33,9 @@ let private checkProgramInternalWithTrace
     // become candidates while resolving a separately compiled source program.
     let compilerImplementationNames =
         Set.ofList [
-            "Stdlib.String.__byteAtUnchecked"; "Stdlib.String.__toCodepoints"; "Stdlib.String.__codepointLength"
-            "Stdlib.Float.__toBits"; "Stdlib.Float.__toInt64Unchecked"
-            "Stdlib.File.readText"; "Stdlib.File.exists"; "Stdlib.File.writeText"; "Stdlib.File.appendText"; "Stdlib.File.delete"; "Stdlib.File.setExecutable"; "Stdlib.File.writeFromPtr" ]
+            "Darklang.Stdlib.String.__byteAtUnchecked"; "Darklang.Stdlib.String.__toCodepoints"; "Darklang.Stdlib.String.__codepointLength"
+            "Darklang.Stdlib.Float.__toBits"; "Darklang.Stdlib.Float.__toInt64Unchecked"
+            "Darklang.Stdlib.File.readText"; "Darklang.Stdlib.File.exists"; "Darklang.Stdlib.File.writeText"; "Darklang.Stdlib.File.appendText"; "Darklang.Stdlib.File.delete"; "Darklang.Stdlib.File.setExecutable"; "Darklang.Stdlib.File.writeFromPtr" ]
     let isCompilerImplementationCandidate (candidate: NameResolution.Candidate) =
         match candidate.Provenance with
         | NameResolution.SourceDeclaration name

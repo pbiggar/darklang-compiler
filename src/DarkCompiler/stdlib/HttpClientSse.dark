@@ -1,6 +1,6 @@
 // HttpClientSse.dark - upstream server-sent event types and parser.
 
-module Stdlib.HttpClient.Sse
+module Darklang.Stdlib.HttpClient.Sse
 
 /// A parsed Server-Sent Event.
 type Event =

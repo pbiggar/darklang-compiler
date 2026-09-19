@@ -2,7 +2,7 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
-module Stdlib.Result
+module Darklang.Stdlib.Result
 
 // Stdlib.Result - Result type for error handling
 type Result<'t, 'e> = Ok of t | Error of e

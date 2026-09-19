@@ -1,6 +1,6 @@
 // CliTextField.dark - upstream text-field state needed by its empty value.
 
-module Stdlib.Cli.UI.TextField
+module Darklang.Stdlib.Cli.UI.TextField
 
 type State = { text: String, cursor: Int }
 type Msg = Submitted of String | Cancelled

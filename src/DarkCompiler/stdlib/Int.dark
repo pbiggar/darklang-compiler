@@ -3,7 +3,7 @@
 // Target-neutral `Stdlib.Int.__*` helpers hold the canonical decimal
 // representation so fixed 128-bit integers share the same semantics.
 
-module Stdlib.Int
+module Darklang.Stdlib.Int
 
 type ParseError = | BadFormat
 

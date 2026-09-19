@@ -1,6 +1,6 @@
 // CliSpinner.dark - the pinned static status wrapper (no timer or TTY branch).
 
-module Stdlib.Cli.UI.Spinner
+module Darklang.Stdlib.Cli.UI.Spinner
 
 let run<'a> (message: String) (fn: (Unit) -> a) : a =
     let _ = Builtin.print (message ++ "... ") in

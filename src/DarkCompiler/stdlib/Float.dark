@@ -1,6 +1,6 @@
 // Stdlib.Float.dark - portable IEEE-754L Float operations and decimal conversion.
 
-module Stdlib.Float
+module Darklang.Stdlib.Float
 
 type ParseError = | BadFormat
 

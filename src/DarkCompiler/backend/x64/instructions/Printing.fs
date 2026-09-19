@@ -127,7 +127,7 @@ let internal emitPrintFloat (ctx: FuncCtx) (freg: LIR.FReg) : Result<X86_64.Inst
     | LIR.FPhysical fp ->
         let xmm = lirFRegToX86 fp
         Ok ((if xmm <> X86_64.XMM0 then [X86_64.MOVSD_reg (X86_64.XMM0, xmm)] else [])
-            @ [X86_64.CALL "Stdlib.Float.toString"]
+            @ [X86_64.CALL "Darklang.Stdlib.Float.toString"]
             @ [X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 8)
                X86_64.LEA (X86_64.RSI, X86_64.RAX, 16)
                X86_64.MOV_imm32 (X86_64.RDI, 1)]
@@ -148,7 +148,7 @@ let internal emitPrintFloatNoNewline (ctx: FuncCtx) (freg: LIR.FReg) : Result<X8
     | LIR.FPhysical fp ->
         let xmm = lirFRegToX86 fp
         Ok ((if xmm <> X86_64.XMM0 then [X86_64.MOVSD_reg (X86_64.XMM0, xmm)] else [])
-            @ [X86_64.CALL "Stdlib.Float.toString"]
+            @ [X86_64.CALL "Darklang.Stdlib.Float.toString"]
             @ [X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 8)
                X86_64.LEA (X86_64.RSI, X86_64.RAX, 16)
                X86_64.MOV_imm32 (X86_64.RDI, 1)]

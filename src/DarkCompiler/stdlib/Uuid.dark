@@ -2,7 +2,7 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
-module Stdlib.Uuid
+module Darklang.Stdlib.Uuid
 
 // The canonical surface mirrors darklang/dark at
 // 04fbe9dcc995c6188757d583e273cbd30a3e2d3d. UUID is represented by the

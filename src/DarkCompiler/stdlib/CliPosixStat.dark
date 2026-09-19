@@ -1,6 +1,6 @@
 // CliPosixStat.dark - upstream POSIX stat-mode values.
 
-module Stdlib.Cli.Posix.StatMode
+module Darklang.Stdlib.Cli.Posix.StatMode
 
 val ifmt = 61440
 val ifdir = 16384

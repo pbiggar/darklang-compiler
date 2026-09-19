@@ -44,7 +44,7 @@ let private nativeIntegerTypeName (typ: AST.Type) : string option =
 
 let private safeOperatorName (typ: AST.Type) (operation: string) : string option =
     nativeIntegerTypeName typ
-    |> Option.map (fun typeName -> $"Stdlib.{typeName}.{operation}")
+    |> Option.map (fun typeName -> $"Darklang.Stdlib.{typeName}.{operation}")
 
 let private integerLiteral (typ: AST.Type) (value: int) : Atom =
     match typ with
@@ -234,7 +234,7 @@ let private tryWrappedListPrepend
         match List.rev bindings with
         | (resultId, Call (pushName, [Var listId; value])) :: _
             when resultId = returnedId
-                 && pushName.StartsWith("Stdlib.List.push_") ->
+                 && pushName.StartsWith("Darklang.Stdlib.List.push_") ->
             let selfCalls =
                 bindings
                 |> List.choose (fun (tempId, cexpr) ->
@@ -425,7 +425,7 @@ let private listPrependCallCount (expr: AExpr) : int =
         | Let (_, cexpr, body) ->
             let here =
                 match cexpr with
-                | Call (target, _) when target.StartsWith("Stdlib.List.push_") -> 1
+                | Call (target, _) when target.StartsWith("Darklang.Stdlib.List.push_") -> 1
                 | _ -> 0
             here + count body
         | Join (_, continuation, entry) -> count continuation + count entry
@@ -1143,7 +1143,7 @@ let internal transformTailRecursionModuloListConstructors
                     find func.Body
                 let finishTarget =
                     pushName
-                    |> Option.map (fun name -> name.Replace("Stdlib.List.push_", "Stdlib.List.__reverseInto_"))
+                    |> Option.map (fun name -> name.Replace("Darklang.Stdlib.List.push_", "Darklang.Stdlib.List.__reverseInto_"))
                 let eligible =
                     match func.ReturnType, finishTarget with
                     | AST.TList _, Some target ->

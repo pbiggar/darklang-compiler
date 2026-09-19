@@ -1,7 +1,7 @@
 // Stdlib.Cli.Posix.dark - Shared POSIX value types used by portable CLI code.
 // Public shapes follow darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
 
-module Stdlib.Cli.Posix
+module Darklang.Stdlib.Cli.Posix
 
 type Error = { errno: Int, message: String }
 

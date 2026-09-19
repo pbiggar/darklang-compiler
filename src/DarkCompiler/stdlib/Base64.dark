@@ -2,7 +2,7 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
-module Stdlib.Base64
+module Darklang.Stdlib.Base64
 
 // Stdlib.Base64 - Base64 encoding and decoding
 // =============================================================================

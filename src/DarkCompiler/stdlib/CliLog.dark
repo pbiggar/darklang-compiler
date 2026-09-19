@@ -1,6 +1,6 @@
 // CliLog.dark - stdout-only leveled logging with ANSI prefixes.
 
-module Stdlib.Cli.Log
+module Darklang.Stdlib.Cli.Log
 
 let info (msg: String) : Unit =
     Builtin.printLine (Stdlib.Cli.UI.Colors.greenText "[INFO]" ++ " " ++ msg)

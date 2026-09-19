@@ -2,7 +2,7 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
-module Stdlib.List
+module Darklang.Stdlib.List
 
 // Stdlib.List - List operations
 // Lists are direct-payload skew-binary random-access lists internally.

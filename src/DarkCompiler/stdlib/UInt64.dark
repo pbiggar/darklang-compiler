@@ -2,7 +2,7 @@
 //
 // Split from stdlib.dark for modular stdlib loading.
 
-module Stdlib.UInt64
+module Darklang.Stdlib.UInt64
 
 type ParseError = BadFormat | OutOfRange
 

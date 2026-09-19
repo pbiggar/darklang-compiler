@@ -2,7 +2,7 @@
 //
 // Ported from darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
 
-module Stdlib.List.SortByComparatorHelpers
+module Darklang.Stdlib.List.SortByComparatorHelpers
 
 let validate<'a> (comparator: a -> a -> Int) (x: a) (y: a) : Stdlib.Result.Result<Int, String> =
     let result = comparator x y in
