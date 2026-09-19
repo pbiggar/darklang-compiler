@@ -6,12 +6,25 @@ Stdlib.Int.toString 4611686018427387904 = "4611686018427387904"
 Stdlib.Int.toString (-4611686018427387904) = "-4611686018427387904"
 Stdlib.Int.toString (-4611686018427387905) = "-4611686018427387905"
 
+// Float conversions on both sides of the tagged-immediate boundary.
+Stdlib.Int.fromFloat 4611686018427387392.0 = 4611686018427387392
+Stdlib.Int.fromFloat 4611686018427387904.0 = 4611686018427387904
+Stdlib.Int.fromFloat (-4611686018427387904.0) = -4611686018427387904
+Stdlib.Int.fromFloat (Stdlib.Float.subtract (-4611686018427387904.0) 1024.0) = -4611686018427388928
+Stdlib.Int.toFloat 4611686018427387903 = 4611686018427387904.0
+Stdlib.Int.toFloat (-4611686018427387904) = -4611686018427387904.0
+
 // Signed arithmetic across immediate and heap-backed values.
 12345678901234567890 + -9876543210987654321 = 2469135690246913569
 4611686018427387904 - 1 = 4611686018427387903
 123456789 * 987654321 = 121932631112635269
 -100 / 7 = -14
 match Stdlib.Int.remainder (-100) 7 with | Ok value -> value | Error _ -> 0 = -2
+Stdlib.Int.remainder 4611686018427387903 4 = Ok 3
+Stdlib.Int.remainder 100 (-7) = Ok 2
+Stdlib.Int.remainder (-100) (-7) = Ok -2
+Stdlib.Int.remainder (-4611686018427387904) (-1) = Ok 0
+Stdlib.Int.remainder 5 0 = Error "Cannot divide by 0"
 Stdlib.Int.mod (-100) 7 = 5
 
 // Infinite two's-complement behavior for negative operands.

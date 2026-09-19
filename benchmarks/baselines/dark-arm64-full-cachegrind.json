@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-19T18:59:17+00:00",
+  "generated_at": "2026-09-19T21:55:47+00:00",
   "compiler": {
-    "commit": "00b50d971232bdf54e37aa60f6ddb84996453bf2",
-    "subject": "Merge job #138: own persistent dictionary loop frontiers"
+    "commit": "38657e96d8e2eea519e5749f5e984175aea6f532",
+    "subject": "Schedule whole-function ownership analysis"
   },
   "benchmarks": [
     {
@@ -46,7 +46,7 @@
     },
     {
       "name": "fft",
-      "instructions": 20156068
+      "instructions": 1802846
     },
     {
       "name": "fib",

@@ -292,7 +292,15 @@ let __divide (a: Int) (b: Int) : Int =
         if negative then Stdlib.Int.__negate quotient else quotient
 
 let __remainder (a: Int) (b: Int) : Stdlib.Result.Result<Int, String> =
-    if Stdlib.Int.__equals b (Stdlib.Int.__zero ()) then Error "Cannot divide by 0"
+    if Stdlib.Int.__isSmall a && Stdlib.Int.__isSmall b then
+        let divisor = Stdlib.Int.__smallValue b in
+        if divisor == 0L then Error "Cannot divide by 0"
+        else
+            let positiveDivisor = if divisor < 0L then 0L - divisor else divisor in
+            let dividend = Stdlib.Int.__smallValue a in
+            let magnitude = Stdlib.Int.__smallMagnitude dividend % positiveDivisor in
+            Ok (Stdlib.Int.__small (if dividend < 0L then 0L - magnitude else magnitude))
+    else if Stdlib.Int.__equals b (Stdlib.Int.__zero ()) then Error "Cannot divide by 0"
     else
         let negative = Stdlib.Int.__isNegative a in
         let result = Stdlib.Tuple2.second (Stdlib.Int.__dividePositive a b) in
@@ -492,9 +500,11 @@ let __toUInt128 (value: Int) : Stdlib.Option.Option<UInt128> =
 let __magnitudeToFloatAt (value: Int) (index: Int64) (acc: Float) : Float =
     if index < 0L then acc else Stdlib.Int.__magnitudeToFloatAt value (index - 1L) (acc * 2147483648.0 + Stdlib.Int64.toFloat (Stdlib.Int.__limb value index))
 let __toFloat (value: Int) : Float =
-    let negative = Stdlib.Int.__isNegative value in
-    let magnitude = Stdlib.Int.__magnitudeToFloatAt value (Stdlib.Int.__absCount value - 1L) 0.0 in
-    if negative then 0.0 - magnitude else magnitude
+    if Stdlib.Int.__isSmall value then Stdlib.Int64.toFloat (Stdlib.Int.__smallValue value)
+    else
+        let negative = Stdlib.Int.__isNegative value in
+        let magnitude = Stdlib.Int.__magnitudeToFloatAt value (Stdlib.Int.__absCount value - 1L) 0.0 in
+        if negative then 0.0 - magnitude else magnitude
 let __sqrt (value: Int) : Float = Stdlib.Float.sqrt (Stdlib.Int.__toFloat value)
 
 let __fromFloat (value: Float) : Int =
@@ -502,6 +512,8 @@ let __fromFloat (value: Float) : Int =
     let rawExponent = Stdlib.UInt64.bitwiseAnd (Stdlib.UInt64.shiftRight bits 52UL) 2047UL in
     if rawExponent == 2047UL then Builtin.crash "Encountered out-of-range value for type of Int"
     else if rawExponent == 0UL then Stdlib.Int.__zero ()
+    else if value >= -4611686018427387904.0 && value < 4611686018427387904.0 then
+        Stdlib.Int.__small (Stdlib.Float.__toInt64Unchecked value)
     else
         let mantissa = Stdlib.UInt64.bitwiseAnd bits 4503599627370495UL in
         let significand = Stdlib.UInt64.bitwiseOr mantissa 4503599627370496UL in
