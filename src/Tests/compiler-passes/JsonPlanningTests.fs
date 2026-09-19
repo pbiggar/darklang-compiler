@@ -19,8 +19,14 @@ let private plannedSource
             program
         |> Result.mapError CheckingDiagnostics.typeErrorToString)
     |> Result.map (fun (_, typedProgram, env) ->
-        JsonPlanning.rewriteProgram env typedProgram
-        |> sprintf "%A")
+        let planned = JsonPlanning.rewriteProgram env typedProgram
+        let functionNames =
+            planned
+            |> CheckedAST.programSymbols
+            |> CheckedAST.functionNames
+            |> Map.values
+            |> String.concat "\n"
+        sprintf "%A\n%s" planned functionNames)
 
 let testTypedDecodingUsesSharedViews
     (stdlib: CompilationContexts.StdlibResult)

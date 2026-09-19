@@ -171,7 +171,7 @@ let private rewriteProjection
     | _ -> cexpr
 
 let private cexprProducesScalar
-    (returnTypes: Map<string, AST.Type>)
+    (returnTypes: Map<AST.FunctionId, AST.Type>)
     (scalarTemps: Set<TempId>)
     (cexpr: CExpr)
     : bool =
@@ -221,7 +221,7 @@ let private tryScalarAggregate
     | _ -> None
 
 let rec private scalarReplaceExpr
-    (returnTypes: Map<string, AST.Type>)
+    (returnTypes: Map<AST.FunctionId, AST.Type>)
     (scalarTemps: Set<TempId>)
     (aggregates: Map<TempId, ScalarAggregate>)
     (expr: AExpr)
@@ -270,7 +270,7 @@ let rec private scalarReplaceExpr
             )
 
 let private scalarReplaceFunction
-    (returnTypes: Map<string, AST.Type>)
+    (returnTypes: Map<AST.FunctionId, AST.Type>)
     (func: Function)
     : Function =
     let scalarParams =
@@ -285,7 +285,7 @@ let private scalarReplaceFunction
 let scalarReplaceProgram (Program (functions, mainExpr): Program) : Program =
     let returnTypes =
         functions
-        |> List.map (fun func -> func.Name, func.ReturnType)
+        |> List.map (fun func -> func.Id, func.ReturnType)
         |> Map.ofList
     Program (
         functions |> List.map (scalarReplaceFunction returnTypes),

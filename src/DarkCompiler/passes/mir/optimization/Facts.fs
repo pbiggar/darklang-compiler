@@ -103,9 +103,9 @@ let private directCallee instr =
     | _ -> None
 
 type private FunctionEffectSummary = {
-    Name: string
+    Id: AST.FunctionId
     LocallyEffectFree: bool
-    DirectCallees: Set<string>
+    DirectCallees: Set<AST.FunctionId>
 }
 
 let private summarizeFunctionEffects (func: Function) : FunctionEffectSummary =
@@ -120,15 +120,15 @@ let private summarizeFunctionEffects (func: Function) : FunctionEffectSummary =
             ) summary
         ) (true, Set.empty)
     {
-        Name = func.Name
+        Id = func.Id
         LocallyEffectFree = locallyEffectFree
         DirectCallees = directCallees
     }
 
-let private directCallees (func: Function) : Set<string> =
+let private directCallees (func: Function) : Set<AST.FunctionId> =
     (summarizeFunctionEffects func).DirectCallees
 
-let analyzeEffectFreeFunctions (functions: Function list) : Set<string> =
+let analyzeEffectFreeFunctions (functions: Function list) : Set<AST.FunctionId> =
     // The fixed point changes only the proven-name set. MIR and call edges stay
     // fixed, so retain each function's scan instead of rebuilding it per round.
     let candidates =
@@ -142,22 +142,22 @@ let analyzeEffectFreeFunctions (functions: Function list) : Set<string> =
             |> List.filter (fun summary ->
                 summary.DirectCallees
                 |> Set.forall (fun callee -> Set.contains callee provenNames))
-            |> List.map (fun summary -> summary.Name)
+            |> List.map (fun summary -> summary.Id)
             |> Set.ofList
 
         if next = provenNames then next else removeCallersOfUnprovenFunctions next
 
     candidates
-    |> List.map (fun summary -> summary.Name)
+    |> List.map (fun summary -> summary.Id)
     |> Set.ofList
     |> removeCallersOfUnprovenFunctions
 
 /// Only direct callees can affect optimization of this function. Restricting
 /// the whole-program result to those names gives a compositional cache key.
 let effectFreeCallsForFunction
-    (effectFreeFunctions: Set<string>)
+    (effectFreeFunctions: Set<AST.FunctionId>)
     (func: Function)
-    : Set<string> =
+    : Set<AST.FunctionId> =
     Set.intersect effectFreeFunctions (directCallees func)
 
 /// Get the destination VReg of an instruction (if any)

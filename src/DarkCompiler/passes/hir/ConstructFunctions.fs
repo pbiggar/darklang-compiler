@@ -28,15 +28,15 @@ type Block = private Block of HIR.Block<HIR.Operation<Primitive, Block>>
 
 type ConstructionError =
     | CannotInferExpression of functionName: string * message: string
-    | InconsistentCallSignature of functionName: string * target: string
+    | InconsistentCallSignature of functionName: string * target: AST.FunctionId
 
 type CallContracts = {
-    ExternalSignature: string -> HIR.FunctionSignature option
-    Contract: string -> (HIR.FunctionCall -> HIR.PrimitiveContract) option
+    ExternalSignature: AST.FunctionId -> HIR.FunctionSignature option
+    Contract: AST.FunctionId -> (HIR.FunctionCall -> HIR.PrimitiveContract) option
 }
 
 type private State = {
-    Values: Map<string, HIR.Value>
+    Values: Map<AST.BindingId, HIR.Value>
     Operations: HIR.Operation<Primitive, Block> list
     NextId: int
 }
@@ -77,24 +77,25 @@ let private signatureOfCheckedFunction (definition: CheckedAST.FunctionDef) : HI
 }
 
 let private constructWithSignatures
-    (infer: Map<string, AST.Type> -> CheckedAST.Expr -> Result<AST.Type, string>)
-    (dependencies: CheckedAST.Expr -> Set<string>)
+    (infer: Map<AST.BindingId, AST.Type> -> CheckedAST.Expr -> Result<AST.Type, string>)
+    (dependencies: CheckedAST.Expr -> Set<AST.BindingId>)
     (calls: CallContracts)
-    (callSignature: string -> HIR.FunctionSignature option)
+    (callSignature: AST.FunctionId -> HIR.FunctionSignature option)
     (definition: CheckedAST.FunctionDef)
     : Result<HIR.Function<Block>, ConstructionError> =
     let parameterValues, nextId =
         definition.Params
         |> AST.NonEmptyList.toList
-        |> List.mapFold (fun nextId (name, typ) ->
+        |> List.mapFold (fun nextId (binding, typ) ->
             let parameter = {
-                Name = name
+                Name = string binding
+                Binding = binding
                 Value = { Id = HIR.ValueId nextId; Type = typ }
             }
             parameter, nextId + 1) 0
     let values =
         parameterValues
-        |> List.map (fun parameter -> parameter.Name, parameter.Value)
+        |> List.map (fun parameter -> parameter.Binding, parameter.Value)
         |> Map.ofList
     let types state = state.Values |> Map.map (fun _ value -> value.Type)
     let inferExpression state expression =
@@ -180,17 +181,17 @@ let private constructWithSignatures
         | None -> normalizeNonLiteral state expected expression
     and normalizeNonLiteral state expected expression =
         match expression with
-        | CheckedAST.Var name ->
-            match Map.tryFind name state.Values with
+        | CheckedAST.Local id ->
+            match Map.tryFind id state.Values with
             | Some value when value.Type = expected -> Ok (value, state)
             | _ -> opaque state expression expected
-        | CheckedAST.Let (CheckedAST.LPVariable name, value, continuation) ->
+        | CheckedAST.Let (CheckedAST.LPVariable id, value, continuation) ->
             inferExpression state value
             |> Result.bind (fun valueType ->
                 normalize state valueType value
                 |> Result.bind (fun (boundValue, afterValue) ->
                     normalize
-                        { afterValue with Values = Map.add name boundValue afterValue.Values }
+                        { afterValue with Values = Map.add id boundValue afterValue.Values }
                         expected
                         continuation))
         | CheckedAST.Let ((CheckedAST.LPUnit | CheckedAST.LPWildcard), value, continuation) ->
@@ -283,6 +284,7 @@ let private constructWithSignatures
     normalize initial definition.ReturnType definition.Body
     |> Result.map (fun (result, finalState) ->
         {
+            Id = definition.Id
             Name = definition.Name
             Body = Block {
                 Parameters = parameterValues
@@ -293,14 +295,14 @@ let private constructWithSignatures
 
 let constructFunction infer dependencies calls (definition: CheckedAST.FunctionDef) =
     let internalSignature target =
-        if target = definition.Name then Some (signatureOfCheckedFunction definition)
+        if target = definition.Id then Some (signatureOfCheckedFunction definition)
         else calls.ExternalSignature target
     constructWithSignatures infer dependencies calls internalSignature definition
 
 let constructFunctions infer dependencies calls (definitions: CheckedAST.FunctionDef list) =
     let internalSignatures =
         definitions
-        |> List.map (fun definition -> definition.Name, signatureOfCheckedFunction definition)
+        |> List.map (fun definition -> definition.Id, signatureOfCheckedFunction definition)
         |> Map.ofList
     let callSignature target =
         match Map.tryFind target internalSignatures with

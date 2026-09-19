@@ -30,6 +30,12 @@ let private externalReturnTypes : Map<string, AST.Type> =
         ("__string_hash", TInt64)
     ]
 
+let private externalFunctionNames =
+    externalReturnTypes
+    |> Map.toList
+    |> List.map (fun (name, _) -> (AST.functionIdForName name, name))
+    |> Map.ofList
+
 let private typeCheckWithStdlib (stdlib: CompilationContexts.StdlibResult) (ast: AST.Program) : Result<AST.Type * CheckedAST.Program, string> =
     match TypeChecking.checkProgramWithBaseEnv stdlib.Context.TypeCheckEnv ast with
     | Error e -> Error $"Type error: {CheckingDiagnostics.typeErrorToString e}"
@@ -62,9 +68,10 @@ let private convertTypedProgram (typedAst: CheckedAST.Program) : Result<AST_to_A
         |> Result.bind (fun (typeDefs, functions, expr) ->
             let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
             let resolvedFunctions = AST_to_ANF.resolveAliasesInFunctions aliasReg functions
-            let registries = AST_to_ANF.buildRegistries moduleRegistry typeDefs aliasReg resolvedFunctions
+            let symbols = CheckedAST.programSymbols lifted
+            let registries = AST_to_ANF.buildRegistries symbols moduleRegistry typeDefs aliasReg resolvedFunctions
             let varGen = ANF.VarGen 0
-            AST_to_ANF.convertFunctions registries varGen resolvedFunctions
+            AST_to_ANF.convertFunctions symbols registries varGen resolvedFunctions
             |> Result.bind (fun (anfFuncs, varGen1) ->
                 AST_to_ANF.convertExprToAnf registries varGen1 expr
                 |> Result.map (fun (anfExpr, _) ->
@@ -119,9 +126,9 @@ let private removeSyntheticMIREntry (MIR.Program (functions, variants, records))
 
 let private formatMIRForOptimizationTest (syntheticMain: bool) (program: MIR.Program) : string =
     if syntheticMain then
-        formatMIR (removeSyntheticMIREntry program)
+        formatMIRWithFunctionNames externalFunctionNames (removeSyntheticMIREntry program)
     else
-        formatMIR program
+        formatMIRWithFunctionNames externalFunctionNames program
 
 let private removeSyntheticLIREntry (LIR.Program (functions, variants, records)) : LIR.Program =
     LIR.Program (

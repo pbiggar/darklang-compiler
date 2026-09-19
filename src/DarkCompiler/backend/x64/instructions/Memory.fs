@@ -108,11 +108,11 @@ let internal emitHeapStore (ctx: FuncCtx) (addr: LIR.Reg) (offset: int) (src: LI
             if addrReg = scratch then
                 // Address is R11 - use RCX to hold the function address
                 Ok [X86_64.PUSH X86_64.RCX
-                    X86_64.LEA_rip (X86_64.RCX, funcName)
+                    X86_64.LEA_rip (X86_64.RCX, functionName ctx funcName)
                     X86_64.MOV_store (addrReg, int32 offset, X86_64.RCX)
                     X86_64.POP X86_64.RCX]
             else
-                Ok [X86_64.LEA_rip (scratch, funcName)
+                Ok [X86_64.LEA_rip (scratch, functionName ctx funcName)
                     X86_64.MOV_store (addrReg, int32 offset, scratch)]
         | LIR.FloatSymbol value ->
             // Store float bits as 8-byte integer value at the heap offset

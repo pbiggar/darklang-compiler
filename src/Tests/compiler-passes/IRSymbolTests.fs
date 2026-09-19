@@ -19,6 +19,7 @@ let testMirToLirSymbolicOperands () : TestResult =
     let block: MIR.BasicBlock = { Label = label; Instrs = instrs; Terminator = MIR.Ret (MIR.Register (MIR.VReg 0)) }
     let cfg: MIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
     let func: MIR.Function = {
+        Id = AST.functionIdForName "mir_symbolic_operands"
         Name = "mir_symbolic_operands"
         TypedParams = []
         ReturnType = AST.TString
@@ -52,7 +53,8 @@ let testMirToLirReportsMissingEntryBlock () : TestResult =
           Terminator = MIR.Ret (MIR.Register (MIR.VReg 0)) }
     let cfg: MIR.CFG = { Entry = entry; Blocks = Map.ofList [ (actual, block) ] }
     let func: MIR.Function =
-        { Name = "missing_entry"
+        { Id = AST.functionIdForName "missing_entry"
+          Name = "missing_entry"
           TypedParams = []
           ReturnType = AST.TInt64
           CFG = cfg
@@ -75,7 +77,8 @@ let testMirToLirUsesNativeInt64ShiftMask () : TestResult =
           Terminator = MIR.Ret (MIR.Register (MIR.VReg 3)) }
     let cfg: MIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
     let func: MIR.Function =
-        { Name = "native_int64_shift_mask"
+        { Id = AST.functionIdForName "native_int64_shift_mask"
+          Name = "native_int64_shift_mask"
           TypedParams = [{ Reg = MIR.VReg 0; Type = AST.TInt64 }; { Reg = MIR.VReg 1; Type = AST.TInt64 }]
           ReturnType = AST.TInt64
           CFG = cfg
@@ -107,7 +110,8 @@ let testMirToLirAllocatesFloatHeapStoreTemporary () : TestResult =
           Terminator = MIR.Ret (MIR.Register (MIR.VReg 0)) }
     let cfg: MIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
     let func: MIR.Function =
-        { Name = "float_heap_store_temp"
+        { Id = AST.functionIdForName "float_heap_store_temp"
+          Name = "float_heap_store_temp"
           TypedParams = []
           ReturnType = AST.TInt64
           CFG = cfg
@@ -145,7 +149,8 @@ let testMirToLirUsesImmediateMaskForListToRawPtr () : TestResult =
           Terminator = MIR.Ret (MIR.Register rawPtrReg) }
     let cfg: MIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
     let func: MIR.Function =
-        { Name = "list_to_raw_ptr"
+        { Id = AST.functionIdForName "list_to_raw_ptr"
+          Name = "list_to_raw_ptr"
           TypedParams = [{ Reg = listReg; Type = AST.TList AST.TInt64 }]
           ReturnType = AST.TRawPtr
           CFG = cfg

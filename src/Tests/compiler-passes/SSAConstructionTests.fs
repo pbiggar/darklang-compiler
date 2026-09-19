@@ -30,11 +30,11 @@ let testGetBlockUsesCoversEveryOperandPosition () : TestResult =
         ("Mov", Mov (destination, register first, Some AST.TInt64), expected [first])
         ("BinOp", BinOp (destination, Add, register first, register second, AST.TInt64), expected [first; second])
         ("UnaryOp", UnaryOp (destination, Neg, register first), expected [first])
-        ("Call", Call (destination, "callee", [register first; Int64Const 1L; register second], [AST.TInt64; AST.TInt64; AST.TInt64], AST.TInt64), expected [first; second])
-        ("TailCall", TailCall ("callee", [register first; Int64Const 1L; register second], [AST.TInt64; AST.TInt64; AST.TInt64], AST.TInt64), expected [first; second])
+        ("Call", Call (destination, AST.functionIdForName "callee", [register first; Int64Const 1L; register second], [AST.TInt64; AST.TInt64; AST.TInt64], AST.TInt64), expected [first; second])
+        ("TailCall", TailCall (AST.functionIdForName "callee", [register first; Int64Const 1L; register second], [AST.TInt64; AST.TInt64; AST.TInt64], AST.TInt64), expected [first; second])
         ("IndirectCall", IndirectCall (destination, register first, [register second; Int64Const 1L; register third], [AST.TInt64; AST.TInt64; AST.TInt64], AST.TInt64), expected [first; second; third])
         ("IndirectTailCall", IndirectTailCall (register first, [register second; Int64Const 1L; register third], [AST.TInt64; AST.TInt64; AST.TInt64], AST.TInt64), expected [first; second; third])
-        ("ClosureAlloc", ClosureAlloc (destination, "callee", [register first; Int64Const 1L; register second]), expected [first; second])
+        ("ClosureAlloc", ClosureAlloc (destination, AST.functionIdForName "callee", [register first; Int64Const 1L; register second]), expected [first; second])
         ("ClosureCall", ClosureCall (destination, register first, [register second; Int64Const 1L; register third], [AST.TInt64; AST.TInt64; AST.TInt64], AST.TInt64), expected [first; second; third])
         ("ClosureTailCall", ClosureTailCall (register first, [register second; Int64Const 1L; register third], [AST.TInt64; AST.TInt64; AST.TInt64]), expected [first; second; third])
         ("HeapStore", HeapStore (first, 0, register second, Some AST.TInt64), expected [first; second])
@@ -158,7 +158,8 @@ let testSSAVersionsStartAboveParameterRegisters () : TestResult =
     let entry = label "entry"
     let parameter = { Reg = vreg 10000; Type = AST.TInt64 }
     let func =
-        { Name = "test"
+        { Id = AST.functionIdForName "test"
+          Name = "test"
           TypedParams = [parameter]
           ReturnType = AST.TInt64
           CFG =

@@ -10,21 +10,22 @@ open SpecializationIdentity
 open TypeSubstitution
 
 type LiftState = {
+    Symbols: CheckedAST.Symbols
     Counter: int
     LiftedFunctions: CheckedAST.FunctionDef list
-    ComparisonFuncs: Map<string * AST.Type list, string>
+    ComparisonFuncs: Map<AST.FunctionId * AST.Type list, string>
     ComparableFunctionParams: Set<AST.Type list>
-    TypeEnv: Map<string, AST.Type>  // Variable name -> Type (for tracking types of captured variables)
-    FuncParams: Map<string, (string * AST.Type) list>  // Function name -> params (for inferring function value types)
-    FuncReturnTypes: Map<string, AST.Type>  // Function name -> Return type (for inferring call result types)
-    GenericFuncDefs: Map<string, string list * AST.Type>  // Function name -> (TypeParams, ReturnType) for TypeApp substitution
+    TypeEnv: Map<AST.BindingId, AST.Type>
+    FuncParams: Map<AST.FunctionId, (AST.BindingId * AST.Type) list>
+    FuncReturnTypes: Map<AST.FunctionId, AST.Type>
+    GenericFuncDefs: Map<AST.FunctionId, string list * AST.Type>
     TypeReg: TypeRegistry
     VariantLookup: VariantLookup
-    RecursiveSelf: (AST.BindingId * AST.Type * AST.TypedRecursiveMember) option
+    RecursiveSelf: (AST.BindingId * AST.BindingId * AST.Type * AST.TypedRecursiveMember) option
 }
 
 let private liftedNameExists (state: LiftState) (name: string) : bool =
-    Map.containsKey name state.FuncParams
+    Map.containsKey (AST.functionIdForName name) state.FuncParams
     || (state.LiftedFunctions |> List.exists (fun f -> f.Name = name))
 
 let rec private findNextLiftedNameCounter
@@ -46,28 +47,28 @@ let internal freshLiftedName (state: LiftState) (prefix: string) : string * Lift
 let rec internal matchPatternBindingTypes
     (typeReg: TypeRegistry)
     (variantLookup: VariantLookup)
-    (pattern: AST.Pattern)
+    (pattern: CheckedAST.Pattern)
     (scrutineeType: AST.Type)
-    : Map<string, AST.Type> =
+    : Map<AST.BindingId, AST.Type> =
     let merge left right = Map.fold (fun current name typ -> Map.add name typ current) left right
     match pattern with
-    | AST.POr alternatives ->
+    | CheckedAST.POr alternatives ->
         matchPatternBindingTypes typeReg variantLookup (AST.NonEmptyList.head alternatives) scrutineeType
-    | AST.PVar name -> Map.ofList [(name, scrutineeType)]
-    | AST.PWildcard | AST.PUnit | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-    | AST.PInt8Literal _ | AST.PInt16Literal _ | AST.PInt32Literal _
-    | AST.PUInt8Literal _ | AST.PUInt16Literal _ | AST.PUInt32Literal _
-    | AST.PUInt64Literal _ | AST.PUInt128Literal _ | AST.PBool _
-    | AST.PString _ | AST.PChar _ | AST.PFloat _ -> Map.empty
-    | AST.PTuple patterns ->
+    | CheckedAST.PVariable id -> Map.ofList [(id, scrutineeType)]
+    | CheckedAST.PWildcard | CheckedAST.PUnit | CheckedAST.PInt64 _ | CheckedAST.PBigInt _
+    | CheckedAST.PInt128Literal _ | CheckedAST.PInt8Literal _ | CheckedAST.PInt16Literal _
+    | CheckedAST.PInt32Literal _ | CheckedAST.PUInt8Literal _ | CheckedAST.PUInt16Literal _
+    | CheckedAST.PUInt32Literal _ | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _
+    | CheckedAST.PBool _ | CheckedAST.PString _ | CheckedAST.PChar _ | CheckedAST.PFloat _ -> Map.empty
+    | CheckedAST.PTuple patterns ->
         match scrutineeType with
         | AST.TTuple elementTypes when List.length patterns = List.length elementTypes ->
             List.zip patterns elementTypes
             |> List.fold (fun current (innerPattern, elementType) ->
                 merge current (matchPatternBindingTypes typeReg variantLookup innerPattern elementType)) Map.empty
         | _ -> Map.empty
-    | AST.PConstructor (variantName, fieldPatterns) ->
-        match Map.tryFind variantName variantLookup with
+    | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
+        match tryFindVariantForTypeById constructorId scrutineeType variantLookup with
         | Some (typeName, typeParameters, _, fieldTypes)
             when List.length fieldPatterns = List.length fieldTypes ->
             let substitution =
@@ -86,14 +87,14 @@ let rec internal matchPatternBindingTypes
                         fieldPattern
                         (applySubstToType substitution fieldType))) Map.empty
         | _ -> Map.empty
-    | AST.PList patterns ->
+    | CheckedAST.PList patterns ->
         match scrutineeType with
         | AST.TList elementType ->
             patterns
             |> List.fold (fun current innerPattern ->
                 merge current (matchPatternBindingTypes typeReg variantLookup innerPattern elementType)) Map.empty
         | _ -> Map.empty
-    | AST.PListCons (headPatterns, tailPattern) ->
+    | CheckedAST.PListCons (headPatterns, tailPattern) ->
         match scrutineeType with
         | AST.TList elementType ->
             let headBindings =
@@ -113,13 +114,14 @@ let internal lambdaNeedsComparison
     |> fun paramTypes -> Set.contains paramTypes state.ComparableFunctionParams
 
 /// Collect free variables in an expression (variables not bound by let or lambda parameters)
-let rec freeVars (expr: CheckedAST.Expr) (bound: Set<string>) : Set<string> =
+let rec freeVars (expr: CheckedAST.Expr) (bound: Set<AST.BindingId>) : Set<AST.BindingId> =
     match expr with
     | CheckedAST.BoundaryRender (_, value) -> freeVars value bound
     | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _ | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
     | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.RuntimeError _ -> Set.empty
-    | CheckedAST.Var name -> if Set.contains name bound then Set.empty else Set.singleton name
+    | CheckedAST.Local id -> if Set.contains id bound then Set.empty else Set.singleton id
+    | CheckedAST.NamedValue _ -> Set.empty
     | CheckedAST.BinOp (_, left, right) -> Set.union (freeVars left bound) (freeVars right bound)
     | CheckedAST.UnaryOp (_, inner) -> freeVars inner bound
     | CheckedAST.Let (pattern, value, body) ->
@@ -128,22 +130,14 @@ let rec freeVars (expr: CheckedAST.Expr) (bound: Set<string>) : Set<string> =
             freeVars body (Set.union bound (CheckedAST.letPatternBindings pattern |> Set.ofList))
         Set.union valueVars bodyVars
     | CheckedAST.RecursiveLet (recursion, value, body) ->
-        let recursiveBound = Set.add (CheckedAST.recursiveBindingName recursion) bound
+        let recursiveBound = Set.add (CheckedAST.recursiveBindingId recursion) bound
         Set.union (freeVars value recursiveBound) (freeVars body recursiveBound)
     | CheckedAST.If (cond, thenBr, elseBr) ->
         Set.union (freeVars cond bound) (Set.union (freeVars thenBr bound) (freeVars elseBr bound))
     | CheckedAST.Sequence (first, next) ->
         Set.union (freeVars first bound) (freeVars next bound)
-    | CheckedAST.Call (funcName, args) ->
-        // Check if funcName is a local variable (not in bound) - if so, it's a free variable
-        // Top-level function names will be filtered out later since they won't be in TypeEnv
-        let funcFree = if Set.contains funcName bound then Set.empty else Set.singleton funcName
-        let argsFree =
-            args
-            |> exprArgsToList
-            |> List.map (fun a -> freeVars a bound)
-            |> List.fold Set.union Set.empty
-        Set.union funcFree argsFree
+    | CheckedAST.Call (_, args) ->
+        args |> exprArgsToList |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
     | CheckedAST.TypeApp (_, _, args) ->
         args |> exprArgsToList |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
     | CheckedAST.TupleLiteral elems | CheckedAST.ListLiteral elems ->
@@ -160,7 +154,7 @@ let rec freeVars (expr: CheckedAST.Expr) (bound: Set<string>) : Set<string> =
         let updateVars = updates |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
         Set.union recordVars updateVars
     | CheckedAST.RecordAccess (record, _) -> freeVars record bound
-    | CheckedAST.Constructor (_, _, fields) ->
+    | CheckedAST.Constructor (_, fields) ->
         fields |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
     | CheckedAST.Match (scrutinee, cases) ->
         let scrutineeVars = freeVars scrutinee bound
@@ -170,9 +164,7 @@ let rec freeVars (expr: CheckedAST.Expr) (bound: Set<string>) : Set<string> =
                 let caseNames =
                     mc.Patterns
                     |> AST.NonEmptyList.toList
-                    |> List.collect (fun pattern ->
-                        AST.validateBinders (AST.MatchBinderPattern pattern)
-                        |> Result.defaultValue [])
+                    |> List.collect CheckedAST.patternBindings
                     |> Set.ofList
                 let caseBound = Set.union bound caseNames
                 let guardVars =
@@ -240,10 +232,10 @@ let rec reconcileBranchTypes (left: AST.Type) (right: AST.Type) : AST.Type optio
 
 let rec simpleInferType
     (expr: CheckedAST.Expr)
-    (typeEnv: Map<string, AST.Type>)
-    (funcParams: Map<string, (string * AST.Type) list>)
-    (funcReturnTypes: Map<string, AST.Type>)
-    (genericFuncDefs: Map<string, string list * AST.Type>)
+    (typeEnv: Map<AST.BindingId, AST.Type>)
+    (funcParams: Map<AST.FunctionId, (AST.BindingId * AST.Type) list>)
+    (funcReturnTypes: Map<AST.FunctionId, AST.Type>)
+    (genericFuncDefs: Map<AST.FunctionId, string list * AST.Type>)
     (typeReg: TypeRegistry)
     (variantLookup: VariantLookup)
     : AST.Type option =
@@ -258,36 +250,35 @@ let rec simpleInferType
     let isNumericType (typ: AST.Type) : bool =
         isIntType typ || typ = AST.TFloat64
 
-    let mergeBindings (bindings: Map<string, AST.Type>) (extra: Map<string, AST.Type>) : Map<string, AST.Type> =
+    let mergeBindings
+        (bindings: Map<AST.BindingId, AST.Type>)
+        (extra: Map<AST.BindingId, AST.Type>)
+        : Map<AST.BindingId, AST.Type> =
         Map.fold (fun acc name typ -> Map.add name typ acc) bindings extra
 
-    let rec extractPatternBindings (pattern: AST.Pattern) (scrutType: AST.Type) : Map<string, AST.Type> =
+    let rec extractPatternBindings
+        (pattern: CheckedAST.Pattern)
+        (scrutType: AST.Type)
+        : Map<AST.BindingId, AST.Type> =
         match pattern with
-        | AST.POr alternatives ->
+        | CheckedAST.POr alternatives ->
             extractPatternBindings (AST.NonEmptyList.head alternatives) scrutType
-        | AST.PVar name -> Map.ofList [(name, scrutType)]
-        | AST.PWildcard -> Map.empty
-        | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-        | AST.PInt8Literal _
-        | AST.PInt16Literal _
-        | AST.PInt32Literal _
-        | AST.PUInt8Literal _
-        | AST.PUInt16Literal _
-        | AST.PUInt32Literal _
-        | AST.PUInt64Literal _ | AST.PUInt128Literal _
-        | AST.PUnit
-        | AST.PBool _
-        | AST.PString _
-        | AST.PChar _
-        | AST.PFloat _ -> Map.empty
-        | AST.PTuple innerPats ->
+        | CheckedAST.PVariable id -> Map.ofList [(id, scrutType)]
+        | CheckedAST.PWildcard -> Map.empty
+        | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
+        | CheckedAST.PInt8Literal _ | CheckedAST.PInt16Literal _ | CheckedAST.PInt32Literal _
+        | CheckedAST.PUInt8Literal _ | CheckedAST.PUInt16Literal _ | CheckedAST.PUInt32Literal _
+        | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _ | CheckedAST.PUnit
+        | CheckedAST.PBool _ | CheckedAST.PString _ | CheckedAST.PChar _
+        | CheckedAST.PFloat _ -> Map.empty
+        | CheckedAST.PTuple innerPats ->
             match scrutType with
             | AST.TTuple elemTypes when List.length elemTypes = List.length innerPats ->
                 List.zip innerPats elemTypes
                 |> List.fold (fun acc (pat, typ) -> mergeBindings acc (extractPatternBindings pat typ)) Map.empty
             | _ -> Map.empty
-        | AST.PConstructor (variantName, fieldPatterns) ->
-            match Map.tryFind variantName variantLookup with
+        | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
+            match tryFindVariantForTypeById constructorId scrutType variantLookup with
             | Some (typeName, typeParams, _, fieldTypes)
                 when List.length fieldPatterns = List.length fieldTypes ->
                 let subst =
@@ -302,13 +293,13 @@ let rec simpleInferType
                     mergeBindings current
                         (extractPatternBindings fieldPattern (applySubstToType subst fieldType))) Map.empty
             | _ -> Map.empty
-        | AST.PList innerPats ->
+        | CheckedAST.PList innerPats ->
             match scrutType with
             | AST.TList elemType ->
                 innerPats
                 |> List.fold (fun acc pat -> mergeBindings acc (extractPatternBindings pat elemType)) Map.empty
             | _ -> Map.empty
-        | AST.PListCons (headPats, tailPat) ->
+        | CheckedAST.PListCons (headPats, tailPat) ->
             match scrutType with
             | AST.TList elemType ->
                 let headBindings =
@@ -335,14 +326,13 @@ let rec simpleInferType
     | CheckedAST.CharLiteral _ -> Some AST.TChar
     | CheckedAST.FloatLiteral _ -> Some AST.TFloat64
     | CheckedAST.UnitLiteral -> Some AST.TUnit
-    | CheckedAST.Var name ->
-        match Map.tryFind name typeEnv with
-        | Some typ -> Some typ
-        | None ->
-            match Map.tryFind name funcParams, Map.tryFind name funcReturnTypes with
-            | Some parameters, Some returnType ->
-                Some (AST.TFunction (parameters |> List.map snd, returnType))
-            | _ -> None
+    | CheckedAST.Local id -> Map.tryFind id typeEnv
+    | CheckedAST.NamedValue name ->
+        let id = AST.functionIdForName name
+        match Map.tryFind id funcParams, Map.tryFind id funcReturnTypes with
+        | Some parameters, Some returnType ->
+            Some (AST.TFunction (parameters |> List.map snd, returnType))
+        | _ -> None
     | CheckedAST.FuncRef name ->
         match Map.tryFind name funcParams, Map.tryFind name funcReturnTypes with
         | Some parameters, Some returnType ->
@@ -361,7 +351,7 @@ let rec simpleInferType
         let valueType = Some recursion.MonomorphicType
         let typeEnv' =
             valueType
-            |> Option.map (fun typ -> Map.add (CheckedAST.recursiveBindingName recursion) typ typeEnv)
+            |> Option.map (fun typ -> Map.add (CheckedAST.recursiveBindingId recursion) typ typeEnv)
             |> Option.defaultValue typeEnv
         simpleInferType body typeEnv' funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
     | CheckedAST.TupleLiteral elements ->
@@ -390,7 +380,9 @@ let rec simpleInferType
     | CheckedAST.DictLiteral (keyType, valueType, _) ->
         Some (AST.TDict (keyType, valueType))
     | CheckedAST.RecordLiteral (reference, fields) ->
-            let typeName = reference.TypeName
+        match tryFindRecordTypeNameById reference.TypeId typeReg with
+        | None -> None
+        | Some typeName ->
             match Map.tryFind typeName typeReg with
             | None ->
                 Some (AST.TRecord (typeName, []))
@@ -400,13 +392,16 @@ let rec simpleInferType
                     |> List.map (fun (fieldName, fieldType) ->
                         (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
 
-                let fieldMap = Map.ofList fields
+                let fieldMap =
+                    fields
+                    |> List.map (fun (field, value) -> AST.fieldIndex field, value)
+                    |> Map.ofList
                 let typeParams = recordInfo.TypeParams
                 let rec inferBindings remaining acc =
                     match remaining with
                     | [] -> Some acc
-                    | (fieldName, expectedFieldType) :: rest ->
-                        match Map.tryFind fieldName fieldMap with
+                    | (fieldIndex, expectedFieldType) :: rest ->
+                        match Map.tryFind fieldIndex fieldMap with
                         | None -> inferBindings rest acc
                         | Some fieldExpr ->
                             match simpleInferType fieldExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup with
@@ -418,7 +413,7 @@ let rec simpleInferType
                                 | Ok newBindings -> inferBindings rest (acc @ newBindings)
                                 | Error _ -> inferBindings rest acc
 
-                match inferBindings expectedFields [] with
+                match inferBindings (expectedFields |> List.map snd |> List.indexed) [] with
                 | None ->
                     Some (AST.TRecord (typeName, []))
                 | Some bindings ->
@@ -438,16 +433,23 @@ let rec simpleInferType
             match Map.tryFind typeName typeReg with
             | Some recordInfo ->
                 recordInfo.Fields
-                |> List.tryFind (fun (name, _) -> name = fieldName)
+                |> List.tryItem (AST.fieldIndex fieldName)
                 |> Option.map (fun (_, fieldTypePattern) ->
                     match buildDeclaredRecordFieldSubst recordInfo typeArgs with
                     | Some subst -> applySubstToType subst fieldTypePattern
                     | None -> fieldTypePattern)
             | None -> None
         | _ -> None
-    | CheckedAST.Constructor (constructorReference, variantName, fields) ->
+    | CheckedAST.Constructor (constructorReference, fields) ->
         // Sum type constructor has the sum type; infer generic args from fields when possible.
-        match tryFindVariant constructorReference variantName variantLookup with
+        match
+            tryFindSumTypeNameById constructorReference.TypeId variantLookup
+            |> Option.bind (fun typeName ->
+                tryFindVariantByTag
+                    typeName
+                    (AST.constructorTag constructorReference.ConstructorId)
+                    variantLookup)
+        with
         | Some (sumTypeName, typeParams, _, fieldPatterns) ->
             let defaultTypeArgs = typeParams |> List.map AST.TVar
             if List.length fieldPatterns <> List.length fields then
@@ -476,7 +478,8 @@ let rec simpleInferType
                                 |> fun typeArgs -> Some (AST.TSum (sumTypeName, typeArgs))
                             | Error _ -> Some (AST.TSum (sumTypeName, defaultTypeArgs))
         | None ->
-            Some (AST.TSum (constructorReference.TypeName, []))
+            tryFindSumTypeNameById constructorReference.TypeId variantLookup
+            |> Option.map (fun typeName -> AST.TSum (typeName, []))
     | CheckedAST.BinOp (op, left, right) ->
         let leftType = simpleInferType left typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
         let rightType = simpleInferType right typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
@@ -500,26 +503,11 @@ let rec simpleInferType
         | AST.Neg | AST.BitNot ->
             simpleInferType operand typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
     | CheckedAST.Call (funcName, args) ->
-        // Look up the function's return type, checking local bindings first
-        if isRuntimeFailureName funcName then
+        if funcName = AST.functionIdForName "Builtin.testRuntimeError"
+           || funcName = AST.functionIdForName "Builtin.crash" then
             Some AST.TRuntimeError
         else
-            match Map.tryFind funcName typeEnv with
-            | Some (AST.TFunction (paramTypes, returnType)) ->
-                let argCount = args |> exprArgsToList |> List.length
-                let paramCount = List.length paramTypes
-                if argCount = paramCount then
-                    Some returnType
-                elif argCount < paramCount then
-                    Some (AST.TFunction (paramTypes |> List.skip argCount, returnType))
-                else
-                    None
-            | Some (AST.TVar funcTypeVar) ->
-                // Higher-order generic values can remain unresolved in public source.
-                // Keep lambda lifting moving by modeling a symbolic return type.
-                Some (AST.TVar $"__call_result_{funcTypeVar}")
-            | _ ->
-                Map.tryFind funcName funcReturnTypes
+            Map.tryFind funcName funcReturnTypes
     | CheckedAST.TypeApp (funcName, typeArgs, _) ->
         // Look up the generic function's definition and apply type substitution
         match Map.tryFind funcName genericFuncDefs with

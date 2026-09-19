@@ -73,9 +73,10 @@ let testNestedTerminalBranchesHaveNoInventedReturn () : TestResult =
     let loop id =
         ANF.Let (
             ANF.TempId id,
-            ANF.TailCall (name, [ANF.BoolLiteral false; ANF.Var first]),
+            ANF.TailCall (AST.functionIdForName name, [ANF.BoolLiteral false; ANF.Var first]),
             ANF.Return (ANF.Var (ANF.TempId id)))
     let func : ANF.Function = {
+        Id = AST.functionIdForName name
         Name = name
         TypedParams = [{ Id = first; Type = AST.TBool }; { Id = second; Type = AST.TBool }]
         ReturnType = AST.TFloat64
@@ -94,7 +95,14 @@ let testNestedTerminalBranchesHaveNoInventedReturn () : TestResult =
             (ANF.TempId 2, AST.TFloat64)
             (ANF.TempId 3, AST.TFloat64)
         ]
-    ANF_to_MIR.convertANFFunction func types denseTypes Map.empty (Map.ofList [(name, AST.TFloat64)]) false
+    ANF_to_MIR.convertANFFunction
+        func
+        types
+        denseTypes
+        Map.empty
+        (Map.ofList [(AST.functionIdForName name, AST.TFloat64)])
+        (Map.ofList [(AST.functionIdForName name, name)])
+        false
     |> Result.bind (fun lowered ->
         let rec visit seen pending =
             match pending with

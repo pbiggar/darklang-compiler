@@ -32,6 +32,7 @@ let testFormatMIR () : TestResult =
         Blocks = Map.ofList [ (entry, entryBlock); (exit, exitBlock) ]
     }
     let func: MIR.Function = {
+        Id = AST.functionIdForName "cfg_pretty"
         Name = "cfg_pretty"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -56,6 +57,7 @@ let testFormatMIR () : TestResult =
 let private emptyMIRFunction (name: string) : MIR.Function =
     let entry = Label $"{name}_entry"
     {
+        Id = AST.functionIdForName name
         Name = name
         TypedParams = []
         ReturnType = AST.TUnit

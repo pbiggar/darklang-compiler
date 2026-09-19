@@ -37,7 +37,7 @@ let convertBinOp (op: AST.BinOp) : ANF.BinOp =
 /// Arbitrary-precision Int values use canonical decimal-string storage. Route
 /// operations through the pure Int stdlib implementation instead of native
 /// machine-word primitives.
-let internal integerFunctionForBinOp (operandType: AST.Type) (op: AST.BinOp) : string option =
+let internal integerFunctionForBinOp (operandType: AST.Type) (op: AST.BinOp) : AST.FunctionId option =
     let moduleName =
         match op, operandType with
         | AST.Pow, AST.TInt -> Some "Darklang.Stdlib.Int"
@@ -74,7 +74,8 @@ let internal integerFunctionForBinOp (operandType: AST.Type) (op: AST.BinOp) : s
         | AST.Gte, _ -> Some "greaterThanOrEqualTo"
         | AST.Eq, _ | AST.Neq, _ | AST.And, _ | AST.Or, _ | AST.StringConcat, _ -> None
     match moduleName, functionName with
-    | Some moduleName, Some functionName -> Some $"{moduleName}.{functionName}"
+    | Some moduleName, Some functionName ->
+        Some (AST.functionIdForName $"{moduleName}.{functionName}")
     | _ -> None
 
 /// Convert AST.UnaryOp to ANF.UnaryOp
@@ -140,9 +141,12 @@ let rec generateStructuralEquality
 
     let primitiveEquality (valueType: AST.Type) (left: ANF.Atom) (right: ANF.Atom) : ANF.CExpr =
         match valueType with
-        | AST.TInt128 -> ANF.Call ("Darklang.Stdlib.Int128.__equals", [left; right])
-        | AST.TUInt128 -> ANF.Call ("Darklang.Stdlib.UInt128.__equals", [left; right])
-        | AST.TString | AST.TChar | AST.TInt -> ANF.Call ("__string_eq", [left; right])
+        | AST.TInt128 ->
+            ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int128.__equals", [left; right])
+        | AST.TUInt128 ->
+            ANF.Call (AST.functionIdForName "Darklang.Stdlib.UInt128.__equals", [left; right])
+        | AST.TString | AST.TChar | AST.TInt ->
+            ANF.Call (AST.functionIdForName "__string_eq", [left; right])
         | _ -> ANF.Prim (ANF.Eq, left, right)
 
     match typ with
@@ -201,8 +205,9 @@ let rec generateStructuralEquality
         | Some recordInfo ->
             let descriptor =
                 recordDescriptor
+                    typeName
                     {
-                        TypeName = typeName
+                        TypeId = AST.typeIdForName typeName
                         TypeArgs = typeArgs
                     }
                     recordInfo
@@ -286,7 +291,10 @@ let rec generateStructuralEquality
             // structural-equality design boundary.
             let payloadComparison =
                 if typeName = "Uuid" then
-                    ANF.Call ("Darklang.Stdlib.UInt128.__equals", [ANF.Var leftPayloadVar; ANF.Var rightPayloadVar])
+                    ANF.Call (
+                        AST.functionIdForName "Darklang.Stdlib.UInt128.__equals",
+                        [ANF.Var leftPayloadVar; ANF.Var rightPayloadVar]
+                    )
                 else
                     ANF.Prim (ANF.Eq, ANF.Var leftPayloadVar, ANF.Var rightPayloadVar)
 

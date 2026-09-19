@@ -18,6 +18,15 @@ let private prettyPrintANFAtom = function
     | ANF.Var (ANF.TempId n) -> $"t{n}"
     | ANF.FuncRef name -> $"&{name}"
 
+let private prettyPrintFunctionName functionNames id =
+    Map.tryFind id functionNames
+    |> Option.defaultWith (fun () -> string id)
+
+let private prettyPrintANFAtomWithNames functionNames atom =
+    match atom with
+    | ANF.FuncRef id -> $"&{prettyPrintFunctionName functionNames id}"
+    | _ -> prettyPrintANFAtom atom
+
 /// Pretty-print ANF binary operator
 let private prettyPrintANFOp = function
     | ANF.Add -> "+"
@@ -57,7 +66,9 @@ let internal prettyPrintCanonicalBufferKind = function
     | MemoryModel.GraphemeCluster -> "grapheme-cluster"
 
 /// Pretty-print ANF complex expression
-let private prettyPrintANFCExpr = function
+let private prettyPrintANFCExpr functionNames expression =
+    let prettyPrintANFAtom = prettyPrintANFAtomWithNames functionNames
+    match expression with
     | ANF.Atom atom -> prettyPrintANFAtom atom
     | ANF.TypedAtom (atom, typ) -> $"{prettyPrintANFAtom atom} : {typ}"
     | ANF.Prim (op, left, right) ->
@@ -66,18 +77,18 @@ let private prettyPrintANFCExpr = function
         $"{prettyPrintANFUnaryOp op}{prettyPrintANFAtom operand}"
     | ANF.Call (funcName, args) ->
         let argStr = args |> commaSeparated prettyPrintANFAtom
-        $"{funcName}({argStr})"
+        $"{prettyPrintFunctionName functionNames funcName}({argStr})"
     | ANF.CanonicalBufferEq (kind, left, right) ->
         $"CanonicalBufferEq[{prettyPrintCanonicalBufferKind kind}]({prettyPrintANFAtom left}, {prettyPrintANFAtom right})"
     | ANF.BorrowedCall (funcName, args) ->
         let argStr = args |> commaSeparated prettyPrintANFAtom
-        $"borrowed {funcName}({argStr})"
+        $"borrowed {prettyPrintFunctionName functionNames funcName}({argStr})"
     | ANF.IndirectCall (func, args) ->
         let argStr = args |> commaSeparated prettyPrintANFAtom
         $"IndirectCall({prettyPrintANFAtom func}, [{argStr}])"
     | ANF.ClosureAlloc (funcName, captures) ->
         let capsStr = captures |> commaSeparated prettyPrintANFAtom
-        $"ClosureAlloc({funcName}, [{capsStr}])"
+        $"ClosureAlloc({prettyPrintFunctionName functionNames funcName}, [{capsStr}])"
     | ANF.ClosureCall (closure, args) ->
         let argStr = args |> commaSeparated prettyPrintANFAtom
         $"ClosureCall({prettyPrintANFAtom closure}, [{argStr}])"
@@ -208,7 +219,7 @@ let private prettyPrintANFCExpr = function
         $"CliNative.{operation}({argText})"
     | ANF.TailCall (funcName, args) ->
         let argStr = args |> commaSeparated prettyPrintANFAtom
-        $"TailCall({funcName}, [{argStr}])"
+        $"TailCall({prettyPrintFunctionName functionNames funcName}, [{argStr}])"
     | ANF.IndirectTailCall (func, args) ->
         let argStr = args |> commaSeparated prettyPrintANFAtom
         $"IndirectTailCall({prettyPrintANFAtom func}, [{argStr}])"
@@ -217,30 +228,35 @@ let private prettyPrintANFCExpr = function
         $"ClosureTailCall({prettyPrintANFAtom closure}, [{argStr}])"
 
 /// Pretty-print ANF expression
-let rec private prettyPrintANFExpr = function
+let rec private prettyPrintANFExpr functionNames expression =
+    let prettyPrintANFAtom = prettyPrintANFAtomWithNames functionNames
+    let recurse = prettyPrintANFExpr functionNames
+    match expression with
     | ANF.Return atom -> $"return {prettyPrintANFAtom atom}"
     | ANF.Jump (target, atom) -> $"jump {target}({prettyPrintANFAtom atom})"
     | ANF.Join (parameter, continuation, entry) ->
-        $"join {parameter.Id}: {parameter.Type} =\n{prettyPrintANFExpr continuation}\nin\n{prettyPrintANFExpr entry}"
+        $"join {parameter.Id}: {parameter.Type} =\n{recurse continuation}\nin\n{recurse entry}"
     | ANF.Let (var, cexpr, body) ->
-        let cexprStr = prettyPrintANFCExpr cexpr
-        let bodyStr = prettyPrintANFExpr body
+        let cexprStr = prettyPrintANFCExpr functionNames cexpr
+        let bodyStr = recurse body
         $"let {var} = {cexprStr}\n{bodyStr}"
     | ANF.If (cond, thenBranch, elseBranch) ->
         let condStr = prettyPrintANFAtom cond
-        let thenStr = prettyPrintANFExpr thenBranch
-        let elseStr = prettyPrintANFExpr elseBranch
+        let thenStr = recurse thenBranch
+        let elseStr = recurse elseBranch
         $"if {condStr} then\n{thenStr}\nelse\n{elseStr}"
 
 /// Format ANF program in a pinned format
 let formatANF (ANF.Program (functions, mainExpr)) : string =
+    let functionNames =
+        functions |> List.map (fun func -> (func.Id, func.Name)) |> Map.ofList
     let funcStrs =
         functions
         |> List.map (fun func ->
-            $"Function {func.Name}:\n{prettyPrintANFExpr func.Body}")
+            $"Function {func.Name}:\n{prettyPrintANFExpr functionNames func.Body}")
         |> String.concat "\n\n"
 
-    let mainStr = prettyPrintANFExpr mainExpr
+    let mainStr = prettyPrintANFExpr functionNames mainExpr
 
     if List.isEmpty functions then
         mainStr

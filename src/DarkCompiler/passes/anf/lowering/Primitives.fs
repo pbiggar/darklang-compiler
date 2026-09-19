@@ -7,13 +7,45 @@ open ANF
 
 let internal eqHelperDispatchMarker = "__dark_internal_eq_helper_dispatch"
 
+let internal materializeFunctionComparisonPlan
+    (leftId: AST.BindingId)
+    (rightId: AST.BindingId)
+    (args: CheckedAST.Expr list)
+    : CheckedAST.Expr =
+    match args with
+    | [leftExpr; rightExpr] ->
+        CheckedAST.Let (
+            CheckedAST.LPVariable leftId,
+            leftExpr,
+            CheckedAST.Let (
+                CheckedAST.LPVariable rightId,
+                rightExpr,
+                CheckedAST.If (
+                    CheckedAST.BinOp (
+                        AST.Eq,
+                        CheckedAST.TupleAccess (CheckedAST.Local leftId, 1),
+                        CheckedAST.TupleAccess (CheckedAST.Local rightId, 1)
+                    ),
+                    CheckedAST.IndirectApply (
+                        CheckedAST.TupleAccess (CheckedAST.Local leftId, 1),
+                        AST.NonEmptyList.fromList [CheckedAST.Local leftId; CheckedAST.Local rightId]
+                    ),
+                    CheckedAST.BoolLiteral false
+                )
+            )
+        )
+    | _ -> Crash.crash "Function comparison plan expected exactly two operands"
+
 let internal canonicalBufferKindForType (typ: AST.Type) : MemoryModel.CanonicalBufferKind option =
     match typ with
     | AST.TString -> Some MemoryModel.Utf8String
     | AST.TChar -> Some MemoryModel.GraphemeCluster
     | _ -> None
 
-let internal materializeComparisonPlan (targetType: AST.Type) (args: CheckedAST.Expr list) : CheckedAST.Expr =
+let internal materializeComparisonPlan
+    (targetType: AST.Type)
+    (args: CheckedAST.Expr list)
+    : CheckedAST.Expr =
     match args with
     | [leftExpr; rightExpr] ->
         match targetType with
@@ -23,35 +55,14 @@ let internal materializeComparisonPlan (targetType: AST.Type) (args: CheckedAST.
         | AST.TRecord _
         | AST.TSum _ ->
             CheckedAST.Call (
-                ComparisonPlanning.eqHelperName targetType,
+                AST.functionIdForName (ComparisonPlanning.eqHelperName targetType),
                 AST.NonEmptyList.fromList [leftExpr; rightExpr]
             )
         | AST.TFunction _ ->
-            let leftName = "__comparison_plan_left"
-            let rightName = "__comparison_plan_right"
-            CheckedAST.Let (
-                CheckedAST.LPVariable leftName,
-                leftExpr,
-                CheckedAST.Let (
-                    CheckedAST.LPVariable rightName,
-                    rightExpr,
-                    CheckedAST.If (
-                        CheckedAST.BinOp (
-                            AST.Eq,
-                            CheckedAST.TupleAccess (CheckedAST.Var leftName, 1),
-                            CheckedAST.TupleAccess (CheckedAST.Var rightName, 1)
-                        ),
-                        CheckedAST.IndirectApply (
-                            CheckedAST.TupleAccess (CheckedAST.Var leftName, 1),
-                            AST.NonEmptyList.fromList [CheckedAST.Var leftName; CheckedAST.Var rightName]
-                        ),
-                        CheckedAST.BoolLiteral false
-                    )
-                )
-            )
+            Crash.crash "Function comparison bindings must be allocated from the checked symbol table"
         | AST.TInt ->
             CheckedAST.Call (
-                "Darklang.Stdlib.Int.__equals",
+                AST.functionIdForName "Darklang.Stdlib.Int.__equals",
                 AST.NonEmptyList.fromList [leftExpr; rightExpr]
             )
         | _ -> CheckedAST.BinOp (AST.Eq, leftExpr, rightExpr)
@@ -64,12 +75,20 @@ let sumTypeNamesFromVariantLookup (variantLookup: VariantLookup) : Set<string> =
     variantLookup
     |> Map.fold (fun names _ (typeName, _, _, _) -> Set.add typeName names) Set.empty
 
-let internal tryFindVariant
-    (constructorReference: CheckedAST.ConstructorReference)
-    (variantName: string)
+let internal tryFindRecordTypeNameById
+    (typeId: AST.TypeId)
+    (typeReg: Map<string, 'recordInfo>)
+    : string option =
+    typeReg |> Map.keys |> Seq.tryFind (fun name -> AST.typeIdForName name = typeId)
+
+let internal tryFindSumTypeNameById
+    (typeId: AST.TypeId)
     (variantLookup: VariantLookup)
-    : (string * string list * int * AST.Type list) option =
-    Map.tryFind $"{constructorReference.TypeName}.{variantName}" variantLookup
+    : string option =
+    variantLookup
+    |> Map.toSeq
+    |> Seq.tryPick (fun (_, (typeName, _, _, _)) ->
+        if AST.typeIdForName typeName = typeId then Some typeName else None)
 
 let internal tryFindVariantForType
     (variantName: string)
@@ -82,6 +101,40 @@ let internal tryFindVariantForType
         Map.tryFind $"{typeName}.{variantName}" variantLookup
         |> Option.orElseWith (fun () -> Map.tryFind variantName variantLookup)
     | _ -> Map.tryFind variantName variantLookup
+
+let internal tryFindVariantByTag
+    (typeName: string)
+    (tag: int)
+    (variantLookup: VariantLookup)
+    : (string * string list * int * AST.Type list) option =
+    variantLookup
+    |> Map.toSeq
+    |> Seq.tryPick (fun (_, ((declaringType, _, variantTag, _) as variant)) ->
+        if declaringType = typeName && variantTag = tag then Some variant else None)
+
+let internal tryFindVariantForTypeById
+    (constructorId: AST.ConstructorId)
+    (sourceType: AST.Type)
+    (variantLookup: VariantLookup)
+    : (string * string list * int * AST.Type list) option =
+    match sourceType with
+    | AST.TSum (typeName, _)
+    | AST.TRecord (typeName, _) ->
+        tryFindVariantByTag typeName (AST.constructorTag constructorId) variantLookup
+    | _ -> None
+
+let internal constructorReferenceMatches
+    (typeName: string)
+    (variantName: string)
+    (reference: CheckedAST.ConstructorReference)
+    (variantLookup: VariantLookup)
+    : bool =
+    match Map.tryFind variantName variantLookup with
+    | Some (declaringType, _, tag, _) ->
+        declaringType = typeName
+        && reference.TypeId = AST.typeIdForName typeName
+        && AST.constructorTag reference.ConstructorId = tag
+    | None -> false
 
 let internal int128ToCanonicalString (value: System.Int128) : string =
     value.ToString(System.Globalization.CultureInfo.InvariantCulture)
@@ -97,19 +150,19 @@ let private int128Words (value: System.Int128) : uint64 * uint64 =
 
 let internal int128Construction (value: System.Int128) : ANF.CExpr =
     let (low, high) = int128Words value
-    ANF.Call ("Darklang.Stdlib.Int128.__fromWords", [ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
+    ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int128.__fromWords", [ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
 
 let internal uint128Construction (value: System.UInt128) : ANF.CExpr =
     let (low, high) = uint128Words value
-    ANF.Call ("Darklang.Stdlib.UInt128.__fromWords", [ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
+    ANF.Call (AST.functionIdForName "Darklang.Stdlib.UInt128.__fromWords", [ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
 
 let internal int128LiteralComparison (valueAtom: ANF.Atom) (value: System.Int128) : ANF.CExpr =
     let (low, high) = int128Words value
-    ANF.Call ("Darklang.Stdlib.Int128.__equalsWords", [valueAtom; ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
+    ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int128.__equalsWords", [valueAtom; ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
 
 let internal uint128LiteralComparison (valueAtom: ANF.Atom) (value: System.UInt128) : ANF.CExpr =
     let (low, high) = uint128Words value
-    ANF.Call ("Darklang.Stdlib.UInt128.__equalsWords", [valueAtom; ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
+    ANF.Call (AST.functionIdForName "Darklang.Stdlib.UInt128.__equalsWords", [valueAtom; ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
 
 /// Convert AST.Type to a string for specialization keys
 let rec typeToString (ty: AST.Type) : string =
@@ -145,16 +198,16 @@ let rec typeToString (ty: AST.Type) : string =
     | AST.TTuple types -> "(" + (types |> List.map typeToString |> String.concat "*") + ")"
 
 /// Convert a literal pattern into an ANF sized integer
-let patternLiteralToSizedInt (pattern: AST.Pattern) : ANF.SizedInt option =
+let patternLiteralToSizedInt (pattern: CheckedAST.Pattern) : ANF.SizedInt option =
     match pattern with
-    | AST.PInt64 n -> Some (ANF.Int64 n)
-    | AST.PInt8Literal n -> Some (ANF.Int8 n)
-    | AST.PInt16Literal n -> Some (ANF.Int16 n)
-    | AST.PInt32Literal n -> Some (ANF.Int32 n)
-    | AST.PUInt8Literal n -> Some (ANF.UInt8 n)
-    | AST.PUInt16Literal n -> Some (ANF.UInt16 n)
-    | AST.PUInt32Literal n -> Some (ANF.UInt32 n)
-    | AST.PUInt64Literal n -> Some (ANF.UInt64 n)
+    | CheckedAST.PInt64 n -> Some (ANF.Int64 n)
+    | CheckedAST.PInt8Literal n -> Some (ANF.Int8 n)
+    | CheckedAST.PInt16Literal n -> Some (ANF.Int16 n)
+    | CheckedAST.PInt32Literal n -> Some (ANF.Int32 n)
+    | CheckedAST.PUInt8Literal n -> Some (ANF.UInt8 n)
+    | CheckedAST.PUInt16Literal n -> Some (ANF.UInt16 n)
+    | CheckedAST.PUInt32Literal n -> Some (ANF.UInt32 n)
+    | CheckedAST.PUInt64Literal n -> Some (ANF.UInt64 n)
     | _ -> None
 
 /// Try to convert a function call to a file I/O intrinsic CExpr
@@ -492,13 +545,13 @@ let tryRawMemoryIntrinsic
     | "__int64_to_uint32", [valueAtom] ->
         Some (ANF.Atom valueAtom)
     | "__int128_to_int", [valueAtom] ->
-        Some (ANF.Call ("Darklang.Stdlib.Int128.__toInt", [valueAtom]))
+        Some (ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int128.__toInt", [valueAtom]))
     | "__uint128_to_int", [valueAtom] ->
-        Some (ANF.Call ("Darklang.Stdlib.UInt128.__toInt", [valueAtom]))
+        Some (ANF.Call (AST.functionIdForName "Darklang.Stdlib.UInt128.__toInt", [valueAtom]))
     | "__int_to_int128", [valueAtom] ->
-        Some (ANF.Call ("Darklang.Stdlib.Int128.__fromInt", [valueAtom]))
+        Some (ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int128.__fromInt", [valueAtom]))
     | "__int_to_uint128", [valueAtom] ->
-        Some (ANF.Call ("Darklang.Stdlib.UInt128.__fromInt", [valueAtom]))
+        Some (ANF.Call (AST.functionIdForName "Darklang.Stdlib.UInt128.__fromInt", [valueAtom]))
     | "__blob_to_rawptr", [bytesAtom] ->
         Some (ANF.BlobToRawPtr bytesAtom)
     | "__rawptr_to_blob", [ptrAtom] ->
@@ -595,8 +648,12 @@ let isBuiltinBlobEmptyName (name: string) : bool =
     name = "Builtin.blobEmpty"
 
 /// Look up a name already resolved and canonicalized by type checking.
-let internal tryLookupResolved (name: string) (m: Map<string, 'a>) : ('a * string) option =
-    Map.tryFind name m |> Option.map (fun value -> (value, name))
+let internal tryLookupResolved
+    (name: string)
+    (m: Map<AST.FunctionId, 'a>)
+    : ('a * AST.FunctionId) option =
+    let id = AST.functionIdForName name
+    Map.tryFind id m |> Option.map (fun value -> (value, id))
 
 let internal unwrapErrorPayloadToString (expr: CheckedAST.Expr) : string option =
     match expr with

@@ -151,15 +151,15 @@ let rec internal buildEqHelperExpr
             let concreteFields =
                 match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
                 | Ok subst ->
-                    fields |> List.map (fun (name, fieldType) -> (name, resolveType aliasReg (applyTypeArguments subst fieldType)))
+                    fields |> List.mapi (fun index (name, fieldType) -> (index, name, resolveType aliasReg (applyTypeArguments subst fieldType)))
                 | Error _ ->
-                    fields |> List.map (fun (name, fieldType) -> (name, resolveType aliasReg fieldType))
+                    fields |> List.mapi (fun index (name, fieldType) -> (index, name, resolveType aliasReg fieldType))
 
             let leftRecordVar = "__dark_eq_helper_record_left"
             let rightRecordVar = "__dark_eq_helper_record_right"
             let fieldComparisons =
                 concreteFields
-                |> List.map (fun (fieldName, fieldType) ->
+                |> List.map (fun (fieldIndex, fieldName, fieldType) ->
                     buildEqHelperExpr
                         aliasReg
                         typeReg
@@ -167,8 +167,8 @@ let rec internal buildEqHelperExpr
                         indexedSumTypeReg
                         UseHelperCall
                         fieldType
-                        (RecordAccess (Var leftRecordVar, fieldName))
-                        (RecordAccess (Var rightRecordVar, fieldName)))
+                        (RecordAccess (Var leftRecordVar, resolvedRecordFieldReference recordTypeName fieldName fieldIndex))
+                        (RecordAccess (Var rightRecordVar, resolvedRecordFieldReference recordTypeName fieldName fieldIndex)))
             Let (LPVariable leftRecordVar, leftExpr, Let (LPVariable rightRecordVar, rightExpr, chainAndExpr fieldComparisons))
 
     | ExpandCurrent, TSum (sumTypeName, sumTypeArgs) ->
@@ -189,7 +189,7 @@ let rec internal buildEqHelperExpr
                                     Map.empty
                             variant.Fields
                             |> List.map (applySubst subst >> resolveType aliasReg)
-                        ($"{sumTypeName}.{variant.Name}", variant.Tag, concreteFields)))
+                        (variant.Name, variant.Tag, concreteFields)))
                 |> Option.defaultValue []
 
             let variantCases =
@@ -197,8 +197,10 @@ let rec internal buildEqHelperExpr
                 |> List.map (fun (variantName, tag, fieldTypes) ->
                     match fieldTypes with
                     | [] ->
+                        let constructor fields =
+                            PResolvedConstructor (sumTypeName, variantName, tag, fields)
                         let pairPattern =
-                            PTuple [PConstructor (variantName, []); PConstructor (variantName, [])]
+                            PTuple [constructor []; constructor []]
                         makeSimpleMatchCase pairPattern (BoolLiteral true)
                     | _ ->
                         let leftFields = fieldTypes |> List.mapi (fun index _ -> $"__dark_eq_helper_left_field_{tag}_{index}")
@@ -216,10 +218,12 @@ let rec internal buildEqHelperExpr
                                     (Var leftField)
                                     (Var rightField))
                             |> chainAndExpr
+                        let constructor fields =
+                            PResolvedConstructor (sumTypeName, variantName, tag, fields)
                         let pairPattern =
                             PTuple [
-                                PConstructor (variantName, List.map PVar leftFields)
-                                PConstructor (variantName, List.map PVar rightFields)
+                                constructor (List.map PVar leftFields)
+                                constructor (List.map PVar rightFields)
                             ]
                         makeSimpleMatchCase pairPattern fieldEqExpr)
 

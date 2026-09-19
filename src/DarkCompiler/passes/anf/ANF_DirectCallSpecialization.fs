@@ -16,8 +16,8 @@ type private ParameterRewrite =
     | ReplaceParameterWith of Atom
 
 type private ProgramAnalysis = {
-    DirectCalls: Map<string, Atom list list>
-    IndirectTargets: Set<string>
+    DirectCalls: Map<AST.FunctionId, Atom list list>
+    IndirectTargets: Set<AST.FunctionId>
 }
 
 type private ScalarLiteral =
@@ -37,7 +37,8 @@ type private KnownValue =
 type private LiteralPattern = (int * KnownValue) list
 
 type private LiteralClone = {
-    OriginalName: string
+    OriginalId: AST.FunctionId
+    CloneId: AST.FunctionId
     CloneName: string
     Pattern: LiteralPattern
 }
@@ -88,7 +89,7 @@ let private exposeKnownIndirectTargets (Program (functions, main)) : Program =
     Program (functions', exposeKnownIndirectExpr main)
 
 let private addDirectCall
-    (name: string)
+    (name: AST.FunctionId)
     (args: Atom list)
     (analysis: ProgramAnalysis)
     : ProgramAnalysis =
@@ -299,9 +300,9 @@ let private rewritesForFunction
     (analysis: ProgramAnalysis)
     (func: Function)
     : ParameterRewrite list option =
-    match Map.tryFind func.Name analysis.DirectCalls with
+    match Map.tryFind func.Id analysis.DirectCalls with
     | None -> None
-    | Some _ when Set.contains func.Name analysis.IndirectTargets -> None
+    | Some _ when Set.contains func.Id analysis.IndirectTargets -> None
     | Some calls ->
         func.TypedParams
         |> List.mapi (fun index parameter ->
@@ -318,13 +319,13 @@ let private rewritesForFunction
 let private buildRewriteMap
     (analysis: ProgramAnalysis)
     (functions: Function list)
-    : Map<string, ParameterRewrite list> =
+    : Map<AST.FunctionId, ParameterRewrite list> =
     functions
     |> List.choose (fun func ->
         rewritesForFunction analysis func
         |> Option.bind (fun rewrites ->
             if rewrites |> List.forall (fun rewrite -> rewrite = KeepParameter) then None
-            else Some (func.Name, rewrites)))
+            else Some (func.Id, rewrites)))
     |> Map.ofList
 
 let private rewriteAtom (substitutions: Map<TempId, Atom>) (atom: Atom) : Atom =
@@ -333,8 +334,8 @@ let private rewriteAtom (substitutions: Map<TempId, Atom>) (atom: Atom) : Atom =
     | _ -> atom
 
 let private rewriteCallArgs
-    (rewriteMap: Map<string, ParameterRewrite list>)
-    (name: string)
+    (rewriteMap: Map<AST.FunctionId, ParameterRewrite list>)
+    (name: AST.FunctionId)
     (args: Atom list)
     : Atom list =
     match Map.tryFind name rewriteMap with
@@ -351,7 +352,7 @@ let private rewriteCallArgs
         loop rewrites args []
 
 let private rewriteCExpr
-    (rewriteMap: Map<string, ParameterRewrite list>)
+    (rewriteMap: Map<AST.FunctionId, ParameterRewrite list>)
     (substitutions: Map<TempId, Atom>)
     (cexpr: CExpr)
     : CExpr =
@@ -439,7 +440,7 @@ let private rewriteCExpr
     | RuntimeErrorString atom -> RuntimeErrorString (rewrite atom)
 
 let rec private rewriteExpr
-    (rewriteMap: Map<string, ParameterRewrite list>)
+    (rewriteMap: Map<AST.FunctionId, ParameterRewrite list>)
     (substitutions: Map<TempId, Atom>)
     (expr: AExpr)
     : AExpr =
@@ -458,10 +459,10 @@ let rec private rewriteExpr
         )
 
 let private rewriteFunction
-    (rewriteMap: Map<string, ParameterRewrite list>)
+    (rewriteMap: Map<AST.FunctionId, ParameterRewrite list>)
     (func: Function)
     : Function =
-    match Map.tryFind func.Name rewriteMap with
+    match Map.tryFind func.Id rewriteMap with
     | None -> { func with Body = rewriteExpr rewriteMap Map.empty func.Body }
     | Some rewrites ->
         let rec pairParameters parameters rewrites pairs =
@@ -511,8 +512,10 @@ let private knownLiteralsForAtoms (env: ValueEnv) (atoms: Atom list) : ScalarLit
 let private knownValueForCExpr (env: ValueEnv) (cexpr: CExpr) : KnownValue option =
     let words name =
         match name with
-        | "Darklang.Stdlib.Int128.__fromWords" -> Some (fun low high -> Int128Value (low, high))
-        | "Darklang.Stdlib.UInt128.__fromWords" -> Some (fun low high -> UInt128Value (low, high))
+        | id when id = AST.functionIdForName "Darklang.Stdlib.Int128.__fromWords" ->
+            Some (fun low high -> Int128Value (low, high))
+        | id when id = AST.functionIdForName "Darklang.Stdlib.UInt128.__fromWords" ->
+            Some (fun low high -> UInt128Value (low, high))
         | _ -> None
     match cexpr with
     | Atom atom
@@ -532,11 +535,11 @@ let private addKnownBinding (id: TempId) (cexpr: CExpr) (env: ValueEnv) : ValueE
     | None -> Map.remove id env
 
 let private addKnownCall
-    (name: string)
+    (name: AST.FunctionId)
     (args: Atom list)
     (env: ValueEnv)
-    (calls: Map<string, KnownValue option list list>)
-    : Map<string, KnownValue option list list> =
+    (calls: Map<AST.FunctionId, KnownValue option list list>)
+    : Map<AST.FunctionId, KnownValue option list list> =
     let values = args |> List.map (knownValueForAtom env)
     let existing = Map.tryFind name calls |> Option.defaultValue []
     Map.add name (values :: existing) calls
@@ -544,8 +547,8 @@ let private addKnownCall
 let rec private collectKnownCalls
     (env: ValueEnv)
     (expr: AExpr)
-    (calls: Map<string, KnownValue option list list>)
-    : Map<string, KnownValue option list list> =
+    (calls: Map<AST.FunctionId, KnownValue option list list>)
+    : Map<AST.FunctionId, KnownValue option list list> =
     match expr with
     | Return _
     | Jump _ -> calls
@@ -581,7 +584,7 @@ let private literalPatternAt
             None)
     |> List.choose id
 
-let rec private directCallsTo (target: string) (expr: AExpr) : Atom list list =
+let rec private directCallsTo (target: AST.FunctionId) (expr: AExpr) : Atom list list =
     match expr with
     | Jump _ | Return _ -> []
     | Join (_, continuation, entry) -> directCallsTo target continuation @ directCallsTo target entry
@@ -603,7 +606,7 @@ let private cloneableParameterIndices (func: Function) : Set<int> =
             if isSpecializableValueType parameter.Type then Some index else None)
         |> List.choose id
         |> Set.ofList
-    match directCallsTo func.Name func.Body with
+    match directCallsTo func.Id func.Body with
     | [] -> allIndices
     | selfCalls ->
         func.TypedParams
@@ -619,17 +622,17 @@ let private cloneableParameterIndices (func: Function) : Set<int> =
 
 let private cloneGroups
     (analysis: ProgramAnalysis)
-    (knownCalls: Map<string, KnownValue option list list>)
+    (knownCalls: Map<AST.FunctionId, KnownValue option list list>)
     (functions: Function list)
-    : (string * LiteralPattern list) list =
+    : (AST.FunctionId * string * LiteralPattern list) list =
     functions
     |> List.choose (fun func ->
-        match Map.tryFind func.Name knownCalls with
+        match Map.tryFind func.Id knownCalls with
         | None -> None
-        | Some _ when Set.contains func.Name analysis.IndirectTargets -> None
+        | Some _ when Set.contains func.Id analysis.IndirectTargets -> None
         | Some calls ->
             let eligibleIndices = cloneableParameterIndices func
-            let isRecursive = not (List.isEmpty (directCallsTo func.Name func.Body))
+            let isRecursive = not (List.isEmpty (directCallsTo func.Id func.Body))
             let valueBenefit value =
                 match value with
                 | LiteralValue _ -> 1
@@ -672,17 +675,17 @@ let private cloneGroups
                 |> List.map fst
                 |> List.truncate maxLiteralClonesPerFunction
             if List.length patterns < 2 then None
-            else Some (func.Name, patterns))
-    |> List.sortBy fst
+            else Some (func.Id, func.Name, patterns))
+    |> List.sortBy (fun (id, _, _) -> id)
 
 let private boundedCloneGroups
-    (groups: (string * LiteralPattern list) list)
-    : (string * LiteralPattern list) list =
+    (groups: (AST.FunctionId * string * LiteralPattern list) list)
+    : (AST.FunctionId * string * LiteralPattern list) list =
     groups
-    |> List.fold (fun (selected, remaining) (name, patterns) ->
+    |> List.fold (fun (selected, remaining) (id, name, patterns) ->
         let count = List.length patterns
         if count <= remaining then
-            ((name, patterns) :: selected, remaining - count)
+            ((id, name, patterns) :: selected, remaining - count)
         else
             (selected, remaining)
     ) ([], maxLiteralClonesPerProgram)
@@ -691,15 +694,17 @@ let private boundedCloneGroups
 
 let private buildLiteralClones
     (existingNames: Set<string>)
-    (groups: (string * LiteralPattern list) list)
+    (groups: (AST.FunctionId * string * LiteralPattern list) list)
     : LiteralClone list =
     let proposed =
         groups
-        |> List.collect (fun (name, patterns) ->
+        |> List.collect (fun (id, name, patterns) ->
             patterns
             |> List.mapi (fun index pattern ->
-                { OriginalName = name
-                  CloneName = $"{name}__literal_{index}"
+                let cloneName = $"{name}__literal_{index}"
+                { OriginalId = id
+                  CloneId = AST.functionIdForName cloneName
+                  CloneName = cloneName
                   Pattern = pattern }))
     let proposedNames = proposed |> List.map (fun clone -> clone.CloneName)
     let namesAreUnique = List.length proposedNames = (proposedNames |> List.distinct |> List.length)
@@ -720,11 +725,11 @@ let private removePatternArguments
     |> List.choose id
 
 let private routeDirectCall
-    (clonesByName: Map<string, LiteralClone list>)
+    (clonesByName: Map<AST.FunctionId, LiteralClone list>)
     (env: ValueEnv)
-    (name: string)
+    (name: AST.FunctionId)
     (args: Atom list)
-    : string * Atom list =
+    : AST.FunctionId * Atom list =
     let matchesPattern pattern =
         pattern
         |> List.forall (fun (index, value) ->
@@ -733,11 +738,11 @@ let private routeDirectCall
         Map.tryFind name clonesByName
         |> Option.bind (List.tryFind (fun clone -> matchesPattern clone.Pattern))
     match matchingClone with
-    | Some clone -> (clone.CloneName, removePatternArguments clone.Pattern args)
+    | Some clone -> (clone.CloneId, removePatternArguments clone.Pattern args)
     | None -> (name, args)
 
 let private routeCExpr
-    (clonesByName: Map<string, LiteralClone list>)
+    (clonesByName: Map<AST.FunctionId, LiteralClone list>)
     (env: ValueEnv)
     (cexpr: CExpr)
     : CExpr =
@@ -754,7 +759,7 @@ let private routeCExpr
     | _ -> cexpr
 
 let rec private routeExpr
-    (clonesByName: Map<string, LiteralClone list>)
+    (clonesByName: Map<AST.FunctionId, LiteralClone list>)
     (env: ValueEnv)
     (expr: AExpr)
     : AExpr =
@@ -782,21 +787,29 @@ let private cexprForKnownValue (value: KnownValue) : CExpr =
     match value with
     | LiteralValue literal -> Atom (atomForScalarLiteral literal)
     | Int128Value (low, high) ->
-        Call ("Darklang.Stdlib.Int128.__fromWords", [IntLiteral (UInt64 low); IntLiteral (UInt64 high)])
+        Call (
+            AST.functionIdForName "Darklang.Stdlib.Int128.__fromWords",
+            [IntLiteral (UInt64 low); IntLiteral (UInt64 high)]
+        )
     | UInt128Value (low, high) ->
-        Call ("Darklang.Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 low); IntLiteral (UInt64 high)])
+        Call (
+            AST.functionIdForName "Darklang.Stdlib.UInt128.__fromWords",
+            [IntLiteral (UInt64 low); IntLiteral (UInt64 high)]
+        )
     | TupleValue fields -> TupleAlloc (atoms fields)
     | RecordValue (descriptor, fields) -> RecordAlloc (descriptor, atoms fields)
 
 let private cloneFunction
-    (clonesByName: Map<string, LiteralClone list>)
-    (functionsByName: Map<string, Function>)
+    (clonesByName: Map<AST.FunctionId, LiteralClone list>)
+    (functionsByName: Map<AST.FunctionId, Function>)
     (clone: LiteralClone)
     : Function =
     let original =
-        match Map.tryFind clone.OriginalName functionsByName with
+        match Map.tryFind clone.OriginalId functionsByName with
         | Some func -> func
-        | None -> Crash.crash $"Missing direct-call clone source '{clone.OriginalName}'"
+        | None ->
+            Crash.crash
+                $"Missing direct-call clone source '{AST.functionIdValue clone.OriginalId}'"
     let literalsByIndex = clone.Pattern |> Map.ofList
     let parameters =
         original.TypedParams
@@ -826,6 +839,7 @@ let private cloneFunction
         let body = rewriteExpr Map.empty substitutions original.Body
         List.foldBack (fun (id, cexpr) nested -> Let (id, cexpr, nested)) materializations body
     { original with
+        Id = clone.CloneId
         Name = clone.CloneName
         TypedParams = parameters
         Body = routeExpr clonesByName Map.empty substitutedBody }
@@ -882,9 +896,9 @@ let private specializeFiniteLiterals (Program (functions, main)) : Program =
         |> buildLiteralClones (functions |> List.map (fun func -> func.Name) |> Set.ofList)
     let clonesByName =
         clones
-        |> List.groupBy (fun clone -> clone.OriginalName)
+        |> List.groupBy (fun clone -> clone.OriginalId)
         |> Map.ofList
-    let functionsByName = functions |> List.map (fun func -> (func.Name, func)) |> Map.ofList
+    let functionsByName = functions |> List.map (fun func -> (func.Id, func)) |> Map.ofList
     let clonedFunctions = clones |> List.map (cloneFunction clonesByName functionsByName)
     let routedFunctions =
         functions

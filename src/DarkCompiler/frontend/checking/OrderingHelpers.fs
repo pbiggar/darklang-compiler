@@ -204,19 +204,23 @@ let rec internal buildCompareHelperExpr
                         else
                             Map.empty
                     let concreteFields = variant.Fields |> List.map (applySubst subst >> resolveType aliasReg)
-                    (variant.Name, $"{sumTypeName}.{variant.Name}", concreteFields))
+                    (variant.Name, variant.Tag, concreteFields))
                 |> List.sortBy (fun (caseName, _, _) -> caseName))
             |> Option.defaultValue []
         let cases =
             variants
-            |> List.collect (fun (leftCaseName, leftVariant, leftFields) ->
+            |> List.collect (fun (leftCaseName, leftTag, leftFields) ->
                 variants
-                |> List.map (fun (rightCaseName, rightVariant, rightFields) ->
+                |> List.map (fun (rightCaseName, rightTag, rightFields) ->
                     let order = System.String.CompareOrdinal(leftCaseName, rightCaseName)
+                    let leftConstructor fields =
+                        PResolvedConstructor (sumTypeName, leftCaseName, leftTag, fields)
+                    let rightConstructor fields =
+                        PResolvedConstructor (sumTypeName, rightCaseName, rightTag, fields)
                     match leftFields, rightFields, order with
                     | [], [], 0 ->
                         makeSimpleMatchCase
-                            (PTuple [PConstructor (leftVariant, []); PConstructor (rightVariant, [])])
+                            (PTuple [leftConstructor []; rightConstructor []])
                             (comparisonResultLiteral 0L)
                     | fieldTypes, _, 0 ->
                         let leftNames = fieldTypes |> List.mapi (fun index _ -> $"__dark_compare_sum_left_field_{index}")
@@ -227,15 +231,15 @@ let rec internal buildCompareHelperExpr
                                 callHelper fieldType (Var leftName) (Var rightName))
                         makeSimpleMatchCase
                             (PTuple [
-                                PConstructor (leftVariant, List.map PVar leftNames)
-                                PConstructor (rightVariant, List.map PVar rightNames)
+                                leftConstructor (List.map PVar leftNames)
+                                rightConstructor (List.map PVar rightNames)
                             ])
                             (chainCompareExprs comparisons)
                     | _ ->
                         let leftPattern =
-                            PConstructor (leftVariant, List.map (fun _ -> PWildcard) leftFields)
+                            leftConstructor (List.map (fun _ -> PWildcard) leftFields)
                         let rightPattern =
-                            PConstructor (rightVariant, List.map (fun _ -> PWildcard) rightFields)
+                            rightConstructor (List.map (fun _ -> PWildcard) rightFields)
                         makeSimpleMatchCase
                             (PTuple [leftPattern; rightPattern])
                             (comparisonResultLiteral (if order < 0 then -1L else 1L))))

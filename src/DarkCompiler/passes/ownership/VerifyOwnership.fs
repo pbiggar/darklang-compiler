@@ -258,7 +258,7 @@ let verifyFunctions
     (functions: Function<'leaf, 'id> list) =
     let duplicateName =
         functions
-        |> List.countBy (fun functionDefinition -> functionDefinition.Definition.Name)
+        |> List.countBy (fun functionDefinition -> functionDefinition.Definition.Id)
         |> List.tryFind (fun (_, count) -> count > 1)
         |> Option.map fst
     match duplicateName with
@@ -278,13 +278,13 @@ let verifyFunctions
                 |> List.tryPick (fun (functionDefinition, expected) ->
                     let body = functionDefinition.Definition.Body.Body
                     let boundaryCall : HIR.FunctionCall = {
-                        Target = functionDefinition.Definition.Name
+                        Target = functionDefinition.Definition.Id
                         Arguments = body.Parameters |> List.map (fun parameter -> parameter.Value)
                         Result = body.Result
                     }
                     match semantics.CallOwnership boundaryCall with
                     | Some registered when registered <> expected ->
-                        Some functionDefinition.Definition.Name
+                        Some functionDefinition.Definition.Id
                     | _ -> None)
             match conflictingRegistration with
             | Some target -> Error (InconsistentRegisteredCallOwnership target)
@@ -292,7 +292,7 @@ let verifyFunctions
                 let registry =
                     signatures
                     |> List.map (fun (functionDefinition, signature) ->
-                        functionDefinition.Definition.Name, signature)
+                        functionDefinition.Definition.Id, signature)
                     |> Map.ofList
                 let programSemantics = {
                     semantics with

@@ -24,9 +24,9 @@ let private functionByName (name: string) (functions: Function list) : Function 
 let rec private directCallArgs (target: string) (expr: AExpr) : Atom list option =
     match expr with
     | Jump _ | Return _ -> None
-    | Let (_, Call (name, args), _) when name = target -> Some args
-    | Let (_, BorrowedCall (name, args), _) when name = target -> Some args
-    | Let (_, TailCall (name, args), _) when name = target -> Some args
+    | Let (_, Call (name, args), _) when name = AST.functionIdForName target -> Some args
+    | Let (_, BorrowedCall (name, args), _) when name = AST.functionIdForName target -> Some args
+    | Let (_, TailCall (name, args), _) when name = AST.functionIdForName target -> Some args
     | Let (_, _, body) -> directCallArgs target body
     | Join (_, thenBranch, elseBranch)
     | If (_, thenBranch, elseBranch) ->
@@ -77,7 +77,8 @@ let testUniformLiteralParametersRewriteRecursiveGroup () : TestResult =
     let gValue = param 2
     let gConstant = param 3
     let f =
-        { Name = "f"
+        { Id = AST.functionIdForName "f"
+          Name = "f"
           TypedParams = [fValue; fConstant]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -87,12 +88,13 @@ let testUniformLiteralParametersRewriteRecursiveGroup () : TestResult =
                 Prim (Add, Var fValue.Id, Var fConstant.Id),
                 Let (
                     TempId 5,
-                    Call ("g", [Var (TempId 4); intAtom 7L]),
+                    Call (AST.functionIdForName "g", [Var (TempId 4); intAtom 7L]),
                     Return (Var (TempId 5))
                 )
             ) }
     let g =
-        { Name = "g"
+        { Id = AST.functionIdForName "g"
+          Name = "g"
           TypedParams = [gValue; gConstant]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -102,12 +104,12 @@ let testUniformLiteralParametersRewriteRecursiveGroup () : TestResult =
                 Prim (Sub, Var gValue.Id, Var gConstant.Id),
                 Let (
                     TempId 7,
-                    TailCall ("f", [Var (TempId 6); intAtom 7L]),
+                    TailCall (AST.functionIdForName "f", [Var (TempId 6); intAtom 7L]),
                     Return (Var (TempId 7))
                 )
             ) }
     let main =
-        Let (TempId 8, Call ("f", [intAtom 1L; intAtom 7L]), Return (Var (TempId 8)))
+        Let (TempId 8, Call (AST.functionIdForName "f", [intAtom 1L; intAtom 7L]), Return (Var (TempId 8)))
     let (Program (functions, main')) =
         ANF_DirectCallSpecialization.specializeProgram
             (Program ([f; g], main))
@@ -134,26 +136,28 @@ let testDifferingLiteralsRetainUnspecializedFallback () : TestResult =
     let constant = param 0
     let dynamic = param 3
     let target =
-        { Name = "target"
+        { Id = AST.functionIdForName "target"
+          Name = "target"
           TypedParams = [constant]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
           Body = Return (Var constant.Id) }
     let caller =
-        { Name = "caller"
+        { Id = AST.functionIdForName "caller"
+          Name = "caller"
           TypedParams = [dynamic]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
           Body =
             Let (
                 TempId 1,
-                Call ("target", [intAtom 7L]),
+                Call (AST.functionIdForName "target", [intAtom 7L]),
                 Let (
                     TempId 2,
-                    Call ("target", [intAtom 8L]),
+                    Call (AST.functionIdForName "target", [intAtom 8L]),
                     Let (
                         TempId 4,
-                        TailCall ("target", [Var dynamic.Id]),
+                        TailCall (AST.functionIdForName "target", [Var dynamic.Id]),
                         Return (Var (TempId 4))
                     )
                 )
@@ -168,7 +172,8 @@ let testDifferingLiteralsRetainUnspecializedFallback () : TestResult =
 let testFiniteScalarLiteralsCreateBoundedClones () : TestResult =
     let constant = param 0
     let target =
-        { Name = "target"
+        { Id = AST.functionIdForName "target"
+          Name = "target"
           TypedParams = [constant]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -179,17 +184,18 @@ let testFiniteScalarLiteralsCreateBoundedClones () : TestResult =
                 Return (Var (TempId 1))
             ) }
     let caller =
-        { Name = "caller"
+        { Id = AST.functionIdForName "caller"
+          Name = "caller"
           TypedParams = []
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
           Body =
             Let (
                 TempId 2,
-                Call ("target", [intAtom 7L]),
+                Call (AST.functionIdForName "target", [intAtom 7L]),
                 Let (
                     TempId 3,
-                    TailCall ("target", [intAtom 8L]),
+                    TailCall (AST.functionIdForName "target", [intAtom 8L]),
                     Return (Var (TempId 3))
                 )
             ) }
@@ -216,7 +222,8 @@ let testRecursiveCloneKeepsTailCallAndReducedSignature () : TestResult =
     let value = param 0
     let mode = param 1
     let loop =
-        { Name = "loop"
+        { Id = AST.functionIdForName "loop"
+          Name = "loop"
           TypedParams = [value; mode]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -226,17 +233,17 @@ let testRecursiveCloneKeepsTailCallAndReducedSignature () : TestResult =
                 Prim (Sub, Var value.Id, intAtom 1L),
                 Let (
                     TempId 3,
-                    TailCall ("loop", [Var (TempId 2); Var mode.Id]),
+                    TailCall (AST.functionIdForName "loop", [Var (TempId 2); Var mode.Id]),
                     Return (Var (TempId 3))
                 )
             ) }
     let main =
         Let (
             TempId 4,
-            Call ("loop", [intAtom 10L; intAtom 1L]),
+            Call (AST.functionIdForName "loop", [intAtom 10L; intAtom 1L]),
             Let (
                 TempId 5,
-                Call ("loop", [intAtom 10L; intAtom 2L]),
+                Call (AST.functionIdForName "loop", [intAtom 10L; intAtom 2L]),
                 Return (Var (TempId 5))
             )
         )
@@ -257,23 +264,25 @@ let testRecursiveCloneKeepsTailCallAndReducedSignature () : TestResult =
 let testUniformStringLiteralIsSpecialized () : TestResult =
     let text = typedParam 0 AST.TString
     let target =
-        { Name = "managed"
+        { Id = AST.functionIdForName "managed"
+          Name = "managed"
           TypedParams = [text]
           ReturnType = AST.TString
           ReturnOwnership = OwnedReturn
           Body = Return (Var text.Id) }
     let caller =
-        { Name = "caller"
+        { Id = AST.functionIdForName "caller"
+          Name = "caller"
           TypedParams = []
           ReturnType = AST.TString
           ReturnOwnership = OwnedReturn
           Body =
             Let (
                 TempId 1,
-                Call ("managed", [StringLiteral "second"]),
+                Call (AST.functionIdForName "managed", [StringLiteral "second"]),
                 Let (
                     TempId 2,
-                    Call ("managed", [StringLiteral "second"]),
+                    Call (AST.functionIdForName "managed", [StringLiteral "second"]),
                     Return (Var (TempId 2))
                 )
             ) }
@@ -292,21 +301,27 @@ let testImmediateSemanticValuesCreateClones () : TestResult =
     let checkCase (name, typ, firstValue, secondValue) =
         let value = typedParam 0 typ
         let target =
-            { Name = name
+            { Id = AST.functionIdForName name
+              Name = name
               TypedParams = [value]
               ReturnType = typ
               ReturnOwnership = OwnedReturn
               Body = Return (Var value.Id) }
         let caller =
-            { Name = $"{name}Caller"
+            { Id = AST.functionIdForName $"{name}Caller"
+              Name = $"{name}Caller"
               TypedParams = []
               ReturnType = typ
               ReturnOwnership = OwnedReturn
               Body =
                 Let (
                     TempId 1,
-                    Call (name, [firstValue]),
-                    Let (TempId 2, Call (name, [secondValue]), Return (Var (TempId 2)))
+                    Call (AST.functionIdForName name, [firstValue]),
+                    Let (
+                        TempId 2,
+                        Call (AST.functionIdForName name, [secondValue]),
+                        Return (Var (TempId 2))
+                    )
                 ) }
         let (Program (functions, _)) =
             ANF_DirectCallSpecialization.specializeProgram
@@ -323,20 +338,22 @@ let testImmediateSemanticValuesCreateClones () : TestResult =
 let testKnownIndirectTargetBecomesSpecializable () : TestResult =
     let value = param 0
     let target =
-        { Name = "knownTarget"
+        { Id = AST.functionIdForName "knownTarget"
+          Name = "knownTarget"
           TypedParams = [value]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
           Body = Return (Var value.Id) }
     let caller =
-        { Name = "knownCaller"
+        { Id = AST.functionIdForName "knownCaller"
+          Name = "knownCaller"
           TypedParams = []
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
           Body =
             Let (
                 TempId 1,
-                IndirectCall (FuncRef "knownTarget", [intAtom 7L]),
+                IndirectCall (FuncRef (AST.functionIdForName "knownTarget"), [intAtom 7L]),
                 Return (Var (TempId 1))
             ) }
     let (Program (functions, _)) =
@@ -349,26 +366,28 @@ let testKnownIndirectTargetBecomesSpecializable () : TestResult =
 let testMismatchedBottomPlaceholderDoesNotSeedClone () : TestResult =
     let value = typedParam 0 AST.TString
     let target =
-        { Name = "bottomTarget"
+        { Id = AST.functionIdForName "bottomTarget"
+          Name = "bottomTarget"
           TypedParams = [value]
           ReturnType = AST.TString
           ReturnOwnership = OwnedReturn
           Body = Return (Var value.Id) }
     let caller =
-        { Name = "bottomCaller"
+        { Id = AST.functionIdForName "bottomCaller"
+          Name = "bottomCaller"
           TypedParams = []
           ReturnType = AST.TString
           ReturnOwnership = OwnedReturn
           Body =
             Let (
                 TempId 1,
-                Call ("bottomTarget", [StringLiteral "first"]),
+                Call (AST.functionIdForName "bottomTarget", [StringLiteral "first"]),
                 Let (
                     TempId 2,
-                    Call ("bottomTarget", [StringLiteral "second"]),
+                    Call (AST.functionIdForName "bottomTarget", [StringLiteral "second"]),
                     Let (
                         TempId 3,
-                        Call ("bottomTarget", [UnitLiteral]),
+                        Call (AST.functionIdForName "bottomTarget", [UnitLiteral]),
                         Return (Var (TempId 2))
                     )
                 )
@@ -387,13 +406,15 @@ let testConstructionValuesCreateClones () : TestResult =
     let checkCase name typ firstConstruction secondConstruction =
         let value = typedParam 0 typ
         let target =
-            { Name = name
+            { Id = AST.functionIdForName name
+              Name = name
               TypedParams = [value]
               ReturnType = typ
               ReturnOwnership = OwnedReturn
               Body = Return (Var value.Id) }
         let caller =
-            { Name = $"{name}Caller"
+            { Id = AST.functionIdForName $"{name}Caller"
+              Name = $"{name}Caller"
               TypedParams = []
               ReturnType = typ
               ReturnOwnership = OwnedReturn
@@ -403,11 +424,15 @@ let testConstructionValuesCreateClones () : TestResult =
                     firstConstruction,
                     Let (
                         TempId 2,
-                        Call (name, [Var (TempId 1)]),
+                        Call (AST.functionIdForName name, [Var (TempId 1)]),
                         Let (
                             TempId 3,
                             secondConstruction,
-                            Let (TempId 4, Call (name, [Var (TempId 3)]), Return (Var (TempId 4)))
+                            Let (
+                                TempId 4,
+                                Call (AST.functionIdForName name, [Var (TempId 3)]),
+                                Return (Var (TempId 4))
+                            )
                         )
                     )
                 ) }
@@ -424,16 +449,16 @@ let testConstructionValuesCreateClones () : TestResult =
         checkCase
             "wideValue"
             AST.TInt128
-            (Call ("Darklang.Stdlib.Int128.__fromWords", [IntLiteral (UInt64 1UL); IntLiteral (UInt64 0UL)]))
-            (Call ("Darklang.Stdlib.Int128.__fromWords", [IntLiteral (UInt64 2UL); IntLiteral (UInt64 0UL)]))
+            (Call (AST.functionIdForName "Darklang.Stdlib.Int128.__fromWords", [IntLiteral (UInt64 1UL); IntLiteral (UInt64 0UL)]))
+            (Call (AST.functionIdForName "Darklang.Stdlib.Int128.__fromWords", [IntLiteral (UInt64 2UL); IntLiteral (UInt64 0UL)]))
     let uint128Result =
         Result.bind
             (fun () ->
                 checkCase
                     "unsignedWideValue"
                     AST.TUInt128
-                    (Call ("Darklang.Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 3UL); IntLiteral (UInt64 0UL)]))
-                    (Call ("Darklang.Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 4UL); IntLiteral (UInt64 0UL)])))
+                    (Call (AST.functionIdForName "Darklang.Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 3UL); IntLiteral (UInt64 0UL)]))
+                    (Call (AST.functionIdForName "Darklang.Stdlib.UInt128.__fromWords", [IntLiteral (UInt64 4UL); IntLiteral (UInt64 0UL)])))
             int128Result
     let tupleResult =
         Result.bind
@@ -461,23 +486,25 @@ let testConstructionValuesCreateClones () : TestResult =
 let testFloatLiteralKeysPreserveDistinctBitPatterns () : TestResult =
     let value = typedParam 0 AST.TFloat64
     let target =
-        { Name = "floatBits"
+        { Id = AST.functionIdForName "floatBits"
+          Name = "floatBits"
           TypedParams = [value]
           ReturnType = AST.TFloat64
           ReturnOwnership = OwnedReturn
           Body = Return (Var value.Id) }
     let caller =
-        { Name = "caller"
+        { Id = AST.functionIdForName "caller"
+          Name = "caller"
           TypedParams = []
           ReturnType = AST.TFloat64
           ReturnOwnership = OwnedReturn
           Body =
             Let (
                 TempId 1,
-                Call ("floatBits", [FloatLiteral 0.0]),
+                Call (AST.functionIdForName "floatBits", [FloatLiteral 0.0]),
                 Let (
                     TempId 2,
-                    Call ("floatBits", [FloatLiteral -0.0]),
+                    Call (AST.functionIdForName "floatBits", [FloatLiteral -0.0]),
                     Return (Var (TempId 2))
                 )
             ) }
@@ -494,7 +521,8 @@ let testFloatLiteralKeysPreserveDistinctBitPatterns () : TestResult =
 let testLiteralCloneCountIsCapped () : TestResult =
     let constant = param 0
     let target =
-        { Name = "capped"
+        { Id = AST.functionIdForName "capped"
+          Name = "capped"
           TypedParams = [constant]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -505,11 +533,12 @@ let testLiteralCloneCountIsCapped () : TestResult =
         | value :: rest ->
             Let (
                 TempId nextId,
-                Call ("capped", [intAtom value]),
+                Call (AST.functionIdForName "capped", [intAtom value]),
                 callEach rest (nextId + 1) body
             )
     let caller =
-        { Name = "caller"
+        { Id = AST.functionIdForName "caller"
+          Name = "caller"
           TypedParams = []
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -531,7 +560,8 @@ let testSpecializedRecursiveSignaturesReachMirAndLir () : TestResult =
     let mode = param 1
     let accumulator = param 2
     let loop =
-        { Name = "pipelineLoop"
+        { Id = AST.functionIdForName "pipelineLoop"
+          Name = "pipelineLoop"
           TypedParams = [counter; mode; accumulator]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -544,7 +574,7 @@ let testSpecializedRecursiveSignaturesReachMirAndLir () : TestResult =
                     Prim (Add, Var accumulator.Id, Var mode.Id),
                     Let (
                         TempId 5,
-                        TailCall ("pipelineLoop", [Var (TempId 3); Var mode.Id; Var (TempId 4)]),
+                        TailCall (AST.functionIdForName "pipelineLoop", [Var (TempId 3); Var mode.Id; Var (TempId 4)]),
                         Return (Var (TempId 5))
                     )
                 )
@@ -552,10 +582,10 @@ let testSpecializedRecursiveSignaturesReachMirAndLir () : TestResult =
     let main =
         Let (
             TempId 6,
-            Call ("pipelineLoop", [intAtom 10L; intAtom 2L; intAtom 0L]),
+            Call (AST.functionIdForName "pipelineLoop", [intAtom 10L; intAtom 2L; intAtom 0L]),
             Let (
                 TempId 7,
-                Call ("pipelineLoop", [intAtom 10L; intAtom 3L; intAtom 0L]),
+                Call (AST.functionIdForName "pipelineLoop", [intAtom 10L; intAtom 3L; intAtom 0L]),
                 Return (Var (TempId 7))
             )
         )
@@ -603,35 +633,38 @@ let testAddressTakenAndClosureTargetsAreExcluded () : TestResult =
     let addressParam = param 0
     let closureParam = param 1
     let addressTaken =
-        { Name = "addressTaken"
+        { Id = AST.functionIdForName "addressTaken"
+          Name = "addressTaken"
           TypedParams = [addressParam]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
           Body = Return (intAtom 1L) }
     let closureTarget =
-        { Name = "closureTarget"
+        { Id = AST.functionIdForName "closureTarget"
+          Name = "closureTarget"
           TypedParams = [closureParam]
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
           Body = Return (intAtom 2L) }
     let observer =
-        { Name = "observer"
+        { Id = AST.functionIdForName "observer"
+          Name = "observer"
           TypedParams = []
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
           Body =
             Let (
                 TempId 2,
-                Atom (FuncRef "addressTaken"),
+                Atom (FuncRef (AST.functionIdForName "addressTaken")),
                 Let (
                     TempId 3,
-                    ClosureAlloc ("closureTarget", []),
+                    ClosureAlloc (AST.functionIdForName "closureTarget", []),
                     Let (
                         TempId 4,
-                        Call ("addressTaken", [intAtom 7L]),
+                        Call (AST.functionIdForName "addressTaken", [intAtom 7L]),
                         Let (
                             TempId 5,
-                            Call ("closureTarget", [intAtom 7L]),
+                            Call (AST.functionIdForName "closureTarget", [intAtom 7L]),
                             Return (Var (TempId 5))
                         )
                     )

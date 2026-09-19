@@ -10,10 +10,15 @@ open RefCountInsertion
 open MemoryShapeTests
 open RcCleanupTests
 
+let private functionRegistry entries : TypeRegistries.FunctionRegistry =
+    entries
+    |> List.map (fun (name, typ) -> AST.functionIdForName name, (name, typ))
+    |> Map.ofList
+
 let testBorrowedCallMaterializesOwnedLocal () : TestResult =
     let nodeType = AST.TList AST.TInt64
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             ("consumer", AST.TFunction ([nodeType; AST.TInt64], AST.TInt64))
             ("Darklang.Stdlib.List.__node2GetChild_i64", AST.TFunction ([nodeType; AST.TInt64], nodeType))
             ("Darklang.Stdlib.List.__nodeMeasure_i64", AST.TFunction ([nodeType], AST.TInt64))
@@ -36,6 +41,7 @@ let testBorrowedCallMaterializesOwnedLocal () : TestResult =
     let measureTemp = TempId 3
 
     let func : Function = {
+        Id = AST.functionIdForName "consumer"
         Name = "consumer"
         TypedParams = [
             { Id = nodeParam; Type = nodeType }
@@ -46,10 +52,10 @@ let testBorrowedCallMaterializesOwnedLocal () : TestResult =
         Body =
             Let (
                 childTemp,
-                BorrowedCall ("Darklang.Stdlib.List.__node2GetChild_i64", [Var nodeParam; Var indexParam]),
+                BorrowedCall (AST.functionIdForName "Darklang.Stdlib.List.__node2GetChild_i64", [Var nodeParam; Var indexParam]),
                 Let (
                     measureTemp,
-                    Call ("Darklang.Stdlib.List.__nodeMeasure_i64", [Var childTemp]),
+                    Call (AST.functionIdForName "Darklang.Stdlib.List.__nodeMeasure_i64", [Var childTemp]),
                     Return (Var measureTemp)
                 )
             )
@@ -67,7 +73,7 @@ let testBorrowedCallMaterializesOwnedLocal () : TestResult =
 let testReturnedBorrowedCallMaterializesOwnership () : TestResult =
     let nodeType = AST.TList AST.TInt64
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             ("project", AST.TFunction ([nodeType], nodeType))
             ("borrowChild", AST.TFunction ([nodeType], nodeType))
         ]
@@ -86,6 +92,7 @@ let testReturnedBorrowedCallMaterializesOwnership () : TestResult =
     let nodeParam = TempId 0
     let childTemp = TempId 1
     let func : Function = {
+        Id = AST.functionIdForName "project"
         Name = "project"
         TypedParams = [
             { Id = nodeParam; Type = nodeType }
@@ -95,7 +102,7 @@ let testReturnedBorrowedCallMaterializesOwnership () : TestResult =
         Body =
             Let (
                 childTemp,
-                BorrowedCall ("borrowChild", [Var nodeParam]),
+                BorrowedCall (AST.functionIdForName "borrowChild", [Var nodeParam]),
                 Return (Var childTemp)
             )
     }
@@ -110,7 +117,7 @@ let testReturnedBorrowedCallMaterializesOwnership () : TestResult =
 let testCallReturningClosureGetsAutoDecAfterUse () : TestResult =
     let closureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             ("makeClosure", AST.TFunction ([], closureType))
         ]
 
@@ -128,6 +135,7 @@ let testCallReturningClosureGetsAutoDecAfterUse () : TestResult =
     let closureTemp = TempId 0
     let resultTemp = TempId 1
     let func : Function = {
+        Id = AST.functionIdForName "caller"
         Name = "caller"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -135,7 +143,7 @@ let testCallReturningClosureGetsAutoDecAfterUse () : TestResult =
         Body =
             Let (
                 closureTemp,
-                Call ("makeClosure", []),
+                Call (AST.functionIdForName "makeClosure", []),
                 Let (
                     resultTemp,
                     ClosureCall (Var closureTemp, [IntLiteral (Int64 5L)]),
@@ -155,7 +163,7 @@ let testClosureCallReturningClosureGetsAutoDecAfterUse () : TestResult =
     let returnedClosureType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let makerClosureType = AST.TFunction ([AST.TInt64], returnedClosureType)
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             ("makeClosure", makerClosureType)
             ("returnedClosure", returnedClosureType)
         ]
@@ -175,6 +183,7 @@ let testClosureCallReturningClosureGetsAutoDecAfterUse () : TestResult =
     let returnedTemp = TempId 1
     let resultTemp = TempId 2
     let func : Function = {
+        Id = AST.functionIdForName "caller"
         Name = "caller"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -182,7 +191,7 @@ let testClosureCallReturningClosureGetsAutoDecAfterUse () : TestResult =
         Body =
             Let (
                 makerTemp,
-                ClosureAlloc ("makeClosure", []),
+                ClosureAlloc (AST.functionIdForName "makeClosure", []),
                 Let (
                     returnedTemp,
                     ClosureCall (Var makerTemp, [IntLiteral (Int64 5L)]),
@@ -221,6 +230,7 @@ let testPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
     let resultTemp = TempId 1
     let enumType = AST.TSum ("Color", [])
     let func : Function = {
+        Id = AST.functionIdForName "pureEnumBinding"
         Name = "pureEnumBinding"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -267,6 +277,7 @@ let testGenericPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
     let resultTemp = TempId 1
     let enumType = AST.TSum ("Phantom", [AST.TString])
     let func : Function = {
+        Id = AST.functionIdForName "genericPureEnumBinding"
         Name = "genericPureEnumBinding"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -294,6 +305,7 @@ let testProgramRcFreshTempsFollowExistingProgramTemps () : TestResult =
     let lowTemp = TempId 1000
     let highTemp = TempId 6000
     let func : Function = {
+        Id = AST.functionIdForName "freshTempBoundary"
         Name = "freshTempBoundary"
         TypedParams = []
         ReturnType = AST.TUnit
@@ -304,7 +316,7 @@ let testProgramRcFreshTempsFollowExistingProgramTemps () : TestResult =
                 Atom (IntLiteral (Int64 0L)),
                 Let (
                     highTemp,
-                    Call ("makeString", []),
+                    Call (AST.functionIdForName "makeString", []),
                     Return UnitLiteral
                 )
             )
@@ -317,7 +329,7 @@ let testProgramRcFreshTempsFollowExistingProgramTemps () : TestResult =
         RecordTypeParamsReg = Map.empty
         VariantLookup = Map.empty
         RcSumShapeReg = Map.empty
-        FuncReg = Map.ofList [("makeString", AST.TFunction ([], AST.TString))]
+        FuncReg = functionRegistry [("makeString", AST.TFunction ([], AST.TString))]
         FuncParams = Map.empty
         ModuleRegistry = Map.empty
     }
@@ -362,7 +374,7 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
                 ("Payload", { TypeParams = []; Payloads = [0, None; 1, Some AST.TString] })
             ]
         FuncReg =
-            Map.ofList [
+            functionRegistry [
                 ("mkDict", AST.TFunction ([], dictType))
             ]
         FuncParams = Map.empty
@@ -374,6 +386,7 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
     let dictTemp = TempId 0
     let resultTemp = TempId 1
     let func : Function = {
+        Id = AST.functionIdForName "canonicalBareSum"
         Name = "canonicalBareSum"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -381,7 +394,7 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
         Body =
             Let (
                 dictTemp,
-                Call ("mkDict", []),
+                Call (AST.functionIdForName "mkDict", []),
                 Let (
                     resultTemp,
                     Atom (IntLiteral (Int64 1L)),

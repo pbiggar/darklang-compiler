@@ -29,7 +29,7 @@ let internal testJoinCleanupPaths () =
     let childType = AST.TTuple [AST.TInt64]
     let ctx : TypeContext = {
         TypeReg = Map.empty; VariantLookup = Map.empty; SumShapeReg = Map.empty
-        FuncReg = Map.ofList ["observe", AST.TFunction ([AST.TInt64], AST.TUnit)]
+        FuncReg = Map.ofList [AST.functionIdForName "observe", ("observe", AST.TFunction ([AST.TInt64], AST.TUnit))]
         FuncParams = Map.empty; ClosureFuncs = Map.empty; TempTypes = Map.empty
         TypePlanning = createRcTypePlanningContext ()
     }
@@ -39,11 +39,11 @@ let internal testJoinCleanupPaths () =
     let flag = TempId 13
     let target = { Id = TempId 14; Type = AST.TInt64 }
     let func : Function = {
-        Name = "joinCleanup"; ReturnType = childType; ReturnOwnership = OwnedReturn
+        Id = AST.functionIdForName "joinCleanup"; Name = "joinCleanup"; ReturnType = childType; ReturnOwnership = OwnedReturn
         TypedParams = [{ Id = borrowed; Type = childType }; { Id = flag; Type = AST.TBool }]
         Body = Let (owner, TupleAlloc [joinValue],
             Join (target,
-                Let (TempId 15, Call ("observe", [Var target.Id]),
+                Let (TempId 15, Call (AST.functionIdForName "observe", [Var target.Id]),
                     If (Var flag, Return (Var owner), Return (Var borrowed))),
                 Let (local, TupleAlloc [joinValue], Jump (target.Id, joinValue))))
     }
@@ -63,7 +63,7 @@ let internal testJoinCleanupPaths () =
                 match operation with
                 | RefCountDec (Var id, _, _, _) -> Some ($"dec:{id}")
                 | RefCountInc (Var id, _, _, _) -> Some ($"inc:{id}")
-                | Call ("observe", _) -> Some "observe"
+                | Call (name, _) when name = AST.functionIdForName "observe" -> Some "observe"
                 | _ -> None
             paths joins (match event with Some value -> value :: events | None -> events) body
     let actual = paths Map.empty [] transformed.Body

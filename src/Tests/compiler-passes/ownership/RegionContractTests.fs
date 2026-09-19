@@ -4,6 +4,8 @@ module RegionContractTests
 
 open OwnedIR
 
+let private fid = AST.functionIdForName
+
 let private identity = function
     | "a" -> HIR.ValueId 0
     | "b" -> HIR.ValueId 1
@@ -11,10 +13,23 @@ let private identity = function
     | "aAlias" -> HIR.ValueId 3
     | "scalar" -> HIR.ValueId 4
     | name -> Crash.crash $"Unsupported ownership fixture identity {name}"
+let private binding = function
+    | "a" -> AST.bindingId 0
+    | "b" -> AST.bindingId 1
+    | "c" -> AST.bindingId 2
+    | "aAlias" -> AST.bindingId 3
+    | "scalar" -> AST.bindingId 4
+    | "escape" -> AST.bindingId 5
+    | name -> Crash.crash $"Unsupported ownership fixture binding {name}"
+let private bindingName id =
+    ["a"; "b"; "c"; "aAlias"; "scalar"; "escape"]
+    |> List.tryFind (fun name -> binding name = id)
+    |> Option.defaultWith (fun () -> Crash.crash "Unsupported ownership fixture binding identity")
 let private value name : HIR.Value = { Id = identity name; Type = AST.TInt64 }
 let private unitValue : HIR.Value = { Id = HIR.ValueId 100; Type = AST.TUnit }
 let private reference name : HIR.Operand =
-    { Expression = CheckedAST.Var name; Type = AST.TInt64; Inputs = Map.ofList [name, value name] }
+    let id = binding name
+    { Expression = CheckedAST.Local id; Type = AST.TInt64; Inputs = Map.ofList [id, value name] }
 let private condition : HIR.Operand = { Expression = CheckedAST.BoolLiteral true; Type = AST.TBool; Inputs = Map.empty }
 
 type private TestLeaf = {
@@ -27,21 +42,22 @@ let private semantics : Semantics<TestLeaf, string> = {
     LeafUniqueness = fun leaf -> leaf.Uniqueness
     CallOwnership = fun call ->
         match call.Target with
-        | "borrow" -> Some { Parameters = [BorrowedCallParameter]; Result = BorrowedCallResult 0 }
-        | "consume" -> Some { Parameters = [ConsumedCallParameter]; Result = ProducedCallResult }
-        | "produce" -> Some { Parameters = []; Result = ProducedCallResult }
-        | "consumeUnique" -> Some { Parameters = [UniqueCallParameter]; Result = UnmanagedCallResult }
-        | "produceUnique" -> Some { Parameters = []; Result = UniqueProducedCallResult }
-        | "consumeTwice" -> Some { Parameters = [ConsumedCallParameter; ConsumedCallParameter]; Result = UnmanagedCallResult }
-        | "discard" -> Some { Parameters = [ConsumedCallParameter]; Result = UnmanagedCallResult }
-        | "invalidBorrow" -> Some { Parameters = [ConsumedCallParameter]; Result = BorrowedCallResult 0 }
-        | "negativeBorrow" -> Some { Parameters = [BorrowedCallParameter]; Result = BorrowedCallResult -1 }
+        | id when id = fid "borrow" -> Some { Parameters = [BorrowedCallParameter]; Result = BorrowedCallResult 0 }
+        | id when id = fid "consume" -> Some { Parameters = [ConsumedCallParameter]; Result = ProducedCallResult }
+        | id when id = fid "produce" -> Some { Parameters = []; Result = ProducedCallResult }
+        | id when id = fid "consumeUnique" -> Some { Parameters = [UniqueCallParameter]; Result = UnmanagedCallResult }
+        | id when id = fid "produceUnique" -> Some { Parameters = []; Result = UniqueProducedCallResult }
+        | id when id = fid "consumeTwice" -> Some { Parameters = [ConsumedCallParameter; ConsumedCallParameter]; Result = UnmanagedCallResult }
+        | id when id = fid "discard" -> Some { Parameters = [ConsumedCallParameter]; Result = UnmanagedCallResult }
+        | id when id = fid "invalidBorrow" -> Some { Parameters = [ConsumedCallParameter]; Result = BorrowedCallResult 0 }
+        | id when id = fid "negativeBorrow" -> Some { Parameters = [BorrowedCallParameter]; Result = BorrowedCallResult -1 }
         | _ -> None
     ScalarUses = fun value ->
-        value.Inputs |> Map.keys |> Set.ofSeq
+        value.Inputs |> Map.keys |> Seq.map bindingName |> Set.ofSeq
     ScalarEscapes = fun value ->
         match value.Expression with
-        | CheckedAST.Var "escape" -> value.Inputs |> Map.keys |> Set.ofSeq
+        | CheckedAST.Local id when id = binding "escape" ->
+            value.Inputs |> Map.keys |> Seq.map bindingName |> Set.ofSeq
         | _ -> Set.empty
     BlockArgument = fun value ->
         match value.Id with
@@ -66,7 +82,9 @@ let private blockResult entry operations result : Block<TestLeaf, string> =
     { Body = { Parameters = []; Operations = drops entry @ List.concat operations; Result = result } }
 let private functionBlock parameters operations result : Block<TestLeaf, string> =
     { Body =
-        { Parameters = parameters |> List.map (fun name -> ({ Name = name; Value = value name }: HIR.Parameter))
+        { Parameters =
+              parameters
+              |> List.map (fun name -> ({ Name = name; Binding = binding name; Value = value name }: HIR.Parameter))
           Operations = List.concat operations
           Result = result } }
 let private branch predicate yes no : Step<TestLeaf, string> list =
@@ -76,10 +94,10 @@ let private managedBranch result predicate yes no : Step<TestLeaf, string> list 
 let private read name releases : Step<TestLeaf, string> list =
     Evaluate (HIR.ScalarBinding ({ Id = HIR.ValueId 102; Type = AST.TInt64 }, reference name)) :: drops releases
 let private escape name releases : Step<TestLeaf, string> list =
-    let operand = { reference name with Expression = CheckedAST.Var "escape" }
+    let operand = { reference name with Expression = CheckedAST.Local (binding "escape") }
     Evaluate (HIR.ScalarBinding ({ Id = HIR.ValueId 103; Type = AST.TInt64 }, operand)) :: drops releases
 let private call target arguments result : Step<TestLeaf, string> list =
-    [Evaluate (HIR.Call { Target = target; Arguments = arguments; Result = result })]
+    [Evaluate (HIR.Call { Target = fid target; Arguments = arguments; Result = result })]
 let private duplicate value : Step<TestLeaf, string> list = [Dup value]
 let private dropOne value : Step<TestLeaf, string> list = [Drop value]
 let private check expected region () =
@@ -175,11 +193,11 @@ let tests = [
         (block [] [step [] ["a"] []; call "consumeTwice" [value "a"; value "aAlias"] unitValue])
     "Call ownership signatures reject unavailable consumed arguments", check (Error (InvalidUse "a"))
         (block [] [call "discard" [value "a"] unitValue])
-    "Call ownership signatures reject unknown targets", check (Error (UnknownCallOwnership "opaque"))
+    "Call ownership signatures reject unknown targets", check (Error (UnknownCallOwnership (fid "opaque")))
         (block [] [call "opaque" [value "a"] unitValue])
-    "Call ownership signatures reject borrowed results from consumed parameters", check (Error (InvalidBorrowedCallResult ("invalidBorrow", 0)))
+    "Call ownership signatures reject borrowed results from consumed parameters", check (Error (InvalidBorrowedCallResult (fid "invalidBorrow", 0)))
         (block [] [step [] ["a"] []; call "invalidBorrow" [value "a"] (value "a")])
-    "Call ownership signatures reject negative borrowed-result parameters", check (Error (InvalidBorrowedCallResult ("negativeBorrow", -1)))
+    "Call ownership signatures reject negative borrowed-result parameters", check (Error (InvalidBorrowedCallResult (fid "negativeBorrow", -1)))
         (block [] [step [] ["a"] []; call "negativeBorrow" [value "a"] (value "aAlias")])
     "Ownership contracts borrow before consuming multiple inputs", check (Ok ())
         (block [] [step [] ["a"; "b"] []; step [Borrowed "a"; Consumed "a"; Consumed "b"] ["c"] ["c"]])

@@ -302,26 +302,26 @@ type internal ObjectReferenceComparer() =
 type internal AnfDependencyKey = {
     Functions: CheckedAST.FunctionDef list
     LocalRegistries: AST_to_ANF.Registries
-    NonInlineableFunctionNames: Set<string>
+    NonInlineableFunctionNames: Set<AST.FunctionId>
 }
 
 type internal AnfDependencyKeyNameHashComparer() =
     interface IEqualityComparer<AnfDependencyKey> with
         member _.Equals(left, right) = left = right
         member _.GetHashCode(key) =
-            let addName hash name =
-                (hash * 397) ^^^ StringComparer.Ordinal.GetHashCode(name)
+            let addId hash functionId =
+                (hash * 397) ^^^ LanguagePrimitives.GenericHash functionId
             let functionHash =
                 key.Functions
-                |> List.fold (fun hash func -> addName hash func.Name) 17
+                |> List.fold (fun current func -> addId current func.Id) 17
             key.NonInlineableFunctionNames
-            |> Set.fold addName functionHash
+            |> Set.fold addId functionHash
 
 [<NoComparison>]
 type internal CompiledDependencyConfig = {
     Target: Platform.Target
     Options: CompilerOptions
-    NonInlineableFunctionNames: Set<string>
+    NonInlineableFunctionNames: Set<AST.FunctionId>
 }
 
 [<NoComparison>]
@@ -338,7 +338,7 @@ type internal SsaFunctionCache =
 type MirOptimizationKey = {
     Function: MIR.Function
     Options: MIROptimizationFacts.OptimizeOptions
-    EffectFreeCalls: Set<string>
+    EffectFreeCalls: Set<AST.FunctionId>
 }
 
 type internal MirOptimizationKeyNameHashComparer() =

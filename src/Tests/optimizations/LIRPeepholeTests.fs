@@ -24,6 +24,7 @@ let testRemoveSelfMovesFromAllocatedFunction () : TestResult =
         Terminator = Ret
     }
     let func : Function = {
+        Id = AST.functionIdForName "self_move_cleanup"
         Name = "self_move_cleanup"
         TypedParams = []
         CFG = {
@@ -63,6 +64,7 @@ let testRemoveFloatingCopyBackMovesFromAllocatedFunction () : TestResult =
         Terminator = Ret
     }
     let func : Function = {
+        Id = AST.functionIdForName "floating_copy_back_cleanup"
         Name = "floating_copy_back_cleanup"
         TypedParams = []
         CFG = {
@@ -102,6 +104,7 @@ let testFloatingCopyBackKeepsMoveAfterFPhiWritesSource () : TestResult =
         Terminator = Ret
     }
     let func : Function = {
+        Id = AST.functionIdForName "floating_copy_back_phi_write"
         Name = "floating_copy_back_phi_write"
         TypedParams = []
         CFG = {
@@ -530,6 +533,7 @@ let private functionWithInstrs name instrs : Function =
         Terminator = Ret
     }
     {
+        Id = AST.functionIdForName name
         Name = name
         TypedParams = []
         CFG = {
@@ -551,7 +555,11 @@ let testConstantReturnCallsAreRewritten () : TestResult =
             "caller"
             [
                 SaveRegs ([X1], [])
-                Call (Virtual 1, "Darklang.Stdlib.__FingerTree.__TAG_SINGLE", [])
+                Call (
+                    Virtual 1,
+                    AST.functionIdForName "Darklang.Stdlib.__FingerTree.__TAG_SINGLE",
+                    []
+                )
                 RestoreRegs ([X1], [])
                 Mov (Virtual 1, Reg (Physical X0))
                 Cmp (Virtual 2, Reg (Virtual 1))

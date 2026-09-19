@@ -28,6 +28,7 @@ let testLirOpExpansionRecorderAttributesGeneratedInstructions () : TestResult =
         RawSlotInitRetainTargets = None
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty
+        FunctionNames = Map.empty
         FunctionName = "lir_op_profile"
         InstructionSite = ""
         StackSize = 0

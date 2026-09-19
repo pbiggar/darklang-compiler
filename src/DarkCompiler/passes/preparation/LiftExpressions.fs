@@ -14,7 +14,7 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
     match expr with
     | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _ | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
-    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.Var _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ | CheckedAST.RuntimeError _ ->
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ | CheckedAST.RuntimeError _ ->
         Ok (expr, state)
     | CheckedAST.BoundaryRender (renderer, value) ->
         liftLambdasInExpr value state
@@ -47,26 +47,32 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                 let state2' = { state2 with TypeEnv = state.TypeEnv }
                 (CheckedAST.Let (pattern, value', body'), state2')))
     | CheckedAST.RecursiveLet (recursion, value, body) ->
-        let name = CheckedAST.recursiveBindingName recursion
+        let selfId = CheckedAST.recursiveBindingId recursion
         match CheckedAST.recursiveBindingAvailability recursion with
         | AST.OrdinaryBinding ->
-            liftLambdasInExpr (CheckedAST.Let (CheckedAST.LPVariable name, value, body)) state
+            liftLambdasInExpr (CheckedAST.Let (CheckedAST.LPVariable selfId, value, body)) state
         | AST.SelfRecursiveMember ->
             let valueType = recursion.MonomorphicType
+            let (closureId, symbols) = CheckedAST.allocateBinding "__closure" state.Symbols
             let rewrittenValue =
                 match value with
                 | CheckedAST.Lambda (parameters, returnAnnotation, lambdaBody) ->
-                    CheckedAST.Lambda (parameters, returnAnnotation, rewriteRecursiveSelfReferences name lambdaBody)
+                    CheckedAST.Lambda (
+                        parameters,
+                        returnAnnotation,
+                        rewriteRecursiveSelfReferences selfId closureId lambdaBody
+                    )
                 | _ -> Crash.crash "RecursiveLet reached lambda lifting with a non-lambda value"
             let recursiveState =
                 { state with
-                    TypeEnv = Map.add "__closure" valueType state.TypeEnv
-                    RecursiveSelf = Some (CheckedAST.recursiveBindingId recursion, valueType, recursion) }
+                    Symbols = symbols
+                    TypeEnv = Map.add closureId valueType state.TypeEnv
+                    RecursiveSelf = Some (selfId, closureId, valueType, recursion) }
             liftLambdasInExpr rewrittenValue recursiveState
             |> Result.bind (fun (value', state1) ->
                 let continuationState =
                     { state1 with
-                        TypeEnv = Map.add name valueType state.TypeEnv
+                        TypeEnv = Map.add selfId valueType state.TypeEnv
                         RecursiveSelf = state.RecursiveSelf }
                 liftLambdasInExpr body continuationState
                 |> Result.map (fun (body', state2) ->
@@ -74,7 +80,7 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                         { state2 with
                             TypeEnv = state.TypeEnv
                             RecursiveSelf = state.RecursiveSelf }
-                    (CheckedAST.Let (CheckedAST.LPVariable name, value', body'), restored)))
+                    (CheckedAST.Let (CheckedAST.LPVariable selfId, value', body'), restored)))
         | AST.MutualRecursiveMember
         | AST.CompletedGroupMember
         | AST.ImportedGroupMember ->
@@ -122,9 +128,9 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
     | CheckedAST.RecordAccess (record, fieldName) ->
         liftLambdasInExpr record state
         |> Result.map (fun (record', state') -> (CheckedAST.RecordAccess (record', fieldName), state'))
-    | CheckedAST.Constructor (typeName, variantName, fields) ->
+    | CheckedAST.Constructor (reference, fields) ->
         liftLambdasInList fields state
-        |> Result.map (fun (fields', state') -> (CheckedAST.Constructor (typeName, variantName, fields'), state'))
+        |> Result.map (fun (fields', state') -> (CheckedAST.Constructor (reference, fields'), state'))
     | CheckedAST.Match (scrutinee, cases) ->
         let scrutineeType =
             simpleInferType
@@ -147,14 +153,20 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
             |> AST.NonEmptyList.toList
             |> List.collect lambdaParameterBindings
             |> Map.ofList
-        let stateWithLambdaParams = { state with TypeEnv = Map.fold (fun acc k v -> Map.add k v acc) state.TypeEnv lambdaParamTypes }
+        let stateWithLambdaParams =
+            { state with
+                TypeEnv = Map.fold (fun acc k v -> Map.add k v acc) state.TypeEnv lambdaParamTypes
+                // Only this lambda is the recursive value. Lambdas nested in
+                // its body capture the recursive closure like any other local.
+                RecursiveSelf = None }
         // First, lift any lambdas within the body
         liftLambdasInExpr body stateWithLambdaParams
         |> Result.bind (fun (body', state1) ->
-            planLambdaComparison parameters body' state
-            |> Result.bind (fun plan ->
+            let stateAfterBody = { state1 with RecursiveSelf = state.RecursiveSelf }
+            planLambdaComparison parameters body' stateAfterBody
+            |> Result.bind (fun (plan, plannedState) ->
                 // Create lifted function
-                let (funcName, stateWithName) = freshLiftedName state1 "__closure_"
+                let (funcName, stateWithName) = freshLiftedName plannedState "__closure_"
                 let comparisonInfo =
                     if lambdaNeedsComparison parameters state then
                         let (name, addDef, nextState) =
@@ -170,11 +182,16 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                     comparisonInfo |> Option.map (fun _ -> [AST.TRawPtr]) |> Option.defaultValue []
                 let closureTupleTypes =
                     AST.TInt64 :: (metadataTypes @ plan.CaptureTypes)
-                let closureParam = ("__closure", AST.TTuple closureTupleTypes)
-                let (loweredParameters, loweredBody) = lowerLambdaParameters parameters plan.Body
+                let (closureId, symbols) =
+                    match state.RecursiveSelf with
+                    | Some (_, closureId, _, _) -> (closureId, stateWithComparison.Symbols)
+                    | None -> CheckedAST.allocateBinding "__closure" stateWithComparison.Symbols
+                let closureParam = (closureId, AST.TTuple closureTupleTypes)
+                let (loweredParameters, loweredBody, symbols) =
+                    lowerLambdaParameters symbols parameters plan.Body
                 let loweredBody =
                     match state.RecursiveSelf with
-                    | Some _ -> rewriteLiftedSelfCalls funcName loweredBody
+                    | Some _ -> rewriteLiftedSelfCalls funcName closureId loweredBody
                     | None -> loweredBody
                 let captureOffset = if Option.isSome comparisonInfo then 2 else 1
 
@@ -185,7 +202,7 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                     else
                         plan.CaptureNames
                         |> List.mapi (fun i capName ->
-                            (capName, CheckedAST.TupleAccess (CheckedAST.Var "__closure", i + captureOffset)))
+                            (capName, CheckedAST.TupleAccess (CheckedAST.Local closureId, i + captureOffset)))
                         |> List.foldBack (fun (capName, accessor) acc ->
                             CheckedAST.Let (CheckedAST.LPVariable capName, accessor, acc)) <| loweredBody
 
@@ -199,6 +216,7 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                 inferLambdaReturnType body stateForReturnType
                 |> Result.bind (fun returnType ->
                     let funcDef : CheckedAST.FunctionDef = {
+                        Id = AST.functionIdForName funcName
                         Name = funcName
                         TypeParams = []
                         Params = paramsFromList "lifted lambda" (closureParam :: loweredParameters)
@@ -206,22 +224,26 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                         Body = bodyWithExtractions
                         Recursion =
                             state.RecursiveSelf
-                            |> Option.map (fun (_, _, typed) -> typed)
+                            |> Option.map (fun (_, _, _, typed) -> typed)
                     }
-                    let comparisonDef =
+                    let comparisonDef, symbols =
                         comparisonInfo
-                        |> Option.bind (fun (comparisonName, addDef, _) ->
+                        |> Option.map (fun (comparisonName, addDef, _) ->
                             if addDef then
-                                Some (
+                                let comparisonDef, symbols =
                                     makeClosureComparator
                                         comparisonName
                                         plan.CaptureTypes
                                         plan.CompareCaptures
                                         state1.VariantLookup
-                                )
+                                        symbols
+                                (Some comparisonDef, symbols)
                             else
-                                None)
+                                (None, symbols))
+                        |> Option.defaultValue (None, symbols)
+                    let (_, symbols) = CheckedAST.internFunction funcName symbols
                     let state' = {
+                        Symbols = symbols
                         Counter = stateWithComparison.Counter
                         LiftedFunctions =
                             comparisonDef
@@ -239,9 +261,9 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                     }
                     let closureCaptures =
                         match comparisonInfo with
-                        | Some (comparisonName, _, _) -> CheckedAST.FuncRef comparisonName :: plan.CaptureExprs
+                        | Some (comparisonName, _, _) -> CheckedAST.FuncRef (AST.functionIdForName comparisonName) :: plan.CaptureExprs
                         | None -> plan.CaptureExprs
-                    Ok (CheckedAST.Closure (funcName, closureCaptures), state'))))
+                    Ok (CheckedAST.Closure (AST.functionIdForName funcName, closureCaptures), state'))))
     | CheckedAST.Apply (func, args) ->
         liftLambdasInExpr func state
         |> Result.bind (fun (func', state1) ->
@@ -289,11 +311,11 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                 // First, recursively lift any nested lambdas in the body
                 liftLambdasInExpr body stateWithLambdaParams
                 |> Result.bind (fun (body', state1) ->
-                    planLambdaComparison parameters body' state
-                    |> Result.bind (fun plan ->
+                    planLambdaComparison parameters body' state1
+                    |> Result.bind (fun (plan, plannedState) ->
                         // All lambdas become closures (even non-capturing ones) for uniform calling convention
                         // The lifted function takes closure as first param, then original params
-                        let (funcName, stateWithName) = freshLiftedName state1 "__closure_"
+                        let (funcName, stateWithName) = freshLiftedName plannedState "__closure_"
                         let comparisonInfo =
                             if lambdaNeedsComparison parameters state then
                                 let (name, addDef, nextState) =
@@ -309,8 +331,11 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                             comparisonInfo |> Option.map (fun _ -> [AST.TRawPtr]) |> Option.defaultValue []
                         let closureTupleTypes =
                             AST.TInt64 :: (metadataTypes @ plan.CaptureTypes)
-                        let closureParam = ("__closure", AST.TTuple closureTupleTypes)
-                        let (loweredParameters, loweredBody) = lowerLambdaParameters parameters plan.Body
+                        let (closureId, symbols) =
+                            CheckedAST.allocateBinding "__closure" stateWithComparison.Symbols
+                        let closureParam = (closureId, AST.TTuple closureTupleTypes)
+                        let (loweredParameters, loweredBody, symbols) =
+                            lowerLambdaParameters symbols parameters plan.Body
                         let captureOffset = if Option.isSome comparisonInfo then 2 else 1
 
                         // Build body that extracts captures from closure tuple:
@@ -321,7 +346,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                             else
                                 plan.CaptureNames
                                 |> List.mapi (fun i capName ->
-                                    (capName, CheckedAST.TupleAccess (CheckedAST.Var "__closure", i + captureOffset)))
+                                    (capName, CheckedAST.TupleAccess (CheckedAST.Local closureId, i + captureOffset)))
                                 |> List.foldBack (fun (capName, accessor) acc ->
                                     CheckedAST.Let (CheckedAST.LPVariable capName, accessor, acc)) <| loweredBody
 
@@ -335,6 +360,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                         inferLambdaReturnType body stateForReturnType
                         |> Result.bind (fun returnType ->
                             let funcDef : CheckedAST.FunctionDef = {
+                                Id = AST.functionIdForName funcName
                                 Name = funcName
                                 TypeParams = []
                                 Params = paramsFromList "lifted argument lambda" (closureParam :: loweredParameters)
@@ -342,20 +368,24 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                                 Body = bodyWithExtractions
                                 Recursion = None
                             }
-                            let comparisonDef =
+                            let comparisonDef, symbols =
                                 comparisonInfo
-                                |> Option.bind (fun (comparisonName, addDef, _) ->
+                                |> Option.map (fun (comparisonName, addDef, _) ->
                                     if addDef then
-                                        Some (
+                                        let comparisonDef, symbols =
                                             makeClosureComparator
                                                 comparisonName
                                                 plan.CaptureTypes
                                                 plan.CompareCaptures
                                                 state1.VariantLookup
-                                        )
+                                                symbols
+                                        (Some comparisonDef, symbols)
                                     else
-                                        None)
+                                        (None, symbols))
+                                |> Option.defaultValue (None, symbols)
+                            let (_, symbols) = CheckedAST.internFunction funcName symbols
                             let state' = {
+                                Symbols = symbols
                                 Counter = stateWithComparison.Counter
                                 LiftedFunctions =
                                     comparisonDef
@@ -373,9 +403,9 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                             }
                             let closureCaptures =
                                 match comparisonInfo with
-                                | Some (comparisonName, _, _) -> CheckedAST.FuncRef comparisonName :: plan.CaptureExprs
+                                | Some (comparisonName, _, _) -> CheckedAST.FuncRef (AST.functionIdForName comparisonName) :: plan.CaptureExprs
                                 | None -> plan.CaptureExprs
-                            loop rest state' (CheckedAST.Closure (funcName, closureCaptures) :: acc))))
+                            loop rest state' (CheckedAST.Closure (AST.functionIdForName funcName, closureCaptures) :: acc))))
 
             | CheckedAST.FuncRef origFuncName ->
                 // Named function used as value - wrap in a closure for uniform calling convention
@@ -387,13 +417,21 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                     let (comparisonName, addComparisonDef, stateWithComparisonName) =
                         comparisonNameForIdentity (Some origFuncName) [] stateWithName
                     let comparatorStorageType = AST.TRawPtr
+                    let (closureId, symbols) =
+                        CheckedAST.allocateBinding "__closure" stateWithComparisonName.Symbols
                     let closureParam =
-                        ("__closure", AST.TTuple [AST.TInt64; comparatorStorageType])
+                        (closureId, AST.TTuple [AST.TInt64; comparatorStorageType])
                     // Generate parameter names for wrapper that match original function's parameters
-                    let wrapperParams = origParams |> List.mapi (fun i (_, t) -> ($"__arg{i}", t))
-                    let wrapperArgs = wrapperParams |> List.map (fun (name, _) -> CheckedAST.Var name)
+                    let wrapperParams, symbols =
+                        origParams
+                        |> List.mapi (fun i (_, typ) -> (i, typ))
+                        |> List.mapFold (fun symbols (i, typ) ->
+                            let (id, symbols) = CheckedAST.allocateBinding $"__arg{i}" symbols
+                            ((id, typ), symbols)) symbols
+                    let wrapperArgs = wrapperParams |> List.map (fun (id, _) -> CheckedAST.Local id)
                     let wrapperBody = CheckedAST.Call (origFuncName, exprArgsFromList wrapperArgs)
                     let wrapperDef : CheckedAST.FunctionDef = {
+                        Id = AST.functionIdForName wrapperName
                         Name = wrapperName
                         TypeParams = []
                         Params = paramsFromList "liftLambdasInArgs:wrapperDef" (closureParam :: wrapperParams)
@@ -401,9 +439,11 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                         Body = wrapperBody
                         Recursion = None
                     }
-                    let comparisonDef =
-                        makeClosureComparator comparisonName [] false state.VariantLookup
+                    let comparisonDef, symbols =
+                        makeClosureComparator comparisonName [] false state.VariantLookup symbols
+                    let (_, symbols) = CheckedAST.internFunction wrapperName symbols
                     let state' = {
+                        Symbols = symbols
                         Counter = stateWithComparisonName.Counter
                         LiftedFunctions =
                             if addComparisonDef then
@@ -422,8 +462,8 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                     }
                     let closure =
                         CheckedAST.Closure (
-                            wrapperName,
-                            [CheckedAST.FuncRef comparisonName]
+                            AST.functionIdForName wrapperName,
+                            [CheckedAST.FuncRef (AST.functionIdForName comparisonName)]
                         )
                     loop rest state' (closure :: acc)
                 | None, _ ->
@@ -431,7 +471,8 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                 | _, None ->
                     Error $"FuncRef to unknown function '{origFuncName}': return type not found"
 
-            | CheckedAST.Var varName ->
+            | CheckedAST.Local _
+            | CheckedAST.NamedValue _ ->
                 // Check if this is a function being passed as value
                 // For now, treat as potential function ref - will be handled at ANF level
                 liftLambdasInExpr arg state
@@ -453,8 +494,8 @@ and liftLambdasInList (exprs: CheckedAST.Expr list) (state: LiftState) : Result<
     loop exprs state []
 
 /// Helper to lift lambdas in record fields
-and liftLambdasInFields (fields: (string * CheckedAST.Expr) list) (state: LiftState) : Result<(string * CheckedAST.Expr) list * LiftState, string> =
-    let rec loop (remaining: (string * CheckedAST.Expr) list) (state: LiftState) (acc: (string * CheckedAST.Expr) list) =
+and liftLambdasInFields (fields: (AST.FieldId * CheckedAST.Expr) list) (state: LiftState) : Result<(AST.FieldId * CheckedAST.Expr) list * LiftState, string> =
+    let rec loop (remaining: (AST.FieldId * CheckedAST.Expr) list) (state: LiftState) (acc: (AST.FieldId * CheckedAST.Expr) list) =
         match remaining with
         | [] -> Ok (List.rev acc, state)
         | (name, e) :: rest ->

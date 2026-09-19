@@ -4,6 +4,9 @@ module OwnershipUniquenessInferenceTests
 
 open OwnedIR
 
+let private binding name =
+    name |> Seq.fold (fun hash ch -> (hash * 31) + int ch) 17 |> AST.bindingId
+
 type private TestLeaf =
     | Reuse of input: string * output: string
 
@@ -54,7 +57,8 @@ let private semantics mappings : Semantics<TestLeaf, string> =
             | None -> Unmanaged
     }
 
-let private parameter name value : HIR.Parameter = { Name = name; Value = value }
+let private parameter name value : HIR.Parameter =
+    { Name = name; Binding = binding name; Value = value }
 
 let private block parameters operations result : Block<TestLeaf, string> = {
     Body = {
@@ -66,7 +70,11 @@ let private block parameters operations result : Block<TestLeaf, string> = {
 
 let private infer semantics signature body =
     let functionDefinition : Function<TestLeaf, string> = {
-        Definition = { Name = "test"; Body = body }
+        Definition = {
+            Id = AST.functionIdForName "test"
+            Name = "test"
+            Body = body
+        }
         Ownership = signature
     }
     InferOwnershipUniqueness.infer semantics functionDefinition
@@ -105,9 +113,9 @@ let private testRetainsInputOutputTradeoffs () =
 let private testEscapeRevokesUniqueResult () =
     let semantics = semantics [(inputValue, "input"); (outputValue, "output")]
     let escapeOperand : HIR.Operand = {
-        Expression = CheckedAST.Var "escape"
+        Expression = CheckedAST.Local (binding "escape")
         Type = AST.TUnit
-        Inputs = Map.ofList [("output", outputValue)]
+        Inputs = Map.ofList [(binding "output", outputValue)]
     }
     let body =
         block
@@ -156,7 +164,7 @@ let private testBoundsVariantSearch () =
 let private testDefersRecursiveInference () =
     let semantics = semantics [(inputValue, "value")]
     let recursiveCall : HIR.FunctionCall = {
-        Target = "test"
+        Target = AST.functionIdForName "test"
         Arguments = [inputValue]
         Result = inputValue
     }
@@ -167,7 +175,8 @@ let private testDefersRecursiveInference () =
             inputValue
     let boundary = signature [ConsumedParameter "value"] (ProducedResult "value")
     match infer semantics boundary body with
-    | Error (InferOwnershipUniqueness.RecursiveFunctionRequiresGroupInference "test") -> Ok ()
+    | Error (InferOwnershipUniqueness.RecursiveFunctionRequiresGroupInference id)
+        when id = AST.functionIdForName "test" -> Ok ()
     | actual -> Error $"Expected recursive uniqueness inference to require a group solver, got {actual}"
 
 let tests = [

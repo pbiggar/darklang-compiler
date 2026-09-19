@@ -254,6 +254,17 @@ let rec private formatPattern (pattern: Pattern) : string =
         |> List.map formatPattern
         |> String.concat ", "
         |> fun fieldText -> $"{formatIdentifierPath name}({fieldText})"
+    | PResolvedConstructor (_, name, _, []) -> formatIdentifierPath name
+    | PResolvedConstructor (_, name, _, [field]) ->
+        let fieldText = formatPattern field
+        match field with
+        | PTuple _ -> $"{formatIdentifierPath name} ({fieldText})"
+        | _ -> $"{formatIdentifierPath name} {fieldText}"
+    | PResolvedConstructor (_, name, _, fields) ->
+        fields
+        |> List.map formatPattern
+        |> String.concat ", "
+        |> fun fieldText -> $"{formatIdentifierPath name}({fieldText})"
     | POr alternatives ->
         alternatives
         |> NonEmptyList.toList
@@ -528,8 +539,8 @@ let rec private formatExpr (expr: Expr) : string =
     | RecordLiteral (reference, fields) ->
         let fieldsText =
             fields
-            |> List.map (fun (name, value) ->
-                $"{formatIdentifierSegment name} = {formatExpr value}")
+            |> List.map (fun (reference, value) ->
+                $"{formatIdentifierSegment reference.SourceFieldName} = {formatExpr value}")
             |> String.concat ", "
         let typeArgsText =
             match reference.TypeArgs with
@@ -544,8 +555,8 @@ let rec private formatExpr (expr: Expr) : string =
         let recordText = formatExpr recordExpr
         let updatesText =
             updates
-            |> List.map (fun (name, value) ->
-                $"{formatIdentifierSegment name} = {formatExpr value}")
+            |> List.map (fun (reference, value) ->
+                $"{formatIdentifierSegment reference.SourceFieldName} = {formatExpr value}")
             |> String.concat ", "
         $"{{ {recordText} with {updatesText} }}"
     | RecordAccess (recordExpr, fieldName) ->
@@ -557,7 +568,7 @@ let rec private formatExpr (expr: Expr) : string =
                 $"({recordBaseText})"
             | _ ->
                 parenthesizeIfNeeded recordExpr recordBaseText
-        $"{recordText}.{formatIdentifierSegment fieldName}"
+        $"{recordText}.{formatIdentifierSegment fieldName.SourceFieldName}"
     | Constructor (constructorReference, variantName, fields) ->
         let fullName =
             let formattedVariantName = formatIdentifierSegment variantName

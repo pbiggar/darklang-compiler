@@ -15,7 +15,7 @@ let private isScalarReturnType (returnType: AST.Type) : bool =
 
 /// Check if an instruction is safe to hoist out of a loop.
 let private isHoistableInstrWithEffectFreeCalls
-    (effectFreeFunctions: Set<string>)
+    (effectFreeFunctions: Set<AST.FunctionId>)
     (instr: Instr)
     : bool =
     match instr with
@@ -42,7 +42,7 @@ let isHoistableInstr (instr: Instr) : bool =
 /// edges to one block and preserves SSA by merging each header phi's outside values
 /// in a new preheader phi.  Existing simple preheaders are deliberately unchanged.
 let private canonicalizeLoopPreheaders
-    (effectFreeFunctions: Set<string>)
+    (effectFreeFunctions: Set<AST.FunctionId>)
     (topology: LoopTopology)
     (cfg: CFG)
     : CFG * bool =
@@ -164,7 +164,7 @@ let private canonicalizeLoopPreheaders
 
 /// Apply loop-invariant code motion for loops with a simple preheader.
 let internal applyLoopInvariantCodeMotionWithEffectFreeCalls
-    (effectFreeFunctions: Set<string>)
+    (effectFreeFunctions: Set<AST.FunctionId>)
     (topology: LoopTopology)
     (cfg: CFG)
     : CFG * bool * LoopTopology =

@@ -33,7 +33,7 @@ let rec private collectHelperTypes
     | CheckedAST.Int32Literal _ | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _
     | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
     | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _
-    | CheckedAST.FloatLiteral _ | CheckedAST.Var _ | CheckedAST.FuncRef _
+    | CheckedAST.FloatLiteral _ | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _
     | CheckedAST.RuntimeError _ -> (Set.empty, Set.empty)
     | CheckedAST.BoundaryRender (_, value)
     | CheckedAST.UnaryOp (_, value)
@@ -55,17 +55,24 @@ let rec private collectHelperTypes
             |> Set.ofList
         let equalityTypes =
             match name, typeArgs, arguments with
-            | "__dark_internal_eq_helper_dispatch", [targetType], [_; _] ->
+            | id, [targetType], [_; _]
+                when id = AST.functionIdForName "__dark_internal_eq_helper_dispatch" ->
                 Set.singleton (resolveType aliasReg targetType)
             | _ -> concreteTypeArgs
         let compareTypes =
             match name, typeArgs with
-            | "__compare", [targetType]
-            | ("Darklang.Stdlib.List.sort" | "Darklang.Stdlib.List.unique"), [targetType]
-            | "Darklang.Stdlib.List.uniqueBy", [targetType; _] ->
+            | id, [targetType]
+                when id = AST.functionIdForName "__compare"
+                     || id = AST.functionIdForName "Darklang.Stdlib.List.sort"
+                     || id = AST.functionIdForName "Darklang.Stdlib.List.unique" ->
                 let resolved = resolveType aliasReg targetType
                 if containsTVar resolved then Set.empty else Set.singleton resolved
-            | "Darklang.Stdlib.List.sortBy", [valueType; keyType] ->
+            | id, [targetType; _]
+                when id = AST.functionIdForName "Darklang.Stdlib.List.uniqueBy" ->
+                let resolved = resolveType aliasReg targetType
+                if containsTVar resolved then Set.empty else Set.singleton resolved
+            | id, [valueType; keyType]
+                when id = AST.functionIdForName "Darklang.Stdlib.List.sortBy" ->
                 let pairType =
                     AST.TTuple [resolveType aliasReg keyType; resolveType aliasReg valueType]
                 if containsTVar pairType then Set.empty else Set.singleton pairType
@@ -78,7 +85,7 @@ let rec private collectHelperTypes
     | CheckedAST.RecordLiteral (_, entries) -> entries |> List.map snd |> combine
     | CheckedAST.RecordUpdate (record, updates) ->
         combine (record :: (updates |> List.map snd))
-    | CheckedAST.Constructor (_, _, fields) ->
+    | CheckedAST.Constructor (_, fields) ->
         combine fields
     | CheckedAST.Match (scrutinee, cases) ->
         let caseExpressions =
@@ -110,7 +117,7 @@ let rec private rewriteHelperCalls
     | CheckedAST.Int32Literal _ | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _
     | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
     | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _
-    | CheckedAST.FloatLiteral _ | CheckedAST.Var _ | CheckedAST.FuncRef _
+    | CheckedAST.FloatLiteral _ | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _
     | CheckedAST.RuntimeError _ -> expr
     | CheckedAST.BoundaryRender (renderer, value) -> CheckedAST.BoundaryRender (renderer, recurse value)
     | CheckedAST.BinOp (op, left, right) -> CheckedAST.BinOp (op, recurse left, recurse right)
@@ -123,22 +130,24 @@ let rec private rewriteHelperCalls
     | CheckedAST.Sequence (first, next) -> CheckedAST.Sequence (recurse first, recurse next)
     | CheckedAST.Call (name, args) -> CheckedAST.Call (name, recurseArgs args)
     | CheckedAST.TypeApp
-        ("__dark_internal_eq_helper_dispatch", [targetType], { Head = left; Tail = [right] }) ->
+        (id, [targetType], { Head = left; Tail = [right] })
+        when id = AST.functionIdForName "__dark_internal_eq_helper_dispatch" ->
         let helperType = resolveType aliasReg targetType
         if needsEqHelperForResolvedType variantLookup helperType then
             CheckedAST.Call (
-                eqHelperName helperType,
+                AST.functionIdForName (eqHelperName helperType),
                 AST.NonEmptyList.fromList [recurse left; recurse right]
             )
         else
             CheckedAST.TypeApp (
-                "__dark_internal_eq_helper_dispatch",
+                id,
                 [targetType],
                 AST.NonEmptyList.fromList [recurse left; recurse right]
             )
-    | CheckedAST.TypeApp ("__compare", [targetType], args) when not (containsTVar targetType) ->
+    | CheckedAST.TypeApp (id, [targetType], args)
+        when id = AST.functionIdForName "__compare" && not (containsTVar targetType) ->
         let helperType = resolveType aliasReg targetType
-        CheckedAST.Call (compareHelperName helperType, recurseArgs args)
+        CheckedAST.Call (AST.functionIdForName (compareHelperName helperType), recurseArgs args)
     | CheckedAST.TypeApp (name, typeArgs, args) ->
         CheckedAST.TypeApp (name, typeArgs, recurseArgs args)
     | CheckedAST.TupleLiteral elements -> CheckedAST.TupleLiteral (List.map recurse elements)
@@ -154,8 +163,8 @@ let rec private rewriteHelperCalls
     | CheckedAST.RecordUpdate (record, updates) ->
         CheckedAST.RecordUpdate (recurse record, updates |> List.map (fun (name, value) -> name, recurse value))
     | CheckedAST.RecordAccess (record, fieldName) -> CheckedAST.RecordAccess (recurse record, fieldName)
-    | CheckedAST.Constructor (reference, variantName, fields) ->
-        CheckedAST.Constructor (reference, variantName, List.map recurse fields)
+    | CheckedAST.Constructor (reference, fields) ->
+        CheckedAST.Constructor (reference, List.map recurse fields)
     | CheckedAST.Match (scrutinee, cases) ->
         CheckedAST.Match (
             recurse scrutinee,
@@ -177,18 +186,19 @@ let rec private rewriteHelperCalls
                 | CheckedAST.StringExpr partExpr -> CheckedAST.StringExpr (recurse partExpr))
         )
 
-let private checkedGeneratedFunction (funcDef: AST.FunctionDef) : CheckedAST.FunctionDef =
-    match CheckedAST.ofTypedFunction funcDef with
-    | Ok checkedFunction -> checkedFunction
+let private checkedGeneratedFunction variantLookup symbols (funcDef: AST.FunctionDef) : CheckedAST.FunctionDef * CheckedAST.Symbols =
+    match CheckedAST.ofTypedFunction variantLookup symbols funcDef with
+    | Ok result -> result
     | Error error -> Crash.crash error
 
 let materializeEqHelpersInTopLevelsWithIndexedSums
+    (symbols: CheckedAST.Symbols)
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
     (topLevels: CheckedAST.TopLevel list)
-    : CheckedAST.TopLevel list =
+    : CheckedAST.Symbols * CheckedAST.TopLevel list =
     let concreteTopLevels =
         topLevels
         |> List.choose (function
@@ -227,7 +237,9 @@ let materializeEqHelpersInTopLevelsWithIndexedSums
         |> Map.toList
         |> List.map snd
         |> List.filter (fun helper -> not (Set.contains helper.Name existingNames))
-        |> List.map (checkedGeneratedFunction >> CheckedAST.FunctionDef)
+        |> List.mapFold (fun symbols helper ->
+            let (checkedFunction, symbols) = checkedGeneratedFunction variantLookup symbols helper
+            (CheckedAST.FunctionDef checkedFunction, symbols)) symbols
     let rewritten =
         topLevels
         |> List.map (function
@@ -240,15 +252,18 @@ let materializeEqHelpersInTopLevelsWithIndexedSums
                 CheckedAST.ValueDef
                     { valueDef with Body = rewriteHelperCalls aliasReg variantLookup valueDef.Body }
             | other -> other)
-    helpers @ rewritten
+    let (helpers, symbols) = helpers
+    (symbols, helpers @ rewritten)
 
 let materializeEqHelpersInTopLevels
+    (symbols: CheckedAST.Symbols)
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (topLevels: CheckedAST.TopLevel list)
-    : CheckedAST.TopLevel list =
+    : CheckedAST.Symbols * CheckedAST.TopLevel list =
     materializeEqHelpersInTopLevelsWithIndexedSums
+        symbols
         aliasReg
         typeReg
         variantLookup

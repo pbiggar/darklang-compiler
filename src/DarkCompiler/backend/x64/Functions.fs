@@ -15,6 +15,7 @@ let translateFunction
     (enableLeakCheck: bool)
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
+    (functionNames: Map<AST.FunctionId, string>)
     (func: LIR.Function)
     : Result<X86_64.Instr list, string> =
     let epilogueLabel = "_epilogue_" + func.Name
@@ -36,6 +37,7 @@ let translateFunction
                 EnableLeakCheck = enableLeakCheck
                 RecordRegistry = recordRegistry
                 SumShapeRegistry = sumShapeRegistry
+                FunctionNames = functionNames
             }
             match translateBlock ctx epilogueLabel nextBlock block with
             | Error e -> Error e

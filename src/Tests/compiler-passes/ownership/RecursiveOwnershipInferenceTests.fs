@@ -14,6 +14,9 @@ let private value id : HIR.Value = {
 
 let private unitValue : HIR.Value = { Id = HIR.ValueId 100; Type = AST.TUnit }
 
+let private binding name =
+    name |> Seq.fold (fun hash ch -> (hash * 31) + int ch) 17 |> AST.bindingId
+
 let private semantics mappings : Semantics<TestLeaf, string> =
     let ownershipByValue =
         mappings
@@ -52,15 +55,20 @@ let private block parameters operations result : Block<TestLeaf, string> = {
     }
 }
 
-let private parameter name value : HIR.Parameter = { Name = name; Value = value }
+let private parameter name value : HIR.Parameter =
+    { Name = name; Binding = binding name; Value = value }
 
 let private functionDefinition name ownership body : Function<TestLeaf, string> = {
-    Definition = { Name = name; Body = body }
+    Definition = { Id = AST.functionIdForName name; Name = name; Body = body }
     Ownership = ownership
 }
 
 let private call target arguments result =
-    Evaluate (HIR.Call { Target = target; Arguments = arguments; Result = result })
+    Evaluate (HIR.Call {
+        Target = AST.functionIdForName target
+        Arguments = arguments
+        Result = result
+    })
 
 let private condition : HIR.Operand = {
     Expression = CheckedAST.BoolLiteral true
@@ -174,7 +182,8 @@ let private testRejectsInvalidFunctionGroup () =
     match infer (semantics []) first [second] with
     | Error (
         InferOwnershipUniqueness.NoVerifiedFunctionGroup (
-            DuplicateFunctionName "duplicate")) -> Ok ()
+            DuplicateFunctionName id))
+        when id = AST.functionIdForName "duplicate" -> Ok ()
     | actual -> Error $"Expected duplicate function names to reject group inference, got {actual}"
 
 let private testBoundsGroupSearch () =

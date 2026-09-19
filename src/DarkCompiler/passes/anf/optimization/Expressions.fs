@@ -277,17 +277,23 @@ let private tryComplementIntegerComparison (op: BinOp) : BinOp option =
 
 let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
     match cexpr, body with
-    | Call ("Darklang.Stdlib.Int.fromInt64", [nativeIndex]),
+    | Call (fromInt64Id, [nativeIndex]),
       Let (
           resultTid,
-          Call ("Darklang.Stdlib.String.getByteAt", [value; Var indexTid]),
+          Call (getByteAtId, [value; Var indexTid]),
           resultBody
       )
-        when indexTid = tid && not (aExprUsesTemp tid resultBody) ->
+        when fromInt64Id = AST.functionIdForName "Darklang.Stdlib.Int.fromInt64"
+             && getByteAtId = AST.functionIdForName "Darklang.Stdlib.String.getByteAt"
+             && indexTid = tid
+             && not (aExprUsesTemp tid resultBody) ->
         Some (
             Let (
                 resultTid,
-                Call ("Darklang.Stdlib.String.__getByteAtInt64", [value; nativeIndex]),
+                Call (
+                    AST.functionIdForName "Darklang.Stdlib.String.__getByteAtInt64",
+                    [value; nativeIndex]
+                ),
                 resultBody
             )
         )
@@ -739,7 +745,7 @@ let rec private countKnownClosureCalls (closureId: TempId) (expr: AExpr) : int o
 /// the lifted function's established ABI does not change.
 let rec private rewriteKnownCaptureFreeCalls
     (closureId: TempId)
-    (funcName: string)
+    (funcName: AST.FunctionId)
     (expr: AExpr)
     : AExpr =
     let rewriteCExpr cexpr =

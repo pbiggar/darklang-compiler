@@ -23,27 +23,31 @@ let private emptyFuncReg : FunctionRegistry = Map.empty
 let private emptyModuleRegistry : AST.ModuleRegistry = Map.empty
 
 let testMissingVariantPayloadTypeErrors () : TestResult =
+    let xId = AST.bindingId 1
+    let payloadId = AST.bindingId 2
     let env : VarEnv =
-        Map.ofList [("x", (ANF.TempId 0, AST.TSum ("MissingType", [])))]
+        Map.ofList [(xId, (ANF.TempId 0, AST.TSum ("MissingType", [])))]
 
-    let pattern = AST.PConstructor ("MissingCtor", [AST.PVar "payload"])
+    let pattern =
+        CheckedAST.PConstructor (AST.constructorId 0 0, [CheckedAST.PVariable payloadId])
 
     match AST.NonEmptyList.tryFromList [pattern] with
     | None -> Error "NonEmptyList.tryFromList returned None for a non-empty list"
     | Some patterns ->
-        let matchCase : CheckedAST.MatchCase = { Patterns = patterns; Guard = None; Body = CheckedAST.Var "payload" }
-        let expr = CheckedAST.Match (CheckedAST.Var "x", [matchCase])
+        let matchCase : CheckedAST.MatchCase = { Patterns = patterns; Guard = None; Body = CheckedAST.Local payloadId }
+        let expr = CheckedAST.Match (CheckedAST.Local xId, [matchCase])
 
         match toANF expr ANF.initialVarGen env emptyTypeReg emptyVariantLookup emptyFuncReg emptyModuleRegistry with
         | Ok _ -> Error "Expected error when constructor payload type is missing from variant lookup"
         | Error msg ->
-            if msg.Contains "MissingCtor" then Ok ()
+            if msg.Contains "Constructor tag" then Ok ()
             else Error $"Unexpected error message: {msg}"
 
 let testNeedsLambdaLoweringIgnoresShadowedFunc () : TestResult =
     let knownFuncs = Set.ofList ["f"]
-    let expr = CheckedAST.Let (CheckedAST.LPVariable "f", CheckedAST.Int64Literal 1L, CheckedAST.Var "f")
-    let program = CheckedAST.Program [CheckedAST.Expression expr]
+    let fId = AST.bindingId 1
+    let expr = CheckedAST.Let (CheckedAST.LPVariable fId, CheckedAST.Int64Literal 1L, CheckedAST.Local fId)
+    let program = CheckedAST.Program (CheckedAST.emptySymbols (), [CheckedAST.Expression expr])
     if programNeedsLambdaLowering knownFuncs program then
         Error "Expected shadowed function name to not trigger lambda lowering"
     else
@@ -51,21 +55,22 @@ let testNeedsLambdaLoweringIgnoresShadowedFunc () : TestResult =
 
 let testNeedsLambdaLoweringDetectsFuncValue () : TestResult =
     let knownFuncs = Set.ofList ["f"]
-    let program = CheckedAST.Program [CheckedAST.Expression (CheckedAST.Var "f")]
+    let program = CheckedAST.Program (CheckedAST.emptySymbols (), [CheckedAST.Expression (CheckedAST.NamedValue "f")])
     if programNeedsLambdaLowering knownFuncs program then Ok ()
     else Error "Expected function value usage to trigger lambda lowering"
 
 let testNeedsLambdaLoweringDetectsLambda () : TestResult =
     let knownFuncs = Set.empty
+    let xId = AST.bindingId 1
     let expr =
         CheckedAST.Lambda (
             AST.NonEmptyList.singleton
-                ({ Pattern = CheckedAST.LPVariable "x"; Type = AST.TInt64 }
+                ({ Pattern = CheckedAST.LPVariable xId; Type = AST.TInt64 }
                     : CheckedAST.LambdaParameter),
             None,
-            CheckedAST.Var "x"
+            CheckedAST.Local xId
         )
-    let program = CheckedAST.Program [CheckedAST.Expression expr]
+    let program = CheckedAST.Program (CheckedAST.emptySymbols (), [CheckedAST.Expression expr])
     if programNeedsLambdaLowering knownFuncs program then Ok ()
     else Error "Expected lambda to trigger lambda lowering"
 
@@ -91,7 +96,8 @@ let testMangledFunctionTypePreservesSyntheticTypeVariables () : TestResult =
 
 let rec private findCallArgs (funcName: string) (expr: ANF.AExpr) : ANF.Atom list option =
     match expr with
-    | ANF.Let (_, ANF.Call (name, args), rest) when name = funcName ->
+    | ANF.Let (_, ANF.Call (name, args), rest)
+        when name = AST.functionIdForName funcName ->
         Some args
     | ANF.Let (_, _, rest) ->
         findCallArgs funcName rest
@@ -114,17 +120,19 @@ let rec private containsCExpr (predicate: ANF.CExpr -> bool) (expr: ANF.AExpr) :
         false
 
 let private lowerTwoElementListPattern (elementType: AST.Type) : Result<ANF.AExpr, string> =
+    let valueId = AST.bindingId 1
+    let headId = AST.bindingId 2
     let listType = AST.TList elementType
     let env : VarEnv =
-        Map.ofList [("value", (ANF.TempId 0, AST.TTuple [listType; AST.TInt64]))]
+        Map.ofList [(valueId, (ANF.TempId 0, AST.TTuple [listType; AST.TInt64]))]
     let matchCase : CheckedAST.MatchCase = {
         Patterns =
             AST.NonEmptyList.singleton
-                (AST.PTuple [AST.PList [AST.PVar "head"; AST.PWildcard]; AST.PWildcard])
+                (CheckedAST.PTuple [CheckedAST.PList [CheckedAST.PVariable headId; CheckedAST.PWildcard]; CheckedAST.PWildcard])
         Guard = None
-        Body = CheckedAST.Var "head"
+        Body = CheckedAST.Local headId
     }
-    let expr = CheckedAST.Match (CheckedAST.Var "value", [matchCase])
+    let expr = CheckedAST.Match (CheckedAST.Local valueId, [matchCase])
 
     toANF expr ANF.initialVarGen env emptyTypeReg emptyVariantLookup emptyFuncReg emptyModuleRegistry
     |> Result.map fst
@@ -137,12 +145,14 @@ let testErasedListHeadPatternLowersToBorrowedCall () : TestResult =
         let hasBorrowedErasedHead =
             anfExpr
             |> containsCExpr (function
-                | ANF.BorrowedCall ("Darklang.Stdlib.List.__headUnsafe_i64", _) -> true
+                | ANF.BorrowedCall (name, _)
+                    when name = AST.functionIdForName "Darklang.Stdlib.List.__headUnsafe_i64" -> true
                 | _ -> false)
         let hasOwnedErasedHead =
             anfExpr
             |> containsCExpr (function
-                | ANF.Call ("Darklang.Stdlib.List.__headUnsafe_i64", _) -> true
+                | ANF.Call (name, _)
+                    when name = AST.functionIdForName "Darklang.Stdlib.List.__headUnsafe_i64" -> true
                 | _ -> false)
 
         if not hasBorrowedErasedHead then
@@ -160,12 +170,14 @@ let testTypedListHeadPatternRemainsOwnedCall () : TestResult =
         let hasOwnedTypedHead =
             anfExpr
             |> containsCExpr (function
-                | ANF.Call ("Darklang.Stdlib.List.__headUnsafeFloat", _) -> true
+                | ANF.Call (name, _)
+                    when name = AST.functionIdForName "Darklang.Stdlib.List.__headUnsafeFloat" -> true
                 | _ -> false)
         let hasBorrowedTypedHead =
             anfExpr
             |> containsCExpr (function
-                | ANF.BorrowedCall ("Darklang.Stdlib.List.__headUnsafeFloat", _) -> true
+                | ANF.BorrowedCall (name, _)
+                    when name = AST.functionIdForName "Darklang.Stdlib.List.__headUnsafeFloat" -> true
                 | _ -> false)
 
         if not hasOwnedTypedHead then
@@ -177,10 +189,16 @@ let testTypedListHeadPatternRemainsOwnedCall () : TestResult =
 
 let testSyntheticNullaryCallLowersToZeroArgs () : TestResult =
     let funcName = "Darklang.Stdlib.List.__TAG_SINGLE"
-    let expr = CheckedAST.Call (funcName, AST.NonEmptyList.singleton CheckedAST.UnitLiteral)
+    let expr =
+        CheckedAST.Call (
+            AST.functionIdForName funcName,
+            AST.NonEmptyList.singleton CheckedAST.UnitLiteral
+        )
     let env : VarEnv = Map.empty
     let funcReg : FunctionRegistry =
-        Map.ofList [ (funcName, AST.TFunction ([], AST.TInt64)) ]
+        Map.ofList [
+            (AST.functionIdForName funcName, (funcName, AST.TFunction ([], AST.TInt64)))
+        ]
 
     match toANF expr ANF.initialVarGen env emptyTypeReg emptyVariantLookup funcReg emptyModuleRegistry with
     | Error err ->
@@ -195,18 +213,23 @@ let testSyntheticNullaryCallLowersToZeroArgs () : TestResult =
             Error $"Expected synthetic nullary call to lower to zero args, got {List.length args}"
 
 let testSyntheticUnitParamLowersFunctionToZeroParams () : TestResult =
+    let unitId, symbols = CheckedAST.allocateBinding "$unit0" (CheckedAST.emptySymbols ())
     let funcDef : CheckedAST.FunctionDef = {
+        Id = AST.functionIdForName "syntheticNullary"
         Name = "syntheticNullary"
         TypeParams = []
-        Params = AST.NonEmptyList.singleton ("$unit0", AST.TUnit)
+        Params = AST.NonEmptyList.singleton (unitId, AST.TUnit)
         ReturnType = AST.TInt64
         Body = CheckedAST.Int64Literal 1L
         Recursion = None
     }
     let funcReg : FunctionRegistry =
-        Map.ofList [ ("syntheticNullary", AST.TFunction ([], AST.TInt64)) ]
+        Map.ofList [
+            (AST.functionIdForName "syntheticNullary",
+             ("syntheticNullary", AST.TFunction ([], AST.TInt64)))
+        ]
 
-    match convertFunction funcDef ANF.initialVarGen emptyTypeReg emptyVariantLookup funcReg emptyModuleRegistry with
+    match convertFunction symbols funcDef ANF.initialVarGen emptyTypeReg emptyVariantLookup funcReg emptyModuleRegistry with
     | Error err ->
         Error $"Unexpected conversion error: {err}"
     | Ok (anfFunc, _) ->
@@ -217,7 +240,7 @@ let testSyntheticUnitParamLowersFunctionToZeroParams () : TestResult =
 
 let testTypedParamAllocationPreservesOrder () : TestResult =
     let loweredParams =
-        [("first", AST.TInt64); ("second", AST.TBool); ("third", AST.TString)]
+        [(AST.bindingId 1, AST.TInt64); (AST.bindingId 2, AST.TBool); (AST.bindingId 3, AST.TString)]
 
     let (typedParams, nextVarGen) =
         allocateTypedParams loweredParams ANF.initialVarGen

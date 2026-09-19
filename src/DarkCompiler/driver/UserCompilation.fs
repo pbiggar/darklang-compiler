@@ -101,7 +101,10 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             (ValueRendering.rewriteProgram
                                 userEnv.IndexedTypeReg
                                 userEnv.IndexedSumTypeReg
-                                plan.BaseContext.Registries.FuncReg
+                                (plan.BaseContext.Registries.FuncReg
+                                 |> Map.toList
+                                 |> List.map (fun (_, (name, typ)) -> name, typ)
+                                 |> Map.ofList)
                                 plannedProgramType
                                 plannedUserAst,
                              AST.TString)
@@ -156,8 +159,8 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             |> List.choose (fun func ->
                                 if func.Name.StartsWith("__dark_json_")
                                    || func.Name.StartsWith("__dark_eq_")
-                                   || Set.contains func.Name userOnly.NonInlineableFunctionNames then
-                                    Some func.Name
+                                   || Set.contains func.Id userOnly.NonInlineableFunctionNames then
+                                    Some func.Id
                                 else
                                     None)
                             |> Set.ofList
@@ -167,7 +170,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 dependencyRoots
                         let dependencyFunctions, programFunctions =
                             functionsToCompile
-                            |> List.partition (fun func -> Set.contains func.Name dependencyNames)
+                            |> List.partition (fun func -> Set.contains func.Id dependencyNames)
 
                         if plan.EmitFunctionEvents && plan.Verbosity >= 3 then
                             println $"  [COMPILE] {programFunctions.Length} program functions compiled fresh"
@@ -187,6 +190,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             SumTypeNames = userOnly.SumTypeNames
                             RcSumShapeReg = userOnly.RcSumShapeReg
                             FuncReg = userOnly.FuncReg
+                            FunctionNames = userOnly.FunctionNames
                             FuncParams = userOnly.FuncParams
                             ModuleRegistry = userOnly.ModuleRegistry
                             RecursiveMembers = userOnly.RecursiveMembers
@@ -304,7 +308,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 let pruneStart = sw.Elapsed.TotalMilliseconds
                                 let reachableFunctions =
                                     ANFDeadCodeElimination.filterReachableFunctions
-                                        (Set.singleton programEntryName)
+                                        (Set.singleton (AST.functionIdForName programEntryName))
                                         functions
                                 let pruneElapsed =
                                     sw.Elapsed.TotalMilliseconds - pruneStart
@@ -397,14 +401,14 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         boundaryProgramType
                                         (ANF.Let (
                                             startResultId,
-                                            ANF.Call (programEntryName, []),
+                                            ANF.Call (AST.functionIdForName programEntryName, []),
                                             ANF.Return (ANF.Var startResultId)))
                                 let startRegistries = {
                                     userRegistries with
                                         FuncReg =
                                             Map.add
-                                                programEntryName
-                                                (AST.TFunction ([], boundaryProgramType))
+                                                (AST.functionIdForName programEntryName)
+                                                (programEntryName, AST.TFunction ([], boundaryProgramType))
                                                 userRegistries.FuncReg
                                         FuncParams =
                                             Map.add programEntryName [] userRegistries.FuncParams
@@ -572,11 +576,17 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                  not (Set.contains func.Name retainedStdlibNames)))
                                         | Platform.ARM64Backend _ ->
                                             (reachableStdlib @ finalUserFuncs, finalUserFuncs)
+                                    let dependencyDisplayNames =
+                                        dependencyNames
+                                        |> Set.toList
+                                        |> List.choose (fun id ->
+                                            Map.tryFind id userRegistries.FunctionNames)
+                                        |> Set.ofList
                                     let loweredDependencyNames =
                                         allocatedDependencyFuncs
                                         |> List.map (fun func -> func.Name)
                                         |> Set.ofList
-                                        |> Set.union dependencyNames
+                                        |> Set.union dependencyDisplayNames
                                     let reachableDependencyFuncs, reachableProgramFuncs =
                                         retainedUserFuncs
                                         |> List.partition (fun func ->
@@ -611,7 +621,8 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         otherUserFuncs
                                         |> List.fold
                                             (fun runsRev func ->
-                                                let isDependency = Set.contains func.Name dependencyNames
+                                                let isDependency =
+                                                    Set.contains func.Name dependencyDisplayNames
                                                 match runsRev with
                                                 | (runIsDependency, funcsRev) :: rest when runIsDependency = isDependency ->
                                                     (runIsDependency, func :: funcsRev) :: rest

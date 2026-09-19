@@ -71,6 +71,23 @@ type RecordReference = {
 let unresolvedRecordReference (sourceTypeName: string) (typeArgs: Type list) : RecordReference =
     { SourceTypeName = sourceTypeName; ResolvedTypeName = sourceTypeName; TypeArgs = typeArgs }
 
+/// A field spelling before or after the checker proves its declaring record.
+/// The resolved owner is semantic evidence required to assign a declaration-
+/// scoped FieldId at the checked-program boundary.
+type RecordFieldReference = {
+    SourceFieldName: string
+    ResolvedTypeName: string option
+    ResolvedFieldIndex: int option
+}
+
+let unresolvedRecordFieldReference fieldName : RecordFieldReference =
+    { SourceFieldName = fieldName; ResolvedTypeName = None; ResolvedFieldIndex = None }
+
+let resolvedRecordFieldReference typeName fieldName fieldIndex : RecordFieldReference =
+    { SourceFieldName = fieldName
+      ResolvedTypeName = Some typeName
+      ResolvedFieldIndex = Some fieldIndex }
+
 /// A source constructor reference before or after nominal resolution.
 /// `None` is the genuinely unqualified form; no empty-name sentinel is used.
 type ConstructorReference =
@@ -163,6 +180,7 @@ type Pattern =
     | PWildcard                                            // _
     | PVar of string                                       // x (binds value to variable)
     | PConstructor of variantName:string * fields:Pattern list  // Red, Some(x), Pair(a, b)
+    | PResolvedConstructor of declaringType:string * variantName:string * tag:int * fields:Pattern list
     | PInt64 of int64                                      // 42 (Int64 literal)
     | PBigInt of System.Numerics.BigInteger                // 42 (Int literal)
     | PInt128Literal of System.Int128                      // 42Q
@@ -233,23 +251,51 @@ type BinderStructure =
 
 /// Stable semantic identities assigned at the parsed-program boundary. The
 /// representation is private so source spellings cannot be used as identities.
-[<StructuralEquality; StructuralComparison>]
-type BindingId = private BindingId of int list
+[<Struct; StructuralEquality; StructuralComparison>]
+type BindingId = private BindingId of int
 
-[<StructuralEquality; StructuralComparison>]
-type ScopeBoundaryId = private ScopeBoundaryId of int list
+[<Struct; StructuralEquality; StructuralComparison>]
+type FunctionId = private FunctionId of int
 
-[<StructuralEquality; StructuralComparison>]
-type RecursiveGroupId = private RecursiveGroupId of int list
+[<Struct; StructuralEquality; StructuralComparison>]
+type TypeId = private TypeId of int
 
-[<StructuralEquality; StructuralComparison>]
-type RecursiveMemberId = private RecursiveMemberId of int list
+[<Struct; StructuralEquality; StructuralComparison>]
+type ConstructorId = private ConstructorId of identity:int * tag:int
 
-let bindingId path = BindingId path
-let scopeBoundaryId path = ScopeBoundaryId path
-let recursiveGroupId path = RecursiveGroupId path
-let recursiveMemberId path = RecursiveMemberId path
-let singletonRecursiveGroupId (RecursiveMemberId path) = RecursiveGroupId (1 :: path)
+[<Struct; StructuralEquality; StructuralComparison>]
+type FieldId = private FieldId of identity:int * index:int
+
+[<Struct; StructuralEquality; StructuralComparison>]
+type ScopeBoundaryId = private ScopeBoundaryId of int
+
+[<Struct; StructuralEquality; StructuralComparison>]
+type RecursiveGroupId = private RecursiveGroupId of int
+
+[<Struct; StructuralEquality; StructuralComparison>]
+type RecursiveMemberId = private RecursiveMemberId of int
+
+let bindingId ordinal = BindingId ordinal
+let functionId ordinal = FunctionId ordinal
+let typeId ordinal = TypeId ordinal
+let semanticNameIdentity (name: string) : int =
+    name
+    |> Seq.fold (fun hash character -> (hash ^^^ uint32 character) * 16777619u) 2166136261u
+    |> fun hash -> int (hash &&& 0x7fffffffu)
+let functionIdForName name = FunctionId (semanticNameIdentity name)
+let functionIdValue (FunctionId identity) = identity
+let typeIdForName name = TypeId (semanticNameIdentity name)
+let constructorId identity tag = ConstructorId (identity, tag)
+let constructorTag (ConstructorId (_, tag)) = tag
+let fieldId identity index = FieldId (identity, index)
+let fieldIndex (FieldId (_, index)) = index
+let scopeBoundaryId ordinal = ScopeBoundaryId ordinal
+// Group IDs share one compact namespace: declaration groups are even and
+// singleton local-recursion groups are odd.
+let topLevelRecursiveGroupId ordinal = RecursiveGroupId (ordinal * 2)
+let recursiveMemberId ordinal = RecursiveMemberId ordinal
+let singletonRecursiveGroupId (RecursiveMemberId ordinal) =
+    RecursiveGroupId (ordinal * 2 + 1)
 
 type RecursiveMemberKind =
     | TopLevelFunctionMember
@@ -362,6 +408,8 @@ let validateBinders (structure: BinderStructure) : Result<string list, string> =
         | PVar name -> [name]
         | PConstructor (_, fields) ->
             fields |> List.collect matchPatternBindings
+        | PResolvedConstructor (_, _, _, fields) ->
+            fields |> List.collect matchPatternBindings
         | PTuple patterns | PList patterns -> patterns |> List.collect matchPatternBindings
         | PListCons (heads, tail) ->
             (heads |> List.collect matchPatternBindings) @ matchPatternBindings tail
@@ -429,9 +477,9 @@ and Expr =
     | TupleLiteral of Expr list              // Tuple literal: (1, 2, 3)
     | TupleAccess of tuple:Expr * index:int  // Tuple access: t.0, t.1, etc.
     | DictLiteral of keyType:Type * valueType:Type * entries:(Expr * Expr) list
-    | RecordLiteral of reference:RecordReference * fields:(string * Expr) list
-    | RecordUpdate of record:Expr * updates:(string * Expr) list      // { record with x = 1, y = 2 }
-    | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y
+    | RecordLiteral of reference:RecordReference * fields:(RecordFieldReference * Expr) list
+    | RecordUpdate of record:Expr * updates:(RecordFieldReference * Expr) list // { record with x = 1, y = 2 }
+    | RecordAccess of record:Expr * field:RecordFieldReference        // p.x, p.y
     | Constructor of reference:ConstructorReference * variantName:string * fields:Expr list
     | Match of scrutinee:Expr * cases:MatchCase list  // match e with | p1 when g -> e1 | p2 -> e2
     | ListLiteral of Expr list                               // [1, 2, 3]

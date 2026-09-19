@@ -17,7 +17,7 @@ let rec insertRCWithAnalysis
     (joinScopes: Map<TempId, Set<TempId>>)
     (inheritedBranchDecs: ReturnDec list)
     (ctx: TypeContext)
-    (currentFuncName: string option)
+    (currentFuncName: AST.FunctionId option)
     (expr: ReturnAnnotatedExpr)
     (varGen: VarGen)
     (returnDecs: ReturnDec list)
@@ -48,12 +48,15 @@ let rec insertRCWithAnalysis
         | _ ->
             false
     let mapHelperTransfersSecondParam =
-        let isMapHelper (funcName: string) : bool =
-            funcName = "Darklang.Stdlib.List.__mapHelper"
-            || funcName.StartsWith("Darklang.Stdlib.List.__mapHelper_")
-        let secondParamTransfersOwnership (funcName: string) : bool =
+        let isMapHelper (funcName: AST.FunctionId) : bool =
             match Map.tryFind funcName ctx.FuncReg with
-            | Some (AST.TFunction (_ :: secondParamType :: _, _)) ->
+            | Some (name, _) ->
+                name = "Darklang.Stdlib.List.__mapHelper"
+                || name.StartsWith("Darklang.Stdlib.List.__mapHelper_")
+            | None -> false
+        let secondParamTransfersOwnership (funcName: AST.FunctionId) : bool =
+            match Map.tryFind funcName ctx.FuncReg with
+            | Some (_, AST.TFunction (_ :: secondParamType :: _, _)) ->
                 secondParamType
                 |> rcShapeForType ctx
                 |> rcShapeIsOwnershipTransferRoot
@@ -178,9 +181,9 @@ let rec insertRCWithAnalysis
             // When a temp is aliased through one or more let-bound vars, infer its type
             // from the first concrete use-site (typically a call argument position).
             let rec inferAliasedVarTypeFromUse (aliasedTemp: TempId) (nextBody: ReturnAnnotatedExpr) : AST.Type option =
-                let inferFromCall (funcName: string) (args: Atom list) : AST.Type option =
+                let inferFromCall (funcName: AST.FunctionId) (args: Atom list) : AST.Type option =
                     match Map.tryFind funcName ctx.FuncReg with
-                    | Some (AST.TFunction (paramTypes, _)) ->
+                    | Some (_, AST.TFunction (paramTypes, _)) ->
                         args
                         |> List.mapi (fun idx atom -> (idx, atom))
                         |> List.tryPick (fun (idx, atom) ->
@@ -272,9 +275,9 @@ let rec insertRCWithAnalysis
 
             let bodyReturned = returnedSet bodyInfo
             let consumedByImmediateI64Push =
-                let isI64Push (funcName: string) : bool =
-                    funcName = "Darklang.Stdlib.List.__push_i64"
-                    || funcName = "Darklang.Stdlib.List.__pushBack_i64"
+                let isI64Push (funcName: AST.FunctionId) : bool =
+                    funcName = AST.functionIdForName "Darklang.Stdlib.List.__push_i64"
+                    || funcName = AST.functionIdForName "Darklang.Stdlib.List.__pushBack_i64"
                 let consumesSecondArg (args: Atom list) : bool =
                     match args with
                     | _listAtom :: Var valueTemp :: _ -> valueTemp = tempId
@@ -296,7 +299,7 @@ let rec insertRCWithAnalysis
                     match cexpr with
                     | BorrowedCall _ -> true
                     | _ -> false
-                if bindingNeedsShapeAutomaticDec cexpr inferredType inferredShape
+                if bindingNeedsShapeAutomaticDec ctx cexpr inferredType inferredShape
                    && (not (isBorrowingExpr cexpr) || materializesBorrowedCall)
                    && not (cexprProducesNonRcSentinel cexpr)
                    && not skipReturnDecForMapHelperLists
@@ -418,8 +421,8 @@ let rec insertRCWithAnalysis
                     match cexpr with
                     | Call (funcName, [_; Var valueTemp])
                     | TailCall (funcName, [_; Var valueTemp]) when
-                        funcName = "Darklang.Stdlib.List.__push_i64"
-                        || funcName = "Darklang.Stdlib.List.__pushBack_i64" ->
+                        funcName = AST.functionIdForName "Darklang.Stdlib.List.__push_i64"
+                        || funcName = AST.functionIdForName "Darklang.Stdlib.List.__pushBack_i64" ->
                         let transfersImmediateOwnedValue =
                             match frames with
                             | previous :: _ when previous.TempId = valueTemp ->
@@ -604,7 +607,7 @@ let rec insertRCWithAnalysis
                     | Some funcName, TupleGet (Var sourceId, _)
                     | Some funcName, RecordGet (_, Var sourceId, _) ->
                         sourceParentIsOwnedLocal sourceId
-                        && isTempUsedAsSelfTailCallArg funcName tempId bodyInfo
+                        && isTempUsedAsSelfTailCallArg ctx funcName tempId bodyInfo
                     | _ ->
                         false
 

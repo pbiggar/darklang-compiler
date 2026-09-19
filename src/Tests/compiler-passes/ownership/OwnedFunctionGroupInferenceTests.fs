@@ -16,7 +16,11 @@ let private unitValue id : HIR.Value = {
     Type = AST.TUnit
 }
 
-let private parameter name value : HIR.Parameter = { Name = name; Value = value }
+let private binding name =
+    name |> Seq.fold (fun hash ch -> (hash * 31) + int ch) 17 |> AST.bindingId
+
+let private parameter name value : HIR.Parameter =
+    { Name = name; Binding = binding name; Value = value }
 
 let private signature parameters result : FunctionSignature<string> = {
     Parameters = parameters
@@ -32,12 +36,16 @@ let private block parameters operations result : Block<TestLeaf, string> = {
 }
 
 let private definition name ownership body : Function<TestLeaf, string> = {
-    Definition = { Name = name; Body = body }
+    Definition = { Id = AST.functionIdForName name; Name = name; Body = body }
     Ownership = ownership
 }
 
 let private call target arguments result =
-    Evaluate (HIR.Call { Target = target; Arguments = arguments; Result = result })
+    Evaluate (HIR.Call {
+        Target = AST.functionIdForName target
+        Arguments = arguments
+        Result = result
+    })
 
 let private callSignature parameters result : CallSignature = {
     Parameters = parameters
@@ -112,7 +120,10 @@ let private testInfersAcyclicGroupsCalleeFirst () =
                     intermediate, "intermediate"
                     entryResult, "entryResult"
                 ]
-                (Map.ofList ["leaf", transferredCall; "external", transferredCall]))
+                (Map.ofList [
+                    AST.functionIdForName "leaf", transferredCall
+                    AST.functionIdForName "external", transferredCall
+                ]))
             [entry; leaf]
         |> Result.map (List.map groupSummary)
     let expected = Ok [
@@ -126,8 +137,8 @@ let private testInfersAcyclicGroupsCalleeFirst () =
             ])
         (
             false,
-            Set.singleton "leaf",
-            Set.singleton "external",
+            Set.singleton (AST.functionIdForName "leaf"),
+            Set.singleton (AST.functionIdForName "external"),
             [["entry", entryBoundary]])
     ]
     if actual = expected then Ok ()
@@ -206,7 +217,8 @@ let private testReportsGroupingFailures () =
     match InferOwnedFunctionGroups.infer (semantics [] Map.empty) [duplicate; duplicate] with
     | Error (
         InferOwnedFunctionGroups.FunctionGroupingFailed (
-            OwnedFunctionGroups.DuplicateFunctionName "duplicate")) -> Ok ()
+            OwnedFunctionGroups.DuplicateFunctionName id))
+        when id = AST.functionIdForName "duplicate" -> Ok ()
     | actual -> Error $"Expected duplicate definitions to retain their grouping error, got {actual}"
 
 let tests = [

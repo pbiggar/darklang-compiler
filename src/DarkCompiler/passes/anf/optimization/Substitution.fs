@@ -192,14 +192,18 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
                     match parts |> List.filter (function StringLiteral "" -> false | _ -> true) with
                     | [single] -> Some (Atom single)
                     | _ -> None
-            | Call ("Darklang.Stdlib.String.__appendNormalized", [StringLiteral left; StringLiteral right]) ->
+            | Call (id, [StringLiteral left; StringLiteral right])
+                when id = AST.functionIdForName "Darklang.Stdlib.String.__appendNormalized" ->
                 let normalized = (left + right).Normalize(System.Text.NormalizationForm.FormC)
                 Some (Atom (StringLiteral normalized))
-            | Call ("Darklang.Stdlib.String.__normalizeAfterConcat", [StringLiteral value]) ->
+            | Call (id, [StringLiteral value])
+                when id = AST.functionIdForName "Darklang.Stdlib.String.__normalizeAfterConcat" ->
                 Some (Atom (StringLiteral (value.Normalize(System.Text.NormalizationForm.FormC))))
-            | Call ("Darklang.Stdlib.String.__appendNormalized", [left; StringLiteral ""]) ->
+            | Call (id, [left; StringLiteral ""])
+                when id = AST.functionIdForName "Darklang.Stdlib.String.__appendNormalized" ->
                 Some (Atom left)
-            | Call ("Darklang.Stdlib.String.__appendNormalized", [StringLiteral ""; right]) ->
+            | Call (id, [StringLiteral ""; right])
+                when id = AST.functionIdForName "Darklang.Stdlib.String.__appendNormalized" ->
                 Some (Atom right)
             | TupleGet (Var tupleTid, index) ->
                 Map.tryFind tupleTid tupleEnv

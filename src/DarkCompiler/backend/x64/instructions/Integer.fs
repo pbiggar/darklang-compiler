@@ -23,7 +23,7 @@ let internal emitMov (ctx: FuncCtx) (dest: LIR.Reg) (src: LIR.Operand) : Result<
         | LIR.StringSymbol value ->
             Ok (emitStringLiteral destReg value)
         | LIR.FuncAddr funcName ->
-            Ok [X86_64.LEA_rip (destReg, funcName)]
+            Ok [X86_64.LEA_rip (destReg, functionName ctx funcName)]
         | LIR.FloatImm value | LIR.FloatSymbol value ->
             // Store float bits in GP register
             let bits = System.BitConverter.DoubleToInt64Bits(value)
@@ -560,7 +560,7 @@ let internal emitArgMoves (ctx: FuncCtx) (moves: (LIR.PhysReg * LIR.Operand) lis
             let bits = System.BitConverter.DoubleToInt64Bits(value)
             Ok (loadImm64 destX86 bits)  // Store float bits in GP register (for passing as arg)
         | LIR.FuncAddr funcName ->
-            Ok [X86_64.LEA_rip (destX86, funcName)]
+            Ok [X86_64.LEA_rip (destX86, functionName ctx funcName)]
         | _ -> Error $"Unsupported ArgMoves operand: {srcOp}"
     // Two-pass approach to handle parallel move conflicts:
     // 1. Find source registers that are also destinations (will be clobbered)
@@ -644,7 +644,7 @@ let internal emitTailArgMoves (ctx: FuncCtx) (moves: (LIR.PhysReg * LIR.Operand)
             let bits = System.BitConverter.DoubleToInt64Bits(value)
             Ok (loadImm64 destX86 bits)
         | LIR.FuncAddr funcName ->
-            Ok [X86_64.LEA_rip (destX86, funcName)]
+            Ok [X86_64.LEA_rip (destX86, functionName ctx funcName)]
         | _ -> Error $"Unsupported TailArgMoves operand: {srcOp}"
     let rec genMoves acc remaining =
         match remaining with
@@ -767,7 +767,8 @@ let internal emitUxtw (ctx: FuncCtx) (dest: LIR.Reg) (src: LIR.Reg) : Result<X86
     resolveReg dest |> Result.bind (fun d -> resolveReg src |> Result.map (fun s ->
         [X86_64.MOV_reg32 (d, s)]))
 
-let internal emitClosureAlloc (ctx: FuncCtx) (dest: LIR.Reg) (funcName: string) (captures: LIR.Operand list) : Result<X86_64.Instr list, string> =
+let internal emitClosureAlloc (ctx: FuncCtx) (dest: LIR.Reg) (funcId: AST.FunctionId) (captures: LIR.Operand list) : Result<X86_64.Instr list, string> =
+    let funcName = functionName ctx funcId
     // Allocate closure on heap: [func_ptr, cap1, cap2, ...][refcount]
     resolveReg dest
     |> Result.bind (fun destReg ->

@@ -110,13 +110,13 @@ type VerificationError<'id when 'id: comparison> =
     | InconsistentFunctionResult
     | InvalidBorrowedResult of 'id
     | InvalidProducedResult of 'id
-    | UnknownCallOwnership of target: string
-    | InconsistentCallOwnershipParameters of target: string
-    | InconsistentCallOwnershipArgument of target: string * parameterIndex: int
-    | InconsistentCallOwnershipResult of target: string
-    | InvalidBorrowedCallResult of target: string * parameterIndex: int
-    | DuplicateFunctionName of name: string
-    | InconsistentRegisteredCallOwnership of target: string
+    | UnknownCallOwnership of target: AST.FunctionId
+    | InconsistentCallOwnershipParameters of target: AST.FunctionId
+    | InconsistentCallOwnershipArgument of target: AST.FunctionId * parameterIndex: int
+    | InconsistentCallOwnershipResult of target: AST.FunctionId
+    | InvalidBorrowedCallResult of target: AST.FunctionId * parameterIndex: int
+    | DuplicateFunctionName of id: AST.FunctionId
+    | InconsistentRegisteredCallOwnership of target: AST.FunctionId
     | InconsistentJoin
     | InconsistentBlockArgument
     | UndroppedValues of Set<'id>

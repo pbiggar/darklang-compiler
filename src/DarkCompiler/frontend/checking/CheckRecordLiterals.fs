@@ -8,7 +8,7 @@ open CheckingTypes
 open TypeUnification
 open CheckExpressionSupport
 
-let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: Type option) (reference: RecordReference) (fields: (string * Expr) list) : Result<Type * Expr, TypeError> =
+let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: Type option) (reference: RecordReference) (fields: (RecordFieldReference * Expr) list) : Result<Type * Expr, TypeError> =
     let typeName = reference.SourceTypeName
     // Type name is required (parser enforces this, but check for safety)
     if typeName = "" then
@@ -16,8 +16,8 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
     else
         let normalizedFields =
             fields
-            |> List.map (fun (name, value) ->
-                (if name = "___" then "" else name), value)
+            |> List.map (fun (reference, value) ->
+                (if reference.SourceFieldName = "___" then "" else reference.SourceFieldName), value)
         let invalidEmptyField = normalizedFields |> List.tryFind (fst >> (=) "")
         let duplicateField =
             normalizedFields
@@ -92,9 +92,9 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
 
                     let rec checkFieldsInOrder
                         (remaining: (string * Expr) list)
-                        (accFields: (string * Expr) list)
+                        (accFields: (RecordFieldReference * Expr) list)
                         (accBindings: (string * Type) list)
-                        : Result<(string * Expr) list * (string * Type) list, TypeError> =
+                        : Result<(RecordFieldReference * Expr) list * (string * Type) list, TypeError> =
                         match remaining with
                         | [] -> Ok (List.rev accFields, accBindings)
                         | (fname, fieldExpr) :: rest ->
@@ -128,9 +128,16 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
                                     let resolvedActualType = resolveType aliasReg actualType
                                     match matchTypes resolvedExpectedFieldType resolvedActualType with
                                     | Ok newBindings ->
+                                        let fieldIndex =
+                                            recordInfo.Fields
+                                            |> List.tryFindIndex (fst >> (=) fname)
+                                            |> Option.defaultWith (fun () ->
+                                                Crash.crash $"Validated record field '{fname}' has no declaration slot")
+                                        let fieldReference =
+                                            resolvedRecordFieldReference resolvedTypeName fname fieldIndex
                                         checkFieldsInOrder
                                             rest
-                                            ((fname, fieldExpr') :: accFields)
+                                            ((fieldReference, fieldExpr') :: accFields)
                                             (accBindings @ newBindings)
                                     | Error _ ->
                                         Error

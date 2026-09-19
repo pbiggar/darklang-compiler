@@ -6,7 +6,7 @@
 module ANFDeadCodeElimination
 
 /// Extract function names from an atom
-let private extractFromAtom (atom: ANF.Atom) : string list =
+let private extractFromAtom (atom: ANF.Atom) : AST.FunctionId list =
     match atom with
     | ANF.FuncRef name -> [name]
     | ANF.UnitLiteral
@@ -17,11 +17,11 @@ let private extractFromAtom (atom: ANF.Atom) : string list =
     | ANF.Var _ -> []
 
 /// Extract function names from a list of atoms
-let private extractFromAtoms (atoms: ANF.Atom list) : string list =
+let private extractFromAtoms (atoms: ANF.Atom list) : AST.FunctionId list =
     atoms |> List.collect extractFromAtom
 
 /// Extract function names from a complex expression
-let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
+let private extractFromCExpr (cexpr: ANF.CExpr) : AST.FunctionId list =
     match cexpr with
     | ANF.Call (funcName, args)
     | ANF.BorrowedCall (funcName, args)
@@ -115,7 +115,7 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.RuntimeErrorString atom -> extractFromAtom atom
 
 /// Extract function names from an ANF expression
-let rec private extractFromAExpr (aexpr: ANF.AExpr) : string list =
+let rec private extractFromAExpr (aexpr: ANF.AExpr) : AST.FunctionId list =
     match aexpr with
     | ANF.Let (_, cexpr, body) ->
         extractFromCExpr cexpr @ extractFromAExpr body
@@ -127,27 +127,27 @@ let rec private extractFromAExpr (aexpr: ANF.AExpr) : string list =
         extractFromAtom cond @ extractFromAExpr thenBranch @ extractFromAExpr elseBranch
 
 /// Extract function names called from an ANF function
-let getCalledFunctions (func: ANF.Function) : Set<string> =
+let getCalledFunctions (func: ANF.Function) : Set<AST.FunctionId> =
     extractFromAExpr func.Body |> Set.ofList
 
 /// Build call graph from list of ANF functions
-let buildCallGraph (funcs: ANF.Function list) : Map<string, Set<string>> =
+let buildCallGraph (funcs: ANF.Function list) : Map<AST.FunctionId, Set<AST.FunctionId>> =
     funcs
-    |> List.map (fun f -> f.Name, getCalledFunctions f)
+    |> List.map (fun f -> f.Id, getCalledFunctions f)
     |> Map.ofList
 
 /// Retain functions reachable from the named roots, preserving input order.
 let filterReachableFunctions
-    (roots: Set<string>)
+    (roots: Set<AST.FunctionId>)
     (funcs: ANF.Function list)
     : ANF.Function list =
     let reachable =
         CallGraphReachability.findReachable (buildCallGraph funcs) roots
-    funcs |> List.filter (fun func -> Set.contains func.Name reachable)
+    funcs |> List.filter (fun func -> Set.contains func.Id reachable)
 
 /// Get the set of stdlib functions reachable from user functions
-let getReachableStdlib (stdlibCallGraph: Map<string, Set<string>>)
-                       (userFuncs: ANF.Function list) : Set<string> =
+let getReachableStdlib (stdlibCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+                       (userFuncs: ANF.Function list) : Set<AST.FunctionId> =
     // Get all functions called from user code
     let userCalls =
         userFuncs

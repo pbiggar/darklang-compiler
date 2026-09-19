@@ -59,7 +59,8 @@ let rec countMatches (expr: CheckedAST.Expr) : int =
         | CheckedAST.StringLiteral _
         | CheckedAST.CharLiteral _
         | CheckedAST.FloatLiteral _
-        | CheckedAST.Var _
+        | CheckedAST.Local _
+        | CheckedAST.NamedValue _
         | CheckedAST.FuncRef _
         | CheckedAST.RuntimeError _ ->
             []
@@ -96,8 +97,7 @@ let rec countMatches (expr: CheckedAST.Expr) : int =
             recordExpr :: (updates |> List.map snd)
         | CheckedAST.RecordAccess (recordExpr, _) ->
             [recordExpr]
-        | CheckedAST.Constructor (_, _, fields) ->
-            fields
+        | CheckedAST.Constructor (_, fields) -> fields
         | CheckedAST.Match (scrutinee, cases) ->
             scrutinee :: (cases |> List.map (fun c -> c.Body))
         | CheckedAST.Lambda (_, _, body) ->
@@ -141,7 +141,7 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
     let program = Program [sumDef; Expression ([], eqExpr)]
 
     match checkProgram program with
-    | Ok (actualType, CheckedAST.Program topLevels) ->
+    | Ok (actualType, CheckedAST.Program (_, topLevels)) ->
         if actualType <> TBool then
             Error $"Expected Bool result type, got {typeToString actualType}"
         else
@@ -197,7 +197,7 @@ let testRecordAccessRejectsInvalidRecordArity () : TestResult =
             TypeParams = []
             Params = NonEmptyList.singleton ("box", TRecord ("ArityBoxTc", [TInt64; TBool]))
             ReturnType = TInt64
-            Body = RecordAccess (Var "box", "value")
+            Body = RecordAccess (Var "box", unresolvedRecordFieldReference "value")
             Recursion = None
         }
 
@@ -345,7 +345,7 @@ let testRecursiveGroupsReceiveStableTypedIdentities () : TestResult =
     |> Result.bind (fun program ->
         checkProgram program
         |> Result.mapError (fun error -> $"Recursive group type check failed: {typeErrorToString error}"))
-    |> Result.bind (fun (_, CheckedAST.Program topLevels) ->
+    |> Result.bind (fun (_, CheckedAST.Program (_, topLevels)) ->
         let recursionByName =
             topLevels
             |> List.choose (function

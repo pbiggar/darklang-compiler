@@ -66,13 +66,10 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                     | LIR.CliNative (_, (LIR.SpawnProcess | LIR.ProcessIO | LIR.TerminateProcess), _) -> true
                     | _ -> false)))
 
-    let rec translateFuncs acc remaining =
-        match remaining with
-        | [] -> Ok (List.rev acc |> List.concat)
-        | func :: rest ->
-            match translateFunction enableLeakCheck recordRegistry sumShapeRegistry func with
-            | Error e -> Error e
-            | Ok instrs -> translateFuncs (instrs :: acc) rest
+    let functionNames =
+        functions
+        |> List.map (fun func -> func.Id, func.Name)
+        |> Map.ofList
 
     let closureCaptureTypes = closureCaptureTypesFromParams functions
 
@@ -642,14 +639,29 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         baseNeedsClosureRcDecHelper || needsStreamRcDecHelper
 
     let closurePayloadSizes =
+        let allocationSizes =
+            closurePayloadSizesFromAllocs functions
+            |> Map.toList
+            |> List.map (fun (funcId, payloadSize) ->
+                match Map.tryFind funcId functionNames with
+                | Some funcName -> funcName, payloadSize
+                | None -> Crash.crash $"x64 metadata: missing closure target name for identity {AST.functionIdValue funcId}")
+            |> Map.ofList
         Map.fold
             (fun acc funcName payloadSize -> Map.add funcName payloadSize acc)
-            (closurePayloadSizesFromAllocs functions)
+            allocationSizes
             (closurePayloadSizesFromParams functions)
     let recursiveSumRcDecHelpers =
         recursiveReleaseTypesInFunctions functions
         |> Set.toList
         |> List.collect (generateRecursiveSumRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegistry)
+    let rec translateFuncs acc remaining =
+        match remaining with
+        | [] -> Ok (List.rev acc |> List.concat)
+        | func :: rest ->
+            match translateFunction enableLeakCheck recordRegistry sumShapeRegistry functionNames func with
+            | Error e -> Error e
+            | Ok instrs -> translateFuncs (instrs :: acc) rest
     translateFuncs [] functions
     |> Result.map (fun allInstrs ->
         let allInstrs =
@@ -750,6 +762,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                     EnableLeakCheck = enableLeakCheck
                     RecordRegistry = recordRegistry
                     SumShapeRegistry = sumShapeRegistry
+                    FunctionNames = Map.empty
                 }
             else
                 []

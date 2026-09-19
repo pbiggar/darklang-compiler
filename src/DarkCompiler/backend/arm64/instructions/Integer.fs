@@ -34,7 +34,7 @@ let internal emitMov (ctx: CodeGenContext) (dest: LIR.Reg) (src: LIR.Operand) : 
             Error "Cannot MOV float reference - use FLoad instruction"
         | LIR.FuncAddr funcName ->
             // Load function address using ADR instruction
-            Ok [ARM64Symbolic.ADR (destReg, codeLabel funcName)])
+            Ok [ARM64Symbolic.ADR (destReg, codeLabel (functionName ctx funcName))])
 
 let internal emitStore (ctx: CodeGenContext) (offset: int) (src: LIR.Reg) : Result<ARM64Symbolic.Instr list, string> =
     // Store register to stack slot
@@ -312,7 +312,8 @@ let internal emitUxtw (ctx: CodeGenContext) (dest: LIR.Reg) (src: LIR.Reg) : Res
         lirRegToARM64Reg src
         |> Result.map (fun srcReg -> [ARM64Symbolic.UXTW (destReg, srcReg)]))
 
-let internal emitClosureAlloc (ctx: CodeGenContext) (dest: LIR.Reg) (funcName: string) (captures: LIR.Operand list) : Result<ARM64Symbolic.Instr list, string> =
+let internal emitClosureAlloc (ctx: CodeGenContext) (dest: LIR.Reg) (funcId: AST.FunctionId) (captures: LIR.Operand list) : Result<ARM64Symbolic.Instr list, string> =
+    let funcName = functionName ctx funcId
     // Allocate closure on heap: (func_ptr, cap1, cap2, ...)
     // Each slot is 8 bytes
     lirRegToARM64Reg dest
@@ -356,7 +357,7 @@ let internal emitClosureAlloc (ctx: CodeGenContext) (dest: LIR.Reg) (funcName: s
                             [ARM64Symbolic.STR (srcReg, destReg, int16 offset)]
                     | Error msg -> Crash.crash $"ClosureAlloc: lirRegToARM64Reg failed: {msg}"
                 | LIR.FuncAddr fname ->
-                    [ARM64Symbolic.ADR (ARM64Symbolic.X15, codeLabel fname); ARM64Symbolic.STR (ARM64Symbolic.X15, destReg, int16 offset)]
+                    [ARM64Symbolic.ADR (ARM64Symbolic.X15, codeLabel (functionName ctx fname)); ARM64Symbolic.STR (ARM64Symbolic.X15, destReg, int16 offset)]
                 | other -> Crash.crash $"ClosureAlloc: Unexpected capture operand type: {other}")
 
         Ok (allocInstrs @ generateLeakCounterInc ctx @ storeFuncAddr @ storeCaptures))
@@ -420,7 +421,7 @@ let internal emitArgMoves (ctx: CodeGenContext) (moves: (LIR.PhysReg * LIR.Opera
         | LIR.StringSymbol value ->
             Ok (loadStringLiteralPointer destARM64 value)
         | LIR.FuncAddr funcName ->
-            Ok [ARM64Symbolic.ADR (destARM64, codeLabel funcName)]
+            Ok [ARM64Symbolic.ADR (destARM64, codeLabel (functionName ctx funcName))]
         | LIR.FloatImm _ | LIR.FloatSymbol _ ->
             Error "Float in ArgMoves not yet supported"
 
@@ -458,7 +459,7 @@ let internal emitTailArgMoves (ctx: CodeGenContext) (moves: (LIR.PhysReg * LIR.O
         | LIR.StackSlot offset ->
             loadStackSlot destARM64 offset
         | LIR.FuncAddr funcName ->
-            Ok [ARM64Symbolic.ADR (destARM64, codeLabel funcName)]
+            Ok [ARM64Symbolic.ADR (destARM64, codeLabel (functionName ctx funcName))]
         | LIR.StringSymbol value ->
             Ok (loadStringLiteralPointer destARM64 value)
         | LIR.FloatImm _ | LIR.FloatSymbol _ ->

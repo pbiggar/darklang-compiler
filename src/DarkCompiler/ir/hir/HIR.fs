@@ -15,7 +15,7 @@ type Value = {
 type Operand = {
     Expression: CheckedAST.Expr
     Type: AST.Type
-    Inputs: Map<string, Value>
+    Inputs: Map<AST.BindingId, Value>
 }
 
 /// Function signatures describe only the typed call boundary. Effects and
@@ -29,7 +29,7 @@ type FunctionSignature = {
 /// Only resolved direct calls enter normalized HIR. Unknown and indirect calls
 /// remain inside opaque scalar evaluation until their boundaries are known.
 type FunctionCall = {
-    Target: string
+    Target: AST.FunctionId
     Arguments: Value list
     Result: Value
 }
@@ -45,6 +45,7 @@ type Operation<'leaf, 'block> =
 /// authority after construction.
 type Parameter = {
     Name: string
+    Binding: AST.BindingId
     Value: Value
 }
 
@@ -59,6 +60,7 @@ type Block<'operation> = {
 /// A normalized function owns one ordered entry block. Its typed signature is
 /// derived from the parameter and result values rather than duplicated here.
 type Function<'block> = {
+    Id: AST.FunctionId
     Name: string
     Body: 'block
 }

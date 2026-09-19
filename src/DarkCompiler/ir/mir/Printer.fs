@@ -18,6 +18,15 @@ let private prettyPrintMIROperand = function
     | MIR.Register (MIR.VReg n) -> $"v{n}"
     | MIR.FuncAddr name -> $"&{name}"
 
+let private prettyPrintFunctionName functionNames id =
+    Map.tryFind id functionNames
+    |> Option.defaultWith (fun () -> string id)
+
+let private prettyPrintMIROperandWithNames functionNames operand =
+    match operand with
+    | MIR.FuncAddr id -> $"&{prettyPrintFunctionName functionNames id}"
+    | _ -> prettyPrintMIROperand operand
+
 /// Pretty-print MIR operator
 let private prettyPrintMIROp = function
     | MIR.Add -> "+"
@@ -61,7 +70,8 @@ let private prettyPrintMIRLabel (MIR.Label name) : string =
     name
 
 /// Pretty-print MIR instruction
-let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
+let private prettyPrintMIRInstr functionNames (instr: MIR.Instr) : string =
+    let prettyPrintMIROperand = prettyPrintMIROperandWithNames functionNames
     match instr with
     | MIR.Mov (dest, src, valueType) ->
         let baseText = $"{prettyPrintMIRVReg dest} <- {prettyPrintMIROperand src}"
@@ -72,12 +82,12 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         $"{prettyPrintMIRVReg dest} <- {prettyPrintMIRUnaryOp op}{prettyPrintMIROperand src}"
     | MIR.Call (dest, funcName, args, _, _) ->
         let argStr = args |> commaSeparated prettyPrintMIROperand
-        $"{prettyPrintMIRVReg dest} <- Call({funcName}, [{argStr}])"
+        $"{prettyPrintMIRVReg dest} <- Call({prettyPrintFunctionName functionNames funcName}, [{argStr}])"
     | MIR.CanonicalBufferEq (dest, kind, left, right) ->
         $"{prettyPrintMIRVReg dest} <- CanonicalBufferEq[{prettyPrintCanonicalBufferKind kind}]({prettyPrintMIROperand left}, {prettyPrintMIROperand right})"
     | MIR.TailCall (funcName, args, _, _) ->
         let argStr = args |> commaSeparated prettyPrintMIROperand
-        $"TailCall({funcName}, [{argStr}])"
+        $"TailCall({prettyPrintFunctionName functionNames funcName}, [{argStr}])"
     | MIR.IndirectCall (dest, func, args, _, _) ->
         let argStr = args |> commaSeparated prettyPrintMIROperand
         $"{prettyPrintMIRVReg dest} <- IndirectCall({prettyPrintMIROperand func}, [{argStr}])"
@@ -86,7 +96,7 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         $"IndirectTailCall({prettyPrintMIROperand func}, [{argStr}])"
     | MIR.ClosureAlloc (dest, funcName, captures) ->
         let capsStr = captures |> commaSeparated prettyPrintMIROperand
-        $"{prettyPrintMIRVReg dest} <- ClosureAlloc({funcName}, [{capsStr}])"
+        $"{prettyPrintMIRVReg dest} <- ClosureAlloc({prettyPrintFunctionName functionNames funcName}, [{capsStr}])"
     | MIR.ClosureCall (dest, closure, args, _, _) ->
         let argStr = args |> commaSeparated prettyPrintMIROperand
         $"{prettyPrintMIRVReg dest} <- ClosureCall({prettyPrintMIROperand closure}, [{argStr}])"
@@ -209,20 +219,24 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         $"CoverageHit({exprId})"
 
 /// Pretty-print MIR terminator
-let private prettyPrintMIRTerminator (term: MIR.Terminator) : string =
+let private prettyPrintMIRTerminator functionNames (term: MIR.Terminator) : string =
+    let prettyPrintMIROperand = prettyPrintMIROperandWithNames functionNames
     match term with
     | MIR.Ret operand -> $"ret {prettyPrintMIROperand operand}"
     | MIR.Branch (cond, trueLabel, falseLabel) ->
         $"branch {prettyPrintMIROperand cond} ? {prettyPrintMIRLabel trueLabel} : {prettyPrintMIRLabel falseLabel}"
     | MIR.Jump label -> $"jump {prettyPrintMIRLabel label}"
 
-/// Format MIR program with CFG structure
-let formatMIR (program: MIR.Program) : string =
+/// Format MIR program with CFG structure and names for external call targets.
+let formatMIRWithFunctionNames externalFunctionNames (program: MIR.Program) : string =
     let (MIR.Program (functions, _, _)) = program
+    let functionNames =
+        functions
+        |> List.fold (fun names func -> Map.add func.Id func.Name names) externalFunctionNames
     let prettyPrintBlock (block: MIR.BasicBlock) =
         let labelLine = $"  {prettyPrintMIRLabel block.Label}:"
-        let instrLines = block.Instrs |> List.map prettyPrintMIRInstr |> List.map (fun line -> $"    {line}")
-        let termLine = $"    {prettyPrintMIRTerminator block.Terminator}"
+        let instrLines = block.Instrs |> List.map (prettyPrintMIRInstr functionNames) |> List.map (fun line -> $"    {line}")
+        let termLine = $"    {prettyPrintMIRTerminator functionNames block.Terminator}"
         String.concat "\n" (labelLine :: instrLines @ [termLine])
 
     let prettyPrintFunction (func: MIR.Function) =
@@ -251,6 +265,8 @@ let formatMIR (program: MIR.Program) : string =
     functions
     |> List.map prettyPrintFunction
     |> String.concat "\n\n"
+
+let formatMIR program = formatMIRWithFunctionNames Map.empty program
 
 /// Format only matching MIR functions, optionally as block/instruction counts.
 let formatMIRDump (filter: string option) (summary: bool) (MIR.Program (functions, variants, records)) : string =

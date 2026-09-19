@@ -39,7 +39,7 @@ type TypeContext = {
     /// Maps TempId -> Type for values we've seen
     TempTypes: Map<TempId, AST.Type>
     /// Maps TempId -> function name for closures (to resolve closure call return types)
-    ClosureFuncs: Map<TempId, string>
+    ClosureFuncs: Map<TempId, AST.FunctionId>
     /// Registry projections and canonical ownership plans shared across local
     /// TypeContext copies for this pass.
     TypePlanning: RcTypePlanningContext
@@ -53,8 +53,8 @@ let createContext (result: ConversionResult) : TypeContext =
         |> List.fold
             (fun registry func ->
                 Map.add
-                    func.Name
-                    (AST.TFunction (
+                    func.Id
+                    (func.Name, AST.TFunction (
                         func.TypedParams |> List.map (fun param -> param.Type),
                         func.ReturnType
                     ))
@@ -73,11 +73,11 @@ let internal withTempTypes (ctx: TypeContext) (types: Map<TempId, AST.Type>) : T
     { ctx with TempTypes = types }
 
 /// Add a closure TempId -> function name mapping to context
-let addClosureFunc (ctx: TypeContext) (tempId: TempId) (funcName: string) : TypeContext =
+let addClosureFunc (ctx: TypeContext) (tempId: TempId) (funcName: AST.FunctionId) : TypeContext =
     { ctx with ClosureFuncs = Map.add tempId funcName ctx.ClosureFuncs }
 
 /// Try to get the function name of a closure from its TempId
-let tryGetClosureFunc (ctx: TypeContext) (atom: Atom) : string option =
+let tryGetClosureFunc (ctx: TypeContext) (atom: Atom) : AST.FunctionId option =
     match atom with
     | Var tid -> Map.tryFind tid ctx.ClosureFuncs
     | _ -> None
@@ -87,10 +87,10 @@ let tryGetType (ctx: TypeContext) (tempId: TempId) : AST.Type option =
     Map.tryFind tempId ctx.TempTypes
 
 /// Try to get a function's return type from the function registry
-let tryGetFuncReturnTypeFromReg (ctx: TypeContext) (funcName: string) : AST.Type option =
+let tryGetFuncReturnTypeFromReg (ctx: TypeContext) (funcName: AST.FunctionId) : AST.Type option =
     match Map.tryFind funcName ctx.FuncReg with
-    | Some (AST.TFunction (_, retType)) -> Some retType
-    | Some otherType -> Some otherType
+    | Some (_, AST.TFunction (_, retType)) -> Some retType
+    | Some (_, otherType) -> Some otherType
     | None -> None
 
 /// Infer the type of an atom (best-effort)
@@ -102,7 +102,7 @@ let inferAtomType (ctx: TypeContext) (atom: Atom) : AST.Type option =
     | StringLiteral _ -> Some AST.TString
     | FloatLiteral _ -> Some AST.TFloat64
     | Var tid -> tryGetType ctx tid
-    | FuncRef funcName -> Map.tryFind funcName ctx.FuncReg
+    | FuncRef funcName -> Map.tryFind funcName ctx.FuncReg |> Option.map snd
 
 let private isIntegerType (typ: AST.Type) : bool =
     match typ with
@@ -244,8 +244,11 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | Call (funcName, args)
     | BorrowedCall (funcName, args) ->
         // Return type from function registry (with special-case inference for stdlib list/tuple helpers)
-        match funcName, args with
-        | name, [listAtom; _] when name.StartsWith("Darklang.Stdlib.List.getAt") || name.StartsWith("Darklang.Stdlib.List.__getAt") ->
+        let displayName = Map.tryFind funcName ctx.FuncReg |> Option.map fst
+        match displayName, args with
+        | Some name, [listAtom; _]
+            when name.StartsWith("Darklang.Stdlib.List.getAt")
+                 || name.StartsWith("Darklang.Stdlib.List.__getAt") ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some retType -> Some retType
             | None ->
@@ -253,7 +256,9 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 | Some (AST.TList elemType) ->
                     Some (AST.TSum ("Darklang.Stdlib.Option.Option", [elemType]))
                 | _ -> None
-        | name, [listAtom] when name.StartsWith("Darklang.Stdlib.List.head") || name.StartsWith("Darklang.Stdlib.List.__head") ->
+        | Some name, [listAtom]
+            when name.StartsWith("Darklang.Stdlib.List.head")
+                 || name.StartsWith("Darklang.Stdlib.List.__head") ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some retType -> Some retType
             | None ->
@@ -261,21 +266,25 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 | Some (AST.TList elemType) ->
                     Some (AST.TSum ("Darklang.Stdlib.Option.Option", [elemType]))
                 | _ -> None
-        | name, [listAtom] when name.StartsWith("Darklang.Stdlib.List.tail") || name.StartsWith("Darklang.Stdlib.List.__tail") ->
+        | Some name, [listAtom]
+            when name.StartsWith("Darklang.Stdlib.List.tail")
+                 || name.StartsWith("Darklang.Stdlib.List.__tail") ->
             match inferAtomType ctx listAtom with
             | Some (AST.TList elemType) when name.StartsWith("Darklang.Stdlib.List.tail") ->
                 Some (AST.TSum ("Darklang.Stdlib.Option.Option", [AST.TList elemType]))
             | Some (AST.TList elemType) ->
                 Some (AST.TList elemType)
             | _ -> tryGetFuncReturnTypeFromReg ctx funcName
-        | name, [tupleAtom] when name.StartsWith("Darklang.Stdlib.Tuple2.first") ->
+        | Some name, [tupleAtom]
+            when name.StartsWith("Darklang.Stdlib.Tuple2.first") ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some retType -> Some retType
             | None ->
                 match inferAtomType ctx tupleAtom with
                 | Some (AST.TTuple (firstType :: _)) -> Some firstType
                 | _ -> None
-        | name, [tupleAtom] when name.StartsWith("Darklang.Stdlib.Tuple2.second") ->
+        | Some name, [tupleAtom]
+            when name.StartsWith("Darklang.Stdlib.Tuple2.second") ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some retType -> Some retType
             | None ->
@@ -285,10 +294,10 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         | _ ->
             match tryGetFuncReturnTypeFromReg ctx funcName with
             | Some t -> Some t
-            | None -> tryGetMonomorphizedIntrinsicReturnType ctx funcName
+            | None -> displayName |> Option.bind (tryGetMonomorphizedIntrinsicReturnType ctx)
     | TailCall (funcName, _) ->
         // Tail calls have same return type as regular calls
-        Map.tryFind funcName ctx.FuncReg
+        tryGetFuncReturnTypeFromReg ctx funcName
     | IndirectCall (funcAtom, _) ->
         // Look up the function's type to get its return type
         match funcAtom with
@@ -314,11 +323,11 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         // pointer, so ownership insertion must preserve the source function type
         // instead of treating the closure as an ordinary fixed block.
         match Map.tryFind funcName ctx.FuncReg with
-        | Some (AST.TFunction _ as funcType) -> Some funcType
-        | Some otherType ->
-            Crash.crash $"RefCountInsertion: ClosureAlloc target '{funcName}' has non-function type {otherType}"
+        | Some (_, (AST.TFunction _ as funcType)) -> Some funcType
+        | Some (displayName, otherType) ->
+            Crash.crash $"RefCountInsertion: ClosureAlloc target '{displayName}' has non-function type {otherType}"
         | None ->
-            Crash.crash $"RefCountInsertion: ClosureAlloc target '{funcName}' not found in function registry"
+            Crash.crash $"RefCountInsertion: ClosureAlloc target '{AST.functionIdValue funcName}' not found in function registry"
     | ClosureCall (closureAtom, _) ->
         // Prefer the concrete closure target when available; otherwise use
         // the closure value's function type carried by the ANF type registry.
@@ -358,7 +367,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                     | None -> Crash.crash $"RefCountInsertion: Type not found for temp {tid} in TupleAlloc"
                 | FuncRef funcName ->
                     match Map.tryFind funcName ctx.FuncReg with
-                    | Some t -> t
+                    | Some (_, typ) -> typ
                     | None -> Crash.crash $"RefCountInsertion: Type not found for function {funcName} in TupleAlloc")
         Some (AST.TTuple elemTypes)
     | RecordAlloc (descriptor, _) ->

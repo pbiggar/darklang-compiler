@@ -63,7 +63,7 @@ let defaultConfig = {
 /// Information about a function for inlining decisions
 type FunctionInfo = {
     Func: Function
-    Calls: Set<string>  // Functions called by the body
+    Calls: Set<AST.FunctionId>
     Size: int  // Count of TempIds (Let bindings) in body
     IsRecursive: bool  // Calls itself directly
     HasClosures: bool  // Contains ClosureAlloc or ClosureCall
@@ -78,7 +78,7 @@ type FunctionInfo = {
 /// Properties used by call-graph construction and inlining eligibility.
 /// Collecting them together keeps function analysis to one ANF traversal.
 type private FunctionAnalysis = {
-    Calls: Set<string>
+    Calls: Set<AST.FunctionId>
     Size: int
     MaxTempId: int
     HasClosures: bool
@@ -159,7 +159,7 @@ let rec private analyzeExpr (expr: AExpr) : FunctionAnalysis =
 // ============================================================================
 
 /// Build reverse call graph: Map<callee, Set<callers>>
-let buildReverseCallGraph (callGraph: Map<string, Set<string>>) : Map<string, Set<string>> =
+let buildReverseCallGraph (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>) : Map<AST.FunctionId, Set<AST.FunctionId>> =
     callGraph
     |> Map.fold (fun acc caller callees ->
         callees
@@ -170,9 +170,9 @@ let buildReverseCallGraph (callGraph: Map<string, Set<string>>) : Map<string, Se
     ) Map.empty
 
 /// DFS to compute finish order (for Kosaraju's algorithm)
-let rec dfsFinishOrder (graph: Map<string, Set<string>>) (node: string)
-                       (visited: Set<string>) (order: string list)
-    : Set<string> * string list =
+let rec dfsFinishOrder (graph: Map<AST.FunctionId, Set<AST.FunctionId>>) (node: AST.FunctionId)
+                       (visited: Set<AST.FunctionId>) (order: AST.FunctionId list)
+    : Set<AST.FunctionId> * AST.FunctionId list =
     if Set.contains node visited then
         (visited, order)
     else
@@ -186,9 +186,9 @@ let rec dfsFinishOrder (graph: Map<string, Set<string>>) (node: string)
         (visited'', node :: order')
 
 /// DFS to collect SCC members
-let rec dfsCollectSCC (graph: Map<string, Set<string>>) (node: string)
-                      (visited: Set<string>) (scc: Set<string>)
-    : Set<string> * Set<string> =
+let rec dfsCollectSCC (graph: Map<AST.FunctionId, Set<AST.FunctionId>>) (node: AST.FunctionId)
+                      (visited: Set<AST.FunctionId>) (scc: Set<AST.FunctionId>)
+    : Set<AST.FunctionId> * Set<AST.FunctionId> =
     if Set.contains node visited then
         (visited, scc)
     else
@@ -203,9 +203,9 @@ let rec dfsCollectSCC (graph: Map<string, Set<string>>) (node: string)
 /// Find all SCCs using Kosaraju's algorithm
 /// Returns list of SCCs, where each SCC is a Set of function names
 let findSCCs
-    (funcNames: Set<string>)
-    (callGraph: Map<string, Set<string>>)
-    : Set<string> list =
+    (funcNames: Set<AST.FunctionId>)
+    (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+    : Set<AST.FunctionId> list =
     let reverseGraph = buildReverseCallGraph callGraph
 
     // Step 1: DFS on original graph to get finish order
@@ -232,9 +232,9 @@ let findSCCs
 /// or direct self-recursion (calls itself)
 let findRecursiveFunctions
     (funcs: Function list)
-    (callGraph: Map<string, Set<string>>)
-    : Set<string> =
-    let funcNames = funcs |> List.map (fun f -> f.Name) |> Set.ofList
+    (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+    : Set<AST.FunctionId> =
+    let funcNames = funcs |> List.map (fun f -> f.Id) |> Set.ofList
     let sccs = findSCCs funcNames callGraph
 
     // Functions in SCCs of size > 1 (mutual recursion)
@@ -247,17 +247,17 @@ let findRecursiveFunctions
     let directlyRecursive =
         funcs
         |> List.filter (fun f ->
-            let calls = Map.tryFind f.Name callGraph |> Option.defaultValue Set.empty
-            Set.contains f.Name calls
+            let calls = Map.tryFind f.Id callGraph |> Option.defaultValue Set.empty
+            Set.contains f.Id calls
         )
-        |> List.map (fun f -> f.Name)
+        |> List.map (fun f -> f.Id)
         |> Set.ofList
 
     Set.union mutuallyRecursive directlyRecursive
 
 /// Build function info for a single function
 let private buildFunctionInfo
-    (recursiveFuncs: Set<string>)
+    (recursiveFuncs: Set<AST.FunctionId>)
     (func: Function)
     (analysis: FunctionAnalysis)
     : FunctionInfo =
@@ -265,7 +265,7 @@ let private buildFunctionInfo
         Func = func
         Calls = analysis.Calls
         Size = analysis.Size
-        IsRecursive = Set.contains func.Name recursiveFuncs
+        IsRecursive = Set.contains func.Id recursiveFuncs
         HasClosures = analysis.HasClosures
         HasTailCalls = analysis.HasTailCalls
         IsExternal = false
@@ -275,17 +275,17 @@ let private buildFunctionInfo
 /// highest TempId needed to initialize the inliner's fresh-variable generator.
 let private buildFunctionInfoMapAndMaxTempId
     (funcs: Function list)
-    : Map<string, FunctionInfo> * int =
+    : Map<AST.FunctionId, FunctionInfo> * int =
     let analyzedFuncs = funcs |> List.map (fun func -> (func, analyzeExpr func.Body))
     let callGraph =
         analyzedFuncs
-        |> List.map (fun (func, analysis) -> (func.Name, analysis.Calls))
+        |> List.map (fun (func, analysis) -> (func.Id, analysis.Calls))
         |> Map.ofList
     let recursiveFuncs = findRecursiveFunctions funcs callGraph
     let infoMap =
         analyzedFuncs
         |> List.map (fun (func, analysis) ->
-            (func.Name, buildFunctionInfo recursiveFuncs func analysis))
+            (func.Id, buildFunctionInfo recursiveFuncs func analysis))
         |> Map.ofList
     let maxTempId =
         analyzedFuncs
@@ -300,7 +300,7 @@ let private buildFunctionInfoMapAndMaxTempId
     (infoMap, maxTempId)
 
 /// Build function info map for all functions
-let buildFunctionInfoMap (funcs: Function list) : Map<string, FunctionInfo> =
+let buildFunctionInfoMap (funcs: Function list) : Map<AST.FunctionId, FunctionInfo> =
     buildFunctionInfoMapAndMaxTempId funcs |> fst
 
 // ============================================================================
@@ -463,7 +463,7 @@ let rec private isSimpleExternalExpr (expr: AExpr) : bool =
     | Return _ -> true
     | Jump _ | Join _ | If _ -> false
 
-let rec private countCallsToNames (names: Set<string>) (expr: AExpr) : int =
+let rec private countCallsToNames (names: Set<AST.FunctionId>) (expr: AExpr) : int =
     match expr with
     | Let (_, Call (name, _), body)
     | Let (_, BorrowedCall (name, _), body) ->
@@ -495,7 +495,7 @@ let private isZeroArgConstantReturn (func: Function) : bool =
 let buildExternalCandidateInfoMap
     (config: InliningConfig)
     (functions: Function list)
-    : Map<string, FunctionInfo> =
+    : Map<AST.FunctionId, FunctionInfo> =
     buildFunctionInfoMap functions
     |> Map.fold (fun candidates name info ->
         if shouldUseExternalCandidate info config then
@@ -642,7 +642,7 @@ let private isProjectedTupleInlineCandidate (info: FunctionInfo) (config: Inlini
     && Option.isSome (returnedTupleElements info.Func.Body)
 
 let rec private countProjectedTupleCalls
-    (funcs: Map<string, FunctionInfo>)
+    (funcs: Map<AST.FunctionId, FunctionInfo>)
     (expr: AExpr)
     : int =
     match expr with
@@ -676,7 +676,7 @@ let private isBoundedLoopPrimitive (cexpr: CExpr) : bool =
     | _ -> false
 
 let private trySplitBoundedLoopIteration
-    (functionName: string)
+    (functionName: AST.FunctionId)
     (expr: AExpr)
     : ((TempId * CExpr) list * Atom list) option =
     let rec split bindings remaining =
@@ -701,7 +701,7 @@ let private tryBoundedRecursiveLoop (info: FunctionInfo) : BoundedRecursiveLoop 
       ) when guardId = conditionId ->
         let parameterIds = info.Func.TypedParams |> List.map (fun param -> param.Id)
         match List.tryFindIndex (fun id -> id = inductionParam) parameterIds,
-              trySplitBoundedLoopIteration info.Func.Name iteration with
+              trySplitBoundedLoopIteration info.Func.Id iteration with
         | Some inductionIndex, Some (iterationBindings, recursiveArgs)
             when List.length recursiveArgs = List.length parameterIds ->
             let inductionAdvance = List.item inductionIndex recursiveArgs
@@ -839,7 +839,7 @@ type InlineScope = FunctionScope | JoinEntryScope
 /// Inlining extends callee locals to the caller's cleanup boundary. Entry
 /// boundaries may move relative to the old continuation tree, so only inline
 /// bodies whose newly owned temporaries have structurally inert destruction.
-let private hasInertInlineLifetime (funcs: Map<string, FunctionInfo>) (func: Function) =
+let private hasInertInlineLifetime (funcs: Map<AST.FunctionId, FunctionInfo>) (func: Function) =
     let inert = DestructionAnalysis.hasInertDestruction
     let knownCall name =
         Map.tryFind name funcs |> Option.exists (fun info -> inert info.Func.ReturnType)
@@ -870,7 +870,7 @@ let private hasInertInlineLifetime (funcs: Map<string, FunctionInfo>) (func: Fun
     func.TypedParams |> List.forall (fun parameter -> inert parameter.Type)
     && body func.Body
 
-let rec inlineInExpr (scope: InlineScope) (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
+let rec inlineInExpr (scope: InlineScope) (funcs: Map<AST.FunctionId, FunctionInfo>) (config: InliningConfig)
                      (depth: int) (varGen: VarGen) (expr: AExpr)
     : AExpr * VarGen =
     let lifetimeAllows info =
@@ -973,7 +973,7 @@ let rec inlineInExpr (scope: InlineScope) (funcs: Map<string, FunctionInfo>) (co
         (If (cond, thenBranch', elseBranch'), varGen'')
 
 /// Inline in a function body
-let inlineInFunction (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
+let inlineInFunction (funcs: Map<AST.FunctionId, FunctionInfo>) (config: InliningConfig)
                      (varGen: VarGen) (func: Function)
     : Function * VarGen =
     let (body', varGen') = inlineInExpr FunctionScope funcs config 0 varGen func.Body
@@ -987,8 +987,8 @@ let inlineInFunction (funcs: Map<string, FunctionInfo>) (config: InliningConfig)
 /// whose bodies are available but should not be emitted with this program.
 let inlineProgramWithExternalCandidatesAndExclusions
     (config: InliningConfig)
-    (externalCandidates: Map<string, FunctionInfo>)
-    (excludedLocalNames: Set<string>)
+    (externalCandidates: Map<AST.FunctionId, FunctionInfo>)
+    (excludedLocalNames: Set<AST.FunctionId>)
     (program: Program)
     : Program =
     let (Program (funcs, main)) = program
@@ -1043,7 +1043,7 @@ let inlineProgramWithExternalCandidatesAndExclusions
 /// whose bodies are available but should not be emitted with this program.
 let inlineProgramWithExternalCandidates
     (config: InliningConfig)
-    (externalCandidates: Map<string, FunctionInfo>)
+    (externalCandidates: Map<AST.FunctionId, FunctionInfo>)
     (program: Program)
     : Program =
     inlineProgramWithExternalCandidatesAndExclusions

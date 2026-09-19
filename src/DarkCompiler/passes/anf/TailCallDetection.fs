@@ -282,8 +282,8 @@ let isCallExpr (cexpr: CExpr) : bool =
 /// The 'inTailPosition' parameter indicates if the current expression
 /// is in tail position (its result is directly returned).
 let rec detectTailCalls
-    (currentFuncName: string)
-    (isCurrentMember: string -> bool)
+    (currentFuncName: AST.FunctionId)
+    (isCurrentMember: AST.FunctionId -> bool)
     (typedParams: TypedParam list)
     (ownedParams: Set<TempId>)
     (releasedTemps: Set<TempId>)
@@ -412,15 +412,20 @@ let private detectTailCallsInFunctionWithRegistry
         // Function body is always in tail position
         let paramIds = func.TypedParams |> List.map (fun param -> param.Id) |> Set.ofList
         let ownedParams = leadingRetainedParams paramIds func.Body
+        let recursiveMembersById =
+            recursiveMembers
+            |> Map.toList
+            |> List.map (fun (name, memberInfo) -> AST.functionIdForName name, memberInfo)
+            |> Map.ofList
         let isCurrentMember targetName =
-            match Map.tryFind func.Name recursiveMembers, Map.tryFind targetName recursiveMembers with
+            match Map.tryFind func.Id recursiveMembersById, Map.tryFind targetName recursiveMembersById with
             | Some currentMember, Some targetMember ->
                 currentMember.Typed.Resolved.Parsed.Binding = targetMember.Typed.Resolved.Parsed.Binding
-            | None, None -> targetName = func.Name
+            | None, None -> targetName = func.Id
             | _ -> false
         let body' =
             detectTailCalls
-                func.Name isCurrentMember func.TypedParams ownedParams Set.empty true Map.empty Map.empty Set.empty func.Body
+                func.Id isCurrentMember func.TypedParams ownedParams Set.empty true Map.empty Map.empty Set.empty func.Body
         { func with Body = body' }
 
 let detectTailCallsInFunction (func: Function) : Function =

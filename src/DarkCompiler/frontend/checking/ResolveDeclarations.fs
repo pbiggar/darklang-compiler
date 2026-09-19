@@ -268,7 +268,7 @@ let internal resolveRecursiveDeclarationGroups (topLevels: TopLevel list) : TopL
             let (sameGroup, laterGroups) =
                 rest |> List.partition (fun candidate -> mutuallyReachable first.Name candidate.Name)
             let members = first :: sameGroup
-            let groupId = recursiveGroupId [0; ordinal]
+            let groupId = topLevelRecursiveGroupId ordinal
             let availability =
                 if not (List.isEmpty sameGroup) then MutualRecursiveMember
                 elif Map.find first.Name graph |> Set.contains first.Name then SelfRecursiveMember
@@ -388,6 +388,8 @@ let internal resolveProgramNames
         match pattern with
         | PVar name -> Set.singleton name
         | PConstructor (_, fields) -> fields |> List.map patternBoundNames |> Set.unionMany
+        | PResolvedConstructor (_, _, _, fields) ->
+            fields |> List.map patternBoundNames |> Set.unionMany
         | PTuple patterns | PList patterns -> patterns |> List.map patternBoundNames |> Set.unionMany
         | PListCons (heads, tail) -> Set.union (heads |> List.map patternBoundNames |> Set.unionMany) (patternBoundNames tail)
         | POr alternatives -> alternatives |> NonEmptyList.head |> patternBoundNames

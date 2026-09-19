@@ -71,6 +71,7 @@ let internal plannedGenericRefCountDecHelperCacheKey
         Terminator = LIR.Ret
     }
     {
+        Id = AST.functionIdForName helperLabel
         Name = helperLabel
         TypedParams = []
         CFG = {

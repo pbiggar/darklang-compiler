@@ -16,8 +16,8 @@ type Group<'id> =
         head: Candidate<'id> *
         tail: Candidate<'id> list *
         recursive: bool *
-        internalDependencies: Set<string> *
-        externalTargets: Set<string>
+        internalDependencies: Set<AST.FunctionId> *
+        externalTargets: Set<AST.FunctionId>
 
 type InferenceError<'id when 'id: comparison> =
     | FunctionGroupingFailed of OwnedFunctionGroups.GroupingError
@@ -47,8 +47,8 @@ let private inferredGroup discovered candidates =
             OwnedFunctionGroups.externalTargets discovered)
     | [] -> Crash.crash "Ownership uniqueness inference returned no group candidates"
 
-let private singletonCandidate name ownership =
-    let boundary : FunctionBoundary<'id> = { Name = name; Ownership = ownership }
+let private singletonCandidate id name ownership =
+    let boundary : FunctionBoundary<'id> = { Id = id; Name = name; Ownership = ownership }
     Candidate (boundary, [])
 
 let private recursiveCandidate boundary =
@@ -75,7 +75,7 @@ let private inferGroup
         |> Result.map (fun inferred ->
             inferred
             |> InferOwnershipUniqueness.toList
-            |> List.map (singletonCandidate definition.Definition.Name))
+            |> List.map (singletonCandidate definition.Definition.Id definition.Definition.Name))
         |> wrap
     | head :: tail, true ->
         InferRecursiveOwnership.infer semantics { Head = head; Tail = tail }

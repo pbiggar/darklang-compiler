@@ -35,6 +35,7 @@ let testPrettyPrintMirCfg () : TestResult =
         Blocks = Map.ofList [ (entry, entryBlock); (exit, exitBlock) ]
     }
     let func: MIR.Function = {
+        Id = AST.functionIdForName "cfg_pretty"
         Name = "cfg_pretty"
         TypedParams = []
         ReturnType = AST.TInt64

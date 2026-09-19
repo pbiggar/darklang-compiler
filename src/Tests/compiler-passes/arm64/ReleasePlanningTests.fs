@@ -97,6 +97,18 @@ let testExpensiveGenericReleaseIsPreparedAsCall () : TestResult =
             |> Map.values
             |> Seq.collect (fun block -> block.Instrs)
             |> Seq.toList)
+    let helperIds =
+        functions
+        |> List.collect (fun func ->
+            func.CodegenFacts
+            |> Option.bind (fun facts -> facts.Arm64RcHelperRequirements)
+            |> Option.map (fun requirements ->
+                requirements.PlannedGenericDecHelpers
+                |> Map.keys
+                |> Seq.map AST.functionIdForName
+                |> Seq.toList)
+            |> Option.defaultValue [])
+        |> Set.ofList
     match instructions with
     | [ LIR.SaveRegs ([], [])
         LIR.ArgMoves [(LIR.X0, LIR.Reg argMoveSource)]
@@ -104,7 +116,7 @@ let testExpensiveGenericReleaseIsPreparedAsCall () : TestResult =
         LIR.RestoreRegs ([], []) ]
         when argMoveSource = source
              && callSource = source
-             && helperLabel.StartsWith("__dark_generic_refcount_dec_plan_") ->
+             && Set.contains helperLabel helperIds ->
         Ok ()
     | _ ->
         Error $"Expected an expensive generic release to become one allocator-visible helper call, got {instructions}"
@@ -256,7 +268,8 @@ let testGenericReleaseHelpersPreserveOwnershipPolicy () : TestResult =
     let metadata = rcMetadataWithSumShapes sumShapes sumType
     let makeFunction (name: string) : LIR.Function =
         let entry = LIR.Label $"{name}_entry"
-        { Name = name
+        { Id = AST.functionIdForName name
+          Name = name
           TypedParams = []
           CFG = {
               Entry = entry
@@ -288,12 +301,20 @@ let testGenericReleaseHelpersPreserveOwnershipPolicy () : TestResult =
         (func: LIR.Function)
         : string option * LIR.Arm64PlannedGenericDecHelper list =
         let callLabel =
+            let helperNamesById =
+                func.CodegenFacts
+                |> Option.bind (fun facts -> facts.Arm64RcHelperRequirements)
+                |> Option.map (fun requirements ->
+                    requirements.PlannedGenericDecHelpers
+                    |> Map.keys
+                    |> Seq.map (fun name -> AST.functionIdForName name, name)
+                    |> Map.ofSeq)
+                |> Option.defaultValue Map.empty
             func.CFG.Blocks
             |> Map.values
             |> Seq.collect (fun block -> block.Instrs)
             |> Seq.tryPick (function
-                | LIR.Call (_, label, _) when label.StartsWith("__dark_generic_refcount_dec_plan_") ->
-                    Some label
+                | LIR.Call (_, id, _) -> Map.tryFind id helperNamesById
                 | _ -> None)
         let specs =
             func.CodegenFacts

@@ -16,6 +16,8 @@ open MIR_Optimize
 open MIRPrinter
 type TestResult = Result<unit, string>
 
+let private fid = AST.functionIdForName
+
 let private singleOptimizedFunction (testName: string) (functions: Function list) : Result<Function, string> =
     match functions with
     | [func] -> Ok func
@@ -39,13 +41,14 @@ let private directCallCount (funcName: string) (func: Function) : int =
     |> List.collect (fun (_, block) -> block.Instrs)
     |> List.filter (fun instr ->
         match instr with
-        | Call (_, calledName, _, _, _) -> calledName = funcName
+        | Call (_, calledName, _, _, _) -> calledName = fid funcName
         | _ -> false)
     |> List.length
 
 let private scalarIdentityFunction (name: string) : Function =
     let entry = Label $"{name}_entry"
     {
+        Id = fid name
         Name = name
         TypedParams = [{ Reg = VReg 0; Type = AST.TInt64 }]
         ReturnType = AST.TInt64
@@ -74,8 +77,8 @@ let testCseReusesEffectFreeDirectScalarCalls () : TestResult =
                         (entry, {
                             Label = entry
                             Instrs = [
-                                Call (VReg 1, "pure", [Register (VReg 0)], [AST.TInt64], AST.TInt64)
-                                Call (VReg 2, "pure", [Register (VReg 0)], [AST.TInt64], AST.TInt64)
+                                Call (VReg 1, fid "pure", [Register (VReg 0)], [AST.TInt64], AST.TInt64)
+                                Call (VReg 2, fid "pure", [Register (VReg 0)], [AST.TInt64], AST.TInt64)
                                 BinOp (VReg 3, Add, Register (VReg 1), Register (VReg 2), AST.TInt64)
                             ]
                             Terminator = Ret (Register (VReg 3))
@@ -104,23 +107,23 @@ let testCseReusesDominatingEffectFreeDirectScalarCalls () : TestResult =
             Map.ofList [
                 (entry, {
                     Label = entry
-                    Instrs = [Call (VReg 1, "pure", [Register (VReg 0)], [AST.TInt64], AST.TInt64)]
+                    Instrs = [Call (VReg 1, fid "pure", [Register (VReg 0)], [AST.TInt64], AST.TInt64)]
                     Terminator = Jump child
                 })
                 (child, {
                     Label = child
-                    Instrs = [Call (VReg 2, "pure", [Register (VReg 0)], [AST.TInt64], AST.TInt64)]
+                    Instrs = [Call (VReg 2, fid "pure", [Register (VReg 0)], [AST.TInt64], AST.TInt64)]
                     Terminator = Ret (Register (VReg 2))
                 })
             ]
     }
     let (optimized, changed) =
-        applyCSEWithEffectFreeCalls (Set.ofList ["pure"]) cfg
+        applyCSEWithEffectFreeCalls (Set.ofList [fid "pure"]) cfg
     let remainingCalls =
         optimized.Blocks
         |> Map.toList
         |> List.collect (fun (_, block) -> block.Instrs)
-        |> List.filter (function | Call (_, "pure", _, _, _) -> true | _ -> false)
+        |> List.filter (function | Call (_, name, _, _, _) when name = fid "pure" -> true | _ -> false)
         |> List.length
     if changed && remainingCalls = 1 then Ok ()
     else Error $"Expected one dominating effect-free call after CSE, found {remainingCalls}."
@@ -128,7 +131,7 @@ let testCseReusesDominatingEffectFreeDirectScalarCalls () : TestResult =
 let testCseDirectCallsRespectBarriersAndScalarTypes () : TestResult =
     let entry = Label "entry"
     let call resultType dest =
-        Call (dest, "pure", [Register (VReg 0)], [resultType], resultType)
+        Call (dest, fid "pure", [Register (VReg 0)], [resultType], resultType)
     let verifyUnchanged name middle resultType =
         let cfg = {
             Entry = entry
@@ -142,12 +145,12 @@ let testCseDirectCallsRespectBarriersAndScalarTypes () : TestResult =
                 ]
         }
         let (optimized, changed) =
-            applyCSEWithEffectFreeCalls (Set.ofList ["pure"]) cfg
+            applyCSEWithEffectFreeCalls (Set.ofList [fid "pure"]) cfg
         let remainingCalls =
             match Map.tryFind entry optimized.Blocks with
             | Some block ->
                 block.Instrs
-                |> List.filter (function | Call (_, "pure", _, _, _) -> true | _ -> false)
+                |> List.filter (function | Call (_, funcName, _, _, _) when funcName = fid "pure" -> true | _ -> false)
                 |> List.length
             | None -> 0
         if not changed && remainingCalls = 2 then Ok ()
@@ -155,7 +158,7 @@ let testCseDirectCallsRespectBarriersAndScalarTypes () : TestResult =
 
     [ verifyUnchanged
           "an unproven call"
-          (Call (VReg 3, "observe", [], [], AST.TUnit))
+          (Call (VReg 3, fid "observe", [], [], AST.TUnit))
           AST.TInt64
       verifyUnchanged "a heap allocation" (HeapAlloc (VReg 3, 16)) AST.TInt64
       verifyUnchanged
@@ -194,8 +197,8 @@ let testCseDoesNotReuseThrowingDirectCalls () : TestResult =
                         (entry, {
                             Label = entry
                             Instrs = [
-                                Call (VReg 1, "throwing", [Register (VReg 0)], [AST.TInt64], AST.TInt64)
-                                Call (VReg 2, "throwing", [Register (VReg 0)], [AST.TInt64], AST.TInt64)
+                                Call (VReg 1, fid "throwing", [Register (VReg 0)], [AST.TInt64], AST.TInt64)
+                                Call (VReg 2, fid "throwing", [Register (VReg 0)], [AST.TInt64], AST.TInt64)
                             ]
                             Terminator = Ret (Register (VReg 2))
                         })
@@ -229,6 +232,7 @@ let testCseAfterCopyPropFixpoint () : TestResult =
         Blocks = Map.ofList [ (entry, block) ]
     }
     let func: Function = {
+        Id = fid "fixpoint_cse"
         Name = "fixpoint_cse"
         TypedParams = [
             { Reg = VReg 0; Type = AST.TInt64 }
@@ -307,6 +311,7 @@ let testCseReusesDominatingExpressions () : TestResult =
     | Some actualChild when changed && actualChild = expectedChild -> Ok ()
     | _ ->
         let func = {
+            Id = fid "dominating_cse"
             Name = "dominating_cse"
             TypedParams = [
                 { Reg = VReg 0; Type = AST.TInt64 }
@@ -354,6 +359,7 @@ let testCseReusesDominatingScalarHeapLoad () : TestResult =
     | Some actualChild when changed && actualChild = expectedChild -> Ok ()
     | _ ->
         let func = {
+            Id = fid "dominating_scalar_heap_load_cse"
             Name = "dominating_scalar_heap_load_cse"
             TypedParams = [{ Reg = VReg 0; Type = AST.TTuple [valueType; valueType] }]
             ReturnType = valueType
@@ -368,7 +374,7 @@ let testCseDoesNotReuseDominatingScalarHeapLoadAcrossBarriers () : TestResult =
     let child = Label "child"
     let valueType = AST.TInt64
     let barriers = [
-        ("call", Call (VReg 3, "observe", [], [], AST.TUnit))
+        ("call", Call (VReg 3, fid "observe", [], [], AST.TUnit))
         ("heap allocation", HeapAlloc (VReg 3, 16))
         ("heap store", HeapStore (VReg 0, 8, Int64Const 99L, Some valueType))
         ("raw memory read", RawGet (VReg 3, Register (VReg 0), Int64Const 0L, Some valueType))
@@ -445,6 +451,7 @@ let testCsePreservesExpressionsAcrossSiblingBlocks () : TestResult =
         Ok ()
     else
         let func = {
+            Id = fid "sibling_cse"
             Name = "sibling_cse"
             TypedParams = [
                 { Reg = VReg 0; Type = AST.TInt64 }
@@ -487,6 +494,7 @@ let testCseDoesNotReuseExpressionsAcrossRefCountDecrement () : TestResult =
         Ok ()
     else
         let func = {
+            Id = fid "refcount_barrier_cse"
             Name = "refcount_barrier_cse"
             TypedParams = [
                 { Reg = VReg 0; Type = AST.TString }
@@ -507,7 +515,7 @@ let testCseDoesNotExtendExpressionsAcrossCalls () : TestResult =
         Label = entry
         Instrs = [
             BinOp (VReg 2, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)
-            Call (VReg 3, "observe", [], [], AST.TUnit)
+            Call (VReg 3, fid "observe", [], [], AST.TUnit)
         ]
         Terminator = Jump child
     }
@@ -529,6 +537,7 @@ let testCseDoesNotExtendExpressionsAcrossCalls () : TestResult =
         Ok ()
     else
         let func = {
+            Id = fid "call_barrier_cse"
             Name = "call_barrier_cse"
             TypedParams = [
                 { Reg = VReg 0; Type = AST.TInt64 }
@@ -642,9 +651,9 @@ let testCseDoesNotKeepDirectCallsAvailableAcrossPureScalarInstructions () : Test
         let block: BasicBlock = {
             Label = entry
             Instrs = [
-                Call (VReg 1, "pure", [], [], AST.TFloat64)
+                Call (VReg 1, fid "pure", [], [], AST.TFloat64)
                 scalarInstr (VReg 2) (Register (VReg 1))
-                Call (VReg 3, "pure", [], [], AST.TFloat64)
+                Call (VReg 3, fid "pure", [], [], AST.TFloat64)
             ]
             Terminator = Ret (Register (VReg 3))
         }
@@ -653,7 +662,7 @@ let testCseDoesNotKeepDirectCallsAvailableAcrossPureScalarInstructions () : Test
             Blocks = Map.ofList [(entry, block)]
         }
         let (optimized, changed) =
-            applyCSEWithEffectFreeCalls (Set.singleton "pure") cfg
+            applyCSEWithEffectFreeCalls (Set.singleton (fid "pure")) cfg
 
         if not changed && optimized = cfg then None
         else Some $"Expected {name} to retain the conservative direct-call CSE boundary")
@@ -702,6 +711,7 @@ let testDceRemovesSelfReferentialDeadPhi () : TestResult =
     }
 
     let func: Function = {
+        Id = fid "dead_phi_cycle"
         Name = "dead_phi_cycle"
         TypedParams = [{ Reg = VReg 0; Type = AST.TBool }]
         ReturnType = AST.TBool
@@ -780,6 +790,7 @@ let testCfgSimplifyRemovesRetPhiJoin () : TestResult =
     }
 
     let func: Function = {
+        Id = fid "ret_phi_join"
         Name = "ret_phi_join"
         TypedParams = [{ Reg = VReg 0; Type = AST.TBool }]
         ReturnType = AST.TInt64
@@ -910,7 +921,7 @@ let testEmptyBlockRemovalRewritesPhiSourceToPredecessor () : TestResult =
         match block.Instrs with
         | Phi (_, [(Register (VReg 0), sourceLabel)], _) :: _ when changed && sourceLabel = entry -> Ok ()
         | _ ->
-            let actual = formatMIR (Program ([{ Name = "empty_phi"; TypedParams = []; ReturnType = AST.TInt64; CFG = optimized; FloatRegs = Set.empty }], Map.empty, Map.empty))
+            let actual = formatMIR (Program ([{ Id = fid "empty_phi"; Name = "empty_phi"; TypedParams = []; ReturnType = AST.TInt64; CFG = optimized; FloatRegs = Set.empty }], Map.empty, Map.empty))
             Error $"Expected phi source to be rewritten from removed empty block to entry predecessor.\nActual:\n{actual}"
     | None ->
         Error "Expected join block to remain after empty block removal"
@@ -994,7 +1005,7 @@ let testLinearBlockMergePreservesPhiSources () : TestResult =
         Ok ()
     else
         let actual =
-            formatMIR (Program ([{ Name = "linear_phi"; TypedParams = []; ReturnType = AST.TInt64; CFG = optimized; FloatRegs = Set.empty }], Map.empty, Map.empty))
+            formatMIR (Program ([{ Id = fid "linear_phi"; Name = "linear_phi"; TypedParams = []; ReturnType = AST.TInt64; CFG = optimized; FloatRegs = Set.empty }], Map.empty, Map.empty))
         Error $"Expected linear block merge to preserve phi values and source labels.\nActual:\n{actual}"
 
 let testLinearBlockMergeExposesLocalCSE () : TestResult =
@@ -1036,7 +1047,7 @@ let testLinearBlockMergeExposesLocalCSE () : TestResult =
         Ok ()
     else
         let actual =
-            formatMIR (Program ([{ Name = "linear_cse"; TypedParams = []; ReturnType = AST.TInt64; CFG = optimized; FloatRegs = Set.empty }], Map.empty, Map.empty))
+            formatMIR (Program ([{ Id = fid "linear_cse"; Name = "linear_cse"; TypedParams = []; ReturnType = AST.TInt64; CFG = optimized; FloatRegs = Set.empty }], Map.empty, Map.empty))
         Error $"Expected linear block merge to expose duplicate expressions to local CSE.\nActual:\n{actual}"
 
 let testSameTargetBranchBecomesJumpAndDropsCondition () : TestResult =
@@ -1076,6 +1087,7 @@ let testSameTargetBranchBecomesJumpAndDropsCondition () : TestResult =
             formatMIR (
                 Program (
                     [{
+                        Id = fid "same_target_branch"
                         Name = "same_target_branch"
                         TypedParams = [
                             { Reg = VReg 0; Type = AST.TBool }
@@ -1151,6 +1163,7 @@ let testSccpPropagatesPhiConstantAndRemovesUnreachableEdge () : TestResult =
             formatMIR (
                 Program (
                     [{
+                        Id = AST.functionIdForName "sccp_phi_constant"
                         Name = "sccp_phi_constant"
                         TypedParams = [{ Reg = condition; Type = AST.TBool }]
                         ReturnType = AST.TInt64
@@ -1375,6 +1388,7 @@ let testMultiplePredecessorsKeepRepeatedSuccessorBranch () : TestResult =
         Ok ()
     else
         let func = {
+            Id = fid "multiple_predecessor_branch"
             Name = "multiple_predecessor_branch"
             TypedParams = [{ Reg = VReg 0; Type = AST.TBool }]
             ReturnType = AST.TInt64

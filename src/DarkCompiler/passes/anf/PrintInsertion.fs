@@ -46,7 +46,7 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
                 // Keep the display helper reachable so tree shaking doesn't drop it.
                 let (keepFunc, varGen1) = freshVar varGen
                 let (printTmp, varGen2) = freshVar varGen1
-                let keepExpr = Atom (FuncRef toDisplayStringName)
+                let keepExpr = Atom (FuncRef (AST.functionIdForName toDisplayStringName))
                 let printExpr = Print (atom, printType)
                 (Let (keepFunc, keepExpr, Let (printTmp, printExpr, Return atom)), varGen2)
             | None ->
@@ -58,7 +58,7 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
                 //           let _ = Print(strTmp, String) in Return atom
                 let (strTmp, varGen1) = freshVar varGen
                 let (printTmp, varGen2) = freshVar varGen1
-                let callExpr = Call (toDisplayStringName, [atom])
+                let callExpr = Call (AST.functionIdForName toDisplayStringName, [atom])
                 let printExpr = Print (Var strTmp, AST.TString)
                 (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
             | None ->
@@ -67,21 +67,24 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
             // For Float64, call Float.toString first, then print the string
             let (strTmp, varGen1) = freshVar varGen
             let (printTmp, varGen2) = freshVar varGen1
-            let callExpr = Call ("Darklang.Stdlib.Float.toString", [atom])
+            let callExpr =
+                Call (AST.functionIdForName "Darklang.Stdlib.Float.toString", [atom])
             let printExpr = Print (Var strTmp, AST.TString)
             (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
         | AST.TDateTime ->
             // DateTime is an opaque immediate; display it through its public formatter.
             let (strTmp, varGen1) = freshVar varGen
             let (printTmp, varGen2) = freshVar varGen1
-            let callExpr = Call ("Darklang.Stdlib.DateTime.toString", [atom])
+            let callExpr =
+                Call (AST.functionIdForName "Darklang.Stdlib.DateTime.toString", [atom])
             let printExpr = Print (Var strTmp, AST.TString)
             (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
         | AST.TSum ("Uuid", []) ->
             // UUID is an ordinary sum, but public output is its canonical text.
             let (strTmp, varGen1) = freshVar varGen
             let (printTmp, varGen2) = freshVar varGen1
-            let callExpr = Call ("Darklang.Stdlib.Uuid.toString", [atom])
+            let callExpr =
+                Call (AST.functionIdForName "Darklang.Stdlib.Uuid.toString", [atom])
             let printExpr = Print (Var strTmp, AST.TString)
             (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
         | _ ->

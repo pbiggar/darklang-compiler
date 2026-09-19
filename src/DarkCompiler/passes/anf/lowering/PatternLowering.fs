@@ -15,16 +15,16 @@ open LoweringTypeInference
 open ANFContinuations
 open LoweringCallbacks
 
-let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (sumTypeNames: Set<string>) (inertScopes: Set<string>) (scrutinee: CheckedAST.Expr) (cases: CheckedAST.MatchCase list) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (sumTypeNames: Set<string>) (inertScopes: Set<AST.FunctionId>) (scrutinee: CheckedAST.Expr) (cases: CheckedAST.MatchCase list) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     // Infer scrutinee type to pass to pattern extraction for correct typing
     let typeEnv = typeEnvFromVarEnv env
-    match inferTypeCore sumTypeNames scrutinee typeEnv typeReg variantLookup funcReg moduleRegistry with
+    match inferTypeCore sumTypeNames scrutinee typeEnv typeReg variantLookup funcReg functionNames moduleRegistry with
     | Error msg -> Error $"Match scrutinee type inference failed: {msg}"
     | Ok scrutType ->
     // Compile match to if-else chain
     // First convert scrutinee to a bound atom. This supports effectful/complex
     // scrutinees such as Builtin.testRuntimeError(...) that cannot be lowered via toAtom.
-    toANFBoundAtomCore sumTypeNames inertScopes scrutinee varGen env typeReg variantLookup funcReg moduleRegistry
+    toANFBoundAtomCore sumTypeNames inertScopes scrutinee varGen env typeReg variantLookup funcReg functionNames moduleRegistry
     |> Result.bind (fun (scrutineeExpr, scrutineeAtom, varGen1) ->
         // Check if any pattern needs to access list structure
         // If so, we must ensure scrutinee is a variable (can't TupleGet on literal)
@@ -32,8 +32,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             cases |> List.exists (fun mc ->
                 mc.Patterns |> AST.NonEmptyList.toList |> List.exists (fun pat ->
                     match pat with
-                    | AST.PList (_ :: _) -> true
-                    | AST.PListCons (_ :: _, _) -> true  // h :: t also needs list access
+                    | CheckedAST.PList (_ :: _) -> true
+                    | CheckedAST.PListCons (_ :: _, _) -> true  // h :: t also needs list access
                     | _ -> false))
 
         // If there are non-empty list patterns, bind the scrutinee to a variable
@@ -47,30 +47,30 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
         // Check if the TYPE that a variant belongs to has any variant with a payload
         // This determines if values are heap-allocated or simple integers
-        let tryPatternVariant variantName =
-            tryFindVariantForType variantName scrutType variantLookup
+        let tryPatternVariant constructorId =
+            tryFindVariantForTypeById constructorId scrutType variantLookup
 
-        let typeHasAnyPayload (variantName: string) : bool =
-            match tryPatternVariant variantName with
+        let typeHasAnyPayload (constructorId: AST.ConstructorId) : bool =
+            match tryPatternVariant constructorId with
             | Some (typeName, _, _, _) ->
                 variantLookup
                 |> Map.exists (fun _ (tName, _, _, fields) -> tName = typeName && not (List.isEmpty fields))
             | None -> false
 
         // Check if pattern always matches (wildcard or variable)
-        let rec patternAlwaysMatches (pattern: AST.Pattern) : bool =
+        let rec patternAlwaysMatches (pattern: CheckedAST.Pattern) : bool =
             match pattern with
-            | AST.PUnit -> true
-            | AST.PWildcard -> true
-            | AST.PVar _ -> true
+            | CheckedAST.PUnit -> true
+            | CheckedAST.PWildcard -> true
+            | CheckedAST.PVariable _ -> true
             | _ -> false
 
         // Constructor coverage is usable only when the payload pattern cannot
         // reject a value; literal and nested patterns therefore remain partial.
-        let constructorPatternCoverage (pattern: AST.Pattern) : int option =
+        let constructorPatternCoverage (pattern: CheckedAST.Pattern) : int option =
             match scrutType, pattern with
-            | AST.TSum (typeName, _), AST.PConstructor (constructorName, fieldPatterns) ->
-                match tryFindVariant (CheckedAST.resolvedConstructorReference typeName) constructorName variantLookup with
+            | AST.TSum (typeName, _), CheckedAST.PConstructor (constructorId, fieldPatterns) ->
+                match tryFindVariantForTypeById constructorId scrutType variantLookup with
                 | Some (variantTypeName, _, tag, fieldTypes)
                     when variantTypeName = typeName
                          && List.length fieldPatterns = List.length fieldTypes
@@ -123,57 +123,57 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         // The list-pattern compilers take variables, wildcards, numeric literals and
         // tuples of those as heads; a string, a constructor or a nested list there
         // ("Unsupported head pattern in list cons") goes through the stages.
-        let rec headNeedsStages (pattern: AST.Pattern) : bool =
+        let rec headNeedsStages (pattern: CheckedAST.Pattern) : bool =
             match pattern with
-            | AST.PString _ | AST.PChar _ | AST.PConstructor _ | AST.PList _ | AST.PListCons _ -> true
-            | AST.PTuple elements -> List.exists headNeedsStages elements
-            | AST.POr alternatives -> AST.NonEmptyList.toList alternatives |> List.exists headNeedsStages
+            | CheckedAST.PString _ | CheckedAST.PChar _ | CheckedAST.PConstructor _ | CheckedAST.PList _ | CheckedAST.PListCons _ -> true
+            | CheckedAST.PTuple elements -> List.exists headNeedsStages elements
+            | CheckedAST.POr alternatives -> AST.NonEmptyList.toList alternatives |> List.exists headNeedsStages
             | _ -> false
-        let listArmNeedsStages (pattern: AST.Pattern) : bool =
+        let listArmNeedsStages (pattern: CheckedAST.Pattern) : bool =
             match pattern with
-            | AST.PList elements -> List.exists headNeedsStages elements
-            | AST.PListCons (heads, _) -> List.exists headNeedsStages heads
+            | CheckedAST.PList elements -> List.exists headNeedsStages elements
+            | CheckedAST.PListCons (heads, _) -> List.exists headNeedsStages heads
             | _ -> false
 
-        let rec patternBindsVariables (pattern: AST.Pattern) : bool =
+        let rec patternBindsVariables (pattern: CheckedAST.Pattern) : bool =
             match pattern with
-            | AST.PVar _ -> true
-            | AST.PConstructor (_, fields)
-            | AST.PTuple fields
-            | AST.PList fields -> List.exists patternBindsVariables fields
-            | AST.PListCons (heads, tail) ->
+            | CheckedAST.PVariable _ -> true
+            | CheckedAST.PConstructor (_, fields)
+            | CheckedAST.PTuple fields
+            | CheckedAST.PList fields -> List.exists patternBindsVariables fields
+            | CheckedAST.PListCons (heads, tail) ->
                 List.exists patternBindsVariables heads || patternBindsVariables tail
-            | AST.POr alternatives ->
+            | CheckedAST.POr alternatives ->
                 alternatives |> AST.NonEmptyList.head |> patternBindsVariables
             | _ -> false
 
-        let rec extractAndCompileBody (pattern: AST.Pattern) (body: CheckedAST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
+        let rec extractAndCompileBody (pattern: CheckedAST.Pattern) (body: CheckedAST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
             // Recursively collect all variable bindings from a pattern
             // Returns: updated env, list of bindings, updated vargen
             // sourceType is the type of the source being matched, used to get correct element types
-            let rec collectPatternBindings (pat: AST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+            let rec collectPatternBindings (pat: CheckedAST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                 match pat with
                 | _ when not (patternBindsVariables pat) ->
                     Ok (env, bindings, vg)
-                | AST.POr alternatives ->
+                | CheckedAST.POr alternatives ->
                     collectPatternBindings (AST.NonEmptyList.head alternatives) sourceAtom sourceType env bindings vg
-                | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-                | AST.PInt8Literal _
-                | AST.PInt16Literal _
-                | AST.PInt32Literal _
-                | AST.PUInt8Literal _
-                | AST.PUInt16Literal _
-                | AST.PUInt32Literal _
-                | AST.PUInt64Literal _ | AST.PUInt128Literal _
-                | AST.PUnit
-                | AST.PWildcard
-                | AST.PBool _
-                | AST.PString _
-                | AST.PChar _
-                | AST.PFloat _ ->
+                | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
+                | CheckedAST.PInt8Literal _
+                | CheckedAST.PInt16Literal _
+                | CheckedAST.PInt32Literal _
+                | CheckedAST.PUInt8Literal _
+                | CheckedAST.PUInt16Literal _
+                | CheckedAST.PUInt32Literal _
+                | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _
+                | CheckedAST.PUnit
+                | CheckedAST.PWildcard
+                | CheckedAST.PBool _
+                | CheckedAST.PString _
+                | CheckedAST.PChar _
+                | CheckedAST.PFloat _ ->
                     // No variable bindings
                     Ok (env, bindings, vg)
-                | AST.PVar name ->
+                | CheckedAST.PVariable name ->
                     // Bind the source to a variable with the correct type
                     // Use TypedAtom to preserve the semantic type (e.g., tuple element type)
                     // even when the source comes from a function with generic return type
@@ -181,13 +181,13 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let binding = (tempId, ANF.TypedAtom (sourceAtom, sourceType))
                     let newEnv = Map.add name (tempId, sourceType) env
                     Ok (newEnv, binding :: bindings, vg1)
-                | AST.PTuple innerPatterns ->
+                | CheckedAST.PTuple innerPatterns ->
                     let unknownElemTypes =
                         innerPatterns
                         |> List.mapi (fun idx _ -> AST.TVar $"__tuple_elem_{idx}")
 
                     // Extract each element and recursively collect bindings
-                    let rec collectFromTuple (pats: AST.Pattern list) (types: AST.Type list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
+                    let rec collectFromTuple (pats: CheckedAST.Pattern list) (types: AST.Type list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                         match pats, types with
                         | [], _ -> Ok (env, bindings, vg)
                         | p :: rest, t :: restTypes ->
@@ -212,7 +212,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         | _ -> unknownElemTypes
 
                     collectFromTuple innerPatterns elemTypes 0 env bindings vg
-                | AST.PConstructor (constructorName, fieldPatterns) ->
+                | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
                     let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
                         match typ with
                         | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
@@ -224,8 +224,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteType subst) args, substituteType subst ret)
                         | _ -> typ
 
-                    let resolveFieldTypes (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
-                        match tryFindVariantForType constructorName scrutineeType variantLookup with
+                    let resolveFieldTypes (constructorId: AST.ConstructorId) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
+                        match tryFindVariantForTypeById constructorId scrutineeType variantLookup with
                         | Some (_, typeParams, _, fieldTypeTemplates) ->
                             let fieldTypes =
                                 match scrutineeType with
@@ -235,12 +235,12 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 | _ -> fieldTypeTemplates
                             Ok (fieldTypes |> List.map (canonicalizeBareSumTypeRefs variantLookup))
                         | None ->
-                            Error $"Unknown constructor '{constructorName}' in pattern"
+                            Error $"Unknown constructor tag '{AST.constructorTag constructorId}' in pattern"
 
                     match fieldPatterns with
                     | [] -> Ok (env, bindings, vg)
                     | _ ->
-                        resolveFieldTypes constructorName sourceType
+                        resolveFieldTypes constructorId sourceType
                         |> Result.bind (fun fieldTypes ->
                             if List.length fieldPatterns <> List.length fieldTypes then
                                 Ok (env, bindings, vg)
@@ -248,7 +248,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 let innerPattern, payloadType =
                                     match fieldPatterns, fieldTypes with
                                     | [fieldPattern], [fieldType] -> fieldPattern, fieldType
-                                    | _ -> AST.PTuple fieldPatterns, AST.TTuple fieldTypes
+                                    | _ -> CheckedAST.PTuple fieldPatterns, AST.TTuple fieldTypes
                                 let (payloadVar, vg1) = ANF.freshVar vg
                                 let payloadExpr = ANF.TupleGet (sourceAtom, 1)
                                 let payloadBinding = (payloadVar, payloadExpr)
@@ -259,7 +259,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     env
                                     (payloadBinding :: bindings)
                                     vg1)
-                | AST.PList innerPatterns ->
+                | CheckedAST.PList innerPatterns ->
                     // Extract element type from list type
                     let elemType =
                         match sourceType with
@@ -268,7 +268,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     // For list patterns, extract head elements using SkewList operations
                     // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
                     // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
-                    let rec collectFromList (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
+                    let rec collectFromList (pats: CheckedAST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                         match pats with
                         | [] -> Ok (env, bindings, vg)
                         | p :: rest ->
@@ -283,11 +283,11 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 else
                                     // Get tail for next iteration
                                     let (tailVar, vg2) = ANF.freshVar vg'
-                                    let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                    let tailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                     let tailBinding = (tailVar, tailExpr)
                                     collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                     collectFromList innerPatterns sourceAtom env bindings vg
-                | AST.PListCons (headPatterns, tailPattern) ->
+                | CheckedAST.PListCons (headPatterns, tailPattern) ->
                     // Extract element type from list type
                     let elemType =
                         match sourceType with
@@ -296,7 +296,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     // Extract head elements then bind tail using SkewList operations
                     // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
                     // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
-                    let rec collectHeads (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
+                    let rec collectHeads (pats: CheckedAST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                         match pats with
                         | [] ->
                             // Bind the remaining list to tail pattern (tail has same type as source)
@@ -313,7 +313,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             collectPatternBindings p (ANF.Var headVar) elemType env (headBinding :: rawHeadBinding :: bindings) vg1'
                             |> Result.bind (fun (env', bindings', vg') ->
                                 let (rawTailVar, vg2) = ANF.freshVar vg'
-                                let rawTailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                let rawTailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                 let rawTailBinding = (rawTailVar, rawTailExpr)
                                 // Wrap tail with TypedAtom to preserve list type
                                 let (tailVar, vg2') = ANF.freshVar vg2
@@ -323,44 +323,44 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     collectHeads headPatterns sourceAtom env bindings vg
 
             match pattern with
-            | AST.PList _ | AST.PListCons _ when listArmNeedsStages pattern ->
+            | CheckedAST.PList _ | CheckedAST.PListCons _ when listArmNeedsStages pattern ->
                 // Heads that are strings, constructors or lists: the specialized
                 // list compilers below do not take them, the general collector does.
                 collectPatternBindings pattern scrutAtom scrutType currentEnv [] vg
                 |> Result.bind (fun (newEnv, bindings, vg1) ->
-                    toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
+                    toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (bodyExpr, vg2) ->
                         (wrapBindings (List.rev bindings) bodyExpr, vg2)))
-            | AST.POr alternatives ->
+            | CheckedAST.POr alternatives ->
                 extractAndCompileBody (AST.NonEmptyList.head alternatives) body scrutAtom scrutType currentEnv vg
-            | AST.PUnit -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-            | AST.PWildcard -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-            | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-            | AST.PInt8Literal _
-            | AST.PInt16Literal _
-            | AST.PInt32Literal _
-            | AST.PUInt8Literal _
-            | AST.PUInt16Literal _
-            | AST.PUInt32Literal _
-            | AST.PUInt64Literal _ | AST.PUInt128Literal _ ->
-                toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-            | AST.PBool _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-            | AST.PString _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-            | AST.PChar _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-            | AST.PFloat _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-            | AST.PVar name ->
+            | CheckedAST.PUnit -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            | CheckedAST.PWildcard -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
+            | CheckedAST.PInt8Literal _
+            | CheckedAST.PInt16Literal _
+            | CheckedAST.PInt32Literal _
+            | CheckedAST.PUInt8Literal _
+            | CheckedAST.PUInt16Literal _
+            | CheckedAST.PUInt32Literal _
+            | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _ ->
+                toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            | CheckedAST.PBool _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            | CheckedAST.PString _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            | CheckedAST.PChar _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            | CheckedAST.PFloat _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            | CheckedAST.PVariable name ->
                 // Bind scrutinee to variable name with the correct type
                 let (tempId, vg1) = ANF.freshVar vg
                 let env' = Map.add name (tempId, scrutType) currentEnv
-                toANFCore sumTypeNames inertScopes body vg1 env' typeReg variantLookup funcReg moduleRegistry
+                toANFCore sumTypeNames inertScopes body vg1 env' typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.map (fun (bodyExpr, vg2) ->
                     let expr = ANF.Let (tempId, ANF.Atom scrutAtom, bodyExpr)
                     (expr, vg2))
-            | AST.PConstructor (constructorName, fieldPatterns) ->
+            | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
                 match fieldPatterns with
-                | [] -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
+                | [] -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                 | _ ->
-                    match tryFindVariantForType constructorName scrutType variantLookup with
+                    match tryFindVariantForTypeById constructorId scrutType variantLookup with
                     | Some (_, typeParams, _, fieldTypeTemplates) ->
                         // Extract payload from heap-allocated variant
                         // Variant layout: [tag:8][payload:8], so payload is at index 1
@@ -388,7 +388,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let innerPattern, payloadType =
                             match fieldPatterns, fieldTypes with
                             | [fieldPattern], [fieldType] -> (fieldPattern, fieldType)
-                            | _ -> (AST.PTuple fieldPatterns, AST.TTuple fieldTypes)
+                            | _ -> (CheckedAST.PTuple fieldPatterns, AST.TTuple fieldTypes)
 
                         let typedPayloadExpr = ANF.TypedAtom (ANF.Var payloadVar, payloadType)
                         extractAndCompileBody innerPattern body (ANF.Var typedPayloadVar) payloadType currentEnv vg2
@@ -396,34 +396,34 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let expr = ANF.Let (payloadVar, payloadExpr, ANF.Let (typedPayloadVar, typedPayloadExpr, innerExpr))
                             (expr, vg3))
                     | None ->
-                        Error $"Constructor '{constructorName}' not found in variant lookup"
-            | AST.PTuple patterns ->
+                        Error $"Constructor tag '{AST.constructorTag constructorId}' not found in variant lookup"
+            | CheckedAST.PTuple patterns ->
                 // Recursively collect all variable bindings from a pattern
                 // Returns: updated env, list of bindings, updated vargen
                 // sourceType is the type of the source being matched, used to get correct element types
-                let rec collectPatternBindings (pat: AST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                let rec collectPatternBindings (pat: CheckedAST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                     match pat with
                     | _ when not (patternBindsVariables pat) ->
                         Ok (env, bindings, vg)
-                    | AST.POr alternatives ->
+                    | CheckedAST.POr alternatives ->
                         collectPatternBindings (AST.NonEmptyList.head alternatives) sourceAtom sourceType env bindings vg
-                    | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-                    | AST.PInt8Literal _
-                    | AST.PInt16Literal _
-                    | AST.PInt32Literal _
-                    | AST.PUInt8Literal _
-                    | AST.PUInt16Literal _
-                    | AST.PUInt32Literal _
-                    | AST.PUInt64Literal _ | AST.PUInt128Literal _
-                    | AST.PUnit
-                    | AST.PWildcard
-                    | AST.PBool _
-                    | AST.PString _
-                    | AST.PChar _
-                    | AST.PFloat _ ->
+                    | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
+                    | CheckedAST.PInt8Literal _
+                    | CheckedAST.PInt16Literal _
+                    | CheckedAST.PInt32Literal _
+                    | CheckedAST.PUInt8Literal _
+                    | CheckedAST.PUInt16Literal _
+                    | CheckedAST.PUInt32Literal _
+                    | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _
+                    | CheckedAST.PUnit
+                    | CheckedAST.PWildcard
+                    | CheckedAST.PBool _
+                    | CheckedAST.PString _
+                    | CheckedAST.PChar _
+                    | CheckedAST.PFloat _ ->
                         // No variable bindings
                         Ok (env, bindings, vg)
-                    | AST.PVar name ->
+                    | CheckedAST.PVariable name ->
                         // Bind the source to a variable with the correct type
                         // Use TypedAtom to preserve the semantic type (e.g., tuple element type)
                         // even when the source comes from a function with generic return type
@@ -431,13 +431,13 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let binding = (tempId, ANF.TypedAtom (sourceAtom, sourceType))
                         let newEnv = Map.add name (tempId, sourceType) env
                         Ok (newEnv, binding :: bindings, vg1)
-                    | AST.PTuple innerPatterns ->
+                    | CheckedAST.PTuple innerPatterns ->
                         let unknownElemTypes =
                             innerPatterns
                             |> List.mapi (fun idx _ -> AST.TVar $"__tuple_elem_{idx}")
 
                         // Extract each element and recursively collect bindings
-                        let rec collectFromTuple (pats: AST.Pattern list) (types: AST.Type list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
+                        let rec collectFromTuple (pats: CheckedAST.Pattern list) (types: AST.Type list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                             match pats, types with
                             | [], _ -> Ok (env, bindings, vg)
                             | p :: rest, t :: restTypes ->
@@ -462,7 +462,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             | _ -> unknownElemTypes
 
                         collectFromTuple innerPatterns elemTypes 0 env bindings vg
-                    | AST.PConstructor (constructorName, fieldPatterns) ->
+                    | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
                         let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
                             match typ with
                             | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
@@ -474,8 +474,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteType subst) args, substituteType subst ret)
                             | _ -> typ
 
-                        let resolveFieldTypes (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
-                            match tryFindVariantForType constructorName scrutineeType variantLookup with
+                        let resolveFieldTypes (constructorId: AST.ConstructorId) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
+                            match tryFindVariantForTypeById constructorId scrutineeType variantLookup with
                             | Some (_, typeParams, _, fieldTypeTemplates) ->
                                 let fieldTypes =
                                     match scrutineeType with
@@ -485,17 +485,17 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     | _ -> fieldTypeTemplates
                                 Ok fieldTypes
                             | None ->
-                                Error $"Unknown constructor '{constructorName}' in pattern"
+                                Error $"Unknown constructor tag '{AST.constructorTag constructorId}' in pattern"
 
                         match fieldPatterns with
                         | [] -> Ok (env, bindings, vg)
                         | _ ->
-                            resolveFieldTypes constructorName sourceType
+                            resolveFieldTypes constructorId sourceType
                             |> Result.bind (fun fieldTypes ->
                                 let innerPat, concretePayloadType =
                                     match fieldPatterns, fieldTypes with
                                     | [fieldPattern], [fieldType] -> (fieldPattern, fieldType)
-                                    | _ -> (AST.PTuple fieldPatterns, AST.TTuple fieldTypes)
+                                    | _ -> (CheckedAST.PTuple fieldPatterns, AST.TTuple fieldTypes)
                                     // Extract payload (at index 1) and recursively collect
                                 let (payloadVar, vg1) = ANF.freshVar vg
                                 let payloadExpr = ANF.TupleGet (sourceAtom, 1)
@@ -507,7 +507,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     env
                                     (payloadBinding :: bindings)
                                     vg1)
-                    | AST.PList innerPatterns ->
+                    | CheckedAST.PList innerPatterns ->
                         // Extract element type from list type
                         let elemType =
                             match sourceType with
@@ -516,7 +516,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         // For list patterns, extract head elements using SkewList operations
                         // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
                         // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
-                        let rec collectFromList (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
+                        let rec collectFromList (pats: CheckedAST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                             match pats with
                             | [] -> Ok (env, bindings, vg)
                             | p :: rest ->
@@ -531,11 +531,11 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     else
                                         // Get tail for next iteration
                                         let (tailVar, vg2) = ANF.freshVar vg'
-                                        let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                        let tailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                         let tailBinding = (tailVar, tailExpr)
                                         collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                         collectFromList innerPatterns sourceAtom env bindings vg
-                    | AST.PListCons (headPatterns, tailPattern) ->
+                    | CheckedAST.PListCons (headPatterns, tailPattern) ->
                         // Extract element type from list type
                         let elemType =
                             match sourceType with
@@ -544,7 +544,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         // Extract head elements then bind tail using SkewList operations
                         // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
                         // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
-                        let rec collectHeads (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
+                        let rec collectHeads (pats: CheckedAST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                             match pats with
                             | [] ->
                                 // Bind the remaining list to tail pattern (tail has same type as source)
@@ -561,7 +561,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 collectPatternBindings p (ANF.Var headVar) elemType env (headBinding :: rawHeadBinding :: bindings) vg1'
                                 |> Result.bind (fun (env', bindings', vg') ->
                                     let (rawTailVar, vg2) = ANF.freshVar vg'
-                                    let rawTailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                    let rawTailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                     let rawTailBinding = (rawTailVar, rawTailExpr)
                                     // Wrap tail with TypedAtom to preserve list type
                                     let (tailVar, vg2') = ANF.freshVar vg2
@@ -571,13 +571,13 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         collectHeads headPatterns sourceAtom env bindings vg
 
                 // Collect all bindings from the tuple pattern, then compile body
-                collectPatternBindings (AST.PTuple patterns) scrutAtom scrutType currentEnv [] vg
+                collectPatternBindings (CheckedAST.PTuple patterns) scrutAtom scrutType currentEnv [] vg
                 |> Result.bind (fun (newEnv, bindings, vg1) ->
-                    toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
+                    toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (bodyExpr, vg2) ->
                         let finalExpr = wrapBindings (List.rev bindings) bodyExpr
                         (finalExpr, vg2)))
-            | AST.PList patterns ->
+            | CheckedAST.PList patterns ->
                 // Extract list elements from SkewList structure
                 // SkewList layout:
                 // SINGLE (tag 1): [node:8] where node is LEAF-tagged
@@ -604,7 +604,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                 // Helper to extract tuple elements from a value
                 // tupleType is the type of the tuple being destructured
-                let rec collectTupleBindings (tupPats: AST.Pattern list) (tupleAtom: ANF.Atom) (tupleType: AST.Type) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                let rec collectTupleBindings (tupPats: CheckedAST.Pattern list) (tupleAtom: ANF.Atom) (tupleType: AST.Type) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                     let tupleElemTypesResult =
                         match tupleType with
                         | AST.TTuple types when List.length types >= List.length tupPats -> Ok types
@@ -624,30 +624,30 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let elemBinding = (elemVar, elemExpr)
                             let elemT = List.item idx tupleElemTypes
                             match tupPat with
-                            | AST.PVar name ->
+                            | CheckedAST.PVariable name ->
                                 let newEnv = Map.add name (elemVar, elemT) env
                                 collectTupleBindings tupRest tupleAtom tupleType (idx + 1) newEnv (bindings @ [elemBinding]) vg1
-                            | AST.PWildcard ->
+                            | CheckedAST.PWildcard ->
                                 collectTupleBindings tupRest tupleAtom tupleType (idx + 1) env bindings vg1
-                            | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-                            | AST.PInt8Literal _
-                            | AST.PInt16Literal _
-                            | AST.PInt32Literal _
-                            | AST.PUInt8Literal _
-                            | AST.PUInt16Literal _
-                            | AST.PUInt32Literal _
-                            | AST.PUInt64Literal _ | AST.PUInt128Literal _
-                            | AST.PUnit
-                            | AST.PConstructor _
-                            | AST.PBool _
-                            | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PTuple _
-                            | AST.PList _ | AST.PListCons _ | AST.POr _ ->
+                            | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
+                            | CheckedAST.PInt8Literal _
+                            | CheckedAST.PInt16Literal _
+                            | CheckedAST.PInt32Literal _
+                            | CheckedAST.PUInt8Literal _
+                            | CheckedAST.PUInt16Literal _
+                            | CheckedAST.PUInt32Literal _
+                            | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _
+                            | CheckedAST.PUnit
+                            | CheckedAST.PConstructor _
+                            | CheckedAST.PBool _
+                            | CheckedAST.PString _ | CheckedAST.PChar _ | CheckedAST.PFloat _ | CheckedAST.PTuple _
+                            | CheckedAST.PList _ | CheckedAST.PListCons _ | CheckedAST.POr _ ->
                                 Error $"Nested pattern in tuple element not yet supported: {tupPat}"
 
                 let patternLen = List.length patterns
                 if patternLen = 0 then
                     // Empty pattern - no bindings needed
-                    toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
+                    toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                 elif patternLen = 1 then
                     // SINGLE node: extract the single element
                     // Untag to get pointer to SINGLE structure
@@ -666,41 +666,41 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let valueAtom = ANF.Var typedValueVar
                     // Bind the pattern
                     match List.head patterns with
-                    | AST.PVar name ->
+                    | CheckedAST.PVariable name ->
                         let newEnv = Map.add name (valueVar, elemType) currentEnv
-                        toANFCore sumTypeNames inertScopes body vg3' newEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg3' newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg4) ->
                             (wrapBindings bindings bodyExpr, vg4))
-                    | AST.PWildcard ->
-                        toANFCore sumTypeNames inertScopes body vg3' currentEnv typeReg variantLookup funcReg moduleRegistry
+                    | CheckedAST.PWildcard ->
+                        toANFCore sumTypeNames inertScopes body vg3' currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg4) ->
                             (wrapBindings bindings bodyExpr, vg4))
-                    | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-                    | AST.PInt8Literal _
-                    | AST.PInt16Literal _
-                    | AST.PInt32Literal _
-                    | AST.PUInt8Literal _
-                    | AST.PUInt16Literal _
-                    | AST.PUInt32Literal _
-                    | AST.PUInt64Literal _ | AST.PUInt128Literal _ ->
-                        toANFCore sumTypeNames inertScopes body vg3' currentEnv typeReg variantLookup funcReg moduleRegistry
+                    | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
+                    | CheckedAST.PInt8Literal _
+                    | CheckedAST.PInt16Literal _
+                    | CheckedAST.PInt32Literal _
+                    | CheckedAST.PUInt8Literal _
+                    | CheckedAST.PUInt16Literal _
+                    | CheckedAST.PUInt32Literal _
+                    | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _ ->
+                        toANFCore sumTypeNames inertScopes body vg3' currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg4) ->
                             (wrapBindings bindings bodyExpr, vg4))
-                    | AST.PTuple innerPatterns ->
+                    | CheckedAST.PTuple innerPatterns ->
                         // elemType is the list element type, use it as tuple type
                         collectTupleBindings innerPatterns valueAtom elemType 0 currentEnv bindings vg3'
                         |> Result.bind (fun (newEnv, newBindings, vg4) ->
-                            toANFCore sumTypeNames inertScopes body vg4 newEnv typeReg variantLookup funcReg moduleRegistry
+                            toANFCore sumTypeNames inertScopes body vg4 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                             |> Result.map (fun (bodyExpr, vg5) ->
                                 (wrapBindings newBindings bodyExpr, vg5)))
-                    | AST.PConstructor _ | AST.PList _ | AST.PListCons _ ->
+                    | CheckedAST.PConstructor _ | CheckedAST.PList _ | CheckedAST.PListCons _ ->
                         Error "Nested pattern in list element not yet supported"
                     | _ ->
                         Error $"Unsupported pattern in single-element list: {List.head patterns}"
                 else
                     // Traverse exact-list patterns through the representation API.
                     let listType = AST.TList elemType
-                    let rec extractElements (pats: AST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                    let rec extractElements (pats: CheckedAST.Pattern list) (currentList: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                         match pats with
                         | [] -> Ok (env, bindings, vg)
                         | pat :: rest ->
@@ -709,7 +709,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let (typedValueVar, vg2) = ANF.freshVar vg1
                             let typedValueExpr = ANF.TypedAtom (ANF.Var rawValueVar, elemType)
                             let (rawTailVar, vg3) = ANF.freshVar vg2
-                            let rawTailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                            let rawTailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                             let (typedTailVar, vg4) = ANF.freshVar vg3
                             let typedTailExpr = ANF.TypedAtom (ANF.Var rawTailVar, listType)
                             let newBindings =
@@ -724,21 +724,21 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let valueAtom = ANF.Var typedValueVar
 
                             match pat with
-                            | AST.PVar name ->
+                            | CheckedAST.PVariable name ->
                                 let newEnv = Map.add name (valueVar, elemType) env
                                 extractElements rest (ANF.Var typedTailVar) newEnv newBindings vg4
-                            | AST.PWildcard ->
+                            | CheckedAST.PWildcard ->
                                 extractElements rest (ANF.Var typedTailVar) env newBindings vg4
-                            | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-                            | AST.PInt8Literal _
-                            | AST.PInt16Literal _
-                            | AST.PInt32Literal _
-                            | AST.PUInt8Literal _
-                            | AST.PUInt16Literal _
-                            | AST.PUInt32Literal _
-                            | AST.PUInt64Literal _ | AST.PUInt128Literal _ ->
+                            | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
+                            | CheckedAST.PInt8Literal _
+                            | CheckedAST.PInt16Literal _
+                            | CheckedAST.PInt32Literal _
+                            | CheckedAST.PUInt8Literal _
+                            | CheckedAST.PUInt16Literal _
+                            | CheckedAST.PUInt32Literal _
+                            | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _ ->
                                 extractElements rest (ANF.Var typedTailVar) env newBindings vg4
-                            | AST.PTuple innerPatterns ->
+                            | CheckedAST.PTuple innerPatterns ->
                                 // elemType is the list element type, use it as tuple type
                                 collectTupleBindings innerPatterns valueAtom elemType 0 env newBindings vg4
                                 |> Result.bind (fun (tupEnv, tupBindings, vg3) ->
@@ -748,10 +748,10 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                     extractElements patterns scrutAtom currentEnv [] vg
                     |> Result.bind (fun (newEnv, bindings, vg2) ->
-                        toANFCore sumTypeNames inertScopes body vg2 newEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg2 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg3) ->
                             (wrapBindings bindings bodyExpr, vg3)))
-            | AST.PListCons (headPatterns, tailPattern) ->
+            | CheckedAST.PListCons (headPatterns, tailPattern) ->
                 // Get element type from list type
                 let elemType =
                     match scrutType with
@@ -759,7 +759,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     | _ -> Crash.crash $"PListCons pattern expects TList scrutinee in extractAndCompileBody, got {scrutType}"
                 // Extract head elements and bind tail using SkewList operations
                 // Lists are SkewLists, use headUnsafe_i64/tail_i64 for extraction
-                let rec collectListConsBindings (pats: AST.Pattern list) (listAtom: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.Atom * ANF.VarGen, string> =
+                let rec collectListConsBindings (pats: CheckedAST.Pattern list) (listAtom: ANF.Atom) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.Atom * ANF.VarGen, string> =
                     match pats with
                     | [] -> Ok (env, List.rev bindings, listAtom, vg)
                     | pat :: rest ->
@@ -773,7 +773,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let headBinding = (headVar, headExpr)
                         // Extract tail using SkewList.tail_i64
                         let (rawTailVar, vg2) = ANF.freshVar vg1'
-                        let rawTailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [listAtom])
+                        let rawTailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [listAtom])
                         let rawTailBinding = (rawTailVar, rawTailExpr)
                         // Wrap with TypedAtom to preserve list type for tail
                         let listType = AST.TList elemType
@@ -784,12 +784,12 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         // Order: typedBindings first (will be reversed at line 3923), so after reversal raw bindings come before typed
                         let allBaseBindings = tailBinding :: rawTailBinding :: headBinding :: rawHeadBinding :: bindings
                         match pat with
-                        | AST.PVar name ->
+                        | CheckedAST.PVariable name ->
                             let newEnv = Map.add name (headVar, elemType) env
                             collectListConsBindings rest (ANF.Var tailVar) newEnv allBaseBindings vg2'
-                        | AST.PWildcard ->
+                        | CheckedAST.PWildcard ->
                             collectListConsBindings rest (ANF.Var tailVar) env allBaseBindings vg2'
-                        | AST.PTuple innerPatterns ->
+                        | CheckedAST.PTuple innerPatterns ->
                             // For tuple patterns inside list cons, extract each tuple element and bind variables
                             // elemType is the tuple type (since list elements are tuples)
                             let tupleElemTypes =
@@ -807,7 +807,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     innerPatterns
                                     |> List.mapi (fun idx _ ->
                                         AST.TVar $"__tuple_elem_unknown_{idx}")
-                            let rec collectTupleBindings (tupPats: AST.Pattern list) (types: AST.Type list) (tupleAtom: ANF.Atom) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                            let rec collectTupleBindings (tupPats: CheckedAST.Pattern list) (types: AST.Type list) (tupleAtom: ANF.Atom) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                                 match tupPats with
                                 | [] -> Ok (env, bindings, vg)
                                 | tupPat :: tupRest ->
@@ -825,59 +825,59 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     let elemExpr = ANF.TypedAtom (ANF.Var rawElemVar, elemT)
                                     let elemBinding = (elemVar, elemExpr)
                                     match tupPat with
-                                    | AST.PVar name ->
+                                    | CheckedAST.PVariable name ->
                                         let newEnv = Map.add name (elemVar, elemT) env
                                         collectTupleBindings tupRest types tupleAtom (idx + 1) newEnv (elemBinding :: rawElemBinding :: bindings) vg1'
-                                    | AST.PWildcard ->
+                                    | CheckedAST.PWildcard ->
                                         collectTupleBindings tupRest types tupleAtom (idx + 1) env (rawElemBinding :: bindings) vg1
-                                    | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-                                    | AST.PInt8Literal _
-                                    | AST.PInt16Literal _
-                                    | AST.PInt32Literal _
-                                    | AST.PUInt8Literal _
-                                    | AST.PUInt16Literal _
-                                    | AST.PUInt32Literal _
-                                    | AST.PUInt64Literal _ | AST.PUInt128Literal _
-                                    | AST.PUnit
-                                    | AST.PConstructor _
-                                    | AST.PBool _
-                                    | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PTuple _
-                                    | AST.PList _ | AST.PListCons _ | AST.POr _ ->
+                                    | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
+                                    | CheckedAST.PInt8Literal _
+                                    | CheckedAST.PInt16Literal _
+                                    | CheckedAST.PInt32Literal _
+                                    | CheckedAST.PUInt8Literal _
+                                    | CheckedAST.PUInt16Literal _
+                                    | CheckedAST.PUInt32Literal _
+                                    | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _
+                                    | CheckedAST.PUnit
+                                    | CheckedAST.PConstructor _
+                                    | CheckedAST.PBool _
+                                    | CheckedAST.PString _ | CheckedAST.PChar _ | CheckedAST.PFloat _ | CheckedAST.PTuple _
+                                    | CheckedAST.PList _ | CheckedAST.PListCons _ | CheckedAST.POr _ ->
                                         Error $"Nested pattern in tuple element not yet supported: {tupPat}"
                             collectTupleBindings innerPatterns tupleElemTypes (ANF.Var headVar) 0 env allBaseBindings vg2'
                             |> Result.bind (fun (newEnv, newBindings, vg3) ->
                                 collectListConsBindings rest (ANF.Var tailVar) newEnv newBindings vg3)
-                        | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-                        | AST.PInt8Literal _
-                        | AST.PInt16Literal _
-                        | AST.PInt32Literal _
-                        | AST.PUInt8Literal _
-                        | AST.PUInt16Literal _
-                        | AST.PUInt32Literal _
-                        | AST.PUInt64Literal _ | AST.PUInt128Literal _ ->
+                        | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
+                        | CheckedAST.PInt8Literal _
+                        | CheckedAST.PInt16Literal _
+                        | CheckedAST.PInt32Literal _
+                        | CheckedAST.PUInt8Literal _
+                        | CheckedAST.PUInt16Literal _
+                        | CheckedAST.PUInt32Literal _
+                        | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _ ->
                             collectListConsBindings rest (ANF.Var tailVar) env allBaseBindings vg2'
-                        | AST.PUnit
-                        | AST.PConstructor _
-                        | AST.PBool _
-                        | AST.PString _ | AST.PChar _ | AST.PFloat _
-                        | AST.PList _ | AST.PListCons _ | AST.POr _ ->
+                        | CheckedAST.PUnit
+                        | CheckedAST.PConstructor _
+                        | CheckedAST.PBool _
+                        | CheckedAST.PString _ | CheckedAST.PChar _ | CheckedAST.PFloat _
+                        | CheckedAST.PList _ | CheckedAST.PListCons _ | CheckedAST.POr _ ->
                             Error $"Nested pattern in list cons element not yet supported: {pat}"
                 collectListConsBindings headPatterns scrutAtom currentEnv [] vg
                 |> Result.bind (fun (newEnv, bindings, tailAtom, vg1) ->
                     // Bind tail pattern
                     match tailPattern with
-                    | AST.PVar name ->
+                    | CheckedAST.PVariable name ->
                         let (tailVar, vg2) = ANF.freshVar vg1
                         // Tail has the same list type as the scrutinee
                         let newEnv' = Map.add name (tailVar, scrutType) newEnv
-                        toANFCore sumTypeNames inertScopes body vg2 newEnv' typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg2 newEnv' typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg3) ->
                             let tailBinding = (tailVar, ANF.TypedAtom (tailAtom, scrutType))
                             let allBindings = bindings @ [tailBinding]
                             let finalExpr = wrapBindings allBindings bodyExpr
                             (finalExpr, vg3))
-                    | AST.PWildcard ->
-                        toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
+                    | CheckedAST.PWildcard ->
+                        toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg2) ->
                             let finalExpr = wrapBindings bindings bodyExpr
                             (finalExpr, vg2))
@@ -886,7 +886,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         // Extract pattern bindings, check guard, and compile body
         // Returns: if guard is true, execute body; otherwise execute elseExpr
         // scrutType is the type of the scrutinee for correct pattern variable typing
-        and extractAndCompileBodyWithGuard (pattern: AST.Pattern) (guardExpr: CheckedAST.Expr) (body: CheckedAST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) (elseExpr: ANF.AExpr) : Result<ANF.AExpr * ANF.VarGen, string> =
+        and extractAndCompileBodyWithGuard (pattern: CheckedAST.Pattern) (guardExpr: CheckedAST.Expr) (body: CheckedAST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) (elseExpr: ANF.AExpr) : Result<ANF.AExpr * ANF.VarGen, string> =
             // First, we need to extract bindings from the pattern
             // Then compile the guard with those bindings in scope
             // Then compile the body with those bindings in scope
@@ -894,16 +894,16 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
             // Return true only when we can prove a pattern can never match this type.
             // Used to preserve "fall through" semantics for guarded patterns that should not bind.
-            let rec patternDefinitelyCannotMatchType (pat: AST.Pattern) (patType: AST.Type) : bool =
+            let rec patternDefinitelyCannotMatchType (pat: CheckedAST.Pattern) (patType: AST.Type) : bool =
                 match pat with
-                | AST.PTuple innerPatterns ->
+                | CheckedAST.PTuple innerPatterns ->
                     match patType with
                     | AST.TTuple elemTypes ->
                         List.length innerPatterns <> List.length elemTypes
                         || List.exists2 patternDefinitelyCannotMatchType innerPatterns elemTypes
                     | AST.TVar _ -> false
                     | _ -> true
-                | AST.PList innerPatterns ->
+                | CheckedAST.PList innerPatterns ->
                     match patType with
                     | AST.TList elemType ->
                         innerPatterns
@@ -911,7 +911,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             patternDefinitelyCannotMatchType innerPat elemType)
                     | AST.TVar _ -> false
                     | _ -> true
-                | AST.PListCons (headPatterns, tailPattern) ->
+                | CheckedAST.PListCons (headPatterns, tailPattern) ->
                     match patType with
                     | AST.TList elemType ->
                         (headPatterns
@@ -920,7 +920,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         || patternDefinitelyCannotMatchType tailPattern patType
                     | AST.TVar _ -> false
                     | _ -> true
-                | AST.POr alternatives ->
+                | CheckedAST.POr alternatives ->
                     alternatives
                     |> AST.NonEmptyList.toList
                     |> List.forall (fun alternative ->
@@ -929,32 +929,32 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
             // Helper to collect pattern variable bindings (simplified version for common patterns)
             // sourceType is the type of the source being matched
-            let rec collectBindings (pat: AST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+            let rec collectBindings (pat: CheckedAST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                 match pat with
-                | AST.POr alternatives ->
+                | CheckedAST.POr alternatives ->
                     collectBindings (AST.NonEmptyList.head alternatives) sourceAtom sourceType env bindings vg
-                | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-                | AST.PInt8Literal _
-                | AST.PInt16Literal _
-                | AST.PInt32Literal _
-                | AST.PUInt8Literal _
-                | AST.PUInt16Literal _
-                | AST.PUInt32Literal _
-                | AST.PUInt64Literal _ | AST.PUInt128Literal _
-                | AST.PUnit
-                | AST.PWildcard
-                | AST.PBool _
-                | AST.PString _
-                | AST.PChar _
-                | AST.PFloat _ ->
+                | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
+                | CheckedAST.PInt8Literal _
+                | CheckedAST.PInt16Literal _
+                | CheckedAST.PInt32Literal _
+                | CheckedAST.PUInt8Literal _
+                | CheckedAST.PUInt16Literal _
+                | CheckedAST.PUInt32Literal _
+                | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _
+                | CheckedAST.PUnit
+                | CheckedAST.PWildcard
+                | CheckedAST.PBool _
+                | CheckedAST.PString _
+                | CheckedAST.PChar _
+                | CheckedAST.PFloat _ ->
                     Ok (env, bindings, vg)
-                | AST.PVar name ->
+                | CheckedAST.PVariable name ->
                     let (tempId, vg1) = ANF.freshVar vg
                     // Use TypedAtom to preserve the correct type in TypeMap
                     let binding = (tempId, ANF.TypedAtom (sourceAtom, sourceType))
                     let newEnv = Map.add name (tempId, sourceType) env
                     Ok (newEnv, binding :: bindings, vg1)
-                | AST.PTuple innerPatterns ->
+                | CheckedAST.PTuple innerPatterns ->
                     let elemTypes =
                         match sourceType with
                         | AST.TTuple types when List.length types = List.length innerPatterns -> types
@@ -978,7 +978,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             Crash.crash
                                 $"collectBindings(PTuple): missing tuple element type at index {idx}; {remaining} pattern elements remain"
                     collectFromTuple innerPatterns elemTypes 0 env bindings vg
-                | AST.PConstructor (constructorName, fieldPatterns) ->
+                | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
                     let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
                         match typ with
                         | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
@@ -990,8 +990,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteType subst) args, substituteType subst ret)
                         | _ -> typ
 
-                    let resolveFieldTypes (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
-                        match tryFindVariantForType constructorName scrutineeType variantLookup with
+                    let resolveFieldTypes (constructorId: AST.ConstructorId) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
+                        match tryFindVariantForTypeById constructorId scrutineeType variantLookup with
                         | Some (_, typeParams, _, fieldTypeTemplates) ->
                             let fieldTypes =
                                 match scrutineeType with
@@ -1002,17 +1002,17 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 |> List.map (canonicalizeBareSumTypeRefs variantLookup)
                             Ok fieldTypes
                         | None ->
-                            Error $"Unknown constructor '{constructorName}' in pattern"
+                            Error $"Unknown constructor tag '{AST.constructorTag constructorId}' in pattern"
 
                     match fieldPatterns with
                     | [] -> Ok (env, bindings, vg)
                     | _ ->
-                        resolveFieldTypes constructorName sourceType
+                        resolveFieldTypes constructorId sourceType
                         |> Result.bind (fun fieldTypes ->
                             let innerPat, concretePayloadType =
                                 match fieldPatterns, fieldTypes with
                                 | [fieldPattern], [fieldType] -> (fieldPattern, fieldType)
-                                | _ -> (AST.PTuple fieldPatterns, AST.TTuple fieldTypes)
+                                | _ -> (CheckedAST.PTuple fieldPatterns, AST.TTuple fieldTypes)
                             let (payloadVar, vg1) = ANF.freshVar vg
                             let payloadExpr = ANF.TupleGet (sourceAtom, 1)
                             collectBindings
@@ -1022,7 +1022,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 env
                                     ((payloadVar, payloadExpr) :: bindings)
                                     vg1)
-                | AST.PList innerPatterns ->
+                | CheckedAST.PList innerPatterns ->
                     let elemTypeResult =
                         match sourceType with
                         | AST.TList t -> Ok t
@@ -1037,7 +1037,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
                         // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
                         let rec collectFromList
-                            (pats: AST.Pattern list)
+                            (pats: CheckedAST.Pattern list)
                             (currentList: ANF.Atom)
                             (env: VarEnv)
                             (bindings: (ANF.TempId * ANF.CExpr) list)
@@ -1057,11 +1057,11 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     else
                                         // Get tail for next iteration
                                         let (tailVar, vg2) = ANF.freshVar vg'
-                                        let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                        let tailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                         let tailBinding = (tailVar, tailExpr)
                                         collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                         collectFromList innerPatterns sourceAtom env bindings vg)
-                | AST.PListCons (headPatterns, tailPattern) ->
+                | CheckedAST.PListCons (headPatterns, tailPattern) ->
                     let elemTypeResult =
                         match sourceType with
                         | AST.TList t -> Ok t
@@ -1076,7 +1076,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
                         // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
                         let rec collectHeads
-                            (pats: AST.Pattern list)
+                            (pats: CheckedAST.Pattern list)
                             (currentList: ANF.Atom)
                             (env: VarEnv)
                             (bindings: (ANF.TempId * ANF.CExpr) list)
@@ -1094,7 +1094,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 collectBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                 |> Result.bind (fun (env', bindings', vg') ->
                                     let (tailVar, vg2) = ANF.freshVar vg'
-                                    let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                    let tailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                     let tailBinding = (tailVar, tailExpr)
                                     collectHeads rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                         collectHeads headPatterns sourceAtom env bindings vg)
@@ -1105,10 +1105,10 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 collectBindings pattern scrutAtom scrutType currentEnv [] vg
                 |> Result.bind (fun (newEnv, bindings, vg1) ->
                     // Compile guard expression in the extended environment
-                    toAtomCore sumTypeNames inertScopes guardExpr vg1 newEnv typeReg variantLookup funcReg moduleRegistry
+                    toAtomCore sumTypeNames inertScopes guardExpr vg1 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.bind (fun (guardAtom, guardBindings, vg2) ->
                         // Compile body expression in the extended environment
-                        toANFCore sumTypeNames inertScopes body vg2 newEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg2 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg3) ->
                             // Build: if guard then body else elseExpr
                             let ifExpr = ANF.If (guardAtom, bodyExpr, elseExpr)
@@ -1138,80 +1138,80 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
         /// `patType` is the static type of the value `scrutAtom` holds, when known;
         /// None falls back to the match scrutinee's type.
-        let rec buildPatternComparison (pattern: AST.Pattern) (scrutAtom: ANF.Atom) (patType: AST.Type option) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
+        let rec buildPatternComparison (pattern: CheckedAST.Pattern) (scrutAtom: ANF.Atom) (patType: AST.Type option) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
             let testedType = defaultArg patType scrutType
-            let variantHere variantName = tryFindVariantForType variantName testedType variantLookup
-            let typeHasAnyPayloadHere (variantName: string) : bool =
-                match variantHere variantName with
+            let variantHere constructorId = tryFindVariantForTypeById constructorId testedType variantLookup
+            let typeHasAnyPayloadHere (constructorId: AST.ConstructorId) : bool =
+                match variantHere constructorId with
                 | Some (typeName, _, _, _) ->
                     variantLookup
                     |> Map.exists (fun _ (tName, _, _, fields) -> tName = typeName && not (List.isEmpty fields))
                 | None -> false
             match pattern with
-            | AST.POr alternatives ->
+            | CheckedAST.POr alternatives ->
                 buildPatternComparison (AST.NonEmptyList.head alternatives) scrutAtom patType vg
-            | AST.PUnit -> Ok None  // Unit pattern always matches unit type
-            | AST.PWildcard -> Ok None
-            | AST.PVar _ -> Ok None
-            | AST.PInt64 n ->
+            | CheckedAST.PUnit -> Ok None  // Unit pattern always matches unit type
+            | CheckedAST.PWildcard -> Ok None
+            | CheckedAST.PVariable _ -> Ok None
+            | CheckedAST.PInt64 n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int64 n))
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PBigInt n ->
+            | CheckedAST.PBigInt n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
-                let cmpExpr = ANF.Call ("Darklang.Stdlib.Int.__equals", [scrutAtom; ANF.StringLiteral (n.ToString())])
+                let cmpExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int.__equals", [scrutAtom; ANF.StringLiteral (n.ToString())])
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PInt128Literal n ->
+            | CheckedAST.PInt128Literal n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = int128LiteralComparison scrutAtom n
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PInt8Literal n ->
+            | CheckedAST.PInt8Literal n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int8 n))
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PInt16Literal n ->
+            | CheckedAST.PInt16Literal n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int16 n))
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PInt32Literal n ->
+            | CheckedAST.PInt32Literal n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int32 n))
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PUInt8Literal n ->
+            | CheckedAST.PUInt8Literal n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.UInt8 n))
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PUInt16Literal n ->
+            | CheckedAST.PUInt16Literal n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.UInt16 n))
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PUInt32Literal n ->
+            | CheckedAST.PUInt32Literal n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.UInt32 n))
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PUInt64Literal n ->
+            | CheckedAST.PUInt64Literal n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.UInt64 n))
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PUInt128Literal n ->
+            | CheckedAST.PUInt128Literal n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = uint128LiteralComparison scrutAtom n
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PBool b ->
+            | CheckedAST.PBool b ->
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.BoolLiteral b)
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PString s ->
+            | CheckedAST.PString s ->
                 // String patterns must use byte-wise equality, not pointer equality.
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = ANF.CanonicalBufferEq (MemoryModel.Utf8String, scrutAtom, ANF.StringLiteral (s.Normalize(System.Text.NormalizationForm.FormC)))
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PChar c ->
+            | CheckedAST.PChar c ->
                 // Char values are represented as single-EGC strings at runtime.
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = ANF.CanonicalBufferEq (MemoryModel.GraphemeCluster, scrutAtom, ANF.StringLiteral (c.Normalize(System.Text.NormalizationForm.FormC)))
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PFloat f ->
+            | CheckedAST.PFloat f ->
                 if f = 0.0 then
                     // Distinguish -0.0 from 0.0 using reciprocal sign.
                     let patternBits = System.BitConverter.DoubleToInt64Bits(f)
@@ -1239,8 +1239,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let (cmpVar, vg1) = ANF.freshVar vg
                     let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.FloatLiteral f)
                     Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-            | AST.PConstructor (variantName, fieldPatterns) ->
-                match variantHere variantName with
+            | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
+                match variantHere constructorId with
                 | Some (_, typeParams, tag, variantFieldTypes) ->
                     let arityMismatch = List.length fieldPatterns <> List.length variantFieldTypes
                     // The fields' types, with the tested type's arguments substituted.
@@ -1261,7 +1261,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let (cmpVar, vg1) = ANF.freshVar vg
                         let cmpExpr = ANF.Atom (ANF.BoolLiteral false)
                         Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
-                    elif typeHasAnyPayloadHere variantName then
+                    elif typeHasAnyPayloadHere constructorId then
                         // Mixed or payload-carrying sum type: tag is stored in heap at index 0.
                         let (tagVar, vg1) = ANF.freshVar vg
                         let tagLoadExpr = ANF.TupleGet (scrutAtom, 0)
@@ -1273,7 +1273,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let innerPattern =
                                 match fieldPatterns with
                                 | [fieldPattern] -> fieldPattern
-                                | _ -> AST.PTuple fieldPatterns
+                                | _ -> CheckedAST.PTuple fieldPatterns
                             // Extract payload and check inner pattern if needed.
                             let (payloadVar, vg3) = ANF.freshVar vg2
                             let payloadLoadExpr = ANF.TupleGet (scrutAtom, 1)
@@ -1302,11 +1302,15 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int64 (int64 tag)))
                             Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                         | _ -> Error "Type checking accepted fields for a nullary constructor"
-                | None -> Error $"Unknown constructor in pattern: {variantName}"
-            | AST.PTuple innerPatterns ->
+                | None -> Error $"Unknown constructor tag in pattern: {AST.constructorTag constructorId}"
+            | CheckedAST.PTuple innerPatterns ->
+                let elementTypes =
+                    match testedType with
+                    | AST.TTuple types when List.length types = List.length innerPatterns -> types
+                    | _ -> List.replicate (List.length innerPatterns) AST.TRuntimeError
                 // Tuple patterns with literals need to compare each element
-                let rec buildTupleComparisons (patterns: AST.Pattern list) (index: int) (vg: ANF.VarGen) (accBindings: (ANF.TempId * ANF.CExpr) list) (accConditions: ANF.Atom list) =
-                    match patterns with
+                let rec buildTupleComparisons (patternsAndTypes: (CheckedAST.Pattern * AST.Type) list) (index: int) (vg: ANF.VarGen) (accBindings: (ANF.TempId * ANF.CExpr) list) (accConditions: ANF.Atom list) =
+                    match patternsAndTypes with
                     | [] ->
                         if List.isEmpty accConditions then
                             Ok None  // All variables/wildcards, no comparison needed
@@ -1324,7 +1328,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                         (ANF.Var andVar, restBindings @ [(andVar, andExpr)], vg2))
                             andAll accConditions vg accBindings
                             |> Result.map (fun (result, bindings, vg') -> Some (result, bindings, vg'))
-                    | p :: rest ->
+                    | (p, elementType) :: rest ->
                         // Extract element at index
                         let (elemVar, vg1) = ANF.freshVar vg
                         let elemLoad = ANF.TupleGet (scrutAtom, index)
@@ -1343,8 +1347,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             | Some (cond, condBindings, vg2) ->
                                 // Add this comparison
                                 buildTupleComparisons rest (index + 1) vg2 (newBindings @ condBindings) (accConditions @ [cond]))
-                buildTupleComparisons innerPatterns 0 vg [] []
-            | AST.PList patterns ->
+                buildTupleComparisons (List.zip innerPatterns elementTypes) 0 vg [] []
+            | CheckedAST.PList patterns ->
                 // Exact list patterns compare the cached skew-list length.
                 let patternLen = List.length patterns
                 if patternLen = 0 then
@@ -1354,7 +1358,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                 elif patternLen = 1 then
                     let (lengthVar, vg1) = ANF.freshVar vg
-                    let lengthExpr = ANF.Call ("Darklang.Stdlib.List.__length_i64", [scrutAtom])
+                    let lengthExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__length_i64", [scrutAtom])
                     let (cmpVar, vg2) = ANF.freshVar vg1
                     let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 1L))
                     Ok (Some (ANF.Var cmpVar, [(lengthVar, lengthExpr); (cmpVar, cmpExpr)], vg2))
@@ -1362,11 +1366,11 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     // Multiple elements: check length == patternLen
                     // Use Stdlib.List.__length which handles EMPTY/SINGLE/DEEP safely
                     let (lengthVar, vg1) = ANF.freshVar vg
-                    let lengthExpr = ANF.Call ("Darklang.Stdlib.List.__length_i64", [scrutAtom])
+                    let lengthExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__length_i64", [scrutAtom])
                     let (cmpVar, vg2) = ANF.freshVar vg1
                     let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 patternLen)))
                     Ok (Some (ANF.Var cmpVar, [(lengthVar, lengthExpr); (cmpVar, cmpExpr)], vg2))
-            | AST.PListCons (headPatterns, _) ->
+            | CheckedAST.PListCons (headPatterns, _) ->
                 // A cons pattern needs one element per normalized head before binding its tail;
                 // a :: b :: t needs at least two, etc.
                 let minLength = List.length headPatterns
@@ -1374,21 +1378,21 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     Ok None
                 else
                     let (lengthVar, vg1) = ANF.freshVar vg
-                    let lengthExpr = ANF.Call ("Darklang.Stdlib.List.__length_i64", [scrutAtom])
+                    let lengthExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__length_i64", [scrutAtom])
                     let (cmpVar, vg2) = ANF.freshVar vg1
                     let cmpExpr = ANF.Prim (ANF.Gte, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 minLength)))
                     Ok (Some (ANF.Var cmpVar, [(lengthVar, lengthExpr); (cmpVar, cmpExpr)], vg2))
 
-        let rec patternBindsVariables (pattern: AST.Pattern) : bool =
+        let rec patternBindsVariables (pattern: CheckedAST.Pattern) : bool =
             match pattern with
-            | AST.PVar _ -> true
-            | AST.PTuple patterns ->
+            | CheckedAST.PVariable _ -> true
+            | CheckedAST.PTuple patterns ->
                 patterns |> List.exists patternBindsVariables
-            | AST.PConstructor (_, fields) ->
+            | CheckedAST.PConstructor (_, fields) ->
                 fields |> List.exists patternBindsVariables
-            | AST.PList patterns ->
+            | CheckedAST.PList patterns ->
                 patterns |> List.exists patternBindsVariables
-            | AST.PListCons (headPatterns, tailPattern) ->
+            | CheckedAST.PListCons (headPatterns, tailPattern) ->
                 (headPatterns |> List.exists patternBindsVariables) || patternBindsVariables tailPattern
             | _ -> false
 
@@ -1408,9 +1412,9 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 )
             | _ -> typ
 
-        let rec patternStaticallyCannotMatchType (pattern: AST.Pattern) (sourceType: AST.Type) : bool =
+        let rec patternStaticallyCannotMatchType (pattern: CheckedAST.Pattern) (sourceType: AST.Type) : bool =
             match pattern with
-            | AST.PTuple innerPatterns ->
+            | CheckedAST.PTuple innerPatterns ->
                 match sourceType with
                 | AST.TTuple elemTypes ->
                     if List.length elemTypes <> List.length innerPatterns then
@@ -1422,13 +1426,13 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 | AST.TVar _
                 | AST.TRuntimeError -> false
                 | _ -> true
-            | AST.PConstructor (constructorName, fieldPatterns) ->
+            | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
                 match sourceType with
                 | AST.TVar _
                 | AST.TRuntimeError -> false
                 | AST.TSum (_, typeArgs)
                 | AST.TRecord (_, typeArgs) ->
-                    match tryFindVariantForType constructorName sourceType variantLookup with
+                    match tryFindVariantForTypeById constructorId sourceType variantLookup with
                     | None -> true
                     | Some (_, typeParams, _, fieldTypes) ->
                         if List.length fieldPatterns <> List.length fieldTypes then
@@ -1446,7 +1450,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 |> canonicalizeBareSumTypeRefs variantLookup
                                 |> patternStaticallyCannotMatchType fieldPattern)
                 | _ -> true
-            | AST.PList innerPatterns ->
+            | CheckedAST.PList innerPatterns ->
                 match sourceType with
                 | AST.TList elemType ->
                     innerPatterns
@@ -1455,7 +1459,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 | AST.TVar _
                 | AST.TRuntimeError -> false
                 | _ -> true
-            | AST.PListCons (headPatterns, tailPattern) ->
+            | CheckedAST.PListCons (headPatterns, tailPattern) ->
                 match sourceType with
                 | AST.TList elemType ->
                     (headPatterns
@@ -1478,7 +1482,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         // Collect variable bindings for nested patterns under a value that is already known to match.
         // This is used by list/list-cons lowering where structural checks are emitted separately.
         let rec collectNestedPatternBindings
-            (pattern: AST.Pattern)
+            (pattern: CheckedAST.Pattern)
             (sourceAtom: ANF.Atom)
             (sourceType: AST.Type)
             (env: VarEnv)
@@ -1486,7 +1490,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             (vg: ANF.VarGen)
             : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
             match pattern with
-            | AST.POr alternatives ->
+            | CheckedAST.POr alternatives ->
                 collectNestedPatternBindings
                     (AST.NonEmptyList.head alternatives)
                     sourceAtom
@@ -1494,26 +1498,26 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     env
                     bindings
                     vg
-            | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-            | AST.PInt8Literal _
-            | AST.PInt16Literal _
-            | AST.PInt32Literal _
-            | AST.PUInt8Literal _
-            | AST.PUInt16Literal _
-            | AST.PUInt32Literal _
-            | AST.PUInt64Literal _ | AST.PUInt128Literal _
-            | AST.PUnit
-            | AST.PWildcard
-            | AST.PBool _
-            | AST.PString _
-            | AST.PChar _
-            | AST.PFloat _ ->
+            | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
+            | CheckedAST.PInt8Literal _
+            | CheckedAST.PInt16Literal _
+            | CheckedAST.PInt32Literal _
+            | CheckedAST.PUInt8Literal _
+            | CheckedAST.PUInt16Literal _
+            | CheckedAST.PUInt32Literal _
+            | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _
+            | CheckedAST.PUnit
+            | CheckedAST.PWildcard
+            | CheckedAST.PBool _
+            | CheckedAST.PString _
+            | CheckedAST.PChar _
+            | CheckedAST.PFloat _ ->
                 Ok (env, bindings, vg)
-            | AST.PVar name ->
+            | CheckedAST.PVariable name ->
                 let (tempId, vg1) = ANF.freshVar vg
                 let binding = (tempId, ANF.TypedAtom (sourceAtom, sourceType))
                 Ok (Map.add name (tempId, sourceType) env, bindings @ [binding], vg1)
-            | AST.PTuple patterns ->
+            | CheckedAST.PTuple patterns ->
                 let tupleElemTypesOpt =
                     match sourceType with
                     | AST.TTuple types when List.length types = List.length patterns ->
@@ -1538,7 +1542,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     Ok (env, bindings, vg)
                 | Some elemTypes ->
                     let rec loop
-                        (remaining: (AST.Pattern * AST.Type) list)
+                        (remaining: (CheckedAST.Pattern * AST.Type) list)
                         (idx: int)
                         (currentEnv: VarEnv)
                         (currentBindings: (ANF.TempId * ANF.CExpr) list)
@@ -1555,7 +1559,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 loop rest (idx + 1) env' bindings' vg')
 
                     loop (List.zip patterns elemTypes) 0 env bindings vg
-            | AST.PConstructor (constructorName, fieldPatterns) ->
+            | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
                 let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
                     match typ with
                     | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
@@ -1566,8 +1570,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     | AST.TSum (name, args) -> AST.TSum (name, List.map (substituteType subst) args)
                     | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteType subst) args, substituteType subst ret)
                     | _ -> typ
-                let resolveFieldTypes (constructorName: string) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
-                    match tryFindVariantForType constructorName scrutineeType variantLookup with
+                let resolveFieldTypes (constructorId: AST.ConstructorId) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
+                    match tryFindVariantForTypeById constructorId scrutineeType variantLookup with
                     | Some (_, typeParams, _, fieldTypeTemplates) ->
                         let fieldTypes =
                             match scrutineeType with
@@ -1578,16 +1582,16 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             |> List.map (canonicalizeBareSumTypeRefs variantLookup)
                         Ok fieldTypes
                     | None ->
-                        Error $"Unknown constructor '{constructorName}' in pattern"
+                        Error $"Unknown constructor tag '{AST.constructorTag constructorId}' in pattern"
                 match fieldPatterns with
                 | [] -> Ok (env, bindings, vg)
                 | _ ->
-                    resolveFieldTypes constructorName sourceType
+                    resolveFieldTypes constructorId sourceType
                     |> Result.bind (fun fieldTypes ->
                         let innerPattern, concretePayloadType =
                             match fieldPatterns, fieldTypes with
                             | [fieldPattern], [fieldType] -> (fieldPattern, fieldType)
-                            | _ -> (AST.PTuple fieldPatterns, AST.TTuple fieldTypes)
+                            | _ -> (CheckedAST.PTuple fieldPatterns, AST.TTuple fieldTypes)
                         let (payloadVar, vg1) = ANF.freshVar vg
                         let payloadExpr = ANF.TupleGet (sourceAtom, 1)
                         collectNestedPatternBindings
@@ -1597,7 +1601,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             env
                             (bindings @ [ (payloadVar, payloadExpr) ])
                             vg1)
-            | AST.PList patterns ->
+            | CheckedAST.PList patterns ->
                 let elemTypeResult =
                     match sourceType with
                     | AST.TList t -> Ok t
@@ -1610,7 +1614,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 elemTypeResult
                 |> Result.bind (fun elemType ->
                     let rec loop
-                        (remaining: AST.Pattern list)
+                        (remaining: CheckedAST.Pattern list)
                         (currentList: ANF.Atom)
                         (currentEnv: VarEnv)
                         (currentBindings: (ANF.TempId * ANF.CExpr) list)
@@ -1627,10 +1631,10 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     Ok (env', bindings', vg')
                                 else
                                     let (tailVar, vg2) = ANF.freshVar vg'
-                                    let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                    let tailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                     loop rest (ANF.Var tailVar) env' (bindings' @ [(tailVar, tailExpr)]) vg2)
                     loop patterns sourceAtom env bindings vg)
-            | AST.PListCons (headPatterns, tailPattern) ->
+            | CheckedAST.PListCons (headPatterns, tailPattern) ->
                 let elemTypeResult =
                     match sourceType with
                     | AST.TList t -> Ok t
@@ -1643,7 +1647,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 elemTypeResult
                 |> Result.bind (fun elemType ->
                     let rec collectHeads
-                        (remaining: AST.Pattern list)
+                        (remaining: CheckedAST.Pattern list)
                         (currentList: ANF.Atom)
                         (currentEnv: VarEnv)
                         (currentBindings: (ANF.TempId * ANF.CExpr) list)
@@ -1655,7 +1659,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let (headVar, vg1) = ANF.freshVar currentVg
                             let headExpr = listHeadUnsafeExpr funcReg elemType currentList
                             let (tailVar, vg2) = ANF.freshVar vg1
-                            let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                            let tailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                             collectNestedPatternBindings pat (ANF.Var headVar) elemType currentEnv (currentBindings @ [(headVar, headExpr); (tailVar, tailExpr)]) vg2
                             |> Result.bind (fun (env', bindings', vg') ->
                                 collectHeads rest (ANF.Var tailVar) env' bindings' vg')
@@ -1670,7 +1674,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         // LEAF (tag 5): [value:8]
         // listType is the list type (TList elemType) for correct pattern variable typing
         let compileListPatternWithChecks
-            (patterns: AST.Pattern list)
+            (patterns: CheckedAST.Pattern list)
             (listAtom: ANF.Atom)
             (listType: AST.Type)
             (currentEnv: VarEnv)
@@ -1699,7 +1703,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 // Helper to extract tuple elements from a value
                 // tupleType is the type of the tuple being matched (TTuple elemTypes)
                 let rec extractTupleBindings
-                    (tupPats: AST.Pattern list)
+                    (tupPats: CheckedAST.Pattern list)
                     (tupleAtom: ANF.Atom)
                     (tupleType: AST.Type)
                     (idx: int)
@@ -1729,38 +1733,38 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let elemExpr = ANF.TypedAtom (ANF.Var rawElemVar, elemT)
                             let elemBinding = (elemVar, elemExpr)
                             match tupPat with
-                            | AST.PVar name ->
+                            | CheckedAST.PVariable name ->
                                 let newEnv = Map.add name (elemVar, elemT) env  // Use correct element type
                                 extractTupleBindings tupRest tupleAtom tupleType (idx + 1) newEnv (bindings @ [rawElemBinding; elemBinding]) vg1'
-                            | AST.PWildcard ->
+                            | CheckedAST.PWildcard ->
                                 extractTupleBindings tupRest tupleAtom tupleType (idx + 1) env (bindings @ [rawElemBinding]) vg1
-                            | AST.PInt64 _ | AST.PBigInt _ | AST.PInt128Literal _
-                            | AST.PInt8Literal _
-                            | AST.PInt16Literal _
-                            | AST.PInt32Literal _
-                            | AST.PUInt8Literal _
-                            | AST.PUInt16Literal _
-                            | AST.PUInt32Literal _
-                            | AST.PUInt64Literal _ | AST.PUInt128Literal _
-                            | AST.PUnit
-                            | AST.PConstructor _
-                            | AST.PBool _
-                            | AST.PString _ | AST.PChar _ | AST.PFloat _ | AST.PTuple _
-                            | AST.PList _ | AST.PListCons _ | AST.POr _ ->
+                            | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
+                            | CheckedAST.PInt8Literal _
+                            | CheckedAST.PInt16Literal _
+                            | CheckedAST.PInt32Literal _
+                            | CheckedAST.PUInt8Literal _
+                            | CheckedAST.PUInt16Literal _
+                            | CheckedAST.PUInt32Literal _
+                            | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _
+                            | CheckedAST.PUnit
+                            | CheckedAST.PConstructor _
+                            | CheckedAST.PBool _
+                            | CheckedAST.PString _ | CheckedAST.PChar _ | CheckedAST.PFloat _ | CheckedAST.PTuple _
+                            | CheckedAST.PList _ | CheckedAST.PListCons _ | CheckedAST.POr _ ->
                                 Error $"Nested pattern in tuple element not yet supported: {tupPat}"
 
                 if patternLen = 0 then
                     // Empty list: check scrutinee == 0 (EMPTY)
                     let (checkVar, vg1) = ANF.freshVar vg
                     let checkExpr = ANF.Prim (ANF.Eq, listAtom, ANF.IntLiteral (ANF.Int64 0L))
-                    toANFCore sumTypeNames inertScopes body vg1 currentEnv typeReg variantLookup funcReg moduleRegistry
+                    toANFCore sumTypeNames inertScopes body vg1 currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (bodyExpr, vg2) ->
                         let ifExpr = ANF.If (ANF.Var checkVar, bodyExpr, elseExpr)
                         (ANF.Let (checkVar, checkExpr, ifExpr), vg2))
                 elif patternLen = 1 then
                     // A singleton has one digit whose tree pointer is at offset 16.
                     let (tagVar, vg1) = ANF.freshVar vg
-                    let tagExpr = ANF.Call ("Darklang.Stdlib.List.__length_i64", [listAtom])
+                    let tagExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__length_i64", [listAtom])
                     let (checkVar, vg2) = ANF.freshVar vg1
                     let checkExpr = ANF.Prim (ANF.Eq, ANF.Var tagVar, ANF.IntLiteral (ANF.Int64 1L))
 
@@ -1786,7 +1790,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         // Important: bindings must come BEFORE the literal check since they define valueVar
                         let (litCheckVar, vg6) = ANF.freshVar vg5'
                         let litCheckExpr = ANF.Prim (ANF.Eq, valueAtom, ANF.IntLiteral literal)
-                        toANFCore sumTypeNames inertScopes body vg6 currentEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg6 currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg7) ->
                             // Structure: check tag -> extract value (bindings) -> check literal -> if match then body else else
                             // Note: We use two nested Ifs because the tag check guards the memory access in bindings
@@ -1799,7 +1803,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                     let compileWideLiteralPattern (litCheckExpr: ANF.CExpr) =
                         let (litCheckVar, vg6) = ANF.freshVar vg5'
-                        toANFCore sumTypeNames inertScopes body vg6 currentEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg6 currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg7) ->
                             let ifLitExpr = ANF.If (ANF.Var litCheckVar, bodyExpr, elseExpr)
                             let withLitBinding = ANF.Let (litCheckVar, litCheckExpr, ifLitExpr)
@@ -1808,23 +1812,23 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             (ANF.Let (tagVar, tagExpr, ANF.Let (checkVar, checkExpr, withTagCheck)), vg7))
 
                     match pat with
-                    | AST.PVar name ->
+                    | CheckedAST.PVariable name ->
                         let newEnv = Map.add name (valueVar, elemType) currentEnv  // Use element type
-                        toANFCore sumTypeNames inertScopes body vg5' newEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg5' newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg6) ->
                             let withBindings = wrapBindings bindings bodyExpr
                             let ifExpr = ANF.If (ANF.Var checkVar, withBindings, elseExpr)
                             (ANF.Let (tagVar, tagExpr, ANF.Let (checkVar, checkExpr, ifExpr)), vg6))
-                    | AST.PWildcard ->
-                        toANFCore sumTypeNames inertScopes body vg5' currentEnv typeReg variantLookup funcReg moduleRegistry
+                    | CheckedAST.PWildcard ->
+                        toANFCore sumTypeNames inertScopes body vg5' currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg6) ->
                             let withBindings = wrapBindings bindings bodyExpr
                             let ifExpr = ANF.If (ANF.Var checkVar, withBindings, elseExpr)
                             (ANF.Let (tagVar, tagExpr, ANF.Let (checkVar, checkExpr, ifExpr)), vg6))
-                    | (AST.PTuple _ as nestedPattern)
-                    | (AST.PConstructor _ as nestedPattern)
-                    | (AST.PList _ as nestedPattern)
-                    | (AST.PListCons _ as nestedPattern) ->
+                    | (CheckedAST.PTuple _ as nestedPattern)
+                    | (CheckedAST.PConstructor _ as nestedPattern)
+                    | (CheckedAST.PList _ as nestedPattern)
+                    | (CheckedAST.PListCons _ as nestedPattern) ->
                         // Structural comparison must run before extracting binders so a
                         // failed nested pattern cannot leak its bindings into this arm.
                         buildPatternComparison nestedPattern valueAtom (Some elemType) vg5'
@@ -1835,7 +1839,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 | Some (condition, bindings', vg') -> (Some condition, bindings', vg')
                             collectNestedPatternBindings nestedPattern valueAtom elemType currentEnv [] vg6
                             |> Result.bind (fun (newEnv, nestedBindings, vg7) ->
-                                toANFCore sumTypeNames inertScopes body vg7 newEnv typeReg variantLookup funcReg moduleRegistry
+                                toANFCore sumTypeNames inertScopes body vg7 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                                 |> Result.map (fun (bodyExpr, vg8) ->
                                     let extractedBody = wrapBindings nestedBindings bodyExpr
                                     let matchedBody =
@@ -1845,16 +1849,16 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     let withBindings = wrapBindings (bindings @ comparisonBindings) matchedBody
                                     let ifExpr = ANF.If (ANF.Var checkVar, withBindings, elseExpr)
                                     (ANF.Let (tagVar, tagExpr, ANF.Let (checkVar, checkExpr, ifExpr)), vg8))))
-                    | AST.PInt64 n -> compileLiteralPattern (ANF.Int64 n)
-                    | AST.PInt128Literal n -> compileWideLiteralPattern (int128LiteralComparison valueAtom n)
-                    | AST.PInt8Literal n -> compileLiteralPattern (ANF.Int8 n)
-                    | AST.PInt16Literal n -> compileLiteralPattern (ANF.Int16 n)
-                    | AST.PInt32Literal n -> compileLiteralPattern (ANF.Int32 n)
-                    | AST.PUInt8Literal n -> compileLiteralPattern (ANF.UInt8 n)
-                    | AST.PUInt16Literal n -> compileLiteralPattern (ANF.UInt16 n)
-                    | AST.PUInt32Literal n -> compileLiteralPattern (ANF.UInt32 n)
-                    | AST.PUInt64Literal n -> compileLiteralPattern (ANF.UInt64 n)
-                    | AST.PUInt128Literal n -> compileWideLiteralPattern (uint128LiteralComparison valueAtom n)
+                    | CheckedAST.PInt64 n -> compileLiteralPattern (ANF.Int64 n)
+                    | CheckedAST.PInt128Literal n -> compileWideLiteralPattern (int128LiteralComparison valueAtom n)
+                    | CheckedAST.PInt8Literal n -> compileLiteralPattern (ANF.Int8 n)
+                    | CheckedAST.PInt16Literal n -> compileLiteralPattern (ANF.Int16 n)
+                    | CheckedAST.PInt32Literal n -> compileLiteralPattern (ANF.Int32 n)
+                    | CheckedAST.PUInt8Literal n -> compileLiteralPattern (ANF.UInt8 n)
+                    | CheckedAST.PUInt16Literal n -> compileLiteralPattern (ANF.UInt16 n)
+                    | CheckedAST.PUInt32Literal n -> compileLiteralPattern (ANF.UInt32 n)
+                    | CheckedAST.PUInt64Literal n -> compileLiteralPattern (ANF.UInt64 n)
+                    | CheckedAST.PUInt128Literal n -> compileWideLiteralPattern (uint128LiteralComparison valueAtom n)
                     | _ ->
                         Error $"Unsupported pattern in single-element list: {pat}"
                 else
@@ -1864,7 +1868,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         match elemType with
                         | AST.TFloat64 -> "Darklang.Stdlib.List.__lengthFloat"
                         | _ -> "Darklang.Stdlib.List.__length_i64"
-                    let lengthExpr = ANF.Call (lengthName, [listAtom])
+                    let lengthExpr = ANF.Call (AST.functionIdForName lengthName, [listAtom])
                     let (checkVar, vg2) = ANF.freshVar vg1
                     let checkExpr = ANF.Prim (ANF.Eq, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 patternLen)))
                     // Untag to get pointer (only used in then-branch after length check passes)
@@ -1879,7 +1883,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     // Extract elements using getAt (handles varying prefix/suffix layouts)
                     // Returns: (env, bindings, conditionAtoms, vg)
                     let rec extractElements
-                        (pats: AST.Pattern list)
+                        (pats: CheckedAST.Pattern list)
                         (idx: int)
                         (env: VarEnv)
                         (bindings: (ANF.TempId * ANF.CExpr) list)
@@ -1898,7 +1902,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 match elemType with
                                 | AST.TFloat64 -> "Darklang.Stdlib.List.__getAtFloat"
                                 | _ -> "Darklang.Stdlib.List.__getAtInt64"
-                            let getAtExpr = ANF.Call (getAtName, [listAtom; ANF.IntLiteral (ANF.Int64 (int64 idx))])
+                            let getAtExpr = ANF.Call (AST.functionIdForName getAtName, [listAtom; ANF.IntLiteral (ANF.Int64 (int64 idx))])
                             // Unwrap the Some - getAt returns tagged value with tag 1 for Some
                             let (rawValueVar, vg2) = ANF.freshVar vg1
                             let valueType =
@@ -1913,15 +1917,15 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let valueVar = typedValueVar
 
                             match pat with
-                            | AST.PVar name ->
+                            | CheckedAST.PVariable name ->
                                 let newEnv = Map.add name (valueVar, elemType) env  // Use element type
                                 extractElements rest (idx + 1) newEnv newBindings condAtoms vg2'
-                            | AST.PWildcard ->
+                            | CheckedAST.PWildcard ->
                                 extractElements rest (idx + 1) env newBindings condAtoms vg2'
-                            | (AST.PTuple _ as nestedPattern)
-                            | (AST.PList _ as nestedPattern)
-                            | (AST.PListCons _ as nestedPattern)
-                            | (AST.PConstructor _ as nestedPattern) ->
+                            | (CheckedAST.PTuple _ as nestedPattern)
+                            | (CheckedAST.PList _ as nestedPattern)
+                            | (CheckedAST.PListCons _ as nestedPattern)
+                            | (CheckedAST.PConstructor _ as nestedPattern) ->
                                 let staticallyCannotMatch = patternStaticallyCannotMatchType nestedPattern elemType
                                 let comparisonResult =
                                     if staticallyCannotMatch then
@@ -1953,14 +1957,14 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                             (newBindings @ comparisonBindings @ nestedBindings)
                                             nextConditions
                                             vg4))
-                            | (AST.PInt64 _ as pat)
-                            | (AST.PInt8Literal _ as pat)
-                            | (AST.PInt16Literal _ as pat)
-                            | (AST.PInt32Literal _ as pat)
-                            | (AST.PUInt8Literal _ as pat)
-                            | (AST.PUInt16Literal _ as pat)
-                            | (AST.PUInt32Literal _ as pat)
-                            | (AST.PUInt64Literal _ as pat) ->
+                            | (CheckedAST.PInt64 _ as pat)
+                            | (CheckedAST.PInt8Literal _ as pat)
+                            | (CheckedAST.PInt16Literal _ as pat)
+                            | (CheckedAST.PInt32Literal _ as pat)
+                            | (CheckedAST.PUInt8Literal _ as pat)
+                            | (CheckedAST.PUInt16Literal _ as pat)
+                            | (CheckedAST.PUInt32Literal _ as pat)
+                            | (CheckedAST.PUInt64Literal _ as pat) ->
                                 let literal =
                                     match patternLiteralToSizedInt pat with
                                     | Some value -> value
@@ -1969,13 +1973,13 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 let litCheckExpr = ANF.Prim (ANF.Eq, ANF.Var valueVar, ANF.IntLiteral literal)
                                 let bindingsWithLiteral = newBindings @ [(litCheckVar, litCheckExpr)]
                                 extractElements rest (idx + 1) env bindingsWithLiteral (condAtoms @ [ANF.Var litCheckVar]) vg3
-                            | AST.PInt128Literal n ->
+                            | CheckedAST.PInt128Literal n ->
                                 let (litCheckVar, vg3) = ANF.freshVar vg2'
                                 let litCheckExpr =
                                     int128LiteralComparison (ANF.Var valueVar) n
                                 let bindingsWithLiteral = newBindings @ [(litCheckVar, litCheckExpr)]
                                 extractElements rest (idx + 1) env bindingsWithLiteral (condAtoms @ [ANF.Var litCheckVar]) vg3
-                            | AST.PUInt128Literal n ->
+                            | CheckedAST.PUInt128Literal n ->
                                 let (litCheckVar, vg3) = ANF.freshVar vg2'
                                 let litCheckExpr =
                                     uint128LiteralComparison (ANF.Var valueVar) n
@@ -1986,7 +1990,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                     extractElements patterns 0 currentEnv [] [] vg6
                     |> Result.bind (fun (newEnv, elemBindings, condAtoms, vg7) ->
-                        toANFCore sumTypeNames inertScopes body vg7 newEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg7 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg8) ->
                             // Build the inner expression based on whether we have extra conditions
                             let (innerExpr, vg9) =
@@ -2035,8 +2039,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         // - DEEP (tag 2): head is prefix[0], tail requires calling SkewList.tail
         // listType is the list type (TList elemType) for correct pattern variable typing
         let rec compileListConsPatternWithChecks
-            (headPatterns: AST.Pattern list)
-            (tailPattern: AST.Pattern)
+            (headPatterns: CheckedAST.Pattern list)
+            (tailPattern: CheckedAST.Pattern)
             (listAtom: ANF.Atom)
             (listType: AST.Type)
             (currentEnv: VarEnv)
@@ -2070,7 +2074,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             // Helper to extract tuple elements
             // tupleType is the type of the tuple being matched (TTuple elemTypes)
             let rec extractTupleBindings
-                (tupPats: AST.Pattern list)
+                (tupPats: CheckedAST.Pattern list)
                 (tupleAtom: ANF.Atom)
                 (tupleType: AST.Type)
                 (idx: int)
@@ -2100,10 +2104,10 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let elemExpr = ANF.TypedAtom (ANF.Var rawElemVar, elemT)
                     let elemBinding = (elemVar, elemExpr)
                     match tupPat with
-                    | AST.PVar name ->
+                    | CheckedAST.PVariable name ->
                         let newEnv = Map.add name (elemVar, elemT) env
                         extractTupleBindings tupRest tupleAtom tupleType (idx + 1) newEnv (bindings @ [rawElemBinding; elemBinding]) vg1'
-                    | AST.PWildcard ->
+                    | CheckedAST.PWildcard ->
                         // Even for wildcard, we need to extract the element (for proper tuple access)
                         // but don't bind it to a name. Just add the raw binding and continue.
                         extractTupleBindings tupRest tupleAtom tupleType (idx + 1) env (bindings @ [rawElemBinding]) vg1
@@ -2112,7 +2116,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
             let tupleHeadPatternType
                 (candidateElemType: AST.Type)
-                (patterns: AST.Pattern list)
+                (patterns: CheckedAST.Pattern list)
                 : AST.Type option =
                 match candidateElemType with
                 | AST.TTuple elemTypes when List.length elemTypes = List.length patterns ->
@@ -2136,23 +2140,23 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             | [] ->
                 // All head elements extracted - bind tail and compile body
                 match tailPattern with
-                | AST.PVar name ->
+                | CheckedAST.PVariable name ->
                     let (tailVar, vg1) = ANF.freshVar vg
                     let newEnv = Map.add name (tailVar, listType) currentEnv  // Use actual list type
-                    toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
+                    toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (bodyExpr, vg2) ->
                         let withTail = ANF.Let (tailVar, ANF.Atom listAtom, bodyExpr)
                         (withTail, vg2))
-                | AST.PWildcard ->
-                    toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
+                | CheckedAST.PWildcard ->
+                    toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                 | _ -> Error "Tail pattern in list cons must be variable or wildcard"
 
             | [singleHeadPattern]
                 when (match singleHeadPattern with
-                      | AST.PList _ | AST.PListCons _ | AST.PConstructor _ -> false
+                      | CheckedAST.PList _ | CheckedAST.PListCons _ | CheckedAST.PConstructor _ -> false
                       | _ -> true)
                      && (match tailPattern with
-                         | AST.PVar _ | AST.PWildcard -> true
+                         | CheckedAST.PVariable _ | CheckedAST.PWildcard -> true
                          | _ -> false) ->
                 // Single head pattern [h, ...t] - most common case
                 // Use branching based on tag to handle SINGLE vs DEEP nodes
@@ -2199,12 +2203,12 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     // guardOpt is Some(var, expr) for literal patterns that need comparison
                     let headEnvResult =
                         match singleHeadPattern with
-                        | AST.PVar name -> Ok (Map.add name (typedHeadVar, elemType) currentEnv, [], vg3', None)  // Use typed head var with element type
-                        | AST.PWildcard -> Ok (currentEnv, [], vg3', None)
-                        | (AST.PTuple _ as nestedPattern)
-                        | (AST.PConstructor _ as nestedPattern)
-                        | (AST.PList _ as nestedPattern)
-                        | (AST.PListCons _ as nestedPattern) ->
+                        | CheckedAST.PVariable name -> Ok (Map.add name (typedHeadVar, elemType) currentEnv, [], vg3', None)  // Use typed head var with element type
+                        | CheckedAST.PWildcard -> Ok (currentEnv, [], vg3', None)
+                        | (CheckedAST.PTuple _ as nestedPattern)
+                        | (CheckedAST.PConstructor _ as nestedPattern)
+                        | (CheckedAST.PList _ as nestedPattern)
+                        | (CheckedAST.PListCons _ as nestedPattern) ->
                             let staticallyCannotMatch = patternStaticallyCannotMatchType nestedPattern elemType
                             let comparisonResult =
                                 if staticallyCannotMatch then
@@ -2228,14 +2232,14 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 nestedBindingsResult
                                 |> Result.map (fun (env, nestedBindings, vg5) ->
                                     (env, comparisonBindings @ nestedBindings, vg5, guardOpt)))
-                        | (AST.PInt64 _ as pat)
-                        | (AST.PInt8Literal _ as pat)
-                        | (AST.PInt16Literal _ as pat)
-                        | (AST.PInt32Literal _ as pat)
-                        | (AST.PUInt8Literal _ as pat)
-                        | (AST.PUInt16Literal _ as pat)
-                        | (AST.PUInt32Literal _ as pat)
-                        | (AST.PUInt64Literal _ as pat) ->
+                        | (CheckedAST.PInt64 _ as pat)
+                        | (CheckedAST.PInt8Literal _ as pat)
+                        | (CheckedAST.PInt16Literal _ as pat)
+                        | (CheckedAST.PInt32Literal _ as pat)
+                        | (CheckedAST.PUInt8Literal _ as pat)
+                        | (CheckedAST.PUInt16Literal _ as pat)
+                        | (CheckedAST.PUInt32Literal _ as pat)
+                        | (CheckedAST.PUInt64Literal _ as pat) ->
                             // Compare head value to literal - guard check
                             let (guardVar, vg4) = ANF.freshVar vg3'
                             let literal =
@@ -2244,12 +2248,12 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 | None -> Crash.crash $"Expected integer literal pattern, got {pat}"
                             let guardExpr = ANF.Prim (ANF.Eq, ANF.Var typedHeadVar, ANF.IntLiteral literal)
                             Ok (currentEnv, [], vg4, Some (guardVar, guardExpr))
-                        | AST.PInt128Literal n ->
+                        | CheckedAST.PInt128Literal n ->
                             let (guardVar, vg4) = ANF.freshVar vg3'
                             let guardExpr =
                                 int128LiteralComparison (ANF.Var typedHeadVar) n
                             Ok (currentEnv, [], vg4, Some (guardVar, guardExpr))
-                        | AST.PUInt128Literal n ->
+                        | CheckedAST.PUInt128Literal n ->
                             let (guardVar, vg4) = ANF.freshVar vg3'
                             let guardExpr =
                                 uint128LiteralComparison (ANF.Var typedHeadVar) n
@@ -2260,13 +2264,13 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     |> Result.bind (fun (envWithHead, tupleBindings, vg4, guardOpt) ->
                         let tailEnvResult =
                             match tailPattern with
-                            | AST.PVar name -> Ok (Map.add name (tailVar, listType) envWithHead, vg4)  // Use actual list type
-                            | AST.PWildcard -> Ok (envWithHead, vg4)
+                            | CheckedAST.PVariable name -> Ok (Map.add name (tailVar, listType) envWithHead, vg4)  // Use actual list type
+                            | CheckedAST.PWildcard -> Ok (envWithHead, vg4)
                             | _ -> Error "Tail pattern must be variable or wildcard"
 
                         tailEnvResult
                         |> Result.bind (fun (finalEnv, vg5) ->
-                            toANFCore sumTypeNames inertScopes body vg5 finalEnv typeReg variantLookup funcReg moduleRegistry
+                            toANFCore sumTypeNames inertScopes body vg5 finalEnv typeReg variantLookup funcReg functionNames moduleRegistry
                             |> Result.map (fun (bodyExpr, vg6) ->
                                 let withTupleBindings = bodyExpr
                                 let withTypedTail = ANF.Let (tailVar, tailExpr, withTupleBindings)
@@ -2298,7 +2302,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                     // Call Stdlib.List.__tail to get the tail
                     let (tailResultVar, vg3) = ANF.freshVar vg2'
-                    let tailCallExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [listAtom])
+                    let tailCallExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [listAtom])
                     // Wrap with TypedAtom to preserve correct list type in TypeMap
                     let (typedTailVar, vg3') = ANF.freshVar vg3
                     let typedTailExpr = ANF.TypedAtom (ANF.Var tailResultVar, listType)
@@ -2308,12 +2312,12 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     // Bind head pattern - returns (env, tupleBindings, vg, guardOpt)
                     let headEnvResult =
                         match singleHeadPattern with
-                        | AST.PVar name -> Ok (Map.add name (typedHeadVar, elemType) currentEnv, [], vg3', None)  // Use typed head var with element type
-                        | AST.PWildcard -> Ok (currentEnv, [], vg3', None)
-                        | (AST.PTuple _ as nestedPattern)
-                        | (AST.PConstructor _ as nestedPattern)
-                        | (AST.PList _ as nestedPattern)
-                        | (AST.PListCons _ as nestedPattern) ->
+                        | CheckedAST.PVariable name -> Ok (Map.add name (typedHeadVar, elemType) currentEnv, [], vg3', None)  // Use typed head var with element type
+                        | CheckedAST.PWildcard -> Ok (currentEnv, [], vg3', None)
+                        | (CheckedAST.PTuple _ as nestedPattern)
+                        | (CheckedAST.PConstructor _ as nestedPattern)
+                        | (CheckedAST.PList _ as nestedPattern)
+                        | (CheckedAST.PListCons _ as nestedPattern) ->
                             let staticallyCannotMatch = patternStaticallyCannotMatchType nestedPattern elemType
                             let comparisonResult =
                                 if staticallyCannotMatch then
@@ -2337,14 +2341,14 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 nestedBindingsResult
                                 |> Result.map (fun (env, nestedBindings, vg5) ->
                                     (env, comparisonBindings @ nestedBindings, vg5, guardOpt)))
-                        | (AST.PInt64 _ as pat)
-                        | (AST.PInt8Literal _ as pat)
-                        | (AST.PInt16Literal _ as pat)
-                        | (AST.PInt32Literal _ as pat)
-                        | (AST.PUInt8Literal _ as pat)
-                        | (AST.PUInt16Literal _ as pat)
-                        | (AST.PUInt32Literal _ as pat)
-                        | (AST.PUInt64Literal _ as pat) ->
+                        | (CheckedAST.PInt64 _ as pat)
+                        | (CheckedAST.PInt8Literal _ as pat)
+                        | (CheckedAST.PInt16Literal _ as pat)
+                        | (CheckedAST.PInt32Literal _ as pat)
+                        | (CheckedAST.PUInt8Literal _ as pat)
+                        | (CheckedAST.PUInt16Literal _ as pat)
+                        | (CheckedAST.PUInt32Literal _ as pat)
+                        | (CheckedAST.PUInt64Literal _ as pat) ->
                             // Compare head value to literal - guard check
                             let (guardVar, vg4) = ANF.freshVar vg3'
                             let literal =
@@ -2353,12 +2357,12 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 | None -> Crash.crash $"Expected integer literal pattern, got {pat}"
                             let guardExpr = ANF.Prim (ANF.Eq, ANF.Var typedHeadVar, ANF.IntLiteral literal)
                             Ok (currentEnv, [], vg4, Some (guardVar, guardExpr))
-                        | AST.PInt128Literal n ->
+                        | CheckedAST.PInt128Literal n ->
                             let (guardVar, vg4) = ANF.freshVar vg3'
                             let guardExpr =
                                 int128LiteralComparison (ANF.Var typedHeadVar) n
                             Ok (currentEnv, [], vg4, Some (guardVar, guardExpr))
-                        | AST.PUInt128Literal n ->
+                        | CheckedAST.PUInt128Literal n ->
                             let (guardVar, vg4) = ANF.freshVar vg3'
                             let guardExpr =
                                 uint128LiteralComparison (ANF.Var typedHeadVar) n
@@ -2369,13 +2373,13 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     |> Result.bind (fun (envWithHead, tupleBindings, vg4, guardOpt) ->
                         let tailEnvResult =
                             match tailPattern with
-                            | AST.PVar name -> Ok (Map.add name (typedTailVar, listType) envWithHead, vg4)  // Use typed tail var with correct list type
-                            | AST.PWildcard -> Ok (envWithHead, vg4)
+                            | CheckedAST.PVariable name -> Ok (Map.add name (typedTailVar, listType) envWithHead, vg4)  // Use typed tail var with correct list type
+                            | CheckedAST.PWildcard -> Ok (envWithHead, vg4)
                             | _ -> Error "Tail pattern must be variable or wildcard"
 
                         tailEnvResult
                         |> Result.bind (fun (finalEnv, vg5) ->
-                            toANFCore sumTypeNames inertScopes body vg5 finalEnv typeReg variantLookup funcReg moduleRegistry
+                            toANFCore sumTypeNames inertScopes body vg5 finalEnv typeReg variantLookup funcReg functionNames moduleRegistry
                             |> Result.map (fun (bodyExpr, vg6) ->
                                 let withTupleBindings = bodyExpr
                                 let withTailBinding = wrapBindings tailBindings withTupleBindings
@@ -2415,7 +2419,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     match elemType with
                     | AST.TFloat64 -> "Darklang.Stdlib.List.__lengthFloat"
                     | _ -> "Darklang.Stdlib.List.__length_i64"
-                let lengthExpr = ANF.Call (lengthName, [listAtom])
+                let lengthExpr = ANF.Call (AST.functionIdForName lengthName, [listAtom])
                 let (lengthCheckVar, vg2) = ANF.freshVar vg1
                 let lengthCheckExpr = ANF.Prim (ANF.Gte, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 numHeads)))
 
@@ -2423,7 +2427,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 // Use _i64 versions which work for any element type at runtime (all values are 64-bit)
                 // The correct element type is tracked in the VarEnv/TypeMap, not in the function name
                 let rec extractElements
-                    (pats: AST.Pattern list)
+                    (pats: CheckedAST.Pattern list)
                     (currentListVar: ANF.TempId)
                     (env: VarEnv)
                     (bindings: (ANF.TempId * ANF.CExpr) list)
@@ -2441,7 +2445,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             listHeadUnsafeExpr funcReg elemType (ANF.Var currentListVar)
                         // Call tail to get rest
                         let (tailResultVar, vg2) = ANF.freshVar vg1
-                        let tailCallExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [ANF.Var currentListVar])
+                        let tailCallExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [ANF.Var currentListVar])
                         // Preserve type information for both head and tail values.
                         let (typedHeadVar, vg2') = ANF.freshVar vg2
                         let typedHeadExpr = ANF.TypedAtom (ANF.Var headResultVar, elemType)
@@ -2457,19 +2461,19 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                               ]
 
                         match pat with
-                        | AST.PVar name ->
+                        | CheckedAST.PVariable name ->
                             let newEnv = Map.add name (typedHeadVar, elemType) env
                             extractElements rest typedTailVar newEnv newBindings condAtoms vg2''
-                        | AST.PWildcard ->
+                        | CheckedAST.PWildcard ->
                             extractElements rest typedTailVar env newBindings condAtoms vg2''
-                        | (AST.PInt64 _ as litPat)
-                        | (AST.PInt8Literal _ as litPat)
-                        | (AST.PInt16Literal _ as litPat)
-                        | (AST.PInt32Literal _ as litPat)
-                        | (AST.PUInt8Literal _ as litPat)
-                        | (AST.PUInt16Literal _ as litPat)
-                        | (AST.PUInt32Literal _ as litPat)
-                        | (AST.PUInt64Literal _ as litPat) ->
+                        | (CheckedAST.PInt64 _ as litPat)
+                        | (CheckedAST.PInt8Literal _ as litPat)
+                        | (CheckedAST.PInt16Literal _ as litPat)
+                        | (CheckedAST.PInt32Literal _ as litPat)
+                        | (CheckedAST.PUInt8Literal _ as litPat)
+                        | (CheckedAST.PUInt16Literal _ as litPat)
+                        | (CheckedAST.PUInt32Literal _ as litPat)
+                        | (CheckedAST.PUInt64Literal _ as litPat) ->
                             let literal =
                                 match patternLiteralToSizedInt litPat with
                                 | Some value -> value
@@ -2478,19 +2482,19 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let litCheckExpr = ANF.Prim (ANF.Eq, ANF.Var typedHeadVar, ANF.IntLiteral literal)
                             let bindingsWithCheck = newBindings @ [(litCheckVar, litCheckExpr)]
                             extractElements rest typedTailVar env bindingsWithCheck (condAtoms @ [ANF.Var litCheckVar]) vg3
-                        | AST.PInt128Literal n ->
+                        | CheckedAST.PInt128Literal n ->
                             let (litCheckVar, vg3) = ANF.freshVar vg2''
                             let litCheckExpr =
                                 int128LiteralComparison (ANF.Var typedHeadVar) n
                             let bindingsWithCheck = newBindings @ [(litCheckVar, litCheckExpr)]
                             extractElements rest typedTailVar env bindingsWithCheck (condAtoms @ [ANF.Var litCheckVar]) vg3
-                        | AST.PUInt128Literal n ->
+                        | CheckedAST.PUInt128Literal n ->
                             let (litCheckVar, vg3) = ANF.freshVar vg2''
                             let litCheckExpr =
                                 uint128LiteralComparison (ANF.Var typedHeadVar) n
                             let bindingsWithCheck = newBindings @ [(litCheckVar, litCheckExpr)]
                             extractElements rest typedTailVar env bindingsWithCheck (condAtoms @ [ANF.Var litCheckVar]) vg3
-                        | AST.PConstructor _ | AST.PList _ | AST.PListCons _ ->
+                        | CheckedAST.PConstructor _ | CheckedAST.PList _ | CheckedAST.PListCons _ ->
                             let staticallyCannotMatch = patternStaticallyCannotMatchType pat elemType
                             let cmpResult =
                                 if staticallyCannotMatch then
@@ -2531,7 +2535,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     // PList condition validates length but does not compare its elements.
                     let tailBodyResult : Result<ANF.AExpr * (ANF.TempId * ANF.CExpr) list * ANF.Atom list * ANF.VarGen, string> =
                         match tailPattern with
-                        | AST.PList patterns ->
+                        | CheckedAST.PList patterns ->
                             compileListPatternWithChecks
                                 patterns
                                 (ANF.Var finalTailVar)
@@ -2541,7 +2545,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 elseExpr
                                 vg4
                             |> Result.map (fun (tailBody, vg5) -> (tailBody, [], [], vg5))
-                        | AST.PListCons (nestedHeads, nestedTail) ->
+                        | CheckedAST.PListCons (nestedHeads, nestedTail) ->
                             compileListConsPatternWithChecks
                                 nestedHeads
                                 nestedTail
@@ -2552,7 +2556,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 elseExpr
                                 vg4
                             |> Result.map (fun (tailBody, vg5) -> (tailBody, [], [], vg5))
-                        | AST.PVar name ->
+                        | CheckedAST.PVariable name ->
                             toANFCore sumTypeNames inertScopes
                                 body
                                 vg4
@@ -2560,10 +2564,11 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 typeReg
                                 variantLookup
                                 funcReg
+                                functionNames
                                 moduleRegistry
                             |> Result.map (fun (tailBody, vg5) -> (tailBody, [], [], vg5))
-                        | AST.PWildcard ->
-                            toANFCore sumTypeNames inertScopes body vg4 envAfterHeads typeReg variantLookup funcReg moduleRegistry
+                        | CheckedAST.PWildcard ->
+                            toANFCore sumTypeNames inertScopes body vg4 envAfterHeads typeReg variantLookup funcReg functionNames moduleRegistry
                             |> Result.map (fun (tailBody, vg5) -> (tailBody, [], [], vg5))
                         | _ ->
                             let staticallyCannotMatch =
@@ -2594,7 +2599,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                         Ok (envAfterHeads, [], vg5)
                                 nestedBindingsResult
                                 |> Result.bind (fun (tailEnv, nestedBindings, vg6) ->
-                                    toANFCore sumTypeNames inertScopes body vg6 tailEnv typeReg variantLookup funcReg moduleRegistry
+                                    toANFCore sumTypeNames inertScopes body vg6 tailEnv typeReg variantLookup funcReg functionNames moduleRegistry
                                     |> Result.map (fun (tailBody, vg7) ->
                                         (tailBody, comparisonBindings @ nestedBindings, conditionAtoms, vg7))))
 
@@ -2642,7 +2647,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
         // Build OR of multiple pattern conditions for pattern grouping
         // Returns: combined condition atom, all bindings, updated vargen
-        let patternStaticallyCannotMatchScrutinee (pattern: AST.Pattern) : bool =
+        let patternStaticallyCannotMatchScrutinee (pattern: CheckedAST.Pattern) : bool =
             patternStaticallyCannotMatchType pattern scrutType
 
         let makeFalseCondition (vg: ANF.VarGen) : ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
@@ -2660,17 +2665,17 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         // None or on a Some(Number) was a SIGSEGV. An arm compiled from stages
         // nests one `If` per stage instead. The else branch is repeated per
         // stage, which is what the list-pattern compilers already do.
-        let rec buildPatternStages (pattern: AST.Pattern) (scrutAtom: ANF.Atom) (patType: AST.Type option) (vg: ANF.VarGen) : Result<((ANF.TempId * ANF.CExpr) list * ANF.Atom) list * ANF.VarGen, string> =
+        let rec buildPatternStages (pattern: CheckedAST.Pattern) (scrutAtom: ANF.Atom) (patType: AST.Type option) (vg: ANF.VarGen) : Result<((ANF.TempId * ANF.CExpr) list * ANF.Atom) list * ANF.VarGen, string> =
             let testedType = defaultArg patType scrutType
             let prependBindings (bindings: (ANF.TempId * ANF.CExpr) list) (stages: ((ANF.TempId * ANF.CExpr) list * ANF.Atom) list) =
                 match stages with
                 | [] -> []
                 | (firstBindings, firstCond) :: rest -> (bindings @ firstBindings, firstCond) :: rest
             match pattern with
-            | AST.PConstructor (variantName, fieldPatterns)
+            | CheckedAST.PConstructor (constructorId, fieldPatterns)
                 when not (List.isEmpty fieldPatterns)
                      && not (List.forall patternAlwaysMatches fieldPatterns) ->
-                match tryFindVariantForType variantName testedType variantLookup with
+                match tryFindVariantForTypeById constructorId testedType variantLookup with
                 | Some (typeName, typeParams, tag, fieldTypeTemplates)
                     when variantLookup
                          |> Map.exists (fun _ (tName, _, _, fields) ->
@@ -2684,7 +2689,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let innerPattern, payloadType =
                         match fieldPatterns, fieldTypes with
                         | [fieldPattern], [fieldType] -> fieldPattern, fieldType
-                        | _ -> AST.PTuple fieldPatterns, AST.TTuple fieldTypes
+                        | _ -> CheckedAST.PTuple fieldPatterns, AST.TTuple fieldTypes
                     let (tagVar, vg1) = ANF.freshVar vg
                     let (tagCmpVar, vg2) = ANF.freshVar vg1
                     let (payloadVar, vg3) = ANF.freshVar vg2
@@ -2701,8 +2706,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     |> Result.map (function
                         | None -> ([], vg)
                         | Some (cond, bindings, vg') -> ([(bindings, cond)], vg'))
-            | AST.PTuple innerPatterns ->
-                let rec elements (patterns: AST.Pattern list) (index: int) (vg: ANF.VarGen) (acc: ((ANF.TempId * ANF.CExpr) list * ANF.Atom) list) =
+            | CheckedAST.PTuple innerPatterns ->
+                let rec elements (patterns: CheckedAST.Pattern list) (index: int) (vg: ANF.VarGen) (acc: ((ANF.TempId * ANF.CExpr) list * ANF.Atom) list) =
                     match patterns with
                     | [] -> Ok (acc, vg)
                     | p :: rest ->
@@ -2716,22 +2721,22 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let staged = prependBindings [(elemVar, ANF.TupleGet (scrutAtom, index))] elemStages
                             elements rest (index + 1) vg2 (acc @ staged))
                 elements innerPatterns 0 vg []
-            | AST.PList [] ->
+            | CheckedAST.PList [] ->
                 // The empty skew-list is the zero tagged pointer; avoid a
                 // full length traversal for the hottest list base case.
                 let (emptyCmpVar, vg1) = ANF.freshVar vg
                 let emptyCmp =
                     ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int64 0L))
                 Ok ([([(emptyCmpVar, emptyCmp)], ANF.Var emptyCmpVar)], vg1)
-            | AST.PList _ | AST.PListCons _ ->
+            | CheckedAST.PList _ | CheckedAST.PListCons _ ->
                 // A list pattern below the top of an arm (in a tuple, a payload) was
                 // one flat length test, so `("Stdlib" :: _, x)` matched every
                 // non-empty list. The length is one stage, then each head is taken
                 // and tested in turn, then the tail.
                 let (headPatterns, tailPattern, exact) =
                     match pattern with
-                    | AST.PList elements -> (elements, None, true)
-                    | AST.PListCons (heads, tail) -> (heads, Some tail, false)
+                    | CheckedAST.PList elements -> (elements, None, true)
+                    | CheckedAST.PListCons (heads, tail) -> (heads, Some tail, false)
                     | _ -> ([], None, false)
                 let elemType =
                     match testedType with
@@ -2742,10 +2747,10 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 let (lengthVar, vg1) = ANF.freshVar vg
                 let (lengthCmpVar, vg2) = ANF.freshVar vg1
                 let lengthStage =
-                    ([(lengthVar, ANF.Call ("Darklang.Stdlib.List.__length_i64", [scrutAtom]))
+                    ([(lengthVar, ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__length_i64", [scrutAtom]))
                       (lengthCmpVar, ANF.Prim ((if exact then ANF.Eq else ANF.Gte), ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 count))))],
                      ANF.Var lengthCmpVar)
-                let rec heads (patterns: AST.Pattern list) (current: ANF.Atom) (vg: ANF.VarGen) (acc: ((ANF.TempId * ANF.CExpr) list * ANF.Atom) list) =
+                let rec heads (patterns: CheckedAST.Pattern list) (current: ANF.Atom) (vg: ANF.VarGen) (acc: ((ANF.TempId * ANF.CExpr) list * ANF.Atom) list) =
                     match patterns with
                     | [] ->
                         match tailPattern with
@@ -2762,7 +2767,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             [(rawHeadVar, listHeadUnsafeExpr funcReg elemType current)
                              (headVar, ANF.TypedAtom (ANF.Var rawHeadVar, elemType))]
                         let tailLoads =
-                            [(rawTailVar, ANF.Call ("Darklang.Stdlib.List.__tail_i64", [current]))
+                            [(rawTailVar, ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [current]))
                              (tailVar, ANF.TypedAtom (ANF.Var rawTailVar, listType))]
                         buildPatternStages p (ANF.Var headVar) (Some elemType) vg4
                         |> Result.bind (fun (headStages, vg5) ->
@@ -2805,7 +2810,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         entry stages)
                 (join, vg1)
 
-        let buildPatternGroupComparison (patterns: AST.Pattern list) (scrutAtom: ANF.Atom) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
+        let buildPatternGroupComparison (patterns: CheckedAST.Pattern list) (scrutAtom: ANF.Atom) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
             match patterns with
             | [] -> Ok None
             | [single] ->
@@ -2816,7 +2821,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     buildPatternComparison single scrutAtom (Some scrutType) vg
             | multiple ->
                 // Build comparison for each pattern, then OR them together
-                let rec buildOr (pats: AST.Pattern list) (accCondOpt: ANF.Atom option) (accBindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
+                let rec buildOr (pats: CheckedAST.Pattern list) (accCondOpt: ANF.Atom option) (accBindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
                     match pats with
                     | [] ->
                         match accCondOpt with
@@ -2896,8 +2901,20 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 |> Option.map (fun rendered ->
                     let joined = String.concat ", " rendered
                     $"[{joined}]")
-            | CheckedAST.Constructor (constructorReference, variantName, fields) ->
-                let fullName = $"{constructorReference.TypeName}.{variantName}"
+            | CheckedAST.Constructor (constructorReference, fields) ->
+                let typeName =
+                    tryFindSumTypeNameById constructorReference.TypeId variantLookup
+                    |> Option.defaultValue "<unknown-type>"
+                let fullName =
+                    variantLookup
+                    |> Map.toSeq
+                    |> Seq.tryPick (fun (qualifiedName, (owner, _, tag, _)) ->
+                        if owner = typeName
+                           && tag = AST.constructorTag constructorReference.ConstructorId then
+                            Some qualifiedName
+                        else
+                            None)
+                    |> Option.defaultValue $"{typeName}.<tag {AST.constructorTag constructorReference.ConstructorId}>"
                 match fields with
                 | [] -> Some fullName
                 | _ ->
@@ -2944,9 +2961,9 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     && constructorMatchIsExhaustive cases
                 let compileBodyWithGuard (vgBody: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
                     match mc.Guard, pattern with
-                    | None, AST.PList (_ :: _ as listPatterns) when not (listArmNeedsStages pattern) ->
+                    | None, CheckedAST.PList (_ :: _ as listPatterns) when not (listArmNeedsStages pattern) ->
                         compileListPatternWithChecks listPatterns scrutineeAtom' scrutType env body fallbackExpr vgBody
-                    | None, AST.PListCons (headPatterns, tailPattern) when not (listArmNeedsStages pattern) ->
+                    | None, CheckedAST.PListCons (headPatterns, tailPattern) when not (listArmNeedsStages pattern) ->
                         compileListConsPatternWithChecks headPatterns tailPattern scrutineeAtom' scrutType env body fallbackExpr vgBody
                     | None, _ ->
                         extractAndCompileBody pattern body scrutineeAtom' scrutType env vgBody
@@ -2958,8 +2975,8 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 // condition here would duplicate work and code size.
                 let canSkipPreComparison =
                     match mc.Guard, pattern with
-                    | None, AST.PList (_ :: _)
-                    | None, AST.PListCons _ -> not (listArmNeedsStages pattern)
+                    | None, CheckedAST.PList (_ :: _)
+                    | None, CheckedAST.PListCons _ -> not (listArmNeedsStages pattern)
                     | _ -> false
 
                 if canSkipPreComparison then
@@ -3001,14 +3018,14 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     // `when` guard goes through the stages below, which test the guard
                     // after the pattern and fall through to the rest when it is false.
                     match firstPattern with
-                    | AST.PList (_ :: _ as listPatterns)
+                    | CheckedAST.PList (_ :: _ as listPatterns)
                         when not (listArmNeedsStages firstPattern) && Option.isNone mc.Guard ->
                         // Build the else branch first (rest of cases)
                         buildChain rest vg
                         |> Result.bind (fun (elseExpr, vg1) ->
                             // Use the new interleaved check-and-extract function
                             compileListPatternWithChecks listPatterns scrutineeAtom' scrutType env body elseExpr vg1)
-                    | AST.PListCons (headPatterns, tailPattern)
+                    | CheckedAST.PListCons (headPatterns, tailPattern)
                         when not (listArmNeedsStages firstPattern) && Option.isNone mc.Guard ->
                         // List cons pattern - needs interleaved checks
                         buildChain rest vg

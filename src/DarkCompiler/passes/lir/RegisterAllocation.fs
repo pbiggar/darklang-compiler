@@ -354,6 +354,7 @@ let private allocateRegistersInternal
             (cfgWithParamCopies, allocatedTypedParams))
 
     let allocatedFunc : LIR.Function = {
+        Id = func.Id
         Name = func.Name
         TypedParams = allocatedTypedParams
         CFG = cfgWithParamCopies

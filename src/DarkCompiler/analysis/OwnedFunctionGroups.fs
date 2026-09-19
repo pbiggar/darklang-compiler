@@ -10,11 +10,11 @@ type Group<'leaf, 'id> =
         head: Function<'leaf, 'id> *
         tail: Function<'leaf, 'id> list *
         recursive: bool *
-        internalDependencies: Set<string> *
-        externalTargets: Set<string>
+        internalDependencies: Set<AST.FunctionId> *
+        externalTargets: Set<AST.FunctionId>
 
 type GroupingError =
-    | DuplicateFunctionName of string
+    | DuplicateFunctionName of AST.FunctionId
 
 let functions (Group (head, tail, _, _, _)) = head :: tail
 let isRecursive (Group (_, _, recursive, _, _)) = recursive
@@ -49,9 +49,9 @@ type private Component<'leaf, 'id> = {
     Index: int
     Head: Function<'leaf, 'id>
     Tail: Function<'leaf, 'id> list
-    Names: Set<string>
-    InternalDependencies: Set<string>
-    ExternalTargets: Set<string>
+    Names: Set<AST.FunctionId>
+    InternalDependencies: Set<AST.FunctionId>
+    ExternalTargets: Set<AST.FunctionId>
     Recursive: bool
 }
 
@@ -60,12 +60,12 @@ let private components definitions names callsByFunction adjacency =
         match remaining with
         | [] -> []
         | head :: _ ->
-            let headName = head.Definition.Name
+            let headName = head.Definition.Id
             let headReachable = reachable adjacency headName
             let componentNames =
                 remaining
                 |> List.choose (fun definition ->
-                    let name = definition.Definition.Name
+                    let name = definition.Definition.Id
                     if Set.contains name headReachable
                        && Set.contains headName (reachable adjacency name) then
                         Some name
@@ -74,11 +74,11 @@ let private components definitions names callsByFunction adjacency =
             let members, rest =
                 remaining
                 |> List.partition (fun definition ->
-                    Set.contains definition.Definition.Name componentNames)
+                    Set.contains definition.Definition.Id componentNames)
             let calls =
                 members
                 |> List.map (fun definition ->
-                    match Map.tryFind definition.Definition.Name callsByFunction with
+                    match Map.tryFind definition.Definition.Id callsByFunction with
                     | Some targets -> targets
                     | None -> Set.empty)
                 |> Set.unionMany
@@ -133,19 +133,19 @@ let discover
     : Result<Group<'leaf, 'id> list, GroupingError> =
     match
         definitions
-        |> List.countBy (fun definition -> definition.Definition.Name)
+        |> List.countBy (fun definition -> definition.Definition.Id)
         |> List.tryFind (fun (_, count) -> count > 1)
     with
     | Some (name, _) -> Error (DuplicateFunctionName name)
     | None ->
         let names =
             definitions
-            |> List.map (fun definition -> definition.Definition.Name)
+            |> List.map (fun definition -> definition.Definition.Id)
             |> Set.ofList
         let callsByFunction =
             definitions
             |> List.map (fun definition ->
-                definition.Definition.Name,
+                definition.Definition.Id,
                 blockCalls definition.Definition.Body)
             |> Map.ofList
         let adjacency = callsByFunction |> Map.map (fun _ calls -> Set.intersect names calls)

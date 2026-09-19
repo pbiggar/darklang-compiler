@@ -10,8 +10,8 @@ open SpecializationIdentity
 open ClosureAnalysis
 
 type internal LambdaComparisonPlan = {
-    Identity: string option
-    CaptureNames: string list
+    Identity: AST.FunctionId option
+    CaptureNames: AST.BindingId list
     CaptureTypes: AST.Type list
     CaptureExprs: CheckedAST.Expr list
     Body: CheckedAST.Expr
@@ -19,7 +19,7 @@ type internal LambdaComparisonPlan = {
 }
 
 let internal comparisonNameForIdentity
-    (identity: string option)
+    (identity: AST.FunctionId option)
     (captureTypes: AST.Type list)
     (state: LiftState)
     : string * bool * LiftState =
@@ -44,7 +44,7 @@ let internal planLambdaComparison
     (parameters: AST.NonEmptyList<CheckedAST.LambdaParameter>)
     (body: CheckedAST.Expr)
     (state: LiftState)
-    : Result<LambdaComparisonPlan, string> =
+    : Result<LambdaComparisonPlan * LiftState, string> =
     let parameterBindings =
         parameters
         |> AST.NonEmptyList.toList
@@ -64,7 +64,10 @@ let internal planLambdaComparison
             List.length argumentList - (parameters |> AST.NonEmptyList.toList |> List.length)
         let synthesizedPartialParameters =
             simpleParameterNames
-            |> Option.exists (List.forall (fun name -> name.StartsWith "__partial_"))
+            |> Option.exists (List.forall (fun id ->
+                CheckedAST.bindingName id state.Symbols
+                |> Option.map (fun name -> name.StartsWith "__partial_")
+                |> Option.defaultValue false))
         if providedCount <= 0 || not synthesizedPartialParameters then
             None
         else
@@ -74,27 +77,30 @@ let internal planLambdaComparison
                 simpleParameterNames
                 |> Option.exists (fun names ->
                     List.map2
-                        (fun parameterName argument -> argument = CheckedAST.Var parameterName)
+                        (fun parameterId argument -> argument = CheckedAST.Local parameterId)
                         names
                         remainingArgs
                     |> List.forall id)
             match isSynthesizedSuffix, Map.tryFind targetName state.FuncParams with
             | true, Some targetParams when List.length targetParams >= providedCount ->
-                let captureNames =
+                let captureNames, state =
                     [0 .. providedCount - 1]
-                    |> List.map (fun index -> $"__comparison_applied_{index}")
+                    |> List.mapFold (fun current index ->
+                        let (id, symbols) =
+                            CheckedAST.allocateBinding $"__comparison_applied_{index}" current.Symbols
+                        (id, { current with Symbols = symbols })) state
                 let captureTypes = targetParams |> List.take providedCount |> List.map snd
                 let replacementArgs =
-                    (captureNames |> List.map CheckedAST.Var) @ remainingArgs
+                    (captureNames |> List.map CheckedAST.Local) @ remainingArgs
                     |> exprArgsFromList
-                Some {
+                Some ({
                     Identity = Some targetName
                     CaptureNames = captureNames
                     CaptureTypes = captureTypes
                     CaptureExprs = providedArgs
                     Body = rebuild replacementArgs
                     CompareCaptures = true
-                }
+                }, state)
             | _ -> None
 
     let partialPlan =
@@ -108,10 +114,12 @@ let internal planLambdaComparison
     match partialPlan with
     | Some plan -> Ok plan
     | None ->
-        let parameterSet = parameterNames |> Set.ofList
+        let parameterSet =
+            match state.RecursiveSelf with
+            | Some (_, closureId, _, _) -> Set.add closureId (parameterNames |> Set.ofList)
+            | None -> parameterNames |> Set.ofList
         let captures =
             freeVars body parameterSet
-            |> Set.filter (fun name -> not (Option.isSome state.RecursiveSelf && name = "__closure"))
             |> Set.filter (fun name -> Map.containsKey name state.TypeEnv)
             |> Set.toList
         let rec collectTypes remaining acc =
@@ -120,16 +128,16 @@ let internal planLambdaComparison
             | name :: rest ->
                 match Map.tryFind name state.TypeEnv with
                 | Some typ -> collectTypes rest (typ :: acc)
-                | None -> Error $"Missing type for captured variable: {name}"
+                | None -> Error "Missing type for captured variable identity"
         collectTypes captures []
-        |> Result.map (fun captureTypes -> {
-            Identity = None
-            CaptureNames = captures
-            CaptureTypes = captureTypes
-            CaptureExprs = captures |> List.map CheckedAST.Var
-            Body = body
-            CompareCaptures = false
-        })
+        |> Result.map (fun captureTypes ->
+            ({ Identity = None
+               CaptureNames = captures
+               CaptureTypes = captureTypes
+               CaptureExprs = captures |> List.map CheckedAST.Local
+               Body = body
+               CompareCaptures = false },
+             state))
 
 let private comparisonForCapturedValue
     (_variantLookup: VariantLookup)
@@ -142,11 +150,17 @@ let private comparisonForCapturedValue
         | AST.TFunction _ | AST.TList _ | AST.TDict _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _ -> true
         | _ -> false
     if needsStructuralHelper then
-        CheckedAST.Call (ComparisonPlanning.eqHelperName typ, exprArgsFromList [left; right])
+        CheckedAST.Call (
+            AST.functionIdForName (ComparisonPlanning.eqHelperName typ),
+            exprArgsFromList [left; right]
+        )
     elif typ = AST.TString then
         CheckedAST.BinOp (AST.Eq, left, right)
     elif typ = AST.TInt then
-        CheckedAST.Call ("Darklang.Stdlib.Int.__equals", exprArgsFromList [left; right])
+        CheckedAST.Call (
+            AST.functionIdForName "Darklang.Stdlib.Int.__equals",
+            exprArgsFromList [left; right]
+        )
     else
         CheckedAST.BinOp (AST.Eq, left, right)
 
@@ -155,12 +169,13 @@ let internal makeClosureComparator
     (captureTypes: AST.Type list)
     (compareCaptures: bool)
     (variantLookup: VariantLookup)
-    : CheckedAST.FunctionDef =
+    (symbols: CheckedAST.Symbols)
+    : CheckedAST.FunctionDef * CheckedAST.Symbols =
     let comparatorStorageType = AST.TRawPtr
     let runtimeClosureType =
         AST.TTuple (AST.TInt64 :: comparatorStorageType :: captureTypes)
-    let leftName = "__comparison_left_closure"
-    let rightName = "__comparison_right_closure"
+    let (leftId, symbols) = CheckedAST.allocateBinding "__comparison_left_closure" symbols
+    let (rightId, symbols) = CheckedAST.allocateBinding "__comparison_right_closure" symbols
     let comparisons =
         if compareCaptures then
             captureTypes
@@ -168,67 +183,59 @@ let internal makeClosureComparator
                 comparisonForCapturedValue
                     variantLookup
                     captureType
-                    (CheckedAST.TupleAccess (CheckedAST.Var leftName, index + 2))
-                    (CheckedAST.TupleAccess (CheckedAST.Var rightName, index + 2)))
+                    (CheckedAST.TupleAccess (CheckedAST.Local leftId, index + 2))
+                    (CheckedAST.TupleAccess (CheckedAST.Local rightId, index + 2)))
         else []
     let body =
         match comparisons with
         | [] -> CheckedAST.BoolLiteral true
         | first :: rest -> rest |> List.fold (fun acc item -> CheckedAST.BinOp (AST.And, acc, item)) first
-    {
+    let (_, symbols) = CheckedAST.internFunction comparisonName symbols
+    ({
+        Id = AST.functionIdForName comparisonName
         Name = comparisonName
         TypeParams = []
         Params =
             paramsFromList
                 "makeClosureComparator"
                 [
-                    (leftName, runtimeClosureType)
-                    (rightName, runtimeClosureType)
+                    (leftId, runtimeClosureType)
+                    (rightId, runtimeClosureType)
                 ]
         ReturnType = AST.TBool
         Body = body
         Recursion = None
-    }
+     }, symbols)
 
 /// Replace references already resolved to a singleton recursive binder with
 /// the closure value passed to its lifted code. This creates no closure-to-self
 /// capture edge: the operational closure parameter is reused directly.
-let rec internal rewriteRecursiveSelfReferences (selfName: string) (expr: CheckedAST.Expr) : CheckedAST.Expr =
-    let recurse = rewriteRecursiveSelfReferences selfName
+let rec internal rewriteRecursiveSelfReferences
+    (selfId: AST.BindingId)
+    (closureId: AST.BindingId)
+    (expr: CheckedAST.Expr)
+    : CheckedAST.Expr =
+    let recurse = rewriteRecursiveSelfReferences selfId closureId
     let mapArgs = AST.NonEmptyList.map recurse
-    let patternShadows pattern = CheckedAST.letPatternBindings pattern |> List.contains selfName
     match expr with
-    | CheckedAST.Var name when name = selfName -> CheckedAST.Var "__closure"
-    | CheckedAST.Call (name, args) when name = selfName -> CheckedAST.Apply (CheckedAST.Var "__closure", mapArgs args)
-    | CheckedAST.FuncRef name when name = selfName -> CheckedAST.Var "__closure"
+    | CheckedAST.Local id when id = selfId -> CheckedAST.Local closureId
+    | CheckedAST.Apply (CheckedAST.Local id, args) when id = selfId ->
+        CheckedAST.Apply (CheckedAST.Local closureId, mapArgs args)
     | CheckedAST.Let (pattern, value, body) ->
-        CheckedAST.Let (pattern, recurse value, if patternShadows pattern then body else recurse body)
-    | CheckedAST.RecursiveLet (recursion, value, body) when CheckedAST.recursiveBindingName recursion = selfName ->
+        CheckedAST.Let (pattern, recurse value, recurse body)
+    | CheckedAST.RecursiveLet (recursion, value, body) when CheckedAST.recursiveBindingId recursion = selfId ->
         match CheckedAST.recursiveBindingAvailability recursion with
         | AST.OrdinaryBinding -> CheckedAST.RecursiveLet (recursion, recurse value, body)
         | _ -> expr
     | CheckedAST.RecursiveLet (recursion, value, body) ->
         CheckedAST.RecursiveLet (recursion, recurse value, recurse body)
     | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
-        let shadows =
-            parameters
-            |> AST.NonEmptyList.toList
-            |> List.collect (fun parameter -> CheckedAST.letPatternBindings parameter.Pattern)
-            |> List.contains selfName
-        CheckedAST.Lambda (parameters, returnAnnotation, if shadows then body else recurse body)
+        CheckedAST.Lambda (parameters, returnAnnotation, recurse body)
     | CheckedAST.Match (scrutinee, cases) ->
         let cases' =
             cases
             |> List.map (fun case ->
-                let shadows =
-                    case.Patterns
-                    |> AST.NonEmptyList.toList
-                    |> List.collect (fun pattern ->
-                        AST.validateBinders (AST.MatchBinderPattern pattern)
-                        |> Result.defaultValue [])
-                    |> List.contains selfName
-                if shadows then case
-                else { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body })
+                { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body })
         CheckedAST.Match (recurse scrutinee, cases')
     | CheckedAST.BoundaryRender (renderer, value) -> CheckedAST.BoundaryRender (renderer, recurse value)
     | CheckedAST.BinOp (op, left, right) -> CheckedAST.BinOp (op, recurse left, recurse right)
@@ -248,7 +255,7 @@ let rec internal rewriteRecursiveSelfReferences (selfName: string) (expr: Checke
     | CheckedAST.RecordLiteral (name, fields) -> CheckedAST.RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | CheckedAST.RecordUpdate (record, fields) -> CheckedAST.RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | CheckedAST.RecordAccess (record, field) -> CheckedAST.RecordAccess (recurse record, field)
-    | CheckedAST.Constructor (reference, name, fields) -> CheckedAST.Constructor (reference, name, List.map recurse fields)
+    | CheckedAST.Constructor (reference, fields) -> CheckedAST.Constructor (reference, List.map recurse fields)
     | CheckedAST.ListLiteral values -> CheckedAST.ListLiteral (List.map recurse values)
     | CheckedAST.Apply (func, args) -> CheckedAST.Apply (recurse func, mapArgs args)
     | CheckedAST.IndirectApply (func, args) -> CheckedAST.IndirectApply (recurse func, mapArgs args)
@@ -260,16 +267,23 @@ let rec internal rewriteRecursiveSelfReferences (selfName: string) (expr: Checke
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _
     | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BoolLiteral _
     | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
-    | CheckedAST.Var _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> expr
+    | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> expr
 
 /// Once the lifted member has a code identity, recursive closure calls become
 /// direct calls with the existing group environment as their first argument.
-let rec internal rewriteLiftedSelfCalls (liftedName: string) (expr: CheckedAST.Expr) : CheckedAST.Expr =
-    let recurse = rewriteLiftedSelfCalls liftedName
+let rec internal rewriteLiftedSelfCalls
+    (liftedName: string)
+    (closureId: AST.BindingId)
+    (expr: CheckedAST.Expr)
+    : CheckedAST.Expr =
+    let recurse = rewriteLiftedSelfCalls liftedName closureId
     let mapArgs = AST.NonEmptyList.map recurse
     match expr with
-    | CheckedAST.Apply (CheckedAST.Var "__closure", args) ->
-        CheckedAST.Call (liftedName, AST.NonEmptyList.cons (CheckedAST.Var "__closure") (mapArgs args))
+    | CheckedAST.Apply (CheckedAST.Local id, args) when id = closureId ->
+        CheckedAST.Call (
+            AST.functionIdForName liftedName,
+            AST.NonEmptyList.cons (CheckedAST.Local closureId) (mapArgs args)
+        )
     | CheckedAST.BoundaryRender (renderer, value) -> CheckedAST.BoundaryRender (renderer, recurse value)
     | CheckedAST.BinOp (op, left, right) -> CheckedAST.BinOp (op, recurse left, recurse right)
     | CheckedAST.UnaryOp (op, value) -> CheckedAST.UnaryOp (op, recurse value)
@@ -290,7 +304,7 @@ let rec internal rewriteLiftedSelfCalls (liftedName: string) (expr: CheckedAST.E
     | CheckedAST.RecordLiteral (name, fields) -> CheckedAST.RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | CheckedAST.RecordUpdate (record, fields) -> CheckedAST.RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | CheckedAST.RecordAccess (record, field) -> CheckedAST.RecordAccess (recurse record, field)
-    | CheckedAST.Constructor (reference, name, fields) -> CheckedAST.Constructor (reference, name, List.map recurse fields)
+    | CheckedAST.Constructor (reference, fields) -> CheckedAST.Constructor (reference, List.map recurse fields)
     | CheckedAST.Match (scrutinee, cases) ->
         CheckedAST.Match (recurse scrutinee, cases |> List.map (fun case -> { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body }))
     | CheckedAST.ListLiteral values -> CheckedAST.ListLiteral (List.map recurse values)
@@ -305,6 +319,6 @@ let rec internal rewriteLiftedSelfCalls (liftedName: string) (expr: CheckedAST.E
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _
     | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BoolLiteral _
     | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
-    | CheckedAST.Var _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> expr
+    | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> expr
 
 /// Lift lambdas in an expression, returning (transformed expr, new state)

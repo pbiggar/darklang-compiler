@@ -62,6 +62,7 @@ let internal buildDeclaredRecordFieldSubst
         None
 
 let internal recordDescriptor
+    (typeName: string)
     (reference: CheckedAST.RecordReference)
     (recordInfo: RecordTypeInfo)
     : ANF.RecordDescriptor =
@@ -74,8 +75,8 @@ let internal recordDescriptor
                 (name, applySubstToType subst fieldType))
         | None -> fields
     {
-        SourceTypeName = reference.TypeName
-        RuntimeTypeName = reference.TypeName
+        SourceTypeName = typeName
+        RuntimeTypeName = typeName
         TypeArgs = reference.TypeArgs
         Fields = concreteFields
     }
@@ -185,7 +186,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
     match expr with
     | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _ | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
-    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.Var _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ | CheckedAST.RuntimeError _ ->
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
+    | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ | CheckedAST.RuntimeError _ ->
         expr  // No types to substitute in literals, variables, function references, and closures
     | CheckedAST.BoundaryRender (renderer, value) ->
         CheckedAST.BoundaryRender (renderer, applySubstToExpr subst value)
@@ -231,8 +233,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
         CheckedAST.RecordUpdate (applySubstToExpr subst record, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) updates)
     | CheckedAST.RecordAccess (record, fieldName) ->
         CheckedAST.RecordAccess (applySubstToExpr subst record, fieldName)
-    | CheckedAST.Constructor (typeName, variantName, fields) ->
-        CheckedAST.Constructor (typeName, variantName, List.map (applySubstToExpr subst) fields)
+    | CheckedAST.Constructor (reference, fields) ->
+        CheckedAST.Constructor (reference, List.map (applySubstToExpr subst) fields)
     | CheckedAST.Match (scrutinee, cases) ->
         CheckedAST.Match (applySubstToExpr subst scrutinee,
                    cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (applySubstToExpr subst); Body = applySubstToExpr subst mc.Body }))
@@ -325,7 +327,8 @@ let specializeFunction (funcDef: CheckedAST.FunctionDef) (typeArgs: AST.Type lis
         |> AST.NonEmptyList.map (fun (name, ty) -> (name, applySubstToType subst ty))
     let specializedReturnType = applySubstToType subst funcDef.ReturnType
     let specializedBody = applySubstToExpr subst funcDef.Body
-    { Name = specializedName
+    { Id = AST.functionIdForName specializedName
+      Name = specializedName
       TypeParams = []  // Specialized function has no type parameters
       Params = specializedParams
       ReturnType = specializedReturnType

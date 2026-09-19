@@ -20,16 +20,17 @@ type ScopeDestruction = InertScope | UnprovenScope
 
 type FunctionScopeContract = {
     LocalDestruction: ScopeDestruction
-    Calls: Set<string>
+    Calls: Set<AST.FunctionId>
 }
 
 /// These compiler primitives can perform effects, but neither owns a value
 /// whose destruction invokes user code. Unknown external calls remain unproven.
-let private inertPrimitives = Set.ofList ["Builtin.printLine"; "Builtin.print"]
+let private inertPrimitives =
+    Set.ofList [AST.functionIdForName "Builtin.printLine"; AST.functionIdForName "Builtin.print"]
 
 /// Reject callers transitively from locally unproven scopes and unavailable
 /// callees. Safe recursive components are accepted without unfolding paths.
-let inertFunctionScopes (contracts: Map<string, FunctionScopeContract>) =
+let inertFunctionScopes (contracts: Map<AST.FunctionId, FunctionScopeContract>) =
     let names = contracts |> Map.keys |> Set.ofSeq
     let primitives = Set.difference inertPrimitives names
     let unavailable calls = not (Set.isSubset calls (Set.union names primitives))

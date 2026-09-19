@@ -55,8 +55,18 @@ let private prettyPrintLIRRcKind = function
     | LIR.DictHeap -> "dict"
     | LIR.ClosureHeap -> "closure"
 
+let private prettyPrintFunctionName functionNames id =
+    Map.tryFind id functionNames
+    |> Option.defaultWith (fun () -> string id)
+
+let private prettyPrintLIROperandWithNames functionNames operand =
+    match operand with
+    | LIR.FuncAddr id -> $"&{prettyPrintFunctionName functionNames id}"
+    | _ -> prettyPrintLIROperand operand
+
 /// Pretty-print LIR instruction
-let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
+let private prettyPrintLIRInstr functionNames (instr: LIR.Instr) : string =
+    let prettyPrintLIROperand = prettyPrintLIROperandWithNames functionNames
     match instr with
     | LIR.Mov (dest, src) ->
         $"{prettyPrintLIRReg dest} <- Mov({prettyPrintLIROperand src})"
@@ -125,10 +135,10 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"{prettyPrintLIRReg dest} <- Uxtw({prettyPrintLIRReg src})"
     | LIR.Call (dest, funcName, args) ->
         let argStr = args |> commaSeparated prettyPrintLIROperand
-        $"{prettyPrintLIRReg dest} <- Call({funcName}, [{argStr}])"
+        $"{prettyPrintLIRReg dest} <- Call({prettyPrintFunctionName functionNames funcName}, [{argStr}])"
     | LIR.TailCall (funcName, args) ->
         let argStr = args |> commaSeparated prettyPrintLIROperand
-        $"TailCall({funcName}, [{argStr}])"
+        $"TailCall({prettyPrintFunctionName functionNames funcName}, [{argStr}])"
     | LIR.IndirectCall (dest, func, args) ->
         let argStr = args |> commaSeparated prettyPrintLIROperand
         $"{prettyPrintLIRReg dest} <- IndirectCall({prettyPrintLIRReg func}, [{argStr}])"
@@ -137,7 +147,7 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"IndirectTailCall({prettyPrintLIRReg func}, [{argStr}])"
     | LIR.ClosureAlloc (dest, funcName, captures) ->
         let capsStr = captures |> commaSeparated prettyPrintLIROperand
-        $"{prettyPrintLIRReg dest} <- ClosureAlloc({funcName}, [{capsStr}])"
+        $"{prettyPrintLIRReg dest} <- ClosureAlloc({prettyPrintFunctionName functionNames funcName}, [{capsStr}])"
     | LIR.ClosureCall (dest, closure, args) ->
         let argStr = args |> commaSeparated prettyPrintLIROperand
         $"{prettyPrintLIRReg dest} <- ClosureCall({prettyPrintLIRReg closure}, [{argStr}])"
@@ -329,6 +339,8 @@ let private prettyPrintLIRTerminator (term: LIR.Terminator) : string =
 
 /// Format symbolic LIR program with CFG structure
 let formatLIR (LIR.Program (functions, _, _)) : string =
+    let functionNames =
+        functions |> List.map (fun func -> (func.Id, func.Name)) |> Map.ofList
     let prettyPrintCalleeSaved (regs: LIR.PhysReg list) : string =
         regs
         |> List.map prettyPrintLIRPhysReg
@@ -344,7 +356,7 @@ let formatLIR (LIR.Program (functions, _, _)) : string =
                 |> List.map (fun (label, block) ->
                     let instrStrs =
                         block.Instrs
-                        |> List.map prettyPrintLIRInstr
+                        |> List.map (prettyPrintLIRInstr functionNames)
                         |> List.map (fun line -> $"    {line}")
                         |> String.concat "\n"
                     let termStr = $"    {prettyPrintLIRTerminator block.Terminator}"

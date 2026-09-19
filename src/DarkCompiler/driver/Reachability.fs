@@ -43,7 +43,10 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     (ValueRendering.rewriteProgram
                         userEnv.IndexedTypeReg
                         userEnv.IndexedSumTypeReg
-                        stdlib.Context.Registries.FuncReg
+                        (stdlib.Context.Registries.FuncReg
+                         |> Map.toList
+                         |> List.map (fun (_, (name, typ)) -> name, typ)
+                         |> Map.ofList)
                         plannedProgramType
                         plannedUserAst,
                      AST.TString)
@@ -64,6 +67,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     SumTypeNames = userOnly.SumTypeNames
                     RcSumShapeReg = userOnly.RcSumShapeReg
                     FuncReg = userOnly.FuncReg
+                    FunctionNames = userOnly.FunctionNames
                     FuncParams = userOnly.FuncParams
                     ModuleRegistry = userOnly.ModuleRegistry
                     RecursiveMembers = userOnly.RecursiveMembers
@@ -89,6 +93,16 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                 |> Result.map (fun (userFunctions, _typeMap) ->
                     let tcoFunctions =
                         applyTco 0 coverageOptions sw userRegistries.RecursiveMembers userFunctions None
-                    ANFDeadCodeElimination.getReachableStdlib
-                        stdlib.StdlibANFCallGraph
-                        tcoFunctions)
+                    let reachableStdlibNames =
+                        ANFDeadCodeElimination.getReachableStdlib
+                            stdlib.StdlibANFCallGraph
+                            tcoFunctions
+                    let namesById =
+                        stdlib.StdlibANFFunctions
+                        |> Map.toList
+                        |> List.map (fun (name, func) -> func.Id, name)
+                        |> Map.ofList
+                    reachableStdlibNames
+                    |> Set.toList
+                    |> List.choose (fun id -> Map.tryFind id namesById)
+                    |> Set.ofList)

@@ -33,13 +33,14 @@ let toANF
         typeReg
         variantLookup
         funcReg
+        (funcReg |> Map.map (fun _ (name, _) -> name))
         moduleRegistry
 
 /// Convert a function definition to ANF
 /// VarGen is passed in and out to maintain globally unique TempIds across functions
 /// (needed for TypeMap which maps TempId -> Type across the whole program)
 let allocateTypedParams
-    (loweredParams: (string * AST.Type) list)
+    (loweredParams: (AST.BindingId * AST.Type) list)
     (varGen: ANF.VarGen)
     : ANF.TypedParam list * ANF.VarGen =
     loweredParams
@@ -48,16 +49,18 @@ let allocateTypedParams
         ({ ANF.TypedParam.Id = tempId; Type = typ }, vg')) varGen
 
 let private convertFunctionWithSumTypeNames
+    (symbols: CheckedAST.Symbols)
     (sumTypeNames: Set<string>)
-    (inertScopes: Set<string>)
+    (inertScopes: Set<AST.FunctionId>)
     (funcDef: CheckedAST.FunctionDef)
     (varGen: ANF.VarGen)
     (typeReg: TypeRegistry)
     (variantLookup: VariantLookup)
     (funcReg: FunctionRegistry)
+    (functionNames: FunctionNameRegistry)
     (moduleRegistry: AST.ModuleRegistry)
     : Result<ANF.Function * ANF.VarGen, string> =
-    let loweredParams = paramsToList funcDef.Params |> normalizeSyntheticNullaryParams
+    let loweredParams = paramsToList funcDef.Params |> normalizeSyntheticNullaryParams symbols
 
     // Allocate TempIds for parameters, bundled with their types
     let (typedParams, varGen1) =
@@ -69,16 +72,31 @@ let private convertFunctionWithSumTypeNames
         |> List.map (fun ((name, _), typedParam) -> (name, (typedParam.Id, typedParam.Type)))
         |> Map.ofList
 
+    let unboundLocals =
+        ClosureAnalysis.freeVars funcDef.Body (loweredParams |> List.map fst |> Set.ofList)
+    let bodyResult =
+        if Set.isEmpty unboundLocals then
+            toANFCore sumTypeNames inertScopes funcDef.Body varGen1 paramEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        else
+            let names =
+                unboundLocals
+                |> Set.toList
+                |> List.map (fun id ->
+                    CheckedAST.bindingName id symbols |> Option.defaultValue "<unknown-binding>")
+                |> String.concat ", "
+            Error $"Function '{funcDef.Name}' has unbound checked locals: {names}"
     // Convert body
-    toANFCore sumTypeNames inertScopes funcDef.Body varGen1 paramEnv typeReg variantLookup funcReg moduleRegistry
+    bodyResult
     |> Result.map (fun (body, varGen2) ->
-        ({ Name = funcDef.Name
+        ({ Id = funcDef.Id
+           Name = funcDef.Name
            TypedParams = typedParams
            ReturnType = funcDef.ReturnType
            ReturnOwnership = ANF.OwnedReturn
            Body = body }, varGen2))
 
 let convertFunction
+    (symbols: CheckedAST.Symbols)
     (funcDef: CheckedAST.FunctionDef)
     (varGen: ANF.VarGen)
     (typeReg: TypeRegistry)
@@ -87,6 +105,7 @@ let convertFunction
     (moduleRegistry: AST.ModuleRegistry)
     : Result<ANF.Function * ANF.VarGen, string> =
     convertFunctionWithSumTypeNames
+        symbols
         (sumTypeNamesFromVariantLookup variantLookup)
         (DestructionAnalysis.inertFunctionScopes Map.empty)
         funcDef
@@ -94,6 +113,7 @@ let convertFunction
         typeReg
         variantLookup
         funcReg
+        (funcReg |> Map.map (fun _ (name, _) -> name))
         moduleRegistry
 
 /// Result type that includes registries needed for later passes
@@ -113,9 +133,9 @@ type ConversionResult = {
 /// Result type for user-only ANF conversion (functions not merged with stdlib)
 /// Used for compiling user code separately from the prebuilt stdlib
 type UserOnlyResult = {
-    ScopeContracts: Map<string, DestructionAnalysis.FunctionScopeContract>
+    ScopeContracts: Map<AST.FunctionId, DestructionAnalysis.FunctionScopeContract>
     UserFunctions: ANF.Function list   // Only user functions, not merged with stdlib
-    NonInlineableFunctionNames: Set<string> // Late external specializations compiled in this unit
+    NonInlineableFunctionNames: Set<AST.FunctionId> // Late external specializations compiled in this unit
     MainExpr: ANF.AExpr                // User's main expression
     TypeReg: TypeRegistry              // Merged registries (for lookups)
     RecordFieldsReg: Map<string, (string * AST.Type) list>
@@ -126,6 +146,7 @@ type UserOnlyResult = {
     LocalVariantLookup: VariantLookup
     RcSumShapeReg: MemoryModel.RcSumShapeRegistry
     FuncReg: FunctionRegistry
+    FunctionNames: FunctionNameRegistry
     LocalReturnTypes: Map<string, AST.Type>
     FuncParams: Map<string, (string * AST.Type) list>
     ModuleRegistry: AST.ModuleRegistry
@@ -134,7 +155,7 @@ type UserOnlyResult = {
 
 /// Registry bundle used during ANF conversion
 type Registries = {
-    ScopeContracts: Map<string, DestructionAnalysis.FunctionScopeContract>
+    ScopeContracts: Map<AST.FunctionId, DestructionAnalysis.FunctionScopeContract>
     TypeReg: TypeRegistry
     RecordFieldsReg: Map<string, (string * AST.Type) list>
     RecordTypeParamsReg: Map<string, string list>
@@ -142,6 +163,7 @@ type Registries = {
     SumTypeNames: Set<string>
     RcSumShapeReg: MemoryModel.RcSumShapeRegistry
     FuncReg: FunctionRegistry
+    FunctionNames: FunctionNameRegistry
     FuncParams: Map<string, (string * AST.Type) list>
     ModuleRegistry: AST.ModuleRegistry
     RecursiveMembers: Map<string, AST.LoweredRecursiveMember>
@@ -167,21 +189,21 @@ let loweredRecursiveMemberRegistry
 
 /// Split program into type defs, function defs, and a single expression
 let splitDeclarations (program: CheckedAST.Program) : Result<AST.TypeDef list * CheckedAST.FunctionDef list, string> =
-    let (CheckedAST.Program topLevels) = program
+    let (CheckedAST.Program (_, topLevels)) = program
     let expressions = topLevels |> List.filter (function CheckedAST.Expression _ -> true | _ -> false)
     if List.isEmpty expressions then
         Ok (
-            topLevels |> List.choose (function CheckedAST.TypeDef definition -> Some definition | _ -> None),
+            topLevels |> List.choose (function CheckedAST.TypeDef (_, definition) -> Some definition | _ -> None),
             topLevels |> List.choose (function CheckedAST.FunctionDef definition -> Some definition | _ -> None)
         )
     else
         Error $"Declaration-only program must not contain entry expressions; found {expressions.Length}"
 
 let splitTopLevels (program: CheckedAST.Program) : Result<AST.TypeDef list * CheckedAST.FunctionDef list * CheckedAST.Expr, string> =
-    let (CheckedAST.Program topLevels) = program
+    let (CheckedAST.Program (_, topLevels)) = program
     let typeDefs =
         topLevels
-        |> List.choose (function CheckedAST.TypeDef t -> Some t | _ -> None)
+        |> List.choose (function CheckedAST.TypeDef (_, t) -> Some t | _ -> None)
     let functions =
         topLevels
         |> List.choose (function CheckedAST.FunctionDef f -> Some f | _ -> None)
@@ -214,6 +236,7 @@ let resolveAliasesInFunctions (aliasReg: AliasRegistry) (functions: CheckedAST.F
     functions |> List.map (resolveAliasesInFunction aliasReg)
 
 let private buildRegistriesInternal
+    (symbols: CheckedAST.Symbols)
     (includeModuleFunctionParams: bool)
     (moduleRegistry: AST.ModuleRegistry)
     (typeDefs: AST.TypeDef list)
@@ -280,14 +303,25 @@ let private buildRegistriesInternal
     let funcReg : FunctionRegistry =
         functions
         |> List.map (fun f ->
-            let paramTypes = f.Params |> paramsToList |> normalizeSyntheticNullaryParams |> List.map snd
+            let paramTypes = f.Params |> paramsToList |> normalizeSyntheticNullaryParams symbols |> List.map snd
             let funcType = AST.TFunction (paramTypes, f.ReturnType)
-            (f.Name, funcType))
+            (f.Id, (f.Name, funcType)))
         |> Map.ofList
+
+    let functionNames : FunctionNameRegistry =
+        functions
+        |> List.fold (fun names func -> Map.add func.Id func.Name names) (CheckedAST.functionNames symbols)
 
     let userFuncParams : Map<string, (string * AST.Type) list> =
         functions
-        |> List.map (fun f -> (f.Name, paramsToList f.Params))
+        |> List.map (fun f ->
+            let parameters =
+                paramsToList f.Params
+                |> List.mapi (fun index (id, typ) ->
+                    match CheckedAST.bindingName id symbols with
+                    | Some name -> (name, typ)
+                    | None -> ($"arg{index}", typ))
+            (f.Name, parameters))
         |> Map.ofList
 
     let moduleFuncParams : Map<string, (string * AST.Type) list> =
@@ -305,7 +339,7 @@ let private buildRegistriesInternal
         TypeReg = typeReg
         ScopeContracts =
             ExtractListRegions.scopeContracts
-                (fun types expr -> inferTypeCore sumTypeNames expr types typeReg variantLookup funcReg moduleRegistry)
+                (fun types expr -> inferTypeCore sumTypeNames expr types typeReg variantLookup funcReg functionNames moduleRegistry)
                 functions
         RecordFieldsReg = recordFieldsRegistry typeReg
         RecordTypeParamsReg = recordTypeParamsRegistry typeReg
@@ -313,6 +347,7 @@ let private buildRegistriesInternal
         SumTypeNames = sumTypeNames
         RcSumShapeReg = rcSumShapeRegistryFromVariantLookup variantLookup
         FuncReg = funcReg
+        FunctionNames = functionNames
         FuncParams = funcParams
         ModuleRegistry = moduleRegistry
         RecursiveMembers = loweredRecursiveMemberRegistry functions
@@ -320,23 +355,25 @@ let private buildRegistriesInternal
 
 /// Build standalone registries from type and function definitions.
 let buildRegistries
+    (symbols: CheckedAST.Symbols)
     (moduleRegistry: AST.ModuleRegistry)
     (typeDefs: AST.TypeDef list)
     (aliasReg: AliasRegistry)
     (functions: CheckedAST.FunctionDef list)
     : Registries =
-    buildRegistriesInternal true moduleRegistry typeDefs aliasReg functions
+    buildRegistriesInternal symbols true moduleRegistry typeDefs aliasReg functions
 
 /// Build only the declaration overlay for a context that already contains the
 /// module function parameters. Reconstructing that constant projection for
 /// every separately compiled user unit is both redundant and expensive.
 let buildOverlayRegistries
+    (symbols: CheckedAST.Symbols)
     (moduleRegistry: AST.ModuleRegistry)
     (typeDefs: AST.TypeDef list)
     (aliasReg: AliasRegistry)
     (functions: CheckedAST.FunctionDef list)
     : Registries =
-    buildRegistriesInternal false moduleRegistry typeDefs aliasReg functions
+    buildRegistriesInternal symbols false moduleRegistry typeDefs aliasReg functions
 
 /// Merge registries with overlay taking precedence (module registry stays from base)
 let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
@@ -350,6 +387,7 @@ let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
         SumTypeNames = Set.union baseRegs.SumTypeNames overlay.SumTypeNames
         RcSumShapeReg = mergeMaps baseRegs.RcSumShapeReg overlay.RcSumShapeReg
         FuncReg = mergeMaps baseRegs.FuncReg overlay.FuncReg
+        FunctionNames = mergeMaps baseRegs.FunctionNames overlay.FunctionNames
         FuncParams = mergeMaps baseRegs.FuncParams overlay.FuncParams
         ModuleRegistry = baseRegs.ModuleRegistry
         RecursiveMembers = mergeMaps baseRegs.RecursiveMembers overlay.RecursiveMembers
@@ -357,6 +395,7 @@ let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
 
 /// Convert functions to ANF, returning updated VarGen
 let convertFunctions
+    (symbols: CheckedAST.Symbols)
     (registries: Registries)
     (varGen: ANF.VarGen)
     (functions: CheckedAST.FunctionDef list)
@@ -368,6 +407,7 @@ let convertFunctions
         | [] -> Ok (List.rev acc, vg)
         | func :: rest ->
             convertFunctionWithSumTypeNames
+                symbols
                 sumTypeNames
                 inertScopes
                 func
@@ -375,6 +415,7 @@ let convertFunctions
                 registries.TypeReg
                 registries.VariantLookup
                 registries.FuncReg
+                registries.FunctionNames
                 registries.ModuleRegistry
             |> Result.bind (fun (anfFunc, vg') ->
                 loop rest vg' (anfFunc :: acc))
@@ -388,11 +429,12 @@ let convertExprToAnf
     : Result<ANF.AExpr * ANF.VarGen, string> =
     let emptyEnv : VarEnv = Map.empty
     let sumTypeNames = registries.SumTypeNames
-    toANFCore sumTypeNames (DestructionAnalysis.inertFunctionScopes registries.ScopeContracts) expr varGen emptyEnv registries.TypeReg registries.VariantLookup registries.FuncReg registries.ModuleRegistry
+    toANFCore sumTypeNames (DestructionAnalysis.inertFunctionScopes registries.ScopeContracts) expr varGen emptyEnv registries.TypeReg registries.VariantLookup registries.FuncReg registries.FunctionNames registries.ModuleRegistry
 
 /// Synthesize an entrypoint function from a main expression
 let synthesizeEntryFunction (name: string) (returnType: AST.Type) (body: ANF.AExpr) : ANF.Function =
-    { Name = name
+    { Id = AST.functionIdForName name
+      Name = name
       TypedParams = []
       ReturnType = returnType
       ReturnOwnership = ANF.OwnedReturn

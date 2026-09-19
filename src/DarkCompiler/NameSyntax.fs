@@ -335,111 +335,171 @@ let validateDeclarationProgram (program: SourceProgram) : Result<SourceProgram, 
     match sourceUnits program |> List.collect entryCandidatesInUnit with
     | [] -> Ok program
     | entries -> Error $"Declaration-only program must not contain entry expressions; found {entries.Length}"
-/// Assign stable structural identities after parsing, while declaration and
-/// lexical boundaries are still explicit. Later passes may change group IDs,
-/// but never recreate binding/member identity from a spelling.
+/// Assign deterministic compact identities after parsing, while declaration
+/// and lexical boundaries are still explicit. One source-order traversal owns
+/// allocation; later passes never recreate identity from a spelling.
 let private assignParsedRecursiveIdentities (Program topLevels) : Program =
-    let parsedMember boundary path (candidate: RecursiveCandidate) : RecursiveBindingInfo =
+    let parsedMember boundary ordinal (candidate: RecursiveCandidate) : RecursiveBindingInfo =
         ParsedRecursiveBinding {
-            Binding = bindingId path
+            Binding = bindingId ordinal
             Boundary = scopeBoundaryId boundary
-            Member = recursiveMemberId path
+            Member = recursiveMemberId ordinal
             SourceName = candidate.SourceName
             Kind = candidate.Kind
         }
 
-    let rec assignExpr boundary path expr =
-        let child index value = assignExpr boundary (path @ [index]) value
-        let mapArgs start args =
-            args
-            |> NonEmptyList.toList
-            |> List.mapi (fun index value -> child (start + index) value)
-            |> NonEmptyList.fromList
+    let rec assignExpr boundary nextOrdinal expr =
+        let assignList values next =
+            values
+            |> List.mapFold (fun ordinal value ->
+                let (assigned, following) = assignExpr boundary ordinal value
+                (assigned, following)) next
+        let assignNonEmpty values next =
+            let (assigned, following) = assignList (NonEmptyList.toList values) next
+            (NonEmptyList.fromList assigned, following)
+        let assignPair first second next =
+            let (first', afterFirst) = assignExpr boundary next first
+            let (second', following) = assignExpr boundary afterFirst second
+            (first', second', following)
+        let assignFields fields next =
+            fields
+            |> List.mapFold (fun ordinal (name, value) ->
+                let (value', following) = assignExpr boundary ordinal value
+                ((name, value'), following)) next
         match expr with
         | RecursiveLet (RecursiveBindingCandidate candidate, value, body) ->
-            let nestedBoundary = path
-            RecursiveLet (
-                parsedMember boundary path candidate,
-                assignExpr nestedBoundary (path @ [0]) value,
-                assignExpr nestedBoundary (path @ [1]) body
-            )
+            let memberOrdinal = nextOrdinal
+            let (value', afterValue) = assignExpr memberOrdinal (nextOrdinal + 1) value
+            let (body', following) = assignExpr memberOrdinal afterValue body
+            (RecursiveLet (parsedMember boundary memberOrdinal candidate, value', body'), following)
         | RecursiveLet (recursion, value, body) ->
-            RecursiveLet (recursion, child 0 value, child 1 body)
-        | Let (pattern, value, body) -> Let (pattern, child 0 value, child 1 body)
-        | BoundaryRender (renderer, value) -> BoundaryRender (renderer, child 0 value)
-        | BinOp (op, left, right) -> BinOp (op, child 0 left, child 1 right)
-        | UnaryOp (op, value) -> UnaryOp (op, child 0 value)
+            let (value', body', following) = assignPair value body nextOrdinal
+            (RecursiveLet (recursion, value', body'), following)
+        | Let (pattern, value, body) ->
+            let (value', body', following) = assignPair value body nextOrdinal
+            (Let (pattern, value', body'), following)
+        | BoundaryRender (renderer, value) ->
+            let (value', following) = assignExpr boundary nextOrdinal value
+            (BoundaryRender (renderer, value'), following)
+        | BinOp (op, left, right) ->
+            let (left', right', following) = assignPair left right nextOrdinal
+            (BinOp (op, left', right'), following)
+        | UnaryOp (op, value) ->
+            let (value', following) = assignExpr boundary nextOrdinal value
+            (UnaryOp (op, value'), following)
         | If (condition, thenBranch, elseBranch) ->
-            If (child 0 condition, child 1 thenBranch, child 2 elseBranch)
-        | Sequence (first, next) -> Sequence (child 0 first, child 1 next)
-        | Call (name, args) -> Call (name, mapArgs 0 args)
-        | TypeApp (name, types, args) -> TypeApp (name, types, mapArgs 0 args)
-        | TupleLiteral values -> TupleLiteral (values |> List.mapi child)
-        | TupleAccess (tuple, index) -> TupleAccess (child 0 tuple, index)
+            let (condition', afterCondition) = assignExpr boundary nextOrdinal condition
+            let (thenBranch', afterThen) = assignExpr boundary afterCondition thenBranch
+            let (elseBranch', following) = assignExpr boundary afterThen elseBranch
+            (If (condition', thenBranch', elseBranch'), following)
+        | Sequence (first, next) ->
+            let (first', next', following) = assignPair first next nextOrdinal
+            (Sequence (first', next'), following)
+        | Call (name, args) ->
+            let (args', following) = assignNonEmpty args nextOrdinal
+            (Call (name, args'), following)
+        | TypeApp (name, types, args) ->
+            let (args', following) = assignNonEmpty args nextOrdinal
+            (TypeApp (name, types, args'), following)
+        | TupleLiteral values ->
+            let (values', following) = assignList values nextOrdinal
+            (TupleLiteral values', following)
+        | TupleAccess (tuple, index) ->
+            let (tuple', following) = assignExpr boundary nextOrdinal tuple
+            (TupleAccess (tuple', index), following)
         | DictLiteral (keyType, valueType, entries) ->
-            DictLiteral (
-                keyType,
-                valueType,
+            let (entries', following) =
                 entries
-                |> List.mapi (fun index (key, value) ->
-                    (child (index * 2) key, child (index * 2 + 1) value)))
+                |> List.mapFold (fun ordinal (key, value) ->
+                    let (key', value', next) = assignPair key value ordinal
+                    ((key', value'), next)) nextOrdinal
+            (DictLiteral (keyType, valueType, entries'), following)
         | RecordLiteral (name, fields) ->
-            RecordLiteral (name, fields |> List.mapi (fun index (field, value) -> (field, child index value)))
+            let (fields', following) = assignFields fields nextOrdinal
+            (RecordLiteral (name, fields'), following)
         | RecordUpdate (record, fields) ->
-            RecordUpdate (child 0 record, fields |> List.mapi (fun index (field, value) -> (field, child (index + 1) value)))
-        | RecordAccess (record, field) -> RecordAccess (child 0 record, field)
+            let (record', afterRecord) = assignExpr boundary nextOrdinal record
+            let (fields', following) = assignFields fields afterRecord
+            (RecordUpdate (record', fields'), following)
+        | RecordAccess (record, field) ->
+            let (record', following) = assignExpr boundary nextOrdinal record
+            (RecordAccess (record', field), following)
         | Constructor (reference, name, fields) ->
-            Constructor (reference, name, fields |> List.mapi child)
+            let (fields', following) = assignList fields nextOrdinal
+            (Constructor (reference, name, fields'), following)
         | Match (scrutinee, cases) ->
-            Match (
-                child 0 scrutinee,
+            let (scrutinee', afterScrutinee) = assignExpr boundary nextOrdinal scrutinee
+            let (cases', following) =
                 cases
-                |> List.mapi (fun caseIndex case ->
-                    let casePath = path @ [caseIndex + 1]
-                    { case with
-                        Guard = case.Guard |> Option.map (assignExpr casePath (casePath @ [0]))
-                        Body = assignExpr casePath (casePath @ [1]) case.Body })
-            )
-        | ListLiteral values -> ListLiteral (values |> List.mapi child)
+                |> List.mapFold (fun ordinal case ->
+                    let caseBoundary = ordinal
+                    let (guard', afterGuard) =
+                        match case.Guard with
+                        | None -> (None, ordinal + 1)
+                        | Some guard ->
+                            let (guard', next) = assignExpr caseBoundary (ordinal + 1) guard
+                            (Some guard', next)
+                    let (body', next) = assignExpr caseBoundary afterGuard case.Body
+                    ({ case with Guard = guard'; Body = body' }, next)) afterScrutinee
+            (Match (scrutinee', cases'), following)
+        | ListLiteral values ->
+            let (values', following) = assignList values nextOrdinal
+            (ListLiteral values', following)
         | Lambda (parameters, returnAnnotation, body) ->
-            let lambdaBoundary = path
-            Lambda (parameters, returnAnnotation, assignExpr lambdaBoundary (path @ [0]) body)
-        | Apply (func, args) -> Apply (child 0 func, mapArgs 1 args)
-        | IndirectApply (func, args) -> IndirectApply (child 0 func, mapArgs 1 args)
-        | Closure (name, captures) -> Closure (name, captures |> List.mapi child)
+            let lambdaBoundary = nextOrdinal
+            let (body', following) = assignExpr lambdaBoundary (nextOrdinal + 1) body
+            (Lambda (parameters, returnAnnotation, body'), following)
+        | Apply (func, args) | IndirectApply (func, args) ->
+            let (func', afterFunc) = assignExpr boundary nextOrdinal func
+            let (args', following) = assignNonEmpty args afterFunc
+            match expr with
+            | Apply _ -> (Apply (func', args'), following)
+            | _ -> (IndirectApply (func', args'), following)
+        | Closure (name, captures) ->
+            let (captures', following) = assignList captures nextOrdinal
+            (Closure (name, captures'), following)
         | InterpolatedString parts ->
-            InterpolatedString (
+            let (parts', following) =
                 parts
-                |> List.mapi (fun index part ->
+                |> List.mapFold (fun ordinal part ->
                     match part with
-                    | StringText _ -> part
-                    | StringExpr value -> StringExpr (child index value))
-            )
+                    | StringText _ -> (part, ordinal)
+                    | StringExpr value ->
+                        let (value', next) = assignExpr boundary ordinal value
+                        (StringExpr value', next)) nextOrdinal
+            (InterpolatedString parts', following)
         | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _
         | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
         | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
         | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _
-        | Var _ | FuncRef _ | RuntimeError _ -> expr
+        | Var _ | FuncRef _ | RuntimeError _ -> (expr, nextOrdinal)
 
-    let assignTopLevel index topLevel =
-        let path = [index]
+    let assignTopLevel nextOrdinal topLevel =
+        let topLevelBoundary = nextOrdinal
         match topLevel with
         | FunctionDef funcDef ->
             let recursion =
                 match funcDef.Recursion with
-                | Some (RecursiveBindingCandidate candidate) -> Some (parsedMember [] path candidate)
+                | Some (RecursiveBindingCandidate candidate) ->
+                    Some (parsedMember 0 topLevelBoundary candidate)
                 | other -> other
-            FunctionDef { funcDef with Body = assignExpr path (path @ [0]) funcDef.Body; Recursion = recursion }
+            let (body, following) = assignExpr topLevelBoundary (nextOrdinal + 1) funcDef.Body
+            (FunctionDef { funcDef with Body = body; Recursion = recursion }, following)
         | ValueDef valueDef ->
             match valueDef with
             | UncheckedValueDef (name, body) ->
-                ValueDef (UncheckedValueDef (name, assignExpr path (path @ [0]) body))
+                let (body', following) = assignExpr topLevelBoundary (nextOrdinal + 1) body
+                (ValueDef (UncheckedValueDef (name, body')), following)
             | CheckedValueDef (name, typ, body) ->
-                ValueDef (CheckedValueDef (name, typ, assignExpr path (path @ [0]) body))
-        | Expression (modulePath, expr) -> Expression (modulePath, assignExpr path (path @ [0]) expr)
-        | TypeDef _ -> topLevel
+                let (body', following) = assignExpr topLevelBoundary (nextOrdinal + 1) body
+                (ValueDef (CheckedValueDef (name, typ, body')), following)
+        | Expression (modulePath, expr) ->
+            let (expr', following) = assignExpr topLevelBoundary (nextOrdinal + 1) expr
+            (Expression (modulePath, expr'), following)
+        | TypeDef _ -> (topLevel, nextOrdinal + 1)
 
-    Program (topLevels |> List.mapi assignTopLevel)
+    let (assigned, _) = topLevels |> List.mapFold assignTopLevel 1
+    Program assigned
 
 let normalizeSource (source: ParsedSource) : Result<Program, string> =
     let nameAtPrefix prefix identifier =
