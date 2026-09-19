@@ -82,6 +82,13 @@ let private foldFunctionCalls
                 else next
             define uniqueOutputs (Set.add value declared) next rest
     let owned state = state.Units |> Map.keys |> Set.ofSeq
+    let joinStates yesState noState =
+        if yesState.Units <> noState.Units then Error InconsistentJoin
+        else
+            Ok {
+                Units = yesState.Units
+                Exclusive = Set.intersect yesState.Exclusive noState.Exclusive
+            }
     let require borrowed state uses =
         match Set.difference uses (Set.union borrowed (owned state)) |> Set.toList with
         | [] -> Ok ()
@@ -198,16 +205,16 @@ let private foldFunctionCalls
                                     let joined =
                                         match managed yesResult, managed noResult, managed result with
                                         | None, None, None ->
-                                            if yesState <> noState then Error InconsistentJoin
-                                            else Ok (afterNo, yesState)
+                                            joinStates yesState noState
+                                            |> Result.map (fun joined -> afterNo, joined)
                                         | Some yesId, Some noId, Some resultId ->
                                             let uniqueResult = isUnique yesState yesId && isUnique noState noId
                                             drop yesState [yesId] |> Result.bind (fun yesRemainder ->
                                                 drop noState [noId] |> Result.bind (fun noRemainder ->
-                                                    if yesRemainder <> noRemainder then Error InconsistentJoin
-                                                    else
+                                                    joinStates yesRemainder noRemainder
+                                                    |> Result.bind (fun remainder ->
                                                         let unique = if uniqueResult then Set.singleton resultId else Set.empty
-                                                        define unique afterNo yesRemainder [resultId]))
+                                                        define unique afterNo remainder [resultId])))
                                         | _ -> Error InconsistentBlockArgument
                                     joined |> withFacts noFacts)))
             after |> Result.bind (fun (declared, state, facts) -> loop facts declared borrowed state rest)
