@@ -1334,11 +1334,47 @@ let private splitRun
             splitDuration count index runtimeTime
         )
 
+let private packageManagerFixture : Lazy<PackageManager.Config> =
+    lazy
+        let server = Uri "http://127.0.0.1:1"
+        let cachePath =
+            System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                $"dark-compiler-package-e2e-{Environment.ProcessId}.sqlite3")
+        use connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={cachePath}")
+        connection.Open()
+        use schema = connection.CreateCommand()
+        schema.CommandText <-
+            "CREATE TABLE IF NOT EXISTS package_responses "
+            + "(cache_key TEXT PRIMARY KEY, status INTEGER NOT NULL, body TEXT NOT NULL)"
+        schema.ExecuteNonQuery() |> ignore
+        let responses =
+            [ "function/find/Darklang.Test", 404, ""
+              "function/find/Darklang.Test.returnsInt",
+              200,
+              """{"Hash":["0f116690f2572bcfff9e18effd2589ad4fc7672fc46088c219229a7821a122f4"]}"""
+              "function/get/with-location/0f116690f2572bcfff9e18effd2589ad4fc7672fc46088c219229a7821a122f4",
+              200,
+              """{"entity":{"body":{"EInt":[5376903518395640452,5]},"description":"","hash":{"Hash":["0f116690f2572bcfff9e18effd2589ad4fc7672fc46088c219229a7821a122f4"]},"parameters":[{"description":"","name":"_","typ":{"TUnit":[]}}],"permissionCeiling":{"None":[]},"returnType":{"TInt":[]},"typeParams":[]},"location":{"modules":["Test"],"name":"returnsInt","owner":"Darklang"}}"""
+              "type/find/Darklang.Test", 404, ""
+              "type/find/Darklang.Test.returnsInt", 404, ""
+              "value/find/Darklang.Test", 404, ""
+              "value/find/Darklang.Test.returnsInt", 404, "" ]
+        responses
+        |> List.iter (fun (path, status, body) ->
+            use command = connection.CreateCommand()
+            command.CommandText <-
+                "INSERT OR REPLACE INTO package_responses(cache_key, status, body) "
+                + "VALUES ($key, $status, $body)"
+            command.Parameters.AddWithValue("$key", $"{server.AbsoluteUri}{path}") |> ignore
+            command.Parameters.AddWithValue("$status", status) |> ignore
+            command.Parameters.AddWithValue("$body", body) |> ignore
+            command.ExecuteNonQuery() |> ignore)
+        { Server = server; CachePath = cachePath }
+
 let private packageManagerForFile (sourceFile: string) : PackageManager.Config option =
-    if sourceFile.EndsWith("/package_manager.e2e", StringComparison.Ordinal)
-       || sourceFile.EndsWith("/scm/constraint-kinds.dark", StringComparison.Ordinal)
-       || sourceFile.EndsWith("/stdlib/prettyPrinter.dark", StringComparison.Ordinal) then
-        Some (PackageManager.defaultConfig ())
+    if sourceFile.EndsWith("/package_manager.e2e", StringComparison.Ordinal) then
+        Some packageManagerFixture.Value
     else
         None
 
