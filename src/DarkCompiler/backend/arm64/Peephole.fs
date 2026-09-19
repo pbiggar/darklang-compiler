@@ -263,6 +263,15 @@ let peepholeOptimize (instrs: ARM64Symbolic.Instr list) : ARM64Symbolic.Instr li
         // Remove branch to next instruction
         | ARM64Symbolic.B_label target :: ARM64Symbolic.Label lbl :: rest when target = lbl ->
             optimize (ARM64Symbolic.Label lbl :: acc) rest
+        // Preserve the multiply-by-constant forms produced with a single-use
+        // shift temporary. Their shared source makes the shifted ADD exact even
+        // when the flat symbolic stream reaches a control-flow barrier next.
+        | ARM64Symbolic.LSL_imm (lslDest, lslSrc, shift) :: ARM64Symbolic.ADD_reg (addDest, addSrc1, addSrc2) :: rest
+            when lslDest = addSrc2 && lslSrc = addSrc1 ->
+            optimize (ARM64Symbolic.ADD_shifted (addDest, addSrc1, lslSrc, shift) :: acc) rest
+        | ARM64Symbolic.LSL_imm (lslDest, lslSrc, shift) :: ARM64Symbolic.ADD_reg (addDest, addSrc1, addSrc2) :: rest
+            when lslDest = addSrc1 && lslSrc = addSrc2 ->
+            optimize (ARM64Symbolic.ADD_shifted (addDest, addSrc2, lslSrc, shift) :: acc) rest
         // Fold a dead shifted value into either register position of addition.
         | ARM64Symbolic.LSL_imm (lslDest, lslSrc, shift) :: ARM64Symbolic.ADD_reg (addDest, addSrc1, addSrc2) :: rest
             when lslDest = addSrc2

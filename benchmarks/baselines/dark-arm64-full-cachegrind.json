@@ -10,127 +10,127 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-18T22:46:33+00:00",
+  "generated_at": "2026-09-19T07:01:45+00:00",
   "compiler": {
-    "commit": "4569b3ddc80f31015bd5283557a80b791ace0c37",
-    "subject": "Preserve PR fixes without benchmark regressions"
+    "commit": "dbfea5c84ec6ac741124079df74e24789ba3e110",
+    "subject": "Expand backend instruction combining"
   },
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 145114139
+      "instructions": 145114130
     },
     {
       "name": "binary_trees",
-      "instructions": 11053080
+      "instructions": 11053071
     },
     {
       "name": "collatz",
-      "instructions": 70194400
+      "instructions": 70194391
     },
     {
       "name": "edigits",
-      "instructions": 51730209
+      "instructions": 51730200
     },
     {
       "name": "factorial",
-      "instructions": 63468
+      "instructions": 63459
     },
     {
       "name": "fannkuch",
-      "instructions": 233405899
+      "instructions": 233405890
     },
     {
       "name": "fasta",
-      "instructions": 154617366
+      "instructions": 154617357
     },
     {
       "name": "fft",
-      "instructions": 407131151
+      "instructions": 407131142
     },
     {
       "name": "fib",
-      "instructions": 8268587
+      "instructions": 8268578
     },
     {
       "name": "huffman",
-      "instructions": 518434255
+      "instructions": 518434214
     },
     {
       "name": "leibniz",
-      "instructions": 17006831
+      "instructions": 17006822
     },
     {
       "name": "mandelbrot",
-      "instructions": 15227450
+      "instructions": 15227441
     },
     {
       "name": "matmul",
-      "instructions": 42560591
+      "instructions": 42560582
     },
     {
       "name": "merkletrees",
-      "instructions": 3877428
+      "instructions": 3877419
     },
     {
       "name": "myers_diff",
-      "instructions": 4637007013
+      "instructions": 4637007004
     },
     {
       "name": "nbody",
-      "instructions": 14537330
+      "instructions": 14537321
     },
     {
       "name": "nqueen",
-      "instructions": 7420425
+      "instructions": 7420416
     },
     {
       "name": "nsieve",
-      "instructions": 131101395
+      "instructions": 131101386
     },
     {
       "name": "pisum",
-      "instructions": 812477
+      "instructions": 812468
     },
     {
       "name": "primes",
-      "instructions": 1673435
+      "instructions": 1673426
     },
     {
       "name": "quicksort",
-      "instructions": 188808249
+      "instructions": 188808240
     },
     {
       "name": "raytracer",
-      "instructions": 47323918
+      "instructions": 47323909
     },
     {
       "name": "regex_lite",
-      "instructions": 77891424
+      "instructions": 77891415
     },
     {
       "name": "spectral_norm",
-      "instructions": 916603990
+      "instructions": 916603981
     },
     {
       "name": "string_equality",
-      "instructions": 1219845
+      "instructions": 1219836
     },
     {
       "name": "sum_to_n",
-      "instructions": 62009
+      "instructions": 62000
     },
     {
       "name": "tak",
-      "instructions": 48017024
+      "instructions": 48017015
     },
     {
       "name": "tinytemplate",
-      "instructions": 5864163666
+      "instructions": 5864163657
     },
     {
       "name": "warden",
-      "instructions": 47043559
+      "instructions": 47043550
     }
   ]
 }
