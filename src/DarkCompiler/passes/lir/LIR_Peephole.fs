@@ -1058,12 +1058,13 @@ let private foldRegUses folder state (instr: Instr) =
     | StringConcat (_, first, second, remaining) ->
         first :: second :: remaining |> List.fold (foldOperandRegUse folder) state
     | CanonicalBufferEq (_, _, left, right)
-    | FileWriteText (_, left, right)
+    | FileWriteBlob (_, left, right)
     | FileAppendText (_, left, right) ->
         foldOperandRegUse folder state left |> fun acc -> foldOperandRegUse folder acc right
-    | FileReadText (_, path)
+    | FileReadBlob (_, path)
     | FileExists (_, path)
     | FileDelete (_, path)
+    | FileCreateDirectory (_, path)
     | FileSetExecutable (_, path) ->
         foldOperandRegUse folder state path
     | StdoutWrite (_, value, _) ->

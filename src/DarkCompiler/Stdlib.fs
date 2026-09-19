@@ -60,6 +60,9 @@ let cliIntrinsicModule : ModuleDef = {
         { Name = "__hostArchitectureCode"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
         { Name = "__hostname"; TypeParams = []; ParamTypes = []; ReturnType = TSum ("Darklang.Stdlib.Result.Result", [TString; TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]) }
         { Name = "__getenv"; TypeParams = []; ParamTypes = [TString]; ReturnType = TSum ("Darklang.Stdlib.Option.Option", [TString]) }
+        { Name = "__environmentPacked"; TypeParams = []; ParamTypes = []; ReturnType = TString }
+        { Name = "__setenv"; TypeParams = []; ParamTypes = [TString; TString]; ReturnType = TSum ("Darklang.Stdlib.Result.Result", [TUnit; TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]) }
+        { Name = "__unsetenv"; TypeParams = []; ParamTypes = [TString]; ReturnType = TSum ("Darklang.Stdlib.Result.Result", [TUnit; TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]) }
         { Name = "__kill"; TypeParams = []; ParamTypes = [TInt64; TInt64]; ReturnType = TSum ("Darklang.Stdlib.Result.Result", [TUnit; TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]) }
         { Name = "__sleep"; TypeParams = []; ParamTypes = [TFloat64]; ReturnType = TUnit }
         { Name = "__getpid"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
@@ -75,7 +78,17 @@ let cliIntrinsicModule : ModuleDef = {
 let fileIntrinsicModule : ModuleDef = {
     Name = "Darklang.Stdlib.File"
     Functions = [
-        { Name = "readText"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TString }
+        { Name = "currentDirectory"; TypeParams = []; ParamTypes = []; ReturnType = TString }
+        { Name = "listDirectoryPacked"; TypeParams = []; ParamTypes = [TString]; ReturnType = TString }
+        { Name = "readBlob"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TBlob }
+        { Name = "exists"; TypeParams = []; ParamTypes = [TString]; ReturnType = TBool }
+        { Name = "isDirectory"; TypeParams = []; ParamTypes = [TString]; ReturnType = TBool }
+        { Name = "writeBlob"; TypeParams = []; ParamTypes = [TString; TBlob]; ReturnType = resultType TUnit }
+        { Name = "appendText"; TypeParams = []; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
+        { Name = "delete"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TUnit }
+        { Name = "createDirectory"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TUnit }
+        { Name = "setExecutable"; TypeParams = []; ParamTypes = [TString]; ReturnType = resultType TUnit }
+        { Name = "writeFromPtr"; TypeParams = []; ParamTypes = [TString; TRawPtr; TInt64]; ReturnType = TUnit }
     ]
 }
 

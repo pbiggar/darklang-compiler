@@ -20,7 +20,7 @@ let currentUser () : Stdlib.Option.Option<String> =
         match Stdlib.Cli.Env.get "USER" with
         | Some user -> Some user
         | _ ->
-            match Stdlib.File.readText "/etc/passwd" with
+            match Stdlib.Cli.FileSystem.readFileAsString "/etc/passwd" with
             | Ok contents ->
                 Stdlib.Cli.Sys.__currentUserFromPasswd (Stdlib.String.splitOnNewline contents) (Stdlib.Int64.toString (Stdlib.Cli.__getuid ()))
             | Error _ -> Stdlib.Option.Option.None

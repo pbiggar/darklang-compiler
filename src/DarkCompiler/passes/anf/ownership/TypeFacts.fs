@@ -237,8 +237,10 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         | Execute | ProcessIO | TerminateProcess -> Some (AST.TRecord ("Darklang.Stdlib.Cli.NativeOutput", []))
         | RunProcess -> Some (AST.TRecord ("Darklang.Stdlib.Cli.NativeProcessOutput", []))
         | GetEnv | GetArgv -> Some (AST.TSum ("Darklang.Stdlib.Option.Option", [AST.TString]))
-        | Kill -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]))
+        | Kill | SetEnv | UnsetEnv -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]))
         | Hostname -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TString; AST.TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]))
+        | GetEnvironmentPacked | DirectoryCurrent | DirectoryListPacked -> Some AST.TString
+        | FileIsDirectory -> Some AST.TBool
         | HostOS | HostArchitecture | GetPid | GetUid | CpuCount | SpawnProcess -> Some AST.TInt64
     | IfValue (_, thenAtom, _) -> inferAtomType ctx thenAtom
     | Call (funcName, args)
@@ -414,11 +416,12 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RefCountInc (_, _, _, _) -> Some AST.TUnit
     | RefCountDec (_, _, _, _) -> Some AST.TUnit
     | Print _ -> Some AST.TUnit
-    | FileReadText _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TString; AST.TString]))  // Result<String, String>
+    | FileReadBlob _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TBlob; AST.TString]))  // Result<Blob, String>
     | FileExists _ -> Some AST.TBool  // Bool
-    | FileWriteText _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
+    | FileWriteBlob _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
     | FileAppendText _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
     | FileDelete _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
+    | FileCreateDirectory _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TString]))
     | FileSetExecutable _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
     | FileWriteFromPtr _ -> Some AST.TBool  // Returns Bool (success/failure)
     // Raw memory intrinsics (no ref counting - manually managed)

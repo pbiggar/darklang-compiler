@@ -32,7 +32,7 @@ parentheses exercise those implementations successfully.
 | HTTP server | Pure `getMethod`, `get`, and `post` route construction is present. `serve` remains absent because there is no HTTP server host. |
 | SQLite | The upstream `Stdlib.Sqlite` value, query, execution, column, and conversion API is absent. |
 | Language tooling | Parsed-file shape, semantic tokenization, builtin introspection, runtime-value pretty printing, and runtime-value promotion are incomplete or absent. The snapshot-backed `ValueSearch` subset does not provide the interpreter's live package service. |
-| Host APIs | Only the explicitly documented CLI/POSIX subset is implemented. The broader interpreter filesystem, environment, descriptor, download, watch, lock, and daemon surfaces have no parity claim. |
+| Host APIs | The documented CLI filesystem/environment and POSIX subsets are implemented. Broader descriptor, download, watch, lock, and daemon surfaces have no parity claim. |
 | Float presentation | Finite `Float.toString` intentionally emits the shortest round-tripping decimal, while the pinned interpreter uses lossy `G12` formatting. This is a deliberate observable improvement, not an AOT requirement. |
 
 Pretty layout/rendering, SGR-aware CLI text measurement and marked clipping,

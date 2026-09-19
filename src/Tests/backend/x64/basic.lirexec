@@ -9,12 +9,12 @@ Ret
 X24
 
 ---NAME---
-Reject unsupported FileReadText path operand
+Reject unsupported FileReadBlob path operand
 ---INPUT-LIR---
-X0 <- FileReadText(Imm 0)
+X0 <- FileReadBlob(Imm 0)
 Ret
 ---EXPECT-CODEGEN-ERROR---
-FileReadText path
+FileReadBlob path
 
 ---NAME---
 MOV and exit

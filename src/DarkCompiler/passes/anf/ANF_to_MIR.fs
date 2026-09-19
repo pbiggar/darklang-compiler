@@ -130,6 +130,12 @@ let convertCliOperation (operation: ANF.CliOperation) : MIR.CliOperation =
     | ANF.HostArchitecture -> MIR.HostArchitecture
     | ANF.Hostname -> MIR.Hostname
     | ANF.GetEnv -> MIR.GetEnv
+    | ANF.GetEnvironmentPacked -> MIR.GetEnvironmentPacked
+    | ANF.SetEnv -> MIR.SetEnv
+    | ANF.UnsetEnv -> MIR.UnsetEnv
+    | ANF.DirectoryCurrent -> MIR.DirectoryCurrent
+    | ANF.DirectoryListPacked -> MIR.DirectoryListPacked
+    | ANF.FileIsDirectory -> MIR.FileIsDirectory
     | ANF.GetArgv -> MIR.GetArgv
     | ANF.Kill -> MIR.Kill
     | ANF.GetPid -> MIR.GetPid
@@ -243,11 +249,12 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
         maxTempIdWithAtoms closure args
     | ANF.ClosureTailCall (closure, args) ->
         maxTempIdWithAtoms closure args
-    | ANF.FileReadText path -> maxTempIdInAtom path
+    | ANF.FileReadBlob path -> maxTempIdInAtom path
     | ANF.FileExists path -> maxTempIdInAtom path
-    | ANF.FileWriteText (path, content) -> max (maxTempIdInAtom path) (maxTempIdInAtom content)
+    | ANF.FileWriteBlob (path, content) -> max (maxTempIdInAtom path) (maxTempIdInAtom content)
     | ANF.FileAppendText (path, content) -> max (maxTempIdInAtom path) (maxTempIdInAtom content)
     | ANF.FileDelete path -> maxTempIdInAtom path
+    | ANF.FileCreateDirectory path -> maxTempIdInAtom path
     | ANF.FileSetExecutable path -> maxTempIdInAtom path
     | ANF.FileWriteFromPtr (path, ptr, length) -> max (maxTempIdInAtom path) (max (maxTempIdInAtom ptr) (maxTempIdInAtom length))
     | ANF.RawAlloc numBytes -> maxTempIdInAtom numBytes
@@ -641,11 +648,12 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.StdinReadLine -> "StdinReadLine"
     | ANF.RuntimeError _ -> "RuntimeError"
     | ANF.RuntimeErrorString _ -> "RuntimeErrorString"
-    | ANF.FileReadText _ -> "FileReadText"
+    | ANF.FileReadBlob _ -> "FileReadBlob"
     | ANF.FileExists _ -> "FileExists"
-    | ANF.FileWriteText _ -> "FileWriteText"
+    | ANF.FileWriteBlob _ -> "FileWriteBlob"
     | ANF.FileAppendText _ -> "FileAppendText"
     | ANF.FileDelete _ -> "FileDelete"
+    | ANF.FileCreateDirectory _ -> "FileCreateDirectory"
     | ANF.FileSetExecutable _ -> "FileSetExecutable"
     | ANF.FileWriteFromPtr _ -> "FileWriteFromPtr"
     | ANF.FloatSqrt _ -> "FloatSqrt"
@@ -1255,18 +1263,18 @@ let rec convertExpr
                         atomToOperand builder rightAtom
                         |> Result.map (fun rightOp ->
                             [MIR.CanonicalBufferEq (destReg, kind, leftOp, rightOp)]))
-                | ANF.FileReadText pathAtom ->
+                | ANF.FileReadBlob pathAtom ->
                     atomToOperand builder pathAtom
-                    |> Result.map (fun pathOp -> [MIR.FileReadText (destReg, pathOp)])
+                    |> Result.map (fun pathOp -> [MIR.FileReadBlob (destReg, pathOp)])
                 | ANF.FileExists pathAtom ->
                     atomToOperand builder pathAtom
                     |> Result.map (fun pathOp -> [MIR.FileExists (destReg, pathOp)])
-                | ANF.FileWriteText (pathAtom, contentAtom) ->
+                | ANF.FileWriteBlob (pathAtom, contentAtom) ->
                     atomToOperand builder pathAtom
                     |> Result.bind (fun pathOp ->
                         atomToOperand builder contentAtom
                         |> Result.map (fun contentOp ->
-                            [MIR.FileWriteText (destReg, pathOp, contentOp)]))
+                            [MIR.FileWriteBlob (destReg, pathOp, contentOp)]))
                 | ANF.FileAppendText (pathAtom, contentAtom) ->
                     atomToOperand builder pathAtom
                     |> Result.bind (fun pathOp ->
@@ -1276,6 +1284,9 @@ let rec convertExpr
                 | ANF.FileDelete pathAtom ->
                     atomToOperand builder pathAtom
                     |> Result.map (fun pathOp -> [MIR.FileDelete (destReg, pathOp)])
+                | ANF.FileCreateDirectory pathAtom ->
+                    atomToOperand builder pathAtom
+                    |> Result.map (fun pathOp -> [MIR.FileCreateDirectory (destReg, pathOp)])
                 | ANF.FileSetExecutable pathAtom ->
                     atomToOperand builder pathAtom
                     |> Result.map (fun pathOp -> [MIR.FileSetExecutable (destReg, pathOp)])

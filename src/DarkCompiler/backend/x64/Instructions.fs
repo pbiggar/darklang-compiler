@@ -334,17 +334,20 @@ let internal translateInstr
     | LIR.PrintBlob reg ->
         X64EmitPrinting.emitPrintBlob ctx reg
 
-    | LIR.FileReadText (dest, path) ->
-        X64EmitFiles.emitFileReadText ctx dest path
+    | LIR.FileReadBlob (dest, path) ->
+        X64EmitFiles.emitFileReadBlob ctx dest path
 
-    | LIR.FileWriteText (dest, path, content) | LIR.FileAppendText (dest, path, content) ->
-        X64EmitFiles.emitFileWriteText ctx instr dest path content
+    | LIR.FileWriteBlob (dest, path, content) | LIR.FileAppendText (dest, path, content) ->
+        X64EmitFiles.emitFileWriteBlob ctx instr dest path content
 
     | LIR.FileExists (dest, path) ->
         X64EmitFiles.emitFileExists ctx dest path
 
-    | LIR.FileDelete (dest, _) ->
-        X64EmitFiles.emitFileDelete ctx dest
+    | LIR.FileDelete (dest, path) ->
+        X64EmitFiles.emitFileDelete ctx dest path
+
+    | LIR.FileCreateDirectory (dest, path) ->
+        X64EmitFiles.emitFileCreateDirectory ctx dest path
 
     | LIR.FileSetExecutable (dest, _) ->
         X64EmitFiles.emitFileSetExecutable ctx dest

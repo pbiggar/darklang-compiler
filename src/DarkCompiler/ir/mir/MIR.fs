@@ -76,6 +76,12 @@ type CliOperation =
     | HostArchitecture
     | Hostname
     | GetEnv
+    | GetEnvironmentPacked
+    | SetEnv
+    | UnsetEnv
+    | DirectoryCurrent
+    | DirectoryListPacked
+    | FileIsDirectory
     | GetArgv
     | Kill
     | GetPid
@@ -118,11 +124,12 @@ type Instr =
     | RuntimeError of message:string               // Print runtime error to stderr and exit with code 1
     | RuntimeErrorString of message:Operand        // Print a heap String error to stderr and exit with code 1
     // File I/O intrinsics (generate syscalls)
-    | FileReadText of dest:VReg * path:Operand    // Read file, returns Result<String, String>
+    | FileReadBlob of dest:VReg * path:Operand    // Read file, returns Result<Blob, String>
     | FileExists of dest:VReg * path:Operand      // Check if file exists, returns Bool
-    | FileWriteText of dest:VReg * path:Operand * content:Operand   // Write file, returns Result<Unit, String>
+    | FileWriteBlob of dest:VReg * path:Operand * content:Operand   // Write Blob, returns Result<Unit, String>
     | FileAppendText of dest:VReg * path:Operand * content:Operand  // Append to file, returns Result<Unit, String>
     | FileDelete of dest:VReg * path:Operand      // Delete file, returns Result<Unit, String>
+    | FileCreateDirectory of dest:VReg * path:Operand // Create directory, returns Result<Unit, String>
     | FileSetExecutable of dest:VReg * path:Operand  // Set executable bit, returns Result<Unit, String>
     | FileWriteFromPtr of dest:VReg * path:Operand * ptr:Operand * length:Operand  // Write raw bytes to file
     // Float intrinsics

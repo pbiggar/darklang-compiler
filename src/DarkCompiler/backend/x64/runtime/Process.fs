@@ -110,6 +110,525 @@ let internal generateCliArgvHelper (enableLeakCheck: bool) : X86_64.Instr list =
     @ leakInc
     @ [ X86_64.RET ]
 
+/// Return the original process environment as NUL-delimited UTF-8 entries.
+let internal generateCliEnvironmentPackedHelper (enableLeakCheck: bool) : X86_64.Instr list =
+    let label = "__dark_cli_environment_packed"
+    let findRoot = $"{label}_find_root"
+    let rootFound = $"{label}_root_found"
+    let findArgvEnd = $"{label}_find_argv_end"
+    let countEntry = $"{label}_count_entry"
+    let countByte = $"{label}_count_byte"
+    let countNext = $"{label}_count_next"
+    let countDone = $"{label}_count_done"
+    let copyEntry = $"{label}_copy_entry"
+    let copyByte = $"{label}_copy_byte"
+    let copyNext = $"{label}_copy_next"
+    let copyDone = $"{label}_copy_done"
+    let leakInc =
+        if enableLeakCheck then
+            [ X86_64.LEA_rip (X86_64.R11, "_leak_count")
+              X86_64.MOV_load (X86_64.RDX, X86_64.R11, 0)
+              X86_64.ADD_imm (X86_64.RDX, 1)
+              X86_64.MOV_store (X86_64.R11, 0, X86_64.RDX) ]
+        else []
+    [ X86_64.Label label
+      X86_64.MOV_reg (X86_64.RAX, X86_64.RBP)
+      X86_64.Label findRoot
+      X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
+      X86_64.CMP_imm (X86_64.RDX, 0)
+      X86_64.Jcc (X86_64.EQ, rootFound)
+      X86_64.MOV_reg (X86_64.RAX, X86_64.RDX)
+      X86_64.JMP findRoot
+      X86_64.Label rootFound
+      X86_64.ADD_imm (X86_64.RAX, 16)
+      X86_64.Label findArgvEnd
+      X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
+      X86_64.ADD_imm (X86_64.RAX, 8)
+      X86_64.CMP_imm (X86_64.RDX, 0)
+      X86_64.Jcc (X86_64.NE, findArgvEnd)
+      X86_64.MOV_reg (X86_64.R8, X86_64.RAX)
+      X86_64.XOR_reg (X86_64.RCX, X86_64.RCX)
+      X86_64.Label countEntry
+      X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
+      X86_64.CMP_imm (X86_64.RDX, 0)
+      X86_64.Jcc (X86_64.EQ, countDone)
+      X86_64.Label countByte
+      X86_64.MOV_load_byte (X86_64.R9, X86_64.RDX, 0)
+      X86_64.ADD_imm (X86_64.RCX, 1)
+      X86_64.ADD_imm (X86_64.RDX, 1)
+      X86_64.CMP_imm (X86_64.R9, 0)
+      X86_64.Jcc (X86_64.EQ, countNext)
+      X86_64.JMP countByte
+      X86_64.Label countNext
+      X86_64.ADD_imm (X86_64.RAX, 8)
+      X86_64.JMP countEntry
+      X86_64.Label countDone
+      X86_64.MOV_reg (X86_64.R10, heapPtr)
+      X86_64.MOV_reg (X86_64.R11, X86_64.RCX)
+      X86_64.ADD_imm (X86_64.R11, 7)
+      X86_64.AND_imm (X86_64.R11, -8)
+      X86_64.ADD_imm (X86_64.R11, 16)
+      X86_64.ADD_reg (heapPtr, X86_64.R11)
+      X86_64.MOV_imm32 (X86_64.RDX, 1)
+      X86_64.MOV_store (X86_64.R10, 0, X86_64.RDX)
+      X86_64.MOV_store (X86_64.R10, 8, X86_64.RCX)
+      X86_64.LEA (X86_64.R9, X86_64.R10, 16)
+      X86_64.MOV_reg (X86_64.RAX, X86_64.R8)
+      X86_64.Label copyEntry
+      X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
+      X86_64.CMP_imm (X86_64.RDX, 0)
+      X86_64.Jcc (X86_64.EQ, copyDone)
+      X86_64.Label copyByte
+      X86_64.MOV_load_byte (X86_64.R8, X86_64.RDX, 0)
+      X86_64.MOV_store_byte (X86_64.R9, 0, X86_64.R8)
+      X86_64.ADD_imm (X86_64.RDX, 1)
+      X86_64.ADD_imm (X86_64.R9, 1)
+      X86_64.CMP_imm (X86_64.R8, 0)
+      X86_64.Jcc (X86_64.EQ, copyNext)
+      X86_64.JMP copyByte
+      X86_64.Label copyNext
+      X86_64.ADD_imm (X86_64.RAX, 8)
+      X86_64.JMP copyEntry
+      X86_64.Label copyDone
+      X86_64.MOV_reg (X86_64.RAX, X86_64.R10) ]
+    @ leakInc
+    @ [X86_64.RET]
+
+/// Return getcwd(2) as a managed UTF-8 string.
+let internal generateCliDirectoryCurrentHelper (enableLeakCheck: bool) : X86_64.Instr list =
+    let label = "__dark_cli_directory_current"
+    let lengthLoop = $"{label}_length"
+    let lengthDone = $"{label}_length_done"
+    let copyLoop = $"{label}_copy"
+    let copyDone = $"{label}_copy_done"
+    let failure = $"{label}_failure"
+    let complete = $"{label}_complete"
+    [ X86_64.Label label
+      X86_64.SUB_imm (X86_64.RSP, 4096)
+      X86_64.MOV_reg (X86_64.RDI, X86_64.RSP) ]
+    @ loadImm64 X86_64.RSI 4096L
+    @ loadImm64 X86_64.RAX 79L
+    @ [ X86_64.SYSCALL
+        X86_64.CMP_imm (X86_64.RAX, 0)
+        X86_64.Jcc (X86_64.LT, failure)
+        X86_64.XOR_reg (X86_64.RCX, X86_64.RCX)
+        X86_64.Label lengthLoop
+        X86_64.MOV_reg (X86_64.RDX, X86_64.RSP)
+        X86_64.ADD_reg (X86_64.RDX, X86_64.RCX)
+        X86_64.MOV_load_byte (X86_64.R8, X86_64.RDX, 0)
+        X86_64.CMP_imm (X86_64.R8, 0)
+        X86_64.Jcc (X86_64.EQ, lengthDone)
+        X86_64.ADD_imm (X86_64.RCX, 1)
+        X86_64.JMP lengthLoop
+        X86_64.Label lengthDone
+        X86_64.MOV_reg (X86_64.R10, heapPtr)
+        X86_64.MOV_reg (X86_64.R11, X86_64.RCX)
+        X86_64.ADD_imm (X86_64.R11, 7)
+        X86_64.AND_imm (X86_64.R11, -8)
+        X86_64.ADD_imm (X86_64.R11, 16)
+        X86_64.ADD_reg (heapPtr, X86_64.R11)
+        X86_64.MOV_imm32 (X86_64.RDX, 1)
+        X86_64.MOV_store (X86_64.R10, 0, X86_64.RDX)
+        X86_64.MOV_store (X86_64.R10, 8, X86_64.RCX)
+        X86_64.LEA (X86_64.R9, X86_64.R10, 16)
+        X86_64.XOR_reg (X86_64.R8, X86_64.R8)
+        X86_64.Label copyLoop
+        X86_64.CMP_reg (X86_64.R8, X86_64.RCX)
+        X86_64.Jcc (X86_64.GE, copyDone)
+        X86_64.MOV_reg (X86_64.RDX, X86_64.RSP)
+        X86_64.ADD_reg (X86_64.RDX, X86_64.R8)
+        X86_64.MOV_load_byte (X86_64.RDI, X86_64.RDX, 0)
+        X86_64.MOV_store_byte (X86_64.R9, 0, X86_64.RDI)
+        X86_64.ADD_imm (X86_64.R9, 1)
+        X86_64.ADD_imm (X86_64.R8, 1)
+        X86_64.JMP copyLoop
+        X86_64.Label copyDone
+        X86_64.MOV_reg (X86_64.RAX, X86_64.R10)
+        X86_64.ADD_imm (X86_64.RSP, 4096) ]
+    @ (if enableLeakCheck then
+           [ X86_64.LEA_rip (X86_64.R11, "_leak_count")
+             X86_64.MOV_load (X86_64.RDX, X86_64.R11, 0)
+             X86_64.ADD_imm (X86_64.RDX, 1)
+             X86_64.MOV_store (X86_64.R11, 0, X86_64.RDX) ]
+       else [])
+    @ [ X86_64.JMP complete
+        X86_64.Label failure
+        X86_64.ADD_imm (X86_64.RSP, 4096) ]
+    @ emitStringLiteral X86_64.RAX ""
+    @ [ X86_64.Label complete
+        X86_64.RET ]
+
+/// Mutate the process environment vector used by getenv and child execve calls.
+let internal generateCliSetEnvHelper (enableLeakCheck: bool) : X86_64.Instr list =
+    let label = "__dark_cli_setenv"
+    let findRoot = $"{label}_find_root"
+    let rootFound = $"{label}_root_found"
+    let findArgvEnd = $"{label}_find_argv_end"
+    let nextEntry = $"{label}_next_entry"
+    let compare = $"{label}_compare"
+    let nameMatched = $"{label}_name_matched"
+    let advance = $"{label}_advance"
+    let useSlot = $"{label}_use_slot"
+    let copyName = $"{label}_copy_name"
+    let nameDone = $"{label}_name_done"
+    let copyValue = $"{label}_copy_value"
+    let valueDone = $"{label}_value_done"
+    let stored = $"{label}_stored"
+    [ X86_64.Label label
+      X86_64.PUSH X86_64.R12
+      X86_64.PUSH X86_64.R13
+      X86_64.PUSH X86_64.R15
+      X86_64.MOV_reg (X86_64.R12, X86_64.RDI)
+      X86_64.MOV_reg (X86_64.R13, X86_64.RSI)
+      X86_64.MOV_reg (X86_64.RAX, X86_64.RBP)
+      X86_64.Label findRoot
+      X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
+      X86_64.CMP_imm (X86_64.RDX, 0)
+      X86_64.Jcc (X86_64.EQ, rootFound)
+      X86_64.MOV_reg (X86_64.RAX, X86_64.RDX)
+      X86_64.JMP findRoot
+      X86_64.Label rootFound
+      X86_64.ADD_imm (X86_64.RAX, 16)
+      X86_64.Label findArgvEnd
+      X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
+      X86_64.ADD_imm (X86_64.RAX, 8)
+      X86_64.CMP_imm (X86_64.RDX, 0)
+      X86_64.Jcc (X86_64.NE, findArgvEnd)
+      X86_64.MOV_load (X86_64.RCX, X86_64.R12, 8)
+      X86_64.Label nextEntry
+      X86_64.MOV_load (X86_64.R8, X86_64.RAX, 0)
+      X86_64.CMP_imm (X86_64.R8, 0)
+      X86_64.Jcc (X86_64.EQ, useSlot)
+      X86_64.XOR_reg (X86_64.R9, X86_64.R9)
+      X86_64.Label compare
+      X86_64.CMP_reg (X86_64.R9, X86_64.RCX)
+      X86_64.Jcc (X86_64.GE, nameMatched)
+      X86_64.LEA (X86_64.R10, X86_64.R12, 16)
+      X86_64.ADD_reg (X86_64.R10, X86_64.R9)
+      X86_64.MOV_load_byte (X86_64.RDX, X86_64.R10, 0)
+      X86_64.MOV_reg (X86_64.R10, X86_64.R8)
+      X86_64.ADD_reg (X86_64.R10, X86_64.R9)
+      X86_64.MOV_load_byte (X86_64.R11, X86_64.R10, 0)
+      X86_64.CMP_reg (X86_64.RDX, X86_64.R11)
+      X86_64.Jcc (X86_64.NE, advance)
+      X86_64.ADD_imm (X86_64.R9, 1)
+      X86_64.JMP compare
+      X86_64.Label nameMatched
+      X86_64.MOV_reg (X86_64.R10, X86_64.R8)
+      X86_64.ADD_reg (X86_64.R10, X86_64.RCX)
+      X86_64.MOV_load_byte (X86_64.RDX, X86_64.R10, 0)
+      X86_64.CMP_imm (X86_64.RDX, 61)
+      X86_64.Jcc (X86_64.EQ, useSlot)
+      X86_64.Label advance
+      X86_64.ADD_imm (X86_64.RAX, 8)
+      X86_64.JMP nextEntry
+      X86_64.Label useSlot
+      X86_64.MOV_reg (X86_64.R15, X86_64.RAX)
+      X86_64.MOV_reg (X86_64.R10, heapPtr)
+      X86_64.MOV_load (X86_64.R11, X86_64.R13, 8)
+      X86_64.ADD_reg (X86_64.R11, X86_64.RCX)
+      X86_64.ADD_imm (X86_64.R11, 9)
+      X86_64.AND_imm (X86_64.R11, -8)
+      X86_64.ADD_reg (heapPtr, X86_64.R11)
+      X86_64.LEA (X86_64.R8, X86_64.R12, 16)
+      X86_64.MOV_reg (X86_64.R9, X86_64.R10)
+      X86_64.MOV_reg (X86_64.R11, X86_64.RCX)
+      X86_64.Label copyName
+      X86_64.CMP_imm (X86_64.R11, 0)
+      X86_64.Jcc (X86_64.EQ, nameDone)
+      X86_64.MOV_load_byte (X86_64.RDX, X86_64.R8, 0)
+      X86_64.MOV_store_byte (X86_64.R9, 0, X86_64.RDX)
+      X86_64.ADD_imm (X86_64.R8, 1)
+      X86_64.ADD_imm (X86_64.R9, 1)
+      X86_64.SUB_imm (X86_64.R11, 1)
+      X86_64.JMP copyName
+      X86_64.Label nameDone
+      X86_64.MOV_imm32 (X86_64.RDX, 61)
+      X86_64.MOV_store_byte (X86_64.R9, 0, X86_64.RDX)
+      X86_64.ADD_imm (X86_64.R9, 1)
+      X86_64.LEA (X86_64.R8, X86_64.R13, 16)
+      X86_64.MOV_load (X86_64.R11, X86_64.R13, 8)
+      X86_64.Label copyValue
+      X86_64.CMP_imm (X86_64.R11, 0)
+      X86_64.Jcc (X86_64.EQ, valueDone)
+      X86_64.MOV_load_byte (X86_64.RDX, X86_64.R8, 0)
+      X86_64.MOV_store_byte (X86_64.R9, 0, X86_64.RDX)
+      X86_64.ADD_imm (X86_64.R8, 1)
+      X86_64.ADD_imm (X86_64.R9, 1)
+      X86_64.SUB_imm (X86_64.R11, 1)
+      X86_64.JMP copyValue
+      X86_64.Label valueDone
+      X86_64.XOR_reg (X86_64.RDX, X86_64.RDX)
+      X86_64.MOV_store_byte (X86_64.R9, 0, X86_64.RDX)
+      X86_64.MOV_load (X86_64.R8, X86_64.R15, 0)
+      X86_64.MOV_store (X86_64.R15, 0, X86_64.R10)
+      X86_64.CMP_imm (X86_64.R8, 0)
+      X86_64.Jcc (X86_64.NE, stored)
+      X86_64.MOV_store (X86_64.R15, 8, X86_64.R8)
+      X86_64.Label stored
+      X86_64.MOV_reg (X86_64.RAX, heapPtr)
+      X86_64.ADD_imm (heapPtr, 24)
+      X86_64.XOR_reg (X86_64.RDX, X86_64.RDX)
+      X86_64.MOV_store (X86_64.RAX, 0, X86_64.RDX)
+      X86_64.MOV_store (X86_64.RAX, 8, X86_64.RDX)
+      X86_64.MOV_imm32 (X86_64.RDX, 1)
+      X86_64.MOV_store (X86_64.RAX, 16, X86_64.RDX) ]
+    @ (if enableLeakCheck then
+           [ X86_64.LEA_rip (X86_64.R11, "_leak_count")
+             X86_64.MOV_load (X86_64.RDX, X86_64.R11, 0)
+             X86_64.ADD_imm (X86_64.RDX, 1)
+             X86_64.MOV_store (X86_64.R11, 0, X86_64.RDX) ]
+       else [])
+    @ [ X86_64.POP X86_64.R15
+        X86_64.POP X86_64.R13
+        X86_64.POP X86_64.R12
+        X86_64.RET ]
+
+/// Remove a matching entry from the original process environment vector.
+let internal generateCliUnsetEnvHelper (enableLeakCheck: bool) : X86_64.Instr list =
+    let label = "__dark_cli_unsetenv"
+    let findRoot = $"{label}_find_root"
+    let rootFound = $"{label}_root_found"
+    let findArgvEnd = $"{label}_find_argv_end"
+    let nextEntry = $"{label}_next_entry"
+    let compare = $"{label}_compare"
+    let nameMatched = $"{label}_name_matched"
+    let advance = $"{label}_advance"
+    let shift = $"{label}_shift"
+    let doneLabel = $"{label}_done"
+    [ X86_64.Label label
+      X86_64.PUSH X86_64.R12
+      X86_64.MOV_reg (X86_64.R12, X86_64.RDI)
+      X86_64.MOV_reg (X86_64.RAX, X86_64.RBP)
+      X86_64.Label findRoot
+      X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
+      X86_64.CMP_imm (X86_64.RDX, 0)
+      X86_64.Jcc (X86_64.EQ, rootFound)
+      X86_64.MOV_reg (X86_64.RAX, X86_64.RDX)
+      X86_64.JMP findRoot
+      X86_64.Label rootFound
+      X86_64.ADD_imm (X86_64.RAX, 16)
+      X86_64.Label findArgvEnd
+      X86_64.MOV_load (X86_64.RDX, X86_64.RAX, 0)
+      X86_64.ADD_imm (X86_64.RAX, 8)
+      X86_64.CMP_imm (X86_64.RDX, 0)
+      X86_64.Jcc (X86_64.NE, findArgvEnd)
+      X86_64.MOV_load (X86_64.RCX, X86_64.R12, 8)
+      X86_64.Label nextEntry
+      X86_64.MOV_load (X86_64.R8, X86_64.RAX, 0)
+      X86_64.CMP_imm (X86_64.R8, 0)
+      X86_64.Jcc (X86_64.EQ, doneLabel)
+      X86_64.XOR_reg (X86_64.R9, X86_64.R9)
+      X86_64.Label compare
+      X86_64.CMP_reg (X86_64.R9, X86_64.RCX)
+      X86_64.Jcc (X86_64.GE, nameMatched)
+      X86_64.LEA (X86_64.R10, X86_64.R12, 16)
+      X86_64.ADD_reg (X86_64.R10, X86_64.R9)
+      X86_64.MOV_load_byte (X86_64.RDX, X86_64.R10, 0)
+      X86_64.MOV_reg (X86_64.R10, X86_64.R8)
+      X86_64.ADD_reg (X86_64.R10, X86_64.R9)
+      X86_64.MOV_load_byte (X86_64.R11, X86_64.R10, 0)
+      X86_64.CMP_reg (X86_64.RDX, X86_64.R11)
+      X86_64.Jcc (X86_64.NE, advance)
+      X86_64.ADD_imm (X86_64.R9, 1)
+      X86_64.JMP compare
+      X86_64.Label nameMatched
+      X86_64.MOV_reg (X86_64.R10, X86_64.R8)
+      X86_64.ADD_reg (X86_64.R10, X86_64.RCX)
+      X86_64.MOV_load_byte (X86_64.RDX, X86_64.R10, 0)
+      X86_64.CMP_imm (X86_64.RDX, 61)
+      X86_64.Jcc (X86_64.NE, advance)
+      X86_64.MOV_reg (X86_64.R8, X86_64.RAX)
+      X86_64.LEA (X86_64.R9, X86_64.RAX, 8)
+      X86_64.Label shift
+      X86_64.MOV_load (X86_64.R10, X86_64.R9, 0)
+      X86_64.MOV_store (X86_64.R8, 0, X86_64.R10)
+      X86_64.CMP_imm (X86_64.R10, 0)
+      X86_64.Jcc (X86_64.EQ, doneLabel)
+      X86_64.ADD_imm (X86_64.R8, 8)
+      X86_64.ADD_imm (X86_64.R9, 8)
+      X86_64.JMP shift
+      X86_64.Label advance
+      X86_64.ADD_imm (X86_64.RAX, 8)
+      X86_64.JMP nextEntry
+      X86_64.Label doneLabel
+      X86_64.MOV_reg (X86_64.RAX, heapPtr)
+      X86_64.ADD_imm (heapPtr, 24)
+      X86_64.XOR_reg (X86_64.RDX, X86_64.RDX)
+      X86_64.MOV_store (X86_64.RAX, 0, X86_64.RDX)
+      X86_64.MOV_store (X86_64.RAX, 8, X86_64.RDX)
+      X86_64.MOV_imm32 (X86_64.RDX, 1)
+      X86_64.MOV_store (X86_64.RAX, 16, X86_64.RDX) ]
+    @ (if enableLeakCheck then
+           [ X86_64.LEA_rip (X86_64.R11, "_leak_count")
+             X86_64.MOV_load (X86_64.RDX, X86_64.R11, 0)
+             X86_64.ADD_imm (X86_64.RDX, 1)
+             X86_64.MOV_store (X86_64.R11, 0, X86_64.RDX) ]
+       else [])
+    @ [ X86_64.POP X86_64.R12
+        X86_64.RET ]
+
+/// Return getdents64(2) entries as NUL-delimited full paths.
+let internal generateCliDirectoryListHelper (enableLeakCheck: bool) : X86_64.Instr list =
+    let label = "__dark_cli_directory_list"
+    let copyPath = $"{label}_copy_path"
+    let pathDone = $"{label}_path_done"
+    let readChunk = $"{label}_read_chunk"
+    let readDone = $"{label}_read_done"
+    let entryLoop = $"{label}_entry_loop"
+    let entriesDone = $"{label}_entries_done"
+    let skipEntry = $"{label}_skip_entry"
+    let appendPath = $"{label}_append_path"
+    let appendPathLoop = $"{label}_append_path_loop"
+    let pathAppended = $"{label}_path_appended"
+    let appendName = $"{label}_append_name"
+    let nameDone = $"{label}_name_done"
+    let openFailed = $"{label}_open_failed"
+    let complete = $"{label}_complete"
+    [ X86_64.Label label
+      X86_64.PUSH X86_64.R12
+      X86_64.PUSH X86_64.R13
+      X86_64.PUSH X86_64.R15
+      X86_64.SUB_imm (X86_64.RSP, 8208)
+      X86_64.MOV_store (X86_64.RSP, 8192, X86_64.RDI)
+      X86_64.MOV_load (X86_64.RCX, X86_64.RDI, 8)
+      X86_64.MOV_store (X86_64.RSP, 8200, X86_64.RCX)
+      X86_64.LEA (X86_64.RSI, X86_64.RDI, 16)
+      X86_64.MOV_reg (X86_64.RDI, X86_64.RSP)
+      X86_64.XOR_reg (X86_64.R8, X86_64.R8)
+      X86_64.Label copyPath
+      X86_64.CMP_reg (X86_64.R8, X86_64.RCX)
+      X86_64.Jcc (X86_64.GE, pathDone)
+      X86_64.MOV_reg (X86_64.R9, X86_64.RSI)
+      X86_64.ADD_reg (X86_64.R9, X86_64.R8)
+      X86_64.MOV_load_byte (X86_64.R10, X86_64.R9, 0)
+      X86_64.MOV_reg (X86_64.R9, X86_64.RDI)
+      X86_64.ADD_reg (X86_64.R9, X86_64.R8)
+      X86_64.MOV_store_byte (X86_64.R9, 0, X86_64.R10)
+      X86_64.ADD_imm (X86_64.R8, 1)
+      X86_64.JMP copyPath
+      X86_64.Label pathDone
+      X86_64.MOV_reg (X86_64.R9, X86_64.RDI)
+      X86_64.ADD_reg (X86_64.R9, X86_64.RCX)
+      X86_64.XOR_reg (X86_64.R10, X86_64.R10)
+      X86_64.MOV_store_byte (X86_64.R9, 0, X86_64.R10) ]
+    @ loadImm64 X86_64.RSI 65536L
+    @ loadImm64 X86_64.RDX 0L
+    @ loadImm64 X86_64.RAX (int64 syscalls.Open)
+    @ [ X86_64.SYSCALL
+        X86_64.CMP_imm (X86_64.RAX, 0)
+        X86_64.Jcc (X86_64.LT, openFailed)
+        X86_64.MOV_reg (X86_64.R15, X86_64.RAX)
+        X86_64.MOV_reg (X86_64.R12, heapPtr)
+        X86_64.XOR_reg (X86_64.R13, X86_64.R13)
+        X86_64.Label readChunk
+        X86_64.MOV_reg (X86_64.RDI, X86_64.R15)
+        X86_64.LEA (X86_64.RSI, X86_64.RSP, 4096) ]
+    @ loadImm64 X86_64.RDX 4096L
+    @ loadImm64 X86_64.RAX 217L
+    @ [ X86_64.SYSCALL
+        X86_64.CMP_imm (X86_64.RAX, 0)
+        X86_64.Jcc (X86_64.LE, readDone)
+        X86_64.MOV_reg (X86_64.RCX, X86_64.RAX)
+        X86_64.XOR_reg (X86_64.R8, X86_64.R8)
+        X86_64.Label entryLoop
+        X86_64.CMP_reg (X86_64.R8, X86_64.RCX)
+        X86_64.Jcc (X86_64.GE, entriesDone)
+        X86_64.LEA (X86_64.R9, X86_64.RSP, 4096)
+        X86_64.ADD_reg (X86_64.R9, X86_64.R8)
+        X86_64.MOV_load_byte (X86_64.R10, X86_64.R9, 16)
+        X86_64.MOV_load_byte (X86_64.R11, X86_64.R9, 17)
+        X86_64.SHL_imm (X86_64.R11, 8)
+        X86_64.OR_reg (X86_64.R10, X86_64.R11)
+        X86_64.ADD_imm (X86_64.R9, 19)
+        X86_64.MOV_load_byte (X86_64.R11, X86_64.R9, 0)
+        X86_64.CMP_imm (X86_64.R11, 46)
+        X86_64.Jcc (X86_64.NE, appendPath)
+        X86_64.MOV_load_byte (X86_64.R11, X86_64.R9, 1)
+        X86_64.CMP_imm (X86_64.R11, 0)
+        X86_64.Jcc (X86_64.EQ, skipEntry)
+        X86_64.CMP_imm (X86_64.R11, 46)
+        X86_64.Jcc (X86_64.NE, appendPath)
+        X86_64.MOV_load_byte (X86_64.R11, X86_64.R9, 2)
+        X86_64.CMP_imm (X86_64.R11, 0)
+        X86_64.Jcc (X86_64.EQ, skipEntry)
+        X86_64.Label appendPath
+        X86_64.MOV_load (X86_64.RDI, X86_64.RSP, 8192)
+        X86_64.LEA (X86_64.RSI, X86_64.RDI, 16)
+        X86_64.MOV_load (X86_64.RDX, X86_64.RSP, 8200)
+        X86_64.LEA (X86_64.RDI, X86_64.R12, 16)
+        X86_64.ADD_reg (X86_64.RDI, X86_64.R13)
+        X86_64.Label appendPathLoop
+        X86_64.CMP_imm (X86_64.RDX, 0)
+        X86_64.Jcc (X86_64.EQ, pathAppended)
+        X86_64.MOV_load_byte (X86_64.R11, X86_64.RSI, 0)
+        X86_64.MOV_store_byte (X86_64.RDI, 0, X86_64.R11)
+        X86_64.ADD_imm (X86_64.RSI, 1)
+        X86_64.ADD_imm (X86_64.RDI, 1)
+        X86_64.ADD_imm (X86_64.R13, 1)
+        X86_64.SUB_imm (X86_64.RDX, 1)
+        X86_64.JMP appendPathLoop
+        X86_64.Label pathAppended
+        X86_64.MOV_load (X86_64.RDX, X86_64.RSP, 8200)
+        X86_64.CMP_imm (X86_64.RDX, 0)
+        X86_64.Jcc (X86_64.EQ, appendName)
+        X86_64.MOV_load (X86_64.RSI, X86_64.RSP, 8192)
+        X86_64.ADD_imm (X86_64.RSI, 16)
+        X86_64.ADD_reg (X86_64.RSI, X86_64.RDX)
+        X86_64.MOV_load_byte (X86_64.R11, X86_64.RSI, -1)
+        X86_64.CMP_imm (X86_64.R11, 47)
+        X86_64.Jcc (X86_64.EQ, appendName)
+        X86_64.MOV_imm32 (X86_64.R11, 47)
+        X86_64.MOV_store_byte (X86_64.RDI, 0, X86_64.R11)
+        X86_64.ADD_imm (X86_64.RDI, 1)
+        X86_64.ADD_imm (X86_64.R13, 1)
+        X86_64.Label appendName
+        X86_64.MOV_load_byte (X86_64.R11, X86_64.R9, 0)
+        X86_64.CMP_imm (X86_64.R11, 0)
+        X86_64.Jcc (X86_64.EQ, nameDone)
+        X86_64.MOV_store_byte (X86_64.RDI, 0, X86_64.R11)
+        X86_64.ADD_imm (X86_64.R9, 1)
+        X86_64.ADD_imm (X86_64.RDI, 1)
+        X86_64.ADD_imm (X86_64.R13, 1)
+        X86_64.JMP appendName
+        X86_64.Label nameDone
+        X86_64.XOR_reg (X86_64.R11, X86_64.R11)
+        X86_64.MOV_store_byte (X86_64.RDI, 0, X86_64.R11)
+        X86_64.ADD_imm (X86_64.R13, 1)
+        X86_64.Label skipEntry
+        X86_64.ADD_reg (X86_64.R8, X86_64.R10)
+        X86_64.JMP entryLoop
+        X86_64.Label entriesDone
+        X86_64.JMP readChunk
+        X86_64.Label readDone
+        X86_64.MOV_reg (X86_64.RDI, X86_64.R15) ]
+    @ loadImm64 X86_64.RAX (int64 syscalls.Close)
+    @ [ X86_64.SYSCALL
+        X86_64.MOV_imm32 (X86_64.RDX, 1)
+        X86_64.MOV_store (X86_64.R12, 0, X86_64.RDX)
+        X86_64.MOV_store (X86_64.R12, 8, X86_64.R13)
+        X86_64.MOV_reg (X86_64.R11, X86_64.R13)
+        X86_64.ADD_imm (X86_64.R11, 7)
+        X86_64.AND_imm (X86_64.R11, -8)
+        X86_64.ADD_imm (X86_64.R11, 16)
+        X86_64.ADD_reg (heapPtr, X86_64.R11)
+        X86_64.MOV_reg (X86_64.RAX, X86_64.R12) ]
+    @ (if enableLeakCheck then
+           [ X86_64.LEA_rip (X86_64.R11, "_leak_count")
+             X86_64.MOV_load (X86_64.RDX, X86_64.R11, 0)
+             X86_64.ADD_imm (X86_64.RDX, 1)
+             X86_64.MOV_store (X86_64.R11, 0, X86_64.RDX) ]
+       else [])
+    @ [ X86_64.JMP complete
+        X86_64.Label openFailed ]
+    @ emitStringLiteral X86_64.RAX ""
+    @ [ X86_64.Label complete
+        X86_64.ADD_imm (X86_64.RSP, 8208)
+        X86_64.POP X86_64.R15
+        X86_64.POP X86_64.R13
+        X86_64.POP X86_64.R12
+        X86_64.RET ]
+
 /// Look up a managed name in the original process environment and return a
 /// boxed Option<String>. This walks _start's native envp directly; no libc or
 /// child process is involved.

@@ -1,0 +1,47 @@
+// Filesystem and environment behavior copied from darklang/dark v0.0.35.
+
+let cwd = Stdlib.Cli.FileSystem.currentDirectory () in Stdlib.String.startsWith cwd "/" && Stdlib.Cli.FileSystem.isDirectory cwd = true
+
+Stdlib.Cli.FileSystem.pathExists "/definitely/missing/dark-file" = false
+
+Stdlib.Cli.FileSystem.isDirectory "/tmp" = true
+
+match Stdlib.Cli.FileSystem.readFile "/etc/hostname" with | Ok blob -> (match Stdlib.Blob.toString blob with | Ok text -> Stdlib.String.length text > 0 | Error _ -> false) | Error _ -> false = stdout="true\n" stderr="" isolated=true
+
+Stdlib.List.length (Stdlib.Cli.FileSystem.listDirectory "/tmp") > 0 = true isolated=true
+
+Stdlib.Cli.FileSystem.listDirectory "/definitely/missing/dark-directory" = []
+
+Stdlib.Cli.FileSystem.readFile "/definitely/missing/dark-file" = Error Stdlib.Cli.FileSystem.FileError.NotFound
+
+Stdlib.Cli.FileSystem.readFile "/etc/shadow" = Error Stdlib.Cli.FileSystem.FileError.OsAccessDenied
+
+Stdlib.Cli.FileSystem.deleteFile "/definitely/missing/dark-file" = Error Stdlib.Cli.FileSystem.FileError.NotFound
+
+(Stdlib.Cli.FileSystem.FileError.toString Stdlib.Cli.FileSystem.FileError.NotFound, Stdlib.Cli.FileSystem.FileError.toString Stdlib.Cli.FileSystem.FileError.OsAccessDenied, Stdlib.Cli.FileSystem.FileError.toString (Stdlib.Cli.FileSystem.FileError.Other "custom")) = ("File not found", "Permission denied", "custom")
+
+let path = "/tmp/dark-filesystem-roundtrip" in let written = Stdlib.Cli.FileSystem.overwriteFile path (Stdlib.Blob.fromString "one") in let appended = Stdlib.Cli.FileSystem.appendToFile path "-two" in let read = Stdlib.Cli.FileSystem.readFile path in match (written, appended, read) with | (Ok (()), Ok (()), Ok blob) -> Stdlib.Blob.toString blob | _ -> Error "file operation failed" = Ok "one-two" isolated=true
+
+Stdlib.List.member (Stdlib.Cli.FileSystem.listDirectory "/tmp") "/tmp/dark-filesystem-roundtrip" = true isolated=true
+
+let deleted = Stdlib.Cli.FileSystem.deleteFile "/tmp/dark-filesystem-roundtrip" in (deleted, Stdlib.Cli.FileSystem.pathExists "/tmp/dark-filesystem-roundtrip") = (Ok (()), false) isolated=true
+
+let path = $"/tmp/dark-filesystem-recursive-{Stdlib.Int.toString (Stdlib.Cli.Sys.currentPid ())}/nested/value" in Stdlib.Cli.FileSystem.writeFile path (Stdlib.Blob.fromString "recursive") = Ok (()) isolated=true
+
+let segment = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in let path = $"/tmp/dark-filesystem-long-{Stdlib.Int.toString (Stdlib.Cli.Sys.currentPid ())}/{segment}/{segment}/{segment}/value" in Stdlib.Cli.FileSystem.writeFile path (Stdlib.Blob.fromString "long") = Ok (()) isolated=true
+
+Stdlib.Cli.FileSystem.isDirectoryAtPath "/" "tmp" = true
+
+Stdlib.List.member (Stdlib.Cli.FileSystem.getDirectoryContents "/tmp") "c4d-filesystem-env-parity" = true
+
+Stdlib.Cli.Env.getOr "DARK_ENV_MISSING_VALUE" "fallback" = "fallback"
+
+Stdlib.Cli.Env.home () = Some "/tmp/upstream-home" env="HOME=/tmp/upstream-home"
+
+let unset = Stdlib.Cli.Env.unset "HOME" in match (unset, Stdlib.Cli.Env.home ()) with | (Ok (()), Some directory) -> Stdlib.String.startsWith directory "/" | _ -> false = true isolated=true
+
+match Stdlib.Cli.Env.set "bad=name" "value" with | Error error -> error.errno | Ok (()) -> 0 = 22
+
+match Stdlib.Env.getAll () |> Stdlib.Dict.get "DARK_ENV_ENUM_VALUE" with | Some value -> value | None -> "missing" = "enumerated" env="DARK_ENV_ENUM_VALUE=enumerated"
+
+let name = "DARK_NATIVE_MUTABLE_ENV" in let setResult = Stdlib.Cli.Env.set name "changed" in let direct = Stdlib.Cli.Env.get name in let inherited = match Stdlib.Cli.Process.run "/bin/sh" (["-c", "printf %s \"$DARK_NATIVE_MUTABLE_ENV\""]) with | Ok output -> output.stdout | Error error -> error.message in let unsetResult = Stdlib.Cli.Env.unset name in (setResult, direct, inherited, unsetResult, Stdlib.Cli.Env.get name) = (Ok (), Some "changed", "changed", Ok (), None) isolated=true

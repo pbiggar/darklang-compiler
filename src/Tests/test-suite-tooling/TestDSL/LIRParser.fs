@@ -258,11 +258,11 @@ let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<I
                 Choice1Of2 (RefCountDecString operand))
     else
 
-    // Try FileReadText: "X0 <- FileReadText(str[path])"
-    let fileReadTextMatch = Regex.Match(line, @"^(.+?)\s*<-\s*FileReadText\((.+)\)$")
+    // Try FileReadBlob: "X0 <- FileReadBlob(str[path])"
+    let fileReadTextMatch = Regex.Match(line, @"^(.+?)\s*<-\s*FileReadBlob\((.+)\)$")
     if fileReadTextMatch.Success then
         match parseRegister fileReadTextMatch.Groups.[1].Value, parseOperand fileReadTextMatch.Groups.[2].Value with
-        | Ok dest, Ok path -> Ok (Choice1Of2 (FileReadText (dest, path)))
+        | Ok dest, Ok path -> Ok (Choice1Of2 (FileReadBlob (dest, path)))
         | Error e, _
         | _, Error e -> Error $"Line {lineNum}: {e}"
     else

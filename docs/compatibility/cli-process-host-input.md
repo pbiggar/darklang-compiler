@@ -13,7 +13,8 @@ All same-source comparisons in this work use those exact revisions.
 | --- | --- | --- |
 | Shell execution | `ExecutionOutcome`, `execute`, the two Result helpers | `$HOME` expansion, `$SHELL` with `/bin/bash` fallback, inherited stdin, independent complete stdout/stderr, untrimmed outcome text |
 | Host | `OS`, `Architecture`, `Shell`, `Host` and discovery functions | Interpreter variants, normalized `uname`, shell recognition, and error precedence |
-| System | `Env.get`, the Posix support subset, `Sys.*` | LOGNAME/USER/account precedence, uname values, PID/UID, online CPUs, EPERM-as-running |
+| System | `Env.get`, `Env.getAll`, `Cli.Env` lookup/default/home/mutation, the Posix support subset, `Sys.*` | Exact environment values, child inheritance, passwd fallback, LOGNAME/USER/account precedence, uname values, PID/UID, online CPUs, EPERM-as-running |
+| Filesystem | `Cli.FileSystem.currentDirectory`, `listDirectory`, `pathExists`, `isDirectory`, `readFile`, `readFileAsString`, `overwriteFile`, `appendToFile`, and `deleteFile` | Blob I/O, full paths in directory listings, structured file errors, and observable file mutation |
 | Processes | `ProcessHandle`, `Output`, `spawn`, `communicate`, `terminate`, and portable helpers | PATH-aware argv execution, inherited environment/stdin, normalized signal exits, timeouts, pipelines, and PID lifecycle |
 | Input | `Key`, `Modifiers`, `KeyRead`, helpers, and `readKey` | Portable key names, ALT+CTRL+SHIFT display order, UTF-8/ANSI decoding, repeat coalescing, resize events, and terminal restoration |
 
@@ -29,9 +30,11 @@ interpreter source omits that match arm, while the AOT compiler requires the
 branch to make the result total. Ahead-of-time type errors remain the normal
 compiler timing divergence.
 
-Only `Posix.Error`, `kill`, `sigterm`, `sigkill`, `sleep`,
-`isProcessRunning`, and `Env.get` are claimed from the much larger interpreter
-Posix/Env API. The remainder is outside this parity scope. F#
+Only `Posix.Error`, `kill`, `sigterm`, `sigkill`, `sleep`, and
+`isProcessRunning` are claimed from the larger interpreter Posix API. The
+filesystem and environment functions listed above are additionally claimed
+against darklang/dark `v0.0.35` revision
+`0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. F#
 `Platform.Target` and `CompilerLibrary.execute` are AOT driver internals, not
 Dark extensions.
 
@@ -45,14 +48,19 @@ process-handle and pending-terminal roots are allocator-independent runtime
 state. Backends construct normal managed Int/String/Result/record/tuple values,
 so ordinary reference counting owns their lifetimes.
 
-Host and account discovery do not launch Unix command-line utilities. `Env.get`
-walks the original `envp` and copies the exact value, including trailing spaces
-and newlines. Architecture and operating-system values are fixed by the compile
+Host, account, filesystem, and environment discovery do not launch Unix
+command-line utilities. `Env.get` and `Env.getAll` walk the native `envp` and
+copy exact values, including trailing spaces and newlines. `Cli.Env.set` and
+`unset` update the same environment vector used by lookup and child `execve`.
+Filesystem operations lower to the target kernel ABI, while portable Dark code
+decodes packed directory/environment data into ordinary List and Dict values.
+Architecture and operating-system values are fixed by the compile
 target. Hostname, PID, UID, signals, and online CPU count use the target kernel
 ABI directly: Linux counts the `sched_getaffinity` mask, while macOS reads
 `HW_AVAILCPU` through `sysctl`. `Sys.currentUser` preserves LOGNAME/USER
-precedence and otherwise matches the native UID in `/etc/passwd` through the
-compiler's existing file intrinsic. These paths therefore do not depend on
+precedence and otherwise matches the native UID in `/etc/passwd`;
+`Cli.Env.home` similarly prefers HOME and then the passwd home field. These
+paths therefore do not depend on
 `PATH`, a configured shell, utility output wording, or text trimming.
 
 This native-host boundary is separate from APIs whose purpose is to execute a
@@ -95,7 +103,8 @@ module files.
 The registry is `src/DarkCompiler/Stdlib.fs`; typed lowering starts in
 `passes/anf/AST_to_ANF.fs`, passes through `ir/anf/ANF.fs`, `ir/mir/MIR.fs`, and `ir/lir/LIR.fs`, and
 ends in both architecture code generators. Focused native evidence is
-`src/Tests/e2e/cli_process_host_input.e2e` plus the enabled pinned
+`src/Tests/e2e/cli_process_host_input.e2e`,
+`src/Tests/e2e/filesystem_env_parity.e2e`, plus the enabled pinned
 `src/Tests/e2e/upstream/stdlib/cli-process.dark` corpus. Target-ABI coverage is
 in `ARM64CodeGenTests.fs`, and executable Linux x86_64 coverage runs the native
 operations under QEMU in `X86_64CodeGenTests.fs`.

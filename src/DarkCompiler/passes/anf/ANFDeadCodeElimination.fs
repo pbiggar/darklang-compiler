@@ -58,13 +58,14 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : string list =
     | ANF.Print (atom, _) -> extractFromAtom atom
     | ANF.StdoutWrite (atom, _) -> extractFromAtom atom
     | ANF.StdinReadLine -> []
-    | ANF.FileReadText path -> extractFromAtom path
+    | ANF.FileReadBlob path -> extractFromAtom path
     | ANF.FileExists path -> extractFromAtom path
-    | ANF.FileWriteText (path, content) ->
+    | ANF.FileWriteBlob (path, content) ->
         extractFromAtom path @ extractFromAtom content
     | ANF.FileAppendText (path, content) ->
         extractFromAtom path @ extractFromAtom content
     | ANF.FileDelete path -> extractFromAtom path
+    | ANF.FileCreateDirectory path -> extractFromAtom path
     | ANF.FileSetExecutable path -> extractFromAtom path
     | ANF.FileWriteFromPtr (path, ptr, length) ->
         extractFromAtom path @ extractFromAtom ptr @ extractFromAtom length

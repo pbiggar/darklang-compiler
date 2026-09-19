@@ -116,16 +116,18 @@ let private prettyPrintANFCExpr = function
         $"runtime_error(\"{escapeStringContent message}\")"
     | ANF.RuntimeErrorString message ->
         $"runtime_error_string({prettyPrintANFAtom message})"
-    | ANF.FileReadText path ->
-        $"FileReadText({prettyPrintANFAtom path})"
+    | ANF.FileReadBlob path ->
+        $"FileReadBlob({prettyPrintANFAtom path})"
     | ANF.FileExists path ->
         $"FileExists({prettyPrintANFAtom path})"
-    | ANF.FileWriteText (path, content) ->
-        $"FileWriteText({prettyPrintANFAtom path}, {prettyPrintANFAtom content})"
+    | ANF.FileWriteBlob (path, content) ->
+        $"FileWriteBlob({prettyPrintANFAtom path}, {prettyPrintANFAtom content})"
     | ANF.FileAppendText (path, content) ->
         $"FileAppendText({prettyPrintANFAtom path}, {prettyPrintANFAtom content})"
     | ANF.FileDelete path ->
         $"FileDelete({prettyPrintANFAtom path})"
+    | ANF.FileCreateDirectory path ->
+        $"FileCreateDirectory({prettyPrintANFAtom path})"
     | ANF.FileSetExecutable path ->
         $"FileSetExecutable({prettyPrintANFAtom path})"
     | ANF.FileWriteFromPtr (path, ptr, length) ->

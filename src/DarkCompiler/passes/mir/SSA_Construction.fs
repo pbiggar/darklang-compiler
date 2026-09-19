@@ -245,11 +245,12 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | Print _ -> defs
         | StdoutWrite _ -> defs
         | StdinReadLine dest -> Set.add dest defs
-        | FileReadText (dest, _) -> Set.add dest defs
+        | FileReadBlob (dest, _) -> Set.add dest defs
         | FileExists (dest, _) -> Set.add dest defs
-        | FileWriteText (dest, _, _) -> Set.add dest defs
+        | FileWriteBlob (dest, _, _) -> Set.add dest defs
         | FileAppendText (dest, _, _) -> Set.add dest defs
         | FileDelete (dest, _) -> Set.add dest defs
+        | FileCreateDirectory (dest, _) -> Set.add dest defs
         | FileSetExecutable (dest, _) -> Set.add dest defs
         | FileWriteFromPtr (dest, _, _, _) -> Set.add dest defs
         | Phi (dest, _, _) -> Set.add dest defs
@@ -356,13 +357,14 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
             | Print (src, _) -> addOperandUse src uses
             | StdoutWrite (_, src, _) -> addOperandUse src uses
             | StdinReadLine _ -> uses
-            | FileReadText (_, path) -> addOperandUse path uses
+            | FileReadBlob (_, path) -> addOperandUse path uses
             | FileExists (_, path) -> addOperandUse path uses
-            | FileWriteText (_, path, content) ->
+            | FileWriteBlob (_, path, content) ->
                 uses |> addOperandUse path |> addOperandUse content
             | FileAppendText (_, path, content) ->
                 uses |> addOperandUse path |> addOperandUse content
             | FileDelete (_, path) -> addOperandUse path uses
+            | FileCreateDirectory (_, path) -> addOperandUse path uses
             | FileSetExecutable (_, path) -> addOperandUse path uses
             | FileWriteFromPtr (_, path, ptr, length) ->
                 uses |> addOperandUse path |> addOperandUse ptr |> addOperandUse length
@@ -856,21 +858,21 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let (_, newDest, state') = newVersion state dest
         (StdinReadLine newDest, state')
 
-    | FileReadText (dest, path) ->
+    | FileReadBlob (dest, path) ->
         let path' = renameOperand state path
         let (_, newDest, state') = newVersion state dest
-        (FileReadText (newDest, path'), state')
+        (FileReadBlob (newDest, path'), state')
 
     | FileExists (dest, path) ->
         let path' = renameOperand state path
         let (_, newDest, state') = newVersion state dest
         (FileExists (newDest, path'), state')
 
-    | FileWriteText (dest, path, content) ->
+    | FileWriteBlob (dest, path, content) ->
         let path' = renameOperand state path
         let content' = renameOperand state content
         let (_, newDest, state') = newVersion state dest
-        (FileWriteText (newDest, path', content'), state')
+        (FileWriteBlob (newDest, path', content'), state')
 
     | FileAppendText (dest, path, content) ->
         let path' = renameOperand state path
@@ -882,6 +884,11 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
         let path' = renameOperand state path
         let (_, newDest, state') = newVersion state dest
         (FileDelete (newDest, path'), state')
+
+    | FileCreateDirectory (dest, path) ->
+        let path' = renameOperand state path
+        let (_, newDest, state') = newVersion state dest
+        (FileCreateDirectory (newDest, path'), state')
 
     | FileSetExecutable (dest, path) ->
         let path' = renameOperand state path

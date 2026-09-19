@@ -257,16 +257,18 @@ let private prettyPrintLIRInstr (instr: LIR.Instr) : string =
         $"PrintHeapString({prettyPrintLIRReg reg})"
     | LIR.LoadFuncAddr (dest, funcName) ->
         $"{prettyPrintLIRReg dest} <- LoadFuncAddr({funcName})"
-    | LIR.FileReadText (dest, path) ->
-        $"{prettyPrintLIRReg dest} <- FileReadText({prettyPrintLIROperand path})"
+    | LIR.FileReadBlob (dest, path) ->
+        $"{prettyPrintLIRReg dest} <- FileReadBlob({prettyPrintLIROperand path})"
     | LIR.FileExists (dest, path) ->
         $"{prettyPrintLIRReg dest} <- FileExists({prettyPrintLIROperand path})"
-    | LIR.FileWriteText (dest, path, content) ->
-        $"{prettyPrintLIRReg dest} <- FileWriteText({prettyPrintLIROperand path}, {prettyPrintLIROperand content})"
+    | LIR.FileWriteBlob (dest, path, content) ->
+        $"{prettyPrintLIRReg dest} <- FileWriteBlob({prettyPrintLIROperand path}, {prettyPrintLIROperand content})"
     | LIR.FileAppendText (dest, path, content) ->
         $"{prettyPrintLIRReg dest} <- FileAppendText({prettyPrintLIROperand path}, {prettyPrintLIROperand content})"
     | LIR.FileDelete (dest, path) ->
         $"{prettyPrintLIRReg dest} <- FileDelete({prettyPrintLIROperand path})"
+    | LIR.FileCreateDirectory (dest, path) ->
+        $"{prettyPrintLIRReg dest} <- FileCreateDirectory({prettyPrintLIROperand path})"
     | LIR.FileSetExecutable (dest, path) ->
         $"{prettyPrintLIRReg dest} <- FileSetExecutable({prettyPrintLIROperand path})"
     | LIR.FileWriteFromPtr (dest, path, ptr, length) ->

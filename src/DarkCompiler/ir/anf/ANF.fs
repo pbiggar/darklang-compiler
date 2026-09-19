@@ -131,6 +131,12 @@ type CliOperation =
     | HostArchitecture
     | Hostname
     | GetEnv
+    | GetEnvironmentPacked
+    | SetEnv
+    | UnsetEnv
+    | DirectoryCurrent
+    | DirectoryListPacked
+    | FileIsDirectory
     | GetArgv
     | Kill
     | GetPid
@@ -184,11 +190,12 @@ type CExpr =
     | RuntimeError of message:string           // Print runtime error to stderr and exit with code 1
     | RuntimeErrorString of message:Atom       // Print a language String error to stderr and exit with code 1
     // File I/O intrinsics (generate syscalls)
-    | FileReadText of path:Atom               // Read file, returns Result<String, String>
+    | FileReadBlob of path:Atom               // Read file, returns Result<Blob, String>
     | FileExists of path:Atom                 // Check if file exists, returns Bool
-    | FileWriteText of path:Atom * content:Atom  // Write file, returns Result<Unit, String>
+    | FileWriteBlob of path:Atom * content:Atom  // Write Blob, returns Result<Unit, String>
     | FileAppendText of path:Atom * content:Atom // Append to file, returns Result<Unit, String>
     | FileDelete of path:Atom                     // Delete file, returns Result<Unit, String>
+    | FileCreateDirectory of path:Atom            // Create directory, returns Result<Unit, String>
     | FileSetExecutable of path:Atom             // Set executable bit, returns Result<Unit, String>
     | FileWriteFromPtr of path:Atom * ptr:Atom * length:Atom  // Write raw bytes from pointer to file
     // Float intrinsics

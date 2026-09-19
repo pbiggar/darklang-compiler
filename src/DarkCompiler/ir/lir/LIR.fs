@@ -74,6 +74,12 @@ type CliOperation =
     | HostArchitecture
     | Hostname
     | GetEnv
+    | GetEnvironmentPacked
+    | SetEnv
+    | UnsetEnv
+    | DirectoryCurrent
+    | DirectoryListPacked
+    | FileIsDirectory
     | GetArgv
     | Kill
     | GetPid
@@ -180,11 +186,12 @@ type Instr =
     | CanonicalBufferEq of dest:Reg * kind:MemoryModel.CanonicalBufferKind * left:Operand * right:Operand
     | PrintHeapString of Reg
     | LoadFuncAddr of dest:Reg * funcName:string
-    | FileReadText of dest:Reg * path:Operand
+    | FileReadBlob of dest:Reg * path:Operand
     | FileExists of dest:Reg * path:Operand
-    | FileWriteText of dest:Reg * path:Operand * content:Operand
+    | FileWriteBlob of dest:Reg * path:Operand * content:Operand
     | FileAppendText of dest:Reg * path:Operand * content:Operand
     | FileDelete of dest:Reg * path:Operand
+    | FileCreateDirectory of dest:Reg * path:Operand
     | FileSetExecutable of dest:Reg * path:Operand
     | FileWriteFromPtr of dest:Reg * path:Operand * ptr:Reg * length:Reg
     | RawAlloc of dest:Reg * numBytes:Reg

@@ -35,7 +35,7 @@ let private checkProgramInternalWithTrace
         Set.ofList [
             "Darklang.Stdlib.String.__byteAtUnchecked"; "Darklang.Stdlib.String.__toCodepoints"; "Darklang.Stdlib.String.__codepointLength"
             "Darklang.Stdlib.Float.__toBits"; "Darklang.Stdlib.Float.__toInt64Unchecked"
-            "Darklang.Stdlib.File.readText"; "Darklang.Stdlib.File.exists"; "Darklang.Stdlib.File.writeText"; "Darklang.Stdlib.File.appendText"; "Darklang.Stdlib.File.delete"; "Darklang.Stdlib.File.setExecutable"; "Darklang.Stdlib.File.writeFromPtr" ]
+            "Darklang.Stdlib.File.currentDirectory"; "Darklang.Stdlib.File.listDirectoryPacked"; "Darklang.Stdlib.File.readBlob"; "Darklang.Stdlib.File.exists"; "Darklang.Stdlib.File.isDirectory"; "Darklang.Stdlib.File.writeBlob"; "Darklang.Stdlib.File.appendText"; "Darklang.Stdlib.File.delete"; "Darklang.Stdlib.File.createDirectory"; "Darklang.Stdlib.File.setExecutable"; "Darklang.Stdlib.File.writeFromPtr" ]
     let isCompilerImplementationCandidate (candidate: NameResolution.Candidate) =
         match candidate.Provenance with
         | NameResolution.SourceDeclaration name

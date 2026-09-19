@@ -142,11 +142,12 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | Print (src, vt) -> Print (p src, vt)
     | StdoutWrite (effectId, src, appendNewline) -> StdoutWrite (effectId, p src, appendNewline)
     | StdinReadLine dest -> StdinReadLine dest
-    | FileReadText (dest, path) -> FileReadText (dest, p path)
+    | FileReadBlob (dest, path) -> FileReadBlob (dest, p path)
     | FileExists (dest, path) -> FileExists (dest, p path)
-    | FileWriteText (dest, path, content) -> FileWriteText (dest, p path, p content)
+    | FileWriteBlob (dest, path, content) -> FileWriteBlob (dest, p path, p content)
     | FileAppendText (dest, path, content) -> FileAppendText (dest, p path, p content)
     | FileDelete (dest, path) -> FileDelete (dest, p path)
+    | FileCreateDirectory (dest, path) -> FileCreateDirectory (dest, p path)
     | FileSetExecutable (dest, path) -> FileSetExecutable (dest, p path)
     | FileWriteFromPtr (dest, path, ptr, length) -> FileWriteFromPtr (dest, p path, p ptr, p length)
     // Don't propagate copies into phi sources - phis are merge points and their

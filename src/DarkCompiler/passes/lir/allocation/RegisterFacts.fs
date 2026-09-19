@@ -104,15 +104,17 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         (operandToVReg left |> Option.toList) @ (operandToVReg right |> Option.toList)
     | LIR.PrintHeapString reg ->
         regToVReg reg |> Option.toList
-    | LIR.FileReadText (_, path) ->
+    | LIR.FileReadBlob (_, path) ->
         operandToVReg path |> Option.toList
     | LIR.FileExists (_, path) ->
         operandToVReg path |> Option.toList
-    | LIR.FileWriteText (_, path, content) ->
+    | LIR.FileWriteBlob (_, path, content) ->
         (operandToVReg path |> Option.toList) @ (operandToVReg content |> Option.toList)
     | LIR.FileAppendText (_, path, content) ->
         (operandToVReg path |> Option.toList) @ (operandToVReg content |> Option.toList)
     | LIR.FileDelete (_, path) ->
+        operandToVReg path |> Option.toList
+    | LIR.FileCreateDirectory (_, path) ->
         operandToVReg path |> Option.toList
     | LIR.FileSetExecutable (_, path) ->
         operandToVReg path |> Option.toList
@@ -206,11 +208,12 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.CanonicalBufferEq (dest, _, _, _) -> regToVReg dest
     | LIR.StdinReadLine (_, dest) -> regToVReg dest
     | LIR.LoadFuncAddr (dest, _) -> regToVReg dest
-    | LIR.FileReadText (dest, _) -> regToVReg dest
+    | LIR.FileReadBlob (dest, _) -> regToVReg dest
     | LIR.FileExists (dest, _) -> regToVReg dest
-    | LIR.FileWriteText (dest, _, _) -> regToVReg dest
+    | LIR.FileWriteBlob (dest, _, _) -> regToVReg dest
     | LIR.FileAppendText (dest, _, _) -> regToVReg dest
     | LIR.FileDelete (dest, _) -> regToVReg dest
+    | LIR.FileCreateDirectory (dest, _) -> regToVReg dest
     | LIR.FileSetExecutable (dest, _) -> regToVReg dest
     | LIR.FileWriteFromPtr (dest, _, _, _) -> regToVReg dest
     | LIR.RawAlloc (dest, _) -> regToVReg dest

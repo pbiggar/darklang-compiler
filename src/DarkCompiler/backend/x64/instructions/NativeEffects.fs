@@ -286,6 +286,103 @@ let internal emitCliNative (ctx: FuncCtx) (dest: LIR.Reg) (operation: LIR.CliOpe
             Ok (loadName
             @ [X86_64.CALL "__dark_cli_getenv"]
             @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
+        | LIR.GetEnvironmentPacked ->
+            Ok ([X86_64.CALL "__dark_cli_environment_packed"]
+                @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
+        | LIR.DirectoryCurrent ->
+            Ok ([X86_64.CALL "__dark_cli_directory_current"]
+                @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
+        | LIR.DirectoryListPacked ->
+            match args with
+            | [path] ->
+                loadCliOperand X86_64.RDI path
+                |> Result.map (fun loads ->
+                    loads
+                    @ [X86_64.CALL "__dark_cli_directory_list"]
+                    @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
+            | _ -> Error "directoryList expects exactly one path"
+        | LIR.FileIsDirectory ->
+            match args with
+            | [path] ->
+                loadCliOperand X86_64.R10 path
+                |> Result.map (fun pathLoads ->
+                    let copyLoop = freshLabel "is_dir_copy"
+                    let copyDone = freshLabel "is_dir_copy_done"
+                    let failure = freshLabel "is_dir_failure"
+                    let complete = freshLabel "is_dir_complete"
+                    pathLoads
+                    @ [ X86_64.PUSH X86_64.RDI
+                        X86_64.PUSH X86_64.RSI
+                        X86_64.PUSH X86_64.RDX
+                        X86_64.PUSH X86_64.RCX
+                        X86_64.PUSH X86_64.R10
+                        X86_64.SUB_imm (X86_64.RSP, 4096)
+                        X86_64.MOV_load (X86_64.RCX, X86_64.R10, 8)
+                        X86_64.LEA (X86_64.RSI, X86_64.R10, 16)
+                        X86_64.MOV_reg (X86_64.RDI, X86_64.RSP)
+                        X86_64.XOR_reg (X86_64.R10, X86_64.R10)
+                        X86_64.Label copyLoop
+                        X86_64.CMP_reg (X86_64.R10, X86_64.RCX)
+                        X86_64.Jcc (X86_64.GE, copyDone)
+                        X86_64.MOV_reg (scratch, X86_64.RSI)
+                        X86_64.ADD_reg (scratch, X86_64.R10)
+                        X86_64.MOV_load_byte (scratch, scratch, 0)
+                        X86_64.MOV_reg (X86_64.RDX, X86_64.RDI)
+                        X86_64.ADD_reg (X86_64.RDX, X86_64.R10)
+                        X86_64.MOV_store_byte (X86_64.RDX, 0, scratch)
+                        X86_64.ADD_imm (X86_64.R10, 1)
+                        X86_64.JMP copyLoop
+                        X86_64.Label copyDone
+                        X86_64.MOV_reg (scratch, X86_64.RDI)
+                        X86_64.ADD_reg (scratch, X86_64.RCX)
+                        X86_64.XOR_reg (X86_64.R10, X86_64.R10)
+                        X86_64.MOV_store_byte (scratch, 0, X86_64.R10)
+                        X86_64.MOV_reg (X86_64.RDI, X86_64.RSP) ]
+                    @ loadImm64 X86_64.RSI 65536L
+                    @ loadImm64 X86_64.RDX 0L
+                    @ loadImm64 X86_64.RAX (int64 syscalls.Open)
+                    @ [ X86_64.SYSCALL
+                        X86_64.CMP_imm (X86_64.RAX, 0)
+                        X86_64.Jcc (X86_64.LT, failure)
+                        X86_64.MOV_reg (X86_64.RDI, X86_64.RAX) ]
+                    @ loadImm64 X86_64.RAX (int64 syscalls.Close)
+                    @ [ X86_64.SYSCALL ]
+                    @ loadImm64 X86_64.RAX 1L
+                    @ [ X86_64.JMP complete
+                        X86_64.Label failure ]
+                    @ loadImm64 X86_64.RAX 0L
+                    @ [ X86_64.Label complete
+                        X86_64.ADD_imm (X86_64.RSP, 4096)
+                        X86_64.POP X86_64.R10
+                        X86_64.POP X86_64.RCX
+                        X86_64.POP X86_64.RDX
+                        X86_64.POP X86_64.RSI
+                        X86_64.POP X86_64.RDI
+                        X86_64.MOV_reg (destReg, X86_64.RAX) ])
+            | _ -> Error "fileIsDirectory expects exactly one path"
+        | LIR.SetEnv ->
+            match args with
+            | [name; value] ->
+                loadCliOperand X86_64.RDI name
+                |> Result.bind (fun nameLoads ->
+                    loadCliOperand X86_64.RSI value
+                    |> Result.map (fun valueLoads ->
+                        nameLoads
+                        @ [X86_64.PUSH X86_64.RDI]
+                        @ valueLoads
+                        @ [X86_64.POP X86_64.RDI]
+                        @ [X86_64.CALL "__dark_cli_setenv"]
+                        @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)])))
+            | _ -> Error "setenv expects exactly a name and value"
+        | LIR.UnsetEnv ->
+            match args with
+            | [name] ->
+                loadCliOperand X86_64.RDI name
+                |> Result.map (fun loads ->
+                    loads
+                    @ [X86_64.CALL "__dark_cli_unsetenv"]
+                    @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
+            | _ -> Error "unsetenv expects exactly one name"
         | LIR.Kill ->
             let successLabel = freshLabel $"kill_{ctx.FunctionName}_success"
             let completeLabel = freshLabel $"kill_{ctx.FunctionName}_complete"

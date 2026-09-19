@@ -9,7 +9,7 @@ module ARM64FileWrite
 /// Returns Result<Unit, String> in destReg
 /// On success, result contains Ok(()) - tag=0, payload=0
 /// On failure, result contains Error("Error") - tag=1, payload=error string ptr
-let generateFileWriteText (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg: ARM64.Reg) (append: bool) : ARM64.Instr list =
+let generateFileWriteBlob (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (pathReg: ARM64.Reg) (contentReg: ARM64.Reg) (append: bool) : ARM64.Instr list =
     let os = ARM64.targetOS target
     let syscalls = ARM64.targetSyscalls target
 
@@ -27,29 +27,34 @@ let generateFileWriteText (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (pat
     match os with
     | Platform.Linux ->
         [
+            // Preserve both inputs before claiming callee-saved working registers;
+            // either input may itself have been allocated to X19 or X22.
+            ARM64.MOV_reg (ARM64.X16, pathReg)
+            ARM64.MOV_reg (ARM64.X17, contentReg)
+
             // Save callee-saved registers
             ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16s)
             ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32s)
             ARM64.STP (ARM64.X23, ARM64.X24, ARM64.SP, -48s)
             ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48us)
 
-            // Allocate stack for path buffer (256) + caller-saved regs (64) = 320 bytes
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255us)
+            // Allocate PATH_MAX path buffer (4096) + caller-saved regs (64).
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 4095us)
             ARM64.SUB_imm (ARM64.SP, ARM64.SP, 65us)
 
             // Save path and content pointers
-            ARM64.MOV_reg (ARM64.X19, pathReg)
-            ARM64.MOV_reg (ARM64.X22, contentReg)
+            ARM64.MOV_reg (ARM64.X19, ARM64.X16)
+            ARM64.MOV_reg (ARM64.X22, ARM64.X17)
 
             // Save ALL potentially live caller-saved registers (X1-X8) at SP+256
-            ARM64.STR (ARM64.X1, ARM64.SP, 256s)
-            ARM64.STR (ARM64.X2, ARM64.SP, 264s)
-            ARM64.STR (ARM64.X3, ARM64.SP, 272s)
-            ARM64.STR (ARM64.X4, ARM64.SP, 280s)
-            ARM64.STR (ARM64.X5, ARM64.SP, 288s)
-            ARM64.STR (ARM64.X6, ARM64.SP, 296s)
-            ARM64.STR (ARM64.X7, ARM64.SP, 304s)
-            ARM64.STR (ARM64.X8, ARM64.SP, 312s)
+            ARM64.STR (ARM64.X1, ARM64.SP, 4096s)
+            ARM64.STR (ARM64.X2, ARM64.SP, 4104s)
+            ARM64.STR (ARM64.X3, ARM64.SP, 4112s)
+            ARM64.STR (ARM64.X4, ARM64.SP, 4120s)
+            ARM64.STR (ARM64.X5, ARM64.SP, 4128s)
+            ARM64.STR (ARM64.X6, ARM64.SP, 4136s)
+            ARM64.STR (ARM64.X7, ARM64.SP, 4144s)
+            ARM64.STR (ARM64.X8, ARM64.SP, 4152s)
 
             // Copy path to stack buffer with null terminator using non-allocatable registers
             // X10 = path length
@@ -148,17 +153,17 @@ let generateFileWriteText (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (pat
             ARM64.MOV_reg (ARM64.X0, ARM64.X20)
 
             // Restore ALL caller-saved registers (X1-X8) we saved at start
-            ARM64.LDR (ARM64.X1, ARM64.SP, 256s)
-            ARM64.LDR (ARM64.X2, ARM64.SP, 264s)
-            ARM64.LDR (ARM64.X3, ARM64.SP, 272s)
-            ARM64.LDR (ARM64.X4, ARM64.SP, 280s)
-            ARM64.LDR (ARM64.X5, ARM64.SP, 288s)
-            ARM64.LDR (ARM64.X6, ARM64.SP, 296s)
-            ARM64.LDR (ARM64.X7, ARM64.SP, 304s)
-            ARM64.LDR (ARM64.X8, ARM64.SP, 312s)
+            ARM64.LDR (ARM64.X1, ARM64.SP, 4096s)
+            ARM64.LDR (ARM64.X2, ARM64.SP, 4104s)
+            ARM64.LDR (ARM64.X3, ARM64.SP, 4112s)
+            ARM64.LDR (ARM64.X4, ARM64.SP, 4120s)
+            ARM64.LDR (ARM64.X5, ARM64.SP, 4128s)
+            ARM64.LDR (ARM64.X6, ARM64.SP, 4136s)
+            ARM64.LDR (ARM64.X7, ARM64.SP, 4144s)
+            ARM64.LDR (ARM64.X8, ARM64.SP, 4152s)
 
             // Deallocate 320-byte stack buffer
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 4095us)
             ARM64.ADD_imm (ARM64.SP, ARM64.SP, 65us)
             ARM64.LDP (ARM64.X23, ARM64.X24, ARM64.SP, 0s)
             ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 16s)
@@ -168,29 +173,34 @@ let generateFileWriteText (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (pat
         ]
     | Platform.MacOS ->
         [
+            // Preserve both inputs before claiming callee-saved working registers;
+            // either input may itself have been allocated to X19 or X22.
+            ARM64.MOV_reg (ARM64.X16, pathReg)
+            ARM64.MOV_reg (ARM64.X17, contentReg)
+
             // Save callee-saved registers
             ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16s)
             ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32s)
             ARM64.STP (ARM64.X23, ARM64.X24, ARM64.SP, -48s)
             ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48us)
 
-            // Allocate stack for path buffer (256) + caller-saved regs (64) = 320 bytes
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255us)
+            // Allocate PATH_MAX path buffer (4096) + caller-saved regs (64).
+            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 4095us)
             ARM64.SUB_imm (ARM64.SP, ARM64.SP, 65us)
 
             // Save path and content pointers
-            ARM64.MOV_reg (ARM64.X19, pathReg)
-            ARM64.MOV_reg (ARM64.X22, contentReg)
+            ARM64.MOV_reg (ARM64.X19, ARM64.X16)
+            ARM64.MOV_reg (ARM64.X22, ARM64.X17)
 
             // Save ALL potentially live caller-saved registers (X1-X8) at SP+256
-            ARM64.STR (ARM64.X1, ARM64.SP, 256s)
-            ARM64.STR (ARM64.X2, ARM64.SP, 264s)
-            ARM64.STR (ARM64.X3, ARM64.SP, 272s)
-            ARM64.STR (ARM64.X4, ARM64.SP, 280s)
-            ARM64.STR (ARM64.X5, ARM64.SP, 288s)
-            ARM64.STR (ARM64.X6, ARM64.SP, 296s)
-            ARM64.STR (ARM64.X7, ARM64.SP, 304s)
-            ARM64.STR (ARM64.X8, ARM64.SP, 312s)
+            ARM64.STR (ARM64.X1, ARM64.SP, 4096s)
+            ARM64.STR (ARM64.X2, ARM64.SP, 4104s)
+            ARM64.STR (ARM64.X3, ARM64.SP, 4112s)
+            ARM64.STR (ARM64.X4, ARM64.SP, 4120s)
+            ARM64.STR (ARM64.X5, ARM64.SP, 4128s)
+            ARM64.STR (ARM64.X6, ARM64.SP, 4136s)
+            ARM64.STR (ARM64.X7, ARM64.SP, 4144s)
+            ARM64.STR (ARM64.X8, ARM64.SP, 4152s)
 
             // Copy path to stack buffer using non-allocatable registers
             // X10 = path length
@@ -284,17 +294,17 @@ let generateFileWriteText (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (pat
             ARM64.MOV_reg (ARM64.X0, ARM64.X20)
 
             // Restore ALL caller-saved registers (X1-X8) we saved at start
-            ARM64.LDR (ARM64.X1, ARM64.SP, 256s)
-            ARM64.LDR (ARM64.X2, ARM64.SP, 264s)
-            ARM64.LDR (ARM64.X3, ARM64.SP, 272s)
-            ARM64.LDR (ARM64.X4, ARM64.SP, 280s)
-            ARM64.LDR (ARM64.X5, ARM64.SP, 288s)
-            ARM64.LDR (ARM64.X6, ARM64.SP, 296s)
-            ARM64.LDR (ARM64.X7, ARM64.SP, 304s)
-            ARM64.LDR (ARM64.X8, ARM64.SP, 312s)
+            ARM64.LDR (ARM64.X1, ARM64.SP, 4096s)
+            ARM64.LDR (ARM64.X2, ARM64.SP, 4104s)
+            ARM64.LDR (ARM64.X3, ARM64.SP, 4112s)
+            ARM64.LDR (ARM64.X4, ARM64.SP, 4120s)
+            ARM64.LDR (ARM64.X5, ARM64.SP, 4128s)
+            ARM64.LDR (ARM64.X6, ARM64.SP, 4136s)
+            ARM64.LDR (ARM64.X7, ARM64.SP, 4144s)
+            ARM64.LDR (ARM64.X8, ARM64.SP, 4152s)
 
             // Deallocate 320-byte stack buffer
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255us)
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 4095us)
             ARM64.ADD_imm (ARM64.SP, ARM64.SP, 65us)
             ARM64.LDP (ARM64.X23, ARM64.X24, ARM64.SP, 0s)
             ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 16s)

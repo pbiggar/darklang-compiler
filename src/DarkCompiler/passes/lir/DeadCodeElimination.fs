@@ -150,16 +150,17 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<stri
     | LIR.CanonicalBufferEq (_, _, left, right) ->
         calls |> addCallFromOperand left |> addCallFromOperand right
     | LIR.LoadFuncAddr (_, funcName) -> Set.add funcName calls
-    | LIR.FileReadText (_, path)
+    | LIR.FileReadBlob (_, path)
     | LIR.FileExists (_, path)
     | LIR.FileDelete (_, path)
+    | LIR.FileCreateDirectory (_, path)
     | LIR.FileSetExecutable (_, path)
     | LIR.RefCountIncString path
     | LIR.RefCountDecString path
     | LIR.RefCountIncBlob path
     | LIR.RefCountDecBlob path ->
         addCallFromOperand path calls
-    | LIR.FileWriteText (_, path, content)
+    | LIR.FileWriteBlob (_, path, content)
     | LIR.FileAppendText (_, path, content) ->
         calls |> addCallFromOperand path |> addCallFromOperand content
 
