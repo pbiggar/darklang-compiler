@@ -231,6 +231,7 @@ def main() -> int:
     parser.add_argument("--profile", required=True)
     parser.add_argument("--refresh-baseline", action="store_true")
     parser.add_argument("--reset-dark-baseline", action="store_true")
+    parser.add_argument("--snapshot-override")
     args = parser.parse_args()
     results_dir = Path(args.results_dir)
     try:
@@ -252,7 +253,8 @@ def main() -> int:
             write_snapshot(canonical, active)
             decision, action, document = "reset", "reset", {"decision": "reset", "snapshot_action": "reset", "benchmarks": []}
         else:
-            previous = load_snapshot(canonical, benchmarks_dir, "dark", track)
+            snapshot_source = Path(args.snapshot_override) if args.snapshot_override else canonical
+            previous = load_snapshot(snapshot_source, benchmarks_dir, "dark", track)
             comparison = compare_suites(current, previous.benchmarks)
             print_comparison(comparison, previous)
             decision = comparison.decision

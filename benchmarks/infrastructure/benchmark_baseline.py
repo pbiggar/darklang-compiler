@@ -779,7 +779,8 @@ def _validate_command(args: argparse.Namespace) -> int:
     benchmarks_dir = Path(args.benchmarks_dir).resolve()
     track = TRACKS[args.track]
     path = snapshot_path(benchmarks_dir, args.language, track)
-    snapshot = load_snapshot(path, benchmarks_dir, args.language, track)
+    source = Path(args.snapshot_override).resolve() if args.snapshot_override else path
+    snapshot = load_snapshot(source, benchmarks_dir, args.language, track)
     print(
         f"Valid {args.language} baseline: {path} (commit {snapshot.compiler.commit}, "
         f"contract {snapshot.contract_sha256})"
@@ -813,6 +814,7 @@ def main() -> int:
     validate.add_argument("--benchmarks-dir", required=True)
     validate.add_argument("--language", choices=("dark", "rust"), required=True)
     validate.add_argument("--track", choices=sorted(TRACKS), required=True)
+    validate.add_argument("--snapshot-override")
     validate.set_defaults(handler=_validate_command)
     args = parser.parse_args()
     try:

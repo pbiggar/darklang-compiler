@@ -51,6 +51,7 @@ VERIFY_RESULTS=false
 VERIFY_PARENT=false
 VERIFY_FRESH=false
 RESET_DARK_BASELINE=false
+SNAPSHOT_OVERRIDE=""
 JOB_COUNT=""
 SKIP_BENCHMARKS=()
 PROFILE=""
@@ -214,11 +215,21 @@ else
 fi
 
 if [ "$PROFILE" = "full" ] && [ "$USE_CACHEGRIND" = true ] && [ "$RESET_DARK_BASELINE" = false ] && [ "$LIST_ONLY" = false ]; then
+    BASELINE_RELATIVE="benchmarks/baselines/dark-${FULL_TRACK}.json"
+    if [ "$VERIFY_RESULTS" = false ] && git -C "$PROJECT_ROOT" ls-files -u -- "$BASELINE_RELATIVE" | grep -q .; then
+        SNAPSHOT_OVERRIDE="$(mktemp "${TMPDIR:-/tmp}/dark-benchmark-baseline.XXXXXX.json")"
+        trap 'rm -f "$SNAPSHOT_OVERRIDE"' EXIT
+        git -C "$PROJECT_ROOT" show ":2:$BASELINE_RELATIVE" > "$SNAPSHOT_OVERRIDE"
+    fi
+    BASELINE_VALIDATE_ARGS=()
+    if [ -n "$SNAPSHOT_OVERRIDE" ]; then
+        BASELINE_VALIDATE_ARGS+=(--snapshot-override "$SNAPSHOT_OVERRIDE")
+    fi
     if [ "$QUIET_MODE" = true ]; then
         run_quiet_on_success python3 "$SCRIPT_DIR/infrastructure/benchmark_baseline.py" validate \
-            --benchmarks-dir "$SCRIPT_DIR" --language dark --track "$FULL_TRACK" || exit 1
+            --benchmarks-dir "$SCRIPT_DIR" --language dark --track "$FULL_TRACK" "${BASELINE_VALIDATE_ARGS[@]}" || exit 1
     elif ! python3 "$SCRIPT_DIR/infrastructure/benchmark_baseline.py" validate \
-        --benchmarks-dir "$SCRIPT_DIR" --language dark --track "$FULL_TRACK"; then
+        --benchmarks-dir "$SCRIPT_DIR" --language dark --track "$FULL_TRACK" "${BASELINE_VALIDATE_ARGS[@]}"; then
         exit 1
     fi
 fi
@@ -521,6 +532,9 @@ fi
             HISTORY_RESET_ARGS=()
             if [ "$RESET_DARK_BASELINE" = true ]; then
                 HISTORY_RESET_ARGS+=(--reset-dark-baseline)
+            fi
+            if [ -n "$SNAPSHOT_OVERRIDE" ]; then
+                HISTORY_RESET_ARGS+=(--snapshot-override "$SNAPSHOT_OVERRIDE")
             fi
             if ! python3 "$SCRIPT_DIR/infrastructure/history_updater.py" "$OUTPUT_DIR" --profile "$PROFILE" "${HISTORY_REFRESH_ARGS[@]}" "${HISTORY_RESET_ARGS[@]}"; then
                 PROCESS_FAILURES+=("history_updater")
