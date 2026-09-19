@@ -97,6 +97,8 @@
     <Compile Include="passes/anf/lowering/Operators.fs" />
     <Compile Include="passes/anf/lowering/TypeInference.fs" />
     <Compile Include="passes/ownership/AnalyzeFunctionOwnership.fs" />
+    <Compile Include="passes/anf/ANF_Inlining.fs" />
+    <Compile Include="passes/anf/LowerOwnershipVariants.fs" />
     <Compile Include="passes/anf/lowering/Aggregates.fs" />
     <Compile Include="passes/anf/lowering/LoweringCallbacks.fs" />
     <Compile Include="passes/anf/lowering/PatternLowering.fs" />
@@ -110,7 +112,6 @@
     <Compile Include="passes/anf/optimization/Expressions.fs" />
     <Compile Include="passes/anf/optimization/Accumulators.fs" />
     <Compile Include="passes/anf/ANF_Optimize.fs" />
-    <Compile Include="passes/anf/ANF_Inlining.fs" />
     <Compile Include="passes/anf/ANF_HigherOrderSpecialization.fs" />
     <Compile Include="passes/anf/ANF_DirectCallSpecialization.fs" />
     <Compile Include="passes/anf/ANF_EscapeAnalysis.fs" />

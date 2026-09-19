@@ -427,15 +427,18 @@ let private convertTypedProgramToConversionResult
                     typeDefs
                     functions
             let varGen = ANF.VarGen 0
-            AST_to_ANF.convertFunctions
+            AST_to_ANF.convertFunctionsWithOwnership
                 (CheckedAST.programSymbols liftedProgram)
                 registries
                 varGen
                 resolvedFunctions
-            |> Result.bind (fun (anfFuncs, varGen1) ->
-                AST_to_ANF.convertExprToAnf registries varGen1 expr
+            |> Result.bind (fun converted ->
+                AST_to_ANF.convertExprToAnf registries converted.VarGen expr
                 |> Result.map (fun (anfExpr, _) ->
-                    buildConversionResult (ANF.Program (anfFuncs, anfExpr)) registries))))
+                    buildConversionResult
+                        (ANF.Program (converted.Functions, anfExpr))
+                        registries
+                        converted.OwnershipContracts))))
 
 let internal convertTypedProgramToUserOnlyWithMode
     (baseContext: PipelineContext)
@@ -584,7 +587,7 @@ let internal convertTypedProgramToUserOnlyWithMode
             }
             let convert () =
                 measure "AST -> ANF Dependency Conversion" (fun () ->
-                    AST_to_ANF.convertFunctions symbols registries varGen resolvedFunctions)
+                    AST_to_ANF.convertFunctionsWithOwnership symbols registries varGen resolvedFunctions)
             let convertedDependencies =
                 measure "AST -> ANF Dependency Lookup" (fun () ->
                     match session with
@@ -595,17 +598,21 @@ let internal convertTypedProgramToUserOnlyWithMode
                             convert
                     | None ->
                         convert ()
-                        |> Result.map (fun (anfFuncs, varGen1) ->
-                            (anfFuncs, varGen1, System.Object())))
+                        |> Result.map (fun converted ->
+                            (converted, System.Object())))
             convertedDependencies
-            |> Result.bind (fun (anfFuncs, varGen1, dependencyIdentity) ->
+            |> Result.bind (fun (converted, dependencyIdentity) ->
                 measure "AST -> ANF Expression Conversion" (fun () ->
-                    AST_to_ANF.convertExprToAnf registries varGen1 expr)
+                    AST_to_ANF.convertExprToAnf registries converted.VarGen expr)
                 |> Result.map (fun (anfExpr, _) ->
                     ({
-                        UserFunctions = anfFuncs
+                        UserFunctions = converted.Functions
+                        OwnershipContracts = converted.OwnershipContracts
                         ScopeContracts = registries.ScopeContracts
-                        NonInlineableFunctionNames = nonInlineableFunctionNames
+                        NonInlineableFunctionNames =
+                            Set.union
+                                nonInlineableFunctionNames
+                                (converted.OwnershipContracts |> Map.keys |> Set.ofSeq)
                         MainExpr = anfExpr
                         TypeReg = registries.TypeReg
                         RecordFieldsReg = registries.RecordFieldsReg
@@ -615,7 +622,10 @@ let internal convertTypedProgramToUserOnlyWithMode
                         LocalRecordFieldsReg = localRegistries.RecordFieldsReg
                         LocalVariantLookup = localRegistries.VariantLookup
                         RcSumShapeReg = registries.RcSumShapeReg
-                        FuncReg = registries.FuncReg
+                        FuncReg =
+                            AST_to_ANF.extendFunctionRegistryWithConverted
+                                registries.FuncReg
+                                converted.Functions
                         FunctionNames = registries.FunctionNames
                         LocalReturnTypes = localReturnTypes
                         FuncParams = registries.FuncParams

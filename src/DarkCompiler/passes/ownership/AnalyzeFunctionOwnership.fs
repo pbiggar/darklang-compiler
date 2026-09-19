@@ -38,6 +38,7 @@ let semantics analysis =
 let hirContracts analysis =
     ScheduleOwnershipVariants.hirContracts analysis.Schedule analysis.HIR
 let schedule analysis = analysis.Schedule
+let originalFunctions analysis = ElaborateFunctionOwnership.functions analysis.Ownership
 
 let private isManaged context (value: HIR.Value) =
     value.Type

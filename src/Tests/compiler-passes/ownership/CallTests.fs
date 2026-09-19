@@ -323,6 +323,7 @@ let testProgramRcFreshTempsFollowExistingProgramTemps () : TestResult =
     }
     let conversion : AST_to_ANF.ConversionResult = {
         Program = Program ([func], Return UnitLiteral)
+        OwnershipContracts = Map.empty
         RecursiveMembers = Map.empty
         TypeReg = Map.empty
         RecordFieldsReg = Map.empty
@@ -358,6 +359,40 @@ let testProgramRcFreshTempsFollowExistingProgramTemps () : TestResult =
         else
             Ok ()
     | Ok _ -> Error "Expected the transformed program to contain one function"
+
+let testProgramRcRejectsDriftedOwnershipContract () : TestResult =
+    let functionId = AST.functionIdForName "driftedOwnership"
+    let func : Function = {
+        Id = functionId
+        Name = "driftedOwnership"
+        TypedParams = [{ Id = TempId 0; Type = AST.TInt64 }]
+        ReturnType = AST.TInt64
+        ReturnOwnership = OwnedReturn
+        Body = Return (Var (TempId 0))
+    }
+    let conversion : AST_to_ANF.ConversionResult = {
+        Program = Program ([func], Return UnitLiteral)
+        OwnershipContracts =
+            Map.ofList [
+                functionId,
+                ({
+                    Parameters = [OwnedIR.UniqueCallParameter]
+                    Result = OwnedIR.UnmanagedCallResult
+                 }: OwnedIR.CallSignature)
+            ]
+        RecursiveMembers = Map.empty
+        TypeReg = Map.empty
+        RecordFieldsReg = Map.empty
+        RecordTypeParamsReg = Map.empty
+        VariantLookup = Map.empty
+        RcSumShapeReg = Map.empty
+        FuncReg = functionRegistry [("driftedOwnership", AST.TFunction ([AST.TInt64], AST.TInt64))]
+        FuncParams = Map.empty
+        ModuleRegistry = Map.empty
+    }
+    match insertRCInProgram conversion with
+    | Error message when message.Contains("Ownership contract parameter representation changed") -> Ok ()
+    | actual -> Error $"Expected RC insertion to reject ownership-contract drift, got {actual}"
 
 let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
     let payloadType = AST.TRecord ("Payload", [])

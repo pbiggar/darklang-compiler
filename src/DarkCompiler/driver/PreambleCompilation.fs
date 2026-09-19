@@ -88,7 +88,7 @@ let buildPreambleContext
                             preambleRegistries
                             baseFuncNames
                             preambleReturnTypes
-                    match buildAnf 0 preambleOptions sw preambleRegistries ANF_Inlining.defaultConfig Map.empty Map.empty Set.empty preambleUserOnly.Functions false passTimingRecorder with
+                    match buildAnf 0 preambleOptions sw preambleRegistries ANF_Inlining.defaultConfig Map.empty Map.empty Set.empty preambleUserOnly.Functions Map.empty false passTimingRecorder with
                     | Error err ->
                         let rcPrefix = "Reference count insertion error: "
                         let msg =
@@ -212,7 +212,7 @@ let buildPreambleContextFromAnalysis
                 preambleRegistries
                 baseFuncNames
                 preambleReturnTypes
-        match buildAnf 0 preambleOptions sw preambleRegistries ANF_Inlining.defaultConfig Map.empty Map.empty Set.empty preambleUserOnly.Functions false passTimingRecorder with
+        match buildAnf 0 preambleOptions sw preambleRegistries ANF_Inlining.defaultConfig Map.empty Map.empty Set.empty preambleUserOnly.Functions Map.empty false passTimingRecorder with
         | Error err ->
             let rcPrefix = "Reference count insertion error: "
             let msg =

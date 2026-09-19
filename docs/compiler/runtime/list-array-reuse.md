@@ -128,7 +128,11 @@ whole-function inputs and fixed-point specialization scheduling now run in the
 production pipeline. Scheduling is bounded by iteration, generated-group, and
 rewritten-call limits, and its cache descriptors retain exact source bodies,
 canonical contracts, and dependencies. The resulting ownership HIR remains an
-analysis artifact until ownership-aware ANF lowering consumes it; escaping
+analysis artifact until ownership-aware ANF lowering consumes it. That lowering
+now emits the scheduled clones and call rewrites, preserves positional
+ownership contracts in the ANF conversion result, and revalidates their arity
+and managed representation before reference-count insertion. The proof
+metadata does not alter the ordinary native calling convention yet; escaping
 array values remain later work.
 
 `verifyFunctional` checks the closed region's incoming collection interface

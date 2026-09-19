@@ -15,16 +15,21 @@ open PipelineDiagnostics
 let internal buildConversionResult
     (program: ANF.Program)
     (registries: AST_to_ANF.Registries)
+    (ownershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>)
     : AST_to_ANF.ConversionResult =
+    let (ANF.Program (functions, _)) = program
+    let funcReg =
+        AST_to_ANF.extendFunctionRegistryWithConverted registries.FuncReg functions
     {
         Program = program
+        OwnershipContracts = ownershipContracts
         RecursiveMembers = registries.RecursiveMembers
         TypeReg = registries.TypeReg
         RecordFieldsReg = registries.RecordFieldsReg
         RecordTypeParamsReg = registries.RecordTypeParamsReg
         VariantLookup = registries.VariantLookup
         RcSumShapeReg = registries.RcSumShapeReg
-        FuncReg = registries.FuncReg
+        FuncReg = funcReg
         FuncParams = registries.FuncParams
         ModuleRegistry = registries.ModuleRegistry
     }
@@ -54,6 +59,7 @@ let internal buildAnf
     (externalOptimizationFunctions: Map<string, ANF.Function>)
     (nonInlineableFunctionNames: Set<AST.FunctionId>)
     (functions: ANF.Function list)
+    (ownershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>)
     (specializeInternalSignatures: bool)
     (passTimingRecorder: PassTimingRecorder option)
     : Result<ANF.Function list * ANF.TypeMap, string> =
@@ -174,7 +180,7 @@ let internal buildAnf
         let t = System.Math.Round(escapeAnalysisElapsed, 1)
         println $"        {t}ms"
 
-    let convResult = buildConversionResult anfAfterEscapeAnalysis registries
+    let convResult = buildConversionResult anfAfterEscapeAnalysis registries ownershipContracts
 
     if verbosity >= 1 then println "  [anf.reference-counts] Reference Count Insertion..."
     let rcStart = sw.Elapsed.TotalMilliseconds
