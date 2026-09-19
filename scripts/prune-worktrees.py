@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -108,13 +109,13 @@ def is_dirty(path: Path) -> bool:
     return bool(result.stdout)
 
 
-def inspect_process_cwds() -> list[ProcessCwd]:
+def inspect_process_cwds(user_id: int) -> list[ProcessCwd]:
     if shutil.which("lsof") is None:
         raise EligibilityError("lsof is not available on PATH")
 
     try:
         result = subprocess.run(
-            ["lsof", "-a", "-d", "cwd", "-F0pcn"],
+            ["lsof", "-a", "-u", str(user_id), "-d", "cwd", "-F0pcn"],
             check=False,
             capture_output=True,
         )
@@ -123,7 +124,7 @@ def inspect_process_cwds() -> list[ProcessCwd]:
     stderr = result.stderr.decode(errors="replace").strip()
     if result.returncode != 0 or stderr:
         detail = stderr or f"lsof exited with status {result.returncode}"
-        raise EligibilityError(detail)
+        raise EligibilityError(f"UID {user_id}: {detail}")
 
     processes: list[ProcessCwd] = []
     pid = ""
@@ -219,6 +220,14 @@ def main() -> int:
         return 1
 
     current_root = Path(current_root_result.stdout.strip()).resolve()
+    checkout_user_id = os.stat(current_root).st_uid
+    if os.geteuid() != checkout_user_id:
+        print(
+            f"Run this script as checkout owner UID {checkout_user_id}, not with sudo; "
+            "no changes made",
+            file=sys.stderr,
+        )
+        return 1
     integration_result = git(
         current_root,
         "rev-parse",
@@ -232,7 +241,7 @@ def main() -> int:
     integration_commit = integration_result.stdout.strip()
 
     try:
-        processes = inspect_process_cwds()
+        processes = inspect_process_cwds(checkout_user_id)
     except EligibilityError as error:
         print(
             f"Cannot verify worktree eligibility with lsof: {error}; no changes made",
@@ -319,7 +328,7 @@ def main() -> int:
         return 1
 
     try:
-        final_processes = inspect_process_cwds()
+        final_processes = inspect_process_cwds(checkout_user_id)
     except EligibilityError as error:
         print(
             f"Cannot reverify worktree eligibility with lsof: {error}; no changes made",

@@ -77,6 +77,12 @@ if os.environ.get("TEST_LSOF_FAIL") == "1":
     print("permission denied while inspecting processes", file=sys.stderr)
     raise SystemExit(1)
 
+expected_uid = os.environ["TEST_LSOF_UID"]
+uid_index = sys.argv.index("-u")
+if sys.argv[uid_index + 1] != expected_uid:
+    print("wrong UID selected for lsof", file=sys.stderr)
+    raise SystemExit(1)
+
 records = [("100", "test-shell", os.environ["TEST_PRIMARY"])]
 busy = os.environ.get("TEST_BUSY_WORKTREE")
 if busy:
@@ -92,6 +98,7 @@ for pid, command, path in records:
             environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
             environment["TEST_PRIMARY"] = str(repo)
             environment["TEST_BUSY_WORKTREE"] = str(paths["busy"])
+            environment["TEST_LSOF_UID"] = str(os.stat(repo).st_uid)
 
             dry_run = subprocess.run(
                 [sys.executable, str(source_script)],
