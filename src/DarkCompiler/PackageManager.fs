@@ -33,6 +33,11 @@ type private LocatedEntity = {
 
 type private FetchResult = Found of string | Missing
 
+// ProgramTypes encodes expression trees as nested tagged arrays. Real package
+// functions exceed System.Text.Json's conservative default depth of 64, while
+// retaining a finite bound protects the compiler from unbounded payloads.
+let private packageJsonOptions = JsonDocumentOptions(MaxDepth = 512)
+
 let defaultServer = Uri "https://matter.darklang.com"
 
 let defaultCachePath () : string =
@@ -168,7 +173,7 @@ let private quoted (value: string) = "\"" + escapedStringContents value + "\""
 
 let private parseHashJson (json: string) : Result<string, string> =
     try
-        use document = JsonDocument.Parse json
+        use document = JsonDocument.Parse(json, packageJsonOptions)
         enumCase document.RootElement
         |> Result.bind (function
             | "Hash", [value] -> stringValue value
@@ -509,7 +514,7 @@ let rec private renderExpr (parameters: string list) (selfName: string) (element
 
 let private parseLocatedEntity (kind: ItemKind) (hash: string) (json: string) : Result<LocatedEntity, string> =
     try
-        use document = JsonDocument.Parse json
+        use document = JsonDocument.Parse(json, packageJsonOptions)
         match tryField "entity" document.RootElement, tryField "location" document.RootElement with
         | Some _, Some location ->
             locationName location
@@ -530,7 +535,7 @@ let private tryPackageHash element : (string * string) option =
 
 let private dependencyRefs (json: string) : Result<(string * string) list, string> =
     try
-        use document = JsonDocument.Parse json
+        use document = JsonDocument.Parse(json, packageJsonOptions)
         let rec collect element =
             let own = tryPackageHash element |> Option.toList
             match element.ValueKind with
@@ -542,7 +547,7 @@ let private dependencyRefs (json: string) : Result<(string * string) list, strin
 
 let private renderEntity (entity: LocatedEntity) : Result<ResolvedSource, string> =
     try
-        use document = JsonDocument.Parse entity.Json
+        use document = JsonDocument.Parse(entity.Json, packageJsonOptions)
         match tryField "entity" document.RootElement with
         | None -> Error $"Missing package entity {entity.Hash}"
         | Some value ->
