@@ -210,6 +210,8 @@ type Instr =
     | RefCountDecString of str:Operand
     | RefCountIncBlob of bytes:Operand
     | RefCountDecBlob of bytes:Operand
+    | RefCountIncInt of value:Operand
+    | RefCountDecInt of value:Operand
     | RandomInt64 of dest:Reg
     | DateTimeNow of dest:Reg
     | Sleep of effectId:int * delayMs:FReg

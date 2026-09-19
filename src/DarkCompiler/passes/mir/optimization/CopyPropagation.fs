@@ -180,6 +180,8 @@ let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     | RefCountDecString str -> RefCountDecString (p str)
     | RefCountIncBlob bytes -> RefCountIncBlob (p bytes)
     | RefCountDecBlob bytes -> RefCountDecBlob (p bytes)
+    | RefCountIncInt value -> RefCountIncInt (p value)
+    | RefCountDecInt value -> RefCountDecInt (p value)
     | RandomInt64 dest -> RandomInt64 dest
     | DateTimeNow dest -> DateTimeNow dest
     | Sleep (effectId, dest, delayMs) -> Sleep (effectId, dest, p delayMs)

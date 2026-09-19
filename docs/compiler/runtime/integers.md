@@ -13,17 +13,22 @@ runtime error.
 
 ## Representation
 
-The compiler represents each value as a reference-counted dynamic buffer
-containing its canonical decimal form. The type system keeps `Int` distinct
-from `String`, while representation-only intrinsics allow the target-neutral
-stdlib implementation to share the existing buffer allocation and reference
-counting machinery on ARM64 and x86-64.
+Values in the signed 62-bit interval -2^62 through 2^62-1 are stored directly
+in the machine word with a low-bit tag. Larger values use an immutable,
+reference-counted buffer of little-endian base-2^31 limbs. Its signed used-limb
+count records the sign without requiring two's-complement padding. Zero and
+small arithmetic results use tagged values; operations accept either form.
 
-Canonical storage has one optional leading minus sign, no leading zeroes, and
-uses `0` rather than negative zero. This makes equality and printing stable
-after every operation. Arithmetic is implemented in the internal target-neutral
-`src/DarkCompiler/stdlib/__Integer.dark` layer, with the public surface in
-`Int.dark`. Both native backends therefore use identical semantics.
+The compiler tracks this representation as `DynamicInt`, separately from
+strings and blobs. Dedicated retain/release instructions skip tagged values and
+manage only limb buffers, including when an `Int` is captured or stored in a
+list, tuple, record, sum, or dictionary.
+
+Arithmetic, shifts, infinite two's-complement bitwise operations, decimal
+parsing/formatting, and fixed-width conversions are implemented in the internal
+target-neutral `src/DarkCompiler/stdlib/__Integer.dark` layer. Both native
+backends therefore share semantics. Decimal strings are allocated only at text
+boundaries; arithmetic does not parse or rebuild decimal text.
 
 ## Int128 and UInt128
 

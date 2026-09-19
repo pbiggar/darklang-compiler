@@ -1158,9 +1158,19 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 let cmpExpr = ANF.Prim (ANF.Eq, scrutAtom, ANF.IntLiteral (ANF.Int64 n))
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
             | CheckedAST.PBigInt n ->
-                let (cmpVar, vg1) = ANF.freshVar vg
-                let cmpExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int.__equals", [scrutAtom; ANF.StringLiteral (n.ToString())])
-                Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                let smallMin = -(System.Numerics.BigInteger.One <<< 62)
+                let smallMax = (System.Numerics.BigInteger.One <<< 62) - System.Numerics.BigInteger.One
+                let (literalVar, vg1) = ANF.freshVar vg
+                let literalExpr =
+                    if n >= smallMin && n <= smallMax then
+                        let taggedWord = int64 (n * 2I + 1I)
+                        ANF.TypedAtom (ANF.IntLiteral (ANF.Int64 taggedWord), AST.TInt)
+                    else
+                        ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int.__value", [ANF.StringLiteral (n.ToString())])
+                let (cmpVar, vg2) = ANF.freshVar vg1
+                let cmpExpr =
+                    ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int.__equals", [scrutAtom; ANF.Var literalVar])
+                Ok (Some (ANF.Var cmpVar, [(literalVar, literalExpr); (cmpVar, cmpExpr)], vg2))
             | CheckedAST.PInt128Literal n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
                 let cmpExpr = int128LiteralComparison scrutAtom n

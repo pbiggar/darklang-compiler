@@ -29,6 +29,7 @@ let internal createReturnDec
             Some (rcMetadataForTypeAndShape ctx typ shape)
         | Some DynamicStringBuffer
         | Some DynamicBlobBuffer
+        | Some DynamicIntBuffer
         | None ->
             None
     (tempId, typ, shape, kindOverride, metadata)
@@ -42,6 +43,8 @@ let internal retainExprForShape
     match rcShapeRetainOperation shape with
     | Some DynamicStringBuffer ->
         RefCountIncString (Var tempId)
+    | Some DynamicIntBuffer ->
+        RefCountIncInt (Var tempId)
     | Some DynamicBlobBuffer ->
         RefCountIncBlob (Var tempId)
     | Some (FixedSizeRoot (size, kind)) ->
@@ -63,6 +66,8 @@ let private releaseExprForShape
     match rcShapeReleaseOperation shape with
     | Some DynamicStringBuffer ->
         RefCountDecString (Var tempId)
+    | Some DynamicIntBuffer ->
+        RefCountDecInt (Var tempId)
     | Some DynamicBlobBuffer ->
         RefCountDecBlob (Var tempId)
     | Some (FixedSizeRoot (size, defaultKind)) ->
@@ -343,6 +348,16 @@ let rec private collectMovableTailDecPrefix
         else
             let (bindings, remaining) = collectMovableTailDecPrefix tailArgTemps rest
             ((tmpId, RefCountDecBlob atom) :: bindings, remaining)
+    | Let (tmpId, RefCountDecInt atom, rest) ->
+        let overlaps =
+            match atom with
+            | Var tid -> Set.contains tid tailArgTemps
+            | _ -> false
+        if overlaps then
+            ([], expr)
+        else
+            let (bindings, remaining) = collectMovableTailDecPrefix tailArgTemps rest
+            ((tmpId, RefCountDecInt atom) :: bindings, remaining)
     | _ ->
         ([], expr)
 

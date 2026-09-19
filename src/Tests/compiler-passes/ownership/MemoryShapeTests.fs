@@ -50,7 +50,7 @@ let testRcShapeClassifiesPrimitivesAsImmediate () : TestResult =
     | Some typ -> Error $"Expected primitive type {typ} to classify as Immediate"
 
 let testRcShapeClassifiesManagedIntegerBuffers () : TestResult =
-    let samples = [AST.TInt, DynamicString; AST.TInt128, FixedBlock (16, []); AST.TUInt128, FixedBlock (16, [])]
+    let samples = [AST.TInt, DynamicInt; AST.TInt128, FixedBlock (16, []); AST.TUInt128, FixedBlock (16, [])]
 
     match samples |> List.tryFind (fun (typ, expected) -> rcShapeOfType Map.empty typ <> expected) with
     | None -> Ok ()

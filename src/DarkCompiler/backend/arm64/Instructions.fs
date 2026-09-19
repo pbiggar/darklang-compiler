@@ -330,13 +330,19 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
     | LIR.RawWriteByte (ptr, byteOffset, value) ->
         ARM64EmitMemory.emitRawWriteByte ctx ptr byteOffset value
 
-    | LIR.RefCountIncString str
+    | LIR.RefCountIncString str ->
+        ARM64EmitReferenceCounts.emitRefCountIncString ctx str
     | LIR.RefCountIncBlob str ->
         ARM64EmitReferenceCounts.emitRefCountIncString ctx str
+    | LIR.RefCountIncInt value ->
+        ARM64EmitReferenceCounts.emitRefCountIncInt ctx value
 
-    | LIR.RefCountDecString str
+    | LIR.RefCountDecString str ->
+        ARM64EmitReferenceCounts.emitRefCountDecString ctx str
     | LIR.RefCountDecBlob str ->
         ARM64EmitReferenceCounts.emitRefCountDecString ctx str
+    | LIR.RefCountDecInt value ->
+        ARM64EmitReferenceCounts.emitRefCountDecInt ctx value
 
     | LIR.RandomInt64 dest ->
         ARM64EmitNativeEffects.emitRandomInt64 ctx dest

@@ -16,8 +16,8 @@ let rec private genFieldReleases
     |> List.collect (function
         | MemoryModel.FieldRelease (fieldOffset, fieldReleasePlan) ->
             match fieldReleasePlan with
-            | MemoryModel.DynamicBufferRelease _ ->
-                genDynamicBufferFieldRelease ctx fieldOffset
+            | MemoryModel.DynamicBufferRelease operation ->
+                genDynamicBufferFieldRelease ctx (operation = MemoryModel.DynamicIntBuffer) fieldOffset
             | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) ->
                 genDictFieldRelease fieldOffset fieldReleasePlan
             | MemoryModel.RootRelease (_, MemoryModel.ClosureHeap, _) ->

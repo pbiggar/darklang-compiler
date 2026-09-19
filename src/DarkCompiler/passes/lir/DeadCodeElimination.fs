@@ -162,6 +162,9 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<AST.FunctionId>) : 
     | LIR.RefCountIncBlob path
     | LIR.RefCountDecBlob path ->
         addCallFromOperand path calls
+    | LIR.RefCountIncInt path
+    | LIR.RefCountDecInt path ->
+        addCallFromOperand path calls
     | LIR.FileWriteBlob (_, path, content)
     | LIR.FileAppendText (_, path, content) ->
         calls |> addCallFromOperand path |> addCallFromOperand content

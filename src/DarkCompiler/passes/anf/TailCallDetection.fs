@@ -34,6 +34,7 @@ let isRefCountDec (cexpr: CExpr) : bool =
     | RefCountDec _ -> true
     | RefCountDecString _ -> true
     | RefCountDecBlob _ -> true
+    | RefCountDecInt _ -> true
     | _ -> false
 
 /// Check if an expression eventually returns a specific TempId
@@ -184,6 +185,12 @@ let rec private collectMovableDecPrefix
         when not (atomOverlapsTailArgs aliasRoots tailArgTemps atom) ->
         let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
         ((tmpId, RefCountDecBlob atom) :: bindings, remaining)
+    | Let (tmpId, RefCountDecInt atom, rest)
+        when not (atomOverlapsTailArgs aliasRoots tailArgTemps atom) ->
+        let (bindings, remaining) = collectMovableDecPrefix aliasRoots tailArgTemps rest
+        ((tmpId, RefCountDecInt atom) :: bindings, remaining)
+    | Let (_, RefCountDecInt _, _) ->
+        ([], expr)
     | Let (_, RefCountDecBlob _, _) ->
         ([], expr)
     | _ ->
@@ -352,11 +359,13 @@ let rec detectTailCalls
                 match cexpr with
                 | RefCountInc (Var retainedTemp, _, _, _)
                 | RefCountIncString (Var retainedTemp)
-                | RefCountIncBlob (Var retainedTemp) ->
+                | RefCountIncBlob (Var retainedTemp)
+                | RefCountIncInt (Var retainedTemp) ->
                     Set.add (canonicalTempId aliasRoots retainedTemp) retainedBorrowRoots
                 | RefCountDec (Var releasedTemp, _, _, _)
                 | RefCountDecString (Var releasedTemp)
-                | RefCountDecBlob (Var releasedTemp) ->
+                | RefCountDecBlob (Var releasedTemp)
+                | RefCountDecInt (Var releasedTemp) ->
                     Set.remove (canonicalTempId aliasRoots releasedTemp) retainedBorrowRoots
                 | _ ->
                     retainedBorrowRoots
@@ -364,7 +373,8 @@ let rec detectTailCalls
                 match cexpr with
                 | RefCountDec (Var releasedTemp, _, _, _)
                 | RefCountDecString (Var releasedTemp)
-                | RefCountDecBlob (Var releasedTemp) ->
+                | RefCountDecBlob (Var releasedTemp)
+                | RefCountDecInt (Var releasedTemp) ->
                     Set.add (canonicalTempId aliasRoots releasedTemp) releasedTemps
                 | _ ->
                     releasedTemps

@@ -102,6 +102,8 @@ let internal mustPreserveEvaluation (context: OptimizeContext) (cexpr: CExpr) : 
     | RefCountDecString _ -> true   // Mutates refcount
     | RefCountIncBlob _ -> true    // Mutates refcount
     | RefCountDecBlob _ -> true    // Mutates refcount
+    | RefCountIncInt _ -> true
+    | RefCountDecInt _ -> true
     | RandomInt64 -> true   // Reads from OS random source
     | DateTimeNow -> true       // Reads current time (syscall)
     | Sleep _ -> true           // Blocks the current process
@@ -206,6 +208,8 @@ let internal addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | RefCountDecString str -> addAtomUse str uses
     | RefCountIncBlob bytes -> addAtomUse bytes uses
     | RefCountDecBlob bytes -> addAtomUse bytes uses
+    | RefCountIncInt value -> addAtomUse value uses
+    | RefCountDecInt value -> addAtomUse value uses
     | RandomInt64 -> uses  // No atoms
     | DateTimeNow -> uses      // No atoms
     | Sleep delayMs -> addAtomUse delayMs uses
@@ -259,6 +263,8 @@ let cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | RefCountDecString atom
     | RefCountIncBlob atom
     | RefCountDecBlob atom
+    | RefCountIncInt atom
+    | RefCountDecInt atom
     | FloatToString atom -> used atom
     | Sleep atom -> used atom
     | StdoutWrite (atom, _) -> used atom

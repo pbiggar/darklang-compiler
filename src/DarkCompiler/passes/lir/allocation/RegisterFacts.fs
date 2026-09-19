@@ -159,6 +159,9 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
         operandToVReg bytes |> Option.toList
     | LIR.RefCountDecBlob bytes ->
         operandToVReg bytes |> Option.toList
+    | LIR.RefCountIncInt value
+    | LIR.RefCountDecInt value ->
+        operandToVReg value |> Option.toList
     | LIR.RandomInt64 _ ->
         []  // No operands to read
     | LIR.DateTimeNow _ ->
@@ -238,6 +241,8 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.RefCountDecString _ -> None
     | LIR.RefCountIncBlob _ -> None
     | LIR.RefCountDecBlob _ -> None
+    | LIR.RefCountIncInt _ -> None
+    | LIR.RefCountDecInt _ -> None
     | LIR.RandomInt64 dest -> regToVReg dest
     | LIR.DateTimeNow dest -> regToVReg dest
     | LIR.CliNative (dest, _, _) -> regToVReg dest

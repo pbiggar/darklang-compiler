@@ -108,6 +108,8 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : AST.FunctionId list =
     | ANF.RefCountDecString atom -> extractFromAtom atom
     | ANF.RefCountIncBlob atom -> extractFromAtom atom
     | ANF.RefCountDecBlob atom -> extractFromAtom atom
+    | ANF.RefCountIncInt atom -> extractFromAtom atom
+    | ANF.RefCountDecInt atom -> extractFromAtom atom
     | ANF.RandomInt64 -> []  // No atoms
     | ANF.DateTimeNow -> []      // No atoms
     | ANF.Sleep delayMs -> extractFromAtom delayMs

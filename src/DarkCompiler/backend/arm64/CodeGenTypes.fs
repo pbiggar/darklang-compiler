@@ -189,7 +189,8 @@ let internal slotInitRootRetainTarget
             | MemoryModel.DictRoot _ ->
                 Some LIR.SlotInitDictRootRetain
             | MemoryModel.DynamicString
-            | MemoryModel.DynamicBlob ->
+            | MemoryModel.DynamicBlob
+            | MemoryModel.DynamicInt ->
                 Some LIR.SlotInitDynamicBufferRetain
             | MemoryModel.ClosureShape _ ->
                 Some LIR.SlotInitClosureRootRetain

@@ -281,6 +281,8 @@ let getBlockDefs (block: BasicBlock) : Set<VReg> =
         | RefCountDecString _ -> defs
         | RefCountIncBlob _ -> defs
         | RefCountDecBlob _ -> defs
+        | RefCountIncInt _ -> defs
+        | RefCountDecInt _ -> defs
         | RandomInt64 dest -> Set.add dest defs
         | DateTimeNow dest -> Set.add dest defs
         | Sleep (_, dest, _) -> Set.add dest defs
@@ -410,6 +412,8 @@ let getBlockUses (block: BasicBlock) : Set<VReg> =
             | RefCountDecString str -> addOperandUse str uses
             | RefCountIncBlob bytes -> addOperandUse bytes uses
             | RefCountDecBlob bytes -> addOperandUse bytes uses
+            | RefCountIncInt value -> addOperandUse value uses
+            | RefCountDecInt value -> addOperandUse value uses
             | RandomInt64 _ -> uses  // No operand uses
             | DateTimeNow _ -> uses      // No operand uses
             | Sleep (_, _, delayMs) -> addOperandUse delayMs uses
@@ -1042,6 +1046,14 @@ let renameInstr (state: RenamingState) (instr: Instr) : Instr * RenamingState =
     | RefCountDecBlob bytes ->
         let bytes' = renameOperand state bytes
         (RefCountDecBlob bytes', state)
+
+    | RefCountIncInt value ->
+        let value' = renameOperand state value
+        (RefCountIncInt value', state)
+
+    | RefCountDecInt value ->
+        let value' = renameOperand state value
+        (RefCountDecInt value', state)
 
     | RandomInt64 dest ->
         let (_, newDest, state') = newVersion state dest

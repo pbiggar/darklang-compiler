@@ -420,7 +420,11 @@ let internal generateLinuxCliProcessLifecycleHelpers (ctx: CodeGenContext) : ARM
             ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X21, 8s)
             ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.SP, 32us)
             ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 1us, 0)
-            zero ARM64Symbolic.X3 ]
+            zero ARM64Symbolic.X3
+            // wait4 writes a 32-bit status. Clear the full stack word so the
+            // 64-bit decode below cannot observe stale upper bytes.
+            zero ARM64Symbolic.X9
+            ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 32s) ]
         @ syscall 260us
         @ [ ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
             ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, "__dark_process_io_read_stdout")
@@ -542,7 +546,10 @@ let internal generateLinuxCliProcessLifecycleHelpers (ctx: CodeGenContext) : ARM
         @ [ ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X21, 8s)
             ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.SP, 32us)
             zero ARM64Symbolic.X2
-            zero ARM64Symbolic.X3 ]
+            zero ARM64Symbolic.X3
+            // wait4 writes only the low 32 bits of the status slot.
+            zero ARM64Symbolic.X9
+            ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 32s) ]
         @ syscall 260us
         @ [ ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.SP, 32s)
             ARM64Symbolic.AND_imm (ARM64Symbolic.X11, ARM64Symbolic.X10, 0x7fUL)

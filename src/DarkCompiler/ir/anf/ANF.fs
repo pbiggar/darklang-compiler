@@ -232,6 +232,8 @@ type CExpr =
     | RefCountDecString of Atom               // Decrement string ref count, free if zero
     | RefCountIncBlob of Atom                // Increment bytes ref count
     | RefCountDecBlob of Atom                // Decrement bytes ref count, free if zero
+    | RefCountIncInt of Atom                 // Increment heap-backed Int ref count
+    | RefCountDecInt of Atom                 // Decrement heap-backed Int ref count
     // Random intrinsics
     | RandomInt64                             // Get 8 random bytes as Int64
     // DateTime intrinsics

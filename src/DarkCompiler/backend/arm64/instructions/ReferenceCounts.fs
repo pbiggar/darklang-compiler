@@ -202,7 +202,11 @@ let internal emitRefCountDec (ctx: CodeGenContext) (addr: LIR.Reg) (payloadSize:
                     ARM64Symbolic.CBZ_offset (fieldReg, List.length callInstrs + 1)
                 ] @ callInstrs
 
-            let releaseDynamicBufferFieldFrom (baseReg: ARM64Symbolic.Reg) (fieldOffset: int) : ARM64Symbolic.Instr list =
+            let releaseDynamicBufferFieldFrom
+                (baseReg: ARM64Symbolic.Reg)
+                (fieldOffset: int)
+                (operation: MemoryModel.RcOperation)
+                : ARM64Symbolic.Instr list =
                 let bufferLeakDec = generateLeakCounterDec ctx
                 let refcountUpdate =
                     if List.isEmpty bufferLeakDec then
@@ -217,10 +221,19 @@ let internal emitRefCountDec (ctx: CodeGenContext) (addr: LIR.Reg) (payloadSize:
                             ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X15, 6)
                         ] @ bufferLeakDec
                 let bcondOffset = List.length refcountUpdate + 1
+                let taggedGuard =
+                    match operation with
+                    | MemoryModel.DynamicIntBuffer ->
+                        [ ARM64Symbolic.AND_imm (ARM64Symbolic.X13, ARM64Symbolic.X12, 1UL)
+                          ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X13, 8 + List.length refcountUpdate) ]
+                    | _ -> []
                 let body =
                     [
                         ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
-                        ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, 8 + List.length refcountUpdate)
+                        ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, List.length taggedGuard + 8 + List.length refcountUpdate)
+                    ]
+                    @ taggedGuard
+                    @ [
                         ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
                         ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0xFFFFus, 0)
                         ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 16)
@@ -239,17 +252,14 @@ let internal emitRefCountDec (ctx: CodeGenContext) (addr: LIR.Reg) (payloadSize:
                     ARM64Symbolic.LDP_post (ARM64Symbolic.X12, ARM64Symbolic.X13, ARM64Symbolic.SP, 32s)
                 ]
 
-            let releaseDynamicBufferField (fieldOffset: int) : ARM64Symbolic.Instr list =
-                releaseDynamicBufferFieldFrom addrReg fieldOffset
-
             let rec releaseFieldPlanFrom
                 (baseReg: ARM64Symbolic.Reg)
                 (fieldOffset: int)
                 (fieldReleasePlan: MemoryModel.RcReleasePlan)
                 : ARM64Symbolic.Instr list =
                 match fieldReleasePlan with
-                | MemoryModel.DynamicBufferRelease _ ->
-                    releaseDynamicBufferFieldFrom baseReg fieldOffset
+                | MemoryModel.DynamicBufferRelease operation ->
+                    releaseDynamicBufferFieldFrom baseReg fieldOffset operation
                 | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
                     releaseListFieldFromPlan baseReg fieldOffset fieldReleasePlan
                 | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) ->
@@ -564,7 +574,7 @@ let internal emitRefCountDec (ctx: CodeGenContext) (addr: LIR.Reg) (payloadSize:
             let cbzOffset = List.length inlineDecPath + 1
             [ARM64Symbolic.CBZ_offset (addrReg, cbzOffset)] @ inlineDecPath)
 
-let internal emitRefCountIncString (ctx: CodeGenContext) (str: LIR.Operand) : Result<ARM64Symbolic.Instr list, string> =
+let private emitRefCountIncBuffer (ctx: CodeGenContext) (skipTagged: bool) (str: LIR.Operand) : Result<ARM64Symbolic.Instr list, string> =
     // Increment the leading refcount for a dynamic buffer.
     // Literal strings have refcount = INT64_MAX as sentinel (don't modify read-only memory)
     match str with
@@ -580,21 +590,27 @@ let internal emitRefCountIncString (ctx: CodeGenContext) (str: LIR.Operand) : Re
                     ARM64Symbolic.X14, [ARM64Symbolic.MOV_reg (ARM64Symbolic.X14, addrReg)]
                 else
                     addrReg, []
-            preserveAddr @ [
-                ARM64Symbolic.LDR (ARM64Symbolic.X15, refAddrReg, 0s)             // X15 = refcount
-            ]
-            // INT64_MAX fits a single MOVN; retain the exact sentinel test
-            // without a four-instruction constant on every buffer RC edge.
-            @ loadImmediate ARM64Symbolic.X13 System.Int64.MaxValue
-            @ [
+            let refcountPath = ([
+                ARM64Symbolic.LDR (ARM64Symbolic.X15, refAddrReg, 0s)
+            ] @ loadImmediate ARM64Symbolic.X13 System.Int64.MaxValue @ [
                 ARM64Symbolic.CMP_reg (ARM64Symbolic.X15, ARM64Symbolic.X13)             // Compare with sentinel
                 ARM64Symbolic.B_cond (ARM64Symbolic.EQ, 3)                       // If literal string, skip to end
                 ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)        // X15++
                 ARM64Symbolic.STR (ARM64Symbolic.X15, refAddrReg, 0s)             // store back
             ])
+            let guards =
+                if skipTagged then
+                    [ ARM64Symbolic.CBZ_offset (refAddrReg, refcountPath.Length + 3)
+                      ARM64Symbolic.AND_imm (ARM64Symbolic.X13, refAddrReg, 1UL)
+                      ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X13, refcountPath.Length + 1) ]
+                else
+                    []
+            preserveAddr
+            @ guards
+            @ refcountPath)
     | _ -> Error "dynamic buffer RefCountInc requires StringSymbol or Reg operand"
 
-let internal emitRefCountDecString (ctx: CodeGenContext) (str: LIR.Operand) : Result<ARM64Symbolic.Instr list, string> =
+let private emitRefCountDecBuffer (ctx: CodeGenContext) (skipTagged: bool) (str: LIR.Operand) : Result<ARM64Symbolic.Instr list, string> =
     // Decrement the leading refcount for a dynamic buffer.
     // Literal strings have refcount = INT64_MAX as sentinel (don't modify read-only memory)
     match str with
@@ -625,12 +641,32 @@ let internal emitRefCountDecString (ctx: CodeGenContext) (str: LIR.Operand) : Re
                         // If refcount hits 0, update leak counter (string freeing not implemented yet)
                         ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X15, 6)                 // If not zero, skip leak counter
                     ] @ leakDec
-            preserveAddr @ [
-                ARM64Symbolic.LDR (ARM64Symbolic.X15, refAddrReg, 0s)             // X15 = refcount
-            ]
-            @ loadImmediate ARM64Symbolic.X13 System.Int64.MaxValue
-            @ [
+            let refcountPath = ([
+                ARM64Symbolic.LDR (ARM64Symbolic.X15, refAddrReg, 0s)
+            ] @ loadImmediate ARM64Symbolic.X13 System.Int64.MaxValue @ [
                 ARM64Symbolic.CMP_reg (ARM64Symbolic.X15, ARM64Symbolic.X13)             // Compare with sentinel
                 ARM64Symbolic.B_cond (ARM64Symbolic.EQ, bcondOffset)             // If literal string, skip to end
             ] @ refcountUpdate)
+            let guards =
+                if skipTagged then
+                    [ ARM64Symbolic.CBZ_offset (refAddrReg, refcountPath.Length + 3)
+                      ARM64Symbolic.AND_imm (ARM64Symbolic.X13, refAddrReg, 1UL)
+                      ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X13, refcountPath.Length + 1) ]
+                else
+                    []
+            preserveAddr
+            @ guards
+            @ refcountPath)
     | _ -> Error "dynamic buffer RefCountDec requires StringSymbol or Reg operand"
+
+let internal emitRefCountIncString (ctx: CodeGenContext) (str: LIR.Operand) =
+    emitRefCountIncBuffer ctx false str
+
+let internal emitRefCountDecString (ctx: CodeGenContext) (str: LIR.Operand) =
+    emitRefCountDecBuffer ctx false str
+
+let internal emitRefCountIncInt (ctx: CodeGenContext) (value: LIR.Operand) =
+    emitRefCountIncBuffer ctx true value
+
+let internal emitRefCountDecInt (ctx: CodeGenContext) (value: LIR.Operand) =
+    emitRefCountDecBuffer ctx true value

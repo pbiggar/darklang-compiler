@@ -21,6 +21,7 @@ type internal ListLeafPayloadRelease =
     | DictListLeafPayload
     | PlannedDictLeafPayload of releasePlan: MemoryModel.RcReleasePlan
     | DynamicBufferLeafPayload
+    | DynamicIntLeafPayload
 
 /// Generate the TaggedList RefCountDec helper function.
 /// Called via CALL with the tagged list pointer in RAX.
@@ -172,6 +173,24 @@ let private generateListRefCountDecHelperWith
             [X86_64.MOV_load (X86_64.R8, X86_64.RDI, 0)
              X86_64.TEST_reg (X86_64.R8, X86_64.R8)
              X86_64.Jcc (X86_64.EQ, leafPayloadDone)
+             X86_64.MOV_reg (X86_64.R10, X86_64.R8)
+             X86_64.MOV_load (X86_64.R9, X86_64.R10, 0)]
+            @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL
+            @ [X86_64.CMP_reg (X86_64.R9, scratch)
+               X86_64.Jcc (X86_64.EQ, leafPayloadDone)
+               X86_64.SUB_imm (X86_64.R9, 1)
+               X86_64.MOV_store (X86_64.R10, 0, X86_64.R9)
+               X86_64.TEST_reg (X86_64.R9, X86_64.R9)
+               X86_64.Jcc (X86_64.NE, leafPayloadDone)]
+            @ leakDec
+            @ [X86_64.Label leafPayloadDone]
+        | DynamicIntLeafPayload ->
+            [X86_64.MOV_load (X86_64.R8, X86_64.RDI, 0)
+             X86_64.TEST_reg (X86_64.R8, X86_64.R8)
+             X86_64.Jcc (X86_64.EQ, leafPayloadDone)
+             X86_64.MOV_reg (X86_64.R10, X86_64.R8)
+             X86_64.AND_imm (X86_64.R10, 1)
+             X86_64.Jcc (X86_64.NE, leafPayloadDone)
              X86_64.MOV_reg (X86_64.R10, X86_64.R8)
              X86_64.MOV_load (X86_64.R9, X86_64.R10, 0)]
             @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL
@@ -391,6 +410,7 @@ let internal listRefCountDecHelperSpecs : (string * ListLeafPayloadRelease) list
     (listRefCountDecDictHelperLabel, DictLeafPayload)
     (listRefCountDecDictListHelperLabel, DictListLeafPayload)
     (listRefCountDecDynamicBufferHelperLabel, DynamicBufferLeafPayload)
+    (listRefCountDecDynamicIntHelperLabel, DynamicIntLeafPayload)
     ]
 
 let private listLeafPayloadNeedsDictDecHelper (leafPayloadRelease: ListLeafPayloadRelease) : bool =
@@ -408,7 +428,8 @@ let private listLeafPayloadNeedsDictDecHelper (leafPayloadRelease: ListLeafPaylo
     | NoLeafPayloadRelease
     | ListLeafPayload
     | ClosureLeafPayload
-    | DynamicBufferLeafPayload ->
+    | DynamicBufferLeafPayload
+    | DynamicIntLeafPayload ->
         false
 
 let private listLeafPayloadNeedsDictListValueDecHelper (leafPayloadRelease: ListLeafPayloadRelease) : bool =
@@ -425,7 +446,8 @@ let private listLeafPayloadNeedsDictListValueDecHelper (leafPayloadRelease: List
     | ListLeafPayload
     | ClosureLeafPayload
     | DictLeafPayload
-    | DynamicBufferLeafPayload ->
+    | DynamicBufferLeafPayload
+    | DynamicIntLeafPayload ->
         false
 
 let private listLeafPayloadNeedsClosureDecHelper (leafPayloadRelease: ListLeafPayloadRelease) : bool =
@@ -441,7 +463,8 @@ let private listLeafPayloadNeedsClosureDecHelper (leafPayloadRelease: ListLeafPa
     | DictLeafPayload
     | DictListLeafPayload
     | PlannedDictLeafPayload _
-    | DynamicBufferLeafPayload ->
+    | DynamicBufferLeafPayload
+    | DynamicIntLeafPayload ->
         false
 
 let internal generateNeededListRefCountDecHelpers

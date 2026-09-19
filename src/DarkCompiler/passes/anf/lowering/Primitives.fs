@@ -530,6 +530,10 @@ let tryRawMemoryIntrinsic
         Some (ANF.StringToRawPtr strAtom)
     | "__rawptr_to_string", [ptrAtom] ->
         Some (ANF.RawPtrToString ptrAtom)
+    | "__int_to_rawptr", [valueAtom] ->
+        Some (ANF.TypedAtom (valueAtom, AST.TRawPtr))
+    | "__rawptr_to_int", [ptrAtom] ->
+        Some (ANF.TypedAtom (ptrAtom, AST.TInt))
     | "__int128_to_rawptr", [valueAtom]
     | "__uint128_to_rawptr", [valueAtom] ->
         Some (ANF.TypedAtom (valueAtom, AST.TRawPtr))
@@ -546,15 +550,21 @@ let tryRawMemoryIntrinsic
                 ANF.StringLiteral ""
             | _ -> atom
         Some (ANF.StringConcat (representable leftAtom, representable rightAtom, []))
-    | "__int_to_string", [valueAtom]
-    | "__string_to_int", [valueAtom]
+    | "__int_to_word", [valueAtom] ->
+        Some (ANF.TypedAtom (valueAtom, AST.TInt64))
+    | "__word_to_int", [valueAtom] ->
+        Some (ANF.TypedAtom (valueAtom, AST.TInt))
+    | "__uint64_to_int64_bits", [valueAtom]
+    | "__uint8_to_int64", [valueAtom]
+    | "__uint16_to_int64", [valueAtom]
+    | "__uint32_to_int64", [valueAtom] -> Some (ANF.TypedAtom (valueAtom, AST.TInt64))
+    | "__int64_to_uint64_bits", [valueAtom]
     | "__int64_to_int8", [valueAtom]
     | "__int64_to_int16", [valueAtom]
     | "__int64_to_int32", [valueAtom]
     | "__int64_to_uint8", [valueAtom]
     | "__int64_to_uint16", [valueAtom]
-    | "__int64_to_uint32", [valueAtom] ->
-        Some (ANF.Atom valueAtom)
+    | "__int64_to_uint32", [valueAtom] -> Some (ANF.Atom valueAtom)
     | "__int128_to_int", [valueAtom] ->
         Some (ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int128.__toInt", [valueAtom]))
     | "__uint128_to_int", [valueAtom] ->

@@ -388,6 +388,8 @@ let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
     | RefCountDecString a -> RefCountDecString (r a)
     | RefCountIncBlob a -> RefCountIncBlob (r a)
     | RefCountDecBlob a -> RefCountDecBlob (r a)
+    | RefCountIncInt a -> RefCountIncInt (r a)
+    | RefCountDecInt a -> RefCountDecInt (r a)
     | RandomInt64 -> RandomInt64
     | DateTimeNow -> DateTimeNow
     | Sleep delayMs -> Sleep (r delayMs)
@@ -880,6 +882,7 @@ let private hasInertInlineLifetime (funcs: Map<AST.FunctionId, FunctionInfo>) (f
         | StringToRawPtr _ | RawPtrToString _ | BlobToRawPtr _ | RawPtrToBlob _
         | RefCountInc _ | RefCountDec _ | RefCountIncString _ | RefCountDecString _
         | RefCountIncBlob _ | RefCountDecBlob _
+        | RefCountIncInt _ | RefCountDecInt _
         | Print _ | StdoutWrite _ | StdinReadLine
         | RandomInt64 | DateTimeNow | Sleep _ | RuntimeError _ | RuntimeErrorString _ -> true
         | TypedAtom (_, typ) | RawGet (_, _, Some typ) | RawTake (_, _, Some typ) -> inert typ

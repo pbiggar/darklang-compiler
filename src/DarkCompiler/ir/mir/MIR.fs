@@ -162,6 +162,8 @@ type Instr =
     | RefCountDecString of str:Operand             // Decrement string ref count, free if zero
     | RefCountIncBlob of bytes:Operand            // Increment bytes ref count at [bytes]
     | RefCountDecBlob of bytes:Operand            // Decrement bytes ref count, free if zero
+    | RefCountIncInt of value:Operand              // Increment heap-backed Int ref count
+    | RefCountDecInt of value:Operand              // Decrement heap-backed Int ref count
     // Random intrinsics
     | RandomInt64 of dest:VReg                     // Get 8 random bytes as Int64
     // DateTime intrinsics

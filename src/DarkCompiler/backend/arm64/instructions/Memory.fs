@@ -381,7 +381,7 @@ let internal emitRawSlotInit (ctx: CodeGenContext) (ptr: LIR.Reg) (byteOffset: L
                                 ARM64Symbolic.X12, [ARM64Symbolic.MOV_reg (ARM64Symbolic.X12, valueReg)]
                             else
                                 valueReg, []
-                        preserveAddr @ [
+                        let refcountPath = [
                             ARM64Symbolic.LDR (ARM64Symbolic.X15, refAddrReg, 0s)
                             ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0xFFFFus, 0)
                             ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 16)
@@ -392,6 +392,17 @@ let internal emitRawSlotInit (ctx: CodeGenContext) (ptr: LIR.Reg) (byteOffset: L
                             ARM64Symbolic.ADD_imm (ARM64Symbolic.X15, ARM64Symbolic.X15, 1us)
                             ARM64Symbolic.STR (ARM64Symbolic.X15, refAddrReg, 0s)
                         ]
+                        let guards =
+                            match valueType with
+                            | AST.TInt ->
+                                [ ARM64Symbolic.CBZ_offset (refAddrReg, List.length refcountPath + 3)
+                                  ARM64Symbolic.AND_imm (ARM64Symbolic.X13, refAddrReg, 1UL)
+                                  ARM64Symbolic.CBNZ_offset (ARM64Symbolic.X13, List.length refcountPath + 1) ]
+                            | _ ->
+                                [ARM64Symbolic.CBZ_offset (refAddrReg, List.length refcountPath + 1)]
+                        preserveAddr
+                        @ guards
+                        @ refcountPath
                     | Some LIR.SlotInitClosureRootRetain ->
                         let closureIncCall = [
                             ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X1, ARM64Symbolic.SP, -96s)

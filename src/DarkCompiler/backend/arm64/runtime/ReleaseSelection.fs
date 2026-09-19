@@ -141,8 +141,10 @@ let internal listDecHelperForElementRelease
             listRefCountDecStringHelperLabel
         | MemoryModel.DynamicBufferRelease MemoryModel.DynamicBlobBuffer ->
             listRefCountDecBlobHelperLabel
+        | MemoryModel.DynamicBufferRelease MemoryModel.DynamicIntBuffer ->
+            listRefCountDecBlobHelperLabel
         | MemoryModel.DynamicBufferRelease _ ->
-            listRefCountDecHelperLabel
+            Crash.crash "list dynamic-buffer release used a fixed-size operation"
         | MemoryModel.RecursiveRelease _ ->
             plannedListDecHelperLabelForFingerprint elementFingerprint
         | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->

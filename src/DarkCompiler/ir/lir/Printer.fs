@@ -309,6 +309,10 @@ let private prettyPrintLIRInstr functionNames (instr: LIR.Instr) : string =
         $"RefCountIncString({prettyPrintLIROperand str})"
     | LIR.RefCountDecString str ->
         $"RefCountDecString({prettyPrintLIROperand str})"
+    | LIR.RefCountIncInt value ->
+        $"RefCountIncInt({prettyPrintLIROperand value})"
+    | LIR.RefCountDecInt value ->
+        $"RefCountDecInt({prettyPrintLIROperand value})"
     | LIR.RefCountIncBlob bytes ->
         $"RefCountIncBlob({prettyPrintLIROperand bytes})"
     | LIR.RefCountDecBlob bytes ->

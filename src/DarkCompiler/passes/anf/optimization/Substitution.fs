@@ -121,6 +121,8 @@ let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RefCountDecString str -> RefCountDecString (s str)
     | RefCountIncBlob bytes -> RefCountIncBlob (s bytes)
     | RefCountDecBlob bytes -> RefCountDecBlob (s bytes)
+    | RefCountIncInt value -> RefCountIncInt (s value)
+    | RefCountDecInt value -> RefCountDecInt (s value)
     | RandomInt64 -> RandomInt64
     | DateTimeNow -> DateTimeNow
     | Sleep delayMs -> Sleep (s delayMs)

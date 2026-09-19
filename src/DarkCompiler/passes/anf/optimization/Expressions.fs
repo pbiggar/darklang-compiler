@@ -165,6 +165,8 @@ let private tryCSEKey (cexpr: CExpr) : CSEKey option =
     | RefCountDecString _
     | RefCountIncBlob _
     | RefCountDecBlob _
+    | RefCountIncInt _
+    | RefCountDecInt _
     | RandomInt64
     | DateTimeNow
     | Sleep _

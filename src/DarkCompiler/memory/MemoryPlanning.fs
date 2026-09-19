@@ -26,10 +26,9 @@ let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.T
     | AST.TRuntimeError
     | AST.TVar _ ->
         Immediate
-    // Arbitrary Int remains a canonical decimal dynamic buffer. Fixed-width
-    // 128-bit values are immutable two-limb blocks with the refcount following
-    // their 16-byte payload.
-    | AST.TInt -> DynamicString
+    // Arbitrary Int uses tagged immediates or a limb buffer. Fixed-width 128-bit
+    // values are immutable two-limb blocks with the refcount after the payload.
+    | AST.TInt -> DynamicInt
     | AST.TInt128
     | AST.TUInt128 -> FixedBlock (16, [])
     | AST.TTuple elemTypes ->
@@ -236,9 +235,10 @@ let rcShapeOfTypeWithSums
         | AST.TFunction _ ->
             ClosureShape []
         | AST.TString
-        | AST.TChar
-        | AST.TInt ->
+        | AST.TChar ->
             DynamicString
+        | AST.TInt ->
+            DynamicInt
         | AST.TInt128
         | AST.TUInt128 ->
             FixedBlock (16, [])
@@ -274,6 +274,7 @@ let rcShapeNeedsOwnedScopeRelease (shape: RcShape) : bool =
         false
     | DynamicString
     | DynamicBlob
+    | DynamicInt
     | FixedBlock _
     | StreamRoot
     | BoxedSum _
@@ -298,6 +299,7 @@ let rcShapeIsRootManaged (shape: RcShape) : bool =
     | Immediate
     | DynamicString
     | DynamicBlob
+    | DynamicInt
     | StaticString
     | RawUnmanaged ->
         false
@@ -325,6 +327,7 @@ let rec rcShapeNeedsRecursiveRelease (shape: RcShape) : bool =
     | Immediate
     | DynamicString
     | DynamicBlob
+    | DynamicInt
     | StaticString
     | RawUnmanaged ->
         false
@@ -347,6 +350,7 @@ let rcShapeRootKind (shape: RcShape) : RcKind option =
     | Immediate
     | DynamicString
     | DynamicBlob
+    | DynamicInt
     | StaticString
     | RawUnmanaged ->
         None
@@ -369,6 +373,7 @@ let rcShapePayloadSize (shape: RcShape) : int option =
     | Immediate
     | DynamicString
     | DynamicBlob
+    | DynamicInt
     | StaticString
     | RawUnmanaged ->
         None
@@ -381,6 +386,8 @@ let rcShapeStorageClass (shape: RcShape) : RcStorageClass =
         ManagedDynamicBuffer DynamicStringBuffer
     | DynamicBlob ->
         ManagedDynamicBuffer DynamicBlobBuffer
+    | DynamicInt ->
+        ManagedDynamicBuffer DynamicIntBuffer
     | _ ->
         match rcShapePayloadSize shape, rcShapeRootKind shape with
         | Some payloadSize, Some kind ->
@@ -487,6 +494,7 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
         | Immediate
         | DynamicString
         | DynamicBlob
+        | DynamicInt
         | StaticString
         | RawUnmanaged ->
             NoPayloadRelease

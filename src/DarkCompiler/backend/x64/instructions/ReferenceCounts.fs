@@ -90,7 +90,7 @@ let internal emitRefCountDec (ctx: FuncCtx) (addr: LIR.Reg) (payloadSize: int) (
         | LIR.GenericHeap ->
             genRefCountDecGeneric ctx addrReg payloadSize metadata)
 
-let internal emitRefCountIncString (ctx: FuncCtx) (str: LIR.Operand) : Result<X86_64.Instr list, string> =
+let private emitRefCountIncBuffer (ctx: FuncCtx) (skipTagged: bool) (str: LIR.Operand) : Result<X86_64.Instr list, string> =
     match str with
     | LIR.StringSymbol _ -> Ok []  // Literal string - no refcount
     | LIR.Reg reg ->
@@ -113,7 +113,17 @@ let internal emitRefCountIncString (ctx: FuncCtx) (str: LIR.Operand) : Result<X8
                     let refValueReg =
                         if addrReg = X86_64.RCX then X86_64.RDX else X86_64.RCX
                     addrReg, refValueReg, [X86_64.PUSH refValueReg], [X86_64.POP refValueReg]
+            let taggedGuard =
+                if skipTagged then
+                    [X86_64.MOV_reg (scratch, refAddrReg)
+                     X86_64.AND_imm (scratch, 1)
+                     X86_64.Jcc (X86_64.NE, skipLabel)]
+                else
+                    []
             preserveRegs
+            @ [X86_64.TEST_reg (refAddrReg, refAddrReg)
+               X86_64.Jcc (X86_64.EQ, skipLabel)]
+            @ taggedGuard
             @ [X86_64.MOV_load (refValueReg, refAddrReg, 0)]
             @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL        // scratch = INT64_MAX
             @ [X86_64.CMP_reg (refValueReg, scratch)
@@ -125,7 +135,7 @@ let internal emitRefCountIncString (ctx: FuncCtx) (str: LIR.Operand) : Result<X8
             @ [X86_64.Label skipLabel])
     | _ -> Error "dynamic buffer RefCountInc requires StringSymbol or Reg operand"
 
-let internal emitRefCountDecString (ctx: FuncCtx) (str: LIR.Operand) : Result<X86_64.Instr list, string> =
+let private emitRefCountDecBuffer (ctx: FuncCtx) (skipTagged: bool) (str: LIR.Operand) : Result<X86_64.Instr list, string> =
     match str with
     | LIR.StringSymbol _ -> Ok []  // Literal string - no refcount
     | LIR.Reg reg ->
@@ -148,7 +158,17 @@ let internal emitRefCountDecString (ctx: FuncCtx) (str: LIR.Operand) : Result<X8
                     let refValueReg =
                         if addrReg = X86_64.RCX then X86_64.RDX else X86_64.RCX
                     addrReg, refValueReg, [X86_64.PUSH refValueReg], [X86_64.POP refValueReg]
+            let taggedGuard =
+                if skipTagged then
+                    [X86_64.MOV_reg (scratch, refAddrReg)
+                     X86_64.AND_imm (scratch, 1)
+                     X86_64.Jcc (X86_64.NE, skipLabel)]
+                else
+                    []
             preserveRegs
+            @ [X86_64.TEST_reg (refAddrReg, refAddrReg)
+               X86_64.Jcc (X86_64.EQ, skipLabel)]
+            @ taggedGuard
             @ [X86_64.MOV_load (refValueReg, refAddrReg, 0)]
             @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL
             @ [X86_64.CMP_reg (refValueReg, scratch)
@@ -164,3 +184,15 @@ let internal emitRefCountDecString (ctx: FuncCtx) (str: LIR.Operand) : Result<X8
             @ restoreRegs
             @ [X86_64.Label skipLabel])
     | _ -> Error "dynamic buffer RefCountDec requires StringSymbol or Reg operand"
+
+let internal emitRefCountIncString (ctx: FuncCtx) (str: LIR.Operand) =
+    emitRefCountIncBuffer ctx false str
+
+let internal emitRefCountDecString (ctx: FuncCtx) (str: LIR.Operand) =
+    emitRefCountDecBuffer ctx false str
+
+let internal emitRefCountIncInt (ctx: FuncCtx) (value: LIR.Operand) =
+    emitRefCountIncBuffer ctx true value
+
+let internal emitRefCountDecInt (ctx: FuncCtx) (value: LIR.Operand) =
+    emitRefCountDecBuffer ctx true value

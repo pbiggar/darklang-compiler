@@ -378,7 +378,15 @@ let internal emitRawSlotInit (ctx: FuncCtx) (ptr: LIR.Reg) (byteOffset: LIR.Reg)
                          X86_64.PUSH X86_64.R10
                          X86_64.PUSH scratch
                          X86_64.MOV_reg (X86_64.R10, v)
-                         X86_64.MOV_load (X86_64.RDX, X86_64.R10, 0)]
+                         X86_64.TEST_reg (X86_64.R10, X86_64.R10)
+                         X86_64.Jcc (X86_64.EQ, literalLabel)]
+                        @ (match valueType with
+                           | AST.TInt ->
+                               [X86_64.MOV_reg (X86_64.RDX, X86_64.R10)
+                                X86_64.AND_imm (X86_64.RDX, 1)
+                                X86_64.Jcc (X86_64.NE, literalLabel)]
+                           | _ -> [])
+                        @ [X86_64.MOV_load (X86_64.RDX, X86_64.R10, 0)]
                         @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL
                         @ [X86_64.CMP_reg (X86_64.RDX, scratch)
                            X86_64.Jcc (X86_64.EQ, literalLabel)

@@ -178,9 +178,18 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     // __string_concat_raw : (String, String) -> String - internal byte concat;
     // public concatenation normalizes the result to NFC.
     { Name = "__string_concat_raw"; TypeParams = []; ParamTypes = [TString; TString]; ReturnType = TString }
-    // Int uses the same canonical decimal dynamic-buffer representation as String.
-    { Name = "__int_to_string"; TypeParams = []; ParamTypes = [TInt]; ReturnType = TString }
-    { Name = "__string_to_int"; TypeParams = []; ParamTypes = [TString]; ReturnType = TInt }
+    // Int uses a tagged machine word: odd words are signed small integers and
+    // aligned words point at immutable limb buffers. These representation
+    // views are private to the bigint implementation.
+    { Name = "__int_to_word"; TypeParams = []; ParamTypes = [TInt]; ReturnType = TInt64 }
+    { Name = "__word_to_int"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TInt }
+    { Name = "__int_to_rawptr"; TypeParams = []; ParamTypes = [TInt]; ReturnType = TRawPtr }
+    { Name = "__rawptr_to_int"; TypeParams = []; ParamTypes = [TRawPtr]; ReturnType = TInt }
+    { Name = "__int64_to_uint64_bits"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TUInt64 }
+    { Name = "__uint64_to_int64_bits"; TypeParams = []; ParamTypes = [TUInt64]; ReturnType = TInt64 }
+    { Name = "__uint8_to_int64"; TypeParams = []; ParamTypes = [TUInt8]; ReturnType = TInt64 }
+    { Name = "__uint16_to_int64"; TypeParams = []; ParamTypes = [TUInt16]; ReturnType = TInt64 }
+    { Name = "__uint32_to_int64"; TypeParams = []; ParamTypes = [TUInt32]; ReturnType = TInt64 }
     // Int128 and UInt128 are immutable fixed blocks containing low/high UInt64 limbs.
     // These representation views are ownership-neutral; the RawPtr-to-value views
     // adopt a fully initialized owned allocation.

@@ -158,6 +158,7 @@ let internal generateDictRefCountDecHelper
     let collisionKeyDone = label "collision_key_done"
     let skipLeafTupleStringListValueRelease = label "skip_leaf_tuple_string_list_value_release"
     let tupleStringListValueDone = label "tuple_string_list_value_done"
+    let tupleStringBufferDone = label "tuple_string_buffer_done"
     let skipLeafSumStringValueRelease = label "skip_leaf_sum_string_value_release"
     let sumStringValueDone = label "sum_string_value_done"
     let sumStringBufferDone = label "sum_string_buffer_done"
@@ -251,6 +252,7 @@ let internal generateDictRefCountDecHelper
     let releaseDynamicBufferFieldAtBaseInstrs
         (baseReg: ARM64.Reg)
         (fieldOffset: int16)
+        (operation: MemoryModel.RcOperation)
         (skipLabel: string)
         : ARM64Symbolic.Instr list =
         let refcountUpdate =
@@ -266,9 +268,18 @@ let internal generateDictRefCountDecHelper
                     ARM64Symbolic.CBNZ (ARM64Symbolic.X15, skipLabel)
                 ] @ leakDec
 
+        let taggedGuard =
+            match operation with
+            | MemoryModel.DynamicIntBuffer ->
+                [ ARM64Symbolic.AND_imm (ARM64Symbolic.X13, ARM64Symbolic.X12, 1UL)
+                  ARM64Symbolic.CBNZ (ARM64Symbolic.X13, skipLabel) ]
+            | _ -> []
         [
             ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, fieldOffset)
             ARM64Symbolic.CBZ (ARM64Symbolic.X12, skipLabel)
+        ]
+        @ taggedGuard
+        @ [
             ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X27)
             ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, skipLabel)
             ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X28)
@@ -291,8 +302,12 @@ let internal generateDictRefCountDecHelper
         (fieldReleasePlan: MemoryModel.RcReleasePlan)
         : ARM64Symbolic.Instr list =
         match fieldReleasePlan with
-        | MemoryModel.DynamicBufferRelease _ ->
-            releaseDynamicBufferFieldAtBaseInstrs baseReg (int16 fieldOffset) (label $"generic_dynamic_{path}_{fieldOffset}_done")
+        | MemoryModel.DynamicBufferRelease operation ->
+            releaseDynamicBufferFieldAtBaseInstrs
+                baseReg
+                (int16 fieldOffset)
+                operation
+                (label $"generic_dynamic_{path}_{fieldOffset}_done")
         | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
             releaseManagedRootValueAtBaseInstrs
                 baseReg
@@ -488,7 +503,11 @@ let internal generateDictRefCountDecHelper
                 ARM64Symbolic.ADD_reg (ARM64Symbolic.X11, ARM64Symbolic.X3, ARM64Symbolic.X11)
             ]
             @ (if releaseLeafDynamicValue then
-                   releaseDynamicBufferFieldAtBaseInstrs ARM64Symbolic.X11 8s skipCollisionDynamicValueRelease
+                   releaseDynamicBufferFieldAtBaseInstrs
+                       ARM64Symbolic.X11
+                       8s
+                       MemoryModel.DynamicStringBuffer
+                       skipCollisionDynamicValueRelease
                else
                    [])
             @ [
@@ -672,17 +691,18 @@ let internal generateDictRefCountDecHelper
                 ARM64Symbolic.CBNZ (ARM64Symbolic.X12, tupleStringListValueDone)
 
                 ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X11, 0s)
-                ARM64Symbolic.CBZ_offset (ARM64Symbolic.X12, 7 + List.length bufferRefcountUpdate)
+                ARM64Symbolic.CBZ (ARM64Symbolic.X12, tupleStringBufferDone)
                 ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
                 ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0xFFFFus, 0)
                 ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 16)
                 ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 32)
                 ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0x7FFFus, 48)
                 ARM64Symbolic.CMP_reg (ARM64Symbolic.X15, ARM64Symbolic.X13)
-                ARM64Symbolic.B_cond (ARM64Symbolic.EQ, List.length bufferRefcountUpdate + 1)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, tupleStringBufferDone)
             ]
             @ bufferRefcountUpdate
             @ [
+                ARM64Symbolic.Label tupleStringBufferDone
                 ARM64Symbolic.LDR (ARM64Symbolic.X11, ARM64Symbolic.SP, 104s)
                 ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X11, 8s)
                 ARM64Symbolic.BL listRefCountDecHelperLabel

@@ -978,6 +978,9 @@ let private foldRegUses folder state (instr: Instr) =
     | RefCountIncBlob src
     | RefCountDecBlob src ->
         foldOperandRegUse folder state src
+    | RefCountIncInt src
+    | RefCountDecInt src ->
+        foldOperandRegUse folder state src
     | Phi (_, sources, _) ->
         sources |> List.fold (fun acc (src, _) -> foldOperandRegUse folder acc src) state
     | Store (_, src)

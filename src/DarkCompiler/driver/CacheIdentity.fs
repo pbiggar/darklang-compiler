@@ -225,6 +225,10 @@ let internal normalizeMirFunctionRegisterOffset
                 MIR.RefCountIncBlob (shiftOperand value)
             | MIR.RefCountDecBlob value ->
                 MIR.RefCountDecBlob (shiftOperand value)
+            | MIR.RefCountIncInt value ->
+                MIR.RefCountIncInt (shiftOperand value)
+            | MIR.RefCountDecInt value ->
+                MIR.RefCountDecInt (shiftOperand value)
             | MIR.RandomInt64 dest -> MIR.RandomInt64 (shiftReg dest)
             | MIR.DateTimeNow dest -> MIR.DateTimeNow (shiftReg dest)
             | MIR.Sleep (effectId, dest, delayMs) ->
