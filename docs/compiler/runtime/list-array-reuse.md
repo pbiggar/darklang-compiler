@@ -251,9 +251,15 @@ contracts derived from that same candidate before group verification.
 Program-level inference discovers those groups in callee-first order, delegates
 acyclic singletons and recursive SCCs to their respective solvers, and retains
 each group's dependency metadata and every nondominated candidate. Cross-group
-calls continue to use their established ownership registry contract. This
-analysis is not yet scheduled in code generation; selecting inferred variants
-at call sites remains separate work.
+calls continue to use their established ownership registry contract during
+inference. Call-site selection indexes every group member, accepts explicit
+argument-uniqueness facts, and chooses a candidate only when its ordinary
+borrow/consume/produce shape matches that established contract. It prefers a
+unique result and then fewer unique-input requirements. Candidate identities
+are structural across the complete group, so recursive SCC selection remains
+atomic. When no inferred candidate applies, the established contract remains
+the fallback. This analysis is not yet scheduled in code generation; variant
+materialization and call rewriting remain separate work.
 
 The next boundaries are:
 
@@ -268,7 +274,7 @@ The next boundaries are:
    elaboration; whole-function HIR must retain that established boundary.
 3. Carry the registered HIR call boundary through whole-function construction,
    then add representation interfaces, bounded specialization, explicit
-   conversion profitability, call-site variant selection, and cache identities.
+   conversion profitability, variant materialization, and cache integration.
 4. Runtime uniqueness tests for consumed arrays whose sharing is not statically
    known; surviving borrowed aliases must remain protected.
 5. Managed elements and destruction-effect propagation. Stream finalizers are
