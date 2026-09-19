@@ -186,6 +186,8 @@ Stdlib.String.startsWith "abc" "abcd" = false
 Stdlib.String.startsWith "hello" "" = true
 Stdlib.String.startsWith "" "" = true
 Stdlib.String.startsWith "" "a" = false
+Stdlib.String.startsWith "👱🏻" "👱" = false
+Stdlib.String.startsWith "\r\nx" "\r" = false
 
 // =============================================================================
 // Stdlib.String.endsWith Tests
@@ -203,6 +205,11 @@ Stdlib.String.endsWith "abc" "xabc" = false
 Stdlib.String.endsWith "hello" "" = true
 Stdlib.String.endsWith "" "" = true
 Stdlib.String.endsWith "" "a" = false
+Stdlib.String.endsWith "👱🏻" "🏻" = false
+Stdlib.String.endsWith "x\r\n" "\n" = false
+
+// Prefix and suffix checks must not materialize the complete input as graphemes.
+let boundaryCheckChunk (remaining: Int64) (value: String): String = if remaining == 0L then value else boundaryCheckChunk (remaining - 1L) (value ++ value); let value = boundaryCheckChunk 24L "x" in Stdlib.String.startsWith value "x" && Stdlib.String.endsWith value "x" = stdout="true\n" stderr="" isolated=true
 
 // =============================================================================
 // Stdlib.String.indexOf Tests
@@ -221,6 +228,9 @@ Stdlib.String.indexOf "abc" "d" = None
 // Empty string search
 Stdlib.String.indexOf "hello" "" = Some 0
 Stdlib.String.indexOf "" "" = Some 0
+
+// Index conversion must not allocate a prefix string and one list node per codepoint.
+let utf16IndexChunk (remaining: Int64) (value: String): String = if remaining == 0L then value else utf16IndexChunk (remaining - 1L) (value ++ value); let value = utf16IndexChunk 24L "x" ++ "y" in Stdlib.String.indexOf value "y" = stdout="Darklang.Stdlib.Option.Option<Int>.Some(16777216)\n" stderr="" isolated=true
 
 // =============================================================================
 // Stdlib.String.contains Tests

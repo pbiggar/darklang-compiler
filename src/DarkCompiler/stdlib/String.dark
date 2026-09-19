@@ -63,14 +63,25 @@ let __substring (value: String) (start_: Int64) (end_: Int64) : String =
 
 let __compareBytes (left: String) (leftStart: Int64) (right: String) (rightStart: Int64) (count: Int64) : Bool =
     if count <= 0L then true
+    else if count >= 8L then
+        let leftWord = __raw_get<Int64> (__string_to_rawptr left) (leftStart + 16L) in
+        let rightWord = __raw_get<Int64> (__string_to_rawptr right) (rightStart + 16L) in
+        leftWord == rightWord && Stdlib.String.__compareBytes left (leftStart + 8L) right (rightStart + 8L) (count - 8L)
     else if Stdlib.String.__byteAtUnchecked left leftStart != Stdlib.String.__byteAtUnchecked right rightStart then false
     else Stdlib.String.__compareBytes left (leftStart + 1L) right (rightStart + 1L) (count - 1L)
+
+let __byteIndexOfSingleFrom (value: String) (searchByte: Int64) (offset: Int64) (valueLength: Int64) : Stdlib.Option.Option<Int64> =
+    if offset >= valueLength then None
+    else if Stdlib.String.__byteAtUnchecked value offset == searchByte then Some offset
+    else Stdlib.String.__byteIndexOfSingleFrom value searchByte (offset + 1L) valueLength
 
 let __byteIndexOfFrom (value: String) (search: String) (offset: Int64) : Stdlib.Option.Option<Int64> =
     let valueLength = Stdlib.String.__byteLength value in
     let searchLength = Stdlib.String.__byteLength search in
     if searchLength == 0L then Some offset
     else if offset + searchLength > valueLength then None
+    else if searchLength == 1L then
+        Stdlib.String.__byteIndexOfSingleFrom value (Stdlib.String.__byteAtUnchecked search 0L) offset valueLength
     else if Stdlib.String.__compareBytes value offset search 0L searchLength then Some offset
     else Stdlib.String.__byteIndexOfFrom value search (offset + 1L)
 
@@ -154,12 +165,16 @@ let toCodepoints (value: String) : List<Int> =
 let codepointLength (value: String) : Int =
     Stdlib.Int.fromInt64 (Stdlib.String.__codepointLength value)
 
+let __getByteAtInt64 (value: String) (index: Int64) : Stdlib.Option.Option<UInt8> =
+    let pointer = __string_to_rawptr value in
+    let length = __raw_get<Int64> pointer 8L in
+    if index < 0L || index >= length then None
+    else Stdlib.UInt8.fromInt64 (__raw_get_byte pointer (index + 16L))
+
 let getByteAt (value: String) (index: Int) : Stdlib.Option.Option<UInt8> =
     match Stdlib.Int.toInt64 index with
     | None -> None
-    | Some nativeIndex ->
-        if nativeIndex < 0L || nativeIndex >= Stdlib.String.__byteLength value then None
-        else Stdlib.UInt8.fromInt64 (Stdlib.String.__byteAtUnchecked value nativeIndex)
+    | Some nativeIndex -> Stdlib.String.__getByteAtInt64 value nativeIndex
 
 let __toGraphemes (value: String) : List<String> =
     Unicode.segmentUtf8 value 0L [] "" []
@@ -249,6 +264,10 @@ let fromList (lst: List<Char>) : String =
 
 let __isAsciiAt (value: String) (index: Int64) (length: Int64) : Bool =
     if index >= length then true
+    else if index + 8L <= length then
+        let word = __raw_get<Int64> (__string_to_rawptr value) (index + 16L) in
+        if Stdlib.Int64.bitwiseAnd word (-9187201950435737472L) != 0L then false
+        else Stdlib.String.__isAsciiAt value (index + 8L) length
     else if Stdlib.String.__byteAtUnchecked value index >= 128L then false
     else Stdlib.String.__isAsciiAt value (index + 1L) length
 
@@ -355,22 +374,53 @@ let __startsWithList (values: List<String>) (prefix: List<String>) : Bool =
         | actual :: actualRest -> actual == expected && Stdlib.String.__startsWithList actualRest expectedRest
 
 let startsWith (value: String) (prefix: String) : Bool =
-    Stdlib.String.__startsWithList (Stdlib.String.__toGraphemes value) (Stdlib.String.__toGraphemes prefix)
+    let valueLength = Stdlib.String.__byteLength value in
+    let prefixLength = Stdlib.String.__byteLength prefix in
+    if Stdlib.String.__isAscii value && Stdlib.String.__isAscii prefix then
+        if prefixLength > valueLength then false
+        else
+            let boundary =
+                prefixLength == 0L || prefixLength == valueLength ||
+                Stdlib.String.__byteAtUnchecked prefix (prefixLength - 1L) != 13L ||
+                Stdlib.String.__byteAtUnchecked value prefixLength != 10L in
+            boundary && Stdlib.String.__compareBytes value 0L prefix 0L prefixLength
+    else Stdlib.String.__startsWithList (Stdlib.String.__toGraphemes value) (Stdlib.String.__toGraphemes prefix)
 
 let endsWith (value: String) (suffix: String) : Bool =
-    Stdlib.String.__startsWithList (Stdlib.List.reverse (Stdlib.String.__toGraphemes value)) (Stdlib.List.reverse (Stdlib.String.__toGraphemes suffix))
+    let valueLength = Stdlib.String.__byteLength value in
+    let suffixLength = Stdlib.String.__byteLength suffix in
+    if Stdlib.String.__isAscii value && Stdlib.String.__isAscii suffix then
+        if suffixLength > valueLength then false
+        else
+            let start = valueLength - suffixLength in
+            let boundary =
+                suffixLength == 0L || suffixLength == valueLength ||
+                Stdlib.String.__byteAtUnchecked value (start - 1L) != 13L ||
+                Stdlib.String.__byteAtUnchecked suffix 0L != 10L in
+            boundary && Stdlib.String.__compareBytes value start suffix 0L suffixLength
+    else
+        Stdlib.String.__startsWithList (Stdlib.List.reverse (Stdlib.String.__toGraphemes value)) (Stdlib.List.reverse (Stdlib.String.__toGraphemes suffix))
 
 let contains (value: String) (search: String) : Bool =
     Stdlib.Option.isSome (Stdlib.String.__byteIndexOf value search)
 
-let __utf16Length (codepoints: List<Int64>) : Int64 =
-    match codepoints with
-    | [] -> 0L
-    | codepoint :: rest -> (if codepoint <= 65535L then 1L else 2L) + Stdlib.String.__utf16Length rest
+let __utf16LengthToByte (value: String) (index: Int64) (end_: Int64) (total: Int64) : Int64 =
+    if index >= end_ then total
+    else if index + 8L <= end_ then
+        let word = __raw_get<Int64> (__string_to_rawptr value) (index + 16L) in
+        if Stdlib.Int64.bitwiseAnd word (-9187201950435737472L) == 0L then
+            Stdlib.String.__utf16LengthToByte value (index + 8L) end_ (total + 8L)
+        else
+            let decoded = Stdlib.String.__decodeUtf8At value index in
+            let width = if decoded.0 <= 65535L then 1L else 2L in
+            Stdlib.String.__utf16LengthToByte value (index + decoded.1) end_ (total + width)
+    else
+        let decoded = Stdlib.String.__decodeUtf8At value index in
+        let width = if decoded.0 <= 65535L then 1L else 2L in
+        Stdlib.String.__utf16LengthToByte value (index + decoded.1) end_ (total + width)
 
 let __utf16IndexAtByte (value: String) (byteIndex: Int64) : Int =
-    let prefix = Stdlib.String.__byteSlice value 0L byteIndex in
-    Stdlib.Int.fromInt64 (Stdlib.String.__utf16Length (Stdlib.String.__toCodepoints prefix))
+    Stdlib.Int.fromInt64 (Stdlib.String.__utf16LengthToByte value 0L byteIndex 0L)
 
 let indexOf (value: String) (search: String) : Stdlib.Option.Option<Int> =
     match Stdlib.String.__byteIndexOf value search with

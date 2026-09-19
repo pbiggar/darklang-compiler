@@ -277,6 +277,20 @@ let private tryComplementIntegerComparison (op: BinOp) : BinOp option =
 
 let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
     match cexpr, body with
+    | Call ("Darklang.Stdlib.Int.fromInt64", [nativeIndex]),
+      Let (
+          resultTid,
+          Call ("Darklang.Stdlib.String.getByteAt", [value; Var indexTid]),
+          resultBody
+      )
+        when indexTid = tid && not (aExprUsesTemp tid resultBody) ->
+        Some (
+            Let (
+                resultTid,
+                Call ("Darklang.Stdlib.String.__getByteAtInt64", [value; nativeIndex]),
+                resultBody
+            )
+        )
     | UnaryPrim (Not, source), If (Var conditionTid, thenBranch, elseBranch)
         when conditionTid = tid
              && not (aExprUsesTemp tid thenBranch)
