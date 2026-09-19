@@ -16,7 +16,6 @@ type Action =
 
 type Config = {
     Seed: int
-    Cases: int
     MaxDepth: int
     TimeoutMs: int
     ArtifactDirectory: string
@@ -37,7 +36,6 @@ type CaseOutcome =
 
 let defaultConfig : Config = {
     Seed = Environment.TickCount
-    Cases = 1000
     MaxDepth = 6
     TimeoutMs = 2000
     ArtifactDirectory = "fuzz-results"
@@ -46,7 +44,7 @@ let defaultConfig : Config = {
 
 let usage =
     "Usage: dotnet run --project src/Fuzzer/Fuzzer.fsproj -- "
-    + "[--seed N] [--cases N] [--max-depth N] [--timeout-ms N] [--artifacts PATH] "
+    + "[--seed N] [--max-depth N] [--timeout-ms N] [--artifacts PATH] "
     + "[--replay FILE | --minimize FILE]"
 
 let private parsePositiveInt (flag: string) (value: string) : Result<int, string> =
@@ -66,9 +64,6 @@ let rec parseArgs (config: Config) (args: string list) : Result<Config option, s
     | "--seed" :: value :: rest ->
         parseInt "--seed" value
         |> Result.bind (fun parsed -> parseArgs { config with Seed = parsed } rest)
-    | "--cases" :: value :: rest ->
-        parsePositiveInt "--cases" value
-        |> Result.bind (fun parsed -> parseArgs { config with Cases = parsed } rest)
     | "--max-depth" :: value :: rest ->
         parsePositiveInt "--max-depth" value
         |> Result.bind (fun parsed -> parseArgs { config with MaxDepth = parsed } rest)
@@ -293,7 +288,7 @@ let private compilerRequest
 let private checkCase
     (config: Config)
     (stdlib: StdlibResult)
-    (caseIndex: int)
+    (caseIndex: int64)
     (source: string)
     : CaseOutcome =
     match interpreterResult config source with
@@ -435,7 +430,7 @@ let private minimize
         match inferGeneratedType [] originalExpr with
         | None -> Error "Minimizer input is outside the generated expression subset"
         | Some originalType ->
-            let originalOutcome = checkCase config stdlib -1 source
+            let originalOutcome = checkCase config stdlib -1L source
             match originalOutcome with
             | Passed -> Error "The input does not reproduce a discrepancy"
             | InterpreterFailed _ -> Error "The interpreter must accept a program before it can be minimized"
@@ -444,7 +439,7 @@ let private minimize
                     match candidates with
                     | [] -> None, attempts
                     | (candidateExpr, candidateSource) :: rest ->
-                        let outcome = checkCase config stdlib -1 candidateSource
+                        let outcome = checkCase config stdlib -1L candidateSource
                         let nextAttempts = attempts + 1
                         if sameFailure originalOutcome outcome then
                             Some (candidateExpr, candidateSource, outcome), nextAttempts
@@ -504,7 +499,7 @@ let private describeCaseOutcome (outcome: CaseOutcome) : string =
 
 let private saveFinding
     (config: Config)
-    (caseIndex: int)
+    (caseIndex: int64)
     (source: string)
     (outcome: CaseOutcome)
     : string =
@@ -537,7 +532,7 @@ let private run (config: Config) : int =
                 1
             | Replay path ->
                 let source = File.ReadAllText path
-                match checkCase config stdlib 0 source with
+                match checkCase config stdlib 0L source with
                 | Passed ->
                     printfn "Replay passed; interpreter and compiler agree."
                     0
@@ -562,29 +557,24 @@ let private run (config: Config) : int =
                     0
             | Fuzz ->
                 printfn $"seed: {config.Seed}"
-                printfn $"cases: {config.Cases}"
                 let random = Random(config.Seed)
                 let rec loop caseIndex =
-                    if caseIndex >= config.Cases then
-                        printfn $"No discrepancies found in {config.Cases} cases."
-                        0
-                    else
-                        let source =
-                            generateProgram random config.MaxDepth
-                            |> ASTPrettyPrinter.formatProgram
-                        File.WriteAllText(currentSourcePath, source + Environment.NewLine)
+                    let source =
+                        generateProgram random config.MaxDepth
+                        |> ASTPrettyPrinter.formatProgram
+                    File.WriteAllText(currentSourcePath, source + Environment.NewLine)
 
-                        match checkCase config stdlib caseIndex source with
-                        | Passed ->
-                            if (caseIndex + 1) % 100 = 0 then
-                                printfn $"checked {caseIndex + 1}/{config.Cases}"
-                            loop (caseIndex + 1)
-                        | failure ->
-                            let artifactPrefix = saveFinding config caseIndex source failure
-                            eprintfn $"Discrepancy found: {describeCaseOutcome failure}"
-                            eprintfn $"Artifacts: {artifactPrefix}.dark and {artifactPrefix}.txt"
-                            1
-                loop 0
+                    match checkCase config stdlib caseIndex source with
+                    | Passed ->
+                        if (caseIndex + 1L) % 100L = 0L then
+                            printfn $"checked {caseIndex + 1L}"
+                        loop (caseIndex + 1L)
+                    | failure ->
+                        let artifactPrefix = saveFinding config caseIndex source failure
+                        eprintfn $"Discrepancy found: {describeCaseOutcome failure}"
+                        eprintfn $"Artifacts: {artifactPrefix}.dark and {artifactPrefix}.txt"
+                        1
+                loop 0L
 
 [<EntryPoint>]
 let main argv =
