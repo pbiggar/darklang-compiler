@@ -238,7 +238,18 @@ binaries retain their previous layout.
 ## Further architecture work
 
 This is the first end-to-end region slice, not a replacement for the entire
-ANF pipeline or a complete Perceus implementation. The next boundaries are:
+ANF pipeline or a complete Perceus implementation.
+
+Owned HIR can refine an established borrow/consume function boundary into a
+bounded set of verifier-proven uniqueness variants. It upgrades only consumed
+parameters and produced results, rejects variants that fail ownership
+verification, and removes a variant only when another requires no stronger
+inputs while promising no weaker result. Keeping incomparable boundaries makes
+the later specialization policy explicit. This analysis is not yet scheduled
+in code generation and does not solve recursive groups or select call-site
+variants.
+
+The next boundaries are:
 
 1. Further runtime-sized constructors (including Result-wrapped `List.repeat`),
    builders, a growth policy, and profitable pooling for large runtime buffers.
