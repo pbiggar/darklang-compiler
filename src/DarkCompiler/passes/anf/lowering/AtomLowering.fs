@@ -290,7 +290,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                 let bindings =
                     partBindings
                     @ [ (rawId, ANF.StringConcat (firstAtom, secondAtom, remainingAtoms))
-                        (resultId, ANF.Call ("Stdlib.String.__normalizeAfterConcat", [ANF.Var rawId])) ]
+                        (resultId, ANF.Call ("Darklang.Stdlib.String.__normalizeAfterConcat", [ANF.Var rawId])) ]
                 (ANF.Var resultId, bindings, varGen3))
 
     | CheckedAST.BinOp (op, left, right) ->

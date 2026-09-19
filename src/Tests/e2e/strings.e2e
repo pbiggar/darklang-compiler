@@ -62,7 +62,7 @@ let a = "hello" in let b = "world" in let c = "!" in a ++ " " ++ b ++ c = "hello
 
 // A nonconstant ASCII concat tree allocates only its final buffer. The unfused
 // left-associated form exhausts the fixed heap by copying every prefix.
-let concatFusionChunk (n: Int64) (value: String): String = if n == 0L then value else concatFusionChunk (n - 1L) (value ++ value); let chunk = concatFusionChunk 20L "x" in Stdlib.String.getByteAt (chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk) 34603007 = stdout="Stdlib.Option.Option<UInt8>.Some(120)\n" stderr="" isolated=true
+let concatFusionChunk (n: Int64) (value: String): String = if n == 0L then value else concatFusionChunk (n - 1L) (value ++ value); let chunk = concatFusionChunk 20L "x" in Stdlib.String.getByteAt (chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk) 34603007 = stdout="Darklang.Stdlib.Option.Option<UInt8>.Some(120)\n" stderr="" isolated=true
 
 // Concatenation in let binding
 let result = "foo" ++ "bar" in result = "foobar"

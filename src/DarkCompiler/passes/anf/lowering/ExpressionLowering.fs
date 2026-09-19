@@ -360,7 +360,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         ANF.StringConcat (firstAtom, secondAtom, remainingAtoms),
                         ANF.Let (
                             resultId,
-                            ANF.Call ("Stdlib.String.__normalizeAfterConcat", [ANF.Var rawId]),
+                            ANF.Call ("Darklang.Stdlib.String.__normalizeAfterConcat", [ANF.Var rawId]),
                             ANF.Return (ANF.Var resultId)))
                 (sequence fused, varGen3))
 
