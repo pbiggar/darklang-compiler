@@ -14,11 +14,15 @@ representation and safety boundaries are documented in
   with canonical structural identities and ownership-contract tests. Full host
   tests and the parent-relative benchmark gate pass; production scheduling is
   a later slice.
-- [ ] **Materialize selected variants.** Generate deterministically named
+- [x] **Materialize selected variants.** Generate deterministically named
   specialized functions, deduplicate equivalent selections, and rewrite
   selected external calls and internal recursive calls consistently. Reject
   incomplete groups and conflicting contracts; return an explicit plan for
-  later scheduling and caching.
+  later scheduling and caching. Implementation:
+  [MaterializeOwnershipVariants](../../src/DarkCompiler/passes/ownership/MaterializeOwnershipVariants.fs).
+  The pass verifies both original and materialized programs. Full host tests
+  and the parent-relative benchmark gate pass; production scheduling remains a
+  later slice.
 - [ ] **Expose call-site ownership facts.** Report which arguments are provably
   unique immediately before each call, accounting for aliases, branches,
   duplication, and escapes.

@@ -259,8 +259,23 @@ unique result and then fewer unique-input requirements. Candidate identities
 are structural across the complete group and independent of discovery order
 and local ownership identities, so recursive SCC selection remains atomic.
 When no inferred candidate applies, the established contract remains
-the fallback. This analysis is not yet scheduled in code generation; variant
-materialization and call rewriting remain separate work.
+the fallback.
+
+Variant materialization now returns a verified plan with rewritten original
+functions, deduplicated specialized groups, and explicit call rewrites. Each
+clone receives a deterministic symbol derived from the complete candidate
+identity. A recursive group is cloned atomically; normalized calls within that
+group use the corresponding cloned symbols and ownership contracts. Selected
+external calls are rewritten, while established requests and calls outside a
+cloned group keep their existing targets. Different complete candidates may
+coexist, but selecting individual recursive edges is rejected. Missing members,
+changed boundaries or group membership, stale call requests, and symbol
+collisions also fail explicitly. The resulting program is checked again for
+typed value flow and ownership, including the actual caller's uniqueness.
+Effect and alias contracts remain independent and are forwarded from source
+targets. This pass is not yet scheduled in code generation; call-site ownership
+facts and whole-function scheduling remain the next integration work. No
+runtime or storage-selection change is enabled by materialization alone.
 
 The [in-place mutation checklist](../../project/perceus-checklist.md) tracks
 the complete implementation sequence. The remaining architecture boundaries
@@ -277,7 +292,7 @@ include:
    elaboration; whole-function HIR must retain that established boundary.
 3. Carry the registered HIR call boundary through whole-function construction,
    then add representation interfaces, bounded specialization, explicit
-   conversion profitability, variant materialization, and cache integration.
+   conversion profitability, specialization scheduling, and cache integration.
 4. Runtime uniqueness tests for consumed arrays whose sharing is not statically
    known; surviving borrowed aliases must remain protected.
 5. Managed elements and destruction-effect propagation. Stream finalizers are

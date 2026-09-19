@@ -135,6 +135,19 @@ prefers stronger result uniqueness and then fewer unique-input requirements,
 and returns the complete candidate for recursive groups. An inapplicable
 inferred candidate leaves the established verified contract in place; this
 stage does not inspect runtime reference counts or materialize specialized functions.
+`MaterializeOwnershipVariants` turns selected calls into an explicit plan of
+original functions, specialized groups, and call rewrites. It deduplicates by
+structural candidate identity, names clones with a versioned canonical digest,
+and routes every normalized internal recursive call through the same complete
+candidate. Requests identify original calls by caller and result identity and
+include the expected call, so stale requests fail. Established calls retain
+their definitions and contracts. Missing members, changed boundaries or SCCs,
+independent recursive-edge selections, and occupied symbols are rejected.
+The plan derives clone ownership registrations and forwards independent typed,
+effect, and alias contracts from the source targets. Original and materialized
+programs both cross `VerifyOwnedHIR`; a selected variant is not itself proof
+that a caller can supply unique arguments. This pass is not yet scheduled in
+code generation and does not change storage selection.
 Resolved direct-call nodes use a typed HIR signature registry and a separate
 ownership signature registry. HIR still requires the call's ordinary primitive
 effect and alias contract; an ownership signature cannot supply either fact.
