@@ -252,6 +252,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 plan.Stdlib.StdlibANFOptimizationCandidates
                                 userOnly.NonInlineableFunctionNames
                                 dependencyFunctions
+                                userOnly.OwnershipContracts
                                 true
                                 plan.PassTimingRecorder
                             |> Result.bind (fun (anfDependencies, dependencyTypeMap) ->
@@ -363,6 +364,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         plan.Stdlib.StdlibANFOptimizationCandidates
                                         userOnly.NonInlineableFunctionNames
                                         preparedFunctions
+                                        userOnly.OwnershipContracts
                                         true
                                         plan.PassTimingRecorder)
                         match dependencyLirResult, programAnfResult with
@@ -424,6 +426,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         Map.empty
                                         Set.empty
                                         [startFunction]
+                                        Map.empty
                                         false
                                         plan.PassTimingRecorder
                                     |> Result.bind (fun (startAnf, startTypeMap) ->

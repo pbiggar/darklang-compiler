@@ -19,7 +19,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             obj,
             Dictionary<
                 AnfDependencyKey,
-                Result<ANF.Function list * ANF.VarGen * obj, string>>>(ObjectReferenceComparer())
+                Result<AST_to_ANF.FunctionConversion * obj, string>>>(ObjectReferenceComparer())
     let compiledDependenciesByIdentity =
         Dictionary<
             obj,
@@ -146,10 +146,10 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member internal _.ConvertAnfDependencies
         (contextIdentity: obj)
         (key: AnfDependencyKey)
-        (convert: unit -> Result<ANF.Function list * ANF.VarGen, string>)
-        : Result<ANF.Function list * ANF.VarGen * obj, string> =
+        (convert: unit -> Result<AST_to_ANF.FunctionConversion, string>)
+        : Result<AST_to_ANF.FunctionConversion * obj, string> =
         if disposed then
-            convert () |> Result.map (fun (functions, varGen) -> (functions, varGen, System.Object()))
+            convert () |> Result.map (fun converted -> (converted, System.Object()))
         else
             let contextEntries =
                 match anfDependenciesByContext.TryGetValue contextIdentity with
@@ -158,7 +158,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
                     let entries =
                         Dictionary<
                             AnfDependencyKey,
-                            Result<ANF.Function list * ANF.VarGen * obj, string>>(
+                            Result<AST_to_ANF.FunctionConversion * obj, string>>(
                                 AnfDependencyKeyNameHashComparer())
                     anfDependenciesByContext.[contextIdentity] <- entries
                     entries
@@ -169,7 +169,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             | false, _ ->
                 let result =
                     convert ()
-                    |> Result.map (fun (functions, varGen) -> (functions, varGen, System.Object()))
+                    |> Result.map (fun converted -> (converted, System.Object()))
                 contextEntries.[key] <- result
                 anfDependencyMissCount <- anfDependencyMissCount + 1
                 result

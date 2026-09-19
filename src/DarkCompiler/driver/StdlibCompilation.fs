@@ -255,7 +255,7 @@ let buildStdlibWithTrace
                         returnTypes
                 let stdlibFunctions = anfResult.Functions
                 let stdlibOptions = defaultOptions
-                match buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty stdlibFunctions false passTimingRecorder with
+                match buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty stdlibFunctions Map.empty false passTimingRecorder with
                 | Error e ->
                     Error e
                 | Ok (anfFunctions, typeMap) ->
@@ -494,7 +494,7 @@ let buildStdlibSpecializations
                     |> Result.bind (fun (anfFuncs, _varGen1) ->
                         let stdlibOptions = defaultOptions
                         let sw = Stopwatch.StartNew()
-                        buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty anfFuncs false passTimingRecorder
+                        buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty anfFuncs Map.empty false passTimingRecorder
                         |> Result.bind (fun (anfFunctions, typeMap) ->
                             let tcoFunctions = applyTco 0 stdlibOptions sw registries.RecursiveMembers anfFunctions passTimingRecorder
                             let newAnfFuncMap =

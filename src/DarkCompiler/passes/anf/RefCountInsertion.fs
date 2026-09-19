@@ -47,6 +47,70 @@ let private addFunctionPhaseTimings
         CleanupRewriteMs = left.CleanupRewriteMs + right.CleanupRewriteMs
     }
 
+let private verifyOwnershipContracts
+    (ctx: TypeContext)
+    (contracts: Map<AST.FunctionId, OwnedIR.CallSignature>)
+    (Program (functions, main): Program)
+    : Result<unit, string> =
+    let managed typ =
+        rcShapeForType ctx typ |> rcShapeNeedsOwnedScopeRelease
+    let parameterMatches typ = function
+        | OwnedIR.UnmanagedCallParameter -> not (managed typ)
+        | OwnedIR.BorrowedCallParameter
+        | OwnedIR.ConsumedCallParameter
+        | OwnedIR.UniqueCallParameter -> managed typ
+    let resultMatches typ = function
+        | OwnedIR.UnmanagedCallResult -> not (managed typ)
+        | OwnedIR.BorrowedCallResult _
+        | OwnedIR.ProducedCallResult
+        | OwnedIR.UniqueProducedCallResult -> managed typ
+    let verifyFunction
+        (functionDefinition: ANF.Function)
+        (contract: OwnedIR.CallSignature) =
+        if List.length functionDefinition.TypedParams <> List.length contract.Parameters then
+            Error $"Ownership contract parameter count changed for {functionDefinition.Name}"
+        elif
+            List.zip functionDefinition.TypedParams contract.Parameters
+            |> List.exists (fun (parameter, ownership) -> not (parameterMatches parameter.Type ownership))
+        then
+            Error $"Ownership contract parameter representation changed for {functionDefinition.Name}"
+        elif not (resultMatches functionDefinition.ReturnType contract.Result) then
+            Error $"Ownership contract result representation changed for {functionDefinition.Name}"
+        else
+            match contract.Result with
+            | OwnedIR.BorrowedCallResult index
+                when index < 0 || index >= List.length contract.Parameters ->
+                Error $"Ownership contract borrowed result index changed for {functionDefinition.Name}"
+            | _ -> Ok ()
+    let rec verifyCalls owner expression =
+        let verifyCall target arguments =
+            match Map.tryFind target contracts with
+            | None -> Ok ()
+            | Some contract when List.length arguments = List.length contract.Parameters -> Ok ()
+            | Some _ -> Error $"Ownership call arity changed in {owner}"
+        match expression with
+        | Return _ | Jump _ -> Ok ()
+        | Let (_, cexpr, body) ->
+            let call =
+                match cexpr with
+                | Call (target, arguments)
+                | BorrowedCall (target, arguments)
+                | TailCall (target, arguments) -> verifyCall target arguments
+                | _ -> Ok ()
+            call |> Result.bind (fun () -> verifyCalls owner body)
+        | If (_, yes, no) ->
+            verifyCalls owner yes |> Result.bind (fun () -> verifyCalls owner no)
+        | Join (_, continuation, entry) ->
+            verifyCalls owner entry |> Result.bind (fun () -> verifyCalls owner continuation)
+    functions
+    |> List.fold (fun result functionDefinition ->
+        result |> Result.bind (fun () ->
+            match Map.tryFind functionDefinition.Id contracts with
+            | Some contract -> verifyFunction functionDefinition contract
+            | None -> Ok ())
+        |> Result.bind (fun () -> verifyCalls functionDefinition.Name functionDefinition.Body)) (Ok ())
+    |> Result.bind (fun () -> verifyCalls "<main>" main)
+
 let private measureFunctionPhase
     (enabled: bool)
     (work: unit -> 'a)
@@ -394,6 +458,8 @@ let private insertRCInProgramInternal
     let ctx = createContext result
     recordPhase "Reference Count Context" contextTimer
     let (ANF.Program (functions, mainExpr)) = result.Program
+    let ownershipVerification =
+        verifyOwnershipContracts ctx result.OwnershipContracts result.Program
     // Inlining and generated JSON helpers can produce thousands of existing
     // temporaries. A fixed starting value eventually collides with them, and
     // sibling-branch type state can then suppress a required retain.
@@ -454,7 +520,8 @@ let private insertRCInProgramInternal
         let missingStr = missingTypes |> List.map (fun (TempId n) -> $"t{n}") |> String.concat ", "
         Crash.crash $"RefCountInsertion: TypeMap incomplete - missing types for: {missingStr}"
 
-    verifyJoinInterfaces (withTempTypes ctx finalTypeMap) program'
+    ownershipVerification
+    |> Result.bind (fun () -> verifyJoinInterfaces (withTempTypes ctx finalTypeMap) program')
     |> Result.map (fun () -> program', finalTypeMap)
 
 /// Insert RC operations into a program

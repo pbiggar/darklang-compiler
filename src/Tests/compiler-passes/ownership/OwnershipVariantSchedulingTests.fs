@@ -101,7 +101,72 @@ let private testBoundsConvergence () =
     | Error (ScheduleOwnershipVariants.IterationLimitExceeded 1) -> Ok ()
     | actual -> Error (sprintf "Expected the scheduler iteration bound, got %A" actual)
 
+let private testLowersSpecializedCallsAndContracts () =
+    let definitions, _, _ = fixture ()
+    ScheduleOwnershipVariants.schedule
+        ScheduleOwnershipVariants.defaultLimits
+        contracts
+        semantics
+        Set.empty
+        definitions
+    |> Result.mapError (sprintf "%A")
+    |> Result.bind (fun scheduled ->
+        let identity : ANF.Function = {
+            Id = fid "identity"
+            Name = "identity"
+            TypedParams = [{ Id = ANF.TempId 0; Type = AST.TList AST.TInt64 }]
+            ReturnType = AST.TList AST.TInt64
+            ReturnOwnership = ANF.OwnedReturn
+            Body = ANF.Return (ANF.Var (ANF.TempId 0))
+        }
+        let caller : ANF.Function = {
+            Id = fid "caller"
+            Name = "caller"
+            TypedParams = [{ Id = ANF.TempId 10; Type = AST.TList AST.TInt64 }]
+            ReturnType = AST.TList AST.TInt64
+            ReturnOwnership = ANF.OwnedReturn
+            Body =
+                ANF.Let (
+                    ANF.TempId 11,
+                    ANF.Call (fid "identity", [ANF.Var (ANF.TempId 10)]),
+                    ANF.Let (
+                        ANF.TempId 12,
+                        ANF.Call (fid "identity", [ANF.Var (ANF.TempId 11)]),
+                        ANF.Return (ANF.Var (ANF.TempId 12))))
+        }
+        LowerOwnershipVariants.lower
+            definitions
+            (ScheduleOwnershipVariants.materialization scheduled)
+            [identity; caller]
+            (ANF.VarGen 100)
+        |> Result.mapError (sprintf "%A")
+        |> Result.bind (fun lowered ->
+            let cloneContracts = lowered.Contracts |> Map.toList
+            let rewrittenTargets =
+                lowered.Functions
+                |> List.tryFind (fun functionDefinition -> functionDefinition.Id = caller.Id)
+                |> Option.map (fun functionDefinition ->
+                    let rec targets = function
+                        | ANF.Let (_, ANF.Call (target, _), body) -> target :: targets body
+                        | ANF.Let (_, _, body) -> targets body
+                        | ANF.If (_, yes, no) -> targets yes @ targets no
+                        | ANF.Join (_, continuation, entry) -> targets entry @ targets continuation
+                        | ANF.Return _ | ANF.Jump _ -> []
+                    targets functionDefinition.Body)
+                |> Option.defaultValue []
+            match cloneContracts, rewrittenTargets with
+            | [(clone, boundary)], [first; second]
+                when clone = first
+                     && first = second
+                     && boundary = {
+                         Parameters = [UniqueCallParameter]
+                         Result = UniqueProducedCallResult
+                     }
+                     && List.length lowered.Functions = 3 -> Ok ()
+            | actual -> Error (sprintf "Expected one explicit ANF clone contract and two routed calls, got %A" actual)))
+
 let tests = [
     "Ownership specialization propagates uniqueness to a fixed point", testPropagatesUniquenessToFixedPoint
     "Ownership specialization has an explicit convergence bound", testBoundsConvergence
+    "Ownership specialization lowers clones calls and contracts into ANF", testLowersSpecializedCallsAndContracts
 ]

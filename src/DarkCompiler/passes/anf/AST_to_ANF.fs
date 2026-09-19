@@ -119,6 +119,7 @@ let convertFunction
 /// Result type that includes registries needed for later passes
 type ConversionResult = {
     Program: ANF.Program
+    OwnershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>
     RecursiveMembers: Map<string, AST.LoweredRecursiveMember>
     TypeReg: TypeRegistry
     RecordFieldsReg: Map<string, (string * AST.Type) list>
@@ -135,6 +136,7 @@ type ConversionResult = {
 type UserOnlyResult = {
     ScopeContracts: Map<AST.FunctionId, DestructionAnalysis.FunctionScopeContract>
     UserFunctions: ANF.Function list   // Only user functions, not merged with stdlib
+    OwnershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>
     NonInlineableFunctionNames: Set<AST.FunctionId> // Late external specializations compiled in this unit
     MainExpr: ANF.AExpr                // User's main expression
     TypeReg: TypeRegistry              // Merged registries (for lookups)
@@ -394,12 +396,32 @@ let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
     }
 
 /// Convert functions to ANF, returning updated VarGen
-let convertFunctions
+type FunctionConversion = {
+    Functions: ANF.Function list
+    VarGen: ANF.VarGen
+    OwnershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>
+}
+
+let extendFunctionRegistryWithConverted
+    (registry: FunctionRegistry)
+    (functions: ANF.Function list)
+    : FunctionRegistry =
+    functions
+    |> List.fold (fun registry functionDefinition ->
+        Map.add
+            functionDefinition.Id
+            (functionDefinition.Name,
+             AST.TFunction (
+                 functionDefinition.TypedParams |> List.map (fun parameter -> parameter.Type),
+                 functionDefinition.ReturnType))
+            registry) registry
+
+let convertFunctionsWithOwnership
     (symbols: CheckedAST.Symbols)
     (registries: Registries)
     (varGen: ANF.VarGen)
     (functions: CheckedAST.FunctionDef list)
-    : Result<ANF.Function list * ANF.VarGen, string> =
+    : Result<FunctionConversion, string> =
     let sumTypeNames = registries.SumTypeNames
     let inertScopes = DestructionAnalysis.inertFunctionScopes registries.ScopeContracts
     let rec loop funcs vg acc =
@@ -432,7 +454,25 @@ let convertFunctions
     }
     AnalyzeFunctionOwnership.analyze ownershipContext functions
     |> Result.mapError (fun error -> $"Whole-function ownership analysis failed: {error}")
-    |> Result.bind (fun _ -> loop functions varGen [])
+    |> Result.bind (fun analysis ->
+        loop functions varGen []
+        |> Result.bind (fun (anfFunctions, nextVarGen) ->
+            LowerOwnershipVariants.lower
+                (AnalyzeFunctionOwnership.originalFunctions analysis)
+                (AnalyzeFunctionOwnership.schedule analysis
+                 |> ScheduleOwnershipVariants.materialization)
+                anfFunctions
+                nextVarGen
+            |> Result.mapError (fun error -> $"Ownership lowering failed: {error}")
+            |> Result.map (fun lowered -> {
+                Functions = lowered.Functions
+                VarGen = lowered.VarGen
+                OwnershipContracts = lowered.Contracts
+            })))
+
+let convertFunctions symbols registries varGen functions =
+    convertFunctionsWithOwnership symbols registries varGen functions
+    |> Result.map (fun converted -> converted.Functions, converted.VarGen)
 
 /// Convert an expression to ANF with the given VarGen
 let convertExprToAnf
