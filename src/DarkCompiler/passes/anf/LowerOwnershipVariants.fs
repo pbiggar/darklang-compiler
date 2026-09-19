@@ -92,12 +92,21 @@ let lower
     (plan: MaterializeOwnershipVariants.Plan<'leaf, 'id>)
     (originalANF: ANF.Function list)
     (varGen: ANF.VarGen)
+    (elidedSites: Set<CallSiteIdentity>)
     : Result<Lowered, LoweringError> =
     let anfById = originalANF |> List.map (fun functionDefinition -> functionDefinition.Id, functionDefinition) |> Map.ofList
     let replacements =
         MaterializeOwnershipVariants.rewrites plan
+        |> List.filter (fun rewrite -> not (Set.contains rewrite.Site elidedSites))
         |> List.map (fun rewrite -> rewrite.Site, rewrite.Specialized.Target)
         |> Map.ofList
+    let usedTargets = replacements |> Map.values |> Set.ofSeq
+    let retainedGroups =
+        MaterializeOwnershipVariants.groups plan
+        |> List.filter (fun group ->
+            AST.NonEmptyList.toList group.Members
+            |> List.exists (fun memberDefinition ->
+                Set.contains memberDefinition.Function.Definition.Id usedTargets))
     let callsByCaller =
         originalOwned
         |> List.map (fun definition ->
@@ -109,7 +118,10 @@ let lower
     originalANF
     |> List.fold (fun result functionDefinition ->
         result |> Result.bind (fun rewritten ->
-            let sites = Map.tryFind functionDefinition.Id callsByCaller |> Option.defaultValue []
+            let sites =
+                Map.tryFind functionDefinition.Id callsByCaller
+                |> Option.defaultValue []
+                |> List.filter (fun (site, _) -> not (Set.contains site elidedSites))
             let hasSelectedCall =
                 sites |> List.exists (fun (site, _) -> Map.containsKey site replacements)
             if not hasSelectedCall then Ok (functionDefinition :: rewritten)
@@ -118,7 +130,7 @@ let lower
                 |> Result.map (fun body -> { functionDefinition with Body = body } :: rewritten))) (Ok [])
     |> Result.map List.rev
     |> Result.bind (fun originals ->
-        MaterializeOwnershipVariants.groups plan
+        retainedGroups
         |> List.fold (fun result group ->
             result |> Result.bind (fun (clones, currentVarGen) ->
                 let members = AST.NonEmptyList.toList group.Members
@@ -155,7 +167,7 @@ let lower
                             Ok (clone :: clones, nextVarGen))) (Ok (clones, currentVarGen)))) (Ok ([], varGen))
         |> Result.map (fun (clones, currentVarGen) -> List.rev clones, currentVarGen)
         |> Result.bind (fun (clones, finalVarGen) ->
-            (MaterializeOwnershipVariants.groups plan
+            (retainedGroups
              |> List.collect (fun group ->
                  AST.NonEmptyList.toList group.Members
                  |> List.map (fun memberDefinition -> memberDefinition.Function)))

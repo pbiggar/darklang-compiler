@@ -17,7 +17,7 @@ CASES = {
     "edge-cases": "0\n", "effect-order": "1\n2\n3\n4\n3\n2\n9\n",
     "large-unique": "-32000\n", "large-shared": "31968000\n",
     "runtime-unique": "769500\n", "runtime-shared": "6412500\n",
-    "runtime-small": "45000\n",
+    "runtime-small": "45000\n", "cross-function": "8205000\n",
     "branch-unique": "960000\n", "branch-shared": "1414500\n",
     "runtime-effects": "count\nvalue\nmap\nmap\nmap\nfold\nfold\nfold\nvalue\nvalue\n39\n",
 }

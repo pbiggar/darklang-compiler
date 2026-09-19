@@ -1,0 +1,15 @@
+// cross-function.dark - Ownership-authorized list-array fusion through a helper.
+let mapReverse (xs: List<Int64>) : List<Int64> =
+    let ys = Stdlib.List.map xs (fun x -> x + 1L) in
+    Stdlib.List.reverse ys
+
+let pipeline (seed: Int64) : Int64 =
+    let xs = [seed, seed + 1L, seed + 2L] in
+    let ys = mapReverse xs in
+    Stdlib.List.fold ys 0L (fun acc x -> acc * 10L + x)
+
+let loop (n: Int64) (acc: Int64) : Int64 =
+    if n == 0L then acc
+    else loop (n - 1L) (acc + pipeline (n % 10L))
+
+loop 10000L 0L

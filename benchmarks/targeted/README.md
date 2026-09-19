@@ -61,6 +61,8 @@ repeated workloads, not tiny controls, to assess mapping syscall costs.
 `runtime-unique` and `runtime-shared` construct 256/257-element repeats using
 function-parameter counts. `runtime-small` exercises lengths 0–3 for 10,000
 iterations to expose mapping overhead above process-startup noise;
+`cross-function` routes the same workload as `main` through a selected
+map/reverse helper and must retain the closed pipeline's instruction count;
 `runtime-effects` checks count/value evaluation,
 callback order, and normalization of zero and huge negative counts on both
 targets.

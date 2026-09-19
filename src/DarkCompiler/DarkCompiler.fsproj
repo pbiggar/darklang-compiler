@@ -97,6 +97,7 @@
     <Compile Include="passes/anf/lowering/Operators.fs" />
     <Compile Include="passes/anf/lowering/TypeInference.fs" />
     <Compile Include="passes/ownership/AnalyzeFunctionOwnership.fs" />
+    <Compile Include="passes/ownership/FuseOwnershipListCalls.fs" />
     <Compile Include="passes/anf/ANF_Inlining.fs" />
     <Compile Include="passes/anf/LowerOwnershipVariants.fs" />
     <Compile Include="passes/anf/lowering/Aggregates.fs" />

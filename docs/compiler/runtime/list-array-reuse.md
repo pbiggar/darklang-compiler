@@ -135,6 +135,23 @@ and managed representation before reference-count insertion. The proof
 metadata does not alter the ordinary native calling convention yet; escaping
 array values remain later work.
 
+The first optimized cross-function path deliberately avoids adding a second
+native list ABI. A fixed-point-selected, nonrecursive `List<Int64>` helper made
+only from map/reverse transformations may be fused into its caller when every
+substituted argument is inert and cannot duplicate evaluation. The checked
+body is beta-reduced before list-region extraction, so the existing typed
+liveness, consume-or-copy decisions, storage layouts, RC cleanup, and native
+lowering see one region spanning the former source call. Nested lets are
+reassociated only for expressions marked as fused by this pass. Compiler-
+generated clones remain the fallback for selected calls that are not eligible.
+
+This is representation compatibility by boundary elimination: no array is
+passed to an ordinary persistent-list callee, and there is no array/skew-list
+conversion. A caller-local fresh list can therefore flow through a fused helper
+and reuse one buffer across map and reverse. A surviving alias causes the
+existing solver to copy, while a list originating as a borrowed function
+parameter still fails closed-region extraction and keeps the persistent path.
+
 `verifyFunctional` checks the closed region's incoming collection interface
 using representation-independent value contracts. `verifyBlockOwnership`
 supplies list operation contracts to the shared `VerifyOwnership.verifyClosed`, which checks

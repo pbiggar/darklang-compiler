@@ -605,6 +605,14 @@ let internal convertTypedProgramToUserOnlyWithMode
                 measure "AST -> ANF Expression Conversion" (fun () ->
                     AST_to_ANF.convertExprToAnf registries converted.VarGen expr)
                 |> Result.map (fun (anfExpr, _) ->
+                    let convertedFuncReg =
+                        AST_to_ANF.extendFunctionRegistryWithConverted
+                            registries.FuncReg
+                            converted.Functions
+                    let convertedReturnTypes =
+                        converted.Functions
+                        |> List.fold (fun returnTypes functionDefinition ->
+                            Map.add functionDefinition.Name functionDefinition.ReturnType returnTypes) localReturnTypes
                     ({
                         UserFunctions = converted.Functions
                         OwnershipContracts = converted.OwnershipContracts
@@ -622,12 +630,9 @@ let internal convertTypedProgramToUserOnlyWithMode
                         LocalRecordFieldsReg = localRegistries.RecordFieldsReg
                         LocalVariantLookup = localRegistries.VariantLookup
                         RcSumShapeReg = registries.RcSumShapeReg
-                        FuncReg =
-                            AST_to_ANF.extendFunctionRegistryWithConverted
-                                registries.FuncReg
-                                converted.Functions
+                        FuncReg = convertedFuncReg
                         FunctionNames = registries.FunctionNames
-                        LocalReturnTypes = localReturnTypes
+                        LocalReturnTypes = convertedReturnTypes
                         FuncParams = registries.FuncParams
                         ModuleRegistry = registries.ModuleRegistry
                         RecursiveMembers = registries.RecursiveMembers
