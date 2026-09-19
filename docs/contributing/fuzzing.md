@@ -5,33 +5,25 @@ The F# fuzzer generates valid expressions directly as the compiler's
 native result with `darklang-interpreter eval`. The interpreter is the semantic
 oracle; the fuzzer does not implement a second evaluator or language model.
 
-Build the fuzzer, then run a bounded campaign:
+Run the continuous fuzz-to-E2E workflow from the repository root:
 
 ```bash
-./fuzz --seed 1234 --cases 1000 --max-depth 6 --timeout-ms 2000
+./fuzz
 ```
 
-The seed is always printed. Before compiling each case, the tool writes its
-source to `fuzz-results/current.dark`, so an unexpected compiler-process crash
-still leaves a reproducer. A normal discrepancy also produces a `.dark` source
-file and a `.txt` result file named with the seed and case index. Replay an
-artifact through the same oracle and compiler path with:
+The script has no options. It builds the F# fuzzer once, runs campaigns until
+interrupted with Ctrl-C, and prints the seed and artifact directory for each
+campaign. Before compiling each case, the fuzzer writes its source to that
+campaign's `current.dark`, so an unexpected compiler-process crash still leaves
+a reproducer.
 
-```bash
-./fuzz --replay fuzz-results/seed-1234-case-5.dark
-```
-
-Minimize a reproducer with the deterministic structural reducer:
-
-```bash
-./fuzz --minimize fuzz-results/seed-1234-case-5.dark
-```
-
-The reducer repeatedly tries smaller compiler ASTs and retains a candidate only
-when the interpreter accepts it and the compiler reproduces the same failure.
-It writes `seed-1234-case-5.min.dark` beside the original. The reducer is local
-and deterministic; it does not use an AI service or implement a second
-evaluator.
+When a discrepancy is found, the script preserves the original source and
+diagnostic, minimizes the source with the deterministic AST reducer, asks the
+interpreter for the expected result, and appends the deduplicated case to
+`src/Tests/e2e/fuzzer-found.e2e`. It then starts the next campaign. The reducer
+is local and deterministic; it does not use an AI service or implement a
+second evaluator. Infrastructure failures stop the script instead of being
+treated as compiler findings.
 
 The first generator deliberately covers a small, total subset: `Int64`,
 `Bool`, and `String` literals, variables, `let`, `if`, arithmetic, comparisons,
@@ -41,18 +33,6 @@ comparable; strings still participate in nested expressions and comparisons.
 Add constructs directly to the existing AST generator rather than introducing
 a parallel language model.
 
-Every discrepancy should be minimized and promoted to a focused E2E test
-before changing compiler behavior.
-
-Use the continuous loop to automate that workflow:
-
-```bash
-./fuzz-loop --cases 1000 --max-depth 6
-```
-
-Each campaign gets its own directory under `fuzz-results/`. A discrepancy is
-minimized deterministically and appended to `src/Tests/e2e/fuzzer-found.e2e`,
-then the next campaign starts. The loop runs until interrupted; pass
-`--campaigns N` for a bounded run. An explicit `--seed` is incremented for
-each campaign so a bounded run is reproducible without repeating one input
-stream.
+Every discrepancy should remain as a focused failing E2E test before changing
+compiler behavior. The script deliberately does not run the promoted tests:
+they are expected to fail until the compiler bug is fixed.
