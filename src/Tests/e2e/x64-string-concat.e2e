@@ -1,0 +1,4 @@
+// x64 fused concatenation snapshots allocation roots, so its copy pass must
+// advance past each dynamic or literal string header before reading bytes.
+
+let rendered = Stdlib.Int64.toString 42L in "before " ++ rendered ++ " after" = "before 42 after"

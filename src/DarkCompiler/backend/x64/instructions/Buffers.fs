@@ -284,6 +284,9 @@ let private emitStringConcatMany
     (remaining: LIR.Operand list)
     : Result<X86_64.Instr list, string> =
     let operands = first :: second :: remaining
+    let savedRegs =
+        [ X86_64.RAX; X86_64.RDI; X86_64.RSI; X86_64.RCX
+          X86_64.R8; X86_64.R9; X86_64.R10; X86_64.RBX ]
 
     let snapshotOperand (operand: LIR.Operand) : Result<X86_64.Instr list, string> =
         match operand with
@@ -311,9 +314,6 @@ let private emitStringConcatMany
         operands
         |> ResultList.mapResults snapshotOperand
         |> Result.map (fun snapshots ->
-            let savedRegs =
-                [ X86_64.RAX; X86_64.RDI; X86_64.RSI; X86_64.RCX
-                  X86_64.R8; X86_64.R9; X86_64.R10; X86_64.RBX ]
             let save = savedRegs |> List.map X86_64.PUSH
             let restore = savedRegs |> List.rev |> List.map X86_64.POP
             let operandCount = List.length operands
@@ -349,6 +349,7 @@ let private emitStringConcatMany
                 let loop = freshLabel $"strcat_many_copy_{index}"
                 let doneLabel = freshLabel $"strcat_many_done_{index}"
                 [ X86_64.MOV_load (X86_64.RSI, X86_64.RSP, stackOffset index 1)
+                  X86_64.ADD_imm (X86_64.RSI, 16)
                   X86_64.MOV_load (X86_64.R10, X86_64.RSP, stackOffset index 0)
                   X86_64.Label loop
                   X86_64.CMP_imm (X86_64.R10, 0)

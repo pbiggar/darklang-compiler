@@ -6,7 +6,12 @@ open X64Operands
 open X64CodeGenTypes
 open X64ReleaseSelection
 
-let rec private genFieldReleases (ctx: FuncCtx) (fieldReleases: MemoryModel.RcFieldRelease list) : X86_64.Instr list =
+let rec private genFieldReleases
+    (recursiveHelperLabel: AST.Type -> string)
+    (preserveRegisters: bool)
+    (ctx: FuncCtx)
+    (fieldReleases: MemoryModel.RcFieldRelease list)
+    : X86_64.Instr list =
     fieldReleases
     |> List.collect (function
         | MemoryModel.FieldRelease (fieldOffset, fieldReleasePlan) ->
@@ -26,21 +31,23 @@ let rec private genFieldReleases (ctx: FuncCtx) (fieldReleases: MemoryModel.RcFi
                 genListFieldRelease fieldOffset fieldReleasePlan
             | MemoryModel.RootRelease (childPayloadSize, MemoryModel.GenericHeap, MemoryModel.FixedBlockPayloadRelease _)
             | MemoryModel.RootRelease (childPayloadSize, MemoryModel.GenericHeap, MemoryModel.BoxedSumPayloadRelease _) ->
-                genFixedBlockFieldRelease ctx fieldOffset childPayloadSize fieldReleasePlan
+                genFixedBlockFieldRelease recursiveHelperLabel preserveRegisters ctx fieldOffset childPayloadSize fieldReleasePlan
             | MemoryModel.RecursiveRelease sourceType ->
                 [X86_64.PUSH X86_64.RDX
                  X86_64.MOV_load (X86_64.RAX, X86_64.RDX, fieldOffset)
-                 X86_64.CALL (recursiveSumRefCountDecHelperLabel sourceType)
+                 X86_64.CALL (recursiveHelperLabel sourceType)
                  X86_64.POP X86_64.RDX]
             | _ ->
                 [])
 
 and private genBoxedSumVariantFieldReleases
+    (recursiveHelperLabel: AST.Type -> string)
+    (preserveRegisters: bool)
     (ctx: FuncCtx)
     (variants: MemoryModel.RcBoxedSumVariantRelease list)
     : X86_64.Instr list =
     let releaseVariant (variant: MemoryModel.RcBoxedSumVariantRelease) : (int * X86_64.Instr list) option =
-        let releaseInstrs = genFieldReleases ctx variant.FieldReleases
+        let releaseInstrs = genFieldReleases recursiveHelperLabel preserveRegisters ctx variant.FieldReleases
 
         if List.isEmpty releaseInstrs then
             None
@@ -66,30 +73,44 @@ and private genBoxedSumVariantFieldReleases
          |> List.concat)
         @ [X86_64.Label doneLabel]
 
-and private genFixedBlockFieldReleases (ctx: FuncCtx) (releasePlan: MemoryModel.RcReleasePlan option) : X86_64.Instr list =
+and private genFixedBlockFieldReleases
+    (recursiveHelperLabel: AST.Type -> string)
+    (preserveRegisters: bool)
+    (ctx: FuncCtx)
+    (releasePlan: MemoryModel.RcReleasePlan option)
+    : X86_64.Instr list =
     match releasePlan with
     | Some (MemoryModel.RootRelease (_, _, MemoryModel.FixedBlockPayloadRelease (_, plannedFieldReleases))) ->
-        genFieldReleases ctx plannedFieldReleases
+        genFieldReleases recursiveHelperLabel preserveRegisters ctx plannedFieldReleases
     | Some (MemoryModel.RootRelease (_, _, MemoryModel.BoxedSumPayloadRelease (_, plannedFieldReleases, []))) ->
-        genFieldReleases ctx plannedFieldReleases
+        genFieldReleases recursiveHelperLabel preserveRegisters ctx plannedFieldReleases
     | Some (MemoryModel.RootRelease (_, _, MemoryModel.BoxedSumPayloadRelease (_, _, variants))) ->
-        genBoxedSumVariantFieldReleases ctx variants
+        genBoxedSumVariantFieldReleases recursiveHelperLabel preserveRegisters ctx variants
     | _ ->
         []
 
 and private genFixedBlockFieldRelease
+    (recursiveHelperLabel: AST.Type -> string)
+    (preserveRegisters: bool)
     (ctx: FuncCtx)
     (fieldOffset: int)
     (childPayloadSize: int)
     (fieldReleasePlan: MemoryModel.RcReleasePlan)
     : X86_64.Instr list =
-        [X86_64.MOV_load (X86_64.R8, X86_64.RDX, fieldOffset)]
-        @ genRefCountDecGenericWithPlan ctx X86_64.R8 childPayloadSize (Some fieldReleasePlan)
+        let saveParent = if preserveRegisters then [] else [X86_64.PUSH X86_64.RDX]
+        let restoreParent = if preserveRegisters then [] else [X86_64.POP X86_64.RDX]
+        saveParent
+        @ [X86_64.MOV_load (X86_64.R8, X86_64.RDX, fieldOffset)]
+        @ genRefCountDecGenericWithPlanUsing recursiveHelperLabel preserveRegisters ctx X86_64.R8 childPayloadSize (Some fieldReleasePlan)
+        @ restoreParent
 
 /// Generic RefCountDec: decrement refcount at [addr + payloadSize].
 /// If zero, release known fields, free block to free list, and update leak accounting.
-/// Uses saved scratch registers for recursive fixed-block payload release.
-and internal genRefCountDecGenericWithPlan
+/// Public lowering preserves scratch registers; recursive workers preserve only
+/// parent roots at nested fixed-block boundaries to keep deep release bounded.
+and private genRefCountDecGenericWithPlanUsing
+    (recursiveHelperLabel: AST.Type -> string)
+    (preserveRegisters: bool)
     (ctx: FuncCtx)
     (addrReg: X86_64.Reg)
     (payloadSize: int)
@@ -98,7 +119,7 @@ and internal genRefCountDecGenericWithPlan
     let skipLabel = freshLabel "rc_dec_skip"
     let noFreeLabel = freshLabel "rc_dec_nofree"
     let leakDec = genLeakCounterDec ctx
-    let fieldReleases = genFixedBlockFieldReleases ctx releasePlan
+    let fieldReleases = genFixedBlockFieldReleases recursiveHelperLabel preserveRegisters ctx releasePlan
     let saveRegs =
         [ X86_64.RAX
           X86_64.RDI
@@ -109,8 +130,8 @@ and internal genRefCountDecGenericWithPlan
           X86_64.R9
           X86_64.R10
           scratch ]
-    let saves = saveRegs |> List.map X86_64.PUSH
-    let restores = saveRegs |> List.rev |> List.map X86_64.POP
+    let saves = if preserveRegisters then saveRegs |> List.map X86_64.PUSH else []
+    let restores = if preserveRegisters then saveRegs |> List.rev |> List.map X86_64.POP else []
     [X86_64.TEST_reg (addrReg, addrReg)
      X86_64.Jcc (X86_64.EQ, skipLabel)]
     @ saves
@@ -131,7 +152,15 @@ and internal genRefCountDecGenericWithPlan
     @ restores
     @ [X86_64.Label skipLabel]
 
-and internal genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) (metadata: MemoryModel.RcMetadata option) : X86_64.Instr list =
+let internal genRefCountDecGenericWithPlan
+    (ctx: FuncCtx)
+    (addrReg: X86_64.Reg)
+    (payloadSize: int)
+    (releasePlan: MemoryModel.RcReleasePlan option)
+    : X86_64.Instr list =
+    genRefCountDecGenericWithPlanUsing recursiveSumRefCountDecHelperLabel true ctx addrReg payloadSize releasePlan
+
+let internal genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) (metadata: MemoryModel.RcMetadata option) : X86_64.Instr list =
     genRefCountDecGenericWithPlan ctx addrReg payloadSize (rcMetadataReleasePlan metadata)
 
 /// Stream roots have the generic fixed-block layout, but their close callback
@@ -145,7 +174,12 @@ let private genRefCountDecStream
     let skipLabel = freshLabel "stream_rc_dec_skip"
     let noFreeLabel = freshLabel "stream_rc_dec_nofree"
     let alreadyClosedLabel = freshLabel "stream_rc_dec_closed"
-    let fieldReleases = genFixedBlockFieldReleases ctx (rcMetadataReleasePlan metadata)
+    let fieldReleases =
+        genFixedBlockFieldReleases
+            recursiveSumRefCountDecHelperLabel
+            true
+            ctx
+            (rcMetadataReleasePlan metadata)
     let savedRegs = [X86_64.RAX; X86_64.RDI; X86_64.RSI; X86_64.RDX; X86_64.RCX; X86_64.R8; X86_64.R9; X86_64.R10; scratch]
     let saves = savedRegs |> List.map X86_64.PUSH
     let restores = savedRegs |> List.rev |> List.map X86_64.POP
@@ -212,10 +246,29 @@ let internal generateRecursiveSumRefCountDecHelper
         SumShapeRegistry = sumShapeRegistry
         FunctionNames = Map.empty
     }
+    let helperLabel = recursiveSumRefCountDecHelperLabel sourceType
+    let workerLabel (typ: AST.Type) = $"{recursiveSumRefCountDecHelperLabel typ}_worker"
+    let savedRegs =
+        [ X86_64.RAX
+          X86_64.RDI
+          X86_64.RSI
+          X86_64.RDX
+          X86_64.RCX
+          X86_64.R8
+          X86_64.R9
+          X86_64.R10
+          scratch ]
+    let saves = savedRegs |> List.map X86_64.PUSH
+    let restores = savedRegs |> List.rev |> List.map X86_64.POP
     match releasePlan with
     | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, _) ->
-        [X86_64.Label (recursiveSumRefCountDecHelperLabel sourceType)]
-        @ genRefCountDecGenericWithPlan helperCtx X86_64.RAX payloadSize (Some releasePlan)
+        [X86_64.Label helperLabel]
+        @ saves
+        @ [X86_64.CALL (workerLabel sourceType)]
+        @ restores
+        @ [X86_64.RET
+           X86_64.Label (workerLabel sourceType)]
+        @ genRefCountDecGenericWithPlanUsing workerLabel false helperCtx X86_64.RAX payloadSize (Some releasePlan)
         @ [X86_64.RET]
     | _ ->
         Crash.crash $"x64 recursive sum RC helper requires a generic root release plan, got {releasePlan}"
