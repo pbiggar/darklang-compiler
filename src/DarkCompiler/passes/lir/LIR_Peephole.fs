@@ -273,6 +273,7 @@ let isPureLoopInstr (instr: Instr) : bool =
     | Madd _
     | Cmp _
     | Cset _
+    | Select _
     | And _
     | And_imm _
     | Orr _
@@ -299,6 +300,7 @@ let isPureLoopInstr (instr: Instr) : bool =
     | FAdd _
     | FSub _
     | FMul _
+    | FMadd _
     | FDiv _
     | FNeg _
     | FAbs _
@@ -457,6 +459,8 @@ let private fRegUsedInInstr (target: FReg) (instr: Instr) : bool =
     | FDiv (_, left, right)
     | FCmp (left, right) ->
         same left || same right
+    | FMadd (_, left, right, addend) ->
+        same left || same right || same addend
     | FPhi (_, sources) ->
         sources |> List.exists (fun (src, _) -> same src)
     | _ -> false
@@ -661,6 +665,7 @@ let private fRegWriteDest (instr: Instr) : FReg option =
     | FAdd (dest, _, _)
     | FSub (dest, _, _)
     | FMul (dest, _, _)
+    | FMadd (dest, _, _, _)
     | FDiv (dest, _, _)
     | FNeg (dest, _)
     | FAbs (dest, _)
@@ -1009,6 +1014,8 @@ let private foldRegUses folder state (instr: Instr) =
     | RawGet (_, left, right)
     | RawGetByte (_, left, right) ->
         folder (folder state left) right
+    | Select (_, whenTrue, whenFalse, _) ->
+        folder (folder state whenTrue) whenFalse
     | RawAlloc (_, numBytes) ->
         folder state numBytes
     | MappedAlloc (_, numBytes) ->
@@ -1091,6 +1098,7 @@ let private foldRegUses folder state (instr: Instr) =
     | FAdd _
     | FSub _
     | FMul _
+    | FMadd _
     | FDiv _
     | FNeg _
     | FAbs _
@@ -1319,6 +1327,135 @@ let private tryFuseMulSubWithChange (instrs: Instr list) : Instr list * bool =
 let tryFuseMulSub (instrs: Instr list) : Instr list =
     tryFuseMulSubWithChange instrs |> fst
 
+/// Fuse a dead floating multiply into an immediately following addition.
+/// This changes the rounding point, so callers enable it only for targets whose
+/// cost model selects a hardware fused operation.
+let tryFuseFloatMultiplyAdd (instrs: Instr list) : Instr list * bool =
+    let rec loop acc changed remaining =
+        match remaining with
+        | FMul (temp, left, right) :: FAdd (dest, addLeft, addRight) :: rest
+            when sameFReg temp addLeft
+                 && not (sameFReg temp addRight)
+                 && not (fRegUsedInInstrs temp rest) ->
+            loop (FMadd (dest, left, right, addRight) :: acc) true rest
+        | FMul (temp, left, right) :: FAdd (dest, addLeft, addRight) :: rest
+            when sameFReg temp addRight
+                 && not (sameFReg temp addLeft)
+                 && not (fRegUsedInInstrs temp rest) ->
+            loop (FMadd (dest, left, right, addLeft) :: acc) true rest
+        | instr :: rest -> loop (instr :: acc) changed rest
+        | [] -> (List.rev acc, changed)
+
+    loop [] false instrs
+
+let private tryRegisterPhiSources
+    (trueLabel: Label)
+    (falseLabel: Label)
+    (instrs: Instr list)
+    : (Instr list * Instr list) option =
+    let sourceFor label sources =
+        sources
+        |> List.tryPick (fun (operand, sourceLabel) ->
+            if sourceLabel = label then Some operand else None)
+
+    let isSelectableScalarType = function
+        | Some AST.TInt8 | Some AST.TInt16 | Some AST.TInt32 | Some AST.TInt64
+        | Some AST.TUInt8 | Some AST.TUInt16 | Some AST.TUInt32 | Some AST.TUInt64
+        | Some AST.TBool | Some AST.TUnit | Some AST.TChar | Some AST.TDateTime
+        | Some AST.TRawPtr -> true
+        | _ -> false
+
+    let rec collect selects remaining =
+        match remaining with
+        | Phi (dest, sources, valueType) :: rest
+            when List.length sources = 2 && isSelectableScalarType valueType ->
+            match sourceFor trueLabel sources, sourceFor falseLabel sources with
+            | Some (Reg whenTrue), Some (Reg whenFalse) ->
+                collect ((dest, whenTrue, whenFalse) :: selects) rest
+            | _ -> None
+        | FPhi _ :: _ -> None
+        | _ when List.isEmpty selects -> None
+        | _ ->
+            let selectInstrs =
+                selects
+                |> List.rev
+                |> List.map (fun (dest, whenTrue, whenFalse) ->
+                    Select (dest, whenTrue, whenFalse, EQ))
+            Some (selectInstrs, remaining)
+
+    collect [] instrs
+
+/// Replace an empty two-arm scalar diamond with flag-based selects. The
+/// comparison and selected registers stay in the predecessor, and the join's
+/// phi definitions become ordinary select definitions.
+let formSelectDiamonds (cfg: CFG) : CFG * bool =
+    let tryRewrite blocks predecessors label block =
+        let selection =
+            match block.Terminator with
+            | CondBranch (condition, trueLabel, falseLabel)
+                when block.Instrs |> List.tryLast |> Option.exists (function Cmp _ -> true | _ -> false) ->
+                Some (condition, trueLabel, falseLabel, block.Instrs)
+            | Branch (conditionReg, trueLabel, falseLabel) ->
+                Some (NE, trueLabel, falseLabel, block.Instrs @ [Cmp (conditionReg, Imm 0L)])
+            | BranchZero (conditionReg, zeroLabel, nonZeroLabel) ->
+                Some (EQ, zeroLabel, nonZeroLabel, block.Instrs @ [Cmp (conditionReg, Imm 0L)])
+            | _ -> None
+        match selection with
+        | Some (condition, trueLabel, falseLabel, predecessorInstrs) when trueLabel <> falseLabel ->
+            match Map.tryFind trueLabel blocks,
+                  Map.tryFind falseLabel blocks with
+            | Some trueBlock, Some falseBlock
+                when List.isEmpty trueBlock.Instrs
+                     && List.isEmpty falseBlock.Instrs
+                     && Map.tryFind trueLabel predecessors = Some [label]
+                     && Map.tryFind falseLabel predecessors = Some [label] ->
+                match trueBlock.Terminator, falseBlock.Terminator with
+                | Jump trueJoin, Jump falseJoin when trueJoin = falseJoin ->
+                    match Map.tryFind trueJoin blocks with
+                    | Some joinBlock ->
+                        match tryRegisterPhiSources trueLabel falseLabel joinBlock.Instrs with
+                        | Some (selects, remainingJoinInstrs) ->
+                            let selects =
+                                selects
+                                |> List.map (function
+                                    | Select (dest, whenTrue, whenFalse, _) ->
+                                        Select (dest, whenTrue, whenFalse, condition)
+                                    | _ -> Crash.crash "Select formation created a non-select instruction")
+                            Some (
+                                { block with
+                                    Instrs = predecessorInstrs @ selects
+                                    Terminator = Jump trueJoin },
+                                trueLabel,
+                                falseLabel,
+                                trueJoin,
+                                { joinBlock with Instrs = remainingJoinInstrs })
+                        | None -> None
+                    | None -> None
+                | _ -> None
+            | _ -> None
+        | _ -> None
+
+    let rec rewrite blocks changed =
+        let predecessors = buildPredecessors { cfg with Blocks = blocks }
+        let candidate =
+            blocks
+            |> Map.toList
+            |> List.tryPick (fun (label, block) ->
+                tryRewrite blocks predecessors label block
+                |> Option.map (fun rewrite -> (label, rewrite)))
+        match candidate with
+        | None -> ({ cfg with Blocks = blocks }, changed)
+        | Some (label, (entryBlock, trueLabel, falseLabel, joinLabel, joinBlock)) ->
+            let updated =
+                blocks
+                |> Map.add label entryBlock
+                |> Map.add joinLabel joinBlock
+                |> Map.remove trueLabel
+                |> Map.remove falseLabel
+            rewrite updated true
+
+    rewrite cfg.Blocks false
+
 /// Try to fuse Cset + Branch into CondBranch
 /// Pattern: last instruction is Cset dest, cond; terminator is Branch dest, trueL, falseL
 /// Result: remove Cset, replace Branch with CondBranch cond, trueL, falseL
@@ -1428,6 +1565,7 @@ let applyAndBitBranchFusion (instrs: Instr list) (terminator: Terminator) : (Ins
 
 /// Optimize a basic block (returns whether anything changed)
 let private optimizeBlockWithRegUseCounts
+    (fuseFloatMultiplyAdd: bool)
     (regUseCounts: Map<Reg, int>)
     (block: BasicBlock)
     : BasicBlock * bool =
@@ -1435,16 +1573,21 @@ let private optimizeBlockWithRegUseCounts
         optimizeInstrsWithChange block.Instrs
     let (instrsCopyCleaned, floatingCopyChanged) =
         removeRedundantFloatingCopyBackMovesWithChange instrs'
+    let (instrsFloatCombined, floatingMultiplyAddChanged) =
+        if fuseFloatMultiplyAdd then
+            tryFuseFloatMultiplyAdd instrsCopyCleaned
+        else
+            (instrsCopyCleaned, false)
     let containsMultiply =
-        instrsCopyCleaned
+        instrsFloatCombined
         |> List.exists (function Mul _ -> true | _ -> false)
     let (instrs'', multiplyChanged) =
         if not containsMultiply then
-            (instrsCopyCleaned, false)
+            (instrsFloatCombined, false)
         else
             // Apply multiply-by-constant strength reduction (Mov + Mul → Lsl + Add/Sub)
             let (instrs1, mulByConstantChanged) =
-                tryMulByConstantWithChange instrsCopyCleaned
+                tryMulByConstantWithChange instrsFloatCombined
             // Apply MUL + ADD → MADD fusion
             let (instrs2, mulAddChanged) = tryFuseMulAddWithChange instrs1
             // Apply MUL + SUB → MSUB fusion
@@ -1489,16 +1632,18 @@ let private optimizeBlockWithRegUseCounts
     (block',
      instructionChanged
      || floatingCopyChanged
+     || floatingMultiplyAddChanged
      || multiplyChanged
      || booleanNotChanged
      || conditionalBranchChanged
      || bitBranchChanged)
 
 let optimizeBlock (block: BasicBlock) : BasicBlock * bool =
-    optimizeBlockWithRegUseCounts Map.empty block
+    optimizeBlockWithRegUseCounts false Map.empty block
 
 /// Optimize a CFG in a single pass (returns whether anything changed)
 let private optimizeCFGOnce
+    (fuseFloatMultiplyAdd: bool)
     (cfg: CFG)
     (domCache: DominatorCache option)
     : CFG * bool * DominatorCache option =
@@ -1506,7 +1651,7 @@ let private optimizeCFGOnce
     let (blocks', changed) =
         cfg.Blocks
         |> Map.fold (fun (acc, ch) label block ->
-            let (block', blockChanged) = optimizeBlockWithRegUseCounts regUseCounts block
+            let (block', blockChanged) = optimizeBlockWithRegUseCounts fuseFloatMultiplyAdd regUseCounts block
             (Map.add label block' acc, ch || blockChanged)
         ) (Map.empty, false)
     let cfg' = { cfg with Blocks = blocks' }
@@ -1514,23 +1659,38 @@ let private optimizeCFGOnce
     (cfg'', changed || hoisted, cache')
 
 /// Optimize a CFG until fixed point
-let optimizeCFG (cfg: CFG) : CFG =
+let private optimizeCFGWithCosts (fuseFloatMultiplyAdd: bool) (cfg: CFG) : CFG =
     validateCFGShape cfg
 
     let rec loop current remaining iteration domCache =
         if remaining <= 0 then
             current
         else
-            let (next, changed, nextCache) = optimizeCFGOnce current domCache
-            if changed then
+            let (locallyOptimized, changed, nextCache) = optimizeCFGOnce fuseFloatMultiplyAdd current domCache
+            let (next, selectChanged) = formSelectDiamonds locallyOptimized
+            if changed || selectChanged then
                 loop next (remaining - 1) (iteration + 1) nextCache
             else
                 next
     loop cfg 10 1 None
 
+let optimizeCFG (cfg: CFG) : CFG =
+    optimizeCFGWithCosts false cfg
+
 /// Optimize a function
 let optimizeFunction (func: Function) : Function =
     { func with CFG = optimizeCFG func.CFG }
+
+/// Apply target-specific combines only when they are both semantically legal
+/// and reduce the selected target's instruction cost. Ordinary Float multiply
+/// followed by add has two language-visible rounding points, so neither target
+/// contracts it; ARM64 FMADD remains available for explicitly fused operations.
+let optimizeFunctionFor (arch: Platform.Arch) (func: Function) : Function =
+    let fuseFloatMultiplyAdd =
+        match arch with
+        | Platform.ARM64 -> false
+        | Platform.X86_64 -> false
+    { func with CFG = optimizeCFGWithCosts fuseFloatMultiplyAdd func.CFG }
 
 /// Optimize a program
 let optimizeProgram (program: Program) : Program =

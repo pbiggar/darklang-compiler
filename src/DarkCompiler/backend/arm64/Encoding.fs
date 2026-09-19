@@ -168,6 +168,17 @@ let private encodeSymbolicWord (instr: ARM64Symbolic.Instr) : ARM64.MachineCode 
         let rd = encodeReg dest
         sf ||| op ||| rm ||| imm6 ||| rn ||| rd
 
+    | ARM64Symbolic.ADD_extended (dest, src1, src2, extend) ->
+        let option =
+            match extend with
+            | ARM64.ExtendUXTB -> 0u | ARM64.ExtendUXTH -> 1u | ARM64.ExtendUXTW -> 2u
+            | ARM64.ExtendSXTB -> 4u | ARM64.ExtendSXTH -> 5u | ARM64.ExtendSXTW -> 6u
+        0x8B200000u
+        ||| ((encodeReg src2) <<< 16)
+        ||| (option <<< 13)
+        ||| ((encodeReg src1) <<< 5)
+        ||| encodeReg dest
+
     | ARM64Symbolic.SUB_imm (dest, src, imm) ->
         // SUB immediate: sf=1 op=1 S=0 10001 shift(2) imm12(12) Rn(5) Rd(5)
         let sf = 1u <<< 31          // 64-bit operation
@@ -218,6 +229,17 @@ let private encodeSymbolicWord (instr: ARM64Symbolic.Instr) : ARM64.MachineCode 
         let rn = (encodeReg src1) <<< 5
         let rd = encodeReg dest
         sf ||| op ||| s ||| opcode ||| rm ||| imm6 ||| rn ||| rd
+
+    | ARM64Symbolic.SUB_extended (dest, src1, src2, extend) ->
+        let option =
+            match extend with
+            | ARM64.ExtendUXTB -> 0u | ARM64.ExtendUXTH -> 1u | ARM64.ExtendUXTW -> 2u
+            | ARM64.ExtendSXTB -> 4u | ARM64.ExtendSXTH -> 5u | ARM64.ExtendSXTW -> 6u
+        0xCB200000u
+        ||| ((encodeReg src2) <<< 16)
+        ||| (option <<< 13)
+        ||| ((encodeReg src1) <<< 5)
+        ||| encodeReg dest
 
     | ARM64Symbolic.SUBS_imm (dest, src, imm) ->
         // SUBS immediate: like SUB but sets condition flags
@@ -518,6 +540,20 @@ let private encodeSymbolicWord (instr: ARM64Symbolic.Instr) : ARM64.MachineCode 
         let rn = 31u <<< 5  // XZR
         let rd = encodeReg dest
         sf ||| op ||| s ||| opcode ||| rm ||| condBits ||| fixedBits ||| rn ||| rd
+
+    | ARM64Symbolic.CSEL (dest, whenTrue, whenFalse, cond) ->
+        let condition =
+            match cond with
+            | ARM64.EQ -> 0b0000u | ARM64.NE -> 0b0001u
+            | ARM64.HS -> 0b0010u | ARM64.LO -> 0b0011u
+            | ARM64.HI -> 0b1000u | ARM64.LS -> 0b1001u
+            | ARM64.GE -> 0b1010u | ARM64.LT -> 0b1011u
+            | ARM64.GT -> 0b1100u | ARM64.LE -> 0b1101u
+        0x9A800000u
+        ||| ((encodeReg whenFalse) <<< 16)
+        ||| (condition <<< 12)
+        ||| ((encodeReg whenTrue) <<< 5)
+        ||| encodeReg dest
 
     | ARM64Symbolic.AND_reg (dest, src1, src2) ->
         // AND register: sf=1 opc=00 01010 shift=00 0 Rm(5) imm6=000000 Rn(5) Rd(5)
@@ -882,6 +918,14 @@ let private encodeSymbolicWord (instr: ARM64Symbolic.Instr) : ARM64.MachineCode 
         let rn = (encodeFReg src1) <<< 5
         let rd = encodeFReg dest
         fixedBits ||| rm ||| opcode ||| rn ||| rd
+
+    | ARM64Symbolic.FMADD (dest, src1, src2, addend) ->
+        // FMADD Dd, Dn, Dm, Da: Dd = Da + Dn * Dm.
+        0x1F400000u
+        ||| ((encodeFReg src2) <<< 16)
+        ||| ((encodeFReg addend) <<< 10)
+        ||| ((encodeFReg src1) <<< 5)
+        ||| encodeFReg dest
 
     | ARM64Symbolic.FDIV (dest, src1, src2) ->
         // FDIV (scalar, double): 0001 1110 01 1 Rm 0001 10 Rn Rd

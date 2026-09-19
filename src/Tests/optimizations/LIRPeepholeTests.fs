@@ -432,6 +432,62 @@ let testMulSubFusionKeepsLiveTempForPrint () : TestResult =
     else
         Error $"Expected MUL temp used by PrintInt64 to stay available, got: {optimized}"
 
+let testFloatMultiplyAddCombineAndTargetDecision () : TestResult =
+    let label = Label "entry"
+    let block : BasicBlock = {
+        Label = label
+        Instrs = [
+            FMul (FVirtual 1, FVirtual 2, FVirtual 3)
+            FAdd (FVirtual 4, FVirtual 1, FVirtual 5)
+        ]
+        Terminator = Ret
+    }
+    let func : Function = {
+        Id = AST.functionIdForName "float_multiply_add"
+        Name = "float_multiply_add"
+        TypedParams = []
+        CFG = { Entry = label; Blocks = Map.ofList [(label, block)] }
+        StackSize = 0
+        UsedCalleeSaved = []
+        CodegenFacts = None
+    }
+    let combined = tryFuseFloatMultiplyAdd block.Instrs |> fst
+    let armBlock = optimizeFunctionFor Platform.ARM64 func |> fun optimized -> Map.tryFind label optimized.CFG.Blocks
+    let x64Block = optimizeFunctionFor Platform.X86_64 func |> fun optimized -> Map.tryFind label optimized.CFG.Blocks
+    match combined, armBlock, x64Block with
+    | [FMadd (FVirtual 4, FVirtual 2, FVirtual 3, FVirtual 5)], Some arm, Some x64
+        when arm.Instrs = block.Instrs && x64.Instrs = block.Instrs -> Ok ()
+    | _ ->
+        Error
+            $"Expected an available FMADD combine rejected by strict target policies, got combine={combined}, ARM64={armBlock}, x64={x64Block}"
+
+let testScalarDiamondFormsSelect () : TestResult =
+    let entry = Label "entry"
+    let trueLabel = Label "true"
+    let falseLabel = Label "false"
+    let join = Label "join"
+    let blocks =
+        [ (entry,
+           { Label = entry
+             Instrs = [Cmp (Virtual 0, Imm 0L)]
+             Terminator = CondBranch (GT, trueLabel, falseLabel) })
+          (trueLabel, { Label = trueLabel; Instrs = []; Terminator = Jump join })
+          (falseLabel, { Label = falseLabel; Instrs = []; Terminator = Jump join })
+          (join,
+           { Label = join
+             Instrs = [Phi (Virtual 3, [(Reg (Virtual 1), trueLabel); (Reg (Virtual 2), falseLabel)], Some AST.TInt64)]
+             Terminator = Ret }) ]
+        |> Map.ofList
+    let optimized = optimizeCFG { Entry = entry; Blocks = blocks }
+    match Map.tryFind entry optimized.Blocks, Map.tryFind join optimized.Blocks with
+    | Some entryBlock, Some joinBlock
+        when entryBlock.Instrs = [Cmp (Virtual 0, Imm 0L); Select (Virtual 3, Virtual 1, Virtual 2, GT)]
+             && entryBlock.Terminator = Jump join
+             && List.isEmpty joinBlock.Instrs
+             && not (Map.containsKey trueLabel optimized.Blocks)
+             && not (Map.containsKey falseLabel optimized.Blocks) -> Ok ()
+    | _ -> Error $"Expected empty scalar diamond to become Select, got: {optimized.Blocks}"
+
 let testMulConstantKeepsLiveConstRegister () : TestResult =
     let instrs = [
         Mov (Physical X1, Imm 3L)
@@ -607,6 +663,8 @@ let tests = [
     ("LIR peephole keeps MUL temp used by later print", testMulAddFusionKeepsLiveTempForPrint)
     ("LIR peephole fuses dead MUL/SUB temporary into MSUB", testMulSubFusionReplacesDeadTemp)
     ("LIR peephole keeps MUL/SUB temporary used by later print", testMulSubFusionKeepsLiveTempForPrint)
+    ("LIR peephole exposes FMADD combine but preserves strict target rounding", testFloatMultiplyAddCombineAndTargetDecision)
+    ("LIR peephole forms scalar selects from empty diamonds", testScalarDiamondFormsSelect)
     ("LIR peephole keeps multiply constants that are used later", testMulConstantKeepsLiveConstRegister)
     ("LIR peephole swaps Boolean negation branch successors", testBooleanNotBranchSwapsSuccessors)
     ("LIR peephole keeps branch Boolean used by a successor", testConditionalBranchKeepsBooleanUsedInSuccessor)

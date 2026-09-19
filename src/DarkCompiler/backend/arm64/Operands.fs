@@ -62,6 +62,7 @@ let lirPhysFPRegToARM64FReg (physReg: LIR.PhysFPReg) : ARM64Symbolic.FReg =
 /// For FVirtual, we use a two-tier allocation scheme to avoid collisions:
 /// - FVirtual 1000 -> D18 (left operand temp for binary ops)
 /// - FVirtual 1001 -> D17 (right operand temp for binary ops)
+/// - FVirtual 1002 -> D27 (third operand temp for fused operations)
 /// - FVirtual 3000-3007 -> D14-D15 (temps for float call args)
 /// - FVirtual 0-7 -> D2-D9 (dedicated 1:1 mapping for parameters)
 /// - FVirtual 8+ -> D10-D13 (4 temps with modulo, for SSA temps and locals)
@@ -75,6 +76,7 @@ let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64Symbolic.FReg, string> =
     // Special temp registers for specific purposes
     | LIR.FVirtual 1000 -> Ok ARM64Symbolic.D18  // Left temp for binary ops
     | LIR.FVirtual 1001 -> Ok ARM64Symbolic.D17  // Right temp for binary ops
+    | LIR.FVirtual 1002 -> Ok ARM64Symbolic.D27  // Third temp for fused operations
     | LIR.FVirtual 2000 -> Ok ARM64Symbolic.D16  // Reserved scratch for FPhi cycles and runtime helpers
     | LIR.FVirtual n when n >= 3000 && n < 4000 ->
         // Temps for float call arguments - use D19-D26 (8 registers)

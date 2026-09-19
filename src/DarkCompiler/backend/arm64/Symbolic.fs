@@ -113,10 +113,12 @@ type Instr =
     | ADD_imm of dest:Reg * src:Reg * imm:uint16
     | ADD_reg of dest:Reg * src1:Reg * src2:Reg
     | ADD_shifted of dest:Reg * src1:Reg * src2:Reg * shift:int
+    | ADD_extended of dest:Reg * src1:Reg * src2:Reg * extend:ARM64.Extend
     | SUB_imm of dest:Reg * src:Reg * imm:uint16
     | SUB_imm12 of dest:Reg * src:Reg * imm:uint16
     | SUB_reg of dest:Reg * src1:Reg * src2:Reg
     | SUB_shifted of dest:Reg * src1:Reg * src2:Reg * shift:int
+    | SUB_extended of dest:Reg * src1:Reg * src2:Reg * extend:ARM64.Extend
     | SUBS_imm of dest:Reg * src:Reg * imm:uint16
     | MUL of dest:Reg * src1:Reg * src2:Reg
     | SDIV of dest:Reg * src1:Reg * src2:Reg
@@ -126,6 +128,7 @@ type Instr =
     | CMP_imm of src:Reg * imm:uint16
     | CMP_reg of src1:Reg * src2:Reg
     | CSET of dest:Reg * cond:Condition
+    | CSEL of dest:Reg * whenTrue:Reg * whenFalse:Reg * cond:Condition
     | AND_reg of dest:Reg * src1:Reg * src2:Reg
     | BIC_reg of dest:Reg * src1:Reg * src2:Reg
     | AND_imm of dest:Reg * src:Reg * imm:uint64
@@ -180,6 +183,7 @@ type Instr =
     | FADD of dest:FReg * src1:FReg * src2:FReg
     | FSUB of dest:FReg * src1:FReg * src2:FReg
     | FMUL of dest:FReg * src1:FReg * src2:FReg
+    | FMADD of dest:FReg * src1:FReg * src2:FReg * addend:FReg
     | FDIV of dest:FReg * src1:FReg * src2:FReg
     | FNEG of dest:FReg * src:FReg
     | FABS of dest:FReg * src:FReg
@@ -218,10 +222,12 @@ let ofARM64 (instr: ARM64.Instr) : Instr =
     | ARM64.ADD_imm (dest, src, imm) -> ADD_imm (dest, src, imm)
     | ARM64.ADD_reg (dest, src1, src2) -> ADD_reg (dest, src1, src2)
     | ARM64.ADD_shifted (dest, src1, src2, shift) -> ADD_shifted (dest, src1, src2, shift)
+    | ARM64.ADD_extended (dest, src1, src2, extend) -> ADD_extended (dest, src1, src2, extend)
     | ARM64.SUB_imm (dest, src, imm) -> SUB_imm (dest, src, imm)
     | ARM64.SUB_imm12 (dest, src, imm) -> SUB_imm12 (dest, src, imm)
     | ARM64.SUB_reg (dest, src1, src2) -> SUB_reg (dest, src1, src2)
     | ARM64.SUB_shifted (dest, src1, src2, shift) -> SUB_shifted (dest, src1, src2, shift)
+    | ARM64.SUB_extended (dest, src1, src2, extend) -> SUB_extended (dest, src1, src2, extend)
     | ARM64.SUBS_imm (dest, src, imm) -> SUBS_imm (dest, src, imm)
     | ARM64.MUL (dest, src1, src2) -> MUL (dest, src1, src2)
     | ARM64.SDIV (dest, src1, src2) -> SDIV (dest, src1, src2)
@@ -231,6 +237,7 @@ let ofARM64 (instr: ARM64.Instr) : Instr =
     | ARM64.CMP_imm (src, imm) -> CMP_imm (src, imm)
     | ARM64.CMP_reg (src1, src2) -> CMP_reg (src1, src2)
     | ARM64.CSET (dest, cond) -> CSET (dest, cond)
+    | ARM64.CSEL (dest, whenTrue, whenFalse, cond) -> CSEL (dest, whenTrue, whenFalse, cond)
     | ARM64.AND_reg (dest, src1, src2) -> AND_reg (dest, src1, src2)
     | ARM64.BIC_reg (dest, src1, src2) -> BIC_reg (dest, src1, src2)
     | ARM64.AND_imm (dest, src, imm) -> AND_imm (dest, src, imm)
@@ -285,6 +292,7 @@ let ofARM64 (instr: ARM64.Instr) : Instr =
     | ARM64.FADD (dest, src1, src2) -> FADD (dest, src1, src2)
     | ARM64.FSUB (dest, src1, src2) -> FSUB (dest, src1, src2)
     | ARM64.FMUL (dest, src1, src2) -> FMUL (dest, src1, src2)
+    | ARM64.FMADD (dest, src1, src2, addend) -> FMADD (dest, src1, src2, addend)
     | ARM64.FDIV (dest, src1, src2) -> FDIV (dest, src1, src2)
     | ARM64.FNEG (dest, src) -> FNEG (dest, src)
     | ARM64.FABS (dest, src) -> FABS (dest, src)

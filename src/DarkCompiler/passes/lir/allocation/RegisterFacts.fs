@@ -45,6 +45,8 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
     | LIR.Cmp (left, right) ->
         (regToVReg left |> Option.toList) @ (operandToVReg right |> Option.toList)
     | LIR.Cset (_, _) -> []
+    | LIR.Select (_, whenTrue, whenFalse, _) ->
+        [regToVReg whenTrue; regToVReg whenFalse] |> List.choose id
     | LIR.Mvn (_, src) ->
         regToVReg src |> Option.toList
     | LIR.Sxtb (_, src) | LIR.Sxth (_, src) | LIR.Sxtw (_, src)
@@ -189,6 +191,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
     | LIR.Add (dest, _, _) | LIR.Sub (dest, _, _) -> regToVReg dest
     | LIR.Mul (dest, _, _) | LIR.Sdiv (dest, _, _) | LIR.Udiv (dest, _, _) | LIR.Msub (dest, _, _, _) | LIR.Madd (dest, _, _, _) -> regToVReg dest
     | LIR.Cset (dest, _) -> regToVReg dest
+    | LIR.Select (dest, _, _, _) -> regToVReg dest
     | LIR.And (dest, _, _) | LIR.And_imm (dest, _, _) | LIR.Orr (dest, _, _) | LIR.Eor (dest, _, _)
     | LIR.Lsl (dest, _, _) | LIR.Lsr (dest, _, _) | LIR.Asr (dest, _, _)
     | LIR.Lsl_imm (dest, _, _) | LIR.Lsr_imm (dest, _, _) | LIR.Asr_imm (dest, _, _) -> regToVReg dest
@@ -248,7 +251,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
 // ============================================================================
 
 let private isFixedFVRegId (id: int) : bool =
-    id = 1000 || id = 1001 || id = 2000 || (id >= 3000 && id < 4000)
+    id = 1000 || id = 1001 || id = 1002 || id = 2000 || (id >= 3000 && id < 4000)
 
 /// Get FVirtual register IDs used (read) by an instruction
 let getUsedFVRegs (instr: LIR.Instr) : int list =
@@ -263,6 +266,8 @@ let getUsedFVRegs (instr: LIR.Instr) : int list =
     | LIR.FAdd (_, left, right) | LIR.FSub (_, left, right)
     | LIR.FMul (_, left, right) | LIR.FDiv (_, left, right) ->
         [fregToId left; fregToId right] |> List.choose id
+    | LIR.FMadd (_, left, right, addend) ->
+        [fregToId left; fregToId right; fregToId addend] |> List.choose id
     | LIR.FNeg (_, src) | LIR.FAbs (_, src) | LIR.FSqrt (_, src) ->
         fregToId src |> Option.toList
     | LIR.FCmp (left, right) ->
@@ -293,6 +298,7 @@ let getDefinedFVReg (instr: LIR.Instr) : int option =
     | LIR.FMov (dest, _) -> fregToId dest
     | LIR.FAdd (dest, _, _) | LIR.FSub (dest, _, _)
     | LIR.FMul (dest, _, _) | LIR.FDiv (dest, _, _) -> fregToId dest
+    | LIR.FMadd (dest, _, _, _) -> fregToId dest
     | LIR.FNeg (dest, _) | LIR.FAbs (dest, _) | LIR.FSqrt (dest, _) -> fregToId dest
     | LIR.FLoad (dest, _) -> fregToId dest
     | LIR.Int64ToFloat (dest, _) -> fregToId dest

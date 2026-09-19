@@ -190,6 +190,28 @@ let internal emitCset (ctx: CodeGenContext) (dest: LIR.Reg) (cond: LIR.Condition
             | LIR.UGE -> ARM64Symbolic.HS
         [ARM64Symbolic.CSET (destReg, arm64Cond)])
 
+let internal emitSelect
+    (ctx: CodeGenContext)
+    (dest: LIR.Reg)
+    (whenTrue: LIR.Reg)
+    (whenFalse: LIR.Reg)
+    (cond: LIR.Condition)
+    : Result<ARM64Symbolic.Instr list, string> =
+    lirRegToARM64Reg dest
+    |> Result.bind (fun destReg ->
+        lirRegToARM64Reg whenTrue
+        |> Result.bind (fun trueReg ->
+            lirRegToARM64Reg whenFalse
+            |> Result.map (fun falseReg ->
+                let arm64Cond =
+                    match cond with
+                    | LIR.EQ -> ARM64Symbolic.EQ | LIR.NE -> ARM64Symbolic.NE
+                    | LIR.LT -> ARM64Symbolic.LT | LIR.GT -> ARM64Symbolic.GT
+                    | LIR.LE -> ARM64Symbolic.LE | LIR.GE -> ARM64Symbolic.GE
+                    | LIR.ULT -> ARM64Symbolic.LO | LIR.UGT -> ARM64Symbolic.HI
+                    | LIR.ULE -> ARM64Symbolic.LS | LIR.UGE -> ARM64Symbolic.HS
+                [ARM64Symbolic.CSEL (destReg, trueReg, falseReg, arm64Cond)])))
+
 let internal emitAnd (ctx: CodeGenContext) (dest: LIR.Reg) (left: LIR.Reg) (right: LIR.Reg) : Result<ARM64Symbolic.Instr list, string> =
     lirRegToARM64Reg dest
     |> Result.bind (fun destReg ->

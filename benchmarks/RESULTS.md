@@ -2,43 +2,43 @@
 
 Best-known compatible full-profile Dark performance vs audited Rust references, with diagnostic reference runtimes (instruction counts).
 
-**Snapshot timestamp:** 2026-09-19T07:14:40+00:00
+**Snapshot timestamp:** 2026-09-19T10:04:34+00:00
 **Architecture:** `arm64`
 **Profile:** `full` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs`
 **Workload contract:** `6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe`
-**Compiler commit:** `90e69daa999b6eb83f81112d66aae6d8772ae7d9` - Merge commit '318c940bf0285aa98cd48d46b689d6280d89c334' into HEAD
+**Compiler commit:** `f8c503411bbabf4593fd18786452d3a6632273ad` - Support benchmark recording during merge recovery
 **Diagnostic references:** informational only; multipliers are instructions divided by Rust for the same workload.
 Every displayed diagnostic row matched the profile's expected stdout.
 
 | Benchmark | Dark (10.4x) | Rust | Darklang interpreter | Node | OCaml | Python |
 |---|---:|---:|---:|---:|---:|---:|
-| ackermann | 145,114,139 (1.62x) | 89,558,784 | - | - | - | - |
-| binary_trees | 11,053,080 (0.17x) | 63,993,594 | - | - | - | - |
-| collatz | 70,194,400 (0.91x) | 76,735,737 | - | - | - | - |
-| edigits | 51,664,643 (75.0x) | 688,749 | - | - | - | - |
-| factorial | 63,468 (0.07x) | 970,290 | - | - | - | - |
-| fannkuch | 233,405,451 (133x) | 1,760,885 | - | - | - | - |
-| fasta | 154,617,366 (225x) | 686,768 | - | - | - | - |
-| fft | 347,587,074 (765x) | 454,262 | - | - | - | - |
-| fib | 8,268,587 (1.37x) | 6,054,417 | - | - | - | - |
-| huffman | 486,099,995 (169x) | 2,868,263 | - | - | - | - |
-| leibniz | 17,006,831 (1.19x) | 14,258,894 | - | - | - | - |
-| mandelbrot | 15,227,450 (1.21x) | 12,557,270 | - | - | - | - |
-| matmul | 42,560,591 (65.5x) | 649,416 | - | - | - | - |
-| merkletrees | 3,877,428 (1.54x) | 2,523,420 | - | - | - | - |
-| myers_diff | 2,524,084,555 (3673x) | 687,142 | - | - | - | - |
-| nbody | 14,537,330 (3.42x) | 4,249,498 | - | - | - | - |
-| nqueen | 7,420,425 (1.25x) | 5,914,962 | - | - | - | - |
-| nsieve | 131,101,395 (345x) | 380,354 | - | - | - | - |
-| pisum | 812,477 (0.70x) | 1,160,413 | - | - | - | - |
-| primes | 1,673,435 (1.33x) | 1,260,125 | - | - | - | - |
-| quicksort | 188,808,249 (31.0x) | 6,095,209 | - | - | - | - |
-| raytracer | 47,323,918 (11.6x) | 4,067,427 | - | - | - | - |
-| regex_lite | 72,586,765 (177x) | 409,856 | - | - | - | - |
-| spectral_norm | 916,414,064 (179x) | 5,106,524 | - | - | - | - |
-| string_equality | 1,181,233 (0.80x) | 1,479,564 | - | - | - | - |
-| sum_to_n | 62,009 (0.24x) | 260,246 | - | - | - | - |
-| tak | 48,017,024 (0.12x) | 391,110,808 | - | - | - | - |
-| tinytemplate | 643,132,963 (1530x) | 420,354 | - | - | - | - |
-| warden | 45,702,576 (169x) | 270,345 | - | - | - | - |
+| ackermann | 145,114,130 (1.62x) | 89,558,784 | - | - | - | - |
+| binary_trees | 11,053,071 (0.17x) | 63,993,594 | - | - | - | - |
+| collatz | 70,194,391 (0.91x) | 76,735,737 | - | - | - | - |
+| edigits | 51,664,634 (75.0x) | 688,749 | - | - | - | - |
+| factorial | 63,459 (0.07x) | 970,290 | - | - | - | - |
+| fannkuch | 233,405,442 (133x) | 1,760,885 | - | - | - | - |
+| fasta | 154,617,357 (225x) | 686,768 | - | - | - | - |
+| fft | 347,587,065 (765x) | 454,262 | - | - | - | - |
+| fib | 8,268,578 (1.37x) | 6,054,417 | - | - | - | - |
+| huffman | 486,099,954 (169x) | 2,868,263 | - | - | - | - |
+| leibniz | 17,006,822 (1.19x) | 14,258,894 | - | - | - | - |
+| mandelbrot | 15,227,441 (1.21x) | 12,557,270 | - | - | - | - |
+| matmul | 42,560,582 (65.5x) | 649,416 | - | - | - | - |
+| merkletrees | 3,877,419 (1.54x) | 2,523,420 | - | - | - | - |
+| myers_diff | 2,524,084,546 (3673x) | 687,142 | - | - | - | - |
+| nbody | 14,537,321 (3.42x) | 4,249,498 | - | - | - | - |
+| nqueen | 7,420,416 (1.25x) | 5,914,962 | - | - | - | - |
+| nsieve | 131,101,386 (345x) | 380,354 | - | - | - | - |
+| pisum | 812,468 (0.70x) | 1,160,413 | - | - | - | - |
+| primes | 1,673,426 (1.33x) | 1,260,125 | - | - | - | - |
+| quicksort | 188,808,240 (31.0x) | 6,095,209 | - | - | - | - |
+| raytracer | 47,323,909 (11.6x) | 4,067,427 | - | - | - | - |
+| regex_lite | 72,586,756 (177x) | 409,856 | - | - | - | - |
+| spectral_norm | 916,414,055 (179x) | 5,106,524 | - | - | - | - |
+| string_equality | 1,181,224 (0.80x) | 1,479,564 | - | - | - | - |
+| sum_to_n | 62,000 (0.24x) | 260,246 | - | - | - | - |
+| tak | 48,017,015 (0.12x) | 391,110,808 | - | - | - | - |
+| tinytemplate | 643,132,954 (1530x) | 420,354 | - | - | - | - |
+| warden | 45,702,567 (169x) | 270,345 | - | - | - | - |

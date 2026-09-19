@@ -26,6 +26,8 @@ let tests : (string * (unit -> TestResult)) list = [
     ("ARM64 list release helper clears child tag with immediate mask", testListReleaseHelperClearsChildTagWithImmediateMask)
     ("ARM64 peephole fuses bit-clear sequence", testPeepholeFusesBitClearSequence)
     ("ARM64 peephole falls through to true branch target", testPeepholeFallsThroughToTrueTarget)
+    ("ARM64 peephole combines operands and memory pairs", testPeepholeCombinesOperandsAndMemoryPairs)
+    ("ARM64 peephole preserves shared-source shift fusion across branch", testPeepholePreservesSharedSourceShiftFusionAcrossBranch)
     ("ARM64 UInt64 runtime zero branches target digit handlers", testPrintUInt64RuntimeZeroBranches)
     ("ARM64 UInt64 runtime preserves trailing newline", testPrintUInt64RuntimePreservesNewline)
     ("ARM64 branch false edge falls through", testBranchFalseEdgeFallsThrough)

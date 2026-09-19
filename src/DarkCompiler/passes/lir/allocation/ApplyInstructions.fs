@@ -183,6 +183,17 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
             | _ -> []
         [csetInstr] @ storeInstrs
 
+    | LIR.Select (dest, whenTrue, whenFalse, cond) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let ((trueReg, trueLoads), (falseReg, falseLoads)) =
+            loadSpilledPair arch mapping whenTrue whenFalse destReg
+        let selectInstr = LIR.Select (destReg, trueReg, falseReg, cond)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        trueLoads @ falseLoads @ [selectInstr] @ storeInstrs
+
     | LIR.And (dest, left, right) ->
         let (destReg, destAlloc) = applyToReg mapping dest
         let ((leftReg, leftLoads), (rightReg, rightLoads)) = loadSpilledPair arch mapping left right destReg
@@ -583,6 +594,7 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
     | LIR.FAdd (dest, left, right) -> [LIR.FAdd (dest, left, right)]
     | LIR.FSub (dest, left, right) -> [LIR.FSub (dest, left, right)]
     | LIR.FMul (dest, left, right) -> [LIR.FMul (dest, left, right)]
+    | LIR.FMadd (dest, left, right, addend) -> [LIR.FMadd (dest, left, right, addend)]
     | LIR.FDiv (dest, left, right) -> [LIR.FDiv (dest, left, right)]
     | LIR.FNeg (dest, src) -> [LIR.FNeg (dest, src)]
     | LIR.FAbs (dest, src) -> [LIR.FAbs (dest, src)]

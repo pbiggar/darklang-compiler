@@ -35,16 +35,24 @@ let internal emitStore (ctx: FuncCtx) (stackSlot: int) (src: LIR.Reg) : Result<X
     |> Result.map (fun srcReg ->
         [X86_64.MOV_store (X86_64.RBP, int32 (adjustStackOffset ctx stackSlot), srcReg)])
 
-let internal emitAdd (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Reg) (right: LIR.Operand) : Result<X86_64.Instr list, string> =
+let internal emitAdd
+    (ctx: FuncCtx)
+    (comparisonContext: ComparisonContext option)
+    (dest: LIR.Reg)
+    (left: LIR.Reg)
+    (right: LIR.Operand)
+    : Result<X86_64.Instr list, string> =
     resolveReg dest
     |> Result.bind (fun destReg ->
         resolveReg left
         |> Result.bind (fun leftReg ->
             match right with
             | LIR.Imm value when value >= int64 System.Int32.MinValue && value <= int64 System.Int32.MaxValue ->
-                // x86_64: dest = left + imm32
-                let setup = if destReg <> leftReg then [X86_64.MOV_reg (destReg, leftReg)] else []
-                Ok (setup @ [X86_64.ADD_imm (destReg, int32 value)])
+                if Option.isNone comparisonContext && destReg <> leftReg then
+                    Ok [X86_64.LEA (destReg, leftReg, int32 value)]
+                else
+                    let setup = if destReg <> leftReg then [X86_64.MOV_reg (destReg, leftReg)] else []
+                    Ok (setup @ [X86_64.ADD_imm (destReg, int32 value)])
             | LIR.Imm value ->
                 if destReg = scratch then
                     // dest is R11: can't use scratch for imm. Use PUSH/POP RCX.
@@ -61,6 +69,12 @@ let internal emitAdd (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Reg) (right: LIR.
                     if destReg = rightX86 && destReg <> leftReg then
                         // dest is right operand: ADD is commutative, so just swap
                         [X86_64.ADD_reg (destReg, leftReg)]
+                    elif Option.isNone comparisonContext
+                         && destReg <> leftReg
+                         && destReg <> rightX86
+                         && rightX86 <> X86_64.RSP
+                         && rightX86 <> X86_64.R12 then
+                        [X86_64.LEA_index (destReg, leftReg, rightX86, 1, 0)]
                     else
                         let setup = if destReg <> leftReg then [X86_64.MOV_reg (destReg, leftReg)] else []
                         setup @ [X86_64.ADD_reg (destReg, rightX86)])
@@ -74,7 +88,7 @@ let internal emitAdd (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Reg) (right: LIR.
                          X86_64.POP X86_64.RCX])
                 else
                     let setup = if destReg <> leftReg then [X86_64.MOV_reg (destReg, leftReg)] else []
-                    Ok (setup @ [X86_64.MOV_load (scratch, X86_64.RBP, adjOff); X86_64.ADD_reg (destReg, scratch)])
+                    Ok (setup @ [X86_64.ADD_load (destReg, X86_64.RBP, adjOff)])
             | _ -> Error $"Unsupported Add right operand: {right}"))
 
 let internal emitSub (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Reg) (right: LIR.Operand) : Result<X86_64.Instr list, string> =
@@ -122,7 +136,7 @@ let internal emitSub (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Reg) (right: LIR.
                          X86_64.POP X86_64.RCX])
                 else
                     let setup = if destReg <> leftReg then [X86_64.MOV_reg (destReg, leftReg)] else []
-                    Ok (setup @ [X86_64.MOV_load (scratch, X86_64.RBP, adjOff); X86_64.SUB_reg (destReg, scratch)])
+                    Ok (setup @ [X86_64.SUB_load (destReg, X86_64.RBP, adjOff)])
             | _ -> Error $"Unsupported Sub right operand: {right}"))
 
 let internal emitMul (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Reg) (right: LIR.Reg) : Result<X86_64.Instr list, string> =
@@ -318,6 +332,47 @@ let internal emitCset (ctx: FuncCtx) (comparisonContext: ComparisonContext optio
                     | LIR.ULT -> X86_64.B | LIR.UGT -> X86_64.A
                     | LIR.ULE -> X86_64.BE | LIR.UGE -> X86_64.AE
                 [X86_64.SETcc (x86Cond, destReg); X86_64.MOVZX_byte (destReg, destReg)])
+
+let internal emitSelect
+    (ctx: FuncCtx)
+    (comparisonContext: ComparisonContext option)
+    (dest: LIR.Reg)
+    (whenTrue: LIR.Reg)
+    (whenFalse: LIR.Reg)
+    (cond: LIR.Condition)
+    : Result<X86_64.Instr list, string> =
+    match comparisonContext with
+    | Some IntegerComparison ->
+        resolveReg dest
+        |> Result.bind (fun destReg ->
+            resolveReg whenTrue
+            |> Result.bind (fun trueReg ->
+                resolveReg whenFalse
+                |> Result.map (fun falseReg ->
+                    let condition =
+                        match cond with
+                        | LIR.EQ -> X86_64.EQ | LIR.NE -> X86_64.NE
+                        | LIR.LT -> X86_64.LT | LIR.GT -> X86_64.GT
+                        | LIR.LE -> X86_64.LE | LIR.GE -> X86_64.GE
+                        | LIR.ULT -> X86_64.B | LIR.UGT -> X86_64.A
+                        | LIR.ULE -> X86_64.BE | LIR.UGE -> X86_64.AE
+                    let inverse =
+                        match condition with
+                        | X86_64.EQ -> X86_64.NE | X86_64.NE -> X86_64.EQ
+                        | X86_64.LT -> X86_64.GE | X86_64.GE -> X86_64.LT
+                        | X86_64.GT -> X86_64.LE | X86_64.LE -> X86_64.GT
+                        | X86_64.B -> X86_64.AE | X86_64.AE -> X86_64.B
+                        | X86_64.A -> X86_64.BE | X86_64.BE -> X86_64.A
+                        | X86_64.P -> X86_64.NP | X86_64.NP -> X86_64.P
+                    if trueReg = falseReg then
+                        if destReg = trueReg then [] else [X86_64.MOV_reg (destReg, trueReg)]
+                    elif destReg = trueReg then
+                        [X86_64.CMOVcc (inverse, destReg, falseReg)]
+                    else
+                        (if destReg = falseReg then [] else [X86_64.MOV_reg (destReg, falseReg)])
+                        @ [X86_64.CMOVcc (condition, destReg, trueReg)])))
+    | Some FloatComparison -> Error "x64 codegen: integer Select after floating-point comparison"
+    | None -> Error "x64 codegen: Select without a preceding comparison in the same block"
 
 let internal emitAnd (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Reg) (right: LIR.Reg) : Result<X86_64.Instr list, string> =
     resolveReg dest |> Result.bind (fun d -> resolveReg left |> Result.bind (fun l -> resolveReg right |> Result.map (fun r ->

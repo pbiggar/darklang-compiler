@@ -106,6 +106,8 @@ type Instr =
     | Madd of dest:Reg * mulLeft:Reg * mulRight:Reg * add:Reg
     | Cmp of left:Reg * right:Operand
     | Cset of dest:Reg * cond:Condition
+    /// Select one of two register values using the flags from the preceding comparison.
+    | Select of dest:Reg * whenTrue:Reg * whenFalse:Reg * cond:Condition
     | And of dest:Reg * left:Reg * right:Reg
     | And_imm of dest:Reg * src:Reg * imm:int64
     | Orr of dest:Reg * left:Reg * right:Reg
@@ -166,6 +168,7 @@ type Instr =
     | FAdd of dest:FReg * left:FReg * right:FReg
     | FSub of dest:FReg * left:FReg * right:FReg
     | FMul of dest:FReg * left:FReg * right:FReg
+    | FMadd of dest:FReg * left:FReg * right:FReg * addend:FReg
     | FDiv of dest:FReg * left:FReg * right:FReg
     | FNeg of dest:FReg * src:FReg
     | FAbs of dest:FReg * src:FReg

@@ -37,9 +37,14 @@ from Git history.
   and Float-load hoisting, affine induction reduction, factor-two counted-loop
   unrolling, same-target and redundant-successor branches, fallthrough block
   placement, and linear block merging.
-- **Instruction selection and allocation:** ARM64 bit-clear fusion, addition
-  with a single-use negation, dead multiply-subtract and Float-copy fusion,
-  ARM64 entry-parameter copy elimination, and floating-point phi coalescing.
+- **Instruction selection and allocation:** ARM64 fused floating multiply-add
+  lowering (ordinary multiply/add contraction is rejected to preserve its two
+  rounding points); scalar select/conditional-move formation; ARM64 shifted and
+  extended arithmetic operands, bit-clear fusion, and aligned stack-frame
+  integer/Float store pairing (with frame-load pairs selected during restore);
+  x64 LEA and stack-memory arithmetic formation; addition
+  with a single-use negation; dead multiply-subtract and Float-copy fusion;
+  ARM64 entry-parameter copy elimination; and floating-point phi coalescing.
 - **Code motion and closures:** shared leading conditional-binding hoisting and
   capture-free local closure devirtualization.
 

@@ -21,14 +21,14 @@ type Instr =
     | ADD_reg of dest * src1 * src2   // Add register
     | SUB_imm / SUB_reg               // Subtract
     | MUL / SDIV / MSUB               // Multiply, divide, mod
-    | CMP / CSET                      // Compare and set
+    | CMP / CSET / CSEL               // Compare, set, and branchless select
     | B / BL                          // Branch, branch-link
     | BR / BLR                        // Branch register
     | CBZ / CBNZ                      // Compare and branch
     | LDR / STR / LDRB / STRB         // Load/store
     | SVC                             // System call
     // Floating-point
-    | FADD / FSUB / FMUL / FDIV
+    | FADD / FSUB / FMUL / FMADD / FDIV
     | FSQRT / FABS / FNEG
     | FCMP / SCVTF / FCVTZS
     // ...

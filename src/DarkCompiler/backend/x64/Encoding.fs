@@ -174,6 +174,28 @@ let encodeInstruction (instr: Instr) : byte array =
         let mem = encodeMemoryOperand [| 0x8Duy |] destEnc baseAddr offset
         Array.concat [| rex true destExt false mem.BaseExt; mem.Blob |]
 
+    | LEA_index (dest, baseAddr, index, scale, offset) ->
+        let (destEnc, destExt) = regEncoding dest
+        let (baseEnc, baseExt) = regEncoding baseAddr
+        let (indexEnc, indexExt) = regEncoding index
+        if indexEnc = 4 then
+            Crash.crash "x64 LEA index cannot use RSP/R12"
+        let scaleBits =
+            match scale with
+            | 1 -> 0 | 2 -> 1 | 4 -> 2 | 8 -> 3
+            | _ -> Crash.crash $"x64 LEA received unsupported scale {scale}"
+        let modBits = if offset = 0 && baseEnc <> 5 then 0 elif fitsInt8 offset then 1 else 2
+        let displacement =
+            if modBits = 0 then [||]
+            elif modBits = 1 then imm8Bytes (int offset)
+            else imm32Bytes offset
+        let sib = byte ((scaleBits <<< 6) ||| (indexEnc <<< 3) ||| baseEnc)
+        Array.concat [|
+            rex true destExt indexExt baseExt
+            [| 0x8Duy; modRM modBits destEnc 4; sib |]
+            displacement
+        |]
+
     | PUSH reg ->
         // 50+rd (PUSH r64) — REX.B if R8-R15
         let (enc, ext) = regEncoding reg
@@ -201,6 +223,11 @@ let encodeInstruction (instr: Instr) : byte array =
         // REX.W + 01 /r (ADD r/m64, r64)
         encodeRegReg 0x01uy dest src
 
+    | ADD_load (dest, baseAddr, offset) ->
+        let (destEnc, destExt) = regEncoding dest
+        let mem = encodeMemoryOperand [| 0x03uy |] destEnc baseAddr offset
+        Array.concat [| rex true destExt false mem.BaseExt; mem.Blob |]
+
     | SUB_imm (dest, imm) ->
         let (destEnc, destExt) = regEncoding dest
         if fitsInt8 imm then
@@ -213,6 +240,11 @@ let encodeInstruction (instr: Instr) : byte array =
     | SUB_reg (dest, src) ->
         // REX.W + 29 /r (SUB r/m64, r64)
         encodeRegReg 0x29uy dest src
+
+    | SUB_load (dest, baseAddr, offset) ->
+        let (destEnc, destExt) = regEncoding dest
+        let mem = encodeMemoryOperand [| 0x2Buy |] destEnc baseAddr offset
+        Array.concat [| rex true destExt false mem.BaseExt; mem.Blob |]
 
     | IMUL_reg (dest, src) ->
         // REX.W + 0F AF /r (IMUL r64, r/m64)
@@ -286,6 +318,15 @@ let encodeInstruction (instr: Instr) : byte array =
         let needsRex = destExt || destEnc >= 4
         let rexByte = if needsRex then [| 0x40uy ||| (if destExt then 0x01uy else 0x00uy) |] else [||]
         Array.concat [| rexByte; [| 0x0Fuy; 0x90uy + cc; modRM 3 0 destEnc |] |]
+
+    | CMOVcc (cond, dest, src) ->
+        let cc = condCode cond
+        let (destEnc, destExt) = regEncoding dest
+        let (srcEnc, srcExt) = regEncoding src
+        Array.concat [|
+            rex true destExt false srcExt
+            [| 0x0Fuy; 0x40uy + cc; modRM 3 destEnc srcEnc |]
+        |]
 
     // --- Bitwise ---
 

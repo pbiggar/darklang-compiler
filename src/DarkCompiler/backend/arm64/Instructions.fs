@@ -45,6 +45,9 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
     | LIR.Cset (dest, cond) ->
         ARM64EmitInteger.emitCset ctx dest cond
 
+    | LIR.Select (dest, whenTrue, whenFalse, cond) ->
+        ARM64EmitInteger.emitSelect ctx dest whenTrue whenFalse cond
+
     | LIR.And (dest, left, right) ->
         ARM64EmitInteger.emitAnd ctx dest left right
 
@@ -209,6 +212,9 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
 
     | LIR.FAdd (dest, left, right) ->
         ARM64EmitFloatingPoint.emitFAdd ctx dest left right
+
+    | LIR.FMadd (dest, left, right, addend) ->
+        ARM64EmitFloatingPoint.emitFMadd ctx dest left right addend
 
     | LIR.FSub (dest, left, right) ->
         ARM64EmitFloatingPoint.emitFSub ctx dest left right

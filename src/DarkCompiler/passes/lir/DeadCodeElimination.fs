@@ -32,6 +32,7 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<AST.FunctionId>) : 
     | LIR.Msub _
     | LIR.Madd _
     | LIR.Cset _
+    | LIR.Select _
     | LIR.And _
     | LIR.And_imm _
     | LIR.Orr _
@@ -103,6 +104,7 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<AST.FunctionId>) : 
     | LIR.FAdd _
     | LIR.FSub _
     | LIR.FMul _
+    | LIR.FMadd _
     | LIR.FDiv _
     | LIR.FNeg _
     | LIR.FAbs _
