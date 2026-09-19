@@ -63,6 +63,7 @@
     <Compile Include="passes/hir/VerifyHIR.fs" />
     <Compile Include="passes/hir/ConstructFunctions.fs" />
     <Compile Include="ir/owned/OwnedIR.fs" />
+    <Compile Include="analysis/OwnedFunctionGroups.fs" />
     <Compile Include="passes/ownership/VerifyOwnership.fs" />
     <Compile Include="passes/ownership/InferOwnershipUniqueness.fs" />
     <Compile Include="passes/ownership/InferRecursiveOwnership.fs" />

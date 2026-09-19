@@ -87,6 +87,7 @@
     <Compile Include="compiler-passes/ListHIRTests.fs" />
     <Compile Include="compiler-passes/HIRVerificationTests.fs" />
     <Compile Include="compiler-passes/HIRConstructionTests.fs" />
+    <Compile Include="compiler-passes/ownership/OwnedFunctionGroupTests.fs" />
     <Compile Include="compiler-passes/ownership/RegionContractTests.fs" />
     <Compile Include="compiler-passes/ownership/OwnershipUniquenessInferenceTests.fs" />
     <Compile Include="compiler-passes/ownership/RecursiveOwnershipInferenceTests.fs" />
