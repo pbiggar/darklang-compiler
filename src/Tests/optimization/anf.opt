@@ -7,18 +7,18 @@ stdlib_string_ascii_whitespace_checks_only_ascii_bytes
 Darklang.Stdlib.String.__asciiWhitespace
 ---EXPECTED---
 Function Darklang.Stdlib.String.__asciiWhitespace:
-let TempId 21285 = t21284 == 9
-let TempId 21286 = t21284 == 10
-let TempId 21287 = t21285 || t21286
-let TempId 21288 = t21284 == 11
-let TempId 21289 = t21287 || t21288
-let TempId 21290 = t21284 == 12
-let TempId 21291 = t21289 || t21290
-let TempId 21292 = t21284 == 13
-let TempId 21293 = t21291 || t21292
-let TempId 21294 = t21284 == 32
-let TempId 21295 = t21293 || t21294
-return t21295
+let TempId 21315 = t21314 == 9
+let TempId 21316 = t21314 == 10
+let TempId 21317 = t21315 || t21316
+let TempId 21318 = t21314 == 11
+let TempId 21319 = t21317 || t21318
+let TempId 21320 = t21314 == 12
+let TempId 21321 = t21319 || t21320
+let TempId 21322 = t21314 == 13
+let TempId 21323 = t21321 || t21322
+let TempId 21324 = t21314 == 32
+let TempId 21325 = t21323 || t21324
+return t21325
 
 ---NAME---
 stdlib_string_ascii_trim_start_scans_bytes
@@ -26,25 +26,25 @@ stdlib_string_ascii_trim_start_scans_bytes
 Darklang.Stdlib.String.__asciiTrimStartBoundary
 ---EXPECTED---
 Function Darklang.Stdlib.String.__asciiTrimStartBoundary:
-let TempId 21299 = t21297 >= t21298
-if t21299 then
-let TempId 21300 = (0, t21297)
-return t21300
+let TempId 21329 = t21327 >= t21328
+if t21329 then
+let TempId 21330 = (0, t21327)
+return t21330
 else
-let TempId 21301 = Darklang.Stdlib.String.__byteAtUnchecked(t21296, t21297)
-let TempId 21303 = t21301 >= 128
-if t21303 then
-let TempId 21304 = (1, 0)
-return t21304
+let TempId 21331 = Darklang.Stdlib.String.__byteAtUnchecked(t21326, t21327)
+let TempId 21333 = t21331 >= 128
+if t21333 then
+let TempId 21334 = (1, 0)
+return t21334
 else
-let TempId 21305 = Darklang.Stdlib.String.__asciiWhitespace(t21301)
-if t21305 then
-let TempId 21306 = t21297 + 1
-let TempId 21307 = TailCall(Darklang.Stdlib.String.__asciiTrimStartBoundary, [t21296, t21306, t21298])
-return t21307
+let TempId 21335 = Darklang.Stdlib.String.__asciiWhitespace(t21331)
+if t21335 then
+let TempId 21336 = t21327 + 1
+let TempId 21337 = TailCall(Darklang.Stdlib.String.__asciiTrimStartBoundary, [t21326, t21336, t21328])
+return t21337
 else
-let TempId 21308 = (0, t21297)
-return t21308
+let TempId 21338 = (0, t21327)
+return t21338
 
 ---NAME---
 stdlib_string_ascii_trim_end_scans_bytes
@@ -52,25 +52,25 @@ stdlib_string_ascii_trim_end_scans_bytes
 Darklang.Stdlib.String.__asciiTrimEndBoundary
 ---EXPECTED---
 Function Darklang.Stdlib.String.__asciiTrimEndBoundary:
-let TempId 21311 = t21310 <= 0
-if t21311 then
-let TempId 21312 = (0, t21310)
-return t21312
+let TempId 21341 = t21340 <= 0
+if t21341 then
+let TempId 21342 = (0, t21340)
+return t21342
 else
-let TempId 21313 = t21310 - 1
-let TempId 21314 = Darklang.Stdlib.String.__byteAtUnchecked(t21309, t21313)
-let TempId 21316 = t21314 >= 128
-if t21316 then
-let TempId 21317 = (1, 0)
-return t21317
+let TempId 21343 = t21340 - 1
+let TempId 21344 = Darklang.Stdlib.String.__byteAtUnchecked(t21339, t21343)
+let TempId 21346 = t21344 >= 128
+if t21346 then
+let TempId 21347 = (1, 0)
+return t21347
 else
-let TempId 21318 = Darklang.Stdlib.String.__asciiWhitespace(t21314)
-if t21318 then
-let TempId 21320 = TailCall(Darklang.Stdlib.String.__asciiTrimEndBoundary, [t21309, t21313])
-return t21320
+let TempId 21348 = Darklang.Stdlib.String.__asciiWhitespace(t21344)
+if t21348 then
+let TempId 21350 = TailCall(Darklang.Stdlib.String.__asciiTrimEndBoundary, [t21339, t21343])
+return t21350
 else
-let TempId 21321 = (0, t21310)
-return t21321
+let TempId 21351 = (0, t21340)
+return t21351
 
 ---NAME---
 stdlib_string_trim_has_ascii_fast_path
@@ -78,61 +78,61 @@ stdlib_string_trim_has_ascii_fast_path
 Darklang.Stdlib.String.trim
 ---EXPECTED---
 Function Darklang.Stdlib.String.trim:
-let TempId 21363 = Darklang.Stdlib.String.__byteLength(t21362)
-let TempId 21365 = Darklang.Stdlib.String.__asciiTrimStartBoundary(t21362, 0, t21363)
-let TempId 21366 = Darklang.Stdlib.String.__asciiTrimEndBoundary(t21362, t21363)
-let TempId 43432 = rc_inc(t21365, size=16, kind=generic)
-let TempId 43433 = rc_inc(t21366, size=16, kind=generic)
-let TempId 21367 = (t21365, t21366)
-join TempId 21393: TBool =
-if t21393 then
-let TempId 21376 = t21367.0
-let TempId 21377 = t21376 : TSum ("Darklang.Stdlib.Option.Option", [TInt64])
-let TempId 21378 = t21377.1
-let TempId 21379 = t21378 : TInt64
-let TempId 21380 = t21367.1
-let TempId 21381 = t21380 : TSum ("Darklang.Stdlib.Option.Option", [TInt64])
-let TempId 21382 = t21381.1
-let TempId 21383 = t21382 : TInt64
-let TempId 21384 = t21379 == 0
-let TempId 21385 = t21383 == t21363
-let TempId 21386 = t21384 && t21385
-if t21386 then
-let TempId 43422 = rc_dec(t21367, size=16, kind=generic)
-let TempId 43421 = rc_dec(t21366, size=16, kind=generic)
-let TempId 43420 = rc_dec(t21365, size=16, kind=generic)
-let TempId 43419 = RefCountIncString(t21362)
-return t21362
-else
-let TempId 21387 = Darklang.Stdlib.String.__byteSlice(t21362, t21379, t21383)
-let TempId 43425 = rc_dec(t21367, size=16, kind=generic)
-let TempId 43424 = rc_dec(t21366, size=16, kind=generic)
-let TempId 43423 = rc_dec(t21365, size=16, kind=generic)
-return t21387
-else
-let TempId 38810 = Unicode.segmentUtf8(t21362, 0, 0, "", 0)
-let TempId 21389 = t38810
-let TempId 21390 = Darklang.Stdlib.String.__trimStart(t21389)
-let TempId 21391 = Darklang.Stdlib.String.__trimEnd(t21390)
-let TempId 21392 = Darklang.Stdlib.String.join(t21391, "")
-let TempId 43431 = rc_dec(t21391, size=24, kind=list)
-let TempId 43430 = rc_dec(t21390, size=24, kind=list)
-let TempId 43429 = rc_dec(t38810, size=24, kind=list)
-let TempId 43428 = rc_dec(t21367, size=16, kind=generic)
-let TempId 43427 = rc_dec(t21366, size=16, kind=generic)
-let TempId 43426 = rc_dec(t21365, size=16, kind=generic)
+let TempId 21393 = Darklang.Stdlib.String.__byteLength(t21392)
+let TempId 21395 = Darklang.Stdlib.String.__asciiTrimStartBoundary(t21392, 0, t21393)
+let TempId 21396 = Darklang.Stdlib.String.__asciiTrimEndBoundary(t21392, t21393)
+let TempId 43462 = rc_inc(t21395, size=16, kind=generic)
+let TempId 43463 = rc_inc(t21396, size=16, kind=generic)
+let TempId 21397 = (t21395, t21396)
+join TempId 21423: TBool =
+if t21423 then
+let TempId 21406 = t21397.0
+let TempId 21407 = t21406 : TSum ("Darklang.Stdlib.Option.Option", [TInt64])
+let TempId 21408 = t21407.1
+let TempId 21409 = t21408 : TInt64
+let TempId 21410 = t21397.1
+let TempId 21411 = t21410 : TSum ("Darklang.Stdlib.Option.Option", [TInt64])
+let TempId 21412 = t21411.1
+let TempId 21413 = t21412 : TInt64
+let TempId 21414 = t21409 == 0
+let TempId 21415 = t21413 == t21393
+let TempId 21416 = t21414 && t21415
+if t21416 then
+let TempId 43452 = rc_dec(t21397, size=16, kind=generic)
+let TempId 43451 = rc_dec(t21396, size=16, kind=generic)
+let TempId 43450 = rc_dec(t21395, size=16, kind=generic)
+let TempId 43449 = RefCountIncString(t21392)
 return t21392
-in
-let TempId 21368 = t21367.0
-let TempId 21369 = t21368.0
-let TempId 21370 = t21369 == 0
-if t21370 then
-let TempId 21372 = t21367.1
-let TempId 21373 = t21372.0
-let TempId 21374 = t21373 == 0
-jump TempId 21393(t21374)
 else
-jump TempId 21393(false)
+let TempId 21417 = Darklang.Stdlib.String.__byteSlice(t21392, t21409, t21413)
+let TempId 43455 = rc_dec(t21397, size=16, kind=generic)
+let TempId 43454 = rc_dec(t21396, size=16, kind=generic)
+let TempId 43453 = rc_dec(t21395, size=16, kind=generic)
+return t21417
+else
+let TempId 38840 = Unicode.segmentUtf8(t21392, 0, 0, "", 0)
+let TempId 21419 = t38840
+let TempId 21420 = Darklang.Stdlib.String.__trimStart(t21419)
+let TempId 21421 = Darklang.Stdlib.String.__trimEnd(t21420)
+let TempId 21422 = Darklang.Stdlib.String.join(t21421, "")
+let TempId 43461 = rc_dec(t21421, size=24, kind=list)
+let TempId 43460 = rc_dec(t21420, size=24, kind=list)
+let TempId 43459 = rc_dec(t38840, size=24, kind=list)
+let TempId 43458 = rc_dec(t21397, size=16, kind=generic)
+let TempId 43457 = rc_dec(t21396, size=16, kind=generic)
+let TempId 43456 = rc_dec(t21395, size=16, kind=generic)
+return t21422
+in
+let TempId 21398 = t21397.0
+let TempId 21399 = t21398.0
+let TempId 21400 = t21399 == 0
+if t21400 then
+let TempId 21402 = t21397.1
+let TempId 21403 = t21402.0
+let TempId 21404 = t21403 == 0
+jump TempId 21423(t21404)
+else
+jump TempId 21423(false)
 
 ---NAME---
 stdlib_string_trim_start_has_ascii_fast_path
@@ -140,46 +140,46 @@ stdlib_string_trim_start_has_ascii_fast_path
 Darklang.Stdlib.String.trimStart
 ---EXPECTED---
 Function Darklang.Stdlib.String.trimStart:
-let TempId 21323 = Darklang.Stdlib.String.__byteLength(t21322)
-let TempId 21325 = Darklang.Stdlib.String.__asciiTrimStartBoundary(t21322, 0, t21323)
-join TempId 21345: TBool =
-if t21345 then
-let TempId 43407 = rc_dec(t21325, size=16, kind=generic)
-let TempId 43406 = RefCountIncString(t21322)
-return t21322
+let TempId 21353 = Darklang.Stdlib.String.__byteLength(t21352)
+let TempId 21355 = Darklang.Stdlib.String.__asciiTrimStartBoundary(t21352, 0, t21353)
+join TempId 21375: TBool =
+if t21375 then
+let TempId 43437 = rc_dec(t21355, size=16, kind=generic)
+let TempId 43436 = RefCountIncString(t21352)
+return t21352
 else
-let TempId 21332 = t21325.0
-let TempId 21333 = t21332 == 0
-if t21333 then
-let TempId 21335 = t21325.1
-let TempId 21336 = t21335 : TInt64
-let TempId 21338 = Darklang.Stdlib.String.__byteSlice(t21322, t21336, t21323)
-let TempId 43408 = rc_dec(t21325, size=16, kind=generic)
-return t21338
+let TempId 21362 = t21355.0
+let TempId 21363 = t21362 == 0
+if t21363 then
+let TempId 21365 = t21355.1
+let TempId 21366 = t21365 : TInt64
+let TempId 21368 = Darklang.Stdlib.String.__byteSlice(t21352, t21366, t21353)
+let TempId 43438 = rc_dec(t21355, size=16, kind=generic)
+return t21368
 else
-let TempId 21341 = t21332 == 1
-if t21341 then
-let TempId 38808 = Unicode.segmentUtf8(t21322, 0, 0, "", 0)
-let TempId 21342 = t38808
-let TempId 21343 = Darklang.Stdlib.String.__trimStart(t21342)
-let TempId 21344 = Darklang.Stdlib.String.join(t21343, "")
-let TempId 43411 = rc_dec(t21343, size=24, kind=list)
-let TempId 43410 = rc_dec(t38808, size=24, kind=list)
-let TempId 43409 = rc_dec(t21325, size=16, kind=generic)
-return t21344
+let TempId 21371 = t21362 == 1
+if t21371 then
+let TempId 38838 = Unicode.segmentUtf8(t21352, 0, 0, "", 0)
+let TempId 21372 = t38838
+let TempId 21373 = Darklang.Stdlib.String.__trimStart(t21372)
+let TempId 21374 = Darklang.Stdlib.String.join(t21373, "")
+let TempId 43441 = rc_dec(t21373, size=24, kind=list)
+let TempId 43440 = rc_dec(t38838, size=24, kind=list)
+let TempId 43439 = rc_dec(t21355, size=16, kind=generic)
+return t21374
 else
-let TempId 21339 = runtime_error("Non-exhaustive match: No matching case found for value <unknown> in match expression")
-let TempId 43412 = rc_dec(t21325, size=16, kind=generic)
-return t21339
+let TempId 21369 = runtime_error("Non-exhaustive match: No matching case found for value <unknown> in match expression")
+let TempId 43442 = rc_dec(t21355, size=16, kind=generic)
+return t21369
 in
-let TempId 21326 = t21325.0
-let TempId 21327 = t21326 == 0
-if t21327 then
-let TempId 21328 = t21325.1
-let TempId 21329 = t21328 == 0
-jump TempId 21345(t21329)
+let TempId 21356 = t21355.0
+let TempId 21357 = t21356 == 0
+if t21357 then
+let TempId 21358 = t21355.1
+let TempId 21359 = t21358 == 0
+jump TempId 21375(t21359)
 else
-jump TempId 21345(false)
+jump TempId 21375(false)
 
 ---NAME---
 stdlib_string_trim_end_has_ascii_fast_path
@@ -187,31 +187,31 @@ stdlib_string_trim_end_has_ascii_fast_path
 Darklang.Stdlib.String.trimEnd
 ---EXPECTED---
 Function Darklang.Stdlib.String.trimEnd:
-let TempId 21347 = Darklang.Stdlib.String.__byteLength(t21346)
-let TempId 21349 = Darklang.Stdlib.String.__asciiTrimEndBoundary(t21346, t21347)
-let TempId 21350 = t21349.0
-let TempId 21351 = t21350 == 0
-if t21351 then
-let TempId 21353 = t21349.1
-let TempId 21354 = t21353 : TInt64
-let TempId 21356 = t21354 == t21347
-if t21356 then
-let TempId 43414 = rc_dec(t21349, size=16, kind=generic)
-let TempId 43413 = RefCountIncString(t21346)
-return t21346
+let TempId 21377 = Darklang.Stdlib.String.__byteLength(t21376)
+let TempId 21379 = Darklang.Stdlib.String.__asciiTrimEndBoundary(t21376, t21377)
+let TempId 21380 = t21379.0
+let TempId 21381 = t21380 == 0
+if t21381 then
+let TempId 21383 = t21379.1
+let TempId 21384 = t21383 : TInt64
+let TempId 21386 = t21384 == t21377
+if t21386 then
+let TempId 43444 = rc_dec(t21379, size=16, kind=generic)
+let TempId 43443 = RefCountIncString(t21376)
+return t21376
 else
-let TempId 21357 = Darklang.Stdlib.String.__byteSlice(t21346, 0, t21354)
-let TempId 43415 = rc_dec(t21349, size=16, kind=generic)
-return t21357
+let TempId 21387 = Darklang.Stdlib.String.__byteSlice(t21376, 0, t21384)
+let TempId 43445 = rc_dec(t21379, size=16, kind=generic)
+return t21387
 else
-let TempId 38809 = Unicode.segmentUtf8(t21346, 0, 0, "", 0)
-let TempId 21359 = t38809
-let TempId 21360 = Darklang.Stdlib.String.__trimEnd(t21359)
-let TempId 21361 = Darklang.Stdlib.String.join(t21360, "")
-let TempId 43418 = rc_dec(t21360, size=24, kind=list)
-let TempId 43417 = rc_dec(t38809, size=24, kind=list)
-let TempId 43416 = rc_dec(t21349, size=16, kind=generic)
-return t21361
+let TempId 38839 = Unicode.segmentUtf8(t21376, 0, 0, "", 0)
+let TempId 21389 = t38839
+let TempId 21390 = Darklang.Stdlib.String.__trimEnd(t21389)
+let TempId 21391 = Darklang.Stdlib.String.join(t21390, "")
+let TempId 43448 = rc_dec(t21390, size=24, kind=list)
+let TempId 43447 = rc_dec(t38839, size=24, kind=list)
+let TempId 43446 = rc_dec(t21379, size=16, kind=generic)
+return t21391
 
 ---NAME---
 const_fold_int_add
