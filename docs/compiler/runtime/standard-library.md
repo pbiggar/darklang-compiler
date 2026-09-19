@@ -8,6 +8,10 @@ The stdlib provides built-in modules available to all Dark programs:
 - **Intrinsics**: Compiler-implemented (syscalls, platform detection)
 - **Dark functions**: Implemented in Dark itself
 
+The canonical package root is `Darklang.Stdlib`. The shorter `Stdlib.*`
+spellings used in the catalog and ordinary source examples below are the public
+interpreter-compatible shortcut and resolve to those same canonical identities.
+
 ## Module Catalog
 
 | Module | Description |
@@ -71,7 +75,7 @@ Defined in `Stdlib.fs`, implemented in the compiler:
 
 ```fsharp
 let fileModule : ModuleDef = {
-    Name = "Stdlib.File"
+    Name = "Darklang.Stdlib.File"
     Functions = [
         { Name = "readText"; ParamTypes = [TString]; ReturnType = resultType TString }
         { Name = "writeText"; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
@@ -88,14 +92,14 @@ Defined in modular `src/DarkCompiler/stdlib/*.dark` files and compiled like
 user code:
 
 ```dark
-module Stdlib.Int64
+module Darklang.Stdlib.Int64
 
 let max (a: Int64) (b: Int64) : Int64 =
     if a > b then a else b
 ```
 
 ```dark
-module Stdlib.List
+module Darklang.Stdlib.List
 
 let map<'a, 'b> (list: List<a>) (fn: a -> b) : List<b> =
     match list with
@@ -106,7 +110,7 @@ let map<'a, 'b> (list: List<a>) (fn: a -> b) : List<b> =
 ## Root prelude
 
 ```dark
-module Stdlib
+module Darklang.Stdlib
 
 let equals<'a> (left: a) (right: a) : Bool
 let notEquals<'a> (left: a) (right: a) : Bool

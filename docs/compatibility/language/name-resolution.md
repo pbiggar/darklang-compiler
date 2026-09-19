@@ -43,7 +43,10 @@ Candidates at the same winning precedence are sorted by rendered identity.
 | `f` applied | callable | value only | value, validated as callable by typing | parity |
 | `A.B.f` | value | exact qualified value + function | value | parity |
 | `A.B.f` applied | callable | exact qualified function + value | function | parity |
-| `A.B.f` | any | only `Stdlib.A.B.f` exists | unresolved | parity; qualified names resolve exactly |
+| `Parent.f` in `Darklang.App.Parent.Child` | any | progressively shorter current-module prefixes | `Darklang.App.Parent.f` | parity |
+| `A.B.f` at the root | any | only `Darklang.Stdlib.A.B.f` exists | unresolved | parity; there is no blanket stdlib opening |
+| `Stdlib.A.B.f` | any | canonical `Darklang.Stdlib.A.B.f` exists | canonical stdlib identity | parity; explicit stdlib shortcut |
+| `Option` / `Result` | type | no nearer relative declaration exists | canonical `Darklang.Stdlib` type | parity; special global fallback only for these types |
 | `Builtin.f` | callable | registered builtin function | builtin `(f, version)` identity | parity |
 | `Builtin.v` | value | registered builtin value | builtin `(v, version)` identity | parity |
 | `f_v0` | value/callable | explicit version-zero inventory alias | registered version-zero identity | parity |
@@ -64,8 +67,12 @@ Candidates at the same winning precedence are sorted by rendered identity.
 package and builtin namespaces, local/module/package/builtin values and
 functions, constructors, user and builtin types, candidate provenance,
 successful resolution, and structured errors as discriminated unions. A pure
-resolver gathers only candidates whose complete parsed qualified name matches;
-it never retries a suffix, prepends `Stdlib`, or changes reference category.
+candidate generator prepends the complete current module, removes its innermost
+segment until reaching the root, and selects the first candidate present in the
+immutable inventory. `Stdlib.*` additionally maps to the canonical
+`Darklang.Stdlib.*` identity, while bare Option and Result type/constructor
+spellings have their interpreter-defined global fallbacks. Candidate generation
+never changes the reference category.
 
 The type-checking boundary builds the immutable inventory from lexical scope,
 top-level declarations, the inherited package-like environment, constructors,
@@ -85,8 +92,8 @@ name`, and `Ambiguous <context> reference`.
   private implementation names. Public compiler-only catalog entries were
   removed; public names resolve only to upstream functions, values, types, or
   builtins.
-- The canonical parser accepts module headers and blocks and retains their typed
-  paths through source-unit composition, then lower them to deterministic
+- The canonical parser accepts module headers and blocks and retains their
+  module paths through name resolution, then lowers references to deterministic
   qualified backend symbols. The compiler does
   not load content-addressed packages. Imported compilation environments model
   the same precedence boundary, but package hashes and dependency traversal
