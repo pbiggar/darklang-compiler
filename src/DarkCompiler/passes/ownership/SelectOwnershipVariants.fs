@@ -4,6 +4,8 @@ module SelectOwnershipVariants
 
 open OwnedIR
 
+/// Canonical group boundaries exclude callee-local identities and discovery
+/// order so equivalent requests share one materialization/cache identity.
 type CandidateIdentity =
     private
     | CandidateIdentity of AST.NonEmptyList<string * CallSignature>
@@ -59,6 +61,7 @@ let private candidateIdentity candidate =
     candidate
     |> InferOwnedFunctionGroups.candidateBoundaries
     |> List.map (fun boundary -> boundary.Name, callSignature boundary)
+    |> List.sortBy fst
     |> nonEmpty "Ownership variant candidate has no function boundaries"
     |> CandidateIdentity
 

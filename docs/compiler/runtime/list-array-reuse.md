@@ -256,12 +256,15 @@ inference. Call-site selection indexes every group member, accepts explicit
 argument-uniqueness facts, and chooses a candidate only when its ordinary
 borrow/consume/produce shape matches that established contract. It prefers a
 unique result and then fewer unique-input requirements. Candidate identities
-are structural across the complete group, so recursive SCC selection remains
-atomic. When no inferred candidate applies, the established contract remains
+are structural across the complete group and independent of discovery order
+and local ownership identities, so recursive SCC selection remains atomic.
+When no inferred candidate applies, the established contract remains
 the fallback. This analysis is not yet scheduled in code generation; variant
 materialization and call rewriting remain separate work.
 
-The next boundaries are:
+The [in-place mutation checklist](../../project/perceus-checklist.md) tracks
+the complete implementation sequence. The remaining architecture boundaries
+include:
 
 1. Further runtime-sized constructors (including Result-wrapped `List.repeat`),
    builders, a growth policy, and profitable pooling for large runtime buffers.

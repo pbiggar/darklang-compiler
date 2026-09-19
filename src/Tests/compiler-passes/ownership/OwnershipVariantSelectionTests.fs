@@ -168,7 +168,7 @@ let private testFallsBackToEstablishedBoundary () =
                          } -> Ok ()
                 | actual -> Error $"Expected established fallback followed by inferred reuse, got {actual}")))
 
-let private testSelectsRecursiveGroupsAtomically () =
+let private recursiveFixture () =
     let firstInput = value 20
     let firstRecursive = value 21
     let firstResult = value 22
@@ -201,7 +201,11 @@ let private testSelectsRecursiveGroupsAtomically () =
         secondRecursive, "secondRecursive"
         secondResult, "secondResult"
     ]
-    catalog (semantics mappings) [first; second]
+    semantics mappings, [first; second]
+
+let private testSelectsRecursiveGroupsAtomically () =
+    let semantics, definitions = recursiveFixture ()
+    catalog semantics definitions
     |> Result.bind (fun variants ->
         SelectOwnershipVariants.select variants (site "first" (Set.singleton 0))
         |> Result.mapError string
@@ -271,9 +275,136 @@ let private testRejectsInvalidCatalogAndCalls () =
                 | actual -> Error $"Expected an unknown call target, got {actual}")
         | actual -> Error $"Expected duplicate catalog entries to fail, got {actual}")
 
+let private selectIn definitions semantics site =
+    catalog semantics definitions
+    |> Result.bind (fun variants ->
+        SelectOwnershipVariants.select variants site |> Result.mapError string)
+
+let private testCanonicalRecursiveIdentity () =
+    let semantics, definitions = recursiveFixture ()
+    let identity definitions target =
+        selectIn definitions semantics (site target (Set.singleton 0))
+        |> Result.bind selected
+        |> Result.map SelectOwnershipVariants.selectedIdentity
+    match identity definitions "first", identity (List.rev definitions) "second" with
+    | Ok first, Ok second when first = second -> Ok ()
+    | actual -> Error $"Expected one candidate identity independent of definition order and entry member, got {actual}"
+
+let private testIdentityIgnoresLocalOwnershipNames () =
+    let selectIdentity localName =
+        let input = value 50
+        let identity = definition "identity"
+                           (signature [ConsumedParameter localName] (ProducedResult localName))
+                           (block [parameter localName input] [] input)
+        selectIn [identity] (semantics [input, localName]) (site "identity" (Set.singleton 0))
+        |> Result.bind selected
+        |> Result.map SelectOwnershipVariants.selectedIdentity
+    match selectIdentity "original", selectIdentity "renamed" with
+    | Ok first, Ok second when first = second -> Ok ()
+    | actual -> Error $"Expected candidate identity to depend only on positional boundaries, got {actual}"
+
+let private testPreservesPositionalTransfers () =
+    let scalar : HIR.Value = { Id = HIR.ValueId 60; Type = AST.TInt64 }
+    let borrowed = value 61
+    let consumed = value 62
+    let mixed = definition "mixed"
+                    (signature [UnmanagedParameter; BorrowedParameter "borrowed"; ConsumedParameter "consumed"]
+                        (ProducedResult "consumed"))
+                    (block [parameter "scalar" scalar; parameter "borrowed" borrowed; parameter "consumed" consumed]
+                        [] consumed)
+    let established : CallSignature = {
+        Parameters = [UnmanagedCallParameter; BorrowedCallParameter; ConsumedCallParameter]
+        Result = ProducedCallResult
+    }
+    let select unique =
+        selectIn [mixed] (semantics [borrowed, "borrowed"; consumed, "consumed"])
+            (siteWithBoundary "mixed" established unique)
+        |> Result.bind selected
+        |> Result.map SelectOwnershipVariants.selectedCallSignature
+    let expectedUnique = {
+        Parameters = [UnmanagedCallParameter; BorrowedCallParameter; UniqueCallParameter]
+        Result = UniqueProducedCallResult
+    }
+    match select (Set.singleton 1), select (Set.singleton 2) with
+    | Ok ordinary, Ok unique when ordinary = established && unique = expectedUnique -> Ok ()
+    | actual -> Error $"Expected uniqueness at the consumed argument's original position only, got {actual}"
+
+let private testPreservesBorrowedResultSource () =
+    let first = value 70
+    let second = value 71
+    let borrowSecond = definition "borrowSecond"
+                           (signature [BorrowedParameter "first"; BorrowedParameter "second"] (BorrowedResult "second"))
+                           (block [parameter "first" first; parameter "second" second] [] second)
+    let established : CallSignature = {
+        Parameters = [BorrowedCallParameter; BorrowedCallParameter]
+        Result = BorrowedCallResult 1
+    }
+    catalog (semantics [first, "first"; second, "second"]) [borrowSecond]
+    |> Result.bind (fun variants ->
+        let valid = SelectOwnershipVariants.select variants
+                        (siteWithBoundary "borrowSecond" established (Set.ofList [0; 1]))
+        let invalid = SelectOwnershipVariants.select variants
+                          (siteWithBoundary "borrowSecond" { established with Result = BorrowedCallResult 0 } Set.empty)
+        match valid, invalid with
+        | Ok (SelectOwnershipVariants.InferredVariant chosen),
+          Error (SelectOwnershipVariants.InconsistentEstablishedBoundary "borrowSecond")
+            when SelectOwnershipVariants.selectedCallSignature chosen = established -> Ok ()
+        | actual -> Error $"Expected a borrowed result to keep its exact source parameter, got {actual}")
+
+let private testDoesNotWeakenEstablishedUniqueResult () =
+    let input = value 80
+    let identity = definition "identity"
+                       (signature [ConsumedParameter "input"] (ProducedResult "input"))
+                       (block [parameter "input" input] [] input)
+    let established = { transferredCall with Result = UniqueProducedCallResult }
+    let actual = selectIn [identity] (semantics [input, "input"])
+                     (siteWithBoundary "identity" established Set.empty)
+    match actual with
+    | Ok (SelectOwnershipVariants.EstablishedBoundary retained) when retained = established -> Ok ()
+    | actual -> Error $"Expected fallback rather than weakening an established result guarantee, got {actual}"
+
+let private testRejectsTransferShapeMismatches () =
+    let input = value 90
+    let identity = definition "identity"
+                       (signature [ConsumedParameter "input"] (ProducedResult "input"))
+                       (block [parameter "input" input] [] input)
+    let invalidBoundaries : CallSignature list = [
+        { transferredCall with Parameters = [] }
+        { transferredCall with Parameters = [UnmanagedCallParameter] }
+        { transferredCall with Parameters = [BorrowedCallParameter] }
+        { transferredCall with Result = UnmanagedCallResult }
+        { transferredCall with Result = BorrowedCallResult 0 }
+    ]
+    catalog (semantics [input, "input"]) [identity]
+    |> Result.bind (fun variants ->
+        invalidBoundaries
+        |> List.fold (fun result boundary ->
+            result |> Result.bind (fun () ->
+                match SelectOwnershipVariants.select variants (siteWithBoundary "identity" boundary Set.empty) with
+                | Error (SelectOwnershipVariants.InconsistentEstablishedBoundary "identity") -> Ok ()
+                | actual -> Error $"Expected rejection of transfer shape {boundary}, got {actual}")) (Ok ()))
+
+let private testRejectsNegativeUniquePosition () =
+    let input = value 100
+    let identity = definition "identity"
+                       (signature [ConsumedParameter "input"] (ProducedResult "input"))
+                       (block [parameter "input" input] [] input)
+    catalog (semantics [input, "input"]) [identity]
+    |> Result.bind (fun variants ->
+        match SelectOwnershipVariants.select variants (site "identity" (Set.singleton -1)) with
+        | Error (SelectOwnershipVariants.InvalidUniqueArgumentIndex ("identity", -1)) -> Ok ()
+        | actual -> Error $"Expected a negative unique argument position to fail, got {actual}")
+
 let tests = [
     "Ownership variants select by available argument uniqueness", testSelectsByAvailableUniqueness
     "Ownership variants retain the established fallback", testFallsBackToEstablishedBoundary
     "Ownership variants select recursive SCC candidates atomically", testSelectsRecursiveGroupsAtomically
     "Ownership variant catalogs reject invalid calls", testRejectsInvalidCatalogAndCalls
+    "Ownership variants canonicalize recursive candidate identities", testCanonicalRecursiveIdentity
+    "Ownership variant identities ignore local ownership names", testIdentityIgnoresLocalOwnershipNames
+    "Ownership variants preserve positional unmanaged and borrowed transfers", testPreservesPositionalTransfers
+    "Ownership variants preserve borrowed result source parameters", testPreservesBorrowedResultSource
+    "Ownership variants preserve established unique result guarantees", testDoesNotWeakenEstablishedUniqueResult
+    "Ownership variants reject transfer shape mismatches", testRejectsTransferShapeMismatches
+    "Ownership variants reject negative uniqueness positions", testRejectsNegativeUniquePosition
 ]
