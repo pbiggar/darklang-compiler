@@ -259,8 +259,30 @@ let __asChar (value: String) : Char = value
 let toList (value: String) : List<Char> =
     Stdlib.List.map (Stdlib.String.__toGraphemes value) Stdlib.String.__asChar
 
+let __charListByteLength (chars: List<Char>) (total: Int64) : Int64 =
+    match chars with
+    | [] -> total
+    | char :: rest ->
+        Stdlib.String.__charListByteLength rest (total + Stdlib.String.__byteLength (Stdlib.Char.toString char))
+
+let __copyCharList (chars: List<Char>) (pointer: RawPtr) (offset: Int64) : Unit =
+    match chars with
+    | [] -> ()
+    | char :: rest ->
+        let value = Stdlib.Char.toString char in
+        let length = Stdlib.String.__byteLength value in
+        let _ = Stdlib.String.__copyBytesToPtr value 0L pointer offset length in
+        Stdlib.String.__copyCharList rest pointer (offset + length)
+
 let fromList (lst: List<Char>) : String =
-    Unicode.normalizeValid (Stdlib.String.__joinChars lst "")
+    let resultLength = Stdlib.String.__charListByteLength lst 0L in
+    if resultLength == 0L then ""
+    else
+        let pointer = __raw_alloc (16L + Stdlib.String.__alignedDataSize resultLength) in
+        let _ = __raw_write_word pointer 0L 1L in
+        let _ = __raw_write_word pointer 8L resultLength in
+        let _ = Stdlib.String.__copyCharList lst pointer 16L in
+        Stdlib.String.__normalizeAfterConcat (__rawptr_to_string pointer)
 
 let __isAsciiAt (value: String) (index: Int64) (length: Int64) : Bool =
     if index >= length then true
@@ -280,28 +302,72 @@ let __normalizeAfterConcat (combined: String) : String =
     if Stdlib.String.__isAscii combined then combined
     else Unicode.normalizeValid combined
 
+/// Return the number of bytes in the normalized UTF-8 representation.
+let byteLength (value: String) : Int64 = Stdlib.String.__byteLength value
+
+/// Slice by UTF-8 byte offsets. Both offsets must be scalar boundaries.
+let byteSlice (value: String) (start_: Int64) (end_: Int64) : String =
+    let length = Stdlib.String.__byteLength value in
+    let actualStart = if start_ < 0L then 0L else if start_ > length then length else start_ in
+    let actualEnd = if end_ < actualStart then actualStart else if end_ > length then length else end_ in
+    if Stdlib.String.__isUtf8Boundary value actualStart && Stdlib.String.__isUtf8Boundary value actualEnd then
+        Stdlib.String.__normalizeAfterConcat (Stdlib.String.__byteSlice value actualStart actualEnd)
+    else Builtin.testRuntimeError "String byte index is not a UTF-8 scalar boundary"
+
+/// Compare equal-length byte ranges without allocating either range.
+let byteRangesEqual (left: String) (leftStart: Int64) (right: String) (rightStart: Int64) (count: Int64) : Bool =
+    let leftLength = Stdlib.String.__byteLength left in
+    let rightLength = Stdlib.String.__byteLength right in
+    let valid =
+        leftStart >= 0L && rightStart >= 0L && count >= 0L &&
+        leftStart <= leftLength && rightStart <= rightLength &&
+        count <= leftLength - leftStart && count <= rightLength - rightStart in
+    valid && Stdlib.String.__compareBytes left leftStart right rightStart count
+
+/// Find a byte substring at or after a byte offset without copying the suffix.
+let byteIndexOfFrom (value: String) (search: String) (offset: Int64) : Stdlib.Option.Option<Int64> =
+    let actualOffset = if offset < 0L then 0L else offset in
+    if actualOffset > Stdlib.String.__byteLength value then None
+    else Stdlib.String.__byteIndexOfFrom value search actualOffset
+
 let __appendNormalized (left: String) (right: String) : String =
     Stdlib.String.__normalizeAfterConcat (__string_concat_raw left right)
-
-let __joinChars (chars: List<Char>) (acc: String) : String =
-    match chars with
-    | [] -> acc
-    | char :: rest -> Stdlib.String.__joinChars rest (acc ++ Stdlib.Char.toString char)
 
 let fromChar (char: Char) : String = Stdlib.Char.toString char
 
 let append (left: String) (right: String) : String = Stdlib.String.__appendNormalized left right
 let prepend (right: String) (left: String) : String = Stdlib.String.__appendNormalized left right
 
-let __join (strings: List<String>) (separator: String) (acc: String) (first: Bool) : String =
+let __joinedByteLength (strings: List<String>) (separatorLength: Int64) (first: Bool) (total: Int64) : Int64 =
     match strings with
-    | [] -> Unicode.normalizeValid acc
+    | [] -> total
     | value :: rest ->
-        let next = if first then acc ++ value else acc ++ separator ++ value in
-        Stdlib.String.__join rest separator next false
+        let next = total + Stdlib.String.__byteLength value + (if first then 0L else separatorLength) in
+        Stdlib.String.__joinedByteLength rest separatorLength false next
+
+let __copyJoinedStrings (strings: List<String>) (separator: String) (separatorLength: Int64) (pointer: RawPtr) (offset: Int64) (first: Bool) : Unit =
+    match strings with
+    | [] -> ()
+    | value :: rest ->
+        let valueOffset =
+            if first then offset
+            else
+                let _ = Stdlib.String.__copyBytesToPtr separator 0L pointer offset separatorLength in
+                offset + separatorLength in
+        let valueLength = Stdlib.String.__byteLength value in
+        let _ = Stdlib.String.__copyBytesToPtr value 0L pointer valueOffset valueLength in
+        Stdlib.String.__copyJoinedStrings rest separator separatorLength pointer (valueOffset + valueLength) false
 
 let join (strings: List<String>) (separator: String) : String =
-    Stdlib.String.__join strings separator "" true
+    let separatorLength = Stdlib.String.__byteLength separator in
+    let resultLength = Stdlib.String.__joinedByteLength strings separatorLength true 0L in
+    if resultLength == 0L then ""
+    else
+        let pointer = __raw_alloc (16L + Stdlib.String.__alignedDataSize resultLength) in
+        let _ = __raw_write_word pointer 0L 1L in
+        let _ = __raw_write_word pointer 8L resultLength in
+        let _ = Stdlib.String.__copyJoinedStrings strings separator separatorLength pointer 16L true in
+        Stdlib.String.__normalizeAfterConcat (__rawptr_to_string pointer)
 
 let repeat (value: String) (count: Int) : String =
     let zero = Stdlib.Int.fromInt64 0L in

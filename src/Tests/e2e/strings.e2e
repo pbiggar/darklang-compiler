@@ -48,6 +48,13 @@
 "test" ++ "" = "test"
 "" ++ "" = ""
 
+// Byte-oriented parser helpers retain UTF-8 validity and avoid suffix copies.
+Stdlib.String.byteLength "aéz" = 4L
+Stdlib.String.byteSlice "aéz" 1L 3L = "é"
+Stdlib.String.byteRangesEqual "xxneedle" 2L "needlezz" 0L 6L = true
+Stdlib.String.byteIndexOfFrom "abcabc" "bc" 3L = Some 4L
+Stdlib.String.byteSlice "é" 1L 2L = exit=1 stderr="Uncaught exception: String byte index is not a UTF-8 scalar boundary"
+
 // Chained concatenation (left associative)
 "a" ++ "b" ++ "c" = "abc"
 "hello" ++ " " ++ "world" = "hello world"
@@ -63,6 +70,14 @@ let a = "hello" in let b = "world" in let c = "!" in a ++ " " ++ b ++ c = "hello
 // A nonconstant ASCII concat tree allocates only its final buffer. The unfused
 // left-associated form exhausts the fixed heap by copying every prefix.
 let concatFusionChunk (n: Int64) (value: String): String = if n == 0L then value else concatFusionChunk (n - 1L) (value ++ value); let chunk = concatFusionChunk 20L "x" in Stdlib.String.getByteAt (chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk) 34603007 = stdout="Darklang.Stdlib.Option.Option<UInt8>.Some(120)\n" stderr="" isolated=true
+
+// Joining dynamic chunks must allocate the final string once. Repeatedly
+// concatenating the growing prefix exhausts the fixed heap for this workload.
+let joinFusionChunk (n: Int64) (value: String): String = if n == 0L then value else joinFusionChunk (n - 1L) (value ++ value); let repeatChunk (n: Int64) (chunk: String) (chunks: List<String>): List<String> = if n == 0L then chunks else repeatChunk (n - 1L) chunk (Stdlib.List.push chunks chunk); let chunk = joinFusionChunk 17L "x" in Stdlib.String.getByteAt (Stdlib.String.join (repeatChunk 100L chunk []) "") 13107199 = stdout="Darklang.Stdlib.Option.Option<UInt8>.Some(120)\n" stderr="" isolated=true
+Stdlib.String.join (["e", "\u0301"]) "" = "é"
+
+// Character-list construction uses the same one-allocation builder path.
+let repeatJoinChar (n: Int64) (chars: List<Char>): List<Char> = if n == 0L then chars else repeatJoinChar (n - 1L) (Stdlib.List.push chars 'x'); let chars = repeatJoinChar 1000L [] in Stdlib.String.byteLength (Stdlib.String.fromList chars) = 1000L
 
 // Concatenation in let binding
 let result = "foo" ++ "bar" in result = "foobar"

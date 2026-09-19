@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-19T01:58:35+00:00",
+  "generated_at": "2026-09-19T07:14:40+00:00",
   "compiler": {
-    "commit": "af37672ff07befde4f5328f0f1ab430f0c2dd3a9",
-    "subject": "Merge commit 'ba37fe420324f3f05cc7c422b980ab2146341356' into HEAD"
+    "commit": "90e69daa999b6eb83f81112d66aae6d8772ae7d9",
+    "subject": "Merge commit '318c940bf0285aa98cd48d46b689d6280d89c334' into HEAD"
   },
   "benchmarks": [
     {
@@ -126,11 +126,11 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 5561197103
+      "instructions": 643132963
     },
     {
       "name": "warden",
-      "instructions": 46197296
+      "instructions": 45702576
     }
   ]
 }
