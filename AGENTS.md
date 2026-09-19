@@ -123,13 +123,28 @@ this repository and takes precedence where it is stricter.
 
 ## Completion report
 
-Use this standard format when reporting completed work. Keep the summary brief,
-include exact commands, and omit optional lines that add no useful information.
+Use this standard format when reporting completed work. Explain what changed
+and why before the commit and validation status. Describe concrete changes and
+their resulting behavior or effect so the reader can understand the work
+without opening the diff. Call out surprising decisions, tradeoffs, or changes
+beyond the obvious request, and explain why they were necessary.
+
+Match the explanation's detail to the complexity and importance of the work:
+a small, straightforward edit may need only a sentence or two; complex or
+consequential work needs enough paragraphs or bullets to explain the main
+changes, their rationale, and material implications. Keep the outcome line
+brief, but do not let brevity hide important details. Include exact validation
+commands and omit optional lines that add no useful information, including
+`Surprises` when there are none.
 Use `✅` for success, `⏳` for a ready branch whose handoff is pending, `⏭️` for
 a skipped or irrelevant gate, and `❌` for a failure or incomplete step.
 
 ```markdown
-Work complete: <brief description of the outcome and important details>
+Work complete: <brief description of the outcome>
+
+Changes and rationale: <what changed and why; scale the explanation to the
+complexity and importance of the work>
+Surprises: <unexpected decisions, tradeoffs, or scope changes and why; omit if none>
 
 Committed: `<short hash>` — <commit subject>
 Merge train: ✅ queued `<branch>` at `<short hash>`
