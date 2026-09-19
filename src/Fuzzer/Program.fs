@@ -514,8 +514,6 @@ let private saveFinding
     File.WriteAllText(
         prefix + ".txt",
         $"seed: {config.Seed}\ncase: {caseIndex}\nmax-depth: {config.MaxDepth}\n"
-        + $"replay: ./fuzz --replay \"{sourcePath}\"\n"
-        + $"minimize: ./fuzz --minimize \"{sourcePath}\"\n"
         + $"{describeCaseOutcome outcome}\n")
     prefix
 
