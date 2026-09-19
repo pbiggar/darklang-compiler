@@ -12,14 +12,14 @@ Stdlib.Dict.__getOrDefault<String, Int64> (dictWithGenericKey<String> "hello" 20
 
 let emptyInt (): Dict<Int64, Int64> = Stdlib.Dict.__empty<Int64, Int64> ()
 let setInt (d: Dict<Int64, Int64>) (k: Int64) (v: Int64): Dict<Int64, Int64> = Stdlib.Dict.__setOverwriting d k v
-let getInt (d: Dict<Int64, Int64>) (k: Int64): Stdlib.Option.Option<Int64> = Stdlib.Dict.__get d k
+let getInt (d: Dict<Int64, Int64>) (k: Int64): Option<Int64> = Stdlib.Dict.__get d k
 let removeInt (d: Dict<Int64, Int64>) (k: Int64): Dict<Int64, Int64> = Stdlib.Dict.__remove d k
 let getOrDefault (d: Dict<Int64, Int64>) (k: Int64) (default: Int64): Int64 = Stdlib.Option.withDefault (getInt d k) default
-let isNoneInt (opt: Stdlib.Option.Option<Int64>): Bool = Stdlib.Option.isNone opt
+let isNoneInt (opt: Option<Int64>): Bool = Stdlib.Option.isNone opt
 
 let emptyStr (): Dict<String, Int64> = Stdlib.Dict.__empty<String, Int64> ()
 let setStr (d: Dict<String, Int64>) (k: String) (v: Int64): Dict<String, Int64> = Stdlib.Dict.__setOverwriting d k v
-let getStr (d: Dict<String, Int64>) (k: String): Stdlib.Option.Option<Int64> = Stdlib.Dict.__get d k
+let getStr (d: Dict<String, Int64>) (k: String): Option<Int64> = Stdlib.Dict.__get d k
 let removeStr (d: Dict<String, Int64>) (k: String): Dict<String, Int64> = Stdlib.Dict.__remove d k
 let getOrDefaultStr (d: Dict<String, Int64>) (k: String) (default: Int64): Int64 = Stdlib.Option.withDefault (getStr d k) default
 
@@ -281,7 +281,7 @@ getOrDefault (buildDict10 ()) 5L (-1L) = 50L
 
 let emptyBool (): Dict<Bool, Int64> = Stdlib.Dict.__empty<Bool, Int64> ()
 let setBool (d: Dict<Bool, Int64>) (k: Bool) (v: Int64): Dict<Bool, Int64> = Stdlib.Dict.__setOverwriting d k v
-let getBool (d: Dict<Bool, Int64>) (k: Bool): Stdlib.Option.Option<Int64> = Stdlib.Dict.__get d k
+let getBool (d: Dict<Bool, Int64>) (k: Bool): Option<Int64> = Stdlib.Dict.__get d k
 
 // Bool keys - two entries
 Stdlib.Dict.__size (setBool (setBool (emptyBool ()) true 1L) false 0L) = 2L
@@ -302,7 +302,7 @@ let s = (let d = Stdlib.Dict.__setOverwriting (Stdlib.Dict.__empty<Int64, String
 
 let emptyListDict (): Dict<Int64, List<Int64>> = Stdlib.Dict.__empty<Int64, List<Int64>> ()
 let setListDict (d: Dict<Int64, List<Int64>>) (k: Int64) (v: List<Int64>): Dict<Int64, List<Int64>> = Stdlib.Dict.__setOverwriting d k v
-let getListDict (d: Dict<Int64, List<Int64>>) (k: Int64): Stdlib.Option.Option<List<Int64>> = Stdlib.Dict.__get d k
+let getListDict (d: Dict<Int64, List<Int64>>) (k: Int64): Option<List<Int64>> = Stdlib.Dict.__get d k
 
 // Set and get list value
 Stdlib.List.length (Stdlib.Option.withDefault (getListDict (setListDict (emptyListDict ()) 1L ([10L, 20L, 30L])) 1L) ([])) = 3

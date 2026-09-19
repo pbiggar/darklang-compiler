@@ -21,9 +21,9 @@ Stdlib.Result.or (Error "first") (Error "second") = Error "second"
 
 // Interpreter application lowering evaluates arguments eagerly from left to
 // right even when selection makes one payload irrelevant.
-let optionAndFirst (): Stdlib.Option.Option<Int64> = let _ = Builtin.print "1" in None let optionAndSecond (): Stdlib.Option.Option<Int64> = let _ = Builtin.print "2" in Some 2L let _ = Stdlib.Option.and (optionAndFirst ()) (optionAndSecond ()) in 0L = stdout="120\n" stderr="" exact_bytes=true
-let resultAndFirst (): Stdlib.Result.Result<Int64, String> = let _ = Builtin.print "1" in Error "first" let resultAndSecond (): Stdlib.Result.Result<Int64, String> = let _ = Builtin.print "2" in Ok 2L let _ = Stdlib.Result.and (resultAndFirst ()) (resultAndSecond ()) in 0L = stdout="120\n" stderr="" exact_bytes=true
-let resultOrFirst (): Stdlib.Result.Result<Int64, String> = let _ = Builtin.print "1" in Ok 1L let resultOrSecond (): Stdlib.Result.Result<Int64, String> = let _ = Builtin.print "2" in Error "second" let _ = Stdlib.Result.or (resultOrFirst ()) (resultOrSecond ()) in 0L = stdout="120\n" stderr="" exact_bytes=true
+let optionAndFirst (): Option<Int64> = let _ = Builtin.print "1" in None let optionAndSecond (): Option<Int64> = let _ = Builtin.print "2" in Some 2L let _ = Stdlib.Option.and (optionAndFirst ()) (optionAndSecond ()) in 0L = stdout="120\n" stderr="" exact_bytes=true
+let resultAndFirst (): Result<Int64, String> = let _ = Builtin.print "1" in Error "first" let resultAndSecond (): Result<Int64, String> = let _ = Builtin.print "2" in Ok 2L let _ = Stdlib.Result.and (resultAndFirst ()) (resultAndSecond ()) in 0L = stdout="120\n" stderr="" exact_bytes=true
+let resultOrFirst (): Result<Int64, String> = let _ = Builtin.print "1" in Ok 1L let resultOrSecond (): Result<Int64, String> = let _ = Builtin.print "2" in Error "second" let _ = Stdlib.Result.or (resultOrFirst ()) (resultOrSecond ()) in 0L = stdout="120\n" stderr="" exact_bytes=true
 
 // Retry callbacks run at least once, return the final callback payload
 // unchanged, and never sleep after success or terminal failure.
@@ -39,5 +39,5 @@ match Stdlib.Retry.withFixedDelayLoop 4 3 0.0 (fun () -> let _ = Builtin.print "
 match Stdlib.Retry.withFixedDelay 2 0.0 (fun () -> let _ = Builtin.print "x" in Error "last") with | Ok value -> value | Error error -> error = stdout="xx\"last\"\n" stderr="" exact_bytes=true
 
 // Deterministic callback input proves that retrying stops on the first Ok.
-let retryFromStdin (unitArg: Unit): Stdlib.Result.Result<String, String> = let value = Builtin.stdinReadLine (()) in let _ = Builtin.print "x" in if value == "ok" then Ok "success" else Error value match Stdlib.Retry.withFixedDelay 5 1.0 retryFromStdin with | Ok value -> value | Error error -> error = stdout="xx\"success\"\n" stderr="" stdin="fail\nok\nunused\n" exact_bytes=true
-let backoffFromStdin (unitArg: Unit): Stdlib.Result.Result<String, String> = let value = Builtin.stdinReadLine (()) in let _ = Builtin.print "x" in if value == "ok" then Ok "success" else Error value match Stdlib.Retry.withBackoffLoop 5 1 0.0 backoffFromStdin with | Ok value -> value | Error error -> error = stdout="xx\"success\"\n" stderr="" stdin="fail\nok\nunused\n" exact_bytes=true
+let retryFromStdin (unitArg: Unit): Result<String, String> = let value = Builtin.stdinReadLine (()) in let _ = Builtin.print "x" in if value == "ok" then Ok "success" else Error value match Stdlib.Retry.withFixedDelay 5 1.0 retryFromStdin with | Ok value -> value | Error error -> error = stdout="xx\"success\"\n" stderr="" stdin="fail\nok\nunused\n" exact_bytes=true
+let backoffFromStdin (unitArg: Unit): Result<String, String> = let value = Builtin.stdinReadLine (()) in let _ = Builtin.print "x" in if value == "ok" then Ok "success" else Error value match Stdlib.Retry.withBackoffLoop 5 1 0.0 backoffFromStdin with | Ok value -> value | Error error -> error = stdout="xx\"success\"\n" stderr="" stdin="fail\nok\nunused\n" exact_bytes=true

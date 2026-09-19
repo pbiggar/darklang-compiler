@@ -95,8 +95,8 @@ Stdlib.Float.parse "1.8e308" = Ok (1.0 / 0.0)
 Stdlib.Float.parse "1.00000000000000011102230246251565404236316680908203125" = Ok 1.0
 Stdlib.Float.parse "2e-324" = Ok 0.0
 Stdlib.Float.isNaN (Stdlib.Result.withDefault (Stdlib.Float.parse "NaN") 0.0) = true
-Stdlib.Float.parse "1.25" = stdout="Stdlib.Result.Result<Float, Stdlib.Float.ParseError>.Ok(1.25)\n"
-Stdlib.Float.parse "bad" = stdout="Stdlib.Result.Result<Float, Stdlib.Float.ParseError>.Error(Stdlib.Float.ParseError.BadFormat)\n"
+Stdlib.Float.parse "1.25" = stdout="Darklang.Stdlib.Result.Result<Float, Darklang.Stdlib.Float.ParseError>.Ok(1.25)\n"
+Stdlib.Float.parse "bad" = stdout="Darklang.Stdlib.Result.Result<Float, Darklang.Stdlib.Float.ParseError>.Error(Darklang.Stdlib.Float.ParseError.BadFormat)\n"
 
 // Shortest round-trip formatting is shared by public and aggregate rendering
 Stdlib.Float.toString 0.1 = "0.1"

@@ -163,7 +163,7 @@ Stdlib.UInt32.sum ([10ul, 20ul, 30ul]) = 60ul
 // Stdlib.UInt32.toFloat(2) = 2.0
 
 // Stdlib.UInt32.parse - needs Result type (blocked by type checker bug)
-// Stdlib.UInt32.parse("1") = Stdlib.Result.Result.Ok(1)
+// Stdlib.UInt32.parse("1") = Ok(1)
 
 // Stdlib.UInt32.remainder - needs Result type (blocked by type checker bug)
-// Stdlib.UInt32.remainder(15, 6) = Stdlib.Result.Result.Ok(3)
+// Stdlib.UInt32.remainder(15, 6) = Ok(3)

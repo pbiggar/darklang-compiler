@@ -157,7 +157,7 @@ Stdlib.Int8.sum ([10y, 20y, 30y]) = 60y
 // Stdlib.Int8.toFloat(2) = 2.0
 
 // Stdlib.Int8.parse - needs Result type (blocked by type checker bug)
-// Stdlib.Int8.parse("1") = Stdlib.Result.Result.Ok(1)
+// Stdlib.Int8.parse("1") = Ok(1)
 
 // Stdlib.Int8.remainder - needs Result type (blocked by type checker bug)
-// Stdlib.Int8.remainder(15, 6) = Stdlib.Result.Result.Ok(3)
+// Stdlib.Int8.remainder(15, 6) = Ok(3)

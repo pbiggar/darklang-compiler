@@ -181,9 +181,9 @@ Stdlib.Int64.sum ([10L, 20L, 30L]) = 60L
 // Stdlib.Int64.toFloat(-5) = -5.0
 
 // Stdlib.Int64.parse - needs Result type (blocked by type checker bug)
-// Stdlib.Int64.parse("1") = Stdlib.Result.Result.Ok(1)
-// Stdlib.Int64.parse("abc") = Stdlib.Result.Result.Error(...)
+// Stdlib.Int64.parse("1") = Ok(1)
+// Stdlib.Int64.parse("abc") = Error(...)
 
 // Stdlib.Int64.remainder - needs Result type (blocked by type checker bug)
-// Stdlib.Int64.remainder(15, 6) = Stdlib.Result.Result.Ok(3)
-// Stdlib.Int64.remainder(5, 0) = Stdlib.Result.Result.Error(...)
+// Stdlib.Int64.remainder(15, 6) = Ok(3)
+// Stdlib.Int64.remainder(5, 0) = Error(...)

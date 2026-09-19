@@ -2,7 +2,7 @@
 let parsed = Stdlib.Json.parse<List<Dict<String>>> ("""[{"a":"b","c":"d"}]""") in 0L = stdout="0\n" stderr="" // leak_check
 
 // Erased list-head access during structural equality is borrowed; it must not consume the dictionary.
-if Stdlib.Json.parse<List<Dict<String>>> ("""[{"a":"b","c":"d"}]""") == Stdlib.Result.Result.Ok ([Dict { a = "b"; c = "d" }]) then 0L else 1L = stdout="0\n" stderr="" // leak_check
+if Stdlib.Json.parse<List<Dict<String>>> ("""[{"a":"b","c":"d"}]""") == Ok ([Dict { a = "b"; c = "d" }]) then 0L else 1L = stdout="0\n" stderr="" // leak_check
 
 // Nested JSON result/list assembly must preserve tuple-element ownership.
-Stdlib.Json.parse<List<Int64 * String>> ("""[[1,"two"],[3,"four"]]""") == Stdlib.Result.Result.Ok ([(1L, "two"), (3L, "four")]) = true // leak_check
+Stdlib.Json.parse<List<Int64 * String>> ("""[[1,"two"],[3,"four"]]""") == Ok ([(1L, "two"), (3L, "four")]) = true // leak_check

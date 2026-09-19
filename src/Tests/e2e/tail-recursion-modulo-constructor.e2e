@@ -20,7 +20,7 @@ let countTrmcSum (chain: TrmcChain) (count: Int64) : Int64 =
 
 countTrmcSum (buildTrmcSum 100000L) 0L = 100000L
 
-type TrmcRecord = { value: Int64, next: Stdlib.Option.Option<TrmcRecord> }
+type TrmcRecord = { value: Int64, next: Option<TrmcRecord> }
 
 let buildTrmcRecord (remaining: Int64) : TrmcRecord =
     if remaining <= 0L then TrmcRecord { value = 0L; next = None }

@@ -192,14 +192,14 @@ Stdlib.String.endsWith "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳
 // Stdlib.String.indexOf - Find UTF-16 code-unit index of substring
 // ===================================================================
 
-Stdlib.String.indexOf "hello" "l" = Stdlib.Option.Option.Some 2
-Stdlib.String.indexOf "hello" "ll" = Stdlib.Option.Option.Some 2
-Stdlib.String.indexOf "hello" "o" = Stdlib.Option.Option.Some 4
-Stdlib.String.indexOf "hello" "x" = Stdlib.Option.Option.None
-Stdlib.String.indexOf "hello" "" = Stdlib.Option.Option.Some 0
-Stdlib.String.indexOf "" "" = Stdlib.Option.Option.Some 0
-Stdlib.String.indexOf "abcabc" "bc" = Stdlib.Option.Option.Some 1
-Stdlib.String.indexOf "" "a" = Stdlib.Option.Option.None
+Stdlib.String.indexOf "hello" "l" = Some 2
+Stdlib.String.indexOf "hello" "ll" = Some 2
+Stdlib.String.indexOf "hello" "o" = Some 4
+Stdlib.String.indexOf "hello" "x" = None
+Stdlib.String.indexOf "hello" "" = Some 0
+Stdlib.String.indexOf "" "" = Some 0
+Stdlib.String.indexOf "abcabc" "bc" = Some 1
+Stdlib.String.indexOf "" "a" = None
 
 // ===================================================================
 // Stdlib.String.slice - Extract EGC range (end exclusive)
@@ -518,18 +518,18 @@ Stdlib.Option.isNone (Stdlib.String.head "") = true
 // Stdlib.String.padStart - Pad on the left
 // ===================================================================
 
-Stdlib.String.padStart "hi" " " 5 = Stdlib.Result.Result.Ok "   hi"
-Stdlib.String.padStart "hello" " " 5 = Stdlib.Result.Result.Ok "hello"
-Stdlib.String.padStart "hello" " " 3 = Stdlib.Result.Result.Ok "hello"
-Stdlib.String.padStart "5" "0" 3 = Stdlib.Result.Result.Ok "005"
-Stdlib.String.padStart "42" "0" 5 = Stdlib.Result.Result.Ok "00042"
+Stdlib.String.padStart "hi" " " 5 = Ok "   hi"
+Stdlib.String.padStart "hello" " " 5 = Ok "hello"
+Stdlib.String.padStart "hello" " " 3 = Ok "hello"
+Stdlib.String.padStart "5" "0" 3 = Ok "005"
+Stdlib.String.padStart "42" "0" 5 = Ok "00042"
 
 // ===================================================================
 // Stdlib.String.padEnd - Pad on the right
 // ===================================================================
 
-Stdlib.String.padEnd "hi" " " 5 = Stdlib.Result.Result.Ok "hi   "
-Stdlib.String.padEnd "hello" " " 5 = Stdlib.Result.Result.Ok "hello"
-Stdlib.String.padEnd "hello" " " 3 = Stdlib.Result.Result.Ok "hello"
-Stdlib.String.padEnd "5" "0" 3 = Stdlib.Result.Result.Ok "500"
-Stdlib.String.padEnd "42" "0" 5 = Stdlib.Result.Result.Ok "42000"
+Stdlib.String.padEnd "hi" " " 5 = Ok "hi   "
+Stdlib.String.padEnd "hello" " " 5 = Ok "hello"
+Stdlib.String.padEnd "hello" " " 3 = Ok "hello"
+Stdlib.String.padEnd "5" "0" 3 = Ok "500"
+Stdlib.String.padEnd "42" "0" 5 = Ok "42000"

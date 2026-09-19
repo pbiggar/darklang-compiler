@@ -13,7 +13,7 @@ let temporalNeedsInt (value: Int): Int = value; temporalNeedsInt (Stdlib.DateTim
 let temporalNeedsDateTime (value: DateTime): DateTime = value; temporalNeedsDateTime 0L = error="temporalNeedsDateTime's 1st parameter `value` expects DateTime, but got Int64 (0)"
 let temporalNeedsDateTimeInt (value: DateTime): DateTime = value; temporalNeedsDateTimeInt 0 = error="temporalNeedsDateTimeInt's 1st parameter `value` expects DateTime, but got Int (0)"
 
-Stdlib.Duration.parse "+5m" = Stdlib.Result.Result.Ok 300
-Stdlib.Duration.parse " -5m" = Stdlib.Result.Result.Ok (-300)
-Stdlib.Duration.parse " 5 m" = Stdlib.Result.Result.Ok 300
-Stdlib.Duration.parse "9223372036854775808d" = Stdlib.Result.Result.Ok 796899343984252629811200
+Stdlib.Duration.parse "+5m" = Ok 300
+Stdlib.Duration.parse " -5m" = Ok (-300)
+Stdlib.Duration.parse " 5 m" = Ok 300
+Stdlib.Duration.parse "9223372036854775808d" = Ok 796899343984252629811200

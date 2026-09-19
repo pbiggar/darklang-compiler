@@ -27,7 +27,7 @@ let x = 5L in Stdlib.Int64.add x 1L
 ---NAME---
 constructor application survives pretty-printing
 ---SOURCE---
-3L |> Stdlib.Result.Result.Ok
+3L |> Ok
 ---ROUNDTRIP---
 
 ---NAME---
@@ -66,8 +66,8 @@ fun x y -> x
 tuple applications inside lists survive roundtrip
 ---SOURCE---
 (Stdlib.Html.link
-  [ ("rel", Stdlib.Option.Option.Some "stylesheet")
-    ("href", Stdlib.Option.Option.Some "./style.css") ])
+  [ ("rel", Some "stylesheet")
+    ("href", Some "./style.css") ])
 |> nodeToString
 ---ROUNDTRIP---
 
@@ -75,9 +75,9 @@ tuple applications inside lists survive roundtrip
 nested tuple applications inside lists survive roundtrip
 ---SOURCE---
 (Stdlib.Html.input
-  [ ("type", Stdlib.Option.Option.Some "text")
-    ("name", Stdlib.Option.Option.Some "name")
-    ("id", Stdlib.Option.Option.Some "name") ])
+  [ ("type", Some "text")
+    ("name", Some "name")
+    ("id", Some "name") ])
 |> nodeToString
 ---ROUNDTRIP---
 
