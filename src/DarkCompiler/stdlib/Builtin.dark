@@ -9,3 +9,53 @@ let uint64GreaterThanOrEqualTo (a: UInt64) (b: UInt64) : Bool =
 
 let uint64LessThanOrEqualTo (a: UInt64) (b: UInt64) : Bool =
     Stdlib.UInt64.lessThanOrEqualTo a b
+
+let __fileError (message: String) : Stdlib.Cli.FileSystem.FileError =
+    if message == "File not found" then Stdlib.Cli.FileSystem.FileError.NotFound
+    else if message == "Permission denied" then Stdlib.Cli.FileSystem.FileError.OsAccessDenied
+    else Stdlib.Cli.FileSystem.FileError.Other message
+
+let __fileDeleteError (message: String) : Stdlib.Cli.FileSystem.FileError =
+    if message == "Error" then Stdlib.Cli.FileSystem.FileError.NotFound
+    else Builtin.__fileError message
+
+let __fileOperationError (pathExists: Bool) (message: String) : Stdlib.Cli.FileSystem.FileError =
+    if pathExists then Stdlib.Cli.FileSystem.FileError.OsAccessDenied
+    else Builtin.__fileError message
+
+let __fileDeleteOperationError (pathExists: Bool) (message: String) : Stdlib.Cli.FileSystem.FileError =
+    if pathExists then Stdlib.Cli.FileSystem.FileError.OsAccessDenied
+    else Builtin.__fileDeleteError message
+
+let directoryCurrent () : String = Stdlib.File.currentDirectory ()
+
+let directoryList (path: String) : List<String> =
+    Stdlib.File.listDirectoryPacked path
+    |> Stdlib.Cli.FileSystem.__decodePackedPaths
+
+let fileExists (path: String) : Bool = Stdlib.File.exists path
+
+let fileIsDirectory (path: String) : Bool = Stdlib.File.isDirectory path
+
+let fileDelete (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.FileSystem.FileError> =
+    let pathExists = Stdlib.File.exists path in
+    Stdlib.File.delete path |> Stdlib.Result.mapError (Builtin.__fileDeleteOperationError pathExists)
+
+let fileAppendText (path: String) (content: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.FileSystem.FileError> =
+    let pathExists = Stdlib.File.exists path in
+    Stdlib.File.appendText path content |> Stdlib.Result.mapError (Builtin.__fileOperationError pathExists)
+
+let fileRead (path: String) : Stdlib.Result.Result<Blob, Stdlib.Cli.FileSystem.FileError> =
+    let pathExists = Stdlib.File.exists path in
+    Stdlib.File.readBlob path |> Stdlib.Result.mapError (Builtin.__fileOperationError pathExists)
+
+let fileWrite (content: Blob) (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.FileSystem.FileError> =
+    let pathExists = Stdlib.File.exists path in
+    Stdlib.File.writeBlob path content |> Stdlib.Result.mapError (Builtin.__fileOperationError pathExists)
+
+let environmentGet (name: String) : Stdlib.Option.Option<String> =
+    Stdlib.Cli.__getenv name
+
+let environmentGetAll () : Dict<String, String> =
+    Stdlib.Cli.__environmentPacked ()
+    |> Stdlib.Env.__decodePacked

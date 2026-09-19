@@ -18,6 +18,9 @@ let __hostOSCode () : Int64 = -1L
 let __hostArchitectureCode () : Int64 = -1L
 let __hostname () : Stdlib.Result.Result<String, Stdlib.Cli.NativePosixError> = Error (Stdlib.Cli.NativePosixError { errno = -1L, message = "native hostname unavailable" })
 let __getenv (name: String) : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
+let __environmentPacked () : String = ""
+let __setenv (name: String) (value: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.NativePosixError> = Ok (())
+let __unsetenv (name: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.NativePosixError> = Ok (())
 // Returns a positional argument, excluding the executable name. The compiler
 // replaces this declaration with a native argv lookup for compiled programs.
 let __argv (index: Int64) : Stdlib.Option.Option<String> = Stdlib.Option.Option.None

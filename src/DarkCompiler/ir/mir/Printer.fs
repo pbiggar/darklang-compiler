@@ -128,16 +128,18 @@ let private prettyPrintMIRInstr functionNames (instr: MIR.Instr) : string =
         $"RuntimeError(\"{escapeStringContent message}\")"
     | MIR.RuntimeErrorString message ->
         $"RuntimeErrorString({prettyPrintMIROperand message})"
-    | MIR.FileReadText (dest, path) ->
-        $"{prettyPrintMIRVReg dest} <- FileReadText({prettyPrintMIROperand path})"
+    | MIR.FileReadBlob (dest, path) ->
+        $"{prettyPrintMIRVReg dest} <- FileReadBlob({prettyPrintMIROperand path})"
     | MIR.FileExists (dest, path) ->
         $"{prettyPrintMIRVReg dest} <- FileExists({prettyPrintMIROperand path})"
-    | MIR.FileWriteText (dest, path, content) ->
-        $"{prettyPrintMIRVReg dest} <- FileWriteText({prettyPrintMIROperand path}, {prettyPrintMIROperand content})"
+    | MIR.FileWriteBlob (dest, path, content) ->
+        $"{prettyPrintMIRVReg dest} <- FileWriteBlob({prettyPrintMIROperand path}, {prettyPrintMIROperand content})"
     | MIR.FileAppendText (dest, path, content) ->
         $"{prettyPrintMIRVReg dest} <- FileAppendText({prettyPrintMIROperand path}, {prettyPrintMIROperand content})"
     | MIR.FileDelete (dest, path) ->
         $"{prettyPrintMIRVReg dest} <- FileDelete({prettyPrintMIROperand path})"
+    | MIR.FileCreateDirectory (dest, path) ->
+        $"{prettyPrintMIRVReg dest} <- FileCreateDirectory({prettyPrintMIROperand path})"
     | MIR.FileSetExecutable (dest, path) ->
         $"{prettyPrintMIRVReg dest} <- FileSetExecutable({prettyPrintMIROperand path})"
     | MIR.FileWriteFromPtr (dest, path, ptr, length) ->

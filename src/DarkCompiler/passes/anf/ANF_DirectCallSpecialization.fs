@@ -115,9 +115,10 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
     | RefCountDec (atom, _, _, _)
     | Print (atom, _)
     | StdoutWrite (atom, _)
-    | FileReadText atom
+    | FileReadBlob atom
     | FileExists atom
     | FileDelete atom
+    | FileCreateDirectory atom
     | FileSetExecutable atom
     | FloatSqrt atom
     | FloatAbs atom
@@ -150,7 +151,7 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
         analyzeMany (first :: second :: remaining) analysis
     | Prim (_, left, right)
     | CanonicalBufferEq (_, left, right)
-    | FileWriteText (left, right)
+    | FileWriteBlob (left, right)
     | FileAppendText (left, right)
     | RawGet (left, right, _)
     | RawTake (left, right, _)
@@ -393,11 +394,12 @@ let private rewriteCExpr
     | Print (atom, typ) -> Print (rewrite atom, typ)
     | StdoutWrite (atom, appendNewline) -> StdoutWrite (rewrite atom, appendNewline)
     | StdinReadLine -> StdinReadLine
-    | FileReadText path -> FileReadText (rewrite path)
+    | FileReadBlob path -> FileReadBlob (rewrite path)
     | FileExists path -> FileExists (rewrite path)
-    | FileWriteText (path, content) -> FileWriteText (rewrite path, rewrite content)
+    | FileWriteBlob (path, content) -> FileWriteBlob (rewrite path, rewrite content)
     | FileAppendText (path, content) -> FileAppendText (rewrite path, rewrite content)
     | FileDelete path -> FileDelete (rewrite path)
+    | FileCreateDirectory path -> FileCreateDirectory (rewrite path)
     | FileSetExecutable path -> FileSetExecutable (rewrite path)
     | FileWriteFromPtr (path, ptr, length) -> FileWriteFromPtr (rewrite path, rewrite ptr, rewrite length)
     | FloatSqrt atom -> FloatSqrt (rewrite atom)

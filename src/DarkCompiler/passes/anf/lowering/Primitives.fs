@@ -214,16 +214,24 @@ let patternLiteralToSizedInt (pattern: CheckedAST.Pattern) : ANF.SizedInt option
 /// Returns Some CExpr if it's a file intrinsic, None otherwise
 let tryFileIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option =
     match funcName, args with
-    | "Darklang.Stdlib.File.readText", [pathAtom] ->
-        Some (ANF.FileReadText pathAtom)
+    | "Darklang.Stdlib.File.currentDirectory", ([] | [ANF.UnitLiteral]) ->
+        Some (ANF.CliNative (ANF.DirectoryCurrent, []))
+    | "Darklang.Stdlib.File.listDirectoryPacked", [pathAtom] ->
+        Some (ANF.CliNative (ANF.DirectoryListPacked, [pathAtom]))
+    | "Darklang.Stdlib.File.readBlob", [pathAtom] ->
+        Some (ANF.FileReadBlob pathAtom)
     | "Darklang.Stdlib.File.exists", [pathAtom] ->
         Some (ANF.FileExists pathAtom)
-    | "Darklang.Stdlib.File.writeText", [pathAtom; contentAtom] ->
-        Some (ANF.FileWriteText (pathAtom, contentAtom))
+    | "Darklang.Stdlib.File.isDirectory", [pathAtom] ->
+        Some (ANF.CliNative (ANF.FileIsDirectory, [pathAtom]))
+    | "Darklang.Stdlib.File.writeBlob", [pathAtom; contentAtom] ->
+        Some (ANF.FileWriteBlob (pathAtom, contentAtom))
     | "Darklang.Stdlib.File.appendText", [pathAtom; contentAtom] ->
         Some (ANF.FileAppendText (pathAtom, contentAtom))
     | "Darklang.Stdlib.File.delete", [pathAtom] ->
         Some (ANF.FileDelete pathAtom)
+    | "Darklang.Stdlib.File.createDirectory", [pathAtom] ->
+        Some (ANF.FileCreateDirectory pathAtom)
     | "Darklang.Stdlib.File.setExecutable", [pathAtom] ->
         Some (ANF.FileSetExecutable pathAtom)
     | "Darklang.Stdlib.File.writeFromPtr", [pathAtom; ptrAtom; lengthAtom] ->
@@ -242,6 +250,9 @@ let tryCliIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option 
             | "Darklang.Stdlib.Cli.__hostArchitectureCode" -> Some ANF.HostArchitecture
             | "Darklang.Stdlib.Cli.__hostname" -> Some ANF.Hostname
             | "Darklang.Stdlib.Cli.__getenv" -> Some ANF.GetEnv
+            | "Darklang.Stdlib.Cli.__environmentPacked" -> Some ANF.GetEnvironmentPacked
+            | "Darklang.Stdlib.Cli.__setenv" -> Some ANF.SetEnv
+            | "Darklang.Stdlib.Cli.__unsetenv" -> Some ANF.UnsetEnv
             | "Darklang.Stdlib.Cli.__argv" -> Some ANF.GetArgv
             | "Darklang.Stdlib.Cli.__kill" -> Some ANF.Kill
             | "Darklang.Stdlib.Cli.__getpid" -> Some ANF.GetPid

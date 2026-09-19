@@ -22,6 +22,12 @@ let convertCliOperation (operation: MIR.CliOperation) : LIR.CliOperation =
     | MIR.HostArchitecture -> LIR.HostArchitecture
     | MIR.Hostname -> LIR.Hostname
     | MIR.GetEnv -> LIR.GetEnv
+    | MIR.GetEnvironmentPacked -> LIR.GetEnvironmentPacked
+    | MIR.SetEnv -> LIR.SetEnv
+    | MIR.UnsetEnv -> LIR.UnsetEnv
+    | MIR.DirectoryCurrent -> LIR.DirectoryCurrent
+    | MIR.DirectoryListPacked -> LIR.DirectoryListPacked
+    | MIR.FileIsDirectory -> LIR.FileIsDirectory
     | MIR.GetArgv -> LIR.GetArgv
     | MIR.Kill -> LIR.Kill
     | MIR.GetPid -> LIR.GetPid
@@ -1368,21 +1374,21 @@ let selectInstr
         let (MIR.VReg effectId) = dest
         Ok ([LIR.StdinReadLine (effectId, vregToLIRReg dest)], state)
 
-    | MIR.FileReadText (dest, path) ->
+    | MIR.FileReadBlob (dest, path) ->
         let lirDest = vregToLIRReg dest
         let lirPath = convertOperand path
-        Ok ([LIR.FileReadText (lirDest, lirPath)], state)
+        Ok ([LIR.FileReadBlob (lirDest, lirPath)], state)
 
     | MIR.FileExists (dest, path) ->
         let lirDest = vregToLIRReg dest
         let lirPath = convertOperand path
         Ok ([LIR.FileExists (lirDest, lirPath)], state)
 
-    | MIR.FileWriteText (dest, path, content) ->
+    | MIR.FileWriteBlob (dest, path, content) ->
         let lirDest = vregToLIRReg dest
         let lirPath = convertOperand path
         let lirContent = convertOperand content
-        Ok ([LIR.FileWriteText (lirDest, lirPath, lirContent)], state)
+        Ok ([LIR.FileWriteBlob (lirDest, lirPath, lirContent)], state)
 
     | MIR.FileAppendText (dest, path, content) ->
         let lirDest = vregToLIRReg dest
@@ -1394,6 +1400,11 @@ let selectInstr
         let lirDest = vregToLIRReg dest
         let lirPath = convertOperand path
         Ok ([LIR.FileDelete (lirDest, lirPath)], state)
+
+    | MIR.FileCreateDirectory (dest, path) ->
+        let lirDest = vregToLIRReg dest
+        let lirPath = convertOperand path
+        Ok ([LIR.FileCreateDirectory (lirDest, lirPath)], state)
 
     | MIR.FileSetExecutable (dest, path) ->
         let lirDest = vregToLIRReg dest
@@ -1834,12 +1845,13 @@ let maxVRegIdFromInstr (instr: MIR.Instr) (currentMax: int) : int =
     | MIR.StdinReadLine dest -> maxVRegId dest currentMax
     | MIR.RuntimeError _ -> currentMax
     | MIR.RuntimeErrorString message -> maxVRegIdFromOperand message currentMax
-    | MIR.FileReadText (dest, path)
+    | MIR.FileReadBlob (dest, path)
     | MIR.FileExists (dest, path)
     | MIR.FileDelete (dest, path)
+    | MIR.FileCreateDirectory (dest, path)
     | MIR.FileSetExecutable (dest, path) ->
         currentMax |> maxVRegId dest |> maxVRegIdFromOperand path
-    | MIR.FileWriteText (dest, path, content)
+    | MIR.FileWriteBlob (dest, path, content)
     | MIR.FileAppendText (dest, path, content) ->
         currentMax
         |> maxVRegId dest

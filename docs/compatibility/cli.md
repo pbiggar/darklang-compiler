@@ -31,6 +31,7 @@ under `src/Tests/e2e/upstream/stdlib/`.
 | `Stdlib.Cli.Path.basename`, `parent`, `extension`, `withExtension`, `isAbsolute`, `join`, `normalize`, absolute `resolve`, and absolute `relativeTo` | `./run-tests --ai --filter=cli-path` at compiler revision above | All 40 values exactly matched the literals in `cli-path.dark`; no errors were expected | Pure; no filesystem or process effects | 40/40 parity on Linux arm64 |
 | `Stdlib.Cli.File.globMatchSegments` for literal segments, `*`, `?`, and recursive `**` | `./run-tests --ai --filter=cli-glob` at compiler revision above | All 27 booleans exactly matched `cli-glob.dark`; no errors were expected | Pure; all recursion completed and the process exited normally | 27/27 parity on Linux arm64 |
 | Multiple `*` wildcards within one segment | `./run-tests --ai --filter=cli_filesystem` at compiler revision above | `a*b*c` matched `axbyc` and rejected `axbyd` | Pure; matcher completed without recursive ownership faults | 2/2 compiler regression cases passed on Linux arm64 |
+| `Stdlib.Cli.FileSystem` operations, `Stdlib.Env.getAll`, and `Stdlib.Cli.Env` lookup/default/home/mutation | `./run-tests --ai --filter=filesystem_env_parity` against darklang/dark `v0.0.35` (`0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`) | Public signatures and structured results match the pinned definitions; Blob contents, packed environment decoding, invalid-name errors, and passwd home fallback are checked | Native syscalls perform filesystem work; environment mutations are visible to lookup and inherited by child processes | Focused parity coverage on Linux arm64 |
 
 Both files are in the default executable upstream set, so these comparisons no
 longer depend on a test filter.
@@ -60,17 +61,16 @@ above. The benchmark's pinned Dark baseline is
 
 ## Boundaries and non-claims
 
-`Stdlib.Path.tempDir` is an ordinary portable Dark definition. The older
-`Stdlib.File` intrinsic surface is not source-resolvable. `Stdlib.Cli.Path.resolve` currently has canonical behavior only for
-absolute inputs: relative inputs require the process-state `getcwd` primitive.
+`Stdlib.Path.tempDir` is an ordinary portable Dark definition. `Stdlib.File`
+is a private typed intrinsic boundary used by the public
+`Stdlib.Cli.FileSystem` wrappers. `Stdlib.Cli.Path.resolve` can use the native
+current-directory operation for relative inputs.
 The loaded `Stdlib.Cli.Posix.Error` and `StatResult` declarations establish the
 canonical public shapes but do not stand in for native POSIX operations.
 
-No filesystem mutation, environment, descriptor, shell, download,
-decompression, watch, lock, ownership, signal, or daemon comparison was run in
-this revision. Those surfaces therefore have no parity classification in this
-ledger. In particular, absence of a row must not be read as either parity or an
-intentional divergence.
+Descriptor, download, decompression, watch, lock, ownership, and daemon
+operations remain outside this comparison. Absence of a row must not be read
+as either parity or an intentional divergence.
 
 The compiler remains ahead-of-time and may diagnose statically knowable errors
 before execution. That timing difference is the retained AOT extension; it does

@@ -132,11 +132,12 @@ let private tryCSEKey (cexpr: CExpr) : CSEKey option =
     | StdinReadLine
     | RuntimeError _
     | RuntimeErrorString _
-    | FileReadText _
+    | FileReadBlob _
     | FileExists _
-    | FileWriteText _
+    | FileWriteBlob _
     | FileAppendText _
     | FileDelete _
+    | FileCreateDirectory _
     | FileSetExecutable _
     | FileWriteFromPtr _
     | RawAlloc _

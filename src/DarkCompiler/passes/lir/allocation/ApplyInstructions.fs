@@ -718,10 +718,10 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
             | _ -> []
         [loadInstr] @ storeInstrs
 
-    | LIR.FileReadText (dest, path) ->
+    | LIR.FileReadBlob (dest, path) ->
         let (destReg, destAlloc) = applyToReg mapping dest
         let (pathOp, pathLoads) = applyToOperand mapping path LIR.X12
-        let fileInstr = LIR.FileReadText (destReg, pathOp)
+        let fileInstr = LIR.FileReadBlob (destReg, pathOp)
         let storeInstrs =
             match destAlloc with
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
@@ -738,13 +738,13 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
             | _ -> []
         pathLoads @ [fileInstr] @ storeInstrs
 
-    | LIR.FileWriteText (dest, path, content) ->
+    | LIR.FileWriteBlob (dest, path, content) ->
         let (destReg, destAlloc) = applyToReg mapping dest
         let (pathOp, pathLoads) = applyToOperand mapping path LIR.X12
         let (contentOp, contentLoads) =
             if isX86_64 arch then (applyToOperandNoLoad mapping content, [])
             else applyToOperand mapping content LIR.X13
-        let fileInstr = LIR.FileWriteText (destReg, pathOp, contentOp)
+        let fileInstr = LIR.FileWriteBlob (destReg, pathOp, contentOp)
         let storeInstrs =
             match destAlloc with
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
@@ -768,6 +768,16 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
         let (destReg, destAlloc) = applyToReg mapping dest
         let (pathOp, pathLoads) = applyToOperand mapping path LIR.X12
         let fileInstr = LIR.FileDelete (destReg, pathOp)
+        let storeInstrs =
+            match destAlloc with
+            | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]
+            | _ -> []
+        pathLoads @ [fileInstr] @ storeInstrs
+
+    | LIR.FileCreateDirectory (dest, path) ->
+        let (destReg, destAlloc) = applyToReg mapping dest
+        let (pathOp, pathLoads) = applyToOperand mapping path LIR.X12
+        let fileInstr = LIR.FileCreateDirectory (destReg, pathOp)
         let storeInstrs =
             match destAlloc with
             | Some (StackSlot offset) -> [LIR.Store (offset, LIR.Physical LIR.X11)]

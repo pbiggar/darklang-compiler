@@ -4,3 +4,46 @@ module Darklang.Stdlib.Cli.Env
 
 let get (name: String) : Stdlib.Option.Option<String> =
     Stdlib.Cli.__getenv name
+
+let getOr (name: String) (default_: String) : String =
+    match Stdlib.Cli.Env.get name with
+    | Some value -> value
+    | None -> default_
+
+let __homeFromPasswd (lines: List<String>) (uid: String) : Stdlib.Option.Option<String> =
+    match lines with
+    | [] -> None
+    | line :: rest ->
+        let fields = Stdlib.String.split line ":" in
+        match (Stdlib.List.getAt fields 2, Stdlib.List.getAt fields 5) with
+        | (Some candidateUid, Some directory) ->
+            if candidateUid == uid then Some directory
+            else Stdlib.Cli.Env.__homeFromPasswd rest uid
+        | _ -> Stdlib.Cli.Env.__homeFromPasswd rest uid
+
+let home () : Stdlib.Option.Option<String> =
+    match Stdlib.Cli.Env.get "HOME" with
+    | Some value -> Some value
+    | None ->
+        match Stdlib.Cli.FileSystem.readFileAsString "/etc/passwd" with
+        | Ok contents ->
+            Stdlib.Cli.Env.__homeFromPasswd
+                (Stdlib.String.splitOnNewline contents)
+                (Stdlib.Int64.toString (Stdlib.Cli.__getuid ()))
+        | Error _ -> None
+
+let set (name: String) (value: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    if name == "" || Stdlib.String.contains name "=" then
+        Error (Stdlib.Cli.Posix.Error { errno = 22, message = "Invalid argument" })
+    else
+        match Stdlib.Cli.__setenv name value with
+        | Ok (()) -> Ok (())
+        | Error error -> Error (Stdlib.Cli.Posix.__error error)
+
+let unset (name: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    if name == "" || Stdlib.String.contains name "=" then
+        Error (Stdlib.Cli.Posix.Error { errno = 22, message = "Invalid argument" })
+    else
+        match Stdlib.Cli.__unsetenv name with
+        | Ok (()) -> Ok (())
+        | Error error -> Error (Stdlib.Cli.Posix.__error error)

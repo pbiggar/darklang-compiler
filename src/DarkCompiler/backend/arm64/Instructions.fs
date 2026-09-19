@@ -273,20 +273,23 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
     | LIR.LoadFuncAddr (dest, funcName) ->
         ARM64EmitCalls.emitLoadFuncAddr ctx dest funcName
 
-    | LIR.FileReadText (dest, path) ->
-        ARM64EmitFiles.emitFileReadText ctx dest path
+    | LIR.FileReadBlob (dest, path) ->
+        ARM64EmitFiles.emitFileReadBlob ctx dest path
 
     | LIR.FileExists (dest, path) ->
         ARM64EmitFiles.emitFileExists ctx dest path
 
-    | LIR.FileWriteText (dest, path, content) ->
-        ARM64EmitFiles.emitFileWriteText ctx dest path content
+    | LIR.FileWriteBlob (dest, path, content) ->
+        ARM64EmitFiles.emitFileWriteBlob ctx dest path content
 
     | LIR.FileAppendText (dest, path, content) ->
         ARM64EmitFiles.emitFileAppendText ctx dest path content
 
     | LIR.FileDelete (dest, path) ->
         ARM64EmitFiles.emitFileDelete ctx dest path
+
+    | LIR.FileCreateDirectory (dest, path) ->
+        ARM64EmitFiles.emitFileCreateDirectory ctx dest path
 
     | LIR.FileSetExecutable (dest, path) ->
         ARM64EmitFiles.emitFileSetExecutable ctx dest path

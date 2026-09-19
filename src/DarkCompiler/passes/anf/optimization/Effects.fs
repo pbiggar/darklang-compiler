@@ -63,11 +63,12 @@ let internal mustPreserveEvaluation (context: OptimizeContext) (cexpr: CExpr) : 
     | Print _ -> true
     | StdoutWrite _ -> true
     | StdinReadLine -> true
-    | FileReadText _ -> true
+    | FileReadBlob _ -> true
     | FileExists _ -> true
-    | FileWriteText _ -> true
+    | FileWriteBlob _ -> true
     | FileAppendText _ -> true
     | FileDelete _ -> true
+    | FileCreateDirectory _ -> true
     | FileSetExecutable _ -> true
     | FileWriteFromPtr _ -> true  // File I/O
     | RawAlloc _ -> true  // Allocates memory
@@ -162,11 +163,12 @@ let internal addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | Print (atom, _) -> addAtomUse atom uses
     | StdoutWrite (atom, _) -> addAtomUse atom uses
     | StdinReadLine -> uses
-    | FileReadText path -> addAtomUse path uses
+    | FileReadBlob path -> addAtomUse path uses
     | FileExists path -> addAtomUse path uses
-    | FileWriteText (path, content) -> uses |> addAtomUse path |> addAtomUse content
+    | FileWriteBlob (path, content) -> uses |> addAtomUse path |> addAtomUse content
     | FileAppendText (path, content) -> uses |> addAtomUse path |> addAtomUse content
     | FileDelete path -> addAtomUse path uses
+    | FileCreateDirectory path -> addAtomUse path uses
     | FileSetExecutable path -> addAtomUse path uses
     | FileWriteFromPtr (path, ptr, length) ->
         uses |> addAtomUse path |> addAtomUse ptr |> addAtomUse length
@@ -229,9 +231,10 @@ let cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | RefCountInc (atom, _, _, _)
     | RefCountDec (atom, _, _, _)
     | Print (atom, _)
-    | FileReadText atom
+    | FileReadBlob atom
     | FileExists atom
     | FileDelete atom
+    | FileCreateDirectory atom
     | FileSetExecutable atom
     | RawAlloc atom
     | MappedAlloc atom
@@ -262,7 +265,7 @@ let cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | StringConcat (first, second, remaining) -> anyUsed (first :: second :: remaining)
     | Prim (_, left, right)
     | CanonicalBufferEq (_, left, right)
-    | FileWriteText (left, right)
+    | FileWriteBlob (left, right)
     | FileAppendText (left, right)
     | RawGet (left, right, _)
     | RawTake (left, right, _)

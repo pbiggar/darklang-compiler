@@ -124,12 +124,12 @@ let internal normalizeMirFunctionRegisterOffset
             | MIR.RuntimeError message -> MIR.RuntimeError message
             | MIR.RuntimeErrorString message ->
                 MIR.RuntimeErrorString (shiftOperand message)
-            | MIR.FileReadText (dest, path) ->
-                MIR.FileReadText (shiftReg dest, shiftOperand path)
+            | MIR.FileReadBlob (dest, path) ->
+                MIR.FileReadBlob (shiftReg dest, shiftOperand path)
             | MIR.FileExists (dest, path) ->
                 MIR.FileExists (shiftReg dest, shiftOperand path)
-            | MIR.FileWriteText (dest, path, content) ->
-                MIR.FileWriteText (
+            | MIR.FileWriteBlob (dest, path, content) ->
+                MIR.FileWriteBlob (
                     shiftReg dest,
                     shiftOperand path,
                     shiftOperand content)
@@ -140,6 +140,8 @@ let internal normalizeMirFunctionRegisterOffset
                     shiftOperand content)
             | MIR.FileDelete (dest, path) ->
                 MIR.FileDelete (shiftReg dest, shiftOperand path)
+            | MIR.FileCreateDirectory (dest, path) ->
+                MIR.FileCreateDirectory (shiftReg dest, shiftOperand path)
             | MIR.FileSetExecutable (dest, path) ->
                 MIR.FileSetExecutable (shiftReg dest, shiftOperand path)
             | MIR.FileWriteFromPtr (dest, path, ptr, length) ->

@@ -7,7 +7,7 @@ open X64CodeGenTypes
 open X64FieldReferenceCounts
 open X64InstructionContext
 
-let internal emitFileReadText (ctx: FuncCtx) (dest: LIR.Reg) (path: LIR.Operand) : Result<X86_64.Instr list, string> =
+let internal emitFileReadBlob (ctx: FuncCtx) (dest: LIR.Reg) (path: LIR.Operand) : Result<X86_64.Instr list, string> =
     // File read: open → fstat → alloc → read → close → Result
     resolveReg dest
     |> Result.bind (fun destReg ->
@@ -21,7 +21,7 @@ let internal emitFileReadText (ctx: FuncCtx) (dest: LIR.Reg) (path: LIR.Operand)
             | LIR.StringSymbol value ->
                 Ok (emitStringLiteralNoRefCount X86_64.R10 value)
             | _ ->
-                Error "FileReadText path operand must be a string pointer or string literal"
+                Error "FileReadBlob path operand must be a string pointer or string literal"
         let copyLabel = freshLabel "fr_copy"
         let doneLabel = freshLabel "fr_done"
         let errorLabel = freshLabel "fr_err"
@@ -113,15 +113,17 @@ let internal emitFileReadText (ctx: FuncCtx) (dest: LIR.Reg) (path: LIR.Operand)
                X86_64.JMP cleanupLabel]
             // === Error path ===
             @ [X86_64.Label errorLabel]
-            // Allocate error string "Error": [refcount=1:8][len=5:8]["Error":8]
+            // Allocate error string "File not found".
             @ [X86_64.MOV_reg (X86_64.R10, heapPtr)
-               X86_64.ADD_imm (heapPtr, 24)]
+               X86_64.ADD_imm (heapPtr, 32)]
             @ loadImm64 scratch 1L
             @ [X86_64.MOV_store (X86_64.R10, 0, scratch)]
-            @ loadImm64 scratch 5L
+            @ loadImm64 scratch 14L
             @ [X86_64.MOV_store (X86_64.R10, 8, scratch)]
-            @ loadImm64 scratch 0x726F727245L                    // "Error" in little-endian
+            @ loadImm64 scratch 0x746F6E20656C6946L
             @ [X86_64.MOV_store (X86_64.R10, 16, scratch)]
+            @ loadImm64 scratch 0x646E756F6620L
+            @ [X86_64.MOV_store (X86_64.R10, 24, scratch)]
             // Allocate Result Error: [tag=1:8][payload=error_str:8][refcount=1:8]
             @ [X86_64.MOV_reg (scratch, heapPtr)
                X86_64.ADD_imm (heapPtr, 24)]
@@ -137,7 +139,7 @@ let internal emitFileReadText (ctx: FuncCtx) (dest: LIR.Reg) (path: LIR.Operand)
             @ restores
             @ [X86_64.MOV_reg (destReg, X86_64.RAX)]))
 
-let internal emitFileWriteText (ctx: FuncCtx) (instr: LIR.Instr) (dest: LIR.Reg) (path: LIR.Operand) (content: LIR.Operand) : Result<X86_64.Instr list, string> =
+let internal emitFileWriteBlob (ctx: FuncCtx) (instr: LIR.Instr) (dest: LIR.Reg) (path: LIR.Operand) (content: LIR.Operand) : Result<X86_64.Instr list, string> =
     // File write/append: open → write → close → Result
     let isAppend = match instr with LIR.FileAppendText _ -> true | _ -> false
     resolveReg dest
@@ -152,7 +154,7 @@ let internal emitFileWriteText (ctx: FuncCtx) (instr: LIR.Instr) (dest: LIR.Reg)
             | LIR.StringSymbol value ->
                 Ok (emitStringLiteralNoRefCount X86_64.R10 value)
             | _ ->
-                Error "FileWriteText/FileAppendText path operand must be a string pointer or string literal"
+                Error "FileWriteBlob/FileAppendText path operand must be a string pointer or string literal"
         let resolveContentToR9 =
             match content with
             | LIR.Reg reg ->
@@ -163,7 +165,7 @@ let internal emitFileWriteText (ctx: FuncCtx) (instr: LIR.Instr) (dest: LIR.Reg)
             | LIR.StringSymbol value ->
                 Ok (emitStringLiteralNoRefCount X86_64.R9 value)
             | _ ->
-                Error "FileWriteText/FileAppendText content operand must be a string pointer or string literal"
+                Error "FileWriteBlob/FileAppendText content operand must be a string pointer or string literal"
         let copyLabel = freshLabel "fw_copy"
         let doneLabel = freshLabel "fw_done"
         let errorLabel = freshLabel "fw_err"
@@ -329,9 +331,101 @@ let internal emitFileExists (ctx: FuncCtx) (dest: LIR.Reg) (path: LIR.Operand) :
             // Move result to destReg after restoring saved registers
             @ [X86_64.MOV_reg (destReg, X86_64.RAX)]))
 
-let internal emitFileDelete (ctx: FuncCtx) (dest: LIR.Reg) : Result<X86_64.Instr list, string> =
+let private emitPathUnitOperation
+    (ctx: FuncCtx)
+    (dest: LIR.Reg)
+    (path: LIR.Operand)
+    (createDirectory: bool)
+    : Result<X86_64.Instr list, string> =
     resolveReg dest
-    |> Result.map (fun destReg -> loadImm64 destReg 0L)
+    |> Result.bind (fun destReg ->
+        let pathSetup =
+            match path with
+            | LIR.Reg reg ->
+                resolveReg reg
+                |> Result.map (fun source ->
+                    if source = X86_64.R10 then [] else [X86_64.MOV_reg (X86_64.R10, source)])
+            | LIR.StackSlot offset ->
+                Ok [X86_64.MOV_load (X86_64.R10, X86_64.RBP, int32 (adjustStackOffset ctx offset))]
+            | LIR.StringSymbol value -> Ok (emitStringLiteralNoRefCount X86_64.R10 value)
+            | _ -> Error "FileDelete path operand must be a string pointer or string literal"
+        let copyLabel = freshLabel "fd_copy"
+        let copyDoneLabel = freshLabel "fd_copy_done"
+        let errorLabel = freshLabel "fd_error"
+        let cleanupLabel = freshLabel "fd_cleanup"
+        pathSetup
+        |> Result.map (fun setup ->
+            setup
+            @ [ X86_64.PUSH X86_64.RDI
+                X86_64.PUSH X86_64.RSI
+                X86_64.PUSH X86_64.RCX
+                X86_64.PUSH X86_64.R10
+                X86_64.SUB_imm (X86_64.RSP, 4096)
+                X86_64.MOV_load (X86_64.RCX, X86_64.R10, 8)
+                X86_64.LEA (X86_64.RSI, X86_64.R10, 16)
+                X86_64.MOV_reg (X86_64.RDI, X86_64.RSP)
+                X86_64.XOR_reg (X86_64.R10, X86_64.R10)
+                X86_64.Label copyLabel
+                X86_64.CMP_reg (X86_64.R10, X86_64.RCX)
+                X86_64.Jcc (X86_64.GE, copyDoneLabel)
+                X86_64.MOV_reg (scratch, X86_64.RSI)
+                X86_64.ADD_reg (scratch, X86_64.R10)
+                X86_64.MOV_load_byte (scratch, scratch, 0)
+                X86_64.MOV_reg (X86_64.RAX, X86_64.RDI)
+                X86_64.ADD_reg (X86_64.RAX, X86_64.R10)
+                X86_64.MOV_store_byte (X86_64.RAX, 0, scratch)
+                X86_64.ADD_imm (X86_64.R10, 1)
+                X86_64.JMP copyLabel
+                X86_64.Label copyDoneLabel
+                X86_64.MOV_reg (scratch, X86_64.RDI)
+                X86_64.ADD_reg (scratch, X86_64.RCX)
+                X86_64.XOR_reg (X86_64.R10, X86_64.R10)
+                X86_64.MOV_store_byte (scratch, 0, X86_64.R10)
+                X86_64.MOV_reg (X86_64.RDI, X86_64.RSP) ]
+            @ (if createDirectory then loadImm64 X86_64.RSI 0o777L else [])
+            @ loadImm64 X86_64.RAX (if createDirectory then 83L else int64 syscalls.Unlink)
+            @ [ X86_64.SYSCALL
+                X86_64.CMP_imm (X86_64.RAX, 0)
+                X86_64.Jcc (X86_64.LT, errorLabel)
+                X86_64.MOV_reg (X86_64.RAX, heapPtr)
+                X86_64.ADD_imm (heapPtr, 24)
+                X86_64.XOR_reg (X86_64.RCX, X86_64.RCX)
+                X86_64.MOV_store (X86_64.RAX, 0, X86_64.RCX)
+                X86_64.MOV_store (X86_64.RAX, 8, X86_64.RCX)
+                X86_64.MOV_imm32 (X86_64.RCX, 1)
+                X86_64.MOV_store (X86_64.RAX, 16, X86_64.RCX) ]
+            @ genLeakCounterInc ctx
+            @ [ X86_64.JMP cleanupLabel
+                X86_64.Label errorLabel
+                X86_64.MOV_reg (X86_64.R10, heapPtr)
+                X86_64.ADD_imm (heapPtr, 24) ]
+            @ loadImm64 X86_64.RCX 1L
+            @ [X86_64.MOV_store (X86_64.R10, 0, X86_64.RCX)]
+            @ loadImm64 X86_64.RCX 5L
+            @ [X86_64.MOV_store (X86_64.R10, 8, X86_64.RCX)]
+            @ loadImm64 X86_64.RCX 0x726F727245L
+            @ [ X86_64.MOV_store (X86_64.R10, 16, X86_64.RCX)
+                X86_64.MOV_reg (X86_64.RAX, heapPtr)
+                X86_64.ADD_imm (heapPtr, 24) ]
+            @ loadImm64 X86_64.RCX 1L
+            @ [ X86_64.MOV_store (X86_64.RAX, 0, X86_64.RCX)
+                X86_64.MOV_store (X86_64.RAX, 8, X86_64.R10)
+                X86_64.MOV_store (X86_64.RAX, 16, X86_64.RCX) ]
+            @ genLeakCounterInc ctx
+            @ genLeakCounterInc ctx
+            @ [ X86_64.Label cleanupLabel
+                X86_64.ADD_imm (X86_64.RSP, 4096)
+                X86_64.POP X86_64.R10
+                X86_64.POP X86_64.RCX
+                X86_64.POP X86_64.RSI
+                X86_64.POP X86_64.RDI
+                X86_64.MOV_reg (destReg, X86_64.RAX) ]))
+
+let internal emitFileDelete (ctx: FuncCtx) (dest: LIR.Reg) (path: LIR.Operand) : Result<X86_64.Instr list, string> =
+    emitPathUnitOperation ctx dest path false
+
+let internal emitFileCreateDirectory (ctx: FuncCtx) (dest: LIR.Reg) (path: LIR.Operand) : Result<X86_64.Instr list, string> =
+    emitPathUnitOperation ctx dest path true
 
 let internal emitFileSetExecutable (ctx: FuncCtx) (dest: LIR.Reg) : Result<X86_64.Instr list, string> =
     resolveReg dest

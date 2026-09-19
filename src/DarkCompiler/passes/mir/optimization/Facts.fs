@@ -48,11 +48,12 @@ let hasSideEffects (instr: Instr) : bool =
     | Print _ -> true
     | StdoutWrite _ -> true
     | StdinReadLine _ -> true
-    | FileReadText _ -> true
+    | FileReadBlob _ -> true
     | FileExists _ -> true
-    | FileWriteText _ -> true
+    | FileWriteBlob _ -> true
     | FileAppendText _ -> true
     | FileDelete _ -> true
+    | FileCreateDirectory _ -> true
     | FileSetExecutable _ -> true
     | FileWriteFromPtr _ -> true  // File I/O
     | RawAlloc _ -> true  // Allocates memory
@@ -178,11 +179,12 @@ let getInstrDest (instr: Instr) : VReg option =
     | StringConcat (dest, _, _, _) -> Some dest
     | CanonicalBufferEq (dest, _, _, _) -> Some dest
     | StdinReadLine dest -> Some dest
-    | FileReadText (dest, _) -> Some dest
+    | FileReadBlob (dest, _) -> Some dest
     | FileExists (dest, _) -> Some dest
-    | FileWriteText (dest, _, _) -> Some dest
+    | FileWriteBlob (dest, _, _) -> Some dest
     | FileAppendText (dest, _, _) -> Some dest
     | FileDelete (dest, _) -> Some dest
+    | FileCreateDirectory (dest, _) -> Some dest
     | FileSetExecutable (dest, _) -> Some dest
     | FileWriteFromPtr (dest, _, _, _) -> Some dest
     | Phi (dest, _, _) -> Some dest
@@ -255,7 +257,7 @@ let foldInstrUses (folder: 'State -> VReg -> 'State) (state: 'State) (instr: Ins
     | StringConcat (_, first, second, remaining) ->
         fromOperands state (first :: second :: remaining)
     | CanonicalBufferEq (_, _, left, right)
-    | FileWriteText (_, left, right)
+    | FileWriteBlob (_, left, right)
     | FileAppendText (_, left, right)
     | RawGet (_, left, right, _)
     | RawGetByte (_, left, right)
@@ -263,9 +265,10 @@ let foldInstrUses (folder: 'State -> VReg -> 'State) (state: 'State) (instr: Ins
     | RawPtrToList (_, left, right) -> fromOperand (fromOperand state left) right
     | Print (src, _)
     | StdoutWrite (_, src, _)
-    | FileReadText (_, src)
+    | FileReadBlob (_, src)
     | FileExists (_, src)
     | FileDelete (_, src)
+    | FileCreateDirectory (_, src)
     | FileSetExecutable (_, src)
     | RawAlloc (_, src)
     | MappedAlloc (_, src)
