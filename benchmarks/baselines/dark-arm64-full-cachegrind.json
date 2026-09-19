@@ -10,127 +10,127 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-19T10:08:11+00:00",
+  "generated_at": "2026-09-19T12:48:03+00:00",
   "compiler": {
-    "commit": "0b298088ccd4f3b8a6642eb8d285684897646901",
-    "subject": "Merge commit '0cac94569adb98168910d7857ce61ef6ab1967d5' into ops/manual-mergetrain-103-complete"
+    "commit": "12510e3f126627f5121f12d167434f6f049c7506",
+    "subject": "Make semantic function identities collision-free"
   },
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 145114130
+      "instructions": 145107203
     },
     {
       "name": "binary_trees",
-      "instructions": 11053071
+      "instructions": 11046646
     },
     {
       "name": "collatz",
-      "instructions": 70194391
+      "instructions": 70193541
     },
     {
       "name": "edigits",
-      "instructions": 51664634
+      "instructions": 49904322
     },
     {
       "name": "factorial",
-      "instructions": 63459
+      "instructions": 59005
     },
     {
       "name": "fannkuch",
-      "instructions": 233405442
+      "instructions": 220629862
     },
     {
       "name": "fasta",
-      "instructions": 154617357
+      "instructions": 21444709
     },
     {
       "name": "fft",
-      "instructions": 347587065
+      "instructions": 19971086
     },
     {
       "name": "fib",
-      "instructions": 8268578
+      "instructions": 8265766
     },
     {
       "name": "huffman",
-      "instructions": 486099954
+      "instructions": 411968764
     },
     {
       "name": "leibniz",
-      "instructions": 17006822
+      "instructions": 17006465
     },
     {
       "name": "mandelbrot",
-      "instructions": 15227441
+      "instructions": 15222005
     },
     {
       "name": "matmul",
-      "instructions": 42560582
+      "instructions": 42560364
     },
     {
       "name": "merkletrees",
-      "instructions": 3877419
+      "instructions": 3870994
     },
     {
       "name": "myers_diff",
-      "instructions": 222528987
+      "instructions": 205029664
     },
     {
       "name": "nbody",
-      "instructions": 14537321
+      "instructions": 14535980
     },
     {
       "name": "nqueen",
-      "instructions": 7420416
+      "instructions": 7417604
     },
     {
       "name": "nsieve",
-      "instructions": 131101386
+      "instructions": 131108232
     },
     {
       "name": "pisum",
-      "instructions": 812468
+      "instructions": 808014
     },
     {
       "name": "primes",
-      "instructions": 1673426
+      "instructions": 1672085
     },
     {
       "name": "quicksort",
-      "instructions": 188808240
+      "instructions": 176619573
     },
     {
       "name": "raytracer",
-      "instructions": 47323909
+      "instructions": 47317991
     },
     {
       "name": "regex_lite",
-      "instructions": 66667759
+      "instructions": 64887050
     },
     {
       "name": "spectral_norm",
-      "instructions": 916414055
+      "instructions": 264941144
     },
     {
       "name": "string_equality",
-      "instructions": 1181224
+      "instructions": 1178270
     },
     {
       "name": "sum_to_n",
-      "instructions": 62000
+      "instructions": 58037
     },
     {
       "name": "tak",
-      "instructions": 48017015
+      "instructions": 48004384
     },
     {
       "name": "tinytemplate",
-      "instructions": 433491840
+      "instructions": 371292451
     },
     {
       "name": "warden",
-      "instructions": 44812324
+      "instructions": 44213596
     }
   ]
 }

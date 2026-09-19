@@ -87,19 +87,66 @@ let private insertRCInFunctionInternal
                         func.Id
                         index
                         param.Type
-                let internalOwnedAccumulator =
-                    rcShapeNeedsBorrowedRetain shape
-                    && isInternalOwnedTailAccumulator func index param
-                (param, shape, transfersOwnedAccumulator, internalOwnedAccumulator)))
+                let internalOwnedKind =
+                    if rcShapeNeedsBorrowedRetain shape then
+                        internalOwnedTailParamKind func index param
+                    else
+                        None
+                (index, param, shape, transfersOwnedAccumulator, internalOwnedKind)))
+    let provisionalOwnedParamIds =
+        parameterInfos
+        |> List.choose (fun (_, param, _, _, ownedKind) ->
+            ownedKind |> Option.map (fun _ -> param.Id))
+        |> Set.ofList
+    // General loop-state ownership currently targets persistent dictionary
+    // frontiers and their compact tuple bookkeeping. Excluding list and record
+    // candidates avoids adding RC traffic to ordinary traversals where eager
+    // replacement cleanup is not profitable.
+    let hasDictionaryLoopState, hasOnlyFrontierLoopState =
+        parameterInfos
+        |> List.fold (fun (hasDictionary, supported) (_, param, _, _, ownedKind) ->
+            match param.Type, ownedKind with
+            | AST.TDict _, Some NonEscapingLoopState -> (true, supported)
+            | AST.TTuple _, Some NonEscapingLoopState -> (hasDictionary, supported)
+            | _, Some NonEscapingLoopState -> (hasDictionary, false)
+            | _, _ -> (hasDictionary, supported)) (false, true)
+    let hasSupportedDictionaryFrontier =
+        hasDictionaryLoopState && hasOnlyFrontierLoopState
+    let rec validateOwnedParamIds (candidateIds: Set<TempId>) : Set<TempId> =
+        let validatedIds =
+            parameterInfos
+            |> List.choose (fun (index, param, _, _, ownedKind) ->
+                match ownedKind with
+                | Some ReturnedAccumulator -> Some param.Id
+                | Some NonEscapingLoopState
+                    when hasSupportedDictionaryFrontier
+                         && internalOwnedTailParamHasSafeReplacements
+                            func
+                            index
+                            candidateIds ->
+                    Some param.Id
+                | _ -> None)
+            |> Set.ofList
+        if validatedIds = candidateIds then
+            validatedIds
+        else
+            validateOwnedParamIds validatedIds
+    let validatedOwnedParamIds = validateOwnedParamIds provisionalOwnedParamIds
+    let parameterInfos =
+        parameterInfos
+        |> List.map (fun (index, param, shape, transfersOwnedAccumulator, ownedKind) ->
+            let validatedKind =
+                if Set.contains param.Id validatedOwnedParamIds then ownedKind else None
+            (index, param, shape, transfersOwnedAccumulator, validatedKind))
     let internalOwnedParams =
         parameterInfos
-        |> List.choose (fun (param, shape, _, isInternalOwned) ->
-            if isInternalOwned then Some (param, shape) else None)
+        |> List.choose (fun (_, param, shape, _, ownedKind) ->
+            ownedKind |> Option.map (fun kind -> (param, shape, kind)))
     let internalOwnedParamIds =
-        internalOwnedParams |> List.map (fun (param, _) -> param.Id) |> Set.ofList
+        internalOwnedParams |> List.map (fun (param, _, _) -> param.Id) |> Set.ofList
     let paramIncsRev =
         parameterInfos
-        |> List.fold (fun acc (param, shape, transfersOwnedAccumulator, _) ->
+        |> List.fold (fun acc (_, param, shape, transfersOwnedAccumulator, _) ->
             if rcShapeNeedsBorrowedRetain shape
                && not transfersOwnedAccumulator
                && not (Set.contains param.Id internalOwnedParamIds) then
@@ -110,11 +157,21 @@ let private insertRCInFunctionInternal
     let paramIncs = List.rev paramIncsRev
     let ownedParamDecs =
         parameterInfos
-        |> List.choose (fun (param, shape, transfersOwnedAccumulator, _) ->
-            if transfersOwnedAccumulator
-               || Set.contains param.Id internalOwnedParamIds then
-                Some (createReturnDec ctxWithParams param.Id param.Type shape None)
-            else
+        |> List.choose (fun (index, param, shape, transfersOwnedAccumulator, ownedKind) ->
+            match transfersOwnedAccumulator, ownedKind with
+            | true, _ ->
+                Some {
+                    ParamIndex = index
+                    ReleaseOnTerminalReturn = false
+                    Dec = createReturnDec ctxWithParams param.Id param.Type shape None
+                }
+            | false, Some kind ->
+                Some {
+                    ParamIndex = index
+                    ReleaseOnTerminalReturn = kind = NonEscapingLoopState
+                    Dec = createReturnDec ctxWithParams param.Id param.Type shape None
+                }
+            | false, None ->
                 None)
 
     // Process function body with return analysis
@@ -132,7 +189,7 @@ let private insertRCInFunctionInternal
                 paramIncs
                 typesWithParams)
     let retainInternalParam
-        ((param, shape): TypedParam * RcShape)
+        ((param, shape, _): TypedParam * RcShape * InternalOwnedParamKind)
         (body: AExpr, currentVarGen: VarGen, currentTypes: Map<TempId, AST.Type>)
         : AExpr * VarGen * Map<TempId, AST.Type> =
         let (dummyId, nextVarGen) = freshVar currentVarGen
