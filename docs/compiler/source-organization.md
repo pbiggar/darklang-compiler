@@ -113,6 +113,12 @@ copying its typed boundary. `VerifyOwnedHIR` projects out ownership-only steps,
 verifies HIR types and primitive effect/alias contracts, then derives internal
 call ownership from the paired definitions before checking direct and recursive
 unit transfer.
+`OwnedFunctionGroups` traverses normalized HIR call edges, partitions mutually
+visible functions into nonempty strongly connected groups, and orders those
+groups callee-first with source-stable ties. It records calls to earlier internal
+groups separately from external targets and marks both self-recursive and
+mutually recursive groups. Calls retained inside opaque scalar expressions do
+not acquire normalized call-graph edges.
 Resolved direct-call nodes use a typed HIR signature registry and a separate
 ownership signature registry. HIR still requires the call's ordinary primitive
 effect and alias contract; an ownership signature cannot supply either fact.
