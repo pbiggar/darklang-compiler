@@ -1355,6 +1355,208 @@ let testSccpLoopBackedgeWidensInductionValue () : TestResult =
              && Map.containsKey exit optimized.Blocks -> Ok ()
     | _ -> Error "Expected the executable loop backedge to widen the induction value and retain both exits"
 
+let testSccpTracksFloatAndStringConstantsWithoutBypass () : TestResult =
+    let entry = Label "entry"
+    let live = Label "live"
+    let dead = Label "dead"
+    let floatValue = VReg 0
+    let stringValue = VReg 1
+    let floatEqual = VReg 2
+    let stringEqual = VReg 3
+    let bothEqual = VReg 4
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, {
+                    Label = entry
+                    Instrs = [
+                        Mov (floatValue, FloatSymbol 1.5, Some AST.TFloat64)
+                        Mov (stringValue, StringSymbol "same", Some AST.TString)
+                        BinOp (floatEqual, Eq, Register floatValue, FloatSymbol 1.5, AST.TFloat64)
+                        CanonicalBufferEq (
+                            stringEqual,
+                            MemoryModel.Utf8String,
+                            Register stringValue,
+                            StringSymbol "same"
+                        )
+                        BinOp (bothEqual, And, Register floatEqual, Register stringEqual, AST.TBool)
+                    ]
+                    Terminator = Branch (Register bothEqual, live, dead)
+                })
+                (live, { Label = live; Instrs = []; Terminator = Ret (StringSymbol "same") })
+                (dead, { Label = dead; Instrs = [RuntimeError "unreachable"]; Terminator = Ret (StringSymbol "dead") })
+            ]
+    }
+
+    let optimized, changed = applySparseConditionalConstantPropagation cfg
+    match Map.tryFind entry optimized.Blocks with
+    | Some block
+        when changed
+             && block.Terminator = Jump live
+             && not (Map.containsKey dead optimized.Blocks) -> Ok ()
+    | _ -> Error "Expected SCCP to analyze Float and String constants without bypassing the CFG"
+
+let testSccpStabilizesNanConstants () : TestResult =
+    let entry = Label "entry"
+    let live = Label "live"
+    let dead = Label "dead"
+    let nanValue = VReg 0
+    let negativeNan = VReg 1
+    let isNan = VReg 2
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, {
+                    Label = entry
+                    Instrs = [
+                        Mov (nanValue, FloatSymbol System.Double.NaN, Some AST.TFloat64)
+                        FloatNeg (negativeNan, Register nanValue)
+                        BinOp (isNan, Neq, Register negativeNan, Register negativeNan, AST.TFloat64)
+                    ]
+                    Terminator = Branch (Register isNan, live, dead)
+                })
+                (live, { Label = live; Instrs = []; Terminator = Ret (BoolConst true) })
+                (dead, { Label = dead; Instrs = [RuntimeError "unreachable"]; Terminator = Ret (BoolConst false) })
+            ]
+    }
+
+    let optimized, changed = applySparseConditionalConstantPropagation cfg
+    match Map.tryFind entry optimized.Blocks with
+    | Some block
+        when changed
+             && block.Terminator = Jump live
+             && not (Map.containsKey dead optimized.Blocks) -> Ok ()
+    | _ -> Error "Expected SCCP to stabilize NaN constants and prune their false comparison edge"
+
+let testSccpTracksAggregateConstructorFields () : TestResult =
+    let entry = Label "entry"
+    let left = Label "left"
+    let right = Label "right"
+    let join = Label "join"
+    let live = Label "live"
+    let dead = Label "dead"
+    let condition = VReg 0
+    let leftValue = VReg 1
+    let rightValue = VReg 2
+    let merged = VReg 3
+    let tag = VReg 4
+    let isSecond = VReg 5
+    let block label instrs terminator : BasicBlock = {
+        Label = label
+        Instrs = instrs
+        Terminator = terminator
+    }
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, block entry [] (Branch (Register condition, left, right)))
+                (left,
+                    block left [HeapAlloc (leftValue, 16); HeapStore (leftValue, 0, Int64Const 1L, None)] (Jump join))
+                (right,
+                    block right [HeapAlloc (rightValue, 16); HeapStore (rightValue, 0, Int64Const 1L, None)] (Jump join))
+                (join,
+                    block join [
+                        Phi (merged, [(Register leftValue, left); (Register rightValue, right)], Some (AST.TSum ("Choice", [])))
+                        HeapLoad (tag, merged, 0, None)
+                        BinOp (isSecond, Eq, Register tag, Int64Const 1L, AST.TInt64)
+                    ] (Branch (Register isSecond, live, dead)))
+                (live, block live [] (Ret (Int64Const 1L)))
+                (dead, block dead [RuntimeError "unreachable"] (Ret (Int64Const 0L)))
+            ]
+    }
+
+    let optimized, changed = applySparseConditionalConstantPropagation cfg
+    match Map.tryFind join optimized.Blocks with
+    | Some block
+        when changed
+             && block.Terminator = Jump live
+             && not (Map.containsKey dead optimized.Blocks) -> Ok ()
+    | _ -> Error "Expected SCCP to merge constructor aggregates and propagate their common tag"
+
+let testSccpUsesCallResultRange () : TestResult =
+    let entry = Label "entry"
+    let live = Label "live"
+    let dead = Label "dead"
+    let result = VReg 0
+    let inRange = VReg 1
+    let call = Call (result, fid "smallResult", [], [], AST.TUInt8)
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, {
+                    Label = entry
+                    Instrs = [call; BinOp (inRange, Lte, Register result, Int64Const 255L, AST.TUInt8)]
+                    Terminator = Branch (Register inRange, live, dead)
+                })
+                (live, { Label = live; Instrs = []; Terminator = Ret (Int64Const 1L) })
+                (dead, { Label = dead; Instrs = [RuntimeError "unreachable"]; Terminator = Ret (Int64Const 0L) })
+            ]
+    }
+
+    let optimized, changed = applySparseConditionalConstantPropagation cfg
+    match Map.tryFind entry optimized.Blocks with
+    | Some block
+        when changed
+             && List.contains call block.Instrs
+             && block.Terminator = Jump live
+             && not (Map.containsKey dead optimized.Blocks) -> Ok ()
+    | _ -> Error "Expected SCCP to retain the call effect while using its typed result range"
+
+let testSccpPropagatesConstantCallResult () : TestResult =
+    let calleeEntry = Label "callee_entry"
+    let callee = {
+        Id = fid "constantText"
+        Name = "constantText"
+        TypedParams = []
+        ReturnType = AST.TString
+        CFG = {
+            Entry = calleeEntry
+            Blocks = Map.ofList [(calleeEntry, { Label = calleeEntry; Instrs = []; Terminator = Ret (StringSymbol "known") })]
+        }
+        FloatRegs = Set.empty
+    }
+    let entry = Label "caller_entry"
+    let live = Label "caller_live"
+    let dead = Label "caller_dead"
+    let result = VReg 0
+    let equal = VReg 1
+    let call = Call (result, callee.Id, [], [], AST.TString)
+    let caller = {
+        Id = fid "constantCaller"
+        Name = "constantCaller"
+        TypedParams = []
+        ReturnType = AST.TInt64
+        CFG = {
+            Entry = entry
+            Blocks =
+                Map.ofList [
+                    (entry, {
+                        Label = entry
+                        Instrs = [call; CanonicalBufferEq (equal, MemoryModel.Utf8String, Register result, StringSymbol "known")]
+                        Terminator = Branch (Register equal, live, dead)
+                    })
+                    (live, { Label = live; Instrs = []; Terminator = Ret (Int64Const 1L) })
+                    (dead, { Label = dead; Instrs = [RuntimeError "unreachable"]; Terminator = Ret (Int64Const 0L) })
+                ]
+        }
+        FloatRegs = Set.empty
+    }
+
+    let (Program (functions, _, _)) = optimizeProgram (Program ([callee; caller], Map.empty, Map.empty))
+    match functions |> List.tryFind (fun func -> func.Id = caller.Id) with
+    | Some optimized ->
+        match Map.tryFind entry optimized.CFG.Blocks with
+        | Some block
+            when List.contains call block.Instrs
+                 && (block.Terminator = Jump live || block.Terminator = Ret (Int64Const 1L))
+                 && not (Map.containsKey dead optimized.CFG.Blocks) -> Ok ()
+        | _ -> Error "Expected SCCP to retain the constant-returning call while pruning its false result edge"
+    | None -> Error "Expected optimized program to retain the constant-call caller"
+
 let testSccpDoesNotApplyIntegerFoldsToFloatOperations () : TestResult =
     let entry = Label "entry"
     let input = VReg 0
@@ -1676,6 +1878,11 @@ let tests = [
     ("MIR SCCP propagates phi constants and removes unreachable edges", testSccpPropagatesPhiConstantAndRemovesUnreachableEdge)
     ("MIR SCCP ignores non-executable phi inputs", testSccpPhiIgnoresNonExecutableIncomingEdge)
     ("MIR SCCP widens loop values after executable backedges", testSccpLoopBackedgeWidensInductionValue)
+    ("MIR SCCP tracks Float and String constants without bypass", testSccpTracksFloatAndStringConstantsWithoutBypass)
+    ("MIR SCCP stabilizes NaN constants", testSccpStabilizesNanConstants)
+    ("MIR SCCP tracks aggregate constructor fields", testSccpTracksAggregateConstructorFields)
+    ("MIR SCCP uses call-result ranges", testSccpUsesCallResultRange)
+    ("MIR SCCP propagates constant call results", testSccpPropagatesConstantCallResult)
     ("MIR SCCP does not apply integer folds to float operations", testSccpDoesNotApplyIntegerFoldsToFloatOperations)
     ("MIR true edge eliminates redundant successor branch", testTrueEdgeEliminatesRedundantSuccessorBranch)
     ("MIR false edge eliminates redundant successor branch", testFalseEdgeEliminatesRedundantSuccessorBranch)

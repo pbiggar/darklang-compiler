@@ -103,17 +103,47 @@ let propagateCopyOperand (copies: CopyMap) (op: Operand) : Operand =
 /// Apply copy propagation to an instruction
 let propagateCopyInstr (copies: CopyMap) (instr: Instr) : Instr =
     let p = propagateCopyOperand copies
+    let typedP valueType operand =
+        let propagated = p operand
+        match valueType, propagated with
+        | AST.TFloat64, Int64Const bits ->
+            FloatSymbol (System.BitConverter.Int64BitsToDouble bits)
+        | AST.TFloat64, (Register _ | FloatSymbol _) -> propagated
+        | AST.TFloat64, _ ->
+            // RuntimeError continuations use an integer zero sentinel even when
+            // their unreachable result flows through a float-typed use.
+            operand
+        | _ -> propagated
+    let rec callArgs args argTypes =
+        match args, argTypes with
+        | [], [] -> []
+        | arg :: remainingArgs, argType :: remainingTypes ->
+            typedP argType arg :: callArgs remainingArgs remainingTypes
+        | _ -> Crash.crash "MIR call argument and type counts differ"
     match instr with
-    | Mov (dest, src, vt) -> Mov (dest, p src, vt)
-    | BinOp (dest, op, left, right, opType) -> BinOp (dest, op, p left, p right, opType)
+    | Mov (dest, src, vt) ->
+        match vt with
+        | Some valueType -> Mov (dest, typedP valueType src, vt)
+        | None -> Mov (dest, p src, vt)
+    | BinOp (dest, op, left, right, opType) ->
+        let left', right' =
+            match op, opType with
+            | (Sub | Eq | Neq | Lt | Gt | Lte | Gte), AST.TFloat64 ->
+                (typedP opType left, typedP opType right)
+            | _ -> (p left, p right)
+        BinOp (dest, op, left', right', opType)
     | UnaryOp (dest, op, src) -> UnaryOp (dest, op, p src)
-    | Call (dest, name, args, argTypes, retType) -> Call (dest, name, List.map p args, argTypes, retType)
-    | TailCall (name, args, argTypes, retType) -> TailCall (name, List.map p args, argTypes, retType)
-    | IndirectCall (dest, func, args, argTypes, retType) -> IndirectCall (dest, p func, List.map p args, argTypes, retType)
-    | IndirectTailCall (func, args, argTypes, retType) -> IndirectTailCall (p func, List.map p args, argTypes, retType)
+    | Call (dest, name, args, argTypes, retType) -> Call (dest, name, callArgs args argTypes, argTypes, retType)
+    | TailCall (name, args, argTypes, retType) -> TailCall (name, callArgs args argTypes, argTypes, retType)
+    | IndirectCall (dest, func, args, argTypes, retType) ->
+        IndirectCall (dest, p func, callArgs args argTypes, argTypes, retType)
+    | IndirectTailCall (func, args, argTypes, retType) ->
+        IndirectTailCall (p func, callArgs args argTypes, argTypes, retType)
     | ClosureAlloc (dest, name, captures) -> ClosureAlloc (dest, name, List.map p captures)
-    | ClosureCall (dest, closure, args, argTypes, retType) -> ClosureCall (dest, p closure, List.map p args, argTypes, retType)
-    | ClosureTailCall (closure, args, argTypes) -> ClosureTailCall (p closure, List.map p args, argTypes)
+    | ClosureCall (dest, closure, args, argTypes, retType) ->
+        ClosureCall (dest, p closure, callArgs args argTypes, argTypes, retType)
+    | ClosureTailCall (closure, args, argTypes) ->
+        ClosureTailCall (p closure, callArgs args argTypes, argTypes)
     | HeapAlloc (dest, size) -> HeapAlloc (dest, size)
     | HeapStore (addr, offset, src, vt) ->
         let addr' = match p (Register addr) with Register v -> v | _ -> addr
