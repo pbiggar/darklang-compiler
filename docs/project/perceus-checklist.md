@@ -39,10 +39,13 @@ representation and safety boundaries are documented in
   [ElaborateFunctionOwnership](../../src/DarkCompiler/passes/ownership/ElaborateFunctionOwnership.fs);
   the verified artifact is deliberately discarded before existing ANF lowering,
   so this scheduling slice has no runtime effect.
-- [ ] **Schedule specialization across functions.** Connect analysis,
+- [x] **Schedule specialization across functions.** Connect analysis,
   selection, and materialization; propagate uniqueness information until the
   process stabilizes. Bound generated code and compilation work, and cache
-  specializations by their bodies, contracts, and dependencies. These
+  specializations by their bodies, contracts, and dependencies. Implemented by
+  [ScheduleOwnershipVariants](../../src/DarkCompiler/passes/ownership/ScheduleOwnershipVariants.fs),
+  which is invoked by production whole-function analysis and returns the
+  materialization, iteration history, and structural cache descriptors. These
   foundation stages alone are not expected to improve runtime performance.
 - [ ] **Carry ownership through lowering.** Preserve contracts through calls,
   returns, branches, tail calls, ANF, and native code generation. Integrate with

@@ -22,6 +22,22 @@ type AnalysisError =
     | OwnershipElaborationFailed of ElaborateFunctionOwnership.ElaborationError
     | OwnedHIRVerificationFailed of VerifyOwnedHIR.VerificationError<HIR.ValueId>
     | FunctionOwnershipVerificationFailed of AST.FunctionId * OwnedIR.VerificationError<HIR.ValueId>
+    | SpecializationSchedulingFailed of ScheduleOwnershipVariants.SchedulingError<HIR.ValueId>
+
+type Analysis = private {
+    Ownership: ElaborateFunctionOwnership.Analysis<ConstructHIRFunctions.Primitive>
+    HIR: VerifyOwnedHIR.HIRContracts<ConstructHIRFunctions.Primitive>
+    Schedule: ScheduleOwnershipVariants.Plan<ConstructHIRFunctions.Primitive, HIR.ValueId>
+}
+
+let functions analysis = ScheduleOwnershipVariants.functions analysis.Schedule
+let semantics analysis =
+    ScheduleOwnershipVariants.ownershipSemantics
+        analysis.Schedule
+        (ElaborateFunctionOwnership.semantics analysis.Ownership)
+let hirContracts analysis =
+    ScheduleOwnershipVariants.hirContracts analysis.Schedule analysis.HIR
+let schedule analysis = analysis.Schedule
 
 let private isManaged context (value: HIR.Value) =
     value.Type
@@ -44,7 +60,7 @@ let private callContract isManaged (call: HIR.FunctionCall) : HIR.PrimitiveContr
 let analyze
     (context: Context)
     (functions: CheckedAST.FunctionDef list)
-    : Result<ElaborateFunctionOwnership.Analysis<ConstructHIRFunctions.Primitive>, AnalysisError> =
+    : Result<Analysis, AnalysisError> =
     let infer types expression =
         LoweringTypeInference.inferTypeCore
             context.SumTypeNames
@@ -109,4 +125,18 @@ let analyze
                             Some (FunctionOwnershipVerificationFailed (definition.Definition.Id, functionError)))
                     |> Option.defaultValue (OwnedHIRVerificationFailed error)
                 | VerifyOwnedHIR.HIRVerificationFailed _ -> OwnedHIRVerificationFailed error)
-            |> Result.map (fun () -> analysis)))
+            |> Result.bind (fun () ->
+                let reservedSymbols =
+                    context.FunctionNames |> Map.values |> Set.ofSeq
+                ScheduleOwnershipVariants.schedule
+                    ScheduleOwnershipVariants.defaultLimits
+                    hir
+                    ownership
+                    reservedSymbols
+                    ownedFunctions
+                |> Result.mapError SpecializationSchedulingFailed
+                |> Result.map (fun scheduled -> {
+                    Ownership = analysis
+                    HIR = hir
+                    Schedule = scheduled
+                }))))

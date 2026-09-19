@@ -123,9 +123,13 @@ exclusivity certificate. Resolved HIR calls require matching typed, primitive,
 and ownership registry entries. Unknown calls remain opaque, and recursion is
 enabled only by an explicit self-entry. Current list regions intentionally
 reject this general call node and use the closed signature because external
-source lists still have the persistent skew-list representation. Building owned
-whole-function inputs in the production pipeline and scheduling inferred modes
-for escaping array values remain later work.
+source lists still have the persistent skew-list representation. Owned
+whole-function inputs and fixed-point specialization scheduling now run in the
+production pipeline. Scheduling is bounded by iteration, generated-group, and
+rewritten-call limits, and its cache descriptors retain exact source bodies,
+canonical contracts, and dependencies. The resulting ownership HIR remains an
+analysis artifact until ownership-aware ANF lowering consumes it; escaping
+array values remain later work.
 
 `verifyFunctional` checks the closed region's incoming collection interface
 using representation-independent value contracts. `verifyBlockOwnership`
