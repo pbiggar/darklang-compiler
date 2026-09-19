@@ -156,6 +156,7 @@ os.execv(os.environ["TEST_REAL_GIT"], [os.environ["TEST_REAL_GIT"], *arguments])
             self.assertIn(f"  {paths['ignored']} (ignored)", dry_run.stdout)
             self.assertIn("tracked, untracked, or ignored files", dry_run.stdout)
             self.assertIn("used by PID 4242 (terminal)", dry_run.stdout)
+            self.assertNotIn("\033[", dry_run.stdout)
             self.assertLess(
                 dry_run.stdout.index("REMOVE (2)"),
                 dry_run.stdout.index("PRUNE (1)"),
@@ -174,6 +175,19 @@ os.execv(os.environ["TEST_REAL_GIT"], [os.environ["TEST_REAL_GIT"], *arguments])
             )
             self.assertTrue(paths["merged"].exists())
             self.assertTrue(self.branch_exists(repo, "merged"))
+
+            colored = subprocess.run(
+                [sys.executable, str(source_script), "--color", "always"],
+                cwd=repo,
+                env=environment,
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+            self.assertIn("\033[1;31mREMOVE (2)", colored.stdout)
+            self.assertIn("\033[1;35mPRUNE (1)", colored.stdout)
+            self.assertIn("\033[1;33mBLOCK (4)\033[0m", colored.stdout)
+            self.assertIn("\033[2mKEEP (2)\033[0m", colored.stdout)
 
             from_linked_worktree = subprocess.run(
                 [sys.executable, str(source_script)],
@@ -224,6 +238,10 @@ os.execv(os.environ["TEST_REAL_GIT"], [os.environ["TEST_REAL_GIT"], *arguments])
                 "deleted 2 branch(es), left 4 blocked worktree(s)",
                 blocked_apply.stdout,
             )
+            self.assertRegex(
+                blocked_apply.stdout,
+                r"Reclaimed checkout space: (?!0 B)\d+(?:\.\d+)? [KMGT]?i?B",
+            )
             self.assertIn("ERROR (1)", blocked_apply.stderr)
             self.assertIn("simulated checkout removal failure", blocked_apply.stderr)
             self.assertIn("Other eligible cleanup continued", blocked_apply.stderr)
@@ -252,6 +270,10 @@ os.execv(os.environ["TEST_REAL_GIT"], [os.environ["TEST_REAL_GIT"], *arguments])
                 capture_output=True,
             )
             self.assertIn("Applied: removed 3 checkout(s)", applied.stdout)
+            self.assertRegex(
+                applied.stdout,
+                r"Reclaimed checkout space: (?!0 B)\d+(?:\.\d+)? [KMGT]?i?B",
+            )
             self.assertFalse(paths["busy"].exists())
             self.assertFalse(paths["ignored"].exists())
             self.assertFalse(paths["remove_fail"].exists())
