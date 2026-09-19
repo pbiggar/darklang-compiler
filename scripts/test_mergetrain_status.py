@@ -6,8 +6,9 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
-from scripts.render_mergetrain_status import human_age
+from scripts.render_mergetrain_status import human_age, render
 
 
 class MergetrainStatusTests(unittest.TestCase):
@@ -18,6 +19,52 @@ class MergetrainStatusTests(unittest.TestCase):
         self.assertEqual(human_age(now - timedelta(minutes=5), now=now), "5m ago")
         self.assertEqual(human_age(now - timedelta(hours=2), now=now), "2h ago")
         self.assertEqual(human_age(now - timedelta(days=3), now=now), "3d ago")
+
+    @patch("scripts.render_mergetrain_status.benchmark_ratio", return_value=None)
+    @patch("scripts.render_mergetrain_status.benchmark_changes", return_value=[])
+    @patch("scripts.render_mergetrain_status.recent_merges", return_value=[])
+    def test_conflict_details_are_collapsed_and_can_be_toggled(
+        self,
+        _recent_merges: object,
+        _benchmark_changes: object,
+        _benchmark_ratio: object,
+    ) -> None:
+        reason = "merge conflict in src/Compiler.fs\nfull conflicting hunk"
+        payload = {
+            "contract_version": 4,
+            "health": "healthy",
+            "state": "attention",
+            "summary": "1 job needs attention",
+            "next_action": {
+                "code": "fix_blocked_job",
+                "command": None,
+                "requires_approval": "none",
+            },
+            "warnings": [],
+            "attention_jobs": [
+                {
+                    "id": 3,
+                    "task": "Compiler work",
+                    "branch": "agent/compiler",
+                    "state": "attention",
+                    "reason": reason,
+                }
+            ],
+            "recent_jobs": [],
+        }
+
+        collapsed = render(
+            payload,
+            Path("."),
+            color=False,
+            conflict_toggle_hint=True,
+        )
+        expanded = render(payload, Path("."), color=False, show_conflicts=True)
+
+        self.assertIn("— conflict", collapsed)
+        self.assertNotIn("full conflicting hunk", collapsed)
+        self.assertIn("[c] show full conflict details", collapsed)
+        self.assertIn(reason, expanded)
 
     def test_shows_active_train_recent_merge_and_benchmark_changes(self) -> None:
         source_root = Path(__file__).resolve().parent.parent
@@ -138,7 +185,8 @@ print(json.dumps({
         "task": "Repair benchmark conflict",
         "branch": "agent/repair",
         "state": "attention",
-        "reason": "merge conflict"
+        "reason": "merge conflict in benchmarks/RESULTS.md\\n"
+                  "CONFLICT (content): both branches changed the benchmark table"
     }],
     "recent_jobs": [
         {
@@ -191,7 +239,7 @@ print(json.dumps({
             self.assertIn("\n\nrecent merges:\n", completed.stdout)
             self.assertIn("\n\nbenchmark ratio: 2.8x\n", completed.stdout)
             attention = completed.stdout.index(
-                "  #9 attention Repair benchmark conflict [agent/repair] — merge conflict"
+                "  #9 attention Repair benchmark conflict [agent/repair] — conflict"
             )
             running = completed.stdout.index(
                 "  #10 running Compile tuples [agent/tuples]"
@@ -236,6 +284,25 @@ print(json.dumps({
             self.assertIn("\x1b[32mhealthy\x1b[0m", colored.stdout)
             self.assertIn("\x1b[31mattention\x1b[0m", colored.stdout)
             self.assertIn("\x1b[36mrunning\x1b[0m", colored.stdout)
+
+            detailed = subprocess.run(
+                [
+                    str(source_root / "mergetrain-status"),
+                    "--repo",
+                    str(repo),
+                    "--show-conflicts",
+                    "--once",
+                ],
+                cwd=repo,
+                env=process_environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(detailed.returncode, 0, detailed.stderr)
+            self.assertIn("merge conflict in benchmarks/RESULTS.md", detailed.stdout)
+            self.assertIn("CONFLICT (content): both branches changed", detailed.stdout)
 
 
 if __name__ == "__main__":

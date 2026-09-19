@@ -3,6 +3,7 @@
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -40,6 +41,14 @@ import time
 
 command = next(arg for arg in sys.argv if arg in {"daemon", "status", "inspect", "retry"})
 if command == "daemon":
+    fail_once_file = os.environ.get("INTEGRATOR_TEST_DAEMON_FAIL_ONCE_FILE")
+    if fail_once_file and not pathlib.Path(fail_once_file).exists():
+        pathlib.Path(fail_once_file).write_text("failed", encoding="utf-8")
+        print("temporary daemon problem")
+        raise SystemExit(1)
+    recovered_file = os.environ.get("INTEGRATOR_TEST_RECOVERED_FILE")
+    if recovered_file:
+        pathlib.Path(recovered_file).write_text("recovered", encoding="utf-8")
     if os.environ.get("INTEGRATOR_TEST_PROGRESS") == "1":
         progress_file = pathlib.Path(os.environ["INTEGRATOR_TEST_PROGRESS_FILE"])
         for stage in ("assembling", "gating", "deploying", "done"):
@@ -201,7 +210,7 @@ raise SystemExit(1)
                 check=False,
             )
 
-            self.assertEqual(completed.returncode, 1)
+            self.assertEqual(completed.returncode, 0)
             self.assertEqual(completed.stdout, "")
             self.assertIn("Integrator started", completed.stderr)
             self.assertIn("Job #4: Repairing task/test after merge conflict", completed.stderr)
@@ -251,7 +260,7 @@ raise SystemExit(1)
                 check=False,
             )
 
-            self.assertEqual(completed.returncode, 1)
+            self.assertEqual(completed.returncode, 0)
             self.assertEqual(completed.stdout, "")
             self.assertIn("Mergetrain daemon command failed", completed.stderr)
             self.assertIn("daemon noise 39", completed.stderr)
@@ -260,6 +269,44 @@ raise SystemExit(1)
             daemon_logs = list(attempts.glob("daemon-failed-*.log"))
             self.assertEqual(len(daemon_logs), 1)
             self.assertIn("daemon noise 0", daemon_logs[0].read_text(encoding="utf-8"))
+
+    def test_daemon_failure_does_not_stop_the_integrator(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo, environment = self.make_fixture(root)
+            environment["INTEGRATOR_TEST_DAEMON_FAIL_ONCE_FILE"] = str(
+                root / "failed-once"
+            )
+            recovered_file = root / "recovered"
+            environment["INTEGRATOR_TEST_RECOVERED_FILE"] = str(recovered_file)
+            environment["INTEGRATOR_TEST_NEXT_ACTION"] = "enqueue_clean_branch"
+
+            process = subprocess.Popen(
+                [
+                    environment["INTEGRATOR_SCRIPT"],
+                    "--repo",
+                    str(repo),
+                    "--attempt-dir",
+                    str(root / "attempts"),
+                    "--interval",
+                    "1",
+                ],
+                env=environment,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            try:
+                for _ in range(50):
+                    if recovered_file.exists():
+                        break
+                    time.sleep(0.1)
+                self.assertTrue(recovered_file.exists(), "integrator did not retry")
+            finally:
+                process.terminate()
+                _stdout, stderr = process.communicate(timeout=5)
+
+            self.assertIn("Mergetrain daemon command failed", stderr)
 
     def test_successful_idle_tick_reports_readable_status_without_subprocess_noise(
         self,
