@@ -53,14 +53,23 @@ class PruneWorktreesTests(unittest.TestCase):
                     "dirty",
                     "locked",
                     "busy",
+                    "ignored",
+                    "remove_fail",
                     "unmerged",
                 )
             }
+            paths["remove_fail"] = root / "protected" / "remove-fail"
+            paths["remove_fail"].parent.mkdir()
             for name in paths:
                 self.git(repo, "branch", name)
                 self.git(repo, "worktree", "add", "-q", str(paths[name]), name)
 
             (paths["dirty"] / "untracked.txt").write_text("keep me\n", encoding="utf-8")
+            with (repo / ".git" / "info" / "exclude").open("a", encoding="utf-8") as file:
+                file.write("artifact.cache\n")
+            (paths["ignored"] / "artifact.cache").write_text(
+                "keep me\n", encoding="utf-8"
+            )
             self.git(repo, "worktree", "lock", str(paths["locked"]))
             (paths["unmerged"] / "change.txt").write_text("change\n", encoding="utf-8")
             self.git(paths["unmerged"], "add", "change.txt")
@@ -94,8 +103,27 @@ for pid, command, path in records:
                 encoding="utf-8",
             )
             fake_lsof.chmod(0o755)
+            real_git = shutil.which("git")
+            self.assertIsNotNone(real_git)
+            fake_git = fake_bin / "git"
+            fake_git.write_text(
+                """#!/usr/bin/env python3
+import os
+import sys
+
+failure_target = os.environ.get("TEST_REMOVE_FAILURE")
+arguments = sys.argv[1:]
+if failure_target and "worktree" in arguments and "remove" in arguments and arguments[-1] == failure_target:
+    print("simulated checkout removal failure", file=sys.stderr)
+    raise SystemExit(255)
+os.execv(os.environ["TEST_REAL_GIT"], [os.environ["TEST_REAL_GIT"], *arguments])
+""",
+                encoding="utf-8",
+            )
+            fake_git.chmod(0o755)
             environment = dict(os.environ)
             environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["TEST_REAL_GIT"] = str(real_git)
             environment["TEST_PRIMARY"] = str(repo)
             environment["TEST_BUSY_WORKTREE"] = str(paths["busy"])
             environment["TEST_LSOF_UID"] = str(os.stat(repo).st_uid)
@@ -109,34 +137,39 @@ for pid, command, path in records:
                 capture_output=True,
             )
             self.assertIn(
-                "REMOVE (1) — clean, inactive, integrated checkouts",
+                "REMOVE (2) — clean, inactive, integrated checkouts",
                 dry_run.stdout,
             )
             self.assertIn(f"  {paths['merged']} (merged)", dry_run.stdout)
+            self.assertIn(
+                f"  {paths['remove_fail']} (remove_fail)", dry_run.stdout
+            )
             self.assertIn("PRUNE (1) — missing checkouts", dry_run.stdout)
             self.assertIn(f"  {paths['stale']} (stale)", dry_run.stdout)
             self.assertIn("KEEP (2)", dry_run.stdout)
             self.assertIn(f"  {paths['unmerged']} (unmerged)", dry_run.stdout)
-            self.assertIn("Dry run: 1 checkout(s) removable", dry_run.stdout)
-            self.assertIn("BLOCK (3)", dry_run.stdout)
+            self.assertIn("Dry run: 2 checkout(s) removable", dry_run.stdout)
+            self.assertIn("BLOCK (4)", dry_run.stdout)
             self.assertIn(f"  {paths['dirty']} (dirty)", dry_run.stdout)
             self.assertIn(f"  {paths['locked']} (locked)", dry_run.stdout)
             self.assertIn(f"  {paths['busy']} (busy)", dry_run.stdout)
+            self.assertIn(f"  {paths['ignored']} (ignored)", dry_run.stdout)
+            self.assertIn("tracked, untracked, or ignored files", dry_run.stdout)
             self.assertIn("used by PID 4242 (terminal)", dry_run.stdout)
             self.assertLess(
-                dry_run.stdout.index("REMOVE (1)"),
+                dry_run.stdout.index("REMOVE (2)"),
                 dry_run.stdout.index("PRUNE (1)"),
             )
             self.assertLess(
                 dry_run.stdout.index("PRUNE (1)"),
-                dry_run.stdout.index("BLOCK (3)"),
+                dry_run.stdout.index("BLOCK (4)"),
             )
             self.assertLess(
                 dry_run.stdout.index(f"  {paths['busy']} (busy)"),
                 dry_run.stdout.index(f"  {paths['dirty']} (dirty)"),
             )
             self.assertLess(
-                dry_run.stdout.index("BLOCK (3)"),
+                dry_run.stdout.index("BLOCK (4)"),
                 dry_run.stdout.index("KEEP (2)"),
             )
             self.assertTrue(paths["merged"].exists())
@@ -173,24 +206,31 @@ for pid, command, path in records:
             self.assertIn("no changes made", failed_inspection.stderr)
             self.assertTrue(paths["merged"].exists())
 
+            removal_failure_environment = dict(environment)
+            removal_failure_environment["TEST_REMOVE_FAILURE"] = str(
+                paths["remove_fail"]
+            )
             blocked_apply = subprocess.run(
                 [sys.executable, str(source_script), "--apply"],
                 cwd=repo,
-                env=environment,
-                check=True,
+                env=removal_failure_environment,
+                check=False,
                 text=True,
                 capture_output=True,
             )
+            self.assertEqual(blocked_apply.returncode, 1)
             self.assertIn(
                 "Applied: removed 1 checkout(s), pruned 1 stale registration(s), "
-                "deleted 2 branch(es), left 3 blocked worktree(s)",
+                "deleted 2 branch(es), left 4 blocked worktree(s)",
                 blocked_apply.stdout,
             )
-            self.assertEqual(blocked_apply.stderr, "")
+            self.assertIn("ERROR (1)", blocked_apply.stderr)
+            self.assertIn("simulated checkout removal failure", blocked_apply.stderr)
+            self.assertIn("Other eligible cleanup continued", blocked_apply.stderr)
             self.assertFalse(paths["merged"].exists())
             self.assertFalse(self.branch_exists(repo, "merged"))
             self.assertFalse(self.branch_exists(repo, "stale"))
-            for name in ("dirty", "locked", "busy"):
+            for name in ("dirty", "locked", "busy", "ignored", "remove_fail"):
                 self.assertTrue(paths[name].exists())
                 self.assertTrue(self.branch_exists(repo, name))
 
@@ -199,6 +239,7 @@ for pid, command, path in records:
             (paths["locked"] / "locked.txt").write_text("keep me\n", encoding="utf-8")
             self.git(paths["locked"], "add", "locked.txt")
             self.git(paths["locked"], "commit", "-q", "-m", "preserve locked branch")
+            (paths["ignored"] / "artifact.cache").unlink()
             eligible_environment = dict(environment)
             eligible_environment.pop("TEST_BUSY_WORKTREE")
 
@@ -210,9 +251,13 @@ for pid, command, path in records:
                 text=True,
                 capture_output=True,
             )
-            self.assertIn("Applied: removed 1 checkout(s)", applied.stdout)
+            self.assertIn("Applied: removed 3 checkout(s)", applied.stdout)
             self.assertFalse(paths["busy"].exists())
+            self.assertFalse(paths["ignored"].exists())
+            self.assertFalse(paths["remove_fail"].exists())
             self.assertFalse(self.branch_exists(repo, "busy"))
+            self.assertFalse(self.branch_exists(repo, "ignored"))
+            self.assertFalse(self.branch_exists(repo, "remove_fail"))
             registrations = self.git(repo, "worktree", "list", "--porcelain")
             self.assertNotIn(str(paths["stale"]), registrations)
             for name in ("dirty", "locked", "unmerged"):

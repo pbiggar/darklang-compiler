@@ -107,6 +107,7 @@ def is_dirty(path: Path) -> bool:
         "status",
         "--porcelain",
         "--untracked-files=normal",
+        "--ignored=matching",
         check=False,
     )
     if result.returncode != 0:
@@ -323,7 +324,9 @@ def main() -> int:
             if worktree.locked:
                 reasons.append("integrated checkout is locked")
             if is_dirty(worktree.path):
-                reasons.append("integrated checkout has tracked or untracked changes")
+                reasons.append(
+                    "integrated checkout has tracked, untracked, or ignored files"
+                )
             if users := processes_using(worktree, processes):
                 first = users[0]
                 extra = f" and {len(users) - 1} more" if len(users) > 1 else ""
@@ -376,7 +379,7 @@ def main() -> int:
 
     print_plan(plan)
 
-    branches_to_delete = {
+    planned_branches = {
         branch: worktree.head
         for worktree in [*removable, *stale]
         if (branch := local_branch(worktree)) is not None
@@ -390,14 +393,58 @@ def main() -> int:
             f"{len(stale)} stale registration(s), {len(blocked)} blocked, "
             f"{skipped} kept{suffix}"
         )
-        print(f"Dry run: {len(branches_to_delete)} merged local branch(es) deletable")
+        print(f"Dry run: {len(planned_branches)} merged local branch(es) deletable")
         return 0
 
+    removed: list[Worktree] = []
+    errors: list[str] = []
     for worktree in removable:
-        git(current_root, "worktree", "remove", "--", str(worktree.path))
+        remove_result = git(
+            current_root,
+            "worktree",
+            "remove",
+            "--",
+            str(worktree.path),
+            check=False,
+        )
+        if remove_result.returncode == 0:
+            removed.append(worktree)
+        else:
+            detail = remove_result.stderr.strip() or remove_result.stdout.strip()
+            preserved = (
+                "branch was preserved"
+                if local_branch(worktree) is not None
+                else "detached HEAD was preserved"
+            )
+            errors.append(
+                f"Could not remove {describe(worktree)}; {preserved}: "
+                f"{detail or f'git exited with status {remove_result.returncode}'}"
+            )
 
+    pruned: list[Worktree] = []
     if stale:
-        git(current_root, "worktree", "prune", "--expire", "now")
+        prune_result = git(
+            current_root,
+            "worktree",
+            "prune",
+            "--expire",
+            "now",
+            check=False,
+        )
+        if prune_result.returncode == 0:
+            pruned = stale
+        else:
+            detail = prune_result.stderr.strip() or prune_result.stdout.strip()
+            errors.append(
+                "Could not prune stale worktree registrations: "
+                f"{detail or f'git exited with status {prune_result.returncode}'}"
+            )
+
+    branches_to_delete = {
+        branch: worktree.head
+        for worktree in [*removed, *pruned]
+        if (branch := local_branch(worktree)) is not None
+    }
 
     deleted_branches = 0
     for branch, expected_head in sorted(branches_to_delete.items()):
@@ -411,15 +458,25 @@ def main() -> int:
         )
         if delete_result.returncode != 0:
             detail = delete_result.stderr.strip() or delete_result.stdout.strip()
-            print(f"Could not delete branch {branch}: {detail}", file=sys.stderr)
-            return 1
-        deleted_branches += 1
+            errors.append(
+                f"Could not delete branch {branch}: "
+                f"{detail or f'git exited with status {delete_result.returncode}'}"
+            )
+        else:
+            deleted_branches += 1
 
     print(
-        f"Applied: removed {len(removable)} checkout(s), pruned "
-        f"{len(stale)} stale registration(s), deleted {deleted_branches} branch(es), "
+        f"Applied: removed {len(removed)} checkout(s), pruned "
+        f"{len(pruned)} stale registration(s), deleted {deleted_branches} branch(es), "
         f"left {len(blocked)} blocked worktree(s)"
     )
+    if errors:
+        print(file=sys.stderr)
+        print(f"ERROR ({len(errors)})", file=sys.stderr)
+        for error in errors:
+            print(f"  {error}", file=sys.stderr)
+        print("Other eligible cleanup continued", file=sys.stderr)
+        return 1
     return 0
 
 
