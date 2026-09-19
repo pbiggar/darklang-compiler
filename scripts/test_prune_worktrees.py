@@ -177,14 +177,22 @@ for pid, command, path in records:
                 [sys.executable, str(source_script), "--apply"],
                 cwd=repo,
                 env=environment,
-                check=False,
+                check=True,
                 text=True,
                 capture_output=True,
             )
-            self.assertEqual(blocked_apply.returncode, 1)
-            self.assertIn("failed eligibility checks", blocked_apply.stderr)
-            self.assertIn("no changes made", blocked_apply.stderr)
-            self.assertTrue(paths["merged"].exists())
+            self.assertIn(
+                "Applied: removed 1 checkout(s), pruned 1 stale registration(s), "
+                "deleted 2 branch(es), left 3 blocked worktree(s)",
+                blocked_apply.stdout,
+            )
+            self.assertEqual(blocked_apply.stderr, "")
+            self.assertFalse(paths["merged"].exists())
+            self.assertFalse(self.branch_exists(repo, "merged"))
+            self.assertFalse(self.branch_exists(repo, "stale"))
+            for name in ("dirty", "locked", "busy"):
+                self.assertTrue(paths[name].exists())
+                self.assertTrue(self.branch_exists(repo, name))
 
             self.git(paths["dirty"], "add", "untracked.txt")
             self.git(paths["dirty"], "commit", "-q", "-m", "preserve dirty branch")
@@ -202,12 +210,9 @@ for pid, command, path in records:
                 text=True,
                 capture_output=True,
             )
-            self.assertIn("Applied: removed 2 checkout(s)", applied.stdout)
-            self.assertFalse(paths["merged"].exists())
+            self.assertIn("Applied: removed 1 checkout(s)", applied.stdout)
             self.assertFalse(paths["busy"].exists())
-            self.assertFalse(self.branch_exists(repo, "merged"))
             self.assertFalse(self.branch_exists(repo, "busy"))
-            self.assertFalse(self.branch_exists(repo, "stale"))
             registrations = self.git(repo, "worktree", "list", "--porcelain")
             self.assertNotIn(str(paths["stale"]), registrations)
             for name in ("dirty", "locked", "unmerged"):

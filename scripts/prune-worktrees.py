@@ -341,6 +341,39 @@ def main() -> int:
                 )
                 removable.append(worktree)
 
+    if args.apply:
+        try:
+            final_processes = inspect_process_cwds(checkout_user_id)
+        except EligibilityError as error:
+            print(
+                f"Cannot reverify worktree eligibility with lsof: {error}; "
+                "no changes made",
+                file=sys.stderr,
+            )
+            return 1
+
+        still_removable: list[Worktree] = []
+        for worktree in removable:
+            if users := processes_using(worktree, final_processes):
+                first = users[0]
+                extra = f" and {len(users) - 1} more" if len(users) > 1 else ""
+                plan["REMOVE"] = [
+                    entry
+                    for entry in plan["REMOVE"]
+                    if entry.worktree != worktree
+                ]
+                plan["BLOCK"].append(
+                    PlanEntry(
+                        worktree,
+                        f"became active before cleanup: used by PID {first.pid} "
+                        f"({first.command}){extra}",
+                    )
+                )
+                blocked.append(worktree)
+            else:
+                still_removable.append(worktree)
+        removable = still_removable
+
     print_plan(plan)
 
     branches_to_delete = {
@@ -359,38 +392,6 @@ def main() -> int:
         )
         print(f"Dry run: {len(branches_to_delete)} merged local branch(es) deletable")
         return 0
-
-    if blocked:
-        print(
-            f"Refusing to apply: {len(blocked)} integrated worktree(s) failed "
-            "eligibility checks; no changes made",
-            file=sys.stderr,
-        )
-        return 1
-
-    try:
-        final_processes = inspect_process_cwds(checkout_user_id)
-    except EligibilityError as error:
-        print(
-            f"Cannot reverify worktree eligibility with lsof: {error}; no changes made",
-            file=sys.stderr,
-        )
-        return 1
-    newly_used = [
-        (worktree, users)
-        for worktree in removable
-        if (users := processes_using(worktree, final_processes))
-    ]
-    if newly_used:
-        for worktree, users in newly_used:
-            first = users[0]
-            print(
-                f"Worktree became active before cleanup: {describe(worktree)} is used "
-                f"by PID {first.pid} ({first.command})",
-                file=sys.stderr,
-            )
-        print("Refusing to apply; no changes made", file=sys.stderr)
-        return 1
 
     for worktree in removable:
         git(current_root, "worktree", "remove", "--", str(worktree.path))
@@ -416,7 +417,8 @@ def main() -> int:
 
     print(
         f"Applied: removed {len(removable)} checkout(s), pruned "
-        f"{len(stale)} stale registration(s), deleted {deleted_branches} branch(es)"
+        f"{len(stale)} stale registration(s), deleted {deleted_branches} branch(es), "
+        f"left {len(blocked)} blocked worktree(s)"
     )
     return 0
 
