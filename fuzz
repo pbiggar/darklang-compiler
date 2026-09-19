@@ -1,10 +1,120 @@
 #!/bin/bash
-# fuzz - Build and run the interpreter-backed Dark compiler fuzzer.
+# fuzz - Continuously find, minimize, and promote compiler discrepancies to E2E tests.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
+
+usage() {
+    echo "Usage: ./fuzz [--seed N] [--timeout-ms N] [--depth N]"
+    echo ""
+    echo "Continuously fuzzes the compiler, minimizes every finding, and adds"
+    echo "it to src/Tests/e2e/fuzzer-found.e2e. Stop with Ctrl-C."
+    echo ""
+    echo "Options:"
+    echo "  --seed N        Start with this signed 32-bit seed."
+    echo "                  Otherwise a seed is chosen and printed."
+    echo "  --timeout-ms N  Per-process timeout in milliseconds (default: 2000)."
+    echo "  --depth N       Maximum generated AST depth (default: 6)."
+    echo "  --help, -h      Show this help."
+}
+
+parse_int32() {
+    local flag="$1"
+    local value="$2"
+    if [[ ! "$value" =~ ^-?[0-9]+$ ]]; then
+        echo "Error: $flag requires a signed 32-bit integer, got '$value'." >&2
+        return 1
+    fi
+
+    local sign=1
+    local digits="$value"
+    if [[ "$digits" == -* ]]; then
+        sign=-1
+        digits="${digits#-}"
+    fi
+    while [[ ${#digits} -gt 1 && "${digits:0:1}" == 0 ]]; do
+        digits="${digits:1}"
+    done
+    if [[ ${#digits} -gt 10 ]]; then
+        echo "Error: $flag requires a signed 32-bit integer, got '$value'." >&2
+        return 1
+    fi
+
+    local parsed=$((sign * 10#$digits))
+    if (( parsed < -2147483648 || parsed > 2147483647 )); then
+        echo "Error: $flag requires a signed 32-bit integer, got '$value'." >&2
+        return 1
+    fi
+    printf '%s\n' "$parsed"
+}
+
+parse_positive_int32() {
+    local flag="$1"
+    local value="$2"
+    if [[ ! "$value" =~ ^[1-9][0-9]*$ || ${#value} -gt 10 ]]; then
+        echo "Error: $flag requires a positive 32-bit integer, got '$value'." >&2
+        return 1
+    fi
+
+    local parsed=$((10#$value))
+    if (( parsed > 2147483647 )); then
+        echo "Error: $flag requires a positive 32-bit integer, got '$value'." >&2
+        return 1
+    fi
+    printf '%s\n' "$parsed"
+}
+
+SEED_SET=false
+NEXT_SEED=0
+TIMEOUT_MS=2000
+DEPTH=6
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --seed)
+            if [[ $# -lt 2 || "$SEED_SET" == true ]]; then
+                echo "Error: --seed requires exactly one integer." >&2
+                exit 2
+            fi
+            if ! NEXT_SEED="$(parse_int32 --seed "$2")"; then
+                exit 2
+            fi
+            SEED_SET=true
+            shift 2
+            ;;
+        --timeout-ms)
+            if [[ $# -lt 2 ]]; then
+                echo "Error: --timeout-ms requires a value." >&2
+                exit 2
+            fi
+            if ! TIMEOUT_MS="$(parse_positive_int32 --timeout-ms "$2")"; then
+                exit 2
+            fi
+            shift 2
+            ;;
+        --depth)
+            if [[ $# -lt 2 ]]; then
+                echo "Error: --depth requires a value." >&2
+                exit 2
+            fi
+            if ! DEPTH="$(parse_positive_int32 --depth "$2")"; then
+                exit 2
+            fi
+            shift 2
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Error: unknown option '$1'." >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
 
 if ! command -v darklang-interpreter >/dev/null 2>&1; then
     echo "Error: darklang-interpreter is not on PATH." >&2
@@ -12,5 +122,212 @@ if ! command -v darklang-interpreter >/dev/null 2>&1; then
     exit 1
 fi
 
-./build --ai -- src/Fuzzer/Fuzzer.fsproj
-exec dotnet run --no-build --project src/Fuzzer/Fuzzer.fsproj -- "$@"
+trap 'echo; echo "Fuzzer stopped."; exit 130' INT
+
+E2E_FILE="src/Tests/e2e/fuzzer-found.e2e"
+FUZZER_PROJECT="src/Fuzzer/Fuzzer.fsproj"
+
+e2e_expected() {
+    local interpreted="$1"
+    case "$interpreted" in
+        true|false)
+            printf '%s\n' "$interpreted"
+            ;;
+        -[0-9]*|[0-9]*)
+            if [[ ! "$interpreted" =~ ^-?[0-9]+$ ]]; then
+                echo "Error: unsupported interpreter result: $interpreted" >&2
+                return 1
+            fi
+            printf '%sL\n' "$interpreted"
+            ;;
+        *)
+            echo "Error: unsupported interpreter result: $interpreted" >&2
+            return 1
+            ;;
+    esac
+}
+
+promote() {
+    local source_path="$1"
+    local interpreted="$2"
+    if [[ ! -f "$source_path" ]]; then
+        echo "Error: minimized source does not exist: $source_path" >&2
+        return 1
+    fi
+
+    local source
+    source="$(<"$source_path")"
+    if [[ "$source" == *$'\n'* ]]; then
+        echo "Error: E2E promotion currently requires a single-line expression." >&2
+        return 1
+    fi
+
+    local expected
+    expected="$(e2e_expected "$interpreted")"
+
+    local test_case="$source = $expected"
+    if [[ ! -f "$E2E_FILE" ]]; then
+        echo "Error: E2E destination does not exist: $E2E_FILE" >&2
+        return 1
+    fi
+
+    if rg --fixed-strings --line-regexp --quiet -- "$test_case" "$E2E_FILE"; then
+        echo "E2E case already present: $E2E_FILE"
+    else
+        printf '%s\n' "$test_case" >> "$E2E_FILE"
+        echo "Added failing E2E case: $E2E_FILE"
+    fi
+}
+
+ask_codex_to_fix() {
+    local source="$1"
+    local expected="$2"
+    local actual="$3"
+
+    if ! command -v codex >/dev/null 2>&1; then
+        echo "Error: codex is not on PATH." >&2
+        return 1
+    fi
+
+    local runtime_dir
+    runtime_dir="$(mktemp -d "$SCRIPT_DIR/fuzz-results/codex-runtime.XXXXXX")"
+
+    local prompt
+    prompt="$(printf '%s\n' \
+        'The compiler fuzzer found the discrepancy below.' \
+        'Fix the compiler bug completely. Do not merely diagnose it.' \
+        'Follow AGENTS.md, including creating the focused failing E2E test before the fix.' \
+        'Use the compiler AST and darklang-interpreter as the semantic oracle.' \
+        'Run all required tests and the parent-relative benchmark gate.' \
+        'When the fix is ready, commit it and run ./land with an accurate task description.' \
+        "Before ./land, publish the fixed Fuzzer project to this exact directory: $runtime_dir" \
+        "Use: dotnet publish src/Fuzzer/Fuzzer.fsproj --output '$runtime_dir'" \
+        'Your final response must use the repository completion-report format.' \
+        '' \
+        'Reduced Dark case:' \
+        "$source" \
+        '' \
+        'Expected result from darklang-interpreter:' \
+        "$expected" \
+        '' \
+        'Actual compiler result:' \
+        "$actual")"
+
+    local codex_result
+    local codex_status
+    set +e
+    codex_result="$(
+        printf '%s\n' "$prompt" \
+        | codex exec \
+            --approve-for-me \
+            --worktree \
+            --add-dir "$SCRIPT_DIR/fuzz-results" \
+            -
+    )"
+    codex_status=$?
+    set -e
+
+    printf '%s\n' "$codex_result"
+    if [[ $codex_status -ne 0 ]]; then
+        echo "Error: Codex failed while fixing the compiler." >&2
+        return 1
+    fi
+    if [[ "$codex_result" != *"Merge train: ✅ queued"* ]]; then
+        echo "Error: Codex did not report a queued compiler fix; stopping." >&2
+        return 1
+    fi
+    if [[ ! -f "$runtime_dir/Fuzzer.dll" ]]; then
+        echo "Error: Codex did not publish the fixed fuzzer to $runtime_dir." >&2
+        return 1
+    fi
+
+    FUZZER_COMMAND=(dotnet "$runtime_dir/Fuzzer.dll")
+    echo "Codex fix queued; continuing with the published fixed compiler."
+}
+
+./build --ai -- "$FUZZER_PROJECT"
+FUZZER_COMMAND=(dotnet run --no-build --project "$FUZZER_PROJECT" --)
+mkdir -p fuzz-results
+CAMPAIGN=1
+
+while true; do
+    RUN_DIR="$(mktemp -d "$SCRIPT_DIR/fuzz-results/run.XXXXXX")"
+    CAMPAIGN_ARGS=(--timeout-ms "$TIMEOUT_MS" --max-depth "$DEPTH" --artifacts "$RUN_DIR")
+    if [[ "$SEED_SET" == true ]]; then
+        CAMPAIGN_ARGS+=(--seed "$NEXT_SEED")
+    fi
+
+    echo "Campaign $CAMPAIGN: artifacts $RUN_DIR"
+    set +e
+    "${FUZZER_COMMAND[@]}" "${CAMPAIGN_ARGS[@]}"
+    FUZZ_STATUS=$?
+    set -e
+
+    shopt -s nullglob
+    FINDINGS=("$RUN_DIR"/seed-*-case-*.dark)
+    shopt -u nullglob
+    if [[ $FUZZ_STATUS -eq 0 || ${#FINDINGS[@]} -ne 1 ]]; then
+        echo "Error: unbounded fuzzer stopped without producing exactly one finding in $RUN_DIR." >&2
+        exit 1
+    fi
+
+    FINDING="${FINDINGS[0]}"
+    "${FUZZER_COMMAND[@]}" --timeout-ms "$TIMEOUT_MS" --minimize "$FINDING"
+    MINIMIZED="${FINDING%.dark}.min.dark"
+    SOURCE="$(<"$MINIMIZED")"
+    EXPECTED="$(darklang-interpreter eval "$SOURCE")"
+
+    set +e
+    ACTUAL="$(
+        "${FUZZER_COMMAND[@]}" \
+            --timeout-ms "$TIMEOUT_MS" \
+            --replay "$MINIMIZED" 2>&1
+    )"
+    REPLAY_STATUS=$?
+    set -e
+    if [[ $REPLAY_STATUS -eq 0 ]]; then
+        echo "Error: minimized finding no longer reproduces: $MINIMIZED" >&2
+        exit 1
+    fi
+    ACTUAL="${ACTUAL#Replay reproduced: }"
+
+    echo ""
+    echo "Reduced case:"
+    printf '%s\n' "$SOURCE"
+    echo ""
+    echo "Expected (darklang-interpreter):"
+    printf '%s\n' "$EXPECTED"
+    echo ""
+    echo "Actual (compiler):"
+    printf '%s\n' "$ACTUAL"
+    echo ""
+
+    printf 'Should Codex fix, land, and continue? [y/N] '
+    if ! IFS= read -r ANSWER; then
+        echo ""
+        echo "Error: no interactive response was available." >&2
+        exit 1
+    fi
+
+    case "${ANSWER,,}" in
+        y|yes)
+            ask_codex_to_fix "$SOURCE" "$EXPECTED" "$ACTUAL"
+            ;;
+        *)
+            promote "$MINIMIZED" "$EXPECTED"
+            echo "Finding preserved without a compiler fix; continuing."
+            ;;
+    esac
+
+    echo "Finding: $FINDING"
+    echo "Minimized: $MINIMIZED"
+
+    if [[ "$SEED_SET" == true ]]; then
+        if (( NEXT_SEED == 2147483647 )); then
+            NEXT_SEED=-2147483648
+        else
+            NEXT_SEED=$((NEXT_SEED + 1))
+        fi
+    fi
+    ((CAMPAIGN += 1))
+done
