@@ -82,6 +82,8 @@ let hasSideEffects (instr: Instr) : bool =
     | RefCountDecString _ -> true   // Mutates refcount
     | RefCountIncBlob _ -> true    // Mutates refcount
     | RefCountDecBlob _ -> true    // Mutates refcount
+    | RefCountIncInt _ -> true
+    | RefCountDecInt _ -> true
     | RandomInt64 _ -> true  // Syscall
     | DateTimeNow _ -> true      // Syscall
     | Sleep _ -> true            // Blocking syscall
@@ -218,6 +220,8 @@ let getInstrDest (instr: Instr) : VReg option =
     | RefCountDecString _ -> None
     | RefCountIncBlob _ -> None
     | RefCountDecBlob _ -> None
+    | RefCountIncInt _ -> None
+    | RefCountDecInt _ -> None
     | RandomInt64 dest -> Some dest
     | DateTimeNow dest -> Some dest
     | Sleep (_, dest, _) -> Some dest
@@ -287,6 +291,8 @@ let foldInstrUses (folder: 'State -> VReg -> 'State) (state: 'State) (instr: Ins
     | RefCountDecString src
     | RefCountIncBlob src
     | RefCountDecBlob src
+    | RefCountIncInt src
+    | RefCountDecInt src
     | FloatToString (_, src) -> fromOperand state src
     | Sleep (_, _, delayMs) -> fromOperand state delayMs
     | FileWriteFromPtr (_, first, second, third)

@@ -281,6 +281,8 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RefCountDecString str -> maxTempIdInAtom str
     | ANF.RefCountIncBlob bytes -> maxTempIdInAtom bytes
     | ANF.RefCountDecBlob bytes -> maxTempIdInAtom bytes
+    | ANF.RefCountIncInt value -> maxTempIdInAtom value
+    | ANF.RefCountDecInt value -> maxTempIdInAtom value
     | ANF.RandomInt64 -> -1  // No atoms, so no TempIds
     | ANF.DateTimeNow -> -1      // No atoms, so no TempIds
     | ANF.Sleep delayMs -> maxTempIdInAtom delayMs
@@ -679,6 +681,8 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.RefCountDecString _ -> "RefCountDecString"
     | ANF.RefCountIncBlob _ -> "RefCountIncBlob"
     | ANF.RefCountDecBlob _ -> "RefCountDecBlob"
+    | ANF.RefCountIncInt _ -> "RefCountIncInt"
+    | ANF.RefCountDecInt _ -> "RefCountDecInt"
     | ANF.RandomInt64 -> "RandomInt64"
     | ANF.DateTimeNow -> "DateTimeNow"
     | ANF.Sleep _ -> "Sleep"
@@ -723,6 +727,11 @@ let rec collectSelfTailCallCleanup
         |> Result.bind (fun bytesOp ->
             collectSelfTailCallCleanup builder callTempId rest
             |> Result.map (fun instrs -> MIR.RefCountDecBlob bytesOp :: instrs))
+    | ANF.Let (_, ANF.RefCountDecInt valueAtom, rest) ->
+        atomToOperand builder valueAtom
+        |> Result.bind (fun valueOp ->
+            collectSelfTailCallCleanup builder callTempId rest
+            |> Result.map (fun instrs -> MIR.RefCountDecInt valueOp :: instrs))
     | _ ->
         Error $"Internal error: unexpected expression after self tailcall in {builder.FuncName}"
 
@@ -1409,6 +1418,12 @@ let rec convertExpr
                 | ANF.RefCountDecBlob bytesAtom ->
                     atomToOperand builder bytesAtom
                     |> Result.map (fun bytesOp -> [MIR.RefCountDecBlob bytesOp])
+                | ANF.RefCountIncInt valueAtom ->
+                    atomToOperand builder valueAtom
+                    |> Result.map (fun valueOp -> [MIR.RefCountIncInt valueOp])
+                | ANF.RefCountDecInt valueAtom ->
+                    atomToOperand builder valueAtom
+                    |> Result.map (fun valueOp -> [MIR.RefCountDecInt valueOp])
                 | ANF.RandomInt64 ->
                     Ok [MIR.RandomInt64 destReg]
                 | ANF.DateTimeNow ->
@@ -1584,6 +1599,10 @@ let convertANFFunction
                 when Set.contains tempId paramIds ->
                 let (remainingRetains, loopBody) = splitLeadingParamRetains body
                 (MIR.RefCountIncBlob (MIR.Register (tempToVReg tempId)) :: remainingRetains, loopBody)
+            | ANF.Let (_, ANF.RefCountIncInt (ANF.Var tempId), body)
+                when Set.contains tempId paramIds ->
+                let (remainingRetains, loopBody) = splitLeadingParamRetains body
+                (MIR.RefCountIncInt (MIR.Register (tempToVReg tempId)) :: remainingRetains, loopBody)
             | _ ->
                 ([], expr)
         let (entryRetains, loopBody) = splitLeadingParamRetains anfFunc.Body

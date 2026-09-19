@@ -37,7 +37,16 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
         Ok (ANF.Var resultVar, [(resultVar, int128Construction n)], varGen1)
 
     | CheckedAST.BigIntLiteral n ->
-        Ok (ANF.StringLiteral (n.ToString()), [], varGen)
+        let smallMin = -(System.Numerics.BigInteger.One <<< 62)
+        let smallMax = (System.Numerics.BigInteger.One <<< 62) - System.Numerics.BigInteger.One
+        let (resultVar, varGen1) = ANF.freshVar varGen
+        let construction =
+            if n >= smallMin && n <= smallMax then
+                let taggedWord = int64 (n * 2I + 1I)
+                ANF.TypedAtom (ANF.IntLiteral (ANF.Int64 taggedWord), AST.TInt)
+            else
+                ANF.Call ("Darklang.Stdlib.Int.__value", [ANF.StringLiteral (n.ToString())])
+        Ok (ANF.Var resultVar, [(resultVar, construction)], varGen1)
 
     | CheckedAST.Int8Literal n ->
         Ok (ANF.IntLiteral (ANF.Int8 n), [], varGen)

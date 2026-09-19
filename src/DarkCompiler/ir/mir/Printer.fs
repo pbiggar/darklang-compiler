@@ -184,6 +184,10 @@ let private prettyPrintMIRInstr (instr: MIR.Instr) : string =
         $"RefCountIncString({prettyPrintMIROperand str})"
     | MIR.RefCountDecString str ->
         $"RefCountDecString({prettyPrintMIROperand str})"
+    | MIR.RefCountIncInt value ->
+        $"RefCountIncInt({prettyPrintMIROperand value})"
+    | MIR.RefCountDecInt value ->
+        $"RefCountDecInt({prettyPrintMIROperand value})"
     | MIR.RefCountIncBlob bytes ->
         $"RefCountIncBlob({prettyPrintMIROperand bytes})"
     | MIR.RefCountDecBlob bytes ->

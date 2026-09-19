@@ -79,7 +79,7 @@ let internal generateDictRefCountIncHelper () : X86_64.Instr list =
 let internal generateDictRefCountDecHelper
     (helperLabel: string)
     (keyReleasePlan: MemoryModel.RcReleasePlan)
-    (releaseLeafDynamicValue: bool)
+    (releaseLeafDynamicValue: MemoryModel.RcOperation option)
     (releaseLeafListValue: bool)
     (releaseLeafDictValueHelper: string option)
     (releaseLeafClosureValue: bool)
@@ -174,6 +174,7 @@ let internal generateDictRefCountDecHelper
     let releaseDynamicBufferFieldInstrs
         (baseReg: X86_64.Reg)
         (fieldOffset: int)
+        (skipTagged: bool)
         (skipLabel: string)
         : X86_64.Instr list =
         let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11; scratch]
@@ -181,15 +182,19 @@ let internal generateDictRefCountDecHelper
         let restores = saveRegs |> List.rev |> List.map X86_64.POP
         saves
         @ [X86_64.MOV_reg (X86_64.RDX, baseReg)]
-        @ genDynamicBufferFieldRelease helperCtx fieldOffset
+        @ genDynamicBufferFieldRelease helperCtx skipTagged fieldOffset
         @ restores
         @ [X86_64.Label skipLabel]
 
     let releaseDynamicBufferValueInstrs baseReg skipLabel =
-        if releaseLeafDynamicValue then
-            releaseDynamicBufferFieldInstrs baseReg 8 skipLabel
-        else
-            []
+        match releaseLeafDynamicValue with
+        | Some operation ->
+            releaseDynamicBufferFieldInstrs
+                baseReg
+                8
+                (operation = MemoryModel.DynamicIntBuffer)
+                skipLabel
+        | None -> []
 
     let releaseFixedBlockValueInstrs
         (baseReg: X86_64.Reg)
@@ -219,8 +224,12 @@ let internal generateDictRefCountDecHelper
         let keyInstrs =
             match keyReleasePlan with
             | MemoryModel.NoReleasePlan -> []
-            | MemoryModel.DynamicBufferRelease _ ->
-                releaseDynamicBufferFieldInstrs baseReg 0 skipKeyRelease
+            | MemoryModel.DynamicBufferRelease operation ->
+                releaseDynamicBufferFieldInstrs
+                    baseReg
+                    0
+                    (operation = MemoryModel.DynamicIntBuffer)
+                    skipKeyRelease
             | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
                 releaseManagedRootValueInstrs
                     baseReg
@@ -272,7 +281,7 @@ let internal generateDictRefCountDecHelper
 
     let hasPayloadRelease =
         keyReleasePlan <> MemoryModel.NoReleasePlan
-        || releaseLeafDynamicValue
+        || Option.isSome releaseLeafDynamicValue
         || releaseLeafListValue
         || Option.isSome releaseLeafDictValueHelper
         || releaseLeafClosureValue
@@ -428,19 +437,19 @@ let internal generatePlannedDictRefCountDecHelper
         let releaseLeafDynamicValue, releaseLeafListValue, releaseLeafDictValueHelper, releaseLeafClosureValue, releaseLeafStreamValue, leafFixedBlockValueRelease =
             match valueRelease with
             | MemoryModel.NoReleasePlan ->
-                false, false, None, false, false, None
-            | MemoryModel.DynamicBufferRelease _ ->
-                true, false, None, false, false, None
+                None, false, None, false, false, None
+            | MemoryModel.DynamicBufferRelease operation ->
+                Some operation, false, None, false, false, None
             | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
-                false, true, None, false, false, None
+                None, true, None, false, false, None
             | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) ->
-                false, false, Some (dictDecHelperForReleasePlan valueRelease), false, false, None
+                None, false, Some (dictDecHelperForReleasePlan valueRelease), false, false, None
             | MemoryModel.RootRelease (_, MemoryModel.ClosureHeap, _) ->
-                false, false, None, true, false, None
+                None, false, None, true, false, None
             | MemoryModel.RootRelease (_, MemoryModel.StreamHeap, _) ->
-                false, false, None, false, true, None
+                None, false, None, false, true, None
             | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, _) ->
-                false, false, None, false, false, Some (payloadSize, valueRelease)
+                None, false, None, false, false, Some (payloadSize, valueRelease)
             | other ->
                 unsupported "value" other
 

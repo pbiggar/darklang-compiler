@@ -18,8 +18,8 @@ let __fromWords (low: UInt64) (high: UInt64) : UInt128 =
     let _ = __raw_write_word ptr 16L 1L in
     __rawptr_to_uint128 ptr
 
-let __base () : Int = __string_to_int "18446744073709551616"
-let __modulus () : Int = __string_to_int "340282366920938463463374607431768211456"
+let __base () : Int = Stdlib.Int.__value "18446744073709551616"
+let __modulus () : Int = Stdlib.Int.__value "340282366920938463463374607431768211456"
 
 let __uint64FromInt (value: Int) : UInt64 =
     match Stdlib.Int.__toUInt64 value with
@@ -31,8 +31,9 @@ let __toInt (value: UInt128) : Int =
 
 let __fromInt (value: Int) : UInt128 =
     let residue = Stdlib.Int.__mod value (Stdlib.UInt128.__modulus ()) in
-    let high = Stdlib.Int.__divide residue (Stdlib.UInt128.__base ()) in
-    let low = Stdlib.Int.__mod residue (Stdlib.UInt128.__base ()) in
+    let division = Stdlib.Int.__dividePositive residue (Stdlib.UInt128.__base ()) in
+    let high = Stdlib.Tuple2.first division in
+    let low = Stdlib.Tuple2.second division in
     Stdlib.UInt128.__fromWords (Stdlib.UInt128.__uint64FromInt low) (Stdlib.UInt128.__uint64FromInt high)
 
 let __equalsWords (value: UInt128) (low: UInt64) (high: UInt64) : Bool =

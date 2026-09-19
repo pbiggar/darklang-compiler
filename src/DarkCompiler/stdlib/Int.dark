@@ -1,7 +1,7 @@
 // Stdlib.Int.dark - public arbitrary-precision integer API.
 //
-// Target-neutral `Stdlib.Int.__*` helpers hold the canonical decimal
-// representation so fixed 128-bit integers share the same semantics.
+// Target-neutral `Stdlib.Int.__*` helpers operate on tagged small integers and
+// reference-counted base-2^31 limb buffers.
 
 module Darklang.Stdlib.Int
 
@@ -13,7 +13,7 @@ let multiply (a: Int) (b: Int) : Int = Stdlib.Int.__multiply a b
 let divide (a: Int) (b: Int) : Int = Stdlib.Int.__divide a b
 let negate (value: Int) : Int = Stdlib.Int.__negate value
 let absoluteValue (value: Int) : Int =
-    if Stdlib.Int.__lessThan value (__string_to_int "0") then
+    if Stdlib.Int.__lessThan value (Stdlib.Int.__zero ()) then
         Stdlib.Int.__negate value
     else value
 
@@ -31,7 +31,7 @@ let sqrt (value: Int) : Float = Stdlib.Int.__sqrt value
 let toFloat (value: Int) : Float = Stdlib.Int.__toFloat value
 let fromFloat (value: Float) : Int = Stdlib.Int.__fromFloat value
 let sum (values: List<Int>) : Int =
-    Stdlib.List.fold values (__string_to_int "0") (fun acc value -> Stdlib.Int.__add acc value)
+    Stdlib.List.fold values (Stdlib.Int.__zero ()) (fun acc value -> Stdlib.Int.__add acc value)
 let max (a: Int) (b: Int) : Int = if Stdlib.Int.__greaterThan a b then a else b
 let min (a: Int) (b: Int) : Int = if Stdlib.Int.__lessThan a b then a else b
 let clamp (value: Int) (limitA: Int) (limitB: Int) : Int =

@@ -161,6 +161,8 @@ let private releasePrintedValueFromReg
     match MemoryPlanning.rcShapeReleaseOperation shape with
     | Some MemoryModel.DynamicStringBuffer ->
         [LIR.RefCountDecString (LIR.Reg reg)]
+    | Some MemoryModel.DynamicIntBuffer ->
+        [LIR.RefCountDecInt (LIR.Reg reg)]
     | Some MemoryModel.DynamicBlobBuffer ->
         [LIR.RefCountDecBlob (LIR.Reg reg)]
     | Some (MemoryModel.FixedSizeRoot (payloadSize, kind)) ->
@@ -1632,6 +1634,12 @@ let selectInstr
     | MIR.RefCountDecBlob bytes ->
         let lirBytes = convertOperand bytes
         Ok ([LIR.RefCountDecBlob lirBytes], state)
+    | MIR.RefCountIncInt value ->
+        let lirValue = convertOperand value
+        Ok ([LIR.RefCountIncInt lirValue], state)
+    | MIR.RefCountDecInt value ->
+        let lirValue = convertOperand value
+        Ok ([LIR.RefCountDecInt lirValue], state)
 
     | MIR.RandomInt64 dest ->
         let lirDest = vregToLIRReg dest
@@ -1873,6 +1881,8 @@ let maxVRegIdFromInstr (instr: MIR.Instr) (currentMax: int) : int =
     | MIR.RefCountDecString ptr
     | MIR.RefCountIncBlob ptr
     | MIR.RefCountDecBlob ptr -> maxVRegIdFromOperand ptr currentMax
+    | MIR.RefCountIncInt ptr
+    | MIR.RefCountDecInt ptr -> maxVRegIdFromOperand ptr currentMax
     | MIR.RawGet (dest, ptr, byteOffset, _)
     | MIR.RawGetByte (dest, ptr, byteOffset)
     | MIR.RawPtrToDict (dest, ptr, byteOffset)

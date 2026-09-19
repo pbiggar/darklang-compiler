@@ -230,13 +230,19 @@ let internal translateInstr
     | LIR.RefCountDec (addr, payloadSize, kind, metadata) ->
         X64EmitReferenceCounts.emitRefCountDec ctx addr payloadSize kind metadata
 
-    | LIR.RefCountIncString str
+    | LIR.RefCountIncString str ->
+        X64EmitReferenceCounts.emitRefCountIncString ctx str
     | LIR.RefCountIncBlob str ->
         X64EmitReferenceCounts.emitRefCountIncString ctx str
+    | LIR.RefCountIncInt value ->
+        X64EmitReferenceCounts.emitRefCountIncInt ctx value
 
-    | LIR.RefCountDecString str
+    | LIR.RefCountDecString str ->
+        X64EmitReferenceCounts.emitRefCountDecString ctx str
     | LIR.RefCountDecBlob str ->
         X64EmitReferenceCounts.emitRefCountDecString ctx str
+    | LIR.RefCountDecInt value ->
+        X64EmitReferenceCounts.emitRefCountDecInt ctx value
 
     | LIR.CanonicalBufferEq (dest, _, left, right) ->
         X64EmitBuffers.emitCanonicalBufferEq ctx dest left right

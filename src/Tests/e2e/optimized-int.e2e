@@ -1,0 +1,28 @@
+// Optimized arbitrary-precision Int representation and behavior.
+
+// Tagged-immediate boundaries and promotion to limb storage.
+Stdlib.Int.toString 4611686018427387903 = "4611686018427387903"
+Stdlib.Int.toString 4611686018427387904 = "4611686018427387904"
+Stdlib.Int.toString (-4611686018427387904) = "-4611686018427387904"
+Stdlib.Int.toString (-4611686018427387905) = "-4611686018427387905"
+
+// Signed arithmetic across immediate and heap-backed values.
+12345678901234567890 + -9876543210987654321 = 2469135690246913569
+4611686018427387904 - 1 = 4611686018427387903
+123456789 * 987654321 = 121932631112635269
+-100 / 7 = -14
+match Stdlib.Int.remainder (-100) 7 with | Ok value -> value | Error _ -> 0 = -2
+Stdlib.Int.mod (-100) 7 = 5
+
+// Infinite two's-complement behavior for negative operands.
+Stdlib.Int.bitwiseAnd (-1) 1180591620717411303424 = 1180591620717411303424
+Stdlib.Int.bitwiseXor (-1) 0 = -1
+Stdlib.Int.shiftRight (-3) 1 = -2
+
+// Aggregate and closure ownership must handle both tagged and buffered values.
+Stdlib.Int.sum [1; 4611686018427387904; (-2)] = 4611686018427387903
+(4611686018427387904, -1).0 = 4611686018427387904
+let captured = 4611686018427387904 in (fun offset -> captured + offset) (-1) = 4611686018427387903
+
+// Large binary shifts and decimal formatting scale with limb count.
+Stdlib.String.length (Stdlib.Int.toString (Stdlib.Int.shiftLeft 1 100000)) = 30103

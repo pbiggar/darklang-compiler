@@ -193,6 +193,10 @@ let private prettyPrintANFCExpr = function
         $"RefCountIncString({prettyPrintANFAtom str})"
     | ANF.RefCountDecString str ->
         $"RefCountDecString({prettyPrintANFAtom str})"
+    | ANF.RefCountIncInt value ->
+        $"RefCountIncInt({prettyPrintANFAtom value})"
+    | ANF.RefCountDecInt value ->
+        $"RefCountDecInt({prettyPrintANFAtom value})"
     | ANF.RefCountIncBlob bytes ->
         $"RefCountIncBlob({prettyPrintANFAtom bytes})"
     | ANF.RefCountDecBlob bytes ->

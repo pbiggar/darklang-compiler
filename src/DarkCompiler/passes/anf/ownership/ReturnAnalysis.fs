@@ -148,7 +148,8 @@ let private cexprReleasesAnyAlias (aliases: Set<TempId>) (cexpr: CExpr) : bool =
     match cexpr with
     | RefCountDec (atom, _, _, _)
     | RefCountDecString atom
-    | RefCountDecBlob atom ->
+    | RefCountDecBlob atom
+    | RefCountDecInt atom ->
         aliases
         |> Set.exists (fun target -> ANFEffects.atomUsesTemp target atom)
     | _ ->

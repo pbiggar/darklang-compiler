@@ -34,6 +34,7 @@ type RcShape =
     | DictRoot of keyShape:RcShape * valueShape:RcShape
     | DynamicString
     | DynamicBlob
+    | DynamicInt
     | ClosureShape of captureShapes:RcShape list
     | StaticString
     | RawUnmanaged
@@ -55,6 +56,7 @@ type RcOperation =
     | FixedSizeRoot of payloadSize:int * kind:RcKind
     | DynamicStringBuffer
     | DynamicBlobBuffer
+    | DynamicIntBuffer
 
 /// High-level storage management class selected from a runtime shape.
 type RcStorageClass =

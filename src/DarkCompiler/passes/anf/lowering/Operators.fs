@@ -34,9 +34,9 @@ let convertBinOp (op: AST.BinOp) : ANF.BinOp =
     | AST.Or -> ANF.Or
     | AST.StringConcat -> ANF.Add  // Never reached - StringConcat handled as CExpr
 
-/// Arbitrary-precision Int values use canonical decimal-string storage. Route
-/// operations through the pure Int stdlib implementation instead of native
-/// machine-word primitives.
+/// Arbitrary-precision Int values use tagged words or limb buffers. Route
+/// operations through the pure Int stdlib implementation instead of fixed-width
+/// machine primitives.
 let internal integerFunctionForBinOp (operandType: AST.Type) (op: AST.BinOp) : string option =
     let moduleName =
         match op, operandType with
@@ -142,7 +142,8 @@ let rec generateStructuralEquality
         match valueType with
         | AST.TInt128 -> ANF.Call ("Darklang.Stdlib.Int128.__equals", [left; right])
         | AST.TUInt128 -> ANF.Call ("Darklang.Stdlib.UInt128.__equals", [left; right])
-        | AST.TString | AST.TChar | AST.TInt -> ANF.Call ("__string_eq", [left; right])
+        | AST.TInt -> ANF.Call ("Darklang.Stdlib.Int.__equals", [left; right])
+        | AST.TString | AST.TChar -> ANF.Call ("__string_eq", [left; right])
         | _ -> ANF.Prim (ANF.Eq, left, right)
 
     match typ with

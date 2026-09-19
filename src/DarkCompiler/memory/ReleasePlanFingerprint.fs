@@ -168,6 +168,7 @@ let rcReleasePlanFingerprintHashFromChildren
             addKind kind
         | DynamicStringBuffer -> addByte 1uy
         | DynamicBlobBuffer -> addByte 2uy
+        | DynamicIntBuffer -> addByte 3uy
     | RecursiveRelease sourceType ->
         addByte 2uy
         addString (rcSourceTypeFingerprint sourceType)

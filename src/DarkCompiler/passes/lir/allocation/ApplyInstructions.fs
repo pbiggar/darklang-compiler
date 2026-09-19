@@ -961,6 +961,14 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
         let (bytesOp, bytesLoads) = applyToOperand mapping bytes LIR.X12
         bytesLoads @ [LIR.RefCountDecBlob bytesOp]
 
+    | LIR.RefCountIncInt value ->
+        let (valueOp, valueLoads) = applyToOperand mapping value LIR.X12
+        valueLoads @ [LIR.RefCountIncInt valueOp]
+
+    | LIR.RefCountDecInt value ->
+        let (valueOp, valueLoads) = applyToOperand mapping value LIR.X12
+        valueLoads @ [LIR.RefCountDecInt valueOp]
+
     | LIR.RandomInt64 dest ->
         let (destReg, destAlloc) = applyToReg mapping dest
         let randomInstr = LIR.RandomInt64 destReg

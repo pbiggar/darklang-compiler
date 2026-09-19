@@ -352,6 +352,7 @@ let internal applyCSEWithEffectFreeCallsAndTopology
                 | RefCountDec _
                 | RefCountDecString _
                 | RefCountDecBlob _
+                | RefCountDecInt _
                 | RawFree _
                 | MappedFree _ ->
                     // A previously computed raw address can outlive its managed

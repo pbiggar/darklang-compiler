@@ -125,11 +125,20 @@ let internal generateClosureRefCountDecHelper
              X86_64.Label nextCase])
         |> List.concat
 
-    let releaseDynamicBufferCapture (fieldOffset: int) (suffix: string) : X86_64.Instr list =
+    let releaseDynamicBufferCapture (skipTagged: bool) (fieldOffset: int) (suffix: string) : X86_64.Instr list =
         let doneLabel = label $"capture_dynamic_done_{suffix}"
+        let taggedGuard =
+            if skipTagged then
+                [X86_64.MOV_reg (X86_64.R10, X86_64.R9)
+                 X86_64.AND_imm (X86_64.R10, 1)
+                 X86_64.Jcc (X86_64.NE, doneLabel)]
+            else
+                []
         [X86_64.MOV_load (X86_64.R9, X86_64.RAX, fieldOffset)
          X86_64.TEST_reg (X86_64.R9, X86_64.R9)
-         X86_64.Jcc (X86_64.EQ, doneLabel)
+         X86_64.Jcc (X86_64.EQ, doneLabel)]
+        @ taggedGuard
+        @ [
          X86_64.MOV_reg (X86_64.R10, X86_64.R9)
          X86_64.MOV_load (X86_64.RDX, X86_64.R10, 0)]
         @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL
@@ -178,9 +187,10 @@ let internal generateClosureRefCountDecHelper
                     match captureType with
                     | AST.TString
                     | AST.TChar
-                    | AST.TInt
                     | AST.TBlob ->
-                        releaseDynamicBufferCapture fieldOffset $"{index}_{captureIndex}"
+                        releaseDynamicBufferCapture false fieldOffset $"{index}_{captureIndex}"
+                    | AST.TInt ->
+                        releaseDynamicBufferCapture true fieldOffset $"{index}_{captureIndex}"
                     | AST.TList _ ->
                         releaseHeapRootCapture fieldOffset (listDecHelperForType recordRegistry sumShapeRegistry captureType) $"{index}_{captureIndex}_list"
                     | AST.TDict _ ->

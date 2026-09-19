@@ -448,6 +448,8 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RefCountDecString _ -> Some AST.TUnit  // Returns unit
     | RefCountIncBlob _ -> Some AST.TUnit   // Returns unit
     | RefCountDecBlob _ -> Some AST.TUnit   // Returns unit
+    | RefCountIncInt _ -> Some AST.TUnit
+    | RefCountDecInt _ -> Some AST.TUnit
     | RuntimeError _ -> Some AST.TUnit
     | RuntimeErrorString _ -> Some AST.TUnit
 

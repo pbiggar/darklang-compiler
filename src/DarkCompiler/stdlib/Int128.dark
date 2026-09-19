@@ -17,12 +17,12 @@ let __fromWords (low: UInt64) (high: UInt64) : Int128 =
     __rawptr_to_int128 ptr
 
 let __unsignedInt (value: Int128) : Int =
-    Stdlib.Int.__add (Stdlib.Int.__multiply (Stdlib.Int.__fromUInt64 (Stdlib.Int128.__high value)) (__string_to_int "18446744073709551616")) (Stdlib.Int.__fromUInt64 (Stdlib.Int128.__low value))
+    Stdlib.Int.__add (Stdlib.Int.__multiply (Stdlib.Int.__fromUInt64 (Stdlib.Int128.__high value)) (Stdlib.Int.__value "18446744073709551616")) (Stdlib.Int.__fromUInt64 (Stdlib.Int128.__low value))
 
 let __toInt (value: Int128) : Int =
     let unsigned = Stdlib.Int128.__unsignedInt value in
     if Stdlib.UInt64.shiftRight (Stdlib.Int128.__high value) 63UL == 1UL then
-        Stdlib.Int.__subtract unsigned (__string_to_int "340282366920938463463374607431768211456")
+        Stdlib.Int.__subtract unsigned (Stdlib.Int.__value "340282366920938463463374607431768211456")
     else unsigned
 
 let __fromInt (value: Int) : Int128 =

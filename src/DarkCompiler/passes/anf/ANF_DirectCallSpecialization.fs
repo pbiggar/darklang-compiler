@@ -142,6 +142,8 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
     | RefCountDecString atom
     | RefCountIncBlob atom
     | RefCountDecBlob atom
+    | RefCountIncInt atom
+    | RefCountDecInt atom
     | FloatToString atom
     | Sleep atom
     | RuntimeErrorString atom -> analyze atom analysis
@@ -430,6 +432,8 @@ let private rewriteCExpr
     | RefCountDecString atom -> RefCountDecString (rewrite atom)
     | RefCountIncBlob atom -> RefCountIncBlob (rewrite atom)
     | RefCountDecBlob atom -> RefCountDecBlob (rewrite atom)
+    | RefCountIncInt atom -> RefCountIncInt (rewrite atom)
+    | RefCountDecInt atom -> RefCountDecInt (rewrite atom)
     | RandomInt64 -> RandomInt64
     | DateTimeNow -> DateTimeNow
     | Sleep delayMs -> Sleep (rewrite delayMs)

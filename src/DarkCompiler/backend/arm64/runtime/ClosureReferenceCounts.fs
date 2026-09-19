@@ -83,7 +83,7 @@ let internal generateRecursiveSumRefCountDecHelper
         match plan with
         | MemoryModel.NoReleasePlan ->
             []
-        | MemoryModel.DynamicBufferRelease _ ->
+        | MemoryModel.DynamicBufferRelease operation ->
             let doneLabel = label $"{path}_dynamic_done"
             let leakRelease =
                 if ctx.Options.EnableLeakCheck then
@@ -98,8 +98,17 @@ let internal generateRecursiveSumRefCountDecHelper
                     ]
                 else
                     []
+            let taggedGuard =
+                match operation with
+                | MemoryModel.DynamicIntBuffer ->
+                    [ ARM64Symbolic.AND_imm (ARM64Symbolic.X3, ARM64Symbolic.X0, 1UL)
+                      ARM64Symbolic.CBNZ (ARM64Symbolic.X3, doneLabel) ]
+                | _ -> []
             [
                 ARM64Symbolic.CBZ (ARM64Symbolic.X0, doneLabel)
+            ]
+            @ taggedGuard
+            @ [
                 ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X27)
                 ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, doneLabel)
                 ARM64Symbolic.CMP_reg (ARM64Symbolic.X0, ARM64Symbolic.X28)
@@ -124,7 +133,8 @@ let internal generateRecursiveSumRefCountDecHelper
                 | MemoryModel.NoReleasePlan -> listRefCountDecHelperLabel
                 | MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer -> listRefCountDecStringHelperLabel
                 | MemoryModel.DynamicBufferRelease MemoryModel.DynamicBlobBuffer -> listRefCountDecBlobHelperLabel
-                | MemoryModel.DynamicBufferRelease _ -> listRefCountDecHelperLabel
+                | MemoryModel.DynamicBufferRelease MemoryModel.DynamicIntBuffer -> listRefCountDecBlobHelperLabel
+                | MemoryModel.DynamicBufferRelease _ -> Crash.crash "closure list release used a fixed-size dynamic-buffer operation"
                 | MemoryModel.RecursiveRelease recursiveType ->
                     plannedListDecHelperLabelForReleasePlan (MemoryModel.RecursiveRelease recursiveType)
                 | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) -> listRefCountDecListHelperLabel
@@ -311,6 +321,7 @@ let internal generateClosureRefCountDecHelper
     and releaseDynamicBufferChildField
         (baseReg: ARM64Symbolic.Reg)
         (fieldOffset: int)
+        (operation: MemoryModel.RcOperation)
         (doneLabel: string)
         : ARM64Symbolic.Instr list =
         let bufferDone = label $"{doneLabel}_dynamic_buffer_{fieldOffset}_done"
@@ -326,9 +337,18 @@ let internal generateClosureRefCountDecHelper
                     ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
                     ARM64Symbolic.CBNZ (ARM64Symbolic.X15, bufferDone)
                 ] @ leakDec
+        let taggedGuard =
+            match operation with
+            | MemoryModel.DynamicIntBuffer ->
+                [ ARM64Symbolic.AND_imm (ARM64Symbolic.X13, ARM64Symbolic.X12, 1UL)
+                  ARM64Symbolic.CBNZ (ARM64Symbolic.X13, bufferDone) ]
+            | _ -> []
         [
             ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
             ARM64Symbolic.CBZ (ARM64Symbolic.X12, bufferDone)
+        ]
+        @ taggedGuard
+        @ [
             ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
             ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0xFFFFus, 0)
             ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 16)
@@ -373,8 +393,8 @@ let internal generateClosureRefCountDecHelper
                 dictRefCountDecHelperLabel
 
         match fieldReleasePlan with
-        | MemoryModel.DynamicBufferRelease _ ->
-            releaseDynamicBufferChildField baseReg fieldOffset doneLabel
+        | MemoryModel.DynamicBufferRelease operation ->
+            releaseDynamicBufferChildField baseReg fieldOffset operation doneLabel
         | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
             releaseManagedRootChildField baseReg fieldOffset listRefCountDecHelperLabel doneLabel
         | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) ->
@@ -430,7 +450,7 @@ let internal generateClosureRefCountDecHelper
              |> List.concat)
             @ [ARM64Symbolic.Label sumDone]
 
-    let releaseDynamicCapture (fieldOffset: int) (doneLabel: string) : ARM64Symbolic.Instr list =
+    let releaseDynamicCapture (skipTagged: bool) (fieldOffset: int) (doneLabel: string) : ARM64Symbolic.Instr list =
         let bufferDone = label $"{doneLabel}_dynamic_capture_{fieldOffset}_done"
         let refcountUpdate =
             if List.isEmpty leakDec then
@@ -444,9 +464,18 @@ let internal generateClosureRefCountDecHelper
                     ARM64Symbolic.STR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
                     ARM64Symbolic.CBNZ (ARM64Symbolic.X15, bufferDone)
                 ] @ leakDec
+        let taggedGuard =
+            if skipTagged then
+                [ ARM64Symbolic.AND_imm (ARM64Symbolic.X13, ARM64Symbolic.X12, 1UL)
+                  ARM64Symbolic.CBNZ (ARM64Symbolic.X13, bufferDone) ]
+            else
+                []
         [
             ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X0, int16 fieldOffset)
             ARM64Symbolic.CBZ (ARM64Symbolic.X12, bufferDone)
+        ]
+        @ taggedGuard
+        @ [
             ARM64Symbolic.LDR (ARM64Symbolic.X15, ARM64Symbolic.X12, 0s)
             ARM64Symbolic.MOVZ (ARM64Symbolic.X13, 0xFFFFus, 0)
             ARM64Symbolic.MOVK (ARM64Symbolic.X13, 0xFFFFus, 16)
@@ -512,9 +541,10 @@ let internal generateClosureRefCountDecHelper
                     match captureType with
                     | AST.TString
                     | AST.TChar
-                    | AST.TInt
                     | AST.TBlob ->
-                        releaseDynamicCapture fieldOffset $"captures_{index}_{captureIndex}"
+                        releaseDynamicCapture false fieldOffset $"captures_{index}_{captureIndex}"
+                    | AST.TInt ->
+                        releaseDynamicCapture true fieldOffset $"captures_{index}_{captureIndex}"
                     | _ ->
                         match tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry captureType with
                         | Some (MemoryModel.RootRelease (_, MemoryModel.TaggedList, MemoryModel.TaggedListPayloadRelease elementRelease)) ->
@@ -523,7 +553,8 @@ let internal generateClosureRefCountDecHelper
                                 | MemoryModel.NoReleasePlan -> listRefCountDecHelperLabel
                                 | MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer -> listRefCountDecStringHelperLabel
                                 | MemoryModel.DynamicBufferRelease MemoryModel.DynamicBlobBuffer -> listRefCountDecBlobHelperLabel
-                                | MemoryModel.DynamicBufferRelease _ -> listRefCountDecHelperLabel
+                                | MemoryModel.DynamicBufferRelease MemoryModel.DynamicIntBuffer -> listRefCountDecBlobHelperLabel
+                                | MemoryModel.DynamicBufferRelease _ -> Crash.crash "closure list release used a fixed-size dynamic-buffer operation"
                                 | MemoryModel.RecursiveRelease sourceType ->
                                     plannedListDecHelperLabelForReleasePlan (MemoryModel.RecursiveRelease sourceType)
                                 | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) -> listRefCountDecListHelperLabel

@@ -154,9 +154,18 @@ let private generateListRefCountDecHelperWith
                     ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X12, 0s)
                     ARM64Symbolic.CBNZ (ARM64Symbolic.X14, leafPayloadDone)
                 ] @ leakDec
+        let taggedGuard =
+            if helperLabel = listRefCountDecBlobHelperLabel then
+                [ ARM64Symbolic.AND_imm (ARM64Symbolic.X13, ARM64Symbolic.X12, 1UL)
+                  ARM64Symbolic.CBNZ (ARM64Symbolic.X13, leafPayloadDone) ]
+            else
+                []
         [
             ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X3, 0s)
             ARM64Symbolic.CBZ (ARM64Symbolic.X12, leafPayloadDone)
+        ]
+        @ taggedGuard
+        @ [
             ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X27)
             ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, leafPayloadDone)
             ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X28)
@@ -203,8 +212,10 @@ let private generateListRefCountDecHelperWith
                 listRefCountDecStringHelperLabel
             | MemoryModel.DynamicBufferRelease MemoryModel.DynamicBlobBuffer ->
                 listRefCountDecBlobHelperLabel
+            | MemoryModel.DynamicBufferRelease MemoryModel.DynamicIntBuffer ->
+                listRefCountDecBlobHelperLabel
             | MemoryModel.DynamicBufferRelease _ ->
-                listRefCountDecHelperLabel
+                Crash.crash "list dynamic-buffer release used a fixed-size operation"
             | MemoryModel.RecursiveRelease sourceType ->
                 plannedListDecHelperLabelForReleasePlan (MemoryModel.RecursiveRelease sourceType)
             | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
@@ -272,6 +283,7 @@ let private generateListRefCountDecHelperWith
         (baseReg: ARM64Symbolic.Reg)
         (fieldOffset: int)
         (path: string)
+        (operation: MemoryModel.RcOperation)
         : ARM64Symbolic.Instr list =
         let fieldDone = label $"leaf_plan_dynamic_{path}_{fieldOffset}_done"
         let refcountUpdate =
@@ -286,9 +298,18 @@ let private generateListRefCountDecHelperWith
                     ARM64Symbolic.STR (ARM64Symbolic.X14, ARM64Symbolic.X12, 0s)
                     ARM64Symbolic.CBNZ (ARM64Symbolic.X14, fieldDone)
                 ] @ leakDec
+        let taggedGuard =
+            match operation with
+            | MemoryModel.DynamicIntBuffer ->
+                [ ARM64Symbolic.AND_imm (ARM64Symbolic.X13, ARM64Symbolic.X12, 1UL)
+                  ARM64Symbolic.CBNZ (ARM64Symbolic.X13, fieldDone) ]
+            | _ -> []
         [
             ARM64Symbolic.LDR (ARM64Symbolic.X12, baseReg, int16 fieldOffset)
             ARM64Symbolic.CBZ (ARM64Symbolic.X12, fieldDone)
+        ]
+        @ taggedGuard
+        @ [
             ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X27)
             ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, fieldDone)
             ARM64Symbolic.CMP_reg (ARM64Symbolic.X12, ARM64Symbolic.X28)
@@ -340,8 +361,8 @@ let private generateListRefCountDecHelperWith
         (fieldReleasePlan: MemoryModel.RcReleasePlan)
         : ARM64Symbolic.Instr list =
         match fieldReleasePlan with
-        | MemoryModel.DynamicBufferRelease _ ->
-            releasePlanDynamicBufferFieldFrom baseReg fieldOffset path
+        | MemoryModel.DynamicBufferRelease operation ->
+            releasePlanDynamicBufferFieldFrom baseReg fieldOffset path operation
         | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
             releasePlanManagedRootFieldFrom
                 baseReg

@@ -9,15 +9,27 @@ open X64CodeGenTypes
 // Reference Counting Helpers
 // ============================================================================
 
-let internal genDynamicBufferFieldRelease (ctx: FuncCtx) (fieldOffset: int) : X86_64.Instr list =
+let internal genDynamicBufferFieldRelease
+    (ctx: FuncCtx)
+    (skipTagged: bool)
+    (fieldOffset: int)
+    : X86_64.Instr list =
     let doneLabel = freshLabel "rc_dec_field_done"
     let literalLabel = freshLabel "rc_dec_field_lit"
     let noFreeLabel = freshLabel "rc_dec_field_nofree"
     let leakDec = genLeakCounterDec ctx
+    let taggedGuard =
+        if skipTagged then
+            [X86_64.MOV_reg (scratch, X86_64.R8)
+             X86_64.AND_imm (scratch, 1)
+             X86_64.Jcc (X86_64.NE, doneLabel)]
+        else
+            []
     [X86_64.MOV_load (X86_64.R8, X86_64.RDX, fieldOffset)
      X86_64.TEST_reg (X86_64.R8, X86_64.R8)
-     X86_64.Jcc (X86_64.EQ, doneLabel)
-     X86_64.MOV_load (X86_64.R9, X86_64.R8, 0)]
+     X86_64.Jcc (X86_64.EQ, doneLabel)]
+    @ taggedGuard
+    @ [X86_64.MOV_load (X86_64.R9, X86_64.R8, 0)]
     @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL
     @ [X86_64.CMP_reg (X86_64.R9, scratch)
        X86_64.Jcc (X86_64.EQ, literalLabel)
@@ -36,6 +48,7 @@ let internal listRefCountDecClosureHelperLabel = "__dark_list_rc_dec_closure_hel
 let internal listRefCountDecDictHelperLabel = "__dark_list_rc_dec_dict_helper"
 let internal listRefCountDecDictListHelperLabel = "__dark_list_rc_dec_dict_list_helper"
 let internal listRefCountDecDynamicBufferHelperLabel = "__dark_list_rc_dec_dynamic_buffer_helper"
+let internal listRefCountDecDynamicIntHelperLabel = "__dark_list_rc_dec_dynamic_int_helper"
 let private plannedListRefCountDecHelperLabelPrefix = "__dark_list_rc_dec_plan_"
 let internal dictRefCountIncHelperLabel = "__dark_dict_rc_inc_helper"
 let internal dictRefCountDecHelperLabel = "__dark_dict_rc_dec_helper"
@@ -89,7 +102,8 @@ let internal slotInitRootRetainTarget
             | MemoryModel.DictRoot _ ->
                 Some SlotInitDictRootRetain
             | MemoryModel.DynamicString
-            | MemoryModel.DynamicBlob ->
+            | MemoryModel.DynamicBlob
+            | MemoryModel.DynamicInt ->
                 Some SlotInitDynamicBufferRetain
             | MemoryModel.ClosureShape _ ->
                 Some SlotInitClosureRootRetain
@@ -268,6 +282,8 @@ let rec internal listDecHelperForReleasePlan (releasePlan: MemoryModel.RcRelease
         match elementRelease with
         | MemoryModel.NoReleasePlan ->
             listRefCountDecHelperLabel
+        | MemoryModel.DynamicBufferRelease MemoryModel.DynamicIntBuffer ->
+            listRefCountDecDynamicIntHelperLabel
         | MemoryModel.DynamicBufferRelease _ ->
             listRefCountDecDynamicBufferHelperLabel
         | MemoryModel.RecursiveRelease sourceType ->
