@@ -125,6 +125,24 @@ let private testReportsBindingInferenceFailure () =
     | Error (ConstructHIRFunctions.CannotInferExpression ("choose", _)) -> Ok ()
     | actual -> Error $"Expected a scoped inference failure, got {actual}"
 
+let private testFallsBackToOpaqueCheckedFunctionForScheduling () =
+    let source =
+        functionDefinition
+            (CheckedAST.Let (
+                variable "unsupported",
+                CheckedAST.TupleLiteral [CheckedAST.Int64Literal 1L],
+                local "first"))
+    match ConstructHIRFunctions.constructFunctionsWithOpaqueFallback infer dependencies noCalls [source] with
+    | Ok [constructed] ->
+        let block = ConstructHIRFunctions.body constructed.Body
+        match block.Parameters, block.Operations with
+        | [_; first; _], [HIR.ScalarBinding (result, operand)]
+            when result = block.Result
+                 && operand.Expression = source.Body
+                 && operand.Inputs = Map.ofList [(first.Binding, first.Value)] -> Ok ()
+        | _ -> Error $"Expected one boundary-typed opaque operation for the unsupported function, got {block}"
+    | actual -> Error $"Expected conservative opaque construction, got {actual}"
+
 let private callFunction name firstParameter remainingParameters body : CheckedAST.FunctionDef = {
     Id = AST.functionIdForName name
     Name = name
@@ -385,6 +403,7 @@ let private testKeepsUnsupportedPrimitivesOpaque () =
 let tests = [
     "Checked functions construct ordered structured HIR", testConstructsOrderedStructuredFunction
     "Checked function construction reports scoped inference failures", testReportsBindingInferenceFailure
+    "Ownership scheduling can conservatively retain inference-resistant checked functions", testFallsBackToOpaqueCheckedFunctionForScheduling
     "Contracted direct calls preserve argument evaluation order", testNormalizesContractedCallsInArgumentOrder
     "Uncontracted direct calls remain opaque", testKeepsUncontractedCallsOpaque
     "Direct-call alias contracts remain verifier-authoritative", testRejectsInvalidCallAliasContract

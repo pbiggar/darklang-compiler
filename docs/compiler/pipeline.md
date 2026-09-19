@@ -18,6 +18,7 @@ The Dark compiler transforms source code through a series of passes, each with a
 |------|-------------------------|-------------------------------------------------------------|-----------------------------------------------|
 | 1    | Parser                  | `frontend/Parser.fs`                             | Source → parsed AST                           |
 | 1.5  | Type checking           | `frontend/TypeChecking.fs`                       | Parsed AST → checked AST                      |
+| 1.9  | Function ownership analysis | `passes/ownership/AnalyzeFunctionOwnership.fs` | Checked AST → verified owned HIR (analysis artifact) |
 | 2    | AST → ANF               | `passes/anf/AST_to_ANF.fs`                       | Checked AST → ANF                             |
 | 2 (regions) | List representation and ownership | `passes/hir/`, `passes/storage/`, `passes/ownership/`, `passes/anf/LowerListRegions.fs` | Closed semantic lists → storage → owned arrays → ANF |
 | 2.2  | Generated result output | `passes/anf/PrintInsertion.fs`                   | ANF → ANF                                     |
@@ -107,6 +108,10 @@ Error:  Type mismatch: expected Int64, got String in binary operator
 **Output**: A-Normal Form (ANF)
 
 ### Responsibilities
+- **Schedule whole-function ownership analysis**: Construct normalized HIR,
+  infer borrow/consume boundaries across internal and recursive calls, place
+  explicit duplication and cleanup, and jointly verify typed HIR and ownership
+  before ordinary lowering. The verified artifact is not yet consumed by ANF.
 - **Flatten nested expressions**: All intermediate results get names
 - **Make evaluation order explicit**: Left-to-right evaluation visible
 - **Handle desugaring**: Convert high-level constructs to primitives

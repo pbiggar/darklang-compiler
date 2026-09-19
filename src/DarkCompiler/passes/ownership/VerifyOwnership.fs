@@ -184,7 +184,12 @@ let private foldFunctionCalls
                 | Evaluate operation ->
                     match operation with
                     | HIR.Leaf leafOperation -> leaf declared borrowed state leafOperation |> withFacts facts
-                    | HIR.ScalarBinding (_, value) -> scalar borrowed state value |> Result.map (fun state -> declared, state, facts)
+                    | HIR.ScalarBinding (result, value) ->
+                        scalar borrowed state value |> Result.bind (fun state ->
+                            match managed result with
+                            | None -> Ok (declared, state)
+                            | Some id -> define Set.empty declared state [id])
+                        |> withFacts facts
                     | HIR.Call functionCall -> call facts declared borrowed state functionCall
                     | HIR.Branch (result, condition, yes, no) ->
                         scalar borrowed state condition |> Result.bind (fun branchState ->

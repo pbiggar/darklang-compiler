@@ -276,9 +276,13 @@ Effect and alias contracts remain independent and are forwarded from source
 targets. Ownership analysis now exposes verified, pre-transfer uniqueness facts
 for normalized call sites, accounting for duplication, aliases, escapes, and
 branches. A contract-level test feeds those facts through selection and
-materialization and rechecks the specialized boundary. Whole-function owned
-HIR construction and production scheduling remain the next integration work;
-these APIs do not yet change runtime behavior or storage selection.
+materialization and rechecks the specialized boundary. Whole-function
+ownership analysis is now scheduled before ordinary ANF lowering: real checked
+functions receive fixed-point borrow/consume boundaries,
+ownership-transferring managed results, explicit duplication and cleanup, and
+joint HIR/ownership verification. The artifact is intentionally discarded until
+selection and materialization are scheduled across functions, so no runtime or
+storage-selection change is enabled by this foundation alone.
 
 The [in-place mutation checklist](../../project/perceus-checklist.md) tracks
 the complete implementation sequence. The remaining architecture boundaries

@@ -419,7 +419,20 @@ let convertFunctions
                 registries.ModuleRegistry
             |> Result.bind (fun (anfFunc, vg') ->
                 loop rest vg' (anfFunc :: acc))
-    loop functions varGen []
+    let ownershipContext : AnalyzeFunctionOwnership.Context = {
+        TypeReg = registries.TypeReg
+        RecordFieldsReg = registries.RecordFieldsReg
+        RecordTypeParamsReg = registries.RecordTypeParamsReg
+        VariantLookup = registries.VariantLookup
+        SumTypeNames = registries.SumTypeNames
+        RcSumShapeReg = registries.RcSumShapeReg
+        FuncReg = registries.FuncReg
+        FunctionNames = registries.FunctionNames
+        ModuleRegistry = registries.ModuleRegistry
+    }
+    AnalyzeFunctionOwnership.analyze ownershipContext functions
+    |> Result.mapError (fun error -> $"Whole-function ownership analysis failed: {error}")
+    |> Result.bind (fun _ -> loop functions varGen [])
 
 /// Convert an expression to ANF with the given VarGen
 let convertExprToAnf

@@ -77,9 +77,12 @@ type PrimitiveEffect =
     | WritesOwnedStorage
 
 /// Alias provenance is a storage-selection capability, not a mutation
-/// guarantee. MayReuseInput permits either fresh storage or ownership transfer.
+/// guarantee. UnknownManagedAlias exposes a managed output without claiming
+/// freshness or an input relationship. MayReuseInput permits either fresh
+/// storage or ownership transfer.
 type ResultAlias =
     | NoManagedAlias
+    | UnknownManagedAlias
     | FreshManaged
     | MayReuseInput of Value
     | MayAliasInputs of first: Value * rest: Value list
@@ -103,4 +106,4 @@ let managedOutputs contract =
     |> List.choose (fun output ->
         match output.Alias with
         | NoManagedAlias -> None
-        | FreshManaged | MayReuseInput _ | MayAliasInputs _ -> Some output.Value)
+        | UnknownManagedAlias | FreshManaged | MayReuseInput _ | MayAliasInputs _ -> Some output.Value)

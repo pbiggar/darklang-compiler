@@ -28,13 +28,17 @@ representation and safety boundaries are documented in
   duplication, and escapes. Implemented by the shared ownership verifier and
   exposed through joint typed-HIR analysis, with recursive-contract, alias,
   failure-atomicity, and specialization-handoff tests. Full host tests and the
-  parent-relative benchmark gate pass; whole-function scheduling is the next
-  slice.
-- [ ] **Schedule whole-function ownership analysis.** Produce ownership-aware
+  parent-relative benchmark gate pass.
+- [x] **Schedule whole-function ownership analysis.** Produce ownership-aware
   HIR for real functions, establish borrowed and consumed parameters and
   ownership-transferring results, and insert duplication and cleanup. Preserve
   compile-time validation, generated result printing, and observable evaluation
-  order.
+  order. Implemented by
+  [AnalyzeFunctionOwnership](../../src/DarkCompiler/passes/ownership/AnalyzeFunctionOwnership.fs)
+  and
+  [ElaborateFunctionOwnership](../../src/DarkCompiler/passes/ownership/ElaborateFunctionOwnership.fs);
+  the verified artifact is deliberately discarded before existing ANF lowering,
+  so this scheduling slice has no runtime effect.
 - [ ] **Schedule specialization across functions.** Connect analysis,
   selection, and materialization; propagate uniqueness information until the
   process stabilizes. Bound generated code and compilation work, and cache

@@ -315,3 +315,59 @@ let constructFunctions infer dependencies calls (definitions: CheckedAST.Functio
             constructWithSignatures infer dependencies calls callSignature definition
             |> Result.map (fun functionDefinition -> functionDefinition :: functions))) (Ok [])
     |> Result.map List.rev
+
+/// Ownership scheduling can conservatively retain a checked function whose
+/// internal expression types are unavailable to the lowering inference helper.
+/// The opaque operation preserves its typed boundary and all visible parameter
+/// dependencies without weakening the strict construction API above.
+let constructFunctionsWithOpaqueFallback infer dependencies calls (definitions: CheckedAST.FunctionDef list) =
+    let internalSignatures =
+        definitions
+        |> List.map (fun definition -> definition.Id, signatureOfCheckedFunction definition)
+        |> Map.ofList
+    let callSignature target =
+        match Map.tryFind target internalSignatures with
+        | Some signature -> Some signature
+        | None -> calls.ExternalSignature target
+    let opaque (definition: CheckedAST.FunctionDef) =
+        let parameters =
+            definition.Params
+            |> AST.NonEmptyList.toList
+            |> List.mapi (fun index (binding, typ) -> {
+                Name = string binding
+                Binding = binding
+                Value = { Id = HIR.ValueId index; Type = typ }
+            })
+        let visible = parameters |> List.map (fun parameter -> parameter.Binding, parameter.Value) |> Map.ofList
+        let inputs =
+            dependencies definition.Body
+            |> Set.toList
+            |> List.choose (fun binding ->
+                Map.tryFind binding visible |> Option.map (fun value -> binding, value))
+            |> Map.ofList
+        let result = {
+            Id = HIR.ValueId (List.length parameters)
+            Type = definition.ReturnType
+        }
+        {
+            Id = definition.Id
+            Name = definition.Name
+            Body = Block {
+                Parameters = parameters
+                Operations = [HIR.ScalarBinding (result, {
+                    Expression = definition.Body
+                    Type = definition.ReturnType
+                    Inputs = inputs
+                })]
+                Result = result
+            }
+        }
+    definitions
+    |> List.fold (fun result definition ->
+        result
+        |> Result.bind (fun functions ->
+            match constructWithSignatures infer dependencies calls callSignature definition with
+            | Ok functionDefinition -> Ok (functionDefinition :: functions)
+            | Error (CannotInferExpression _ | InconsistentCallSignature _) ->
+                Ok (opaque definition :: functions))) (Ok [])
+    |> Result.map List.rev

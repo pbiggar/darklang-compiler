@@ -43,9 +43,13 @@ destruction proofs live in `analysis/`. The list dialect uses these interfaces
 for closed collection regions, storage selection, and branch-aware ownership.
 Opaque operands still contain checked AST evaluation payloads, but their local
 inputs are normalized identities rather than lexical-name lookups. The
-whole-function constructor is not yet scheduled in code generation, and calls
-without explicit contracts plus unsupported or managed source primitives remain
-opaque; this is not yet a whole-program storage pipeline or a general RC solver.
+whole-function constructor now runs before ordinary ANF lowering. It normalizes
+compatible internal calls, while calls without explicit contracts plus
+unsupported or managed source primitives remain opaque. If auxiliary lowering
+type inference cannot describe an already-checked compiler-generated function,
+the scheduler conservatively represents its complete body as one typed opaque
+operation. The verified owned-HIR artifact is discarded for now, so this is not
+yet a whole-program storage pipeline or a general RC solver.
 See
 [compiler-selected list arrays](runtime/list-array-reuse.md) for its boundary
 and the remaining general ownership work.
@@ -116,7 +120,10 @@ ownership unit. A recursive call is accepted only
 when its target is present in the verified function group and its independent
 effect/alias and ownership registries; unknown and indirect calls remain opaque
 evaluation rather than receiving guessed facts. Checked-source whole-function
-construction and the closed-list dialect still do not admit these general calls,
+analysis derives conservative borrowed and consumed parameter boundaries to a
+fixed point, treats managed results as ownership transfers, and inserts `Dup`
+and `Drop` steps for consuming calls, dead results, and branch edges. Joint
+verification runs before ANF, but the artifact is not yet carried into lowering,
 so this boundary does not change emitted code or list representation selection.
 
 ## ANF shared continuations

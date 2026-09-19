@@ -72,7 +72,7 @@ let verify (dialect: Dialect<'leaf, 'block>) (root: 'block) =
         |> List.fold (fun result output ->
             result |> Result.bind (fun () ->
                 match output.Alias with
-                | NoManagedAlias | FreshManaged -> Ok ()
+                | NoManagedAlias | UnknownManagedAlias | FreshManaged -> Ok ()
                 | MayReuseInput source -> validate output source
                 | MayAliasInputs (first, rest) -> validateMany output first rest)) (Ok ())
     let effects (contract: PrimitiveContract) =

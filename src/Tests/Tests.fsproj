@@ -94,6 +94,7 @@
     <Compile Include="compiler-passes/ownership/OwnedFunctionGroupInferenceTests.fs" />
     <Compile Include="compiler-passes/ownership/OwnershipVariantSelectionTests.fs" />
     <Compile Include="compiler-passes/ownership/OwnershipVariantMaterializationTests.fs" />
+    <Compile Include="compiler-passes/ownership/WholeFunctionOwnershipTests.fs" />
     <Compile Include="compiler-passes/ownership/OwnedHIRVerificationTests.fs" />
     <Compile Include="compiler-passes/ownership/OwnershipCallFactsTests.fs" />
     <Compile Include="compiler-passes/RuntimeDataLayoutTests.fs" />

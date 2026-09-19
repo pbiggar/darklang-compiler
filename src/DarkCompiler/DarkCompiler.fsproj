@@ -71,6 +71,7 @@
     <Compile Include="passes/ownership/InferOwnedFunctionGroups.fs" />
     <Compile Include="passes/ownership/SelectOwnershipVariants.fs" />
     <Compile Include="passes/ownership/VerifyOwnedHIR.fs" />
+    <Compile Include="passes/ownership/ElaborateFunctionOwnership.fs" />
     <Compile Include="passes/ownership/MaterializeOwnershipVariants.fs" />
     <Compile Include="ir/hir/ListRegion.fs" />
     <Compile Include="passes/ownership/ListAllocationBudget.fs" />
@@ -94,6 +95,7 @@
     <Compile Include="passes/preparation/CheckedMaterializeHelpers.fs" />
     <Compile Include="passes/anf/lowering/Operators.fs" />
     <Compile Include="passes/anf/lowering/TypeInference.fs" />
+    <Compile Include="passes/ownership/AnalyzeFunctionOwnership.fs" />
     <Compile Include="passes/anf/lowering/Aggregates.fs" />
     <Compile Include="passes/anf/lowering/LoweringCallbacks.fs" />
     <Compile Include="passes/anf/lowering/PatternLowering.fs" />

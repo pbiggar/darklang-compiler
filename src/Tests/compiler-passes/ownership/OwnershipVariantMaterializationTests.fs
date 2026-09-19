@@ -336,7 +336,11 @@ let private testRejectsStaleBodyProof () =
                     Expression = CheckedAST.Int64Literal 0L; Type = AST.TInt64
                     Inputs = Map.ofList [binding "input", input]
                 }
-                let body = block [parameter input] [Evaluate (HIR.ScalarBinding (ignored, escape))] input
+                let body =
+                    block
+                        [parameter input]
+                        [Evaluate (HIR.ScalarBinding (ignored, escape)); Drop ignored.Id]
+                        input
                 { definition with Definition = { definition.Definition with Body = body } }
             else definition)
         let escaping = { semantics with ScalarEscapes = semantics.ScalarUses }
