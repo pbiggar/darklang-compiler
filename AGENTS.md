@@ -84,9 +84,11 @@ this repository and takes precedence where it is stricter.
 
 ## Git workflow
 
-- Create a dedicated worktree once when beginning a new task and rebase its
-  branch on the configured integration ref (`origin/main` by default) before
-  making changes. Perform all task work there, never in the primary checkout.
+- Create a dedicated worktree once when beginning a new task and base its
+  branch on the current local value of the configured integration ref
+  (`origin/main` by default) before making changes. Do not fetch or otherwise
+  contact the remote first; another process owns integration-ref updates.
+  Perform all task work there, never in the primary checkout.
   After work begins, do not pull, merge, rebase, reset, or otherwise incorporate
   later integration-ref changes into that task worktree merely because the
   integration ref advanced or a new agent turn began. Once enqueued, keep the

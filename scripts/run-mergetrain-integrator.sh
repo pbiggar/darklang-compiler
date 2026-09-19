@@ -145,6 +145,13 @@ log_error() {
   log_event ERROR "$color_red" "$@"
 }
 
+log_job() {
+  local logger="$1"
+  local job_id="$2"
+  shift 2
+  "$logger" "Job #$job_id: $*"
+}
+
 json_value() {
   local path="$1"
   python3 -c '
@@ -166,10 +173,16 @@ else:
 print_log_excerpt() {
   local log_file="$1"
   local line_count="${2:-8}"
+  local job_id="${3:-}"
 
   if [[ -s "$log_file" ]]; then
-    log_warn "Last $line_count log line(s):"
-    tail -n "$line_count" "$log_file" | sed 's/^/  /' >&2
+    if [[ -n "$job_id" ]]; then
+      log_job log_warn "$job_id" "Last $line_count log line(s):"
+      tail -n "$line_count" "$log_file" | sed "s/^/  Job #$job_id: /" >&2
+    else
+      log_warn "Last $line_count log line(s):"
+      tail -n "$line_count" "$log_file" | sed 's/^/  /' >&2
+    fi
   fi
 }
 
@@ -208,10 +221,10 @@ repair_job() {
   )"; then
     daemon_log="$attempt_dir/$job_id-unknown.daemon.log"
     mv "$daemon_output" "$daemon_log"
-    log_error "Mergetrain inspection failed for job #$job_id"
-    print_log_excerpt "$inspect_log"
-    log_info "Full inspection log: $inspect_log"
-    log_info "Daemon log: $daemon_log"
+    log_job log_error "$job_id" "Mergetrain inspection failed"
+    print_log_excerpt "$inspect_log" 8 "$job_id"
+    log_job log_info "$job_id" "Full inspection log: $inspect_log"
+    log_job log_info "$job_id" "Daemon log: $daemon_log"
     exit 1
   fi
   rm -f "$inspect_log"
@@ -221,28 +234,28 @@ repair_job() {
   daemon_log="$attempt_dir/$job_id-${old_head:-unknown}.daemon.log"
   mv "$daemon_output" "$daemon_log"
   branch="$(json_value job.branch <<<"$details")"
-  log_run "Repairing job #$job_id ($branch) after ${category//_/ }"
+  log_job log_run "$job_id" "Repairing $branch after ${category//_/ }"
   case "$category" in
     merge_conflict|semantic_conflict)
       ;;
     push_rejected)
       if [[ "$reason" != *non-fast-forward* ]]; then
-        log_error "Job #$job_id has a non-recoverable push rejection: $reason"
-        log_info "Daemon log: $daemon_log"
+        log_job log_error "$job_id" "Non-recoverable push rejection: $reason"
+        log_job log_info "$job_id" "Daemon log: $daemon_log"
         exit 1
       fi
       ;;
     *)
-      log_error "Job #$job_id needs operator attention ($category); refusing an automatic repair"
-      log_info "Daemon log: $daemon_log"
+      log_job log_error "$job_id" "Needs operator attention ($category); refusing an automatic repair"
+      log_job log_info "$job_id" "Daemon log: $daemon_log"
       exit 1
       ;;
   esac
 
   worktree="$(json_value job.worktree_path <<<"$details")"
   if [[ -z "$worktree" || -z "$branch" || -z "$old_head" || ! -d "$worktree" ]]; then
-    log_error "Job #$job_id does not identify a usable owning worktree"
-    log_info "Daemon log: $daemon_log"
+    log_job log_error "$job_id" "Does not identify a usable owning worktree"
+    log_job log_info "$job_id" "Daemon log: $daemon_log"
     exit 1
   fi
 
@@ -250,14 +263,14 @@ repair_job() {
   output_file="$attempt_dir/$job_id-$old_head.last-message.txt"
   codex_log="$attempt_dir/$job_id-$old_head.codex.log"
   if [[ -e "$attempt_marker" ]]; then
-    log_error "Codex already attempted job #$job_id at $old_head; operator review required"
-    log_info "Daemon log: $daemon_log"
+    log_job log_error "$job_id" "Codex already attempted revision $old_head; operator review required"
+    log_job log_info "$job_id" "Daemon log: $daemon_log"
     exit 1
   fi
   touch "$attempt_marker"
 
   git_common_dir="$(git -C "$worktree" rev-parse --path-format=absolute --git-common-dir)"
-  log_run "Starting Codex repair; full output: $codex_log"
+  log_job log_run "$job_id" "Starting Codex repair; full output: $codex_log"
 
   if ! printf '%s\n' "$details" |
     codex exec \
@@ -288,43 +301,43 @@ For this recovery run, do not invoke ./land. Do not push, deploy, enqueue,
 retry, reconcile, cancel, dismiss, or modify mergetrain queue state; the
 integrator owns the retry. If a confident repair is not possible, leave the
 branch unchanged and explain the blocker." >"$codex_log" 2>&1; then
-    log_error "Codex repair failed for job #$job_id ($category)"
+    log_job log_error "$job_id" "Codex repair failed ($category)"
     if [[ -s "$output_file" ]]; then
       summary="$(last_message_summary "$output_file")"
       if [[ -n "$summary" ]]; then
-        log_warn "Codex summary: $summary"
+        log_job log_warn "$job_id" "Codex summary: $summary"
       fi
-      log_info "Final message: $output_file"
+      log_job log_info "$job_id" "Final message: $output_file"
     else
-      print_log_excerpt "$codex_log"
+      print_log_excerpt "$codex_log" 8 "$job_id"
     fi
-    log_info "Full execution log: $codex_log"
-    log_info "Daemon log: $daemon_log"
+    log_job log_info "$job_id" "Full execution log: $codex_log"
+    log_job log_info "$job_id" "Daemon log: $daemon_log"
     exit 1
   fi
 
-  log_run "Codex finished; verifying the committed repair"
+  log_job log_run "$job_id" "Codex finished; verifying the committed repair"
   current_branch="$(git -C "$worktree" branch --show-current)"
   new_head="$(git -C "$worktree" rev-parse HEAD)"
   dirty="$(git -C "$worktree" status --porcelain)"
   if [[ "$current_branch" != "$branch" || "$new_head" == "$old_head" || -n "$dirty" ]]; then
-    log_error "Codex did not leave job #$job_id on a clean, newly committed $branch"
-    log_info "Final message: $output_file"
-    log_info "Full execution log: $codex_log"
-    log_info "Daemon log: $daemon_log"
+    log_job log_error "$job_id" "Codex did not leave a clean, newly committed $branch"
+    log_job log_info "$job_id" "Final message: $output_file"
+    log_job log_info "$job_id" "Full execution log: $codex_log"
+    log_job log_info "$job_id" "Daemon log: $daemon_log"
     exit 1
   fi
 
   retry_log="$attempt_dir/$job_id-$new_head.retry.log"
-  log_run "Retrying job #$job_id at ${new_head:0:10}"
+  log_job log_run "$job_id" "Retrying at ${new_head:0:10}"
   if ! mergetrain --repo "$repo_root" retry "$job_id" --json >"$retry_log" 2>&1; then
-    log_error "Mergetrain retry failed for job #$job_id"
-    print_log_excerpt "$retry_log"
-    log_info "Full retry log: $retry_log"
+    log_job log_error "$job_id" "Mergetrain retry failed"
+    print_log_excerpt "$retry_log" 8 "$job_id"
+    log_job log_info "$job_id" "Full retry log: $retry_log"
     exit 1
   fi
   rm -f "$retry_log"
-  log_ok "Retried job #$job_id after Codex committed a repair"
+  log_job log_ok "$job_id" "Retried after Codex committed a repair"
 }
 
 last_queue_signature=""
@@ -380,7 +393,7 @@ for job in payload.get("recent_jobs", []):
 report_train_progress() {
   local snapshot="$1"
   local running_ids job_ids final_poll=false details_file inspect_log job_id
-  local event_id event_state message detail
+  local event_id event_job_id event_state message detail
 
   running_ids="$(running_job_ids <<<"$snapshot")"
   if [[ -n "$running_ids" ]]; then
@@ -403,11 +416,14 @@ report_train_progress() {
     rm -f "$inspect_log"
   done
 
-  while IFS=$'\t' read -r event_id event_state message detail; do
+  while IFS=$'\t' read -r event_id event_job_id event_state message detail; do
     [[ -n "$event_id" ]] || continue
     last_progress_event_id="$event_id"
     if [[ -n "$detail" && "$message" != *"$detail"* ]]; then
       message="$message — $detail"
+    fi
+    if [[ "$event_job_id" != "-" ]]; then
+      message="Job #$event_job_id: $message"
     fi
     case "$event_state" in
       success)
@@ -446,6 +462,7 @@ for event_id in sorted(events):
     event = events[event_id]
     fields = [
         str(event_id),
+        str(event.get("job_id")) if isinstance(event.get("job_id"), int) else "-",
         str(event.get("state", "active")),
         str(event.get("message") or "Mergetrain progress"),
         str(event.get("detail") or ""),
