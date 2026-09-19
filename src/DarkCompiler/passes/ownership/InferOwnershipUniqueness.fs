@@ -13,7 +13,7 @@ type Candidates<'id> =
 
 type InferenceError<'id when 'id: comparison> =
     | VariantLimitExceeded of refinableModes: int * maximumVariants: int
-    | RecursiveFunctionRequiresGroupInference of functionName: string
+    | RecursiveFunctionRequiresGroupInference of functionId: AST.FunctionId
     | NoVerifiedBoundary of VerificationError<'id>
     | NoVerifiedFunctionGroup of VerificationError<'id>
 
@@ -117,8 +117,8 @@ let infer
     let signature = functionDefinition.Ownership
     let root = functionDefinition.Definition.Body
     let refinableModes = refinableModeCount signature
-    if callsTarget functionDefinition.Definition.Name root then
-        Error (RecursiveFunctionRequiresGroupInference functionDefinition.Definition.Name)
+    if callsTarget functionDefinition.Definition.Id root then
+        Error (RecursiveFunctionRequiresGroupInference functionDefinition.Definition.Id)
     elif not (withinVariantLimit refinableModes) then
         Error (VariantLimitExceeded (refinableModes, maximumVariants))
     else

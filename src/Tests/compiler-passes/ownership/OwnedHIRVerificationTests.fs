@@ -10,7 +10,11 @@ let private parameter : HIR.Value = { Id = HIR.ValueId 0; Type = AST.TInt64 }
 let private alias : HIR.Value = { Id = HIR.ValueId 3; Type = AST.TInt64 }
 
 let private call target result =
-    Evaluate (HIR.Call { Target = target; Arguments = [parameter]; Result = result })
+    Evaluate (HIR.Call {
+        Target = AST.functionIdForName target
+        Arguments = [parameter]
+        Result = result
+    })
 
 let private block operations result : Block<TestLeaf, string> = {
     Body = {
@@ -21,7 +25,11 @@ let private block operations result : Block<TestLeaf, string> = {
 }
 
 let private ownedFunction name operations result : Function<TestLeaf, string> = {
-    Definition = { Name = name; Body = block operations result }
+    Definition = {
+        Id = AST.functionIdForName name
+        Name = name
+        Body = block operations result
+    }
     Ownership = {
         Parameters = [BorrowedParameter "value"]
         Result = BorrowedResult "value"
@@ -80,7 +88,9 @@ let private testRequiresIndependentCallContract () =
             (ownership (fun _ -> None))
             [recursive]
     let expected =
-        Error (VerifyOwnedHIR.HIRVerificationFailed (VerifyHIR.MissingCallContract "recursive"))
+        Error (
+            VerifyOwnedHIR.HIRVerificationFailed (
+                VerifyHIR.MissingCallContract (AST.functionIdForName "recursive")))
     if actual = expected then Ok () else Error $"Expected {expected}, got {actual}"
 
 let private testRejectsPositionalOwnershipMismatch () =
@@ -100,7 +110,7 @@ let private testRejectsPositionalOwnershipMismatch () =
 let private testRejectsConflictingOwnershipRegistration () =
     let recursive = ownedFunction "recursive" [call "recursive" alias] alias
     let registered (call: HIR.FunctionCall) =
-        if call.Target = "recursive" then
+        if call.Target = AST.functionIdForName "recursive" then
             Some { Parameters = [ConsumedCallParameter]; Result = ProducedCallResult }
         else None
     let actual =
@@ -111,7 +121,7 @@ let private testRejectsConflictingOwnershipRegistration () =
     let expected =
         Error (
             VerifyOwnedHIR.OwnershipVerificationFailed (
-                InconsistentRegisteredCallOwnership "recursive"))
+                InconsistentRegisteredCallOwnership (AST.functionIdForName "recursive")))
     if actual = expected then Ok () else Error $"Expected {expected}, got {actual}"
 
 let tests = [

@@ -327,7 +327,8 @@ let specializeFunction (funcDef: CheckedAST.FunctionDef) (typeArgs: AST.Type lis
         |> AST.NonEmptyList.map (fun (name, ty) -> (name, applySubstToType subst ty))
     let specializedReturnType = applySubstToType subst funcDef.ReturnType
     let specializedBody = applySubstToExpr subst funcDef.Body
-    { Name = specializedName
+    { Id = AST.functionIdForName specializedName
+      Name = specializedName
       TypeParams = []  // Specialized function has no type parameters
       Params = specializedParams
       ReturnType = specializedReturnType

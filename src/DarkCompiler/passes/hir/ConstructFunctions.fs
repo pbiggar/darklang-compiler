@@ -28,11 +28,11 @@ type Block = private Block of HIR.Block<HIR.Operation<Primitive, Block>>
 
 type ConstructionError =
     | CannotInferExpression of functionName: string * message: string
-    | InconsistentCallSignature of functionName: string * target: string
+    | InconsistentCallSignature of functionName: string * target: AST.FunctionId
 
 type CallContracts = {
-    ExternalSignature: string -> HIR.FunctionSignature option
-    Contract: string -> (HIR.FunctionCall -> HIR.PrimitiveContract) option
+    ExternalSignature: AST.FunctionId -> HIR.FunctionSignature option
+    Contract: AST.FunctionId -> (HIR.FunctionCall -> HIR.PrimitiveContract) option
 }
 
 type private State = {
@@ -80,7 +80,7 @@ let private constructWithSignatures
     (infer: Map<AST.BindingId, AST.Type> -> CheckedAST.Expr -> Result<AST.Type, string>)
     (dependencies: CheckedAST.Expr -> Set<AST.BindingId>)
     (calls: CallContracts)
-    (callSignature: string -> HIR.FunctionSignature option)
+    (callSignature: AST.FunctionId -> HIR.FunctionSignature option)
     (definition: CheckedAST.FunctionDef)
     : Result<HIR.Function<Block>, ConstructionError> =
     let parameterValues, nextId =
@@ -284,6 +284,7 @@ let private constructWithSignatures
     normalize initial definition.ReturnType definition.Body
     |> Result.map (fun (result, finalState) ->
         {
+            Id = definition.Id
             Name = definition.Name
             Body = Block {
                 Parameters = parameterValues
@@ -294,14 +295,14 @@ let private constructWithSignatures
 
 let constructFunction infer dependencies calls (definition: CheckedAST.FunctionDef) =
     let internalSignature target =
-        if target = definition.Name then Some (signatureOfCheckedFunction definition)
+        if target = definition.Id then Some (signatureOfCheckedFunction definition)
         else calls.ExternalSignature target
     constructWithSignatures infer dependencies calls internalSignature definition
 
 let constructFunctions infer dependencies calls (definitions: CheckedAST.FunctionDef list) =
     let internalSignatures =
         definitions
-        |> List.map (fun definition -> definition.Name, signatureOfCheckedFunction definition)
+        |> List.map (fun definition -> definition.Id, signatureOfCheckedFunction definition)
         |> Map.ofList
     let callSignature target =
         match Map.tryFind target internalSignatures with

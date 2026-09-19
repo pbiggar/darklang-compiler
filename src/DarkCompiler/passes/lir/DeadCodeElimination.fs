@@ -6,16 +6,16 @@
 module DeadCodeElimination
 
 /// Add a function name referenced by an operand to the current call set.
-let private addCallFromOperand (op: LIR.Operand) (calls: Set<string>) : Set<string> =
+let private addCallFromOperand (op: LIR.Operand) (calls: Set<AST.FunctionId>) : Set<AST.FunctionId> =
     match op with
     | LIR.FuncAddr name -> Set.add name calls
     | _ -> calls
 
-let private addCallsFromOperands (ops: LIR.Operand list) (calls: Set<string>) : Set<string> =
+let private addCallsFromOperands (ops: LIR.Operand list) (calls: Set<AST.FunctionId>) : Set<AST.FunctionId> =
     ops |> List.fold (fun calls op -> addCallFromOperand op calls) calls
 
 /// Add function names referenced by one instruction to the current call set.
-let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<string> =
+let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<AST.FunctionId>) : Set<AST.FunctionId> =
     match instr with
     | LIR.Mov (_, src) -> addCallFromOperand src calls
     | LIR.Phi (_, sources, _) ->
@@ -141,7 +141,7 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<stri
             match payloadType with
             | Some (AST.TList elemType) ->
                 match ListDisplay.getDisplayStringFunc elemType with
-                | Some funcName -> Set.add funcName calls
+                | Some funcName -> Set.add (AST.functionIdForName funcName) calls
                 | None -> calls
             | _ -> calls) calls
     | LIR.HeapStore (_, _, src, _) -> addCallFromOperand src calls
@@ -164,50 +164,50 @@ let private addCallsFromInstr (instr: LIR.Instr) (calls: Set<string>) : Set<stri
         calls |> addCallFromOperand path |> addCallFromOperand content
 
 /// Add every function-call edge in one LIR function to an existing call set.
-let private addCalledFunctions (func: LIR.Function) (calls: Set<string>) : Set<string> =
+let private addCalledFunctions (func: LIR.Function) (calls: Set<AST.FunctionId>) : Set<AST.FunctionId> =
     func.CFG.Blocks
     |> Map.fold (fun calls _ block ->
         block.Instrs
         |> List.fold (fun calls instr -> addCallsFromInstr instr calls) calls) calls
 
 /// Extract function names called from a LIR function
-let getCalledFunctions (func: LIR.Function) : Set<string> =
+let getCalledFunctions (func: LIR.Function) : Set<AST.FunctionId> =
     addCalledFunctions func Set.empty
 
 /// Build call graph from list of functions
-let buildCallGraph (funcs: LIR.Function list) : Map<string, Set<string>> =
+let buildCallGraph (funcs: LIR.Function list) : Map<AST.FunctionId, Set<AST.FunctionId>> =
     funcs
-    |> List.map (fun f -> f.Name, getCalledFunctions f)
+    |> List.map (fun f -> f.Id, getCalledFunctions f)
     |> Map.ofList
 
 /// Compute transitive closure of reachable functions.
-let findReachable (callGraph: Map<string, Set<string>>) (roots: Set<string>) : Set<string> =
+let findReachable (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>) (roots: Set<AST.FunctionId>) : Set<AST.FunctionId> =
     CallGraphReachability.findReachable callGraph roots
 
 /// Collect the direct calls made by functions already represented in a call graph.
 let directCallsFromFunctions
-    (callGraph: Map<string, Set<string>>)
+    (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
     (functions: LIR.Function list)
-    : Set<string> =
+    : Set<AST.FunctionId> =
     functions
     |> List.fold (fun calls func ->
-        match Map.tryFind func.Name callGraph with
+        match Map.tryFind func.Id callGraph with
         | Some functionCalls -> Set.union calls functionCalls
         | None -> calls) Set.empty
 
 /// Filter functions to only include those reachable from a precomputed user call graph.
 let filterFunctionsWithUserCallGraph
-    (callGraph: Map<string, Set<string>>)
-    (userCallGraph: Map<string, Set<string>>)
+    (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+    (userCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
     (userFuncs: LIR.Function list)
     (stdlibFuncs: LIR.Function list)
     : LIR.Function list =
     let userCalls = directCallsFromFunctions userCallGraph userFuncs
     let reachable = findReachable callGraph userCalls
-    stdlibFuncs |> List.filter (fun f -> Set.contains f.Name reachable)
+    stdlibFuncs |> List.filter (fun f -> Set.contains f.Id reachable)
 
 /// Filter functions to only include reachable ones
-let filterFunctions (callGraph: Map<string, Set<string>>)
+let filterFunctions (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
                     (userFuncs: LIR.Function list)
                     (stdlibFuncs: LIR.Function list) : LIR.Function list =
     let userCallGraph = buildCallGraph userFuncs

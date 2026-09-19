@@ -44,6 +44,7 @@ let internal makeSimpleProgramWithVariants
         Terminator = LIR.Ret
     }
     let func : LIR.Function = {
+        Id = AST.functionIdForName "_start"
         Name = "_start"
         TypedParams = []
         CFG = {
@@ -67,6 +68,7 @@ let internal makeSimpleProgramWithRecords
         Terminator = LIR.Ret
     }
     let func : LIR.Function = {
+        Id = AST.functionIdForName "_start"
         Name = "_start"
         TypedParams = []
         CFG = {

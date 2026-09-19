@@ -76,13 +76,18 @@ let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : MemoryM
     |> List.fold addVariant Map.empty
     |> Map.map toSumShapeInfo
 
-/// Function registry - maps function names to their FULL function types (TFunction)
-type FunctionRegistry = Map<string, AST.Type>
+/// Function registry keyed by semantic identity. Names are retained as
+/// definition metadata for diagnostics and backend symbol emission.
+type FunctionRegistry = Map<AST.FunctionId, string * AST.Type>
+
+/// Display metadata for every resolved function identity, including compiler
+/// intrinsics that do not have ordinary checked definitions.
+type FunctionNameRegistry = Map<AST.FunctionId, string>
 
 let private listHeadUnsafeFunction
     (funcReg: FunctionRegistry)
     (elementType: AST.Type)
-    : string =
+    : AST.FunctionId =
     let valueViewType = AST.TString
     let jsonAccessor =
         match elementType with
@@ -91,9 +96,9 @@ let private listHeadUnsafeFunction
             Some "Darklang.Stdlib.Json.__viewFieldListHead"
         | _ -> None
     match jsonAccessor with
-    | Some name when Map.containsKey name funcReg -> name
-    | _ when elementType = AST.TFloat64 -> "Darklang.Stdlib.List.__headUnsafeFloat"
-    | _ -> "Darklang.Stdlib.List.__headUnsafe_i64"
+    | Some name when Map.containsKey (AST.functionIdForName name) funcReg -> AST.functionIdForName name
+    | _ when elementType = AST.TFloat64 -> AST.functionIdForName "Darklang.Stdlib.List.__headUnsafeFloat"
+    | _ -> AST.functionIdForName "Darklang.Stdlib.List.__headUnsafe_i64"
 
 /// Pattern matching reads list payloads without taking an ownership edge.
 /// Typed accessors materialize owned return values in their callee; the erased
@@ -105,7 +110,7 @@ let internal listHeadUnsafeExpr
     (listAtom: ANF.Atom)
     : ANF.CExpr =
     let functionName = listHeadUnsafeFunction funcReg elementType
-    if functionName = "Darklang.Stdlib.List.__headUnsafe_i64" then
+    if functionName = AST.functionIdForName "Darklang.Stdlib.List.__headUnsafe_i64" then
         ANF.BorrowedCall (functionName, [listAtom])
     else
         ANF.Call (functionName, [listAtom])

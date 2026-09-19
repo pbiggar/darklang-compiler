@@ -10,6 +10,8 @@ open ANF
 
 type TestResult = Result<unit, string>
 
+let private fid = AST.functionIdForName
+
 let private param id typ = { Id = TempId id; Type = typ }
 
 let private functionByName (name: string) (functions: Function list) : Function option =
@@ -18,8 +20,8 @@ let private functionByName (name: string) (functions: Function list) : Function 
 let rec private findCall (target: string) (expr: AExpr) : CExpr option =
     match expr with
     | Jump _ | Return _ -> None
-    | Let (_, Call (name, _), _) when name = target -> Some(Call (name, []))
-    | Let (_, TailCall (name, _), _) when name = target -> Some(TailCall (name, []))
+    | Let (_, Call (name, _), _) when name = (fid target) -> Some(Call (name, []))
+    | Let (_, TailCall (name, _), _) when name = (fid target) -> Some(TailCall (name, []))
     | Let (_, _, body) -> findCall target body
     | Join (_, thenBranch, elseBranch)
     | If (_, thenBranch, elseBranch) ->
@@ -30,8 +32,8 @@ let rec private findCall (target: string) (expr: AExpr) : CExpr option =
 let rec private callArgs (target: string) (expr: AExpr) : Atom list option =
     match expr with
     | Jump _ | Return _ -> None
-    | Let (_, Call (name, args), _) when name = target -> Some args
-    | Let (_, TailCall (name, args), _) when name = target -> Some args
+    | Let (_, Call (name, args), _) when name = (fid target) -> Some args
+    | Let (_, TailCall (name, args), _) when name = (fid target) -> Some args
     | Let (_, _, body) -> callArgs target body
     | Join (_, thenBranch, elseBranch)
     | If (_, thenBranch, elseBranch) ->
@@ -65,6 +67,7 @@ let private fixture () : Program =
     let closureType = AST.TTuple [AST.TInt64; AST.TInt64]
     let predicate =
         {
+            Id = fid "predicate"
             Name = "predicate"
             TypedParams = [param 0 closureType; param 1 AST.TInt64]
             ReturnType = AST.TBool
@@ -83,6 +86,7 @@ let private fixture () : Program =
     let functionType = AST.TFunction ([AST.TInt64], AST.TBool)
     let helper =
         {
+            Id = fid "filter"
             Name = "filter"
             TypedParams = [param 3 AST.TInt64; param 4 functionType; param 5 AST.TInt64]
             ReturnType = AST.TInt64
@@ -98,7 +102,7 @@ let private fixture () : Program =
                             Prim (Add, Var (TempId 3), IntLiteral (Int64 1L)),
                             Let (
                                 TempId 8,
-                                TailCall ("filter", [Var (TempId 7); Var (TempId 4); Var (TempId 5)]),
+                                TailCall (fid "filter", [Var (TempId 7); Var (TempId 4); Var (TempId 5)]),
                                 Return (Var (TempId 8))
                             )
                         ),
@@ -109,15 +113,16 @@ let private fixture () : Program =
     let knownCallerBody =
         Let (
             TempId 9,
-            ClosureAlloc ("predicate", [IntLiteral (Int64 7L)]),
+            ClosureAlloc (fid "predicate", [IntLiteral (Int64 7L)]),
             Let (
                 TempId 10,
-                Call ("filter", [IntLiteral (Int64 1L); Var (TempId 9); IntLiteral (Int64 0L)]),
+                Call (fid "filter", [IntLiteral (Int64 1L); Var (TempId 9); IntLiteral (Int64 0L)]),
                 Return (Var (TempId 10))
             )
         )
     let genericCaller =
         {
+            Id = fid "genericCaller"
             Name = "genericCaller"
             TypedParams = [param 11 functionType]
             ReturnType = AST.TInt64
@@ -125,7 +130,7 @@ let private fixture () : Program =
             Body =
                 Let (
                     TempId 12,
-                    Call ("filter", [IntLiteral (Int64 1L); Var (TempId 11); IntLiteral (Int64 0L)]),
+                    Call (fid "filter", [IntLiteral (Int64 1L); Var (TempId 11); IntLiteral (Int64 0L)]),
                     Return (Var (TempId 12))
                 )
         }
@@ -176,13 +181,13 @@ let private aliasFixture () : Program =
     let main =
         Let (
             TempId 20,
-            ClosureAlloc ("predicate", [IntLiteral (Int64 7L)]),
+            ClosureAlloc (fid "predicate", [IntLiteral (Int64 7L)]),
             Let (
                 TempId 21,
                 Atom (Var (TempId 20)),
                 Let (
                     TempId 22,
-                    Call ("filter", [IntLiteral (Int64 1L); Var (TempId 21); IntLiteral (Int64 0L)]),
+                    Call (fid "filter", [IntLiteral (Int64 1L); Var (TempId 21); IntLiteral (Int64 0L)]),
                     Return (Var (TempId 22))
                 )
             )
@@ -201,6 +206,7 @@ let testKnownClosureFlowsThroughAlias () : TestResult =
 
 let private targetFunction name operation =
     {
+        Id = fid name
         Name = name
         TypedParams = [param 30 (AST.TTuple [AST.TInt64]); param 31 AST.TInt64]
         ReturnType = AST.TInt64
@@ -217,6 +223,7 @@ let private twoFunctionFixture () : Program =
     let functionType = AST.TFunction ([AST.TInt64], AST.TInt64)
     let helper =
         {
+            Id = fid "applyBoth"
             Name = "applyBoth"
             TypedParams = [param 40 functionType; param 41 functionType; param 42 AST.TInt64]
             ReturnType = AST.TInt64
@@ -239,13 +246,13 @@ let private twoFunctionFixture () : Program =
     let main =
         Let (
             TempId 46,
-            ClosureAlloc ("increment", []),
+            ClosureAlloc (fid "increment", []),
             Let (
                 TempId 47,
-                ClosureAlloc ("decrement", []),
+                ClosureAlloc (fid "decrement", []),
                 Let (
                     TempId 48,
-                    Call ("applyBoth", [Var (TempId 46); Var (TempId 47); IntLiteral (Int64 10L)]),
+                    Call (fid "applyBoth", [Var (TempId 46); Var (TempId 47); IntLiteral (Int64 10L)]),
                     Return (Var (TempId 48))
                 )
             )
@@ -271,6 +278,7 @@ let testMultipleKnownArgumentsShareOneClone () : TestResult =
 
 let private captureFreeTarget name =
     {
+        Id = fid name
         Name = name
         TypedParams = [param 50 (AST.TTuple [AST.TInt64]); param 51 AST.TInt64]
         ReturnType = AST.TInt64
@@ -281,6 +289,7 @@ let private captureFreeTarget name =
 let private applyOneHelper () =
     let functionType = AST.TFunction ([AST.TInt64], AST.TInt64)
     {
+        Id = fid "applyOne"
         Name = "applyOne"
         TypedParams = [param 52 functionType; param 53 AST.TInt64]
         ReturnType = AST.TInt64
@@ -297,7 +306,7 @@ let testKnownClosureFlowsThroughBranchValue () : TestResult =
     let main =
         Let (
             TempId 55,
-            ClosureAlloc ("identityClosure", []),
+            ClosureAlloc (fid "identityClosure", []),
             Let (
                 TempId 56,
                 Atom (Var (TempId 55)),
@@ -306,7 +315,7 @@ let testKnownClosureFlowsThroughBranchValue () : TestResult =
                     IfValue (BoolLiteral true, Var (TempId 55), Var (TempId 56)),
                     Let (
                         TempId 58,
-                        Call ("applyOne", [Var (TempId 57); IntLiteral (Int64 42L)]),
+                        Call (fid "applyOne", [Var (TempId 57); IntLiteral (Int64 42L)]),
                         Return (Var (TempId 58))
                     )
                 )
@@ -323,6 +332,7 @@ let testKnownClosureFlowsThroughBranchValue () : TestResult =
 let testReturnedKnownClosureSpecializes () : TestResult =
     let factory =
         {
+            Id = fid "makeIdentity"
             Name = "makeIdentity"
             TypedParams = []
             ReturnType = AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -330,17 +340,17 @@ let testReturnedKnownClosureSpecializes () : TestResult =
             Body =
                 Let (
                     TempId 60,
-                    ClosureAlloc ("identityClosure", []),
+                    ClosureAlloc (fid "identityClosure", []),
                     Return (Var (TempId 60))
                 )
         }
     let main =
         Let (
             TempId 61,
-            Call ("makeIdentity", []),
+            Call (fid "makeIdentity", []),
             Let (
                 TempId 62,
-                Call ("applyOne", [Var (TempId 61); IntLiteral (Int64 42L)]),
+                Call (fid "applyOne", [Var (TempId 61); IntLiteral (Int64 42L)]),
                 Return (Var (TempId 62))
             )
         )
@@ -354,6 +364,7 @@ let testReturnedKnownClosureSpecializes () : TestResult =
 
 let private plainTarget =
     {
+        Id = fid "plainIdentity"
         Name = "plainIdentity"
         TypedParams = [param 70 AST.TInt64]
         ReturnType = AST.TInt64
@@ -365,7 +376,7 @@ let testStaticFunctionReferenceNeedsNoClosure () : TestResult =
     let main =
         Let (
             TempId 71,
-            Call ("applyOne", [FuncRef "plainIdentity"; IntLiteral (Int64 42L)]),
+            Call (fid "applyOne", [FuncRef (fid "plainIdentity"); IntLiteral (Int64 42L)]),
             Return (Var (TempId 71))
         )
     let (Program (functions, rewrittenMain)) =
@@ -383,15 +394,18 @@ let testExternalDefinitionsCanSpecializeLocalCall () : TestResult =
     let main =
         Let (
             TempId 80,
-            ClosureAlloc ("externalIdentity", []),
+            ClosureAlloc (fid "externalIdentity", []),
             Let (
                 TempId 81,
-                Call ("externalApply", [Var (TempId 80); IntLiteral (Int64 42L)]),
+                Call (fid "externalApply", [Var (TempId 80); IntLiteral (Int64 42L)]),
                 Return (Var (TempId 81))
             )
         )
     let externalTarget = { captureFreeTarget "externalIdentity" with TypedParams = [param 82 (AST.TTuple [AST.TInt64]); param 83 AST.TInt64]; Body = Return (Var (TempId 83)) }
-    let externalHelper = { applyOneHelper () with Name = "externalApply" }
+    let externalHelper =
+        { applyOneHelper () with
+            Id = fid "externalApply"
+            Name = "externalApply" }
     let (Program (functions, rewrittenMain)) =
         ANF_HigherOrderSpecialization.specializeProgramWithExternalFunctions
             [externalTarget; externalHelper]
@@ -403,6 +417,7 @@ let testExternalDefinitionsCanSpecializeLocalCall () : TestResult =
 
 let private partialTarget =
     {
+        Id = fid "partialTarget"
         Name = "partialTarget"
         TypedParams = [param 90 (AST.TTuple [AST.TInt64; AST.TInt64]); param 91 AST.TInt64]
         ReturnType = AST.TInt64
@@ -422,6 +437,7 @@ let private partialTarget =
 let testReturnedPartialApplicationSpecializes () : TestResult =
     let factory =
         {
+            Id = fid "bindPartial"
             Name = "bindPartial"
             TypedParams = [param 94 AST.TInt64]
             ReturnType = AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -429,17 +445,17 @@ let testReturnedPartialApplicationSpecializes () : TestResult =
             Body =
                 Let (
                     TempId 95,
-                    ClosureAlloc ("partialTarget", [Var (TempId 94)]),
+                    ClosureAlloc (fid "partialTarget", [Var (TempId 94)]),
                     Return (Var (TempId 95))
                 )
         }
     let main =
         Let (
             TempId 96,
-            Call ("bindPartial", [IntLiteral (Int64 10L)]),
+            Call (fid "bindPartial", [IntLiteral (Int64 10L)]),
             Let (
                 TempId 97,
-                Call ("applyOne", [Var (TempId 96); IntLiteral (Int64 32L)]),
+                Call (fid "applyOne", [Var (TempId 96); IntLiteral (Int64 32L)]),
                 Return (Var (TempId 97))
             )
         )
@@ -455,6 +471,7 @@ let testReturnedPartialApplicationSpecializes () : TestResult =
 let testReturnedClosureWithLocalCaptureStaysGeneric () : TestResult =
     let factory =
         {
+            Id = fid "computeThenBind"
             Name = "computeThenBind"
             TypedParams = [param 100 AST.TInt64]
             ReturnType = AST.TFunction ([AST.TInt64], AST.TInt64)
@@ -465,7 +482,7 @@ let testReturnedClosureWithLocalCaptureStaysGeneric () : TestResult =
                     Prim (Add, Var (TempId 100), IntLiteral (Int64 1L)),
                     Let (
                         TempId 102,
-                        ClosureAlloc ("partialTarget", [Var (TempId 101)]),
+                        ClosureAlloc (fid "partialTarget", [Var (TempId 101)]),
                         Return (Var (TempId 102))
                     )
                 )
@@ -473,10 +490,10 @@ let testReturnedClosureWithLocalCaptureStaysGeneric () : TestResult =
     let main =
         Let (
             TempId 103,
-            Call ("computeThenBind", [IntLiteral (Int64 9L)]),
+            Call (fid "computeThenBind", [IntLiteral (Int64 9L)]),
             Let (
                 TempId 104,
-                Call ("applyOne", [Var (TempId 103); IntLiteral (Int64 32L)]),
+                Call (fid "applyOne", [Var (TempId 103); IntLiteral (Int64 32L)]),
                 Return (Var (TempId 104))
             )
         )

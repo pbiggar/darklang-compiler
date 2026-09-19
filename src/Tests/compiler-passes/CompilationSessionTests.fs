@@ -37,6 +37,7 @@ let private expectCompiled (report: CompilerOptions.CompileReport) : TestResult 
 let private fakeFunction : LIR.Function =
     let entry = LIR.Label "cached_function_entry"
     {
+        Id = AST.functionIdForName "cached_function"
         Name = "cached_function"
         TypedParams = []
         CFG = {
@@ -53,6 +54,7 @@ let private fakeFunction : LIR.Function =
 let private fakeMirFunction : MIR.Function =
     let entry = MIR.Label "cached_mir_function_entry"
     {
+        Id = AST.functionIdForName "cached_mir_function"
         Name = "cached_mir_function"
         TypedParams = []
         ReturnType = TUnit
@@ -102,6 +104,7 @@ let testSsaFunctionCacheIgnoresFunctionLocalRegisterOffsets
         let parameter = MIR.VReg registerOffset
         let result = MIR.VReg (registerOffset + 1)
         {
+            Id = AST.functionIdForName "offset_mir_function"
             Name = "offset_mir_function"
             TypedParams = [{ Reg = parameter; Type = TInt64 }]
             ReturnType = TInt64
@@ -273,6 +276,7 @@ let testArm64CodegenCacheSegregatesCompilationContexts (_: CompilationContexts.S
         let entry = LIR.Label "registry_dependent_entry"
         {
             fakeFunction with
+                Id = AST.functionIdForName "registry_dependent_function"
                 Name = "registry_dependent_function"
                 CFG = {
                     Entry = entry
@@ -361,6 +365,7 @@ let testArm64CodegenCacheReusesPlannedSlotInitFunctions
         let entry = LIR.Label "planned_slot_init_entry"
         {
             fakeFunction with
+                Id = AST.functionIdForName "planned_slot_init_function"
                 Name = "planned_slot_init_function"
                 CFG = {
                     Entry = entry

@@ -8,7 +8,7 @@ type VerificationError =
     | UnknownValue of ValueId
     | DuplicateDefinition of ValueId
     | DuplicateParameterName of string
-    | DuplicateFunctionName of string
+    | DuplicateFunctionName of AST.FunctionId
     | InconsistentValueType of ValueId
     | BindingTypeMismatch of result: ValueId
     | InvalidBranchCondition of AST.Type
@@ -17,18 +17,18 @@ type VerificationError =
     | IncompatibleAliasTypes of result: ValueId * source: ValueId
     | DuplicateAliasSource of result: ValueId * source: ValueId
     | UnaccountedOpaqueEffects
-    | UnknownCallTarget of target: string
-    | MissingCallContract of target: string
-    | InvalidCallArgumentCount of target: string
-    | InvalidCallArgumentType of target: string * parameterIndex: int
-    | InvalidCallResultType of target: string
-    | InconsistentCallContract of target: string
-    | InconsistentRegisteredFunctionSignature of target: string
+    | UnknownCallTarget of target: AST.FunctionId
+    | MissingCallContract of target: AST.FunctionId
+    | InvalidCallArgumentCount of target: AST.FunctionId
+    | InvalidCallArgumentType of target: AST.FunctionId * parameterIndex: int
+    | InvalidCallResultType of target: AST.FunctionId
+    | InconsistentCallContract of target: AST.FunctionId
+    | InconsistentRegisteredFunctionSignature of target: AST.FunctionId
 
 type Dialect<'leaf, 'block> = {
     Body: 'block -> Block<Operation<'leaf, 'block>>
     Leaf: 'leaf -> PrimitiveContract
-    CallSignature: string -> FunctionSignature option
+    CallSignature: AST.FunctionId -> FunctionSignature option
     CallContract: FunctionCall -> PrimitiveContract option
 }
 
@@ -53,14 +53,15 @@ let verify (dialect: Dialect<'leaf, 'block>) (root: 'block) =
         | Some (name, _) -> Error (DuplicateParameterName name)
         | None -> Ok (values |> List.map (fun parameter -> parameter.Value))
     let aliases (contract: PrimitiveContract) =
-        let inputs = contract.Inputs |> List.map (fun value -> value.Id, value) |> Map.ofList
-        let validate output source =
+        let inputs : Map<ValueId, Value> =
+            contract.Inputs |> List.map (fun value -> value.Id, value) |> Map.ofList
+        let validate (output: OutputContract) (source: Value) =
             match Map.tryFind source.Id inputs with
             | None -> Error (InvalidAliasSource (output.Value.Id, source.Id))
             | Some input when input.Type <> source.Type || output.Value.Type <> source.Type ->
                 Error (IncompatibleAliasTypes (output.Value.Id, source.Id))
             | Some _ -> Ok ()
-        let validateMany output first rest =
+        let validateMany (output: OutputContract) (first: Value) (rest: Value list) =
             let sources = first :: rest
             match sources |> List.countBy (fun value -> value.Id) |> List.tryFind (fun (_, count) -> count > 1) with
             | Some (source, _) -> Error (DuplicateAliasSource (output.Value.Id, source))
@@ -151,19 +152,19 @@ let verifyFunction (dialect: Dialect<'leaf, 'block>) (definition: Function<'bloc
 /// derived from definitions; independently registered signatures for the same
 /// names must agree. Primitive call contracts remain a separate dialect input.
 let verifyFunctions (dialect: Dialect<'leaf, 'block>) (definitions: Function<'block> list) =
-    match definitions |> List.countBy (fun definition -> definition.Name) |> List.tryFind (fun (_, count) -> count > 1) with
+    match definitions |> List.countBy (fun definition -> definition.Id) |> List.tryFind (fun (_, count) -> count > 1) with
     | Some (name, _) -> Error (DuplicateFunctionName name)
     | None ->
         let signatures =
             definitions
-            |> List.map (fun definition -> definition.Name, functionSignature dialect definition)
+            |> List.map (fun definition -> definition.Id, functionSignature dialect definition)
             |> Map.ofList
         let inconsistentRegistration =
             definitions
             |> List.tryPick (fun definition ->
-                match dialect.CallSignature definition.Name with
+                match dialect.CallSignature definition.Id with
                 | Some registered when registered <> functionSignature dialect definition ->
-                    Some (InconsistentRegisteredFunctionSignature definition.Name)
+                    Some (InconsistentRegisteredFunctionSignature definition.Id)
                 | _ -> None)
         match inconsistentRegistration with
         | Some error -> Error error

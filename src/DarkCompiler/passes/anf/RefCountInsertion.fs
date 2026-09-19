@@ -84,7 +84,7 @@ let private insertRCInFunctionInternal
                 let transfersOwnedAccumulator =
                     functionParamReturnTransfersOwnedAccumulator
                         ctxWithParams
-                        func.Name
+                        func.Id
                         index
                         param.Type
                 let internalOwnedAccumulator =
@@ -124,7 +124,7 @@ let private insertRCInFunctionInternal
                 Map.empty
                 []
                 ctxWithParams
-                (Some func.Name)
+                (Some func.Id)
                 bodyInfo
                 varGen
                 []
@@ -146,7 +146,7 @@ let private insertRCInFunctionInternal
                 else
                     insertOwnedAccumulatorDecsBeforeSelfTailCalls
                         ctxWithParams
-                        func.Name
+                        func.Id
                         ownedParamDecs
                         bodyWithRC
                         varGen'
@@ -157,14 +157,14 @@ let private insertRCInFunctionInternal
                 (bodyWithOwnedAccumulatorDecs, varGen'', accTypes'))
     let ((needsClosureMapRetains, needsTailDecMove), cleanupPlanningMs) =
         measureFunctionPhase tracePhases (fun () ->
-            requiredFunctionCleanups func.Name bodyWithInternalParamRetains)
+            requiredFunctionCleanups ctx func.Id bodyWithInternalParamRetains)
     let ((body', varGen'''', accTypes'''), cleanupRewriteMs) =
         measureFunctionPhase tracePhases (fun () ->
             let (bodyWithClosureMapSourceRetains, nextVarGen, nextTypes) =
                 if needsClosureMapRetains then
                     insertClosureMapSourceRetainsBeforeHelperCalls
                         ctxWithParams
-                        func.Name
+                        func.Id
                         bodyWithInternalParamRetains
                         varGen'''
                         accTypes''
@@ -172,7 +172,7 @@ let private insertRCInFunctionInternal
                     (bodyWithInternalParamRetains, varGen''', accTypes'')
             let rewrittenBody =
                 if needsTailDecMove then
-                    moveDecsBeforeNonSelfTailCalls func.Name bodyWithClosureMapSourceRetains
+                    moveDecsBeforeNonSelfTailCalls func.Id bodyWithClosureMapSourceRetains
                 else
                     bodyWithClosureMapSourceRetains
             (rewrittenBody, nextVarGen, nextTypes))

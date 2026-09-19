@@ -327,7 +327,7 @@ let isFloatAtom (floatRegs: Set<int>) (atom: ANF.Atom) : bool =
 
 /// Helper to check if a CExpr produces a float value
 /// returnTypeReg: map from function name to return type (for checking Call results)
-let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<string, AST.Type>) (cexpr: ANF.CExpr) : bool =
+let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<AST.FunctionId, AST.Type>) (cexpr: ANF.CExpr) : bool =
     match cexpr with
     | ANF.Prim (op, left, right) ->
         // Comparisons and boolean ops always produce Bool, not Float
@@ -365,11 +365,16 @@ let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<string, AST.Typ
 let buildReturnTypeReg
     (functions: ANF.Function list)
     (externalReturnTypes: Map<string, AST.Type>)
-    : Map<string, AST.Type> =
+    : Map<AST.FunctionId, AST.Type> =
+    let externalById =
+        externalReturnTypes
+        |> Map.toList
+        |> List.map (fun (name, typ) -> AST.functionIdForName name, typ)
+        |> Map.ofList
     functions
     |> List.fold
-        (fun returnTypes anfFunc -> Map.add anfFunc.Name anfFunc.ReturnType returnTypes)
-        externalReturnTypes
+        (fun returnTypes anfFunc -> Map.add anfFunc.Id anfFunc.ReturnType returnTypes)
+        externalById
 
 /// Return type for monomorphized intrinsics not tracked in the return type registry
 let tryGetIntrinsicReturnType (funcName: string) : AST.Type option =
@@ -404,11 +409,13 @@ type CFGBuilder = {
     SourceTempIdMax: int
     ExtraTypeMap: Map<ANF.TempId, AST.Type>
     TypeReg: Map<string, (string * AST.Type) list>
-    ReturnTypeReg: Map<string, AST.Type>  // Function name -> return type
+    ReturnTypeReg: Map<AST.FunctionId, AST.Type>  // Function identity -> return type
+    FunctionNames: Map<AST.FunctionId, string>
+    FuncId: AST.FunctionId
     FuncName: string  // For generating unique labels per function
     ParamRegs: MIR.VReg list  // Parameter VRegs for self-recursive tail call loop optimization
     FloatRegs: Set<int>  // VReg IDs that hold float values
-    ClosureFuncs: Map<ANF.TempId, string>  // Closure temp -> function name for return type lookup
+    ClosureFuncs: Map<ANF.TempId, AST.FunctionId>  // Closure temp -> function identity for return type lookup
     // Coverage support
     EnableCoverage: bool
     ExprIdGen: ANF.ExprIdGen
@@ -500,14 +507,15 @@ let private closureCallReturnType (builder: CFGBuilder) (resultTempId: ANF.TempI
         | None -> resultTempType ()
     | _ -> resultTempType ()
 
-let private directCallReturnType (builder: CFGBuilder) (funcName: string) : AST.Type =
+let private directCallReturnType (builder: CFGBuilder) (funcName: AST.FunctionId) : AST.Type =
     match Map.tryFind funcName builder.ReturnTypeReg with
     | Some t -> t
     | None ->
-        match tryGetIntrinsicReturnType funcName with
+        let displayName = Map.tryFind funcName builder.FunctionNames
+        match displayName |> Option.bind tryGetIntrinsicReturnType with
         | Some t -> t
-        | None when funcName.StartsWith("__dark_eq_") -> AST.TBool
-        | None -> Crash.crash $"ANF_to_MIR: Return type not found for function: {funcName}"
+        | None when displayName |> Option.exists (fun name -> name.StartsWith("__dark_eq_")) -> AST.TBool
+        | None -> Crash.crash $"ANF_to_MIR: Return type not found for function identity: {AST.functionIdValue funcName}"
 
 let private tupleGetDestType
     (builder: CFGBuilder)
@@ -865,7 +873,7 @@ let rec convertExpr
     // Self-recursive tail call: emit arg capture + cleanup + param update + Jump to loop header
     // This must come before the general Let case to take precedence
     // Phi nodes carry type info, so this works for both int and float parameters.
-    | ANF.Let (callTempId, ANF.TailCall (funcName, args), rest) when funcName = builder.FuncName ->
+    | ANF.Let (callTempId, ANF.TailCall (funcName, args), rest) when funcName = builder.FuncId ->
         collectSelfTailCallCleanup builder callTempId rest
         |> Result.bind (fun cleanupInstrs ->
             let argTypes = args |> List.map (atomType builder)
@@ -873,7 +881,7 @@ let rec convertExpr
             |> List.map (atomToOperand builder)
             |> sequenceResults
             |> Result.bind (fun argOperands ->
-                let loopLabel = MIR.Label $"{funcName}_body"
+                let loopLabel = MIR.Label $"{builder.FuncName}_body"
                 // To handle register swaps correctly (e.g., swapInt(b, a, n-1)),
                 // we need temps only when an argument directly references a parameter.
                 //
@@ -1504,7 +1512,8 @@ let convertANFFunction
     (typeMap: ANF.TypeMap)
     (typeById: AST.Type option array)
     (typeReg: Map<string, (string * AST.Type) list>)
-    (returnTypeReg: Map<string, AST.Type>)
+    (returnTypeReg: Map<AST.FunctionId, AST.Type>)
+    (functionNames: Map<AST.FunctionId, string>)
     (enableCoverage: bool)
     : Result<MIR.Function, string> =
     let convertCore () : Result<MIR.Function, string> =
@@ -1550,6 +1559,8 @@ let convertANFFunction
             ExtraTypeMap = functionParamTypes
             TypeReg = typeReg
             ReturnTypeReg = returnTypeReg
+            FunctionNames = functionNames
+            FuncId = anfFunc.Id
             FuncName = anfFunc.Name
             ParamRegs = paramVRegs  // For self-recursive tail call loop optimization
             FloatRegs = floatParamIds
@@ -1620,6 +1631,7 @@ let convertANFFunction
             |> List.map (fun (reg, typ) -> { Reg = reg; Type = typ })
 
         let mirFunc = {
+            MIR.Id = anfFunc.Id
             MIR.Name = anfFunc.Name
             MIR.TypedParams = typedMIRParams
             MIR.ReturnType = anfFunc.ReturnType
@@ -1654,12 +1666,16 @@ let toMIR
 
     // Build return type registry for all functions (needed for caller to know return type)
     let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
-
+    let functionNames =
+        (externalReturnTypes |> Map.toList)
+        @ (functions |> List.map (fun func -> func.Name, func.ReturnType))
+        |> List.map (fun (name, _) -> AST.functionIdForName name, name)
+        |> Map.ofList
     // Phase 2: Convert all functions to MIR
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
     match
         mapResults
-            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg enableCoverage)
+            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg functionNames enableCoverage)
             functions
     with
     | Error err -> Error err
@@ -1680,6 +1696,8 @@ let toMIR
         ExtraTypeMap = Map.empty
         TypeReg = typeReg
         ReturnTypeReg = returnTypeReg
+        FunctionNames = functionNames
+        FuncId = AST.functionIdForName "_start"
         FuncName = "_start"
         ParamRegs = []  // _start has no params
         FloatRegs = Set.empty
@@ -1698,6 +1716,7 @@ let toMIR
     // Use the passed mainExprType for _start's return type
     // This is needed for proper float handling in the Ret terminator
     let startFunc = {
+        MIR.Id = AST.functionIdForName "_start"
         MIR.Name = "_start"
         MIR.TypedParams = []
         MIR.ReturnType = mainExprType
@@ -1744,6 +1763,11 @@ let private toMIRFunctionsOnlyInternal
     // Build return type registry for all functions (needed for caller to know return type)
     let returnTypeTimer = startPhase ()
     let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
+    let functionNames =
+        (externalReturnTypes |> Map.toList)
+        @ (functions |> List.map (fun func -> func.Name, func.ReturnType))
+        |> List.map (fun (name, _) -> AST.functionIdForName name, name)
+        |> Map.ofList
     recordPhase "ANF -> MIR Return Type Preparation" returnTypeTimer
 
     // Phase 2: Convert all functions to MIR (skip main/_start)
@@ -1751,7 +1775,7 @@ let private toMIRFunctionsOnlyInternal
     let conversionTimer = startPhase ()
     match
         mapResults
-            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg enableCoverage)
+            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg functionNames enableCoverage)
             functions
     with
     | Error err -> Error err

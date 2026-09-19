@@ -46,7 +46,7 @@ type MetadataGroupCache =
 [<NoComparison>]
 type HelperCacheKey = {
     ClosurePayloadSizesFromParams: (string * int) list
-    ClosurePayloadSizesFromAllocs: (string * int) list
+    ClosurePayloadSizesFromAllocs: (AST.FunctionId * int) list
     ClosureCaptureTypes: (string * AST.Type list) list
     RecursiveReleaseTypes: AST.Type list
     CliArgvHelperLabels: string list
@@ -474,10 +474,31 @@ let private generatePreparedARM64WithOptionsAndCache
     let needsCliProcessLifecycleHelpers = programMetadata.Facts.NeedsCliProcessLifecycleHelpers
 
     let closurePayloadSizes =
+        let functionNames = functions |> List.map (fun func -> func.Id, func.Name) |> Map.ofList
         Map.fold
-            (fun acc funcName payloadSize -> Map.add funcName payloadSize acc)
+            (fun acc funcId payloadSize ->
+                match Map.tryFind funcId functionNames with
+                | Some funcName -> Map.add funcName payloadSize acc
+                | None -> Crash.crash $"ARM64 metadata: missing closure target name for identity {AST.functionIdValue funcId}")
             programMetadata.Facts.ClosurePayloadSizesFromParams
             programMetadata.Facts.ClosurePayloadSizesFromAllocs
+
+    let plannedListDecHelpers = rcHelperRequirements.PlannedListDecHelpers
+    let plannedGenericDecHelpers = rcHelperRequirements.PlannedGenericDecHelpers
+    let plannedDictDecHelpers = rcHelperRequirements.PlannedDictDecHelpers
+    let helperFunctionNames =
+        [ rcHelperRequirements.ListDecHelperLabels
+          rcHelperRequirements.DictDecHelperLabels
+          plannedListDecHelpers |> Map.keys |> Set.ofSeq
+          plannedGenericDecHelpers |> Map.keys |> Set.ofSeq
+          plannedDictDecHelpers |> Map.keys |> Set.ofSeq
+          programMetadata.Facts.CliArgvHelperLabels ]
+        |> Set.unionMany
+    let functionNames =
+        helperFunctionNames
+        |> Set.fold
+            (fun names name -> Map.add (AST.functionIdForName name) name names)
+            (functions |> List.map (fun func -> func.Id, func.Name) |> Map.ofList)
 
     // StackSize and UsedCalleeSaved are set per-function in convertFunction.
     let ctx = {
@@ -488,6 +509,7 @@ let private generatePreparedARM64WithOptionsAndCache
         RawSlotInitRetainTargets = None
         ClosurePayloadSizes = closurePayloadSizes
         ClosureCaptureTypes = programMetadata.Facts.ClosureCaptureTypes
+        FunctionNames = functionNames
         FunctionName = ""
         InstructionSite = ""
         StackSize = 0
@@ -495,13 +517,6 @@ let private generatePreparedARM64WithOptionsAndCache
         HeapOverflowLabel = ""
         RecordLirOpExpansion = lirOpExpansionRecorder
     }
-
-    let plannedListDecHelpers = rcHelperRequirements.PlannedListDecHelpers
-
-    let plannedGenericDecHelpers =
-        rcHelperRequirements.PlannedGenericDecHelpers
-
-    let plannedDictDecHelpers = rcHelperRequirements.PlannedDictDecHelpers
 
     recordPhase "ARM64 Codegen Metadata" metadataTimer
 

@@ -39,15 +39,15 @@ type CompilationSession(collectCodegenMetrics: bool) =
     let reachableStdlibFunctionsByContext =
         Dictionary<
             obj,
-            Dictionary<Set<string>, LIR.Function list>>(ObjectReferenceComparer())
+            Dictionary<Set<AST.FunctionId>, LIR.Function list>>(ObjectReferenceComparer())
     let stdlibFunctionInventoryByContext =
         Dictionary<
             obj,
-            Dictionary<string, struct (int * LIR.Function)>>(ObjectReferenceComparer())
+            Dictionary<AST.FunctionId, struct (int * LIR.Function)>>(ObjectReferenceComparer())
     let reachableStdlibNamesByRootAndContext =
         Dictionary<
             obj,
-            Dictionary<string, Set<string>>>(ObjectReferenceComparer())
+            Dictionary<AST.FunctionId, Set<AST.FunctionId>>>(ObjectReferenceComparer())
     let mirRegistriesByContext =
         Dictionary<
             obj,
@@ -297,9 +297,9 @@ type CompilationSession(collectCodegenMetrics: bool) =
 
     member internal _.ReachableStdlibFunctions
         (contextIdentity: obj)
-        (userCallGraph: Map<string, Set<string>>)
+        (userCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
         (userFunctions: LIR.Function list)
-        (stdlibCallGraph: Map<string, Set<string>>)
+        (stdlibCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
         (stdlibFunctions: LIR.Function list)
         : LIR.Function list =
         let directCalls =
@@ -313,13 +313,13 @@ type CompilationSession(collectCodegenMetrics: bool) =
         if disposed then
             let reachable = DeadCodeElimination.findReachable stdlibCallGraph directCalls
             stdlibFunctions
-            |> List.filter (fun func -> Set.contains func.Name reachable)
+            |> List.filter (fun func -> Set.contains func.Id reachable)
         else
             let contextEntries =
                 match reachableStdlibFunctionsByContext.TryGetValue contextIdentity with
                 | true, entries -> entries
                 | false, _ ->
-                    let entries = Dictionary<Set<string>, LIR.Function list>()
+                    let entries = Dictionary<Set<AST.FunctionId>, LIR.Function list>()
                     reachableStdlibFunctionsByContext.[contextIdentity] <- entries
                     entries
             match contextEntries.TryGetValue directCalls with
@@ -331,7 +331,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
                     match reachableStdlibNamesByRootAndContext.TryGetValue contextIdentity with
                     | true, entries -> entries
                     | false, _ ->
-                        let entries = Dictionary<string, Set<string>>()
+                        let entries = Dictionary<AST.FunctionId, Set<AST.FunctionId>>()
                         reachableStdlibNamesByRootAndContext.[contextIdentity] <- entries
                         entries
                 let reachable =
@@ -352,10 +352,10 @@ type CompilationSession(collectCodegenMetrics: bool) =
                     match stdlibFunctionInventoryByContext.TryGetValue contextIdentity with
                     | true, inventory -> inventory
                     | false, _ ->
-                        let inventory = Dictionary<string, struct (int * LIR.Function)>()
+                        let inventory = Dictionary<AST.FunctionId, struct (int * LIR.Function)>()
                         stdlibFunctions
                         |> List.iteri (fun index func ->
-                            inventory.[func.Name] <- struct (index, func))
+                            inventory.[func.Id] <- struct (index, func))
                         stdlibFunctionInventoryByContext.[contextIdentity] <- inventory
                         inventory
                 let functions =

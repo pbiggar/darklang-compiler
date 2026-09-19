@@ -6,6 +6,7 @@ open OwnedIR
 open InferOwnershipUniqueness
 
 type FunctionBoundary<'id> = {
+    Id: AST.FunctionId
     Name: string
     Ownership: FunctionSignature<'id>
 }
@@ -53,6 +54,7 @@ let private boundary = function
     | [] -> Crash.crash "Ownership uniqueness inference produced an empty function group"
     | head :: tail ->
         let functionBoundary functionDefinition = {
+            Id = functionDefinition.Definition.Id
             Name = functionDefinition.Definition.Name
             Ownership = functionDefinition.Ownership
         }

@@ -85,7 +85,7 @@ type Atom =
     | StringLiteral of string
     | FloatLiteral of float
     | Var of TempId
-    | FuncRef of string  // Reference to a function by name (for higher-order functions)
+    | FuncRef of AST.FunctionId
 
 /// Binary operations on atoms
 type BinOp =
@@ -156,12 +156,12 @@ type CExpr =
     | Prim of BinOp * Atom * Atom
     | UnaryPrim of UnaryOp * Atom
     | IfValue of cond:Atom * thenValue:Atom * elseValue:Atom  // If-expression that produces a value
-    | Call of funcName:string * args:Atom list  // Function call (direct: BL instruction)
-    | BorrowedCall of funcName:string * args:Atom list  // Function call that returns a borrowed/aliased value
-    | TailCall of funcName:string * args:Atom list  // Tail call (direct: B instruction, no return)
+    | Call of functionId:AST.FunctionId * args:Atom list
+    | BorrowedCall of functionId:AST.FunctionId * args:Atom list
+    | TailCall of functionId:AST.FunctionId * args:Atom list
     | IndirectCall of func:Atom * args:Atom list  // Call through function variable (BLR instruction)
     | IndirectTailCall of func:Atom * args:Atom list  // Tail call through function variable (BR instruction)
-    | ClosureAlloc of funcName:string * captures:Atom list  // Allocate closure: (func_addr, cap1, cap2, ...)
+    | ClosureAlloc of functionId:AST.FunctionId * captures:Atom list
     | ClosureCall of closure:Atom * args:Atom list  // Call through closure, passing closure as hidden first arg
     | ClosureTailCall of closure:Atom * args:Atom list  // Tail call through closure (BR instruction)
     | TupleAlloc of Atom list                   // Create tuple: (a, b, c)
@@ -247,6 +247,7 @@ type AExpr =
 
 /// ANF function definition
 type Function = {
+    Id: AST.FunctionId
     Name: string
     TypedParams: TypedParam list  // Parameter IDs with their types bundled
     ReturnType: AST.Type

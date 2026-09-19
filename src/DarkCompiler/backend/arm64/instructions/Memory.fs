@@ -117,7 +117,7 @@ let internal emitHeapStore (ctx: CodeGenContext) (addr: LIR.Reg) (offset: int) (
         | LIR.FuncAddr funcName, _ ->
             // Load function address into temp, then store to heap
             let tempReg = ARM64Symbolic.X9
-            Ok [ARM64Symbolic.ADR (tempReg, codeLabel funcName); ARM64Symbolic.STR (tempReg, addrReg, int16 offset)]
+            Ok [ARM64Symbolic.ADR (tempReg, codeLabel (functionName ctx funcName)); ARM64Symbolic.STR (tempReg, addrReg, int16 offset)]
         | LIR.StringSymbol value, _ ->
             // Convert literal string to heap format when storing in tuples/data structures
             // Dynamic and literal strings share [refcount:8][length:8][data:N].

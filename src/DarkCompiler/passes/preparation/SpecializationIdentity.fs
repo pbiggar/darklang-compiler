@@ -241,7 +241,7 @@ let internal normalizeSyntheticNullaryArgAtoms
 
 let internal unresolvedKeyIntrinsicTypeArgErrorExpr (funcName: string) : CheckedAST.Expr =
     CheckedAST.Call (
-        "Builtin.testRuntimeError",
+        AST.functionIdForName "Builtin.testRuntimeError",
         AST.NonEmptyList.singleton (CheckedAST.StringLiteral $"Internal error: unresolved type arguments for {funcName}")
     )
 

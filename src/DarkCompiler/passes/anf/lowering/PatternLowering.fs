@@ -15,16 +15,16 @@ open LoweringTypeInference
 open ANFContinuations
 open LoweringCallbacks
 
-let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (sumTypeNames: Set<string>) (inertScopes: Set<string>) (scrutinee: CheckedAST.Expr) (cases: CheckedAST.MatchCase list) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (sumTypeNames: Set<string>) (inertScopes: Set<AST.FunctionId>) (scrutinee: CheckedAST.Expr) (cases: CheckedAST.MatchCase list) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     // Infer scrutinee type to pass to pattern extraction for correct typing
     let typeEnv = typeEnvFromVarEnv env
-    match inferTypeCore sumTypeNames scrutinee typeEnv typeReg variantLookup funcReg moduleRegistry with
+    match inferTypeCore sumTypeNames scrutinee typeEnv typeReg variantLookup funcReg functionNames moduleRegistry with
     | Error msg -> Error $"Match scrutinee type inference failed: {msg}"
     | Ok scrutType ->
     // Compile match to if-else chain
     // First convert scrutinee to a bound atom. This supports effectful/complex
     // scrutinees such as Builtin.testRuntimeError(...) that cannot be lowered via toAtom.
-    toANFBoundAtomCore sumTypeNames inertScopes scrutinee varGen env typeReg variantLookup funcReg moduleRegistry
+    toANFBoundAtomCore sumTypeNames inertScopes scrutinee varGen env typeReg variantLookup funcReg functionNames moduleRegistry
     |> Result.bind (fun (scrutineeExpr, scrutineeAtom, varGen1) ->
         // Check if any pattern needs to access list structure
         // If so, we must ensure scrutinee is a variable (can't TupleGet on literal)
@@ -283,7 +283,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 else
                                     // Get tail for next iteration
                                     let (tailVar, vg2) = ANF.freshVar vg'
-                                    let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                    let tailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                     let tailBinding = (tailVar, tailExpr)
                                     collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                     collectFromList innerPatterns sourceAtom env bindings vg
@@ -313,7 +313,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             collectPatternBindings p (ANF.Var headVar) elemType env (headBinding :: rawHeadBinding :: bindings) vg1'
                             |> Result.bind (fun (env', bindings', vg') ->
                                 let (rawTailVar, vg2) = ANF.freshVar vg'
-                                let rawTailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                let rawTailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                 let rawTailBinding = (rawTailVar, rawTailExpr)
                                 // Wrap tail with TypedAtom to preserve list type
                                 let (tailVar, vg2') = ANF.freshVar vg2
@@ -328,13 +328,13 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 // list compilers below do not take them, the general collector does.
                 collectPatternBindings pattern scrutAtom scrutType currentEnv [] vg
                 |> Result.bind (fun (newEnv, bindings, vg1) ->
-                    toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
+                    toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (bodyExpr, vg2) ->
                         (wrapBindings (List.rev bindings) bodyExpr, vg2)))
             | CheckedAST.POr alternatives ->
                 extractAndCompileBody (AST.NonEmptyList.head alternatives) body scrutAtom scrutType currentEnv vg
-            | CheckedAST.PUnit -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-            | CheckedAST.PWildcard -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
+            | CheckedAST.PUnit -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            | CheckedAST.PWildcard -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
             | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
             | CheckedAST.PInt8Literal _
             | CheckedAST.PInt16Literal _
@@ -343,22 +343,22 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             | CheckedAST.PUInt16Literal _
             | CheckedAST.PUInt32Literal _
             | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _ ->
-                toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-            | CheckedAST.PBool _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-            | CheckedAST.PString _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-            | CheckedAST.PChar _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
-            | CheckedAST.PFloat _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
+                toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            | CheckedAST.PBool _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            | CheckedAST.PString _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            | CheckedAST.PChar _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            | CheckedAST.PFloat _ -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
             | CheckedAST.PVariable name ->
                 // Bind scrutinee to variable name with the correct type
                 let (tempId, vg1) = ANF.freshVar vg
                 let env' = Map.add name (tempId, scrutType) currentEnv
-                toANFCore sumTypeNames inertScopes body vg1 env' typeReg variantLookup funcReg moduleRegistry
+                toANFCore sumTypeNames inertScopes body vg1 env' typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.map (fun (bodyExpr, vg2) ->
                     let expr = ANF.Let (tempId, ANF.Atom scrutAtom, bodyExpr)
                     (expr, vg2))
             | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
                 match fieldPatterns with
-                | [] -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
+                | [] -> toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                 | _ ->
                     match tryFindVariantForTypeById constructorId scrutType variantLookup with
                     | Some (_, typeParams, _, fieldTypeTemplates) ->
@@ -531,7 +531,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     else
                                         // Get tail for next iteration
                                         let (tailVar, vg2) = ANF.freshVar vg'
-                                        let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                        let tailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                         let tailBinding = (tailVar, tailExpr)
                                         collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                         collectFromList innerPatterns sourceAtom env bindings vg
@@ -561,7 +561,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 collectPatternBindings p (ANF.Var headVar) elemType env (headBinding :: rawHeadBinding :: bindings) vg1'
                                 |> Result.bind (fun (env', bindings', vg') ->
                                     let (rawTailVar, vg2) = ANF.freshVar vg'
-                                    let rawTailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                    let rawTailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                     let rawTailBinding = (rawTailVar, rawTailExpr)
                                     // Wrap tail with TypedAtom to preserve list type
                                     let (tailVar, vg2') = ANF.freshVar vg2
@@ -573,7 +573,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 // Collect all bindings from the tuple pattern, then compile body
                 collectPatternBindings (CheckedAST.PTuple patterns) scrutAtom scrutType currentEnv [] vg
                 |> Result.bind (fun (newEnv, bindings, vg1) ->
-                    toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
+                    toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (bodyExpr, vg2) ->
                         let finalExpr = wrapBindings (List.rev bindings) bodyExpr
                         (finalExpr, vg2)))
@@ -647,7 +647,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 let patternLen = List.length patterns
                 if patternLen = 0 then
                     // Empty pattern - no bindings needed
-                    toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
+                    toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                 elif patternLen = 1 then
                     // SINGLE node: extract the single element
                     // Untag to get pointer to SINGLE structure
@@ -668,11 +668,11 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     match List.head patterns with
                     | CheckedAST.PVariable name ->
                         let newEnv = Map.add name (valueVar, elemType) currentEnv
-                        toANFCore sumTypeNames inertScopes body vg3' newEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg3' newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg4) ->
                             (wrapBindings bindings bodyExpr, vg4))
                     | CheckedAST.PWildcard ->
-                        toANFCore sumTypeNames inertScopes body vg3' currentEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg3' currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg4) ->
                             (wrapBindings bindings bodyExpr, vg4))
                     | CheckedAST.PInt64 _ | CheckedAST.PBigInt _ | CheckedAST.PInt128Literal _
@@ -683,14 +683,14 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     | CheckedAST.PUInt16Literal _
                     | CheckedAST.PUInt32Literal _
                     | CheckedAST.PUInt64Literal _ | CheckedAST.PUInt128Literal _ ->
-                        toANFCore sumTypeNames inertScopes body vg3' currentEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg3' currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg4) ->
                             (wrapBindings bindings bodyExpr, vg4))
                     | CheckedAST.PTuple innerPatterns ->
                         // elemType is the list element type, use it as tuple type
                         collectTupleBindings innerPatterns valueAtom elemType 0 currentEnv bindings vg3'
                         |> Result.bind (fun (newEnv, newBindings, vg4) ->
-                            toANFCore sumTypeNames inertScopes body vg4 newEnv typeReg variantLookup funcReg moduleRegistry
+                            toANFCore sumTypeNames inertScopes body vg4 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                             |> Result.map (fun (bodyExpr, vg5) ->
                                 (wrapBindings newBindings bodyExpr, vg5)))
                     | CheckedAST.PConstructor _ | CheckedAST.PList _ | CheckedAST.PListCons _ ->
@@ -709,7 +709,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let (typedValueVar, vg2) = ANF.freshVar vg1
                             let typedValueExpr = ANF.TypedAtom (ANF.Var rawValueVar, elemType)
                             let (rawTailVar, vg3) = ANF.freshVar vg2
-                            let rawTailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                            let rawTailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                             let (typedTailVar, vg4) = ANF.freshVar vg3
                             let typedTailExpr = ANF.TypedAtom (ANF.Var rawTailVar, listType)
                             let newBindings =
@@ -748,7 +748,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                     extractElements patterns scrutAtom currentEnv [] vg
                     |> Result.bind (fun (newEnv, bindings, vg2) ->
-                        toANFCore sumTypeNames inertScopes body vg2 newEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg2 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg3) ->
                             (wrapBindings bindings bodyExpr, vg3)))
             | CheckedAST.PListCons (headPatterns, tailPattern) ->
@@ -773,7 +773,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let headBinding = (headVar, headExpr)
                         // Extract tail using SkewList.tail_i64
                         let (rawTailVar, vg2) = ANF.freshVar vg1'
-                        let rawTailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [listAtom])
+                        let rawTailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [listAtom])
                         let rawTailBinding = (rawTailVar, rawTailExpr)
                         // Wrap with TypedAtom to preserve list type for tail
                         let listType = AST.TList elemType
@@ -870,14 +870,14 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let (tailVar, vg2) = ANF.freshVar vg1
                         // Tail has the same list type as the scrutinee
                         let newEnv' = Map.add name (tailVar, scrutType) newEnv
-                        toANFCore sumTypeNames inertScopes body vg2 newEnv' typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg2 newEnv' typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg3) ->
                             let tailBinding = (tailVar, ANF.TypedAtom (tailAtom, scrutType))
                             let allBindings = bindings @ [tailBinding]
                             let finalExpr = wrapBindings allBindings bodyExpr
                             (finalExpr, vg3))
                     | CheckedAST.PWildcard ->
-                        toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg2) ->
                             let finalExpr = wrapBindings bindings bodyExpr
                             (finalExpr, vg2))
@@ -1057,7 +1057,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     else
                                         // Get tail for next iteration
                                         let (tailVar, vg2) = ANF.freshVar vg'
-                                        let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                        let tailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                         let tailBinding = (tailVar, tailExpr)
                                         collectFromList rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                         collectFromList innerPatterns sourceAtom env bindings vg)
@@ -1094,7 +1094,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 collectBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                 |> Result.bind (fun (env', bindings', vg') ->
                                     let (tailVar, vg2) = ANF.freshVar vg'
-                                    let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                    let tailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                     let tailBinding = (tailVar, tailExpr)
                                     collectHeads rest (ANF.Var tailVar) env' (tailBinding :: bindings') vg2)
                         collectHeads headPatterns sourceAtom env bindings vg)
@@ -1105,10 +1105,10 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 collectBindings pattern scrutAtom scrutType currentEnv [] vg
                 |> Result.bind (fun (newEnv, bindings, vg1) ->
                     // Compile guard expression in the extended environment
-                    toAtomCore sumTypeNames inertScopes guardExpr vg1 newEnv typeReg variantLookup funcReg moduleRegistry
+                    toAtomCore sumTypeNames inertScopes guardExpr vg1 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.bind (fun (guardAtom, guardBindings, vg2) ->
                         // Compile body expression in the extended environment
-                        toANFCore sumTypeNames inertScopes body vg2 newEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg2 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg3) ->
                             // Build: if guard then body else elseExpr
                             let ifExpr = ANF.If (guardAtom, bodyExpr, elseExpr)
@@ -1159,7 +1159,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
             | CheckedAST.PBigInt n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
-                let cmpExpr = ANF.Call ("Darklang.Stdlib.Int.__equals", [scrutAtom; ANF.StringLiteral (n.ToString())])
+                let cmpExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int.__equals", [scrutAtom; ANF.StringLiteral (n.ToString())])
                 Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
             | CheckedAST.PInt128Literal n ->
                 let (cmpVar, vg1) = ANF.freshVar vg
@@ -1358,7 +1358,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                 elif patternLen = 1 then
                     let (lengthVar, vg1) = ANF.freshVar vg
-                    let lengthExpr = ANF.Call ("Darklang.Stdlib.List.__length_i64", [scrutAtom])
+                    let lengthExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__length_i64", [scrutAtom])
                     let (cmpVar, vg2) = ANF.freshVar vg1
                     let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 1L))
                     Ok (Some (ANF.Var cmpVar, [(lengthVar, lengthExpr); (cmpVar, cmpExpr)], vg2))
@@ -1366,7 +1366,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     // Multiple elements: check length == patternLen
                     // Use Stdlib.List.__length which handles EMPTY/SINGLE/DEEP safely
                     let (lengthVar, vg1) = ANF.freshVar vg
-                    let lengthExpr = ANF.Call ("Darklang.Stdlib.List.__length_i64", [scrutAtom])
+                    let lengthExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__length_i64", [scrutAtom])
                     let (cmpVar, vg2) = ANF.freshVar vg1
                     let cmpExpr = ANF.Prim (ANF.Eq, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 patternLen)))
                     Ok (Some (ANF.Var cmpVar, [(lengthVar, lengthExpr); (cmpVar, cmpExpr)], vg2))
@@ -1378,7 +1378,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     Ok None
                 else
                     let (lengthVar, vg1) = ANF.freshVar vg
-                    let lengthExpr = ANF.Call ("Darklang.Stdlib.List.__length_i64", [scrutAtom])
+                    let lengthExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__length_i64", [scrutAtom])
                     let (cmpVar, vg2) = ANF.freshVar vg1
                     let cmpExpr = ANF.Prim (ANF.Gte, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 minLength)))
                     Ok (Some (ANF.Var cmpVar, [(lengthVar, lengthExpr); (cmpVar, cmpExpr)], vg2))
@@ -1631,7 +1631,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     Ok (env', bindings', vg')
                                 else
                                     let (tailVar, vg2) = ANF.freshVar vg'
-                                    let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                                    let tailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                                     loop rest (ANF.Var tailVar) env' (bindings' @ [(tailVar, tailExpr)]) vg2)
                     loop patterns sourceAtom env bindings vg)
             | CheckedAST.PListCons (headPatterns, tailPattern) ->
@@ -1659,7 +1659,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let (headVar, vg1) = ANF.freshVar currentVg
                             let headExpr = listHeadUnsafeExpr funcReg elemType currentList
                             let (tailVar, vg2) = ANF.freshVar vg1
-                            let tailExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [currentList])
+                            let tailExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [currentList])
                             collectNestedPatternBindings pat (ANF.Var headVar) elemType currentEnv (currentBindings @ [(headVar, headExpr); (tailVar, tailExpr)]) vg2
                             |> Result.bind (fun (env', bindings', vg') ->
                                 collectHeads rest (ANF.Var tailVar) env' bindings' vg')
@@ -1757,14 +1757,14 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     // Empty list: check scrutinee == 0 (EMPTY)
                     let (checkVar, vg1) = ANF.freshVar vg
                     let checkExpr = ANF.Prim (ANF.Eq, listAtom, ANF.IntLiteral (ANF.Int64 0L))
-                    toANFCore sumTypeNames inertScopes body vg1 currentEnv typeReg variantLookup funcReg moduleRegistry
+                    toANFCore sumTypeNames inertScopes body vg1 currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (bodyExpr, vg2) ->
                         let ifExpr = ANF.If (ANF.Var checkVar, bodyExpr, elseExpr)
                         (ANF.Let (checkVar, checkExpr, ifExpr), vg2))
                 elif patternLen = 1 then
                     // A singleton has one digit whose tree pointer is at offset 16.
                     let (tagVar, vg1) = ANF.freshVar vg
-                    let tagExpr = ANF.Call ("Darklang.Stdlib.List.__length_i64", [listAtom])
+                    let tagExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__length_i64", [listAtom])
                     let (checkVar, vg2) = ANF.freshVar vg1
                     let checkExpr = ANF.Prim (ANF.Eq, ANF.Var tagVar, ANF.IntLiteral (ANF.Int64 1L))
 
@@ -1790,7 +1790,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         // Important: bindings must come BEFORE the literal check since they define valueVar
                         let (litCheckVar, vg6) = ANF.freshVar vg5'
                         let litCheckExpr = ANF.Prim (ANF.Eq, valueAtom, ANF.IntLiteral literal)
-                        toANFCore sumTypeNames inertScopes body vg6 currentEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg6 currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg7) ->
                             // Structure: check tag -> extract value (bindings) -> check literal -> if match then body else else
                             // Note: We use two nested Ifs because the tag check guards the memory access in bindings
@@ -1803,7 +1803,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                     let compileWideLiteralPattern (litCheckExpr: ANF.CExpr) =
                         let (litCheckVar, vg6) = ANF.freshVar vg5'
-                        toANFCore sumTypeNames inertScopes body vg6 currentEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg6 currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg7) ->
                             let ifLitExpr = ANF.If (ANF.Var litCheckVar, bodyExpr, elseExpr)
                             let withLitBinding = ANF.Let (litCheckVar, litCheckExpr, ifLitExpr)
@@ -1814,13 +1814,13 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     match pat with
                     | CheckedAST.PVariable name ->
                         let newEnv = Map.add name (valueVar, elemType) currentEnv  // Use element type
-                        toANFCore sumTypeNames inertScopes body vg5' newEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg5' newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg6) ->
                             let withBindings = wrapBindings bindings bodyExpr
                             let ifExpr = ANF.If (ANF.Var checkVar, withBindings, elseExpr)
                             (ANF.Let (tagVar, tagExpr, ANF.Let (checkVar, checkExpr, ifExpr)), vg6))
                     | CheckedAST.PWildcard ->
-                        toANFCore sumTypeNames inertScopes body vg5' currentEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg5' currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg6) ->
                             let withBindings = wrapBindings bindings bodyExpr
                             let ifExpr = ANF.If (ANF.Var checkVar, withBindings, elseExpr)
@@ -1839,7 +1839,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 | Some (condition, bindings', vg') -> (Some condition, bindings', vg')
                             collectNestedPatternBindings nestedPattern valueAtom elemType currentEnv [] vg6
                             |> Result.bind (fun (newEnv, nestedBindings, vg7) ->
-                                toANFCore sumTypeNames inertScopes body vg7 newEnv typeReg variantLookup funcReg moduleRegistry
+                                toANFCore sumTypeNames inertScopes body vg7 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                                 |> Result.map (fun (bodyExpr, vg8) ->
                                     let extractedBody = wrapBindings nestedBindings bodyExpr
                                     let matchedBody =
@@ -1868,7 +1868,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         match elemType with
                         | AST.TFloat64 -> "Darklang.Stdlib.List.__lengthFloat"
                         | _ -> "Darklang.Stdlib.List.__length_i64"
-                    let lengthExpr = ANF.Call (lengthName, [listAtom])
+                    let lengthExpr = ANF.Call (AST.functionIdForName lengthName, [listAtom])
                     let (checkVar, vg2) = ANF.freshVar vg1
                     let checkExpr = ANF.Prim (ANF.Eq, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 patternLen)))
                     // Untag to get pointer (only used in then-branch after length check passes)
@@ -1902,7 +1902,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 match elemType with
                                 | AST.TFloat64 -> "Darklang.Stdlib.List.__getAtFloat"
                                 | _ -> "Darklang.Stdlib.List.__getAtInt64"
-                            let getAtExpr = ANF.Call (getAtName, [listAtom; ANF.IntLiteral (ANF.Int64 (int64 idx))])
+                            let getAtExpr = ANF.Call (AST.functionIdForName getAtName, [listAtom; ANF.IntLiteral (ANF.Int64 (int64 idx))])
                             // Unwrap the Some - getAt returns tagged value with tag 1 for Some
                             let (rawValueVar, vg2) = ANF.freshVar vg1
                             let valueType =
@@ -1990,7 +1990,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                     extractElements patterns 0 currentEnv [] [] vg6
                     |> Result.bind (fun (newEnv, elemBindings, condAtoms, vg7) ->
-                        toANFCore sumTypeNames inertScopes body vg7 newEnv typeReg variantLookup funcReg moduleRegistry
+                        toANFCore sumTypeNames inertScopes body vg7 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, vg8) ->
                             // Build the inner expression based on whether we have extra conditions
                             let (innerExpr, vg9) =
@@ -2143,12 +2143,12 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 | CheckedAST.PVariable name ->
                     let (tailVar, vg1) = ANF.freshVar vg
                     let newEnv = Map.add name (tailVar, listType) currentEnv  // Use actual list type
-                    toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg moduleRegistry
+                    toANFCore sumTypeNames inertScopes body vg1 newEnv typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (bodyExpr, vg2) ->
                         let withTail = ANF.Let (tailVar, ANF.Atom listAtom, bodyExpr)
                         (withTail, vg2))
                 | CheckedAST.PWildcard ->
-                    toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg moduleRegistry
+                    toANFCore sumTypeNames inertScopes body vg currentEnv typeReg variantLookup funcReg functionNames moduleRegistry
                 | _ -> Error "Tail pattern in list cons must be variable or wildcard"
 
             | [singleHeadPattern]
@@ -2270,7 +2270,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                         tailEnvResult
                         |> Result.bind (fun (finalEnv, vg5) ->
-                            toANFCore sumTypeNames inertScopes body vg5 finalEnv typeReg variantLookup funcReg moduleRegistry
+                            toANFCore sumTypeNames inertScopes body vg5 finalEnv typeReg variantLookup funcReg functionNames moduleRegistry
                             |> Result.map (fun (bodyExpr, vg6) ->
                                 let withTupleBindings = bodyExpr
                                 let withTypedTail = ANF.Let (tailVar, tailExpr, withTupleBindings)
@@ -2302,7 +2302,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                     // Call Stdlib.List.__tail to get the tail
                     let (tailResultVar, vg3) = ANF.freshVar vg2'
-                    let tailCallExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [listAtom])
+                    let tailCallExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [listAtom])
                     // Wrap with TypedAtom to preserve correct list type in TypeMap
                     let (typedTailVar, vg3') = ANF.freshVar vg3
                     let typedTailExpr = ANF.TypedAtom (ANF.Var tailResultVar, listType)
@@ -2379,7 +2379,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                         tailEnvResult
                         |> Result.bind (fun (finalEnv, vg5) ->
-                            toANFCore sumTypeNames inertScopes body vg5 finalEnv typeReg variantLookup funcReg moduleRegistry
+                            toANFCore sumTypeNames inertScopes body vg5 finalEnv typeReg variantLookup funcReg functionNames moduleRegistry
                             |> Result.map (fun (bodyExpr, vg6) ->
                                 let withTupleBindings = bodyExpr
                                 let withTailBinding = wrapBindings tailBindings withTupleBindings
@@ -2419,7 +2419,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     match elemType with
                     | AST.TFloat64 -> "Darklang.Stdlib.List.__lengthFloat"
                     | _ -> "Darklang.Stdlib.List.__length_i64"
-                let lengthExpr = ANF.Call (lengthName, [listAtom])
+                let lengthExpr = ANF.Call (AST.functionIdForName lengthName, [listAtom])
                 let (lengthCheckVar, vg2) = ANF.freshVar vg1
                 let lengthCheckExpr = ANF.Prim (ANF.Gte, ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 numHeads)))
 
@@ -2445,7 +2445,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             listHeadUnsafeExpr funcReg elemType (ANF.Var currentListVar)
                         // Call tail to get rest
                         let (tailResultVar, vg2) = ANF.freshVar vg1
-                        let tailCallExpr = ANF.Call ("Darklang.Stdlib.List.__tail_i64", [ANF.Var currentListVar])
+                        let tailCallExpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [ANF.Var currentListVar])
                         // Preserve type information for both head and tail values.
                         let (typedHeadVar, vg2') = ANF.freshVar vg2
                         let typedHeadExpr = ANF.TypedAtom (ANF.Var headResultVar, elemType)
@@ -2564,10 +2564,11 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 typeReg
                                 variantLookup
                                 funcReg
+                                functionNames
                                 moduleRegistry
                             |> Result.map (fun (tailBody, vg5) -> (tailBody, [], [], vg5))
                         | CheckedAST.PWildcard ->
-                            toANFCore sumTypeNames inertScopes body vg4 envAfterHeads typeReg variantLookup funcReg moduleRegistry
+                            toANFCore sumTypeNames inertScopes body vg4 envAfterHeads typeReg variantLookup funcReg functionNames moduleRegistry
                             |> Result.map (fun (tailBody, vg5) -> (tailBody, [], [], vg5))
                         | _ ->
                             let staticallyCannotMatch =
@@ -2598,7 +2599,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                         Ok (envAfterHeads, [], vg5)
                                 nestedBindingsResult
                                 |> Result.bind (fun (tailEnv, nestedBindings, vg6) ->
-                                    toANFCore sumTypeNames inertScopes body vg6 tailEnv typeReg variantLookup funcReg moduleRegistry
+                                    toANFCore sumTypeNames inertScopes body vg6 tailEnv typeReg variantLookup funcReg functionNames moduleRegistry
                                     |> Result.map (fun (tailBody, vg7) ->
                                         (tailBody, comparisonBindings @ nestedBindings, conditionAtoms, vg7))))
 
@@ -2746,7 +2747,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 let (lengthVar, vg1) = ANF.freshVar vg
                 let (lengthCmpVar, vg2) = ANF.freshVar vg1
                 let lengthStage =
-                    ([(lengthVar, ANF.Call ("Darklang.Stdlib.List.__length_i64", [scrutAtom]))
+                    ([(lengthVar, ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__length_i64", [scrutAtom]))
                       (lengthCmpVar, ANF.Prim ((if exact then ANF.Eq else ANF.Gte), ANF.Var lengthVar, ANF.IntLiteral (ANF.Int64 (int64 count))))],
                      ANF.Var lengthCmpVar)
                 let rec heads (patterns: CheckedAST.Pattern list) (current: ANF.Atom) (vg: ANF.VarGen) (acc: ((ANF.TempId * ANF.CExpr) list * ANF.Atom) list) =
@@ -2766,7 +2767,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             [(rawHeadVar, listHeadUnsafeExpr funcReg elemType current)
                              (headVar, ANF.TypedAtom (ANF.Var rawHeadVar, elemType))]
                         let tailLoads =
-                            [(rawTailVar, ANF.Call ("Darklang.Stdlib.List.__tail_i64", [current]))
+                            [(rawTailVar, ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__tail_i64", [current]))
                              (tailVar, ANF.TypedAtom (ANF.Var rawTailVar, listType))]
                         buildPatternStages p (ANF.Var headVar) (Some elemType) vg4
                         |> Result.bind (fun (headStages, vg5) ->

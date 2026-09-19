@@ -10,13 +10,17 @@ open RefCountInsertion
 open MemoryShapeTests
 open RcCleanupTests
 
+let private fid = AST.functionIdForName
+let private functionRegistry entries : TypeRegistries.FunctionRegistry =
+    entries |> List.map (fun (name, typ) -> fid name, (name, typ)) |> Map.ofList
+
 let testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator () : TestResult =
     let sourceListType = AST.TList AST.TInt64
     let mappedListType = AST.TList (AST.TFunction ([AST.TInt64], AST.TInt64))
     let mapperType = AST.TFunction ([AST.TInt64], AST.TFunction ([AST.TInt64], AST.TInt64))
     let helperName = "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
         ]
 
@@ -35,6 +39,7 @@ let testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator () : TestResult 
     let mapperParam = TempId 1
     let accParam = TempId 2
     let func : Function = {
+        Id = fid helperName
         Name = helperName
         TypedParams = [
             { Id = sourceParam; Type = sourceListType }
@@ -61,7 +66,7 @@ let testMapHelperSelfTailCallReleasesReplacedAccumulator () : TestResult =
     let specializedHelperName = "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
     let pushBackName = "Darklang.Stdlib.List.__pushBack_fn_i64_to_i64"
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
             (specializedHelperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
             ("mappedClosure", AST.TFunction ([AST.TInt64], AST.TInt64))
@@ -86,6 +91,7 @@ let testMapHelperSelfTailCallReleasesReplacedAccumulator () : TestResult =
     let newAccTemp = TempId 4
     let tailTemp = TempId 5
     let func : Function = {
+        Id = fid helperName
         Name = helperName
         TypedParams = [
             { Id = sourceParam; Type = sourceListType }
@@ -97,13 +103,13 @@ let testMapHelperSelfTailCallReleasesReplacedAccumulator () : TestResult =
         Body =
             Let (
                 closureTemp,
-                ClosureAlloc ("mappedClosure", []),
+                ClosureAlloc (fid "mappedClosure", []),
                 Let (
                     newAccTemp,
-                    Call (pushBackName, [Var accParam; Var closureTemp]),
+                    Call (fid pushBackName, [Var accParam; Var closureTemp]),
                     Let (
                         tailTemp,
-                        TailCall (specializedHelperName, [Var sourceParam; Var mapperParam; Var newAccTemp]),
+                        TailCall (fid specializedHelperName, [Var sourceParam; Var mapperParam; Var newAccTemp]),
                         Return (Var tailTemp)
                     )
                 )
@@ -117,14 +123,14 @@ let testMapHelperSelfTailCallReleasesReplacedAccumulator () : TestResult =
     else
         Error "Darklang.Stdlib.List.__mapHelper self tail-call should release the replaced owned accumulator"
 
-let private testBorrowedProjectionRecursiveArgsAreRetained (recursiveCExpr: string -> Atom list -> CExpr) : TestResult =
+let private testBorrowedProjectionRecursiveArgsAreRetained (recursiveCExpr: AST.FunctionId -> Atom list -> CExpr) : TestResult =
     let state1Type = AST.TTuple [AST.TInt64; AST.TInt64; AST.TInt64]
     let state2Type = AST.TTuple [AST.TInt64; AST.TInt64]
     let resultType = AST.TTuple [state1Type; state2Type]
     let helperName = "loop"
     let roundName = "round"
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             (helperName, AST.TFunction ([state1Type; state2Type; AST.TInt64], resultType))
             (roundName, AST.TFunction ([state1Type; state2Type; AST.TInt64], resultType))
         ]
@@ -148,6 +154,7 @@ let private testBorrowedProjectionRecursiveArgsAreRetained (recursiveCExpr: stri
     let nextState2Temp = TempId 5
     let tailTemp = TempId 6
     let func : Function = {
+        Id = fid helperName
         Name = helperName
         TypedParams = [
             { Id = state1Param; Type = state1Type }
@@ -159,7 +166,7 @@ let private testBorrowedProjectionRecursiveArgsAreRetained (recursiveCExpr: stri
         Body =
             Let (
                 resultTemp,
-                Call (roundName, [Var state1Param; Var state2Param; Var iParam]),
+                Call (fid roundName, [Var state1Param; Var state2Param; Var iParam]),
                 Let (
                     nextState1Temp,
                     TupleGet (Var resultTemp, 0),
@@ -168,7 +175,7 @@ let private testBorrowedProjectionRecursiveArgsAreRetained (recursiveCExpr: stri
                         TupleGet (Var resultTemp, 1),
                         Let (
                             tailTemp,
-                            recursiveCExpr helperName [Var nextState1Temp; Var nextState2Temp; Var iParam],
+                            recursiveCExpr (fid helperName) [Var nextState1Temp; Var nextState2Temp; Var iParam],
                             Return (Var tailTemp)
                         )
                     )
@@ -196,7 +203,7 @@ let testBorrowedProjectionAliasSelfRecursiveCallArgsAreRetained () : TestResult 
     let helperName = "loop"
     let roundName = "round"
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             (helperName, AST.TFunction ([state1Type; state2Type; AST.TInt64], resultType))
             (roundName, AST.TFunction ([state1Type; state2Type; AST.TInt64], resultType))
         ]
@@ -222,6 +229,7 @@ let testBorrowedProjectionAliasSelfRecursiveCallArgsAreRetained () : TestResult 
     let nextState2Alias = TempId 7
     let tailTemp = TempId 8
     let func : Function = {
+        Id = fid helperName
         Name = helperName
         TypedParams = [
             { Id = state1Param; Type = state1Type }
@@ -233,7 +241,7 @@ let testBorrowedProjectionAliasSelfRecursiveCallArgsAreRetained () : TestResult 
         Body =
             Let (
                 resultTemp,
-                Call (roundName, [Var state1Param; Var state2Param; Var iParam]),
+                Call (fid roundName, [Var state1Param; Var state2Param; Var iParam]),
                 Let (
                     nextState1Temp,
                     TupleGet (Var resultTemp, 0),
@@ -248,7 +256,7 @@ let testBorrowedProjectionAliasSelfRecursiveCallArgsAreRetained () : TestResult 
                                 TypedAtom (Var nextState2Temp, state2Type),
                                 Let (
                                     tailTemp,
-                                    Call (helperName, [Var nextState1Alias; Var nextState2Alias; Var iParam]),
+                                    Call (fid helperName, [Var nextState1Alias; Var nextState2Alias; Var iParam]),
                                     Return (Var tailTemp)
                                 )
                             )
@@ -273,7 +281,7 @@ let testBorrowedProjectionIfBranchSelfRecursiveCallArgsAreRetained () : TestResu
     let helperName = "loop"
     let roundName = "round"
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             (helperName, AST.TFunction ([state1Type; state2Type; AST.TInt64], resultType))
             (roundName, AST.TFunction ([state1Type; state2Type; AST.TInt64], resultType))
         ]
@@ -304,6 +312,7 @@ let testBorrowedProjectionIfBranchSelfRecursiveCallArgsAreRetained () : TestResu
     let nextI = TempId 12
     let recursiveResultTemp = TempId 13
     let func : Function = {
+        Id = fid helperName
         Name = helperName
         TypedParams = [
             { Id = state1Param; Type = state1Type }
@@ -322,7 +331,7 @@ let testBorrowedProjectionIfBranchSelfRecursiveCallArgsAreRetained () : TestResu
                 ),
                 Let (
                     roundResultTemp,
-                    Call (roundName, [Var state1Param; Var state2Param; Var iParam]),
+                    Call (fid roundName, [Var state1Param; Var state2Param; Var iParam]),
                     Let (
                         roundResultAliasTemp,
                         Atom (Var roundResultTemp),
@@ -350,7 +359,7 @@ let testBorrowedProjectionIfBranchSelfRecursiveCallArgsAreRetained () : TestResu
                                                     Let (
                                                         recursiveResultTemp,
                                                         Call (
-                                                            helperName,
+                                                            fid helperName,
                                                             [
                                                                 Var nextState1SecondAliasTemp
                                                                 Var nextState2SecondAliasTemp
@@ -383,7 +392,7 @@ let testBorrowedProjectionFromParameterSelfRecursiveCallStaysBorrowed () : TestR
     let parentType = AST.TTuple [childType]
     let helperName = "loop"
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             (helperName, AST.TFunction ([parentType; childType], childType))
         ]
 
@@ -403,6 +412,7 @@ let testBorrowedProjectionFromParameterSelfRecursiveCallStaysBorrowed () : TestR
     let projectedTemp = TempId 2
     let resultTemp = TempId 3
     let func : Function = {
+        Id = fid helperName
         Name = helperName
         TypedParams = [
             { Id = parentParam; Type = parentType }
@@ -416,7 +426,7 @@ let testBorrowedProjectionFromParameterSelfRecursiveCallStaysBorrowed () : TestR
                 TupleGet (Var parentParam, 0),
                 Let (
                     resultTemp,
-                    Call (helperName, [Var parentParam; Var projectedTemp]),
+                    Call (fid helperName, [Var parentParam; Var projectedTemp]),
                     Return (Var resultTemp)
                 )
             )
@@ -435,7 +445,7 @@ let testMapHelperClosureProducingCallRetainsBorrowedSource () : TestResult =
     let mapperType = AST.TFunction ([AST.TInt64], AST.TFunction ([AST.TInt64], AST.TInt64))
     let helperName = "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_to_i64"
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
         ]
 
@@ -455,6 +465,7 @@ let testMapHelperClosureProducingCallRetainsBorrowedSource () : TestResult =
     let accParam = TempId 2
     let mappedTemp = TempId 3
     let func : Function = {
+        Id = fid "caller"
         Name = "caller"
         TypedParams = [
             { Id = sourceParam; Type = sourceListType }
@@ -466,7 +477,7 @@ let testMapHelperClosureProducingCallRetainsBorrowedSource () : TestResult =
         Body =
             Let (
                 mappedTemp,
-                Call (helperName, [Var sourceParam; Var mapperParam; Var accParam]),
+                Call (fid helperName, [Var sourceParam; Var mapperParam; Var accParam]),
                 Return (Var mappedTemp)
             )
     }
@@ -484,7 +495,7 @@ let testMapHelperClosureSourceToValueKeepsSourceBorrowed () : TestResult =
     let mapperType = AST.TFunction ([AST.TFunction ([AST.TInt64], AST.TInt64)], AST.TInt64)
     let helperName = "Darklang.Stdlib.List.__mapHelper_fn_i64_to_i64_i64"
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             (helperName, AST.TFunction ([sourceListType; mapperType; mappedListType], mappedListType))
         ]
 
@@ -503,6 +514,7 @@ let testMapHelperClosureSourceToValueKeepsSourceBorrowed () : TestResult =
     let mapperParam = TempId 1
     let accParam = TempId 2
     let func : Function = {
+        Id = fid helperName
         Name = helperName
         TypedParams = [
             { Id = sourceParam; Type = sourceListType }
@@ -529,7 +541,7 @@ let testClosurePushBackRetainsImmediateClosureCallResult () : TestResult =
     let listType = AST.TList closureType
     let pushBackName = "Darklang.Stdlib.List.__pushBack_fn_i64_to_i64"
     let funcReg : TypeRegistries.FunctionRegistry =
-        Map.ofList [
+        functionRegistry [
             ("makeClosure", makerType)
             ("mappedClosure", closureType)
             ("returnedClosure", closureType)
@@ -552,6 +564,7 @@ let testClosurePushBackRetainsImmediateClosureCallResult () : TestResult =
     let listParam = TempId 2
     let pushedTemp = TempId 3
     let func : Function = {
+        Id = fid "caller"
         Name = "caller"
         TypedParams = [
             { Id = listParam; Type = listType }
@@ -561,13 +574,13 @@ let testClosurePushBackRetainsImmediateClosureCallResult () : TestResult =
         Body =
             Let (
                 makerTemp,
-                ClosureAlloc ("makeClosure", []),
+                ClosureAlloc (fid "makeClosure", []),
                 Let (
                     returnedTemp,
                     ClosureCall (Var makerTemp, [IntLiteral (Int64 5L)]),
                     Let (
                         pushedTemp,
-                        Call (pushBackName, [Var listParam; Var returnedTemp]),
+                        Call (fid pushBackName, [Var listParam; Var returnedTemp]),
                         Return (Var pushedTemp)
                     )
                 )

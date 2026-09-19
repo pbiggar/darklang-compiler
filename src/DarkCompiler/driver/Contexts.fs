@@ -37,18 +37,21 @@ let internal packageCatalogFunctionNames =
         "Builtin.pmFindValuesByValueType"
         "Builtin.pmGetLocationsByValue"
         "Builtin.pmEvaluateValue"
-    ]
+    ] |> Set.map AST.functionIdForName
 
 /// Generic functions whose call graph can reach a package-catalog intrinsic.
 /// This lets ordinary programs skip catalog specialization without changing
 /// the behavior of generic wrappers around the catalog API.
 let private buildPackageCatalogGenericCallers
     (genericFuncDefs: SpecializationIdentity.GenericFuncDefs)
-    : Set<string> =
+    : Set<AST.FunctionId> =
     let callsByFunction =
         genericFuncDefs
-        |> Map.map (fun _ definition ->
+        |> Map.toList
+        |> List.map (fun (name, definition) ->
+            AST.functionIdForName name,
             Monomorphization.collectCalledFunctions definition.Function.Body)
+        |> Map.ofList
     let rec findFixedPoint callers =
         let targets = Set.union packageCatalogFunctionNames callers
         let next =
@@ -87,7 +90,7 @@ type PipelineContext = {
     LambdaLiftVariantLookup: LoweringPrimitives.VariantLookup
     ProjectedMirRegistries: MIR.VariantRegistry * MIR.RecordRegistry
     ReturnTypes: Map<string, AST.Type>
-    PackageCatalogGenericCallers: Set<string>
+    PackageCatalogGenericCallers: Set<AST.FunctionId>
 }
 
 let internal buildContext
@@ -155,16 +158,16 @@ type StdlibResult = {
     /// Pre-allocated stdlib functions (physical registers assigned, ready for merge)
     AllocatedFunctions: LIR.Function list
     /// Call graph for dead code elimination (which stdlib funcs call which other funcs)
-    StdlibCallGraph: Map<string, Set<string>>
+    StdlibCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>
     /// Stdlib ANF functions indexed by name (for coverage analysis)
     StdlibANFFunctions: Map<string, ANF.Function>
     /// Pre-reference-count bodies available to optimizations that introduce
     /// calls to already-monomorphized stdlib helpers.
     StdlibANFOptimizationCandidates: Map<string, ANF.Function>
     /// Pre-reference-count stdlib ANF functions available as user inlining candidates
-    StdlibInlineCandidates: Map<string, ANF_Inlining.FunctionInfo>
+    StdlibInlineCandidates: Map<AST.FunctionId, ANF_Inlining.FunctionInfo>
     /// Call graph at ANF level (for coverage analysis reachability)
-    StdlibANFCallGraph: Map<string, Set<string>>
+    StdlibANFCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>
     /// TypeMap from RC insertion (needed for getReachableStdlibFunctions)
     StdlibTypeMap: ANF.TypeMap
 }

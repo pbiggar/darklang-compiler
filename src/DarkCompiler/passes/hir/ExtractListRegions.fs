@@ -84,7 +84,7 @@ let scopeContracts infer (functions: CheckedAST.FunctionDef list) =
             DestructionAnalysis.hasInertDestruction func.ReturnType
             && List.forall (snd >> DestructionAnalysis.hasInertDestruction) parameters
             && inertExpression infer (fun _ -> true) types func.Body
-        func.Name,
+        func.Id,
         ({ LocalDestruction = if localInert then DestructionAnalysis.InertScope else DestructionAnalysis.UnprovenScope
            Calls = calls func.Body }: DestructionAnalysis.FunctionScopeContract))
     |> Map.ofList
@@ -92,7 +92,7 @@ let scopeContracts infer (functions: CheckedAST.FunctionDef list) =
 /// A failed recognition is semantic absence, not a compiler failure. The
 /// original checked expression then uses the supported persistent List path.
 let tryExtract
-    (inertScopes: Set<string>)
+    (inertScopes: Set<AST.FunctionId>)
     (parameterTypes: Map<AST.BindingId, AST.Type>)
     (infer: Map<AST.BindingId, AST.Type> -> CheckedAST.Expr -> Result<AST.Type, string>)
     (freeVariables: CheckedAST.Expr -> Set<AST.BindingId>)
@@ -172,16 +172,16 @@ let tryExtract
             else None
         | _ ->
             match listCall expr with
-            | Some ("Darklang.Stdlib.List.repeatUnsafe_i64", [count; value]) ->
+            | Some (id, [count; value]) when id = AST.functionIdForName "Darklang.Stdlib.List.repeatUnsafe_i64" ->
                 match operand state ((=) AST.TInt) count, operand state ((=) AST.TInt64) value with
                 | Some count, Some value -> Some (addList state (fun output -> Leaf (Construct (output, Repeat (count, value)))))
                 | _ -> None
-            | Some ("Darklang.Stdlib.List.map_i64_i64", [input; fn]) ->
+            | Some (id, [input; fn]) when id = AST.functionIdForName "Darklang.Stdlib.List.map_i64_i64" ->
                 list state input
                 |> Option.bind (fun (source, next) ->
                     callback state (AST.TFunction ([AST.TInt64], AST.TInt64)) fn
                     |> Option.map (fun fn -> addList next (fun id -> Leaf (Transform (id, source, Map fn)))))
-            | Some ("Darklang.Stdlib.List.reverse_i64", [input]) ->
+            | Some (id, [input]) when id = AST.functionIdForName "Darklang.Stdlib.List.reverse_i64" ->
                 list state input
                 |> Option.map (fun (source, next) -> addList next (fun id -> Leaf (Transform (id, source, Reverse))))
             | _ -> None
@@ -206,7 +206,7 @@ let tryExtract
 
     and bindSimpleScalar state name expr =
         match listCall expr with
-        | Some ("Darklang.Stdlib.List.fold_i64_i64", [input; initial; fn]) ->
+        | Some (id, [input; initial; fn]) when id = AST.functionIdForName "Darklang.Stdlib.List.fold_i64_i64" ->
             list state input
             |> Option.bind (fun (source, next) ->
                 match scalar state initial, callback state (AST.TFunction ([AST.TInt64; AST.TInt64], AST.TInt64)) fn with
@@ -245,10 +245,11 @@ let tryExtract
 
     let isListOperation value =
         match listCall value with
-        | Some ("Darklang.Stdlib.List.map_i64_i64", _)
-        | Some ("Darklang.Stdlib.List.reverse_i64", _)
-        | Some ("Darklang.Stdlib.List.repeatUnsafe_i64", _)
-        | Some ("Darklang.Stdlib.List.fold_i64_i64", _) -> true
+        | Some (id, _)
+            when id = AST.functionIdForName "Darklang.Stdlib.List.map_i64_i64"
+                 || id = AST.functionIdForName "Darklang.Stdlib.List.reverse_i64"
+                 || id = AST.functionIdForName "Darklang.Stdlib.List.repeatUnsafe_i64"
+                 || id = AST.functionIdForName "Darklang.Stdlib.List.fold_i64_i64" -> true
         | _ -> false
     let candidate =
         match expression with

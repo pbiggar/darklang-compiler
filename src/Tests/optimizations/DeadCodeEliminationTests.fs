@@ -13,7 +13,8 @@ let private blockWith instrs =
       LIR.Terminator = LIR.Ret }
 
 let private namedFunctionWith name instrs =
-    { LIR.Name = name
+    { LIR.Id = AST.functionIdForName name
+      LIR.Name = name
       LIR.TypedParams = []
       LIR.CFG =
         { LIR.Entry = LIR.Label "entry"
@@ -26,7 +27,8 @@ let private functionWith instrs = namedFunctionWith "user" instrs
 
 let private expectCalls expected instrs =
     let actual = DeadCodeElimination.getCalledFunctions (functionWith instrs)
-    if actual = Set.ofList expected then
+    let expectedIds = expected |> List.map AST.functionIdForName |> Set.ofList
+    if actual = expectedIds then
         Ok ()
     else
         Error $"Expected calls {expected}, got {Set.toList actual}"
@@ -34,13 +36,19 @@ let private expectCalls expected instrs =
 let testArgMovesFunctionAddressIsReachable () : TestResult =
     expectCalls
         ["Darklang.Stdlib.List.map"]
-        [ LIR.ArgMoves [ (LIR.X0, LIR.FuncAddr "Darklang.Stdlib.List.map") ] ]
+        [ LIR.ArgMoves [
+            (LIR.X0, LIR.FuncAddr (AST.functionIdForName "Darklang.Stdlib.List.map"))
+          ] ]
 
 let testFilteredFunctionsPreserveReachableSetAndInputOrder () : TestResult =
     let userFunctions =
         [ namedFunctionWith
               "user"
-              [ LIR.Call (LIR.Virtual 0, "stdlib_b", [ LIR.FuncAddr "stdlib_a" ]) ] ]
+              [ LIR.Call (
+                    LIR.Virtual 0,
+                    AST.functionIdForName "stdlib_b",
+                    [ LIR.FuncAddr (AST.functionIdForName "stdlib_a") ]
+                ) ] ]
     let stdlibFunctions =
         [ namedFunctionWith "unused" []
           namedFunctionWith "stdlib_c" []
@@ -48,10 +56,10 @@ let testFilteredFunctionsPreserveReachableSetAndInputOrder () : TestResult =
           namedFunctionWith "stdlib_b" [] ]
     let callGraph =
         Map.ofList
-            [ "stdlib_a", Set.empty
-              "stdlib_b", Set.ofList [ "stdlib_c" ]
-              "stdlib_c", Set.empty
-              "unused", Set.empty ]
+            [ AST.functionIdForName "stdlib_a", Set.empty
+              AST.functionIdForName "stdlib_b", Set.ofList [ AST.functionIdForName "stdlib_c" ]
+              AST.functionIdForName "stdlib_c", Set.empty
+              AST.functionIdForName "unused", Set.empty ]
     let actual =
         DeadCodeElimination.filterFunctions callGraph userFunctions stdlibFunctions
         |> List.map (fun function_ -> function_.Name)

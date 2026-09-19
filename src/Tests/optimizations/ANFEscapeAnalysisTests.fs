@@ -9,6 +9,8 @@ open ANF
 
 type TestResult = Result<unit, string>
 
+let private fid = AST.functionIdForName
+
 let private pointDescriptor fieldType =
     { SourceTypeName = "Point"
       RuntimeTypeName = "Point"
@@ -56,7 +58,8 @@ let rec private containsRecordReuse (expr: AExpr) : bool =
 
 let private optimizeBody (body: AExpr) : AExpr =
     let func =
-        { Name = "fixture"
+        { Id = fid "fixture"
+          Name = "fixture"
           TypedParams = []
           ReturnType = AST.TInt64
           ReturnOwnership = OwnedReturn
@@ -152,7 +155,7 @@ let testRecordPassedToCallPreservesAllocation () : TestResult =
         Let (
             TempId 0,
             RecordAlloc (descriptor, [IntLiteral (Int64 1L); IntLiteral (Int64 2L)]),
-            Let (TempId 1, Call ("consume", [Var (TempId 0)]), Return (Var (TempId 1)))
+            Let (TempId 1, Call (fid "consume", [Var (TempId 0)]), Return (Var (TempId 1)))
         )
         |> optimizeBody
     if containsAggregateAllocation body then Ok ()
@@ -164,7 +167,7 @@ let testRecordCapturedByClosurePreservesAllocation () : TestResult =
         Let (
             TempId 0,
             RecordAlloc (descriptor, [IntLiteral (Int64 1L); IntLiteral (Int64 2L)]),
-            Let (TempId 1, ClosureAlloc ("capture", [Var (TempId 0)]), Return (IntLiteral (Int64 0L)))
+            Let (TempId 1, ClosureAlloc (fid "capture", [Var (TempId 0)]), Return (IntLiteral (Int64 0L)))
         )
         |> optimizeBody
     if containsAggregateAllocation body then Ok ()
@@ -297,7 +300,7 @@ let testFloatRecordCallBeforeCloneRejectsReuse () : TestResult =
             RecordAlloc (descriptor, [FloatLiteral 1.0; FloatLiteral 2.0]),
             Let (
                 TempId 1,
-                Call ("observe", [Var (TempId 0)]),
+                Call (fid "observe", [Var (TempId 0)]),
                 Let (
                     TempId 2,
                     RecordClone (descriptor, Var (TempId 0), [FloatLiteral 3.0; FloatLiteral 2.0]),

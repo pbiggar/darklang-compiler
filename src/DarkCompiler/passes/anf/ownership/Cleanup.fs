@@ -83,13 +83,15 @@ let private releaseExprForShape
 
 let internal functionParamReturnTransfersOwnedAccumulator
     (ctx: TypeContext)
-    (funcName: string)
+    (funcName: AST.FunctionId)
     (paramIndex: int)
     (paramType: AST.Type)
     : bool =
+    let displayName =
+        Map.tryFind funcName ctx.FuncReg |> Option.map fst |> Option.defaultValue ""
     let isMapHelper =
-        funcName = "Darklang.Stdlib.List.__mapHelper"
-        || funcName.StartsWith("Darklang.Stdlib.List.__mapHelper_")
+        displayName = "Darklang.Stdlib.List.__mapHelper"
+        || displayName.StartsWith("Darklang.Stdlib.List.__mapHelper_")
     let returnsClosureList =
         match tryGetFuncReturnTypeFromReg ctx funcName with
         | Some (AST.TList (AST.TFunction _)) -> true
@@ -126,7 +128,7 @@ let internal isInternalOwnedTailAccumulator
         | Return _ ->
             (false, false)
         | Let (callTemp, Call (targetFunc, args), Return (Var returnTemp))
-            when targetFunc = func.Name && callTemp = returnTemp ->
+            when targetFunc = func.Id && callTemp = returnTemp ->
             match List.tryItem paramIndex args with
             | Some (Var replacement) when canonicalAlias aliases replacement <> param.Id ->
                 (true, true)
@@ -135,7 +137,7 @@ let internal isInternalOwnedTailAccumulator
         | Let (tempId, Atom (Var sourceId), body)
         | Let (tempId, TypedAtom (Var sourceId, _), body) ->
             analyze (Map.add tempId (canonicalAlias aliases sourceId) aliases) body
-        | Let (_, Call (targetFunc, _), _) when targetFunc = func.Name ->
+        | Let (_, Call (targetFunc, _), _) when targetFunc = func.Id ->
             (false, false)
         | Let (_, _, body) ->
             analyze aliases body
@@ -267,12 +269,20 @@ let private tailCallArgTempIds (cexpr: CExpr) : Set<TempId> =
     | _ ->
         Set.empty
 
-let private isSelfTailCallTarget (currentFuncName: string) (targetFunc: string) : bool =
+let private isSelfTailCallTarget
+    (ctx: TypeContext)
+    (currentFuncName: AST.FunctionId)
+    (targetFunc: AST.FunctionId)
+    : bool =
     targetFunc = currentFuncName
-    || targetFunc.StartsWith($"{currentFuncName}_")
+    ||
+       match Map.tryFind currentFuncName ctx.FuncReg, Map.tryFind targetFunc ctx.FuncReg with
+       | Some (currentName, _), Some (targetName, _) -> targetName.StartsWith($"{currentName}_")
+       | _ -> false
 
 let rec internal isTempUsedAsSelfTailCallArg
-    (currentFuncName: string)
+    (ctx: TypeContext)
+    (currentFuncName: AST.FunctionId)
     (targetTemp: TempId)
     (expr: ReturnAnnotatedExpr)
     : bool =
@@ -289,10 +299,10 @@ let rec internal isTempUsedAsSelfTailCallArg
         | RReturn _ ->
             false
         | RLet (_, Call (targetFunc, args), _, _)
-            when isSelfTailCallTarget currentFuncName targetFunc && argsContainAlias args ->
+            when isSelfTailCallTarget ctx currentFuncName targetFunc && argsContainAlias args ->
             true
         | RLet (_, TailCall (targetFunc, args), _, _)
-            when isSelfTailCallTarget currentFuncName targetFunc && argsContainAlias args ->
+            when isSelfTailCallTarget ctx currentFuncName targetFunc && argsContainAlias args ->
             true
         | RLet (aliasTemp, Atom (Var sourceTemp), body, _)
         | RLet (aliasTemp, TypedAtom (Var sourceTemp, _), body, _)
@@ -336,7 +346,7 @@ let rec private collectMovableTailDecPrefix
     | _ ->
         ([], expr)
 
-let rec internal moveDecsBeforeNonSelfTailCalls (currentFuncName: string) (expr: AExpr) : AExpr =
+let rec internal moveDecsBeforeNonSelfTailCalls (currentFuncName: AST.FunctionId) (expr: AExpr) : AExpr =
     match expr with
     | Jump _ -> expr
     | Join (parameter, continuation, entry) ->
@@ -362,7 +372,7 @@ let rec internal moveDecsBeforeNonSelfTailCalls (currentFuncName: string) (expr:
 
 let rec internal insertOwnedAccumulatorDecsBeforeSelfTailCalls
     (ctx: TypeContext)
-    (currentFuncName: string)
+    (currentFuncName: AST.FunctionId)
     (ownedParamDecs: ReturnDec list)
     (expr: AExpr)
     (varGen: VarGen)
@@ -408,12 +418,12 @@ let rec internal insertOwnedAccumulatorDecsBeforeSelfTailCalls
         let (elseBranch', varGen2, types2) =
             insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs elseBranch varGen1 types1
         (If (cond, thenBranch', elseBranch'), varGen2, types2)
-    | Let (tempId, Call (targetFunc, args), body) when isSelfTailCallTarget currentFuncName targetFunc ->
+    | Let (tempId, Call (targetFunc, args), body) when isSelfTailCallTarget ctx currentFuncName targetFunc ->
         let (body', varGen1, types1) =
             insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs body varGen types
         let callExpr = Let (tempId, Call (targetFunc, args), body')
         wrapOwnedAccumulatorDecs (decsForSelfTailCall args) callExpr varGen1 types1
-    | Let (tempId, TailCall (targetFunc, args), body) when isSelfTailCallTarget currentFuncName targetFunc ->
+    | Let (tempId, TailCall (targetFunc, args), body) when isSelfTailCallTarget ctx currentFuncName targetFunc ->
         let (body', varGen1, types1) =
             insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs body varGen types
         let tailExpr = Let (tempId, TailCall (targetFunc, args), body')
@@ -423,13 +433,20 @@ let rec internal insertOwnedAccumulatorDecsBeforeSelfTailCalls
             insertOwnedAccumulatorDecsBeforeSelfTailCalls ctx currentFuncName ownedParamDecs body varGen types
         (Let (tempId, cexpr, body'), varGen1, types1)
 
-let private isClosureMapHelperTarget (targetFunc: string) : bool =
-    targetFunc = "Darklang.Stdlib.List.__mapHelper"
-    || targetFunc.StartsWith("Darklang.Stdlib.List.__mapHelper_")
+let private isClosureMapHelperTarget
+    (ctx: TypeContext)
+    (targetFunc: AST.FunctionId)
+    : bool =
+    match Map.tryFind targetFunc ctx.FuncReg with
+    | Some (name, _) ->
+        name = "Darklang.Stdlib.List.__mapHelper"
+        || name.StartsWith("Darklang.Stdlib.List.__mapHelper_")
+    | None -> false
 
 /// Find the two rare post-RC cleanups with one allocation-free body scan.
 let rec internal requiredFunctionCleanups
-    (currentFuncName: string)
+    (ctx: TypeContext)
+    (currentFuncName: AST.FunctionId)
     (expr: AExpr)
     : bool * bool =
     match expr with
@@ -437,18 +454,18 @@ let rec internal requiredFunctionCleanups
     | Join (_, thenBranch, elseBranch)
     | If (_, thenBranch, elseBranch) ->
         let (thenNeedsMapRetain, thenNeedsTailDecMove) =
-            requiredFunctionCleanups currentFuncName thenBranch
+            requiredFunctionCleanups ctx currentFuncName thenBranch
         let (elseNeedsMapRetain, elseNeedsTailDecMove) =
-            requiredFunctionCleanups currentFuncName elseBranch
+            requiredFunctionCleanups ctx currentFuncName elseBranch
         (thenNeedsMapRetain || elseNeedsMapRetain,
          thenNeedsTailDecMove || elseNeedsTailDecMove)
     | Let (_, cexpr, body) ->
         let (bodyNeedsMapRetain, bodyNeedsTailDecMove) =
-            requiredFunctionCleanups currentFuncName body
+            requiredFunctionCleanups ctx currentFuncName body
         let currentNeedsMapRetain =
             match cexpr with
             | Call (targetFunc, _)
-            | TailCall (targetFunc, _) -> isClosureMapHelperTarget targetFunc
+            | TailCall (targetFunc, _) -> isClosureMapHelperTarget ctx targetFunc
             | _ -> false
         let currentNeedsTailDecMove =
             match cexpr with
@@ -459,22 +476,20 @@ let rec internal requiredFunctionCleanups
 
 let rec internal insertClosureMapSourceRetainsBeforeHelperCalls
     (ctx: TypeContext)
-    (currentFuncName: string)
+    (currentFuncName: AST.FunctionId)
     (expr: AExpr)
     (varGen: VarGen)
     (types: Map<TempId, AST.Type>)
     : AExpr * VarGen * Map<TempId, AST.Type> =
-    let currentIsMapHelper =
-        currentFuncName = "Darklang.Stdlib.List.__mapHelper"
-        || currentFuncName.StartsWith("Darklang.Stdlib.List.__mapHelper_")
+    let currentIsMapHelper = isClosureMapHelperTarget ctx currentFuncName
 
-    let targetReturnsClosureList (targetFunc: string) : bool =
+    let targetReturnsClosureList (targetFunc: AST.FunctionId) : bool =
         match tryGetFuncReturnTypeFromReg ctx targetFunc with
         | Some (AST.TList (AST.TFunction _)) -> true
         | _ -> false
 
     let wrapSourceRetain
-        (targetFunc: string)
+        (targetFunc: AST.FunctionId)
         (args: Atom list)
         (callExpr: AExpr)
         (varGen: VarGen)
@@ -511,12 +526,12 @@ let rec internal insertClosureMapSourceRetainsBeforeHelperCalls
         let (elseBranch', varGen2, types2) =
             insertClosureMapSourceRetainsBeforeHelperCalls ctx currentFuncName elseBranch varGen1 types1
         (If (cond, thenBranch', elseBranch'), varGen2, types2)
-    | Let (tempId, Call (targetFunc, args), body) when isClosureMapHelperTarget targetFunc ->
+    | Let (tempId, Call (targetFunc, args), body) when isClosureMapHelperTarget ctx targetFunc ->
         let (body', varGen1, types1) =
             insertClosureMapSourceRetainsBeforeHelperCalls ctx currentFuncName body varGen types
         let callExpr = Let (tempId, Call (targetFunc, args), body')
         wrapSourceRetain targetFunc args callExpr varGen1 types1
-    | Let (tempId, TailCall (targetFunc, args), body) when isClosureMapHelperTarget targetFunc ->
+    | Let (tempId, TailCall (targetFunc, args), body) when isClosureMapHelperTarget ctx targetFunc ->
         let (body', varGen1, types1) =
             insertClosureMapSourceRetainsBeforeHelperCalls ctx currentFuncName body varGen types
         let callExpr = Let (tempId, TailCall (targetFunc, args), body')

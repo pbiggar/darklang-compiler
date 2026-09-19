@@ -573,14 +573,14 @@ let private constantReturnValue (func: Function) : int64 option =
         | _ -> None
     | _ -> None
 
-let private constantReturnFunctions (functions: Function list) : Map<string, int64> =
+let private constantReturnFunctions (functions: Function list) : Map<AST.FunctionId, int64> =
     functions
     |> List.choose (fun func ->
         constantReturnValue func
-        |> Option.map (fun value -> (func.Name, value)))
+        |> Option.map (fun value -> (func.Id, value)))
     |> Map.ofList
 
-let private optimizeConstantCalls (constants: Map<string, int64>) (instrs: Instr list) : Instr list =
+let private optimizeConstantCalls (constants: Map<AST.FunctionId, int64>) (instrs: Instr list) : Instr list =
     let rec loop remaining =
         match remaining with
         | SaveRegs _ :: Call (dest, funcName, []) :: RestoreRegs _ :: Mov (moveDest, Reg (Physical X0)) :: rest

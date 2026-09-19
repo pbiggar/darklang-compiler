@@ -8,7 +8,7 @@ open X64ReleaseSelection
 open X64FieldReferenceCounts
 open X64ListReferenceCounts
 
-let internal closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<string, int> =
+let internal closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<AST.FunctionId, int> =
     functions
     |> List.collect (fun func ->
         func.CFG.Blocks
@@ -109,6 +109,7 @@ let internal generateClosureRefCountDecHelper
         EnableLeakCheck = enableLeakCheck
         RecordRegistry = recordRegistry
         SumShapeRegistry = sumShapeRegistry
+        FunctionNames = Map.empty
     }
 
     let payloadCases =

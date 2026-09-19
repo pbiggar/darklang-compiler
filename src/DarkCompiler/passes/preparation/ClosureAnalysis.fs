@@ -13,19 +13,19 @@ type LiftState = {
     Symbols: CheckedAST.Symbols
     Counter: int
     LiftedFunctions: CheckedAST.FunctionDef list
-    ComparisonFuncs: Map<string * AST.Type list, string>
+    ComparisonFuncs: Map<AST.FunctionId * AST.Type list, string>
     ComparableFunctionParams: Set<AST.Type list>
     TypeEnv: Map<AST.BindingId, AST.Type>
-    FuncParams: Map<string, (AST.BindingId * AST.Type) list>
-    FuncReturnTypes: Map<string, AST.Type>  // Function name -> Return type (for inferring call result types)
-    GenericFuncDefs: Map<string, string list * AST.Type>  // Function name -> (TypeParams, ReturnType) for TypeApp substitution
+    FuncParams: Map<AST.FunctionId, (AST.BindingId * AST.Type) list>
+    FuncReturnTypes: Map<AST.FunctionId, AST.Type>
+    GenericFuncDefs: Map<AST.FunctionId, string list * AST.Type>
     TypeReg: TypeRegistry
     VariantLookup: VariantLookup
     RecursiveSelf: (AST.BindingId * AST.BindingId * AST.Type * AST.TypedRecursiveMember) option
 }
 
 let private liftedNameExists (state: LiftState) (name: string) : bool =
-    Map.containsKey name state.FuncParams
+    Map.containsKey (AST.functionIdForName name) state.FuncParams
     || (state.LiftedFunctions |> List.exists (fun f -> f.Name = name))
 
 let rec private findNextLiftedNameCounter
@@ -233,9 +233,9 @@ let rec reconcileBranchTypes (left: AST.Type) (right: AST.Type) : AST.Type optio
 let rec simpleInferType
     (expr: CheckedAST.Expr)
     (typeEnv: Map<AST.BindingId, AST.Type>)
-    (funcParams: Map<string, (AST.BindingId * AST.Type) list>)
-    (funcReturnTypes: Map<string, AST.Type>)
-    (genericFuncDefs: Map<string, string list * AST.Type>)
+    (funcParams: Map<AST.FunctionId, (AST.BindingId * AST.Type) list>)
+    (funcReturnTypes: Map<AST.FunctionId, AST.Type>)
+    (genericFuncDefs: Map<AST.FunctionId, string list * AST.Type>)
     (typeReg: TypeRegistry)
     (variantLookup: VariantLookup)
     : AST.Type option =
@@ -328,7 +328,8 @@ let rec simpleInferType
     | CheckedAST.UnitLiteral -> Some AST.TUnit
     | CheckedAST.Local id -> Map.tryFind id typeEnv
     | CheckedAST.NamedValue name ->
-        match Map.tryFind name funcParams, Map.tryFind name funcReturnTypes with
+        let id = AST.functionIdForName name
+        match Map.tryFind id funcParams, Map.tryFind id funcReturnTypes with
         | Some parameters, Some returnType ->
             Some (AST.TFunction (parameters |> List.map snd, returnType))
         | _ -> None
@@ -502,7 +503,8 @@ let rec simpleInferType
         | AST.Neg | AST.BitNot ->
             simpleInferType operand typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
     | CheckedAST.Call (funcName, args) ->
-        if isRuntimeFailureName funcName then
+        if funcName = AST.functionIdForName "Builtin.testRuntimeError"
+           || funcName = AST.functionIdForName "Builtin.crash" then
             Some AST.TRuntimeError
         else
             Map.tryFind funcName funcReturnTypes

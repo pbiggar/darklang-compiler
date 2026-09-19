@@ -4,6 +4,8 @@ module RegionContractTests
 
 open OwnedIR
 
+let private fid = AST.functionIdForName
+
 let private identity = function
     | "a" -> HIR.ValueId 0
     | "b" -> HIR.ValueId 1
@@ -38,15 +40,15 @@ let private semantics : Semantics<TestLeaf, string> = {
     LeafUniqueness = fun leaf -> leaf.Uniqueness
     CallOwnership = fun call ->
         match call.Target with
-        | "borrow" -> Some { Parameters = [BorrowedCallParameter]; Result = BorrowedCallResult 0 }
-        | "consume" -> Some { Parameters = [ConsumedCallParameter]; Result = ProducedCallResult }
-        | "produce" -> Some { Parameters = []; Result = ProducedCallResult }
-        | "consumeUnique" -> Some { Parameters = [UniqueCallParameter]; Result = UnmanagedCallResult }
-        | "produceUnique" -> Some { Parameters = []; Result = UniqueProducedCallResult }
-        | "consumeTwice" -> Some { Parameters = [ConsumedCallParameter; ConsumedCallParameter]; Result = UnmanagedCallResult }
-        | "discard" -> Some { Parameters = [ConsumedCallParameter]; Result = UnmanagedCallResult }
-        | "invalidBorrow" -> Some { Parameters = [ConsumedCallParameter]; Result = BorrowedCallResult 0 }
-        | "negativeBorrow" -> Some { Parameters = [BorrowedCallParameter]; Result = BorrowedCallResult -1 }
+        | id when id = fid "borrow" -> Some { Parameters = [BorrowedCallParameter]; Result = BorrowedCallResult 0 }
+        | id when id = fid "consume" -> Some { Parameters = [ConsumedCallParameter]; Result = ProducedCallResult }
+        | id when id = fid "produce" -> Some { Parameters = []; Result = ProducedCallResult }
+        | id when id = fid "consumeUnique" -> Some { Parameters = [UniqueCallParameter]; Result = UnmanagedCallResult }
+        | id when id = fid "produceUnique" -> Some { Parameters = []; Result = UniqueProducedCallResult }
+        | id when id = fid "consumeTwice" -> Some { Parameters = [ConsumedCallParameter; ConsumedCallParameter]; Result = UnmanagedCallResult }
+        | id when id = fid "discard" -> Some { Parameters = [ConsumedCallParameter]; Result = UnmanagedCallResult }
+        | id when id = fid "invalidBorrow" -> Some { Parameters = [ConsumedCallParameter]; Result = BorrowedCallResult 0 }
+        | id when id = fid "negativeBorrow" -> Some { Parameters = [BorrowedCallParameter]; Result = BorrowedCallResult -1 }
         | _ -> None
     ScalarUses = fun value ->
         value.Inputs |> Map.keys |> Seq.map bindingName |> Set.ofSeq
@@ -93,7 +95,7 @@ let private escape name releases : Step<TestLeaf, string> list =
     let operand = { reference name with Expression = CheckedAST.Local (binding "escape") }
     Evaluate (HIR.ScalarBinding ({ Id = HIR.ValueId 103; Type = AST.TInt64 }, operand)) :: drops releases
 let private call target arguments result : Step<TestLeaf, string> list =
-    [Evaluate (HIR.Call { Target = target; Arguments = arguments; Result = result })]
+    [Evaluate (HIR.Call { Target = fid target; Arguments = arguments; Result = result })]
 let private duplicate value : Step<TestLeaf, string> list = [Dup value]
 let private dropOne value : Step<TestLeaf, string> list = [Drop value]
 let private check expected region () =
@@ -189,11 +191,11 @@ let tests = [
         (block [] [step [] ["a"] []; call "consumeTwice" [value "a"; value "aAlias"] unitValue])
     "Call ownership signatures reject unavailable consumed arguments", check (Error (InvalidUse "a"))
         (block [] [call "discard" [value "a"] unitValue])
-    "Call ownership signatures reject unknown targets", check (Error (UnknownCallOwnership "opaque"))
+    "Call ownership signatures reject unknown targets", check (Error (UnknownCallOwnership (fid "opaque")))
         (block [] [call "opaque" [value "a"] unitValue])
-    "Call ownership signatures reject borrowed results from consumed parameters", check (Error (InvalidBorrowedCallResult ("invalidBorrow", 0)))
+    "Call ownership signatures reject borrowed results from consumed parameters", check (Error (InvalidBorrowedCallResult (fid "invalidBorrow", 0)))
         (block [] [step [] ["a"] []; call "invalidBorrow" [value "a"] (value "a")])
-    "Call ownership signatures reject negative borrowed-result parameters", check (Error (InvalidBorrowedCallResult ("negativeBorrow", -1)))
+    "Call ownership signatures reject negative borrowed-result parameters", check (Error (InvalidBorrowedCallResult (fid "negativeBorrow", -1)))
         (block [] [step [] ["a"] []; call "negativeBorrow" [value "a"] (value "aAlias")])
     "Ownership contracts borrow before consuming multiple inputs", check (Ok ())
         (block [] [step [] ["a"; "b"] []; step [Borrowed "a"; Consumed "a"; Consumed "b"] ["c"] ["c"]])

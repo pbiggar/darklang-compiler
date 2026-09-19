@@ -13,7 +13,7 @@ type ExprKey =
     | BinExpr of BinOp * Operand * Operand * AST.Type
     | UnaryExpr of UnaryOp * Operand
     | ScalarHeapLoadExpr of VReg * int * AST.Type
-    | DirectCallExpr of funcName:string * args:Operand list * returnType:AST.Type
+    | DirectCallExpr of funcName:AST.FunctionId * args:Operand list * returnType:AST.Type
 
 type private ExprAvailability = {
     Arithmetic: Map<ExprKey, VReg>
@@ -281,7 +281,7 @@ let private applyPartialRedundancyElimination
 /// blocks and completing safe expressions at joins.
 let internal applyCSEWithEffectFreeCallsAndTopology
     (existingTopology: DominatorTopology option)
-    (effectFreeFunctions: Set<string>)
+    (effectFreeFunctions: Set<AST.FunctionId>)
     (cfg: CFG)
     : CFG * bool * DominatorTopology =
     let optimizeBlock
@@ -439,7 +439,7 @@ let internal applyCSEWithEffectFreeCallsAndTopology
     (preCfg, cseChanged || preChanged, dominatorTopology)
 
 let applyCSEWithEffectFreeCalls
-    (effectFreeFunctions: Set<string>)
+    (effectFreeFunctions: Set<AST.FunctionId>)
     (cfg: CFG)
     : CFG * bool =
     let (optimized, changed, _) =

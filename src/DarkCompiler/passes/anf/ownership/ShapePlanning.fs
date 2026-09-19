@@ -115,6 +115,7 @@ let internal shapeNeedsManagedAliasRootPreservation (ctx: TypeContext) (typ: AST
     typ |> rcShapeForType ctx |> rcShapeNeedsManagedAliasRootPreservation
 
 let internal bindingNeedsShapeAutomaticDec
+    (ctx: TypeContext)
     (cexpr: CExpr)
     (typ: AST.Type)
     (shape: RcShape)
@@ -122,7 +123,10 @@ let internal bindingNeedsShapeAutomaticDec
     rcShapeNeedsAutomaticBindingDec shape
     || match typ, cexpr with
        | AST.TFunction _, ClosureAlloc _ -> true
-       | AST.TFunction _, Call (funcName, _) when not (funcName.StartsWith("Darklang.Stdlib.")) -> true
+       | AST.TFunction _, Call (funcName, _) ->
+           match Map.tryFind funcName ctx.FuncReg with
+           | Some (name, _) -> not (name.StartsWith("Darklang.Stdlib."))
+           | None -> true
        | AST.TFunction _, ClosureCall _ -> true
        | _ -> false
 

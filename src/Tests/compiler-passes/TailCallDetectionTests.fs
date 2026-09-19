@@ -14,7 +14,7 @@ open TailCallDetection
 
 type TestResult = Result<unit, string>
 
-let private isTailCallWithUnreachableCleanup (funcName: string) (cexpr: CExpr) : bool =
+let private isTailCallWithUnreachableCleanup (funcName: AST.FunctionId) (cexpr: CExpr) : bool =
     match cexpr with
     | TailCall (target, _) when target <> funcName -> true
     | IndirectTailCall _ -> true
@@ -28,7 +28,7 @@ let private isCleanupDec (cexpr: CExpr) : bool =
     | RefCountDecBlob _ -> true
     | _ -> false
 
-let rec private hasDecAfterNonSelfTailCall (funcName: string) (expr: AExpr) : bool =
+let rec private hasDecAfterNonSelfTailCall (funcName: AST.FunctionId) (expr: AExpr) : bool =
     match expr with
     | Jump _ | Return _ ->
         false
@@ -55,6 +55,7 @@ let testNonSelfTailCallMovesDecBeforeTailCall () : TestResult =
           SourceType = Some tupleType }
 
     let caller : Function = {
+        Id = AST.functionIdForName "caller"
         Name = "caller"
         TypedParams = [{ Id = p0; Type = AST.TInt64 }]
         ReturnType = AST.TInt64
@@ -65,7 +66,7 @@ let testNonSelfTailCallMovesDecBeforeTailCall () : TestResult =
                 TupleAlloc [Var p0; IntLiteral (Int64 1L)],
                 Let (
                     callTmp,
-                    Call ("callee", [Var p0]),
+                    Call (AST.functionIdForName "callee", [Var p0]),
                     Let (decTmp, RefCountDec (Var tupleTmp, 16, GenericHeap, Some tupleMetadata), Return (Var callTmp))
                 )
             )
@@ -73,7 +74,7 @@ let testNonSelfTailCallMovesDecBeforeTailCall () : TestResult =
 
     let transformed = detectTailCallsInFunction caller
 
-    if hasDecAfterNonSelfTailCall transformed.Name transformed.Body then
+    if hasDecAfterNonSelfTailCall transformed.Id transformed.Body then
         Error "Found RefCountDec after non-self TailCall; cleanup should run before tailcall"
     else
         Ok ()
@@ -92,6 +93,7 @@ let testIndirectTailCallMovesDecBeforeTailCall () : TestResult =
           SourceType = Some tupleType }
 
     let caller : Function = {
+        Id = AST.functionIdForName "caller"
         Name = "caller"
         TypedParams = [{ Id = p0; Type = AST.TInt64 }]
         ReturnType = AST.TInt64
@@ -99,7 +101,7 @@ let testIndirectTailCallMovesDecBeforeTailCall () : TestResult =
         Body =
             Let (
                 funcTmp,
-                Atom (FuncRef "callee"),
+                Atom (FuncRef (AST.functionIdForName "callee")),
                 Let (
                     tupleTmp,
                     TupleAlloc [Var p0; IntLiteral (Int64 1L)],
@@ -114,7 +116,7 @@ let testIndirectTailCallMovesDecBeforeTailCall () : TestResult =
 
     let transformed = detectTailCallsInFunction caller
 
-    if hasDecAfterNonSelfTailCall transformed.Name transformed.Body then
+    if hasDecAfterNonSelfTailCall transformed.Id transformed.Body then
         Error "Found RefCountDec after IndirectTailCall; cleanup should run before tailcall"
     else
         Ok ()
@@ -134,6 +136,7 @@ let testOwnedTransferDeclinesMismatchedArity () : TestResult =
     let refCountDec atom = RefCountDec (atom, 16, GenericHeap, Some tupleMetadata)
 
     let caller : Function = {
+        Id = AST.functionIdForName "caller"
         Name = "caller"
         TypedParams = [{ Id = p0; Type = tupleType }]
         ReturnType = tupleType
@@ -147,7 +150,7 @@ let testOwnedTransferDeclinesMismatchedArity () : TestResult =
                     refCountDec (Var p0),
                     Let (
                         callTmp,
-                        Call ("caller", [Var p0; IntLiteral (Int64 1L); IntLiteral (Int64 2L)]),
+                        Call (AST.functionIdForName "caller", [Var p0; IntLiteral (Int64 1L); IntLiteral (Int64 2L)]),
                         Let (cleanupTmp, refCountDec (Var p0), Return (Var callTmp))
                     )
                 )
@@ -156,7 +159,7 @@ let testOwnedTransferDeclinesMismatchedArity () : TestResult =
 
     let transformed = detectTailCallsInFunction caller
     match transformed.Body with
-    | Let (_, _, Let (_, _, Let (_, Call ("caller", _), _))) -> Ok ()
+    | Let (_, _, Let (_, _, Let (_, Call (name, _), _))) when name = AST.functionIdForName "caller" -> Ok ()
     | _ -> Error "Mismatched-arity owned transfer should preserve the ordinary call cleanup path"
 
 let testRetainedProjectionAllowsSelfTailCall () : TestResult =
@@ -176,6 +179,7 @@ let testRetainedProjectionAllowsSelfTailCall () : TestResult =
           SourceType = Some typ }
 
     let func : Function = {
+        Id = AST.functionIdForName "loop"
         Name = "loop"
         TypedParams = [{ Id = current; Type = listType }]
         ReturnType = AST.TInt64
@@ -192,7 +196,7 @@ let testRetainedProjectionAllowsSelfTailCall () : TestResult =
                         RefCountInc (Var projected, 24, TaggedList, Some (metadata listType listPlan)),
                         Let (
                             callResult,
-                            Call ("loop", [Var projected]),
+                            Call (AST.functionIdForName "loop", [Var projected]),
                             Let (
                                 releaseSource,
                                 RefCountDec (Var source, 8, GenericHeap, Some (metadata tupleType tuplePlan)),
@@ -207,7 +211,8 @@ let testRetainedProjectionAllowsSelfTailCall () : TestResult =
     let transformed = detectTailCallsInFunction func
     let rec containsSelfTailCall expr =
         match expr with
-        | Let (_, TailCall ("loop", _), _) -> true
+        | Let (_, TailCall (id, _), _)
+            when id = AST.functionIdForName "loop" -> true
         | Let (_, _, body) -> containsSelfTailCall body
         | Join (_, continuation, entry)
         | If (_, continuation, entry) ->

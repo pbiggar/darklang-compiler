@@ -4,7 +4,7 @@ module VerifyOwnedHIR
 
 type HIRContracts<'leaf> = {
     Leaf: 'leaf -> HIR.PrimitiveContract
-    CallSignature: string -> HIR.FunctionSignature option
+    CallSignature: AST.FunctionId -> HIR.FunctionSignature option
     CallContract: HIR.FunctionCall -> HIR.PrimitiveContract option
 }
 

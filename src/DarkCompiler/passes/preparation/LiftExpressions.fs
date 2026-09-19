@@ -216,6 +216,7 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                 inferLambdaReturnType body stateForReturnType
                 |> Result.bind (fun returnType ->
                     let funcDef : CheckedAST.FunctionDef = {
+                        Id = AST.functionIdForName funcName
                         Name = funcName
                         TypeParams = []
                         Params = paramsFromList "lifted lambda" (closureParam :: loweredParameters)
@@ -240,6 +241,7 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                             else
                                 (None, symbols))
                         |> Option.defaultValue (None, symbols)
+                    let (_, symbols) = CheckedAST.internFunction funcName symbols
                     let state' = {
                         Symbols = symbols
                         Counter = stateWithComparison.Counter
@@ -259,9 +261,9 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                     }
                     let closureCaptures =
                         match comparisonInfo with
-                        | Some (comparisonName, _, _) -> CheckedAST.FuncRef comparisonName :: plan.CaptureExprs
+                        | Some (comparisonName, _, _) -> CheckedAST.FuncRef (AST.functionIdForName comparisonName) :: plan.CaptureExprs
                         | None -> plan.CaptureExprs
-                    Ok (CheckedAST.Closure (funcName, closureCaptures), state'))))
+                    Ok (CheckedAST.Closure (AST.functionIdForName funcName, closureCaptures), state'))))
     | CheckedAST.Apply (func, args) ->
         liftLambdasInExpr func state
         |> Result.bind (fun (func', state1) ->
@@ -358,6 +360,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                         inferLambdaReturnType body stateForReturnType
                         |> Result.bind (fun returnType ->
                             let funcDef : CheckedAST.FunctionDef = {
+                                Id = AST.functionIdForName funcName
                                 Name = funcName
                                 TypeParams = []
                                 Params = paramsFromList "lifted argument lambda" (closureParam :: loweredParameters)
@@ -380,6 +383,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                                     else
                                         (None, symbols))
                                 |> Option.defaultValue (None, symbols)
+                            let (_, symbols) = CheckedAST.internFunction funcName symbols
                             let state' = {
                                 Symbols = symbols
                                 Counter = stateWithComparison.Counter
@@ -399,9 +403,9 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                             }
                             let closureCaptures =
                                 match comparisonInfo with
-                                | Some (comparisonName, _, _) -> CheckedAST.FuncRef comparisonName :: plan.CaptureExprs
+                                | Some (comparisonName, _, _) -> CheckedAST.FuncRef (AST.functionIdForName comparisonName) :: plan.CaptureExprs
                                 | None -> plan.CaptureExprs
-                            loop rest state' (CheckedAST.Closure (funcName, closureCaptures) :: acc))))
+                            loop rest state' (CheckedAST.Closure (AST.functionIdForName funcName, closureCaptures) :: acc))))
 
             | CheckedAST.FuncRef origFuncName ->
                 // Named function used as value - wrap in a closure for uniform calling convention
@@ -427,6 +431,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                     let wrapperArgs = wrapperParams |> List.map (fun (id, _) -> CheckedAST.Local id)
                     let wrapperBody = CheckedAST.Call (origFuncName, exprArgsFromList wrapperArgs)
                     let wrapperDef : CheckedAST.FunctionDef = {
+                        Id = AST.functionIdForName wrapperName
                         Name = wrapperName
                         TypeParams = []
                         Params = paramsFromList "liftLambdasInArgs:wrapperDef" (closureParam :: wrapperParams)
@@ -436,6 +441,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                     }
                     let comparisonDef, symbols =
                         makeClosureComparator comparisonName [] false state.VariantLookup symbols
+                    let (_, symbols) = CheckedAST.internFunction wrapperName symbols
                     let state' = {
                         Symbols = symbols
                         Counter = stateWithComparisonName.Counter
@@ -456,8 +462,8 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                     }
                     let closure =
                         CheckedAST.Closure (
-                            wrapperName,
-                            [CheckedAST.FuncRef comparisonName]
+                            AST.functionIdForName wrapperName,
+                            [CheckedAST.FuncRef (AST.functionIdForName comparisonName)]
                         )
                     loop rest state' (closure :: acc)
                 | None, _ ->

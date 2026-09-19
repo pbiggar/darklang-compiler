@@ -7,6 +7,8 @@ open RcTypeFacts
 open RcCleanup
 open MemoryShapeTests
 
+let private fid = AST.functionIdForName
+
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {
         TypeReg = Map.empty
@@ -14,7 +16,7 @@ let testInferCallReturnsFunctionReturnType () : TestResult =
         SumShapeReg = Map.empty
         FuncReg =
             Map.ofList [
-                ("mkPair", AST.TFunction ([AST.TInt64], AST.TTuple [AST.TInt64; AST.TInt64]))
+                (fid "mkPair", ("mkPair", AST.TFunction ([AST.TInt64], AST.TTuple [AST.TInt64; AST.TInt64])))
             ]
         FuncParams = Map.empty
         TempTypes = Map.empty
@@ -22,7 +24,7 @@ let testInferCallReturnsFunctionReturnType () : TestResult =
         TypePlanning = createRcTypePlanningContext ()
     }
 
-    let cexpr = Call ("mkPair", [IntLiteral (Int64 1L)])
+    let cexpr = Call (fid "mkPair", [IntLiteral (Int64 1L)])
 
     match inferCExprType ctx cexpr with
     | Some (AST.TTuple [AST.TInt64; AST.TInt64]) ->
@@ -44,7 +46,7 @@ let testMalformedRawGetIntrinsicDoesNotInferInt64 () : TestResult =
         TypePlanning = createRcTypePlanningContext ()
     }
 
-    let cexpr = Call ("__raw_get_not_a_mangled_type", [Var (TempId 1); IntLiteral (Int64 0L)])
+    let cexpr = Call (fid "__raw_get_not_a_mangled_type", [Var (TempId 1); IntLiteral (Int64 0L)])
 
     match inferCExprType ctx cexpr with
     | None ->

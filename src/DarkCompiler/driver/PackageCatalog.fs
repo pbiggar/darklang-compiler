@@ -32,7 +32,7 @@ type internal UserCompilePlan = {
     Stdlib: StdlibResult
     BaseContext: PipelineContext
     Monomorphization: MonomorphizationMode
-    ExternalInlineCandidates: Map<string, ANF_Inlining.FunctionInfo>
+    ExternalInlineCandidates: Map<AST.FunctionId, ANF_Inlining.FunctionInfo>
     PrebuiltSymbolicFunctions: LIR.Function list
     SkipFunctionNames: Set<string>
     EmitFunctionEvents: bool
@@ -181,16 +181,16 @@ let private catalogFunction
     }
 
 let private collectProgramSpecs (program: CheckedAST.Program) : Set<SpecializationIdentity.SpecKey> =
-    let (CheckedAST.Program (_, topLevels)) = program
+    let (CheckedAST.Program (symbols, topLevels)) = program
     topLevels
     |> List.map (function
         | CheckedAST.FunctionDef func when List.isEmpty func.TypeParams ->
-            Monomorphization.collectTypeAppsFromFunc func
-        | CheckedAST.Expression expr -> Monomorphization.collectTypeApps expr
+            Monomorphization.collectTypeAppsFromFunc symbols func
+        | CheckedAST.Expression expr -> Monomorphization.collectTypeApps symbols expr
         | _ -> Set.empty)
     |> List.fold Set.union Set.empty
 
-let private collectProgramCalls (program: CheckedAST.Program) : Set<string> =
+let private collectProgramCalls (program: CheckedAST.Program) : Set<AST.FunctionId> =
     let (CheckedAST.Program (_, topLevels)) = program
     topLevels
     |> List.map (function
@@ -246,8 +246,8 @@ let private materializeReachablePackageValueCatalog
                 Monomorphization.collectCalledFunctions artifact.Function.Body)
             |> List.fold Set.union Set.empty
         let reachableCalls = Set.union (collectProgramCalls typedProgram) specializedCalls
-        let needsFind = Set.contains "Builtin.pmFindValuesByValueType" reachableCalls
-        let needsLocations = Set.contains "Builtin.pmGetLocationsByValue" reachableCalls
+        let needsFind = Set.contains (AST.functionIdForName "Builtin.pmFindValuesByValueType") reachableCalls
+        let needsLocations = Set.contains (AST.functionIdForName "Builtin.pmGetLocationsByValue") reachableCalls
         let needsEvaluators = not (Set.isEmpty requestedEvaluatorTypes)
 
         if not needsFind && not needsLocations && not needsEvaluators then

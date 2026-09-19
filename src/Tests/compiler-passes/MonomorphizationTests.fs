@@ -20,8 +20,10 @@ type TestResult = Result<unit, string>
 
 let testPreservesTypeVarsInSpecialization () : TestResult =
     let xId, symbols = CheckedAST.allocateBinding "x" (CheckedAST.emptySymbols ())
+    let _, symbols = CheckedAST.internFunction "id" symbols
     let funcDef : CheckedAST.FunctionDef =
-        { Name = "id"
+        { Id = AST.functionIdForName "id"
+          Name = "id"
           TypeParams = ["t"]
           Params = NonEmptyList.singleton (xId, TVar "t")
           ReturnType = TVar "t"
@@ -33,7 +35,7 @@ let testPreservesTypeVarsInSpecialization () : TestResult =
             symbols,
             [ CheckedAST.FunctionDef funcDef
               CheckedAST.Expression (
-                  CheckedAST.TypeApp ("id", [TVar "t"], NonEmptyList.singleton (CheckedAST.Int64Literal 1L))
+                  CheckedAST.TypeApp (AST.functionIdForName "id", [TVar "t"], NonEmptyList.singleton (CheckedAST.Int64Literal 1L))
               ) ]
         )
 
@@ -50,26 +52,30 @@ let testPreservesTypeVarsInSpecialization () : TestResult =
         Error "Expected monomorphized function id_t without defaulting to id_i64"
 
 let testReplaceTypeAppsWithRegistry () : TestResult =
-    let expr = TypeApp ("id", [TInt64], NonEmptyList.singleton (Int64Literal 1L))
+    let _, symbols = CheckedAST.internFunction "id" (CheckedAST.emptySymbols ())
+    let expr = TypeApp (AST.functionIdForName "id", [TInt64], NonEmptyList.singleton (Int64Literal 1L))
     let registry : SpecRegistry = Map.ofList [ (("id", [TInt64]), "id_i64") ]
-    match replaceTypeAppsWithRegistry registry expr with
+    match replaceTypeAppsWithRegistry symbols registry expr with
     | Ok (Call (name, args))
-        when name = "id_i64"
+        when name = AST.functionIdForName "id_i64"
              && NonEmptyList.toList args = [Int64Literal 1L] -> Ok ()
     | Ok result -> Error $"Unexpected replacement result: {result}"
     | Error msg -> Error $"Unexpected error: {msg}"
 
 let testReplaceTypeAppsWithRegistryMissingSpec () : TestResult =
-    let expr = TypeApp ("id", [TInt64], NonEmptyList.singleton (Int64Literal 1L))
+    let _, symbols = CheckedAST.internFunction "id" (CheckedAST.emptySymbols ())
+    let expr = TypeApp (AST.functionIdForName "id", [TInt64], NonEmptyList.singleton (Int64Literal 1L))
     let registry : SpecRegistry = Map.empty
-    match replaceTypeAppsWithRegistry registry expr with
+    match replaceTypeAppsWithRegistry symbols registry expr with
     | Ok _ -> Error "Expected missing specialization error"
     | Error _ -> Ok ()
 
 let testSpecializeFromSpecs () : TestResult =
     let xId, symbols = CheckedAST.allocateBinding "x" (CheckedAST.emptySymbols ())
+    let _, symbols = CheckedAST.internFunction "id" symbols
     let funcDef : CheckedAST.FunctionDef =
-        { Name = "id"
+        { Id = AST.functionIdForName "id"
+          Name = "id"
           TypeParams = ["t"]
           Params = NonEmptyList.singleton (xId, TVar "t")
           ReturnType = TVar "t"

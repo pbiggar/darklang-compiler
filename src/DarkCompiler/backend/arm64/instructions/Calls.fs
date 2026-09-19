@@ -7,12 +7,12 @@ open ARM64HeapAllocation
 open ARM64Operands
 open ARM64Frames
 
-let internal emitCall (ctx: CodeGenContext) (dest: LIR.Reg) (funcName: string) (args: LIR.Operand list) : Result<ARM64Symbolic.Instr list, string> =
+let internal emitCall (ctx: CodeGenContext) (dest: LIR.Reg) (funcId: AST.FunctionId) (args: LIR.Operand list) : Result<ARM64Symbolic.Instr list, string> =
     // Function call: arguments already moved to X0-X7 by preceding MOVs
     // Caller-save is handled by SaveRegs/RestoreRegs instructions
-    Ok [ARM64Symbolic.BL funcName]
+    Ok [ARM64Symbolic.BL (functionName ctx funcId)]
 
-let internal emitTailCall (ctx: CodeGenContext) (funcName: string) (args: LIR.Operand list) : Result<ARM64Symbolic.Instr list, string> =
+let internal emitTailCall (ctx: CodeGenContext) (funcId: AST.FunctionId) (args: LIR.Operand list) : Result<ARM64Symbolic.Instr list, string> =
     // Tail call: restore stack frame, then branch (no link)
     // This is the same as the epilogue but with B instead of RET
     let calleeSavedSpace = calleeSavedStackSpace ctx.UsedCalleeSaved
@@ -25,7 +25,7 @@ let internal emitTailCall (ctx: CodeGenContext) (funcName: string) (args: LIR.Op
         else
             []
     let restoreFpLr = [ARM64Symbolic.LDP_post (ARM64Symbolic.X29, ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)]
-    let branch = [ARM64Symbolic.B_label funcName]
+    let branch = [ARM64Symbolic.B_label (functionName ctx funcId)]
     Ok (restoreCalleeSavedInstrs @ deallocStack @ restoreFpLr @ branch)
 
 let internal emitIndirectCall (ctx: CodeGenContext) (dest: LIR.Reg) (func: LIR.Reg) (args: LIR.Operand list) : Result<ARM64Symbolic.Instr list, string> =
@@ -224,8 +224,8 @@ let internal emitRestoreRegs (ctx: CodeGenContext) (intRegs: LIR.PhysReg list) (
 
         Ok (intRestores @ floatRestores @ deallocStack)
 
-let internal emitLoadFuncAddr (ctx: CodeGenContext) (dest: LIR.Reg) (funcName: string) : Result<ARM64Symbolic.Instr list, string> =
+let internal emitLoadFuncAddr (ctx: CodeGenContext) (dest: LIR.Reg) (funcId: AST.FunctionId) : Result<ARM64Symbolic.Instr list, string> =
     // Load the address of a function into the destination register using ADR
     lirRegToARM64Reg dest
     |> Result.map (fun destReg ->
-        [ARM64Symbolic.ADR (destReg, codeLabel funcName)])
+        [ARM64Symbolic.ADR (destReg, codeLabel (functionName ctx funcId))])

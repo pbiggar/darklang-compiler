@@ -386,7 +386,7 @@ let buildStdlibSpecializations
                         | _ -> None)
                 let helperSpecs =
                     initiallyMaterializedFunctions
-                    |> List.map Monomorphization.collectTypeAppsFromFunc
+                    |> List.map (Monomorphization.collectTypeAppsFromFunc symbols)
                     |> List.fold Set.union Set.empty
                     |> Set.filter (fun (funcName, _) ->
                         Map.containsKey funcName stdlib.Context.GenericFuncDefs)

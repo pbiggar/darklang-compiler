@@ -83,9 +83,9 @@ let private patternLocal name bindings =
     | None -> Crash.crash $"Generated JSON pattern binding was not allocated: {name}"
 
 let private args values = NonEmptyList.fromList values
-let private call name values = Call (name, args values)
+let private call name values = Call (AST.functionIdForName name, args values)
 let private listPush elementType list value =
-    TypeApp ("Darklang.Stdlib.List.push", [elementType], args [list; value])
+    TypeApp (AST.functionIdForName "Darklang.Stdlib.List.push", [elementType], args [list; value])
 
 let private stableHash (value: string) : uint64 =
     value
@@ -401,6 +401,7 @@ let rec private ensureSerializer (env: Env) typ state : Result<string * State, s
             | Some id -> id
             | None -> Crash.crash "JSON serializer value binding was not allocated"
         let placeholder = {
+            Id = AST.functionIdForName name
             Name = name
             TypeParams = []
             Params = args [(writerId, writerType); (valueId, typ)]
@@ -441,6 +442,7 @@ and private ensureListSerializer env elemType state =
             | Some id -> id
             | None -> Crash.crash $"JSON list serializer binding was not allocated: {name}"
         let placeholder = {
+            Id = AST.functionIdForName name
             Name = name
             TypeParams = []
             Params =
@@ -483,6 +485,7 @@ and private ensureDictSerializer env valueType state =
             | Some id -> id
             | None -> Crash.crash $"JSON dictionary serializer binding was not allocated: {name}"
         let placeholder = {
+            Id = AST.functionIdForName name
             Name = name
             TypeParams = []
             Params =
@@ -552,7 +555,11 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
         |> Result.map (fun (name, nextState) ->
             let (entriesId, nextState) = freshBinding "__entries" nextState
             let entries =
-                TypeApp ("Darklang.Stdlib.Dict.toList", [TString; valueType], NonEmptyList.singleton value)
+                TypeApp (
+                    AST.functionIdForName "Darklang.Stdlib.Dict.toList",
+                    [TString; valueType],
+                    NonEmptyList.singleton value
+                )
             let encoded = call name [Local entriesId; writerBeginObject writer; BoolLiteral true]
             (Let (LPVariable entriesId, entries, writerEndObject encoded),
              nextState))
@@ -665,6 +672,7 @@ let rec private ensureDecoder (env: Env) typ state : Result<string * State, stri
             | Some id -> id
             | None -> Crash.crash $"JSON decoder binding was not allocated: {name}"
         let placeholder = {
+            Id = AST.functionIdForName name
             Name = name
             TypeParams = []
             Params =
@@ -723,6 +731,7 @@ and private ensureListDecoder env elemType state =
             | Some id -> id
             | None -> Crash.crash $"JSON list decoder binding was not allocated: {name}"
         let placeholder = {
+            Id = AST.functionIdForName name
             Name = name
             TypeParams = []
             Params =
@@ -812,6 +821,7 @@ and private ensureDictDecoder env valueType state =
             | Some id -> id
             | None -> Crash.crash $"JSON dictionary decoder binding was not allocated: {name}"
         let placeholder = {
+            Id = AST.functionIdForName name
             Name = name
             TypeParams = []
             Params =
@@ -836,7 +846,7 @@ and private ensureDictDecoder env valueType state =
         |> Result.map (fun (decoded, nextState) ->
             let withValue =
                 TypeApp (
-                    "Darklang.Stdlib.Dict.setOverridingDuplicates",
+                    AST.functionIdForName "Darklang.Stdlib.Dict.setOverridingDuplicates",
                     [TString; valueType],
                     args [local "__dict" bindings; key; local "__decoded_value" bindings])
             let body =
@@ -1070,7 +1080,7 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
                         let (fieldErrorId, current) = freshBinding "__field_error" current
                         let matches =
                             TypeApp (
-                                "Darklang.Stdlib.Dict.get",
+                                AST.functionIdForName "Darklang.Stdlib.Dict.get",
                                 [TString; valueViewType],
                                 args [Local objectMapId; StringLiteral fieldName])
                         let fieldPath =
@@ -1332,8 +1342,10 @@ let rewriteProgramWithSession
             let rec walk current collected =
                 let collected =
                     match current with
-                    | TypeApp ("Darklang.Stdlib.Json.serialize", [typ], _) -> (typ :: fst collected, snd collected)
-                    | TypeApp ("Darklang.Stdlib.Json.parse", [typ], _) -> (fst collected, typ :: snd collected)
+                    | TypeApp (id, [typ], _) when id = AST.functionIdForName "Darklang.Stdlib.Json.serialize" ->
+                        (typ :: fst collected, snd collected)
+                    | TypeApp (id, [typ], _) when id = AST.functionIdForName "Darklang.Stdlib.Json.parse" ->
+                        (fst collected, typ :: snd collected)
                     | _ -> collected
                 let capture child = walk child
                 match current with
@@ -1367,6 +1379,54 @@ let rewriteProgramWithSession
         |> fun (serializers, parsers) -> (List.distinct serializers, List.distinct parsers)
 
     let hasJsonCalls = not (List.isEmpty serializerTypes && List.isEmpty parserTypes)
+    let symbols =
+        if hasJsonCalls then
+            [ "Darklang.Stdlib.DateTime.toString"
+              "Darklang.Stdlib.Int.fromInt64"
+              "Darklang.Stdlib.Int.toString"
+              "Darklang.Stdlib.Int128.toString"
+              "Darklang.Stdlib.Int16.toString"
+              "Darklang.Stdlib.Int32.toString"
+              "Darklang.Stdlib.Int64.toString"
+              "Darklang.Stdlib.Int8.toString"
+              "Darklang.Stdlib.Json.ParseError.__copyPath"
+              "Darklang.Stdlib.Json.__arrayAfter"
+              "Darklang.Stdlib.Json.__arrayItems"
+              "Darklang.Stdlib.Json.__arrayNext"
+              "Darklang.Stdlib.Json.__arrayStart"
+              "Darklang.Stdlib.Json.__copyRaw"
+              "Darklang.Stdlib.Json.__enumCandidate"
+              "Darklang.Stdlib.Json.__isNull"
+              "Darklang.Stdlib.Json.__objectFieldMap"
+              "Darklang.Stdlib.Json.__objectFields"
+              "Darklang.Stdlib.Json.__parseRoot"
+              "Darklang.Stdlib.Json.__serializeFloat"
+              "Darklang.Stdlib.Json.__viewFieldName"
+              "Darklang.Stdlib.Json.__viewFieldValue"
+              "Darklang.Stdlib.Json.__viewIsDuplicate"
+              "Darklang.Stdlib.Json.__writerBeginArray"
+              "Darklang.Stdlib.Json.__writerBeginObject"
+              "Darklang.Stdlib.Json.__writerEmpty"
+              "Darklang.Stdlib.Json.__writerEndArray"
+              "Darklang.Stdlib.Json.__writerEndObject"
+              "Darklang.Stdlib.Json.__writerFieldName"
+              "Darklang.Stdlib.Json.__writerFinish"
+              "Darklang.Stdlib.Json.__writerSeparator"
+              "Darklang.Stdlib.Json.__writerWriteRaw"
+              "Darklang.Stdlib.Json.__writerWriteString"
+              "Darklang.Stdlib.List.push"
+              "Darklang.Stdlib.Dict.toList"
+              "Darklang.Stdlib.Dict.setOverridingDuplicates"
+              "Darklang.Stdlib.Dict.get"
+              "Darklang.Stdlib.UInt128.toString"
+              "Darklang.Stdlib.UInt16.toString"
+              "Darklang.Stdlib.UInt32.toString"
+              "Darklang.Stdlib.UInt64.toString"
+              "Darklang.Stdlib.UInt8.toString"
+              "Darklang.Stdlib.Uuid.toString" ]
+            |> List.fold (fun current name -> CheckedAST.internFunction name current |> snd) symbols
+        else
+            symbols
     let planningSymbols =
         env.IndexedTypeReg
         |> Map.fold (fun current typeName recordInfo ->
@@ -1449,8 +1509,10 @@ let rewriteProgramWithSession
         | Error error ->
             let rewrite currentSymbols expr =
                 match expr with
-                | TypeApp ("Darklang.Stdlib.Json.serialize", _, _)
-                | TypeApp ("Darklang.Stdlib.Json.parse", _, _) -> (RuntimeError error, currentSymbols)
+                | TypeApp (id, _, _)
+                    when id = AST.functionIdForName "Darklang.Stdlib.Json.serialize"
+                         || id = AST.functionIdForName "Darklang.Stdlib.Json.parse" ->
+                    (RuntimeError error, currentSymbols)
                 | _ -> (expr, currentSymbols)
             let (rewritten, symbols') =
                 topLevels
@@ -1467,13 +1529,13 @@ let rewriteProgramWithSession
         | Ok state ->
             let rewrite currentSymbols expr =
                 match expr with
-                | TypeApp ("Darklang.Stdlib.Json.serialize", [typ], values) ->
+                | TypeApp (id, [typ], values) when id = AST.functionIdForName "Darklang.Stdlib.Json.serialize" ->
                     let written =
                         call
                             (serializeName (resolveJsonType planningEnv typ))
                             (writerEmpty :: NonEmptyList.toList values)
                     (writerFinish written, currentSymbols)
-                | TypeApp ("Darklang.Stdlib.Json.parse", [typ], values) ->
+                | TypeApp (id, [typ], values) when id = AST.functionIdForName "Darklang.Stdlib.Json.parse" ->
                     let concrete = resolveJsonType planningEnv typ
                     let source = NonEmptyList.head values
                     let (sourceId, symbols1) = allocateBinding "__json_source" currentSymbols

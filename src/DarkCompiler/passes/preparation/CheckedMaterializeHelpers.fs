@@ -55,17 +55,24 @@ let rec private collectHelperTypes
             |> Set.ofList
         let equalityTypes =
             match name, typeArgs, arguments with
-            | "__dark_internal_eq_helper_dispatch", [targetType], [_; _] ->
+            | id, [targetType], [_; _]
+                when id = AST.functionIdForName "__dark_internal_eq_helper_dispatch" ->
                 Set.singleton (resolveType aliasReg targetType)
             | _ -> concreteTypeArgs
         let compareTypes =
             match name, typeArgs with
-            | "__compare", [targetType]
-            | ("Darklang.Stdlib.List.sort" | "Darklang.Stdlib.List.unique"), [targetType]
-            | "Darklang.Stdlib.List.uniqueBy", [targetType; _] ->
+            | id, [targetType]
+                when id = AST.functionIdForName "__compare"
+                     || id = AST.functionIdForName "Darklang.Stdlib.List.sort"
+                     || id = AST.functionIdForName "Darklang.Stdlib.List.unique" ->
                 let resolved = resolveType aliasReg targetType
                 if containsTVar resolved then Set.empty else Set.singleton resolved
-            | "Darklang.Stdlib.List.sortBy", [valueType; keyType] ->
+            | id, [targetType; _]
+                when id = AST.functionIdForName "Darklang.Stdlib.List.uniqueBy" ->
+                let resolved = resolveType aliasReg targetType
+                if containsTVar resolved then Set.empty else Set.singleton resolved
+            | id, [valueType; keyType]
+                when id = AST.functionIdForName "Darklang.Stdlib.List.sortBy" ->
                 let pairType =
                     AST.TTuple [resolveType aliasReg keyType; resolveType aliasReg valueType]
                 if containsTVar pairType then Set.empty else Set.singleton pairType
@@ -123,22 +130,24 @@ let rec private rewriteHelperCalls
     | CheckedAST.Sequence (first, next) -> CheckedAST.Sequence (recurse first, recurse next)
     | CheckedAST.Call (name, args) -> CheckedAST.Call (name, recurseArgs args)
     | CheckedAST.TypeApp
-        ("__dark_internal_eq_helper_dispatch", [targetType], { Head = left; Tail = [right] }) ->
+        (id, [targetType], { Head = left; Tail = [right] })
+        when id = AST.functionIdForName "__dark_internal_eq_helper_dispatch" ->
         let helperType = resolveType aliasReg targetType
         if needsEqHelperForResolvedType variantLookup helperType then
             CheckedAST.Call (
-                eqHelperName helperType,
+                AST.functionIdForName (eqHelperName helperType),
                 AST.NonEmptyList.fromList [recurse left; recurse right]
             )
         else
             CheckedAST.TypeApp (
-                "__dark_internal_eq_helper_dispatch",
+                id,
                 [targetType],
                 AST.NonEmptyList.fromList [recurse left; recurse right]
             )
-    | CheckedAST.TypeApp ("__compare", [targetType], args) when not (containsTVar targetType) ->
+    | CheckedAST.TypeApp (id, [targetType], args)
+        when id = AST.functionIdForName "__compare" && not (containsTVar targetType) ->
         let helperType = resolveType aliasReg targetType
-        CheckedAST.Call (compareHelperName helperType, recurseArgs args)
+        CheckedAST.Call (AST.functionIdForName (compareHelperName helperType), recurseArgs args)
     | CheckedAST.TypeApp (name, typeArgs, args) ->
         CheckedAST.TypeApp (name, typeArgs, recurseArgs args)
     | CheckedAST.TupleLiteral elements -> CheckedAST.TupleLiteral (List.map recurse elements)

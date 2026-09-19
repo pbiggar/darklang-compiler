@@ -48,6 +48,7 @@ let testBranchFalseEdgeFallsThrough () : TestResult =
     let falseBlock = LIR.Label "arm64_layout_false"
     let block label instrs terminator : LIR.BasicBlock = { Label = label; Instrs = instrs; Terminator = terminator }
     let func : LIR.Function = {
+        Id = AST.functionIdForName "arm64_layout"
         Name = "arm64_layout"
         TypedParams = []
         CFG = {
@@ -65,7 +66,7 @@ let testBranchFalseEdgeFallsThrough () : TestResult =
     let ctx : ARM64CodeGenTypes.CodeGenContext = {
         Target = target; Options = ARM64CodeGenTypes.defaultOptions; SumShapeRegistry = Map.empty; RecordRegistry = Map.empty
         RawSlotInitRetainTargets = None
-        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty
+        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; FunctionNames = Map.empty
         FunctionName = func.Name; InstructionSite = ""; StackSize = 0; UsedCalleeSaved = []
         HeapOverflowLabel = "__heap_oom_arm64_layout"
         RecordLirOpExpansion = None
@@ -95,6 +96,7 @@ let testSharedReturnTransferCost () : TestResult =
     let join = LIR.Label "common_return_join"
     let block label instrs terminator : LIR.BasicBlock = { Label = label; Instrs = instrs; Terminator = terminator }
     let func : LIR.Function = {
+        Id = AST.functionIdForName "common_return"
         Name = "common_return"
         TypedParams = []
         CFG = {
@@ -113,7 +115,7 @@ let testSharedReturnTransferCost () : TestResult =
     let ctx : ARM64CodeGenTypes.CodeGenContext = {
         Target = target; Options = ARM64CodeGenTypes.defaultOptions; SumShapeRegistry = Map.empty; RecordRegistry = Map.empty
         RawSlotInitRetainTargets = None
-        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty
+        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; FunctionNames = Map.empty
         FunctionName = func.Name; InstructionSite = ""; StackSize = 0; UsedCalleeSaved = []
         HeapOverflowLabel = "__heap_oom_common_return"
         RecordLirOpExpansion = None
@@ -130,7 +132,7 @@ let testDynamicBufferRcInstructionCost () : TestResult =
     let ctx : ARM64CodeGenTypes.CodeGenContext = {
         Target = target; Options = ARM64CodeGenTypes.defaultOptions; SumShapeRegistry = Map.empty; RecordRegistry = Map.empty
         RawSlotInitRetainTargets = None
-        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty
+        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; FunctionNames = Map.empty
         FunctionName = "buffer_rc_cost"; InstructionSite = ""; StackSize = 0; UsedCalleeSaved = []
         HeapOverflowLabel = "__heap_oom_buffer_rc_cost"
         RecordLirOpExpansion = None
@@ -181,6 +183,7 @@ let internal makeEmptyFunction
     : LIR.Function =
     let label = LIR.Label $"{name}_entry"
     {
+        Id = AST.functionIdForName name
         Name = name
         TypedParams = typedParams
         CFG = {
@@ -207,6 +210,7 @@ let private makeAllocatedEntryFunction
     : LIR.Function =
     let label = LIR.Label $"{name}_entry"
     {
+        Id = AST.functionIdForName name
         Name = name
         TypedParams = typedParams
         CFG = {
@@ -236,6 +240,7 @@ let private generatedEntryTransfers
         RawSlotInitRetainTargets = None
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty
+        FunctionNames = Map.empty
         FunctionName = func.Name
         InstructionSite = ""
         StackSize = func.StackSize
@@ -349,6 +354,7 @@ let testReportsMissingEntryBlock () : TestResult =
         Terminator = LIR.Ret
     }
     let func : LIR.Function = {
+        Id = AST.functionIdForName "_start"
         Name = "_start"
         TypedParams = []
         CFG = {

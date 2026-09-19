@@ -20,10 +20,10 @@ open CompilationContexts
 /// Extract return types from a FuncReg (FunctionRegistry maps func name -> full type)
 /// This is needed because buildReturnTypeReg only includes functions in the current program,
 /// but we need return types for all callable functions (including stdlib)
-let internal extractReturnTypes (funcReg: Map<string, AST.Type>) : Map<string, AST.Type> =
+let internal extractReturnTypes (funcReg: TypeRegistries.FunctionRegistry) : Map<string, AST.Type> =
     funcReg
     |> Map.toSeq
-    |> Seq.choose (fun (name, typ) ->
+    |> Seq.choose (fun (_, (name, typ)) ->
         match typ with
         | AST.TFunction (_, retType) -> Some (name, retType)
         | other -> Crash.crash $"extractReturnTypes: Non-function type '{other}' found in FuncReg for '{name}'")
@@ -39,6 +39,7 @@ let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Re
         SumTypeNames = Set.empty
         RcSumShapeReg = Map.empty
         FuncReg = Map.empty
+        FunctionNames = Map.empty
         FuncParams = Map.empty
         ModuleRegistry = moduleRegistry
         RecursiveMembers = Map.empty
@@ -76,13 +77,13 @@ let private collectLocalSpecs
     (genericDefs: SpecializationIdentity.GenericFuncDefs)
     (program: CheckedAST.Program)
     : Set<SpecializationIdentity.SpecKey> =
-    let (CheckedAST.Program (_, topLevels)) = program
+    let (CheckedAST.Program (symbols, topLevels)) = program
     let allSpecs =
         topLevels
         |> List.map (function
-            | CheckedAST.FunctionDef f when List.isEmpty f.TypeParams -> Monomorphization.collectTypeAppsFromFunc f
-            | CheckedAST.ValueDef valueDef -> Monomorphization.collectTypeApps (CheckedAST.valueDefBody valueDef)
-            | CheckedAST.Expression e -> Monomorphization.collectTypeApps e
+            | CheckedAST.FunctionDef f when List.isEmpty f.TypeParams -> Monomorphization.collectTypeAppsFromFunc symbols f
+            | CheckedAST.ValueDef valueDef -> Monomorphization.collectTypeApps symbols (CheckedAST.valueDefBody valueDef)
+            | CheckedAST.Expression e -> Monomorphization.collectTypeApps symbols e
             | _ -> Set.empty)
         |> List.fold Set.union Set.empty
     allSpecs
@@ -542,7 +543,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                 let programWithSpecializations =
                     CheckedAST.Program (symbols, (newFunctions |> List.map CheckedAST.FunctionDef) @ items)
                 let specializedFunctionNames =
-                    newFunctions |> List.map (fun fn -> fn.Name) |> Set.ofList
+                    newFunctions |> List.map (fun fn -> fn.Id) |> Set.ofList
                 (programWithSpecializations, rebuildMode combinedRegistry, specializedFunctionNames)
             match monomorphization with
             | ReplaceTypeApps registry -> addMissing registry ReplaceTypeApps
@@ -615,6 +616,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                         LocalVariantLookup = localRegistries.VariantLookup
                         RcSumShapeReg = registries.RcSumShapeReg
                         FuncReg = registries.FuncReg
+                        FunctionNames = registries.FunctionNames
                         LocalReturnTypes = localReturnTypes
                         FuncParams = registries.FuncParams
                         ModuleRegistry = registries.ModuleRegistry

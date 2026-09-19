@@ -36,7 +36,7 @@ let private args (values: Expr list) : NonEmptyList<Expr> =
     NonEmptyList.fromList values
 
 let private call (name: string) (values: Expr list) : Expr =
-    Call (name, args values)
+    Call (AST.functionIdForName name, args values)
 
 let private concat (parts: Expr list) : Expr =
     match parts with
@@ -134,6 +134,7 @@ let rec private ensureRenderer
         let (valueId, state) = freshBinding "__value" state
         // Reserve the name before descending so recursive sum types terminate.
         let placeholder = {
+            Id = AST.functionIdForName name
             Name = name
             TypeParams = []
             Params = NonEmptyList.singleton (valueId, typ)
@@ -182,6 +183,7 @@ and private ensureListItemsRenderer
         let (headId, state) = freshBinding "__head" state
         let (tailId, state) = freshBinding "__tail" state
         let placeholder = {
+            Id = AST.functionIdForName name
             Name = name
             TypeParams = []
             Params = NonEmptyList.singleton (itemsId, listType)
@@ -224,6 +226,7 @@ and private ensureDictItemsRenderer
         let (entryId, state) = freshBinding "__entry" state
         let (tailId, state) = freshBinding "__tail" state
         let placeholder = {
+            Id = AST.functionIdForName name
             Name = name
             TypeParams = []
             Params = NonEmptyList.singleton (entriesId, listType)
@@ -315,7 +318,12 @@ and private renderBody
     | TDict (keyType, valueType) ->
         let (itemsName, nextState) = ensureDictItemsRenderer env keyType valueType state
         let (entriesId, nextState) = freshBinding "__dict_entries" nextState
-        let entries = TypeApp ("Darklang.Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton value)
+        let entries =
+            TypeApp (
+                AST.functionIdForName "Darklang.Stdlib.Dict.toList",
+                [keyType; valueType],
+                NonEmptyList.singleton value
+            )
         let body =
             Let (
                 LPVariable entriesId,
@@ -463,6 +471,7 @@ let rewriteProgram
     (programType: Type)
     (Program (symbols, topLevels))
     : Program =
+    let (_, symbols) = CheckedAST.internFunction "Darklang.Stdlib.Dict.toList" symbols
     // Type checking already built and overlaid these immutable indexes. Keep
     // them lazy so primitive renderers do not inspect declaration metadata.
     let records = lazy recordMetadata
@@ -519,22 +528,30 @@ let rewriteProgram
         let rendered =
             match programType, expr, tryNamedPartialName expr with
             | TDateTime, _, _ ->
-                (BoundaryRender ("Darklang.Stdlib.DateTime.toString", expr), state)
-            | TFunction _, _, Some name ->
+                (BoundaryRender (AST.functionIdForName "Darklang.Stdlib.DateTime.toString", expr), state)
+            | TFunction _, _, Some functionId ->
                 let (id, next) = freshBinding "__rendered_named_partial" state
+                let name =
+                    functionName functionId state.Symbols
+                    |> Option.defaultWith (fun () -> Crash.crash "Named partial function identity is absent from symbols")
                 (Let (LPVariable id, expr, StringLiteral name), next)
             | TFunction _, NamedValue name, _ when Set.contains name namedFunctions.Value ->
                 let (id, next) = freshBinding "__rendered_named_function" state
                 (Let (LPVariable id, expr, StringLiteral name), next)
-            | TFunction _, FuncRef name, _ ->
+            | TFunction _, FuncRef functionId, _ ->
                 let (id, next) = freshBinding "__rendered_named_function" state
+                let name =
+                    functionName functionId state.Symbols
+                    |> Option.defaultWith (fun () -> Crash.crash "Function identity is absent from symbols")
                 (Let (LPVariable id, expr, StringLiteral name), next)
             | TFunction _, Lambda _, _ ->
                 let (id, next) = freshBinding "__rendered_lambda" state
                 (Let (LPVariable id, expr, StringLiteral "(lambda)"), next)
             | _ ->
                 (BoundaryRender (
-                    renderName |> Option.defaultWith (fun () -> Crash.crash "Missing boundary value renderer"),
+                    renderName
+                    |> Option.map AST.functionIdForName
+                    |> Option.defaultWith (fun () -> Crash.crash "Missing boundary value renderer"),
                     expr
                  ), state)
         let (expression, next) = rendered

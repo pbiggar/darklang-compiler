@@ -68,7 +68,8 @@ let optimizeProgramWithOptionsAndExternalFunctions
             { optimized with Body = devirtualizeCaptureFreeClosures optimized.Body })
 
     // Optimize main expression
-    let mainFunc = { Name = "__main__"
+    let mainFunc = { Id = AST.functionIdForName "__main__"
+                     Name = "__main__"
                      TypedParams = []
                      ReturnType = AST.TUnit
                      ReturnOwnership = OwnedReturn

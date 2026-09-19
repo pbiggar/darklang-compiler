@@ -85,8 +85,8 @@ and Expr =
     | NamedValue of string
     | If of cond:Expr * thenBranch:Expr * elseBranch:Expr
     | Sequence of first:Expr * next:Expr
-    | Call of funcName:string * args:AST.NonEmptyList<Expr>
-    | TypeApp of funcName:string * typeArgs:AST.Type list * args:AST.NonEmptyList<Expr>
+    | Call of functionId:AST.FunctionId * args:AST.NonEmptyList<Expr>
+    | TypeApp of functionId:AST.FunctionId * typeArgs:AST.Type list * args:AST.NonEmptyList<Expr>
     | TupleLiteral of Expr list
     | TupleAccess of tuple:Expr * index:int
     | DictLiteral of keyType:AST.Type * valueType:AST.Type * entries:(Expr * Expr) list
@@ -99,10 +99,10 @@ and Expr =
     | Lambda of parameters:AST.NonEmptyList<LambdaParameter> * returnAnnotation:AST.Type option * body:Expr
     | Apply of func:Expr * args:AST.NonEmptyList<Expr>
     | IndirectApply of func:Expr * args:AST.NonEmptyList<Expr>
-    | FuncRef of funcName:string
-    | Closure of funcName:string * captures:Expr list
+    | FuncRef of AST.FunctionId
+    | Closure of AST.FunctionId * captures:Expr list
     | RuntimeError of message:string
-    | BoundaryRender of renderer:string * value:Expr
+    | BoundaryRender of renderer:AST.FunctionId * value:Expr
 
 and MatchCase = {
     Patterns: AST.NonEmptyList<Pattern>
@@ -111,6 +111,7 @@ and MatchCase = {
 }
 
 type FunctionDef = {
+    Id: AST.FunctionId
     Name: string
     TypeParams: string list
     Params: AST.NonEmptyList<AST.BindingId * AST.Type>
@@ -197,8 +198,18 @@ let private intern
         (id, rebuild (Map.add key id ids) (Map.add id displayName names) (nextOrdinal + 1))
 
 let internFunction name symbols =
-    intern AST.functionId name name symbols.FunctionIds symbols.FunctionNames symbols.NextFunctionOrdinal
-        (fun ids names next -> { symbols with FunctionIds = ids; FunctionNames = names; NextFunctionOrdinal = next })
+    match Map.tryFind name symbols.FunctionIds with
+    | Some id -> (id, symbols)
+    | None ->
+        let id = AST.functionIdForName name
+        match Map.tryFind id symbols.FunctionNames with
+        | Some existing when existing <> name ->
+            Crash.crash $"Function identity collision: {existing}, {name}"
+        | _ ->
+            (id,
+             { symbols with
+                 FunctionIds = Map.add name id symbols.FunctionIds
+                 FunctionNames = Map.add id name symbols.FunctionNames })
 
 let internType name symbols =
     match Map.tryFind name symbols.TypeIds with
@@ -241,6 +252,8 @@ let internField typeName name index symbols =
         (id, symbols)
 
 let functionName id symbols = Map.tryFind id symbols.FunctionNames
+
+let functionNames symbols = symbols.FunctionNames
 let typeName id symbols = Map.tryFind id symbols.TypeNames
 let constructorInfo id symbols = Map.tryFind id symbols.ConstructorNames
 
@@ -276,6 +289,13 @@ let importTopLevels
             let (targetId, symbols) = allocateBinding name symbols
             ((sourceId, targetId), symbols)) targetSymbols
         |> fun (entries, symbols) -> (Map.ofList entries, symbols)
+    let (functionRemap, symbols) =
+        sourceSymbols.FunctionNames
+        |> Map.toList
+        |> List.mapFold (fun symbols (sourceId, name) ->
+            let (targetId, symbols) = internFunction name symbols
+            ((sourceId, targetId), symbols)) symbols
+        |> fun (entries, symbols) -> (Map.ofList entries, symbols)
     let (typeRemap, symbols) =
         sourceSymbols.TypeNames
         |> Map.toList
@@ -306,6 +326,10 @@ let importTopLevels
         match Map.tryFind id typeRemap with
         | Some mapped -> mapped
         | None -> Crash.crash "Imported checked type is absent from its source symbol table"
+    let mapFunctionId id =
+        match Map.tryFind id functionRemap with
+        | Some mapped -> mapped
+        | None -> Crash.crash "Imported checked function is absent from its source symbol table"
     let mapFieldId id =
         match Map.tryFind id fieldRemap with
         | Some mapped -> mapped
@@ -364,14 +388,14 @@ let importTopLevels
                       Guard = Option.map mapExpr case.Guard
                       Body = mapExpr case.Body })
             )
-        | BoundaryRender (renderer, value) -> BoundaryRender (renderer, mapExpr value)
+        | BoundaryRender (renderer, value) -> BoundaryRender (mapFunctionId renderer, mapExpr value)
         | BinOp (op, left, right) -> BinOp (op, mapExpr left, mapExpr right)
         | UnaryOp (op, value) -> UnaryOp (op, mapExpr value)
         | If (condition, thenBranch, elseBranch) ->
             If (mapExpr condition, mapExpr thenBranch, mapExpr elseBranch)
         | Sequence (first, next) -> Sequence (mapExpr first, mapExpr next)
-        | Call (name, args) -> Call (name, mapArgs args)
-        | TypeApp (name, types, args) -> TypeApp (name, types, mapArgs args)
+        | Call (id, args) -> Call (mapFunctionId id, mapArgs args)
+        | TypeApp (id, types, args) -> TypeApp (mapFunctionId id, types, mapArgs args)
         | TupleLiteral values -> TupleLiteral (List.map mapExpr values)
         | TupleAccess (tuple, index) -> TupleAccess (mapExpr tuple, index)
         | DictLiteral (keyType, valueType, entries) ->
@@ -393,7 +417,7 @@ let importTopLevels
         | ListLiteral values -> ListLiteral (List.map mapExpr values)
         | Apply (func, args) -> Apply (mapExpr func, mapArgs args)
         | IndirectApply (func, args) -> IndirectApply (mapExpr func, mapArgs args)
-        | Closure (name, captures) -> Closure (name, List.map mapExpr captures)
+        | Closure (id, captures) -> Closure (mapFunctionId id, List.map mapExpr captures)
         | InterpolatedString parts ->
             InterpolatedString (
                 parts
@@ -401,12 +425,14 @@ let importTopLevels
                     | StringText _ as text -> text
                     | StringExpr value -> StringExpr (mapExpr value))
             )
+        | FuncRef id -> FuncRef (mapFunctionId id)
         | UnitLiteral | Int64Literal _ | Int128Literal _ | Int8Literal _ | Int16Literal _
         | Int32Literal _ | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _
         | UInt128Literal _ | BigIntLiteral _ | BoolLiteral _ | StringLiteral _ | CharLiteral _
-        | FloatLiteral _ | NamedValue _ | FuncRef _ | RuntimeError _ -> expr
+        | FloatLiteral _ | NamedValue _ | RuntimeError _ -> expr
     let mapFunction functionDef =
         { functionDef with
+            Id = mapFunctionId functionDef.Id
             Params =
                 functionDef.Params
                 |> AST.NonEmptyList.map (fun (id, typ) -> mapId id, typ)
@@ -845,10 +871,14 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
         |> Result.map (fun (converted, state) ->
             match Map.tryFind name environment with
             | Some id -> (Apply (Local id, converted), state)
-            | None -> (Call (name, converted), state))
+            | None ->
+                let (functionId, state) = internFunction name state
+                (Call (functionId, converted), state))
     | AST.TypeApp (name, typeArgs, args) ->
         convertNonEmpty args symbols
-        |> Result.map (fun (converted, state) -> (TypeApp (name, typeArgs, converted), state))
+        |> Result.map (fun (converted, state) ->
+            let (functionId, state) = internFunction name state
+            (TypeApp (functionId, typeArgs, converted), state))
     | AST.TupleLiteral elements ->
         convertList elements symbols |> Result.map (fun (values, state) -> (TupleLiteral values, state))
     | AST.TupleAccess (tuple, index) ->
@@ -944,12 +974,20 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
         |> Result.bind (fun (func', afterFunc) ->
             convertNonEmpty args afterFunc
             |> Result.map (fun (args', following) -> (IndirectApply (func', args'), following)))
-    | AST.FuncRef name -> Ok (FuncRef name, symbols)
+    | AST.FuncRef name ->
+        let (functionId, symbols) = internFunction name symbols
+        Ok (FuncRef functionId, symbols)
     | AST.Closure (name, captures) ->
-        convertList captures symbols |> Result.map (fun (values, state) -> (Closure (name, values), state))
+        convertList captures symbols
+        |> Result.map (fun (values, state) ->
+            let (functionId, state) = internFunction name state
+            (Closure (functionId, values), state))
     | AST.RuntimeError message -> Ok (RuntimeError message, symbols)
     | AST.BoundaryRender (renderer, value) ->
-        convert symbols value |> Result.map (fun (converted, state) -> (BoundaryRender (renderer, converted), state))
+        convert symbols value
+        |> Result.map (fun (converted, state) ->
+            let (functionId, state) = internFunction renderer state
+            (BoundaryRender (functionId, converted), state))
 
 let private convertFunctionWithEnvironment
     (outerEnvironment: Map<string, AST.BindingId>)
@@ -963,6 +1001,7 @@ let private convertFunctionWithEnvironment
         | Some _ -> conversionError $"function '{funcDef.Name}'" "function has no typed recursion evidence"
     recursion
     |> Result.bind (fun recursion' ->
+        let (functionId, symbols) = internFunction funcDef.Name symbols
         let symbols =
             match recursion' with
             | Some typed -> registerBinding typed.Resolved.Parsed.Binding typed.Resolved.Parsed.SourceName symbols
@@ -978,7 +1017,8 @@ let private convertFunctionWithEnvironment
                 |> List.fold (fun environment (name, id) -> Map.add name id environment) outerEnvironment
             convertExpr $"function '{funcDef.Name}'" environment afterParameters funcDef.Body
             |> Result.map (fun (body, following) ->
-                ({ Name = funcDef.Name
+                ({ Id = functionId
+                   Name = funcDef.Name
                    TypeParams = funcDef.TypeParams
                    Params = AST.NonEmptyList.fromList parameters
                    ReturnType = funcDef.ReturnType

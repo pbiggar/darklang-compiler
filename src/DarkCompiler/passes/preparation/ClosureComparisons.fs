@@ -10,7 +10,7 @@ open SpecializationIdentity
 open ClosureAnalysis
 
 type internal LambdaComparisonPlan = {
-    Identity: string option
+    Identity: AST.FunctionId option
     CaptureNames: AST.BindingId list
     CaptureTypes: AST.Type list
     CaptureExprs: CheckedAST.Expr list
@@ -19,7 +19,7 @@ type internal LambdaComparisonPlan = {
 }
 
 let internal comparisonNameForIdentity
-    (identity: string option)
+    (identity: AST.FunctionId option)
     (captureTypes: AST.Type list)
     (state: LiftState)
     : string * bool * LiftState =
@@ -150,11 +150,17 @@ let private comparisonForCapturedValue
         | AST.TFunction _ | AST.TList _ | AST.TDict _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _ -> true
         | _ -> false
     if needsStructuralHelper then
-        CheckedAST.Call (ComparisonPlanning.eqHelperName typ, exprArgsFromList [left; right])
+        CheckedAST.Call (
+            AST.functionIdForName (ComparisonPlanning.eqHelperName typ),
+            exprArgsFromList [left; right]
+        )
     elif typ = AST.TString then
         CheckedAST.BinOp (AST.Eq, left, right)
     elif typ = AST.TInt then
-        CheckedAST.Call ("Darklang.Stdlib.Int.__equals", exprArgsFromList [left; right])
+        CheckedAST.Call (
+            AST.functionIdForName "Darklang.Stdlib.Int.__equals",
+            exprArgsFromList [left; right]
+        )
     else
         CheckedAST.BinOp (AST.Eq, left, right)
 
@@ -184,7 +190,9 @@ let internal makeClosureComparator
         match comparisons with
         | [] -> CheckedAST.BoolLiteral true
         | first :: rest -> rest |> List.fold (fun acc item -> CheckedAST.BinOp (AST.And, acc, item)) first
+    let (_, symbols) = CheckedAST.internFunction comparisonName symbols
     ({
+        Id = AST.functionIdForName comparisonName
         Name = comparisonName
         TypeParams = []
         Params =
@@ -272,7 +280,10 @@ let rec internal rewriteLiftedSelfCalls
     let mapArgs = AST.NonEmptyList.map recurse
     match expr with
     | CheckedAST.Apply (CheckedAST.Local id, args) when id = closureId ->
-        CheckedAST.Call (liftedName, AST.NonEmptyList.cons (CheckedAST.Local closureId) (mapArgs args))
+        CheckedAST.Call (
+            AST.functionIdForName liftedName,
+            AST.NonEmptyList.cons (CheckedAST.Local closureId) (mapArgs args)
+        )
     | CheckedAST.BoundaryRender (renderer, value) -> CheckedAST.BoundaryRender (renderer, recurse value)
     | CheckedAST.BinOp (op, left, right) -> CheckedAST.BinOp (op, recurse left, recurse right)
     | CheckedAST.UnaryOp (op, value) -> CheckedAST.UnaryOp (op, recurse value)

@@ -38,16 +38,16 @@ let internal emitRestoreRegs (ctx: FuncCtx) (intRegs: LIR.PhysReg list) (floatRe
             intRegs |> List.rev |> List.map (fun reg -> X86_64.POP (lirRegToX86 reg))
         Ok (floatRestores @ intRestores)
 
-let internal emitCall (ctx: FuncCtx) (dest: LIR.Reg) (funcName: string) (_args: LIR.Operand list) : Result<X86_64.Instr list, string> =
+let internal emitCall (ctx: FuncCtx) (dest: LIR.Reg) (funcId: AST.FunctionId) (_args: LIR.Operand list) : Result<X86_64.Instr list, string> =
     // Arguments are already in place from ArgMoves
     resolveReg dest
     |> Result.map (fun destReg ->
-        [X86_64.CALL funcName]
+        [X86_64.CALL (functionName ctx funcId)]
         @ (if destReg <> X86_64.RAX then [X86_64.MOV_reg (destReg, X86_64.RAX)] else []))
 
-let internal emitTailCall (ctx: FuncCtx) (funcName: string) (_args: LIR.Operand list) : Result<X86_64.Instr list, string> =
+let internal emitTailCall (ctx: FuncCtx) (funcId: AST.FunctionId) (_args: LIR.Operand list) : Result<X86_64.Instr list, string> =
     // Restore stack frame before jumping (epilogue without RET)
-    Ok (genEpilogue ctx.StackSize ctx.UsedCalleeSaved @ [X86_64.JMP funcName])
+    Ok (genEpilogue ctx.StackSize ctx.UsedCalleeSaved @ [X86_64.JMP (functionName ctx funcId)])
 
 let internal emitIndirectCall (ctx: FuncCtx) (dest: LIR.Reg) (func: LIR.Reg) (_args: LIR.Operand list) : Result<X86_64.Instr list, string> =
     resolveReg func
@@ -63,9 +63,9 @@ let internal emitIndirectTailCall (ctx: FuncCtx) (func: LIR.Reg) (_args: LIR.Ope
         genEpilogue ctx.StackSize ctx.UsedCalleeSaved
         @ [X86_64.JMP_reg funcReg])
 
-let internal emitLoadFuncAddr (ctx: FuncCtx) (dest: LIR.Reg) (funcName: string) : Result<X86_64.Instr list, string> =
+let internal emitLoadFuncAddr (ctx: FuncCtx) (dest: LIR.Reg) (funcId: AST.FunctionId) : Result<X86_64.Instr list, string> =
     resolveReg dest
-    |> Result.map (fun destReg -> [X86_64.LEA_rip (destReg, funcName)])
+    |> Result.map (fun destReg -> [X86_64.LEA_rip (destReg, functionName ctx funcId)])
 
 let internal emitClosureCall (ctx: FuncCtx) (dest: LIR.Reg) (closure: LIR.Reg) (_args: LIR.Operand list) : Result<X86_64.Instr list, string> =
     // The closure register contains the function pointer

@@ -60,6 +60,7 @@ let rec private infer types = function
     | expression -> Error $"unsupported test expression {expression}"
 
 let private functionDefinition body : CheckedAST.FunctionDef = {
+    Id = AST.functionIdForName "choose"
     Name = "choose"
     TypeParams = []
     Params = {
@@ -125,6 +126,7 @@ let private testReportsBindingInferenceFailure () =
     | actual -> Error $"Expected a scoped inference failure, got {actual}"
 
 let private callFunction name firstParameter remainingParameters body : CheckedAST.FunctionDef = {
+    Id = AST.functionIdForName name
     Name = name
     TypeParams = []
     Params = {
@@ -149,7 +151,7 @@ let private callContract aliasResult (call: HIR.FunctionCall) : HIR.PrimitiveCon
 let private contractedCalls aliasResult : ConstructHIRFunctions.CallContracts = {
     ExternalSignature = fun _ -> None
     Contract = fun target ->
-        if target = "callee" then Some (callContract aliasResult)
+        if target = AST.functionIdForName "callee" then Some (callContract aliasResult)
         else None
 }
 
@@ -166,7 +168,7 @@ let private testNormalizesContractedCallsInArgumentOrder () =
             (parameter "unit" AST.TUnit)
             []
             (CheckedAST.Call (
-                "callee",
+                AST.functionIdForName "callee",
                 { Head = CheckedAST.Int64Literal 1L; Tail = [CheckedAST.Int64Literal 2L] }))
     let calls = contractedCalls false
     match ConstructHIRFunctions.constructFunctions infer dependencies calls [callee; caller] with
@@ -198,7 +200,9 @@ let private testKeepsUncontractedCallsOpaque () =
             "caller"
             (parameter "value" AST.TInt64)
             []
-            (CheckedAST.Call ("callee", AST.NonEmptyList.singleton (local "value")))
+            (CheckedAST.Call (
+                AST.functionIdForName "callee",
+                AST.NonEmptyList.singleton (local "value")))
     match ConstructHIRFunctions.constructFunctions infer dependencies noCalls [callee; caller] with
     | Ok [_; constructedCaller] ->
         let block = ConstructHIRFunctions.body constructedCaller.Body
@@ -218,7 +222,9 @@ let private testRejectsInvalidCallAliasContract () =
             "caller"
             (parameter "value" AST.TInt64)
             []
-            (CheckedAST.Call ("callee", AST.NonEmptyList.singleton (local "value")))
+            (CheckedAST.Call (
+                AST.functionIdForName "callee",
+                AST.NonEmptyList.singleton (local "value")))
     let calls = contractedCalls true
     match ConstructHIRFunctions.constructFunctions infer dependencies calls [callee; caller] with
     | Error error -> Error $"Unexpected direct-call construction failure: {error}"
@@ -234,6 +240,7 @@ let private scalarFunction
     body
     : CheckedAST.FunctionDef =
     {
+        Id = AST.functionIdForName name
         Name = name
         TypeParams = []
         Params = AST.NonEmptyList.singleton parameter

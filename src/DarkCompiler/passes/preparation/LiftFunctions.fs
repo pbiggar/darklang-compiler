@@ -50,12 +50,14 @@ let generateFuncWrapper
                 ((id, typ), symbols)) symbols
         let closureParam =
             (closureId, AST.TTuple [AST.TInt64; comparatorStorageType])
+        let (_, symbols) = CheckedAST.internFunction origFuncName symbols
         let wrapperBody =
             parameters
             |> List.map (fun (id, _) -> CheckedAST.Local id)
             |> exprArgsFromList
-            |> fun args -> CheckedAST.Call (origFuncName, args)
+            |> fun args -> CheckedAST.Call (AST.functionIdForName origFuncName, args)
         let wrapperDef : CheckedAST.FunctionDef = {
+            Id = AST.functionIdForName wrapperName
             Name = wrapperName
             TypeParams = []
             Params = paramsFromList "generateFuncWrapper" (closureParam :: parameters)
@@ -70,6 +72,7 @@ let generateFuncWrapper
                 false
                 stateWithFuncs.State.VariantLookup
                 symbols
+        let (_, symbols) = CheckedAST.internFunction wrapperName symbols
         let newState = {
             stateWithFuncs with
                 State = {
@@ -395,6 +398,11 @@ let rec liftLambdasInProgram
     let funcReturnTypes =
         Map.fold (fun acc k v -> Map.add k v acc) baseFuncReturnTypes (Map.fold (fun acc k v -> Map.add k v acc) userFuncReturnTypes moduleFuncReturnTypes)
     let genericFuncDefs = Map.fold (fun acc k v -> Map.add k v acc) userGenericFuncDefs moduleGenericFuncDefs
+    let byFunctionId values =
+        values
+        |> Map.toList
+        |> List.map (fun (name, value) -> AST.functionIdForName name, value)
+        |> Map.ofList
 
     let locallyComparedFunctionParams =
         topLevels
@@ -420,6 +428,11 @@ let rec liftLambdasInProgram
     let comparableFunctionParams =
         Set.union locallyComparedFunctionParams escapingFunctionParams
 
+    let symbols =
+        funcParams
+        |> Map.keys
+        |> Seq.fold (fun symbols name -> CheckedAST.internFunction name symbols |> snd) symbols
+
     let initialState = {
         Symbols = symbols
         Counter = 0
@@ -427,9 +440,9 @@ let rec liftLambdasInProgram
         ComparisonFuncs = Map.empty
         ComparableFunctionParams = comparableFunctionParams
         TypeEnv = Map.empty
-        FuncParams = funcParams
-        FuncReturnTypes = funcReturnTypes
-        GenericFuncDefs = genericFuncDefs
+        FuncParams = byFunctionId funcParams
+        FuncReturnTypes = byFunctionId funcReturnTypes
+        GenericFuncDefs = byFunctionId genericFuncDefs
         TypeReg = canonicalMergedTypeReg
         VariantLookup = mergedVariantLookup
         RecursiveSelf = None
@@ -560,16 +573,21 @@ and replaceInExpr (wrapperMap: Map<string, string>) (expr: CheckedAST.Expr) : Ch
             match Map.tryFind name wrapperMap with
             | Some wrapperName ->
                 CheckedAST.Closure (
-                    wrapperName,
-                    [CheckedAST.FuncRef $"{wrapperName}__comparison"]
+                    AST.functionIdForName wrapperName,
+                    [CheckedAST.FuncRef (AST.functionIdForName $"{wrapperName}__comparison")]
                 )
             | None -> Crash.crash $"replaceInExpr expected wrapper for function '{name}'"
         | CheckedAST.Closure (funcName, captures) ->
-            match Map.tryFind funcName wrapperMap with
+            let wrapper =
+                wrapperMap
+                |> Map.toSeq
+                |> Seq.tryPick (fun (name, wrapperName) ->
+                    if AST.functionIdForName name = funcName then Some wrapperName else None)
+            match wrapper with
             | Some wrapperName ->
                 CheckedAST.Closure (
-                    wrapperName,
-                    CheckedAST.FuncRef $"{wrapperName}__comparison"
+                    AST.functionIdForName wrapperName,
+                    CheckedAST.FuncRef (AST.functionIdForName $"{wrapperName}__comparison")
                     :: (captures |> List.map (replace bound))
                 )
             | None -> CheckedAST.Closure (funcName, captures |> List.map (replace bound))

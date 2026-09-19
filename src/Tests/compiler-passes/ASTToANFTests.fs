@@ -96,7 +96,8 @@ let testMangledFunctionTypePreservesSyntheticTypeVariables () : TestResult =
 
 let rec private findCallArgs (funcName: string) (expr: ANF.AExpr) : ANF.Atom list option =
     match expr with
-    | ANF.Let (_, ANF.Call (name, args), rest) when name = funcName ->
+    | ANF.Let (_, ANF.Call (name, args), rest)
+        when name = AST.functionIdForName funcName ->
         Some args
     | ANF.Let (_, _, rest) ->
         findCallArgs funcName rest
@@ -144,12 +145,14 @@ let testErasedListHeadPatternLowersToBorrowedCall () : TestResult =
         let hasBorrowedErasedHead =
             anfExpr
             |> containsCExpr (function
-                | ANF.BorrowedCall ("Darklang.Stdlib.List.__headUnsafe_i64", _) -> true
+                | ANF.BorrowedCall (name, _)
+                    when name = AST.functionIdForName "Darklang.Stdlib.List.__headUnsafe_i64" -> true
                 | _ -> false)
         let hasOwnedErasedHead =
             anfExpr
             |> containsCExpr (function
-                | ANF.Call ("Darklang.Stdlib.List.__headUnsafe_i64", _) -> true
+                | ANF.Call (name, _)
+                    when name = AST.functionIdForName "Darklang.Stdlib.List.__headUnsafe_i64" -> true
                 | _ -> false)
 
         if not hasBorrowedErasedHead then
@@ -167,12 +170,14 @@ let testTypedListHeadPatternRemainsOwnedCall () : TestResult =
         let hasOwnedTypedHead =
             anfExpr
             |> containsCExpr (function
-                | ANF.Call ("Darklang.Stdlib.List.__headUnsafeFloat", _) -> true
+                | ANF.Call (name, _)
+                    when name = AST.functionIdForName "Darklang.Stdlib.List.__headUnsafeFloat" -> true
                 | _ -> false)
         let hasBorrowedTypedHead =
             anfExpr
             |> containsCExpr (function
-                | ANF.BorrowedCall ("Darklang.Stdlib.List.__headUnsafeFloat", _) -> true
+                | ANF.BorrowedCall (name, _)
+                    when name = AST.functionIdForName "Darklang.Stdlib.List.__headUnsafeFloat" -> true
                 | _ -> false)
 
         if not hasOwnedTypedHead then
@@ -184,10 +189,16 @@ let testTypedListHeadPatternRemainsOwnedCall () : TestResult =
 
 let testSyntheticNullaryCallLowersToZeroArgs () : TestResult =
     let funcName = "Darklang.Stdlib.List.__TAG_SINGLE"
-    let expr = CheckedAST.Call (funcName, AST.NonEmptyList.singleton CheckedAST.UnitLiteral)
+    let expr =
+        CheckedAST.Call (
+            AST.functionIdForName funcName,
+            AST.NonEmptyList.singleton CheckedAST.UnitLiteral
+        )
     let env : VarEnv = Map.empty
     let funcReg : FunctionRegistry =
-        Map.ofList [ (funcName, AST.TFunction ([], AST.TInt64)) ]
+        Map.ofList [
+            (AST.functionIdForName funcName, (funcName, AST.TFunction ([], AST.TInt64)))
+        ]
 
     match toANF expr ANF.initialVarGen env emptyTypeReg emptyVariantLookup funcReg emptyModuleRegistry with
     | Error err ->
@@ -204,6 +215,7 @@ let testSyntheticNullaryCallLowersToZeroArgs () : TestResult =
 let testSyntheticUnitParamLowersFunctionToZeroParams () : TestResult =
     let unitId, symbols = CheckedAST.allocateBinding "$unit0" (CheckedAST.emptySymbols ())
     let funcDef : CheckedAST.FunctionDef = {
+        Id = AST.functionIdForName "syntheticNullary"
         Name = "syntheticNullary"
         TypeParams = []
         Params = AST.NonEmptyList.singleton (unitId, AST.TUnit)
@@ -212,7 +224,10 @@ let testSyntheticUnitParamLowersFunctionToZeroParams () : TestResult =
         Recursion = None
     }
     let funcReg : FunctionRegistry =
-        Map.ofList [ ("syntheticNullary", AST.TFunction ([], AST.TInt64)) ]
+        Map.ofList [
+            (AST.functionIdForName "syntheticNullary",
+             ("syntheticNullary", AST.TFunction ([], AST.TInt64)))
+        ]
 
     match convertFunction symbols funcDef ANF.initialVarGen emptyTypeReg emptyVariantLookup funcReg emptyModuleRegistry with
     | Error err ->

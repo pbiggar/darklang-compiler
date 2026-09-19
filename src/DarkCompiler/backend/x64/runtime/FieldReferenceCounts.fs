@@ -210,6 +210,7 @@ let internal generateRecursiveSumRefCountDecHelper
         EnableLeakCheck = enableLeakCheck
         RecordRegistry = recordRegistry
         SumShapeRegistry = sumShapeRegistry
+        FunctionNames = Map.empty
     }
     match releasePlan with
     | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, _) ->

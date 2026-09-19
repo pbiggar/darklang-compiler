@@ -57,7 +57,7 @@ let applyConstantFolding (cfg: CFG) : CFG * bool =
 
 /// Run all optimizations in a single pass (returns whether anything changed).
 let private optimizeCFGOnceWithEffectFreeCalls
-    (effectFreeFunctions: Set<string>)
+    (effectFreeFunctions: Set<AST.FunctionId>)
     (options: OptimizeOptions)
     (recordTicks: (string -> int64 -> unit) option)
     (existingTopology: DominatorTopology option)
@@ -198,7 +198,7 @@ let optimizeCFGOnce (options: OptimizeOptions) (cfg: CFG) : CFG * bool =
 
 /// Run all optimizations until fixed point
 let private optimizeCFGWithEffectFreeCalls
-    (effectFreeFunctions: Set<string>)
+    (effectFreeFunctions: Set<AST.FunctionId>)
     (options: OptimizeOptions)
     (recordTicks: (string -> int64 -> unit) option)
     (cfg: CFG)
@@ -260,7 +260,7 @@ let optimizeFunctionWithOptions (options: OptimizeOptions) (func: Function) : Fu
     withOptimizedCFG func cfg'
 
 let private optimizeFunctionWithEffectFreeCalls
-    (effectFreeFunctions: Set<string>)
+    (effectFreeFunctions: Set<AST.FunctionId>)
     (options: OptimizeOptions)
     (func: Function)
     : Function =
@@ -269,7 +269,7 @@ let private optimizeFunctionWithEffectFreeCalls
 
 let optimizeFunctionWithEffectFreeCallsAndTickTrace
     (phaseTickRecorder: (string -> int64 -> unit) option)
-    (effectFreeFunctions: Set<string>)
+    (effectFreeFunctions: Set<AST.FunctionId>)
     (options: OptimizeOptions)
     (func: Function)
     : Function =

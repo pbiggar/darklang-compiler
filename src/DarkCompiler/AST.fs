@@ -282,6 +282,8 @@ let semanticNameIdentity (name: string) : int =
     name
     |> Seq.fold (fun hash character -> (hash ^^^ uint32 character) * 16777619u) 2166136261u
     |> fun hash -> int (hash &&& 0x7fffffffu)
+let functionIdForName name = FunctionId (semanticNameIdentity name)
+let functionIdValue (FunctionId identity) = identity
 let typeIdForName name = TypeId (semanticNameIdentity name)
 let constructorId identity tag = ConstructorId (identity, tag)
 let constructorTag (ConstructorId (_, tag)) = tag

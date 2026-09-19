@@ -2282,7 +2282,8 @@ let private convertFunctionsForWithTrace
                     let (MIR.VReg id) = tp.Reg
                     { Reg = LIR.Virtual id; Type = tp.Type })
             Ok
-                { Name = mirFunc.Name
+                { Id = mirFunc.Id
+                  Name = mirFunc.Name
                   TypedParams = lirTypedParams
                   CFG = lirCFG
                   StackSize = 0  // Will be determined by register allocation

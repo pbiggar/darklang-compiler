@@ -86,7 +86,7 @@ let private outlineExpensiveGenericReleasesInFunction
                         LIR.ArgMoves [(LIR.X0, LIR.Reg addr)]
                         // The physical destination declares that this effect has no
                         // virtual result while retaining normal call liveness.
-                        LIR.Call (LIR.Physical LIR.X0, helperLabel, [LIR.Reg addr])
+                        LIR.Call (LIR.Physical LIR.X0, AST.functionIdForName helperLabel, [LIR.Reg addr])
                         LIR.RestoreRegs ([], [])
                     ]
                 | _ ->

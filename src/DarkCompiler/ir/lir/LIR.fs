@@ -44,7 +44,7 @@ type Operand =
     | StackSlot of int
     | StringSymbol of string
     | FloatSymbol of float
-    | FuncAddr of string
+    | FuncAddr of AST.FunctionId
 
 /// Comparison conditions (for CSET)
 type Condition =
@@ -119,11 +119,11 @@ type Instr =
     | Uxtb of dest:Reg * src:Reg
     | Uxth of dest:Reg * src:Reg
     | Uxtw of dest:Reg * src:Reg
-    | Call of dest:Reg * funcName:string * args:Operand list
-    | TailCall of funcName:string * args:Operand list
+    | Call of dest:Reg * funcName:AST.FunctionId * args:Operand list
+    | TailCall of funcName:AST.FunctionId * args:Operand list
     | IndirectCall of dest:Reg * func:Reg * args:Operand list
     | IndirectTailCall of func:Reg * args:Operand list
-    | ClosureAlloc of dest:Reg * funcName:string * captures:Operand list
+    | ClosureAlloc of dest:Reg * funcName:AST.FunctionId * captures:Operand list
     | ClosureCall of dest:Reg * closure:Reg * args:Operand list
     | ClosureTailCall of closure:Reg * args:Operand list
     | SaveRegs of intRegs:PhysReg list * floatRegs:PhysFPReg list
@@ -179,7 +179,7 @@ type Instr =
     | StringConcat of dest:Reg * first:Operand * second:Operand * remaining:Operand list
     | CanonicalBufferEq of dest:Reg * kind:MemoryModel.CanonicalBufferKind * left:Operand * right:Operand
     | PrintHeapString of Reg
-    | LoadFuncAddr of dest:Reg * funcName:string
+    | LoadFuncAddr of dest:Reg * funcName:AST.FunctionId
     | FileReadText of dest:Reg * path:Operand
     | FileExists of dest:Reg * path:Operand
     | FileWriteText of dest:Reg * path:Operand * content:Operand
@@ -380,7 +380,7 @@ type Arm64SlotInitRootRetainTarget =
 type FunctionCodegenFacts = {
     ClosurePayloadSizeFromParams: int option
     ClosureCaptureTypes: AST.Type list option
-    ClosurePayloadSizesFromAllocs: (string * int) list
+    ClosurePayloadSizesFromAllocs: (AST.FunctionId * int) list
     RecursiveReleaseTypes: Set<AST.Type>
     /// Deduplicated by kind and compact plan identity. Keeping recursive
     /// metadata out of the ordered key prevents deep structural comparisons.
@@ -405,6 +405,7 @@ type FunctionCodegenFacts = {
 /// Function with CFG. CodegenFacts is absent only for hand-built or legacy LIR;
 /// production lowering attaches it before register allocation.
 type Function = {
+    Id: AST.FunctionId
     Name: string
     TypedParams: TypedLIRParam list
     CFG: CFG
