@@ -80,6 +80,12 @@ class PruneWorktreesTests(unittest.TestCase):
             (paths["unmerged"] / "change.txt").write_text("change\n", encoding="utf-8")
             self.git(paths["unmerged"], "add", "change.txt")
             self.git(paths["unmerged"], "commit", "-q", "-m", "unmerged")
+            (repo / "same-subject-main.txt").write_text(
+                "different change\n", encoding="utf-8"
+            )
+            self.git(repo, "add", "same-subject-main.txt")
+            self.git(repo, "commit", "-q", "-m", "unmerged")
+            self.git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
             shutil.rmtree(paths["stale"])
             shutil.rmtree(paths["interactive_stale"])
 
@@ -164,8 +170,16 @@ os.execv(os.environ["TEST_REAL_GIT"], [os.environ["TEST_REAL_GIT"], *arguments])
             self.assertIn(f"Directory: {paths['unmerged']} (present)", interactive.stdout)
             self.assertIn("Checkout:", interactive.stdout)
             self.assertIn("Last commit:", interactive.stdout)
+            self.assertIn("less than a minute ago", interactive.stdout)
             self.assertIn("Merged into origin/main: no", interactive.stdout)
+            self.assertIn(
+                "Same-subject commit on origin/main: yes",
+                interactive.stdout,
+            )
             self.assertIn("Locked: yes", interactive.stdout)
+            self.assertIn("?? untracked.txt", interactive.stdout)
+            self.assertIn("!! artifact.cache", interactive.stdout)
+            self.assertIn("created/updated:", interactive.stdout)
             self.assertIn("Active processes: 4242 (terminal)", interactive.stdout)
             self.assertIn("Recommendation: KEEP", interactive.stdout)
             self.assertIn("Recommendation: DELETE", interactive.stdout)
