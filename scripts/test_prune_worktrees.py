@@ -20,6 +20,17 @@ class PruneWorktreesTests(unittest.TestCase):
             capture_output=True,
         ).stdout.strip()
 
+    def commit(self, repo: Path, message: str, date: str | None = None) -> None:
+        environment = dict(os.environ)
+        if date is not None:
+            environment["GIT_AUTHOR_DATE"] = date
+            environment["GIT_COMMITTER_DATE"] = date
+        subprocess.run(
+            ["git", "-C", str(repo), "commit", "-q", "-m", message],
+            check=True,
+            env=environment,
+        )
+
     def branch_exists(self, repo: Path, branch: str) -> bool:
         result = subprocess.run(
             ["git", "-C", str(repo), "show-ref", "--verify", f"refs/heads/{branch}"],
@@ -42,7 +53,7 @@ class PruneWorktreesTests(unittest.TestCase):
             self.git(repo, "config", "user.name", "Worktree Test")
             (repo / "base.txt").write_text("base\n", encoding="utf-8")
             self.git(repo, "add", "base.txt")
-            self.git(repo, "commit", "-q", "-m", "base")
+            self.commit(repo, "base", "2026-09-16T00:00:00+0000")
             self.git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
 
             paths = {
@@ -58,6 +69,7 @@ class PruneWorktreesTests(unittest.TestCase):
                     "interactive_override",
                     "interactive_stale",
                     "remove_fail",
+                    "recent",
                     "unmerged",
                 )
             }
@@ -79,7 +91,14 @@ class PruneWorktreesTests(unittest.TestCase):
             self.git(repo, "worktree", "lock", str(paths["locked"]))
             (paths["unmerged"] / "change.txt").write_text("change\n", encoding="utf-8")
             self.git(paths["unmerged"], "add", "change.txt")
-            self.git(paths["unmerged"], "commit", "-q", "-m", "unmerged")
+            self.commit(
+                paths["unmerged"],
+                "unmerged",
+                "2026-09-16T00:00:00+0000",
+            )
+            (paths["recent"] / "recent.txt").write_text("recent\n", encoding="utf-8")
+            self.git(paths["recent"], "add", "recent.txt")
+            self.commit(paths["recent"], "recent")
             (repo / "same-subject-main.txt").write_text(
                 "different change\n", encoding="utf-8"
             )
@@ -185,15 +204,18 @@ os.execv(os.environ["TEST_REAL_GIT"], [os.environ["TEST_REAL_GIT"], *arguments])
             self.assertIn("Recommendation: DELETE", interactive.stdout)
             self.assertIn(
                 "Interactive cleanup: deleted 3 checkout(s), deleted 3 branch(es), "
-                "kept 9 worktree(s)",
+                "kept 8 worktree(s), omitted 2 main/recent worktree(s)",
                 interactive.stdout,
             )
+            self.assertNotIn(str(paths["recent"]), interactive.stdout)
             self.assertIn("Reclaimed checkout space:", interactive.stdout)
             self.assertFalse(paths["interactive_delete"].exists())
             self.assertFalse(self.branch_exists(repo, "interactive_delete"))
             self.assertFalse(paths["interactive_override"].exists())
             self.assertFalse(self.branch_exists(repo, "interactive_override"))
             self.assertFalse(self.branch_exists(repo, "interactive_stale"))
+            self.git(repo, "worktree", "remove", str(paths["recent"]))
+            self.git(repo, "branch", "-D", "recent")
 
             dry_run = subprocess.run(
                 [sys.executable, str(source_script)],
