@@ -574,33 +574,47 @@ let __trimStart (graphemes: List<String>) : List<String> =
 let __trimEnd (graphemes: List<String>) : List<String> =
     Stdlib.List.reverse (Stdlib.String.__trimStart (Stdlib.List.reverse graphemes))
 
-// Printable ASCII cannot be Unicode whitespace. Checking the relevant
-// boundary lets the common no-op case retain the original normalized string
-// without allocating a grapheme list. Non-ASCII and control boundaries still
-// use the full Unicode-aware path.
-let __printableAsciiBoundary (byte: Int64) : Bool = byte >= 33L && byte <= 126L
+let __asciiWhitespace (byte: Int64) : Bool =
+    byte == 9L || byte == 10L || byte == 11L || byte == 12L || byte == 13L || byte == 32L
+
+// Stop at the first non-whitespace ASCII byte. A non-ASCII boundary needs the
+// Unicode path because it may itself be whitespace.
+let __asciiTrimStartBoundary (value: String) (index: Int64) (length: Int64) : Stdlib.Option.Option<Int64> =
+    if index >= length then Some index
+    else
+        let byte = Stdlib.String.__byteAtUnchecked value index in
+        if byte >= 128L then None
+        else if Stdlib.String.__asciiWhitespace byte then Stdlib.String.__asciiTrimStartBoundary value (index + 1L) length
+        else Some index
+
+let __asciiTrimEndBoundary (value: String) (index: Int64) : Stdlib.Option.Option<Int64> =
+    if index <= 0L then Some index
+    else
+        let byte = Stdlib.String.__byteAtUnchecked value (index - 1L) in
+        if byte >= 128L then None
+        else if Stdlib.String.__asciiWhitespace byte then Stdlib.String.__asciiTrimEndBoundary value (index - 1L)
+        else Some index
 
 let trimStart (value: String) : String =
     let length = Stdlib.String.__byteLength value in
-    if length == 0L || Stdlib.String.__printableAsciiBoundary (Stdlib.String.__byteAtUnchecked value 0L) then value
-    else Stdlib.String.join (Stdlib.String.__trimStart (Stdlib.String.__toGraphemes value)) ""
+    match Stdlib.String.__asciiTrimStartBoundary value 0L length with
+    | Some 0L -> value
+    | Some start_ -> Stdlib.String.__byteSlice value start_ length
+    | None -> Stdlib.String.join (Stdlib.String.__trimStart (Stdlib.String.__toGraphemes value)) ""
 
 let trimEnd (value: String) : String =
     let length = Stdlib.String.__byteLength value in
-    if length == 0L || Stdlib.String.__printableAsciiBoundary (Stdlib.String.__byteAtUnchecked value (length - 1L)) then value
-    else Stdlib.String.join (Stdlib.String.__trimEnd (Stdlib.String.__toGraphemes value)) ""
+    match Stdlib.String.__asciiTrimEndBoundary value length with
+    | Some end_ -> if end_ == length then value else Stdlib.String.__byteSlice value 0L end_
+    | None -> Stdlib.String.join (Stdlib.String.__trimEnd (Stdlib.String.__toGraphemes value)) ""
 
 let trim (value: String) : String =
     let length = Stdlib.String.__byteLength value in
-    if length == 0L then value
-    else
-        let cleanStart = Stdlib.String.__printableAsciiBoundary (Stdlib.String.__byteAtUnchecked value 0L) in
-        let cleanEnd = Stdlib.String.__printableAsciiBoundary (Stdlib.String.__byteAtUnchecked value (length - 1L)) in
-        if cleanStart && cleanEnd then value
-        else if cleanStart then Stdlib.String.trimEnd value
-        else if cleanEnd then Stdlib.String.trimStart value
-        else
-            Stdlib.String.join (Stdlib.String.__trimEnd (Stdlib.String.__trimStart (Stdlib.String.__toGraphemes value))) ""
+    match (Stdlib.String.__asciiTrimStartBoundary value 0L length, Stdlib.String.__asciiTrimEndBoundary value length) with
+    | (Some start_, Some end_) ->
+        if start_ == 0L && end_ == length then value
+        else Stdlib.String.__byteSlice value start_ end_
+    | _ -> Stdlib.String.join (Stdlib.String.__trimEnd (Stdlib.String.__trimStart (Stdlib.String.__toGraphemes value))) ""
 
 let padStart (value: String) (padWith: String) (goalLength: Int) : Stdlib.Result.Result<String, String> =
     if Stdlib.String.length padWith != Stdlib.Int.fromInt64 1L then
