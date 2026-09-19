@@ -22,7 +22,8 @@ from Git history.
   common-factor combination; and safe Float/UInt64 multiplicative identities.
 - **Strength reduction:** integer self-addition, Float multiplication by two,
   and signed/unsigned multiplication, division, and modulo by powers of two.
-- **Common-subexpression elimination:** dominator-scoped MIR scalar reuse,
+- **Common-subexpression and partial-redundancy elimination:** dominator-scoped
+  MIR scalar reuse, path-selective scalar arithmetic completion at joins,
   effect-free direct-call reuse, barrier-aware scalar heap-load reuse through
   supported pure scalar operations, and ANF pure-value reuse with commutative
   and reversed-relational canonicalization.
@@ -125,6 +126,9 @@ conservative call and managed-field boundaries.
 `passes/mir/MIR_Optimize.fs` and `src/Tests/optimization/mir.opt` own:
 
 - dominator-scoped scalar and effect-free-call common-subexpression reuse;
+- partial-redundancy elimination for non-trapping scalar arithmetic and unary
+  expressions, inserting only on unconditional incoming edges and merging the
+  path-specific values with SSA phis;
 - barrier-aware exact scalar heap-load reuse through `FloatSqrt`, `FloatAbs`, `FloatNeg`,
   `Int64ToFloat`, `FloatToInt64`, and `FloatToBits` locally, without exporting
   availability into dominated blocks;

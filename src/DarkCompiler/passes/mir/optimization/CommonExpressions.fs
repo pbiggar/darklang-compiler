@@ -1,4 +1,4 @@
-// CommonExpressions.fs - Reuse available scalar expressions under effect constraints.
+// CommonExpressions.fs - Reuse and path-complete scalar expressions under effect constraints.
 
 module MIRCommonExpressions
 
@@ -104,7 +104,181 @@ let private clearHeapLoadAndDirectCallAvailability
         ScalarHeapLoads = Map.empty
         DirectCalls = Map.empty }
 
-/// Apply CSE to a CFG, carrying available expressions into dominated blocks.
+type private PartialRedundancyCandidate = {
+    Block: Label
+    Dest: VReg
+    Key: ExprKey
+    Instr: Instr
+    ValueType: AST.Type option
+    Operands: Operand list
+}
+
+let private tryPartialRedundancyCandidate
+    (block: Label)
+    (instr: Instr)
+    : PartialRedundancyCandidate option =
+    match instr with
+    | BinOp (dest, op, left, right, opType)
+        when isCrossBlockCSEType opType && op <> Div && op <> Mod ->
+        Some {
+            Block = block
+            Dest = dest
+            Key = makeBinExprKey op left right opType
+            Instr = instr
+            ValueType = Some opType
+            Operands = [left; right]
+        }
+    | UnaryOp (dest, op, src) ->
+        Some {
+            Block = block
+            Dest = dest
+            Key = makeUnaryExprKey op src
+            Instr = instr
+            ValueType = None
+            Operands = [src]
+        }
+    | _ -> None
+
+let private replaceInstrWithPhi
+    (candidate: PartialRedundancyCandidate)
+    (sources: (Operand * Label) list)
+    (block: BasicBlock)
+    : BasicBlock =
+    let isPhi = function | Phi _ -> true | _ -> false
+    let phis = block.Instrs |> List.takeWhile isPhi
+    let remaining = block.Instrs |> List.skipWhile isPhi
+    let remaining' =
+        remaining
+        |> List.filter (function
+            | BinOp (dest, _, _, _, _)
+            | UnaryOp (dest, _, _) -> dest <> candidate.Dest
+            | _ -> true)
+    { block with
+        Instrs = phis @ [Phi (candidate.Dest, sources, candidate.ValueType)] @ remaining' }
+
+let private withDest
+    (dest: VReg)
+    (instr: Instr)
+    : Instr =
+    match instr with
+    | BinOp (_, op, left, right, opType) -> BinOp (dest, op, left, right, opType)
+    | UnaryOp (_, op, src) -> UnaryOp (dest, op, src)
+    | _ -> Crash.crash "MIR PRE: candidate is not an arithmetic expression"
+
+let private maxVRegId (VReg id) (currentMax: int) : int =
+    max id currentMax
+
+/// Complete expressions that are available on only some incoming paths. The
+/// insertion boundary is an unconditional edge into the join, so PRE neither
+/// speculates work onto another successor nor changes when trapping operations
+/// run. Expressions depending on join-local definitions are not movable.
+let private applyPartialRedundancyElimination
+    (exitAvailability: Map<Label, ExprAvailability>)
+    (cfg: CFG)
+    : CFG * bool =
+    let predecessors = buildPredecessors cfg
+    let candidates =
+        cfg.Blocks
+        |> Map.toList
+        |> List.collect (fun (label, block) ->
+            block.Instrs |> List.choose (tryPartialRedundancyCandidate label))
+    let initialMaxReg =
+        cfg.Blocks
+        |> Map.fold (fun currentMax _ block ->
+            Set.union (getBlockDefs block) (getBlockUses block)
+            |> Set.fold (fun maxId reg -> maxVRegId reg maxId) currentMax
+        ) -1
+
+    let rec applyCandidates
+        (remaining: PartialRedundancyCandidate list)
+        (blocks: Map<Label, BasicBlock>)
+        (availability: Map<Label, ExprAvailability>)
+        (nextRegId: int)
+        (changed: bool)
+        : Map<Label, BasicBlock> * bool =
+        match remaining with
+        | [] -> (blocks, changed)
+        | candidate :: rest ->
+            let block =
+                Map.tryFind candidate.Block blocks
+                |> Option.defaultWith (fun () -> Crash.crash $"MIR PRE: missing block {candidate.Block}")
+            let localDefs = getBlockDefs block
+            let usesJoinLocalDefinition =
+                candidate.Operands
+                |> List.exists (function
+                    | Register reg -> Set.contains reg localDefs
+                    | _ -> false)
+            let incoming =
+                Map.tryFind candidate.Block predecessors
+                |> Option.defaultValue []
+                |> List.distinct
+            let incomingAvailability =
+                incoming
+                |> List.map (fun predecessor ->
+                    let available =
+                        Map.tryFind predecessor availability
+                        |> Option.bind (tryFindAvailable candidate.Key)
+                    (predecessor, available))
+            let hasAvailablePath =
+                incomingAvailability |> List.exists (snd >> Option.isSome)
+            let missingPathsCanInsert =
+                incomingAvailability
+                |> List.forall (fun (predecessor, available) ->
+                    match available, Map.tryFind predecessor blocks with
+                    | Some _, _ -> true
+                    | None, Some predecessorBlock ->
+                        predecessorBlock.Terminator = Jump candidate.Block
+                    | None, None -> false)
+
+            if incoming.Length < 2
+               || usesJoinLocalDefinition
+               || not hasAvailablePath
+               || not missingPathsCanInsert then
+                applyCandidates rest blocks availability nextRegId changed
+            else
+                let (blocks', availability', nextRegId', sourcesRev) =
+                    incomingAvailability
+                    |> List.fold (fun (currentBlocks, currentAvailability, freshId, sources) (predecessor, available) ->
+                        match available with
+                        | Some reg ->
+                            (currentBlocks,
+                             currentAvailability,
+                             freshId,
+                             (Register reg, predecessor) :: sources)
+                        | None ->
+                            let insertedDest = VReg freshId
+                            let predecessorBlock =
+                                Map.tryFind predecessor currentBlocks
+                                |> Option.defaultWith (fun () -> Crash.crash $"MIR PRE: missing predecessor {predecessor}")
+                            let predecessorBlock' =
+                                { predecessorBlock with
+                                    Instrs = predecessorBlock.Instrs @ [withDest insertedDest candidate.Instr] }
+                            let predecessorAvailability =
+                                Map.tryFind predecessor currentAvailability
+                                |> Option.defaultValue emptyExprAvailability
+                                |> addAvailable candidate.Key insertedDest
+                            (Map.add predecessor predecessorBlock' currentBlocks,
+                             Map.add predecessor predecessorAvailability currentAvailability,
+                             freshId + 1,
+                             (Register insertedDest, predecessor) :: sources)
+                    ) (blocks, availability, nextRegId, [])
+                let joinBlock =
+                    Map.tryFind candidate.Block blocks'
+                    |> Option.defaultWith (fun () -> Crash.crash $"MIR PRE: missing join {candidate.Block}")
+                let joinBlock' = replaceInstrWithPhi candidate (List.rev sourcesRev) joinBlock
+                applyCandidates
+                    rest
+                    (Map.add candidate.Block joinBlock' blocks')
+                    availability'
+                    nextRegId'
+                    true
+
+    let (blocks, changed) =
+        applyCandidates candidates cfg.Blocks exitAvailability (initialMaxReg + 1) false
+    ({ cfg with Blocks = blocks }, changed)
+
+/// Apply CSE and PRE to a CFG, carrying available expressions into dominated
+/// blocks and completing safe expressions at joins.
 let internal applyCSEWithEffectFreeCallsAndTopology
     (existingTopology: DominatorTopology option)
     (effectFreeFunctions: Set<string>)
@@ -225,35 +399,44 @@ let internal applyCSEWithEffectFreeCallsAndTopology
     let rec optimizeDominatorSubtree
         (available: ExprAvailability)
         (label: Label)
-        (blocks: Map<Label, BasicBlock>, changed: bool)
-        : Map<Label, BasicBlock> * bool =
+        (blocks: Map<Label, BasicBlock>, exits: Map<Label, ExprAvailability>, changed: bool)
+        : Map<Label, BasicBlock> * Map<Label, ExprAvailability> * bool =
         match Map.tryFind label cfg.Blocks with
         | None -> Crash.crash $"MIR CSE: missing dominator-tree block {label}"
         | Some block ->
             let (block', available', blockChanged) = optimizeBlock available block
-            let state = (Map.add label block' blocks, changed || blockChanged)
+            let state =
+                (Map.add label block' blocks,
+                 Map.add label available' exits,
+                 changed || blockChanged)
             let children = Map.tryFind label dominatorChildren |> Option.defaultValue []
             children
             |> List.fold (fun childState child ->
                 optimizeDominatorSubtree available' child childState
             ) state
 
-    let (reachableBlocks, reachableChanged) =
-        optimizeDominatorSubtree emptyExprAvailability cfg.Entry (Map.empty, false)
+    let (reachableBlocks, reachableExits, reachableChanged) =
+        optimizeDominatorSubtree emptyExprAvailability cfg.Entry (Map.empty, Map.empty, false)
 
     // Dominators are undefined for unreachable blocks. Retain local CSE there so
     // this transformation remains complete when invoked independently.
-    let (blocks', changed) =
+    let (blocks', exits, cseChanged) =
         cfg.Blocks
-        |> Map.fold (fun (blocks, ch) label block ->
+        |> Map.fold (fun (blocks, blockExits, ch) label block ->
             if Map.containsKey label blocks then
-                (blocks, ch)
+                (blocks, blockExits, ch)
             else
-                let (block', _, blockChanged) = optimizeBlock emptyExprAvailability block
-                (Map.add label block' blocks, ch || blockChanged)
-        ) (reachableBlocks, reachableChanged)
+                let (block', available, blockChanged) =
+                    optimizeBlock emptyExprAvailability block
+                (Map.add label block' blocks,
+                 Map.add label available blockExits,
+                 ch || blockChanged)
+        ) (reachableBlocks, reachableExits, reachableChanged)
 
-    ({ cfg with Blocks = blocks' }, changed, dominatorTopology)
+    let cseCfg = { cfg with Blocks = blocks' }
+    let (preCfg, preChanged) = applyPartialRedundancyElimination exits cseCfg
+
+    (preCfg, cseChanged || preChanged, dominatorTopology)
 
 let applyCSEWithEffectFreeCalls
     (effectFreeFunctions: Set<string>)
