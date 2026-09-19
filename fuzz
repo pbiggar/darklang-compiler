@@ -219,7 +219,6 @@ ask_codex_to_fix() {
     codex_result="$(
         printf '%s\n' "$prompt" \
         | codex exec \
-            --sandbox workspace-write \
             --approve-for-me \
             --worktree \
             --add-dir "$SCRIPT_DIR/fuzz-results" \
