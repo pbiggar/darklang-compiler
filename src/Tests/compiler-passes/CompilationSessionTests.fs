@@ -25,6 +25,7 @@ let private compile
         Verbosity = 0
         Options = options
         PackageValues = CompilationContexts.emptyPackageValueCatalog
+        PackageManager = None
         PassTimingRecorder = None
         Session = Some session
     }

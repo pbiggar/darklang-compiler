@@ -116,6 +116,7 @@ let private compile
         Verbosity = 0
         Options = CompilerOptions.defaultOptions
         PackageValues = catalog
+        PackageManager = None
         PassTimingRecorder = None
         Session = None
     }

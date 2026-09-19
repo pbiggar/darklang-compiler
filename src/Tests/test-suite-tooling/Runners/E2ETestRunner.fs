@@ -1328,6 +1328,14 @@ let private splitRun
             splitDuration count index runtimeTime
         )
 
+let private packageManagerForFile (sourceFile: string) : PackageManager.Config option =
+    if sourceFile.EndsWith("/package_manager.e2e", StringComparison.Ordinal)
+       || sourceFile.EndsWith("/scm/constraint-kinds.dark", StringComparison.Ordinal)
+       || sourceFile.EndsWith("/stdlib/prettyPrinter.dark", StringComparison.Ordinal) then
+        Some (PackageManager.defaultConfig ())
+    else
+        None
+
 let runE2ETestBatchWithPreambleContext
     (stdlib: CompilationContexts.StdlibResult)
     (preambleCtx: CompilationContexts.PreambleContext)
@@ -1353,6 +1361,7 @@ let runE2ETestBatchWithPreambleContext
             Verbosity = 0
             Options = buildCompilerOptions first.Test
             PackageValues = CompilationContexts.emptyPackageValueCatalog
+            PackageManager = packageManagerForFile first.Test.SourceFile
             PassTimingRecorder = passTimingRecorder
             Session = session
         }
@@ -1455,6 +1464,7 @@ let private runE2ETestSourceWithPreambleContext
         Verbosity = 0
         Options = options
         PackageValues = CompilationContexts.emptyPackageValueCatalog
+        PackageManager = packageManagerForFile test.SourceFile
         PassTimingRecorder = passTimingRecorder
         Session = session
     }
@@ -1490,6 +1500,7 @@ let private runE2ETestSourceWithPreambleContext
             Verbosity = 0
             Options = options
             PackageValues = CompilationContexts.emptyPackageValueCatalog
+            PackageManager = packageManagerForFile test.SourceFile
             PassTimingRecorder = passTimingRecorder
             Session = session
         }

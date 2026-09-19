@@ -57,6 +57,7 @@ type BatchCliOptions = {
     Target: TargetSelection
     Verbosity: VerbosityLevel
     AllowInternal: bool
+    PackageServer: Uri option
     Input: BatchInput
     KeepGoing: bool
     ReportPath: string option
@@ -107,6 +108,8 @@ type CliOptions = {
     LeakCheck: bool
     Target: TargetSelection
     EmitResult: bool
+    // Opt-in hosted package resolution. Ordinary compilation stays offline.
+    PackageServer: Uri option
     // Compiler-owned sources may use private runtime and HAMT helpers.
     AllowInternal: bool
     // Optimization flags
@@ -154,6 +157,7 @@ let defaultOptions = {
     LeakCheck = false
     Target = HostTarget
     EmitResult = false
+    PackageServer = None
     AllowInternal = false
     DisableFreeList = false
     DisableANFOpt = false
@@ -186,6 +190,11 @@ let private parseTargetValue (value: string) : Result<TargetSelection, string> =
     match value.Trim().ToLowerInvariant() with
     | "linux-x86_64" -> Ok (ExplicitTarget Platform.LinuxX86_64)
     | _ -> Error $"Invalid target '{value}' (expected 'linux-x86_64')"
+
+let private parsePackageServerValue (value: string) : Result<Uri, string> =
+    match Uri.TryCreate(value, UriKind.Absolute) with
+    | true, uri when uri.Scheme = Uri.UriSchemeHttp || uri.Scheme = Uri.UriSchemeHttps -> Ok uri
+    | _ -> Error $"Invalid package server '{value}' (expected an absolute HTTP(S) URL)"
 
 /// Build compiler options from CLI options
 let buildCompilerOptions (cliOpts: CliOptions) : CompilerOptions.CompilerOptions = {
@@ -248,6 +257,25 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
 
         | "--target" :: [] ->
             Error "Missing value for --target (expected 'linux-x86_64')"
+
+        | "--package-server" :: value :: rest ->
+            if opts.PackageServer.IsSome then
+                Error "Package server specified multiple times"
+            else
+                parsePackageServerValue value
+                |> Result.bind (fun server ->
+                    parseFlags rest { opts with PackageServer = Some server } lastVerbosity)
+
+        | "--package-server" :: [] ->
+            Error "Missing value for --package-server"
+
+        | flag :: rest when flag.StartsWith("--package-server=") ->
+            if opts.PackageServer.IsSome then
+                Error "Package server specified multiple times"
+            else
+                parsePackageServerValue (flag.Substring(17))
+                |> Result.bind (fun server ->
+                    parseFlags rest { opts with PackageServer = Some server } lastVerbosity)
 
         | flag :: rest when flag.StartsWith("--target=") ->
             match opts.Target with
@@ -506,6 +534,7 @@ let parseBatchArgs (argv: string array) : Result<BatchCliOptions, string> =
         (target: TargetSelection)
         (verbosity: VerbosityLevel)
         (allowInternal: bool)
+        (packageServer: Uri option)
         (manifestPath: string option)
         (keepGoing: bool)
         (reportPath: string option)
@@ -521,44 +550,60 @@ let parseBatchArgs (argv: string array) : Result<BatchCliOptions, string> =
                     Target = target
                     Verbosity = verbosity
                     AllowInternal = allowInternal
+                    PackageServer = packageServer
                     Input = CommandLineItems items
                     KeepGoing = keepGoing
                     ReportPath = reportPath
                 })
         | ("-q" | "--quiet") :: rest ->
-            parseOptions target Quiet allowInternal manifestPath keepGoing reportPath rest
+            parseOptions target Quiet allowInternal packageServer manifestPath keepGoing reportPath rest
         | "--allow-internal" :: rest ->
-            parseOptions target verbosity true manifestPath keepGoing reportPath rest
+            parseOptions target verbosity true packageServer manifestPath keepGoing reportPath rest
         | "--keep-going" :: rest ->
             if keepGoing then Error "Keep-going specified multiple times"
-            else parseOptions target verbosity allowInternal manifestPath true reportPath rest
+            else parseOptions target verbosity allowInternal packageServer manifestPath true reportPath rest
         | "--manifest" :: value :: rest ->
             if manifestPath.IsSome then Error "Batch manifest specified multiple times"
             elif String.IsNullOrWhiteSpace value then Error "--manifest requires a non-empty path"
-            else parseOptions target verbosity allowInternal (Some value) keepGoing reportPath rest
+            else parseOptions target verbosity allowInternal packageServer (Some value) keepGoing reportPath rest
         | "--manifest" :: [] -> Error "Missing value for --manifest"
         | flag :: rest when flag.StartsWith("--manifest=") ->
             let value = flag.Substring(11)
             if manifestPath.IsSome then Error "Batch manifest specified multiple times"
             elif String.IsNullOrWhiteSpace value then Error "--manifest requires a non-empty path"
-            else parseOptions target verbosity allowInternal (Some value) keepGoing reportPath rest
+            else parseOptions target verbosity allowInternal packageServer (Some value) keepGoing reportPath rest
         | "--report" :: value :: rest ->
             if reportPath.IsSome then Error "Batch report specified multiple times"
             elif String.IsNullOrWhiteSpace value then Error "--report requires a non-empty path"
-            else parseOptions target verbosity allowInternal manifestPath keepGoing (Some value) rest
+            else parseOptions target verbosity allowInternal packageServer manifestPath keepGoing (Some value) rest
         | "--report" :: [] -> Error "Missing value for --report"
         | flag :: rest when flag.StartsWith("--report=") ->
             let value = flag.Substring(9)
             if reportPath.IsSome then Error "Batch report specified multiple times"
             elif String.IsNullOrWhiteSpace value then Error "--report requires a non-empty path"
-            else parseOptions target verbosity allowInternal manifestPath keepGoing (Some value) rest
+            else parseOptions target verbosity allowInternal packageServer manifestPath keepGoing (Some value) rest
+        | "--package-server" :: value :: rest ->
+            if packageServer.IsSome then
+                Error "Package server specified multiple times"
+            else
+                parsePackageServerValue value
+                |> Result.bind (fun server ->
+                    parseOptions target verbosity allowInternal (Some server) manifestPath keepGoing reportPath rest)
+        | "--package-server" :: [] -> Error "Missing value for --package-server"
+        | flag :: rest when flag.StartsWith("--package-server=") ->
+            if packageServer.IsSome then
+                Error "Package server specified multiple times"
+            else
+                parsePackageServerValue (flag.Substring(17))
+                |> Result.bind (fun server ->
+                    parseOptions target verbosity allowInternal (Some server) manifestPath keepGoing reportPath rest)
         | "--target" :: value :: rest ->
             match target with
             | ExplicitTarget _ -> Error "Target specified multiple times"
             | HostTarget ->
                 parseTargetValue value
                 |> Result.bind (fun parsedTarget ->
-                    parseOptions parsedTarget verbosity allowInternal manifestPath keepGoing reportPath rest)
+                    parseOptions parsedTarget verbosity allowInternal packageServer manifestPath keepGoing reportPath rest)
         | "--target" :: [] -> Error "Missing value for --target (expected 'linux-x86_64')"
         | flag :: rest when flag.StartsWith("--target=") ->
             match target with
@@ -566,7 +611,7 @@ let parseBatchArgs (argv: string array) : Result<BatchCliOptions, string> =
             | HostTarget ->
                 parseTargetValue (flag.Substring(9))
                 |> Result.bind (fun parsedTarget ->
-                    parseOptions parsedTarget verbosity allowInternal manifestPath keepGoing reportPath rest)
+                    parseOptions parsedTarget verbosity allowInternal packageServer manifestPath keepGoing reportPath rest)
         | [] ->
             match manifestPath with
             | None -> Error "Batch compilation requires --manifest or '--' before SOURCE OUTPUT pairs"
@@ -575,13 +620,14 @@ let parseBatchArgs (argv: string array) : Result<BatchCliOptions, string> =
                     Target = target
                     Verbosity = verbosity
                     AllowInternal = allowInternal
+                    PackageServer = packageServer
                     Input = ManifestFile path
                     KeepGoing = keepGoing
                     ReportPath = reportPath
                 }
         | flag :: _ -> Error $"Unknown batch flag: {flag}"
 
-    parseOptions HostTarget Normal false None false None (Array.toList argv)
+    parseOptions HostTarget Normal false None None false None (Array.toList argv)
 
 let parseCommand (argv: string array) : Result<CliCommand, string> =
     match Array.toList argv with
@@ -662,6 +708,9 @@ let private compileWithStdlib
         Verbosity = verbosityToInt verbosity
         Options = options
         PackageValues = CompilationContexts.emptyPackageValueCatalog
+        PackageManager =
+            cliOpts.PackageServer
+            |> Option.map (fun server -> { PackageManager.defaultConfig () with Server = server })
         PassTimingRecorder = None
         Session = None
     }
@@ -789,6 +838,7 @@ let compileBatch (options: BatchCliOptions) : int =
                             Verbosity = options.Verbosity
                             Target = options.Target
                             AllowInternal = options.AllowInternal
+                            PackageServer = options.PackageServer
                     }
                     let result =
                         compileWithStdlib
@@ -866,6 +916,9 @@ let run (source: string) (verbosity: VerbosityLevel) (cliOpts: CliOptions) : int
                     Verbosity = verbosityToInt verbosity
                     Options = options
                     PackageValues = CompilationContexts.emptyPackageValueCatalog
+                    PackageManager =
+                        cliOpts.PackageServer
+                        |> Option.map (fun server -> { PackageManager.defaultConfig () with Server = server })
                     PassTimingRecorder = None
                     Session = None
                 }
@@ -919,6 +972,10 @@ let printUsage () =
     println "  -r, --run            Run instead of compile (shows exit code)"
     println "  -e, --expression     Treat argument as expression (not filename)"
     println "  --target TARGET      Compile for linux-x86_64 instead of the host"
+    println "  --manifest FILE      Read labeled batch inputs from a JSON manifest"
+    println "  --keep-going         Continue batch compilation after individual failures"
+    println "  --report FILE        Write one JSON object per batch result"
+    println "  --package-server URL Resolve referenced hosted packages from URL"
     println "  --manifest FILE      Read labeled batch inputs from a JSON manifest"
     println "  --keep-going         Continue batch compilation after individual failures"
     println "  --report FILE        Write one JSON object per batch result"
