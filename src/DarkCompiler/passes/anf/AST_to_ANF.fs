@@ -455,14 +455,21 @@ let convertFunctionsWithOwnership
     AnalyzeFunctionOwnership.analyze ownershipContext functions
     |> Result.mapError (fun error -> $"Whole-function ownership analysis failed: {error}")
     |> Result.bind (fun analysis ->
-        loop functions varGen []
+        let materialization =
+            AnalyzeFunctionOwnership.schedule analysis
+            |> ScheduleOwnershipVariants.materialization
+        let fusion =
+            FuseOwnershipListCalls.fuse
+                materialization
+                functions
+        loop fusion.Functions varGen []
         |> Result.bind (fun (anfFunctions, nextVarGen) ->
             LowerOwnershipVariants.lower
                 (AnalyzeFunctionOwnership.originalFunctions analysis)
-                (AnalyzeFunctionOwnership.schedule analysis
-                 |> ScheduleOwnershipVariants.materialization)
+                materialization
                 anfFunctions
                 nextVarGen
+                fusion.FusedSites
             |> Result.mapError (fun error -> $"Ownership lowering failed: {error}")
             |> Result.map (fun lowered -> {
                 Functions = lowered.Functions

@@ -23,6 +23,8 @@ type Primitive =
     | Literal of result: HIR.Value * value: ScalarLiteral
     | Unary of result: HIR.Value * op: AST.UnaryOp * operand: HIR.Value
     | Binary of result: HIR.Value * op: AST.BinOp * left: HIR.Value * right: HIR.Value
+    | FreshManaged of result: HIR.Value * source: HIR.Operand
+    | ListTransform of result: HIR.Value * input: HIR.Value * source: HIR.Operand
 
 type Block = private Block of HIR.Block<HIR.Operation<Primitive, Block>>
 
@@ -52,10 +54,38 @@ let primitiveContract primitive : HIR.PrimitiveContract =
             when left.Type <> AST.TFloat64 ->
             [left; right], result, Set.singleton HIR.MayFail
         | Binary (result, _, left, right) -> [left; right], result, Set.empty
+        | FreshManaged (result, source) ->
+            source.Inputs |> Map.values |> Seq.toList,
+            result,
+            Set.ofList [HIR.MayEvaluateOpaqueSource; HIR.MayAllocate]
+        | ListTransform (result, input, source) ->
+            input
+            :: (source.Inputs
+                |> Map.values
+                |> Seq.filter (fun value -> value.Id <> input.Id)
+                |> Seq.toList),
+            result,
+            Set.ofList [
+                HIR.MayEvaluateOpaqueSource
+                HIR.MayAllocate
+                HIR.MayInvokeUserCode
+                HIR.ReadsOwnedStorage
+                HIR.WritesOwnedStorage
+            ]
     {
         Inputs = inputs
-        Operands = []
-        Outputs = [{ Value = output; Alias = HIR.NoManagedAlias }]
+        Outputs = [{
+            Value = output
+            Alias =
+                match primitive with
+                | FreshManaged _ -> HIR.FreshManaged
+                | ListTransform (_, input, _) -> HIR.MayReuseInput input
+                | Literal _ | Unary _ | Binary _ -> HIR.NoManagedAlias
+        }]
+        Operands =
+            match primitive with
+            | FreshManaged (_, source) | ListTransform (_, _, source) -> [source]
+            | Literal _ | Unary _ | Binary _ -> []
         Effects = effects
     }
 
@@ -181,6 +211,30 @@ let private constructWithSignatures
         | None -> normalizeNonLiteral state expected expression
     and normalizeNonLiteral state expected expression =
         match expression with
+        | CheckedAST.ListLiteral _ when expected = AST.TList AST.TInt64 ->
+            let result, next = fresh expected state
+            let operation = HIR.Leaf (FreshManaged (result, operand state expression expected))
+            Ok (result, { next with Operations = operation :: state.Operations })
+        | CheckedAST.Call (target, arguments)
+            when expected = AST.TList AST.TInt64
+                 && (target = AST.functionIdForName "Darklang.Stdlib.List.map_i64_i64"
+                     || target = AST.functionIdForName "Darklang.Stdlib.List.reverse_i64") ->
+            match AST.NonEmptyList.toList arguments with
+            | inputExpression :: _ ->
+                inferExpression state inputExpression
+                |> Result.bind (fun inputType ->
+                    if inputType <> AST.TList AST.TInt64 then
+                        Error (InconsistentCallSignature (definition.Name, target))
+                    else
+                        normalize state inputType inputExpression
+                        |> Result.map (fun (input, afterInput) ->
+                            let result, next = fresh expected afterInput
+                            let operation = HIR.Leaf (ListTransform (
+                                result,
+                                input,
+                                operand afterInput expression expected))
+                            result, { next with Operations = operation :: afterInput.Operations }))
+            | [] -> Error (InconsistentCallSignature (definition.Name, target))
         | CheckedAST.Local id ->
             match Map.tryFind id state.Values with
             | Some value when value.Type = expected -> Ok (value, state)
