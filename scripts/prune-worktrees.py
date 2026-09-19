@@ -8,7 +8,9 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 
@@ -32,6 +34,13 @@ class ProcessCwd:
 class PlanEntry:
     worktree: Worktree
     reason: str
+
+
+@dataclass(frozen=True)
+class StatusEntry:
+    code: str
+    path: Path
+    display_path: str
 
 
 @dataclass(frozen=True)
@@ -262,20 +271,120 @@ def format_size(size: int) -> str:
     raise AssertionError("unreachable size unit")
 
 
-def commit_description(repo: Path, head: str) -> tuple[str, str, str]:
+def commit_description(repo: Path, head: str) -> tuple[str, int, str, str]:
     result = git(
         repo,
         "show",
         "-s",
-        "--format=%h%x00%cs%x00%s",
+        "--format=%h%x00%ct%x00%cs%x00%s",
         head,
         check=False,
     )
     if result.returncode != 0:
         detail = result.stderr.strip() or "git show failed"
         raise EligibilityError(f"cannot inspect commit {head}: {detail}")
-    abbreviated, date, subject = result.stdout.rstrip("\n").split("\0", 2)
-    return abbreviated, date, subject
+    abbreviated, timestamp, date, subject = result.stdout.rstrip("\n").split(
+        "\0", 3
+    )
+    return abbreviated, int(timestamp), date, subject
+
+
+def format_age(timestamp: float) -> str:
+    seconds = max(0, int(time.time() - timestamp))
+    intervals = (
+        (365 * 24 * 60 * 60, "year"),
+        (30 * 24 * 60 * 60, "month"),
+        (7 * 24 * 60 * 60, "week"),
+        (24 * 60 * 60, "day"),
+        (60 * 60, "hour"),
+        (60, "minute"),
+    )
+    for interval, name in intervals:
+        if seconds >= interval:
+            count = seconds // interval
+            suffix = "" if count == 1 else "s"
+            return f"{count} {name}{suffix} ago"
+    return "less than a minute ago"
+
+
+def format_timestamp(timestamp: float) -> str:
+    formatted = (
+        datetime.fromtimestamp(timestamp)
+        .astimezone()
+        .strftime("%Y-%m-%d %H:%M %Z")
+    )
+    return f"{formatted} ({format_age(timestamp)})"
+
+
+def checkout_status(path: Path) -> list[StatusEntry]:
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(path),
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+            "--ignored=matching",
+        ],
+        check=False,
+        capture_output=True,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.decode(errors="replace").strip() or "git status failed"
+        raise EligibilityError(f"cannot inspect checkout {path}: {detail}")
+
+    fields = result.stdout.split(b"\0")
+    entries: list[StatusEntry] = []
+    index = 0
+    while index < len(fields) and fields[index]:
+        record = fields[index].decode(errors="surrogateescape")
+        if len(record) < 4:
+            raise EligibilityError(f"git returned malformed status for {path}")
+        code = record[:2]
+        relative_path = record[3:]
+        display_path = relative_path
+        if "R" in code or "C" in code:
+            index += 1
+            if index >= len(fields) or not fields[index]:
+                raise EligibilityError(f"git returned an incomplete rename for {path}")
+            original = fields[index].decode(errors="surrogateescape")
+            display_path = f"{original} -> {relative_path}"
+        entries.append(StatusEntry(code, path / relative_path, display_path))
+        index += 1
+    return entries
+
+
+def status_activity(entry: StatusEntry) -> str:
+    try:
+        stat = entry.path.stat(follow_symlinks=False)
+    except FileNotFoundError:
+        return "not present on disk"
+    except OSError as error:
+        return f"timestamp unavailable: {error}"
+    created = getattr(stat, "st_birthtime", 0.0)
+    return format_timestamp(max(stat.st_mtime, created))
+
+
+def integration_subjects(
+    repo: Path, integration_commit: str
+) -> dict[str, tuple[str, int, str]]:
+    result = git(
+        repo,
+        "log",
+        "--format=%H%x1f%ct%x1f%cs%x1f%s",
+        integration_commit,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "git log failed"
+        raise EligibilityError(f"cannot inspect integration history: {detail}")
+    matches: dict[str, tuple[str, int, str]] = {}
+    for line in result.stdout.splitlines():
+        commit, timestamp, date, subject = line.split("\x1f", 3)
+        matches.setdefault(subject, (commit, int(timestamp), date))
+    return matches
 
 
 def prompt_delete(recommend_delete: bool, has_branch: bool) -> bool:
@@ -322,6 +431,7 @@ def run_interactive(
     errors: list[str] = []
     stopped_early = False
     ordered = sorted(worktrees, key=lambda worktree: str(worktree.path))
+    subjects = integration_subjects(repo, integration_commit)
 
     for index, worktree in enumerate(ordered, start=1):
         resolved_path = worktree.path.resolve()
@@ -329,9 +439,13 @@ def run_interactive(
         is_running = resolved_path == current_root
         exists = worktree.path.exists() and not worktree.prunable
         integrated = is_ancestor(repo, worktree.head, integration_commit)
-        dirty = is_dirty(worktree.path) if exists else False
+        status_entries = checkout_status(worktree.path) if exists else []
+        dirty = bool(status_entries)
         users = processes_using(worktree, processes) if exists else []
-        abbreviated, date, subject = commit_description(repo, worktree.head)
+        abbreviated, commit_timestamp, date, subject = commit_description(
+            repo, worktree.head
+        )
+        subject_match = subjects.get(subject)
         branch = local_branch(worktree)
 
         gates: list[str] = []
@@ -363,8 +477,21 @@ def run_interactive(
         print(f"  Branch: {branch or '(detached)'}")
         print(f"  Directory: {worktree.path} ({'present' if exists else 'missing'})")
         print(f"  Checkout: {worktree.head}")
-        print(f"  Last commit: {abbreviated} {date} — {subject}")
+        print(
+            f"  Last commit: {abbreviated} {date} ({format_age(commit_timestamp)}) "
+            f"— {subject}"
+        )
         print(f"  Merged into {integration_ref}: {'yes' if integrated else 'no'}")
+        if subject_match is None:
+            print(f"  Same-subject commit on {integration_ref}: no")
+        else:
+            match_commit, match_timestamp, match_date = subject_match
+            same_commit = " (same commit)" if match_commit == worktree.head else ""
+            print(
+                f"  Same-subject commit on {integration_ref}: yes — "
+                f"{match_commit[:12]} {match_date} ({format_age(match_timestamp)})"
+                f"{same_commit}"
+            )
         print(f"  Locked: {'yes' if worktree.locked else 'no'}")
         local_files = (
             "unavailable (directory missing)"
@@ -374,6 +501,13 @@ def run_interactive(
             else "clean"
         )
         print(f"  Local files: {local_files}")
+        if status_entries:
+            print("  Git status:")
+            for entry in status_entries:
+                print(f"    {entry.code} {entry.display_path}")
+                print(f"       created/updated: {status_activity(entry)}")
+        else:
+            print("  Git status: clean")
         print(f"  Active processes: {format_processes(users)}")
         styled_recommendation = (
             output_palette.action("REMOVE", recommendation)
