@@ -28,6 +28,7 @@ Purpose: Serialize committed local task branches through one merge/test/push/ver
 - A task agent runs `./land` and stops when it prints `queued`. The script's internal `--auto` enqueue authorizes only the configured runner's bounded unattended validation and deployment; it does not authorize the task agent to monitor, validate, deploy, or report the eventual outcome.
 - Only a separately authorized runner uses `deploy` or a daemon.
 - A recovery conflict in generated `benchmarks/RESULTS.md` is resolved only by a successful improving `./benchmarks/run_benchmarks.sh full` recording from the rebased source. Never hand-merge or choose one side of that file; if recording does not regenerate it from an improved canonical snapshot, recovery stops.
+- The `benchmark-sources` gate rejects any candidate that changes `benchmarks/problems/`; benchmark source changes require a separately controlled integration-policy update and are never repaired or bypassed by the integrator.
 - Deployment requires either confirmation of the human-readable exact plan or prior bounded unattended approval. Agents never select train IDs or supply plan hashes; structured evidence may include identifiers for inspection.
 - Unattended approval is bound to the exact destination and execution policy. Any change blocks before push.
 - Recovery and destructive cleanup require their stated approval. Follow `status.next_action`; never rewrite permanent deploy audit refs.

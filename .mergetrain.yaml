@@ -10,6 +10,8 @@ git:
     - main
 
 gates:
+  - name: benchmark-sources
+    run: python3 benchmarks/check_sources_unchanged.py --base ${integration_ref}
   - name: build
     run: ./build --ai
   - name: tests
