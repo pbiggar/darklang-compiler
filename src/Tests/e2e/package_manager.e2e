@@ -2,6 +2,6 @@
 
 Darklang.Test.returnsInt () = stdout="5\n" stderr=""
 
-Darklang.SCM.Constraints.kindToString Darklang.SCM.Constraints.Kind.KindChanged = stdout="kind-changed\n" stderr=""
+Darklang.SCM.Constraints.kindToString Darklang.SCM.Constraints.Kind.KindChanged = stdout="\"kind-changed\"\n" stderr=""
 
-Darklang.PrettyPrinter.shortenName ["Darklang", "Stdlib", "Option"] "Darklang" ["Stdlib", "List"] "map" = stdout="List.map\n" stderr=""
+Darklang.PrettyPrinter.shortenName ["Darklang", "Stdlib", "Option"] "Darklang" ["Stdlib", "List"] "map" = stdout="\"List.map\"\n" stderr=""

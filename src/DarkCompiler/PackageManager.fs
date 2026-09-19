@@ -705,7 +705,10 @@ let rec private expressionNames (expr: AST.Expr) : string list =
     | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _
     | AST.Var _ | AST.RuntimeError _ -> []
 
-let private sourceCandidates (AST.Program topLevels) : string list =
+let private sourceCandidates
+    (isKnownName: string -> bool)
+    (AST.Program topLevels)
+    : string list =
     topLevels
     |> List.collect (function
         | AST.FunctionDef definition ->
@@ -719,14 +722,26 @@ let private sourceCandidates (AST.Program topLevels) : string list =
         | AST.TypeDef (AST.TypeAlias (_, _, target)) -> typeNames target
         | AST.Expression (_, expression) -> expressionNames expression)
     |> List.filter (fun name -> name.Contains '.')
+    |> List.distinct
+    |> List.filter (isKnownName >> not)
     |> List.collect (fun name ->
         let parts = name.Split('.') |> Array.toList
         [2 .. List.length parts] |> List.rev |> List.map (fun length -> parts |> List.take length |> String.concat "."))
     |> List.distinct
 
-let resolve (config: Config) (program: AST.Program) : Result<ResolvedSource list, string> =
+let resolve
+    (config: Config)
+    (resolutionEnv: NameResolution.ResolutionEnvironment)
+    (program: AST.Program)
+    : Result<ResolvedSource list, string> =
     use client = new HttpClient()
     client.Timeout <- TimeSpan.FromSeconds 30.0
+    let isKnownName name =
+        [ NameResolution.ResolutionContext.Type
+          NameResolution.ResolutionContext.Callable
+          NameResolution.ResolutionContext.Value ]
+        |> List.exists (fun context ->
+            NameResolution.resolve context name resolutionEnv |> Result.isOk)
     let fetchLocated (kind: ItemKind) (hash: string) =
         let path = $"/{kindPath kind}/get/with-location/{Uri.EscapeDataString hash}"
         fetchByHash client config path
@@ -734,7 +749,8 @@ let resolve (config: Config) (program: AST.Program) : Result<ResolvedSource list
             | Missing -> Ok None
             | Found json -> parseLocatedEntity kind hash json |> Result.map Some)
     let findRoots () =
-        sourceCandidates program
+        sourceCandidates isKnownName program
+        |> List.filter (isKnownName >> not)
         |> ResultList.collectResults (fun name ->
             allKinds
             |> ResultList.collectResults (fun kind ->
@@ -755,7 +771,11 @@ let resolve (config: Config) (program: AST.Program) : Result<ResolvedSource list
                 | Some entity ->
                     dependencyRefs entity.Json
                     |> Result.bind (fun dependencies ->
-                        let next = dependencies |> List.map (fun (dependencyHash, _) -> None, dependencyHash)
+                        let next =
+                            dependencies
+                            |> List.choose (fun (dependencyHash, dependencyName) ->
+                                if isKnownName dependencyName then None
+                                else Some (None, dependencyHash))
                         load (next @ rest) (Set.add hash visited) (entity :: loaded)))
         | (None, hash) :: rest ->
             allKinds
@@ -766,7 +786,11 @@ let resolve (config: Config) (program: AST.Program) : Result<ResolvedSource list
                 | Some (_, entity) ->
                     dependencyRefs entity.Json
                     |> Result.bind (fun dependencies ->
-                        let next = dependencies |> List.map (fun (dependencyHash, _) -> None, dependencyHash)
+                        let next =
+                            dependencies
+                            |> List.choose (fun (dependencyHash, dependencyName) ->
+                                if isKnownName dependencyName then None
+                                else Some (None, dependencyHash))
                         load (next @ rest) (Set.add hash visited) (entity :: loaded)))
     findRoots ()
     |> Result.bind (fun roots -> roots |> List.map (fun (kind, hash) -> Some kind, hash) |> fun pending -> load pending Set.empty [])

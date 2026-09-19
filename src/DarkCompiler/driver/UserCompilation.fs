@@ -35,7 +35,8 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                     match plan.PackageManager with
                     | None -> Ok originalProgram
                     | Some config ->
-                        PackageManager.resolve config originalProgram
+                        let baseEnv = plan.BaseContext.TypeCheckEnv
+                        PackageManager.resolve config baseEnv.ResolutionEnv originalProgram
                         |> Result.bind (fun packages ->
                             let originalSources = AST.NonEmptyList.toList plan.Sources
                             packages
