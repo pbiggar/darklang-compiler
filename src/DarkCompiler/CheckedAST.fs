@@ -46,12 +46,12 @@ type LambdaParameter = {
 }
 
 type RecordReference = {
-    TypeName: string
+    TypeId: AST.TypeId
     TypeArgs: AST.Type list
 }
 
 type ConstructorReference = {
-    TypeName: string
+    TypeId: AST.TypeId
     ConstructorId: AST.ConstructorId
 }
 
@@ -201,10 +201,21 @@ let internFunction name symbols =
         (fun ids names next -> { symbols with FunctionIds = ids; FunctionNames = names; NextFunctionOrdinal = next })
 
 let internType name symbols =
-    intern AST.typeId name name symbols.TypeIds symbols.TypeNames symbols.NextTypeOrdinal
-        (fun ids names next -> { symbols with TypeIds = ids; TypeNames = names; NextTypeOrdinal = next })
+    match Map.tryFind name symbols.TypeIds with
+    | Some id -> (id, symbols)
+    | None ->
+        let id = AST.typeIdForName name
+        match Map.tryFind id symbols.TypeNames with
+        | Some existing when existing <> name ->
+            Crash.crash $"Type identity collision: {existing}, {name}"
+        | _ ->
+            (id,
+             { symbols with
+                 TypeIds = Map.add name id symbols.TypeIds
+                 TypeNames = Map.add id name symbols.TypeNames })
 
 let internConstructor typeName name tag symbols =
+    let (_, symbols) = internType typeName symbols
     match Map.tryFind (typeName, name) symbols.ConstructorIds with
     | Some id -> (id, symbols)
     | None ->
@@ -217,6 +228,7 @@ let internConstructor typeName name tag symbols =
         (id, symbols)
 
 let internField typeName name index symbols =
+    let (_, symbols) = internType typeName symbols
     match Map.tryFind (typeName, name) symbols.FieldIds with
     | Some id -> (id, symbols)
     | None ->
@@ -365,13 +377,17 @@ let importTopLevels
         | DictLiteral (keyType, valueType, entries) ->
             DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> mapExpr key, mapExpr value))
         | RecordLiteral (reference, fields) ->
-            RecordLiteral (reference, fields |> List.map (fun (field, value) -> mapFieldId field, mapExpr value))
+            RecordLiteral (
+                { reference with TypeId = mapTypeId reference.TypeId },
+                fields |> List.map (fun (field, value) -> mapFieldId field, mapExpr value)
+            )
         | RecordUpdate (record, fields) ->
             RecordUpdate (mapExpr record, fields |> List.map (fun (field, value) -> mapFieldId field, mapExpr value))
         | RecordAccess (record, field) -> RecordAccess (mapExpr record, mapFieldId field)
         | Constructor (reference, fields) ->
             Constructor (
-                { reference with ConstructorId = mapConstructorId reference.ConstructorId },
+                { TypeId = mapTypeId reference.TypeId
+                  ConstructorId = mapConstructorId reference.ConstructorId },
                 List.map mapExpr fields
             )
         | ListLiteral values -> ListLiteral (List.map mapExpr values)
@@ -610,9 +626,6 @@ let recursiveBindingAvailability
     : AST.RecursiveAvailability =
     memberInfo.Resolved.Availability
 
-let constructorReferenceTypeName (reference: ConstructorReference) : string =
-    reference.TypeName
-
 let private conversionError location detail =
     Error $"Checked AST construction failed at {location}: {detail}"
 
@@ -622,7 +635,8 @@ let private map2 f first second =
         second |> Result.map (fun secondValue -> f firstValue secondValue))
 
 let private convertRecordReference (reference: AST.RecordReference) : RecordReference =
-    { TypeName = reference.ResolvedTypeName; TypeArgs = reference.TypeArgs }
+    { TypeId = AST.typeIdForName reference.ResolvedTypeName
+      TypeArgs = reference.TypeArgs }
 
 let private convertConstructorReference
     (location: string)
@@ -635,7 +649,7 @@ let private convertConstructorReference
         match AST.constructorReferenceTypeName reference with
         | Some typeName ->
             match tryFindConstructorId typeName variantName symbols with
-            | Some id -> Ok { TypeName = typeName; ConstructorId = id }
+            | Some id -> Ok { TypeId = AST.typeIdForName typeName; ConstructorId = id }
             | None -> conversionError location "resolved constructor has no semantic identity"
         | None -> conversionError location "resolved constructor has no declaring type"
     | AST.UnresolvedConstructor _ ->

@@ -49,7 +49,9 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
     | CheckedAST.DictLiteral (keyType, valueType, _) ->
         Ok (AST.TDict (keyType, valueType))
     | CheckedAST.RecordLiteral (reference, fields) ->
-            let typeName = reference.TypeName
+        match tryFindRecordTypeNameById reference.TypeId typeReg with
+        | None -> Error "Unknown semantic record type"
+        | Some typeName ->
             match Map.tryFind typeName typeReg with
             | None ->
                 Error $"Unknown record type: {typeName}"
@@ -133,36 +135,34 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
             | AST.TTuple _ -> Error $"Tuple index {index} out of bounds"
             | _ -> Error "Cannot access index on non-tuple type")
     | CheckedAST.Constructor (constructorReference, fields) ->
-        match
-            tryFindVariantByTag
-                constructorReference.TypeName
-                (AST.constructorTag constructorReference.ConstructorId)
-                variantLookup
-        with
-        | None ->
-            Error $"Unknown constructor tag: {AST.constructorTag constructorReference.ConstructorId}"
-        | Some (typeName, typeParams, _, fieldPatterns) ->
-            let defaultTypeArgs = typeParams |> List.map AST.TVar
-            if List.length fieldPatterns <> List.length fields then
-                Ok (AST.TSum (typeName, defaultTypeArgs))
-            else
-                List.zip fieldPatterns fields
-                |> List.fold (fun result (fieldPattern, fieldExpr) ->
-                    result
-                    |> Result.bind (fun bindings ->
-                        inferTypeCore sumTypeNames fieldExpr typeEnv typeReg variantLookup funcReg moduleRegistry
-                        |> Result.map (fun actualFieldType ->
-                            match matchTypePattern fieldPattern actualFieldType with
-                            | Ok fieldBindings -> bindings @ fieldBindings
-                            | Error _ -> bindings))) (Ok [])
-                |> Result.map (fun bindings ->
-                    match consolidateTypeBindings bindings with
-                    | Error _ -> AST.TSum (typeName, defaultTypeArgs)
-                    | Ok subst ->
-                        typeParams
-                        |> List.map (fun typeParam ->
-                            Map.tryFind typeParam subst |> Option.defaultValue (AST.TVar typeParam))
-                        |> fun typeArgs -> AST.TSum (typeName, typeArgs))
+        match tryFindSumTypeNameById constructorReference.TypeId variantLookup with
+        | None -> Error "Unknown semantic constructor type"
+        | Some constructorTypeName ->
+            match tryFindVariantByTag constructorTypeName (AST.constructorTag constructorReference.ConstructorId) variantLookup with
+            | None ->
+                Error $"Unknown constructor tag: {AST.constructorTag constructorReference.ConstructorId}"
+            | Some (typeName, typeParams, _, fieldPatterns) ->
+                let defaultTypeArgs = typeParams |> List.map AST.TVar
+                if List.length fieldPatterns <> List.length fields then
+                    Ok (AST.TSum (typeName, defaultTypeArgs))
+                else
+                    List.zip fieldPatterns fields
+                    |> List.fold (fun result (fieldPattern, fieldExpr) ->
+                        result
+                        |> Result.bind (fun bindings ->
+                            inferTypeCore sumTypeNames fieldExpr typeEnv typeReg variantLookup funcReg moduleRegistry
+                            |> Result.map (fun actualFieldType ->
+                                match matchTypePattern fieldPattern actualFieldType with
+                                | Ok fieldBindings -> bindings @ fieldBindings
+                                | Error _ -> bindings))) (Ok [])
+                    |> Result.map (fun bindings ->
+                        match consolidateTypeBindings bindings with
+                        | Error _ -> AST.TSum (typeName, defaultTypeArgs)
+                        | Ok subst ->
+                            typeParams
+                            |> List.map (fun typeParam ->
+                                Map.tryFind typeParam subst |> Option.defaultValue (AST.TVar typeParam))
+                            |> fun typeArgs -> AST.TSum (typeName, typeArgs))
     | CheckedAST.ListLiteral elements ->
         match elements with
         | [] -> Ok (AST.TList (AST.TVar "t"))  // Preserve unknown element type for empty lists

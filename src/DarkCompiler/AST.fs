@@ -278,6 +278,11 @@ type RecursiveMemberId = private RecursiveMemberId of int
 let bindingId ordinal = BindingId ordinal
 let functionId ordinal = FunctionId ordinal
 let typeId ordinal = TypeId ordinal
+let semanticNameIdentity (name: string) : int =
+    name
+    |> Seq.fold (fun hash character -> (hash ^^^ uint32 character) * 16777619u) 2166136261u
+    |> fun hash -> int (hash &&& 0x7fffffffu)
+let typeIdForName name = TypeId (semanticNameIdentity name)
 let constructorId identity tag = ConstructorId (identity, tag)
 let constructorTag (ConstructorId (_, tag)) = tag
 let fieldId identity index = FieldId (identity, index)

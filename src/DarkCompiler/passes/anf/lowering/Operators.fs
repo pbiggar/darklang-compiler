@@ -201,8 +201,9 @@ let rec generateStructuralEquality
         | Some recordInfo ->
             let descriptor =
                 recordDescriptor
+                    typeName
                     {
-                        TypeName = typeName
+                        TypeId = AST.typeIdForName typeName
                         TypeArgs = typeArgs
                     }
                     recordInfo

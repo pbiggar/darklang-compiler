@@ -95,12 +95,12 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             | Some recordInfo ->
                 let (resultVar, nextVarGen) = ANF.freshVar varGen
                 let reference : CheckedAST.RecordReference =
-                    { TypeName = typeName; TypeArgs = [] }
+                    { TypeId = AST.typeIdForName typeName; TypeArgs = [] }
                 Ok (
                     ANF.Var resultVar,
                     [ resultVar,
                       ANF.RecordAlloc (
-                          recordDescriptor reference recordInfo,
+                          recordDescriptor typeName reference recordInfo,
                           [ANF.IntLiteral (ANF.Int64 0L)]
                       ) ],
                     nextVarGen
@@ -556,13 +556,17 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             (ANF.Var tempVar, allBindings, varGen2))
 
     | CheckedAST.RecordLiteral (reference, fields) ->
-        let typeName = reference.TypeName
+        let typeName =
+            match tryFindRecordTypeNameById reference.TypeId typeReg with
+            | Some name -> name
+            | None -> Crash.crash "Resolved record type identity is absent from the lowering registry"
         // Evaluate field expressions in source order, independently of the
         // declaration-order tuple layout used for the record value.
-        let fieldCount =
+        let recordInfo =
             match Map.tryFind typeName typeReg with
-            | Some recordInfo -> List.length recordInfo.Fields
+            | Some info -> info
             | None -> Crash.crash $"Record type '{typeName}' not found in typeReg"
+        let fieldCount = List.length recordInfo.Fields
 
         let rec convertFields remaining vg acc =
             match remaining with
@@ -591,7 +595,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
              sourceBindings
              @ [(tempVar,
                  ANF.RecordAlloc (
-                    recordDescriptor reference (Map.find typeName typeReg),
+                    recordDescriptor typeName reference recordInfo,
                     orderedAtoms
                  ))],
              varGen2))
@@ -639,10 +643,9 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                                              fieldVar,
                                              ANF.RecordGet (
                                                  recordDescriptor
-                                                     {
-                                                         TypeName = typeName
-                                                         TypeArgs = typeArgs
-                                                     }
+                                                     typeName
+                                                     { TypeId = AST.typeIdForName typeName
+                                                       TypeArgs = typeArgs }
                                                      recordInfo,
                                                  recordAtom,
                                                  index
@@ -658,10 +661,9 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                                  resultVar,
                                  ANF.RecordClone (
                                      recordDescriptor
-                                         {
-                                             TypeName = typeName
-                                             TypeArgs = typeArgs
-                                         }
+                                         typeName
+                                         { TypeId = AST.typeIdForName typeName
+                                           TypeArgs = typeArgs }
                                          recordInfo,
                                      recordAtom,
                                      List.rev fieldAtoms
@@ -691,10 +693,9 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                             let getCExpr =
                                 ANF.RecordGet (
                                     recordDescriptor
-                                        {
-                                            TypeName = typeName
-                                            TypeArgs = typeArgs
-                                        }
+                                        typeName
+                                        { TypeId = AST.typeIdForName typeName
+                                          TypeArgs = typeArgs }
                                         recordInfo,
                                     recordAtom,
                                     index
@@ -709,49 +710,47 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                 Error $"Cannot access field '{fieldName}' on non-record type")
 
     | CheckedAST.Constructor (constructorReference, fields) ->
-        match
-            tryFindVariantByTag
-                constructorReference.TypeName
-                (AST.constructorTag constructorReference.ConstructorId)
-                variantLookup
-        with
-        | None ->
-            Error $"Unknown constructor tag: {AST.constructorTag constructorReference.ConstructorId}"
-        | Some (typeName, _, tag, _) ->
-            // Check if ANY variant in this type has a payload
-            // Note: We get typeName from variantLookup, not from AST (which may be empty)
-            let typeHasPayloadVariants =
-                variantLookup
-                |> Map.exists (fun _ (tName, _, _, variantFields) ->
-                    tName = typeName && not (List.isEmpty variantFields))
+        match tryFindSumTypeNameById constructorReference.TypeId variantLookup with
+        | None -> Error "Resolved constructor type identity is absent from the lowering registry"
+        | Some constructorTypeName ->
+            match tryFindVariantByTag constructorTypeName (AST.constructorTag constructorReference.ConstructorId) variantLookup with
+            | None ->
+                Error $"Unknown constructor tag: {AST.constructorTag constructorReference.ConstructorId}"
+            | Some (typeName, _, tag, _) ->
+                // Check if ANY variant in this type has a payload
+                // Note: We get typeName from variantLookup, not from AST (which may be empty)
+                let typeHasPayloadVariants =
+                    variantLookup
+                    |> Map.exists (fun _ (tName, _, _, variantFields) ->
+                        tName = typeName && not (List.isEmpty variantFields))
 
-            match fields with
-            | [] when not typeHasPayloadVariants ->
-                // Pure enum type: return tag as an integer (no bindings needed)
-                Ok (ANF.IntLiteral (ANF.Int64 (int64 tag)), [], varGen)
-            | [] ->
-                // No payload but type has other variants with payloads
-                // Heap-allocate as [tag, 0] for uniform 2-element structure
-                // This enables consistent structural equality comparison
-                let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
-                let dummyPayload = ANF.IntLiteral (ANF.Int64 0L)
-                let (tempVar, varGen1) = ANF.freshVar varGen
-                let tupleCExpr = ANF.TupleAlloc [tagAtom; dummyPayload]
-                Ok (ANF.Var tempVar, [(tempVar, tupleCExpr)], varGen1)
-            | _ ->
-                // Variant with payload: allocate [tag, payload] on heap
-                let payloadExpr =
-                    match fields with
-                    | [field] -> field
-                    | _ -> CheckedAST.TupleLiteral fields
-                toAtomCore sumTypeNames inertScopes payloadExpr varGen env typeReg variantLookup funcReg moduleRegistry
-                |> Result.map (fun (payloadAtom, payloadBindings, varGen1) ->
+                match fields with
+                | [] when not typeHasPayloadVariants ->
+                    // Pure enum type: return tag as an integer (no bindings needed)
+                    Ok (ANF.IntLiteral (ANF.Int64 (int64 tag)), [], varGen)
+                | [] ->
+                    // No payload but type has other variants with payloads
+                    // Heap-allocate as [tag, 0] for uniform 2-element structure
+                    // This enables consistent structural equality comparison
                     let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
-                    // Create TupleAlloc [tag, payload] and bind to fresh variable
-                    let (tempVar, varGen2) = ANF.freshVar varGen1
-                    let tupleCExpr = ANF.TupleAlloc [tagAtom; payloadAtom]
-                    let allBindings = payloadBindings @ [(tempVar, tupleCExpr)]
-                    (ANF.Var tempVar, allBindings, varGen2))
+                    let dummyPayload = ANF.IntLiteral (ANF.Int64 0L)
+                    let (tempVar, varGen1) = ANF.freshVar varGen
+                    let tupleCExpr = ANF.TupleAlloc [tagAtom; dummyPayload]
+                    Ok (ANF.Var tempVar, [(tempVar, tupleCExpr)], varGen1)
+                | _ ->
+                    // Variant with payload: allocate [tag, payload] on heap
+                    let payloadExpr =
+                        match fields with
+                        | [field] -> field
+                        | _ -> CheckedAST.TupleLiteral fields
+                    toAtomCore sumTypeNames inertScopes payloadExpr varGen env typeReg variantLookup funcReg moduleRegistry
+                    |> Result.map (fun (payloadAtom, payloadBindings, varGen1) ->
+                        let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
+                        // Create TupleAlloc [tag, payload] and bind to fresh variable
+                        let (tempVar, varGen2) = ANF.freshVar varGen1
+                        let tupleCExpr = ANF.TupleAlloc [tagAtom; payloadAtom]
+                        let allBindings = payloadBindings @ [(tempVar, tupleCExpr)]
+                        (ANF.Var tempVar, allBindings, varGen2))
 
     | CheckedAST.ListLiteral elements ->
         // Compile list literal as SkewList in atom position

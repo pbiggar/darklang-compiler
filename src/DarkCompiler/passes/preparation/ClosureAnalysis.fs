@@ -379,7 +379,9 @@ let rec simpleInferType
     | CheckedAST.DictLiteral (keyType, valueType, _) ->
         Some (AST.TDict (keyType, valueType))
     | CheckedAST.RecordLiteral (reference, fields) ->
-            let typeName = reference.TypeName
+        match tryFindRecordTypeNameById reference.TypeId typeReg with
+        | None -> None
+        | Some typeName ->
             match Map.tryFind typeName typeReg with
             | None ->
                 Some (AST.TRecord (typeName, []))
@@ -440,10 +442,12 @@ let rec simpleInferType
     | CheckedAST.Constructor (constructorReference, fields) ->
         // Sum type constructor has the sum type; infer generic args from fields when possible.
         match
-            tryFindVariantByTag
-                constructorReference.TypeName
-                (AST.constructorTag constructorReference.ConstructorId)
-                variantLookup
+            tryFindSumTypeNameById constructorReference.TypeId variantLookup
+            |> Option.bind (fun typeName ->
+                tryFindVariantByTag
+                    typeName
+                    (AST.constructorTag constructorReference.ConstructorId)
+                    variantLookup)
         with
         | Some (sumTypeName, typeParams, _, fieldPatterns) ->
             let defaultTypeArgs = typeParams |> List.map AST.TVar
@@ -473,7 +477,8 @@ let rec simpleInferType
                                 |> fun typeArgs -> Some (AST.TSum (sumTypeName, typeArgs))
                             | Error _ -> Some (AST.TSum (sumTypeName, defaultTypeArgs))
         | None ->
-            Some (AST.TSum (constructorReference.TypeName, []))
+            tryFindSumTypeNameById constructorReference.TypeId variantLookup
+            |> Option.map (fun typeName -> AST.TSum (typeName, []))
     | CheckedAST.BinOp (op, left, right) ->
         let leftType = simpleInferType left typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup
         let rightType = simpleInferType right typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup

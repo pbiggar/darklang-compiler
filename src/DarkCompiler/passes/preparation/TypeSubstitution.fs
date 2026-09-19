@@ -62,6 +62,7 @@ let internal buildDeclaredRecordFieldSubst
         None
 
 let internal recordDescriptor
+    (typeName: string)
     (reference: CheckedAST.RecordReference)
     (recordInfo: RecordTypeInfo)
     : ANF.RecordDescriptor =
@@ -74,8 +75,8 @@ let internal recordDescriptor
                 (name, applySubstToType subst fieldType))
         | None -> fields
     {
-        SourceTypeName = reference.TypeName
-        RuntimeTypeName = reference.TypeName
+        SourceTypeName = typeName
+        RuntimeTypeName = typeName
         TypeArgs = reference.TypeArgs
         Fields = concreteFields
     }

@@ -2901,22 +2901,26 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     let joined = String.concat ", " rendered
                     $"[{joined}]")
             | CheckedAST.Constructor (constructorReference, fields) ->
-                variantLookup
-                |> Map.toSeq
-                |> Seq.tryPick (fun (qualifiedName, (typeName, _, tag, _)) ->
-                    if typeName = constructorReference.TypeName
-                       && tag = AST.constructorTag constructorReference.ConstructorId then
-                        Some qualifiedName
-                    else
-                        None)
-                |> Option.bind (fun fullName ->
-                    match fields with
-                    | [] -> Some fullName
-                    | _ ->
-                        formatAll fields []
-                        |> Option.map (fun rendered ->
-                            let fieldText = String.concat ", " rendered
-                            $"{fullName}({fieldText})"))
+                let typeName =
+                    tryFindSumTypeNameById constructorReference.TypeId variantLookup
+                    |> Option.defaultValue "<unknown-type>"
+                let fullName =
+                    variantLookup
+                    |> Map.toSeq
+                    |> Seq.tryPick (fun (qualifiedName, (owner, _, tag, _)) ->
+                        if owner = typeName
+                           && tag = AST.constructorTag constructorReference.ConstructorId then
+                            Some qualifiedName
+                        else
+                            None)
+                    |> Option.defaultValue $"{typeName}.<tag {AST.constructorTag constructorReference.ConstructorId}>"
+                match fields with
+                | [] -> Some fullName
+                | _ ->
+                    formatAll fields []
+                    |> Option.map (fun rendered ->
+                        let fieldText = String.concat ", " rendered
+                        $"{fullName}({fieldText})")
             | _ -> None
 
         let makeNoMatchingCaseFallback (vg: ANF.VarGen) : ANF.AExpr * ANF.VarGen =

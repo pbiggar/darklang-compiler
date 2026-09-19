@@ -168,7 +168,7 @@ let private makeCase pattern body =
 let private constructor (env: Env) owner caseName payload =
     match tryFindConstructorId owner caseName env.Symbols with
     | Some id ->
-        Constructor ({ TypeName = owner; ConstructorId = id }, Option.toList payload)
+        Constructor ({ TypeId = AST.typeIdForName owner; ConstructorId = id }, Option.toList payload)
     | None -> Crash.crash $"JSON constructor was not interned: {owner}.{caseName}"
 
 let private constructorPattern (env: Env) owner caseName fields =
@@ -219,7 +219,7 @@ let rec private typeReference env typ =
         let resolution =
             RecordLiteral (
                 {
-                    TypeName = "Darklang.LanguageTools.RuntimeTypes.NameResolution"
+                    TypeId = AST.typeIdForName "Darklang.LanguageTools.RuntimeTypes.NameResolution"
                     TypeArgs = [fqNameType]
                 },
                 [ fieldId env "Darklang.LanguageTools.RuntimeTypes.NameResolution" "originalName", originalName
@@ -905,7 +905,12 @@ and private decodeEnumCase
     let constructed =
         let values = valueNames |> List.map (fun name -> local name bindings)
         match tryFindConstructorId typeName variant.Name env.Symbols with
-        | Some id -> Constructor ({ TypeName = typeName; ConstructorId = id }, values) |> ok env
+        | Some id ->
+            Constructor (
+                { TypeId = AST.typeIdForName typeName; ConstructorId = id },
+                values
+            )
+            |> ok env
         | None -> Crash.crash $"JSON enum constructor was not interned: {typeName}.{variant.Name}"
     let exactResult = sequenceDecoded env source (decodedItems fieldTypes.Length) (fun _ -> constructed) state
     exactResult
@@ -1052,7 +1057,7 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
                         Ok (
                             ok env (
                                 RecordLiteral (
-                                    { TypeName = typeName; TypeArgs = typeArgs },
+                                    { TypeId = AST.typeIdForName typeName; TypeArgs = typeArgs },
                                     List.rev decodedFields
                                 )
                             ),

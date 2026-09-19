@@ -75,12 +75,20 @@ let sumTypeNamesFromVariantLookup (variantLookup: VariantLookup) : Set<string> =
     variantLookup
     |> Map.fold (fun names _ (typeName, _, _, _) -> Set.add typeName names) Set.empty
 
-let internal tryFindVariant
-    (constructorReference: CheckedAST.ConstructorReference)
-    (variantName: string)
+let internal tryFindRecordTypeNameById
+    (typeId: AST.TypeId)
+    (typeReg: Map<string, 'recordInfo>)
+    : string option =
+    typeReg |> Map.keys |> Seq.tryFind (fun name -> AST.typeIdForName name = typeId)
+
+let internal tryFindSumTypeNameById
+    (typeId: AST.TypeId)
     (variantLookup: VariantLookup)
-    : (string * string list * int * AST.Type list) option =
-    Map.tryFind $"{constructorReference.TypeName}.{variantName}" variantLookup
+    : string option =
+    variantLookup
+    |> Map.toSeq
+    |> Seq.tryPick (fun (_, (typeName, _, _, _)) ->
+        if AST.typeIdForName typeName = typeId then Some typeName else None)
 
 let internal tryFindVariantForType
     (variantName: string)
@@ -124,7 +132,7 @@ let internal constructorReferenceMatches
     match Map.tryFind variantName variantLookup with
     | Some (declaringType, _, tag, _) ->
         declaringType = typeName
-        && reference.TypeName = typeName
+        && reference.TypeId = AST.typeIdForName typeName
         && AST.constructorTag reference.ConstructorId = tag
     | None -> false
 
