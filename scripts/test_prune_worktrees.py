@@ -176,6 +176,38 @@ os.execv(os.environ["TEST_REAL_GIT"], [os.environ["TEST_REAL_GIT"], *arguments])
                 stopped.stderr,
             )
 
+            colored_interactive = subprocess.run(
+                [
+                    sys.executable,
+                    str(source_script),
+                    "--interactive",
+                    "--color",
+                    "always",
+                ],
+                cwd=repo,
+                env=environment,
+                input="k\n" * 11,
+                check=True,
+                text=True,
+                capture_output=True,
+            )
+            self.assertIn(
+                "Same-subject commit on origin/main: \033[1;95myes — ",
+                colored_interactive.stdout,
+            )
+            self.assertIn(
+                "Merged into origin/main: \033[1;32myes\033[0m",
+                colored_interactive.stdout,
+            )
+            self.assertIn(
+                "Merged into origin/main: \033[1;33mno\033[0m",
+                colored_interactive.stdout,
+            )
+            self.assertIn(
+                "Active processes: \033[1;31m4242 (terminal)\033[0m",
+                colored_interactive.stdout,
+            )
+
             interactive = subprocess.run(
                 [sys.executable, str(source_script), "--interactive"],
                 cwd=repo,

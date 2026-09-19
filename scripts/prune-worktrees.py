@@ -71,6 +71,12 @@ class Palette:
     def info(self, text: str) -> str:
         return self.paint("1;36", text)
 
+    def quiet(self, text: str) -> str:
+        return self.paint("2", text)
+
+    def evidence(self, text: str) -> str:
+        return self.paint("1;95", text)
+
 
 class EligibilityError(Exception):
     pass
@@ -492,18 +498,34 @@ def run_interactive(
             f"  Last commit: {abbreviated} {date} ({format_age(commit_timestamp)}) "
             f"— {subject}"
         )
-        print(f"  Merged into {integration_ref}: {'yes' if integrated else 'no'}")
+        merged_value = (
+            output_palette.success("yes")
+            if integrated
+            else output_palette.warning("no")
+        )
+        print(f"  Merged into {integration_ref}: {merged_value}")
         if subject_match is None:
-            print(f"  Same-subject commit on {integration_ref}: no")
+            print(
+                f"  Same-subject commit on {integration_ref}: "
+                f"{output_palette.quiet('no')}"
+            )
         else:
             match_commit, match_timestamp, match_date = subject_match
             same_commit = " (same commit)" if match_commit == worktree.head else ""
-            print(
-                f"  Same-subject commit on {integration_ref}: yes — "
-                f"{match_commit[:12]} {match_date} ({format_age(match_timestamp)})"
-                f"{same_commit}"
+            subject_evidence = (
+                f"yes — {match_commit[:12]} {match_date} "
+                f"({format_age(match_timestamp)}){same_commit}"
             )
-        print(f"  Locked: {'yes' if worktree.locked else 'no'}")
+            print(
+                f"  Same-subject commit on {integration_ref}: "
+                f"{output_palette.evidence(subject_evidence)}"
+            )
+        locked_value = (
+            output_palette.warning("yes")
+            if worktree.locked
+            else output_palette.quiet("no")
+        )
+        print(f"  Locked: {locked_value}")
         local_files = (
             "unavailable (directory missing)"
             if not exists
@@ -511,15 +533,30 @@ def run_interactive(
             if dirty
             else "clean"
         )
-        print(f"  Local files: {local_files}")
+        styled_local_files = (
+            output_palette.warning(local_files)
+            if dirty or not exists
+            else output_palette.success(local_files)
+        )
+        print(f"  Local files: {styled_local_files}")
         if status_entries:
-            print("  Git status:")
+            print(output_palette.warning("  Git status:"))
             for entry in status_entries:
-                print(f"    {entry.code} {entry.display_path}")
-                print(f"       created/updated: {status_activity(entry)}")
+                print(output_palette.warning(f"    {entry.code} {entry.display_path}"))
+                print(
+                    output_palette.warning(
+                        f"       created/updated: {status_activity(entry)}"
+                    )
+                )
         else:
-            print("  Git status: clean")
-        print(f"  Active processes: {format_processes(users)}")
+            print(f"  Git status: {output_palette.success('clean')}")
+        process_summary = format_processes(users)
+        styled_processes = (
+            output_palette.error(process_summary)
+            if users
+            else output_palette.quiet(process_summary)
+        )
+        print(f"  Active processes: {styled_processes}")
         styled_recommendation = (
             output_palette.action("REMOVE", recommendation)
             if recommend_delete
