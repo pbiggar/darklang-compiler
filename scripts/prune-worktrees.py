@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -19,6 +20,17 @@ class Worktree:
     prunable: bool
 
 
+@dataclass(frozen=True)
+class ProcessCwd:
+    pid: str
+    command: str
+    path: Path
+
+
+class EligibilityError(Exception):
+    pass
+
+
 def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["git", "-C", str(repo), *args],
@@ -29,7 +41,11 @@ def git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
 
 
 def parse_worktrees(repo: Path) -> list[Worktree]:
-    output = git(repo, "worktree", "list", "--porcelain", "-z").stdout
+    result = git(repo, "worktree", "list", "--porcelain", "-z", check=False)
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "git worktree list failed"
+        raise EligibilityError(f"cannot inspect registered worktrees: {detail}")
+    output = result.stdout
     records: list[Worktree] = []
     fields: dict[str, str] = {}
 
@@ -52,7 +68,7 @@ def parse_worktrees(repo: Path) -> list[Worktree]:
         fields[key] = value if separator else ""
 
     if fields:
-        raise RuntimeError("Git returned an unterminated worktree record")
+        raise EligibilityError("Git returned an unterminated worktree record")
     return records
 
 
@@ -73,12 +89,91 @@ def is_ancestor(repo: Path, commit: str, integration_commit: str) -> bool:
         check=False,
     )
     if result.returncode not in (0, 1):
-        raise RuntimeError(result.stderr.strip() or "git merge-base failed")
+        detail = result.stderr.strip() or "git merge-base failed"
+        raise EligibilityError(f"cannot check whether {commit} is integrated: {detail}")
     return result.returncode == 0
 
 
 def is_dirty(path: Path) -> bool:
-    return bool(git(path, "status", "--porcelain", "--untracked-files=normal").stdout)
+    result = git(
+        path,
+        "status",
+        "--porcelain",
+        "--untracked-files=normal",
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or "git status failed"
+        raise EligibilityError(f"cannot inspect checkout {path}: {detail}")
+    return bool(result.stdout)
+
+
+def inspect_process_cwds() -> list[ProcessCwd]:
+    if shutil.which("lsof") is None:
+        raise EligibilityError("lsof is not available on PATH")
+
+    try:
+        result = subprocess.run(
+            ["lsof", "-a", "-d", "cwd", "-F0pcn"],
+            check=False,
+            capture_output=True,
+        )
+    except OSError as error:
+        raise EligibilityError(f"could not run lsof: {error}") from error
+    stderr = result.stderr.decode(errors="replace").strip()
+    if result.returncode != 0 or stderr:
+        detail = stderr or f"lsof exited with status {result.returncode}"
+        raise EligibilityError(detail)
+
+    processes: list[ProcessCwd] = []
+    pid = ""
+    command = ""
+    inspection_errors: list[str] = []
+    for raw_field in result.stdout.split(b"\0"):
+        field = raw_field.removeprefix(b"\n").decode(errors="surrogateescape")
+        if not field:
+            continue
+        tag, value = field[0], field[1:]
+        if tag == "p":
+            pid = value
+            command = ""
+        elif tag == "c":
+            command = value
+        elif tag == "n":
+            if "(readlink:" in value:
+                inspection_errors.append(f"PID {pid or '?'}: {value}")
+            elif not pid or not value:
+                inspection_errors.append("lsof returned an incomplete cwd record")
+            elif not Path(value).is_absolute():
+                inspection_errors.append(
+                    f"PID {pid}: lsof returned a non-absolute cwd: {value}"
+                )
+            else:
+                processes.append(
+                    ProcessCwd(
+                        pid=pid,
+                        command=command or "unknown",
+                        path=Path(value).resolve(),
+                    )
+                )
+
+    if inspection_errors:
+        raise EligibilityError("; ".join(inspection_errors[:3]))
+    if not processes:
+        raise EligibilityError("lsof returned no process working directories")
+    return processes
+
+
+def processes_using(worktree: Worktree, processes: list[ProcessCwd]) -> list[ProcessCwd]:
+    root = worktree.path.resolve()
+    matches: list[ProcessCwd] = []
+    for process in processes:
+        try:
+            process.path.relative_to(root)
+            matches.append(process)
+        except ValueError:
+            pass
+    return matches
 
 
 def describe(worktree: Worktree) -> str:
@@ -97,12 +192,10 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument(
         "--apply",
         action="store_true",
-        help="remove eligible checkouts and prune stale worktree metadata",
-    )
-    result.add_argument(
-        "--delete-branches",
-        action="store_true",
-        help="also delete local branches after their eligible worktrees are removed",
+        help=(
+            "remove eligible checkouts, prune stale metadata, and delete their "
+            "merged local branches"
+        ),
     )
     result.add_argument(
         "--integration-ref",
@@ -138,6 +231,15 @@ def main() -> int:
         return 1
     integration_commit = integration_result.stdout.strip()
 
+    try:
+        processes = inspect_process_cwds()
+    except EligibilityError as error:
+        print(
+            f"Cannot verify worktree eligibility with lsof: {error}; no changes made",
+            file=sys.stderr,
+        )
+        return 1
+
     worktrees = parse_worktrees(current_root)
     if not worktrees:
         print("Git reported no worktrees", file=sys.stderr)
@@ -146,6 +248,7 @@ def main() -> int:
     primary_path = worktrees[0].path.resolve()
     removable: list[Worktree] = []
     stale: list[Worktree] = []
+    blocked: list[Worktree] = []
     skipped = 0
 
     for worktree in worktrees:
@@ -156,24 +259,39 @@ def main() -> int:
         elif resolved_path == current_root:
             print(f"KEEP  {describe(worktree)}: running worktree")
             skipped += 1
-        elif worktree.locked:
-            print(f"KEEP  {describe(worktree)}: locked")
-            skipped += 1
-        elif worktree.prunable or not worktree.path.exists():
-            print(f"PRUNE {describe(worktree)}: checkout is missing")
-            stale.append(worktree)
-        elif is_dirty(worktree.path):
-            print(f"KEEP  {describe(worktree)}: checkout has tracked or untracked changes")
-            skipped += 1
         elif not is_ancestor(current_root, worktree.head, integration_commit):
             print(
                 f"KEEP  {describe(worktree)}: "
                 f"HEAD is not contained in {args.integration_ref}"
             )
             skipped += 1
+        elif worktree.prunable or not worktree.path.exists():
+            if worktree.locked:
+                print(f"BLOCK {describe(worktree)}: stale registration is locked")
+                blocked.append(worktree)
+            else:
+                print(f"PRUNE {describe(worktree)}: checkout is missing")
+                stale.append(worktree)
         else:
-            print(f"REMOVE {describe(worktree)}: HEAD is contained in {args.integration_ref}")
-            removable.append(worktree)
+            reasons: list[str] = []
+            if worktree.locked:
+                reasons.append("integrated checkout is locked")
+            if is_dirty(worktree.path):
+                reasons.append("integrated checkout has tracked or untracked changes")
+            if users := processes_using(worktree, processes):
+                first = users[0]
+                extra = f" and {len(users) - 1} more" if len(users) > 1 else ""
+                reasons.append(f"used by PID {first.pid} ({first.command}){extra}")
+
+            if reasons:
+                print(f"BLOCK {describe(worktree)}: {'; '.join(reasons)}")
+                blocked.append(worktree)
+            else:
+                print(
+                    f"REMOVE {describe(worktree)}: "
+                    f"HEAD is contained in {args.integration_ref}"
+                )
+                removable.append(worktree)
 
     branches_to_delete = {
         branch: worktree.head
@@ -186,11 +304,43 @@ def main() -> int:
         suffix = "; rerun with --apply to perform it"
         print(
             f"Dry run: {len(removable)} checkout(s) removable, "
-            f"{len(stale)} stale registration(s), {skipped} kept{suffix}"
+            f"{len(stale)} stale registration(s), {len(blocked)} blocked, "
+            f"{skipped} kept{suffix}"
         )
-        if args.delete_branches:
-            print(f"Dry run: {len(branches_to_delete)} merged local branch(es) deletable")
+        print(f"Dry run: {len(branches_to_delete)} merged local branch(es) deletable")
         return 0
+
+    if blocked:
+        print(
+            f"Refusing to apply: {len(blocked)} integrated worktree(s) failed "
+            "eligibility checks; no changes made",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        final_processes = inspect_process_cwds()
+    except EligibilityError as error:
+        print(
+            f"Cannot reverify worktree eligibility with lsof: {error}; no changes made",
+            file=sys.stderr,
+        )
+        return 1
+    newly_used = [
+        (worktree, users)
+        for worktree in removable
+        if (users := processes_using(worktree, final_processes))
+    ]
+    if newly_used:
+        for worktree, users in newly_used:
+            first = users[0]
+            print(
+                f"Worktree became active before cleanup: {describe(worktree)} is used "
+                f"by PID {first.pid} ({first.command})",
+                file=sys.stderr,
+            )
+        print("Refusing to apply; no changes made", file=sys.stderr)
+        return 1
 
     for worktree in removable:
         git(current_root, "worktree", "remove", "--", str(worktree.path))
@@ -199,21 +349,20 @@ def main() -> int:
         git(current_root, "worktree", "prune", "--expire", "now")
 
     deleted_branches = 0
-    if args.delete_branches:
-        for branch, expected_head in sorted(branches_to_delete.items()):
-            delete_result = git(
-                current_root,
-                "update-ref",
-                "-d",
-                f"refs/heads/{branch}",
-                expected_head,
-                check=False,
-            )
-            if delete_result.returncode != 0:
-                detail = delete_result.stderr.strip() or delete_result.stdout.strip()
-                print(f"Could not delete branch {branch}: {detail}", file=sys.stderr)
-                return 1
-            deleted_branches += 1
+    for branch, expected_head in sorted(branches_to_delete.items()):
+        delete_result = git(
+            current_root,
+            "update-ref",
+            "-d",
+            f"refs/heads/{branch}",
+            expected_head,
+            check=False,
+        )
+        if delete_result.returncode != 0:
+            detail = delete_result.stderr.strip() or delete_result.stdout.strip()
+            print(f"Could not delete branch {branch}: {detail}", file=sys.stderr)
+            return 1
+        deleted_branches += 1
 
     print(
         f"Applied: removed {len(removable)} checkout(s), pruned "
@@ -223,4 +372,12 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        exit_code = main()
+    except EligibilityError as error:
+        print(
+            f"Cannot verify worktree eligibility: {error}; no changes made",
+            file=sys.stderr,
+        )
+        exit_code = 1
+    raise SystemExit(exit_code)
