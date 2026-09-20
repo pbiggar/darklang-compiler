@@ -25,6 +25,11 @@ let private optimizeMain (context: ANFConstants.OptimizeContext) (expr: AExpr) :
         ANF_Optimize.optimizeProgramWithOptions context dceOnlyOptions program
     optimizedMain
 
+let private emptyContext : ANFConstants.OptimizeContext =
+    { TypeReg = Map.empty
+      RecordTypeParams = Map.empty
+      SumShapeReg = Map.empty }
+
 let private markerContext : ANFConstants.OptimizeContext =
     { TypeReg = Map.empty
       RecordTypeParams = Map.empty
@@ -194,6 +199,58 @@ let testDcePreservesUnusedHeapGenericSumTypedAtom () : TestResult =
     | Let (TempId 0, TypedAtom (_, typ), Return UnitLiteral) when typ = boxType -> Ok ()
     | other -> Error $"Expected heap generic sum TypedAtom to be preserved, got {other}"
 
+let testCseReusesFloatAbsoluteValue () : TestResult =
+    let parameter = { Id = TempId 0; Type = AST.TFloat64 }
+    let func =
+        { Id = AST.functionIdForName "floatAbsCse"
+          Name = "floatAbsCse"
+          TypedParams = [parameter]
+          ReturnType = AST.TTuple [AST.TFloat64; AST.TFloat64]
+          ReturnOwnership = OwnedReturn
+          Body =
+            Let (
+                TempId 1,
+                FloatAbs (Var parameter.Id),
+                Let (
+                    TempId 2,
+                    FloatAbs (Var parameter.Id),
+                    Let (TempId 3, TupleAlloc [Var (TempId 1); Var (TempId 2)], Return (Var (TempId 3)))
+                )
+            ) }
+    let (Program (functions, _)) =
+        ANF_Optimize.optimizeProgram emptyContext (Program ([func], Return UnitLiteral))
+    match functions with
+    | [{ Body = Let (TempId 1, FloatAbs (Var (TempId 0)), Let (TempId 3, TupleAlloc [Var left; Var right], Return (Var (TempId 3)))) }]
+        when left = TempId 1 && right = TempId 1 -> Ok ()
+    | _ -> Error "Expected duplicate FloatAbs expressions to reuse the first result"
+
+let testCanonicalBufferSelfEqualityFoldsForBothRepresentations () : TestResult =
+    let check kind =
+        let parameterType =
+            match kind with
+            | Utf8String -> AST.TString
+            | GraphemeCluster -> AST.TChar
+        let parameter = { Id = TempId 0; Type = parameterType }
+        let func =
+            { Id = AST.functionIdForName "bufferEquality"
+              Name = "bufferEquality"
+              TypedParams = [parameter]
+              ReturnType = AST.TBool
+              ReturnOwnership = OwnedReturn
+              Body =
+                Let (
+                    TempId 1,
+                    CanonicalBufferEq (kind, Var parameter.Id, Var parameter.Id),
+                    Return (Var (TempId 1))
+                ) }
+        let (Program (functions, _)) =
+            ANF_Optimize.optimizeProgram emptyContext (Program ([func], Return UnitLiteral))
+        match functions with
+        | [{ Body = Return (BoolLiteral true) }] -> Ok ()
+        | _ -> Error $"Expected {kind} self-equality to fold to true"
+    [Utf8String; GraphemeCluster]
+    |> List.fold (fun result kind -> Result.bind (fun () -> check kind) result) (Ok ())
+
 let tests = [
     ("DCE drops unused pure generic sum TypedAtom", testDceDropsUnusedPureGenericSumTypedAtom)
     ("DCE preserves unused heap generic sum TypedAtom", testDcePreservesUnusedHeapGenericSumTypedAtom)
@@ -203,4 +260,6 @@ let tests = [
     ("Literal FloatAbs folds", testLiteralFloatAbsoluteValueFolds)
     ("Literal FloatToInt64 folds", testLiteralFloatToInt64Folds)
     ("Literal BitNot folds", testLiteralBitNotFolds)
+    ("ANF CSE reuses FloatAbs", testCseReusesFloatAbsoluteValue)
+    ("Canonical buffer self-equality folds for String and Char storage", testCanonicalBufferSelfEqualityFoldsForBothRepresentations)
 ]

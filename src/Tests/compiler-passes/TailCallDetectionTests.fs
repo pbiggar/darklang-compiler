@@ -121,6 +121,26 @@ let testIndirectTailCallMovesDecBeforeTailCall () : TestResult =
     else
         Ok ()
 
+let testClosureCallInTailPositionBecomesClosureTailCall () : TestResult =
+    let closure = TempId 0
+    let value = TempId 1
+    let result = TempId 2
+    let caller : Function = {
+        Id = AST.functionIdForName "closureCaller"
+        Name = "closureCaller"
+        TypedParams = [
+            { Id = closure; Type = AST.TFunction ([AST.TInt64], AST.TInt64) }
+            { Id = value; Type = AST.TInt64 }
+        ]
+        ReturnType = AST.TInt64
+        ReturnOwnership = OwnedReturn
+        Body = Let (result, ClosureCall (Var closure, [Var value]), Return (Var result))
+    }
+    match (detectTailCallsInFunction caller).Body with
+    | Let (bound, ClosureTailCall (Var target, [Var argument]), Return (Var returned))
+        when bound = result && target = closure && argument = value && returned = result -> Ok ()
+    | body -> Error $"Expected a tail-position closure invocation to form ClosureTailCall, got {body}"
+
 let testOwnedTransferDeclinesMismatchedArity () : TestResult =
     let p0 = TempId 0
     let retainTmp = TempId 1
@@ -333,6 +353,7 @@ let testRetainedProjectionAllowsSelfTailCall () : TestResult =
 let tests = [
     ("non-self tailcall moves dec before tailcall", testNonSelfTailCallMovesDecBeforeTailCall)
     ("indirect tailcall moves dec before tailcall", testIndirectTailCallMovesDecBeforeTailCall)
+    ("tail-position closure call forms ClosureTailCall", testClosureCallInTailPositionBecomesClosureTailCall)
     ("owned transfer declines mismatched arity", testOwnedTransferDeclinesMismatchedArity)
     ("owned transfer requires one-to-one cleanup accounting", testOwnedTransferRequiresOneToOneCleanupAccounting)
     ("owned transfer accepts multiple exactly matched cleanups", testOwnedTransferAcceptsMultipleExactlyMatchedCleanups)

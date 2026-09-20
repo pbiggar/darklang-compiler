@@ -2386,6 +2386,58 @@ let TempId 7 = t3 + t3
 return t7
 
 ---NAME---
+cse_reuses_duplicate_float_add
+---INPUT---
+let f (x: Float) (y: Float) : Float =
+  let first = x + y in
+  let second = x + y in
+  first + second
+---EXPECTED---
+Function f:
+let TempId 2 = t0 + t1
+let TempId 6 = t2 + t2
+return t6
+
+---NAME---
+cse_reuses_duplicate_int8_add
+---INPUT---
+let f (x: Int8) (y: Int8) : Int8 =
+  let first = x + y in
+  let second = x + y in
+  first + second
+---EXPECTED---
+Function f:
+let TempId 2 = t0 + t1
+let TempId 6 = t2 + t2
+return t6
+
+---NAME---
+cse_reuses_duplicate_bitwise_not
+---INPUT---
+let f (x: Int64) : (Int64 * Int64) =
+  let first = Stdlib.Int64.bitwiseNot x in
+  let second = Stdlib.Int64.bitwiseNot x in
+  (first, second)
+---EXPECTED---
+Function f:
+let TempId 1 = ~~~t0
+let TempId 5 = (t1, t1)
+return t5
+
+---NAME---
+cse_reuses_duplicate_float_to_int64
+---INPUT---
+let f (x: Float) : (Int64 * Int64) =
+  let first = Stdlib.Float.__toInt64Unchecked x in
+  let second = Stdlib.Float.__toInt64Unchecked x in
+  (first, second)
+---EXPECTED---
+Function f:
+let TempId 1 = FloatToInt64(t0)
+let TempId 5 = (t1, t1)
+return t5
+
+---NAME---
 cse_reuses_commuted_integer_add
 ---INPUT---
 let f (x: Int64) : Int64 =
