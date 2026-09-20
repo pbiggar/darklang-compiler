@@ -425,6 +425,37 @@ let testKnownClosureFlowsThroughBranchValue () : TestResult =
     | Some specialized when Option.isSome (findCall specialized.Name rewrittenMain) -> Ok ()
     | _ -> Error "Expected a known closure selected through a branch value to specialize"
 
+let testKnownClosureFlowsThroughJoin () : TestResult =
+    let functionType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let joinParameter = param 59 functionType
+    let main =
+        Let (
+            TempId 55,
+            ClosureAlloc (fid "identityClosure", []),
+            Join (
+                joinParameter,
+                Let (
+                    TempId 58,
+                    Call (fid "applyOne", [Var joinParameter.Id; IntLiteral (Int64 42L)]),
+                    Return (Var (TempId 58))
+                ),
+                If (
+                    BoolLiteral true,
+                    Jump (joinParameter.Id, Var (TempId 55)),
+                    Jump (joinParameter.Id, Var (TempId 55))
+                )
+            )
+        )
+    let (Program (functions, rewrittenMain)) =
+        Program ([captureFreeTarget "identityClosure"; applyOneHelper ()], main)
+        |> ANF_HigherOrderSpecialization.specializeProgram
+    match functions |> List.tryFind (fun func -> func.Name.StartsWith("applyOne__known_")) with
+    | Some specialized
+        when Option.isSome (findCall specialized.Name rewrittenMain)
+             && Option.isSome (findCall "identityClosure__captures" specialized.Body)
+             && not (containsClosureCall specialized.Body) -> Ok ()
+    | _ -> Error "Expected a known closure merged through an ANF Join to specialize"
+
 let testReturnedKnownClosureSpecializes () : TestResult =
     let factory =
         {
@@ -608,6 +639,7 @@ let tests = [
     ("Exact helper and target size boundaries specialize", testExactHelperAndTargetSizeBoundariesSpecialize)
     ("Sixteen known functional-argument pairs specialize", testSixteenKnownArgumentPairBudgetSpecializes)
     ("Known closure flows through branch value", testKnownClosureFlowsThroughBranchValue)
+    ("Known closure flows through ANF Join", testKnownClosureFlowsThroughJoin)
     ("Returned known closure specializes", testReturnedKnownClosureSpecializes)
     ("Static function reference needs no closure", testStaticFunctionReferenceNeedsNoClosure)
     ("External definitions specialize local call", testExternalDefinitionsCanSpecializeLocalCall)

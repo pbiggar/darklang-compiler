@@ -1615,6 +1615,40 @@ let private basicBlock label instrs terminator : BasicBlock = {
     Terminator = terminator
 }
 
+let testPartialRedundancyEliminationSupportsFloatAndNarrowValues () : TestResult =
+    let check valueType =
+        let entry = Label "typed_pre_entry"
+        let left = Label "typed_pre_left"
+        let right = Label "typed_pre_right"
+        let join = Label "typed_pre_join"
+        let expression dest =
+            BinOp (dest, Add, Register (VReg 0), Register (VReg 1), valueType)
+        let cfg = {
+            Entry = entry
+            Blocks =
+                Map.ofList [
+                    (entry, basicBlock entry [] (Branch (Register (VReg 2), left, right)))
+                    (left, basicBlock left [expression (VReg 3)] (Jump join))
+                    (right, basicBlock right [] (Jump join))
+                    (join, basicBlock join [expression (VReg 4)] (Ret (Register (VReg 4))))
+                ]
+        }
+        let (optimized, changed) = applyCSE cfg
+        match Map.tryFind right optimized.Blocks, Map.tryFind join optimized.Blocks with
+        | Some rightBlock, Some joinBlock
+            when changed
+                 && rightBlock.Instrs = [expression (VReg 5)]
+                 && joinBlock.Instrs = [
+                     Phi (
+                         VReg 4,
+                         [(Register (VReg 5), right); (Register (VReg 3), left)],
+                         Some valueType
+                     )
+                 ] -> Ok ()
+        | _ -> Error $"Expected PRE to complete a partially redundant {valueType} addition"
+    [AST.TFloat64; AST.TInt8]
+    |> List.fold (fun result valueType -> Result.bind (fun () -> check valueType) result) (Ok ())
+
 let private expectRedundantSuccessorBranchEliminated
     (edge: EstablishedEdge)
     : TestResult =
@@ -1956,6 +1990,7 @@ let tests = [
     ("MIR CSE reuses dominating binary and unary expressions", testCseReusesDominatingExpressions)
     ("MIR PRE completes an expression missing on one incoming path", testPartialRedundancyEliminationCompletesMissingPath)
     ("MIR unary PRE completes an expression missing on one incoming path", testUnaryPartialRedundancyEliminationCompletesMissingPath)
+    ("MIR PRE supports Float and narrow scalar values", testPartialRedundancyEliminationSupportsFloatAndNarrowValues)
     ("MIR CSE reuses dominating scalar heap loads", testCseReusesDominatingScalarHeapLoad)
     ("MIR CSE scalar heap load barriers", testCseDoesNotReuseDominatingScalarHeapLoadAcrossBarriers)
     ("MIR CSE preserves binary and unary expressions across siblings", testCsePreservesExpressionsAcrossSiblingBlocks)

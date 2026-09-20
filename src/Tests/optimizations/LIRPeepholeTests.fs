@@ -520,6 +520,34 @@ let testBranchZeroDiamondFormsMultipleNarrowSelects () : TestResult =
              && List.isEmpty joinBlock.Instrs -> Ok ()
     | _ -> Error $"Expected BranchZero with UInt8 and Bool phis to form two selects, got: {optimized.Blocks}"
 
+let testMaterializedBooleanDiamondFormsSelect () : TestResult =
+    let entry = Label "bool_entry"
+    let trueLabel = Label "bool_true"
+    let falseLabel = Label "bool_false"
+    let join = Label "bool_join"
+    let blocks =
+        [ (entry,
+           { Label = entry
+             Instrs = []
+             Terminator = Branch (Virtual 0, trueLabel, falseLabel) })
+          (trueLabel, { Label = trueLabel; Instrs = []; Terminator = Jump join })
+          (falseLabel, { Label = falseLabel; Instrs = []; Terminator = Jump join })
+          (join,
+           { Label = join
+             Instrs = [Phi (Virtual 3, [(Reg (Virtual 1), trueLabel); (Reg (Virtual 2), falseLabel)], Some AST.TInt64)]
+             Terminator = Ret }) ]
+        |> Map.ofList
+    let optimized = optimizeCFG { Entry = entry; Blocks = blocks }
+    match Map.tryFind entry optimized.Blocks, Map.tryFind join optimized.Blocks with
+    | Some entryBlock, Some joinBlock
+        when entryBlock.Instrs = [
+                 Cmp (Virtual 0, Imm 0L)
+                 Select (Virtual 3, Virtual 1, Virtual 2, NE)
+             ]
+             && entryBlock.Terminator = Jump join
+             && List.isEmpty joinBlock.Instrs -> Ok ()
+    | _ -> Error $"Expected a materialized Boolean Branch diamond to become Select, got: {optimized.Blocks}"
+
 let testMulConstantKeepsLiveConstRegister () : TestResult =
     let instrs = [
         Mov (Physical X1, Imm 3L)
@@ -698,6 +726,7 @@ let tests = [
     ("LIR peephole exposes FMADD combine but preserves strict target rounding", testFloatMultiplyAddCombineAndTargetDecision)
     ("LIR peephole forms scalar selects from empty diamonds", testScalarDiamondFormsSelect)
     ("LIR peephole forms multiple narrow selects from BranchZero diamonds", testBranchZeroDiamondFormsMultipleNarrowSelects)
+    ("LIR peephole forms selects from materialized Boolean diamonds", testMaterializedBooleanDiamondFormsSelect)
     ("LIR peephole keeps multiply constants that are used later", testMulConstantKeepsLiveConstRegister)
     ("LIR peephole swaps Boolean negation branch successors", testBooleanNotBranchSwapsSuccessors)
     ("LIR peephole keeps branch Boolean used by a successor", testConditionalBranchKeepsBooleanUsedInSuccessor)

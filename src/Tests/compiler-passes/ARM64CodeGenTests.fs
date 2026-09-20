@@ -28,6 +28,7 @@ let tests : (string * (unit -> TestResult)) list = [
     ("ARM64 peephole falls through to true branch target", testPeepholeFallsThroughToTrueTarget)
     ("ARM64 peephole combines operands and memory pairs", testPeepholeCombinesOperandsAndMemoryPairs)
     ("ARM64 peephole combines every extension and Float store pairs", testPeepholeCombinesEveryExtensionAndFloatStorePairs)
+    ("ARM64 peephole combines shifted subtraction", testPeepholeCombinesShiftedSubtraction)
     ("ARM64 peephole preserves shared-source shift fusion across branch", testPeepholePreservesSharedSourceShiftFusionAcrossBranch)
     ("ARM64 UInt64 runtime zero branches target digit handlers", testPrintUInt64RuntimeZeroBranches)
     ("ARM64 UInt64 runtime preserves trailing newline", testPrintUInt64RuntimePreservesNewline)

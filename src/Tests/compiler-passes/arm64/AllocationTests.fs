@@ -471,6 +471,18 @@ let testPeepholeCombinesEveryExtensionAndFloatStorePairs () : TestResult =
         if actual = expected then Ok ()
         else Error $"Expected aligned Float stack stores to form STP_fp, got {actual}"
 
+let testPeepholeCombinesShiftedSubtraction () : TestResult =
+    let before = [
+        ARM64Symbolic.LSL_imm (ARM64.X9, ARM64.X2, 3)
+        ARM64Symbolic.SUB_reg (ARM64.X9, ARM64.X1, ARM64.X9)
+    ]
+    let expected = [
+        ARM64Symbolic.SUB_shifted (ARM64.X9, ARM64.X1, ARM64.X2, 3)
+    ]
+    match ARM64Peephole.peepholeOptimize before with
+    | actual when actual = expected -> Ok ()
+    | actual -> Error $"Expected shifted subtraction to form SUB_shifted, got {actual}"
+
 /// The multiply-by-constant selector creates this shared-source shape before
 /// final block layout. A following branch must not hide the shift temporary's
 /// established single-use contract from the target peephole.
