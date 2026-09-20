@@ -12,14 +12,17 @@ interactive_redraw=false
 color_mode=auto
 show_conflicts=false
 interactive_input=false
+show_more_merges=false
+benchmark_detail_index=""
+scroll_offset=0
 
 usage() {
   cat <<EOF
 Usage: ./mergetrain-status [OPTIONS]
 
-Continuously display merge-train health, active jobs, the five most recent
-integration merges, the benchmark ratio, and recent benchmarks/RESULTS.md
-changes. Interactive terminals are redrawn in place as complete frames.
+Continuously display merge-train health, active jobs, recent integration
+merges, and the ten latest benchmark results. Interactive terminals support
+scrolling and keyboard shortcuts and are redrawn in place as complete frames.
 
 Options:
   --repo PATH          Repository whose merge-train status is displayed.
@@ -120,14 +123,17 @@ fi
 while true; do
   status_output=""
   renderer_args=(--repo "$repo_root")
+  if [[ "$show_more_merges" == true ]]; then
+    renderer_args+=(--merge-limit 20)
+  fi
+  if [[ -n "$benchmark_detail_index" ]]; then
+    renderer_args+=(--benchmark-detail-index "$benchmark_detail_index")
+  fi
   if [[ "$color_mode" == always ]]; then
     renderer_args+=(--color)
   fi
   if [[ "$show_conflicts" == true ]]; then
     renderer_args+=(--show-conflicts)
-  fi
-  if [[ "$interactive_input" == true ]]; then
-    renderer_args+=(--conflict-toggle-hint)
   fi
   if ! status_output="$(
     mergetrain --repo "$repo_root" status --json --limit 1000 \
@@ -136,7 +142,36 @@ while true; do
     status_output="Status refresh failed; retrying in $interval_seconds second(s)"
   fi
   if [[ "$interactive_redraw" == true ]]; then
-    printf '\033[H\033[J%s\n' "$status_output"
+    terminal_lines="${LINES:-}"
+    if [[ ! "$terminal_lines" =~ ^[1-9][0-9]*$ ]]; then
+      terminal_lines="$(tput lines 2>/dev/null || true)"
+    fi
+    if [[ ! "$terminal_lines" =~ ^[1-9][0-9]*$ ]]; then
+      terminal_lines=24
+    fi
+    viewport_lines=$((terminal_lines - 2))
+    if ((viewport_lines < 1)); then
+      viewport_lines=1
+    fi
+    output_lines="$(printf '%s\n' "$status_output" | awk 'END { print NR }')"
+    max_scroll=$((output_lines - viewport_lines))
+    if ((max_scroll < 0)); then
+      max_scroll=0
+    fi
+    if ((scroll_offset > max_scroll)); then
+      scroll_offset=$max_scroll
+    fi
+    first_line=$((scroll_offset + 1))
+    last_line=$((scroll_offset + viewport_lines))
+    visible_output="$(printf '%s\n' "$status_output" | sed -n "${first_line},${last_line}p")"
+    if [[ -n "$benchmark_detail_index" ]]; then
+      controls="[↑/↓ or j/k] scroll  [q/Esc] back"
+    elif [[ "$show_more_merges" == true ]]; then
+      controls="[↑/↓ or j/k] scroll  [m] fewer merges  [1-9,0] benchmark details  [c] conflicts  [q] quit"
+    else
+      controls="[↑/↓ or j/k] scroll  [m] more merges  [1-9,0] benchmark details  [c] conflicts  [q] quit"
+    fi
+    printf '\033[H\033[J%s\n\n%s\n' "$visible_output" "$controls"
   else
     printf '%s\n' "$status_output"
   fi
@@ -146,12 +181,61 @@ while true; do
   fi
   if [[ "$interactive_input" == true ]]; then
     pressed_key=""
-    if read -rsn1 -t "$interval_seconds" pressed_key && [[ "$pressed_key" == c ]]; then
-      if [[ "$show_conflicts" == true ]]; then
-        show_conflicts=false
-      else
-        show_conflicts=true
+    if read -rsn1 -t "$interval_seconds" pressed_key; then
+      if [[ "$pressed_key" == $'\033' ]]; then
+        escape_suffix=""
+        read -rsn2 -t 0.05 escape_suffix || true
+        pressed_key+="$escape_suffix"
       fi
+      case "$pressed_key" in
+        $'\033[A'|k)
+          if ((scroll_offset > 0)); then
+            scroll_offset=$((scroll_offset - 1))
+          fi
+          ;;
+        $'\033[B'|j)
+          scroll_offset=$((scroll_offset + 1))
+          ;;
+        m)
+          if [[ -z "$benchmark_detail_index" ]]; then
+            if [[ "$show_more_merges" == true ]]; then
+              show_more_merges=false
+            else
+              show_more_merges=true
+            fi
+            scroll_offset=0
+          fi
+          ;;
+        c)
+          if [[ -z "$benchmark_detail_index" ]]; then
+            if [[ "$show_conflicts" == true ]]; then
+              show_conflicts=false
+            else
+              show_conflicts=true
+            fi
+          fi
+          ;;
+        [1-9])
+          if [[ -z "$benchmark_detail_index" ]]; then
+            benchmark_detail_index="$pressed_key"
+            scroll_offset=0
+          fi
+          ;;
+        0)
+          if [[ -z "$benchmark_detail_index" ]]; then
+            benchmark_detail_index=10
+            scroll_offset=0
+          fi
+          ;;
+        q|$'\033')
+          if [[ -n "$benchmark_detail_index" ]]; then
+            benchmark_detail_index=""
+            scroll_offset=0
+          else
+            exit 0
+          fi
+          ;;
+      esac
     fi
   else
     sleep "$interval_seconds"
