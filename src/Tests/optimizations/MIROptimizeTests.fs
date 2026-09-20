@@ -324,6 +324,68 @@ let testCseReusesDominatingExpressions () : TestResult =
         let actual = formatMIR (Program ([func], Map.empty, Map.empty))
         Error $"Expected binary and unary expressions from the dominating entry block to be reused.\nActual:\n{actual}"
 
+let testPartialRedundancyEliminationCompletesMissingPath () : TestResult =
+    let entry = Label "entry"
+    let left = Label "left"
+    let right = Label "right"
+    let join = Label "join"
+    let expression dest =
+        BinOp (dest, Add, Register (VReg 0), Register (VReg 1), AST.TInt64)
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, {
+                    Label = entry
+                    Instrs = []
+                    Terminator = Branch (Register (VReg 2), left, right)
+                })
+                (left, {
+                    Label = left
+                    Instrs = [expression (VReg 3)]
+                    Terminator = Jump join
+                })
+                (right, {
+                    Label = right
+                    Instrs = []
+                    Terminator = Jump join
+                })
+                (join, {
+                    Label = join
+                    Instrs = [expression (VReg 4)]
+                    Terminator = Ret (Register (VReg 4))
+                })
+            ]
+    }
+
+    let (optimized, changed) = applyCSE cfg
+    match Map.tryFind right optimized.Blocks, Map.tryFind join optimized.Blocks with
+    | Some rightBlock, Some joinBlock
+        when changed
+             && rightBlock.Instrs = [expression (VReg 5)]
+             && joinBlock.Instrs = [
+                 Phi (
+                     VReg 4,
+                     [(Register (VReg 5), right); (Register (VReg 3), left)],
+                     Some AST.TInt64
+                 )
+             ] -> Ok ()
+    | _ ->
+        let func = {
+            Id = fid "pre"
+            Name = "pre"
+            TypedParams = [
+                { Reg = VReg 0; Type = AST.TInt64 }
+                { Reg = VReg 1; Type = AST.TInt64 }
+                { Reg = VReg 2; Type = AST.TBool }
+            ]
+            ReturnType = AST.TInt64
+            CFG = optimized
+            FloatRegs = Set.empty
+        }
+        let actual = formatMIR (Program ([func], Map.empty, Map.empty))
+        Error $"Expected PRE to insert the missing expression and replace the join computation with a phi.\nActual:\n{actual}"
+
 let testCseReusesDominatingScalarHeapLoad () : TestResult =
     let entry = Label "entry"
     let bridge = Label "bridge"
@@ -1594,6 +1656,7 @@ let tests = [
     ("MIR CSE does not reuse throwing direct calls", testCseDoesNotReuseThrowingDirectCalls)
     ("MIR optimize fixed point CSE after copy prop", testCseAfterCopyPropFixpoint)
     ("MIR CSE reuses dominating binary and unary expressions", testCseReusesDominatingExpressions)
+    ("MIR PRE completes an expression missing on one incoming path", testPartialRedundancyEliminationCompletesMissingPath)
     ("MIR CSE reuses dominating scalar heap loads", testCseReusesDominatingScalarHeapLoad)
     ("MIR CSE scalar heap load barriers", testCseDoesNotReuseDominatingScalarHeapLoadAcrossBarriers)
     ("MIR CSE preserves binary and unary expressions across siblings", testCsePreservesExpressionsAcrossSiblingBlocks)

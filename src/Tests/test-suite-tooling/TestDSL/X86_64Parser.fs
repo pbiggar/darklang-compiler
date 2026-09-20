@@ -126,12 +126,30 @@ let private parseLine (lineNumber: int) (source: string) : Result<Instr, string>
                                 | _, _, Error msg -> Error msg
 
                         let movsdStore = threeArgs "MOVSD_store" line
+                        let leaIndex = Regex.Match(line, @"^LEA_index\(([^,]+),\s*([^,]+),\s*([^,]+),\s*(\d+),\s*(-?\d+)\)$")
                         let parsers : (unit -> Result<Instr option, string>) list = [
                             fun () -> parseRegReg MOV_reg "MOV_reg" line
                             fun () -> parseRegImmediate MOV_imm32 "MOV_imm32" line
                             fun () -> memory "MOV_load" MOV_load
                             fun () -> store "MOV_store" MOV_store
                             fun () -> memory "LEA" LEA
+                            fun () -> memory "ADD_load" ADD_load
+                            fun () -> memory "SUB_load" SUB_load
+                            fun () ->
+                                if not leaIndex.Success then Ok None
+                                else
+                                    match parseReg leaIndex.Groups.[1].Value,
+                                          parseReg leaIndex.Groups.[2].Value,
+                                          parseReg leaIndex.Groups.[3].Value,
+                                          parseShift leaIndex.Groups.[4].Value,
+                                          parseInt32 "LEA offset" leaIndex.Groups.[5].Value with
+                                    | Ok dest, Ok baseAddr, Ok index, Ok scale, Ok offset ->
+                                        Ok (Some (LEA_index (dest, baseAddr, index, scale, offset)))
+                                    | Error msg, _, _, _, _
+                                    | _, Error msg, _, _, _
+                                    | _, _, Error msg, _, _
+                                    | _, _, _, Error msg, _
+                                    | _, _, _, _, Error msg -> Error msg
                             fun () -> parseRegImmediate ADD_imm "ADD_imm" line
                             fun () -> parseRegImmediate SUB_imm "SUB_imm" line
                             fun () -> parseRegReg XOR_reg "XOR_reg" line

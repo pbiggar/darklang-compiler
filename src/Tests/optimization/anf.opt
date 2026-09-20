@@ -326,6 +326,34 @@ if 1.5 == 1.5 then 10L else 20L
 return 10
 
 ---NAME---
+const_fold_float_neq
+---INPUT---
+if 1.5 != 2.5 then 10L else 20L
+---EXPECTED---
+return 10
+
+---NAME---
+const_fold_float_gt
+---INPUT---
+if 2.5 > 1.5 then 10L else 20L
+---EXPECTED---
+return 10
+
+---NAME---
+const_fold_float_lte
+---INPUT---
+if 1.5 <= 1.5 then 10L else 20L
+---EXPECTED---
+return 10
+
+---NAME---
+const_fold_float_gte
+---INPUT---
+if 2.5 >= 1.5 then 10L else 20L
+---EXPECTED---
+return 10
+
+---NAME---
 const_fold_float_neg
 ---INPUT---
 let x = 3.5 in -x
@@ -352,6 +380,20 @@ const_fold_float_to_bits
 let x = 1.0 in Stdlib.Float.__toBits (x)
 ---EXPECTED---
 return 4607182418800017408
+
+---NAME---
+const_fold_literal_string_equality
+---INPUT---
+"same" == "same"
+---EXPECTED---
+return true
+
+---NAME---
+const_fold_literal_string_inequality
+---INPUT---
+"left" != "right"
+---EXPECTED---
+return true
 
 ---NAME---
 const_fold_comparison_lt
@@ -1918,6 +1960,114 @@ return t1
 Main:
 let TempId 2 = f(40)
 return t2
+
+---NAME---
+strength_reduce_float_div_negative_4
+---INPUT---
+let f (x: Float) : Float = x / -4.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * -0.25
+return t1
+
+---NAME---
+strength_reduce_float_div_negative_8
+---INPUT---
+let f (x: Float) : Float = x / -8.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * -0.125
+return t1
+
+---NAME---
+strength_reduce_float_div_16
+---INPUT---
+let f (x: Float) : Float = x / 16.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * 0.0625
+return t1
+
+---NAME---
+strength_reduce_float_div_negative_16
+---INPUT---
+let f (x: Float) : Float = x / -16.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * -0.0625
+return t1
+
+---NAME---
+strength_reduce_float_div_32
+---INPUT---
+let f (x: Float) : Float = x / 32.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * 0.03125
+return t1
+
+---NAME---
+strength_reduce_float_div_negative_32
+---INPUT---
+let f (x: Float) : Float = x / -32.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * -0.03125
+return t1
+
+---NAME---
+strength_reduce_float_div_64
+---INPUT---
+let f (x: Float) : Float = x / 64.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * 0.015625
+return t1
+
+---NAME---
+strength_reduce_float_div_negative_64
+---INPUT---
+let f (x: Float) : Float = x / -64.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * -0.015625
+return t1
+
+---NAME---
+strength_reduce_float_div_128
+---INPUT---
+let f (x: Float) : Float = x / 128.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * 0.0078125
+return t1
+
+---NAME---
+strength_reduce_float_div_negative_128
+---INPUT---
+let f (x: Float) : Float = x / -128.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * -0.0078125
+return t1
+
+---NAME---
+strength_reduce_float_div_256
+---INPUT---
+let f (x: Float) : Float = x / 256.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * 0.00390625
+return t1
+
+---NAME---
+strength_reduce_float_div_negative_256
+---INPUT---
+let f (x: Float) : Float = x / -256.0
+---EXPECTED---
+Function f:
+let TempId 1 = t0 * -0.00390625
+return t1
 
 ---NAME---
 strength_reduce_sub_negative_literal

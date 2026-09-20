@@ -24,6 +24,9 @@ type IRStage =
     | ANF      // After ANF optimization
     | MIR      // After MIR optimization (SSA-based)
     | LIR      // After LIR peephole optimization
+    | DirectLIR // Direct symbolic LIR before and after the peephole pass
+    | DirectARM64 // Direct symbolic ARM64 before and after target peepholes
+    | DirectLIR2X64 // Allocated LIR lowered to selected x64 instructions
 
 type OptimizationInput =
     | Source of string

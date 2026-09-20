@@ -352,7 +352,12 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
             e2eFiles
             includeUpstreamDarkPathsForRoundtrip
     let verificationTestFiles = getTestFiles "verification" "e2e"
-    let optTestFiles = getTestFiles "optimization" "opt"
+    let optTestFiles =
+        [| getTestFiles "optimization" "opt"
+           getTestFiles "optimization" "liropt"
+           getTestFiles "optimization" "arm64opt"
+           getTestFiles "optimization" "lir2x64" |]
+        |> Array.concat
     let typecheckTestFiles = getTestFiles "typecheck" "typecheck"
     let anf2mirTestFiles  = getTestFiles "passes/anf2mir" "anf2mir"
     let mir2lirTestFiles  = getTestFiles "passes/mir2lir" "mir2lir"
@@ -1259,7 +1264,10 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
             let fileName = Path.GetFileNameWithoutExtension (testFile: string)
             let loweredFileName = fileName.ToLowerInvariant()
             let stage =
-                if loweredFileName.Contains("anf") then TestDSL.OptimizationFormat.ANF
+                if Path.GetExtension(testFile) = ".liropt" then TestDSL.OptimizationFormat.DirectLIR
+                elif Path.GetExtension(testFile) = ".arm64opt" then TestDSL.OptimizationFormat.DirectARM64
+                elif Path.GetExtension(testFile) = ".lir2x64" then TestDSL.OptimizationFormat.DirectLIR2X64
+                elif loweredFileName.Contains("anf") then TestDSL.OptimizationFormat.ANF
                 elif loweredFileName.Contains("mir") then TestDSL.OptimizationFormat.MIR
                 elif loweredFileName.Contains("lir") then TestDSL.OptimizationFormat.LIR
                 else TestDSL.OptimizationFormat.ANF

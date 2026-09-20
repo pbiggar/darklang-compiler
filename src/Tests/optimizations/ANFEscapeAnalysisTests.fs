@@ -231,6 +231,35 @@ let testFloatRecordCloneScalarizesSourceAllocation () : TestResult =
     | 1 -> Ok ()
     | count -> Error $"Expected the Float clone source to be scalar-replaced, got {count} allocations"
 
+let testFloatRecordCloneReusesNonScalarizedSourceAllocation () : TestResult =
+    let descriptor = pointDescriptor AST.TFloat64
+    let body =
+        Let (
+            TempId 0,
+            FloatSqrt (FloatLiteral 4.0),
+            Let (
+                TempId 1,
+                RecordAlloc (descriptor, [Var (TempId 0); FloatLiteral 2.0]),
+                Let (
+                    TempId 2,
+                    RecordClone (descriptor, Var (TempId 1), [FloatLiteral 3.0; FloatLiteral 2.0]),
+                    Return (Var (TempId 2))
+                )
+            )
+        )
+        |> optimizeBody
+    match body with
+    | Let (
+        TempId 0,
+        FloatSqrt (FloatLiteral 4.0),
+        Let (
+            TempId 1,
+            RecordAlloc _,
+            Let (TempId 2, RecordReuse (_, Var (TempId 1), _), Return (Var (TempId 2)))
+        )
+      ) -> Ok ()
+    | _ -> Error $"Expected the escaping Float clone to reuse its dead source allocation, got {body}"
+
 let testFloatRecordCloneAliasChainScalarizesIntermediates () : TestResult =
     let descriptor = pointDescriptor AST.TFloat64
     let body =
@@ -386,6 +415,7 @@ let tests =
       ("Managed record preserves allocation", testManagedRecordPreservesAllocation)
       ("Float record is scalar-replaced", testFloatRecordIsScalarReplaced)
       ("Float record clone scalarizes source allocation", testFloatRecordCloneScalarizesSourceAllocation)
+      ("Float record clone reuses non-scalarized source allocation", testFloatRecordCloneReusesNonScalarizedSourceAllocation)
       ("Float record clone alias chain scalarizes intermediates", testFloatRecordCloneAliasChainScalarizesIntermediates)
       ("Float record projection before clone scalarizes source", testFloatRecordProjectionBeforeCloneScalarizesSource)
       ("Float record use after clone retains escaping source", testFloatRecordUseAfterCloneRetainsEscapingSource)

@@ -358,6 +358,18 @@ let parseInstructionOrTerminator (lineNum: int) (line: string) : Result<Choice<I
         | _, _, Error e -> Error $"Line {lineNum}: {e}"
     else
 
+    // Try Lsl_imm: "X0 <- Lsl_imm(X1, #3)"
+    let lslImmMatch = Regex.Match(line, @"^(.+?)\s*<-\s*Lsl_imm\((.+?),\s*#?(\d+)\)$")
+    if lslImmMatch.Success then
+        match parseRegister lslImmMatch.Groups.[1].Value,
+              parseRegister lslImmMatch.Groups.[2].Value,
+              parseInt32Field "left shift immediate" lslImmMatch.Groups.[3].Value with
+        | Ok dest, Ok src, Ok shift -> Ok (Choice1Of2 (Lsl_imm (dest, src, shift)))
+        | Error e, _, _
+        | _, Error e, _
+        | _, _, Error e -> Error $"Line {lineNum}: {e}"
+    else
+
     // Try Madd/Msub: "X0 <- Madd(X1, X2, X3)"
     let multiplyAddMatch = Regex.Match(line, @"^(.+?)\s*<-\s*(Madd|Msub)\((.+?),\s*(.+?),\s*(.+)\)$")
     if multiplyAddMatch.Success then
