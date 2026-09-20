@@ -15,6 +15,7 @@ from scripts.render_mergetrain_status import (
     benchmark_changes,
     benchmark_changes_for_commit,
     benchmark_detail,
+    benchmark_diff,
     human_age,
     render,
 )
@@ -30,7 +31,7 @@ class MergetrainStatusTests(unittest.TestCase):
         self.assertEqual(human_age(now - timedelta(days=3), now=now), "3d ago")
 
     @patch("scripts.render_mergetrain_status.git_file")
-    def test_benchmark_detail_data_contains_only_improvements(
+    def test_benchmark_detail_data_contains_only_changed_workloads(
         self, mock_git_file: MagicMock
     ) -> None:
         identity = (
@@ -59,9 +60,32 @@ class MergetrainStatusTests(unittest.TestCase):
             current if revision == "current" else previous
         )
 
-        changes = benchmark_changes_for_commit(Path("."), "current")
+        comparison = benchmark_changes_for_commit(Path("."), "current")
 
-        self.assertEqual(changes, [("faster", 25.0, 150)])
+        self.assertNotIsInstance(comparison, str)
+        assert not isinstance(comparison, str)
+        self.assertEqual(comparison.total_benchmarks, 3)
+        self.assertEqual(len(comparison.workload_changes), 2)
+        improvement = comparison.workload_changes[0]
+        self.assertEqual(improvement.name, "faster")
+        self.assertEqual(improvement.previous_instructions, 200)
+        self.assertEqual(improvement.current_instructions, 150)
+        self.assertEqual(improvement.saved_instructions, 50)
+        self.assertEqual(improvement.change, -25.0)
+        self.assertEqual(improvement.previous_ratio, 2.0)
+        self.assertEqual(improvement.current_ratio, 1.5)
+        disimprovement = comparison.workload_changes[1]
+        self.assertEqual(disimprovement.name, "slower")
+        self.assertAlmostEqual(disimprovement.change, 20.0)
+        self.assertEqual(disimprovement.saved_instructions, -20)
+
+        with patch("scripts.render_mergetrain_status.git", return_value="test"):
+            detail = benchmark_detail(Path("."), "current", color=True)
+        self.assertIn("faster", detail)
+        self.assertIn("slower", detail)
+        self.assertNotIn("same ", detail)
+        self.assertIn("\x1b[32m", detail)
+        self.assertIn("\x1b[31m", detail)
 
     @patch("scripts.render_mergetrain_status.git", return_value="")
     def test_benchmark_history_requests_latest_ten(
@@ -75,9 +99,12 @@ class MergetrainStatusTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             fake_bin = Path(temp_dir)
             fake_mergetrain = fake_bin / "mergetrain"
+            calls_path = fake_bin / "calls"
             fake_mergetrain.write_text(
                 "#!/usr/bin/env python3\n"
                 "import json\n"
+                f"with open({str(calls_path)!r}, 'a', encoding='utf-8') as calls:\n"
+                "    calls.write('status\\n')\n"
                 "print(json.dumps({\n"
                 "    'contract_version': 4,\n"
                 "    'health': 'healthy',\n"
@@ -130,15 +157,22 @@ class MergetrainStatusTests(unittest.TestCase):
 
             try:
                 read_until(b"[m] more merges")
+                self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"j")
-                read_until(b"\x1b[H\x1b[JIDLE: No active jobs")
+                read_until(b"\x1b[H\x1b[Jin train:")
                 os.write(master, b"\x1b[A")
                 read_until(b"\x1b[H\x1b[Jhealth: healthy")
+                self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"m")
                 read_until(b"[m] fewer merges")
                 os.write(master, b"1")
                 detail_output = read_until(b"[q/Esc] back")
                 self.assertIn(b"benchmark result:", detail_output)
+                os.write(master, b"d")
+                diff_output = read_until(b"benchmark commit diff:")
+                self.assertIn(b"benchmarks/RESULTS.md excluded", diff_output)
+                os.write(master, b"d")
+                read_until(b"benchmark result:")
                 os.write(master, b"q")
                 status_output = read_until(b"[m] fewer merges")
                 self.assertNotIn(b"benchmark result:", status_output)
@@ -269,7 +303,11 @@ class MergetrainStatusTests(unittest.TestCase):
                 "| sample | 280 (2.8x) | 100 |\n",
                 encoding="utf-8",
             )
+            (repo / "optimization.txt").write_text(
+                "optimized implementation\n", encoding="utf-8"
+            )
             subprocess.run(["git", "add", "benchmarks/RESULTS.md"], cwd=repo, check=True)
+            subprocess.run(["git", "add", "optimization.txt"], cwd=repo, check=True)
             subprocess.run(
                 ["git", "commit", "-q", "-m", "Record benchmark improvement"],
                 cwd=repo,
@@ -389,25 +427,54 @@ print(json.dumps({
             self.assertNotIn("feature-1 — Add feature 1", completed.stdout)
             self.assertRegex(
                 completed.stdout,
-                r"\[1\] [0-9a-f]{7,12} \d+s ago n/a 2.8x Change benchmark contract",
+                r"\[1\] [0-9a-f]{7,12} +\d+s ago +2.8x \(n/a\) +"
+                r"Change benchmark contract",
             )
             self.assertRegex(
                 completed.stdout,
-                r"\[2\] [0-9a-f]{7,12} \d+s ago 6.7% 2.8x "
+                r"\[2\] [0-9a-f]{7,12} +\d+s ago +2.8x \(-6.7%\) +"
                 r"Record benchmark improvement",
             )
+            benchmark_lines = [
+                line
+                for line in completed.stdout.splitlines()
+                if line.startswith(("[1]", "[2]", "[3]"))
+            ]
+            subject_columns = {
+                line.index(subject)
+                for line, subject in zip(
+                    benchmark_lines,
+                    (
+                        "Change benchmark contract",
+                        "Record benchmark improvement",
+                        "Initial benchmark results",
+                    ),
+                    strict=True,
+                )
+            }
+            self.assertEqual(len(subject_columns), 1)
 
             changes = benchmark_changes(repo)
             self.assertEqual(len(changes), 3)
             self.assertEqual(changes[0].ratio, "2.8x")
-            self.assertEqual(changes[0].improvement, "n/a")
-            self.assertEqual(changes[1].improvement, "6.7%")
+            self.assertIsNone(changes[0].change)
+            self.assertAlmostEqual(changes[1].change or 0, -6.6666667)
 
             detail = benchmark_detail(repo, changes[1].commit, color=False)
             self.assertIn("benchmark result:", detail)
-            self.assertIn("ratio: 2.8x", detail)
-            self.assertIn("sample 6.7% 280 instructions", detail)
-            self.assertNotIn("300 instructions", detail)
+            self.assertIn("overall: 2.8x ← 3.0x (-6.7%)", detail)
+            self.assertIn("changed: 1/1 · 1 improved · 0 disimproved", detail)
+            self.assertIn("instructions: 20 saved · 0 added · net 20 saved", detail)
+            self.assertRegex(
+                detail,
+                r"sample +300 → 280 +20 saved +-6.7% +3x → 2.8x",
+            )
+
+            diff = benchmark_diff(repo, changes[1].commit, color=False)
+            self.assertIn("benchmark commit diff:", diff)
+            self.assertIn("benchmarks/RESULTS.md excluded", diff)
+            self.assertIn("diff --git a/optimization.txt b/optimization.txt", diff)
+            self.assertNotIn("diff --git a/benchmarks/RESULTS.md", diff)
 
             colored = subprocess.run(
                 [
@@ -429,6 +496,7 @@ print(json.dumps({
             self.assertIn("\x1b[32mhealthy\x1b[0m", colored.stdout)
             self.assertIn("\x1b[31mattention\x1b[0m", colored.stdout)
             self.assertIn("\x1b[36mrunning\x1b[0m", colored.stdout)
+            self.assertIn("\x1b[32m(-6.7%)\x1b[0m", colored.stdout)
 
             detailed = subprocess.run(
                 [

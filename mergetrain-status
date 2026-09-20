@@ -14,7 +14,9 @@ show_conflicts=false
 interactive_input=false
 show_more_merges=false
 benchmark_detail_index=""
+show_benchmark_diff=false
 scroll_offset=0
+refresh_status=true
 
 usage() {
   cat <<EOF
@@ -121,25 +123,32 @@ if [[ "$interactive_redraw" == true && -t 0 ]]; then
 fi
 
 while true; do
-  status_output=""
-  renderer_args=(--repo "$repo_root")
-  if [[ "$show_more_merges" == true ]]; then
-    renderer_args+=(--merge-limit 20)
-  fi
-  if [[ -n "$benchmark_detail_index" ]]; then
-    renderer_args+=(--benchmark-detail-index "$benchmark_detail_index")
-  fi
-  if [[ "$color_mode" == always ]]; then
-    renderer_args+=(--color)
-  fi
-  if [[ "$show_conflicts" == true ]]; then
-    renderer_args+=(--show-conflicts)
-  fi
-  if ! status_output="$(
-    mergetrain --repo "$repo_root" status --json --limit 1000 \
-      | python3 "$script_root/scripts/render_mergetrain_status.py" "${renderer_args[@]}"
-  )"; then
-    status_output="Status refresh failed; retrying in $interval_seconds second(s)"
+  if [[ "$refresh_status" == true ]]; then
+    status_output=""
+    renderer_args=(--repo "$repo_root")
+    if [[ "$show_more_merges" == true ]]; then
+      renderer_args+=(--merge-limit 20)
+    fi
+    if [[ -n "$benchmark_detail_index" ]]; then
+      if [[ "$show_benchmark_diff" == true ]]; then
+        renderer_args+=(--benchmark-diff-index "$benchmark_detail_index")
+      else
+        renderer_args+=(--benchmark-detail-index "$benchmark_detail_index")
+      fi
+    fi
+    if [[ "$color_mode" == always ]]; then
+      renderer_args+=(--color)
+    fi
+    if [[ "$show_conflicts" == true ]]; then
+      renderer_args+=(--show-conflicts)
+    fi
+    if ! status_output="$(
+      mergetrain --repo "$repo_root" status --json --limit 1000 \
+        | python3 "$script_root/scripts/render_mergetrain_status.py" "${renderer_args[@]}"
+    )"; then
+      status_output="Status refresh failed; retrying in $interval_seconds second(s)"
+    fi
+    refresh_status=false
   fi
   if [[ "$interactive_redraw" == true ]]; then
     terminal_lines="${LINES:-}"
@@ -153,6 +162,10 @@ while true; do
     if ((viewport_lines < 1)); then
       viewport_lines=1
     fi
+    scroll_step=$((viewport_lines / 3))
+    if ((scroll_step < 3)); then
+      scroll_step=3
+    fi
     output_lines="$(printf '%s\n' "$status_output" | awk 'END { print NR }')"
     max_scroll=$((output_lines - viewport_lines))
     if ((max_scroll < 0)); then
@@ -165,11 +178,15 @@ while true; do
     last_line=$((scroll_offset + viewport_lines))
     visible_output="$(printf '%s\n' "$status_output" | sed -n "${first_line},${last_line}p")"
     if [[ -n "$benchmark_detail_index" ]]; then
-      controls="[↑/↓ or j/k] scroll  [q/Esc] back"
+      if [[ "$show_benchmark_diff" == true ]]; then
+        controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [d] change report  [q/Esc] back"
+      else
+        controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [d] commit diff  [q/Esc] back"
+      fi
     elif [[ "$show_more_merges" == true ]]; then
-      controls="[↑/↓ or j/k] scroll  [m] fewer merges  [1-9,0] benchmark details  [c] conflicts  [q] quit"
+      controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [m] fewer merges  [1-9,0] details  [c] conflicts  [q] quit"
     else
-      controls="[↑/↓ or j/k] scroll  [m] more merges  [1-9,0] benchmark details  [c] conflicts  [q] quit"
+      controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [m] more merges  [1-9,0] details  [c] conflicts  [q] quit"
     fi
     printf '\033[H\033[J%s\n\n%s\n' "$visible_output" "$controls"
   else
@@ -184,17 +201,40 @@ while true; do
     if read -rsn1 -t "$interval_seconds" pressed_key; then
       if [[ "$pressed_key" == $'\033' ]]; then
         escape_suffix=""
-        read -rsn2 -t 0.05 escape_suffix || true
+        read -rsn2 -t 0.02 escape_suffix || true
+        if [[ "$escape_suffix" == "[5" || "$escape_suffix" == "[6" ]]; then
+          escape_terminator=""
+          read -rsn1 -t 0.02 escape_terminator || true
+          escape_suffix+="$escape_terminator"
+        fi
         pressed_key+="$escape_suffix"
       fi
       case "$pressed_key" in
         $'\033[A'|k)
-          if ((scroll_offset > 0)); then
-            scroll_offset=$((scroll_offset - 1))
+          if ((scroll_offset > scroll_step)); then
+            scroll_offset=$((scroll_offset - scroll_step))
+          else
+            scroll_offset=0
           fi
           ;;
         $'\033[B'|j)
-          scroll_offset=$((scroll_offset + 1))
+          scroll_offset=$((scroll_offset + scroll_step))
+          ;;
+        $'\033[5~')
+          if ((scroll_offset > viewport_lines)); then
+            scroll_offset=$((scroll_offset - viewport_lines))
+          else
+            scroll_offset=0
+          fi
+          ;;
+        $'\033[6~')
+          scroll_offset=$((scroll_offset + viewport_lines))
+          ;;
+        $'\033[H'|g)
+          scroll_offset=0
+          ;;
+        $'\033[F'|G)
+          scroll_offset=$output_lines
           ;;
         m)
           if [[ -z "$benchmark_detail_index" ]]; then
@@ -204,6 +244,7 @@ while true; do
               show_more_merges=true
             fi
             scroll_offset=0
+            refresh_status=true
           fi
           ;;
         c)
@@ -213,31 +254,52 @@ while true; do
             else
               show_conflicts=true
             fi
+            refresh_status=true
+          fi
+          ;;
+        d)
+          if [[ -n "$benchmark_detail_index" ]]; then
+            if [[ "$show_benchmark_diff" == true ]]; then
+              show_benchmark_diff=false
+            else
+              show_benchmark_diff=true
+            fi
+            scroll_offset=0
+            refresh_status=true
           fi
           ;;
         [1-9])
           if [[ -z "$benchmark_detail_index" ]]; then
             benchmark_detail_index="$pressed_key"
+            show_benchmark_diff=false
             scroll_offset=0
+            refresh_status=true
           fi
           ;;
         0)
           if [[ -z "$benchmark_detail_index" ]]; then
             benchmark_detail_index=10
+            show_benchmark_diff=false
             scroll_offset=0
+            refresh_status=true
           fi
           ;;
         q|$'\033')
           if [[ -n "$benchmark_detail_index" ]]; then
             benchmark_detail_index=""
+            show_benchmark_diff=false
             scroll_offset=0
+            refresh_status=true
           else
             exit 0
           fi
           ;;
       esac
+    else
+      refresh_status=true
     fi
   else
     sleep "$interval_seconds"
+    refresh_status=true
   fi
 done

@@ -154,27 +154,61 @@ def git_file(repo: Path, revision: str) -> str | None:
     return completed.stdout if completed.returncode == 0 else None
 
 
-def percentage(value: float) -> str:
-    return f"{value:.2g}%"
+def percentage(value: float | None) -> str:
+    if value is None:
+        return "n/a"
+    if value == 0:
+        return "0%"
+    return f"{value:+.2g}%"
 
 
-def benchmark_improvement(
+def change_style(value: float | None) -> str:
+    if value is None or value == 0:
+        return DIM
+    return GREEN if value < 0 else RED
+
+
+@dataclass(frozen=True)
+class BenchmarkWorkloadChange:
+    name: str
+    previous_instructions: int
+    current_instructions: int
+    previous_ratio: float
+    current_ratio: float
+
+    @property
+    def saved_instructions(self) -> int:
+        return self.previous_instructions - self.current_instructions
+
+    @property
+    def change(self) -> float:
+        return (self.current_instructions / self.previous_instructions - 1) * 100
+
+
+@dataclass(frozen=True)
+class BenchmarkComparison:
+    previous_ratio: str
+    current_ratio: str
+    aggregate_change: float
+    total_benchmarks: int
+    workload_changes: tuple[BenchmarkWorkloadChange, ...]
+
+
+def benchmark_comparison(
     repo: Path, commit: str, *, current_contents: str | None = None
-) -> str:
+) -> BenchmarkComparison | str:
     current_contents = current_contents or git_file(repo, commit)
     previous_contents = git_file(repo, f"{commit}^")
-    if current_contents is None:
-        return "n/a"
-    if previous_contents is None:
-        return "n/a"
+    if current_contents is None or previous_contents is None:
+        return "comparison unavailable"
     current_identity = benchmark_identity(current_contents)
     previous_identity = benchmark_identity(previous_contents)
     if current_identity and current_identity != previous_identity:
-        return "n/a"
+        return "not comparable with the previous result"
     current = benchmark_rows(current_contents)
     previous = benchmark_rows(previous_contents)
     if not current or current.keys() != previous.keys():
-        return "n/a"
+        return "comparison unavailable"
 
     current_dark = math.prod(dark for dark, _rust in current.values())
     current_rust = math.prod(rust for _dark, rust in current.values())
@@ -182,15 +216,34 @@ def benchmark_improvement(
     previous_rust = math.prod(rust for _dark, rust in previous.values())
     exact_current = current_dark * previous_rust
     exact_previous = previous_dark * current_rust
-    if exact_current == exact_previous:
-        return "0%"
     log_change = math.fsum(
         math.log(current[name][0] / current[name][1])
         - math.log(previous[name][0] / previous[name][1])
         for name in current
     ) / len(current)
-    improvement = (1 - math.exp(log_change)) * 100
-    return percentage(improvement)
+    aggregate_change = (
+        0.0
+        if exact_current == exact_previous
+        else (math.exp(log_change) - 1) * 100
+    )
+    workload_changes = tuple(
+        BenchmarkWorkloadChange(
+            name=name,
+            previous_instructions=previous[name][0],
+            current_instructions=current[name][0],
+            previous_ratio=previous[name][0] / previous[name][1],
+            current_ratio=current[name][0] / current[name][1],
+        )
+        for name in current
+        if current[name][0] != previous[name][0]
+    )
+    return BenchmarkComparison(
+        previous_ratio=displayed_benchmark_ratio(previous_contents) or "n/a",
+        current_ratio=displayed_benchmark_ratio(current_contents) or "n/a",
+        aggregate_change=aggregate_change,
+        total_benchmarks=len(current),
+        workload_changes=workload_changes,
+    )
 
 
 @dataclass(frozen=True)
@@ -199,7 +252,7 @@ class BenchmarkChange:
     short_commit: str
     date: str
     subject: str
-    improvement: str
+    change: float | None
     ratio: str
 
 
@@ -218,7 +271,7 @@ def benchmark_changes(repo: Path, limit: int = 10) -> list[BenchmarkChange]:
     def parse(line: str) -> BenchmarkChange:
         commit, short_commit, date, subject = line.split("\t", 3)
         current_contents = git_file(repo, commit)
-        improvement = benchmark_improvement(
+        comparison = benchmark_comparison(
             repo, commit, current_contents=current_contents
         )
         ratio = (
@@ -231,7 +284,11 @@ def benchmark_changes(repo: Path, limit: int = 10) -> list[BenchmarkChange]:
             short_commit=short_commit,
             date=date,
             subject=subject,
-            improvement=improvement,
+            change=(
+                comparison.aggregate_change
+                if isinstance(comparison, BenchmarkComparison)
+                else None
+            ),
             ratio=ratio or "n/a",
         )
 
@@ -239,53 +296,157 @@ def benchmark_changes(repo: Path, limit: int = 10) -> list[BenchmarkChange]:
 
 
 def benchmark_detail(repo: Path, commit: str, *, color: bool) -> str:
-    changes = benchmark_changes_for_commit(repo, commit)
+    comparison = benchmark_changes_for_commit(repo, commit)
     current_contents = git_file(repo, commit)
-    ratio = (
-        displayed_benchmark_ratio(current_contents)
-        if current_contents is not None
-        else None
-    )
     short_commit = git(repo, "show", "-s", "--format=%h", commit)
     subject = git(repo, "show", "-s", "--format=%s", commit)
     lines = [
         styled("benchmark result:", BOLD, color),
         f"{styled(short_commit, CYAN, color)} {subject}",
-        f"ratio: {styled(ratio or 'unavailable', CYAN, color)}",
-        styled("improved benchmarks:", BOLD, color),
     ]
-    if isinstance(changes, str):
-        lines.append(changes)
-    else:
-        lines.extend(
-            f"{name} {percentage(improvement)} {instructions:,} instructions"
-            for name, improvement, instructions in changes
+    if current_contents is not None:
+        metadata = [
+            line.replace("**", "").replace("`", "")
+            for line in current_contents.splitlines()
+            if line.startswith(
+                ("**Snapshot timestamp:**", "**Architecture:**", "**Profile:**")
+            )
+        ]
+        if metadata:
+            lines.append(styled(" · ".join(metadata), DIM, color))
+    if isinstance(comparison, str):
+        lines.extend(["", comparison])
+        return "\n".join(lines)
+
+    improved = tuple(
+        change
+        for change in comparison.workload_changes
+        if change.saved_instructions > 0
+    )
+    disimproved = tuple(
+        change
+        for change in comparison.workload_changes
+        if change.saved_instructions < 0
+    )
+    saved = sum(change.saved_instructions for change in improved)
+    added = -sum(change.saved_instructions for change in disimproved)
+    net = saved - added
+    net_text = (
+        f"{abs(net):,} {'saved' if net > 0 else 'added'}" if net else "even"
+    )
+    lines.extend(
+        [
+            "",
+            "overall: "
+            + styled(comparison.current_ratio, CYAN, color)
+            + styled(" ← ", DIM, color)
+            + styled(comparison.previous_ratio, DIM, color)
+            + " "
+            + styled(
+                f"({percentage(comparison.aggregate_change)})",
+                change_style(comparison.aggregate_change),
+                color,
+            ),
+            f"changed: {len(comparison.workload_changes)}/{comparison.total_benchmarks}"
+            f" · {len(improved)} improved · {len(disimproved)} disimproved",
+            f"instructions: {saved:,} saved · {added:,} added · net {net_text}",
+            "",
+            styled("changed benchmarks:", BOLD, color),
+        ]
+    )
+    if not comparison.workload_changes:
+        lines.append("(none)")
+        return "\n".join(lines)
+
+    names_width = max(
+        len("benchmark"),
+        *(len(change.name) for change in comparison.workload_changes),
+    )
+    transitions = {
+        change.name: (
+            f"{change.previous_instructions:,} → {change.current_instructions:,}"
         )
-        if not changes:
-            lines.append("(none)")
+        for change in comparison.workload_changes
+    }
+    impacts = {
+        change.name: (
+            f"{abs(change.saved_instructions):,} "
+            f"{'saved' if change.saved_instructions > 0 else 'added'}"
+        )
+        for change in comparison.workload_changes
+    }
+    transition_width = max(
+        len("instructions (before → after)"),
+        *(len(value) for value in transitions.values()),
+    )
+    impact_width = max(len("impact"), *(len(value) for value in impacts.values()))
+    lines.append(
+        f"{'benchmark':<{names_width}}  "
+        f"{'instructions (before → after)':<{transition_width}}  "
+        f"{'impact':<{impact_width}}  {'change':>7}  ratio (before → after)"
+    )
+    for change in comparison.workload_changes:
+        style = change_style(change.change)
+        ratio_transition = (
+            f"{change.previous_ratio:.3g}x → {change.current_ratio:.3g}x"
+        )
+        lines.append(
+            styled(f"{change.name:<{names_width}}", BOLD, color)
+            + "  "
+            + styled(f"{transitions[change.name]:<{transition_width}}", style, color)
+            + "  "
+            + styled(f"{impacts[change.name]:<{impact_width}}", style, color)
+            + "  "
+            + styled(f"{percentage(change.change):>7}", style, color)
+            + "  "
+            + styled(ratio_transition, CYAN, color)
+        )
     return "\n".join(lines)
 
 
 def benchmark_changes_for_commit(
     repo: Path, commit: str
-) -> list[tuple[str, float, int]] | str:
-    current_contents = git_file(repo, commit)
-    previous_contents = git_file(repo, f"{commit}^")
-    if current_contents is None or previous_contents is None:
-        return "individual improvements unavailable"
-    current_identity = benchmark_identity(current_contents)
-    previous_identity = benchmark_identity(previous_contents)
-    if current_identity and current_identity != previous_identity:
-        return "not comparable with the previous result"
-    current = benchmark_rows(current_contents)
-    previous = benchmark_rows(previous_contents)
-    if not current or current.keys() != previous.keys():
-        return "individual improvements unavailable"
-    return [
-        (name, (1 - current[name][0] / previous[name][0]) * 100, current[name][0])
-        for name in current
-        if current[name][0] < previous[name][0]
+) -> BenchmarkComparison | str:
+    return benchmark_comparison(repo, commit)
+
+
+def benchmark_diff(repo: Path, commit: str, *, color: bool) -> str:
+    short_commit = git(repo, "show", "-s", "--format=%h", commit)
+    subject = git(repo, "show", "-s", "--format=%s", commit)
+    patch = git(
+        repo,
+        "show",
+        "--format=",
+        "--first-parent",
+        "--no-ext-diff",
+        "--no-renames",
+        commit,
+        "--",
+        ".",
+        ":(exclude)benchmarks/RESULTS.md",
+    )
+
+    def diff_line(line: str) -> str:
+        if line.startswith(("diff --git", "--- ", "+++ ")):
+            return styled(line, BOLD, color)
+        if line.startswith("@@"):
+            return styled(line, CYAN, color)
+        if line.startswith("+"):
+            return styled(line, GREEN, color)
+        if line.startswith("-"):
+            return styled(line, RED, color)
+        return line
+
+    lines = [
+        styled("benchmark commit diff:", BOLD, color),
+        f"{styled(short_commit, CYAN, color)} {subject}",
+        styled("benchmarks/RESULTS.md excluded (generated)", DIM, color),
+        "",
     ]
+    lines.extend(map(diff_line, patch.splitlines()))
+    if not patch:
+        lines.append("(no non-generated changes in this commit)")
+    return "\n".join(lines)
 
 
 def merged_branch(repo: Path, commit: str) -> str:
@@ -348,18 +509,23 @@ def render(
     conflict_toggle_hint: bool = False,
     merge_limit: int = 5,
     benchmark_detail_index: int | None = None,
+    benchmark_diff_index: int | None = None,
 ) -> str:
     if payload.get("contract_version") != 4:
         raise ValueError(
             f"unsupported mergetrain contract version: {payload.get('contract_version')}"
         )
 
-    if benchmark_detail_index is not None:
+    benchmark_index = benchmark_detail_index or benchmark_diff_index
+    if benchmark_index is not None:
         changes = benchmark_changes(repo)
-        if benchmark_detail_index < 1 or benchmark_detail_index > len(changes):
+        if benchmark_index < 1 or benchmark_index > len(changes):
             return "benchmark result unavailable"
-        return benchmark_detail(
-            repo, changes[benchmark_detail_index - 1].commit, color=color
+        commit = changes[benchmark_index - 1].commit
+        return (
+            benchmark_diff(repo, commit, color=color)
+            if benchmark_diff_index is not None
+            else benchmark_detail(repo, commit, color=color)
         )
 
     action = payload["next_action"]
@@ -416,15 +582,29 @@ def render(
     lines.append("")
     lines.append(f"benchmark ratio: {styled(ratio or 'unavailable', CYAN, color)}")
     lines.append(styled("recent benchmark results:", BOLD, color))
+    ratio_width = max((len(change.ratio) for change in changes), default=0)
+    changes_text = [percentage(change.change) for change in changes]
+    change_width = max((len(value) + 2 for value in changes_text), default=0)
     lines.extend(
         [
             f"[{index if index < 10 else 0}] "
-            + history_line(
-                f"{change.short_commit} {change.date} "
-                f"{change.improvement} {change.ratio} {change.subject}",
+            + styled(change.short_commit, CYAN, color)
+            + " "
+            + styled(
+                f"{human_age(change.date, now=now):<8}",
+                DIM,
                 color,
-                now=now,
             )
+            + " "
+            + styled(f"{change.ratio:>{ratio_width}}", CYAN, color)
+            + " "
+            + styled(
+                f"({percentage(change.change)})".ljust(change_width),
+                change_style(change.change),
+                color,
+            )
+            + " "
+            + change.subject
             for index, change in enumerate(changes, start=1)
         ]
         or ["(none)"]
@@ -440,6 +620,7 @@ def main() -> int:
     parser.add_argument("--conflict-toggle-hint", action="store_true")
     parser.add_argument("--merge-limit", type=int, default=5)
     parser.add_argument("--benchmark-detail-index", type=int)
+    parser.add_argument("--benchmark-diff-index", type=int)
     args = parser.parse_args()
     try:
         payload = json.load(sys.stdin)
@@ -452,6 +633,7 @@ def main() -> int:
                 conflict_toggle_hint=args.conflict_toggle_hint,
                 merge_limit=args.merge_limit,
                 benchmark_detail_index=args.benchmark_detail_index,
+                benchmark_diff_index=args.benchmark_diff_index,
             )
         )
     except (
