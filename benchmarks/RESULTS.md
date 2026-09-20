@@ -2,12 +2,12 @@
 
 Best-known compatible full-profile Dark performance vs audited Rust references, with diagnostic reference runtimes (instruction counts).
 
-**Snapshot timestamp:** 2026-09-20T08:30:34+00:00
+**Snapshot timestamp:** 2026-09-20T10:56:11+00:00
 **Architecture:** `arm64`
 **Profile:** `full` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs`
 **Workload contract:** `6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe`
-**Compiler commit:** `c7cf59ffecc9f940e22141ba87bed9ccd3796c80` - Expand MIR sparse conditional constants
+**Compiler commit:** `df6831dbd7bdb53e8a25023a3c63fae0ca34c945` - Reuse straight-line boxed sum constructors
 **Diagnostic references:** informational only; multipliers are instructions divided by Rust for the same workload.
 Every displayed diagnostic row matched the profile's expected stdout.
 
@@ -40,5 +40,5 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | string_equality | 1,178,632 (0.80x) | 1,479,564 | - | - | - | - |
 | sum_to_n | 58,399 (0.22x) | 260,246 | - | - | - | - |
 | tak | 48,005,108 (0.12x) | 391,110,808 | - | - | - | - |
-| tinytemplate | 310,045,808 (738x) | 420,354 | - | - | - | - |
+| tinytemplate | 310,044,137 (738x) | 420,354 | - | - | - | - |
 | warden | 44,213,054 (164x) | 270,345 | - | - | - | - |

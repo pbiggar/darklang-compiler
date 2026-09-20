@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-20T08:30:34+00:00",
+  "generated_at": "2026-09-20T10:56:11+00:00",
   "compiler": {
-    "commit": "c7cf59ffecc9f940e22141ba87bed9ccd3796c80",
-    "subject": "Expand MIR sparse conditional constants"
+    "commit": "df6831dbd7bdb53e8a25023a3c63fae0ca34c945",
+    "subject": "Reuse straight-line boxed sum constructors"
   },
   "benchmarks": [
     {
@@ -126,7 +126,7 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 310045808
+      "instructions": 310044137
     },
     {
       "name": "warden",
