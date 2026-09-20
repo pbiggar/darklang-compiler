@@ -217,21 +217,27 @@ prebuilt functions and for selecting reachable standard-library functions.
 **Input**: Specialized ANF
 **Output**: ANF with eligible local aggregates scalar-replaced or uniquely reused
 
-The first escape-analysis scope covers fixed-layout tuple and record
-allocations whose fields are all immediate scalar values, including Float64. An
-allocation is removed only when its complete lexical use set consists of field
-projections, local aliases, and representation-only record-clone sources.
-Returns, calls, closure capture, storage, raw-pointer operations, managed
-fields, and every unmodelled use preserve the heap representation. Escaping
-clones retain their own allocation while eligible source and intermediate
-aggregates are scalar-replaced. A remaining uniquely owned Float record can
-still transfer its allocation to a sole escaping clone after scalar replacement.
+The first escape-analysis scope scalar-replaces fixed-layout tuple and record
+allocations whose fields are all immediate scalar values, including Float64.
+An allocation is removed only when its complete lexical use set consists of
+field projections, local aliases, and representation-only record-clone
+sources. A remaining uniquely owned record can transfer its allocation to a
+sole compatible clone when every field is immediate or a non-observable
+`String`, `Blob`, or `Int` buffer. Reference-count elaboration retains the
+replacement child edges, releases displaced children in field order, and then
+overwrites the block.
+
+Returns, calls, closure capture, storage, raw-pointer operations, composite or
+potentially observable managed fields, and every unmodelled use preserve the
+ordinary allocation.
+Escaping clones retain their own allocation while eligible immediate source
+and intermediate aggregates are scalar-replaced.
 
 Running before reference-count insertion ensures eliminated aggregates never
 acquire root retain or release operations and allows reused records to be
-treated as one ownership family. Stack allocation, managed-field reuse or
-scalar replacement, and interprocedural representation changes are outside the
-current scope.
+treated as one ownership family. Stack allocation, scalar replacement of
+managed fields, observable-destruction reuse, and interprocedural
+representation changes are outside the current scope.
 
 ## Pass 2.5: Reference Count Insertion (`RefCountInsertion.fs`)
 

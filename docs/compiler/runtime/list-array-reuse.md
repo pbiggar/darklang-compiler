@@ -342,8 +342,9 @@ include:
 5. Managed elements and destruction-effect propagation. Stream finalizers are
    observable, including through containers, so general last-use release cannot
    move them arbitrarily. This slice excludes managed elements and captures.
-6. Drop specialization, constructor reset/reuse tokens, safe child-edge
-   dismantling, and later suitable tail-recursion-modulo-constructor lowering.
+6. Extend the fixed-layout record reset/reuse foundation to general constructor
+   tokens, additional layouts, observable child-edge dismantling, and later
+   suitable tail-recursion-modulo-constructor lowering.
 
 Roc's ownership solver/emitter/certifier separation and array uniqueness
 mechanics inform these later stages. Koka's Perceus implementation supplies the

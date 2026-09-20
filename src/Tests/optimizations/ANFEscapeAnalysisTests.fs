@@ -312,23 +312,45 @@ let testFloatRecordCallBeforeCloneRejectsReuse () : TestResult =
     if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then Ok ()
     else Error $"Expected a call before a Float clone to reject reuse, got {body}"
 
-let testManagedFloatRecordRejectsReuse () : TestResult =
+let testCompositeManagedRecordRejectsReuse () : TestResult =
     let descriptor =
         { pointDescriptor AST.TFloat64 with
-            Fields = ["x", AST.TFloat64; "label", AST.TString] }
+            Fields = ["x", AST.TFloat64; "items", AST.TList AST.TInt64] }
     let body =
         Let (
-            TempId 0,
-            RecordAlloc (descriptor, [FloatLiteral 1.0; StringLiteral "old"]),
+            TempId 4,
+            Call (fid "makeItems", []),
             Let (
-                TempId 1,
-                RecordClone (descriptor, Var (TempId 0), [FloatLiteral 2.0; StringLiteral "new"]),
-                Return (Var (TempId 1))
+                TempId 0,
+                RecordAlloc (descriptor, [FloatLiteral 1.0; Var (TempId 4)]),
+                Let (
+                    TempId 1,
+                    RecordClone (descriptor, Var (TempId 0), [FloatLiteral 2.0; Var (TempId 4)]),
+                    Return (Var (TempId 1))
+                )
             )
         )
         |> optimizeBody
     if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then Ok ()
-    else Error $"Expected a record with a managed field to reject reuse, got {body}"
+    else Error $"Expected a record with a composite managed field to reject reuse, got {body}"
+
+let testManagedLeafRecordReusesUniqueAllocation () : TestResult =
+    let descriptor =
+        { pointDescriptor AST.TString with
+            Fields = ["label", AST.TString; "count", AST.TInt64] }
+    let body =
+        Let (
+            TempId 0,
+            RecordAlloc (descriptor, [StringLiteral "old"; IntLiteral (Int64 1L)]),
+            Let (
+                TempId 1,
+                RecordClone (descriptor, Var (TempId 0), [StringLiteral "new"; IntLiteral (Int64 2L)]),
+                Return (Var (TempId 1))
+            )
+        )
+        |> optimizeBody
+    if aggregateAllocationCount body = 1 && containsRecordReuse body then Ok ()
+    else Error $"Expected the unique managed-leaf record allocation to be reused, got {body}"
 
 let testFloatRecordAliasUseAfterCloneRetainsEscapingSource () : TestResult =
     let descriptor = pointDescriptor AST.TFloat64
@@ -390,6 +412,7 @@ let tests =
       ("Float record projection before clone scalarizes source", testFloatRecordProjectionBeforeCloneScalarizesSource)
       ("Float record use after clone retains escaping source", testFloatRecordUseAfterCloneRetainsEscapingSource)
       ("Float record call before clone rejects reuse", testFloatRecordCallBeforeCloneRejectsReuse)
-      ("Managed Float record rejects reuse", testManagedFloatRecordRejectsReuse)
+      ("Composite managed record rejects reuse", testCompositeManagedRecordRejectsReuse)
+      ("Managed leaf record reuses unique allocation", testManagedLeafRecordReusesUniqueAllocation)
       ("Float record alias use after clone retains escaping source", testFloatRecordAliasUseAfterCloneRetainsEscapingSource)
       ("Float record branch clones scalarize shared source", testFloatRecordBranchClonesScalarizeSharedSource) ]

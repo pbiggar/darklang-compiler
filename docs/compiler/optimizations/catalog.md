@@ -29,8 +29,9 @@ from Git history.
   and reversed-relational canonicalization.
 - **Interprocedural and aggregate work:** uniform literal direct-parameter
   propagation, bounded scalar-literal cloning, ownership-safe tuple projection
-  forwarding, projection-only scalar tuple and record replacement, unique Float
-  record-clone allocation reuse, and unused ANF binding elimination.
+  forwarding, projection-only scalar tuple and record replacement, unique
+  fixed-layout record-clone allocation reuse for Float and non-observable
+  buffer fields, and unused ANF binding elimination.
 - **Loops and control flow:** bounded recursive-loop unrolling, tail recursion
   modulo native-width wrapping addition, recursive-left subtraction,
   multiplication, or immutable list/sum/record constructors; effect-free call
@@ -113,18 +114,20 @@ left on the generic closure path.
 ## Escape analysis and scalar replacement
 
 `passes/anf/ANF_EscapeAnalysis.fs` removes fixed-layout tuple and record
-allocations whose fields are immediate scalar values, including Float64, and whose
-complete lexical use set consists only of projections, local aliases, and
-representation-only record-clone sources. Escaping clones retain their own
+allocations whose fields are immediate scalar values, including Float64, and
+whose complete lexical use set consists only of projections, local aliases,
+and representation-only record-clone sources. Escaping clones retain their own
 allocation even when an eligible source allocation is removed.
 
-Returns, calls, closure capture, storage, raw operations, managed fields, and
-unknown uses preserve scalar-replacement allocations. Escaping clones retain
-their own allocation while eligible Float source and intermediate aggregates
-are scalar-replaced. After scalar replacement, a remaining uniquely owned
-Float record may still transfer its allocation to a sole escaping clone.
-Focused tests cover projection, alias, clone-chain, and branch shapes plus the
-conservative call and managed-field boundaries.
+After scalar replacement, a remaining uniquely owned record may transfer its
+fixed block to a sole compatible clone. Eligible layouts contain immediate
+fields or non-observable `String`, `Blob`, and `Int` buffers. Replacement
+children are retained before displaced children are released and the block is
+overwritten. Returns, calls, closure capture, storage, raw operations,
+composite or potentially observable managed fields, and unknown uses preserve
+the ordinary allocation.
+Focused tests cover projection, alias, clone-chain, ownership ordering, and
+branch shapes plus the conservative call and observable-field boundaries.
 
 ## MIR optimization
 

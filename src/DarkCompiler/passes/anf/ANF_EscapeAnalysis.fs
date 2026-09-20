@@ -1,9 +1,10 @@
-// ANF_EscapeAnalysis.fs - Eliminate projection-only scalar aggregates.
+// ANF_EscapeAnalysis.fs - Eliminate scalar aggregates and reuse unique records.
 //
 // This deliberately narrow first escape-analysis pass scalar-replaces local
 // tuple and record allocations only when their complete lexical use set is
 // projections, aliases, or the representation-only source of a record clone.
-// Managed fields and every unmodelled use retain the ordinary heap allocation.
+// Composite or potentially observable managed fields and every unmodelled use
+// retain the ordinary allocation. Buffer fields can reset before unique reuse.
 
 module ANF_EscapeAnalysis
 
@@ -29,6 +30,12 @@ let private isScalarType (typ: AST.Type) : bool =
     | AST.TUnit
     | AST.TRuntimeError -> true
     | _ -> false
+
+let private isReusableRecordFieldType (typ: AST.Type) : bool =
+    isScalarType typ
+    || match typ with
+       | AST.TString | AST.TBlob | AST.TInt -> true
+       | _ -> false
 
 let private atomIsScalar (scalarTemps: Set<TempId>) (atom: Atom) : bool =
     match atom with
@@ -61,9 +68,10 @@ let rec private exprUsesTracked (tracked: Set<TempId>) (expr: AExpr) : bool =
         || exprUsesTracked tracked thenBranch
         || exprUsesTracked tracked elseBranch
 
-/// Rewrite the sole consuming clone of a uniquely local immediate record to
-/// reuse its source block. Running this after scalar replacement preserves the
-/// allocation-free cases while retaining reuse for escaping clone chains.
+/// Rewrite the sole consuming clone of a uniquely local compatible record to
+/// reuse its source block. RC elaboration retains replacement buffer children
+/// and releases displaced children before the stores. Running this after
+/// scalar replacement preserves allocation-free immediate cases.
 let rec private reuseUniqueRecordClone
     (sourceDescriptor: RecordDescriptor)
     (tracked: Set<TempId>)
@@ -95,21 +103,20 @@ let rec private reuseUniqueRecordClone
         else
             None
 
-let rec private reuseFloatRecordClones (expr: AExpr) : AExpr =
+let rec private reuseEligibleRecordClones (expr: AExpr) : AExpr =
     match expr with
     | Jump _ | Return _ -> expr
     | Join (parameter, continuation, entry) ->
-        Join (parameter, reuseFloatRecordClones continuation, reuseFloatRecordClones entry)
+        Join (parameter, reuseEligibleRecordClones continuation, reuseEligibleRecordClones entry)
     | If (condition, thenBranch, elseBranch) ->
-        If (condition, reuseFloatRecordClones thenBranch, reuseFloatRecordClones elseBranch)
+        If (condition, reuseEligibleRecordClones thenBranch, reuseEligibleRecordClones elseBranch)
     | Let (boundId, cexpr, body) ->
-        let body = reuseFloatRecordClones body
+        let body = reuseEligibleRecordClones body
         match cexpr with
         | RecordAlloc (descriptor, _)
         | RecordClone (descriptor, _, _)
         | RecordReuse (descriptor, _, _)
-            when descriptor.Fields |> List.forall (snd >> isScalarType)
-                 && descriptor.Fields |> List.exists (snd >> (=) AST.TFloat64) ->
+            when descriptor.Fields |> List.forall (snd >> isReusableRecordFieldType) ->
             let rewritten =
                 reuseUniqueRecordClone descriptor (Set.singleton boundId) body
                 |> Option.defaultValue body
@@ -280,7 +287,7 @@ let private scalarReplaceFunction
     { func with
         Body =
             scalarReplaceExpr returnTypes scalarParams Map.empty func.Body
-            |> reuseFloatRecordClones }
+            |> reuseEligibleRecordClones }
 
 let scalarReplaceProgram (Program (functions, mainExpr): Program) : Program =
     let returnTypes =
@@ -290,5 +297,5 @@ let scalarReplaceProgram (Program (functions, mainExpr): Program) : Program =
     Program (
         functions |> List.map (scalarReplaceFunction returnTypes),
         scalarReplaceExpr returnTypes Set.empty Map.empty mainExpr
-        |> reuseFloatRecordClones
+        |> reuseEligibleRecordClones
     )

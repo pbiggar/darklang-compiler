@@ -206,5 +206,10 @@ let nonRecord = 1L in nonRecord.value = error="Attempting to access field 'value
 type ScalarEscapePoint = { x: Int64; y: Int64 }
 let start = ScalarEscapePoint { x = 10L; y = 20L } in let moved = { start with x = start.x + 5L } in moved.x + moved.y = 35L
 
+// A unique record update may reuse its fixed block while retaining the new
+// managed child and releasing the displaced child exactly once.
+type ManagedReuseRecord = { label: String; count: Int64 }
+let oldLabel = Stdlib.String.append "ol" "d" in let newLabel = Stdlib.String.append "ne" "w" in let original = ManagedReuseRecord { label = oldLabel; count = 1L } in let counted = { original with count = 2L } in let updated = { counted with label = newLabel; count = 3L } in oldLabel == "old" && updated.label == "new" && updated.count == 3L = true
+
 type LongRenderedRecord = { alpha: String; beta: String }
 LongRenderedRecord { alpha = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"; beta = "abcdefghijklmnopqrstuvwxyz" } = stdout="LongRenderedRecord {\n  alpha: \"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz\",\n  beta: \"abcdefghijklmnopqrstuvwxyz\"\n}\n" stderr=""

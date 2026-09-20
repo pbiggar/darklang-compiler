@@ -382,7 +382,8 @@ let rec insertRCWithAnalysis
                         ) []
                         |> List.rev
                     | RecordAlloc (_, fields)
-                    | RecordClone (_, _, fields) ->
+                    | RecordClone (_, _, fields)
+                    | RecordReuse (_, _, fields) ->
                         fields
                         |> List.fold (fun acc atom ->
                             match atom with
@@ -650,7 +651,25 @@ let rec insertRCWithAnalysis
             let frame = {
                 TempId = tempId
                 CExpr = cexprAfterTransfers
-                TupleIncTargets = allocationIncTargetsAfterTransfers
+                AllocationIncTargets = allocationIncTargetsAfterTransfers
+                RecordReuseCleanup =
+                    match cexprAfterTransfers with
+                    | RecordReuse (descriptor, Var sourceId, _) ->
+                        descriptor.Fields
+                        |> List.mapi (fun index (_, typ) ->
+                            let shape = rcShapeForType ctx typ
+                            if rcShapeNeedsOwnedScopeRelease shape then
+                                Some (index, typ, shape)
+                            else
+                                None)
+                        |> List.choose id
+                        |> fun fields ->
+                            Some {
+                                Descriptor = descriptor
+                                Source = sourceId
+                                Fields = fields
+                            }
+                    | _ -> None
                 TransferableOwnership = transferableOwnership
                 ReturnInc = returnInc
                 BranchDec = bindingDec
