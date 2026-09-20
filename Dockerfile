@@ -4,7 +4,8 @@
 ARG QEMU_VERSION=11.1.1
 ARG QEMU_COMMIT=c3d48b7d1e89604920e5b81b91140c2ad39a1943
 ARG HERDR_VERSION=0.9.0
-FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS dotnet
+FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS dotnet10
+FROM mcr.microsoft.com/dotnet/sdk:11.0.100-rc.1 AS dotnet11
 FROM node:26-bookworm-slim AS node
 FROM docker.io/docker/sandbox-templates:claude-code AS claude
 FROM rust:1.89.0-slim-bookworm AS rust
@@ -60,7 +61,10 @@ ARG HERDR_VERSION
 
 USER root
 
-COPY --from=dotnet /usr/share/dotnet /usr/share/dotnet
+# Keep .NET 10 as the default host for existing worktrees. New worktrees use
+# global.json to discover the isolated .NET 11 SDK first.
+COPY --from=dotnet10 /usr/share/dotnet /usr/share/dotnet
+COPY --from=dotnet11 /usr/share/dotnet /opt/dotnet11
 COPY --from=node /usr/local /usr/local
 COPY --from=claude --chown=agent:agent /home/agent/.local/bin/claude /home/agent/.local/bin/claude
 COPY --from=claude --chown=agent:agent /home/agent/.local/share/claude /home/agent/.local/share/claude
