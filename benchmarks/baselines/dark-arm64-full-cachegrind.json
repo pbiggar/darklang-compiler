@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-19T21:55:47+00:00",
+  "generated_at": "2026-09-20T08:30:34+00:00",
   "compiler": {
-    "commit": "38657e96d8e2eea519e5749f5e984175aea6f532",
-    "subject": "Schedule whole-function ownership analysis"
+    "commit": "c7cf59ffecc9f940e22141ba87bed9ccd3796c80",
+    "subject": "Expand MIR sparse conditional constants"
   },
   "benchmarks": [
     {
@@ -30,7 +30,7 @@
     },
     {
       "name": "edigits",
-      "instructions": 49904684
+      "instructions": 49935784
     },
     {
       "name": "factorial",
@@ -42,7 +42,7 @@
     },
     {
       "name": "fasta",
-      "instructions": 21444890
+      "instructions": 21292809
     },
     {
       "name": "fft",
@@ -102,7 +102,7 @@
     },
     {
       "name": "raytracer",
-      "instructions": 47318353
+      "instructions": 47302477
     },
     {
       "name": "regex_lite",
@@ -110,7 +110,7 @@
     },
     {
       "name": "spectral_norm",
-      "instructions": 264941506
+      "instructions": 264941406
     },
     {
       "name": "string_equality",
@@ -126,11 +126,11 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 310047074
+      "instructions": 310045808
     },
     {
       "name": "warden",
-      "instructions": 44213958
+      "instructions": 44213054
     }
   ]
 }
