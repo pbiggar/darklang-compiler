@@ -89,6 +89,12 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
         Ok RET
     else
 
+    // Try Label: "Label(done)"
+    let labelMatch = Regex.Match(line, @"^Label\((.+?)\)$")
+    if labelMatch.Success then
+        Ok (Label labelMatch.Groups.[1].Value)
+    else
+
     // Try MOVZ: "MOVZ(X1, 10, 0)"
     let movzMatch = Regex.Match(line, @"^MOVZ\((.+?),\s*(\d+),\s*(\d+)\)$")
     if movzMatch.Success then
@@ -100,6 +106,18 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
             | Ok imm, Ok shift -> Ok (MOVZ (dest, imm, shift))
             | Error e, _ -> Error e
             | _, Error e -> Error e
+    else
+
+    // Try MOVN: "MOVN(X1, 0, 0)"
+    let movnMatch = Regex.Match(line, @"^MOVN\((.+?),\s*(\d+),\s*(\d+)\)$")
+    if movnMatch.Success then
+        match parseReg movnMatch.Groups.[1].Value,
+              parseUInt16Operand lineNum "MOVN immediate" movnMatch.Groups.[2].Value,
+              parseIntOperand lineNum "MOVN shift" movnMatch.Groups.[3].Value with
+        | Ok dest, Ok imm, Ok shift -> Ok (MOVN (dest, imm, shift))
+        | Error e, _, _
+        | _, Error e, _
+        | _, _, Error e -> Error e
     else
 
     // Try MOVK: "MOVK(X1, 10, 16)"
@@ -157,6 +175,28 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
                 | Ok imm -> Ok (SUB_imm (dest, src, imm))
     else
 
+    // Try SUBS_imm: "SUBS_imm(X1, X1, 3)"
+    let subsImmMatch = Regex.Match(line, @"^SUBS_imm\((.+?),\s*(.+?),\s*(\d+)\)$")
+    if subsImmMatch.Success then
+        match parseReg subsImmMatch.Groups.[1].Value,
+              parseReg subsImmMatch.Groups.[2].Value,
+              parseUInt12Operand lineNum "SUBS_imm immediate" subsImmMatch.Groups.[3].Value with
+        | Ok dest, Ok src, Ok imm -> Ok (SUBS_imm (dest, src, imm))
+        | Error e, _, _
+        | _, Error e, _
+        | _, _, Error e -> Error e
+    else
+
+    // Try CMP_imm: "CMP_imm(X1, 0)"
+    let cmpImmMatch = Regex.Match(line, @"^CMP_imm\((.+?),\s*(\d+)\)$")
+    if cmpImmMatch.Success then
+        match parseReg cmpImmMatch.Groups.[1].Value,
+              parseUInt12Operand lineNum "CMP_imm immediate" cmpImmMatch.Groups.[2].Value with
+        | Ok src, Ok imm -> Ok (CMP_imm (src, imm))
+        | Error e, _
+        | _, Error e -> Error e
+    else
+
     // Try SUB_reg: "SUB_reg(X1, X0, X2)"
     let subRegMatch = Regex.Match(line, @"^SUB_reg\((.+?),\s*(.+?),\s*(.+?)\)$")
     if subRegMatch.Success then
@@ -169,6 +209,24 @@ let parseInstruction (lineNum: int) (line: string) : Result<Instr, string> =
                 match parseReg subRegMatch.Groups.[3].Value with
                 | Error e -> Error $"Line {lineNum}: {e}"
                 | Ok src2 -> Ok (SUB_reg (dest, src1, src2))
+    else
+
+    // Try the three-register logical instructions used by peephole fixtures.
+    let logicalMatch = Regex.Match(line, @"^(AND_reg|ORR_reg|EOR_reg|BIC_reg)\((.+?),\s*(.+?),\s*(.+?)\)$")
+    if logicalMatch.Success then
+        match parseReg logicalMatch.Groups.[2].Value,
+              parseReg logicalMatch.Groups.[3].Value,
+              parseReg logicalMatch.Groups.[4].Value with
+        | Ok dest, Ok left, Ok right ->
+            match logicalMatch.Groups.[1].Value with
+            | "AND_reg" -> Ok (AND_reg (dest, left, right))
+            | "ORR_reg" -> Ok (ORR_reg (dest, left, right))
+            | "EOR_reg" -> Ok (EOR_reg (dest, left, right))
+            | "BIC_reg" -> Ok (BIC_reg (dest, left, right))
+            | _ -> Crash.crash "ARM64 symbolic parser matched an unknown logical instruction"
+        | Error e, _, _
+        | _, Error e, _
+        | _, _, Error e -> Error $"Line {lineNum}: {e}"
     else
 
     // Try MUL: "MUL(X1, X0, X2)"

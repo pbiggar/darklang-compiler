@@ -11,6 +11,9 @@ open TestDSL.OptimizationFormat
 open ANFPrinter
 open MIRPrinter
 open LIRPrinter
+open TestDSL.LIRParser
+open TestDSL.ARM64SymbolicParser
+open TestDSL.X86_64Parser
 /// Result of running an optimization test
 type OptimizationTestResult = {
     Success: bool
@@ -270,34 +273,88 @@ let getOptimizedLIR (stdlib: CompilationContexts.StdlibResult) (source: string) 
 
 /// Run a single optimization test
 let runOptimizationTest (stdlib: CompilationContexts.StdlibResult) (test: OptimizationTest) : OptimizationTestResult =
-    let irResult =
+    let sourceIRResult =
         match test.Stage, test.Input with
         | ANF, Source source -> getOptimizedANF stdlib source
         | ANF, StdlibFunction functionName -> getOptimizedStdlibANF stdlib functionName
         | MIR, Source source -> getOptimizedMIR stdlib source
         | LIR, Source source -> getOptimizedLIR stdlib source
         | MIR, StdlibFunction _ | LIR, StdlibFunction _ -> Error "STDLIB-FUNCTION is supported only for ANF optimization tests"
+        | DirectLIR, _ | DirectARM64, _ | DirectLIR2X64, _ -> Error "Direct optimization stages use structural comparison"
 
-    match irResult with
-    | Error e ->
-        { Success = false
-          Message = e
-          Expected = Some test.ExpectedIR
-          Actual = None }
-    | Ok actualIR ->
-        let normalizedExpected = normalizeIR test.ExpectedIR
-        let normalizedActual = normalizeIR actualIR
+    let structuralResult =
+        match test.Stage, test.Input with
+        | DirectLIR, Source source ->
+            match parseLIR source, parseLIR test.ExpectedIR with
+            | Error e, _ -> Some (Error $"Failed to parse INPUT LIR: {e}")
+            | _, Error e -> Some (Error $"Failed to parse EXPECTED LIR: {e}")
+            | Ok input, Ok expected ->
+                let actual = LIR_Peephole.optimizeProgram input
+                if actual = expected then Some (Ok ())
+                else
+                    Some (Error $"LIR mismatch\nExpected:\n{formatLIR expected}\nActual:\n{formatLIR actual}")
+        | DirectARM64, Source source ->
+            match parseARM64Symbolic source, parseARM64Symbolic test.ExpectedIR with
+            | Error e, _ -> Some (Error $"Failed to parse INPUT ARM64: {e}")
+            | _, Error e -> Some (Error $"Failed to parse EXPECTED ARM64: {e}")
+            | Ok input, Ok expected ->
+                let actual = ARM64Peephole.peepholeOptimize input
+                if actual = expected then Some (Ok ())
+                else
+                    let render instrs =
+                        instrs
+                        |> List.map TestDSL.PassTestRunner.prettyPrintARM64Instr
+                        |> String.concat "\n"
+                    Some (Error $"ARM64 mismatch\nExpected:\n{render expected}\nActual:\n{render actual}")
+        | DirectLIR2X64, Source source ->
+            match parseLIR source, parseX64 test.ExpectedIR with
+            | Error e, _ -> Some (Error $"Failed to parse INPUT LIR: {e}")
+            | _, Error e -> Some (Error $"Failed to parse EXPECTED x64: {e}")
+            | Ok (LIR.Program ([func], _, _) as input), Ok expected ->
+                let rec containsSequence remaining =
+                    if List.length remaining < List.length expected then false
+                    elif List.take (List.length expected) remaining = expected then true
+                    else containsSequence (List.tail remaining)
+                match CodeGen_X86_64.translateProgram input false with
+                | Error e -> Some (Error $"x64 lowering failed: {e}")
+                | Ok emitted ->
+                    let functionBody =
+                        emitted
+                        |> List.skipWhile ((<>) (X86_64.Label func.Name))
+                        |> List.takeWhile ((<>) (X86_64.Label $"_epilogue_{func.Name}"))
+                    if containsSequence functionBody then Some (Ok ())
+                    else Some (Error $"Expected x64 instruction sequence was not selected in {func.Name}\nExpected sequence: {expected}\nActual function: {functionBody}")
+            | Ok _, Ok _ -> Some (Error "INPUT LIR must contain exactly one function")
+        | DirectLIR, StdlibFunction _ | DirectARM64, StdlibFunction _ | DirectLIR2X64, StdlibFunction _ ->
+            Some (Error "Direct optimization stages require an INPUT section")
+        | (ANF | MIR | LIR), _ -> None
 
-        if normalizedExpected = normalizedActual then
-            { Success = true
-              Message = "Test passed"
-              Expected = None
-              Actual = None }
-        else
+    match structuralResult with
+    | Some (Ok ()) ->
+        { Success = true; Message = "Test passed"; Expected = None; Actual = None }
+    | Some (Error e) ->
+        { Success = false; Message = e; Expected = Some test.ExpectedIR; Actual = None }
+    | None ->
+        match sourceIRResult with
+        | Error e ->
             { Success = false
-              Message = "IR mismatch"
-              Expected = Some normalizedExpected
-              Actual = Some normalizedActual }
+              Message = e
+              Expected = Some test.ExpectedIR
+              Actual = None }
+        | Ok actualIR ->
+            let normalizedExpected = normalizeIR test.ExpectedIR
+            let normalizedActual = normalizeIR actualIR
+
+            if normalizedExpected = normalizedActual then
+                { Success = true
+                  Message = "Test passed"
+                  Expected = None
+                  Actual = None }
+            else
+                { Success = false
+                  Message = "IR mismatch"
+                  Expected = Some normalizedExpected
+                  Actual = Some normalizedActual }
 
 /// Load and run tests from a file
 let runTestFile (stdlib: CompilationContexts.StdlibResult) (stage: IRStage) (path: string) : Result<(OptimizationTest * OptimizationTestResult) list, string> =

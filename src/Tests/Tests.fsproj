@@ -160,6 +160,9 @@
     <None Include="verification/**/*.e2e" />
     <None Include="typecheck/**/*.typecheck" />
     <None Include="optimization/**/*.opt" />
+    <None Include="optimization/**/*.liropt" />
+    <None Include="optimization/**/*.arm64opt" />
+    <None Include="optimization/**/*.lir2x64" />
     <None Include="formatting-roundtrip/**/*.roundtrip" />
     <None Include="syntax/**/*.syntax" />
   </ItemGroup>

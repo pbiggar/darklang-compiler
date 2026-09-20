@@ -1,0 +1,54 @@
+// Allocated LIR fixtures prove optimized x64 instruction selection.
+
+---NAME---
+three_register_add_selects_indexed_lea
+---INPUT---
+X0 <- Add(X1, Reg X2)
+Ret
+---EXPECTED---
+LEA_index(RAX, RDI, RSI, 1, 0)
+
+---NAME---
+independent_immediate_add_selects_lea
+---INPUT---
+X0 <- Add(X1, Imm 7)
+Ret
+---EXPECTED---
+LEA(RAX, RDI, 7)
+
+---NAME---
+destination_alias_falls_back_to_add
+---INPUT---
+X2 <- Add(X1, Reg X2)
+Ret
+---EXPECTED---
+ADD_reg(RSI, RDI)
+
+---NAME---
+stack_operand_selects_memory_add
+---INPUT---
+X0 <- Add(X1, Stack -8)
+Ret
+---EXPECTED---
+MOV_reg(RAX, RDI)
+ADD_load(RAX, RBP, -8)
+
+---NAME---
+stack_operand_selects_memory_subtract
+---INPUT---
+X0 <- Sub(X1, Stack -8)
+Ret
+---EXPECTED---
+MOV_reg(RAX, RDI)
+SUB_load(RAX, RBP, -8)
+
+---NAME---
+scratch_alias_preserves_stack_add_operand
+---INPUT---
+X8 <- Add(X8, Stack -8)
+Ret
+---EXPECTED---
+PUSH(RCX)
+MOV_load(RCX, RBP, -8)
+ADD_reg(R11, RCX)
+POP(RCX)

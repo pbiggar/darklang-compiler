@@ -1,0 +1,99 @@
+// Direct target fixtures prove symbolic ARM64 peepholes are selected.
+
+---NAME---
+subtract_then_compare_zero_fuses_to_flag_setting_subtract
+---INPUT---
+SUB_imm(X1, X2, 1)
+CMP_imm(X1, 0)
+---EXPECTED---
+SUBS_imm(X1, X2, 1)
+
+---NAME---
+compare_zero_equal_selects_cbz
+---INPUT---
+CMP_imm(X1, 0)
+B_cond_label(EQ, zero)
+---EXPECTED---
+CBZ(X1, zero)
+
+---NAME---
+compare_zero_not_equal_selects_cbnz
+---INPUT---
+CMP_imm(X1, 0)
+B_cond_label(NE, nonzero)
+---EXPECTED---
+CBNZ(X1, nonzero)
+
+---NAME---
+integer_self_move_disappears
+---INPUT---
+MOV_reg(X1, X1)
+---EXPECTED---
+
+---NAME---
+add_zero_same_destination_disappears
+---INPUT---
+ADD_imm(X1, X1, 0)
+---EXPECTED---
+
+---NAME---
+subtract_zero_same_destination_disappears
+---INPUT---
+SUB_imm(X1, X1, 0)
+---EXPECTED---
+
+---NAME---
+and_with_self_becomes_move
+---INPUT---
+AND_reg(X1, X2, X2)
+---EXPECTED---
+MOV_reg(X1, X2)
+
+---NAME---
+and_with_self_same_destination_disappears
+---INPUT---
+AND_reg(X2, X2, X2)
+---EXPECTED---
+
+---NAME---
+or_with_self_becomes_move
+---INPUT---
+ORR_reg(X1, X2, X2)
+---EXPECTED---
+MOV_reg(X1, X2)
+
+---NAME---
+bit_clear_sequence_fuses_with_mask_on_right
+---INPUT---
+MOVN(X9, 0, 0)
+EOR_reg(X10, X2, X9)
+AND_reg(X10, X1, X10)
+---EXPECTED---
+BIC_reg(X10, X1, X2)
+
+---NAME---
+bit_clear_sequence_fuses_with_mask_on_left
+---INPUT---
+MOVN(X9, 0, 0)
+EOR_reg(X10, X9, X2)
+AND_reg(X10, X1, X10)
+---EXPECTED---
+BIC_reg(X10, X1, X2)
+
+---NAME---
+branch_to_next_label_disappears
+---INPUT---
+B_label(done)
+Label(done)
+---EXPECTED---
+Label(done)
+
+---NAME---
+true_target_becomes_fallthrough
+---INPUT---
+B_cond_label(LE, true_target)
+B_label(false_target)
+Label(true_target)
+---EXPECTED---
+B_cond_label(GT, false_target)
+Label(true_target)

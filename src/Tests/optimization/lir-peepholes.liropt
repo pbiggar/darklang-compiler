@@ -1,0 +1,112 @@
+// Direct LIR fixtures prove that local instruction shapes trigger peepholes.
+
+---NAME---
+mul_add_left_fuses_to_madd
+---INPUT---
+v1 <- Mul(v2, Reg v3)
+v4 <- Add(v1, Reg v5)
+Ret
+---EXPECTED---
+v4 <- Madd(v2, v3, v5)
+Ret
+
+---NAME---
+mul_add_right_fuses_to_madd
+---INPUT---
+v1 <- Mul(v2, Reg v3)
+v4 <- Add(v5, Reg v1)
+Ret
+---EXPECTED---
+v4 <- Madd(v2, v3, v5)
+Ret
+
+---NAME---
+live_multiply_result_prevents_madd
+---INPUT---
+v1 <- Mul(v2, Reg v3)
+v4 <- Add(v1, Reg v5)
+PrintInt64(v1)
+Ret
+---EXPECTED---
+v1 <- Mul(v2, Reg v3)
+v4 <- Add(v1, Reg v5)
+PrintInt64(v1)
+Ret
+
+---NAME---
+add_zero_retargets_destination
+---INPUT---
+v2 <- Add(v1, Imm 0)
+Ret
+---EXPECTED---
+v2 <- Mov(Reg v1)
+Ret
+
+---NAME---
+add_zero_same_destination_disappears
+---INPUT---
+v1 <- Add(v1, Imm 0)
+Ret
+---EXPECTED---
+Ret
+
+---NAME---
+subtract_zero_retargets_destination
+---INPUT---
+v2 <- Sub(v1, Imm 0)
+Ret
+---EXPECTED---
+v2 <- Mov(Reg v1)
+Ret
+
+---NAME---
+subtract_zero_same_destination_disappears
+---INPUT---
+v1 <- Sub(v1, Imm 0)
+Ret
+---EXPECTED---
+Ret
+
+---NAME---
+multiply_by_power_plus_one_right_strength_reduces
+---INPUT---
+v1 <- Mov(Imm 3)
+v4 <- Mul(v2, Reg v1)
+Ret
+---EXPECTED---
+v1 <- Lsl_imm(v2, #1)
+v4 <- Add(v2, Reg v1)
+Ret
+
+---NAME---
+multiply_by_power_plus_one_left_strength_reduces
+---INPUT---
+v1 <- Mov(Imm 3)
+v4 <- Mul(v1, Reg v2)
+Ret
+---EXPECTED---
+v1 <- Lsl_imm(v2, #1)
+v4 <- Add(v2, Reg v1)
+Ret
+
+---NAME---
+multiply_by_power_minus_one_right_strength_reduces
+---INPUT---
+v1 <- Mov(Imm 7)
+v4 <- Mul(v2, Reg v1)
+Ret
+---EXPECTED---
+v1 <- Lsl_imm(v2, #3)
+v4 <- Sub(v1, Reg v2)
+Ret
+
+---NAME---
+multiply_by_power_minus_one_left_strength_reduces
+---INPUT---
+v1 <- Mov(Imm 7)
+v4 <- Mul(v1, Reg v2)
+Ret
+---EXPECTED---
+v1 <- Lsl_imm(v2, #3)
+v4 <- Sub(v1, Reg v2)
+Ret

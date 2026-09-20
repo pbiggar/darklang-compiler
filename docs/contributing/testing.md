@@ -100,6 +100,42 @@ Keep direct F# tests for internal helper APIs and programs that require richer
 binary layout or execution setup. Run all fixtures and unit tests with
 `./build --ai && ./run-tests --ai`.
 
+## Optimization fixtures
+
+Source-based `.opt` files under `src/Tests/optimization/` compile Dark source
+through the stage named by the filename (`anf`, `mir`, or `lir`) and compare
+the complete optimized IR. Use them when a source construct and the normal
+pipeline are important parts of the proof.
+
+Three direct formats use the same repeatable `NAME`, `INPUT`, and `EXPECTED`
+sections for instruction-level transformations:
+
+- `.liropt` parses single-block symbolic LIR and compares the complete result
+  of the LIR peephole pass structurally.
+- `.arm64opt` parses symbolic ARM64 and compares the complete target-peephole
+  result structurally. An empty `EXPECTED` section proves removal.
+- `.lir2x64` parses allocated single-block LIR and requires the listed x64
+  instructions to occur as a contiguous sequence in the generated function.
+
+For example:
+
+```text
+---NAME---
+dead multiply feeds addition
+---INPUT---
+v1 <- Mul(v2, Reg v3)
+v4 <- Add(v1, Reg v5)
+Ret
+---EXPECTED---
+v4 <- Madd(v2, v3, v5)
+Ret
+```
+
+These fixtures should prove that an optimization is selected, not merely that
+the unoptimized program has the right result. Pair positive cases with live
+value, aliasing, flag-use, or control-flow near misses when those boundaries
+are part of the transformation's correctness.
+
 ## Graph-coloring fixtures
 
 Place multi-case `.graphcolor` files under
