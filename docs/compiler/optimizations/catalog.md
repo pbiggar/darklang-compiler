@@ -30,8 +30,8 @@ from Git history.
 - **Interprocedural and aggregate work:** uniform literal direct-parameter
   propagation, bounded scalar-literal cloning, ownership-safe tuple projection
   forwarding, projection-only scalar tuple and record replacement, unique
-  fixed-layout record-clone allocation reuse for Float and non-observable
-  buffer fields, and unused ANF binding elimination.
+  fixed-layout record-clone allocation reuse for Float, non-observable buffers,
+  and structurally safe composite fields, and unused ANF binding elimination.
 - **Loops and control flow:** bounded recursive-loop unrolling, tail recursion
   modulo native-width wrapping addition, recursive-left subtraction,
   multiplication, or immutable list/sum/record constructors; effect-free call
@@ -121,11 +121,12 @@ allocation even when an eligible source allocation is removed.
 
 After scalar replacement, a remaining uniquely owned record may transfer its
 fixed block to a sole compatible clone. Eligible layouts contain immediate
-fields or non-observable `String`, `Blob`, and `Int` buffers. Replacement
-children are retained before displaced children are released and the block is
-overwritten. Returns, calls, closure capture, storage, raw operations,
-composite or potentially observable managed fields, and unknown uses preserve
-the ordinary allocation.
+fields, non-observable `String`, `Blob`, and `Int` buffers, or tuples, lists,
+and dictionaries recursively composed from those leaves. Replacement children
+are retained before displaced children are released with their recursive plans
+and the block is overwritten. Streams and containers holding them are rejected;
+sums, nested nominal records, closures, returns, calls, closure capture,
+storage, raw operations, and unknown uses preserve the ordinary allocation.
 Focused tests cover projection, alias, clone-chain, ownership ordering, and
 branch shapes plus the conservative call and observable-field boundaries.
 

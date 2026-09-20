@@ -3,8 +3,8 @@
 // This deliberately narrow first escape-analysis pass scalar-replaces local
 // tuple and record allocations only when their complete lexical use set is
 // projections, aliases, or the representation-only source of a record clone.
-// Composite or potentially observable managed fields and every unmodelled use
-// retain the ordinary allocation. Buffer fields can reset before unique reuse.
+// Managed fields without a structural non-observable destruction proof and
+// every unmodelled use retain the ordinary allocation.
 
 module ANF_EscapeAnalysis
 
@@ -31,10 +31,18 @@ let private isScalarType (typ: AST.Type) : bool =
     | AST.TRuntimeError -> true
     | _ -> false
 
-let private isReusableRecordFieldType (typ: AST.Type) : bool =
+/// Prove that releasing a displaced field cannot run a language-visible
+/// finalizer. Nominal records, sums and closures require metadata not carried
+/// by this local pass, so they fail closed even when a particular value is safe.
+let rec private hasNonObservableDestruction (typ: AST.Type) : bool =
     isScalarType typ
     || match typ with
        | AST.TString | AST.TBlob | AST.TInt -> true
+       | AST.TTuple elements -> List.forall hasNonObservableDestruction elements
+       | AST.TList element -> hasNonObservableDestruction element
+       | AST.TDict (key, value) ->
+           hasNonObservableDestruction key
+           && hasNonObservableDestruction value
        | _ -> false
 
 let private atomIsScalar (scalarTemps: Set<TempId>) (atom: Atom) : bool =
@@ -69,7 +77,7 @@ let rec private exprUsesTracked (tracked: Set<TempId>) (expr: AExpr) : bool =
         || exprUsesTracked tracked elseBranch
 
 /// Rewrite the sole consuming clone of a uniquely local compatible record to
-/// reuse its source block. RC elaboration retains replacement buffer children
+/// reuse its source block. RC elaboration retains replacement managed children
 /// and releases displaced children before the stores. Running this after
 /// scalar replacement preserves allocation-free immediate cases.
 let rec private reuseUniqueRecordClone
@@ -116,7 +124,7 @@ let rec private reuseEligibleRecordClones (expr: AExpr) : AExpr =
         | RecordAlloc (descriptor, _)
         | RecordClone (descriptor, _, _)
         | RecordReuse (descriptor, _, _)
-            when descriptor.Fields |> List.forall (snd >> isReusableRecordFieldType) ->
+            when descriptor.Fields |> List.forall (snd >> hasNonObservableDestruction) ->
             let rewritten =
                 reuseUniqueRecordClone descriptor (Set.singleton boundId) body
                 |> Option.defaultValue body

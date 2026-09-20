@@ -211,5 +211,10 @@ let start = ScalarEscapePoint { x = 10L; y = 20L } in let moved = { start with x
 type ManagedReuseRecord = { label: String; count: Int64 }
 let oldLabel = Stdlib.String.append "ol" "d" in let newLabel = Stdlib.String.append "ne" "w" in let original = ManagedReuseRecord { label = oldLabel; count = 1L } in let counted = { original with count = 2L } in let updated = { counted with label = newLabel; count = 3L } in oldLabel == "old" && updated.label == "new" && updated.count == 3L = true
 
+// Composite fields with non-observable destruction retain the same ownership
+// ordering when their containing record block is reused.
+type CompositeReuseRecord = { items: List<Int64>; count: Int64 }
+let items = [1L, 2L, 3L] in let original = CompositeReuseRecord { items = items; count = 1L } in let counted = { original with count = 2L } in let updated = { counted with items = [4L, 5L]; count = 3L } in items == [1L, 2L, 3L] && updated.items == [4L, 5L] && updated.count == 3L = true
+
 type LongRenderedRecord = { alpha: String; beta: String }
 LongRenderedRecord { alpha = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"; beta = "abcdefghijklmnopqrstuvwxyz" } = stdout="LongRenderedRecord {\n  alpha: \"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz\",\n  beta: \"abcdefghijklmnopqrstuvwxyz\"\n}\n" stderr=""

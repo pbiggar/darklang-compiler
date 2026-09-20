@@ -312,11 +312,11 @@ let testFloatRecordCallBeforeCloneRejectsReuse () : TestResult =
     if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then Ok ()
     else Error $"Expected a call before a Float clone to reject reuse, got {body}"
 
-let testCompositeManagedRecordRejectsReuse () : TestResult =
-    let descriptor =
-        { pointDescriptor AST.TFloat64 with
-            Fields = ["x", AST.TFloat64; "items", AST.TList AST.TInt64] }
-    let body =
+let testCompositeManagedRecordsReuseUniqueAllocations () : TestResult =
+    let optimized fieldType =
+        let descriptor =
+            { pointDescriptor AST.TFloat64 with
+                Fields = ["x", AST.TFloat64; "items", fieldType] }
         Let (
             TempId 4,
             Call (fid "makeItems", []),
@@ -331,8 +331,57 @@ let testCompositeManagedRecordRejectsReuse () : TestResult =
             )
         )
         |> optimizeBody
-    if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then Ok ()
-    else Error $"Expected a record with a composite managed field to reject reuse, got {body}"
+    let samples = [
+        AST.TTuple [AST.TString; AST.TInt64]
+        AST.TList AST.TInt64
+        AST.TDict (AST.TString, AST.TInt64)
+    ]
+    samples
+    |> List.tryPick (fun fieldType ->
+        let body = optimized fieldType
+        if aggregateAllocationCount body = 1 && containsRecordReuse body then None
+        else Some (fieldType, body))
+    |> function
+       | None -> Ok ()
+       | Some (fieldType, body) ->
+           Error $"Expected the unique {fieldType} record allocation to be reused, got {body}"
+
+let testUnsupportedCompositeRecordsRejectReuse () : TestResult =
+    let optimized fieldType =
+        let descriptor =
+            { pointDescriptor AST.TFloat64 with
+                Fields = ["x", AST.TFloat64; "items", fieldType] }
+        Let (
+            TempId 4,
+            Call (fid "makeManaged", []),
+            Let (
+                TempId 0,
+                RecordAlloc (descriptor, [FloatLiteral 1.0; Var (TempId 4)]),
+                Let (
+                    TempId 1,
+                    RecordClone (descriptor, Var (TempId 0), [FloatLiteral 2.0; Var (TempId 4)]),
+                    Return (Var (TempId 1))
+                )
+            )
+        )
+        |> optimizeBody
+    let samples = [
+        AST.TStream AST.TInt64
+        AST.TList (AST.TStream AST.TInt64)
+        AST.TFunction ([], AST.TInt64)
+        AST.TSum ("Maybe", [AST.TInt64])
+        AST.TRecord ("Nested", [])
+        AST.TVar "unknown"
+    ]
+    samples
+    |> List.tryPick (fun fieldType ->
+        let body = optimized fieldType
+        if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then None
+        else Some (fieldType, body))
+    |> function
+       | None -> Ok ()
+       | Some (fieldType, body) ->
+           Error $"Expected unsupported {fieldType} destruction to reject reuse, got {body}"
 
 let testManagedLeafRecordReusesUniqueAllocation () : TestResult =
     let descriptor =
@@ -412,7 +461,8 @@ let tests =
       ("Float record projection before clone scalarizes source", testFloatRecordProjectionBeforeCloneScalarizesSource)
       ("Float record use after clone retains escaping source", testFloatRecordUseAfterCloneRetainsEscapingSource)
       ("Float record call before clone rejects reuse", testFloatRecordCallBeforeCloneRejectsReuse)
-      ("Composite managed record rejects reuse", testCompositeManagedRecordRejectsReuse)
+      ("Composite managed records reuse unique allocations", testCompositeManagedRecordsReuseUniqueAllocations)
+      ("Unsupported composite records reject reuse", testUnsupportedCompositeRecordsRejectReuse)
       ("Managed leaf record reuses unique allocation", testManagedLeafRecordReusesUniqueAllocation)
       ("Float record alias use after clone retains escaping source", testFloatRecordAliasUseAfterCloneRetainsEscapingSource)
       ("Float record branch clones scalarize shared source", testFloatRecordBranchClonesScalarizeSharedSource) ]

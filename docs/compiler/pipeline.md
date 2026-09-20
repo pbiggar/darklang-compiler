@@ -222,14 +222,18 @@ allocations whose fields are all immediate scalar values, including Float64.
 An allocation is removed only when its complete lexical use set consists of
 field projections, local aliases, and representation-only record-clone
 sources. A remaining uniquely owned record can transfer its allocation to a
-sole compatible clone when every field is immediate or a non-observable
-`String`, `Blob`, or `Int` buffer. Reference-count elaboration retains the
-replacement child edges, releases displaced children in field order, and then
-overwrites the block.
+sole compatible clone when every field has structurally non-observable
+destruction: immediate values and `String`, `Blob`, or `Int` buffers, plus
+tuples, lists, and dictionaries built recursively from those leaves.
+Reference-count elaboration retains replacement child edges, releases
+displaced children with their complete recursive release plans in field order,
+and then overwrites the block.
 
 Returns, calls, closure capture, storage, raw-pointer operations, composite or
-potentially observable managed fields, and every unmodelled use preserve the
-ordinary allocation.
+potentially observable managed fields without that proof, and every unmodelled
+use preserve the ordinary allocation. Streams and containers holding them are
+rejected recursively; nominal sums, nested records, and closures fail closed
+until this pass receives complete destruction metadata.
 Escaping clones retain their own allocation while eligible immediate source
 and intermediate aggregates are scalar-replaced.
 
