@@ -6,5 +6,6 @@ __raw_alloc 8L = error="Internal identifier not allowed in user code: __raw_allo
 Stdlib.Dict.__getTag (Dict { }) = error="Internal identifier not allowed in user code: Stdlib.Dict.__getTag"
 Stdlib.List.__empty () = error="Internal identifier not allowed in user code: Stdlib.List.__empty"
 Stdlib.List.__arrayCopy 0L 0L 0L 0L = error="Internal identifier not allowed in user code: Stdlib.List.__arrayCopy"
+Stdlib.List.__arrayOwnershipBoundary_i64 [] = error="Internal identifier not allowed in user code: Stdlib.List.__arrayOwnershipBoundary_i64"
 Stdlib.Internal.SkewList.empty () = error="There is no variable named: Stdlib.Internal.SkewList.empty"
 Stdlib.Internal.ListArray.copy 0L 0L 0L 0L = error="There is no variable named: Stdlib.Internal.ListArray.copy"

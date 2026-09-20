@@ -200,14 +200,23 @@ let private eligible
         (callee.Params |> AST.NonEmptyList.toList)
         ownership.Parameters
 
-let private substitutions parameters arguments =
-    let rec build result parameters arguments =
-        match parameters, arguments with
-        | (binding, _) :: parameters, argument :: arguments ->
-            build (Map.add binding argument result) parameters arguments
-        | [], [] -> Some result
+let private ownershipBoundary argument =
+    CheckedAST.Call (
+        AST.functionIdForName "Darklang.Stdlib.List.__arrayOwnershipBoundary_i64",
+        AST.NonEmptyList.fromList [argument])
+
+let private substitutions parameters modes arguments =
+    let rec build result parameters modes arguments =
+        match parameters, modes, arguments with
+        | (binding, typ) :: parameters, mode :: modes, argument :: arguments ->
+            let replacement =
+                if typ = AST.TList AST.TInt64 && mode = ConsumedCallParameter then
+                    ownershipBoundary argument
+                else argument
+            build (Map.add binding replacement result) parameters modes arguments
+        | [], [], [] -> Some result
         | _ -> None
-    build Map.empty parameters arguments
+    build Map.empty parameters modes arguments
 
 /// Fuse only compiler-selected unique list calls, and only when substitution
 /// cannot duplicate evaluation. Unsupported calls keep their scheduled ANF
@@ -259,6 +268,7 @@ let fuse
                         match
                             substitutions
                                 (callee.Params |> AST.NonEmptyList.toList)
+                                ownership.Parameters
                                 (AST.NonEmptyList.toList arguments)
                         with
                         | Some replacements ->

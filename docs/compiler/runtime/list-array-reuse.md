@@ -108,8 +108,13 @@ consumed unit without a static exclusivity certificate. That transform checks
 the array RC: one owner reuses storage, while multiple owners allocate and copy
 before removing the consumed source unit. Both recyclable and mapped buffers
 use the same retain/release contract when shared. The current extraction solver
-still chooses static consume-or-copy decisions; production selection of this
-runtime decision for escaping array boundaries remains later work.
+chooses the runtime decision only for a fixed-point-selected source boundary
+whose list parameter is consumed without a static uniqueness certificate.
+Source fusion carries that fact through a hidden typed identity marker, which
+region extraction removes before ANF. A surviving local alias inserts one
+retain; an RC=1 input is reused directly, while a shared input is copied and
+the consumed unit is removed from the source RC. Unique selected boundaries
+and ordinary closed regions keep their static path.
 
 The shared ownership interface also models managed block arguments beyond the
 current list extraction grammar. Mutually exclusive arms transfer their
@@ -154,8 +159,9 @@ This is representation compatibility by boundary elimination: no array is
 passed to an ordinary persistent-list callee, and there is no array/skew-list
 conversion. A caller-local fresh list can therefore flow through a fused helper
 and reuse one buffer across map and reverse. A surviving alias causes the
-existing solver to copy, while a list originating as a borrowed function
-parameter still fails closed-region extraction and keeps the persistent path.
+runtime ownership decision to copy while preserving the source buffer. A list
+originating as a borrowed function parameter still fails closed-region
+extraction and keeps the persistent path.
 
 `verifyFunctional` checks the closed region's incoming collection interface
 using representation-independent value contracts. `verifyBlockOwnership`
@@ -330,9 +336,9 @@ include:
 3. Carry the registered HIR call boundary through whole-function construction,
    then add representation interfaces, bounded specialization, explicit
    conversion profitability, specialization scheduling, and cache integration.
-4. Select the implemented runtime consume-or-copy decision at escaping array
-   boundaries whose sharing is not statically known; borrowed aliases must
-   remain outside the consumed ownership transfer.
+4. Add a true internal array calling convention for non-fused and recursive
+   specializations. Current optimized boundaries are eliminated by source
+   fusion; ordinary public and borrowed `List` boundaries remain persistent.
 5. Managed elements and destruction-effect propagation. Stream finalizers are
    observable, including through containers, so general last-use release cannot
    move them arbitrarily. This slice excludes managed elements and captures.

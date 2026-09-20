@@ -14,6 +14,8 @@ let private map input =
         "Darklang.Stdlib.List.map_i64_i64"
         [input; CheckedAST.Closure (AST.functionIdForName "mapCallback", [])]
 let private reverse input = call "Darklang.Stdlib.List.reverse_i64" [input]
+let private ownershipBoundary input =
+    call "Darklang.Stdlib.List.__arrayOwnershipBoundary_i64" [input]
 let private fold input =
     call
         "Darklang.Stdlib.List.fold_i64_i64"
@@ -31,6 +33,7 @@ let private functions : TypeRegistries.FunctionRegistry =
         "Darklang.Stdlib.List.map_i64_i64", AST.TFunction ([AST.TList AST.TInt64; AST.TFunction ([AST.TInt64], AST.TInt64)], AST.TList AST.TInt64)
         "Darklang.Stdlib.List.reverse_i64", AST.TFunction ([AST.TList AST.TInt64], AST.TList AST.TInt64)
         "Darklang.Stdlib.List.fold_i64_i64", AST.TFunction ([AST.TList AST.TInt64; AST.TInt64; AST.TFunction ([AST.TInt64; AST.TInt64], AST.TInt64)], AST.TInt64)
+        "Darklang.Stdlib.List.__arrayOwnershipBoundary_i64", AST.TFunction ([AST.TList AST.TInt64], AST.TList AST.TInt64)
     ]
     |> List.map (fun (name, typ) -> AST.functionIdForName name, (name, typ))
     |> Map.ofList
@@ -69,6 +72,13 @@ let private shared =
     bind "xs" (values 3)
         (bind "ys" (map (local "xs"))
             (bind "old" (fold (local "xs")) (fold (local "ys"))))
+
+let private runtimeUnique = fold (map (ownershipBoundary (values 3)))
+let private runtimeShared =
+    bind "xs" (values 3)
+        (bind "alias" (local "xs")
+            (bind "ys" (map (ownershipBoundary (local "xs")))
+                (bind "old" (fold (local "alias")) (fold (local "ys")))))
 
 let private rejects expression () =
     match extract expression with
@@ -155,7 +165,9 @@ let private testPrimitiveContracts () =
           Type = AST.TFunction ([AST.TInt64], AST.TInt64)
           Inputs = Map.empty }
     let construct = ListRegion.primitiveContract (ListRegion.Construct (output, ListRegion.Literal [scalar]))
-    let transform = ListRegion.primitiveContract (ListRegion.Transform (output, input, ListRegion.Map callback))
+    let transform =
+        ListRegion.primitiveContract (
+            ListRegion.Transform (output, input, (ListRegion.Map callback, ListRegion.StaticReuse)))
     let fold = ListRegion.primitiveContract (ListRegion.Fold (scalarValue, input, scalar, callback))
     let alias (contract: HIR.PrimitiveContract) = contract.Outputs |> List.map (fun result -> result.Alias)
     if alias construct <> [HIR.FreshManaged]
@@ -228,6 +240,8 @@ let tests = [
     "List HIR verifier rejects double edge cleanup", rejectsOwnership [construct []; ownedBranch (ownedBlock [root; root] []) (ownedBlock [root] [])]
     "List HIR verifies runtime copy-on-write after ownership duplication", testRuntimeSharedOwnership
     "List HIR rejects static consumption after ownership duplication", rejectsOwnership [construct []; [OwnedIR.Dup root]; transform [root; HIR.ValueId 1]]
+    "List HIR selects runtime reuse for an ownership boundary", checkBudget runtimeUnique (ListRegion.RuntimeConditional (allocated, ListRegion.Complete { zero with ReusedTransforms = 1 }, ListRegion.Complete { allocated with Copies = 1 }, ListRegion.Complete { zero with Releases = 1 }))
+    "List HIR protects aliases across a runtime ownership boundary", checkBudget runtimeShared (ListRegion.RuntimeConditional (allocated, ListRegion.Complete { zero with ReusedTransforms = 1 }, ListRegion.Complete { allocated with Copies = 1 }, ListRegion.Complete { zero with Releases = 2 }))
     "List HIR consumes unique map/reverse storage", checkSummary unique { Allocations = 1; AllocatedBytes = bytes 56L; Copies = 0; ReusedTransforms = 2; Releases = 1 }
     "List HIR copies a surviving source version", checkSummary shared { Allocations = 2; AllocatedBytes = bytes 112L; Copies = 1; ReusedTransforms = 0; Releases = 2 }
     "List HIR normalizes aliases before last-use solving", checkSummary (bind "xs" (values 3) (bind "alias" (local "xs") (fold (reverse (local "alias"))))) { Allocations = 1; AllocatedBytes = bytes 56L; Copies = 0; ReusedTransforms = 1; Releases = 1 }

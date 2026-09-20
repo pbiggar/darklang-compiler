@@ -4,6 +4,10 @@
 
 module Darklang.Stdlib.List
 
+// Source fusion uses this identity as a typed marker. List-region extraction
+// removes it before ANF; a conservative fallback retains ordinary List values.
+let __arrayOwnershipBoundary_i64 (value: List<Int64>) : List<Int64> = value
+
 // The mapping's private prefix and the common array layout cost 40 bytes.
 // Check before narrowing Int or multiplying a machine-sized length by eight.
 let __arrayRepeatLength (count: Int) : Int64 =

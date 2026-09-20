@@ -15,7 +15,8 @@ type private ExtractionName =
 type private Extraction = {
     Lists: Map<ExtractionName, HIR.Value>
     Values: Map<ExtractionName, HIR.Value>
-    Operations: HIR.Operation<Operation<Transform>, FunctionalBlock> list
+    Operations: HIR.Operation<Operation<Transform * ReuseSelection>, FunctionalBlock> list
+    RuntimeInputs: Set<ListId>
     NextId: int
     Lifetime: ScalarLifetime
 }
@@ -172,6 +173,12 @@ let tryExtract
             else None
         | _ ->
             match listCall expr with
+            | Some (id, [input])
+                when id = AST.functionIdForName "Darklang.Stdlib.List.__arrayOwnershipBoundary_i64" ->
+                list state input
+                |> Option.map (fun (source, next) ->
+                    source,
+                    { next with RuntimeInputs = Set.add source.Id next.RuntimeInputs })
             | Some (id, [count; value]) when id = AST.functionIdForName "Darklang.Stdlib.List.repeatUnsafe_i64" ->
                 match operand state ((=) AST.TInt) count, operand state ((=) AST.TInt64) value with
                 | Some count, Some value -> Some (addList state (fun output -> Leaf (Construct (output, Repeat (count, value)))))
@@ -180,10 +187,20 @@ let tryExtract
                 list state input
                 |> Option.bind (fun (source, next) ->
                     callback state (AST.TFunction ([AST.TInt64], AST.TInt64)) fn
-                    |> Option.map (fun fn -> addList next (fun id -> Leaf (Transform (id, source, Map fn)))))
+                    |> Option.map (fun fn ->
+                        let reuse =
+                            if Set.contains source.Id next.RuntimeInputs then RuntimeReuse
+                            else StaticReuse
+                        let next = { next with RuntimeInputs = Set.remove source.Id next.RuntimeInputs }
+                        addList next (fun id -> Leaf (Transform (id, source, (Map fn, reuse))))))
             | Some (id, [input]) when id = AST.functionIdForName "Darklang.Stdlib.List.reverse_i64" ->
                 list state input
-                |> Option.map (fun (source, next) -> addList next (fun id -> Leaf (Transform (id, source, Reverse))))
+                |> Option.map (fun (source, next) ->
+                    let reuse =
+                        if Set.contains source.Id next.RuntimeInputs then RuntimeReuse
+                        else StaticReuse
+                    let next = { next with RuntimeInputs = Set.remove source.Id next.RuntimeInputs }
+                    addList next (fun id -> Leaf (Transform (id, source, (Reverse, reuse)))))
             | _ -> None
 
     let rec bindScalar state name expr =
@@ -268,7 +285,14 @@ let tryExtract
             |> fun (values, nextId) -> Map.ofList values, nextId
         let extractionParameters =
             parameters |> Map.toList |> List.map (fun (name, value) -> SourceBinding name, value) |> Map.ofList
-        region finalName { Lists = Map.empty; Values = extractionParameters; Operations = []; NextId = nextId; Lifetime = EnclosingLifetime } expression
+        region finalName {
+            Lists = Map.empty
+            Values = extractionParameters
+            Operations = []
+            RuntimeInputs = Set.empty
+            NextId = nextId
+            Lifetime = EnclosingLifetime
+        } expression
         |> Option.bind (fun (FunctionalBlock block, _) ->
             let rec containsListOperation (FunctionalBlock block) =
                 block.Operations
