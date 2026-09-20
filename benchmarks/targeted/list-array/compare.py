@@ -87,7 +87,7 @@ def main():
         report["compilers"][label] = {
             "commit": checked(["git", "rev-parse", "HEAD"], repository).stdout.strip(),
             "dirty": bool(checked(["git", "status", "--porcelain"], repository).stdout),
-            "assembly_sha256": hashlib.sha256((repository / "bin/DarkCompiler/Debug/net10.0/DarkCompiler.dll").read_bytes()).hexdigest(),
+            "assembly_sha256": hashlib.sha256((repository / "bin/DarkCompiler/Debug/net11.0/DarkCompiler.dll").read_bytes()).hexdigest(),
         }
     with tempfile.TemporaryDirectory(prefix="list-array-bench-") as temporary:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -100,7 +100,7 @@ def main():
                 for label, repository in roots.items()
             }
             for label, repository in roots.items():
-                assembly = repository / "bin/DarkCompiler/Debug/net10.0/DarkCompiler.dll"
+                assembly = repository / "bin/DarkCompiler/Debug/net11.0/DarkCompiler.dll"
                 if hashlib.sha256(assembly.read_bytes()).hexdigest() != report["compilers"][label]["assembly_sha256"]:
                     raise RuntimeError(f"{label} compiler changed during measurement; rebuild before comparing")
             measurements["source_sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()

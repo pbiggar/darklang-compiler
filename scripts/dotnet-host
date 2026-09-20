@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# dotnet-host - Run a managed command with the runtime beside the selected SDK.
+
+set -euo pipefail
+
+SDK_BASE_PATH="$(dotnet --info | sed -n 's/^ Base Path:[[:space:]]*//p' | head -n 1)"
+if [[ -z "$SDK_BASE_PATH" ]]; then
+    echo "Unable to determine the selected .NET SDK base path" >&2
+    exit 1
+fi
+
+DOTNET_HOST="$(dirname "$(dirname "$SDK_BASE_PATH")")/dotnet"
+if [[ ! -x "$DOTNET_HOST" ]]; then
+    echo "Selected .NET host is not executable: $DOTNET_HOST" >&2
+    exit 1
+fi
+
+exec "$DOTNET_HOST" "$@"

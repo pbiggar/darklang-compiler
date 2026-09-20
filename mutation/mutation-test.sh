@@ -238,11 +238,12 @@ run_mutation_test() {
     fi
 
     # Find test executable (output goes to bin/ at project root, not src/Tests/bin/)
-    local test_exe="${SCRIPT_DIR}/../bin/Tests/Release/net10.0/Tests"
-    [[ ! -x "$test_exe" ]] && { echo "BUILD_FAILURE"; return; }
+    local test_dll="${SCRIPT_DIR}/../bin/Tests/Release/net11.0/Tests.dll"
+    local dotnet_host="${SCRIPT_DIR}/../scripts/dotnet-host"
+    [[ ! -f "$test_dll" ]] && { echo "BUILD_FAILURE"; return; }
 
     # Run tests
-    if timeout "$TEST_TIMEOUT" "$test_exe" > /dev/null 2>&1; then
+    if timeout "$TEST_TIMEOUT" "$dotnet_host" "$test_dll" > /dev/null 2>&1; then
         echo "SURVIVED"
     else
         local rc=$?

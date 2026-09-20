@@ -14,15 +14,11 @@ document is the short CLI reference.
 Arguments after `--` are passed to `dotnet build`. Complete failed AI build
 logs are retained under `TestResults/ai/`.
 
-The development image keeps .NET 10 in `/usr/share/dotnet` and installs .NET 11
-separately in `/opt/dotnet11`. During the .NET 11 transition, `global.json`
-searches the isolated installation first and falls back to the SDK beside the
-active `dotnet` host. Existing worktrees without this policy continue to use
-.NET 10, while new worktrees select .NET 11 automatically. The projects still
-target `net10.0`, so the .NET 10 runtime remains installed. `allowPrerelease`
-is required until .NET 11 reaches general availability; at that point, pin the
-repository to the .NET 11 feature band instead of retaining the transitional
-cross-major roll-forward policy.
+The development image installs both .NET 10 and .NET 11 in the default host.
+The repository pins the .NET 11 release-candidate SDK and targets `net11.0`;
+.NET 10 remains installed so existing worktrees and binaries continue to run.
+`allowPrerelease` is required until .NET 11 reaches general availability, when
+the repository can move to the stable .NET 11 feature band.
 
 ## Test
 
