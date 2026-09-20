@@ -14,7 +14,7 @@ let elaborateOwnership (StorageRegion (FunctionalRegion block, layouts)) : Owned
     let rec elaborate (FunctionalBlock block) liveAfter : OwnedBlock * Set<ListId> =
         let operations, liveBefore =
             List.foldBack (fun operation (tail, live) ->
-                let ownedOperation, releases, before =
+                let ownedOperation, duplicates, releases, before =
                     match operation with
                     | Branch (result, condition, yes, no) ->
                         let managed (value: HIR.Value) =
@@ -32,7 +32,7 @@ let elaborateOwnership (StorageRegion (FunctionalRegion block, layouts)) : Owned
                             managed result
                             |> Option.filter (fun id -> not (Set.contains id live))
                             |> Option.toList
-                        Branch (result, condition, edge yes yesLive, edge no noLive), unusedResult, before
+                        Branch (result, condition, edge yes yesLive, edge no noLive), [], unusedResult, before
                     | _ ->
                         let unusedOutput =
                             match operation with
@@ -47,19 +47,26 @@ let elaborateOwnership (StorageRegion (FunctionalRegion block, layouts)) : Owned
                                 else []
                             | ScalarBinding _ -> []
                             | Branch _ -> Crash.crash "List HIR: branch handled before output accounting"
-                        let owned, releases =
+                        let owned, duplicates, releases =
                             match operation with
-                            | Leaf (Construct (output, construction)) -> Leaf (Construct (output, construction)), []
-                            | Leaf (Transform (output, input, transform)) ->
-                                let ownership = if Set.contains input.Id live then BorrowAndCopy else Consume
-                                Leaf (Transform (output, input, (transform, ownership))), []
+                            | Leaf (Construct (output, construction)) -> Leaf (Construct (output, construction)), [], []
+                            | Leaf (Transform (output, input, (transform, reuse))) ->
+                                let inputSurvives = Set.contains input.Id live
+                                let ownership, duplicates =
+                                    match reuse, inputSurvives with
+                                    | StaticReuse, false -> Consume, []
+                                    | StaticReuse, true -> BorrowAndCopy, []
+                                    | RuntimeReuse, false -> ConsumeOrCopy, []
+                                    | RuntimeReuse, true -> ConsumeOrCopy, [input.Id]
+                                Leaf (Transform (output, input, (transform, ownership))), duplicates, []
                             | Leaf (Fold (name, input, initial, callback)) ->
-                                Leaf (Fold (name, input, initial, callback)), (if Set.contains input.Id live then [] else [input.Id])
-                            | Call call -> Call call, []
-                            | ScalarBinding (name, value) -> ScalarBinding (name, value), []
+                                Leaf (Fold (name, input, initial, callback)), [], (if Set.contains input.Id live then [] else [input.Id])
+                            | Call call -> Call call, [], []
+                            | ScalarBinding (name, value) -> ScalarBinding (name, value), [], []
                             | Branch _ -> Crash.crash "List HIR: branch handled before leaf ownership"
-                        owned, releases @ unusedOutput, ValueLiveness.liveBefore (valueContract operation) live
-                Evaluate ownedOperation :: ((releases |> List.map Drop) @ tail), before)
+                        owned, duplicates, releases @ unusedOutput, ValueLiveness.liveBefore (valueContract operation) live
+                (duplicates |> List.map Dup)
+                @ (Evaluate ownedOperation :: ((releases |> List.map Drop) @ tail)), before)
                 block.Operations ([], liveAfter)
         { Body = { Parameters = block.Parameters; Operations = operations; Result = block.Result } }, liveBefore
     let owned, _ = elaborate block Set.empty

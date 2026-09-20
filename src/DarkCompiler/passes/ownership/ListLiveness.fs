@@ -32,7 +32,7 @@ and private entryLive (FunctionalBlock block) liveAfter =
 /// No physical ownership is needed to check the region's incoming value
 /// interface. The current representation permits no external collection roots.
 let verifyFunctional (FunctionalRegion block) : Result<unit, string> =
-    let dialect : VerifyHIR.Dialect<Operation<Transform>, FunctionalBlock> = {
+    let dialect : VerifyHIR.Dialect<Operation<Transform * ReuseSelection>, FunctionalBlock> = {
         Body = fun (FunctionalBlock block) -> block
         Leaf = primitiveContract
         CallSignature = fun _ -> None

@@ -10,6 +10,8 @@ type Transform =
     | Map of callback: Scalar
     | Reverse
 
+type ReuseSelection = StaticReuse | RuntimeReuse
+
 type Construction =
     | Literal of elements: Scalar list
     | Repeat of count: Scalar * value: Scalar
@@ -18,7 +20,7 @@ type Operation<'transform> =
     | Construct of result: HIR.Value * construction: Construction
     | Transform of result: HIR.Value * source: HIR.Value * operation: 'transform
     | Fold of result: HIR.Value * source: HIR.Value * initial: Scalar * callback: Scalar
-type FunctionalBlock = internal FunctionalBlock of HIR.Block<HIR.Operation<Operation<Transform>, FunctionalBlock>>
+type FunctionalBlock = internal FunctionalBlock of HIR.Block<HIR.Operation<Operation<Transform * ReuseSelection>, FunctionalBlock>>
 type FunctionalRegion = internal FunctionalRegion of FunctionalBlock
 
 /// Runtime extent identity survives aliases and consuming transformations.
@@ -91,7 +93,7 @@ let internal lookup name key map =
     | Some value -> value
     | None -> Crash.crash $"List HIR: missing {name} for {key}"
 
-let primitiveContract (operation: Operation<Transform>) : HIR.PrimitiveContract =
+let primitiveContract (operation: Operation<Transform * ReuseSelection>) : HIR.PrimitiveContract =
     let output value alias : HIR.OutputContract = { Value = value; Alias = alias }
     let effects values = Set.ofList values
     match operation with
@@ -105,14 +107,14 @@ let primitiveContract (operation: Operation<Transform>) : HIR.PrimitiveContract 
           Operands = [count; value]
           Outputs = [output result HIR.FreshManaged]
           Effects = effects [HIR.MayEvaluateOpaqueSource; HIR.MayAllocate; HIR.MayFail] }
-    | Transform (result, source, (Map callback)) ->
+    | Transform (result, source, (Map callback, _)) ->
         { Inputs = [source]
           Operands = [callback]
           Outputs = [output result (HIR.MayReuseInput source)]
           Effects =
               effects [HIR.MayEvaluateOpaqueSource; HIR.MayAllocate; HIR.MayInvokeUserCode
                        HIR.ReadsOwnedStorage; HIR.WritesOwnedStorage] }
-    | Transform (result, source, Reverse) ->
+    | Transform (result, source, (Reverse, _)) ->
         { Inputs = [source]
           Operands = []
           Outputs = [output result (HIR.MayReuseInput source)]
