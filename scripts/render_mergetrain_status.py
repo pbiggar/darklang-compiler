@@ -8,6 +8,7 @@ import json
 import math
 import subprocess
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -153,22 +154,27 @@ def git_file(repo: Path, revision: str) -> str | None:
     return completed.stdout if completed.returncode == 0 else None
 
 
-def benchmark_improvement(repo: Path, commit: str) -> str:
-    current_contents = git_file(repo, commit)
+def percentage(value: float) -> str:
+    return f"{value:.2g}%"
+
+
+def benchmark_improvement(
+    repo: Path, commit: str, *, current_contents: str | None = None
+) -> str:
+    current_contents = current_contents or git_file(repo, commit)
     previous_contents = git_file(repo, f"{commit}^")
     if current_contents is None:
-        return "improvement unavailable"
+        return "n/a"
     if previous_contents is None:
-        ratio = displayed_benchmark_ratio(current_contents)
-        return f"initial {ratio}" if ratio else "improvement unavailable"
+        return "n/a"
     current_identity = benchmark_identity(current_contents)
     previous_identity = benchmark_identity(previous_contents)
     if current_identity and current_identity != previous_identity:
-        return "not comparable"
+        return "n/a"
     current = benchmark_rows(current_contents)
     previous = benchmark_rows(previous_contents)
     if not current or current.keys() != previous.keys():
-        return "improvement unavailable"
+        return "n/a"
 
     current_dark = math.prod(dark for dark, _rust in current.values())
     current_rust = math.prod(rust for _dark, rust in current.values())
@@ -177,19 +183,27 @@ def benchmark_improvement(repo: Path, commit: str) -> str:
     exact_current = current_dark * previous_rust
     exact_previous = previous_dark * current_rust
     if exact_current == exact_previous:
-        return "unchanged"
+        return "0%"
     log_change = math.fsum(
         math.log(current[name][0] / current[name][1])
         - math.log(previous[name][0] / previous[name][1])
         for name in current
     ) / len(current)
     improvement = (1 - math.exp(log_change)) * 100
-    result = f"{abs(improvement):.2g}%"
-    outcome = "improvement" if exact_current < exact_previous else "regression"
-    return f"{result} {outcome}"
+    return percentage(improvement)
 
 
-def benchmark_changes(repo: Path, limit: int = 3) -> list[str]:
+@dataclass(frozen=True)
+class BenchmarkChange:
+    commit: str
+    short_commit: str
+    date: str
+    subject: str
+    improvement: str
+    ratio: str
+
+
+def benchmark_changes(repo: Path, limit: int = 10) -> list[BenchmarkChange]:
     history = git(
         repo,
         "log",
@@ -201,12 +215,77 @@ def benchmark_changes(repo: Path, limit: int = 3) -> list[str]:
     if not history:
         return []
 
-    def render(line: str) -> str:
+    def parse(line: str) -> BenchmarkChange:
         commit, short_commit, date, subject = line.split("\t", 3)
-        improvement = benchmark_improvement(repo, commit)
-        return f"{short_commit} {date} {subject} — {improvement}"
+        current_contents = git_file(repo, commit)
+        improvement = benchmark_improvement(
+            repo, commit, current_contents=current_contents
+        )
+        ratio = (
+            displayed_benchmark_ratio(current_contents)
+            if current_contents is not None
+            else None
+        )
+        return BenchmarkChange(
+            commit=commit,
+            short_commit=short_commit,
+            date=date,
+            subject=subject,
+            improvement=improvement,
+            ratio=ratio or "n/a",
+        )
 
-    return [render(line) for line in history.splitlines()]
+    return [parse(line) for line in history.splitlines()]
+
+
+def benchmark_detail(repo: Path, commit: str, *, color: bool) -> str:
+    changes = benchmark_changes_for_commit(repo, commit)
+    current_contents = git_file(repo, commit)
+    ratio = (
+        displayed_benchmark_ratio(current_contents)
+        if current_contents is not None
+        else None
+    )
+    short_commit = git(repo, "show", "-s", "--format=%h", commit)
+    subject = git(repo, "show", "-s", "--format=%s", commit)
+    lines = [
+        styled("benchmark result:", BOLD, color),
+        f"{styled(short_commit, CYAN, color)} {subject}",
+        f"ratio: {styled(ratio or 'unavailable', CYAN, color)}",
+        styled("improved benchmarks:", BOLD, color),
+    ]
+    if isinstance(changes, str):
+        lines.append(changes)
+    else:
+        lines.extend(
+            f"{name} {percentage(improvement)} {instructions:,} instructions"
+            for name, improvement, instructions in changes
+        )
+        if not changes:
+            lines.append("(none)")
+    return "\n".join(lines)
+
+
+def benchmark_changes_for_commit(
+    repo: Path, commit: str
+) -> list[tuple[str, float, int]] | str:
+    current_contents = git_file(repo, commit)
+    previous_contents = git_file(repo, f"{commit}^")
+    if current_contents is None or previous_contents is None:
+        return "individual improvements unavailable"
+    current_identity = benchmark_identity(current_contents)
+    previous_identity = benchmark_identity(previous_contents)
+    if current_identity and current_identity != previous_identity:
+        return "not comparable with the previous result"
+    current = benchmark_rows(current_contents)
+    previous = benchmark_rows(previous_contents)
+    if not current or current.keys() != previous.keys():
+        return "individual improvements unavailable"
+    return [
+        (name, (1 - current[name][0] / previous[name][0]) * 100, current[name][0])
+        for name in current
+        if current[name][0] < previous[name][0]
+    ]
 
 
 def merged_branch(repo: Path, commit: str) -> str:
@@ -267,10 +346,20 @@ def render(
     color: bool,
     show_conflicts: bool = False,
     conflict_toggle_hint: bool = False,
+    merge_limit: int = 5,
+    benchmark_detail_index: int | None = None,
 ) -> str:
     if payload.get("contract_version") != 4:
         raise ValueError(
             f"unsupported mergetrain contract version: {payload.get('contract_version')}"
+        )
+
+    if benchmark_detail_index is not None:
+        changes = benchmark_changes(repo)
+        if benchmark_detail_index < 1 or benchmark_detail_index > len(changes):
+            return "benchmark result unavailable"
+        return benchmark_detail(
+            repo, changes[benchmark_detail_index - 1].commit, color=color
         )
 
     action = payload["next_action"]
@@ -315,22 +404,30 @@ def render(
         lines.append(styled(f"  [c] {action} conflict details", DIM, color))
 
     now = datetime.now(timezone.utc)
-    merges = recent_merges(repo)
+    merges = recent_merges(repo, limit=merge_limit)
     lines.append("")
     lines.append(styled("recent merges:", BOLD, color))
     lines.extend(
-        [f"  {history_line(merge, color, now=now)}" for merge in merges]
-        or ["  (none)"]
+        [history_line(merge, color, now=now) for merge in merges] or ["(none)"]
     )
 
     changes = benchmark_changes(repo)
     ratio = benchmark_ratio(repo)
     lines.append("")
     lines.append(f"benchmark ratio: {styled(ratio or 'unavailable', CYAN, color)}")
-    lines.append(styled("recent benchmarks/RESULTS.md changes:", BOLD, color))
+    lines.append(styled("recent benchmark results:", BOLD, color))
     lines.extend(
-        [f"  {history_line(change, color, now=now)}" for change in changes]
-        or ["  (none)"]
+        [
+            f"[{index if index < 10 else 0}] "
+            + history_line(
+                f"{change.short_commit} {change.date} "
+                f"{change.improvement} {change.ratio} {change.subject}",
+                color,
+                now=now,
+            )
+            for index, change in enumerate(changes, start=1)
+        ]
+        or ["(none)"]
     )
     return "\n".join(lines)
 
@@ -341,6 +438,8 @@ def main() -> int:
     parser.add_argument("--color", action="store_true")
     parser.add_argument("--show-conflicts", action="store_true")
     parser.add_argument("--conflict-toggle-hint", action="store_true")
+    parser.add_argument("--merge-limit", type=int, default=5)
+    parser.add_argument("--benchmark-detail-index", type=int)
     args = parser.parse_args()
     try:
         payload = json.load(sys.stdin)
@@ -351,6 +450,8 @@ def main() -> int:
                 color=args.color,
                 show_conflicts=args.show_conflicts,
                 conflict_toggle_hint=args.conflict_toggle_hint,
+                merge_limit=args.merge_limit,
+                benchmark_detail_index=args.benchmark_detail_index,
             )
         )
     except (
