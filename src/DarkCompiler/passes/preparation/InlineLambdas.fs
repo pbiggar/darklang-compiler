@@ -14,9 +14,8 @@ let rec varOccursInExpr (name: AST.BindingId) (expr: CheckedAST.Expr) : bool =
     | CheckedAST.BoundaryRender (_, value) -> varOccursInExpr name value
     | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _ | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
-    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.RuntimeError _ -> false
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.BlobLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.RuntimeError _ -> false
     | CheckedAST.Local id -> id = name
-    | CheckedAST.NamedValue _ -> false
     | CheckedAST.BinOp (_, left, right) -> varOccursInExpr name left || varOccursInExpr name right
     | CheckedAST.UnaryOp (_, inner) -> varOccursInExpr name inner
     | CheckedAST.Let (pattern, value, body) ->
@@ -77,11 +76,11 @@ let rec inlineLambdas (expr: CheckedAST.Expr) (lambdaEnv: LambdaEnv) : CheckedAS
     match expr with
     | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _ | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
-    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.RuntimeError _ ->
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.BlobLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.RuntimeError _ ->
         expr
     | CheckedAST.BoundaryRender (renderer, value) ->
         CheckedAST.BoundaryRender (renderer, inlineLambdas value lambdaEnv)
-    | CheckedAST.Local _ | CheckedAST.NamedValue _ -> expr
+    | CheckedAST.Local _ -> expr
     | CheckedAST.BinOp (op, left, right) ->
         CheckedAST.BinOp (op, inlineLambdas left lambdaEnv, inlineLambdas right lambdaEnv)
     | CheckedAST.UnaryOp (op, inner) ->

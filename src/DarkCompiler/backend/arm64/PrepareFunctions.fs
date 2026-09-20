@@ -5,6 +5,18 @@ module ARM64PrepareFunctions
 open ARM64CodeGenTypes
 open ARM64ReleasePlanSummary
 
+let private helperLabelsForRequirements (requirements: LIR.Arm64RcHelperRequirements) =
+    requirements.PlannedGenericDecHelpers |> Map.keys |> Set.ofSeq
+
+let private helperLabelsForFunctions (functions: LIR.Function list) =
+    functions
+    |> List.map (fun func ->
+        func.CodegenFacts
+        |> Option.bind (fun facts -> facts.Arm64RcHelperRequirements)
+        |> Option.map helperLabelsForRequirements
+        |> Option.defaultValue Set.empty)
+    |> Set.unionMany
+
 /// Attach backend-specific helper planning to a compilation batch. Release
 /// plans shared by sibling functions are traversed once, while each function
 /// retains only its own semantic requirements for later tree-shaken unions.
@@ -55,10 +67,14 @@ let attachARM64CodegenFactsToFunctions
         let facts =
             func.CodegenFacts
             |> Option.map (fun facts ->
-                { facts with Arm64RawSlotInitRetainTargets = None })
+                { facts with
+                    Arm64RawSlotInitRetainTargets = None
+                    Arm64FunctionNames = None
+                    Arm64GenericDecHelperIds = None })
         { func with CodegenFacts = facts })
 
 let private outlineExpensiveGenericReleasesInFunction
+    (helperIds: Map<string, AST.FunctionId>)
     (func: LIR.Function)
     : LIR.Function =
     let helperLabelsByMemoKey =
@@ -73,8 +89,20 @@ let private outlineExpensiveGenericReleasesInFunction
                 |> Set.toList
                 |> List.map (fun memoKey -> memoKey, label))
             |> Map.ofList
-    if Map.isEmpty helperLabelsByMemoKey then
-        func
+    let functionHelperIds =
+        helperLabelsByMemoKey
+        |> Map.values
+        |> Set.ofSeq
+        |> Set.toList
+        |> List.map (fun label -> label, Map.find label helperIds)
+        |> Map.ofList
+    let func =
+        { func with
+            CodegenFacts =
+                func.CodegenFacts
+                |> Option.map (fun facts ->
+                    { facts with Arm64GenericDecHelperIds = Some functionHelperIds }) }
+    if Map.isEmpty helperLabelsByMemoKey then func
     else
         let outlineInstr instr =
             match instr with
@@ -86,7 +114,10 @@ let private outlineExpensiveGenericReleasesInFunction
                         LIR.ArgMoves [(LIR.X0, LIR.Reg addr)]
                         // The physical destination declares that this effect has no
                         // virtual result while retaining normal call liveness.
-                        LIR.Call (LIR.Physical LIR.X0, AST.functionIdForName helperLabel, [LIR.Reg addr])
+                        let helperId =
+                            Map.tryFind helperLabel helperIds
+                            |> Option.defaultWith (fun () -> Crash.crash $"ARM64 helper identity is absent: {helperLabel}")
+                        LIR.Call (LIR.Physical LIR.X0, helperId, [LIR.Reg addr])
                         LIR.RestoreRegs ([], [])
                     ]
                 | _ ->
@@ -107,6 +138,7 @@ let prepareARM64FunctionsForAllocationWithCache
     (phaseRecorder: (string -> float -> unit) option)
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
+    (reservedFunctionNames: Map<AST.FunctionId, string>)
     (functions: LIR.Function list)
     : LIR.Function list =
     let recordPhase name (timer: System.Diagnostics.Stopwatch) =
@@ -124,8 +156,26 @@ let prepareARM64FunctionsForAllocationWithCache
             sumShapeRegistry
     recordPhase "ARM64 Function Facts Planning" factsTimer
     let outliningTimer = System.Diagnostics.Stopwatch.StartNew()
+    let partitionFunctionNames =
+        functionsWithFacts
+        |> List.fold
+            (fun names func -> Map.add func.Id func.Name names)
+            reservedFunctionNames
+    let functionsWithFacts =
+        functionsWithFacts
+        |> List.map (fun func ->
+            { func with
+                CodegenFacts =
+                    func.CodegenFacts
+                    |> Option.map (fun facts ->
+                        { facts with Arm64FunctionNames = Some partitionFunctionNames }) })
+    let helperLabels = helperLabelsForFunctions functionsWithFacts
+    let helperIds =
+        AST.allocateFunctionIds
+            (partitionFunctionNames |> Map.keys)
+            helperLabels
     let outlinedFunctions =
-        functionsWithFacts |> List.map outlineExpensiveGenericReleasesInFunction
+        functionsWithFacts |> List.map (outlineExpensiveGenericReleasesInFunction helperIds)
     recordPhase "ARM64 Generic Release Outlining" outliningTimer
     outlinedFunctions
 
@@ -133,7 +183,9 @@ let prepareARM64FunctionsForAllocation
     (functions: LIR.Function list)
     : LIR.Function list =
     let functionsWithFacts = attachARM64CodegenFactsToFunctions functions
-    functionsWithFacts |> List.map outlineExpensiveGenericReleasesInFunction
+    let helperLabels = helperLabelsForFunctions functionsWithFacts
+    let helperIds = AST.allocateFunctionIds (functionsWithFacts |> List.map (fun func -> func.Id)) helperLabels
+    functionsWithFacts |> List.map (outlineExpensiveGenericReleasesInFunction helperIds)
 
 /// Explicit preparation entry point for tools that construct LIR directly.
 /// Production performs the same preparation before register allocation.
@@ -152,4 +204,5 @@ let prepareARM64Program
             None
             records
             sumShapeRegistry
+            (functions |> List.map (fun func -> func.Id, func.Name) |> Map.ofList)
     LIR.Program (functionsWithFacts, variants, records)

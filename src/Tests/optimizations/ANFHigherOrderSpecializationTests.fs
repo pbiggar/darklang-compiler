@@ -10,18 +10,18 @@ open ANF
 
 type TestResult = Result<unit, string>
 
-let private fid = AST.functionIdForName
+let private fid = TestIds.functionIdForName
 
 let private param id typ = { Id = TempId id; Type = typ }
 
 let private functionByName (name: string) (functions: Function list) : Function option =
     functions |> List.tryFind (fun func -> func.Name = name)
 
-let rec private findCall (target: string) (expr: AExpr) : CExpr option =
+let rec private findCall (target: AST.FunctionId) (expr: AExpr) : CExpr option =
     match expr with
     | Jump _ | Return _ -> None
-    | Let (_, Call (name, _), _) when name = (fid target) -> Some(Call (name, []))
-    | Let (_, TailCall (name, _), _) when name = (fid target) -> Some(TailCall (name, []))
+    | Let (_, Call (name, _), _) when name = target -> Some(Call (name, []))
+    | Let (_, TailCall (name, _), _) when name = target -> Some(TailCall (name, []))
     | Let (_, _, body) -> findCall target body
     | Join (_, thenBranch, elseBranch)
     | If (_, thenBranch, elseBranch) ->
@@ -29,11 +29,11 @@ let rec private findCall (target: string) (expr: AExpr) : CExpr option =
         | Some call -> Some call
         | None -> findCall target elseBranch
 
-let rec private callArgs (target: string) (expr: AExpr) : Atom list option =
+let rec private callArgs (target: AST.FunctionId) (expr: AExpr) : Atom list option =
     match expr with
     | Jump _ | Return _ -> None
-    | Let (_, Call (name, args), _) when name = (fid target) -> Some args
-    | Let (_, TailCall (name, args), _) when name = (fid target) -> Some args
+    | Let (_, Call (name, args), _) when name = target -> Some args
+    | Let (_, TailCall (name, args), _) when name = target -> Some args
     | Let (_, _, body) -> callArgs target body
     | Join (_, thenBranch, elseBranch)
     | If (_, thenBranch, elseBranch) ->
@@ -155,17 +155,17 @@ let testKnownCapturingClosureSpecializesRecursiveHelper () : TestResult =
         elif containsClosureAlloc main then
             Error "Expected known call site to pass captures without allocating a closure"
         else
-            match callArgs specializedHelper.Name main with
+            match callArgs specializedHelper.Id main with
             | Some [IntLiteral (Int64 1L); IntLiteral (Int64 0L); IntLiteral (Int64 7L)] ->
                 if List.length specializedPredicate.TypedParams <> 2 then
                     Error $"Expected specialized predicate to have captures and arguments, got {List.length specializedPredicate.TypedParams}"
-                elif Option.isNone (findCall specializedPredicate.Name specializedHelper.Body) then
+                elif Option.isNone (findCall specializedPredicate.Id specializedHelper.Body) then
                     Error "Expected specialized helper to call its specialized predicate directly"
-                elif Option.isNone (findCall specializedHelper.Name specializedHelper.Body) then
+                elif Option.isNone (findCall specializedHelper.Id specializedHelper.Body) then
                     Error "Expected specialized helper to recurse into itself directly"
-                elif callArgs specializedPredicate.Name specializedHelper.Body
+                elif callArgs specializedPredicate.Id specializedHelper.Body
                      <> Some [Var (List.last specializedHelper.TypedParams).Id; Var (TempId 3)] then
-                    let actual = callArgs specializedPredicate.Name specializedHelper.Body
+                    let actual = callArgs specializedPredicate.Id specializedHelper.Body
                     Error $"Expected specialized predicate call to pass its capture before the value argument; got {actual}"
                 else
                     Ok ()
@@ -201,7 +201,7 @@ let testKnownClosureFlowsThroughAlias () : TestResult =
         functions
         |> List.filter (fun func -> func.Name.StartsWith("filter__known_"))
     match specializedHelpers with
-    | [helper] when Option.isSome (findCall helper.Name main) && not (containsClosureAlloc main) -> Ok ()
+    | [helper] when Option.isSome (findCall helper.Id main) && not (containsClosureAlloc main) -> Ok ()
     | _ -> Error "Expected an aliased known closure to select one allocation-free helper clone"
 
 let private targetFunction name operation =
@@ -273,7 +273,7 @@ let testMultipleKnownArgumentsShareOneClone () : TestResult =
         when List.length added = 3
              && not (containsClosureCall helper.Body)
              && not (containsClosureAlloc main)
-             && Option.isSome (findCall helper.Name main) -> Ok ()
+             && Option.isSome (findCall helper.Id main) -> Ok ()
     | _ -> Error "Expected both known functional arguments to share one fully devirtualized helper clone"
 
 let private captureFreeTarget name =
@@ -344,8 +344,8 @@ let testExactHelperAndTargetSizeBoundariesSpecialize () : TestResult =
         |> ANF_HigherOrderSpecialization.specializeProgram
     match functions |> List.tryFind (fun func -> func.Name.StartsWith("boundaryHelper__known_")) with
     | Some helper
-        when Option.isSome (findCall "boundaryTarget" helper.Body)
-             && Option.isSome (findCall helper.Name rewrittenMain) -> Ok ()
+        when Option.isSome (findCall boundaryTarget.Id helper.Body)
+             && Option.isSome (findCall helper.Id rewrittenMain) -> Ok ()
     | _ -> Error "Expected helpers and targets exactly at both size limits to specialize"
 
 let testSixteenKnownArgumentPairBudgetSpecializes () : TestResult =
@@ -395,7 +395,7 @@ let testSixteenKnownArgumentPairBudgetSpecializes () : TestResult =
     match functions |> List.tryFind (fun func -> func.Name.StartsWith("pairBudgetHelper__known_")) with
     | Some specialized
         when not (containsClosureCall specialized.Body)
-             && Option.isSome (findCall specialized.Name rewrittenMain) -> Ok ()
+             && Option.isSome (findCall specialized.Id rewrittenMain) -> Ok ()
     | _ -> Error "Expected all sixteen known functional-argument pairs to specialize together"
 
 let testKnownClosureFlowsThroughBranchValue () : TestResult =
@@ -422,7 +422,7 @@ let testKnownClosureFlowsThroughBranchValue () : TestResult =
         |> ANF_HigherOrderSpecialization.specializeProgram
     let helper = functions |> List.tryFind (fun func -> func.Name.StartsWith("applyOne__known_"))
     match helper with
-    | Some specialized when Option.isSome (findCall specialized.Name rewrittenMain) -> Ok ()
+    | Some specialized when Option.isSome (findCall specialized.Id rewrittenMain) -> Ok ()
     | _ -> Error "Expected a known closure selected through a branch value to specialize"
 
 let testKnownClosureFlowsThroughJoin () : TestResult =
@@ -449,10 +449,13 @@ let testKnownClosureFlowsThroughJoin () : TestResult =
     let (Program (functions, rewrittenMain)) =
         Program ([captureFreeTarget "identityClosure"; applyOneHelper ()], main)
         |> ANF_HigherOrderSpecialization.specializeProgram
-    match functions |> List.tryFind (fun func -> func.Name.StartsWith("applyOne__known_")) with
-    | Some specialized
-        when Option.isSome (findCall specialized.Name rewrittenMain)
-             && Option.isSome (findCall "identityClosure__captures" specialized.Body)
+    match
+        functions |> List.tryFind (fun func -> func.Name.StartsWith("applyOne__known_")),
+        functionByName "identityClosure__captures" functions
+    with
+    | Some specialized, Some targetClone
+        when Option.isSome (findCall specialized.Id rewrittenMain)
+             && Option.isSome (findCall targetClone.Id specialized.Body)
              && not (containsClosureCall specialized.Body) -> Ok ()
     | _ -> Error "Expected a known closure merged through an ANF Join to specialize"
 
@@ -486,7 +489,7 @@ let testReturnedKnownClosureSpecializes () : TestResult =
         |> ANF_HigherOrderSpecialization.specializeProgram
     let helper = functions |> List.tryFind (fun func -> func.Name.StartsWith("applyOne__known_"))
     match helper with
-    | Some specialized when Option.isSome (findCall specialized.Name rewrittenMain) -> Ok ()
+    | Some specialized when Option.isSome (findCall specialized.Id rewrittenMain) -> Ok ()
     | _ -> Error "Expected a statically known closure returned by a local function to specialize"
 
 let private plainTarget =
@@ -513,8 +516,8 @@ let testStaticFunctionReferenceNeedsNoClosure () : TestResult =
     match helper with
     | Some specialized
         when not (containsClosureCall specialized.Body)
-             && Option.isSome (findCall "plainIdentity" specialized.Body)
-             && Option.isSome (findCall specialized.Name rewrittenMain) -> Ok ()
+             && Option.isSome (findCall (fid "plainIdentity") specialized.Body)
+             && Option.isSome (findCall specialized.Id rewrittenMain) -> Ok ()
     | _ -> Error "Expected a static function reference to devirtualize without a closure target clone"
 
 let testExternalDefinitionsCanSpecializeLocalCall () : TestResult =
@@ -539,7 +542,7 @@ let testExternalDefinitionsCanSpecializeLocalCall () : TestResult =
             (Program ([], main))
     let helper = functions |> List.tryFind (fun func -> func.Name.StartsWith("externalApply__known_"))
     match helper with
-    | Some specialized when Option.isSome (findCall specialized.Name rewrittenMain) -> Ok ()
+    | Some specialized when Option.isSome (findCall specialized.Id rewrittenMain) -> Ok ()
     | _ -> Error "Expected external ANF definitions to support cross-unit specialization"
 
 let private partialTarget =
@@ -591,7 +594,7 @@ let testReturnedPartialApplicationSpecializes () : TestResult =
         |> ANF_HigherOrderSpecialization.specializeProgram
     match functions |> List.tryFind (fun func -> func.Name.StartsWith("applyOne__known_")) with
     | Some helper
-        when callArgs helper.Name rewrittenMain
+        when callArgs helper.Id rewrittenMain
              = Some [IntLiteral (Int64 32L); IntLiteral (Int64 10L)] -> Ok ()
     | _ -> Error "Expected a returned partial application to pass its bound argument directly"
 

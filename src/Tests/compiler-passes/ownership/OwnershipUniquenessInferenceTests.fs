@@ -71,7 +71,7 @@ let private block parameters operations result : Block<TestLeaf, string> = {
 let private infer semantics signature body =
     let functionDefinition : Function<TestLeaf, string> = {
         Definition = {
-            Id = AST.functionIdForName "test"
+            Id = TestIds.functionIdForName "test"
             Name = "test"
             Body = body
         }
@@ -164,7 +164,7 @@ let private testBoundsVariantSearch () =
 let private testDefersRecursiveInference () =
     let semantics = semantics [(inputValue, "value")]
     let recursiveCall : HIR.FunctionCall = {
-        Target = AST.functionIdForName "test"
+        Target = TestIds.functionIdForName "test"
         Arguments = [inputValue]
         Result = inputValue
     }
@@ -176,7 +176,7 @@ let private testDefersRecursiveInference () =
     let boundary = signature [ConsumedParameter "value"] (ProducedResult "value")
     match infer semantics boundary body with
     | Error (InferOwnershipUniqueness.RecursiveFunctionRequiresGroupInference id)
-        when id = AST.functionIdForName "test" -> Ok ()
+        when id = TestIds.functionIdForName "test" -> Ok ()
     | actual -> Error $"Expected recursive uniqueness inference to require a group solver, got {actual}"
 
 let tests = [

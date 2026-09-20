@@ -20,19 +20,27 @@ open CompilationContexts
 /// Extract return types from a FuncReg (FunctionRegistry maps func name -> full type)
 /// This is needed because buildReturnTypeReg only includes functions in the current program,
 /// but we need return types for all callable functions (including stdlib)
-let internal extractReturnTypes (funcReg: TypeRegistries.FunctionRegistry) : Map<string, AST.Type> =
+let internal extractReturnTypes
+    (funcReg: TypeRegistries.FunctionRegistry)
+    : Map<AST.FunctionId, string * AST.Type> =
     funcReg
     |> Map.toSeq
-    |> Seq.choose (fun (_, (name, typ)) ->
+    |> Seq.choose (fun (id, (name, typ)) ->
         match typ with
-        | AST.TFunction (_, retType) -> Some (name, retType)
+        | AST.TFunction (_, retType) -> Some (id, (name, retType))
         | other -> Crash.crash $"extractReturnTypes: Non-function type '{other}' found in FuncReg for '{name}'")
     |> Map.ofSeq
+
+let internal returnTypesByName
+    (returnTypes: Map<AST.FunctionId, string * AST.Type>)
+    : Map<string, AST.Type> =
+    returnTypes |> Map.toSeq |> Seq.map snd |> Map.ofSeq
 
 let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Registries =
     {
         ScopeContracts = Map.empty
         TypeReg = Map.empty
+        TypeNames = TypeRegistries.emptyTypeNames
         RecordFieldsReg = Map.empty
         RecordTypeParamsReg = Map.empty
         VariantLookup = Map.empty
@@ -113,10 +121,10 @@ let private importInheritedValues
     let rec groupBySymbolNamespace entries =
         match entries with
         | [] -> []
-        | (_, first) :: _ ->
+        | (_, (first: CheckedValueArtifact)) :: _ ->
             let same, rest =
                 entries
-                |> List.partition (fun (_, artifact) ->
+                |> List.partition (fun (_, (artifact: CheckedValueArtifact)) ->
                     CheckedAST.sameSymbolNamespace first.Symbols artifact.Symbols)
             same :: groupBySymbolNamespace rest
     let inheritedDefinitions, symbols =
@@ -140,7 +148,7 @@ let private importInheritedValues
             let definitions, symbols =
                 importedEntries
                 |> List.mapFold (fun symbols (name, typ, body) ->
-                    let (id, symbols) = CheckedAST.allocateBinding name symbols
+                    let (id, symbols) = CheckedAST.internValue name symbols
                     (CheckedAST.ValueDef { Id = id; Name = name; Type = typ; Body = body }, symbols)) symbols
             (collected @ definitions, symbols)) ([], symbols)
     CheckedAST.Program (symbols, inheritedDefinitions @ topLevels)
@@ -166,10 +174,8 @@ let private materializeProgramValues
     let bindings =
         rawBindings
         |> List.map (fun (name, id, body) ->
-            let body = CheckedAST.resolveNamedValues valueIds body
             (name, id, CheckedAST.resolveUnboundValueLocals symbols valueIds body))
     let wrap excluded body =
-        let body = CheckedAST.resolveNamedValues valueIds body
         let body = CheckedAST.resolveUnboundValueLocals symbols valueIds body
         let eligible = bindings |> List.filter (fun (_, id, _) -> not (Set.contains id excluded))
         let rec required fixedPoint =
@@ -316,9 +322,10 @@ let internal buildRegistriesForProgram
     (mergedRegistries, localRegistries, resolvedFunctions)
 
 type internal DeclarationConversion = {
+    Symbols: CheckedAST.Symbols
     Functions: ANF.Function list
     Registries: AST_to_ANF.Registries
-    LocalReturnTypes: Map<string, AST.Type>
+    LocalReturnTypes: Map<AST.FunctionId, string * AST.Type>
 }
 
 let internal splitDeclarations
@@ -339,6 +346,17 @@ let internal convertTypedDeclarations
     (monomorphization: MonomorphizationMode)
     (typedProgram: CheckedAST.Program)
     : Result<DeclarationConversion, string> =
+    let typedProgram =
+        match baseContext with
+        | None -> typedProgram
+        | Some context ->
+            let sourceSymbols = CheckedAST.programSymbols typedProgram
+            let symbols, topLevels =
+                CheckedAST.importTopLevels
+                    sourceSymbols
+                    context.Symbols
+                    (CheckedAST.programTopLevels typedProgram)
+            CheckedAST.Program (symbols, topLevels)
     let moduleRegistry =
         baseContext
         |> Option.map (fun context -> context.Registries.ModuleRegistry)
@@ -358,8 +376,10 @@ let internal convertTypedDeclarations
             reserveBaseFunctionParams baseRegistries.FuncParams baseFuncNames)
     let baseFuncReturnTypes =
         baseContext
-        |> Option.map (fun context -> context.ReturnTypes)
-        |> Option.defaultWith (fun () -> extractReturnTypes baseRegistries.FuncReg)
+        |> Option.map (fun context ->
+            returnTypesByName context.ReturnTypes)
+        |> Option.defaultWith (fun () ->
+            extractReturnTypes baseRegistries.FuncReg |> returnTypesByName)
     let (baseTypeReg, baseVariantLookup) =
         match baseContext with
         | Some context ->
@@ -395,7 +415,8 @@ let internal convertTypedDeclarations
                 (ANF.VarGen 0)
                 resolvedFunctions
             |> Result.map (fun (anfFunctions, _) ->
-                { Functions = anfFunctions
+                { Symbols = CheckedAST.programSymbols liftedProgram
+                  Functions = anfFunctions
                   Registries = registries
                   LocalReturnTypes = extractReturnTypes localRegistries.FuncReg })))
 
@@ -454,6 +475,13 @@ let internal convertTypedProgramToUserOnlyWithMode
         timer.Stop()
         recordPassTiming passTimingRecorder name timer.Elapsed.TotalMilliseconds
         result
+    let sourceSymbols = CheckedAST.programSymbols typedProgram
+    let symbols, topLevels =
+        CheckedAST.importTopLevels
+            sourceSymbols
+            baseContext.Symbols
+            (CheckedAST.programTopLevels typedProgram)
+    let typedProgram = CheckedAST.Program (symbols, topLevels)
 
     // Late AOT plans (notably Json) may introduce concrete calls to generic
     // stdlib functions after the suite preamble registry was built. Materialize
@@ -560,7 +588,10 @@ let internal convertTypedProgramToUserOnlyWithMode
             baseContext.LambdaLiftVariantLookup
             baseFuncNames
             baseContext.LambdaLiftFuncParams
-            baseContext.ReturnTypes
+            (baseContext.ReturnTypes
+             |> Map.toSeq
+             |> Seq.map snd
+             |> Map.ofSeq)
             baseContext.CheckedValues
             passTimingRecorder
             typedProgram)
@@ -612,8 +643,12 @@ let internal convertTypedProgramToUserOnlyWithMode
                     let convertedReturnTypes =
                         converted.Functions
                         |> List.fold (fun returnTypes functionDefinition ->
-                            Map.add functionDefinition.Name functionDefinition.ReturnType returnTypes) localReturnTypes
+                            Map.add
+                                functionDefinition.Id
+                                (functionDefinition.Name, functionDefinition.ReturnType)
+                                returnTypes) localReturnTypes
                     ({
+                        Symbols = symbols
                         UserFunctions = converted.Functions
                         OwnershipContracts = converted.OwnershipContracts
                         ScopeContracts = registries.ScopeContracts
@@ -623,6 +658,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                                 (converted.OwnershipContracts |> Map.keys |> Set.ofSeq)
                         MainExpr = anfExpr
                         TypeReg = registries.TypeReg
+                        TypeNames = registries.TypeNames
                         RecordFieldsReg = registries.RecordFieldsReg
                         RecordTypeParamsReg = registries.RecordTypeParamsReg
                         VariantLookup = registries.VariantLookup
@@ -639,7 +675,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                      },
                      dependencyIdentity)))))
 
-let internal convertTypedProgramToUserOnly
+let convertTypedProgramToUserOnly
     (baseContext: PipelineContext)
     (typedProgram: CheckedAST.Program)
     : Result<AST_to_ANF.UserOnlyResult, string> =

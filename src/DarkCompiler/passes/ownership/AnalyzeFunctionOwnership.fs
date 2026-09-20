@@ -7,6 +7,7 @@ open LoweringPrimitives
 
 type Context = {
     TypeReg: TypeRegistry
+    TypeNames: TypeNameRegistry
     RecordFieldsReg: Map<string, (string * AST.Type) list>
     RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
@@ -65,6 +66,7 @@ let analyze
     let infer types expression =
         LoweringTypeInference.inferTypeCore
             context.SumTypeNames
+            context.TypeNames
             expression
             types
             context.TypeReg
@@ -77,6 +79,7 @@ let analyze
         Contract = fun _ -> Some (callContract (isManaged context))
     }
     ConstructHIRFunctions.constructFunctionsWithOpaqueFallback
+        context.FunctionNames
         infer
         (fun expression -> ClosureAnalysis.freeVars expression Set.empty)
         calls

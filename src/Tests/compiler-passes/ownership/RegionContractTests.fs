@@ -4,7 +4,7 @@ module RegionContractTests
 
 open OwnedIR
 
-let private fid = AST.functionIdForName
+let private fid = TestIds.functionIdForName
 
 let private identity = function
     | "a" -> HIR.ValueId 0

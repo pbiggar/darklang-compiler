@@ -278,7 +278,21 @@ let private tryComplementIntegerComparison (op: BinOp) : BinOp option =
     | Gte -> Some Lt
     | _ -> None
 
-let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExpr) (body: AExpr) : AExpr option =
+let private trySimplifyAdjacentLet
+    (context: OptimizeContext)
+    (typeEnv: TypeEnv)
+    (tid: TempId)
+    (cexpr: CExpr)
+    (body: AExpr)
+    : AExpr option =
+    let hasName id name = Map.tryFind id context.FunctionNames = Some name
+    let resolve name =
+        context.FunctionNames
+        |> Map.toSeq
+        |> Seq.tryPick (fun (id, displayName) -> if displayName = name then Some id else None)
+        |> Option.defaultWith (fun () ->
+            Crash.crash $"ANF optimization helper '{name}' is absent from registries")
+
     match cexpr, body with
     | Call (fromInt64Id, [nativeIndex]),
       Let (
@@ -286,15 +300,15 @@ let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExp
           Call (getByteAtId, [value; Var indexTid]),
           resultBody
       )
-        when fromInt64Id = AST.functionIdForName "Darklang.Stdlib.Int.fromInt64"
-             && getByteAtId = AST.functionIdForName "Darklang.Stdlib.String.getByteAt"
+        when hasName fromInt64Id "Darklang.Stdlib.Int.fromInt64"
+             && hasName getByteAtId "Darklang.Stdlib.String.getByteAt"
              && indexTid = tid
              && not (aExprUsesTemp tid resultBody) ->
         Some (
             Let (
                 resultTid,
                 Call (
-                    AST.functionIdForName "Darklang.Stdlib.String.__getByteAtInt64",
+                    resolve "Darklang.Stdlib.String.__getByteAtInt64",
                     [value; nativeIndex]
                 ),
                 resultBody
@@ -310,7 +324,7 @@ let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExp
               If (Var branchConditionTid, someBranch, noneBranch)
           )
       )
-        when getByteAtInt64Id = AST.functionIdForName "Darklang.Stdlib.String.__getByteAtInt64"
+        when hasName getByteAtInt64Id "Darklang.Stdlib.String.__getByteAtInt64"
              && optionTid = tid
              && projectedTagTid = tagTid
              && branchConditionTid = conditionTid
@@ -325,7 +339,7 @@ let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExp
         Some (
             Let (
                 tid,
-                Call (AST.functionIdForName "Darklang.Stdlib.String.__byteLength", [value]),
+                Call (resolve "Darklang.Stdlib.String.__byteLength", [value]),
                 Let (
                     tagTid,
                     Prim (Gte, index, IntLiteral (Int64 0L)),
@@ -355,7 +369,7 @@ let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExp
               )
           )
       )
-        when getByteAtInt64Id = AST.functionIdForName "Darklang.Stdlib.String.__getByteAtInt64"
+        when hasName getByteAtInt64Id "Darklang.Stdlib.String.__getByteAtInt64"
              && optionTid = tid
              && projectedTagTid = tagTid
              && branchConditionTid = conditionTid
@@ -371,13 +385,13 @@ let private trySimplifyAdjacentLet (typeEnv: TypeEnv) (tid: TempId) (cexpr: CExp
         let loadedPayload =
             Let (
                 payloadTid,
-                Call (AST.functionIdForName "Darklang.Stdlib.String.__byteAtUnchecked", [value; index]),
+                Call (resolve "Darklang.Stdlib.String.__byteAtUnchecked", [value; index]),
                 payloadBody
             )
         Some (
             Let (
                 tid,
-                Call (AST.functionIdForName "Darklang.Stdlib.String.__byteLength", [value]),
+                Call (resolve "Darklang.Stdlib.String.__byteLength", [value]),
                 Let (
                     tagTid,
                     Prim (Gte, index, IntLiteral (Int64 0L)),
@@ -619,7 +633,8 @@ and private optimizeAExprWithoutBranchHoisting
 
     | Let (tid, cexpr, body) ->
         // Optimize the CExpr
-        let (cexpr', cexprChanged) = optimizeCExpr options env typeEnv tupleEnv cexpr
+        let (cexpr', cexprChanged) =
+            optimizeCExpr context options env typeEnv tupleEnv cexpr
         let (cexpr'', cseChanged, cseEnv') =
             if options.EnableCSE then
                 match tryCSEKey cexpr' with
@@ -672,7 +687,7 @@ and private optimizeAExprWithoutBranchHoisting
 
         let adjacentSimplification =
             if options.EnableConstFolding then
-                trySimplifyAdjacentLet typeEnv tid cexpr'' bodyResult.Expr
+                trySimplifyAdjacentLet context typeEnv tid cexpr'' bodyResult.Expr
                 |> Option.orElseWith (fun () -> trySimplifyBoolComplement tid cexpr'' bodyResult.Expr)
                 |> Option.orElseWith (fun () ->
                     trySimplifyInt64BitwiseComplement typeEnv tid cexpr'' bodyResult.Expr)

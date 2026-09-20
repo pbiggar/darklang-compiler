@@ -146,7 +146,7 @@ let parseMIRWithEntryLabel (entryLabelName: string) (text: string) : Result<MIR.
                     Blocks = Map.ofList [(entryLabel, block)]
                 }
                 let func = {
-                    Id = AST.functionIdForName "_start"
+                    Id = TestIds.functionIdForName "_start"
                     Name = "_start"
                     TypedParams = []
                     ReturnType = AST.TInt64

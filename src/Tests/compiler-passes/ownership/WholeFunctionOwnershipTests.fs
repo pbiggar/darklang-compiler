@@ -36,7 +36,7 @@ let private block parameters operations result =
     TestBlock { Parameters = parameters; Operations = operations; Result = result }
 
 let private definition name parameters operations result : HIR.Function<TestBlock> = {
-    Id = AST.functionIdForName name
+    Id = TestIds.functionIdForName name
     Name = name
     Body = block parameters operations result
 }
@@ -54,7 +54,7 @@ let private leaf inputs outputs = HIR.Leaf { Inputs = inputs; Outputs = outputs 
 
 let private call target arguments result =
     HIR.Call {
-        Target = AST.functionIdForName target
+        Target = TestIds.functionIdForName target
         Arguments = arguments
         Result = result
     }
@@ -338,13 +338,13 @@ let private testRejectsMissingCallOwnership () =
             result
     match ElaborateFunctionOwnership.elaborateFunctions dialect [source] with
     | Error (ElaborateFunctionOwnership.UnknownCallOwnership target)
-        when target = AST.functionIdForName "missing" -> Ok ()
+        when target = TestIds.functionIdForName "missing" -> Ok ()
     | actual -> Error $"Expected explicit rejection of missing call ownership, got {actual}"
 
 let private testRejectsMismatchedCallOwnership () =
     let input = managed 0
     let result = unitValue 1
-    let target = AST.functionIdForName "external"
+    let target = TestIds.functionIdForName "external"
     let source =
         definition
             "caller"

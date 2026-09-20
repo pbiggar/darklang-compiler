@@ -7,7 +7,7 @@ open RcTypeFacts
 open RcCleanup
 open MemoryShapeTests
 
-let private fid = AST.functionIdForName
+let private fid = TestIds.functionIdForName
 
 let testInferCallReturnsFunctionReturnType () : TestResult =
     let ctx : TypeContext = {

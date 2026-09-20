@@ -17,7 +17,7 @@ open MIR_Optimize
 open MIRPrinter
 type TestResult = Result<unit, string>
 
-let private fid = AST.functionIdForName
+let private fid = TestIds.functionIdForName
 
 let private singleOptimizedFunction (testName: string) (functions: Function list) : Result<Function, string> =
     match functions with
@@ -1251,7 +1251,7 @@ let testSccpPropagatesPhiConstantAndRemovesUnreachableEdge () : TestResult =
             formatMIR (
                 Program (
                     [{
-                        Id = AST.functionIdForName "sccp_phi_constant"
+                        Id = TestIds.functionIdForName "sccp_phi_constant"
                         Name = "sccp_phi_constant"
                         TypedParams = [{ Reg = condition; Type = AST.TBool }]
                         ReturnType = AST.TInt64

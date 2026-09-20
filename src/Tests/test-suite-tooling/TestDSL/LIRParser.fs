@@ -436,7 +436,7 @@ let parseLIR (text: string) : Result<LIR.Program, string> =
                 Blocks = Map.ofList [(entryLabel, block)]
             }
             let func = {
-                Id = AST.functionIdForName "_start"
+                Id = TestIds.functionIdForName "_start"
                 Name = "_start"
                 TypedParams = []
                 CFG = cfg

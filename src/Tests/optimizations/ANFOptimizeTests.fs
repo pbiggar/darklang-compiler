@@ -28,11 +28,24 @@ let private optimizeMain (context: ANFConstants.OptimizeContext) (expr: AExpr) :
 let private emptyContext : ANFConstants.OptimizeContext =
     { TypeReg = Map.empty
       RecordTypeParams = Map.empty
-      SumShapeReg = Map.empty }
+      SumShapeReg = Map.empty
+      FunctionNames = Map.empty }
+
+let private optimizationFunctionNames =
+    [ "Int.fromInt64"
+      "String.getByteAt"
+      "String.__getByteAtInt64"
+      "String.__byteLength"
+      "String.__byteAtUnchecked" ]
+    |> List.map (fun name ->
+        let fullName = $"Darklang.Stdlib.{name}"
+        TestIds.functionIdForName fullName, fullName)
+    |> Map.ofList
 
 let private markerContext : ANFConstants.OptimizeContext =
     { TypeReg = Map.empty
       RecordTypeParams = Map.empty
+      FunctionNames = optimizationFunctionNames
       SumShapeReg =
         Map.ofList [
             ("Marker",
@@ -65,7 +78,7 @@ let rec private expressionCalls (expr: AExpr) : Set<AST.FunctionId> =
     | Join (_, thenBranch, elseBranch) ->
         Set.union (expressionCalls thenBranch) (expressionCalls elseBranch)
 
-let private stdlibFunction name = AST.functionIdForName $"Darklang.Stdlib.{name}"
+let private stdlibFunction name = TestIds.functionIdForName $"Darklang.Stdlib.{name}"
 
 let testStringByteIndexConversionFusesWithLookup () : TestResult =
     let fromInt64 = stdlibFunction "Int.fromInt64"
@@ -202,7 +215,7 @@ let testDcePreservesUnusedHeapGenericSumTypedAtom () : TestResult =
 let testCseReusesFloatAbsoluteValue () : TestResult =
     let parameter = { Id = TempId 0; Type = AST.TFloat64 }
     let func =
-        { Id = AST.functionIdForName "floatAbsCse"
+        { Id = TestIds.functionIdForName "floatAbsCse"
           Name = "floatAbsCse"
           TypedParams = [parameter]
           ReturnType = AST.TTuple [AST.TFloat64; AST.TFloat64]
@@ -232,7 +245,7 @@ let testCanonicalBufferSelfEqualityFoldsForBothRepresentations () : TestResult =
             | GraphemeCluster -> AST.TChar
         let parameter = { Id = TempId 0; Type = parameterType }
         let func =
-            { Id = AST.functionIdForName "bufferEquality"
+            { Id = TestIds.functionIdForName "bufferEquality"
               Name = "bufferEquality"
               TypedParams = [parameter]
               ReturnType = AST.TBool

@@ -7,7 +7,7 @@ open OwnedIR
 type private Leaf = Fresh of HIR.Value
 type private External = HIR.FunctionSignature * CallSignature
 
-let private fid = AST.functionIdForName
+let private fid = TestIds.functionIdForName
 let private managed id : HIR.Value = { Id = HIR.ValueId id; Type = AST.TList AST.TInt64 }
 let private scalar id : HIR.Value = { Id = HIR.ValueId id; Type = AST.TUnit }
 let private unitValue = scalar 99

@@ -31,13 +31,13 @@ let private block parameters operations result : Block<TestLeaf, string> = {
 }
 
 let private definition name ownership body : Function<TestLeaf, string> = {
-    Definition = { Id = AST.functionIdForName name; Name = name; Body = body }
+    Definition = { Id = TestIds.functionIdForName name; Name = name; Body = body }
     Ownership = ownership
 }
 
 let private call target arguments result =
     Evaluate (HIR.Call {
-        Target = AST.functionIdForName target
+        Target = TestIds.functionIdForName target
         Arguments = arguments
         Result = result
     })

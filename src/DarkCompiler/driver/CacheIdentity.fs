@@ -403,6 +403,34 @@ type internal Arm64MetadataGroupKeyComparer() =
                 17
 
 [<NoComparison>]
+type internal Arm64FunctionGroupKey = {
+    Functions: LIR.Function list
+    Target: ARM64.TargetConfig
+    Options: ARM64CodeGenTypes.CodeGenOptions
+}
+
+type internal Arm64FunctionGroupKeyComparer() =
+    interface IEqualityComparer<Arm64FunctionGroupKey> with
+        member _.Equals(left, right) =
+            left.Target = right.Target
+            && left.Options = right.Options
+            && List.length left.Functions = List.length right.Functions
+            && List.forall2
+                (fun leftFunction rightFunction ->
+                    Object.ReferenceEquals(leftFunction, rightFunction))
+                left.Functions
+                right.Functions
+        member _.GetHashCode(key) =
+            let functionHash =
+                key.Functions
+                |> List.fold
+                    (fun hash func ->
+                        (hash * 397)
+                        ^^^ System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(func))
+                    17
+            System.HashCode.Combine(functionHash, key.Target, key.Options)
+
+[<NoComparison>]
 type internal Arm64HelperCacheKey = {
     Target: ARM64.TargetConfig
     Options: ARM64CodeGenTypes.CodeGenOptions

@@ -62,7 +62,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
         Dictionary<
             obj,
             Dictionary<
-                ARM64.TargetConfig * ARM64CodeGenTypes.CodeGenOptions,
+                Arm64FunctionGroupKey,
                 Result<CodeGen.GeneratedChunk list, string>>>(ObjectReferenceComparer())
     let arm64FunctionsByContext =
         Dictionary<
@@ -87,10 +87,10 @@ type CompilationSession(collectCodegenMetrics: bool) =
                     ARM64.TargetConfig * ARM64CodeGenTypes.CodeGenOptions,
                     Result<ARM64Symbolic.Instr list, string>>>>(ObjectReferenceComparer())
     let arm64StartContextIdentity = System.Object()
+    let arm64RegistryIndependentFunctionContextIdentity = System.Object()
     // Finalized functions carry every input needed by ARM64 conversion except
     // RawSlotInit's nominal-type lookup. Share all other functions across
     // executable registry contexts while retaining target/options segregation.
-    let arm64RegistryIndependentFunctionContextIdentity = System.Object()
     let arm64GenericReleaseHelperContextIdentity = System.Object()
     let arm64RegistryIndependentHelperContextIdentity = System.Object()
     let arm64EmissionChunks =
@@ -428,7 +428,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
         (contextIdentity: obj)
         (target: ARM64.TargetConfig)
         (options: ARM64CodeGenTypes.CodeGenOptions)
-        (_functions: LIR.Function list)
+        (functions: LIR.Function list)
         (generate: unit -> Result<CodeGen.GeneratedChunk list, string>)
         : Result<CodeGen.GeneratedChunk list, string> =
         if disposed || options.EnableCoverage then
@@ -440,11 +440,17 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 | false, _ ->
                     let entries =
                         Dictionary<
-                            ARM64.TargetConfig * ARM64CodeGenTypes.CodeGenOptions,
-                            Result<CodeGen.GeneratedChunk list, string>>()
+                            Arm64FunctionGroupKey,
+                            Result<CodeGen.GeneratedChunk list, string>>(
+                                Arm64FunctionGroupKeyComparer()
+                            )
                     arm64FunctionGroupsByContext.[contextIdentity] <- entries
                     entries
-            let key = (target, options)
+            let key = {
+                Functions = functions
+                Target = target
+                Options = options
+            }
             match contextEntries.TryGetValue key with
             | true, result ->
                 arm64FunctionGroupHitCount <- arm64FunctionGroupHitCount + 1
@@ -500,6 +506,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
         else
             let contextIdentity =
                 if func.Name = "_start" then arm64StartContextIdentity
+                elif func.Name = "__dark_compiler_program_entry" then contextIdentity
                 elif
                     func.CodegenFacts
                     |> Option.exists (fun facts ->

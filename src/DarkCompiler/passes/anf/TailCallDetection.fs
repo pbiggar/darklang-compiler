@@ -386,7 +386,7 @@ let rec detectTailCalls
 
 /// Detect tail calls in a function
 let private detectTailCallsInFunctionWithRegistry
-    (recursiveMembers: Map<string, AST.LoweredRecursiveMember>)
+    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
     (func: Function)
     : Function =
     // The process entrypoint has no caller return address. A sibling tail branch
@@ -415,13 +415,8 @@ let private detectTailCallsInFunctionWithRegistry
         // Function body is always in tail position
         let paramIds = func.TypedParams |> List.map (fun param -> param.Id) |> Set.ofList
         let ownedParams = leadingRetainedParams paramIds func.Body
-        let recursiveMembersById =
-            recursiveMembers
-            |> Map.toList
-            |> List.map (fun (name, memberInfo) -> AST.functionIdForName name, memberInfo)
-            |> Map.ofList
         let isCurrentMember targetName =
-            match Map.tryFind func.Id recursiveMembersById, Map.tryFind targetName recursiveMembersById with
+            match Map.tryFind func.Id recursiveMembers, Map.tryFind targetName recursiveMembers with
             | Some currentMember, Some targetMember ->
                 currentMember.Typed.Resolved.Parsed.Binding = targetMember.Typed.Resolved.Parsed.Binding
             | None, None -> targetName = func.Id
@@ -442,7 +437,7 @@ let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =
     ANF.Program (functions |> List.map detectTailCallsInFunction, main)
 
 let detectTailCallsInProgramWithRecursion
-    (recursiveMembers: Map<string, AST.LoweredRecursiveMember>)
+    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
     (program: ANF.Program)
     : ANF.Program =
     let (ANF.Program (functions, main)) = program

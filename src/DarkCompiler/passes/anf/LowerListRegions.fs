@@ -38,14 +38,14 @@ let private write pointer offset value vg = emit (ANF.RawWriteWord (pointer, wor
 
 type private Buffer = { Pointer: ANF.Atom; Length: ANF.Atom; Layout: ArrayLayout }
 
-let private allocate layout length vg =
+let private allocate resolveFunction layout length vg =
     let allocateConstant count primitive =
         let pointer, allocation, next = emit (primitive (word (allocationSize count))) vg
         let header = [0, count; 8, count; 16, 0; payloadSize count, 1]
         let writes, final = header |> List.mapFold (fun state (offset, value) -> let _, bindings, next = write pointer offset (word value) state in bindings, next) next
         pointer, allocation @ List.concat writes, final
     match layout with
-    | RuntimeArray _ -> emit (ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__arrayAllocate", [length])) vg
+    | RuntimeArray _ -> emit (ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayAllocate", [length])) vg
     | RecycledArray count -> allocateConstant count ANF.RawAlloc
     | MappedArray count -> allocateConstant count ANF.MappedAlloc
 
@@ -53,7 +53,7 @@ let private wrap bindings body = List.foldBack (fun (id, value) tail -> ANF.Let 
 
 /// Lower verified storage operations to existing raw memory and RC primitives.
 /// The raw pointer is never tagged as a source List or assigned a fake Blob type.
-let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as region) =
+let lower resolveFunction (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as region) =
     let rec duplicated block =
         block.Body.Operations
         |> List.fold (fun ids step ->
@@ -62,7 +62,6 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
             | Evaluate (Branch (_, _, yes, no)) -> Set.union ids (Set.union (duplicated yes) (duplicated no))
             | Drop _ | Evaluate _ -> ids) Set.empty
     let sharedValues = duplicated block
-
     let lowerValue values vg (value: Scalar) =
         let sourceEnv =
             value.Inputs
@@ -78,12 +77,12 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
             let buffer = lookup "release buffer" value buffers
             let operation =
                 if Set.contains value sharedValues then
-                    ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__arrayRelease", [buffer.Pointer])
+                    ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayRelease", [buffer.Pointer])
                 else
                     match buffer.Layout with
                     | RecycledArray length -> ANF.RefCountDec (buffer.Pointer, payloadSize length, MemoryModel.GenericHeap, metadata length)
                     | MappedArray _ -> ANF.MappedFree buffer.Pointer
-                    | RuntimeArray _ -> ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__arrayRelease", [buffer.Pointer])
+                    | RuntimeArray _ -> ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayRelease", [buffer.Pointer])
             let _, bindings, next = emit operation state
             bindings, next) vg
         |> fun (bindings, next) -> List.concat bindings, next
@@ -95,16 +94,16 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
             let prepared, bindings, next =
                 emit
                     (ANF.Call (
-                        AST.functionIdForName "Darklang.Stdlib.List.__arrayPrepareMutation",
+                        resolveFunction "Darklang.Stdlib.List.__arrayPrepareMutation",
                         [buffer.Pointer]))
                     vg
             wrap bindings (ANF.Return prepared), next
         | BorrowAndCopy ->
-            let copy, allocations, afterAllocation = allocate buffer.Layout buffer.Length vg
+            let copy, allocations, afterAllocation = allocate resolveFunction buffer.Layout buffer.Length vg
             let copied, afterCopy =
                 match buffer.Layout with
                 | MappedArray _ | RuntimeArray _ ->
-                    let _, bindings, next = emit (ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__arrayCopy", [buffer.Pointer; copy; word 0; buffer.Length])) afterAllocation
+                    let _, bindings, next = emit (ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayCopy", [buffer.Pointer; copy; word 0; buffer.Length])) afterAllocation
                     [bindings], next
                 | RecycledArray length ->
                     [0 .. length - 1] |> List.mapFold (fun state index ->
@@ -130,7 +129,7 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
             let _, bindings, next =
                 emit
                     (ANF.Call (
-                        AST.functionIdForName "Darklang.Stdlib.List.__arrayRetain",
+                        resolveFunction "Darklang.Stdlib.List.__arrayRetain",
                         [buffer.Pointer]))
                     vg
             loop finalValue values buffers next rest
@@ -161,7 +160,7 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
             | Leaf (Construct (output, Repeat (count, value))) ->
                 lowerValue values vg count |> Result.bind (fun (countExpr, countAtom, afterCount) ->
                     lowerValue values afterCount value |> Result.bind (fun (valueExpr, valueAtom, afterValue) ->
-                        let pointer, allocation, afterAllocation = emit (ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__arrayRepeat", [countAtom; valueAtom])) afterValue
+                        let pointer, allocation, afterAllocation = emit (ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayRepeat", [countAtom; valueAtom])) afterValue
                         let length, load, afterLoad = emit (ANF.RawGet (pointer, word 0, Some AST.TInt64)) afterAllocation
                         let buffer = { Pointer = pointer; Length = length; Layout = lookup "construction layout" output.Id layouts }
                         lowerRest values (Map.add output.Id buffer buffers) afterLoad
@@ -178,7 +177,7 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
                 evaluate vg elements [] |> Result.bind (fun (evaluation, atoms, next) ->
                     let layout = lookup "construction layout" output.Id layouts
                     let length = word (List.length elements)
-                    let pointer, allocation, afterAllocation = allocate layout length next
+                    let pointer, allocation, afterAllocation = allocate resolveFunction layout length next
                     let writes, afterWrites = atoms |> List.mapi (fun index atom -> index, atom) |> List.mapFold (fun state (index, atom) -> let _, bindings, next = write pointer (elementOffset index) atom state in bindings, next) afterAllocation
                     let _, initialized, afterInit = write pointer 16 length afterWrites
                     let buffer = { Pointer = pointer; Length = length; Layout = layout }
@@ -197,11 +196,11 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
                     let mutations, afterMutation =
                         match operation, buffer.Layout with
                         | Map _, (MappedArray _ | RuntimeArray _) ->
-                            let _, bindings, next = emit (ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__arrayMap", [target; word 0; buffer.Length; fn])) afterDestination
+                            let _, bindings, next = emit (ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayMap", [target; word 0; buffer.Length; fn])) afterDestination
                             [bindings], next
                         | Reverse, (MappedArray _ | RuntimeArray _) ->
                             let last, subtraction, afterLast = emit (ANF.Prim (ANF.Sub, buffer.Length, word 1)) afterDestination
-                            let _, bindings, next = emit (ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__arrayReverse", [target; word 0; last])) afterLast
+                            let _, bindings, next = emit (ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayReverse", [target; word 0; last])) afterLast
                             [subtraction @ bindings], next
                         | Map _, RecycledArray length ->
                             [0 .. length - 1] |> List.mapFold (fun state index ->
@@ -229,7 +228,7 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
                         let bindings, (value, afterFold) =
                             match buffer.Layout with
                             | MappedArray _ | RuntimeArray _ ->
-                                let result, calls, next = emit (ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__arrayFold", [buffer.Pointer; word 0; buffer.Length; accumulator; callback])) afterCallback
+                                let result, calls, next = emit (ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayFold", [buffer.Pointer; word 0; buffer.Length; accumulator; callback])) afterCallback
                                 [calls], (result, next)
                             | RecycledArray length ->
                                 [0 .. length - 1] |> List.mapFold (fun (acc, state) index ->

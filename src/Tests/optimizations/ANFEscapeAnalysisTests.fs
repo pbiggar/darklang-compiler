@@ -9,7 +9,7 @@ open ANF
 
 type TestResult = Result<unit, string>
 
-let private fid = AST.functionIdForName
+let private fid = TestIds.functionIdForName
 
 let private pointDescriptor fieldType =
     { SourceTypeName = "Point"

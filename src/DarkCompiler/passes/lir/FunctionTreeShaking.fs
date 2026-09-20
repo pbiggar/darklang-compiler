@@ -9,10 +9,11 @@ module FunctionTreeShaking
 let private buildUserRoots (entryName: string option) (functions: LIR.Function list) : Set<AST.FunctionId> =
     match entryName with
     | Some name ->
-        if functions |> List.exists (fun f -> f.Name = name) then
-            Set.ofList [AST.functionIdForName name]
-        else
-            Crash.crash $"FunctionTreeShaking: entry '{name}' not found in user functions"
+        functions
+        |> List.tryFind (fun f -> f.Name = name)
+        |> Option.map (fun functionDef -> Set.singleton functionDef.Id)
+        |> Option.defaultWith (fun () ->
+            Crash.crash $"FunctionTreeShaking: entry '{name}' not found in user functions")
     | None ->
         functions |> List.map (fun f -> f.Id) |> Set.ofList
 
@@ -59,7 +60,7 @@ let getReachableStdlibNames
     : Set<AST.FunctionId> =
     let (ANF.Program (userFuncs, userMainExpr)) = userProgram
     let startFunc : ANF.Function =
-        { Id = AST.functionIdForName "_start"
+        { Id = AST.functionId System.Int32.MaxValue
           Name = "_start"
           TypedParams = []
           ReturnType = AST.TUnit

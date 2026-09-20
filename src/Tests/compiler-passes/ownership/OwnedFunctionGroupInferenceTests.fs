@@ -36,13 +36,13 @@ let private block parameters operations result : Block<TestLeaf, string> = {
 }
 
 let private definition name ownership body : Function<TestLeaf, string> = {
-    Definition = { Id = AST.functionIdForName name; Name = name; Body = body }
+    Definition = { Id = TestIds.functionIdForName name; Name = name; Body = body }
     Ownership = ownership
 }
 
 let private call target arguments result =
     Evaluate (HIR.Call {
-        Target = AST.functionIdForName target
+        Target = TestIds.functionIdForName target
         Arguments = arguments
         Result = result
     })
@@ -121,8 +121,8 @@ let private testInfersAcyclicGroupsCalleeFirst () =
                     entryResult, "entryResult"
                 ]
                 (Map.ofList [
-                    AST.functionIdForName "leaf", transferredCall
-                    AST.functionIdForName "external", transferredCall
+                    TestIds.functionIdForName "leaf", transferredCall
+                    TestIds.functionIdForName "external", transferredCall
                 ]))
             [entry; leaf]
         |> Result.map (List.map groupSummary)
@@ -137,8 +137,8 @@ let private testInfersAcyclicGroupsCalleeFirst () =
             ])
         (
             false,
-            Set.singleton (AST.functionIdForName "leaf"),
-            Set.singleton (AST.functionIdForName "external"),
+            Set.singleton (TestIds.functionIdForName "leaf"),
+            Set.singleton (TestIds.functionIdForName "external"),
             [["entry", entryBoundary]])
     ]
     if actual = expected then Ok ()
@@ -218,7 +218,7 @@ let private testReportsGroupingFailures () =
     | Error (
         InferOwnedFunctionGroups.FunctionGroupingFailed (
             OwnedFunctionGroups.DuplicateFunctionName id))
-        when id = AST.functionIdForName "duplicate" -> Ok ()
+        when id = TestIds.functionIdForName "duplicate" -> Ok ()
     | actual -> Error $"Expected duplicate definitions to retain their grouping error, got {actual}"
 
 let tests = [

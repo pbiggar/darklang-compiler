@@ -241,7 +241,7 @@ let internal lowerToAllocatedLir
     (typeMap: ANF.TypeMap)
     (registries: AST_to_ANF.Registries)
     (projectedMirRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
-    (externalReturnTypes: Map<string, AST.Type>)
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.Type>)
     : Result<LIR.Function list, string> =
 
     let suffix = if stageSuffix = "" then "" else $" ({stageSuffix})"
@@ -252,7 +252,7 @@ let internal lowerToAllocatedLir
     let allReturnTypes =
         functions
         |> List.fold
-            (fun returnTypes func -> Map.add func.Name func.ReturnType returnTypes)
+            (fun returnTypes func -> Map.add func.Id (func.Name, func.ReturnType) returnTypes)
             externalReturnTypes
     let compileFunctions (functionsToCompile: ANF.Function list) : Result<LIR.Function list, string> =
         if List.isEmpty functionsToCompile then
@@ -279,6 +279,7 @@ let internal lowerToAllocatedLir
                     registries.VariantLookup
                     registries.RecordFieldsReg
                     options.EnableCoverage
+                    registries.FunctionNames
                     allReturnTypes
             match mirResult with
             | Error err -> Error $"MIR conversion error: {err}"
@@ -315,6 +316,7 @@ let internal lowerToAllocatedLir
                                          }))
                                 registries.RecordFieldsReg
                                 registries.RcSumShapeReg
+                                registries.FunctionNames
                                 lirFuncs
                         | Platform.X86_64 ->
                             lirFuncs

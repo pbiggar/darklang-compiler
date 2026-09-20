@@ -83,11 +83,30 @@ type FunctionRegistry = Map<AST.FunctionId, string * AST.Type>
 /// Display metadata for every resolved function identity, including compiler
 /// intrinsics that do not have ordinary checked definitions.
 type FunctionNameRegistry = Map<AST.FunctionId, string>
+type TypeNameRegistry = CheckedAST.SemanticMetadata
+
+let emptyTypeNames : TypeNameRegistry = {
+    TypeNames = Map.empty
+    ConstructorTags = Map.empty
+    FieldIndices = Map.empty
+}
+
+let typeNamesFromSymbols (symbols: CheckedAST.Symbols) : TypeNameRegistry =
+    CheckedAST.semanticMetadata symbols
+
+let tryFindConstructorTag id (registry: TypeNameRegistry) = Map.tryFind id registry.ConstructorTags
+let tryFindFieldIndex id (registry: TypeNameRegistry) = Map.tryFind id registry.FieldIndices
 
 let private listHeadUnsafeFunction
     (funcReg: FunctionRegistry)
     (elementType: AST.Type)
-    : AST.FunctionId =
+    : AST.FunctionId * bool =
+    let idsByName =
+        funcReg |> Map.toSeq |> Seq.map (fun (id, (name, _)) -> name, id) |> Map.ofSeq
+    let resolve name =
+        Map.tryFind name idsByName
+        |> Option.defaultWith (fun () ->
+            Crash.crash $"List pattern helper '{name}' is absent from the function registry")
     let valueViewType = AST.TString
     let jsonAccessor =
         match elementType with
@@ -96,9 +115,9 @@ let private listHeadUnsafeFunction
             Some "Darklang.Stdlib.Json.__viewFieldListHead"
         | _ -> None
     match jsonAccessor with
-    | Some name when Map.containsKey (AST.functionIdForName name) funcReg -> AST.functionIdForName name
-    | _ when elementType = AST.TFloat64 -> AST.functionIdForName "Darklang.Stdlib.List.__headUnsafeFloat"
-    | _ -> AST.functionIdForName "Darklang.Stdlib.List.__headUnsafe_i64"
+    | Some name when Map.containsKey name idsByName -> (resolve name, false)
+    | _ when elementType = AST.TFloat64 -> (resolve "Darklang.Stdlib.List.__headUnsafeFloat", false)
+    | _ -> (resolve "Darklang.Stdlib.List.__headUnsafe_i64", true)
 
 /// Pattern matching reads list payloads without taking an ownership edge.
 /// Typed accessors materialize owned return values in their callee; the erased
@@ -109,11 +128,11 @@ let internal listHeadUnsafeExpr
     (elementType: AST.Type)
     (listAtom: ANF.Atom)
     : ANF.CExpr =
-    let functionName = listHeadUnsafeFunction funcReg elementType
-    if functionName = AST.functionIdForName "Darklang.Stdlib.List.__headUnsafe_i64" then
-        ANF.BorrowedCall (functionName, [listAtom])
+    let functionId, borrowed = listHeadUnsafeFunction funcReg elementType
+    if borrowed then
+        ANF.BorrowedCall (functionId, [listAtom])
     else
-        ANF.Call (functionName, [listAtom])
+        ANF.Call (functionId, [listAtom])
 
 /// Alias registry - maps type alias names to their type params and target types
 /// For simple record aliases: "Vec" -> ([], TRecord "Point")

@@ -201,6 +201,15 @@ let private collectProgramCalls (program: CheckedAST.Program) : Set<AST.Function
         | CheckedAST.TypeDef _ -> Set.empty)
     |> List.fold Set.union Set.empty
 
+let private calledFunctionNames
+    (symbols: CheckedAST.Symbols)
+    (calls: Set<AST.FunctionId>)
+    : Set<string> =
+    calls
+    |> Set.toList
+    |> List.choose (fun id -> CheckedAST.functionName id symbols)
+    |> Set.ofList
+
 let private validateDistinctCatalogHashes
     (entries: PackageValueCatalogEntry list)
     : Result<unit, string> =
@@ -241,14 +250,20 @@ let private materializeReachablePackageValueCatalog
                 | "Builtin.pmEvaluateValue", [resultType] -> Some resultType
                 | _ -> None)
             |> Set.ofList
-        let specializedCalls =
+        let specializedCallNames =
             specialization.SpecializedFuncs
             |> List.map (fun artifact ->
-                Monomorphization.collectCalledFunctions artifact.Function.Body)
+                Monomorphization.collectCalledFunctions artifact.Function.Body
+                |> calledFunctionNames artifact.Symbols)
             |> List.fold Set.union Set.empty
-        let reachableCalls = Set.union (collectProgramCalls typedProgram) specializedCalls
-        let needsFind = Set.contains (AST.functionIdForName "Builtin.pmFindValuesByValueType") reachableCalls
-        let needsLocations = Set.contains (AST.functionIdForName "Builtin.pmGetLocationsByValue") reachableCalls
+        let symbols = CheckedAST.programSymbols typedProgram
+        let reachableCallNames =
+            Set.union
+                (collectProgramCalls typedProgram |> calledFunctionNames symbols)
+                specializedCallNames
+        let isReachable name = Set.contains name reachableCallNames
+        let needsFind = isReachable "Builtin.pmFindValuesByValueType"
+        let needsLocations = isReachable "Builtin.pmGetLocationsByValue"
         let needsEvaluators = not (Set.isEmpty requestedEvaluatorTypes)
 
         if not needsFind && not needsLocations && not needsEvaluators then
@@ -385,8 +400,10 @@ let internal materializePackageValueCatalog
     (typedProgram: CheckedAST.Program)
     : Result<CheckedAST.Program, string> =
     let programCalls = collectProgramCalls typedProgram
+    let symbols = CheckedAST.programSymbols typedProgram
+    let programCallNames = calledFunctionNames symbols programCalls
     let mightReachCatalog =
-        programCalls
+        programCallNames
         |> Set.exists (fun called ->
             Set.contains called packageCatalogFunctionNames
             || Set.contains called baseContext.PackageCatalogGenericCallers)

@@ -151,7 +151,7 @@ let testBranchFalseEdgeFallsThrough () : Result<unit, string> =
     let falseBlock = LIR.Label "x64_layout_false"
     let block label terminator : LIR.BasicBlock = { Label = label; Instrs = []; Terminator = terminator }
     let func : LIR.Function = {
-        Id = AST.functionIdForName "x64_layout"
+        Id = TestIds.functionIdForName "x64_layout"
         Name = "x64_layout"
         TypedParams = []
         CFG = {
@@ -352,7 +352,7 @@ let private makeSimpleProgramWithRecords (instrs: LIR.Instr list) (term: LIR.Ter
         Terminator = term
     }
     let func : LIR.Function = {
-        Id = AST.functionIdForName "_start"
+        Id = TestIds.functionIdForName "_start"
         Name = "_start"
         TypedParams = []
         CFG = {
@@ -684,11 +684,11 @@ let testNonCommutativeFloatAliasesPreserveScratch () : Result<unit, string> =
         else Error $"Expected aliased x64 float operations to print 857, got stdout '{output}' and stderr '{stderr}'"
 
 let private runInNamedFunction (name: string) (instrs: LIR.Instr list) (term: LIR.Terminator) : LIR.Program =
-    match makeSimpleProgram [LIR.Call (LIR.Physical LIR.X0, AST.functionIdForName name, [])] LIR.Ret with
+    match makeSimpleProgram [LIR.Call (LIR.Physical LIR.X0, TestIds.functionIdForName name, [])] LIR.Ret with
     | LIR.Program ([entryFunc], variants, records) ->
         let calleeLabel = LIR.Label $"{name}_entry"
         let callee : LIR.Function = {
-            Id = AST.functionIdForName name
+            Id = TestIds.functionIdForName name
             Name = name
             TypedParams = []
             CFG = {
@@ -709,7 +709,7 @@ let private runInNamedFunction (name: string) (instrs: LIR.Instr list) (term: LI
 let private makeEmptyFunction (name: string) (typedParams: LIR.TypedLIRParam list) : LIR.Function =
     let label = LIR.Label $"{name}_entry"
     {
-        Id = AST.functionIdForName name
+        Id = TestIds.functionIdForName name
         Name = name
         TypedParams = typedParams
         CFG = {
@@ -731,7 +731,7 @@ let testReportsMissingEntryBlock () : Result<unit, string> =
         Terminator = LIR.Ret
     }
     let func : LIR.Function = {
-        Id = AST.functionIdForName "_start"
+        Id = TestIds.functionIdForName "_start"
         Name = "_start"
         TypedParams = []
         CFG = {
@@ -818,7 +818,7 @@ let testBranch () : Result<unit, string> =
         Terminator = LIR.Ret
     }
     let func : LIR.Function = {
-        Id = AST.functionIdForName "_start"
+        Id = TestIds.functionIdForName "_start"
         Name = "_start"
         TypedParams = []
         CFG = {
@@ -1224,7 +1224,7 @@ let testClosureRefCountDecMixedSumCaptureUsesVariantDispatch () : Result<unit, s
                 [
                     LIR.ClosureAlloc (
                         LIR.Physical LIR.X4,
-                        AST.functionIdForName "x64_mixed_sum_capture_fn",
+                        TestIds.functionIdForName "x64_mixed_sum_capture_fn",
                         [LIR.Reg (LIR.Physical LIR.X3)])
                     LIR.RefCountDec (
                         LIR.Physical LIR.X4,
@@ -1263,7 +1263,7 @@ let testTaggedListRefCountDecClosurePayloadInStdlibFunction () : Result<unit, st
         runInNamedFunction
             "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64"
             [
-                LIR.ClosureAlloc (LIR.Physical LIR.X2, AST.functionIdForName "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64", [])
+                LIR.ClosureAlloc (LIR.Physical LIR.X2, TestIds.functionIdForName "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64", [])
                 LIR.HeapAlloc (LIR.Physical LIR.X3, 8)
                 LIR.HeapStore (LIR.Physical LIR.X3, 0, LIR.Reg (LIR.Physical LIR.X2), Some closureType)
                 LIR.Mov (LIR.Physical LIR.X4, LIR.Imm 2L)

@@ -24,7 +24,7 @@ let testRemoveSelfMovesFromAllocatedFunction () : TestResult =
         Terminator = Ret
     }
     let func : Function = {
-        Id = AST.functionIdForName "self_move_cleanup"
+        Id = TestIds.functionIdForName "self_move_cleanup"
         Name = "self_move_cleanup"
         TypedParams = []
         CFG = {
@@ -64,7 +64,7 @@ let testRemoveFloatingCopyBackMovesFromAllocatedFunction () : TestResult =
         Terminator = Ret
     }
     let func : Function = {
-        Id = AST.functionIdForName "floating_copy_back_cleanup"
+        Id = TestIds.functionIdForName "floating_copy_back_cleanup"
         Name = "floating_copy_back_cleanup"
         TypedParams = []
         CFG = {
@@ -104,7 +104,7 @@ let testFloatingCopyBackKeepsMoveAfterFPhiWritesSource () : TestResult =
         Terminator = Ret
     }
     let func : Function = {
-        Id = AST.functionIdForName "floating_copy_back_phi_write"
+        Id = TestIds.functionIdForName "floating_copy_back_phi_write"
         Name = "floating_copy_back_phi_write"
         TypedParams = []
         CFG = {
@@ -443,7 +443,7 @@ let testFloatMultiplyAddCombineAndTargetDecision () : TestResult =
         Terminator = Ret
     }
     let func : Function = {
-        Id = AST.functionIdForName "float_multiply_add"
+        Id = TestIds.functionIdForName "float_multiply_add"
         Name = "float_multiply_add"
         TypedParams = []
         CFG = { Entry = label; Blocks = Map.ofList [(label, block)] }
@@ -649,7 +649,7 @@ let private functionWithInstrs name instrs : Function =
         Terminator = Ret
     }
     {
-        Id = AST.functionIdForName name
+        Id = TestIds.functionIdForName name
         Name = name
         TypedParams = []
         CFG = {
@@ -673,7 +673,7 @@ let testConstantReturnCallsAreRewritten () : TestResult =
                 SaveRegs ([X1], [])
                 Call (
                     Virtual 1,
-                    AST.functionIdForName "Darklang.Stdlib.__FingerTree.__TAG_SINGLE",
+                    TestIds.functionIdForName "Darklang.Stdlib.__FingerTree.__TAG_SINGLE",
                     []
                 )
                 RestoreRegs ([X1], [])

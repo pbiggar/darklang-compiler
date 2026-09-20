@@ -90,6 +90,15 @@ let testExpensiveGenericReleaseIsPreparedAsCall () : TestResult =
             Map.empty
         |> ARM64PrepareFunctions.prepareARM64Program
     let (LIR.Program (functions, _, _)) = program
+    let helperIdsByName =
+        let helperNames =
+            functions
+            |> List.collect (fun func ->
+                func.CodegenFacts
+                |> Option.bind (fun facts -> facts.Arm64RcHelperRequirements)
+                |> Option.map (fun requirements -> requirements.PlannedGenericDecHelpers |> Map.keys |> Seq.toList)
+                |> Option.defaultValue [])
+        AST.allocateFunctionIds (functions |> List.map (fun func -> func.Id)) helperNames
     let instructions =
         functions
         |> List.collect (fun func ->
@@ -105,7 +114,7 @@ let testExpensiveGenericReleaseIsPreparedAsCall () : TestResult =
             |> Option.map (fun requirements ->
                 requirements.PlannedGenericDecHelpers
                 |> Map.keys
-                |> Seq.map AST.functionIdForName
+                |> Seq.choose (fun name -> Map.tryFind name helperIdsByName)
                 |> Seq.toList)
             |> Option.defaultValue [])
         |> Set.ofList
@@ -268,7 +277,7 @@ let testGenericReleaseHelpersPreserveOwnershipPolicy () : TestResult =
     let metadata = rcMetadataWithSumShapes sumShapes sumType
     let makeFunction (name: string) : LIR.Function =
         let entry = LIR.Label $"{name}_entry"
-        { Id = AST.functionIdForName name
+        { Id = TestIds.functionIdForName name
           Name = name
           TypedParams = []
           CFG = {
@@ -297,6 +306,15 @@ let testGenericReleaseHelpersPreserveOwnershipPolicy () : TestResult =
             Map.empty)
         |> ARM64PrepareFunctions.prepareARM64Program
     let (LIR.Program (functions, _, _)) = prepared
+    let helperIdsByName =
+        let helperNames =
+            functions
+            |> List.collect (fun func ->
+                func.CodegenFacts
+                |> Option.bind (fun facts -> facts.Arm64RcHelperRequirements)
+                |> Option.map (fun requirements -> requirements.PlannedGenericDecHelpers |> Map.keys |> Seq.toList)
+                |> Option.defaultValue [])
+        AST.allocateFunctionIds (functions |> List.map (fun func -> func.Id)) helperNames
     let helperInfo
         (func: LIR.Function)
         : string option * LIR.Arm64PlannedGenericDecHelper list =
@@ -307,7 +325,7 @@ let testGenericReleaseHelpersPreserveOwnershipPolicy () : TestResult =
                 |> Option.map (fun requirements ->
                     requirements.PlannedGenericDecHelpers
                     |> Map.keys
-                    |> Seq.map (fun name -> AST.functionIdForName name, name)
+                    |> Seq.choose (fun name -> Map.tryFind name helperIdsByName |> Option.map (fun id -> id, name))
                     |> Map.ofSeq)
                 |> Option.defaultValue Map.empty
             func.CFG.Blocks

@@ -35,10 +35,15 @@ let private constructorPattern typeName (variant: SumVariant) symbols fields =
 let private args (values: Expr list) : NonEmptyList<Expr> =
     NonEmptyList.fromList values
 
-let private call (name: string) (values: Expr list) : Expr =
-    Call (AST.functionIdForName name, args values)
+let private resolveFunction symbols name =
+    tryFindFunctionId name symbols
+    |> Option.defaultWith (fun () ->
+        Crash.crash $"Value renderer function was not interned: {name}")
 
-let private concat (parts: Expr list) : Expr =
+let private call symbols (name: string) (values: Expr list) : Expr =
+    Call (resolveFunction symbols name, args values)
+
+let private concat symbols (parts: Expr list) : Expr =
     match parts with
     | [] -> StringLiteral ""
     | first :: rest ->
@@ -46,7 +51,7 @@ let private concat (parts: Expr list) : Expr =
         // punctuation, separators, or the edge of a canonical numeric value.
         // Those boundaries cannot compose under NFC, so retain the native raw
         // concat used before public StringConcat acquired normalization.
-        List.fold (fun acc part -> call "__string_concat_raw" [acc; part]) first rest
+        List.fold (fun acc part -> call symbols "__string_concat_raw" [acc; part]) first rest
 
 let private stableHash (value: string) : uint64 =
     value
@@ -65,6 +70,27 @@ let private listItemsRendererName (typ: Type) : string =
 let private dictItemsRendererName (typ: Type) : string =
     let text = CheckingDiagnostics.typeToString typ
     $"__dark_render_dict_items_{stableHash text:x16}"
+
+let private runtimeFunctionNames =
+    [ "__string_concat_raw"
+      "Darklang.Stdlib.DateTime.toString"
+      "Darklang.Stdlib.Dict.__renderKey"
+      "Darklang.Stdlib.Dict.toList"
+      "Darklang.Stdlib.Float.toString"
+      "Darklang.Stdlib.Int.toString"
+      "Darklang.Stdlib.Int128.toString"
+      "Darklang.Stdlib.Int16.toString"
+      "Darklang.Stdlib.Int32.toString"
+      "Darklang.Stdlib.Int64.toString"
+      "Darklang.Stdlib.Int8.toString"
+      "Darklang.Stdlib.String.length"
+      "Darklang.Stdlib.String.replaceAll"
+      "Darklang.Stdlib.UInt128.toString"
+      "Darklang.Stdlib.UInt16.toString"
+      "Darklang.Stdlib.UInt32.toString"
+      "Darklang.Stdlib.UInt64.toString"
+      "Darklang.Stdlib.UInt8.toString"
+      "Darklang.Stdlib.Uuid.toString" ]
 
 let private applySubstitution (subst: Map<string, Type>) (typ: Type) : Type =
     let rec apply typ =
@@ -90,9 +116,9 @@ let private typeSubstitution (typeParams: string list) (typeArgs: Type list) : M
         Crash.crash
             $"Value renderer type argument mismatch: params={List.length typeParams}, args={List.length typeArgs}"
 
-let private escapedString (quote: string) (value: Expr) : Expr =
+let private escapedString symbols (quote: string) (value: Expr) : Expr =
     let replace oldValue newValue input =
-        call "Darklang.Stdlib.String.replaceAll" [input; StringLiteral oldValue; StringLiteral newValue]
+        call symbols "Darklang.Stdlib.String.replaceAll" [input; StringLiteral oldValue; StringLiteral newValue]
 
     let escaped =
         value
@@ -102,7 +128,7 @@ let private escapedString (quote: string) (value: Expr) : Expr =
         |> replace "\t" "\\t"
         |> replace quote ($"\\{quote}")
 
-    concat [StringLiteral quote; escaped; StringLiteral quote]
+    concat symbols [StringLiteral quote; escaped; StringLiteral quote]
 
 let private makeCase (pattern: Pattern) (body: Expr) : MatchCase =
     { Patterns = NonEmptyList.singleton pattern; Guard = None; Body = body }
@@ -131,10 +157,12 @@ let rec private ensureRenderer
     match Map.tryFind name state.Functions with
     | Some _ -> (name, state)
     | None ->
+        let (functionId, symbols) = internFunction name state.Symbols
+        let state = { state with Symbols = symbols }
         let (valueId, state) = freshBinding "__value" state
         // Reserve the name before descending so recursive sum types terminate.
         let placeholder = {
-            Id = AST.functionIdForName name
+            Id = functionId
             Name = name
             TypeParams = []
             Params = NonEmptyList.singleton (valueId, typ)
@@ -154,7 +182,7 @@ and private renderCall
     (state: RenderState)
     : Expr * RenderState =
     let (name, nextState) = ensureRenderer env typ state
-    (call name [value], nextState)
+    (call nextState.Symbols name [value], nextState)
 
 and private renderDelimited
     (env: RenderEnv)
@@ -179,11 +207,13 @@ and private ensureListItemsRenderer
     match Map.tryFind name state.Functions with
     | Some _ -> (name, state)
     | None ->
+        let (functionId, symbols) = internFunction name state.Symbols
+        let state = { state with Symbols = symbols }
         let (itemsId, state) = freshBinding "__items" state
         let (headId, state) = freshBinding "__head" state
         let (tailId, state) = freshBinding "__tail" state
         let placeholder = {
-            Id = AST.functionIdForName name
+            Id = functionId
             Name = name
             TypeParams = []
             Params = NonEmptyList.singleton (itemsId, listType)
@@ -197,7 +227,7 @@ and private ensureListItemsRenderer
             Match (
                 Local tailId,
                 [ makeCase (PList []) (StringLiteral "")
-                  makeCase PWildcard (concat [StringLiteral ", "; call name [Local tailId]]) ]
+                  makeCase PWildcard (concat reserved.Symbols [StringLiteral ", "; call reserved.Symbols name [Local tailId]]) ]
             )
         let body =
             Match (
@@ -205,7 +235,7 @@ and private ensureListItemsRenderer
                 [ makeCase (PList []) (StringLiteral "")
                   makeCase
                       (PListCons ([PVariable headId], PVariable tailId))
-                      (concat [renderedHead; tailBody]) ]
+                      (concat withElemRenderer.Symbols [renderedHead; tailBody]) ]
             )
         let completed = { placeholder with Body = body }
         (name, { withElemRenderer with Functions = Map.add name completed withElemRenderer.Functions })
@@ -222,11 +252,13 @@ and private ensureDictItemsRenderer
     match Map.tryFind name state.Functions with
     | Some _ -> (name, state)
     | None ->
+        let (functionId, symbols) = internFunction name state.Symbols
+        let state = { state with Symbols = symbols }
         let (entriesId, state) = freshBinding "__entries" state
         let (entryId, state) = freshBinding "__entry" state
         let (tailId, state) = freshBinding "__tail" state
         let placeholder = {
-            Id = AST.functionIdForName name
+            Id = functionId
             Name = name
             TypeParams = []
             Params = NonEmptyList.singleton (entriesId, listType)
@@ -239,12 +271,12 @@ and private ensureDictItemsRenderer
         let entryValue = TupleAccess (Local entryId, 1)
         let (renderedKey, withKeyRenderer) =
             match keyType with
-            | TString -> (call "Darklang.Stdlib.Dict.__renderKey" [entryKey], reserved)
+            | TString -> (call reserved.Symbols "Darklang.Stdlib.Dict.__renderKey" [entryKey], reserved)
             | _ -> renderCall env keyType entryKey reserved
         let separator = if keyType = TString then " = " else ": "
         let (renderedValue, withValueRenderer) = renderCall env valueType entryValue withKeyRenderer
         let renderedEntry =
-            concat [
+            concat withValueRenderer.Symbols [
                 renderedKey
                 StringLiteral separator
                 renderedValue
@@ -253,7 +285,7 @@ and private ensureDictItemsRenderer
             Match (
                 Local tailId,
                 [ makeCase (PList []) (StringLiteral "")
-                  makeCase PWildcard (concat [StringLiteral "; "; call name [Local tailId]]) ]
+                  makeCase PWildcard (concat withValueRenderer.Symbols [StringLiteral "; "; call withValueRenderer.Symbols name [Local tailId]]) ]
             )
         let body =
             Match (
@@ -261,7 +293,7 @@ and private ensureDictItemsRenderer
                 [ makeCase (PList []) (StringLiteral "")
                   makeCase
                       (PListCons ([PVariable entryId], PVariable tailId))
-                      (concat [renderedEntry; tailBody]) ]
+                      (concat withValueRenderer.Symbols [renderedEntry; tailBody]) ]
             )
         let completed = { placeholder with Body = body }
         (name, { withValueRenderer with Functions = Map.add name completed withValueRenderer.Functions })
@@ -275,23 +307,23 @@ and private renderBody
     match typ with
     | TUnit -> (StringLiteral "()", state)
     | TBool -> (If (value, StringLiteral "true", StringLiteral "false"), state)
-    | TInt8 -> (call "Darklang.Stdlib.Int8.toString" [value], state)
-    | TInt16 -> (call "Darklang.Stdlib.Int16.toString" [value], state)
-    | TInt32 -> (call "Darklang.Stdlib.Int32.toString" [value], state)
-    | TInt64 -> (call "Darklang.Stdlib.Int64.toString" [value], state)
-    | TInt -> (call "Darklang.Stdlib.Int.toString" [value], state)
-    | TUInt8 -> (call "Darklang.Stdlib.UInt8.toString" [value], state)
-    | TUInt16 -> (call "Darklang.Stdlib.UInt16.toString" [value], state)
-    | TUInt32 -> (call "Darklang.Stdlib.UInt32.toString" [value], state)
-    | TUInt64 -> (call "Darklang.Stdlib.UInt64.toString" [value], state)
+    | TInt8 -> (call state.Symbols "Darklang.Stdlib.Int8.toString" [value], state)
+    | TInt16 -> (call state.Symbols "Darklang.Stdlib.Int16.toString" [value], state)
+    | TInt32 -> (call state.Symbols "Darklang.Stdlib.Int32.toString" [value], state)
+    | TInt64 -> (call state.Symbols "Darklang.Stdlib.Int64.toString" [value], state)
+    | TInt -> (call state.Symbols "Darklang.Stdlib.Int.toString" [value], state)
+    | TUInt8 -> (call state.Symbols "Darklang.Stdlib.UInt8.toString" [value], state)
+    | TUInt16 -> (call state.Symbols "Darklang.Stdlib.UInt16.toString" [value], state)
+    | TUInt32 -> (call state.Symbols "Darklang.Stdlib.UInt32.toString" [value], state)
+    | TUInt64 -> (call state.Symbols "Darklang.Stdlib.UInt64.toString" [value], state)
     // Fixed-block 128-bit values cross the textual boundary through their
     // limb-based decimal formatters.
-    | TInt128 -> (call "Darklang.Stdlib.Int128.toString" [value], state)
-    | TUInt128 -> (call "Darklang.Stdlib.UInt128.toString" [value], state)
-    | TFloat64 -> (call "Darklang.Stdlib.Float.toString" [value], state)
-    | TString -> (escapedString "\"" value, state)
-    | TChar -> (escapedString "'" value, state)
-    | TDateTime -> (call "Darklang.Stdlib.DateTime.toString" [value], state)
+    | TInt128 -> (call state.Symbols "Darklang.Stdlib.Int128.toString" [value], state)
+    | TUInt128 -> (call state.Symbols "Darklang.Stdlib.UInt128.toString" [value], state)
+    | TFloat64 -> (call state.Symbols "Darklang.Stdlib.Float.toString" [value], state)
+    | TString -> (escapedString state.Symbols "\"" value, state)
+    | TChar -> (escapedString state.Symbols "'" value, state)
+    | TDateTime -> (call state.Symbols "Darklang.Stdlib.DateTime.toString" [value], state)
     | TTuple elemTypes ->
         let items = elemTypes |> List.mapi (fun index elemType -> (elemType, TupleAccess (value, index)))
         let (rendered, nextState) = renderDelimited env items state
@@ -299,7 +331,7 @@ and private renderBody
             rendered
             |> List.mapi (fun index expr -> if index = 0 then [expr] else [StringLiteral ", "; expr])
             |> List.concat
-        (concat (StringLiteral "(" :: separated @ [StringLiteral ")"]), nextState)
+        (concat nextState.Symbols (StringLiteral "(" :: separated @ [StringLiteral ")"]), nextState)
     | TList elemType ->
         let (itemsName, nextState) = ensureListItemsRenderer env elemType state
         let typeName = CheckingDiagnostics.typeToString typ
@@ -307,7 +339,7 @@ and private renderBody
             Match (
                 value,
                 [ makeCase (PList []) (StringLiteral $"{typeName} []")
-                  makeCase PWildcard (concat [StringLiteral "["; call itemsName [value]; StringLiteral "]"]) ]
+                  makeCase PWildcard (concat nextState.Symbols [StringLiteral "["; call nextState.Symbols itemsName [value]; StringLiteral "]"]) ]
             )
         (body, nextState)
     | TStream _ ->
@@ -320,7 +352,7 @@ and private renderBody
         let (entriesId, nextState) = freshBinding "__dict_entries" nextState
         let entries =
             TypeApp (
-                AST.functionIdForName "Darklang.Stdlib.Dict.toList",
+                resolveFunction nextState.Symbols "Darklang.Stdlib.Dict.toList",
                 [keyType; valueType],
                 NonEmptyList.singleton value
             )
@@ -333,9 +365,9 @@ and private renderBody
                     [ makeCase (PList []) (StringLiteral "Dict { }")
                       makeCase
                           PWildcard
-                          (concat
+                          (concat nextState.Symbols
                               [ StringLiteral "Dict { "
-                                call itemsName [Local entriesId]
+                                call nextState.Symbols itemsName [Local entriesId]
                                 StringLiteral " }" ]) ]
                 )
             )
@@ -389,14 +421,14 @@ and private renderBody
                     [StringLiteral $"{prefix}{fieldName}: "; rendered])
                 |> List.concat
             let typeText = CheckingDiagnostics.typeToString typ
-            let short = concat (StringLiteral $"{typeText} {{ " :: shortParts @ [StringLiteral " }"])
+            let short = concat nextState.Symbols (StringLiteral $"{typeText} {{ " :: shortParts @ [StringLiteral " }"])
             let longParts =
                 renderedFields
                 |> List.mapi (fun index (fieldName, rendered) ->
                     let prefix = if index = 0 then "" else ",\n  "
                     [StringLiteral $"{prefix}{fieldName}: "; rendered])
                 |> List.concat
-            let long = concat (StringLiteral $"{typeText} {{\n  " :: longParts @ [StringLiteral "\n}"])
+            let long = concat nextState.Symbols (StringLiteral $"{typeText} {{\n  " :: longParts @ [StringLiteral "\n}"])
             let shortName = "__record_short"
             let (shortId, nextState) = freshBinding shortName nextState
             (Let (
@@ -405,14 +437,14 @@ and private renderBody
                 If (
                     BinOp (
                         Lte,
-                        call "Darklang.Stdlib.String.length" [Local shortId],
+                        call nextState.Symbols "Darklang.Stdlib.String.length" [Local shortId],
                         BigIntLiteral (System.Numerics.BigInteger 80)
                     ),
                     Local shortId,
                     long
                 )
              ), nextState)
-    | TSum ("Uuid", []) -> (call "Darklang.Stdlib.Uuid.toString" [value], state)
+    | TSum ("Uuid", []) -> (call state.Symbols "Darklang.Stdlib.Uuid.toString" [value], state)
     | TSum (typeName, typeArgs) ->
         match Map.tryFind typeName env.Sums.Value with
         | None -> Crash.crash $"Missing sum metadata for value renderer: {typeName}"
@@ -446,7 +478,7 @@ and private renderBody
                                 if index = 0 then [rendered] else [StringLiteral ", "; rendered])
                             |> List.concat
                         let body =
-                            concat (StringLiteral $"{typeText}.{variant.Name}(" :: separated @ [StringLiteral ")"])
+                            concat nextState.Symbols (StringLiteral $"{typeText}.{variant.Name}(" :: separated @ [StringLiteral ")"])
                         let case =
                             makeCase
                                 (constructorPattern typeName variant nextState.Symbols (List.map PVariable fieldIds))
@@ -460,7 +492,7 @@ and private renderBody
         // or process-local identities through value rendering.
         (StringLiteral "<Blob: ephemeral>", state)
     | TRawPtr ->
-        (call "Darklang.Stdlib.Int64.toString" [value], state)
+        (call state.Symbols "Darklang.Stdlib.Int64.toString" [value], state)
     | TRuntimeError -> (StringLiteral "()", state)
     | TVar name -> Crash.crash $"Unresolved type variable in value renderer: {name}"
 
@@ -471,7 +503,9 @@ let rewriteProgram
     (programType: Type)
     (Program (symbols, topLevels))
     : Program =
-    let (_, symbols) = CheckedAST.internFunction "Darklang.Stdlib.Dict.toList" symbols
+    let symbols =
+        runtimeFunctionNames
+        |> List.fold (fun current name -> internFunction name current |> snd) symbols
     // Type checking already built and overlaid these immutable indexes. Keep
     // them lazy so primitive renderers do not inspect declaration metadata.
     let records = lazy recordMetadata
@@ -528,15 +562,12 @@ let rewriteProgram
         let rendered =
             match programType, expr, tryNamedPartialName expr with
             | TDateTime, _, _ ->
-                (BoundaryRender (AST.functionIdForName "Darklang.Stdlib.DateTime.toString", expr), state)
+                (BoundaryRender (resolveFunction state.Symbols "Darklang.Stdlib.DateTime.toString", expr), state)
             | TFunction _, _, Some functionId ->
                 let (id, next) = freshBinding "__rendered_named_partial" state
                 let name =
                     functionName functionId state.Symbols
                     |> Option.defaultWith (fun () -> Crash.crash "Named partial function identity is absent from symbols")
-                (Let (LPVariable id, expr, StringLiteral name), next)
-            | TFunction _, NamedValue name, _ when Set.contains name namedFunctions.Value ->
-                let (id, next) = freshBinding "__rendered_named_function" state
                 (Let (LPVariable id, expr, StringLiteral name), next)
             | TFunction _, FuncRef functionId, _ ->
                 let (id, next) = freshBinding "__rendered_named_function" state
@@ -550,7 +581,7 @@ let rewriteProgram
             | _ ->
                 (BoundaryRender (
                     renderName
-                    |> Option.map AST.functionIdForName
+                    |> Option.map (resolveFunction state.Symbols)
                     |> Option.defaultWith (fun () -> Crash.crash "Missing boundary value renderer"),
                     expr
                  ), state)
@@ -564,4 +595,5 @@ let rewriteProgram
             | Expression expr -> rewriteExpression currentState expr
             | other -> (other, currentState)) state
     let generatedFunctions = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
-    Program (finalState.Symbols, generatedFunctions @ rewrittenTopLevels)
+    let generatedTopLevels = generatedFunctions @ rewrittenTopLevels
+    Program (finalState.Symbols, generatedTopLevels)

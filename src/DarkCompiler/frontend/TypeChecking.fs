@@ -152,7 +152,7 @@ let private checkProgramInternal
 let private constructCheckedProgram
     (typ, program, (env: TypeCheckEnv))
     : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
-    CheckedAST.ofTypedProgram env.VariantLookup program
+    CheckedAST.ofTypedProgram env.VariantLookup (env.Values |> Map.keys |> Set.ofSeq) program
     |> Result.map (fun checkedProgram -> (typ, checkedProgram, env))
     |> Result.mapError GenericError
 

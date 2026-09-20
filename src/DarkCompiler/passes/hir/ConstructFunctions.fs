@@ -107,6 +107,7 @@ let private signatureOfCheckedFunction (definition: CheckedAST.FunctionDef) : HI
 }
 
 let private constructWithSignatures
+    (functionHasName: AST.FunctionId -> string -> bool)
     (infer: Map<AST.BindingId, AST.Type> -> CheckedAST.Expr -> Result<AST.Type, string>)
     (dependencies: CheckedAST.Expr -> Set<AST.BindingId>)
     (calls: CallContracts)
@@ -217,8 +218,8 @@ let private constructWithSignatures
             Ok (result, { next with Operations = operation :: state.Operations })
         | CheckedAST.Call (target, arguments)
             when expected = AST.TList AST.TInt64
-                 && (target = AST.functionIdForName "Darklang.Stdlib.List.map_i64_i64"
-                     || target = AST.functionIdForName "Darklang.Stdlib.List.reverse_i64") ->
+                 && (functionHasName target "Darklang.Stdlib.List.map_i64_i64"
+                     || functionHasName target "Darklang.Stdlib.List.reverse_i64") ->
             match AST.NonEmptyList.toList arguments with
             | inputExpression :: _ ->
                 inferExpression state inputExpression
@@ -351,7 +352,7 @@ let constructFunction infer dependencies calls (definition: CheckedAST.FunctionD
     let internalSignature target =
         if target = definition.Id then Some (signatureOfCheckedFunction definition)
         else calls.ExternalSignature target
-    constructWithSignatures infer dependencies calls internalSignature definition
+    constructWithSignatures (fun _ _ -> false) infer dependencies calls internalSignature definition
 
 let constructFunctions infer dependencies calls (definitions: CheckedAST.FunctionDef list) =
     let internalSignatures =
@@ -366,7 +367,7 @@ let constructFunctions infer dependencies calls (definitions: CheckedAST.Functio
     |> List.fold (fun result definition ->
         result
         |> Result.bind (fun functions ->
-            constructWithSignatures infer dependencies calls callSignature definition
+            constructWithSignatures (fun _ _ -> false) infer dependencies calls callSignature definition
             |> Result.map (fun functionDefinition -> functionDefinition :: functions))) (Ok [])
     |> Result.map List.rev
 
@@ -374,7 +375,8 @@ let constructFunctions infer dependencies calls (definitions: CheckedAST.Functio
 /// internal expression types are unavailable to the lowering inference helper.
 /// The opaque operation preserves its typed boundary and all visible parameter
 /// dependencies without weakening the strict construction API above.
-let constructFunctionsWithOpaqueFallback infer dependencies calls (definitions: CheckedAST.FunctionDef list) =
+let constructFunctionsWithOpaqueFallback functionNames infer dependencies calls (definitions: CheckedAST.FunctionDef list) =
+    let functionHasName id name = Map.tryFind id functionNames = Some name
     let internalSignatures =
         definitions
         |> List.map (fun definition -> definition.Id, signatureOfCheckedFunction definition)
@@ -420,7 +422,7 @@ let constructFunctionsWithOpaqueFallback infer dependencies calls (definitions: 
     |> List.fold (fun result definition ->
         result
         |> Result.bind (fun functions ->
-            match constructWithSignatures infer dependencies calls callSignature definition with
+            match constructWithSignatures functionHasName infer dependencies calls callSignature definition with
             | Ok functionDefinition -> Ok (functionDefinition :: functions)
             | Error (CannotInferExpression _ | InconsistentCallSignature _) ->
                 Ok (opaque definition :: functions))) (Ok [])

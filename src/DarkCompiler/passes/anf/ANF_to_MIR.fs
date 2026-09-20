@@ -373,13 +373,11 @@ let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<AST.FunctionId,
 /// externalReturnTypes: return types for functions not in `functions` (e.g., specialized functions compiled elsewhere)
 let buildReturnTypeReg
     (functions: ANF.Function list)
-    (externalReturnTypes: Map<string, AST.Type>)
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.Type>)
     : Map<AST.FunctionId, AST.Type> =
     let externalById =
         externalReturnTypes
-        |> Map.toList
-        |> List.map (fun (name, typ) -> AST.functionIdForName name, typ)
-        |> Map.ofList
+        |> Map.map (fun _ (_, typ) -> typ)
     functions
     |> List.fold
         (fun returnTypes anfFunc -> Map.add anfFunc.Id anfFunc.ReturnType returnTypes)
@@ -387,7 +385,11 @@ let buildReturnTypeReg
 
 /// Return type for monomorphized intrinsics not tracked in the return type registry
 let tryGetIntrinsicReturnType (funcName: string) : AST.Type option =
-    if funcName.StartsWith("__raw_get_") then
+    if funcName = "Builtin.pmFindValuesByValueType" then
+        Some (AST.TList (AST.TSum ("Darklang.LanguageTools.ProgramTypes.Hash", [])))
+    elif funcName = "Builtin.pmGetLocationsByValue" then
+        Some (AST.TList (AST.TRecord ("Darklang.LanguageTools.ProgramTypes.PackageLocation", [])))
+    elif funcName.StartsWith("__raw_get_") then
         Crash.crash $"ANF_to_MIR: monomorphized raw_get return type missing from registry: {funcName}"
     elif funcName.StartsWith("__raw_take_") then
         Crash.crash $"ANF_to_MIR: monomorphized raw_take return type missing from registry: {funcName}"
@@ -524,7 +526,36 @@ let private directCallReturnType (builder: CFGBuilder) (funcName: AST.FunctionId
         match displayName |> Option.bind tryGetIntrinsicReturnType with
         | Some t -> t
         | None when displayName |> Option.exists (fun name -> name.StartsWith("__dark_eq_")) -> AST.TBool
-        | None -> Crash.crash $"ANF_to_MIR: Return type not found for function identity: {AST.functionIdValue funcName}"
+        | None when displayName |> Option.exists (fun name -> name.StartsWith("Builtin.pmEvaluateValue_")) ->
+            let name = displayName |> Option.defaultWith (fun () -> Crash.crash "Package evaluator identity lost its display name")
+            let suffix = name.Substring("Builtin.pmEvaluateValue_".Length)
+            let resultType =
+                match suffix with
+                | "i8" -> AST.TInt8
+                | "i16" -> AST.TInt16
+                | "i32" -> AST.TInt32
+                | "i64" -> AST.TInt64
+                | "i128" -> AST.TInt128
+                | "int" -> AST.TInt
+                | "u8" -> AST.TUInt8
+                | "u16" -> AST.TUInt16
+                | "u32" -> AST.TUInt32
+                | "u64" -> AST.TUInt64
+                | "u128" -> AST.TUInt128
+                | "bool" -> AST.TBool
+                | "f64" -> AST.TFloat64
+                | "str" -> AST.TString
+                | "blob" -> AST.TBlob
+                | "char" -> AST.TChar
+                | "datetime" -> AST.TDateTime
+                | "unit" -> AST.TUnit
+                | nominal when Map.containsKey nominal builder.TypeReg -> AST.TRecord (nominal, [])
+                | nominal -> AST.TSum (nominal, [])
+            AST.TSum ("Darklang.Stdlib.Option.Option", [resultType])
+        | None ->
+            let renderedName = displayName |> Option.defaultValue "<missing>"
+            Crash.crash
+                $"ANF_to_MIR: Return type not found for function identity {AST.functionIdValue funcName} ({renderedName})"
 
 let private tupleGetDestType
     (builder: CFGBuilder)
@@ -1742,7 +1773,7 @@ let toMIR
     (variantLookup: LoweringPrimitives.VariantLookup)
     (typeRegForRecords: Map<string, (string * AST.Type) list>)
     (enableCoverage: bool)
-    (externalReturnTypes: Map<string, AST.Type>)
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.Type>)
     : Result<MIR.Program, string> =
     let (ANF.Program (functions, mainExpr)) = program
     // TypeMap spans the whole program, so materialize its dense lookup once and
@@ -1753,9 +1784,14 @@ let toMIR
     let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
     let functionNames =
         (externalReturnTypes |> Map.toList)
-        @ (functions |> List.map (fun func -> func.Name, func.ReturnType))
-        |> List.map (fun (name, _) -> AST.functionIdForName name, name)
+        |> List.map (fun (id, (name, _)) -> id, name)
+        |> List.append (functions |> List.map (fun func -> func.Id, func.Name))
         |> Map.ofList
+    let startId =
+        functionNames
+        |> Map.toSeq
+        |> Seq.tryPick (fun (id, name) -> if name = "_start" then Some id else None)
+        |> Option.defaultValue (AST.functionId 0)
     // Phase 2: Convert all functions to MIR
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
     match
@@ -1782,7 +1818,7 @@ let toMIR
         TypeReg = typeReg
         ReturnTypeReg = returnTypeReg
         FunctionNames = functionNames
-        FuncId = AST.functionIdForName "_start"
+        FuncId = startId
         FuncName = "_start"
         ParamRegs = []  // _start has no params
         FloatRegs = Set.empty
@@ -1801,7 +1837,7 @@ let toMIR
     // Use the passed mainExprType for _start's return type
     // This is needed for proper float handling in the Ret terminator
     let startFunc = {
-        MIR.Id = AST.functionIdForName "_start"
+        MIR.Id = startId
         MIR.Name = "_start"
         MIR.TypedParams = []
         MIR.ReturnType = mainExprType
@@ -1828,7 +1864,8 @@ let private toMIRFunctionsOnlyInternal
     (variantLookup: LoweringPrimitives.VariantLookup)
     (typeRegForRecords: Map<string, (string * AST.Type) list>)
     (enableCoverage: bool)
-    (externalReturnTypes: Map<string, AST.Type>)
+    (knownFunctionNames: Map<AST.FunctionId, string>)
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.Type>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let startPhase () =
         phaseRecorder |> Option.map (fun _ -> System.Diagnostics.Stopwatch.StartNew())
@@ -1850,9 +1887,9 @@ let private toMIRFunctionsOnlyInternal
     let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
     let functionNames =
         (externalReturnTypes |> Map.toList)
-        @ (functions |> List.map (fun func -> func.Name, func.ReturnType))
-        |> List.map (fun (name, _) -> AST.functionIdForName name, name)
-        |> Map.ofList
+        |> List.map (fun (id, (name, _)) -> id, name)
+        |> List.append (functions |> List.map (fun func -> func.Id, func.Name))
+        |> List.fold (fun names (id, name) -> Map.add id name names) knownFunctionNames
     recordPhase "ANF -> MIR Return Type Preparation" returnTypeTimer
 
     // Phase 2: Convert all functions to MIR (skip main/_start)
@@ -1883,7 +1920,7 @@ let toMIRFunctionsOnly
     (variantLookup: LoweringPrimitives.VariantLookup)
     (typeRegForRecords: Map<string, (string * AST.Type) list>)
     (enableCoverage: bool)
-    (externalReturnTypes: Map<string, AST.Type>)
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.Type>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     toMIRFunctionsOnlyInternal
         None
@@ -1894,6 +1931,7 @@ let toMIRFunctionsOnly
         variantLookup
         typeRegForRecords
         enableCoverage
+        Map.empty
         externalReturnTypes
 
 let toMIRFunctionsOnlyWithTrace
@@ -1905,7 +1943,8 @@ let toMIRFunctionsOnlyWithTrace
     (variantLookup: LoweringPrimitives.VariantLookup)
     (typeRegForRecords: Map<string, (string * AST.Type) list>)
     (enableCoverage: bool)
-    (externalReturnTypes: Map<string, AST.Type>)
+    (functionNames: Map<AST.FunctionId, string>)
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.Type>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     toMIRFunctionsOnlyInternal
         phaseRecorder
@@ -1916,4 +1955,5 @@ let toMIRFunctionsOnlyWithTrace
         variantLookup
         typeRegForRecords
         enableCoverage
+        functionNames
         externalReturnTypes

@@ -23,7 +23,7 @@ let rec private containsCall (target: string) (expr: AExpr) : bool =
     match expr with
     | Jump _ | Return _ -> false
     | Let (_, Call (name, _), body) ->
-        name = AST.functionIdForName target || containsCall target body
+        name = TestIds.functionIdForName target || containsCall target body
     | Let (_, _, body) ->
         containsCall target body
     | Join (_, thenBranch, elseBranch)
@@ -34,7 +34,7 @@ let rec private countCalls (target: string) (expr: AExpr) : int =
     match expr with
     | Jump _ | Return _ -> 0
     | Let (_, Call (name, _), body) ->
-        (if name = AST.functionIdForName target then 1 else 0) + countCalls target body
+        (if name = TestIds.functionIdForName target then 1 else 0) + countCalls target body
     | Let (_, _, body) ->
         countCalls target body
     | Join (_, thenBranch, elseBranch)
@@ -79,7 +79,7 @@ let testInliningWithLiteralArgumentsRemovesCall () : TestResult =
             Return (Var (TempId 1))
         )
     let addOne =
-        { Id = AST.functionIdForName "addOne"
+        { Id = TestIds.functionIdForName "addOne"
           Name = "addOne"
           TypedParams = [param]
           ReturnType = AST.TInt64
@@ -88,7 +88,7 @@ let testInliningWithLiteralArgumentsRemovesCall () : TestResult =
     let main =
         Let (
             TempId 2,
-            Call (AST.functionIdForName "addOne", [intAtom 41L]),
+            Call (TestIds.functionIdForName "addOne", [intAtom 41L]),
             Return (Var (TempId 2))
         )
     let (Program (_, inlinedMain)) =
@@ -101,7 +101,7 @@ let testInliningWithLiteralArgumentsRemovesCall () : TestResult =
 let testInliningWithLiteralArgumentsBindsTemp () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let identity =
-        { Id = AST.functionIdForName "id"
+        { Id = TestIds.functionIdForName "id"
           Name = "id"
           TypedParams = [param]
           ReturnType = AST.TInt64
@@ -110,7 +110,7 @@ let testInliningWithLiteralArgumentsBindsTemp () : TestResult =
     let main =
         Let (
             TempId 1,
-            Call (AST.functionIdForName "id", [intAtom 7L]),
+            Call (TestIds.functionIdForName "id", [intAtom 7L]),
             Return (Var (TempId 1))
         )
     let (Program (_, inlinedMain)) =
@@ -129,7 +129,7 @@ let testInliningUnderscoreFunctionName () : TestResult =
             Return (Var (TempId 1))
         )
     let addOne =
-        { Id = AST.functionIdForName "_addOne"
+        { Id = TestIds.functionIdForName "_addOne"
           Name = "_addOne"
           TypedParams = [param]
           ReturnType = AST.TInt64
@@ -141,7 +141,7 @@ let testInliningUnderscoreFunctionName () : TestResult =
             Atom (intAtom 41L),
             Let (
                 TempId 3,
-                Call (AST.functionIdForName "_addOne", [Var (TempId 2)]),
+                Call (TestIds.functionIdForName "_addOne", [Var (TempId 2)]),
                 Return (Var (TempId 3))
             )
         )
@@ -155,7 +155,7 @@ let testInliningUnderscoreFunctionName () : TestResult =
 let testExternalInlineCandidateRemovesShiftCall () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let stdlibShiftLeft =
-        { Id = AST.functionIdForName "Darklang.Stdlib.Int64.shiftLeft"
+        { Id = TestIds.functionIdForName "Darklang.Stdlib.Int64.shiftLeft"
           Name = "Darklang.Stdlib.Int64.shiftLeft"
           TypedParams = [param]
           ReturnType = AST.TInt64
@@ -169,7 +169,7 @@ let testExternalInlineCandidateRemovesShiftCall () : TestResult =
     let main =
         Let (
             TempId 2,
-            Call (AST.functionIdForName "Darklang.Stdlib.Int64.shiftLeft", [intAtom 41L]),
+            Call (TestIds.functionIdForName "Darklang.Stdlib.Int64.shiftLeft", [intAtom 41L]),
             Return (Var (TempId 2))
         )
     let (Program (_, inlinedMain)) =
@@ -185,7 +185,7 @@ let testExternalInlineCandidateRemovesShiftCall () : TestResult =
 let testExcludedLocalFunctionRemainsCall () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let lateExternalSpecialization =
-        { Id = AST.functionIdForName "Darklang.Stdlib.List.pushBack__String"
+        { Id = TestIds.functionIdForName "Darklang.Stdlib.List.pushBack__String"
           Name = "Darklang.Stdlib.List.pushBack__String"
           TypedParams = [param]
           ReturnType = AST.TInt64
@@ -216,7 +216,7 @@ let testExcludedLocalFunctionRemainsCall () : TestResult =
 let testExternalInlineCandidateRemovesFloatConversionCall () : TestResult =
     let param = { Id = TempId 0; Type = AST.TFloat64 }
     let stdlibFloatConversion =
-        { Id = AST.functionIdForName "Darklang.Stdlib.Float.__toInt64ForInliningTest"
+        { Id = TestIds.functionIdForName "Darklang.Stdlib.Float.__toInt64ForInliningTest"
           Name = "Darklang.Stdlib.Float.__toInt64ForInliningTest"
           TypedParams = [param]
           ReturnType = AST.TInt64
@@ -246,7 +246,7 @@ let testExternalInlineCandidateRemovesFloatConversionCall () : TestResult =
 let testExternalInlineCandidateRejectsRawAllocBody () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let stdlibAllocate =
-        { Id = AST.functionIdForName "Darklang.Stdlib.Test.allocate"
+        { Id = TestIds.functionIdForName "Darklang.Stdlib.Test.allocate"
           Name = "Darklang.Stdlib.Test.allocate"
           TypedParams = [param]
           ReturnType = AST.TRawPtr
@@ -260,7 +260,7 @@ let testExternalInlineCandidateRejectsRawAllocBody () : TestResult =
     let main =
         Let (
             TempId 2,
-            Call (AST.functionIdForName "Darklang.Stdlib.Test.allocate", [intAtom 41L]),
+            Call (TestIds.functionIdForName "Darklang.Stdlib.Test.allocate", [intAtom 41L]),
             Return (Var (TempId 2))
         )
     let (Program (_, inlinedMain)) =
@@ -276,7 +276,7 @@ let testExternalInlineCandidateRejectsRawAllocBody () : TestResult =
 let testExternalInlineCandidateRejectsControlFlowBody () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let stdlibAbs =
-        { Id = AST.functionIdForName "Darklang.Stdlib.Int64.abs"
+        { Id = TestIds.functionIdForName "Darklang.Stdlib.Int64.abs"
           Name = "Darklang.Stdlib.Int64.abs"
           TypedParams = [param]
           ReturnType = AST.TInt64
@@ -294,7 +294,7 @@ let testExternalInlineCandidateRejectsControlFlowBody () : TestResult =
     let main =
         Let (
             TempId 2,
-            Call (AST.functionIdForName "Darklang.Stdlib.Int64.abs", [intAtom 41L]),
+            Call (TestIds.functionIdForName "Darklang.Stdlib.Int64.abs", [intAtom 41L]),
             Return (Var (TempId 2))
         )
     let (Program (_, inlinedMain)) =
@@ -310,7 +310,7 @@ let testExternalInlineCandidateRejectsControlFlowBody () : TestResult =
 let testExternalInliningHonorsCallerBudget () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let stdlibShiftLeft =
-        { Id = AST.functionIdForName "Darklang.Stdlib.Int64.shiftLeft"
+        { Id = TestIds.functionIdForName "Darklang.Stdlib.Int64.shiftLeft"
           Name = "Darklang.Stdlib.Int64.shiftLeft"
           TypedParams = [param]
           ReturnType = AST.TInt64
@@ -328,7 +328,7 @@ let testExternalInliningHonorsCallerBudget () : TestResult =
             calls
                 (remaining - 1)
                 (nextTid + 1)
-                (Let (TempId nextTid, Call (AST.functionIdForName "Darklang.Stdlib.Int64.shiftLeft", [intAtom 1L]), body))
+                (Let (TempId nextTid, Call (TestIds.functionIdForName "Darklang.Stdlib.Int64.shiftLeft", [intAtom 1L]), body))
     let main = calls 9 2 (Return (Var (TempId 10)))
     let (Program (_, inlinedMain)) =
         ANF_Inlining.inlineProgramWithExternalCandidates
@@ -343,7 +343,7 @@ let testExternalInliningHonorsCallerBudget () : TestResult =
 
 let testExternalConstantCandidateBypassesCallerBudget () : TestResult =
     let tagFunction =
-        { Id = AST.functionIdForName "Darklang.Stdlib.__FingerTree.__TAG_SINGLE"
+        { Id = TestIds.functionIdForName "Darklang.Stdlib.__FingerTree.__TAG_SINGLE"
           Name = "Darklang.Stdlib.__FingerTree.__TAG_SINGLE"
           TypedParams = []
           ReturnType = AST.TInt64
@@ -356,7 +356,7 @@ let testExternalConstantCandidateBypassesCallerBudget () : TestResult =
             calls
                 (remaining - 1)
                 (nextTid + 1)
-                (Let (TempId nextTid, Call (AST.functionIdForName "Darklang.Stdlib.__FingerTree.__TAG_SINGLE", []), body))
+                (Let (TempId nextTid, Call (TestIds.functionIdForName "Darklang.Stdlib.__FingerTree.__TAG_SINGLE", []), body))
     let main = calls 9 2 (Return (Var (TempId 10)))
     let (Program (_, inlinedMain)) =
         ANF_Inlining.inlineProgramWithExternalCandidates
@@ -371,7 +371,7 @@ let testExternalConstantCandidateBypassesCallerBudget () : TestResult =
 let testBorrowedSelfCallBlocksInlining () : TestResult =
     let param = { Id = TempId 0; Type = AST.TString }
     let borrowedSelf =
-        { Id = AST.functionIdForName "borrowSelf"
+        { Id = TestIds.functionIdForName "borrowSelf"
           Name = "borrowSelf"
           TypedParams = [param]
           ReturnType = AST.TString
@@ -379,13 +379,13 @@ let testBorrowedSelfCallBlocksInlining () : TestResult =
           Body =
             Let (
                 TempId 1,
-                BorrowedCall (AST.functionIdForName "borrowSelf", [Var param.Id]),
+                BorrowedCall (TestIds.functionIdForName "borrowSelf", [Var param.Id]),
                 Return (Var (TempId 1))
             ) }
     let main =
         Let (
             TempId 2,
-            Call (AST.functionIdForName "borrowSelf", [StringLiteral "x"]),
+            Call (TestIds.functionIdForName "borrowSelf", [StringLiteral "x"]),
             Return (Var (TempId 2))
         )
     let (Program (_, inlinedMain)) =
@@ -399,7 +399,7 @@ let private boundedHashLoop (bound: int64) : Function =
     let hashParam = { Id = TempId 0; Type = AST.TInt64 }
     let dataParam = { Id = TempId 1; Type = AST.TInt64 }
     let indexParam = { Id = TempId 2; Type = AST.TInt64 }
-    { Id = AST.functionIdForName "hashLoop"
+    { Id = TestIds.functionIdForName "hashLoop"
       Name = "hashLoop"
       TypedParams = [hashParam; dataParam; indexParam]
       ReturnType = AST.TInt64
@@ -426,7 +426,7 @@ let private boundedHashLoop (bound: int64) : Function =
                                 Let (
                                     TempId 8,
                                     Call (
-                                        AST.functionIdForName "hashLoop",
+                                        TestIds.functionIdForName "hashLoop",
                                         [Var (TempId 6); Var dataParam.Id; Var (TempId 7)]
                                     ),
                                     Return (Var (TempId 8))
@@ -442,7 +442,7 @@ let private boundedHashCall () : AExpr =
     Let (
         TempId 9,
         Call (
-            AST.functionIdForName "hashLoop",
+            TestIds.functionIdForName "hashLoop",
             [intAtom -3750763034362895579L; intAtom 42L; intAtom 0L]
         ),
         Return (Var (TempId 9))
@@ -482,7 +482,7 @@ let testBoundedRecursiveLoopHonorsExpansionLimit () : TestResult =
 let testSequentialCallsDoNotConsumeInlineDepth () : TestResult =
     let param = { Id = TempId 0; Type = AST.TInt64 }
     let addOne =
-        { Id = AST.functionIdForName "addOne"
+        { Id = TestIds.functionIdForName "addOne"
           Name = "addOne"
           TypedParams = [param]
           ReturnType = AST.TInt64
@@ -499,7 +499,7 @@ let testSequentialCallsDoNotConsumeInlineDepth () : TestResult =
         else
             Let (
                 TempId resultTid,
-                Call (AST.functionIdForName "addOne", [Var argumentTid]),
+                Call (TestIds.functionIdForName "addOne", [Var argumentTid]),
                 calls (remaining - 1) (TempId resultTid) (resultTid + 1)
             )
     let main =
@@ -529,7 +529,7 @@ let testImmediateTupleProjectionsInlineLargeProducer () : TestResult =
             let nextId = TempId (10 + remaining)
             Let (nextId, Prim (Add, Var previousId, intAtom 1L), bindings (remaining - 1) nextId)
     let producer =
-        { Id = AST.functionIdForName "largePair"
+        { Id = TestIds.functionIdForName "largePair"
           Name = "largePair"
           TypedParams = [param]
           ReturnType = AST.TTuple [AST.TInt64; AST.TInt64]
@@ -538,7 +538,7 @@ let testImmediateTupleProjectionsInlineLargeProducer () : TestResult =
     let main =
         Let (
             TempId 40,
-            Call (AST.functionIdForName "largePair", [intAtom 1L]),
+            Call (TestIds.functionIdForName "largePair", [intAtom 1L]),
             Let (
                 TempId 41,
                 TupleGet (Var (TempId 40), 0),

@@ -26,7 +26,7 @@ let rec private mapExpr rewrite state expr =
         | CheckedAST.Int32Literal _ | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _
         | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
         | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _
-        | CheckedAST.FloatLiteral _ | CheckedAST.Local _ | CheckedAST.NamedValue _
+        | CheckedAST.FloatLiteral _ | CheckedAST.BlobLiteral _ | CheckedAST.Local _
         | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> expr, state
         | CheckedAST.InterpolatedString parts ->
             let parts, next =
@@ -170,11 +170,13 @@ let private isSafeArgument = function
     | CheckedAST.FuncRef _ -> true
     | _ -> false
 
-let private isSupportedTransformTarget target =
-    target = AST.functionIdForName "Darklang.Stdlib.List.map_i64_i64"
-    || target = AST.functionIdForName "Darklang.Stdlib.List.reverse_i64"
+let private isSupportedTransformTarget functionNames target =
+    match Map.tryFind target functionNames with
+    | Some "Darklang.Stdlib.List.map_i64_i64"
+    | Some "Darklang.Stdlib.List.reverse_i64" -> true
+    | _ -> false
 
-let private isTransformBody body =
+let private isTransformBody functionNames body =
     let _, targets =
         mapExpr
             (fun targets expression ->
@@ -183,9 +185,11 @@ let private isTransformBody body =
                 | _ -> expression, targets)
             Set.empty
             body
-    not (Set.isEmpty targets) && Set.forall isSupportedTransformTarget targets
+    not (Set.isEmpty targets)
+    && Set.forall (isSupportedTransformTarget functionNames) targets
 
 let private eligible
+    functionNames
     (callee: CheckedAST.FunctionDef)
     (ownership: CallSignature) =
     let rec hasConsumedListParameter parameters modes =
@@ -194,24 +198,24 @@ let private eligible
         | _ :: parameters, _ :: modes -> hasConsumedListParameter parameters modes
         | _, _ -> false
     callee.ReturnType = AST.TList AST.TInt64
-    && isTransformBody callee.Body
+    && isTransformBody functionNames callee.Body
     && ownership.Result = UniqueProducedCallResult
     && hasConsumedListParameter
         (callee.Params |> AST.NonEmptyList.toList)
         ownership.Parameters
 
-let private ownershipBoundary argument =
+let private ownershipBoundary boundaryId argument =
     CheckedAST.Call (
-        AST.functionIdForName "Darklang.Stdlib.List.__arrayOwnershipBoundary_i64",
+        boundaryId,
         AST.NonEmptyList.fromList [argument])
 
-let private substitutions parameters modes arguments =
+let private substitutions boundaryId parameters modes arguments =
     let rec build result parameters modes arguments =
         match parameters, modes, arguments with
         | (binding, typ) :: parameters, mode :: modes, argument :: arguments ->
             let replacement =
                 if typ = AST.TList AST.TInt64 && mode = ConsumedCallParameter then
-                    ownershipBoundary argument
+                    ownershipBoundary boundaryId argument
                 else argument
             build (Map.add binding replacement result) parameters modes arguments
         | [], [], [] -> Some result
@@ -222,9 +226,18 @@ let private substitutions parameters modes arguments =
 /// cannot duplicate evaluation. Unsupported calls keep their scheduled ANF
 /// specialization and the ordinary persistent-list representation.
 let fuse
+    functionNames
     (plan: MaterializeOwnershipVariants.Plan<'leaf, 'id>)
     (functions: CheckedAST.FunctionDef list)
     : Result =
+    let boundaryId =
+        functionNames
+        |> Map.toSeq
+        |> Seq.tryPick (fun (id, name) ->
+            if name = "Darklang.Stdlib.List.__arrayOwnershipBoundary_i64" then Some id
+            else None)
+        |> Option.defaultWith (fun () ->
+            Crash.crash "Ownership boundary function is absent from semantic function metadata")
     let checkedById = functions |> List.map (fun definition -> definition.Id, definition) |> Map.ofList
     let rewrites =
         MaterializeOwnershipVariants.rewrites plan
@@ -263,10 +276,11 @@ let fuse
                     let next = { state with Selected = selected }
                     match Map.tryFind site rewrites, Map.tryFind target checkedById with
                     | Some ownership, Some callee
-                        when eligible callee ownership
+                        when eligible functionNames callee ownership
                              && (AST.NonEmptyList.toList arguments |> List.forall isSafeArgument) ->
                         match
                             substitutions
+                                boundaryId
                                 (callee.Params |> AST.NonEmptyList.toList)
                                 ownership.Parameters
                                 (AST.NonEmptyList.toList arguments)

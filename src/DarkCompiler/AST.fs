@@ -256,21 +256,16 @@ type BindingId = private BindingId of int
 
 [<Struct; StructuralEquality; StructuralComparison>]
 type FunctionId =
-    private
-    | FunctionOrdinal of ordinal:int
-    | FunctionName of name:string
+    private FunctionId of int
 
 [<Struct; StructuralEquality; StructuralComparison>]
-type TypeId =
-    private
-    | TypeOrdinal of ordinal:int
-    | TypeName of name:string
+type TypeId = private TypeId of int
 
 [<Struct; StructuralEquality; StructuralComparison>]
-type ConstructorId = private ConstructorId of identity:int * tag:int
+type ConstructorId = private ConstructorId of int
 
 [<Struct; StructuralEquality; StructuralComparison>]
-type FieldId = private FieldId of identity:int * index:int
+type FieldId = private FieldId of int
 
 [<Struct; StructuralEquality; StructuralComparison>]
 type ScopeBoundaryId = private ScopeBoundaryId of int
@@ -282,17 +277,24 @@ type RecursiveGroupId = private RecursiveGroupId of int
 type RecursiveMemberId = private RecursiveMemberId of int
 
 let bindingId ordinal = BindingId ordinal
-let functionId ordinal = FunctionOrdinal ordinal
-let typeId ordinal = TypeOrdinal ordinal
-let functionIdForName name = FunctionName name
-let functionIdValue = function
-    | FunctionOrdinal ordinal -> $"ordinal:{ordinal}"
-    | FunctionName name -> name
-let typeIdForName name = TypeName name
-let constructorId identity tag = ConstructorId (identity, tag)
-let constructorTag (ConstructorId (_, tag)) = tag
-let fieldId identity index = FieldId (identity, index)
-let fieldIndex (FieldId (_, index)) = index
+let functionId ordinal = FunctionId ordinal
+let functionIdOrdinal (FunctionId ordinal) = ordinal
+let allocateFunctionIds (existing: seq<FunctionId>) (names: seq<string>) : Map<string, FunctionId> =
+    let nextOrdinal =
+        existing
+        |> Seq.map functionIdOrdinal
+        |> Seq.fold (fun highest ordinal -> max highest ordinal) -1
+        |> fun highest -> highest + 1
+    names
+    |> Seq.distinct
+    |> Seq.sort
+    |> Seq.mapFold (fun ordinal name -> ((name, functionId ordinal), ordinal + 1)) nextOrdinal
+    |> fst
+    |> Map.ofSeq
+let typeId ordinal = TypeId ordinal
+let functionIdValue (FunctionId ordinal) = string ordinal
+let constructorId ordinal = ConstructorId ordinal
+let fieldId ordinal = FieldId ordinal
 let scopeBoundaryId ordinal = ScopeBoundaryId ordinal
 // Group IDs share one compact namespace: declaration groups are even and
 // singleton local-recursion groups are odd.

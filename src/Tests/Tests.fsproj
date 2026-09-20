@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="TestIds.fs" />
     <!-- Test suite tooling -->
     <Compile Include="test-suite-tooling/TestDSL/Common.fs" />
     <Compile Include="test-suite-tooling/TestDSL/ANFParser.fs" />

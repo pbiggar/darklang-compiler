@@ -25,6 +25,10 @@ let rec insertRCWithAnalysis
     (paramIncs: (TempId * AST.Type * RcShape) list)
     (types: Map<TempId, AST.Type>)
     : AExpr * VarGen * Map<TempId, AST.Type> =
+    let functionHasName id expected =
+        Map.tryFind id ctx.FuncReg
+        |> Option.map (fun (name, _) -> name = expected)
+        |> Option.defaultValue false
     let pendingIds = returnDecs |> List.map (fun (id, _, _, _, _) -> id) |> Set.ofList
     let branchDecs =
         inheritedBranchDecs
@@ -276,8 +280,8 @@ let rec insertRCWithAnalysis
             let bodyReturned = returnedSet bodyInfo
             let consumedByImmediateI64Push =
                 let isI64Push (funcName: AST.FunctionId) : bool =
-                    funcName = AST.functionIdForName "Darklang.Stdlib.List.__push_i64"
-                    || funcName = AST.functionIdForName "Darklang.Stdlib.List.__pushBack_i64"
+                    functionHasName funcName "Darklang.Stdlib.List.__push_i64"
+                    || functionHasName funcName "Darklang.Stdlib.List.__pushBack_i64"
                 let consumesSecondArg (args: Atom list) : bool =
                     match args with
                     | _listAtom :: Var valueTemp :: _ -> valueTemp = tempId
@@ -422,8 +426,8 @@ let rec insertRCWithAnalysis
                     match cexpr with
                     | Call (funcName, [_; Var valueTemp])
                     | TailCall (funcName, [_; Var valueTemp]) when
-                        funcName = AST.functionIdForName "Darklang.Stdlib.List.__push_i64"
-                        || funcName = AST.functionIdForName "Darklang.Stdlib.List.__pushBack_i64" ->
+                        functionHasName funcName "Darklang.Stdlib.List.__push_i64"
+                        || functionHasName funcName "Darklang.Stdlib.List.__pushBack_i64" ->
                         let transfersImmediateOwnedValue =
                             match frames with
                             | previous :: _ when previous.TempId = valueTemp ->

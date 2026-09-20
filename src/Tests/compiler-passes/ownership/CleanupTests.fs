@@ -11,7 +11,7 @@ open MemoryShapeTests
 
 let private functionRegistry entries : TypeRegistries.FunctionRegistry =
     entries
-    |> List.map (fun (name, typ) -> AST.functionIdForName name, (name, typ))
+    |> List.map (fun (name, typ) -> TestIds.functionIdForName name, (name, typ))
     |> Map.ofList
 
 let rec private hasDecAfterNonSelfTailCall
@@ -163,7 +163,7 @@ let private rawSlotTransferTestFunction
             ("observeValue", AST.TFunction ([valueType], AST.TUnit))
             ("makeList", AST.TFunction ([], listType))
         ]
-        |> List.map (fun (name, typ) -> AST.functionIdForName name, (name, typ))
+        |> List.map (fun (name, typ) -> TestIds.functionIdForName name, (name, typ))
         |> Map.ofList
     let ctx : TypeContext = {
         TypeReg = Map.empty
@@ -202,11 +202,11 @@ let private rawSlotTransferTestFunction
             )
     let afterSlot =
         if usesValueAfterSlot then
-            Let (observedTemp, Call (AST.functionIdForName "observeValue", [Var valueTemp]), tail)
+            Let (observedTemp, Call (TestIds.functionIdForName "observeValue", [Var valueTemp]), tail)
         else
             tail
     let func : Function = {
-        Id = AST.functionIdForName "makeList"
+        Id = TestIds.functionIdForName "makeList"
         Name = "makeList"
         TypedParams = []
         ReturnType = listType
@@ -214,7 +214,7 @@ let private rawSlotTransferTestFunction
         Body =
             Let (
                 valueTemp,
-                Call (AST.functionIdForName "makeValue", []),
+                Call (TestIds.functionIdForName "makeValue", []),
                 Let (
                     ptrTemp,
                     RawAlloc (IntLiteral (Int64 16L)),
@@ -310,7 +310,7 @@ let testBranchLocalTempReuseUsesCurrentTypeContext () : TestResult =
         TypePlanning = createRcTypePlanningContext ()
     }
     let func : Function = {
-        Id = AST.functionIdForName "branchLocalTypeContext"
+        Id = TestIds.functionIdForName "branchLocalTypeContext"
         Name = "branchLocalTypeContext"
         TypedParams = [{ Id = conditionTemp; Type = AST.TBool }]
         ReturnType = AST.TInt64
@@ -359,7 +359,7 @@ let testReturnedAggregateTransfersOwnedValueThroughAlias () : TestResult =
     let aliasTemp = TempId 1
     let outerTemp = TempId 2
     let func : Function = {
-        Id = AST.functionIdForName "wrapChild"
+        Id = TestIds.functionIdForName "wrapChild"
         Name = "wrapChild"
         TypedParams = []
         ReturnType = outerType
@@ -367,7 +367,7 @@ let testReturnedAggregateTransfersOwnedValueThroughAlias () : TestResult =
         Body =
             Let (
                 childTemp,
-                Call (AST.functionIdForName "makeChild", []),
+                Call (TestIds.functionIdForName "makeChild", []),
                 Let (
                     aliasTemp,
                     Atom (Var childTemp),
@@ -413,7 +413,7 @@ let testReturnedAggregateTransfersOwnedValueThroughTypedAlias () : TestResult =
     let aliasTemp = TempId 1
     let outerTemp = TempId 2
     let func : Function = {
-        Id = AST.functionIdForName "wrapChild"
+        Id = TestIds.functionIdForName "wrapChild"
         Name = "wrapChild"
         TypedParams = []
         ReturnType = outerType
@@ -421,7 +421,7 @@ let testReturnedAggregateTransfersOwnedValueThroughTypedAlias () : TestResult =
         Body =
             Let (
                 childTemp,
-                Call (AST.functionIdForName "makeChild", []),
+                Call (TestIds.functionIdForName "makeChild", []),
                 Let (
                     aliasTemp,
                     TypedAtom (Var childTemp, childType),
@@ -466,7 +466,7 @@ let testReturnedAggregateRetainsOwnershipProducingStreamAlias () : TestResult =
     let streamTemp = TempId 1
     let outerTemp = TempId 2
     let func : Function = {
-        Id = AST.functionIdForName "wrapStream"
+        Id = TestIds.functionIdForName "wrapStream"
         Name = "wrapStream"
         TypedParams = []
         ReturnType = outerType
@@ -520,7 +520,7 @@ let testReturnedAggregateTransfersOwnedValueAfterBorrowedUse () : TestResult =
     let inspectedTemp = TempId 2
     let outerTemp = TempId 3
     let func : Function = {
-        Id = AST.functionIdForName "wrapChild"
+        Id = TestIds.functionIdForName "wrapChild"
         Name = "wrapChild"
         TypedParams = []
         ReturnType = outerType
@@ -528,13 +528,13 @@ let testReturnedAggregateTransfersOwnedValueAfterBorrowedUse () : TestResult =
         Body =
             Let (
                 childTemp,
-                Call (AST.functionIdForName "makeChild", []),
+                Call (TestIds.functionIdForName "makeChild", []),
                 Let (
                     aliasTemp,
                     Atom (Var childTemp),
                     Let (
                         inspectedTemp,
-                        Call (AST.functionIdForName "inspectChild", [Var aliasTemp]),
+                        Call (TestIds.functionIdForName "inspectChild", [Var aliasTemp]),
                         Let (
                             outerTemp,
                             TupleAlloc [Var aliasTemp; Var inspectedTemp],
@@ -578,7 +578,7 @@ let testExplicitReleaseBlocksLaterAggregateTransfer () : TestResult =
     let releaseTemp = TempId 1
     let outerTemp = TempId 2
     let func : Function = {
-        Id = AST.functionIdForName "wrapChild"
+        Id = TestIds.functionIdForName "wrapChild"
         Name = "wrapChild"
         TypedParams = []
         ReturnType = outerType
@@ -586,7 +586,7 @@ let testExplicitReleaseBlocksLaterAggregateTransfer () : TestResult =
         Body =
             Let (
                 childTemp,
-                Call (AST.functionIdForName "makeChild", []),
+                Call (TestIds.functionIdForName "makeChild", []),
                 Let (
                     releaseTemp,
                     RefCountDec (Var childTemp, 8, GenericHeap, None),
@@ -631,7 +631,7 @@ let testReturnedAggregateTransfersOwnedValueAcrossBranches () : TestResult =
     let thenOuterTemp = TempId 2
     let elseOuterTemp = TempId 3
     let func : Function = {
-        Id = AST.functionIdForName "wrapChild"
+        Id = TestIds.functionIdForName "wrapChild"
         Name = "wrapChild"
         TypedParams = [{ Id = conditionTemp; Type = AST.TBool }]
         ReturnType = outerType
@@ -639,7 +639,7 @@ let testReturnedAggregateTransfersOwnedValueAcrossBranches () : TestResult =
         Body =
             Let (
                 childTemp,
-                Call (AST.functionIdForName "makeChild", []),
+                Call (TestIds.functionIdForName "makeChild", []),
                 If (
                     Var conditionTemp,
                     Let (
@@ -691,7 +691,7 @@ let testReturnedAggregateRequiresEveryBranchToTransferOwnedValue () : TestResult
     let thenOuterTemp = TempId 3
     let elseOuterTemp = TempId 4
     let func : Function = {
-        Id = AST.functionIdForName "wrapChild"
+        Id = TestIds.functionIdForName "wrapChild"
         Name = "wrapChild"
         TypedParams = [{ Id = conditionTemp; Type = AST.TBool }]
         ReturnType = outerType
@@ -699,7 +699,7 @@ let testReturnedAggregateRequiresEveryBranchToTransferOwnedValue () : TestResult
         Body =
             Let (
                 childTemp,
-                Call (AST.functionIdForName "makeChild", []),
+                Call (TestIds.functionIdForName "makeChild", []),
                 If (
                     Var conditionTemp,
                     Let (
@@ -709,7 +709,7 @@ let testReturnedAggregateRequiresEveryBranchToTransferOwnedValue () : TestResult
                     ),
                     Let (
                         replacementTemp,
-                        Call (AST.functionIdForName "makeChild", []),
+                        Call (TestIds.functionIdForName "makeChild", []),
                         Let (
                             elseOuterTemp,
                             TupleAlloc [Var replacementTemp],
@@ -754,7 +754,7 @@ let testReturnedAggregateTransfersNestedOwnedAliases () : TestResult =
     let innerAlias = TempId 3
     let outerTemp = TempId 4
     let func : Function = {
-        Id = AST.functionIdForName "wrapChild"
+        Id = TestIds.functionIdForName "wrapChild"
         Name = "wrapChild"
         TypedParams = []
         ReturnType = outerType
@@ -762,7 +762,7 @@ let testReturnedAggregateTransfersNestedOwnedAliases () : TestResult =
         Body =
             Let (
                 childTemp,
-                Call (AST.functionIdForName "makeChild", []),
+                Call (TestIds.functionIdForName "makeChild", []),
                 Let (
                     childAlias,
                     Atom (Var childTemp),
@@ -823,7 +823,7 @@ let testReturnedAggregateDoesNotTransferDuplicatedAliases () : TestResult =
     let secondAlias = TempId 2
     let outerTemp = TempId 3
     let func : Function = {
-        Id = AST.functionIdForName "duplicateChild"
+        Id = TestIds.functionIdForName "duplicateChild"
         Name = "duplicateChild"
         TypedParams = []
         ReturnType = outerType
@@ -831,7 +831,7 @@ let testReturnedAggregateDoesNotTransferDuplicatedAliases () : TestResult =
         Body =
             Let (
                 childTemp,
-                Call (AST.functionIdForName "makeChild", []),
+                Call (TestIds.functionIdForName "makeChild", []),
                 Let (
                     firstAlias,
                     Atom (Var childTemp),
@@ -873,7 +873,7 @@ let testStaticStringBindingSkipsNoOpRcTraffic () : TestResult =
     let stringTemp = TempId 0
     let resultTemp = TempId 1
     let func : Function = {
-        Id = AST.functionIdForName "staticString"
+        Id = TestIds.functionIdForName "staticString"
         Name = "staticString"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -913,7 +913,7 @@ let testKnownEmptyListBindingSkipsNoOpRcTraffic () : TestResult =
     let listTemp = TempId 0
     let resultTemp = TempId 1
     let func : Function = {
-        Id = AST.functionIdForName "emptyList"
+        Id = TestIds.functionIdForName "emptyList"
         Name = "emptyList"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -955,7 +955,7 @@ let testAggregateSkipsRetainsForKnownNonRcSentinels () : TestResult =
     let listTemp = TempId 1
     let resultTemp = TempId 2
     let func : Function = {
-        Id = AST.functionIdForName "sentinelTuple"
+        Id = TestIds.functionIdForName "sentinelTuple"
         Name = "sentinelTuple"
         TypedParams = []
         ReturnType = resultType
@@ -1002,7 +1002,7 @@ let testAggregateSkipsRetainForConditionalStaticString () : TestResult =
     let stringTemp = TempId 1
     let resultTemp = TempId 2
     let func : Function = {
-        Id = AST.functionIdForName "conditionalStaticString"
+        Id = TestIds.functionIdForName "conditionalStaticString"
         Name = "conditionalStaticString"
         TypedParams = [{ Id = conditionTemp; Type = AST.TBool }]
         ReturnType = resultType
@@ -1052,7 +1052,7 @@ let testNonSelfTailCallDoesNotLeaveDecAfterTailCall () : TestResult =
     let tupleTmp = TempId 1
     let callTmp = TempId 2
     let func : Function = {
-        Id = AST.functionIdForName "caller"
+        Id = TestIds.functionIdForName "caller"
         Name = "caller"
         TypedParams = [{ Id = p0; Type = AST.TInt64 }]
         ReturnType = AST.TInt64
@@ -1063,7 +1063,7 @@ let testNonSelfTailCallDoesNotLeaveDecAfterTailCall () : TestResult =
                 TupleAlloc [Var p0; IntLiteral (Int64 1L)],
                 Let (
                     callTmp,
-                    TailCall (AST.functionIdForName "callee", [Var p0]),
+                    TailCall (TestIds.functionIdForName "callee", [Var p0]),
                     Return (Var callTmp)
                 )
             )
@@ -1099,7 +1099,7 @@ let testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed () : TestRe
     let childTemp = TempId 2
 
     let func : Function = {
-        Id = AST.functionIdForName "Darklang.Stdlib.List.__node2GetChild_i64"
+        Id = TestIds.functionIdForName "Darklang.Stdlib.List.__node2GetChild_i64"
         Name = "Darklang.Stdlib.List.__node2GetChild_i64"
         TypedParams = [
             { Id = nodeParam; Type = nodeType }
@@ -1138,8 +1138,8 @@ let private elaborateSingleFieldRecordReuseWithTypes
     let recordType = AST.TRecord (descriptor.RuntimeTypeName, [])
     let makeOldName = $"makeOld{typeName}"
     let fixtureName = $"reuse{typeName}"
-    let makeOld = AST.functionIdForName makeOldName
-    let fixture = AST.functionIdForName fixtureName
+    let makeOld = TestIds.functionIdForName makeOldName
+    let fixture = TestIds.functionIdForName fixtureName
     let replacementId = TempId 0
     let oldId = TempId 1
     let sourceId = TempId 2
@@ -1303,8 +1303,8 @@ let testBoxedSumReuseReleasesSourceVariantBeforeOverwrite () : TestResult =
     }
     let makeOldName = "makeOldReuseChoice"
     let fixtureName = "reuseChoice"
-    let makeOld = AST.functionIdForName makeOldName
-    let fixture = AST.functionIdForName fixtureName
+    let makeOld = TestIds.functionIdForName makeOldName
+    let fixture = TestIds.functionIdForName fixtureName
     let replacementId = TempId 0
     let oldId = TempId 1
     let sourceId = TempId 2

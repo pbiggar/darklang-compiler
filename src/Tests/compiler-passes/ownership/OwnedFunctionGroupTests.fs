@@ -24,7 +24,7 @@ let private block operations : Block<TestLeaf, string> = {
 
 let private call target =
     Evaluate (HIR.Call {
-        Target = AST.functionIdForName target
+        Target = TestIds.functionIdForName target
         Arguments = [unitValue]
         Result = unitValue
     })
@@ -34,7 +34,7 @@ let private branch ifTrue ifFalse =
 
 let private definition name operations : Function<TestLeaf, string> = {
     Definition = {
-        Id = AST.functionIdForName name
+        Id = TestIds.functionIdForName name
         Name = name
         Body = {
             Body = {
@@ -66,7 +66,7 @@ let private testDiscoversCalleeFirstRecursiveGroups () =
     let leaf =
         let opaqueCall : HIR.Operand = {
             Expression = CheckedAST.Call (
-                AST.functionIdForName "opaque",
+                TestIds.functionIdForName "opaque",
                 AST.NonEmptyList.singleton CheckedAST.UnitLiteral)
             Type = AST.TUnit
             Inputs = Map.empty
@@ -79,8 +79,8 @@ let private testDiscoversCalleeFirstRecursiveGroups () =
         |> Result.map (List.map summary)
     let expected = Ok [
         (["leaf"], false, Set.empty, Set.empty)
-        (["mutualA"; "mutualB"], true, Set.singleton (AST.functionIdForName "leaf"), Set.empty)
-        (["entry"], false, Set.singleton (AST.functionIdForName "mutualA"), Set.singleton (AST.functionIdForName "external"))
+        (["mutualA"; "mutualB"], true, Set.singleton (TestIds.functionIdForName "leaf"), Set.empty)
+        (["entry"], false, Set.singleton (TestIds.functionIdForName "mutualA"), Set.singleton (TestIds.functionIdForName "external"))
         (["self"], true, Set.empty, Set.empty)
     ]
     if actual = expected then Ok ()
@@ -90,7 +90,7 @@ let private testRejectsDuplicateFunctionNames () =
     let duplicate = definition "duplicate" []
     let actual = OwnedFunctionGroups.discover [duplicate; duplicate]
     let expected =
-        Error (OwnedFunctionGroups.DuplicateFunctionName (AST.functionIdForName "duplicate"))
+        Error (OwnedFunctionGroups.DuplicateFunctionName (TestIds.functionIdForName "duplicate"))
     if actual = expected then Ok ()
     else Error $"Expected duplicate owned functions to fail grouping, got {actual}"
 

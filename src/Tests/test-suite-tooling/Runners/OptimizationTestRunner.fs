@@ -22,22 +22,26 @@ type OptimizationTestResult = {
     Actual: string option
 }
 
-let private externalReturnTypes : Map<string, AST.Type> =
+let private externalReturnTypes : Map<AST.FunctionId, string * AST.Type> =
     Map.ofList [
-        ("__hash_i64", TInt64)
-        ("__hash_str", TInt64)
-        ("__hash_bool", TInt64)
-        ("__key_eq_i64", TBool)
-        ("__key_eq_str", TBool)
-        ("__key_eq_bool", TBool)
-        ("__string_hash", TInt64)
+        (TestIds.functionIdForName "__hash_i64", ("__hash_i64", TInt64))
+        (TestIds.functionIdForName "__hash_str", ("__hash_str", TInt64))
+        (TestIds.functionIdForName "__hash_bool", ("__hash_bool", TInt64))
+        (TestIds.functionIdForName "__key_eq_i64", ("__key_eq_i64", TBool))
+        (TestIds.functionIdForName "__key_eq_str", ("__key_eq_str", TBool))
+        (TestIds.functionIdForName "__key_eq_bool", ("__key_eq_bool", TBool))
+        (TestIds.functionIdForName "__string_hash", ("__string_hash", TInt64))
     ]
 
 let private externalFunctionNames =
     externalReturnTypes
     |> Map.toList
-    |> List.map (fun (name, _) -> (AST.functionIdForName name, name))
+    |> List.map (fun (id, (name, _)) -> (id, name))
     |> Map.ofList
+
+let private returnTypesFor (stdlib: CompilationContexts.StdlibResult) =
+    externalReturnTypes
+    |> Map.fold (fun returnTypes id value -> Map.add id value returnTypes) stdlib.Context.ReturnTypes
 
 let private typeCheckWithStdlib (stdlib: CompilationContexts.StdlibResult) (ast: AST.Program) : Result<AST.Type * CheckedAST.Program, string> =
     match TypeChecking.checkProgramWithBaseEnv stdlib.Context.TypeCheckEnv ast with
@@ -61,41 +65,31 @@ let private parseOptimizationSource (source: string) : Result<AST.Program * bool
     | Error e -> Error $"Parse error: {e}"
     | Ok ast -> Ok (addSyntheticMainExpressionIfNeeded ast)
 
-let private convertTypedProgram (typedAst: CheckedAST.Program) : Result<AST_to_ANF.ConversionResult, string> =
-    let moduleRegistry = Stdlib.buildModuleRegistry ()
-    let monomorphized = PrepareFunctions.monomorphize typedAst
-    let inlined = InlineLambdas.inlineLambdasInProgram monomorphized
-    LiftFunctions.liftLambdasInProgram Map.empty Map.empty Map.empty Map.empty inlined
-    |> Result.bind (fun lifted ->
-        AST_to_ANF.splitTopLevels lifted
-        |> Result.bind (fun (typeDefs, functions, expr) ->
-            let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
-            let resolvedFunctions = AST_to_ANF.resolveAliasesInFunctions aliasReg functions
-            let symbols = CheckedAST.programSymbols lifted
-            let registries = AST_to_ANF.buildRegistries symbols moduleRegistry typeDefs aliasReg resolvedFunctions
-            let varGen = ANF.VarGen 0
-            AST_to_ANF.convertFunctions symbols registries varGen resolvedFunctions
-            |> Result.bind (fun (anfFuncs, varGen1) ->
-                AST_to_ANF.convertExprToAnf registries varGen1 expr
-                |> Result.map (fun (anfExpr, _) ->
-                    {
-                        Program = ANF.Program (anfFuncs, anfExpr)
-                        OwnershipContracts = Map.empty
-                        RecursiveMembers = registries.RecursiveMembers
-                        TypeReg = registries.TypeReg
-                        RecordFieldsReg = registries.RecordFieldsReg
-                        RecordTypeParamsReg = registries.RecordTypeParamsReg
-                        VariantLookup = registries.VariantLookup
-                        RcSumShapeReg = registries.RcSumShapeReg
-                        FuncReg = registries.FuncReg
-                        FuncParams = registries.FuncParams
-                        ModuleRegistry = registries.ModuleRegistry
-                    }))))
+let private convertTypedProgram
+    (stdlib: CompilationContexts.StdlibResult)
+    (typedAst: CheckedAST.Program)
+    : Result<AST_to_ANF.ConversionResult, string> =
+    SourcePreparation.convertTypedProgramToUserOnly stdlib.Context typedAst
+    |> Result.map (fun converted ->
+        {
+            Program = ANF.Program (converted.UserFunctions, converted.MainExpr)
+            OwnershipContracts = converted.OwnershipContracts
+            RecursiveMembers = converted.RecursiveMembers
+            TypeReg = converted.TypeReg
+            RecordFieldsReg = converted.RecordFieldsReg
+            RecordTypeParamsReg = converted.RecordTypeParamsReg
+            VariantLookup = converted.VariantLookup
+            RcSumShapeReg = converted.RcSumShapeReg
+            FuncReg = converted.FuncReg
+            FuncParams = converted.FuncParams
+            ModuleRegistry = converted.ModuleRegistry
+        })
 
 let private optimizeContextFromConversionResult (convResult: AST_to_ANF.ConversionResult) : ANFConstants.OptimizeContext =
     { TypeReg = convResult.RecordFieldsReg
       RecordTypeParams = convResult.RecordTypeParamsReg
-      SumShapeReg = convResult.RcSumShapeReg }
+      SumShapeReg = convResult.RcSumShapeReg
+      FunctionNames = convResult.FuncReg |> Map.map (fun _ (name, _) -> name) }
 
 /// Normalize IR output for comparison
 /// - Trim whitespace
@@ -128,11 +122,17 @@ let private removeSyntheticMIREntry (MIR.Program (functions, variants, records))
         records
     )
 
-let private formatMIRForOptimizationTest (syntheticMain: bool) (program: MIR.Program) : string =
+let private formatMIRForOptimizationTest
+    (functionNames: Map<AST.FunctionId, string>)
+    (syntheticMain: bool)
+    (program: MIR.Program)
+    : string =
+    let functionNames =
+        Map.fold (fun names id name -> Map.add id name names) functionNames externalFunctionNames
     if syntheticMain then
-        formatMIRWithFunctionNames externalFunctionNames (removeSyntheticMIREntry program)
+        formatMIRWithFunctionNames functionNames (removeSyntheticMIREntry program)
     else
-        formatMIRWithFunctionNames externalFunctionNames program
+        formatMIRWithFunctionNames functionNames program
 
 let private removeSyntheticLIREntry (LIR.Program (functions, variants, records)) : LIR.Program =
     LIR.Program (
@@ -157,7 +157,7 @@ let getOptimizedANF (stdlib: CompilationContexts.StdlibResult) (source: string) 
         | Error e -> Error e
         | Ok (programType, typedAst) ->
             // Convert to ANF
-            match convertTypedProgram typedAst with
+            match convertTypedProgram stdlib typedAst with
             | Error e -> Error $"ANF conversion error: {e}"
             | Ok convResult ->
                 // Optimize ANF
@@ -191,7 +191,7 @@ let getOptimizedMIR (stdlib: CompilationContexts.StdlibResult) (source: string) 
         | Error e -> Error e
         | Ok (programType, typedAst) ->
             // Convert to ANF
-            match convertTypedProgram typedAst with
+            match convertTypedProgram stdlib typedAst with
             | Error e -> Error $"ANF conversion error: {e}"
             | Ok convResult ->
                 // Optimize ANF
@@ -211,7 +211,7 @@ let getOptimizedMIR (stdlib: CompilationContexts.StdlibResult) (source: string) 
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
 
                     // Convert to MIR
-                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false externalReturnTypes with
+                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false (returnTypesFor stdlib) with
                     | Error e -> Error $"MIR conversion error: {e}"
                     | Ok mirProgram ->
                         // SSA construction
@@ -222,7 +222,9 @@ let getOptimizedMIR (stdlib: CompilationContexts.StdlibResult) (source: string) 
 
                         // SSA form is now preserved (phi resolution happens in register allocation)
                         // Pretty-print the optimized MIR (still in SSA form)
-                        Ok (formatMIRForOptimizationTest syntheticMain optimizedMir)
+                        let functionNames =
+                            convResultOptimized.FuncReg |> Map.map (fun _ (name, _) -> name)
+                        Ok (formatMIRForOptimizationTest functionNames syntheticMain optimizedMir)
 
 /// Compile source and get LIR after optimization
 let getOptimizedLIR (stdlib: CompilationContexts.StdlibResult) (source: string) : Result<string, string> =
@@ -234,7 +236,7 @@ let getOptimizedLIR (stdlib: CompilationContexts.StdlibResult) (source: string) 
         | Error e -> Error e
         | Ok (programType, typedAst) ->
             // Convert to ANF
-            match convertTypedProgram typedAst with
+            match convertTypedProgram stdlib typedAst with
             | Error e -> Error $"ANF conversion error: {e}"
             | Ok convResult ->
                 // Optimize ANF
@@ -254,7 +256,7 @@ let getOptimizedLIR (stdlib: CompilationContexts.StdlibResult) (source: string) 
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
 
                     // Convert to MIR
-                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false externalReturnTypes with
+                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false (returnTypesFor stdlib) with
                     | Error e -> Error $"MIR conversion error: {e}"
                     | Ok mirProgram ->
                         // SSA construction and optimization

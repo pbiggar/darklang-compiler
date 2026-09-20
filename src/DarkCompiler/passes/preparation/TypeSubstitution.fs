@@ -63,12 +63,12 @@ let internal buildDeclaredRecordFieldSubst
 
 let internal recordDescriptor
     (typeName: string)
-    (reference: CheckedAST.RecordReference)
+    (typeArgs: AST.Type list)
     (recordInfo: RecordTypeInfo)
     : ANF.RecordDescriptor =
     let fields = recordInfo.Fields
     let concreteFields =
-        match buildDeclaredRecordFieldSubst recordInfo reference.TypeArgs with
+        match buildDeclaredRecordFieldSubst recordInfo typeArgs with
         | Some subst ->
             fields
             |> List.map (fun (name, fieldType) ->
@@ -77,9 +77,9 @@ let internal recordDescriptor
     {
         SourceTypeName = typeName
         RuntimeTypeName = typeName
-        TypeArgs = reference.TypeArgs
+        TypeArgs = typeArgs
         Fields = concreteFields
-        ValueType = AST.TRecord (typeName, reference.TypeArgs)
+        ValueType = AST.TRecord (typeName, typeArgs)
     }
 
 let internal boxedSumDescriptor
@@ -210,8 +210,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
     match expr with
     | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _ | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
-    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
-    | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ | CheckedAST.RuntimeError _ ->
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.BlobLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
+    | CheckedAST.Local _ | CheckedAST.FuncRef _ | CheckedAST.Closure _ | CheckedAST.RuntimeError _ ->
         expr  // No types to substitute in literals, variables, function references, and closures
     | CheckedAST.BoundaryRender (renderer, value) ->
         CheckedAST.BoundaryRender (renderer, applySubstToExpr subst value)
@@ -335,7 +335,11 @@ let resolveAliasesInFunction (aliasReg: AliasRegistry) (funcDef: CheckedAST.Func
     { funcDef with Params = resolvedParams; ReturnType = resolvedReturnType }
 
 /// Specialize a generic function definition with specific type arguments
-let specializeFunction (funcDef: CheckedAST.FunctionDef) (typeArgs: AST.Type list) : CheckedAST.FunctionDef =
+let specializeFunction
+    (specializedId: AST.FunctionId)
+    (funcDef: CheckedAST.FunctionDef)
+    (typeArgs: AST.Type list)
+    : CheckedAST.FunctionDef =
     // Build substitution from type parameters to type args
     let subst =
         if List.length funcDef.TypeParams <> List.length typeArgs then
@@ -351,7 +355,7 @@ let specializeFunction (funcDef: CheckedAST.FunctionDef) (typeArgs: AST.Type lis
         |> AST.NonEmptyList.map (fun (name, ty) -> (name, applySubstToType subst ty))
     let specializedReturnType = applySubstToType subst funcDef.ReturnType
     let specializedBody = applySubstToExpr subst funcDef.Body
-    { Id = AST.functionIdForName specializedName
+    { Id = specializedId
       Name = specializedName
       TypeParams = []  // Specialized function has no type parameters
       Params = specializedParams

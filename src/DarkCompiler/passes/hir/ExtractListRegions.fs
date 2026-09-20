@@ -54,12 +54,12 @@ let private inertExpression infer callIsInert =
         | CheckedAST.Call (name, args) ->
             callIsInert name && (AST.NonEmptyList.toList args |> List.forall recur) && typedInert ()
         | CheckedAST.TupleLiteral values | CheckedAST.ListLiteral values -> List.forall recur values
-        | CheckedAST.Local _ | CheckedAST.NamedValue _ -> typedInert ()
+        | CheckedAST.Local _ -> typedInert ()
         | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _
         | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
         | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _
         | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BigIntLiteral _
-        | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _
+        | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.BlobLiteral _ | CheckedAST.CharLiteral _
         | CheckedAST.FloatLiteral _ | CheckedAST.RuntimeError _ -> true
         | _ -> false
     check
@@ -94,11 +94,13 @@ let scopeContracts infer (functions: CheckedAST.FunctionDef list) =
 /// original checked expression then uses the supported persistent List path.
 let tryExtract
     (inertScopes: Set<AST.FunctionId>)
+    (functionNames: Map<AST.FunctionId, string>)
     (parameterTypes: Map<AST.BindingId, AST.Type>)
     (infer: Map<AST.BindingId, AST.Type> -> CheckedAST.Expr -> Result<AST.Type, string>)
     (freeVariables: CheckedAST.Expr -> Set<AST.BindingId>)
     (expression: CheckedAST.Expr)
     : FunctionalRegion option =
+    let functionHasName id name = Map.tryFind id functionNames = Some name
     let inertExpression = inertExpression infer (fun name -> Set.contains name inertScopes)
     let types state =
         state.Values
@@ -174,16 +176,16 @@ let tryExtract
         | _ ->
             match listCall expr with
             | Some (id, [input])
-                when id = AST.functionIdForName "Darklang.Stdlib.List.__arrayOwnershipBoundary_i64" ->
+                when functionHasName id "Darklang.Stdlib.List.__arrayOwnershipBoundary_i64" ->
                 list state input
                 |> Option.map (fun (source, next) ->
                     source,
                     { next with RuntimeInputs = Set.add source.Id next.RuntimeInputs })
-            | Some (id, [count; value]) when id = AST.functionIdForName "Darklang.Stdlib.List.repeatUnsafe_i64" ->
+            | Some (id, [count; value]) when functionHasName id "Darklang.Stdlib.List.repeatUnsafe_i64" ->
                 match operand state ((=) AST.TInt) count, operand state ((=) AST.TInt64) value with
                 | Some count, Some value -> Some (addList state (fun output -> Leaf (Construct (output, Repeat (count, value)))))
                 | _ -> None
-            | Some (id, [input; fn]) when id = AST.functionIdForName "Darklang.Stdlib.List.map_i64_i64" ->
+            | Some (id, [input; fn]) when functionHasName id "Darklang.Stdlib.List.map_i64_i64" ->
                 list state input
                 |> Option.bind (fun (source, next) ->
                     callback state (AST.TFunction ([AST.TInt64], AST.TInt64)) fn
@@ -193,7 +195,7 @@ let tryExtract
                             else StaticReuse
                         let next = { next with RuntimeInputs = Set.remove source.Id next.RuntimeInputs }
                         addList next (fun id -> Leaf (Transform (id, source, (Map fn, reuse))))))
-            | Some (id, [input]) when id = AST.functionIdForName "Darklang.Stdlib.List.reverse_i64" ->
+            | Some (id, [input]) when functionHasName id "Darklang.Stdlib.List.reverse_i64" ->
                 list state input
                 |> Option.map (fun (source, next) ->
                     let reuse =
@@ -223,7 +225,7 @@ let tryExtract
 
     and bindSimpleScalar state name expr =
         match listCall expr with
-        | Some (id, [input; initial; fn]) when id = AST.functionIdForName "Darklang.Stdlib.List.fold_i64_i64" ->
+        | Some (id, [input; initial; fn]) when functionHasName id "Darklang.Stdlib.List.fold_i64_i64" ->
             list state input
             |> Option.bind (fun (source, next) ->
                 match scalar state initial, callback state (AST.TFunction ([AST.TInt64; AST.TInt64], AST.TInt64)) fn with
@@ -263,10 +265,10 @@ let tryExtract
     let isListOperation value =
         match listCall value with
         | Some (id, _)
-            when id = AST.functionIdForName "Darklang.Stdlib.List.map_i64_i64"
-                 || id = AST.functionIdForName "Darklang.Stdlib.List.reverse_i64"
-                 || id = AST.functionIdForName "Darklang.Stdlib.List.repeatUnsafe_i64"
-                 || id = AST.functionIdForName "Darklang.Stdlib.List.fold_i64_i64" -> true
+            when functionHasName id "Darklang.Stdlib.List.map_i64_i64"
+                 || functionHasName id "Darklang.Stdlib.List.reverse_i64"
+                 || functionHasName id "Darklang.Stdlib.List.repeatUnsafe_i64"
+                 || functionHasName id "Darklang.Stdlib.List.fold_i64_i64" -> true
         | _ -> false
     let candidate =
         match expression with

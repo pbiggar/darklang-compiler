@@ -37,7 +37,11 @@ let convertBinOp (op: AST.BinOp) : ANF.BinOp =
 /// Arbitrary-precision Int values use tagged words or limb buffers. Route
 /// operations through the pure Int stdlib implementation instead of fixed-width
 /// machine primitives.
-let internal integerFunctionForBinOp (operandType: AST.Type) (op: AST.BinOp) : AST.FunctionId option =
+let internal integerFunctionForBinOp
+    (resolveFunction: string -> AST.FunctionId)
+    (operandType: AST.Type)
+    (op: AST.BinOp)
+    : AST.FunctionId option =
     let moduleName =
         match op, operandType with
         | AST.Pow, AST.TInt -> Some "Darklang.Stdlib.Int"
@@ -75,7 +79,7 @@ let internal integerFunctionForBinOp (operandType: AST.Type) (op: AST.BinOp) : A
         | AST.Eq, _ | AST.Neq, _ | AST.And, _ | AST.Or, _ | AST.StringConcat, _ -> None
     match moduleName, functionName with
     | Some moduleName, Some functionName ->
-        Some (AST.functionIdForName $"{moduleName}.{functionName}")
+        Some (resolveFunction $"{moduleName}.{functionName}")
     | _ -> None
 
 /// Convert AST.UnaryOp to ANF.UnaryOp
@@ -96,6 +100,7 @@ let isCompoundType (typ: AST.Type) : bool =
 /// Generate structural equality comparison for compound types.
 /// Returns a list of bindings and the final result atom that holds the comparison result.
 let rec generateStructuralEquality
+    (resolveFunction: string -> AST.FunctionId)
     (leftAtom: ANF.Atom)
     (rightAtom: ANF.Atom)
     (typ: AST.Type)
@@ -142,13 +147,13 @@ let rec generateStructuralEquality
     let primitiveEquality (valueType: AST.Type) (left: ANF.Atom) (right: ANF.Atom) : ANF.CExpr =
         match valueType with
         | AST.TInt128 ->
-            ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int128.__equals", [left; right])
+            ANF.Call (resolveFunction "Darklang.Stdlib.Int128.__equals", [left; right])
         | AST.TUInt128 ->
-            ANF.Call (AST.functionIdForName "Darklang.Stdlib.UInt128.__equals", [left; right])
+            ANF.Call (resolveFunction "Darklang.Stdlib.UInt128.__equals", [left; right])
         | AST.TInt ->
-            ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int.__equals", [left; right])
+            ANF.Call (resolveFunction "Darklang.Stdlib.Int.__equals", [left; right])
         | AST.TString | AST.TChar ->
-            ANF.Call (AST.functionIdForName "__string_eq", [left; right])
+            ANF.Call (resolveFunction "__string_eq", [left; right])
         | _ -> ANF.Prim (ANF.Eq, left, right)
 
     match typ with
@@ -177,6 +182,7 @@ let rec generateStructuralEquality
                     if isCompoundType elemType then
                         let (nestedBindings, nestedResult, vgNested) =
                             generateStructuralEquality
+                                resolveFunction
                                 (ANF.Var leftElemVar)
                                 (ANF.Var rightElemVar)
                                 elemType
@@ -208,10 +214,7 @@ let rec generateStructuralEquality
             let descriptor =
                 recordDescriptor
                     typeName
-                    {
-                        TypeId = AST.typeIdForName typeName
-                        TypeArgs = typeArgs
-                    }
+                    typeArgs
                     recordInfo
             let concreteFields =
                 match buildDeclaredRecordFieldSubst recordInfo typeArgs with
@@ -245,6 +248,7 @@ let rec generateStructuralEquality
                         if isCompoundType fieldType then
                             let (nestedBindings, nestedResult, vgNested) =
                                 generateStructuralEquality
+                                    resolveFunction
                                     (ANF.Var leftFieldVar)
                                     (ANF.Var rightFieldVar)
                                     fieldType
@@ -294,7 +298,7 @@ let rec generateStructuralEquality
             let payloadComparison =
                 if typeName = "Uuid" then
                     ANF.Call (
-                        AST.functionIdForName "Darklang.Stdlib.UInt128.__equals",
+                        resolveFunction "Darklang.Stdlib.UInt128.__equals",
                         [ANF.Var leftPayloadVar; ANF.Var rightPayloadVar]
                     )
                 else

@@ -62,6 +62,7 @@ let internal generatePlannedGenericRefCountDecHelper
 /// release helpers. Their reserved stable label fully identifies the planned
 /// body; the cache separately keys target and codegen options.
 let internal plannedGenericRefCountDecHelperCacheKey
+    (helperId: AST.FunctionId)
     (helperLabel: string)
     : LIR.Function =
     let entry = LIR.Label "cache_entry"
@@ -71,7 +72,7 @@ let internal plannedGenericRefCountDecHelperCacheKey
         Terminator = LIR.Ret
     }
     {
-        Id = AST.functionIdForName helperLabel
+        Id = helperId
         Name = helperLabel
         TypedParams = []
         CFG = {

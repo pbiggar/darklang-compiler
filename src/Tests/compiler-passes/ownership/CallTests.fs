@@ -12,7 +12,7 @@ open RcCleanupTests
 
 let private functionRegistry entries : TypeRegistries.FunctionRegistry =
     entries
-    |> List.map (fun (name, typ) -> AST.functionIdForName name, (name, typ))
+    |> List.map (fun (name, typ) -> TestIds.functionIdForName name, (name, typ))
     |> Map.ofList
 
 let testBorrowedCallMaterializesOwnedLocal () : TestResult =
@@ -41,7 +41,7 @@ let testBorrowedCallMaterializesOwnedLocal () : TestResult =
     let measureTemp = TempId 3
 
     let func : Function = {
-        Id = AST.functionIdForName "consumer"
+        Id = TestIds.functionIdForName "consumer"
         Name = "consumer"
         TypedParams = [
             { Id = nodeParam; Type = nodeType }
@@ -52,10 +52,10 @@ let testBorrowedCallMaterializesOwnedLocal () : TestResult =
         Body =
             Let (
                 childTemp,
-                BorrowedCall (AST.functionIdForName "Darklang.Stdlib.List.__node2GetChild_i64", [Var nodeParam; Var indexParam]),
+                BorrowedCall (TestIds.functionIdForName "Darklang.Stdlib.List.__node2GetChild_i64", [Var nodeParam; Var indexParam]),
                 Let (
                     measureTemp,
-                    Call (AST.functionIdForName "Darklang.Stdlib.List.__nodeMeasure_i64", [Var childTemp]),
+                    Call (TestIds.functionIdForName "Darklang.Stdlib.List.__nodeMeasure_i64", [Var childTemp]),
                     Return (Var measureTemp)
                 )
             )
@@ -92,7 +92,7 @@ let testReturnedBorrowedCallMaterializesOwnership () : TestResult =
     let nodeParam = TempId 0
     let childTemp = TempId 1
     let func : Function = {
-        Id = AST.functionIdForName "project"
+        Id = TestIds.functionIdForName "project"
         Name = "project"
         TypedParams = [
             { Id = nodeParam; Type = nodeType }
@@ -102,7 +102,7 @@ let testReturnedBorrowedCallMaterializesOwnership () : TestResult =
         Body =
             Let (
                 childTemp,
-                BorrowedCall (AST.functionIdForName "borrowChild", [Var nodeParam]),
+                BorrowedCall (TestIds.functionIdForName "borrowChild", [Var nodeParam]),
                 Return (Var childTemp)
             )
     }
@@ -135,7 +135,7 @@ let testCallReturningClosureGetsAutoDecAfterUse () : TestResult =
     let closureTemp = TempId 0
     let resultTemp = TempId 1
     let func : Function = {
-        Id = AST.functionIdForName "caller"
+        Id = TestIds.functionIdForName "caller"
         Name = "caller"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -143,7 +143,7 @@ let testCallReturningClosureGetsAutoDecAfterUse () : TestResult =
         Body =
             Let (
                 closureTemp,
-                Call (AST.functionIdForName "makeClosure", []),
+                Call (TestIds.functionIdForName "makeClosure", []),
                 Let (
                     resultTemp,
                     ClosureCall (Var closureTemp, [IntLiteral (Int64 5L)]),
@@ -183,7 +183,7 @@ let testClosureCallReturningClosureGetsAutoDecAfterUse () : TestResult =
     let returnedTemp = TempId 1
     let resultTemp = TempId 2
     let func : Function = {
-        Id = AST.functionIdForName "caller"
+        Id = TestIds.functionIdForName "caller"
         Name = "caller"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -191,7 +191,7 @@ let testClosureCallReturningClosureGetsAutoDecAfterUse () : TestResult =
         Body =
             Let (
                 makerTemp,
-                ClosureAlloc (AST.functionIdForName "makeClosure", []),
+                ClosureAlloc (TestIds.functionIdForName "makeClosure", []),
                 Let (
                     returnedTemp,
                     ClosureCall (Var makerTemp, [IntLiteral (Int64 5L)]),
@@ -230,7 +230,7 @@ let testPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
     let resultTemp = TempId 1
     let enumType = AST.TSum ("Color", [])
     let func : Function = {
-        Id = AST.functionIdForName "pureEnumBinding"
+        Id = TestIds.functionIdForName "pureEnumBinding"
         Name = "pureEnumBinding"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -277,7 +277,7 @@ let testGenericPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
     let resultTemp = TempId 1
     let enumType = AST.TSum ("Phantom", [AST.TString])
     let func : Function = {
-        Id = AST.functionIdForName "genericPureEnumBinding"
+        Id = TestIds.functionIdForName "genericPureEnumBinding"
         Name = "genericPureEnumBinding"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -305,7 +305,7 @@ let testProgramRcFreshTempsFollowExistingProgramTemps () : TestResult =
     let lowTemp = TempId 1000
     let highTemp = TempId 6000
     let func : Function = {
-        Id = AST.functionIdForName "freshTempBoundary"
+        Id = TestIds.functionIdForName "freshTempBoundary"
         Name = "freshTempBoundary"
         TypedParams = []
         ReturnType = AST.TUnit
@@ -316,7 +316,7 @@ let testProgramRcFreshTempsFollowExistingProgramTemps () : TestResult =
                 Atom (IntLiteral (Int64 0L)),
                 Let (
                     highTemp,
-                    Call (AST.functionIdForName "makeString", []),
+                    Call (TestIds.functionIdForName "makeString", []),
                     Return UnitLiteral
                 )
             )
@@ -361,7 +361,7 @@ let testProgramRcFreshTempsFollowExistingProgramTemps () : TestResult =
     | Ok _ -> Error "Expected the transformed program to contain one function"
 
 let testProgramRcRejectsDriftedOwnershipContract () : TestResult =
-    let functionId = AST.functionIdForName "driftedOwnership"
+    let functionId = TestIds.functionIdForName "driftedOwnership"
     let func : Function = {
         Id = functionId
         Name = "driftedOwnership"
@@ -421,7 +421,7 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
     let dictTemp = TempId 0
     let resultTemp = TempId 1
     let func : Function = {
-        Id = AST.functionIdForName "canonicalBareSum"
+        Id = TestIds.functionIdForName "canonicalBareSum"
         Name = "canonicalBareSum"
         TypedParams = []
         ReturnType = AST.TInt64
@@ -429,7 +429,7 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
         Body =
             Let (
                 dictTemp,
-                Call (AST.functionIdForName "mkDict", []),
+                Call (TestIds.functionIdForName "mkDict", []),
                 Let (
                     resultTemp,
                     Atom (IntLiteral (Int64 1L)),

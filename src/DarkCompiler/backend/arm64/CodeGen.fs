@@ -486,18 +486,13 @@ let private generatePreparedARM64WithOptionsAndCache
     let plannedListDecHelpers = rcHelperRequirements.PlannedListDecHelpers
     let plannedGenericDecHelpers = rcHelperRequirements.PlannedGenericDecHelpers
     let plannedDictDecHelpers = rcHelperRequirements.PlannedDictDecHelpers
-    let helperFunctionNames =
-        [ rcHelperRequirements.ListDecHelperLabels
-          rcHelperRequirements.DictDecHelperLabels
-          plannedListDecHelpers |> Map.keys |> Set.ofSeq
-          plannedGenericDecHelpers |> Map.keys |> Set.ofSeq
-          plannedDictDecHelpers |> Map.keys |> Set.ofSeq
-          programMetadata.Facts.CliArgvHelperLabels ]
-        |> Set.unionMany
+    let helperIds =
+        AST.allocateFunctionIds
+            (functions |> List.map (fun func -> func.Id))
+            (plannedGenericDecHelpers |> Map.keys)
     let functionNames =
-        helperFunctionNames
-        |> Set.fold
-            (fun names name -> Map.add (AST.functionIdForName name) name names)
+        helperIds
+        |> Map.fold (fun names name id -> Map.add id name names)
             (functions |> List.map (fun func -> func.Id, func.Name) |> Map.ofList)
 
     // StackSize and UsedCalleeSaved are set per-function in convertFunction.
@@ -520,14 +515,26 @@ let private generatePreparedARM64WithOptionsAndCache
 
     recordPhase "ARM64 Codegen Metadata" metadataTimer
 
-    let convertCached func =
+    let convertCached (func: LIR.Function) =
         // Function chunks are closed by their epilogue (or _start exit), so
         // peephole patterns cannot span into the next function's entry label.
         // The compiler's fixed _start trampoline is reusable too: the changing
         // user expression lives behind its __dark_compiler_program_entry call.
         // Cache each finalized chunk and never rescan it per executable.
         let generate () =
-            convertFunction heapOverflowTrapBody ctx func
+            let partitionFunctionNames =
+                func.CodegenFacts
+                |> Option.bind (fun facts -> facts.Arm64FunctionNames)
+                |> Option.defaultValue Map.empty
+            let functionNames =
+                match func.CodegenFacts |> Option.bind (fun facts -> facts.Arm64GenericDecHelperIds) with
+                | Some localHelperIds ->
+                    localHelperIds
+                    |> Map.fold (fun names label id -> Map.add id label names) partitionFunctionNames
+                | None -> partitionFunctionNames
+            let functionNames =
+                Map.fold (fun names id name -> Map.add id name names) ctx.FunctionNames functionNames
+            convertFunction heapOverflowTrapBody { ctx with FunctionNames = functionNames } func
             |> Result.map peepholeOptimize
         let reusableAcrossCompilations = Option.isSome functionCache
         let converted =
@@ -861,7 +868,7 @@ let private generatePreparedARM64WithOptionsAndCache
                         match functionCache with
                         | Some cache ->
                             cache
-                                (plannedGenericRefCountDecHelperCacheKey helperLabel)
+                                (plannedGenericRefCountDecHelperCacheKey (Map.find helperLabel helperIds) helperLabel)
                                 generate
                         | None ->
                             generate ()

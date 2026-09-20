@@ -576,7 +576,7 @@ let testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan () : TestResult 
                 [
                     LIR.ClosureAlloc (
                         LIR.Physical LIR.X1,
-                        AST.functionIdForName "arm64_nested_tuple_capture_fn",
+                        TestIds.functionIdForName "arm64_nested_tuple_capture_fn",
                         [LIR.Reg (LIR.Physical LIR.X2)])
                     LIR.RefCountDec (
                         LIR.Physical LIR.X1,
@@ -630,7 +630,7 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
                 [
                     LIR.ClosureAlloc (
                         LIR.Physical LIR.X1,
-                        AST.functionIdForName "arm64_sum_bytes_capture_fn",
+                        TestIds.functionIdForName "arm64_sum_bytes_capture_fn",
                         [LIR.Reg (LIR.Physical LIR.X2)])
                     LIR.RefCountDec (
                         LIR.Physical LIR.X1,

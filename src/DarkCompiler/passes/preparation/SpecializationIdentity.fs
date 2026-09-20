@@ -43,31 +43,24 @@ let importSpecializedFunctions
     (targetSymbols: CheckedAST.Symbols)
     (artifacts: GenericFunctionArtifact list)
     : CheckedAST.Symbols * CheckedAST.FunctionDef list =
-    let rec groupByNamespace remaining =
-        match remaining with
-        | [] -> []
-        | first :: _ ->
-            let same, rest =
-                remaining
-                |> List.partition (fun artifact ->
-                    CheckedAST.sameSymbolNamespace first.Symbols artifact.Symbols)
-            same :: groupByNamespace rest
-    groupByNamespace artifacts
-    |> List.fold (fun (symbols, functions) group ->
-        let sourceSymbols = (List.head group).Symbols
-        if CheckedAST.sameSymbolNamespace sourceSymbols symbols then
-            (symbols, functions @ (group |> List.map (fun artifact -> artifact.Function)))
-        else
-            let symbols, imported =
-                group
-                |> List.map (fun artifact -> CheckedAST.FunctionDef artifact.Function)
-                |> CheckedAST.importTopLevels sourceSymbols symbols
-            let importedFunctions =
-                imported
-                |> List.map (function
-                    | CheckedAST.FunctionDef functionDef -> functionDef
-                    | _ -> Crash.crash "Generic function import changed its top-level shape")
-            (symbols, functions @ importedFunctions)) (targetSymbols, [])
+    artifacts
+    |> List.fold (fun (symbols, functions) artifact ->
+        // Specializations are produced from immutable forks of a source symbol
+        // table. Equal namespace tokens therefore do not imply that ordinals
+        // allocated on separate forks identify the same generated function.
+        // Import each artifact through its names so the destination owns one
+        // collision-free identity namespace.
+        let symbols, imported =
+            CheckedAST.importTopLevels
+                artifact.Symbols
+                symbols
+                [CheckedAST.FunctionDef artifact.Function]
+        let importedFunction =
+            match imported with
+            | [CheckedAST.FunctionDef functionDef] -> functionDef
+            | _ -> Crash.crash "Generic function import changed its top-level shape"
+        (symbols, importedFunction :: functions)) (targetSymbols, [])
+    |> fun (symbols, functions) -> (symbols, List.rev functions)
 
 let private mangleTypeVarName (name: string) : string =
     name.Replace("_", "$u")
@@ -239,9 +232,12 @@ let internal normalizeSyntheticNullaryArgAtoms
     | [], [CheckedAST.UnitLiteral], [_] -> []
     | _ -> argAtoms
 
-let internal unresolvedKeyIntrinsicTypeArgErrorExpr (funcName: string) : CheckedAST.Expr =
+let internal unresolvedKeyIntrinsicTypeArgErrorExpr
+    (runtimeErrorId: AST.FunctionId)
+    (funcName: string)
+    : CheckedAST.Expr =
     CheckedAST.Call (
-        AST.functionIdForName "Builtin.testRuntimeError",
+        runtimeErrorId,
         AST.NonEmptyList.singleton (CheckedAST.StringLiteral $"Internal error: unresolved type arguments for {funcName}")
     )
 

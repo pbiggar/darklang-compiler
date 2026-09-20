@@ -178,12 +178,15 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 println $"    - {f.Name}"
 
                         let programEntryName = "__dark_compiler_program_entry"
+                        let programEntryId, symbolsWithProgramEntry =
+                            CheckedAST.internFunction programEntryName userOnly.Symbols
                         let hasReservedName =
                             functionsToCompile
                             |> List.exists (fun func -> func.Name = programEntryName)
                         let userRegistries : AST_to_ANF.Registries = {
                             ScopeContracts = userOnly.ScopeContracts
                             TypeReg = userOnly.TypeReg
+                            TypeNames = userOnly.TypeNames
                             RecordFieldsReg = userOnly.RecordFieldsReg
                             RecordTypeParamsReg = userOnly.RecordTypeParamsReg
                             VariantLookup = userOnly.VariantLookup
@@ -298,6 +301,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
 
                         let programEntry =
                             AST_to_ANF.synthesizeEntryFunction
+                                programEntryId
                                 programEntryName
                                 boundaryProgramType
                                 userOnly.MainExpr
@@ -309,7 +313,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 let pruneStart = sw.Elapsed.TotalMilliseconds
                                 let reachableFunctions =
                                     ANFDeadCodeElimination.filterReachableFunctions
-                                        (Set.singleton (AST.functionIdForName programEntryName))
+                                        (Set.singleton programEntryId)
                                         functions
                                 let pruneElapsed =
                                     sw.Elapsed.TotalMilliseconds - pruneStart
@@ -329,6 +333,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     println "  [anf.print-result] Print Insertion..."
                                 let printStart = sw.Elapsed.TotalMilliseconds
                                 PrintInsertion.insertPrintInEntry
+                                    userOnly.FunctionNames
                                     programEntryName
                                     boundaryProgramType
                                     functions
@@ -398,18 +403,21 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         externalReturnTypes
                                 let startResultId = ANF.TempId 0
                                 let startFunction =
+                                    let startId =
+                                        CheckedAST.internFunction "_start" symbolsWithProgramEntry |> fst
                                     AST_to_ANF.synthesizeEntryFunction
+                                        startId
                                         "_start"
                                         boundaryProgramType
                                         (ANF.Let (
                                             startResultId,
-                                            ANF.Call (AST.functionIdForName programEntryName, []),
+                                            ANF.Call (programEntryId, []),
                                             ANF.Return (ANF.Var startResultId)))
                                 let startRegistries = {
                                     userRegistries with
                                         FuncReg =
                                             Map.add
-                                                (AST.functionIdForName programEntryName)
+                                                programEntryId
                                                 (programEntryName, AST.TFunction ([], boundaryProgramType))
                                                 userRegistries.FuncReg
                                         FuncParams =
@@ -451,7 +459,10 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             startTypeMap
                                             startRegistries
                                             (Some projectedMirRegistries)
-                                            (Map.add programEntryName boundaryProgramType externalReturnTypes))
+                                            (Map.add
+                                                programEntryId
+                                                (programEntryName, boundaryProgramType)
+                                                externalReturnTypes))
                                 let startLirResult =
                                     match plan.Session with
                                     | Some current ->
@@ -476,7 +487,10 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     let userCallGraphStart = sw.Elapsed.TotalMilliseconds
                                     let userCallGraph =
                                         if plan.Options.DisableFunctionTreeShaking then Map.empty
-                                        else DeadCodeElimination.buildCallGraph allSymbolicUserFuncs
+                                        else
+                                            DeadCodeElimination.buildCallGraphWithNames
+                                                userRegistries.FunctionNames
+                                                allSymbolicUserFuncs
                                     let userCallGraphElapsed =
                                         sw.Elapsed.TotalMilliseconds - userCallGraphStart
                                     recordPassTiming
@@ -500,6 +514,48 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             shakenUserFuncs
                                         else
                                             allSymbolicUserFuncs
+
+                                    let finalUserFuncs =
+                                        if not plan.TreeShakeUserFunctions
+                                           || plan.Options.DisableFunctionTreeShaking then
+                                            finalUserFuncs
+                                        else
+                                            let allUserByName =
+                                                allSymbolicUserFuncs
+                                                |> List.map (fun func -> func.Name, func)
+                                                |> Map.ofList
+                                            let rec close reachable pending =
+                                                if Set.isEmpty pending then reachable
+                                                else
+                                                    let discovered =
+                                                        pending
+                                                        |> Set.toList
+                                                        |> List.choose (fun name -> Map.tryFind name allUserByName)
+                                                        |> List.fold (fun names func ->
+                                                            Set.union
+                                                                names
+                                                                (DeadCodeElimination.getCalledFunctionNames
+                                                                    userRegistries.FunctionNames
+                                                                    func)) Set.empty
+                                                        |> Set.filter (fun name ->
+                                                            Map.containsKey name allUserByName
+                                                            && not (Set.contains name reachable))
+                                                    close (Set.union reachable discovered) discovered
+                                            let initial =
+                                                finalUserFuncs
+                                                |> List.map (fun func -> func.Name)
+                                                |> Set.ofList
+                                                |> Set.union
+                                                    (allSymbolicUserFuncs
+                                                     |> List.map (fun func -> func.Name)
+                                                     |> List.filter (fun name ->
+                                                         name = "Builtin.pmFindValuesByValueType"
+                                                         || name = "Builtin.pmGetLocationsByValue"
+                                                         || name.StartsWith("Builtin.pmEvaluateValue_"))
+                                                     |> Set.ofList)
+                                            let reachable = close initial initial
+                                            allSymbolicUserFuncs
+                                            |> List.filter (fun func -> Set.contains func.Name reachable)
 
                                     if plan.EmitFunctionEvents && plan.Verbosity >= 3 then
                                         println $"  [COMBINED] fresh: {allocatedUserFuncs.Length}, total: {allSymbolicUserFuncs.Length}"
@@ -528,6 +584,83 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                         finalUserFuncs
                                                         plan.Stdlib.AllocatedFunctions
                                             filtered
+                                            |> fun initiallyReachable ->
+                                                let stdlibByName =
+                                                    plan.Stdlib.AllocatedFunctions
+                                                    |> List.map (fun func -> func.Name, func)
+                                                    |> Map.ofList
+                                                let stdlibNamesById =
+                                                    plan.Stdlib.AllocatedFunctions
+                                                    |> List.fold (fun byId func ->
+                                                        let names =
+                                                            Map.tryFind func.Id byId
+                                                            |> Option.defaultValue Set.empty
+                                                            |> Set.add func.Name
+                                                        Map.add func.Id names byId) Map.empty
+                                                let calledStdlibNames func =
+                                                    let resolved =
+                                                        DeadCodeElimination.getCalledFunctionNames
+                                                            userRegistries.FunctionNames
+                                                            func
+                                                        |> Set.filter (fun name -> Map.containsKey name stdlibByName)
+                                                    let identityCandidates =
+                                                        DeadCodeElimination.getCalledFunctions func
+                                                        |> Set.fold (fun names id ->
+                                                            Set.union
+                                                                names
+                                                                (Map.tryFind id stdlibNamesById
+                                                                 |> Option.defaultValue Set.empty)) Set.empty
+                                                    Set.union resolved identityCandidates
+                                                let rec close reachableNames pendingNames =
+                                                    match Set.isEmpty pendingNames with
+                                                    | true -> reachableNames
+                                                    | false ->
+                                                        let discovered =
+                                                            pendingNames
+                                                            |> Set.toList
+                                                            |> List.choose (fun name -> Map.tryFind name stdlibByName)
+                                                            |> List.fold (fun names func ->
+                                                                Set.union
+                                                                    names
+                                                                    (calledStdlibNames func)) Set.empty
+                                                            |> Set.filter (fun name ->
+                                                                Map.containsKey name stdlibByName
+                                                                && not (Set.contains name reachableNames))
+                                                        close
+                                                            (Set.union reachableNames discovered)
+                                                            discovered
+                                                let initialNames =
+                                                    initiallyReachable
+                                                    |> List.map (fun func -> func.Name)
+                                                    |> Set.ofList
+                                                let directUserNames =
+                                                    finalUserFuncs
+                                                    |> List.fold (fun names func ->
+                                                        Set.union
+                                                            names
+                                                            (calledStdlibNames func)) Set.empty
+                                                let directUserNames =
+                                                    if
+                                                        (directUserNames
+                                                         |> Set.exists (fun name ->
+                                                             name.StartsWith("Darklang.Stdlib.List.__toDisplayString_")))
+                                                        || (finalUserFuncs
+                                                            |> List.exists DeadCodeElimination.requiresListDisplayHelpers)
+                                                    then
+                                                        stdlibByName
+                                                        |> Map.keys
+                                                        |> Seq.filter (fun name ->
+                                                            name.StartsWith("Darklang.Stdlib.List."))
+                                                        |> Set.ofSeq
+                                                        |> Set.union directUserNames
+                                                    else
+                                                        directUserNames
+                                                let reachableNames =
+                                                    close
+                                                        (Set.union initialNames directUserNames)
+                                                        directUserNames
+                                                plan.Stdlib.AllocatedFunctions
+                                                |> List.filter (fun func -> Set.contains func.Name reachableNames)
                                             |> fun shakenStdlib ->
                                                 let treeShakeElapsed = sw.Elapsed.TotalMilliseconds - treeShakeStart
                                                 recordPassTiming plan.PassTimingRecorder "Function Tree Shaking" treeShakeElapsed
@@ -647,7 +780,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                 Functions = startProgramFuncs
                                             }
                                             {
-                                                ContextIdentity = box reachableStdlib
+                                                ContextIdentity = box plan.Stdlib
                                                 ReusableAcrossCompilations = true
                                                 Functions = reachableStdlib
                                             }

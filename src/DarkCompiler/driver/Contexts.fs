@@ -27,9 +27,9 @@ let internal reserveBaseFunctionParams
         if Map.containsKey name acc then acc else Map.add name [] acc) funcParams
 
 let internal mergeReturnTypes
-    (baseReturnTypes: Map<string, AST.Type>)
-    (overlayReturnTypes: Map<string, AST.Type>)
-    : Map<string, AST.Type> =
+    (baseReturnTypes: Map<AST.FunctionId, string * AST.Type>)
+    (overlayReturnTypes: Map<AST.FunctionId, string * AST.Type>)
+    : Map<AST.FunctionId, string * AST.Type> =
     Map.fold (fun acc k v -> Map.add k v acc) baseReturnTypes overlayReturnTypes
 
 let internal packageCatalogFunctionNames =
@@ -37,20 +37,23 @@ let internal packageCatalogFunctionNames =
         "Builtin.pmFindValuesByValueType"
         "Builtin.pmGetLocationsByValue"
         "Builtin.pmEvaluateValue"
-    ] |> Set.map AST.functionIdForName
+    ]
 
 /// Generic functions whose call graph can reach a package-catalog intrinsic.
 /// This lets ordinary programs skip catalog specialization without changing
 /// the behavior of generic wrappers around the catalog API.
 let private buildPackageCatalogGenericCallers
     (genericFuncDefs: SpecializationIdentity.GenericFuncDefs)
-    : Set<AST.FunctionId> =
+    : Set<string> =
     let callsByFunction =
         genericFuncDefs
         |> Map.toList
         |> List.map (fun (name, definition) ->
-            AST.functionIdForName name,
-            Monomorphization.collectCalledFunctions definition.Function.Body)
+            name,
+            Monomorphization.collectCalledFunctions definition.Function.Body
+            |> Set.toList
+            |> List.choose (fun id -> CheckedAST.functionName id definition.Symbols)
+            |> Set.ofList)
         |> Map.ofList
     let rec findFixedPoint callers =
         let targets = Set.union packageCatalogFunctionNames callers
@@ -78,6 +81,7 @@ let internal checkedValueArtifacts (program: CheckedAST.Program) : Map<string, C
     |> Map.map (fun _ (typ, body) -> { Symbols = symbols; Type = typ; Body = body })
 
 type PipelineContext = {
+    Symbols: CheckedAST.Symbols
     Target: Platform.Target
     TypeCheckEnv: CheckingTypes.TypeCheckEnv
     CheckedValues: Map<string, CheckedValueArtifact>
@@ -89,25 +93,27 @@ type PipelineContext = {
     LambdaLiftTypeReg: TypeRegistries.TypeRegistry
     LambdaLiftVariantLookup: LoweringPrimitives.VariantLookup
     ProjectedMirRegistries: MIR.VariantRegistry * MIR.RecordRegistry
-    ReturnTypes: Map<string, AST.Type>
-    PackageCatalogGenericCallers: Set<AST.FunctionId>
+    ReturnTypes: Map<AST.FunctionId, string * AST.Type>
+    PackageCatalogGenericCallers: Set<string>
 }
 
 let internal buildContext
     (target: Platform.Target)
+    (symbols: CheckedAST.Symbols)
     (typeCheckEnv: CheckingTypes.TypeCheckEnv)
     (checkedValues: Map<string, CheckedValueArtifact>)
     (genericFuncDefs: SpecializationIdentity.GenericFuncDefs)
     (specRegistry: SpecializationIdentity.SpecRegistry)
     (registries: AST_to_ANF.Registries)
     (baseFuncNames: Set<string>)
-    (returnTypes: Map<string, AST.Type>)
+    (returnTypes: Map<AST.FunctionId, string * AST.Type>)
     : PipelineContext =
     let (lambdaLiftTypeReg, lambdaLiftVariantLookup) =
         LiftFunctions.prepareLambdaLiftBaseTypes
             registries.TypeReg
             registries.VariantLookup
     {
+        Symbols = symbols
         Target = target
         TypeCheckEnv = typeCheckEnv
         CheckedValues = checkedValues

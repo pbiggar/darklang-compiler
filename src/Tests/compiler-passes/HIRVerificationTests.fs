@@ -2,7 +2,7 @@
 
 module HIRVerificationTests
 
-let private fid = AST.functionIdForName
+let private fid = TestIds.functionIdForName
 
 type private TestBlock = TestBlock of HIR.Block<HIR.Operation<HIR.PrimitiveContract, TestBlock>>
 

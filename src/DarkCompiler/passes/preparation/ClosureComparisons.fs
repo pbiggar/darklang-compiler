@@ -140,6 +140,7 @@ let internal planLambdaComparison
              state))
 
 let private comparisonForCapturedValue
+    (symbols: CheckedAST.Symbols)
     (_variantLookup: VariantLookup)
     (typ: AST.Type)
     (left: CheckedAST.Expr)
@@ -149,16 +150,20 @@ let private comparisonForCapturedValue
         match typ with
         | AST.TFunction _ | AST.TList _ | AST.TDict _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _ -> true
         | _ -> false
+    let resolvedFunctionId name =
+        CheckedAST.tryFindFunctionId name symbols
+        |> Option.defaultWith (fun () ->
+            Crash.crash $"Closure comparison function '{name}' is absent from symbols")
     if needsStructuralHelper then
         CheckedAST.Call (
-            AST.functionIdForName (ComparisonPlanning.eqHelperName typ),
+            resolvedFunctionId (ComparisonPlanning.eqHelperName typ),
             exprArgsFromList [left; right]
         )
     elif typ = AST.TString then
         CheckedAST.BinOp (AST.Eq, left, right)
     elif typ = AST.TInt then
         CheckedAST.Call (
-            AST.functionIdForName "Darklang.Stdlib.Int.__equals",
+            resolvedFunctionId "Darklang.Stdlib.Int.__equals",
             exprArgsFromList [left; right]
         )
     else
@@ -181,6 +186,7 @@ let internal makeClosureComparator
             captureTypes
             |> List.mapi (fun index captureType ->
                 comparisonForCapturedValue
+                    symbols
                     variantLookup
                     captureType
                     (CheckedAST.TupleAccess (CheckedAST.Local leftId, index + 2))
@@ -190,9 +196,9 @@ let internal makeClosureComparator
         match comparisons with
         | [] -> CheckedAST.BoolLiteral true
         | first :: rest -> rest |> List.fold (fun acc item -> CheckedAST.BinOp (AST.And, acc, item)) first
-    let (_, symbols) = CheckedAST.internFunction comparisonName symbols
+    let (comparisonId, symbols) = CheckedAST.internFunction comparisonName symbols
     ({
-        Id = AST.functionIdForName comparisonName
+        Id = comparisonId
         Name = comparisonName
         TypeParams = []
         Params =
@@ -266,22 +272,22 @@ let rec internal rewriteRecursiveSelfReferences
     | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _
     | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BoolLiteral _
-    | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
-    | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> expr
+    | CheckedAST.StringLiteral _ | CheckedAST.BlobLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
+    | CheckedAST.Local _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> expr
 
 /// Once the lifted member has a code identity, recursive closure calls become
 /// direct calls with the existing group environment as their first argument.
 let rec internal rewriteLiftedSelfCalls
-    (liftedName: string)
+    (liftedId: AST.FunctionId)
     (closureId: AST.BindingId)
     (expr: CheckedAST.Expr)
     : CheckedAST.Expr =
-    let recurse = rewriteLiftedSelfCalls liftedName closureId
+    let recurse = rewriteLiftedSelfCalls liftedId closureId
     let mapArgs = AST.NonEmptyList.map recurse
     match expr with
     | CheckedAST.Apply (CheckedAST.Local id, args) when id = closureId ->
         CheckedAST.Call (
-            AST.functionIdForName liftedName,
+            liftedId,
             AST.NonEmptyList.cons (CheckedAST.Local closureId) (mapArgs args)
         )
     | CheckedAST.BoundaryRender (renderer, value) -> CheckedAST.BoundaryRender (renderer, recurse value)
@@ -318,7 +324,7 @@ let rec internal rewriteLiftedSelfCalls
     | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _
     | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BoolLiteral _
-    | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
-    | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> expr
+    | CheckedAST.StringLiteral _ | CheckedAST.BlobLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
+    | CheckedAST.Local _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> expr
 
 /// Lift lambdas in an expression, returning (transformed expr, new state)

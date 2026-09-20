@@ -175,9 +175,9 @@ let private validateRequests definitions discovered semantics requests =
     let groupNames =
         discovered
         |> List.collect (fun group ->
-            let names = OwnedFunctionGroups.functions group |> List.map (fun definition -> definition.Definition.Name) |> Set.ofList
-            let ids = names |> Set.map AST.functionIdForName
-            names |> Set.toList |> List.map (fun name -> AST.functionIdForName name, ids))
+            let members = OwnedFunctionGroups.functions group
+            let ids = members |> List.map (fun definition -> definition.Definition.Id) |> Set.ofList
+            members |> List.map (fun definition -> definition.Definition.Id, ids))
         |> Map.ofList
     let callSites =
         definitions
@@ -201,10 +201,18 @@ let private validateRequests definitions discovered semantics requests =
                 | Some _ -> Ok ())) (Ok ())
         |> Result.bind (fun () ->
             let names = boundaries |> List.map (fun boundary -> boundary.Name) |> Set.ofList
-            if AST.functionIdForName target.Name <> request.Call.Target then Error (BoundaryMismatch requestTargetName)
-            elif Map.tryFind request.Call.Target groupNames <> Some (names |> Set.map AST.functionIdForName) then
+            let ids =
+                names
+                |> Set.toList
+                |> List.choose (fun name -> Map.tryFind name definitionsByName |> Option.map (fun definition -> definition.Definition.Id))
+                |> Set.ofList
+            let targetId =
+                Map.tryFind target.Name definitionsByName
+                |> Option.map (fun definition -> definition.Definition.Id)
+            if targetId <> Some request.Call.Target then Error (BoundaryMismatch requestTargetName)
+            elif Map.tryFind request.Call.Target groupNames <> Some ids then
                 Error (GroupMembershipMismatch target.Name)
-            elif Set.contains request.Caller (names |> Set.map AST.functionIdForName) then
+            elif Set.contains request.Caller ids then
                 Error (MixedRecursiveCandidate (site request))
             else Ok ())
     requests
@@ -254,6 +262,17 @@ let private cloneGroups
         |> List.map (fun selected -> selectedIdentity selected, selectedCandidate selected)
         |> Map.ofList
     let occupied = Set.union reserved (definitions |> List.map (fun definition -> definition.Definition.Name) |> Set.ofList)
+    let cloneNames =
+        selections
+        |> Map.toList
+        |> List.collect (fun (identity, candidate) ->
+            let suffix = symbolSuffix identity
+            InferOwnedFunctionGroups.candidateBoundaries candidate
+            |> List.map (fun boundary -> boundary.Name + suffix))
+    let cloneIds =
+        AST.allocateFunctionIds
+            (definitions |> List.map (fun definition -> definition.Definition.Id))
+            cloneNames
     selections
     |> Map.toList
     |> List.fold (fun result (identity, candidate) ->
@@ -262,7 +281,12 @@ let private cloneGroups
             let boundaries = InferOwnedFunctionGroups.candidateBoundaries candidate |> List.sortBy (fun boundary -> boundary.Name)
             let symbols =
                 boundaries
-                |> List.map (fun boundary -> AST.functionIdForName boundary.Name, AST.functionIdForName (boundary.Name + suffix))
+                |> List.map (fun boundary ->
+                    let originalId =
+                        Map.tryFind boundary.Name definitionsByName
+                        |> Option.map (fun definition -> definition.Definition.Id)
+                        |> Option.defaultWith (fun () -> Crash.crash "Ownership boundary definition is absent")
+                    originalId, Map.find (boundary.Name + suffix) cloneIds)
                 |> Map.ofList
             let rewrite (call: HIR.FunctionCall) =
                 match Map.tryFind call.Target symbols with
@@ -279,7 +303,7 @@ let private cloneGroups
                             Ownership = boundary.Ownership
                             Definition = {
                                 original.Definition with
-                                    Id = AST.functionIdForName name
+                                    Id = Map.find name cloneIds
                                     Name = name
                                     Body = rewriteCalls rewrite original.Definition.Body
                             }

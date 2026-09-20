@@ -13,8 +13,8 @@ type TestResult = Result<unit, string>
 /// Semantic identities retain the complete source name. These two names
 /// collide under the former 31-bit FNV representation.
 let testFunctionIdentitiesDoNotHashCollide () : TestResult =
-    let generated = AST.functionIdForName "e2eBatchde340de328b830e8_Check5"
-    let stdlib = AST.functionIdForName "Darklang.Stdlib.Int64.__digitToString"
+    let generated = TestIds.functionIdForName "e2eBatchde340de328b830e8_Check5"
+    let stdlib = TestIds.functionIdForName "Darklang.Stdlib.Int64.__digitToString"
     if generated <> stdlib then Ok ()
     else Error "Distinct function names received the same semantic identity"
 
@@ -27,7 +27,7 @@ let testMirToLirSymbolicOperands () : TestResult =
     let block: MIR.BasicBlock = { Label = label; Instrs = instrs; Terminator = MIR.Ret (MIR.Register (MIR.VReg 0)) }
     let cfg: MIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
     let func: MIR.Function = {
-        Id = AST.functionIdForName "mir_symbolic_operands"
+        Id = TestIds.functionIdForName "mir_symbolic_operands"
         Name = "mir_symbolic_operands"
         TypedParams = []
         ReturnType = AST.TString
@@ -61,7 +61,7 @@ let testMirToLirReportsMissingEntryBlock () : TestResult =
           Terminator = MIR.Ret (MIR.Register (MIR.VReg 0)) }
     let cfg: MIR.CFG = { Entry = entry; Blocks = Map.ofList [ (actual, block) ] }
     let func: MIR.Function =
-        { Id = AST.functionIdForName "missing_entry"
+        { Id = TestIds.functionIdForName "missing_entry"
           Name = "missing_entry"
           TypedParams = []
           ReturnType = AST.TInt64
@@ -85,7 +85,7 @@ let testMirToLirUsesNativeInt64ShiftMask () : TestResult =
           Terminator = MIR.Ret (MIR.Register (MIR.VReg 3)) }
     let cfg: MIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
     let func: MIR.Function =
-        { Id = AST.functionIdForName "native_int64_shift_mask"
+        { Id = TestIds.functionIdForName "native_int64_shift_mask"
           Name = "native_int64_shift_mask"
           TypedParams = [{ Reg = MIR.VReg 0; Type = AST.TInt64 }; { Reg = MIR.VReg 1; Type = AST.TInt64 }]
           ReturnType = AST.TInt64
@@ -118,7 +118,7 @@ let testMirToLirAllocatesFloatHeapStoreTemporary () : TestResult =
           Terminator = MIR.Ret (MIR.Register (MIR.VReg 0)) }
     let cfg: MIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
     let func: MIR.Function =
-        { Id = AST.functionIdForName "float_heap_store_temp"
+        { Id = TestIds.functionIdForName "float_heap_store_temp"
           Name = "float_heap_store_temp"
           TypedParams = []
           ReturnType = AST.TInt64
@@ -157,7 +157,7 @@ let testMirToLirUsesImmediateMaskForListToRawPtr () : TestResult =
           Terminator = MIR.Ret (MIR.Register rawPtrReg) }
     let cfg: MIR.CFG = { Entry = label; Blocks = Map.ofList [ (label, block) ] }
     let func: MIR.Function =
-        { Id = AST.functionIdForName "list_to_raw_ptr"
+        { Id = TestIds.functionIdForName "list_to_raw_ptr"
           Name = "list_to_raw_ptr"
           TypedParams = [{ Reg = listReg; Type = AST.TList AST.TInt64 }]
           ReturnType = AST.TRawPtr

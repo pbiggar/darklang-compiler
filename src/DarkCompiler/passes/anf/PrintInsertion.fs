@@ -16,7 +16,12 @@ let unsupportedListDisplay (elemType: AST.Type) : 'a =
 /// Wrap the return value with a Print instruction
 /// Transforms: Return atom  →  Let (_, Print (atom, type), Return atom)
 /// For list types, generates: Call toDisplayString, then Print the string
-let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExpr) : AExpr * VarGen =
+let rec wrapReturnWithPrint
+    (resolveFunction: string -> AST.FunctionId)
+    (programType: AST.Type)
+    (varGen: VarGen)
+    (expr: AExpr)
+    : AExpr * VarGen =
     let defaultPrintType =
         match programType with
         // Builtin.testRuntimeError has a bottom-like compile-time type.
@@ -46,7 +51,7 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
                 // Keep the display helper reachable so tree shaking doesn't drop it.
                 let (keepFunc, varGen1) = freshVar varGen
                 let (printTmp, varGen2) = freshVar varGen1
-                let keepExpr = Atom (FuncRef (AST.functionIdForName toDisplayStringName))
+                let keepExpr = Atom (FuncRef (resolveFunction toDisplayStringName))
                 let printExpr = Print (atom, printType)
                 (Let (keepFunc, keepExpr, Let (printTmp, printExpr, Return atom)), varGen2)
             | None ->
@@ -58,7 +63,7 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
                 //           let _ = Print(strTmp, String) in Return atom
                 let (strTmp, varGen1) = freshVar varGen
                 let (printTmp, varGen2) = freshVar varGen1
-                let callExpr = Call (AST.functionIdForName toDisplayStringName, [atom])
+                let callExpr = Call (resolveFunction toDisplayStringName, [atom])
                 let printExpr = Print (Var strTmp, AST.TString)
                 (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
             | None ->
@@ -68,7 +73,7 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
             let (strTmp, varGen1) = freshVar varGen
             let (printTmp, varGen2) = freshVar varGen1
             let callExpr =
-                Call (AST.functionIdForName "Darklang.Stdlib.Float.toString", [atom])
+                Call (resolveFunction "Darklang.Stdlib.Float.toString", [atom])
             let printExpr = Print (Var strTmp, AST.TString)
             (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
         | AST.TDateTime ->
@@ -76,7 +81,7 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
             let (strTmp, varGen1) = freshVar varGen
             let (printTmp, varGen2) = freshVar varGen1
             let callExpr =
-                Call (AST.functionIdForName "Darklang.Stdlib.DateTime.toString", [atom])
+                Call (resolveFunction "Darklang.Stdlib.DateTime.toString", [atom])
             let printExpr = Print (Var strTmp, AST.TString)
             (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
         | AST.TSum ("Uuid", []) ->
@@ -84,7 +89,7 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
             let (strTmp, varGen1) = freshVar varGen
             let (printTmp, varGen2) = freshVar varGen1
             let callExpr =
-                Call (AST.functionIdForName "Darklang.Stdlib.Uuid.toString", [atom])
+                Call (resolveFunction "Darklang.Stdlib.Uuid.toString", [atom])
             let printExpr = Print (Var strTmp, AST.TString)
             (Let (strTmp, callExpr, Let (printTmp, printExpr, Return atom)), varGen2)
         | _ ->
@@ -93,27 +98,43 @@ let rec wrapReturnWithPrint (programType: AST.Type) (varGen: VarGen) (expr: AExp
             (Let (printTmp, Print (atom, printType), Return atom), varGen')
     | Let (tempId, cexpr, body) ->
         // Recurse into body
-        let (body', varGen') = wrapReturnWithPrint programType varGen body
+        let (body', varGen') = wrapReturnWithPrint resolveFunction programType varGen body
         (Let (tempId, cexpr, body'), varGen')
     | Jump _ -> (expr, varGen)
     | Join (parameter, continuation, entry) ->
-        let continuation', next = wrapReturnWithPrint programType varGen continuation
-        let entry', final = wrapReturnWithPrint programType next entry
+        let continuation', next = wrapReturnWithPrint resolveFunction programType varGen continuation
+        let entry', final = wrapReturnWithPrint resolveFunction programType next entry
         (Join (parameter, continuation', entry'), final)
     | If (cond, thenBranch, elseBranch) ->
         // Wrap both branches
-        let (thenBranch', varGen1) = wrapReturnWithPrint programType varGen thenBranch
-        let (elseBranch', varGen2) = wrapReturnWithPrint programType varGen1 elseBranch
+        let (thenBranch', varGen1) = wrapReturnWithPrint resolveFunction programType varGen thenBranch
+        let (elseBranch', varGen2) = wrapReturnWithPrint resolveFunction programType varGen1 elseBranch
         (If (cond, thenBranch', elseBranch'), varGen2)
 
 /// Insert Print at the end of the main expression
 let insertPrint (functions: ANF.Function list) (mainExpr: ANF.AExpr) (programType: AST.Type) : ANF.Program =
+    let idsByName = functions |> List.map (fun fn -> fn.Name, fn.Id) |> Map.ofList
+    let resolveFunction name =
+        Map.tryFind name idsByName
+        |> Option.defaultWith (fun () -> Crash.crash $"Print helper '{name}' is absent from ANF functions")
     let varGen = VarGen 2000  // Start high to avoid conflicts
-    let (exprWithPrint, _) = wrapReturnWithPrint programType varGen mainExpr
+    let (exprWithPrint, _) = wrapReturnWithPrint resolveFunction programType varGen mainExpr
     ANF.Program (functions, exprWithPrint)
 
 /// Insert Print into a named entry function
-let insertPrintInEntry (entryName: string) (programType: AST.Type) (functions: ANF.Function list) : Result<ANF.Function list, string> =
+let insertPrintInEntry
+    (functionNames: Map<AST.FunctionId, string>)
+    (entryName: string)
+    (programType: AST.Type)
+    (functions: ANF.Function list)
+    : Result<ANF.Function list, string> =
+    let idsByName =
+        functionNames
+        |> Map.fold (fun names id name -> Map.add name id names) Map.empty
+        |> fun names -> functions |> List.fold (fun names fn -> Map.add fn.Name fn.Id names) names
+    let resolveFunction name =
+        Map.tryFind name idsByName
+        |> Option.defaultWith (fun () -> Crash.crash $"Print helper '{name}' is absent from ANF functions")
     let varGen = VarGen 2000  // Start high to avoid conflicts
     let rec update found remaining =
         match remaining with
@@ -122,7 +143,7 @@ let insertPrintInEntry (entryName: string) (programType: AST.Type) (functions: A
             else Error $"Entry function '{entryName}' not found for print insertion"
         | f :: rest ->
             if f.Name = entryName then
-                let (bodyWithPrint, _) = wrapReturnWithPrint programType varGen f.Body
+                let (bodyWithPrint, _) = wrapReturnWithPrint resolveFunction programType varGen f.Body
                 update true rest
                 |> Result.map (fun updatedTail -> { f with Body = bodyWithPrint } :: updatedTail)
             else

@@ -55,7 +55,7 @@ let testNonSelfTailCallMovesDecBeforeTailCall () : TestResult =
           SourceType = Some tupleType }
 
     let caller : Function = {
-        Id = AST.functionIdForName "caller"
+        Id = TestIds.functionIdForName "caller"
         Name = "caller"
         TypedParams = [{ Id = p0; Type = AST.TInt64 }]
         ReturnType = AST.TInt64
@@ -66,7 +66,7 @@ let testNonSelfTailCallMovesDecBeforeTailCall () : TestResult =
                 TupleAlloc [Var p0; IntLiteral (Int64 1L)],
                 Let (
                     callTmp,
-                    Call (AST.functionIdForName "callee", [Var p0]),
+                    Call (TestIds.functionIdForName "callee", [Var p0]),
                     Let (decTmp, RefCountDec (Var tupleTmp, 16, GenericHeap, Some tupleMetadata), Return (Var callTmp))
                 )
             )
@@ -93,7 +93,7 @@ let testIndirectTailCallMovesDecBeforeTailCall () : TestResult =
           SourceType = Some tupleType }
 
     let caller : Function = {
-        Id = AST.functionIdForName "caller"
+        Id = TestIds.functionIdForName "caller"
         Name = "caller"
         TypedParams = [{ Id = p0; Type = AST.TInt64 }]
         ReturnType = AST.TInt64
@@ -101,7 +101,7 @@ let testIndirectTailCallMovesDecBeforeTailCall () : TestResult =
         Body =
             Let (
                 funcTmp,
-                Atom (FuncRef (AST.functionIdForName "callee")),
+                Atom (FuncRef (TestIds.functionIdForName "callee")),
                 Let (
                     tupleTmp,
                     TupleAlloc [Var p0; IntLiteral (Int64 1L)],
@@ -126,7 +126,7 @@ let testClosureCallInTailPositionBecomesClosureTailCall () : TestResult =
     let value = TempId 1
     let result = TempId 2
     let caller : Function = {
-        Id = AST.functionIdForName "closureCaller"
+        Id = TestIds.functionIdForName "closureCaller"
         Name = "closureCaller"
         TypedParams = [
             { Id = closure; Type = AST.TFunction ([AST.TInt64], AST.TInt64) }
@@ -156,7 +156,7 @@ let testOwnedTransferDeclinesMismatchedArity () : TestResult =
     let refCountDec atom = RefCountDec (atom, 16, GenericHeap, Some tupleMetadata)
 
     let caller : Function = {
-        Id = AST.functionIdForName "caller"
+        Id = TestIds.functionIdForName "caller"
         Name = "caller"
         TypedParams = [{ Id = p0; Type = tupleType }]
         ReturnType = tupleType
@@ -170,7 +170,7 @@ let testOwnedTransferDeclinesMismatchedArity () : TestResult =
                     refCountDec (Var p0),
                     Let (
                         callTmp,
-                        Call (AST.functionIdForName "caller", [Var p0; IntLiteral (Int64 1L); IntLiteral (Int64 2L)]),
+                        Call (TestIds.functionIdForName "caller", [Var p0; IntLiteral (Int64 1L); IntLiteral (Int64 2L)]),
                         Let (cleanupTmp, refCountDec (Var p0), Return (Var callTmp))
                     )
                 )
@@ -179,7 +179,7 @@ let testOwnedTransferDeclinesMismatchedArity () : TestResult =
 
     let transformed = detectTailCallsInFunction caller
     match transformed.Body with
-    | Let (_, _, Let (_, _, Let (_, Call (name, _), _))) when name = AST.functionIdForName "caller" -> Ok ()
+    | Let (_, _, Let (_, _, Let (_, Call (name, _), _))) when name = TestIds.functionIdForName "caller" -> Ok ()
     | _ -> Error "Mismatched-arity owned transfer should preserve the ordinary call cleanup path"
 
 let private ownedTransferTestFunction
@@ -211,7 +211,7 @@ let private ownedTransferTestFunction
             Let (cleanupTemp, cleanup, Return (Var callTmp)))
         |> Option.defaultValue (Return (Var callTmp))
     {
-        Id = AST.functionIdForName "caller"
+        Id = TestIds.functionIdForName "caller"
         Name = "caller"
         TypedParams = [
             { Id = p0; Type = tupleType }
@@ -234,7 +234,7 @@ let private ownedTransferTestFunction
                             dec p1,
                             Let (
                                 callTmp,
-                                Call (AST.functionIdForName "caller", [Var replacement0; Var secondArgument]),
+                                Call (TestIds.functionIdForName "caller", [Var replacement0; Var secondArgument]),
                                 Let (cleanup0, dec replacement0, terminal)
                             )
                         )
@@ -250,7 +250,7 @@ let testOwnedTransferRequiresOneToOneCleanupAccounting () : TestResult =
         |> detectTailCallsInFunction
     let rec containsOrdinarySelfCall expr =
         match expr with
-        | Let (_, Call (id, _), _) when id = AST.functionIdForName "caller" -> true
+        | Let (_, Call (id, _), _) when id = TestIds.functionIdForName "caller" -> true
         | Let (_, _, body) -> containsOrdinarySelfCall body
         | Join (_, continuation, entry)
         | If (_, continuation, entry) ->
@@ -278,7 +278,7 @@ let testOwnedTransferAcceptsMultipleExactlyMatchedCleanups () : TestResult =
         |> detectTailCallsInFunction
     let rec containsSelfTailCall expr =
         match expr with
-        | Let (_, TailCall (id, _), _) when id = AST.functionIdForName "caller" -> true
+        | Let (_, TailCall (id, _), _) when id = TestIds.functionIdForName "caller" -> true
         | Let (_, _, body) -> containsSelfTailCall body
         | Join (_, continuation, entry)
         | If (_, continuation, entry) ->
@@ -306,7 +306,7 @@ let testRetainedProjectionAllowsSelfTailCall () : TestResult =
           SourceType = Some typ }
 
     let func : Function = {
-        Id = AST.functionIdForName "loop"
+        Id = TestIds.functionIdForName "loop"
         Name = "loop"
         TypedParams = [{ Id = current; Type = listType }]
         ReturnType = AST.TInt64
@@ -323,7 +323,7 @@ let testRetainedProjectionAllowsSelfTailCall () : TestResult =
                         RefCountInc (Var projected, 24, TaggedList, Some (metadata listType listPlan)),
                         Let (
                             callResult,
-                            Call (AST.functionIdForName "loop", [Var projected]),
+                            Call (TestIds.functionIdForName "loop", [Var projected]),
                             Let (
                                 releaseSource,
                                 RefCountDec (Var source, 8, GenericHeap, Some (metadata tupleType tuplePlan)),
@@ -339,7 +339,7 @@ let testRetainedProjectionAllowsSelfTailCall () : TestResult =
     let rec containsSelfTailCall expr =
         match expr with
         | Let (_, TailCall (id, _), _)
-            when id = AST.functionIdForName "loop" -> true
+            when id = TestIds.functionIdForName "loop" -> true
         | Let (_, _, body) -> containsSelfTailCall body
         | Join (_, continuation, entry)
         | If (_, continuation, entry) ->

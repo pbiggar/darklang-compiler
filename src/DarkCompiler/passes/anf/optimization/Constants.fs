@@ -29,6 +29,7 @@ type OptimizeContext = {
     TypeReg: Map<string, (string * AST.Type) list>
     RecordTypeParams: Map<string, string list>
     SumShapeReg: RcSumShapeRegistry
+    FunctionNames: Map<AST.FunctionId, string>
 }
 
 let defaultOptimizeOptions = {

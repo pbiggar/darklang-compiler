@@ -59,13 +59,13 @@ let private parameter name value : HIR.Parameter =
     { Name = name; Binding = binding name; Value = value }
 
 let private functionDefinition name ownership body : Function<TestLeaf, string> = {
-    Definition = { Id = AST.functionIdForName name; Name = name; Body = body }
+    Definition = { Id = TestIds.functionIdForName name; Name = name; Body = body }
     Ownership = ownership
 }
 
 let private call target arguments result =
     Evaluate (HIR.Call {
-        Target = AST.functionIdForName target
+        Target = TestIds.functionIdForName target
         Arguments = arguments
         Result = result
     })
@@ -183,7 +183,7 @@ let private testRejectsInvalidFunctionGroup () =
     | Error (
         InferOwnershipUniqueness.NoVerifiedFunctionGroup (
             DuplicateFunctionName id))
-        when id = AST.functionIdForName "duplicate" -> Ok ()
+        when id = TestIds.functionIdForName "duplicate" -> Ok ()
     | actual -> Error $"Expected duplicate function names to reject group inference, got {actual}"
 
 let private testBoundsGroupSearch () =

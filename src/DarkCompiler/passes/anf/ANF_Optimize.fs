@@ -46,7 +46,7 @@ let private rewriteInvertedBoolLiteralBranchesInProgram (program: Program) : Pro
 let optimizeProgramWithOptionsAndExternalFunctions
     (context: OptimizeContext)
     (options: OptimizeOptions)
-    (eligibleTailRecursionNames: Set<string>)
+    (eligibleTailRecursionNames: Set<AST.FunctionId>)
     (externalFunctions: Map<string, Function>)
     (program: Program)
     : Program =
@@ -68,7 +68,7 @@ let optimizeProgramWithOptionsAndExternalFunctions
             { optimized with Body = devirtualizeCaptureFreeClosures optimized.Body })
 
     // Optimize main expression
-    let mainFunc = { Id = AST.functionIdForName "__main__"
+    let mainFunc = { Id = AST.functionId -1
                      Name = "__main__"
                      TypedParams = []
                      ReturnType = AST.TUnit
@@ -80,17 +80,17 @@ let optimizeProgramWithOptionsAndExternalFunctions
         Program (functions', devirtualizeCaptureFreeClosures mainOptimized.Body)
     if options.EnableTailRecursionModuloOperation then
         optimizedProgram
-        |> transformTailRecursionModuloAddition eligibleTailRecursionNames
-        |> transformTailRecursionModuloSubtraction eligibleTailRecursionNames
-        |> transformTailRecursionModuloMultiplication eligibleTailRecursionNames
-        |> transformTailRecursionModuloFixedConstructors eligibleTailRecursionNames
-        |> transformTailRecursionModuloListConstructors eligibleTailRecursionNames externalFunctions
+        |> transformTailRecursionModuloAddition context.FunctionNames eligibleTailRecursionNames
+        |> transformTailRecursionModuloSubtraction context.FunctionNames eligibleTailRecursionNames
+        |> transformTailRecursionModuloMultiplication context.FunctionNames eligibleTailRecursionNames
+        |> transformTailRecursionModuloFixedConstructors context.FunctionNames eligibleTailRecursionNames
+        |> transformTailRecursionModuloListConstructors context.FunctionNames eligibleTailRecursionNames externalFunctions
     else
         optimizedProgram
 
 let optimizeProgramWithOptions (context: OptimizeContext) (options: OptimizeOptions) (program: Program) : Program =
     let (Program (functions, _)) = program
-    let eligible = functions |> List.map (fun func -> func.Name) |> Set.ofList
+    let eligible = functions |> List.map (fun func -> func.Id) |> Set.ofList
     optimizeProgramWithOptionsAndExternalFunctions context options eligible Map.empty program
 
 /// Optimize a program with default options

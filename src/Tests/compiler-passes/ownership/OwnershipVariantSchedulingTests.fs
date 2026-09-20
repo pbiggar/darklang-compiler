@@ -6,7 +6,7 @@ open OwnedIR
 
 type private Leaf = Fresh of HIR.Value
 
-let private fid = AST.functionIdForName
+let private fid = TestIds.functionIdForName
 let private value id : HIR.Value = { Id = HIR.ValueId id; Type = AST.TList AST.TInt64 }
 let private parameter (value: HIR.Value) : HIR.Parameter = {
     Name = "value"

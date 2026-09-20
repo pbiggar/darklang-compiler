@@ -15,7 +15,8 @@ open LiftFunctions
 open LoweringTypeInference
 open LoweringExpressions
 
-let toANF
+let toANFWithMetadata
+    (typeNames: TypeNameRegistry)
     (expr: CheckedAST.Expr)
     (varGen: ANF.VarGen)
     (env: VarEnv)
@@ -26,7 +27,8 @@ let toANF
     : Result<ANF.AExpr * ANF.VarGen, string> =
     toANFCore
         (sumTypeNamesFromVariantLookup variantLookup)
-        (DestructionAnalysis.inertFunctionScopes Map.empty)
+        typeNames
+        (DestructionAnalysis.inertFunctionScopes Map.empty Map.empty)
         expr
         varGen
         env
@@ -34,6 +36,25 @@ let toANF
         variantLookup
         funcReg
         (funcReg |> Map.map (fun _ (name, _) -> name))
+        moduleRegistry
+
+let toANF
+    (expr: CheckedAST.Expr)
+    (varGen: ANF.VarGen)
+    (env: VarEnv)
+    (typeReg: TypeRegistry)
+    (variantLookup: VariantLookup)
+    (funcReg: FunctionRegistry)
+    (moduleRegistry: AST.ModuleRegistry)
+    : Result<ANF.AExpr * ANF.VarGen, string> =
+    toANFWithMetadata
+        emptyTypeNames
+        expr
+        varGen
+        env
+        typeReg
+        variantLookup
+        funcReg
         moduleRegistry
 
 /// Convert a function definition to ANF
@@ -76,7 +97,7 @@ let private convertFunctionWithSumTypeNames
         ClosureAnalysis.freeVars funcDef.Body (loweredParams |> List.map fst |> Set.ofList)
     let bodyResult =
         if Set.isEmpty unboundLocals then
-            toANFCore sumTypeNames inertScopes funcDef.Body varGen1 paramEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            toANFCore sumTypeNames (typeNamesFromSymbols symbols) inertScopes funcDef.Body varGen1 paramEnv typeReg variantLookup funcReg functionNames moduleRegistry
         else
             let names =
                 unboundLocals
@@ -107,7 +128,7 @@ let convertFunction
     convertFunctionWithSumTypeNames
         symbols
         (sumTypeNamesFromVariantLookup variantLookup)
-        (DestructionAnalysis.inertFunctionScopes Map.empty)
+        (DestructionAnalysis.inertFunctionScopes Map.empty Map.empty)
         funcDef
         varGen
         typeReg
@@ -120,7 +141,7 @@ let convertFunction
 type ConversionResult = {
     Program: ANF.Program
     OwnershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>
-    RecursiveMembers: Map<string, AST.LoweredRecursiveMember>
+    RecursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>
     TypeReg: TypeRegistry
     RecordFieldsReg: Map<string, (string * AST.Type) list>
     RecordTypeParamsReg: Map<string, string list>
@@ -134,12 +155,14 @@ type ConversionResult = {
 /// Result type for user-only ANF conversion (functions not merged with stdlib)
 /// Used for compiling user code separately from the prebuilt stdlib
 type UserOnlyResult = {
+    Symbols: CheckedAST.Symbols
     ScopeContracts: Map<AST.FunctionId, DestructionAnalysis.FunctionScopeContract>
     UserFunctions: ANF.Function list   // Only user functions, not merged with stdlib
     OwnershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>
     NonInlineableFunctionNames: Set<AST.FunctionId> // Late external specializations compiled in this unit
     MainExpr: ANF.AExpr                // User's main expression
     TypeReg: TypeRegistry              // Merged registries (for lookups)
+    TypeNames: TypeNameRegistry
     RecordFieldsReg: Map<string, (string * AST.Type) list>
     RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
@@ -149,16 +172,17 @@ type UserOnlyResult = {
     RcSumShapeReg: MemoryModel.RcSumShapeRegistry
     FuncReg: FunctionRegistry
     FunctionNames: FunctionNameRegistry
-    LocalReturnTypes: Map<string, AST.Type>
+    LocalReturnTypes: Map<AST.FunctionId, string * AST.Type>
     FuncParams: Map<string, (string * AST.Type) list>
     ModuleRegistry: AST.ModuleRegistry
-    RecursiveMembers: Map<string, AST.LoweredRecursiveMember>
+    RecursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>
 }
 
 /// Registry bundle used during ANF conversion
 type Registries = {
     ScopeContracts: Map<AST.FunctionId, DestructionAnalysis.FunctionScopeContract>
     TypeReg: TypeRegistry
+    TypeNames: TypeNameRegistry
     RecordFieldsReg: Map<string, (string * AST.Type) list>
     RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
@@ -168,7 +192,7 @@ type Registries = {
     FunctionNames: FunctionNameRegistry
     FuncParams: Map<string, (string * AST.Type) list>
     ModuleRegistry: AST.ModuleRegistry
-    RecursiveMembers: Map<string, AST.LoweredRecursiveMember>
+    RecursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>
 }
 
 /// Retain semantic recursive identities alongside lowered ANF. Native symbol
@@ -176,13 +200,13 @@ type Registries = {
 /// recovered exclusively from this registry.
 let loweredRecursiveMemberRegistry
     (functions: CheckedAST.FunctionDef list)
-    : Map<string, AST.LoweredRecursiveMember> =
+    : Map<AST.FunctionId, AST.LoweredRecursiveMember> =
     functions
     |> List.choose (fun func ->
         match func.Recursion with
         | Some typed ->
             Some (
-                func.Name,
+                func.Id,
                 ({ Typed = typed; EnvironmentIndex = typed.Resolved.GroupIndex }
                     : AST.LoweredRecursiveMember)
             )
@@ -339,9 +363,10 @@ let private buildRegistriesInternal
 
     {
         TypeReg = typeReg
+        TypeNames = typeNamesFromSymbols symbols
         ScopeContracts =
             ExtractListRegions.scopeContracts
-                (fun types expr -> inferTypeCore sumTypeNames expr types typeReg variantLookup funcReg functionNames moduleRegistry)
+                (fun types expr -> inferTypeCore sumTypeNames (typeNamesFromSymbols symbols) expr types typeReg variantLookup funcReg functionNames moduleRegistry)
                 functions
         RecordFieldsReg = recordFieldsRegistry typeReg
         RecordTypeParamsReg = recordTypeParamsRegistry typeReg
@@ -382,6 +407,11 @@ let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
     let mergeMaps m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
     {
         TypeReg = mergeMaps baseRegs.TypeReg overlay.TypeReg
+        TypeNames = ({
+            TypeNames = mergeMaps baseRegs.TypeNames.TypeNames overlay.TypeNames.TypeNames
+            ConstructorTags = mergeMaps baseRegs.TypeNames.ConstructorTags overlay.TypeNames.ConstructorTags
+            FieldIndices = mergeMaps baseRegs.TypeNames.FieldIndices overlay.TypeNames.FieldIndices
+        } : TypeNameRegistry)
         ScopeContracts = mergeMaps baseRegs.ScopeContracts overlay.ScopeContracts
         RecordFieldsReg = mergeMaps baseRegs.RecordFieldsReg overlay.RecordFieldsReg
         RecordTypeParamsReg = mergeMaps baseRegs.RecordTypeParamsReg overlay.RecordTypeParamsReg
@@ -423,7 +453,7 @@ let convertFunctionsWithOwnership
     (functions: CheckedAST.FunctionDef list)
     : Result<FunctionConversion, string> =
     let sumTypeNames = registries.SumTypeNames
-    let inertScopes = DestructionAnalysis.inertFunctionScopes registries.ScopeContracts
+    let inertScopes = DestructionAnalysis.inertFunctionScopes registries.FunctionNames registries.ScopeContracts
     let rec loop funcs vg acc =
         match funcs with
         | [] -> Ok (List.rev acc, vg)
@@ -443,6 +473,7 @@ let convertFunctionsWithOwnership
                 loop rest vg' (anfFunc :: acc))
     let ownershipContext : AnalyzeFunctionOwnership.Context = {
         TypeReg = registries.TypeReg
+        TypeNames = registries.TypeNames
         RecordFieldsReg = registries.RecordFieldsReg
         RecordTypeParamsReg = registries.RecordTypeParamsReg
         VariantLookup = registries.VariantLookup
@@ -460,6 +491,7 @@ let convertFunctionsWithOwnership
             |> ScheduleOwnershipVariants.materialization
         let fusion =
             FuseOwnershipListCalls.fuse
+                registries.FunctionNames
                 materialization
                 functions
         loop fusion.Functions varGen []
@@ -489,11 +521,16 @@ let convertExprToAnf
     : Result<ANF.AExpr * ANF.VarGen, string> =
     let emptyEnv : VarEnv = Map.empty
     let sumTypeNames = registries.SumTypeNames
-    toANFCore sumTypeNames (DestructionAnalysis.inertFunctionScopes registries.ScopeContracts) expr varGen emptyEnv registries.TypeReg registries.VariantLookup registries.FuncReg registries.FunctionNames registries.ModuleRegistry
+    toANFCore sumTypeNames registries.TypeNames (DestructionAnalysis.inertFunctionScopes registries.FunctionNames registries.ScopeContracts) expr varGen emptyEnv registries.TypeReg registries.VariantLookup registries.FuncReg registries.FunctionNames registries.ModuleRegistry
 
 /// Synthesize an entrypoint function from a main expression
-let synthesizeEntryFunction (name: string) (returnType: AST.Type) (body: ANF.AExpr) : ANF.Function =
-    { Id = AST.functionIdForName name
+let synthesizeEntryFunction
+    (id: AST.FunctionId)
+    (name: string)
+    (returnType: AST.Type)
+    (body: ANF.AExpr)
+    : ANF.Function =
+    { Id = id
       Name = name
       TypedParams = []
       ReturnType = returnType

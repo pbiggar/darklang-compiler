@@ -92,7 +92,8 @@ let internal buildAnf
     let anfOptimizeContext : ANFConstants.OptimizeContext =
         { TypeReg = registries.RecordFieldsReg
           RecordTypeParams = registries.RecordTypeParamsReg
-          SumShapeReg = registries.RcSumShapeReg }
+          SumShapeReg = registries.RcSumShapeReg
+          FunctionNames = registries.FunctionNames }
     let anfOptimized =
         if shouldRunANFOptimize anfOptions then
             ANF_Optimize.optimizeProgramWithOptionsAndExternalFunctions
@@ -135,7 +136,8 @@ let internal buildAnf
                 |> Map.values
                 |> Seq.map (fun info -> info.Func)
                 |> Seq.toList
-            ANF_HigherOrderSpecialization.specializeProgramWithExternalFunctions
+            ANF_HigherOrderSpecialization.specializeProgramWithExternalFunctionsAndNames
+                registries.FunctionNames
                 externalFunctions
                 anfInlined
     let higherOrderElapsed = sw.Elapsed.TotalMilliseconds - higherOrderStart
@@ -152,7 +154,7 @@ let internal buildAnf
         if options.DisableInlining || not specializeInternalSignatures then
             anfKnownHigherOrder
         else
-            ANF_DirectCallSpecialization.specializeProgram anfKnownHigherOrder
+            ANF_DirectCallSpecialization.specializeProgramWithFunctionNames registries.FunctionNames anfKnownHigherOrder
     let specializationElapsed = sw.Elapsed.TotalMilliseconds - specializationStart
     if specializeInternalSignatures then
         recordPassTiming passTimingRecorder "ANF Direct-Call Specialization" specializationElapsed
@@ -213,7 +215,7 @@ let internal applyTco
     (verbosity: int)
     (options: CompilerOptions)
     (sw: Stopwatch)
-    (recursiveMembers: Map<string, AST.LoweredRecursiveMember>)
+    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
     (functions: ANF.Function list)
     (passTimingRecorder: PassTimingRecorder option)
     : ANF.Function list =

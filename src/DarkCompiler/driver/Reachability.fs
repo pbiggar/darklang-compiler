@@ -57,10 +57,16 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                 let coverageOptions = { defaultOptions with DisableANFOpt = true; DisableInlining = true }
                 let sw = Stopwatch.StartNew()
                 let entryFunction =
-                    AST_to_ANF.synthesizeEntryFunction "_start" boundaryProgramType userOnly.MainExpr
+                    let entryId = CheckedAST.internFunction "_start" userOnly.Symbols |> fst
+                    AST_to_ANF.synthesizeEntryFunction
+                        entryId
+                        "_start"
+                        boundaryProgramType
+                        userOnly.MainExpr
                 let userRegistries : AST_to_ANF.Registries = {
                     ScopeContracts = userOnly.ScopeContracts
                     TypeReg = userOnly.TypeReg
+                    TypeNames = userOnly.TypeNames
                     RecordFieldsReg = userOnly.RecordFieldsReg
                     RecordTypeParamsReg = userOnly.RecordTypeParamsReg
                     VariantLookup = userOnly.VariantLookup
@@ -73,6 +79,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     RecursiveMembers = userOnly.RecursiveMembers
                 }
                 PrintInsertion.insertPrintInEntry
+                    userOnly.FunctionNames
                     "_start"
                     boundaryProgramType
                     (entryFunction :: userOnly.UserFunctions)

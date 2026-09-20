@@ -74,6 +74,7 @@ and Expr =
     | BigIntLiteral of System.Numerics.BigInteger
     | BoolLiteral of bool
     | StringLiteral of string
+    | BlobLiteral of string
     | CharLiteral of string
     | FloatLiteral of float
     | InterpolatedString of StringPart list
@@ -82,7 +83,6 @@ and Expr =
     | Let of pattern:LetPattern * value:Expr * body:Expr
     | RecursiveLet of recursion:AST.TypedRecursiveMember * value:Expr * body:Expr
     | Local of AST.BindingId
-    | NamedValue of string
     | If of cond:Expr * thenBranch:Expr * elseBranch:Expr
     | Sequence of first:Expr * next:Expr
     | Call of functionId:AST.FunctionId * args:AST.NonEmptyList<Expr>
@@ -133,9 +133,16 @@ type TopLevel =
     | ValueDef of ValueDef
     | Expression of Expr
 
+type SemanticMetadata = {
+    TypeNames: Map<AST.TypeId, string>
+    ConstructorTags: Map<AST.ConstructorId, int>
+    FieldIndices: Map<AST.FieldId, int>
+}
+
 type Symbols = private {
     NamespaceToken: obj
     BindingNames: Map<AST.BindingId, string>
+    ValueIds: Map<string, AST.BindingId>
     NextBindingOrdinal: int
     FunctionNames: Map<AST.FunctionId, string>
     FunctionIds: Map<string, AST.FunctionId>
@@ -144,9 +151,11 @@ type Symbols = private {
     TypeIds: Map<string, AST.TypeId>
     NextTypeOrdinal: int
     ConstructorNames: Map<AST.ConstructorId, string * string>
+    ConstructorTags: Map<AST.ConstructorId, int>
     ConstructorIds: Map<string * string, AST.ConstructorId>
     NextConstructorOrdinal: int
     FieldNames: Map<AST.FieldId, string * string>
+    FieldIndices: Map<AST.FieldId, int>
     FieldIds: Map<string * string, AST.FieldId>
     NextFieldOrdinal: int
 }
@@ -154,19 +163,26 @@ type Symbols = private {
 type Program = Program of Symbols * TopLevel list
 
 let emptySymbols () =
+    let startId = AST.functionId 0
+    let programEntryId = AST.functionId 1
     { NamespaceToken = System.Object()
       BindingNames = Map.empty
+      ValueIds = Map.empty
       NextBindingOrdinal = -1
-      FunctionNames = Map.empty
-      FunctionIds = Map.empty
-      NextFunctionOrdinal = 0
+      FunctionNames =
+        Map.ofList [startId, "_start"; programEntryId, "__dark_compiler_program_entry"]
+      FunctionIds =
+        Map.ofList ["_start", startId; "__dark_compiler_program_entry", programEntryId]
+      NextFunctionOrdinal = 2
       TypeNames = Map.empty
       TypeIds = Map.empty
       NextTypeOrdinal = 0
       ConstructorNames = Map.empty
+      ConstructorTags = Map.empty
       ConstructorIds = Map.empty
       NextConstructorOrdinal = 0
       FieldNames = Map.empty
+      FieldIndices = Map.empty
       FieldIds = Map.empty
       NextFieldOrdinal = 0 }
 
@@ -181,7 +197,15 @@ let allocateBinding name symbols =
             NextBindingOrdinal = symbols.NextBindingOrdinal - 1 }
     (id, symbols')
 
+let internValue name symbols =
+    match Map.tryFind name symbols.ValueIds with
+    | Some id -> (id, symbols)
+    | None ->
+        let (id, symbols) = allocateBinding name symbols
+        (id, { symbols with ValueIds = Map.add name id symbols.ValueIds })
+
 let bindingName id symbols : string option = Map.tryFind id symbols.BindingNames
+let tryFindValueId name symbols = Map.tryFind name symbols.ValueIds
 
 let private intern
     makeId
@@ -201,40 +225,35 @@ let internFunction name symbols =
     match Map.tryFind name symbols.FunctionIds with
     | Some id -> (id, symbols)
     | None ->
-        let id = AST.functionIdForName name
-        match Map.tryFind id symbols.FunctionNames with
-        | Some existing when existing <> name ->
-            Crash.crash $"Function identity collision: {existing}, {name}"
-        | _ ->
-            (id,
-             { symbols with
-                 FunctionIds = Map.add name id symbols.FunctionIds
-                 FunctionNames = Map.add id name symbols.FunctionNames })
+        let id = AST.functionId symbols.NextFunctionOrdinal
+        (id,
+         { symbols with
+             FunctionIds = Map.add name id symbols.FunctionIds
+             FunctionNames = Map.add id name symbols.FunctionNames
+             NextFunctionOrdinal = symbols.NextFunctionOrdinal + 1 })
 
 let internType name symbols =
     match Map.tryFind name symbols.TypeIds with
     | Some id -> (id, symbols)
     | None ->
-        let id = AST.typeIdForName name
-        match Map.tryFind id symbols.TypeNames with
-        | Some existing when existing <> name ->
-            Crash.crash $"Type identity collision: {existing}, {name}"
-        | _ ->
-            (id,
-             { symbols with
-                 TypeIds = Map.add name id symbols.TypeIds
-                 TypeNames = Map.add id name symbols.TypeNames })
+        let id = AST.typeId symbols.NextTypeOrdinal
+        (id,
+         { symbols with
+             TypeIds = Map.add name id symbols.TypeIds
+             TypeNames = Map.add id name symbols.TypeNames
+             NextTypeOrdinal = symbols.NextTypeOrdinal + 1 })
 
 let internConstructor typeName name tag symbols =
     let (_, symbols) = internType typeName symbols
     match Map.tryFind (typeName, name) symbols.ConstructorIds with
     | Some id -> (id, symbols)
     | None ->
-        let id = AST.constructorId symbols.NextConstructorOrdinal tag
+        let id = AST.constructorId symbols.NextConstructorOrdinal
         let symbols =
             { symbols with
                 ConstructorIds = Map.add (typeName, name) id symbols.ConstructorIds
                 ConstructorNames = Map.add id (typeName, name) symbols.ConstructorNames
+                ConstructorTags = Map.add id tag symbols.ConstructorTags
                 NextConstructorOrdinal = symbols.NextConstructorOrdinal + 1 }
         (id, symbols)
 
@@ -243,23 +262,37 @@ let internField typeName name index symbols =
     match Map.tryFind (typeName, name) symbols.FieldIds with
     | Some id -> (id, symbols)
     | None ->
-        let id = AST.fieldId symbols.NextFieldOrdinal index
+        let id = AST.fieldId symbols.NextFieldOrdinal
         let symbols =
             { symbols with
                 FieldIds = Map.add (typeName, name) id symbols.FieldIds
                 FieldNames = Map.add id (typeName, name) symbols.FieldNames
+                FieldIndices = Map.add id index symbols.FieldIndices
                 NextFieldOrdinal = symbols.NextFieldOrdinal + 1 }
         (id, symbols)
 
 let functionName id symbols = Map.tryFind id symbols.FunctionNames
 
 let functionNames symbols = symbols.FunctionNames
+let tryFindFunctionId name symbols = Map.tryFind name symbols.FunctionIds
 let typeName id symbols = Map.tryFind id symbols.TypeNames
+let typeNames symbols = symbols.TypeNames
+let tryFindTypeId name symbols = Map.tryFind name symbols.TypeIds
 let constructorInfo id symbols = Map.tryFind id symbols.ConstructorNames
+let constructorTag id symbols = Map.tryFind id symbols.ConstructorTags
+let constructorTags symbols = symbols.ConstructorTags
 
 let tryFindConstructorId typeName name symbols =
     Map.tryFind (typeName, name) symbols.ConstructorIds
 let fieldInfo id symbols = Map.tryFind id symbols.FieldNames
+let fieldIndex id symbols = Map.tryFind id symbols.FieldIndices
+let fieldIndices symbols = symbols.FieldIndices
+
+let semanticMetadata symbols : SemanticMetadata = {
+    TypeNames = symbols.TypeNames
+    ConstructorTags = symbols.ConstructorTags
+    FieldIndices = symbols.FieldIndices
+}
 
 let tryFindFieldId typeName name symbols =
     Map.tryFind (typeName, name) symbols.FieldIds
@@ -282,13 +315,23 @@ let importTopLevels
     (targetSymbols: Symbols)
     (topLevels: TopLevel list)
     : Symbols * TopLevel list =
-    let (remap, symbols) =
-        sourceSymbols.BindingNames
+    let (valueRemap, symbols) =
+        sourceSymbols.ValueIds
         |> Map.toList
-        |> List.mapFold (fun symbols (sourceId, name) ->
-            let (targetId, symbols) = allocateBinding name symbols
+        |> List.mapFold (fun symbols (name, sourceId) ->
+            let (targetId, symbols) = internValue name symbols
             ((sourceId, targetId), symbols)) targetSymbols
         |> fun (entries, symbols) -> (Map.ofList entries, symbols)
+    let sourceValueIds = sourceSymbols.ValueIds |> Map.values |> Set.ofSeq
+    let (bindingRemap, symbols) =
+        sourceSymbols.BindingNames
+        |> Map.toList
+        |> List.filter (fun (sourceId, _) -> not (Set.contains sourceId sourceValueIds))
+        |> List.mapFold (fun symbols (sourceId, name) ->
+            let (targetId, symbols) = allocateBinding name symbols
+            ((sourceId, targetId), symbols)) symbols
+        |> fun (entries, symbols) -> (Map.ofList entries, symbols)
+    let remap = Map.fold (fun result sourceId targetId -> Map.add sourceId targetId result) bindingRemap valueRemap
     let (functionRemap, symbols) =
         sourceSymbols.FunctionNames
         |> Map.toList
@@ -307,15 +350,20 @@ let importTopLevels
         sourceSymbols.FieldNames
         |> Map.toList
         |> List.mapFold (fun symbols (sourceId, (typeName, fieldName)) ->
-            let (targetId, symbols) = internField typeName fieldName (AST.fieldIndex sourceId) symbols
+            let index =
+                fieldIndex sourceId sourceSymbols
+                |> Option.defaultWith (fun () -> Crash.crash "Imported checked field layout is absent")
+            let (targetId, symbols) = internField typeName fieldName index symbols
             ((sourceId, targetId), symbols)) symbols
         |> fun (entries, symbols) -> (Map.ofList entries, symbols)
     let (constructorRemap, symbols) =
         sourceSymbols.ConstructorNames
         |> Map.toList
         |> List.mapFold (fun symbols (sourceId, (typeName, constructorName)) ->
-            let (targetId, symbols) =
-                internConstructor typeName constructorName (AST.constructorTag sourceId) symbols
+            let tag =
+                constructorTag sourceId sourceSymbols
+                |> Option.defaultWith (fun () -> Crash.crash "Imported checked constructor layout is absent")
+            let (targetId, symbols) = internConstructor typeName constructorName tag symbols
             ((sourceId, targetId), symbols)) symbols
         |> fun (entries, symbols) -> (Map.ofList entries, symbols)
     let mapId id =
@@ -329,7 +377,9 @@ let importTopLevels
     let mapFunctionId id =
         match Map.tryFind id functionRemap with
         | Some mapped -> mapped
-        | None -> Crash.crash "Imported checked function is absent from its source symbol table"
+        | None ->
+            Crash.crash
+                $"Imported checked function {AST.functionIdValue id} is absent from its source symbol table"
     let mapFieldId id =
         match Map.tryFind id fieldRemap with
         | Some mapped -> mapped
@@ -428,8 +478,8 @@ let importTopLevels
         | FuncRef id -> FuncRef (mapFunctionId id)
         | UnitLiteral | Int64Literal _ | Int128Literal _ | Int8Literal _ | Int16Literal _
         | Int32Literal _ | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _
-        | UInt128Literal _ | BigIntLiteral _ | BoolLiteral _ | StringLiteral _ | CharLiteral _
-        | FloatLiteral _ | NamedValue _ | RuntimeError _ -> expr
+        | UInt128Literal _ | BigIntLiteral _ | BoolLiteral _ | StringLiteral _ | BlobLiteral _ | CharLiteral _
+        | FloatLiteral _ | RuntimeError _ -> expr
     let mapFunction functionDef =
         { functionDef with
             Id = mapFunctionId functionDef.Id
@@ -447,60 +497,6 @@ let importTopLevels
             | Expression expr -> Expression (mapExpr expr)
             | TypeDef (id, typeDef) -> TypeDef (mapTypeId id, typeDef))
     (symbols, mapped)
-
-/// Resolve selected externally named values when importing them into a
-/// lexical materialization scope. Local identities are already final and are
-/// never reconsidered by spelling.
-let rec resolveNamedValues (values: Map<string, AST.BindingId>) (expr: Expr) : Expr =
-    let recurse = resolveNamedValues values
-    let mapArgs = AST.NonEmptyList.map recurse
-    match expr with
-    | NamedValue name ->
-        match Map.tryFind name values with
-        | Some id -> Local id
-        | None -> expr
-    | BoundaryRender (renderer, value) -> BoundaryRender (renderer, recurse value)
-    | BinOp (op, left, right) -> BinOp (op, recurse left, recurse right)
-    | UnaryOp (op, value) -> UnaryOp (op, recurse value)
-    | Let (pattern, value, body) -> Let (pattern, recurse value, recurse body)
-    | RecursiveLet (recursion, value, body) -> RecursiveLet (recursion, recurse value, recurse body)
-    | If (condition, thenBranch, elseBranch) -> If (recurse condition, recurse thenBranch, recurse elseBranch)
-    | Sequence (first, next) -> Sequence (recurse first, recurse next)
-    | Call (name, args) -> Call (name, mapArgs args)
-    | TypeApp (name, types, args) -> TypeApp (name, types, mapArgs args)
-    | TupleLiteral elements -> TupleLiteral (List.map recurse elements)
-    | TupleAccess (tuple, index) -> TupleAccess (recurse tuple, index)
-    | DictLiteral (keyType, valueType, entries) ->
-        DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> recurse key, recurse value))
-    | RecordLiteral (reference, fields) ->
-        RecordLiteral (reference, fields |> List.map (fun (name, value) -> name, recurse value))
-    | RecordUpdate (record, fields) ->
-        RecordUpdate (recurse record, fields |> List.map (fun (name, value) -> name, recurse value))
-    | RecordAccess (record, field) -> RecordAccess (recurse record, field)
-    | Constructor (reference, fields) -> Constructor (reference, List.map recurse fields)
-    | Match (scrutinee, cases) ->
-        Match (
-            recurse scrutinee,
-            cases
-            |> List.map (fun case ->
-                { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body })
-        )
-    | ListLiteral elements -> ListLiteral (List.map recurse elements)
-    | Lambda (parameters, annotation, body) -> Lambda (parameters, annotation, recurse body)
-    | Apply (func, args) -> Apply (recurse func, mapArgs args)
-    | IndirectApply (func, args) -> IndirectApply (recurse func, mapArgs args)
-    | Closure (name, captures) -> Closure (name, List.map recurse captures)
-    | InterpolatedString parts ->
-        InterpolatedString (
-            parts
-            |> List.map (function
-                | StringText _ as text -> text
-                | StringExpr value -> StringExpr (recurse value))
-        )
-    | UnitLiteral | Int64Literal _ | Int128Literal _ | Int8Literal _ | Int16Literal _
-    | Int32Literal _ | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _
-    | UInt128Literal _ | BigIntLiteral _ | BoolLiteral _ | StringLiteral _ | CharLiteral _
-    | FloatLiteral _ | Local _ | FuncRef _ | RuntimeError _ -> expr
 
 let resolveUnboundValueLocals
     (symbols: Symbols)
@@ -660,9 +656,12 @@ let private map2 f first second =
     |> Result.bind (fun firstValue ->
         second |> Result.map (fun secondValue -> f firstValue secondValue))
 
-let private convertRecordReference (reference: AST.RecordReference) : RecordReference =
-    { TypeId = AST.typeIdForName reference.ResolvedTypeName
-      TypeArgs = reference.TypeArgs }
+let private convertRecordReference
+    (reference: AST.RecordReference)
+    (symbols: Symbols)
+    : RecordReference * Symbols =
+    let typeId, symbols = internType reference.ResolvedTypeName symbols
+    ({ TypeId = typeId; TypeArgs = reference.TypeArgs }, symbols)
 
 let private convertConstructorReference
     (location: string)
@@ -675,7 +674,12 @@ let private convertConstructorReference
         match AST.constructorReferenceTypeName reference with
         | Some typeName ->
             match tryFindConstructorId typeName variantName symbols with
-            | Some id -> Ok { TypeId = AST.typeIdForName typeName; ConstructorId = id }
+            | Some id ->
+                let typeId =
+                    tryFindTypeId typeName symbols
+                    |> Option.defaultWith (fun () ->
+                        Crash.crash $"Constructor owner '{typeName}' is absent from type symbols")
+                Ok { TypeId = typeId; ConstructorId = id }
             | None -> conversionError location "resolved constructor has no semantic identity"
         | None -> conversionError location "resolved constructor has no declaring type"
     | AST.UnresolvedConstructor _ ->
@@ -854,9 +858,25 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
                 |> Result.map (fun (body', following) -> (RecursiveLet (typed, value', body'), following)))
         | _ -> conversionError location "recursive let has no typed recursion evidence"
     | AST.Var name ->
-        match Map.tryFind name environment with
-        | Some id -> Ok (Local id, symbols)
-        | None -> Ok (NamedValue name, symbols)
+        if name = "Builtin.testNan" then Ok (FloatLiteral System.Double.NaN, symbols)
+        elif name = "Builtin.testInfinity" then Ok (FloatLiteral System.Double.PositiveInfinity, symbols)
+        elif name = "Builtin.blobEmpty" then Ok (BlobLiteral "", symbols)
+        else
+            match Map.tryFind name environment with
+            | Some id -> Ok (Local id, symbols)
+            | None ->
+                match tryFindValueId name symbols with
+                | Some id -> Ok (Local id, symbols)
+                | None ->
+                    match tryFindFunctionId name symbols with
+                    | Some id -> Ok (FuncRef id, symbols)
+                    | None ->
+                        // Successful checking has already established that a
+                        // remaining non-value variable denotes a function.
+                        // Allocate its dense identity at this boundary just as
+                        // direct Call and FuncRef nodes do.
+                        let (id, symbols) = internFunction name symbols
+                        Ok (FuncRef id, symbols)
     | AST.If (condition, thenBranch, elseBranch) ->
         convert symbols condition
         |> Result.bind (fun (condition', afterCondition) ->
@@ -893,7 +913,9 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
         |> Result.map (fun (converted, state) -> (DictLiteral (keyType, valueType, List.rev converted), state))
     | AST.RecordLiteral (reference, fields) ->
         convertFields fields symbols
-        |> Result.map (fun (converted, state) -> (RecordLiteral (convertRecordReference reference, converted), state))
+        |> Result.map (fun (converted, state) ->
+            let reference, state = convertRecordReference reference state
+            (RecordLiteral (reference, converted), state))
     | AST.RecordUpdate (record, updates) ->
         convert symbols record
         |> Result.bind (fun (record', afterRecord) ->
@@ -1040,6 +1062,7 @@ let ofTypedFunction
 
 let ofTypedProgram
     (variantLookup: Map<string, string * string list * int * AST.Type list>)
+    (externalValueNames: Set<string>)
     (AST.Program topLevels)
     : Result<Program, string> =
     let valueEnvironment, initialSymbols =
@@ -1047,9 +1070,26 @@ let ofTypedProgram
         |> List.choose (function
             | AST.ValueDef (AST.CheckedValueDef (name, _, _)) -> Some name
             | _ -> None)
+        |> Set.ofList
+        |> Set.union externalValueNames
+        |> Set.toList
         |> List.fold (fun (environment, symbols) name ->
-            let (id, symbols) = allocateBinding name symbols
+            let (id, symbols) = internValue name symbols
             (Map.add name id environment, symbols)) (Map.empty, emptySymbols ())
+    let initialSymbols =
+        topLevels
+        |> List.fold (fun symbols topLevel ->
+            match topLevel with
+            | AST.FunctionDef functionDef ->
+                internFunction functionDef.Name symbols |> snd
+            | AST.TypeDef typeDef ->
+                let name =
+                    match typeDef with
+                    | AST.RecordDef (name, _, _)
+                    | AST.SumTypeDef (name, _, _)
+                    | AST.TypeAlias (name, _, _) -> name
+                internType name symbols |> snd
+            | _ -> symbols) initialSymbols
     let initialSymbols =
         variantLookup
         |> Map.fold (fun symbols lookupName (typeName, _, tag, _) ->

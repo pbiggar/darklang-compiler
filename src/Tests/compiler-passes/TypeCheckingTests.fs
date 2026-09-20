@@ -57,10 +57,10 @@ let rec countMatches (expr: CheckedAST.Expr) : int =
         | CheckedAST.UInt128Literal _
         | CheckedAST.BoolLiteral _
         | CheckedAST.StringLiteral _
+        | CheckedAST.BlobLiteral _
         | CheckedAST.CharLiteral _
         | CheckedAST.FloatLiteral _
         | CheckedAST.Local _
-        | CheckedAST.NamedValue _
         | CheckedAST.FuncRef _
         | CheckedAST.RuntimeError _ ->
             []

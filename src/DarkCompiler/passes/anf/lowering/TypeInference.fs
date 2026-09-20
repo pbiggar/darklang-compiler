@@ -12,7 +12,13 @@ open ClosureAnalysis
 open LiftExpressions
 open LiftFunctions
 
-let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeEnv: Map<AST.BindingId, AST.Type>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<AST.Type, string> =
+let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (expr: CheckedAST.Expr) (typeEnv: Map<AST.BindingId, AST.Type>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<AST.Type, string> =
+    let fieldIndex id =
+        tryFindFieldIndex id typeNames
+        |> Option.defaultWith (fun () -> Crash.crash "Checked field identity is absent from layout metadata")
+    let constructorTag id =
+        tryFindConstructorTag id typeNames
+        |> Option.defaultWith (fun () -> Crash.crash "Checked constructor identity is absent from layout metadata")
     match expr with
     | CheckedAST.BoundaryRender _ -> Ok AST.TString
     | CheckedAST.RuntimeError _ -> Ok AST.TRuntimeError
@@ -30,26 +36,17 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
     | CheckedAST.UInt128Literal _ -> Ok AST.TUInt128
     | CheckedAST.BoolLiteral _ -> Ok AST.TBool
     | CheckedAST.StringLiteral _ -> Ok AST.TString
+    | CheckedAST.BlobLiteral _ -> Ok AST.TBlob
     | CheckedAST.CharLiteral _ -> Ok AST.TChar
     | CheckedAST.FloatLiteral _ -> Ok AST.TFloat64
     | CheckedAST.Local id ->
         match Map.tryFind id typeEnv with
         | Some typ -> Ok typ
         | None -> Error "Cannot infer type: undefined local binding identity"
-    | CheckedAST.NamedValue name ->
-        if isBuiltinTestNanName name || isBuiltinTestInfinityName name then
-            Ok AST.TFloat64
-        else if isBuiltinBlobEmptyName name then
-            Ok AST.TBlob
-        else
-            // Check if it's a module function (e.g., Stdlib.Int64.add)
-            match Stdlib.tryGetFunction moduleRegistry name with
-            | Some (moduleFunc, _) -> Ok (Stdlib.getFunctionType moduleFunc)
-            | None -> Error $"Cannot infer type: undefined named value '{name}'"
     | CheckedAST.DictLiteral (keyType, valueType, _) ->
         Ok (AST.TDict (keyType, valueType))
     | CheckedAST.RecordLiteral (reference, fields) ->
-        match tryFindRecordTypeNameById reference.TypeId typeReg with
+        match tryFindRecordTypeNameById reference.TypeId typeNames with
         | None -> Error "Unknown semantic record type"
         | Some typeName ->
             match Map.tryFind typeName typeReg with
@@ -63,7 +60,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
 
                 let fieldMap =
                     fields
-                    |> List.map (fun (field, value) -> AST.fieldIndex field, value)
+                    |> List.map (fun (field, value) -> fieldIndex field, value)
                     |> Map.ofList
                 let typeParams = recordInfo.TypeParams
 
@@ -79,7 +76,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                             // Type checker should have enforced completeness already.
                             inferBindings rest accBindings
                         | Some fieldExpr ->
-                            inferTypeCore sumTypeNames fieldExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+                            inferTypeCore sumTypeNames typeNames fieldExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
                             |> Result.bind (fun actualFieldType ->
                                 let actualFieldType =
                                     canonicalizeBareSumTypeRefs variantLookup actualFieldType
@@ -99,15 +96,15 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                     AST.TRecord (typeName, typeArgs))
     | CheckedAST.RecordUpdate (recordExpr, _) ->
         // Record update returns the same type as the record being updated
-        inferTypeCore sumTypeNames recordExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames recordExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
     | CheckedAST.RecordAccess (recordExpr, fieldName) ->
-        inferTypeCore sumTypeNames recordExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames recordExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun recordType ->
             match recordType with
             | AST.TRecord (typeName, typeArgs) ->
                 match Map.tryFind typeName typeReg with
                 | Some recordInfo ->
-                    match List.tryItem (AST.fieldIndex fieldName) recordInfo.Fields with
+                    match List.tryItem (fieldIndex fieldName) recordInfo.Fields with
                     | Some (_, fieldTypePattern) ->
                         let fieldType =
                             match buildDeclaredRecordFieldSubst recordInfo typeArgs with
@@ -119,7 +116,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
             | _ -> Error $"Cannot access field on non-record type")
     | CheckedAST.TupleLiteral elems ->
         elems
-        |> List.map (fun e -> inferTypeCore sumTypeNames e typeEnv typeReg variantLookup funcReg functionNames moduleRegistry)
+        |> List.map (fun e -> inferTypeCore sumTypeNames typeNames e typeEnv typeReg variantLookup funcReg functionNames moduleRegistry)
         |> List.fold (fun acc r ->
             match acc, r with
             | Ok types, Ok t -> Ok (types @ [t])
@@ -127,7 +124,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
             | _, Error e -> Error e) (Ok [])
         |> Result.map AST.TTuple
     | CheckedAST.TupleAccess (tupleExpr, index) ->
-        inferTypeCore sumTypeNames tupleExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames tupleExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun tupleType ->
             match tupleType with
             | AST.TTuple elemTypes when index >= 0 && index < List.length elemTypes ->
@@ -135,12 +132,13 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
             | AST.TTuple _ -> Error $"Tuple index {index} out of bounds"
             | _ -> Error "Cannot access index on non-tuple type")
     | CheckedAST.Constructor (constructorReference, fields) ->
-        match tryFindSumTypeNameById constructorReference.TypeId variantLookup with
+        match tryFindSumTypeNameById constructorReference.TypeId typeNames with
         | None -> Error "Unknown semantic constructor type"
         | Some constructorTypeName ->
-            match tryFindVariantByTag constructorTypeName (AST.constructorTag constructorReference.ConstructorId) variantLookup with
+            let tag = constructorTag constructorReference.ConstructorId
+            match tryFindVariantByTag constructorTypeName tag variantLookup with
             | None ->
-                Error $"Unknown constructor tag: {AST.constructorTag constructorReference.ConstructorId}"
+                Error $"Unknown constructor tag: {tag}"
             | Some (typeName, typeParams, _, fieldPatterns) ->
                 let defaultTypeArgs = typeParams |> List.map AST.TVar
                 if List.length fieldPatterns <> List.length fields then
@@ -150,7 +148,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                     |> List.fold (fun result (fieldPattern, fieldExpr) ->
                         result
                         |> Result.bind (fun bindings ->
-                            inferTypeCore sumTypeNames fieldExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+                            inferTypeCore sumTypeNames typeNames fieldExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
                             |> Result.map (fun actualFieldType ->
                                 match matchTypePattern fieldPattern actualFieldType with
                                 | Ok fieldBindings -> bindings @ fieldBindings
@@ -167,20 +165,21 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
         match elements with
         | [] -> Ok (AST.TList (AST.TVar "t"))  // Preserve unknown element type for empty lists
         | first :: _ ->
-            inferTypeCore sumTypeNames first typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            inferTypeCore sumTypeNames typeNames first typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
             |> Result.map (fun elemType -> AST.TList elemType)
     | CheckedAST.Let (pattern, value, body) ->
-        inferTypeCore sumTypeNames value typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames value typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun valueType ->
             let typeEnv' =
                 letPatternBindingTypes pattern valueType
                 |> List.fold (fun current (name, bindingType) -> Map.add name bindingType current) typeEnv
-            inferTypeCore sumTypeNames body typeEnv' typeReg variantLookup funcReg functionNames moduleRegistry)
+            inferTypeCore sumTypeNames typeNames body typeEnv' typeReg variantLookup funcReg functionNames moduleRegistry)
     | CheckedAST.RecursiveLet (recursion, value, body) ->
         let valueTypeResult = Ok recursion.MonomorphicType
         valueTypeResult
         |> Result.bind (fun valueType ->
             inferTypeCore sumTypeNames
+                typeNames
                 body
                 (Map.add (CheckedAST.recursiveBindingId recursion) valueType typeEnv)
                 typeReg
@@ -190,7 +189,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                 moduleRegistry)
     | CheckedAST.If (_, thenExpr, elseExpr) ->
         let inferBranchType (branchExpr: CheckedAST.Expr) : Result<AST.Type, string> =
-            inferTypeCore sumTypeNames branchExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            inferTypeCore sumTypeNames typeNames branchExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
 
         let resolveBranchType (preferred: AST.Type) (other: AST.Type) : Result<AST.Type, string> =
             match matchTypePattern preferred other with
@@ -225,12 +224,12 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                         Error
                             $"If branches have incompatible types: then={typeToString thenType}, else={typeToString elseType}"))
     | CheckedAST.Sequence (_, next) ->
-        inferTypeCore sumTypeNames next typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames next typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
     | CheckedAST.BinOp (op, left, right) ->
         let ensureSameType () =
-            inferTypeCore sumTypeNames left typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            inferTypeCore sumTypeNames typeNames left typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
             |> Result.bind (fun leftType ->
-                inferTypeCore sumTypeNames right typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+                inferTypeCore sumTypeNames typeNames right typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.bind (fun rightType ->
                     if leftType = AST.TRuntimeError then
                         Ok rightType
@@ -275,7 +274,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
         | AST.And | AST.Or -> Ok AST.TBool
         | AST.StringConcat -> Ok AST.TString
     | CheckedAST.UnaryOp (op, inner) ->
-        inferTypeCore sumTypeNames inner typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames inner typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun innerType ->
             match op with
             | AST.Neg ->
@@ -296,7 +295,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
     | CheckedAST.Match (scrutinee, cases) ->
         // Infer from first case body, but first extend environment with pattern variables
         // Infer scrutinee type to help with pattern variable typing
-        let scrutineeTypeResult = inferTypeCore sumTypeNames scrutinee typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        let scrutineeTypeResult = inferTypeCore sumTypeNames typeNames scrutinee typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
 
         let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
             match typ with
@@ -456,10 +455,10 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                 mc.Patterns
                 |> AST.NonEmptyList.toList
                 |> List.fold (fun acc pat ->
-                    matchPatternBindingTypes typeReg variantLookup pat patternType
+                    matchPatternBindingTypes typeReg variantLookup typeNames pat patternType
                     |> Map.fold (fun current id typ -> Map.add id typ current) acc) Map.empty
             let typeEnv' = Map.fold (fun m k v -> Map.add k v m) typeEnv patBindings
-            inferTypeCore sumTypeNames mc.Body typeEnv' typeReg variantLookup funcReg functionNames moduleRegistry
+            inferTypeCore sumTypeNames typeNames mc.Body typeEnv' typeReg variantLookup funcReg functionNames moduleRegistry
 
         let patternType =
             match scrutineeTypeResult with
@@ -485,14 +484,10 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
             Map.tryFind funcName funcReg
             |> Option.map fst
             |> Option.orElseWith (fun () -> Map.tryFind funcName functionNames)
-            |> Option.orElseWith (fun () ->
-                moduleRegistry
-                |> Map.keys
-                |> Seq.tryFind (fun name -> AST.functionIdForName name = funcName))
-        if funcName = AST.functionIdForName "Builtin.unwrap" then
+        if displayName = Some "Builtin.unwrap" then
             match argList with
             | [argExpr] ->
-                inferTypeCore sumTypeNames argExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+                inferTypeCore sumTypeNames typeNames argExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.bind (fun argType ->
                     match argType with
                     | AST.TSum ("Darklang.Stdlib.Option.Option", [valueType]) -> Ok valueType
@@ -504,8 +499,9 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                                 "Darklang.Stdlib.Option.Option"
                                 "Some"
                                 reference
+                                typeNames
                                 variantLookup ->
-                            inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+                            inferTypeCore sumTypeNames typeNames payloadExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         | _ ->
                             // Type args may be unavailable in ANF inferType.
                             // Use Unit to avoid leaking unresolved type variables into later passes.
@@ -517,8 +513,9 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                                 "Darklang.Stdlib.Result.Result"
                                 "Ok"
                                 reference
+                                typeNames
                                 variantLookup ->
-                            inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+                            inferTypeCore sumTypeNames typeNames payloadExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
                         | _ ->
                             // Type args may be unavailable in ANF inferType.
                             // Use Unit to avoid leaking unresolved type variables into later passes.
@@ -527,8 +524,8 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                         Error $"Internal error: Builtin.unwrap expects Option/Result argument, got {typeToString argType}")
             | _ ->
                 Error $"Internal error: Builtin.unwrap expects 1 argument, got {List.length argList}"
-        elif funcName = AST.functionIdForName "Builtin.testRuntimeError"
-             || funcName = AST.functionIdForName "Builtin.crash" then
+        elif displayName = Some "Builtin.testRuntimeError"
+             || displayName = Some "Builtin.crash" then
             match argList with
             // Runtime errors are bottom-like: branch and match inference select
             // the type of the reachable value-producing alternatives.
@@ -555,6 +552,11 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
                             $"__missing_function_identity_{AST.functionIdValue funcName}"
                     if missingFunctionIdentity then
                         Error $"Function identity {AST.functionIdValue functionId} is absent from lowering registries"
+                    elif funcName.StartsWith("Builtin.pmEvaluateValue_") then
+                        let suffix = funcName.Substring("Builtin.pmEvaluateValue_".Length)
+                        tryParseMangledTypeWithSumTypeNames sumTypeNames suffix
+                        |> Result.map (fun resultType ->
+                            AST.TSum ("Darklang.Stdlib.Option.Option", [resultType]))
                     elif funcName.StartsWith("__raw_get_") then
                         // Preserve the monomorphized return type; defaulting to Int64 can
                         // incorrectly mark pattern-match branches as impossible.
@@ -628,11 +630,11 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
             parameterList
             |> List.collect lambdaParameterBindings
             |> List.fold (fun env (name, ty) -> Map.add name ty env) typeEnv
-        inferTypeCore sumTypeNames body typeEnv' typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames body typeEnv' typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.map (fun returnType -> AST.TFunction (paramTypes, returnType))
     | CheckedAST.Apply (func, _args) ->
         // Apply result is the return type of the function
-        inferTypeCore sumTypeNames func typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames func typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun funcType ->
             match funcType with
             | AST.TFunction (_, returnType) -> Ok returnType

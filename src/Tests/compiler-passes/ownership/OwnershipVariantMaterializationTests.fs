@@ -8,7 +8,7 @@ open MaterializeOwnershipVariants
 type private Leaf = Fresh of HIR.Value
 
 let private value id : HIR.Value = { Id = HIR.ValueId id; Type = AST.TList AST.TInt64 }
-let private functionId name = AST.functionIdForName name
+let private functionId name = TestIds.functionIdForName name
 let private binding name =
     name |> Seq.fold (fun hash ch -> (hash * 31) + int ch) 17 |> AST.bindingId
 let private signature parameters result : FunctionSignature<HIR.ValueId> = { Parameters = parameters; Result = result }

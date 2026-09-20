@@ -17,14 +17,30 @@ open LoweringAggregates
 open ANFContinuations
 open LoweringCallbacks
 
-let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (sumTypeNames: Set<string>) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+    let fieldIndex id =
+        tryFindFieldIndex id typeNames
+        |> Option.defaultWith (fun () -> Crash.crash "Checked field identity is absent from layout metadata")
+    let constructorTag id =
+        tryFindConstructorTag id typeNames
+        |> Option.defaultWith (fun () -> Crash.crash "Checked constructor identity is absent from layout metadata")
+    let functionIds =
+        functionNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
+    let functionId name =
+        Map.tryFind name functionIds
+        |> Option.defaultWith (fun () ->
+            Crash.crash $"Expression lowering function '{name}' is absent from registries")
+    let functionNameIs id expected =
+        Map.tryFind id functionNames
+        |> Option.orElseWith (fun () -> Map.tryFind id funcReg |> Option.map fst)
+        |> Option.contains expected
     match expr with
     | CheckedAST.RecursiveLet _ -> Error "RecursiveLet must be lowered during lambda lifting"
     | CheckedAST.DictLiteral (_, _, []) ->
         Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 0L)), varGen)
     | CheckedAST.DictLiteral _ -> Error "Non-empty DictLiteral must be lowered during generic specialization"
     | CheckedAST.BoundaryRender (renderer, value) ->
-        toANFCore sumTypeNames inertScopes value varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+        toANFCore sumTypeNames typeNames inertScopes value varGen env typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.map (fun (valueExpr, varGen1) ->
             let (renderedVar, varGen2) = ANF.freshVar varGen1
             let renderedExpr =
@@ -48,7 +64,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
 
     | CheckedAST.Int128Literal n ->
         let (resultVar, varGen1) = ANF.freshVar varGen
-        Ok (ANF.Let (resultVar, int128Construction n, ANF.Return (ANF.Var resultVar)), varGen1)
+        Ok (ANF.Let (resultVar, int128Construction functionId n, ANF.Return (ANF.Var resultVar)), varGen1)
 
     | CheckedAST.BigIntLiteral n ->
         let smallMin = -(System.Numerics.BigInteger.One <<< 62)
@@ -59,7 +75,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 let taggedWord = int64 (n * 2I + 1I)
                 ANF.TypedAtom (ANF.IntLiteral (ANF.Int64 taggedWord), AST.TInt)
             else
-                ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int.__value", [ANF.StringLiteral (n.ToString())])
+                ANF.Call (functionId "Darklang.Stdlib.Int.__value", [ANF.StringLiteral (n.ToString())])
         Ok (ANF.Let (resultVar, construction, ANF.Return (ANF.Var resultVar)), varGen1)
 
     | CheckedAST.Int8Literal n ->
@@ -85,7 +101,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
 
     | CheckedAST.UInt128Literal n ->
         let (resultVar, varGen1) = ANF.freshVar varGen
-        Ok (ANF.Let (resultVar, uint128Construction n, ANF.Return (ANF.Var resultVar)), varGen1)
+        Ok (ANF.Let (resultVar, uint128Construction functionId n, ANF.Return (ANF.Var resultVar)), varGen1)
 
     | CheckedAST.BoolLiteral b ->
         // Boolean literal becomes return
@@ -94,6 +110,9 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
     | CheckedAST.StringLiteral s ->
         // String literal becomes return
         Ok (ANF.Return (ANF.StringLiteral (s.Normalize(System.Text.NormalizationForm.FormC))), varGen)
+
+    | CheckedAST.BlobLiteral bytes ->
+        Ok (ANF.Return (ANF.StringLiteral bytes), varGen)
 
     | CheckedAST.CharLiteral s ->
         // Char literal becomes return (stored as string, same runtime representation)
@@ -107,53 +126,6 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
         match Map.tryFind id env with
         | Some (tempId, _) -> Ok (ANF.Return (ANF.Var tempId), varGen)
         | None -> Error "Undefined local binding identity"
-
-    | CheckedAST.NamedValue name ->
-        if isBuiltinTestNanName name then
-            Ok (ANF.Return (ANF.FloatLiteral System.Double.NaN), varGen)
-        else if isBuiltinTestInfinityName name then
-            Ok (ANF.Return (ANF.FloatLiteral System.Double.PositiveInfinity), varGen)
-        else if isBuiltinBlobEmptyName name then
-            Ok (ANF.Return (ANF.StringLiteral ""), varGen)
-        else if name = "Darklang.LanguageTools.PackageManager.PickContext.empty" then
-            let typeName = "Darklang.LanguageTools.PackageManager.PickContext"
-            match Map.tryFind typeName typeReg with
-            | Some recordInfo ->
-                let (resultVar, nextVarGen) = ANF.freshVar varGen
-                let reference : CheckedAST.RecordReference =
-                    { TypeId = AST.typeIdForName typeName; TypeArgs = [] }
-                Ok (
-                    ANF.Let (
-                        resultVar,
-                        ANF.RecordAlloc (
-                            recordDescriptor typeName reference recordInfo,
-                            [ANF.IntLiteral (ANF.Int64 0L)]
-                        ),
-                        ANF.Return (ANF.Var resultVar)
-                    ),
-                    nextVarGen
-                )
-            | None -> Error $"Unknown record type: {typeName}"
-        else if name = "Darklang.Stdlib.List.empty" || name = "Darklang.Stdlib.List.empty_v0" then
-            // The empty skew-list is the null pointer with tag zero.
-            Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 0L)), varGen)
-        else
-            // Check if it's a module function (e.g., Stdlib.Int64.add)
-            match Stdlib.tryGetFunction moduleRegistry name with
-            | Some (_, resolvedName) ->
-                let (closureId, varGen') = ANF.freshVar varGen
-                let closureAlloc =
-                    ANF.ClosureAlloc (AST.functionIdForName resolvedName, [])
-                Ok (ANF.Let (closureId, closureAlloc, ANF.Return (ANF.Var closureId)), varGen')
-            | None ->
-                // Check if it's a function reference (function name used as value)
-                match tryLookupResolved name funcReg with
-                | Some (_, resolvedName) ->
-                    let (closureId, varGen') = ANF.freshVar varGen
-                    let closureAlloc = ANF.ClosureAlloc (resolvedName, [])
-                    Ok (ANF.Let (closureId, closureAlloc, ANF.Return (ANF.Var closureId)), varGen')
-                | None ->
-                    Error $"Undefined named value: {name}"
 
     | CheckedAST.FuncRef name ->
         // Explicit function reference - wrap in closure for uniform calling convention
@@ -170,7 +142,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             | CheckedAST.FuncRef funcName :: rest ->
                 convertCaptures rest vg ((ANF.FuncRef funcName, []) :: acc)
             | cap :: rest ->
-                toAtomCore sumTypeNames inertScopes cap vg env typeReg variantLookup funcReg functionNames moduleRegistry
+                toAtomCore sumTypeNames typeNames inertScopes cap vg env typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.bind (fun (capAtom, capBindings, vg') ->
                     convertCaptures rest vg' ((capAtom, capBindings) :: acc))
         convertCaptures captures varGen []
@@ -189,15 +161,15 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
         // projection before exposing any binder to the continuation.
         // Infer the type of the value for type-directed field lookup
         let typeEnv = typeEnvFromVarEnv env
-        inferTypeCore sumTypeNames value typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames value typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun valueType ->
             if not (letPatternAcceptsType pattern valueType) then
                 // Type checking has replaced the continuation with the binding
                 // mismatch error. Preserve every RHS effect, then transition
                 // directly to that error without preparing any projection.
-                toANFCore sumTypeNames inertScopes value varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes value varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.bind (fun (valueExpr, varGen1) ->
-                    toANFCore sumTypeNames inertScopes body varGen1 env typeReg variantLookup funcReg functionNames moduleRegistry
+                    toANFCore sumTypeNames typeNames inertScopes body varGen1 env typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (failureExpr, varGen2) ->
                         (bindReturns valueExpr (fun _ -> failureExpr), varGen2)))
             else
@@ -206,21 +178,21 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 | CheckedAST.LPVariable name ->
                     let (bindingId, varGen2) = ANF.freshVar varGen1
                     let env' = Map.add name (bindingId, valueType) env
-                    toANFCore sumTypeNames inertScopes body varGen2 env' typeReg variantLookup funcReg functionNames moduleRegistry
+                    toANFCore sumTypeNames typeNames inertScopes body varGen2 env' typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (bodyExpr, varGen3) ->
                         let transition =
                             ANF.Let (bindingId, ANF.Atom valueAtom, bodyExpr)
                             |> wrapBindings valueBindings
                         (transition, varGen3))
                 | CheckedAST.LPUnit | CheckedAST.LPWildcard ->
-                    toANFCore sumTypeNames inertScopes body varGen1 env typeReg variantLookup funcReg functionNames moduleRegistry
+                    toANFCore sumTypeNames typeNames inertScopes body varGen1 env typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (bodyExpr, varGen2) ->
                         (wrapBindings valueBindings bodyExpr, varGen2))
                 | CheckedAST.LPTuple _ ->
                     let (rootId, varGen2) = ANF.freshVar varGen1
                     lowerLetPatternBindings pattern (ANF.Var rootId) valueType env [] varGen2
                     |> Result.bind (fun (env', patternBindingsRev, varGen3) ->
-                        toANFCore sumTypeNames inertScopes body varGen3 env' typeReg variantLookup funcReg functionNames moduleRegistry
+                        toANFCore sumTypeNames typeNames inertScopes body varGen3 env' typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (bodyExpr, varGen4) ->
                             let transition =
                                 wrapBindings (List.rev patternBindingsRev) bodyExpr
@@ -229,17 +201,17 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                             (transition, varGen4)))
 
               // Try toAtom first; if it fails for complex expressions like Match, use toANF
-              match toAtomCore sumTypeNames inertScopes value varGen env typeReg variantLookup funcReg functionNames moduleRegistry with
+              match toAtomCore sumTypeNames typeNames inertScopes value varGen env typeReg variantLookup funcReg functionNames moduleRegistry with
               | Ok (valueAtom, valueBindings, varGen1) ->
                   compileContinuation valueAtom valueBindings varGen1
               | Error _ ->
                   // Complex expression (like Match) - compile with toANF and transform returns
-                  toANFCore sumTypeNames inertScopes value varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                  toANFCore sumTypeNames typeNames inertScopes value varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                   |> Result.bind (fun (valueExpr, varGen2) ->
                       let (rootId, varGen3) = ANF.freshVar varGen2
                       lowerLetPatternBindings pattern (ANF.Var rootId) valueType env [] varGen3
                       |> Result.bind (fun (env', patternBindingsRev, varGen4) ->
-                          toANFCore sumTypeNames inertScopes body varGen4 env' typeReg variantLookup funcReg functionNames moduleRegistry
+                          toANFCore sumTypeNames typeNames inertScopes body varGen4 env' typeReg variantLookup funcReg functionNames moduleRegistry
                           |> Result.map (fun (bodyExpr, varGen5) ->
                               let patternContinuation =
                                   wrapBindings (List.rev patternBindingsRev) bodyExpr
@@ -257,7 +229,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
     | CheckedAST.UnaryOp (AST.Neg, innerExpr) ->
         // Unary negation: use operand type to select float vs integer path
         let typeEnv = typeEnvFromVarEnv env
-        inferTypeCore sumTypeNames innerExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames innerExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun innerType ->
             match innerType with
             | AST.TFloat64 ->
@@ -266,7 +238,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     // Constant-fold negative float literals at compile time
                     Ok (ANF.Return (ANF.FloatLiteral (-f)), varGen)
                 | _ ->
-                    toANFBoundAtomCore sumTypeNames inertScopes innerExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                    toANFBoundAtomCore sumTypeNames typeNames inertScopes innerExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (innerSetup, innerAtom, varGen1) ->
                         let (tempVar, varGen2) = ANF.freshVar varGen1
                         let cexpr = ANF.FloatNeg innerAtom
@@ -280,42 +252,42 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 System.Int64.MinValue)), varGen)
                 | _ ->
                     let zeroExpr = CheckedAST.Int64Literal 0L
-                    toANFCore sumTypeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                    toANFCore sumTypeNames typeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             | AST.TInt ->
-                toANFCore sumTypeNames inertScopes
+                toANFCore sumTypeNames typeNames inertScopes
                     (CheckedAST.BinOp (AST.Sub, CheckedAST.BigIntLiteral System.Numerics.BigInteger.Zero, innerExpr))
                     varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             | AST.TInt128 ->
-                toANFCore sumTypeNames inertScopes (CheckedAST.BinOp (AST.Sub, CheckedAST.Int128Literal System.Int128.Zero, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes (CheckedAST.BinOp (AST.Sub, CheckedAST.Int128Literal System.Int128.Zero, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             | AST.TInt32 ->
                 let zeroExpr = CheckedAST.Int32Literal 0l
-                toANFCore sumTypeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             | AST.TInt16 ->
                 let zeroExpr = CheckedAST.Int16Literal 0s
-                toANFCore sumTypeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             | AST.TInt8 ->
                 let zeroExpr = CheckedAST.Int8Literal 0y
-                toANFCore sumTypeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             | AST.TUInt64 ->
                 let zeroExpr = CheckedAST.UInt64Literal 0UL
-                toANFCore sumTypeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             | AST.TUInt32 ->
                 let zeroExpr = CheckedAST.UInt32Literal 0ul
-                toANFCore sumTypeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             | AST.TUInt16 ->
                 let zeroExpr = CheckedAST.UInt16Literal 0us
-                toANFCore sumTypeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             | AST.TUInt8 ->
                 let zeroExpr = CheckedAST.UInt8Literal 0uy
-                toANFCore sumTypeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes (CheckedAST.BinOp (AST.Sub, zeroExpr, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             | AST.TUInt128 ->
-                toANFCore sumTypeNames inertScopes (CheckedAST.BinOp (AST.Sub, CheckedAST.UInt128Literal System.UInt128.Zero, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes (CheckedAST.BinOp (AST.Sub, CheckedAST.UInt128Literal System.UInt128.Zero, innerExpr)) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             | _ ->
                 Error $"Negation requires numeric operand, got {innerType}")
 
     | CheckedAST.UnaryOp (AST.Not, innerExpr) ->
         // Boolean not: convert operand to atom and apply Not
-        toANFBoundAtomCore sumTypeNames inertScopes innerExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry |> Result.map (fun (innerSetup, innerAtom, varGen1) ->
+        toANFBoundAtomCore sumTypeNames typeNames inertScopes innerExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry |> Result.map (fun (innerSetup, innerAtom, varGen1) ->
             // Create unary op and bind to fresh variable
             let (tempVar, varGen2) = ANF.freshVar varGen1
             let cexpr = ANF.UnaryPrim (ANF.Not, innerAtom)
@@ -326,16 +298,16 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
 
     | CheckedAST.UnaryOp (AST.BitNot, innerExpr) ->
         let typeEnv = typeEnvFromVarEnv env
-        inferTypeCore sumTypeNames innerExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames innerExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun innerType ->
-            toANFBoundAtomCore sumTypeNames inertScopes innerExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+            toANFBoundAtomCore sumTypeNames typeNames inertScopes innerExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             |> Result.map (fun (innerSetup, innerAtom, varGen1) ->
                 let (tempVar, varGen2) = ANF.freshVar varGen1
                 let cexpr =
                     match innerType with
-                    | AST.TInt -> ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int.bitwiseNot", [innerAtom])
-                    | AST.TInt128 -> ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int128.bitwiseNot", [innerAtom])
-                    | AST.TUInt128 -> ANF.Call (AST.functionIdForName "Darklang.Stdlib.UInt128.bitwiseNot", [innerAtom])
+                    | AST.TInt -> ANF.Call (functionId "Darklang.Stdlib.Int.bitwiseNot", [innerAtom])
+                    | AST.TInt128 -> ANF.Call (functionId "Darklang.Stdlib.Int128.bitwiseNot", [innerAtom])
+                    | AST.TUInt128 -> ANF.Call (functionId "Darklang.Stdlib.UInt128.bitwiseNot", [innerAtom])
                     | _ -> ANF.UnaryPrim (ANF.BitNot, innerAtom)
                 let finalExpr = ANF.Let (tempVar, cexpr, ANF.Return (ANF.Var tempVar))
                 (bindReturns innerSetup (fun _ -> finalExpr), varGen2)))
@@ -351,7 +323,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             match parts with
             | [] -> Ok (List.rev expressions, List.rev atoms, vg)
             | part :: rest ->
-                toANFBoundAtomCore sumTypeNames inertScopes part vg env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFBoundAtomCore sumTypeNames typeNames inertScopes part vg env typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.bind (fun (partExpr, partAtom, nextVg) ->
                     let representableAtom =
                         match partAtom with
@@ -383,25 +355,25 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         ANF.StringConcat (firstAtom, secondAtom, remainingAtoms),
                         ANF.Let (
                             resultId,
-                            ANF.Call (AST.functionIdForName "Darklang.Stdlib.String.__normalizeAfterConcat", [ANF.Var rawId]),
+                            ANF.Call (functionId "Darklang.Stdlib.String.__normalizeAfterConcat", [ANF.Var rawId]),
                             ANF.Return (ANF.Var resultId)))
                 (sequence fused, varGen3))
 
     | CheckedAST.BinOp (op, left, right) ->
-        toANFBoundAtomCore sumTypeNames inertScopes left varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+        toANFBoundAtomCore sumTypeNames typeNames inertScopes left varGen env typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun (leftExpr, leftAtom, varGen1) ->
-            toANFBoundAtomCore sumTypeNames inertScopes right varGen1 env typeReg variantLookup funcReg functionNames moduleRegistry
+            toANFBoundAtomCore sumTypeNames typeNames inertScopes right varGen1 env typeReg variantLookup funcReg functionNames moduleRegistry
             |> Result.bind (fun (rightExpr, rightAtom, varGen2) ->
                 let typeEnv = typeEnvFromVarEnv env
                 let buildCoreExpr () : Result<ANF.AExpr * ANF.VarGen, string> =
                     match op with
                     | AST.Eq | AST.Neq ->
                         // Infer type of left operand to check if structural comparison is needed
-                        match inferTypeCore sumTypeNames left typeEnv typeReg variantLookup funcReg functionNames moduleRegistry with
+                        match inferTypeCore sumTypeNames typeNames left typeEnv typeReg variantLookup funcReg functionNames moduleRegistry with
                         | Ok operandType when isCompoundType operandType ->
                             // Generate structural equality
                             let (eqBindings, eqResultAtom, varGen3) =
-                                generateStructuralEquality leftAtom rightAtom operandType varGen2 typeReg variantLookup
+                                generateStructuralEquality functionId leftAtom rightAtom operandType varGen2 typeReg variantLookup
                             // For Neq, negate the result
                             let (finalAtom, finalBindings, varGen4) =
                                 if op = AST.Neq then
@@ -413,7 +385,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                             Ok (wrapBindings finalBindings (ANF.Return finalAtom), varGen4)
                         | Ok AST.TInt ->
                             let (tempVar, varGen3) = ANF.freshVar varGen2
-                            let cexpr = ANF.Call (AST.functionIdForName "Darklang.Stdlib.Int.__equals", [leftAtom; rightAtom])
+                            let cexpr = ANF.Call (functionId "Darklang.Stdlib.Int.__equals", [leftAtom; rightAtom])
                             let (finalAtom, finalBindings, varGen4) =
                                 if op = AST.Neq then
                                     let (negVar, vg) = ANF.freshVar varGen3
@@ -445,7 +417,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                                 | Ok AST.TInt128 -> "Darklang.Stdlib.Int128.__equals"
                                 | Ok AST.TUInt128 -> "Darklang.Stdlib.UInt128.__equals"
                                 | _ -> Crash.crash "128-bit equality dispatch lost its operand type"
-                            let cexpr = ANF.Call (AST.functionIdForName equalsName, [leftAtom; rightAtom])
+                            let cexpr = ANF.Call (functionId equalsName, [leftAtom; rightAtom])
                             let (finalAtom, finalBindings, varGen4) =
                                 if op = AST.Neq then
                                     let (negVar, vg) = ANF.freshVar varGen3
@@ -466,9 +438,9 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     | AST.And | AST.Or ->
                         let (tempVar, varGen3) = ANF.freshVar varGen2
                         let cexpr =
-                            match inferTypeCore sumTypeNames left typeEnv typeReg variantLookup funcReg functionNames moduleRegistry with
+                            match inferTypeCore sumTypeNames typeNames left typeEnv typeReg variantLookup funcReg functionNames moduleRegistry with
                             | Ok operandType ->
-                                match integerFunctionForBinOp operandType op with
+                                match integerFunctionForBinOp functionId operandType op with
                                 | Some funcName -> ANF.Call (funcName, [leftAtom; rightAtom])
                                 | None -> ANF.Prim (convertBinOp op, leftAtom, rightAtom)
                             | _ -> ANF.Prim (convertBinOp op, leftAtom, rightAtom)
@@ -481,11 +453,11 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     (withLeft, varGen3))))
 
     | CheckedAST.If (cond, thenBranch, elseBranch) ->
-        toANFBoundAtomCore sumTypeNames inertScopes cond varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+        toANFBoundAtomCore sumTypeNames typeNames inertScopes cond varGen env typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun (condSetup, condAtom, varGen1) ->
-            toANFCore sumTypeNames inertScopes thenBranch varGen1 env typeReg variantLookup funcReg functionNames moduleRegistry
+            toANFCore sumTypeNames typeNames inertScopes thenBranch varGen1 env typeReg variantLookup funcReg functionNames moduleRegistry
             |> Result.bind (fun (thenExpr, varGen2) ->
-                toANFCore sumTypeNames inertScopes elseBranch varGen2 env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes elseBranch varGen2 env typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.map (fun (elseExpr, varGen3) ->
                     let ifExpr = ANF.If (condAtom, thenExpr, elseExpr)
                     (bindReturns condSetup (fun _ -> ifExpr), varGen3))))
@@ -493,19 +465,19 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
     | CheckedAST.Sequence (first, next) ->
         // Preserve source order and let the final expression carry the value.
         // bindReturns also prevents the tail from running after a failing head.
-        toANFCore sumTypeNames inertScopes first varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+        toANFCore sumTypeNames typeNames inertScopes first varGen env typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun (firstExpr, varGen1) ->
-            toANFCore sumTypeNames inertScopes next varGen1 env typeReg variantLookup funcReg functionNames moduleRegistry
+            toANFCore sumTypeNames typeNames inertScopes next varGen1 env typeReg variantLookup funcReg functionNames moduleRegistry
             |> Result.map (fun (nextExpr, varGen2) ->
                 (bindReturns firstExpr (fun _ -> nextExpr), varGen2)))
 
     | CheckedAST.Call (funcName, args)
-        when funcName = AST.functionIdForName "Builtin.unwrap" ->
+        when functionNameIs funcName "Builtin.unwrap" ->
         let argList = exprArgsToList args
         match argList with
         | [argExpr] ->
             let typeEnv = typeEnvFromVarEnv env
-            inferTypeCore sumTypeNames argExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            inferTypeCore sumTypeNames typeNames argExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
             |> Result.bind (fun argType ->
                 let lookupVariantInfo (expectedTypeName: string) (variantName: string) : Result<int * AST.Type list, string> =
                     match Map.tryFind variantName variantLookup with
@@ -520,13 +492,13 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     match Map.tryFind expectedVariantName variantLookup, expression with
                     | Some (typeName, _, tag, _), CheckedAST.Constructor (reference, [payload])
                         when typeName = expectedTypeName
-                             && reference.TypeId = AST.typeIdForName expectedTypeName
-                             && AST.constructorTag reference.ConstructorId = tag ->
+                             && Map.tryFind reference.TypeId typeNames.TypeNames = Some expectedTypeName
+                             && tryFindConstructorTag reference.ConstructorId typeNames = Some tag ->
                         Some payload
                     | _ -> None
 
                 let buildUnwrapExpr (successTag: int) (payloadType: AST.Type) (failureMessage: string) : Result<ANF.AExpr * ANF.VarGen, string> =
-                    toAtomCore sumTypeNames inertScopes argExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                    toAtomCore sumTypeNames typeNames inertScopes argExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (argAtom0, argBindings0, vg1) ->
                         let (argAtom, argBindings, vg2) =
                             match argAtom0 with
@@ -581,7 +553,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         let payloadTypeResult =
                             match tryConstructorPayload "Darklang.Stdlib.Option.Option" "Some" argExpr with
                             | Some payloadExpr ->
-                                inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+                                inferTypeCore sumTypeNames typeNames payloadExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
                             | _ ->
                                 match fieldTypes with
                                 | [payloadType] -> Ok payloadType
@@ -607,7 +579,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         let payloadTypeResult =
                             match tryConstructorPayload "Darklang.Stdlib.Result.Result" "Ok" argExpr with
                             | Some payloadExpr ->
-                                inferTypeCore sumTypeNames payloadExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+                                inferTypeCore sumTypeNames typeNames payloadExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
                             | _ ->
                                 match fieldTypes with
                                 | [payloadType] -> Ok payloadType
@@ -629,8 +601,8 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             Error $"Internal error: Builtin.unwrap should have exactly 1 argument, got {List.length argList}"
 
     | CheckedAST.Call (funcName, args)
-        when funcName = AST.functionIdForName "Builtin.testRuntimeError"
-             || funcName = AST.functionIdForName "Builtin.crash" ->
+        when functionNameIs funcName "Builtin.testRuntimeError"
+             || functionNameIs funcName "Builtin.crash" ->
         let argList = exprArgsToList args
         match argList with
         | [messageExpr] ->
@@ -641,7 +613,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 let runtimeErrorExpr = ANF.RuntimeError fullMessage
                 Ok (ANF.Let (runtimeErrorVar, runtimeErrorExpr, ANF.Return ANF.UnitLiteral), varGen1)
             | None ->
-                toAtomCore sumTypeNames inertScopes messageExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toAtomCore sumTypeNames typeNames inertScopes messageExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.map (fun (messageAtom, messageBindings, varGen1) ->
                     let (fullMessageVar, varGen2) = ANF.freshVar varGen1
                     let (runtimeErrorVar, varGen3) = ANF.freshVar varGen2
@@ -691,7 +663,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             | [] ->
                 Ok (List.rev accExprs, List.rev accAtoms, vg)
             | arg :: rest ->
-                toANFBoundAtomCore sumTypeNames inertScopes arg vg env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFBoundAtomCore sumTypeNames typeNames inertScopes arg vg env typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.bind (fun (argExpr, argAtom, vg') ->
                     // Wrap function references in closures for uniform calling convention.
                     let (wrappedExpr, wrappedAtom, vg'') = wrapFuncRefInClosure argExpr argAtom vg'
@@ -726,7 +698,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 Ok (withArgSetups finalExpr, varGen2)
             | None ->
                 // Check if it's a raw memory intrinsic
-                match tryRawMemoryIntrinsic sumTypeNames displayName argAtoms with
+                match tryRawMemoryIntrinsic functionId sumTypeNames displayName argAtoms with
                 | Some intrinsicExpr ->
                     // Raw memory intrinsic call
                     let finalExpr = ANF.Let (resultVar, intrinsicExpr, ANF.Return (ANF.Var resultVar))
@@ -794,7 +766,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             match elems with
             | [] -> Ok (List.rev accExprs, List.rev accAtoms, vg)
             | elem :: rest ->
-                toANFBoundAtomCore sumTypeNames inertScopes elem vg env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFBoundAtomCore sumTypeNames typeNames inertScopes elem vg env typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.bind (fun (elemExpr, elemAtom, vg') ->
                     convertElements rest vg' (elemExpr :: accExprs) (elemAtom :: accAtoms))
 
@@ -814,7 +786,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
 
     | CheckedAST.TupleAccess (tupleExpr, index) ->
         // Convert tuple to atom and create TupleGet
-        toANFBoundAtomCore sumTypeNames inertScopes tupleExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+        toANFBoundAtomCore sumTypeNames typeNames inertScopes tupleExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.map (fun (tupleSetup, tupleAtom, varGen1) ->
             let (resultVar, varGen2) = ANF.freshVar varGen1
             let getExpr = ANF.TupleGet (tupleAtom, index)
@@ -823,7 +795,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
 
     | CheckedAST.RecordLiteral (reference, fields) ->
         let typeName =
-            match tryFindRecordTypeNameById reference.TypeId typeReg with
+            match tryFindRecordTypeNameById reference.TypeId typeNames with
             | Some name -> name
             | None -> Crash.crash "Resolved record type identity is absent from the lowering registry"
         // Evaluate fields in source order, then place their already-computed atoms
@@ -838,7 +810,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             match remaining with
             | [] -> Ok (List.rev acc, vg)
             | (fieldId, fieldExpr) :: rest ->
-                toANFBoundAtomCore sumTypeNames inertScopes fieldExpr vg env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFBoundAtomCore sumTypeNames typeNames inertScopes fieldExpr vg env typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.bind (fun (setupExpr, fieldAtom, vg') ->
                     convertFields rest vg' ((fieldId, setupExpr, fieldAtom) :: acc))
 
@@ -846,7 +818,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
         |> Result.map (fun (convertedFields, varGen1) ->
             let atomByIndex =
                 convertedFields
-                |> List.map (fun (fieldId, _, atom) -> (AST.fieldIndex fieldId, atom))
+                |> List.map (fun (fieldId, _, atom) -> (fieldIndex fieldId, atom))
                 |> Map.ofList
             let orderedAtoms =
                 [0 .. fieldCount - 1]
@@ -858,7 +830,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             let allocation =
                 ANF.Let (
                     resultVar,
-                    ANF.RecordAlloc (recordDescriptor typeName reference recordInfo, orderedAtoms),
+                    ANF.RecordAlloc (recordDescriptor typeName reference.TypeArgs recordInfo, orderedAtoms),
                     ANF.Return (ANF.Var resultVar)
                 )
             let withSourceOrderEvaluation =
@@ -869,20 +841,20 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
 
     | CheckedAST.RecordUpdate (recordExpr, updates) ->
         let typeEnv = typeEnvFromVarEnv env
-        inferTypeCore sumTypeNames recordExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames recordExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun recordType ->
             match recordType with
             | AST.TRecord (typeName, typeArgs) ->
                 match Map.tryFind typeName typeReg with
                 | Some recordInfo ->
                     let typeFields = recordInfo.Fields
-                    toANFBoundAtomCore sumTypeNames inertScopes recordExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                    toANFBoundAtomCore sumTypeNames typeNames inertScopes recordExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.bind (fun (recordSetup, recordAtom, varGen1) ->
                         let rec convertUpdates remaining vg acc =
                             match remaining with
                             | [] -> Ok (List.rev acc, vg)
                             | (fieldId, updateExpr) :: rest ->
-                                toANFBoundAtomCore sumTypeNames inertScopes updateExpr vg env typeReg variantLookup funcReg functionNames moduleRegistry
+                                toANFBoundAtomCore sumTypeNames typeNames inertScopes updateExpr vg env typeReg variantLookup funcReg functionNames moduleRegistry
                                 |> Result.bind (fun (setupExpr, updateAtom, vg') ->
                                     convertUpdates rest vg' ((fieldId, setupExpr, updateAtom) :: acc))
 
@@ -890,7 +862,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         |> Result.map (fun (convertedUpdates, varGen2) ->
                             let updatesByIndex =
                                 convertedUpdates
-                                |> List.map (fun (fieldId, _, atom) -> (AST.fieldIndex fieldId, atom))
+                                |> List.map (fun (fieldId, _, atom) -> (fieldIndex fieldId, atom))
                                 |> Map.ofList
 
                             let (fieldAtoms, projectionBindings, varGen3) =
@@ -907,8 +879,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                                              ANF.RecordGet (
                                                  recordDescriptor
                                                      typeName
-                                                     { TypeId = AST.typeIdForName typeName
-                                                       TypeArgs = typeArgs }
+                                                     typeArgs
                                                      recordInfo,
                                                  recordAtom,
                                                  index
@@ -923,8 +894,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                                     ANF.RecordClone (
                                         recordDescriptor
                                             typeName
-                                            { TypeId = AST.typeIdForName typeName
-                                              TypeArgs = typeArgs }
+                                            typeArgs
                                             recordInfo,
                                         recordAtom,
                                         List.rev fieldAtoms
@@ -947,25 +917,24 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
         // Projection is type-directed so the nominal descriptor and keyed slot
         // always agree, including after aliases and generic substitution.
         let typeEnv = typeEnvFromVarEnv env
-        inferTypeCore sumTypeNames recordExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        inferTypeCore sumTypeNames typeNames recordExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun recordType ->
             match recordType with
             | AST.TRecord (typeName, typeArgs) ->
                 // Look up field index in the specific record type
                 match Map.tryFind typeName typeReg with
                 | Some recordInfo ->
-                    match List.tryItem (AST.fieldIndex fieldName) recordInfo.Fields with
+                    match List.tryItem (fieldIndex fieldName) recordInfo.Fields with
                     | Some _ ->
-                        let index = AST.fieldIndex fieldName
-                        toANFBoundAtomCore sumTypeNames inertScopes recordExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                        let index = fieldIndex fieldName
+                        toANFBoundAtomCore sumTypeNames typeNames inertScopes recordExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (recordSetup, recordAtom, varGen1) ->
                             let (resultVar, varGen2) = ANF.freshVar varGen1
                             let getExpr =
                                 ANF.RecordGet (
                                     recordDescriptor
                                         typeName
-                                        { TypeId = AST.typeIdForName typeName
-                                          TypeArgs = typeArgs }
+                                        typeArgs
                                         recordInfo,
                                     recordAtom,
                                     index
@@ -980,12 +949,13 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 Error $"Cannot access field '{fieldName}' on non-record type")
 
     | CheckedAST.Constructor (constructorReference, fields) ->
-        match tryFindSumTypeNameById constructorReference.TypeId variantLookup with
+        match tryFindSumTypeNameById constructorReference.TypeId typeNames with
         | None -> Error "Resolved constructor type identity is absent from the lowering registry"
         | Some constructorTypeName ->
-            match tryFindVariantByTag constructorTypeName (AST.constructorTag constructorReference.ConstructorId) variantLookup with
+            let tag = constructorTag constructorReference.ConstructorId
+            match tryFindVariantByTag constructorTypeName tag variantLookup with
             | None ->
-                Error $"Unknown constructor tag: {AST.constructorTag constructorReference.ConstructorId}"
+                Error $"Unknown constructor tag: {tag}"
             | Some (typeName, typeParams, tag, variantFieldTypes) ->
                 // Check if ANY variant in this type has a payload
                 // If so, all variants must be heap-allocated for consistency
@@ -998,6 +968,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 let boxedDescriptor () =
                     inferTypeCore
                         sumTypeNames
+                        typeNames
                         expr
                         (typeEnvFromVarEnv env)
                         typeReg
@@ -1035,7 +1006,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         | _ -> CheckedAST.TupleLiteral fields
                     boxedDescriptor ()
                     |> Result.bind (fun descriptor ->
-                        toANFBoundAtomCore sumTypeNames inertScopes payloadExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                        toANFBoundAtomCore sumTypeNames typeNames inertScopes payloadExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.map (fun (payloadSetupExpr, payloadAtom, varGen1) ->
                             let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
                             let (resultVar, varGen2) = ANF.freshVar varGen1
@@ -1253,9 +1224,9 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 match elems with
                 | [] -> Ok (List.rev acc, vg)
                 | e :: rest ->
-                    inferTypeCore sumTypeNames e typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+                    inferTypeCore sumTypeNames typeNames e typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.bind (fun elemType ->
-                        toANFBoundAtomCore sumTypeNames inertScopes e vg env typeReg variantLookup funcReg functionNames moduleRegistry
+                        toANFBoundAtomCore sumTypeNames typeNames inertScopes e vg env typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.bind (fun (setupExpr, atom, vg') ->
                             convertElements rest vg' ((setupExpr, atom, elemType) :: acc)))
 
@@ -1284,7 +1255,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 Ok (exprWithElements, varGen3))
 
     | CheckedAST.Match (scrutinee, cases) ->
-        PatternLowering.lowerMatch toANFCore toAtomCore toANFBoundAtomCore sumTypeNames inertScopes scrutinee cases varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+        PatternLowering.lowerMatch toANFCore toAtomCore toANFBoundAtomCore sumTypeNames typeNames inertScopes scrutinee cases varGen env typeReg variantLookup funcReg functionNames moduleRegistry
 
     | CheckedAST.InterpolatedString parts ->
         // Desugar interpolated string to StringConcat chain
@@ -1299,7 +1270,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             Ok (ANF.Return (ANF.StringLiteral ""), varGen)
         | [single] ->
             // Single part → convert directly
-            toANFCore sumTypeNames inertScopes (partToExpr single) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+            toANFCore sumTypeNames typeNames inertScopes (partToExpr single) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
         | first :: rest ->
             // Multiple parts → fold with StringConcat
             let desugared =
@@ -1307,20 +1278,20 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 |> List.fold (fun acc part ->
                     CheckedAST.BinOp (AST.StringConcat, acc, partToExpr part))
                     (partToExpr first)
-            toANFCore sumTypeNames inertScopes desugared varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+            toANFCore sumTypeNames typeNames inertScopes desugared varGen env typeReg variantLookup funcReg functionNames moduleRegistry
 
     | CheckedAST.Lambda (_parameters, _, _body) ->
         // Lambda in expression position - closures not yet fully implemented
         Error "Lambda expressions (closures) are not yet fully implemented"
 
     | CheckedAST.IndirectApply (func, args) ->
-        toAtomCore sumTypeNames inertScopes func varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+        toAtomCore sumTypeNames typeNames inertScopes func varGen env typeReg variantLookup funcReg functionNames moduleRegistry
         |> Result.bind (fun (funcAtom, funcBindings, varGen1) ->
             let rec convertArgs remaining vg acc =
                 match remaining with
                 | [] -> Ok (List.rev acc, vg)
                 | arg :: rest ->
-                    toAtomCore sumTypeNames inertScopes arg vg env typeReg variantLookup funcReg functionNames moduleRegistry
+                    toAtomCore sumTypeNames typeNames inertScopes arg vg env typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.bind (fun (argAtom, argBindings, vg') ->
                         convertArgs rest vg' ((argAtom, argBindings) :: acc))
             convertArgs (exprArgsToList args) varGen1 []
@@ -1351,7 +1322,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         CheckedAST.Let (parameter.Pattern, argExpr, buildLets restPs restAs)
                     | _ -> body  // Should not happen due to length check
                 let desugared = buildLets parameterList argsList
-                toANFCore sumTypeNames inertScopes desugared varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes desugared varGen env typeReg variantLookup funcReg functionNames moduleRegistry
         | CheckedAST.Local name ->
             // Calling a variable that might hold a closure
             match Map.tryFind name env with
@@ -1361,7 +1332,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     match remaining with
                     | [] -> Ok (List.rev acc, vg)
                     | arg :: rest ->
-                        toAtomCore sumTypeNames inertScopes arg vg env typeReg variantLookup funcReg functionNames moduleRegistry
+                        toAtomCore sumTypeNames typeNames inertScopes arg vg env typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.bind (fun (argAtom, argBindings, vg') ->
                             convertArgs rest vg' ((argAtom, argBindings) :: acc))
                 convertArgs argsList varGen []
@@ -1423,7 +1394,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                             desugaAll applied restArgLists
 
                 let desugared = desugaAll baseFunc allArgLists
-                toANFCore sumTypeNames inertScopes desugared varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore sumTypeNames typeNames inertScopes desugared varGen env typeReg variantLookup funcReg functionNames moduleRegistry
 
             | _ ->
                 // Base function is not a lambda - use toAtom which handles nested applies
@@ -1435,14 +1406,14 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         applyAll (CheckedAST.Apply (currentExpr, exprArgsFromList currentArgs)) rest
                 let fullApply = applyAll baseFunc allArgLists
 
-                toAtomCore sumTypeNames inertScopes fullApply varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                toAtomCore sumTypeNames typeNames inertScopes fullApply varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.map (fun (resultAtom, bindings, vg) ->
                     (wrapBindings bindings (ANF.Return resultAtom), vg))
 
         | CheckedAST.Let (letName, letValue, letBody) ->
             // Apply(let x = v in body, args) → let x = v in Apply(body, args)
             // Float the let binding out
-            toANFCore sumTypeNames inertScopes (CheckedAST.Let (letName, letValue, CheckedAST.Apply (letBody, args))) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+            toANFCore sumTypeNames typeNames inertScopes (CheckedAST.Let (letName, letValue, CheckedAST.Apply (letBody, args))) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
 
         | CheckedAST.Closure (funcName, captures) ->
             // Closure being called directly - convert to ClosureCall
@@ -1453,7 +1424,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 | CheckedAST.FuncRef funcName :: rest ->
                     convertCaptures rest vg ((ANF.FuncRef funcName, []) :: acc)
                 | cap :: rest ->
-                    toAtomCore sumTypeNames inertScopes cap vg env typeReg variantLookup funcReg functionNames moduleRegistry
+                    toAtomCore sumTypeNames typeNames inertScopes cap vg env typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.bind (fun (capAtom, capBindings, vg') ->
                         convertCaptures rest vg' ((capAtom, capBindings) :: acc))
             convertCaptures captures varGen []
@@ -1472,7 +1443,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     match remaining with
                     | [] -> Ok (List.rev acc, vg)
                     | arg :: rest ->
-                        toANFBoundAtomCore sumTypeNames inertScopes arg vg env typeReg variantLookup funcReg functionNames moduleRegistry
+                        toANFBoundAtomCore sumTypeNames typeNames inertScopes arg vg env typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.bind (fun (argExpr, argAtom, vg') ->
                             convertArgs rest vg' ((argExpr, argAtom) :: acc))
                 convertArgs argsList varGen2 []
@@ -1492,7 +1463,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
         | _ ->
             // General function-expression application (for example record field access):
             // evaluate function expression to a closure value, then invoke it.
-            toAtomCore sumTypeNames inertScopes func varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+            toAtomCore sumTypeNames typeNames inertScopes func varGen env typeReg variantLookup funcReg functionNames moduleRegistry
             |> Result.bind (fun (funcAtom, funcBindings, varGen1) ->
                 let rec convertArgs
                     (remaining: CheckedAST.Expr list)
@@ -1502,7 +1473,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     match remaining with
                     | [] -> Ok (List.rev acc, vg)
                     | arg :: rest ->
-                        toAtomCore sumTypeNames inertScopes arg vg env typeReg variantLookup funcReg functionNames moduleRegistry
+                        toAtomCore sumTypeNames typeNames inertScopes arg vg env typeReg variantLookup funcReg functionNames moduleRegistry
                         |> Result.bind (fun (argAtom, argBindings, vg') ->
                             convertArgs rest vg' ((argAtom, argBindings) :: acc))
 

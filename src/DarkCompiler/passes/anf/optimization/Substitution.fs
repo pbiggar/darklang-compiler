@@ -161,7 +161,8 @@ let private substCExprWithChange (env: Map<TempId, Atom>) (cexpr: CExpr) : struc
         struct (cexpr', changed)
 
 /// Optimize a CExpr with constant folding
-let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) (tupleEnv: TupleEnv) (cexpr: CExpr) : CExpr * bool =
+let optimizeCExpr (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) (tupleEnv: TupleEnv) (cexpr: CExpr) : CExpr * bool =
+    let hasName id name = Map.tryFind id context.FunctionNames = Some name
     // First, substitute known constants
     let struct (cexpr', substitutionChanged) = substCExprWithChange env cexpr
 
@@ -196,17 +197,17 @@ let optimizeCExpr (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) 
                     | [single] -> Some (Atom single)
                     | _ -> None
             | Call (id, [StringLiteral left; StringLiteral right])
-                when id = AST.functionIdForName "Darklang.Stdlib.String.__appendNormalized" ->
+                when hasName id "Darklang.Stdlib.String.__appendNormalized" ->
                 let normalized = (left + right).Normalize(System.Text.NormalizationForm.FormC)
                 Some (Atom (StringLiteral normalized))
             | Call (id, [StringLiteral value])
-                when id = AST.functionIdForName "Darklang.Stdlib.String.__normalizeAfterConcat" ->
+                when hasName id "Darklang.Stdlib.String.__normalizeAfterConcat" ->
                 Some (Atom (StringLiteral (value.Normalize(System.Text.NormalizationForm.FormC))))
             | Call (id, [left; StringLiteral ""])
-                when id = AST.functionIdForName "Darklang.Stdlib.String.__appendNormalized" ->
+                when hasName id "Darklang.Stdlib.String.__appendNormalized" ->
                 Some (Atom left)
             | Call (id, [StringLiteral ""; right])
-                when id = AST.functionIdForName "Darklang.Stdlib.String.__appendNormalized" ->
+                when hasName id "Darklang.Stdlib.String.__appendNormalized" ->
                 Some (Atom right)
             | TupleGet (Var tupleTid, index) ->
                 Map.tryFind tupleTid tupleEnv

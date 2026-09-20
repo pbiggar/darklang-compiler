@@ -226,7 +226,7 @@ let rec private buildInto (typed: TypedShape) target state : Result<BuildState, 
         |> Result.map (fun (captureRegisters, afterBuild) ->
             let operands = captureRegisters |> List.map (physical >> LIR.Reg)
             let withClosure =
-                append [ LIR.ClosureAlloc (physical target, AST.functionIdForName $"rc_fixture_closure_{typed.Path}", operands) ] afterBuild
+                append [ LIR.ClosureAlloc (physical target, TestIds.functionIdForName $"rc_fixture_closure_{typed.Path}", operands) ] afterBuild
             captureRegisters |> List.fold (fun current register -> releaseRegister register current) withClosure)
 
 let rec private collectClosureFunctions (typed: TypedShape) : LIR.Function list =
@@ -237,7 +237,7 @@ let rec private collectClosureFunctions (typed: TypedShape) : LIR.Function list 
         let label = LIR.Label $"{name}_entry"
         let captureTuple = AST.TTuple (AST.TInt64 :: (typed.Children |> List.map _.Type))
         let func : LIR.Function =
-            { Id = AST.functionIdForName name
+            { Id = TestIds.functionIdForName name
               Name = name
               TypedParams = [{ Reg = physical LIR.X0; Type = captureTuple }]
               CFG =
@@ -305,7 +305,7 @@ let private buildProgram test =
             let instructions = built.Instructions @ preservedSetup @ [ releaseInstruction ] @ preservedChecks
             let entry = LIR.Label "entry"
             let main : LIR.Function =
-                { Id = AST.functionIdForName "_start"
+                { Id = TestIds.functionIdForName "_start"
                   Name = "_start"
                   TypedParams = []
                   CFG =

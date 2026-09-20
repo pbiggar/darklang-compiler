@@ -81,6 +81,7 @@ let buildPreambleContext
                             |> Map.fold (fun values name value -> Map.add name value values) stdlib.Context.CheckedValues
                         buildContext
                             stdlib.Context.Target
+                            preambleUserOnly.Symbols
                             preambleTypeCheckEnv
                             checkedValues
                             mergedGenericDefs
@@ -205,6 +206,7 @@ let buildPreambleContextFromAnalysis
                 |> Map.fold (fun values name value -> Map.add name value values) stdlib.Context.CheckedValues
             buildContext
                 stdlib.Context.Target
+                preambleUserOnly.Symbols
                 analysis.TypeCheckEnv
                 checkedValues
                 mergedGenericDefs

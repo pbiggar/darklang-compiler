@@ -246,6 +246,7 @@ let buildStdlibWithTrace
                 let context =
                     buildContext
                         target
+                        anfResult.Symbols
                         typeCheckEnv
                         (checkedValueArtifacts typedStdlib)
                         genericFuncDefs
@@ -368,7 +369,7 @@ let buildStdlibSpecializations
             |> Result.bind (fun (typeDefs, _functions) ->
                 let symbols, newSpecializedFunctions =
                     SpecializationIdentity.importSpecializedFunctions
-                        (CheckedAST.programSymbols stdlib.TypedAST)
+                        stdlib.Context.Symbols
                         newSpecializedFuncs
                 let initiallyMaterializedTopLevels, symbols =
                     newSpecializedFunctions
@@ -436,7 +437,7 @@ let buildStdlibSpecializations
                     stdlib.Context.LambdaLiftVariantLookup
                     stdlib.Context.BaseFuncNames
                     stdlib.Context.LambdaLiftFuncParams
-                    stdlib.Context.ReturnTypes
+                    (returnTypesByName stdlib.Context.ReturnTypes)
                     stdlib.Context.CheckedValues
                     passTimingRecorder
                     specializationProgram
@@ -552,6 +553,7 @@ let buildStdlibSpecializations
                                         registries.VariantLookup
                                 let updatedContext = {
                                     stdlib.Context with
+                                        Symbols = CheckedAST.programSymbols preparedProgram
                                         Registries = registries
                                         SpecRegistry = combinedSpecRegistry
                                         BaseFuncNames = baseFuncNames

@@ -535,10 +535,10 @@ let applyOnce (value: Int64) : Int64 =
   let increment = fun x -> x + 1L in
   increment (value)
 ---EXPECTED---
-__closure_0:
+__closure_47:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "__closure_0_entry":
+  Label "__closure_47_entry":
     v10002 <- Add(v1, Imm 1)
     X0 <- Mov(Reg v10002)
     Ret
@@ -548,7 +548,7 @@ applyOnce:
   UsedCalleeSaved: []
   Label "applyOnce_entry":
     TailArgMoves(X0 <- Imm 0, X1 <- Reg v3)
-    TailCall(__closure_0, [Imm 0, Reg v3])
+    TailCall(__closure_47, [Imm 0, Reg v3])
     X0 <- Mov(Reg v6)
     Ret
 
@@ -559,10 +559,10 @@ let addOffset (value: Int64) (offset: Int64) : Int64 =
   let add = fun x -> x + offset in
   add (value)
 ---EXPECTED---
-__closure_0:
+__closure_47:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "__closure_0_entry":
+  Label "__closure_47_entry":
     v10004 <- HeapLoad(v0, 8)
     v10005 <- Add(v1, Reg v10004)
     X0 <- Mov(Reg v10005)
@@ -573,7 +573,7 @@ addOffset:
   UsedCalleeSaved: []
   Label "addOffset_entry":
     v10009 <- HeapAlloc(16)
-    HeapStore(v10009, 0, &__closure_0)
+    HeapStore(v10009, 0, &__closure_47)
     HeapStore(v10009, 8, Reg v6)
     SaveRegs([], [])
     X10 <- Mov(Reg v10009)
@@ -593,18 +593,18 @@ let makeIncrement () : (Int64) -> Int64 =
   let increment = fun x -> x + 1L in
   increment
 ---EXPECTED---
-__closure_0:
+__closure_47:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "__closure_0_entry":
+  Label "__closure_47_entry":
     v10002 <- Add(v1, Imm 1)
     X0 <- Mov(Reg v10002)
     Ret
 
-__closure_comparison_1:
+__closure_comparison_48:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "__closure_comparison_1_entry":
+  Label "__closure_comparison_48_entry":
     X0 <- Mov(Imm 1)
     Ret
 
@@ -613,8 +613,8 @@ makeIncrement:
   UsedCalleeSaved: []
   Label "makeIncrement_entry":
     v10005 <- HeapAlloc(16)
-    HeapStore(v10005, 0, &__closure_0)
-    HeapStore(v10005, 8, &__closure_comparison_1)
+    HeapStore(v10005, 0, &__closure_47)
+    HeapStore(v10005, 8, &__closure_comparison_48)
     X0 <- Mov(Reg v10005)
     Ret
 
@@ -626,10 +626,10 @@ let applyTwice (value: Int64) : Int64 =
   let once = increment (value) in
   increment (once)
 ---EXPECTED---
-__closure_0:
+__closure_47:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "__closure_0_entry":
+  Label "__closure_47_entry":
     v10002 <- Add(v1, Imm 1)
     X0 <- Mov(Reg v10002)
     Ret
@@ -640,10 +640,10 @@ applyTwice:
   Label "applyTwice_entry":
     SaveRegs([], [])
     ArgMoves(X0 <- Imm 0, X1 <- Reg v3)
-    v10006 <- Call(__closure_0, [Imm 0, Reg v3])
+    v10006 <- Call(__closure_47, [Imm 0, Reg v3])
     RestoreRegs([], [])
     v10006 <- Mov(Reg X0)
     TailArgMoves(X0 <- Imm 0, X1 <- Reg v10006)
-    TailCall(__closure_0, [Imm 0, Reg v10006])
+    TailCall(__closure_47, [Imm 0, Reg v10006])
     X0 <- Mov(Reg v8)
     Ret

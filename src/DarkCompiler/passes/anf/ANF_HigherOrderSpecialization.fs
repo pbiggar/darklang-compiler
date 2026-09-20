@@ -355,8 +355,10 @@ let private displayName definitions functionId =
 let private specializedTargetName definitions targetId =
     $"{displayName definitions targetId}__captures"
 
-let private specializedTargetId definitions targetId =
-    AST.functionIdForName (specializedTargetName definitions targetId)
+let private specializedTargetId generatedIds definitions targetId =
+    let name = specializedTargetName definitions targetId
+    Map.tryFind name generatedIds
+    |> Option.defaultWith (fun () -> Crash.crash $"Higher-order specialization did not allocate '{name}'")
 
 let private specializedHelperName definitions request =
     let suffix =
@@ -469,7 +471,10 @@ let private requiredFunction name definitions =
     | Some func -> func
     | None -> Crash.crash $"Higher-order specialization lost validated function '{name}'"
 
-let specializeProgramWithExternalFunctions externalFunctions (Program (functions, main)) =
+let specializeProgramWithExternalFunctionsAndNames
+    (reservedFunctionNames: Map<AST.FunctionId, string>)
+    externalFunctions
+    (Program (functions, main)) =
     let definitions = mergeFunctionMaps externalFunctions functions
     let returnFacts = buildReturnFacts definitions
     let rawRequests =
@@ -482,24 +487,33 @@ let specializeProgramWithExternalFunctions externalFunctions (Program (functions
             Map.tryFind request.HelperName definitions
             |> Option.exists (fun helper -> countNodes helper.Body <= maxHelperNodes))
         |> List.distinctBy requestKey |> List.sortBy requestKey |> withinPairBudget
-    let existingNames = definitions |> Map.keys |> Set.ofSeq
+    let existingNames =
+        Set.union
+            (definitions |> Map.values |> Seq.map (fun func -> func.Name) |> Set.ofSeq)
+            (reservedFunctionNames |> Map.values |> Set.ofSeq)
     let targetCloneNames =
         requests |> List.collect (fun request -> request.KnownArguments)
         |> List.filter (fun argument -> argument.Callable.Convention = ClosureValue)
-        |> List.map (fun argument -> specializedTargetId definitions argument.Callable.TargetName) |> Set.ofList
-    let helperCloneNames = requests |> List.map (specializedHelperName definitions >> AST.functionIdForName) |> Set.ofList
+        |> List.map (fun argument -> specializedTargetName definitions argument.Callable.TargetName) |> Set.ofList
+    let helperCloneNames = requests |> List.map (specializedHelperName definitions) |> Set.ofList
     let usableRequests =
         requests
         |> List.filter (fun request ->
-            let helperName = AST.functionIdForName (specializedHelperName definitions request)
+            let helperName = specializedHelperName definitions request
             let targets =
                 request.KnownArguments
                 |> List.filter (fun argument -> argument.Callable.Convention = ClosureValue)
-                |> List.map (fun argument -> specializedTargetId definitions argument.Callable.TargetName)
+                |> List.map (fun argument -> specializedTargetName definitions argument.Callable.TargetName)
             not (Set.contains helperName existingNames)
             && not (Set.contains helperName targetCloneNames)
             && (targets |> List.forall (fun name ->
                 not (Set.contains name existingNames) && not (Set.contains name helperCloneNames))))
+
+    let generatedNames = Set.union targetCloneNames helperCloneNames
+    let generatedIds =
+        AST.allocateFunctionIds
+            (Seq.append (definitions |> Map.keys) (reservedFunctionNames |> Map.keys))
+            generatedNames
 
     let allDefinitions = definitions |> Map.values |> Seq.toList
     let targetCallables =
@@ -518,7 +532,7 @@ let specializeProgramWithExternalFunctions externalFunctions (Program (functions
                     let (captureParameters, nextVarGen) = makeCaptureParameters shape.CaptureTypes currentVarGen
                     let clone = {
                         target with
-                            Id = specializedTargetId definitions target.Id
+                            Id = specializedTargetId generatedIds definitions target.Id
                             Name = specializedTargetName definitions target.Id
                             TypedParams = captureParameters @ shape.ValueParameters
                             Body = rewriteTargetBody closureId captureParameters target.Body
@@ -547,7 +561,7 @@ let specializeProgramWithExternalFunctions externalFunctions (Program (functions
                     let (captures, next) = makeCaptureParameters shape.CaptureTypes varGen
                     let targetName =
                         match argument.Callable.Convention with
-                        | ClosureValue -> specializedTargetId definitions argument.Callable.TargetName
+                        | ClosureValue -> specializedTargetId generatedIds definitions argument.Callable.TargetName
                         | StaticFunction -> argument.Callable.TargetName
                     let rewrittenCallable = {
                         TargetName = targetName
@@ -560,13 +574,13 @@ let specializeProgramWithExternalFunctions externalFunctions (Program (functions
             let cloneName = specializedHelperName definitions request
             let clone = {
                 helper with
-                    Id = AST.functionIdForName cloneName
+                    Id = Map.find cloneName generatedIds
                     Name = cloneName
                     TypedParams = removeIndexes indexes helper.TypedParams @ captureParameters
                     Body =
                         rewriteHelperBody
                             helper.Id
-                            (AST.functionIdForName cloneName)
+                            (Map.find cloneName generatedIds)
                             rewrittenCallables
                             indexes
                             captureParameters
@@ -576,12 +590,22 @@ let specializeProgramWithExternalFunctions externalFunctions (Program (functions
 
     let specializedNames =
         usableRequests
-        |> List.map (fun request -> (requestKey request, AST.functionIdForName (specializedHelperName definitions request)))
+        |> List.map (fun request ->
+            let name = specializedHelperName definitions request
+            (requestKey request, Map.find name generatedIds))
         |> Map.ofList
     let rewrittenFunctions =
         functions |> List.map (fun func -> {
             func with Body = rewriteKnownCalls definitions returnFacts specializedNames Map.empty func.Body })
     let rewrittenMain = rewriteKnownCalls definitions returnFacts specializedNames Map.empty main
     Program (List.rev targetClones @ rewrittenFunctions @ List.rev helperClones, rewrittenMain)
+
+let specializeProgramWithExternalFunctions externalFunctions program =
+    let (Program (functions, _)) = program
+    let functionNames =
+        (externalFunctions @ functions)
+        |> List.map (fun func -> func.Id, func.Name)
+        |> Map.ofList
+    specializeProgramWithExternalFunctionsAndNames functionNames externalFunctions program
 
 let specializeProgram program = specializeProgramWithExternalFunctions [] program

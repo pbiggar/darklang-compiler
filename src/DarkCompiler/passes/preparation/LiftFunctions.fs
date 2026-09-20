@@ -25,7 +25,7 @@ let liftLambdasInFunc (funcDef: CheckedAST.FunctionDef) (state: LiftState) : Res
 type LiftStateWithFuncs = {
     State: LiftState
     FuncParams: Map<string, (AST.BindingId * AST.Type) list>
-    GeneratedWrappers: Map<string, string>  // original func name -> wrapper name
+    GeneratedWrappers: Map<string, AST.FunctionId * AST.FunctionId * AST.FunctionId>
 }
 
 /// Generate a wrapper for a named function used as a value
@@ -50,14 +50,15 @@ let generateFuncWrapper
                 ((id, typ), symbols)) symbols
         let closureParam =
             (closureId, AST.TTuple [AST.TInt64; comparatorStorageType])
-        let (_, symbols) = CheckedAST.internFunction origFuncName symbols
+        let (originalId, symbols) = CheckedAST.internFunction origFuncName symbols
+        let (wrapperId, symbols) = CheckedAST.internFunction wrapperName symbols
         let wrapperBody =
             parameters
             |> List.map (fun (id, _) -> CheckedAST.Local id)
             |> exprArgsFromList
-            |> fun args -> CheckedAST.Call (AST.functionIdForName origFuncName, args)
+            |> fun args -> CheckedAST.Call (originalId, args)
         let wrapperDef : CheckedAST.FunctionDef = {
-            Id = AST.functionIdForName wrapperName
+            Id = wrapperId
             Name = wrapperName
             TypeParams = []
             Params = paramsFromList "generateFuncWrapper" (closureParam :: parameters)
@@ -72,7 +73,6 @@ let generateFuncWrapper
                 false
                 stateWithFuncs.State.VariantLookup
                 symbols
-        let (_, symbols) = CheckedAST.internFunction wrapperName symbols
         let newState = {
             stateWithFuncs with
                 State = {
@@ -80,7 +80,11 @@ let generateFuncWrapper
                         Symbols = symbols
                         LiftedFunctions = comparisonDef :: stateWithName.LiftedFunctions
                 }
-                GeneratedWrappers = Map.add origFuncName wrapperName stateWithFuncs.GeneratedWrappers
+                GeneratedWrappers =
+                    Map.add
+                        origFuncName
+                        (originalId, wrapperId, comparisonDef.Id)
+                        stateWithFuncs.GeneratedWrappers
         }
         Ok (wrapperDef, newState)
     | None, _ ->
@@ -132,8 +136,8 @@ let rec private containsIndirectApply (expr: CheckedAST.Expr) : bool =
     | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _ | CheckedAST.BigIntLiteral _
     | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
     | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _ | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _
-    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
-    | CheckedAST.Local _ | CheckedAST.NamedValue _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> false
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.BlobLiteral _ | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _
+    | CheckedAST.Local _ | CheckedAST.FuncRef _ | CheckedAST.RuntimeError _ -> false
 
 /// A separately compiled caller may compare any closure returned by this
 /// compilation unit. Retain comparator metadata for function values nested in
@@ -398,12 +402,6 @@ let rec liftLambdasInProgram
     let funcReturnTypes =
         Map.fold (fun acc k v -> Map.add k v acc) baseFuncReturnTypes (Map.fold (fun acc k v -> Map.add k v acc) userFuncReturnTypes moduleFuncReturnTypes)
     let genericFuncDefs = Map.fold (fun acc k v -> Map.add k v acc) userGenericFuncDefs moduleGenericFuncDefs
-    let byFunctionId values =
-        values
-        |> Map.toList
-        |> List.map (fun (name, value) -> AST.functionIdForName name, value)
-        |> Map.ofList
-
     let locallyComparedFunctionParams =
         topLevels
         |> List.choose (function
@@ -432,6 +430,21 @@ let rec liftLambdasInProgram
         funcParams
         |> Map.keys
         |> Seq.fold (fun symbols name -> CheckedAST.internFunction name symbols |> snd) symbols
+    let byFunctionId values =
+        values
+        |> Map.toList
+        |> List.map (fun (name, value) ->
+            match CheckedAST.tryFindFunctionId name symbols with
+            | Some id -> id, value
+            | None -> Crash.crash $"Lambda lifting function '{name}' is absent from symbols")
+        |> Map.ofList
+
+    let funcReturnTypesById =
+        [ "Builtin.testRuntimeError"; "Builtin.crash" ]
+        |> List.fold (fun returnTypes name ->
+            match CheckedAST.tryFindFunctionId name symbols with
+            | Some id -> Map.add id AST.TRuntimeError returnTypes
+            | None -> returnTypes) (byFunctionId funcReturnTypes)
 
     let initialState = {
         Symbols = symbols
@@ -441,7 +454,7 @@ let rec liftLambdasInProgram
         ComparableFunctionParams = comparableFunctionParams
         TypeEnv = Map.empty
         FuncParams = byFunctionId funcParams
-        FuncReturnTypes = byFunctionId funcReturnTypes
+        FuncReturnTypes = funcReturnTypesById
         GenericFuncDefs = byFunctionId genericFuncDefs
         TypeReg = canonicalMergedTypeReg
         VariantLookup = mergedVariantLookup
@@ -476,8 +489,8 @@ let rec liftLambdasInProgram
         let funcNamesUsedAsValues =
             topLevels'
             |> List.collect (function
-                | CheckedAST.FunctionDef f -> collectFuncRefsInExpr f.Body funcParams
-                | CheckedAST.Expression e -> collectFuncRefsInExpr e funcParams
+                | CheckedAST.FunctionDef f -> collectFuncRefsInExpr state'.Symbols f.Body funcParams
+                | CheckedAST.Expression e -> collectFuncRefsInExpr state'.Symbols e funcParams
                 | _ -> [])
             |> List.distinct
 
@@ -500,12 +513,19 @@ let rec liftLambdasInProgram
             CheckedAST.Program (finalStateWithFuncs.State.Symbols, liftedFuncDefs @ topLevels'')))
 
 /// Collect function names that are used as values (not in Call position)
-and collectFuncRefsInExpr (expr: CheckedAST.Expr) (knownFuncs: Map<string, (AST.BindingId * AST.Type) list>) : string list =
+and collectFuncRefsInExpr
+    (symbols: CheckedAST.Symbols)
+    (expr: CheckedAST.Expr)
+    (knownFuncs: Map<string, (AST.BindingId * AST.Type) list>)
+    : string list =
     let rec collect (bound: Set<AST.BindingId>) candidate =
         let collectChildren children = children |> List.collect (collect bound)
         match candidate with
         | CheckedAST.BoundaryRender (_, value) -> collect bound value
-        | CheckedAST.NamedValue name when Map.containsKey name knownFuncs -> [name]
+        | CheckedAST.FuncRef id ->
+            match CheckedAST.functionName id symbols with
+            | Some name when Map.containsKey name knownFuncs -> [name]
+            | _ -> []
         | CheckedAST.Call (_, args) | CheckedAST.TypeApp (_, _, args) ->
             args |> exprArgsToList |> collectChildren
         | CheckedAST.Let (pattern, value, body) ->
@@ -552,7 +572,10 @@ and collectFuncRefsInExpr (expr: CheckedAST.Expr) (knownFuncs: Map<string, (AST.
     collect Set.empty expr
 
 /// Replace function references with wrapper references in a TopLevel
-and replaceFuncRefsWithWrappers (wrapperMap: Map<string, string>) (topLevel: CheckedAST.TopLevel) : CheckedAST.TopLevel =
+and replaceFuncRefsWithWrappers
+    (wrapperMap: Map<string, AST.FunctionId * AST.FunctionId * AST.FunctionId>)
+    (topLevel: CheckedAST.TopLevel)
+    : CheckedAST.TopLevel =
     match topLevel with
     | CheckedAST.FunctionDef f ->
         CheckedAST.FunctionDef { f with Body = replaceInExpr wrapperMap f.Body }
@@ -564,31 +587,30 @@ and replaceFuncRefsWithWrappers (wrapperMap: Map<string, string>) (topLevel: Che
     | CheckedAST.TypeDef (id, t) -> CheckedAST.TypeDef (id, t)
 
 /// Replace function references with wrapper references in an expression
-and replaceInExpr (wrapperMap: Map<string, string>) (expr: CheckedAST.Expr) : CheckedAST.Expr =
+and replaceInExpr
+    (wrapperMap: Map<string, AST.FunctionId * AST.FunctionId * AST.FunctionId>)
+    (expr: CheckedAST.Expr)
+    : CheckedAST.Expr =
     let rec replace (bound: Set<AST.BindingId>) candidate =
         let replaceArgs args = args |> AST.NonEmptyList.map (replace bound)
         match candidate with
         | CheckedAST.BoundaryRender (renderer, value) -> CheckedAST.BoundaryRender (renderer, replace bound value)
-        | CheckedAST.NamedValue name when Map.containsKey name wrapperMap ->
-            match Map.tryFind name wrapperMap with
-            | Some wrapperName ->
-                CheckedAST.Closure (
-                    AST.functionIdForName wrapperName,
-                    [CheckedAST.FuncRef (AST.functionIdForName $"{wrapperName}__comparison")]
-                )
-            | None -> Crash.crash $"replaceInExpr expected wrapper for function '{name}'"
+        | CheckedAST.FuncRef id ->
+            match wrapperMap |> Map.values |> Seq.tryFind (fun (originalId, _, _) -> originalId = id) with
+            | Some (_, wrapperId, comparisonId) ->
+                CheckedAST.Closure (wrapperId, [CheckedAST.FuncRef comparisonId])
+            | None -> candidate
         | CheckedAST.Closure (funcName, captures) ->
             let wrapper =
                 wrapperMap
                 |> Map.toSeq
-                |> Seq.tryPick (fun (name, wrapperName) ->
-                    if AST.functionIdForName name = funcName then Some wrapperName else None)
+                |> Seq.tryPick (fun (_, (originalId, wrapperId, comparisonId)) ->
+                    if originalId = funcName then Some (wrapperId, comparisonId) else None)
             match wrapper with
-            | Some wrapperName ->
+            | Some (wrapperId, comparisonId) ->
                 CheckedAST.Closure (
-                    AST.functionIdForName wrapperName,
-                    CheckedAST.FuncRef (AST.functionIdForName $"{wrapperName}__comparison")
-                    :: (captures |> List.map (replace bound))
+                    wrapperId,
+                    CheckedAST.FuncRef comparisonId :: (captures |> List.map (replace bound))
                 )
             | None -> CheckedAST.Closure (funcName, captures |> List.map (replace bound))
         | CheckedAST.Call (name, args) -> CheckedAST.Call (name, replaceArgs args)

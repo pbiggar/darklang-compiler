@@ -10,7 +10,7 @@ open RefCountInsertion
 open MemoryShapeTests
 open RcCleanupTests
 
-let private fid = AST.functionIdForName
+let private fid = TestIds.functionIdForName
 let private functionRegistry entries : TypeRegistries.FunctionRegistry =
     entries |> List.map (fun (name, typ) -> fid name, (name, typ)) |> Map.ofList
 

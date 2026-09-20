@@ -11,7 +11,7 @@ let private alias : HIR.Value = { Id = HIR.ValueId 3; Type = AST.TInt64 }
 
 let private call target result =
     Evaluate (HIR.Call {
-        Target = AST.functionIdForName target
+        Target = TestIds.functionIdForName target
         Arguments = [parameter]
         Result = result
     })
@@ -26,7 +26,7 @@ let private block operations result : Block<TestLeaf, string> = {
 
 let private ownedFunction name operations result : Function<TestLeaf, string> = {
     Definition = {
-        Id = AST.functionIdForName name
+        Id = TestIds.functionIdForName name
         Name = name
         Body = block operations result
     }
@@ -90,7 +90,7 @@ let private testRequiresIndependentCallContract () =
     let expected =
         Error (
             VerifyOwnedHIR.HIRVerificationFailed (
-                VerifyHIR.MissingCallContract (AST.functionIdForName "recursive")))
+                VerifyHIR.MissingCallContract (TestIds.functionIdForName "recursive")))
     if actual = expected then Ok () else Error $"Expected {expected}, got {actual}"
 
 let private testRejectsPositionalOwnershipMismatch () =
@@ -110,7 +110,7 @@ let private testRejectsPositionalOwnershipMismatch () =
 let private testRejectsConflictingOwnershipRegistration () =
     let recursive = ownedFunction "recursive" [call "recursive" alias] alias
     let registered (call: HIR.FunctionCall) =
-        if call.Target = AST.functionIdForName "recursive" then
+        if call.Target = TestIds.functionIdForName "recursive" then
             Some { Parameters = [ConsumedCallParameter]; Result = ProducedCallResult }
         else None
     let actual =
@@ -121,7 +121,7 @@ let private testRejectsConflictingOwnershipRegistration () =
     let expected =
         Error (
             VerifyOwnedHIR.OwnershipVerificationFailed (
-                InconsistentRegisteredCallOwnership (AST.functionIdForName "recursive")))
+                InconsistentRegisteredCallOwnership (TestIds.functionIdForName "recursive")))
     if actual = expected then Ok () else Error $"Expected {expected}, got {actual}"
 
 let tests = [

@@ -448,7 +448,7 @@ let testLoopPhiCoalesced () : TestResult =
 
     let cfg = makeCFG labelEntry [blockEntry; blockLoop; blockBack; blockExit]
     let func : LIR.Function = {
-        Id = AST.functionIdForName "phi_coalesce_loop"
+        Id = TestIds.functionIdForName "phi_coalesce_loop"
         Name = "phi_coalesce_loop"
         TypedParams = []
         CFG = cfg
@@ -498,7 +498,7 @@ let testFloatLoopPhiCoalesced () : TestResult =
 
     let cfg = makeCFG labelEntry [blockEntry; blockLoop; blockBack; blockExit]
     let func : LIR.Function = {
-        Id = AST.functionIdForName "float_phi_coalesce_loop"
+        Id = TestIds.functionIdForName "float_phi_coalesce_loop"
         Name = "float_phi_coalesce_loop"
         TypedParams = []
         CFG = cfg
@@ -537,7 +537,7 @@ let testFloatLoopPhiPreservesReturnRegister () : TestResult =
             [SaveRegs ([], [])
              FLoad (fvr 40, 0.0)
              FArgMoves [(LIR.D0, fvr 40)]
-             Call (vr 32, AST.functionIdForName "float_return_source", [])
+             Call (vr 32, TestIds.functionIdForName "float_return_source", [])
              FMov (LIR.FPhysical LIR.D8, LIR.FPhysical LIR.D0)
              RestoreRegs ([], [])
              FMov (fvr 32, LIR.FPhysical LIR.D8)]
@@ -556,7 +556,7 @@ let testFloatLoopPhiPreservesReturnRegister () : TestResult =
 
     let cfg = makeCFG labelEntry [blockEntry; blockLoop; blockBack; blockExit]
     let func : LIR.Function = {
-        Id = AST.functionIdForName "float_phi_preserve_return"
+        Id = TestIds.functionIdForName "float_phi_preserve_return"
         Name = "float_phi_preserve_return"
         TypedParams =
             [{ Reg = vr 11; Type = AST.TInt64 }
@@ -588,7 +588,7 @@ let testCallerSaveExcludesDeadArguments () : TestResult =
              Mov (vr 2, Imm 30L)
              SaveRegs ([], [])
              ArgMoves [(LIR.X0, Imm 0L); (LIR.X1, vreg 0); (LIR.X2, vreg 1)]
-             Call (vr 3, AST.functionIdForName "callee", [vreg 0; vreg 1])
+             Call (vr 3, TestIds.functionIdForName "callee", [vreg 0; vreg 1])
              RestoreRegs ([], [])
              Mov (vr 3, Reg (phys LIR.X0))
              Add (vr 4, vr 2, vreg 3)]
@@ -627,7 +627,7 @@ let testCallerSavePreservesArgumentCycle () : TestResult =
              Mov (vr 1, Imm 20L)
              SaveRegs ([], [])
              ArgMoves [(LIR.X1, vreg 1); (LIR.X2, vreg 0)]
-             Call (vr 2, AST.functionIdForName "callee", [vreg 1; vreg 0])
+             Call (vr 2, TestIds.functionIdForName "callee", [vreg 1; vreg 0])
              RestoreRegs ([], [])
              Mov (vr 2, Reg (phys LIR.X0))]
     let cfg = makeCFG label [block]

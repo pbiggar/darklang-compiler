@@ -48,7 +48,7 @@ let testBranchFalseEdgeFallsThrough () : TestResult =
     let falseBlock = LIR.Label "arm64_layout_false"
     let block label instrs terminator : LIR.BasicBlock = { Label = label; Instrs = instrs; Terminator = terminator }
     let func : LIR.Function = {
-        Id = AST.functionIdForName "arm64_layout"
+        Id = TestIds.functionIdForName "arm64_layout"
         Name = "arm64_layout"
         TypedParams = []
         CFG = {
@@ -96,7 +96,7 @@ let testSharedReturnTransferCost () : TestResult =
     let join = LIR.Label "common_return_join"
     let block label instrs terminator : LIR.BasicBlock = { Label = label; Instrs = instrs; Terminator = terminator }
     let func : LIR.Function = {
-        Id = AST.functionIdForName "common_return"
+        Id = TestIds.functionIdForName "common_return"
         Name = "common_return"
         TypedParams = []
         CFG = {
@@ -183,7 +183,7 @@ let internal makeEmptyFunction
     : LIR.Function =
     let label = LIR.Label $"{name}_entry"
     {
-        Id = AST.functionIdForName name
+        Id = TestIds.functionIdForName name
         Name = name
         TypedParams = typedParams
         CFG = {
@@ -210,7 +210,7 @@ let private makeAllocatedEntryFunction
     : LIR.Function =
     let label = LIR.Label $"{name}_entry"
     {
-        Id = AST.functionIdForName name
+        Id = TestIds.functionIdForName name
         Name = name
         TypedParams = typedParams
         CFG = {
@@ -354,7 +354,7 @@ let testReportsMissingEntryBlock () : TestResult =
         Terminator = LIR.Ret
     }
     let func : LIR.Function = {
-        Id = AST.functionIdForName "_start"
+        Id = TestIds.functionIdForName "_start"
         Name = "_start"
         TypedParams = []
         CFG = {

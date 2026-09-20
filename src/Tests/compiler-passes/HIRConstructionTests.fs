@@ -60,7 +60,7 @@ let rec private infer types = function
     | expression -> Error $"unsupported test expression {expression}"
 
 let private functionDefinition body : CheckedAST.FunctionDef = {
-    Id = AST.functionIdForName "choose"
+    Id = TestIds.functionIdForName "choose"
     Name = "choose"
     TypeParams = []
     Params = {
@@ -132,7 +132,7 @@ let private testFallsBackToOpaqueCheckedFunctionForScheduling () =
                 variable "unsupported",
                 CheckedAST.TupleLiteral [CheckedAST.Int64Literal 1L],
                 local "first"))
-    match ConstructHIRFunctions.constructFunctionsWithOpaqueFallback infer dependencies noCalls [source] with
+    match ConstructHIRFunctions.constructFunctionsWithOpaqueFallback Map.empty infer dependencies noCalls [source] with
     | Ok [constructed] ->
         let block = ConstructHIRFunctions.body constructed.Body
         match block.Parameters, block.Operations with
@@ -144,7 +144,7 @@ let private testFallsBackToOpaqueCheckedFunctionForScheduling () =
     | actual -> Error $"Expected conservative opaque construction, got {actual}"
 
 let private callFunction name firstParameter remainingParameters body : CheckedAST.FunctionDef = {
-    Id = AST.functionIdForName name
+    Id = TestIds.functionIdForName name
     Name = name
     TypeParams = []
     Params = {
@@ -169,7 +169,7 @@ let private callContract aliasResult (call: HIR.FunctionCall) : HIR.PrimitiveCon
 let private contractedCalls aliasResult : ConstructHIRFunctions.CallContracts = {
     ExternalSignature = fun _ -> None
     Contract = fun target ->
-        if target = AST.functionIdForName "callee" then Some (callContract aliasResult)
+        if target = TestIds.functionIdForName "callee" then Some (callContract aliasResult)
         else None
 }
 
@@ -186,7 +186,7 @@ let private testNormalizesContractedCallsInArgumentOrder () =
             (parameter "unit" AST.TUnit)
             []
             (CheckedAST.Call (
-                AST.functionIdForName "callee",
+                TestIds.functionIdForName "callee",
                 { Head = CheckedAST.Int64Literal 1L; Tail = [CheckedAST.Int64Literal 2L] }))
     let calls = contractedCalls false
     match ConstructHIRFunctions.constructFunctions infer dependencies calls [callee; caller] with
@@ -219,7 +219,7 @@ let private testKeepsUncontractedCallsOpaque () =
             (parameter "value" AST.TInt64)
             []
             (CheckedAST.Call (
-                AST.functionIdForName "callee",
+                TestIds.functionIdForName "callee",
                 AST.NonEmptyList.singleton (local "value")))
     match ConstructHIRFunctions.constructFunctions infer dependencies noCalls [callee; caller] with
     | Ok [_; constructedCaller] ->
@@ -241,7 +241,7 @@ let private testRejectsInvalidCallAliasContract () =
             (parameter "value" AST.TInt64)
             []
             (CheckedAST.Call (
-                AST.functionIdForName "callee",
+                TestIds.functionIdForName "callee",
                 AST.NonEmptyList.singleton (local "value")))
     let calls = contractedCalls true
     match ConstructHIRFunctions.constructFunctions infer dependencies calls [callee; caller] with
@@ -258,7 +258,7 @@ let private scalarFunction
     body
     : CheckedAST.FunctionDef =
     {
-        Id = AST.functionIdForName name
+        Id = TestIds.functionIdForName name
         Name = name
         TypeParams = []
         Params = AST.NonEmptyList.singleton parameter
