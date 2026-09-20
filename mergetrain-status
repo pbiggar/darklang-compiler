@@ -10,6 +10,8 @@ clear_screen=true
 run_once=false
 interactive_redraw=false
 color_mode=auto
+show_conflicts=false
+interactive_input=false
 
 usage() {
   cat <<EOF
@@ -28,6 +30,7 @@ Options:
                        Default: $color_mode
   --no-color           Equivalent to --color never.
   --no-clear           Append each refresh instead of redrawing in place.
+  --show-conflicts     Show complete conflict reasons instead of summaries.
   --once               Display one status snapshot, then exit.
   -h, --help           Show this help and exit.
 
@@ -60,6 +63,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-clear)
       clear_screen=false
+      shift
+      ;;
+    --show-conflicts)
+      show_conflicts=true
       shift
       ;;
     --once)
@@ -106,12 +113,21 @@ if [[ "$clear_screen" == true && -t 1 ]]; then
   printf '\033[?25l'
   trap 'printf "\033[?25h\n"' EXIT
 fi
+if [[ "$interactive_redraw" == true && -t 0 ]]; then
+  interactive_input=true
+fi
 
 while true; do
   status_output=""
   renderer_args=(--repo "$repo_root")
   if [[ "$color_mode" == always ]]; then
     renderer_args+=(--color)
+  fi
+  if [[ "$show_conflicts" == true ]]; then
+    renderer_args+=(--show-conflicts)
+  fi
+  if [[ "$interactive_input" == true ]]; then
+    renderer_args+=(--conflict-toggle-hint)
   fi
   if ! status_output="$(
     mergetrain --repo "$repo_root" status --json --limit 1000 \
@@ -128,5 +144,16 @@ while true; do
   if [[ "$run_once" == true ]]; then
     exit 0
   fi
-  sleep "$interval_seconds"
+  if [[ "$interactive_input" == true ]]; then
+    pressed_key=""
+    if read -rsn1 -t "$interval_seconds" pressed_key && [[ "$pressed_key" == c ]]; then
+      if [[ "$show_conflicts" == true ]]; then
+        show_conflicts=false
+      else
+        show_conflicts=true
+      fi
+    fi
+  else
+    sleep "$interval_seconds"
+  fi
 done
