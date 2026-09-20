@@ -484,7 +484,8 @@ let testConstructionValuesCreateClones () : TestResult =
         { SourceTypeName = "SmallRecord"
           RuntimeTypeName = "SmallRecord"
           TypeArgs = []
-          Fields = [("count", AST.TInt64); ("enabled", AST.TBool)] }
+          Fields = [("count", AST.TInt64); ("enabled", AST.TBool)]
+          ValueType = AST.TRecord ("SmallRecord", []) }
     Result.bind
         (fun () ->
             checkCase
@@ -555,7 +556,8 @@ let testThreeFieldAggregatesSpecializeAndPruneCallerConstruction () : TestResult
         { SourceTypeName = "ThreeFieldRecord"
           RuntimeTypeName = "ThreeFieldRecord"
           TypeArgs = []
-          Fields = [("count", AST.TInt64); ("enabled", AST.TBool); ("tag", AST.TUInt64)] }
+          Fields = [("count", AST.TInt64); ("enabled", AST.TBool); ("tag", AST.TUInt64)]
+          ValueType = AST.TRecord ("ThreeFieldRecord", []) }
     Result.bind
         (fun () ->
             checkCase

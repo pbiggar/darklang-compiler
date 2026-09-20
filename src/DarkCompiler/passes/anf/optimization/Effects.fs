@@ -155,7 +155,7 @@ let internal addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | RecordAlloc (_, fields) -> addAtomUses fields uses
     | RecordGet (_, record, _) -> addAtomUse record uses
     | RecordClone (_, record, fields)
-    | RecordReuse (_, record, fields) ->
+    | RecordReuse (_, _, record, fields) ->
         uses |> addAtomUse record |> addAtomUses fields
     | StringConcat (first, second, remaining) ->
         uses |> addAtomUses (first :: second :: remaining)
@@ -291,7 +291,7 @@ let cexprUsesTemp (tid: TempId) (cexpr: CExpr) : bool =
     | TupleAlloc atoms
     | RecordAlloc (_, atoms) -> anyUsed atoms
     | RecordClone (_, record, fields)
-    | RecordReuse (_, record, fields) -> used record || anyUsed fields
+    | RecordReuse (_, _, record, fields) -> used record || anyUsed fields
     | CliNative (_, atoms) -> anyUsed atoms
     | IndirectCall (first, rest)
     | IndirectTailCall (first, rest)

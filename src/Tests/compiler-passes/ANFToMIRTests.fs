@@ -35,6 +35,7 @@ let testRecordAllocationStartsFieldsAtOffsetZero () : TestResult =
         RuntimeTypeName = "LayoutRecord"
         TypeArgs = []
         Fields = [("left", AST.TInt64); ("right", AST.TInt64)]
+        ValueType = AST.TRecord ("LayoutRecord", [])
     }
     let program =
         ANF.Program (

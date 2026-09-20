@@ -46,7 +46,7 @@ let private extractFromCExpr (cexpr: ANF.CExpr) : AST.FunctionId list =
     | ANF.RecordAlloc (_, fields) -> extractFromAtoms fields
     | ANF.RecordGet (_, record, _) -> extractFromAtom record
     | ANF.RecordClone (_, record, fields)
-    | ANF.RecordReuse (_, record, fields) ->
+    | ANF.RecordReuse (_, _, record, fields) ->
         extractFromAtom record @ extractFromAtoms fields
     | ANF.StringConcat (first, second, remaining) ->
         extractFromAtoms (first :: second :: remaining)

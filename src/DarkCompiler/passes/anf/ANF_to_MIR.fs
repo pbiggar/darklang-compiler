@@ -231,7 +231,7 @@ let maxTempIdInCExpr (cexpr: ANF.CExpr) : int =
     | ANF.RecordAlloc (_, fields) -> maxTempIdInAtoms fields
     | ANF.RecordGet (_, record, _) -> maxTempIdInAtom record
     | ANF.RecordClone (_, record, fields)
-    | ANF.RecordReuse (_, record, fields) -> maxTempIdWithAtoms record fields
+    | ANF.RecordReuse (_, _, record, fields) -> maxTempIdWithAtoms record fields
     | ANF.StringConcat (first, second, remaining) ->
         maxTempIdInAtoms (first :: second :: remaining)
     | ANF.CanonicalBufferEq (_, left, right) ->
@@ -587,9 +587,10 @@ let private inferSimpleCExprDestType
     | ANF.TupleGet (ANF.Var tupleId, index) ->
         tupleGetDestType builder tempId tupleGetAliasType tupleId index
     | ANF.RecordAlloc (descriptor, _)
-    | ANF.RecordClone (descriptor, _, _)
-    | ANF.RecordReuse (descriptor, _, _) ->
-        Some (AST.TRecord (descriptor.RuntimeTypeName, descriptor.TypeArgs))
+    | ANF.RecordClone (descriptor, _, _) ->
+        Some descriptor.ValueType
+    | ANF.RecordReuse (_, descriptor, _, _) ->
+        Some descriptor.ValueType
     | ANF.RecordGet (descriptor, _, index) ->
         descriptor.Fields |> List.tryItem index |> Option.map snd
     | ANF.StringToRawPtr _
@@ -648,7 +649,7 @@ let cexprDescription (cexpr: ANF.CExpr) : string =
     | ANF.RecordAlloc (descriptor, _) -> System.String.Concat("RecordAlloc ", descriptor.RuntimeTypeName)
     | ANF.RecordGet (descriptor, _, _) -> System.String.Concat("RecordGet ", descriptor.RuntimeTypeName)
     | ANF.RecordClone (descriptor, _, _) -> System.String.Concat("RecordClone ", descriptor.RuntimeTypeName)
-    | ANF.RecordReuse (descriptor, _, _) -> System.String.Concat("RecordReuse ", descriptor.RuntimeTypeName)
+    | ANF.RecordReuse (_, descriptor, _, _) -> System.String.Concat("RecordReuse ", descriptor.RuntimeTypeName)
     | ANF.StringConcat _ -> "StringConcat"
     | ANF.CanonicalBufferEq _ -> "CanonicalBufferEq"
     | ANF.RefCountInc _ -> "RefCountInc"
@@ -1263,10 +1264,10 @@ let rec convertExpr
                             MIR.HeapStore (destReg, index * 8, operand, valueType)))
                     |> sequenceResults
                     |> Result.map (fun stores -> allocInstr :: stores)
-                | ANF.RecordReuse (descriptor, recordAtom, fields) ->
+                | ANF.RecordReuse (_, descriptor, recordAtom, fields) ->
                     match recordAtom with
                     | ANF.Var sourceId ->
-                        let recordType = AST.TRecord (descriptor.RuntimeTypeName, descriptor.TypeArgs)
+                        let recordType = descriptor.ValueType
                         fields
                         |> List.mapi (fun index field -> (index, field))
                         |> List.map (fun (index, field) ->

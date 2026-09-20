@@ -90,6 +90,7 @@ let tests = [
     ("record reuse retains replacement before releasing old child", testRecordReuseRetainsReplacementBeforeReleasingOldChild)
     ("composite record reuse carries recursive release plan", testCompositeRecordReuseCarriesRecursiveReleasePlan)
     ("nested record reuse carries recursive release plan", testNestedRecordReuseCarriesRecursiveReleasePlan)
+    ("boxed sum reuse releases source variant before overwrite", testBoxedSumReuseReleasesSourceVariantBeforeOverwrite)
     ("map helper accumulator return transfers ownership without retain", testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator)
     ("map helper self tail-call releases replaced accumulator", testMapHelperSelfTailCallReleasesReplacedAccumulator)
     ("borrowed projection self tail-call args are retained", testBorrowedProjectionSelfTailCallArgsAreRetained)

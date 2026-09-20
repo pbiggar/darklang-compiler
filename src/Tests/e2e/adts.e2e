@@ -106,6 +106,14 @@ type StrResult = StrOk of String | StrErr of String
 match StrOk "success" with | StrOk s -> s | StrErr e -> e = "success"
 match StrErr "failed" with | StrOk s -> s | StrErr e -> e = "failed"
 
+// A uniquely local boxed sum can transfer its fixed block to the next
+// constructor while a separate payload alias preserves immutable behavior.
+type ReuseBox = ReuseBox of List<Int64>
+let oldItems = [1L, 2L, 3L] in let original = ReuseBox oldItems in let updated = match original with | ReuseBox _ -> ReuseBox [4L, 5L] in match updated with | ReuseBox newItems -> oldItems == [1L, 2L, 3L] && newItems == [4L, 5L] = true
+
+type GenericReuseBox<'a> = GenericReuseBox of List<a>
+let oldItems = [6L, 7L] in let original = GenericReuseBox oldItems in let updated = match original with | GenericReuseBox _ -> GenericReuseBox [8L, 9L] in match updated with | GenericReuseBox newItems -> oldItems == [6L, 7L] && newItems == [8L, 9L] = true
+
 // ===================================================================
 // Type Aliases to Primitive Types (must NOT be parsed as sum types)
 // ===================================================================

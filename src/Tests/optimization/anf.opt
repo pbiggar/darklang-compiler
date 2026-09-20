@@ -28,13 +28,13 @@ Darklang.Stdlib.String.__asciiTrimStartBoundary
 Function Darklang.Stdlib.String.__asciiTrimStartBoundary:
 let TempId 21329 = t21327 >= t21328
 if t21329 then
-let TempId 21330 = (0, t21327)
+let TempId 21330 = RecordAlloc(Darklang.Stdlib.Option.Option, [0, t21327])
 return t21330
 else
 let TempId 21331 = Darklang.Stdlib.String.__byteAtUnchecked(t21326, t21327)
 let TempId 21333 = t21331 >= 128
 if t21333 then
-let TempId 21334 = (1, 0)
+let TempId 21334 = RecordAlloc(Darklang.Stdlib.Option.Option, [1, 0])
 return t21334
 else
 let TempId 21335 = Darklang.Stdlib.String.__asciiWhitespace(t21331)
@@ -43,7 +43,7 @@ let TempId 21336 = t21327 + 1
 let TempId 21337 = TailCall(Darklang.Stdlib.String.__asciiTrimStartBoundary, [t21326, t21336, t21328])
 return t21337
 else
-let TempId 21338 = (0, t21327)
+let TempId 21338 = RecordAlloc(Darklang.Stdlib.Option.Option, [0, t21327])
 return t21338
 
 ---NAME---
@@ -54,14 +54,14 @@ Darklang.Stdlib.String.__asciiTrimEndBoundary
 Function Darklang.Stdlib.String.__asciiTrimEndBoundary:
 let TempId 21341 = t21340 <= 0
 if t21341 then
-let TempId 21342 = (0, t21340)
+let TempId 21342 = RecordAlloc(Darklang.Stdlib.Option.Option, [0, t21340])
 return t21342
 else
 let TempId 21343 = t21340 - 1
 let TempId 21344 = Darklang.Stdlib.String.__byteAtUnchecked(t21339, t21343)
 let TempId 21346 = t21344 >= 128
 if t21346 then
-let TempId 21347 = (1, 0)
+let TempId 21347 = RecordAlloc(Darklang.Stdlib.Option.Option, [1, 0])
 return t21347
 else
 let TempId 21348 = Darklang.Stdlib.String.__asciiWhitespace(t21344)
@@ -69,7 +69,7 @@ if t21348 then
 let TempId 21350 = TailCall(Darklang.Stdlib.String.__asciiTrimEndBoundary, [t21339, t21343])
 return t21350
 else
-let TempId 21351 = (0, t21340)
+let TempId 21351 = RecordAlloc(Darklang.Stdlib.Option.Option, [0, t21340])
 return t21351
 
 ---NAME---

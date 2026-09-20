@@ -986,7 +986,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             match tryFindVariantByTag constructorTypeName (AST.constructorTag constructorReference.ConstructorId) variantLookup with
             | None ->
                 Error $"Unknown constructor tag: {AST.constructorTag constructorReference.ConstructorId}"
-            | Some (typeName, _, tag, _) ->
+            | Some (typeName, typeParams, tag, variantFieldTypes) ->
                 // Check if ANY variant in this type has a payload
                 // If so, all variants must be heap-allocated for consistency
                 // Note: We get typeName from variantLookup, not from AST (which may be empty)
@@ -994,6 +994,22 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     variantLookup
                     |> Map.exists (fun _ (tName, _, _, variantFields) ->
                         tName = typeName && not (List.isEmpty variantFields))
+
+                let boxedDescriptor () =
+                    inferTypeCore
+                        sumTypeNames
+                        expr
+                        (typeEnvFromVarEnv env)
+                        typeReg
+                        variantLookup
+                        funcReg
+                        functionNames
+                        moduleRegistry
+                    |> Result.bind (function
+                        | AST.TSum (inferredName, typeArgs) when inferredName = typeName ->
+                            boxedSumDescriptor typeName typeParams typeArgs variantFieldTypes
+                        | inferredType ->
+                            Error $"Constructor '{typeName}' inferred unexpected type '{inferredType}'")
 
                 match fields with
                 | [] when not typeHasPayloadVariants ->
@@ -1003,27 +1019,30 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     // No payload but type has other variants with payloads
                     // Heap-allocate as [tag, 0] for uniform 2-element structure
                     // This enables consistent structural equality comparison
-                    let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
-                    let dummyPayload = ANF.IntLiteral (ANF.Int64 0L)
-                    let (resultVar, varGen1) = ANF.freshVar varGen
-                    let tupleExpr = ANF.TupleAlloc [tagAtom; dummyPayload]
-                    let finalExpr = ANF.Let (resultVar, tupleExpr, ANF.Return (ANF.Var resultVar))
-                    Ok (finalExpr, varGen1)
+                    boxedDescriptor ()
+                    |> Result.map (fun descriptor ->
+                        let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
+                        let dummyPayload = ANF.IntLiteral (ANF.Int64 0L)
+                        let (resultVar, varGen1) = ANF.freshVar varGen
+                        let allocation = ANF.RecordAlloc (descriptor, [tagAtom; dummyPayload])
+                        let finalExpr = ANF.Let (resultVar, allocation, ANF.Return (ANF.Var resultVar))
+                        (finalExpr, varGen1))
                 | _ ->
                     // Variant with payload: allocate [tag, payload] on heap
                     let payloadExpr =
                         match fields with
                         | [field] -> field
                         | _ -> CheckedAST.TupleLiteral fields
-                    toANFBoundAtomCore sumTypeNames inertScopes payloadExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
-                    |> Result.map (fun (payloadSetupExpr, payloadAtom, varGen1) ->
-                        let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
-                        // Create TupleAlloc [tag, payload] and bind to fresh variable
-                        let (resultVar, varGen2) = ANF.freshVar varGen1
-                        let tupleExpr = ANF.TupleAlloc [tagAtom; payloadAtom]
-                        let finalExpr = ANF.Let (resultVar, tupleExpr, ANF.Return (ANF.Var resultVar))
-                        let exprWithPayloadEvaluation = bindReturns payloadSetupExpr (fun _ -> finalExpr)
-                        (exprWithPayloadEvaluation, varGen2))
+                    boxedDescriptor ()
+                    |> Result.bind (fun descriptor ->
+                        toANFBoundAtomCore sumTypeNames inertScopes payloadExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                        |> Result.map (fun (payloadSetupExpr, payloadAtom, varGen1) ->
+                            let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
+                            let (resultVar, varGen2) = ANF.freshVar varGen1
+                            let allocation = ANF.RecordAlloc (descriptor, [tagAtom; payloadAtom])
+                            let finalExpr = ANF.Let (resultVar, allocation, ANF.Return (ANF.Var resultVar))
+                            let exprWithPayloadEvaluation = bindReturns payloadSetupExpr (fun _ -> finalExpr)
+                            (exprWithPayloadEvaluation, varGen2)))
 
     | CheckedAST.ListLiteral elements ->
         // Compile list literal as SkewList

@@ -339,8 +339,8 @@ let renameCExpr (mapping: Map<TempId, TempId>) (cexpr: CExpr) : CExpr =
     | RecordGet (descriptor, record, idx) -> RecordGet (descriptor, r record, idx)
     | RecordClone (descriptor, record, fields) ->
         RecordClone (descriptor, r record, List.map r fields)
-    | RecordReuse (descriptor, record, fields) ->
-        RecordReuse (descriptor, r record, List.map r fields)
+    | RecordReuse (sourceDescriptor, targetDescriptor, record, fields) ->
+        RecordReuse (sourceDescriptor, targetDescriptor, r record, List.map r fields)
     | StringConcat (first, second, remaining) ->
         StringConcat (r first, r second, List.map r remaining)
     | CanonicalBufferEq (kind, left, right) -> CanonicalBufferEq (kind, r left, r right)
@@ -887,7 +887,7 @@ let private hasInertInlineLifetime (funcs: Map<AST.FunctionId, FunctionInfo>) (f
         | RandomInt64 | DateTimeNow | Sleep _ | RuntimeError _ | RuntimeErrorString _ -> true
         | TypedAtom (_, typ) | RawGet (_, _, Some typ) | RawTake (_, _, Some typ) -> inert typ
         | RecordAlloc (descriptor, _) | RecordGet (descriptor, _, _)
-        | RecordClone (descriptor, _, _) | RecordReuse (descriptor, _, _) ->
+        | RecordClone (descriptor, _, _) | RecordReuse (_, descriptor, _, _) ->
             descriptor.Fields |> List.forall (snd >> inert)
         | Call (name, _) | BorrowedCall (name, _) | TailCall (name, _) -> knownCall name
         | _ -> false
