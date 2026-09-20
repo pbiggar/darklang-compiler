@@ -216,5 +216,11 @@ let oldLabel = Stdlib.String.append "ol" "d" in let newLabel = Stdlib.String.app
 type CompositeReuseRecord = { items: List<Int64>; count: Int64 }
 let items = [1L, 2L, 3L] in let original = CompositeReuseRecord { items = items; count = 1L } in let counted = { original with count = 2L } in let updated = { counted with items = [4L, 5L]; count = 3L } in items == [1L, 2L, 3L] && updated.items == [4L, 5L] && updated.count == 3L = true
 
+// Nested records composed from safe fields can be displaced while a separate
+// alias keeps the old inner record alive.
+type NestedReuseInner = { items: List<Int64> }
+type NestedReuseOuter = { inner: NestedReuseInner; count: Int64 }
+let inner = NestedReuseInner { items = [1L, 2L, 3L] } in let original = NestedReuseOuter { inner = inner; count = 1L } in let counted = { original with count = 2L } in let updated = { counted with inner = NestedReuseInner { items = [4L, 5L] }; count = 3L } in inner.items == [1L, 2L, 3L] && updated.inner.items == [4L, 5L] && updated.count == 3L = true
+
 type LongRenderedRecord = { alpha: String; beta: String }
 LongRenderedRecord { alpha = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"; beta = "abcdefghijklmnopqrstuvwxyz" } = stdout="LongRenderedRecord {\n  alpha: \"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz\",\n  beta: \"abcdefghijklmnopqrstuvwxyz\"\n}\n" stderr=""

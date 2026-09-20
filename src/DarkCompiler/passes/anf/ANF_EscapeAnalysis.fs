@@ -32,18 +32,37 @@ let private isScalarType (typ: AST.Type) : bool =
     | _ -> false
 
 /// Prove that releasing a displaced field cannot run a language-visible
-/// finalizer. Nominal records, sums and closures require metadata not carried
-/// by this local pass, so they fail closed even when a particular value is safe.
-let rec private hasNonObservableDestruction (typ: AST.Type) : bool =
-    isScalarType typ
-    || match typ with
-       | AST.TString | AST.TBlob | AST.TInt -> true
-       | AST.TTuple elements -> List.forall hasNonObservableDestruction elements
-       | AST.TList element -> hasNonObservableDestruction element
-       | AST.TDict (key, value) ->
-           hasNonObservableDestruction key
-           && hasNonObservableDestruction value
-       | _ -> false
+/// finalizer. Nominal records use the complete registry and concrete type
+/// arguments; recursive records, sums and closures still fail closed.
+let private hasNonObservableDestruction
+    (typeReg: TypeRegistries.TypeRegistry)
+    (typ: AST.Type)
+    : bool =
+    let rec prove (expandingRecords: Set<string>) typ =
+        isScalarType typ
+        || match typ with
+           | AST.TString | AST.TBlob | AST.TInt -> true
+           | AST.TTuple elements -> List.forall (prove expandingRecords) elements
+           | AST.TList element -> prove expandingRecords element
+           | AST.TDict (key, value) ->
+               prove expandingRecords key
+               && prove expandingRecords value
+           | AST.TRecord (name, typeArgs) ->
+               if Set.contains name expandingRecords then
+                   false
+               else
+                   match Map.tryFind name typeReg with
+                   | Some info when List.length info.TypeParams = List.length typeArgs ->
+                       let subst = List.zip info.TypeParams typeArgs |> Map.ofList
+                       let expandingRecords = Set.add name expandingRecords
+                       info.Fields
+                       |> List.forall (fun (_, fieldType) ->
+                           fieldType
+                           |> TypeSubstitution.applySubstToType subst
+                           |> prove expandingRecords)
+                   | _ -> false
+           | _ -> false
+    prove Set.empty typ
 
 let private atomIsScalar (scalarTemps: Set<TempId>) (atom: Atom) : bool =
     match atom with
@@ -111,20 +130,32 @@ let rec private reuseUniqueRecordClone
         else
             None
 
-let rec private reuseEligibleRecordClones (expr: AExpr) : AExpr =
+let rec private reuseEligibleRecordClones
+    (typeReg: TypeRegistries.TypeRegistry)
+    (expr: AExpr)
+    : AExpr =
     match expr with
     | Jump _ | Return _ -> expr
     | Join (parameter, continuation, entry) ->
-        Join (parameter, reuseEligibleRecordClones continuation, reuseEligibleRecordClones entry)
+        Join (
+            parameter,
+            reuseEligibleRecordClones typeReg continuation,
+            reuseEligibleRecordClones typeReg entry
+        )
     | If (condition, thenBranch, elseBranch) ->
-        If (condition, reuseEligibleRecordClones thenBranch, reuseEligibleRecordClones elseBranch)
+        If (
+            condition,
+            reuseEligibleRecordClones typeReg thenBranch,
+            reuseEligibleRecordClones typeReg elseBranch
+        )
     | Let (boundId, cexpr, body) ->
-        let body = reuseEligibleRecordClones body
+        let body = reuseEligibleRecordClones typeReg body
         match cexpr with
         | RecordAlloc (descriptor, _)
         | RecordClone (descriptor, _, _)
         | RecordReuse (descriptor, _, _)
-            when descriptor.Fields |> List.forall (snd >> hasNonObservableDestruction) ->
+            when descriptor.Fields
+                 |> List.forall (snd >> hasNonObservableDestruction typeReg) ->
             let rewritten =
                 reuseUniqueRecordClone descriptor (Set.singleton boundId) body
                 |> Option.defaultValue body
@@ -285,6 +316,7 @@ let rec private scalarReplaceExpr
             )
 
 let private scalarReplaceFunction
+    (typeReg: TypeRegistries.TypeRegistry)
     (returnTypes: Map<AST.FunctionId, AST.Type>)
     (func: Function)
     : Function =
@@ -295,15 +327,18 @@ let private scalarReplaceFunction
     { func with
         Body =
             scalarReplaceExpr returnTypes scalarParams Map.empty func.Body
-            |> reuseEligibleRecordClones }
+            |> reuseEligibleRecordClones typeReg }
 
-let scalarReplaceProgram (Program (functions, mainExpr): Program) : Program =
+let scalarReplaceProgram
+    (typeReg: TypeRegistries.TypeRegistry)
+    (Program (functions, mainExpr): Program)
+    : Program =
     let returnTypes =
         functions
         |> List.map (fun func -> func.Id, func.ReturnType)
         |> Map.ofList
     Program (
-        functions |> List.map (scalarReplaceFunction returnTypes),
+        functions |> List.map (scalarReplaceFunction typeReg returnTypes),
         scalarReplaceExpr returnTypes Set.empty Map.empty mainExpr
-        |> reuseEligibleRecordClones
+        |> reuseEligibleRecordClones typeReg
     )

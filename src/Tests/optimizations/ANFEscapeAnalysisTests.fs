@@ -56,7 +56,10 @@ let rec private containsRecordReuse (expr: AExpr) : bool =
     | If (_, thenBranch, elseBranch) ->
         containsRecordReuse thenBranch || containsRecordReuse elseBranch
 
-let private optimizeBody (body: AExpr) : AExpr =
+let private optimizeBodyWithTypes
+    (typeReg: TypeRegistries.TypeRegistry)
+    (body: AExpr)
+    : AExpr =
     let func =
         { Id = fid "fixture"
           Name = "fixture"
@@ -65,11 +68,14 @@ let private optimizeBody (body: AExpr) : AExpr =
           ReturnOwnership = OwnedReturn
           Body = body }
     let (Program (functions, _)) =
-        ANF_EscapeAnalysis.scalarReplaceProgram
+        ANF_EscapeAnalysis.scalarReplaceProgram typeReg
             (Program ([func], Return UnitLiteral))
     match functions with
     | [optimized] -> optimized.Body
     | _ -> Crash.crash "ANFEscapeAnalysisTests: fixture function disappeared"
+
+let private optimizeBody (body: AExpr) : AExpr =
+    optimizeBodyWithTypes Map.empty body
 
 let testScalarRecordProjectionRemovesAllocation () : TestResult =
     let descriptor = pointDescriptor AST.TInt64
@@ -370,7 +376,6 @@ let testUnsupportedCompositeRecordsRejectReuse () : TestResult =
         AST.TList (AST.TStream AST.TInt64)
         AST.TFunction ([], AST.TInt64)
         AST.TSum ("Maybe", [AST.TInt64])
-        AST.TRecord ("Nested", [])
         AST.TVar "unknown"
     ]
     samples
@@ -382,6 +387,67 @@ let testUnsupportedCompositeRecordsRejectReuse () : TestResult =
        | None -> Ok ()
        | Some (fieldType, body) ->
            Error $"Expected unsupported {fieldType} destruction to reject reuse, got {body}"
+
+let testNestedRecordsReuseOnlyWithSafeInstantiatedFields () : TestResult =
+    let optimized typeReg fieldType =
+        let descriptor =
+            { pointDescriptor AST.TFloat64 with
+                Fields = ["x", AST.TFloat64; "nested", fieldType] }
+        Let (
+            TempId 4,
+            Call (fid "makeNested", []),
+            Let (
+                TempId 0,
+                RecordAlloc (descriptor, [FloatLiteral 1.0; Var (TempId 4)]),
+                Let (
+                    TempId 1,
+                    RecordClone (descriptor, Var (TempId 0), [FloatLiteral 2.0; Var (TempId 4)]),
+                    Return (Var (TempId 1))
+                )
+            )
+        )
+        |> optimizeBodyWithTypes typeReg
+    let typeReg : TypeRegistries.TypeRegistry =
+        Map.ofList [
+            ("NestedSafe",
+             { TypeParams = []
+               Fields = ["items", AST.TList AST.TInt64] })
+            ("NestedGeneric",
+             { TypeParams = ["a"]
+               Fields = ["value", AST.TVar "a"] })
+            ("NestedStream",
+             { TypeParams = []
+               Fields = ["events", AST.TStream AST.TInt64] })
+            ("NestedRecursive",
+             { TypeParams = []
+               Fields = ["next", AST.TRecord ("NestedRecursive", [])] })
+            ("NestedGrowing",
+             { TypeParams = ["a"]
+               Fields = [
+                   "next",
+                   AST.TRecord ("NestedGrowing", [AST.TList (AST.TVar "a")])
+               ] })
+        ]
+    let samples = [
+        (AST.TRecord ("NestedSafe", []), true)
+        (AST.TRecord ("NestedGeneric", [AST.TString]), true)
+        (AST.TRecord ("NestedGeneric", [AST.TStream AST.TInt64]), false)
+        (AST.TRecord ("NestedStream", []), false)
+        (AST.TRecord ("NestedRecursive", []), false)
+        (AST.TRecord ("NestedGrowing", [AST.TString]), false)
+        (AST.TRecord ("Missing", []), false)
+    ]
+    samples
+    |> List.tryPick (fun (fieldType, shouldReuse) ->
+        let body = optimized typeReg fieldType
+        let reused = aggregateAllocationCount body = 1 && containsRecordReuse body
+        let rejected = aggregateAllocationCount body = 2 && not (containsRecordReuse body)
+        if (shouldReuse && reused) || (not shouldReuse && rejected) then None
+        else Some (fieldType, shouldReuse, body))
+    |> function
+       | None -> Ok ()
+       | Some (fieldType, shouldReuse, body) ->
+           Error $"Expected nested {fieldType} reuse={shouldReuse}, got {body}"
 
 let testManagedLeafRecordReusesUniqueAllocation () : TestResult =
     let descriptor =
@@ -463,6 +529,7 @@ let tests =
       ("Float record call before clone rejects reuse", testFloatRecordCallBeforeCloneRejectsReuse)
       ("Composite managed records reuse unique allocations", testCompositeManagedRecordsReuseUniqueAllocations)
       ("Unsupported composite records reject reuse", testUnsupportedCompositeRecordsRejectReuse)
+      ("Nested records reuse only with safe instantiated fields", testNestedRecordsReuseOnlyWithSafeInstantiatedFields)
       ("Managed leaf record reuses unique allocation", testManagedLeafRecordReusesUniqueAllocation)
       ("Float record alias use after clone retains escaping source", testFloatRecordAliasUseAfterCloneRetainsEscapingSource)
       ("Float record branch clones scalarize shared source", testFloatRecordBranchClonesScalarizeSharedSource) ]

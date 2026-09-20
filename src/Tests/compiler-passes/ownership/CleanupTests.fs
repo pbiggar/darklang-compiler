@@ -1122,7 +1122,8 @@ let testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed () : TestRe
     else
         Error "Alias return should materialize ownership with RefCountInc even when function is marked BorrowedReturn"
 
-let private elaborateSingleFieldRecordReuse
+let private elaborateSingleFieldRecordReuseWithTypes
+    (additionalTypes: (string * TypeRegistries.RecordTypeInfo) list)
     (typeName: string)
     (fieldName: string)
     (fieldType: AST.Type)
@@ -1147,7 +1148,7 @@ let private elaborateSingleFieldRecordReuse
         Fields = descriptor.Fields
     }
     let ctx : TypeContext = {
-        TypeReg = Map.ofList [(descriptor.RuntimeTypeName, recordInfo)]
+        TypeReg = Map.ofList ((descriptor.RuntimeTypeName, recordInfo) :: additionalTypes)
         VariantLookup = Map.empty
         SumShapeReg = Map.empty
         FuncReg =
@@ -1183,6 +1184,13 @@ let private elaborateSingleFieldRecordReuse
     }
     let transformed, _, _ = insertRCInFunction ctx func initialVarGen
     (transformed.Body, replacementId, sourceId)
+
+let private elaborateSingleFieldRecordReuse
+    (typeName: string)
+    (fieldName: string)
+    (fieldType: AST.Type)
+    : AExpr * TempId * TempId =
+    elaborateSingleFieldRecordReuseWithTypes [] typeName fieldName fieldType
 
 let testRecordReuseRetainsReplacementBeforeReleasingOldChild () : TestResult =
     let body, replacementId, sourceId =
@@ -1237,3 +1245,41 @@ let testCompositeRecordReuseCarriesRecursiveReleasePlan () : TestResult =
 
     if hasOrderedReset false false body then Ok ()
     else Error $"Expected composite reuse to carry ordered recursive cleanup; got {body}"
+
+let testNestedRecordReuseCarriesRecursiveReleasePlan () : TestResult =
+    let innerName = "NestedReuseInner"
+    let innerType = AST.TRecord (innerName, [])
+    let innerInfo : TypeRegistries.RecordTypeInfo = {
+        TypeParams = []
+        Fields = ["items", AST.TList AST.TInt64]
+    }
+    let body, replacementId, sourceId =
+        elaborateSingleFieldRecordReuseWithTypes
+            [(innerName, innerInfo)]
+            "NestedReuseOuter"
+            "inner"
+            innerType
+    let rec hasOrderedReset retained oldFieldReleased expression =
+        match expression with
+        | Let (_, RefCountInc (Var id, _, _, _), rest) when id = replacementId ->
+            hasOrderedReset true oldFieldReleased rest
+        | Let (fieldId, RecordGet (_, Var id, 0), rest) when retained && id = sourceId ->
+            match rest with
+            | Let (_, RefCountDec (Var releasedId, _, _, Some metadata), afterRelease)
+                when releasedId = fieldId
+                     && metadata.SourceType = Some innerType
+                     && Option.isSome metadata.ReleasePlan ->
+                hasOrderedReset retained true afterRelease
+            | _ -> false
+        | Let (_, RecordReuse (_, Var id, _), _) when id = sourceId ->
+            retained && oldFieldReleased
+        | Let (_, _, rest) ->
+            hasOrderedReset retained oldFieldReleased rest
+        | Join (_, continuation, entry)
+        | If (_, continuation, entry) ->
+            hasOrderedReset retained oldFieldReleased continuation
+            || hasOrderedReset retained oldFieldReleased entry
+        | Jump _ | Return _ -> false
+
+    if hasOrderedReset false false body then Ok ()
+    else Error $"Expected nested record reuse to carry ordered recursive cleanup; got {body}"
