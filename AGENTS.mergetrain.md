@@ -39,6 +39,11 @@ Purpose: Serialize committed local task branches through one merge/test/push/ver
 - Deployment requires either confirmation of the human-readable exact plan or prior bounded unattended approval. Agents never select train IDs or supply plan hashes; structured evidence may include identifiers for inspection.
 - Unattended approval is bound to the exact destination and execution policy. Any change blocks before push.
 - Recovery and destructive cleanup require their stated approval. Follow `status.next_action`; never rewrite permanent deploy audit refs.
+- Automated recovery preserves the original enqueued branch and owning
+  worktree. The integrator creates a fresh recovery branch and worktree from
+  the current integration commit, asks Codex to perform any semantic merge
+  there, independently reruns the repository readiness gates, and only then
+  replaces the blocked queue row. Codex never pushes or changes queue state.
 
 ## Stable machine contract
 
