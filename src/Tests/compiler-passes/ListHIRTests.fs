@@ -125,6 +125,26 @@ let private transform releases : ListRegion.OwnedOperation list =
     OwnedIR.Evaluate (HIR.Leaf (ListRegion.Transform ({ Id = HIR.ValueId 1; Type = AST.TList AST.TInt64 }, rootValue, (ListRegion.Reverse, ListRegion.Consume))))
     :: drops releases
 
+let private runtimeSharedBlock () : ListRegion.OwnedBlock =
+    let output: HIR.Value = { Id = HIR.ValueId 1; Type = AST.TList AST.TInt64 }
+    let result: HIR.Value = { Id = HIR.ValueId 2; Type = AST.TUnit }
+    let element value: HIR.Operand = {
+        Expression = CheckedAST.Int64Literal value
+        Type = AST.TInt64
+        Inputs = Map.empty
+    }
+    let operations: ListRegion.OwnedOperation list = [
+        OwnedIR.Evaluate (HIR.Leaf (ListRegion.Construct (rootValue, ListRegion.Literal [element 1L; element 2L; element 3L])))
+        OwnedIR.Dup root
+        OwnedIR.Evaluate (HIR.Leaf (ListRegion.Transform (output, rootValue, (ListRegion.Reverse, ListRegion.ConsumeOrCopy))))
+        OwnedIR.Drop root
+        OwnedIR.Drop output.Id
+    ]
+    { Body = { Parameters = []; Operations = operations; Result = result } }
+
+let private testRuntimeSharedOwnership () =
+    runtimeSharedBlock () |> VerifyListOwnership.verifyBlockOwnership
+
 let private testPrimitiveContracts () =
     let listValue id : HIR.Value = { Id = HIR.ValueId id; Type = AST.TList AST.TInt64 }
     let scalarValue: HIR.Value = { Id = HIR.ValueId 2; Type = AST.TInt64 }
@@ -206,6 +226,8 @@ let tests = [
     "List HIR verifier rejects branch-local leaked values", rejectsOwnership [ownedBranch (ownedBlock [] [construct []]) (ownedBlock [] [])]
     "List HIR verifier rejects duplicate identities across branches", rejectsOwnership [ownedBranch (ownedBlock [] [construct [root]]) (ownedBlock [] [construct [root]])]
     "List HIR verifier rejects double edge cleanup", rejectsOwnership [construct []; ownedBranch (ownedBlock [root; root] []) (ownedBlock [root] [])]
+    "List HIR verifies runtime copy-on-write after ownership duplication", testRuntimeSharedOwnership
+    "List HIR rejects static consumption after ownership duplication", rejectsOwnership [construct []; [OwnedIR.Dup root]; transform [root; HIR.ValueId 1]]
     "List HIR consumes unique map/reverse storage", checkSummary unique { Allocations = 1; AllocatedBytes = bytes 56L; Copies = 0; ReusedTransforms = 2; Releases = 1 }
     "List HIR copies a surviving source version", checkSummary shared { Allocations = 2; AllocatedBytes = bytes 112L; Copies = 1; ReusedTransforms = 0; Releases = 2 }
     "List HIR normalizes aliases before last-use solving", checkSummary (bind "xs" (values 3) (bind "alias" (local "xs") (fold (reverse (local "alias"))))) { Allocations = 1; AllocatedBytes = bytes 56L; Copies = 0; ReusedTransforms = 1; Releases = 1 }

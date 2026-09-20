@@ -74,7 +74,11 @@ representation and safety boundaries are documented in
 - [ ] **Handle dynamically shared values.** Check runtime uniqueness for
   consumed values without a static certificate, update exclusive storage in
   place, and copy otherwise. Protect every surviving alias and preserve the
-  copy path's semantics.
+  copy path's semantics. The shareable `List<Int64>` storage foundation is in
+  place: owned IR can materialize retains, runtime consume-or-copy lowering
+  reuses RC=1 buffers and copies shared buffers, and shared release works for
+  recyclable and mapped storage. Selecting this path for escaping specialized
+  array boundaries remains before this item is complete.
 - [ ] **Add general constructor reuse.** Safely dismantle old values and reuse
   suitable storage for new constructors. Specialize destruction and release
   child references correctly, extending reuse to records and other supported
