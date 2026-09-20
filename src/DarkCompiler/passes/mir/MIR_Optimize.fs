@@ -285,6 +285,76 @@ let optimizeFunction (func: Function) : Function =
     let cfg' = optimizeCFG func.CFG
     withOptimizedCFG func cfg'
 
+let private sameReturnOperand left right =
+    match left, right with
+    | FloatSymbol leftValue, FloatSymbol rightValue ->
+        (System.BitConverter.DoubleToInt64Bits leftValue) = (System.BitConverter.DoubleToInt64Bits rightValue)
+    | _ -> left = right
+
+let private constantReturnOperand (func: Function) : Operand option =
+    let hasTailCall =
+        func.CFG.Blocks
+        |> Map.exists (fun _ block ->
+            block.Instrs
+            |> List.exists (function
+                | TailCall _
+                | IndirectTailCall _
+                | ClosureTailCall _ -> true
+                | _ -> false))
+    let definitions =
+        func.CFG.Blocks
+        |> Map.fold (fun constants _ block ->
+            block.Instrs
+            |> List.fold (fun current instr ->
+                match instr with
+                | Mov (destination, (Int64Const _ | BoolConst _ | FloatSymbol _ | StringSymbol _ | FuncAddr _ as value), _) ->
+                    Map.add destination value current
+                | _ -> current) constants) Map.empty
+    let resolve operand =
+        match operand with
+        | Int64Const _
+        | BoolConst _
+        | FloatSymbol _
+        | StringSymbol _
+        | FuncAddr _ -> Some operand
+        | Register register -> Map.tryFind register definitions
+    let returns =
+        func.CFG.Blocks
+        |> Map.toList
+        |> List.choose (fun (_, block) ->
+            match block.Terminator with
+            | Ret operand -> Some (resolve operand)
+            | Jump _
+            | Branch _ -> None)
+    match hasTailCall, returns with
+    | true, _ -> None
+    | false, Some first :: rest when rest |> List.forall (function Some value -> sameReturnOperand first value | None -> false) ->
+        Some first
+    | _ -> None
+
+let private constantCallResults (functions: Function list) : Map<AST.FunctionId, Operand> =
+    functions
+    |> List.choose (fun func -> constantReturnOperand func |> Option.map (fun value -> (func.Id, value)))
+    |> Map.ofList
+
+let private propagateConstantCallResults
+    (optimizeAgain: Function -> Function)
+    (options: OptimizeOptions)
+    (functions: Function list)
+    : Function list =
+    if not (options.EnableConstFolding && options.EnableCFGSimplify) then
+        functions
+    else
+        let callResults = constantCallResults functions
+        if Map.isEmpty callResults then
+            functions
+        else
+            functions
+            |> List.map (fun func ->
+                let cfg, changed =
+                    applySparseConditionalConstantPropagationWithCallResults callResults func.CFG
+                if changed then optimizeAgain (withOptimizedCFG func cfg) else func)
+
 /// Optimize a program
 let optimizeProgramWithOptions (options: OptimizeOptions) (program: Program) : Program =
     let (Program (functions, variants, records)) = program
@@ -296,7 +366,12 @@ let optimizeProgramWithOptions (options: OptimizeOptions) (program: Program) : P
     let functions' =
         functions
         |> List.map (optimizeFunctionWithEffectFreeCalls effectFreeFunctions options)
-    Program (functions', variants, records)
+    let optimizedFunctions =
+        functions'
+        |> propagateConstantCallResults
+            (optimizeFunctionWithEffectFreeCalls effectFreeFunctions options)
+            options
+    Program (optimizedFunctions, variants, records)
 
 /// Optimize a program and report aggregate timings for the fixed-point
 /// subpasses. Timings are accumulated as timestamp ticks so tracing does not
@@ -334,10 +409,22 @@ let optimizeProgramWithOptionsAndTrace
                         (Some addTicks)
                         func.CFG
                 withOptimizedCFG func cfg)
+        let optimizedFunctions =
+            functions'
+            |> propagateConstantCallResults
+                (fun func ->
+                    let cfg =
+                        optimizeCFGWithEffectFreeCalls
+                            effectFreeFunctions
+                            options
+                            (Some addTicks)
+                            func.CFG
+                    withOptimizedCFG func cfg)
+                options
         let tickFrequency = float System.Diagnostics.Stopwatch.Frequency
         for KeyValue (name, ticks) in accumulatedTicks do
             record name (float ticks * 1000.0 / tickFrequency)
-        Program (functions', variants, records)
+        Program (optimizedFunctions, variants, records)
 
 let optimizeProgram (program: Program) : Program =
     optimizeProgramWithOptions defaultOptimizeOptions program

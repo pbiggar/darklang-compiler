@@ -3,3 +3,15 @@
 
 let choose (condition: Bool) : Int64 = let value = if condition then let _ = Builtin.print "left" in 7L else let _ = Builtin.print "right" in 7L in if value == 7L then value + 35L else let _ = Builtin.print "unreachable" in 0L choose (true) = stdout="left42\n" stderr="" exact_bytes=true
 let choose (condition: Bool) : Int64 = let value = if condition then let _ = Builtin.print "left" in 7L else let _ = Builtin.print "right" in 7L in if value == 7L then value + 35L else let _ = Builtin.print "unreachable" in 0L choose (false) = stdout="right42\n" stderr="" exact_bytes=true
+
+// Mixed scalar kinds must not disable executable-edge analysis or confuse
+// Float/String/constructor representations with integer heap sentinels.
+let mixed (condition: Bool) : String = let floating = if condition then 1.5 else 1.5 in let text = if condition then "same" else "same" in if (floating == 1.5) && (text == "same") then text else Builtin.testRuntimeError "unreachable"; mixed (true) = "same"
+type Choice = | First | Second of Int64
+let constructor (condition: Bool) : Int64 = let value = if condition then Second 42L else Second 42L in match value with | First -> Builtin.testRuntimeError "unreachable" | Second number -> number; constructor (false) = 42L
+let smallResult (value: UInt8) : UInt8 = value
+let callRange (value: UInt8) : Bool = let result = smallResult value in if result <= 255uy then true else Builtin.testRuntimeError "unreachable"; callRange (42uy) = true
+
+// Pruning an unreachable runtime-error result must keep its integer sentinel
+// behind the register used by a float-typed continuation.
+let floatAt (values: List<Float>) (index: Int) : Float = match Stdlib.List.getAt values index with | Some value -> value | None -> Builtin.testRuntimeError "missing float"; floatAt ([1.5]) (0) = 1.5

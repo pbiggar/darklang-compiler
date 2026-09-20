@@ -133,9 +133,11 @@ branch shapes plus the conservative call and observable-field boundaries.
 
 `passes/mir/MIR_Optimize.fs` and `src/Tests/optimization/mir.opt` own:
 
-- sparse conditional constant propagation over explicitly typed integer and
-  Boolean SSA values and executable CFG edges, including phi constants and
-  non-executable predecessor removal;
+- sparse conditional constant propagation over exact integer, Boolean, Float,
+  String, Char, DateTime, Unit, and function-symbol values; bounded native
+  integer ranges; fixed aggregate fields and constructor tags; uniform direct-
+  call results; and executable CFG edges, including phi constants and non-
+  executable predecessor removal;
 - dominator-scoped scalar and effect-free-call common-subexpression reuse;
 - partial-redundancy elimination for non-trapping scalar arithmetic and unary
   expressions, inserting only on unconditional incoming edges and merging the
@@ -150,10 +152,11 @@ branch shapes plus the conservative call and observable-field boundaries.
 - linear basic-block merging with typed phi repair.
 
 Memory, allocation, ownership, unknown-call, managed-result, and aliasing
-barriers remain conservative unless a focused proof says otherwise.
-Functions containing float-producing MIR remain on the existing local
-optimizer because float error paths currently carry integer return placeholders
-that are valid only while they remain terminator operands.
+barriers remain conservative unless a focused proof says otherwise. SCCP tracks
+fixed fields only for aggregate-phi CFGs, never rewrites managed allocations or
+calls away, and validates every exact fact against its MIR type. Float equality
+and merging preserve IEEE NaN and signed-zero behavior by separating bitwise
+constant identity from language comparisons.
 
 Before ANF, semantic HIR leaf operations carry typed effect and alias
 contracts. These contracts currently drive list-region verification and
