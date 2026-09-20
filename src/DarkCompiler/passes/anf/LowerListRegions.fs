@@ -54,6 +54,15 @@ let private wrap bindings body = List.foldBack (fun (id, value) tail -> ANF.Let 
 /// Lower verified storage operations to existing raw memory and RC primitives.
 /// The raw pointer is never tagged as a source List or assigned a fake Blob type.
 let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as region) =
+    let rec duplicated block =
+        block.Body.Operations
+        |> List.fold (fun ids step ->
+            match step with
+            | Dup id -> Set.add id ids
+            | Evaluate (Branch (_, _, yes, no)) -> Set.union ids (Set.union (duplicated yes) (duplicated no))
+            | Drop _ | Evaluate _ -> ids) Set.empty
+    let sharedValues = duplicated block
+
     let lowerValue values vg (value: Scalar) =
         let sourceEnv =
             value.Inputs
@@ -68,10 +77,13 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
         values |> List.mapFold (fun state value ->
             let buffer = lookup "release buffer" value buffers
             let operation =
-                match buffer.Layout with
-                | RecycledArray length -> ANF.RefCountDec (buffer.Pointer, payloadSize length, MemoryModel.GenericHeap, metadata length)
-                | MappedArray _ -> ANF.MappedFree buffer.Pointer
-                | RuntimeArray _ -> ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__arrayRelease", [buffer.Pointer])
+                if Set.contains value sharedValues then
+                    ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__arrayRelease", [buffer.Pointer])
+                else
+                    match buffer.Layout with
+                    | RecycledArray length -> ANF.RefCountDec (buffer.Pointer, payloadSize length, MemoryModel.GenericHeap, metadata length)
+                    | MappedArray _ -> ANF.MappedFree buffer.Pointer
+                    | RuntimeArray _ -> ANF.Call (AST.functionIdForName "Darklang.Stdlib.List.__arrayRelease", [buffer.Pointer])
             let _, bindings, next = emit operation state
             bindings, next) vg
         |> fun (bindings, next) -> List.concat bindings, next
@@ -79,6 +91,14 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
     let prepareMutation buffer ownership vg =
         match ownership with
         | Consume -> ANF.Return buffer.Pointer, vg
+        | ConsumeOrCopy ->
+            let prepared, bindings, next =
+                emit
+                    (ANF.Call (
+                        AST.functionIdForName "Darklang.Stdlib.List.__arrayPrepareMutation",
+                        [buffer.Pointer]))
+                    vg
+            wrap bindings (ANF.Return prepared), next
         | BorrowAndCopy ->
             let copy, allocations, afterAllocation = allocate buffer.Layout buffer.Length vg
             let copied, afterCopy =
@@ -105,7 +125,16 @@ let lower (lowerScalar: LowerScalar) env vg (OwnedRegion (block, layouts) as reg
             let releases, next = release buffers [value] vg
             loop finalValue values buffers next rest
             |> Result.map (fun (body, final) -> wrap releases body, final)
-        | Dup _ :: _ -> Crash.crash "List HIR: verified unique regions cannot duplicate ownership"
+        | Dup value :: rest ->
+            let buffer = lookup "retain buffer" value buffers
+            let _, bindings, next =
+                emit
+                    (ANF.Call (
+                        AST.functionIdForName "Darklang.Stdlib.List.__arrayRetain",
+                        [buffer.Pointer]))
+                    vg
+            loop finalValue values buffers next rest
+            |> Result.map (fun (body, final) -> wrap bindings body, final)
         | Evaluate operation :: rest ->
             let lowerRest values buffers vg = loop finalValue values buffers vg rest
             match operation with

@@ -12,7 +12,10 @@ let private semantics : Semantics<Operation<Transform * Ownership>, ListId> = {
     Leaf = function
         | Construct (output, _) -> { Inputs = []; Outputs = [output.Id] }
         | Transform (output, input, (_, ownership)) ->
-            let useMode = match ownership with Consume -> Consumed input.Id | BorrowAndCopy -> Borrowed input.Id
+            let useMode =
+                match ownership with
+                | Consume | ConsumeOrCopy -> Consumed input.Id
+                | BorrowAndCopy -> Borrowed input.Id
             { Inputs = [useMode]; Outputs = [output.Id] }
         | Fold (_, input, _, _) -> { Inputs = [Borrowed input.Id]; Outputs = [] }
     LeafUniqueness = function
@@ -22,7 +25,7 @@ let private semantics : Semantics<Operation<Transform * Ownership>, ListId> = {
         | Transform (output, input, (_, Consume)) ->
             { RequiredInputs = Set.singleton input.Id
               UniqueOutputs = Set.singleton output.Id }
-        | Transform (output, _, (_, BorrowAndCopy)) ->
+        | Transform (output, _, (_, (BorrowAndCopy | ConsumeOrCopy))) ->
             { RequiredInputs = Set.empty
               UniqueOutputs = Set.singleton output.Id }
         | Fold _ ->
@@ -47,7 +50,7 @@ let verify (OwnedRegion (block, layouts)) : Result<unit, string> =
     let rec blockValid block = immediate block.Body.Result.Type && List.forall typesValid block.Body.Operations
     and typesValid step =
         match step with
-        | Dup _ -> false
+        | Dup id -> Map.containsKey id layouts
         | Drop id -> Map.containsKey id layouts
         | Evaluate (Leaf (Construct (output, Literal elements))) ->
             elements |> List.forall (fun element -> element.Type = AST.TInt64)

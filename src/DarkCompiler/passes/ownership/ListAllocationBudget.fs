@@ -18,6 +18,19 @@ let allocationBudget (OwnedRegion (block, layouts)) : AllocationBudget =
         | Dup _ :: rest -> loop summary rest
         | Evaluate (Branch (_, _, yes, no)) :: rest ->
             Conditional (summary, budget yes, budget no, loop empty rest)
+        | Evaluate (Leaf (Transform (output, _, (_, ConsumeOrCopy)))) :: rest ->
+            let layout =
+                match Map.tryFind output.Id layouts with
+                | Some layout -> layout
+                | None -> Crash.crash "List HIR: missing runtime-copy layout"
+            let reused = { empty with ReusedTransforms = 1 }
+            let copied = {
+                empty with
+                    Allocations = 1
+                    AllocatedBytes = requestedBytes layout
+                    Copies = 1
+            }
+            RuntimeConditional (summary, Complete reused, Complete copied, loop empty rest)
         | Evaluate operation :: rest ->
             let allocations, bytes, copies, reused =
                 match operation with
@@ -29,6 +42,8 @@ let allocationBudget (OwnedRegion (block, layouts)) : AllocationBudget =
                         | None -> Crash.crash "List HIR: missing allocation layout"
                     1, requestedBytes layout, (match operation with Leaf (Transform _) -> 1 | _ -> 0), 0
                 | Leaf (Transform (_, _, (_, Consume))) -> 0, constantBytes 0L, 0, 1
+                | Leaf (Transform (_, _, (_, ConsumeOrCopy))) ->
+                    Crash.crash "List HIR: runtime transform handled before static accounting"
                 | _ -> 0, constantBytes 0L, 0, 0
             loop { Allocations = summary.Allocations + allocations
                    AllocatedBytes = addBytes summary.AllocatedBytes bytes

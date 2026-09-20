@@ -1,6 +1,6 @@
-// __ListArray.dark - Checked construction and borrowing Int64 array kernels.
-// Constructors establish runtime bounds. ListHIR proves physical uniqueness
-// and owns release; traversal kernels neither allocate nor release buffers.
+// __ListArray.dark - Checked construction and copy-on-write Int64 array kernels.
+// Constructors establish runtime bounds. ListHIR owns retain/release decisions;
+// traversal kernels neither allocate nor release buffers.
 
 module Darklang.Stdlib.List
 
@@ -23,11 +23,21 @@ let __arrayAllocate (length: Int64) : RawPtr =
         let _ = __raw_write_word buffer rcOffset 1L in
         buffer
 
+let __arrayRetain (buffer: RawPtr) : Unit =
+    let capacity = __raw_get<Int64> buffer 8L in
+    let rcOffset = 24L + capacity * 8L in
+    let rc = __raw_get<Int64> buffer rcOffset in
+    __raw_write_word buffer rcOffset (rc + 1L)
+
 // This boundary keeps conditional cleanup out of each region continuation.
 // ListHIR's intrinsic supplies the exact fixed-block RC release metadata.
 let __arrayRelease (buffer: RawPtr) : Unit =
     let length = __raw_get<Int64> buffer 0L in
-    if length <= 28L then __list_array_release_small buffer
+    let capacity = __raw_get<Int64> buffer 8L in
+    let rcOffset = 24L + capacity * 8L in
+    let rc = __raw_get<Int64> buffer rcOffset in
+    if rc > 1L then __raw_write_word buffer rcOffset (rc - 1L)
+    else if length <= 28L then __list_array_release_small buffer
     else __mapped_free buffer
 
 let __arrayFill (buffer: RawPtr) (index: Int64) (length: Int64) (value: Int64) : Unit =
@@ -70,6 +80,21 @@ let __arrayCopy (source: RawPtr) (destination: RawPtr) (index: Int64) (length: I
         let value = __raw_get<Int64> source offset in
         let _ = __raw_write_word destination offset value in
         Stdlib.List.__arrayCopy source destination (index + 1L) length
+
+// Consume one ownership unit. Exclusive storage is returned directly; shared
+// storage is copied before the consumed unit is removed from the source.
+let __arrayPrepareMutation (source: RawPtr) : RawPtr =
+    let length = __raw_get<Int64> source 0L in
+    let capacity = __raw_get<Int64> source 8L in
+    let rcOffset = 24L + capacity * 8L in
+    let rc = __raw_get<Int64> source rcOffset in
+    if rc == 1L then source
+    else
+        let destination = Stdlib.List.__arrayAllocate length in
+        let _ = Stdlib.List.__arrayCopy source destination 0L length in
+        let _ = __raw_write_word destination 16L length in
+        let _ = __raw_write_word source rcOffset (rc - 1L) in
+        destination
 
 let __arrayFold (buffer: RawPtr) (index: Int64) (length: Int64) (acc: Int64) (fn: Int64 -> Int64 -> Int64) : Int64 =
     if index >= length then acc

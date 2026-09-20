@@ -61,10 +61,10 @@ let internal addBytes left right =
 
 type StorageRegion = internal StorageRegion of FunctionalRegion * Map<ListId, ArrayLayout>
 
-/// Closed regions prove uniqueness statically. Consume transfers the final
-/// reference; BorrowAndCopy preserves a source with surviving logical aliases.
-/// Runtime uniqueness checks belong to the later escaping-array storage class.
-type Ownership = Consume | BorrowAndCopy
+/// Consume transfers statically exclusive storage. BorrowAndCopy preserves a
+/// statically visible source version. ConsumeOrCopy transfers one ownership
+/// unit and asks the runtime RC whether the storage itself is exclusive.
+type Ownership = Consume | BorrowAndCopy | ConsumeOrCopy
 
 type OwnedOperation = OwnedIR.Step<Operation<Transform * Ownership>, ListId>
 type OwnedBlock = OwnedIR.Block<Operation<Transform * Ownership>, ListId>
@@ -84,6 +84,7 @@ type AllocationSummary = {
 type AllocationBudget =
     | Complete of AllocationSummary
     | Conditional of prefix: AllocationSummary * ifTrue: AllocationBudget * ifFalse: AllocationBudget * continuation: AllocationBudget
+    | RuntimeConditional of prefix: AllocationSummary * exclusive: AllocationBudget * shared: AllocationBudget * continuation: AllocationBudget
 
 let internal lookup name key map =
     match Map.tryFind key map with
