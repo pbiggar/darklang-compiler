@@ -11,6 +11,7 @@ open MIRLoopInvariantMotion
 open MIRControlFlow
 open MIRConstants
 open MIRCommonExpressions
+open MIRUnrolling
 open MIRSparseConditionalConstants
 open MIR_Optimize
 open MIRPrinter
@@ -323,6 +324,31 @@ let testCseReusesDominatingExpressions () : TestResult =
         }
         let actual = formatMIR (Program ([func], Map.empty, Map.empty))
         Error $"Expected binary and unary expressions from the dominating entry block to be reused.\nActual:\n{actual}"
+
+let testUnaryPartialRedundancyEliminationCompletesMissingPath () : TestResult =
+    let entry = Label "unary_pre_entry"
+    let left = Label "unary_pre_left"
+    let right = Label "unary_pre_right"
+    let join = Label "unary_pre_join"
+    let expression dest = UnaryOp (dest, BitNot, Register (VReg 0))
+    let block label instrs terminator = { Label = label; Instrs = instrs; Terminator = terminator }
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, block entry [] (Branch (Register (VReg 1), left, right)))
+                (left, block left [expression (VReg 2)] (Jump join))
+                (right, block right [] (Jump join))
+                (join, block join [expression (VReg 3)] (Ret (Register (VReg 3))))
+            ]
+    }
+    let (optimized, changed) = applyCSE cfg
+    match Map.tryFind right optimized.Blocks, Map.tryFind join optimized.Blocks with
+    | Some rightBlock, Some joinBlock
+        when changed
+             && rightBlock.Instrs = [expression (VReg 4)]
+             && joinBlock.Instrs = [Phi (VReg 3, [(Register (VReg 4), right); (Register (VReg 2), left)], None)] -> Ok ()
+    | _ -> Error "Expected unary PRE to insert BitNot on the missing path and merge both values with a phi"
 
 let testPartialRedundancyEliminationCompletesMissingPath () : TestResult =
     let entry = Label "entry"
@@ -1851,6 +1877,76 @@ let testLicmCanonicalizesNestedLoopEntry () : TestResult =
              && innerHeaderBlock.Instrs = [] -> Ok ()
     | _ -> Error "Expected nested-loop entry canonicalization to preserve the outer loop and hoist the inner invariant"
 
+let testLicmHoistsFloatUnaryAndConversionFamilies () : TestResult =
+    let cases = [
+        ("FloatSqrt", fun dest source -> FloatSqrt (dest, source))
+        ("FloatAbs", fun dest source -> FloatAbs (dest, source))
+        ("FloatNeg", fun dest source -> FloatNeg (dest, source))
+        ("Int64ToFloat", fun dest source -> Int64ToFloat (dest, source))
+        ("FloatToInt64", fun dest source -> FloatToInt64 (dest, source))
+        ("FloatToBits", fun dest source -> FloatToBits (dest, source))
+    ]
+    let check (name, makeInstruction) =
+        let entry = Label $"{name}_entry"
+        let preheader = Label $"{name}_preheader"
+        let header = Label $"{name}_header"
+        let latch = Label $"{name}_latch"
+        let exit = Label $"{name}_exit"
+        let invariant = makeInstruction (VReg 2) (Register (VReg 0))
+        let cfg = {
+            Entry = entry
+            Blocks = Map.ofList [
+                (entry, basicBlock entry [] (Jump preheader))
+                (preheader, basicBlock preheader [] (Jump header))
+                (header, basicBlock header [invariant] (Branch (Register (VReg 1), latch, exit)))
+                (latch, basicBlock latch [] (Jump header))
+                (exit, basicBlock exit [] (Ret (Register (VReg 2))))
+            ]
+        }
+        let (optimized, changed) = applyLoopInvariantCodeMotion cfg
+        match Map.tryFind preheader optimized.Blocks, Map.tryFind header optimized.Blocks with
+        | Some preheaderBlock, Some headerBlock
+            when changed && preheaderBlock.Instrs = [invariant] && List.isEmpty headerBlock.Instrs -> Ok ()
+        | _ -> Error $"Expected LICM to hoist invariant {name} work into the preheader"
+    cases
+    |> List.fold (fun result case -> Result.bind (fun () -> check case) result) (Ok ())
+
+let testCountedLoopUnrollingSupportsNarrowSignedAndUnsignedValues () : TestResult =
+    let check valueType =
+        let preheader = Label "narrow_preheader"
+        let header = Label "narrow_header"
+        let latch = Label "narrow_latch"
+        let exit = Label "narrow_exit"
+        let cfg = {
+            Entry = preheader
+            Blocks = Map.ofList [
+                (preheader, basicBlock preheader [] (Jump header))
+                (header, basicBlock header [
+                    Phi (VReg 0, [(Int64Const 0L, preheader); (Register (VReg 3), latch)], Some AST.TInt64)
+                    Phi (VReg 1, [(Int64Const 1L, preheader); (Register (VReg 4), latch)], Some valueType)
+                    BinOp (VReg 2, Gte, Register (VReg 0), Int64Const 4L, AST.TInt64)
+                ] (Branch (Register (VReg 2), exit, latch)))
+                (latch, basicBlock latch [
+                    BinOp (VReg 4, Add, Register (VReg 1), Int64Const 1L, valueType)
+                    BinOp (VReg 3, Add, Register (VReg 0), Int64Const 1L, AST.TInt64)
+                ] (Jump header))
+                (exit, basicBlock exit [] (Ret (Register (VReg 1))))
+            ]
+        }
+        let (optimized, changed) = applyCountedLoopUnrolling cfg
+        let hasSecondIteration =
+            optimized.Blocks
+            |> Map.exists (fun (Label label) block ->
+                label.StartsWith("narrow_latch_unroll_second")
+                && (block.Instrs
+                    |> List.exists (function
+                        | BinOp (_, Add, _, _, typ) when typ = valueType -> true
+                        | _ -> false)))
+        if changed && hasSecondIteration then Ok ()
+        else Error $"Expected counted-loop unrolling to clone {valueType} scalar work"
+    [AST.TInt8; AST.TUInt8]
+    |> List.fold (fun result typ -> Result.bind (fun () -> check typ) result) (Ok ())
+
 let tests = [
     ("MIR CSE reuses effect-free direct scalar calls", testCseReusesEffectFreeDirectScalarCalls)
     ("MIR CSE reuses dominating effect-free direct scalar calls", testCseReusesDominatingEffectFreeDirectScalarCalls)
@@ -1859,6 +1955,7 @@ let tests = [
     ("MIR optimize fixed point CSE after copy prop", testCseAfterCopyPropFixpoint)
     ("MIR CSE reuses dominating binary and unary expressions", testCseReusesDominatingExpressions)
     ("MIR PRE completes an expression missing on one incoming path", testPartialRedundancyEliminationCompletesMissingPath)
+    ("MIR unary PRE completes an expression missing on one incoming path", testUnaryPartialRedundancyEliminationCompletesMissingPath)
     ("MIR CSE reuses dominating scalar heap loads", testCseReusesDominatingScalarHeapLoad)
     ("MIR CSE scalar heap load barriers", testCseDoesNotReuseDominatingScalarHeapLoadAcrossBarriers)
     ("MIR CSE preserves binary and unary expressions across siblings", testCsePreservesExpressionsAcrossSiblingBlocks)
@@ -1893,4 +1990,6 @@ let tests = [
     ("MIR LICM canonicalizes multiple loop entries", testLicmCanonicalizesMultipleLoopEntries)
     ("MIR LICM retains existing loop preheader", testLicmRetainsExistingLoopPreheader)
     ("MIR LICM canonicalizes nested loop entry", testLicmCanonicalizesNestedLoopEntry)
+    ("MIR LICM hoists Float unary and conversion families", testLicmHoistsFloatUnaryAndConversionFamilies)
+    ("MIR counted-loop unrolling supports narrow signed and unsigned values", testCountedLoopUnrollingSupportsNarrowSignedAndUnsignedValues)
 ]

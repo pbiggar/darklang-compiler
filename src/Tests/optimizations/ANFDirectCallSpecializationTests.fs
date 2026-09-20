@@ -49,6 +49,17 @@ let rec private containsAtom (expected: Atom) (expr: AExpr) : bool =
         || containsAtom expected thenBranch
         || containsAtom expected elseBranch
 
+let rec private containsAggregateAllocation (expr: AExpr) : bool =
+    let isAllocation = function
+        | TupleAlloc _ | RecordAlloc _ -> true
+        | _ -> false
+    match expr with
+    | Jump _ | Return _ -> false
+    | Let (_, cexpr, body) -> isAllocation cexpr || containsAggregateAllocation body
+    | Join (_, continuation, entry)
+    | If (_, continuation, entry) ->
+        containsAggregateAllocation continuation || containsAggregateAllocation entry
+
 let private expectArity (name: string) (expected: int) (functions: Function list) : TestResult =
     match functionByName name functions with
     | None -> Error $"Expected function '{name}'"
@@ -483,6 +494,77 @@ let testConstructionValuesCreateClones () : TestResult =
                 (RecordAlloc (descriptor, [intAtom 2L; BoolLiteral false])))
         tupleResult
 
+let testThreeFieldAggregatesSpecializeAndPruneCallerConstruction () : TestResult =
+    let checkCase name typ firstConstruction secondConstruction =
+        let value = typedParam 0 typ
+        let target =
+            { Id = AST.functionIdForName name
+              Name = name
+              TypedParams = [value]
+              ReturnType = typ
+              ReturnOwnership = OwnedReturn
+              Body = Return (Var value.Id) }
+        let callerName = $"{name}Caller"
+        let caller =
+            { Id = AST.functionIdForName callerName
+              Name = callerName
+              TypedParams = []
+              ReturnType = typ
+              ReturnOwnership = OwnedReturn
+              Body =
+                Let (
+                    TempId 1,
+                    firstConstruction,
+                    Let (
+                        TempId 2,
+                        Call (AST.functionIdForName name, [Var (TempId 1)]),
+                        Let (
+                            TempId 3,
+                            secondConstruction,
+                            Let (
+                                TempId 4,
+                                Call (AST.functionIdForName name, [Var (TempId 3)]),
+                                Return (Var (TempId 4))
+                            )
+                        )
+                    )
+                ) }
+        let (Program (functions, _)) =
+            ANF_DirectCallSpecialization.specializeProgram
+                (Program ([target; caller], Return UnitLiteral))
+        let clones =
+            functions
+            |> List.filter (fun func -> func.Name.StartsWith($"{name}__literal_"))
+        match functionByName callerName functions with
+        | Some rewrittenCaller
+            when List.length clones = 2
+                 && (clones
+                     |> List.forall (fun specialized ->
+                         List.isEmpty specialized.TypedParams
+                         && containsAggregateAllocation specialized.Body
+                         && Option.isSome (directCallArgs specialized.Name rewrittenCaller.Body)))
+                 && not (containsAggregateAllocation rewrittenCaller.Body) -> Ok ()
+        | _ -> Error $"Expected three-field {name} specialization to rematerialize only inside the clone"
+    let tupleResult =
+        checkCase
+            "tuple3Value"
+            (AST.TTuple [AST.TInt64; AST.TBool; AST.TUInt64])
+            (TupleAlloc [intAtom 1L; BoolLiteral true; IntLiteral (UInt64 2UL)])
+            (TupleAlloc [intAtom 3L; BoolLiteral false; IntLiteral (UInt64 4UL)])
+    let descriptor =
+        { SourceTypeName = "ThreeFieldRecord"
+          RuntimeTypeName = "ThreeFieldRecord"
+          TypeArgs = []
+          Fields = [("count", AST.TInt64); ("enabled", AST.TBool); ("tag", AST.TUInt64)] }
+    Result.bind
+        (fun () ->
+            checkCase
+                "record3Value"
+                (AST.TRecord ("ThreeFieldRecord", []))
+                (RecordAlloc (descriptor, [intAtom 1L; BoolLiteral true; IntLiteral (UInt64 2UL)]))
+                (RecordAlloc (descriptor, [intAtom 3L; BoolLiteral false; IntLiteral (UInt64 4UL)])))
+        tupleResult
+
 let testFloatLiteralKeysPreserveDistinctBitPatterns () : TestResult =
     let value = typedParam 0 AST.TFloat64
     let target =
@@ -554,6 +636,37 @@ let testLiteralCloneCountIsCapped () : TestResult =
         when List.length clones = 4
              && directCallArgs "capped" caller'.Body = Some [intAtom 5L] -> Ok ()
     | _ -> Error $"Expected four clones and a fifth-call fallback, found {List.length clones} clones"
+
+let testSixteenCloneProgramBoundarySpecializes () : TestResult =
+    let targets =
+        [0 .. 3]
+        |> List.map (fun index ->
+            let name = $"programBoundary{index}"
+            let value = param index
+            { Id = AST.functionIdForName name
+              Name = name
+              TypedParams = [value]
+              ReturnType = AST.TInt64
+              ReturnOwnership = OwnedReturn
+              Body = Return (Var value.Id) })
+    let calls =
+        targets
+        |> List.collect (fun target ->
+            [1L .. 4L]
+            |> List.map (fun value -> (target.Id, intAtom value)))
+    let main =
+        List.foldBack
+            (fun (index, (target, argument)) body ->
+                Let (TempId (100 + index), Call (target, [argument]), body))
+            (calls |> List.indexed)
+            (Return (intAtom 0L))
+    let (Program (functions, _)) =
+        ANF_DirectCallSpecialization.specializeProgram (Program (targets, main))
+    let clones =
+        functions
+        |> List.filter (fun func -> func.Name.Contains("__literal_"))
+    if List.length clones = 16 && (clones |> List.forall (fun func -> List.isEmpty func.TypedParams)) then Ok ()
+    else Error $"Expected all sixteen allowed program-level clones, found {List.length clones}"
 
 let testSpecializedRecursiveSignaturesReachMirAndLir () : TestResult =
     let counter = param 0
@@ -693,8 +806,10 @@ let tests = [
     ("Known indirect targets become specializable", testKnownIndirectTargetBecomesSpecializable)
     ("Mismatched bottom placeholders do not seed clones", testMismatchedBottomPlaceholderDoesNotSeedClone)
     ("Construction values create clones", testConstructionValuesCreateClones)
+    ("Three-field aggregates specialize and prune caller construction", testThreeFieldAggregatesSpecializeAndPruneCallerConstruction)
     ("Float literal keys preserve distinct bit patterns", testFloatLiteralKeysPreserveDistinctBitPatterns)
     ("Literal clone count is capped", testLiteralCloneCountIsCapped)
+    ("Sixteen-clone program boundary specializes", testSixteenCloneProgramBoundarySpecializes)
     ("Specialized recursive signatures reach MIR and LIR", testSpecializedRecursiveSignaturesReachMirAndLir)
     ("Address-taken and closure targets are excluded", testAddressTakenAndClosureTargetsAreExcluded)
 ]

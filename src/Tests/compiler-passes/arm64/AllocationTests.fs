@@ -440,6 +440,37 @@ let testPeepholeCombinesOperandsAndMemoryPairs () : TestResult =
     | actual when actual = expected -> Ok ()
     | actual -> Error $"Expected shifted/extended operands and paired memory operations, got {actual}"
 
+let testPeepholeCombinesEveryExtensionAndFloatStorePairs () : TestResult =
+    let extensionCases = [
+        (ARM64Symbolic.UXTB (ARM64.X10, ARM64.X3), ARM64.ExtendUXTB)
+        (ARM64Symbolic.UXTH (ARM64.X10, ARM64.X3), ARM64.ExtendUXTH)
+        (ARM64Symbolic.UXTW (ARM64.X10, ARM64.X3), ARM64.ExtendUXTW)
+        (ARM64Symbolic.SXTB (ARM64.X10, ARM64.X3), ARM64.ExtendSXTB)
+        (ARM64Symbolic.SXTH (ARM64.X10, ARM64.X3), ARM64.ExtendSXTH)
+        (ARM64Symbolic.SXTW (ARM64.X10, ARM64.X3), ARM64.ExtendSXTW)
+    ]
+    let extensionFailure =
+        extensionCases
+        |> List.tryPick (fun (extension, kind) ->
+            let actual =
+                ARM64Peephole.peepholeOptimize [
+                    extension
+                    ARM64Symbolic.ADD_reg (ARM64.X10, ARM64.X5, ARM64.X10)
+                ]
+            let expected = [ARM64Symbolic.ADD_extended (ARM64.X10, ARM64.X5, ARM64.X3, kind)]
+            if actual = expected then None else Some $"{kind}: {actual}")
+    match extensionFailure with
+    | Some failure -> Error $"Expected every extension kind to fold into ADD_extended; failed {failure}"
+    | None ->
+        let actual =
+            ARM64Peephole.peepholeOptimize [
+                ARM64Symbolic.STR_fp (ARM64.D2, ARM64.SP, 32s)
+                ARM64Symbolic.STR_fp (ARM64.D3, ARM64.SP, 40s)
+            ]
+        let expected = [ARM64Symbolic.STP_fp (ARM64.D2, ARM64.D3, ARM64.SP, 32s)]
+        if actual = expected then Ok ()
+        else Error $"Expected aligned Float stack stores to form STP_fp, got {actual}"
+
 /// The multiply-by-constant selector creates this shared-source shape before
 /// final block layout. A following branch must not hide the shift temporary's
 /// established single-use contract from the target peephole.

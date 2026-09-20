@@ -302,6 +302,102 @@ let private applyOneHelper () =
             )
     }
 
+let private prependPureBindings count firstId body =
+    List.foldBack
+        (fun offset current ->
+            Let (TempId (firstId + offset), Atom (IntLiteral (Int64 (int64 offset))), current))
+        [0 .. count - 1]
+        body
+
+let testExactHelperAndTargetSizeBoundariesSpecialize () : TestResult =
+    let boundaryTarget =
+        { Id = fid "boundaryTarget"
+          Name = "boundaryTarget"
+          TypedParams = [param 400 AST.TInt64]
+          ReturnType = AST.TInt64
+          ReturnOwnership = OwnedReturn
+          // Return is one node; 31 administrative bindings reach the 32-node limit.
+          Body = prependPureBindings 31 500 (Return (Var (TempId 400))) }
+    let functionType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let baseHelperBody =
+        Let (
+            TempId 900,
+            ClosureCall (Var (TempId 401), [Var (TempId 402)]),
+            Return (Var (TempId 900))
+        )
+    let boundaryHelper =
+        { Id = fid "boundaryHelper"
+          Name = "boundaryHelper"
+          TypedParams = [param 401 functionType; param 402 AST.TInt64]
+          ReturnType = AST.TInt64
+          ReturnOwnership = OwnedReturn
+          // The call and return are two nodes; 254 bindings reach the 256-node limit.
+          Body = prependPureBindings 254 600 baseHelperBody }
+    let main =
+        Let (
+            TempId 901,
+            Call (fid "boundaryHelper", [FuncRef (fid "boundaryTarget"); IntLiteral (Int64 42L)]),
+            Return (Var (TempId 901))
+        )
+    let (Program (functions, rewrittenMain)) =
+        Program ([boundaryTarget; boundaryHelper], main)
+        |> ANF_HigherOrderSpecialization.specializeProgram
+    match functions |> List.tryFind (fun func -> func.Name.StartsWith("boundaryHelper__known_")) with
+    | Some helper
+        when Option.isSome (findCall "boundaryTarget" helper.Body)
+             && Option.isSome (findCall helper.Name rewrittenMain) -> Ok ()
+    | _ -> Error "Expected helpers and targets exactly at both size limits to specialize"
+
+let testSixteenKnownArgumentPairBudgetSpecializes () : TestResult =
+    let functionType = AST.TFunction ([AST.TInt64], AST.TInt64)
+    let targets =
+        [0 .. 15]
+        |> List.map (fun index ->
+            let name = $"pairTarget{index}"
+            { Id = fid name
+              Name = name
+              TypedParams = [param (1000 + index) AST.TInt64]
+              ReturnType = AST.TInt64
+              ReturnOwnership = OwnedReturn
+              Body = Return (Var (TempId (1000 + index))) })
+    let functionalParameters =
+        [0 .. 15] |> List.map (fun index -> param (1100 + index) functionType)
+    let valueParameter = param 1200 AST.TInt64
+    let helperBody =
+        List.foldBack
+            (fun (index, parameter: TypedParam) body ->
+                Let (
+                    TempId (1300 + index),
+                    ClosureCall (Var parameter.Id, [Var valueParameter.Id]),
+                    body
+                ))
+            (functionalParameters |> List.indexed)
+            (Return (Var (TempId 1315)))
+    let helper =
+        { Id = fid "pairBudgetHelper"
+          Name = "pairBudgetHelper"
+          TypedParams = functionalParameters @ [valueParameter]
+          ReturnType = AST.TInt64
+          ReturnOwnership = OwnedReturn
+          Body = helperBody }
+    let arguments =
+        (targets |> List.map (fun target -> FuncRef target.Id))
+        @ [IntLiteral (Int64 42L)]
+    let main =
+        Let (
+            TempId 1400,
+            Call (helper.Id, arguments),
+            Return (Var (TempId 1400))
+        )
+    let (Program (functions, rewrittenMain)) =
+        Program (targets @ [helper], main)
+        |> ANF_HigherOrderSpecialization.specializeProgram
+    match functions |> List.tryFind (fun func -> func.Name.StartsWith("pairBudgetHelper__known_")) with
+    | Some specialized
+        when not (containsClosureCall specialized.Body)
+             && Option.isSome (findCall specialized.Name rewrittenMain) -> Ok ()
+    | _ -> Error "Expected all sixteen known functional-argument pairs to specialize together"
+
 let testKnownClosureFlowsThroughBranchValue () : TestResult =
     let main =
         Let (
@@ -509,6 +605,8 @@ let tests = [
     ("Known capturing closure specializes a recursive helper", testKnownCapturingClosureSpecializesRecursiveHelper)
     ("Known closure flows through alias", testKnownClosureFlowsThroughAlias)
     ("Multiple known functional arguments share one clone", testMultipleKnownArgumentsShareOneClone)
+    ("Exact helper and target size boundaries specialize", testExactHelperAndTargetSizeBoundariesSpecialize)
+    ("Sixteen known functional-argument pairs specialize", testSixteenKnownArgumentPairBudgetSpecializes)
     ("Known closure flows through branch value", testKnownClosureFlowsThroughBranchValue)
     ("Returned known closure specializes", testReturnedKnownClosureSpecializes)
     ("Static function reference needs no closure", testStaticFunctionReferenceNeedsNoClosure)

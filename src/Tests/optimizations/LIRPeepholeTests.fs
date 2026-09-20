@@ -488,6 +488,38 @@ let testScalarDiamondFormsSelect () : TestResult =
              && not (Map.containsKey falseLabel optimized.Blocks) -> Ok ()
     | _ -> Error $"Expected empty scalar diamond to become Select, got: {optimized.Blocks}"
 
+let testBranchZeroDiamondFormsMultipleNarrowSelects () : TestResult =
+    let entry = Label "zero_entry"
+    let zeroLabel = Label "zero_arm"
+    let nonzeroLabel = Label "nonzero_arm"
+    let join = Label "narrow_join"
+    let blocks =
+        [ (entry,
+           { Label = entry
+             Instrs = []
+             Terminator = BranchZero (Virtual 0, zeroLabel, nonzeroLabel) })
+          (zeroLabel, { Label = zeroLabel; Instrs = []; Terminator = Jump join })
+          (nonzeroLabel, { Label = nonzeroLabel; Instrs = []; Terminator = Jump join })
+          (join,
+           { Label = join
+             Instrs = [
+                 Phi (Virtual 5, [(Reg (Virtual 1), zeroLabel); (Reg (Virtual 2), nonzeroLabel)], Some AST.TUInt8)
+                 Phi (Virtual 6, [(Reg (Virtual 3), zeroLabel); (Reg (Virtual 4), nonzeroLabel)], Some AST.TBool)
+             ]
+             Terminator = Ret }) ]
+        |> Map.ofList
+    let optimized = optimizeCFG { Entry = entry; Blocks = blocks }
+    match Map.tryFind entry optimized.Blocks, Map.tryFind join optimized.Blocks with
+    | Some entryBlock, Some joinBlock
+        when entryBlock.Instrs = [
+                 Cmp (Virtual 0, Imm 0L)
+                 Select (Virtual 5, Virtual 1, Virtual 2, EQ)
+                 Select (Virtual 6, Virtual 3, Virtual 4, EQ)
+             ]
+             && entryBlock.Terminator = Jump join
+             && List.isEmpty joinBlock.Instrs -> Ok ()
+    | _ -> Error $"Expected BranchZero with UInt8 and Bool phis to form two selects, got: {optimized.Blocks}"
+
 let testMulConstantKeepsLiveConstRegister () : TestResult =
     let instrs = [
         Mov (Physical X1, Imm 3L)
@@ -665,6 +697,7 @@ let tests = [
     ("LIR peephole keeps MUL/SUB temporary used by later print", testMulSubFusionKeepsLiveTempForPrint)
     ("LIR peephole exposes FMADD combine but preserves strict target rounding", testFloatMultiplyAddCombineAndTargetDecision)
     ("LIR peephole forms scalar selects from empty diamonds", testScalarDiamondFormsSelect)
+    ("LIR peephole forms multiple narrow selects from BranchZero diamonds", testBranchZeroDiamondFormsMultipleNarrowSelects)
     ("LIR peephole keeps multiply constants that are used later", testMulConstantKeepsLiveConstRegister)
     ("LIR peephole swaps Boolean negation branch successors", testBooleanNotBranchSwapsSuccessors)
     ("LIR peephole keeps branch Boolean used by a successor", testConditionalBranchKeepsBooleanUsedInSuccessor)
