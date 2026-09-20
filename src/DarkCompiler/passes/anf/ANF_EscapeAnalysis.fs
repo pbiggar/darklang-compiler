@@ -3,8 +3,8 @@
 // This deliberately narrow first escape-analysis pass scalar-replaces local
 // tuple and record allocations only when their complete lexical use set is
 // projections, aliases, or the representation-only source of a record clone.
-// Composite or potentially observable managed fields and every unmodelled use
-// retain the ordinary allocation. Buffer fields can reset before unique reuse.
+// Managed fields without a structural non-observable destruction proof and
+// every unmodelled use retain the ordinary allocation.
 
 module ANF_EscapeAnalysis
 
@@ -31,11 +31,38 @@ let private isScalarType (typ: AST.Type) : bool =
     | AST.TRuntimeError -> true
     | _ -> false
 
-let private isReusableRecordFieldType (typ: AST.Type) : bool =
-    isScalarType typ
-    || match typ with
-       | AST.TString | AST.TBlob | AST.TInt -> true
-       | _ -> false
+/// Prove that releasing a displaced field cannot run a language-visible
+/// finalizer. Nominal records use the complete registry and concrete type
+/// arguments; recursive records, sums and closures still fail closed.
+let private hasNonObservableDestruction
+    (typeReg: TypeRegistries.TypeRegistry)
+    (typ: AST.Type)
+    : bool =
+    let rec prove (expandingRecords: Set<string>) typ =
+        isScalarType typ
+        || match typ with
+           | AST.TString | AST.TBlob | AST.TInt -> true
+           | AST.TTuple elements -> List.forall (prove expandingRecords) elements
+           | AST.TList element -> prove expandingRecords element
+           | AST.TDict (key, value) ->
+               prove expandingRecords key
+               && prove expandingRecords value
+           | AST.TRecord (name, typeArgs) ->
+               if Set.contains name expandingRecords then
+                   false
+               else
+                   match Map.tryFind name typeReg with
+                   | Some info when List.length info.TypeParams = List.length typeArgs ->
+                       let subst = List.zip info.TypeParams typeArgs |> Map.ofList
+                       let expandingRecords = Set.add name expandingRecords
+                       info.Fields
+                       |> List.forall (fun (_, fieldType) ->
+                           fieldType
+                           |> TypeSubstitution.applySubstToType subst
+                           |> prove expandingRecords)
+                   | _ -> false
+           | _ -> false
+    prove Set.empty typ
 
 let private atomIsScalar (scalarTemps: Set<TempId>) (atom: Atom) : bool =
     match atom with
@@ -69,7 +96,7 @@ let rec private exprUsesTracked (tracked: Set<TempId>) (expr: AExpr) : bool =
         || exprUsesTracked tracked elseBranch
 
 /// Rewrite the sole consuming clone of a uniquely local compatible record to
-/// reuse its source block. RC elaboration retains replacement buffer children
+/// reuse its source block. RC elaboration retains replacement managed children
 /// and releases displaced children before the stores. Running this after
 /// scalar replacement preserves allocation-free immediate cases.
 let rec private reuseUniqueRecordClone
@@ -103,20 +130,32 @@ let rec private reuseUniqueRecordClone
         else
             None
 
-let rec private reuseEligibleRecordClones (expr: AExpr) : AExpr =
+let rec private reuseEligibleRecordClones
+    (typeReg: TypeRegistries.TypeRegistry)
+    (expr: AExpr)
+    : AExpr =
     match expr with
     | Jump _ | Return _ -> expr
     | Join (parameter, continuation, entry) ->
-        Join (parameter, reuseEligibleRecordClones continuation, reuseEligibleRecordClones entry)
+        Join (
+            parameter,
+            reuseEligibleRecordClones typeReg continuation,
+            reuseEligibleRecordClones typeReg entry
+        )
     | If (condition, thenBranch, elseBranch) ->
-        If (condition, reuseEligibleRecordClones thenBranch, reuseEligibleRecordClones elseBranch)
+        If (
+            condition,
+            reuseEligibleRecordClones typeReg thenBranch,
+            reuseEligibleRecordClones typeReg elseBranch
+        )
     | Let (boundId, cexpr, body) ->
-        let body = reuseEligibleRecordClones body
+        let body = reuseEligibleRecordClones typeReg body
         match cexpr with
         | RecordAlloc (descriptor, _)
         | RecordClone (descriptor, _, _)
         | RecordReuse (descriptor, _, _)
-            when descriptor.Fields |> List.forall (snd >> isReusableRecordFieldType) ->
+            when descriptor.Fields
+                 |> List.forall (snd >> hasNonObservableDestruction typeReg) ->
             let rewritten =
                 reuseUniqueRecordClone descriptor (Set.singleton boundId) body
                 |> Option.defaultValue body
@@ -277,6 +316,7 @@ let rec private scalarReplaceExpr
             )
 
 let private scalarReplaceFunction
+    (typeReg: TypeRegistries.TypeRegistry)
     (returnTypes: Map<AST.FunctionId, AST.Type>)
     (func: Function)
     : Function =
@@ -287,15 +327,18 @@ let private scalarReplaceFunction
     { func with
         Body =
             scalarReplaceExpr returnTypes scalarParams Map.empty func.Body
-            |> reuseEligibleRecordClones }
+            |> reuseEligibleRecordClones typeReg }
 
-let scalarReplaceProgram (Program (functions, mainExpr): Program) : Program =
+let scalarReplaceProgram
+    (typeReg: TypeRegistries.TypeRegistry)
+    (Program (functions, mainExpr): Program)
+    : Program =
     let returnTypes =
         functions
         |> List.map (fun func -> func.Id, func.ReturnType)
         |> Map.ofList
     Program (
-        functions |> List.map (scalarReplaceFunction returnTypes),
+        functions |> List.map (scalarReplaceFunction typeReg returnTypes),
         scalarReplaceExpr returnTypes Set.empty Map.empty mainExpr
-        |> reuseEligibleRecordClones
+        |> reuseEligibleRecordClones typeReg
     )

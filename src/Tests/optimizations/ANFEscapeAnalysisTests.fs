@@ -56,7 +56,10 @@ let rec private containsRecordReuse (expr: AExpr) : bool =
     | If (_, thenBranch, elseBranch) ->
         containsRecordReuse thenBranch || containsRecordReuse elseBranch
 
-let private optimizeBody (body: AExpr) : AExpr =
+let private optimizeBodyWithTypes
+    (typeReg: TypeRegistries.TypeRegistry)
+    (body: AExpr)
+    : AExpr =
     let func =
         { Id = fid "fixture"
           Name = "fixture"
@@ -65,11 +68,14 @@ let private optimizeBody (body: AExpr) : AExpr =
           ReturnOwnership = OwnedReturn
           Body = body }
     let (Program (functions, _)) =
-        ANF_EscapeAnalysis.scalarReplaceProgram
+        ANF_EscapeAnalysis.scalarReplaceProgram typeReg
             (Program ([func], Return UnitLiteral))
     match functions with
     | [optimized] -> optimized.Body
     | _ -> Crash.crash "ANFEscapeAnalysisTests: fixture function disappeared"
+
+let private optimizeBody (body: AExpr) : AExpr =
+    optimizeBodyWithTypes Map.empty body
 
 let testScalarRecordProjectionRemovesAllocation () : TestResult =
     let descriptor = pointDescriptor AST.TInt64
@@ -341,11 +347,11 @@ let testFloatRecordCallBeforeCloneRejectsReuse () : TestResult =
     if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then Ok ()
     else Error $"Expected a call before a Float clone to reject reuse, got {body}"
 
-let testCompositeManagedRecordRejectsReuse () : TestResult =
-    let descriptor =
-        { pointDescriptor AST.TFloat64 with
-            Fields = ["x", AST.TFloat64; "items", AST.TList AST.TInt64] }
-    let body =
+let testCompositeManagedRecordsReuseUniqueAllocations () : TestResult =
+    let optimized fieldType =
+        let descriptor =
+            { pointDescriptor AST.TFloat64 with
+                Fields = ["x", AST.TFloat64; "items", fieldType] }
         Let (
             TempId 4,
             Call (fid "makeItems", []),
@@ -360,8 +366,117 @@ let testCompositeManagedRecordRejectsReuse () : TestResult =
             )
         )
         |> optimizeBody
-    if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then Ok ()
-    else Error $"Expected a record with a composite managed field to reject reuse, got {body}"
+    let samples = [
+        AST.TTuple [AST.TString; AST.TInt64]
+        AST.TList AST.TInt64
+        AST.TDict (AST.TString, AST.TInt64)
+    ]
+    samples
+    |> List.tryPick (fun fieldType ->
+        let body = optimized fieldType
+        if aggregateAllocationCount body = 1 && containsRecordReuse body then None
+        else Some (fieldType, body))
+    |> function
+       | None -> Ok ()
+       | Some (fieldType, body) ->
+           Error $"Expected the unique {fieldType} record allocation to be reused, got {body}"
+
+let testUnsupportedCompositeRecordsRejectReuse () : TestResult =
+    let optimized fieldType =
+        let descriptor =
+            { pointDescriptor AST.TFloat64 with
+                Fields = ["x", AST.TFloat64; "items", fieldType] }
+        Let (
+            TempId 4,
+            Call (fid "makeManaged", []),
+            Let (
+                TempId 0,
+                RecordAlloc (descriptor, [FloatLiteral 1.0; Var (TempId 4)]),
+                Let (
+                    TempId 1,
+                    RecordClone (descriptor, Var (TempId 0), [FloatLiteral 2.0; Var (TempId 4)]),
+                    Return (Var (TempId 1))
+                )
+            )
+        )
+        |> optimizeBody
+    let samples = [
+        AST.TStream AST.TInt64
+        AST.TList (AST.TStream AST.TInt64)
+        AST.TFunction ([], AST.TInt64)
+        AST.TSum ("Maybe", [AST.TInt64])
+        AST.TVar "unknown"
+    ]
+    samples
+    |> List.tryPick (fun fieldType ->
+        let body = optimized fieldType
+        if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then None
+        else Some (fieldType, body))
+    |> function
+       | None -> Ok ()
+       | Some (fieldType, body) ->
+           Error $"Expected unsupported {fieldType} destruction to reject reuse, got {body}"
+
+let testNestedRecordsReuseOnlyWithSafeInstantiatedFields () : TestResult =
+    let optimized typeReg fieldType =
+        let descriptor =
+            { pointDescriptor AST.TFloat64 with
+                Fields = ["x", AST.TFloat64; "nested", fieldType] }
+        Let (
+            TempId 4,
+            Call (fid "makeNested", []),
+            Let (
+                TempId 0,
+                RecordAlloc (descriptor, [FloatLiteral 1.0; Var (TempId 4)]),
+                Let (
+                    TempId 1,
+                    RecordClone (descriptor, Var (TempId 0), [FloatLiteral 2.0; Var (TempId 4)]),
+                    Return (Var (TempId 1))
+                )
+            )
+        )
+        |> optimizeBodyWithTypes typeReg
+    let typeReg : TypeRegistries.TypeRegistry =
+        Map.ofList [
+            ("NestedSafe",
+             { TypeParams = []
+               Fields = ["items", AST.TList AST.TInt64] })
+            ("NestedGeneric",
+             { TypeParams = ["a"]
+               Fields = ["value", AST.TVar "a"] })
+            ("NestedStream",
+             { TypeParams = []
+               Fields = ["events", AST.TStream AST.TInt64] })
+            ("NestedRecursive",
+             { TypeParams = []
+               Fields = ["next", AST.TRecord ("NestedRecursive", [])] })
+            ("NestedGrowing",
+             { TypeParams = ["a"]
+               Fields = [
+                   "next",
+                   AST.TRecord ("NestedGrowing", [AST.TList (AST.TVar "a")])
+               ] })
+        ]
+    let samples = [
+        (AST.TRecord ("NestedSafe", []), true)
+        (AST.TRecord ("NestedGeneric", [AST.TString]), true)
+        (AST.TRecord ("NestedGeneric", [AST.TStream AST.TInt64]), false)
+        (AST.TRecord ("NestedStream", []), false)
+        (AST.TRecord ("NestedRecursive", []), false)
+        (AST.TRecord ("NestedGrowing", [AST.TString]), false)
+        (AST.TRecord ("Missing", []), false)
+    ]
+    samples
+    |> List.tryPick (fun (fieldType, shouldReuse) ->
+        let body = optimized typeReg fieldType
+        let reused = aggregateAllocationCount body = 1 && containsRecordReuse body
+        let rejected = aggregateAllocationCount body = 2 && not (containsRecordReuse body)
+        if (shouldReuse && reused) || (not shouldReuse && rejected) then None
+        else Some (fieldType, shouldReuse, body))
+    |> function
+       | None -> Ok ()
+       | Some (fieldType, shouldReuse, body) ->
+           Error $"Expected nested {fieldType} reuse={shouldReuse}, got {body}"
 
 let testManagedLeafRecordReusesUniqueAllocation () : TestResult =
     let descriptor =
@@ -442,7 +557,9 @@ let tests =
       ("Float record projection before clone scalarizes source", testFloatRecordProjectionBeforeCloneScalarizesSource)
       ("Float record use after clone retains escaping source", testFloatRecordUseAfterCloneRetainsEscapingSource)
       ("Float record call before clone rejects reuse", testFloatRecordCallBeforeCloneRejectsReuse)
-      ("Composite managed record rejects reuse", testCompositeManagedRecordRejectsReuse)
+      ("Composite managed records reuse unique allocations", testCompositeManagedRecordsReuseUniqueAllocations)
+      ("Unsupported composite records reject reuse", testUnsupportedCompositeRecordsRejectReuse)
+      ("Nested records reuse only with safe instantiated fields", testNestedRecordsReuseOnlyWithSafeInstantiatedFields)
       ("Managed leaf record reuses unique allocation", testManagedLeafRecordReusesUniqueAllocation)
       ("Float record alias use after clone retains escaping source", testFloatRecordAliasUseAfterCloneRetainsEscapingSource)
       ("Float record branch clones scalarize shared source", testFloatRecordBranchClonesScalarizeSharedSource) ]
