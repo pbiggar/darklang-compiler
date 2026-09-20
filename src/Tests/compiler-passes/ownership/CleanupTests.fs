@@ -1121,3 +1121,79 @@ let testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed () : TestRe
         Ok ()
     else
         Error "Alias return should materialize ownership with RefCountInc even when function is marked BorrowedReturn"
+
+let testRecordReuseRetainsReplacementBeforeReleasingOldChild () : TestResult =
+    let descriptor = {
+        SourceTypeName = "ManagedReuseRecord"
+        RuntimeTypeName = "ManagedReuseRecord"
+        TypeArgs = []
+        Fields = ["label", AST.TString; "count", AST.TInt64]
+    }
+    let recordType = AST.TRecord (descriptor.RuntimeTypeName, [])
+    let makeOld = AST.functionIdForName "makeOld"
+    let fixture = AST.functionIdForName "reuseRecord"
+    let replacementId = TempId 0
+    let oldId = TempId 1
+    let sourceId = TempId 2
+    let resultId = TempId 3
+    let recordInfo : TypeRegistries.RecordTypeInfo = {
+        TypeParams = []
+        Fields = descriptor.Fields
+    }
+    let ctx : TypeContext = {
+        TypeReg = Map.ofList [(descriptor.RuntimeTypeName, recordInfo)]
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg =
+            functionRegistry [
+                "makeOld", AST.TFunction ([], AST.TString)
+                "reuseRecord", AST.TFunction ([AST.TString], recordType)
+            ]
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+        TypePlanning = createRcTypePlanningContext ()
+    }
+    let func : Function = {
+        Id = fixture
+        Name = "reuseRecord"
+        TypedParams = [{ Id = replacementId; Type = AST.TString }]
+        ReturnType = recordType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                oldId,
+                Call (makeOld, []),
+                Let (
+                    sourceId,
+                    RecordAlloc (descriptor, [Var oldId; IntLiteral (Int64 1L)]),
+                    Let (
+                        resultId,
+                        RecordReuse (descriptor, Var sourceId, [Var replacementId; IntLiteral (Int64 2L)]),
+                        Return (Var resultId)
+                    )
+                )
+            )
+    }
+    let transformed, _, _ = insertRCInFunction ctx func initialVarGen
+    let rec hasOrderedReset retained oldFieldReleased expression =
+        match expression with
+        | Let (_, RefCountIncString (Var id), body) when id = replacementId ->
+            hasOrderedReset true oldFieldReleased body
+        | Let (fieldId, RecordGet (_, Var id, 0), body) when retained && id = sourceId ->
+            match body with
+            | Let (_, RefCountDecString (Var releasedId), rest) when releasedId = fieldId ->
+                hasOrderedReset retained true rest
+            | _ -> false
+        | Let (_, RecordReuse (_, Var id, _), _) when id = sourceId ->
+            retained && oldFieldReleased
+        | Let (_, _, body) ->
+            hasOrderedReset retained oldFieldReleased body
+        | Join (_, continuation, entry)
+        | If (_, continuation, entry) ->
+            hasOrderedReset retained oldFieldReleased continuation
+            || hasOrderedReset retained oldFieldReleased entry
+        | Jump _ | Return _ -> false
+
+    if hasOrderedReset false false transformed.Body then Ok ()
+    else Error $"Expected retain, displaced-child release, then record reuse; got {transformed.Body}"

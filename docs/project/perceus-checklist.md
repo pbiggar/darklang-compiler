@@ -83,7 +83,12 @@ representation and safety boundaries are documented in
 - [ ] **Add general constructor reuse.** Safely dismantle old values and reuse
   suitable storage for new constructors. Specialize destruction and release
   child references correctly, extending reuse to records and other supported
-  data.
+  data. The first fixed-layout record slice reuses a uniquely local record for
+  its sole compatible update when fields are immediate values or
+  non-observable `String`, `Blob`, or `Int` buffers. It retains replacement
+  children, releases displaced children in field order, and then overwrites the
+  block. Other managed fields, sum constructors, and interprocedural reuse
+  remain before this item is complete.
 - [ ] **Support managed elements and observable destruction.** Extend reuse to
   collections containing managed values and broader function bodies. Track
   destruction effects so cleanup preserves Stream finalizers and other

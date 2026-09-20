@@ -87,6 +87,7 @@ let tests = [
     ("aggregate skips retain for conditional static string", testAggregateSkipsRetainForConditionalStaticString)
     ("non-self tailcall does not keep dec after tailcall", testNonSelfTailCallDoesNotLeaveDecAfterTailCall)
     ("alias return materializes ownership even for borrowed-return function", testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed)
+    ("record reuse retains replacement before releasing old child", testRecordReuseRetainsReplacementBeforeReleasingOldChild)
     ("map helper accumulator return transfers ownership without retain", testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator)
     ("map helper self tail-call releases replaced accumulator", testMapHelperSelfTailCallReleasesReplacedAccumulator)
     ("borrowed projection self tail-call args are retained", testBorrowedProjectionSelfTailCallArgsAreRetained)

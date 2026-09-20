@@ -305,11 +305,20 @@ let insertReturnDecs
         (expr, varGen, types)
         decsInOrder
 
+type RecordReuseCleanup = {
+    Descriptor: RecordDescriptor
+    Source: TempId
+    Fields: (int * AST.Type * RcShape) list
+}
+
 /// Stored state for rebuilding a Let while unwinding an expression spine
 type LetFrame = {
     TempId: TempId
     CExpr: CExpr
-    TupleIncTargets: (TempId * AST.Type * RcShape) list
+    AllocationIncTargets: (TempId * AST.Type * RcShape) list
+    /// Managed child edges displaced by RecordReuse. Replacements are retained
+    /// before these fields are loaded and released; stores happen afterward.
+    RecordReuseCleanup: RecordReuseCleanup option
     /// The pass owns exactly one pending release for this value, and its next
     /// use transfers that ownership into a closed returned aggregate suffix.
     TransferableOwnership: ReturnDec option
@@ -324,7 +333,7 @@ let applyLetFrame
     (expr: AExpr, varGen: VarGen, types: Map<TempId, AST.Type>)
     : AExpr * VarGen * Map<TempId, AST.Type> =
     let (incBindingsRev, varGen1) =
-        frame.TupleIncTargets
+        frame.AllocationIncTargets
         |> List.fold (fun (acc, vg) (tid, typ, shape) ->
             let (dummyId, vg') = freshVar vg
             ((dummyId, retainExprForShape ctx tid typ shape) :: acc, vg')) ([], varGen)
@@ -334,19 +343,44 @@ let applyLetFrame
         incBindings
         |> List.fold (fun m (tid, _) -> Map.add tid AST.TUnit m) types
 
-    let (returnIncBinding, varGen2, typesWithReturnInc) =
-        match frame.ReturnInc with
-        | Some (typ, shape) ->
-            let (incId, vg) = freshVar varGen1
-            let incExpr = retainExprForShape ctx frame.TempId typ shape
-            ([(incId, incExpr)], vg, Map.add incId AST.TUnit typesWithIncs)
+    let (reuseCleanupBindings, varGen2, typesWithReuseCleanup) =
+        match frame.RecordReuseCleanup with
+        | Some cleanup ->
+            cleanup.Fields
+            |> List.fold (fun (bindingsRev, vg, currentTypes) (index, typ, shape) ->
+                let (fieldId, afterField) = freshVar vg
+                let (releaseId, afterRelease) = freshVar afterField
+                let (_, _, _, kindOverride, metadata) =
+                    createReturnDec ctx fieldId typ shape None
+                let release =
+                    releaseExprForShape fieldId typ shape kindOverride metadata
+                ( (releaseId, release)
+                  :: (fieldId, RecordGet (cleanup.Descriptor, Var cleanup.Source, index))
+                  :: bindingsRev,
+                 afterRelease,
+                 currentTypes
+                 |> Map.add fieldId typ
+                 |> Map.add releaseId AST.TUnit))
+                ([], varGen1, typesWithIncs)
+            |> fun (bindingsRev, vg, currentTypes) ->
+                (List.rev bindingsRev, vg, currentTypes)
         | None ->
             ([], varGen1, typesWithIncs)
 
+    let (returnIncBinding, varGen3, typesWithReturnInc) =
+        match frame.ReturnInc with
+        | Some (typ, shape) ->
+            let (incId, vg) = freshVar varGen2
+            let incExpr = retainExprForShape ctx frame.TempId typ shape
+            ([(incId, incExpr)], vg, Map.add incId AST.TUnit typesWithReuseCleanup)
+        | None ->
+            ([], varGen2, typesWithReuseCleanup)
+
     let bodyWithReturnInc = wrapBindings returnIncBinding expr
     let letExpr = Let (frame.TempId, frame.CExpr, bodyWithReturnInc)
-    let exprWithIncs = wrapBindings incBindings letExpr
-    (exprWithIncs, varGen2, typesWithReturnInc)
+    let exprWithCleanup = wrapBindings reuseCleanupBindings letExpr
+    let exprWithIncs = wrapBindings incBindings exprWithCleanup
+    (exprWithIncs, varGen3, typesWithReturnInc)
 
 /// Apply a stack of Let frames (innermost-first)
 let applyLetFrames
