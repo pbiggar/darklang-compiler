@@ -146,13 +146,18 @@ type CliOperation =
     | ProcessIO
     | TerminateProcess
 
-/// Immutable nominal metadata carried through record lowering for field layout,
-/// diagnostics, and rendering. It is compile-time metadata, not a native field.
+/// Immutable nominal metadata carried through fixed-block lowering for field
+/// layout, ownership, diagnostics, and rendering. It is compile-time metadata,
+/// not a native field.
 type RecordDescriptor = {
     SourceTypeName: string
     RuntimeTypeName: string
     TypeArgs: AST.Type list
     Fields: (string * AST.Type) list
+    /// The nominal value represented by this fixed block. Constructor lowering
+    /// also uses this descriptor for boxed sums whose physical layout is
+    /// [tag, payload].
+    ValueType: AST.Type
 }
 
 /// Complex expressions (produce values)
@@ -175,7 +180,7 @@ type CExpr =
     | RecordAlloc of descriptor:RecordDescriptor * fields:Atom list
     | RecordGet of descriptor:RecordDescriptor * record:Atom * index:int
     | RecordClone of descriptor:RecordDescriptor * record:Atom * fields:Atom list
-    | RecordReuse of descriptor:RecordDescriptor * record:Atom * fields:Atom list
+    | RecordReuse of sourceDescriptor:RecordDescriptor * targetDescriptor:RecordDescriptor * record:Atom * fields:Atom list
     // String operations (heap-allocating)
     /// Concatenate at least two strings with one allocation and ordered copies.
     | StringConcat of first:Atom * second:Atom * remaining:Atom list

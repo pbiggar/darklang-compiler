@@ -1,8 +1,8 @@
-// ANF_EscapeAnalysis.fs - Eliminate scalar aggregates and reuse unique records.
+// ANF_EscapeAnalysis.fs - Eliminate scalar aggregates and reuse unique fixed blocks.
 //
 // This deliberately narrow first escape-analysis pass scalar-replaces local
-// tuple and record allocations only when their complete lexical use set is
-// projections, aliases, or the representation-only source of a record clone.
+// tuple, record, and boxed-sum allocations only when their complete lexical use
+// set is projections, aliases, or a representation-only constructor source.
 // Managed fields without a structural non-observable destruction proof and
 // every unmodelled use retain the ordinary allocation.
 
@@ -110,7 +110,13 @@ let rec private reuseUniqueRecordClone
         when Set.contains cloneSourceId tracked && descriptor = sourceDescriptor ->
         if not (atomsUseTracked tracked fields)
            && not (exprUsesTracked tracked body) then
-            Some (Let (boundId, RecordReuse (descriptor, Var cloneSourceId, fields), body))
+            Some (
+                Let (
+                    boundId,
+                    RecordReuse (sourceDescriptor, descriptor, Var cloneSourceId, fields),
+                    body
+                )
+            )
         else
             None
     | Let (boundId, Atom (Var sourceId), body) when Set.contains sourceId tracked ->
@@ -130,7 +136,62 @@ let rec private reuseUniqueRecordClone
         else
             None
 
-let rec private reuseEligibleRecordClones
+/// Rewrite a later straight-line constructor of the same instantiated boxed
+/// sum to reuse a uniquely local source block. The source descriptor remains
+/// attached so RC elaboration releases the displaced variant payload type.
+let rec private reuseUniqueSumConstructor
+    (typeReg: TypeRegistries.TypeRegistry)
+    (sourceDescriptor: RecordDescriptor)
+    (sourceId: TempId)
+    (tracked: Set<TempId>)
+    (projections: Set<TempId>)
+    (expr: AExpr)
+    : AExpr option =
+    match expr with
+    | Jump _ | Join _ | Return _ | If _ -> None
+    | Let (boundId, RecordAlloc (targetDescriptor, fields), body)
+        when targetDescriptor.ValueType = sourceDescriptor.ValueType
+             && List.length targetDescriptor.Fields = List.length sourceDescriptor.Fields
+             && targetDescriptor.Fields
+                |> List.forall (snd >> hasNonObservableDestruction typeReg) ->
+        if not (atomsUseTracked tracked fields)
+           && not (exprUsesTracked tracked body)
+           && not (exprUsesTracked projections body) then
+            Some (
+                Let (
+                    boundId,
+                    RecordReuse (sourceDescriptor, targetDescriptor, Var sourceId, fields),
+                    body
+                )
+            )
+        else
+            None
+    | Let (boundId, Atom (Var sourceId), body) when Set.contains sourceId tracked ->
+        reuseUniqueSumConstructor typeReg sourceDescriptor sourceId (Set.add boundId tracked) projections body
+        |> Option.map (fun rewritten -> Let (boundId, Atom (Var sourceId), rewritten))
+    | Let (boundId, TypedAtom (Var sourceId, typ), body) when Set.contains sourceId tracked ->
+        reuseUniqueSumConstructor typeReg sourceDescriptor sourceId (Set.add boundId tracked) projections body
+        |> Option.map (fun rewritten -> Let (boundId, TypedAtom (Var sourceId, typ), rewritten))
+    | Let (boundId, Atom (Var projectionId), body) when Set.contains projectionId projections ->
+        reuseUniqueSumConstructor typeReg sourceDescriptor sourceId tracked (Set.add boundId projections) body
+        |> Option.map (fun rewritten -> Let (boundId, Atom (Var projectionId), rewritten))
+    | Let (boundId, TypedAtom (Var projectionId, typ), body)
+        when Set.contains projectionId projections ->
+        reuseUniqueSumConstructor typeReg sourceDescriptor sourceId tracked (Set.add boundId projections) body
+        |> Option.map (fun rewritten -> Let (boundId, TypedAtom (Var projectionId, typ), rewritten))
+    | Let (boundId, (TupleGet (Var projectedSourceId, _) as cexpr), body)
+    | Let (boundId, (RecordGet (_, Var projectedSourceId, _) as cexpr), body)
+        when Set.contains projectedSourceId tracked ->
+        reuseUniqueSumConstructor typeReg sourceDescriptor sourceId tracked (Set.add boundId projections) body
+        |> Option.map (fun rewritten -> Let (boundId, cexpr, rewritten))
+    | Let (boundId, cexpr, body) ->
+        if not (cexprUsesTracked tracked cexpr) then
+            reuseUniqueSumConstructor typeReg sourceDescriptor sourceId tracked projections body
+            |> Option.map (fun rewritten -> Let (boundId, cexpr, rewritten))
+        else
+            None
+
+let rec private reuseEligibleFixedBlocks
     (typeReg: TypeRegistries.TypeRegistry)
     (expr: AExpr)
     : AExpr =
@@ -139,26 +200,35 @@ let rec private reuseEligibleRecordClones
     | Join (parameter, continuation, entry) ->
         Join (
             parameter,
-            reuseEligibleRecordClones typeReg continuation,
-            reuseEligibleRecordClones typeReg entry
+            reuseEligibleFixedBlocks typeReg continuation,
+            reuseEligibleFixedBlocks typeReg entry
         )
     | If (condition, thenBranch, elseBranch) ->
         If (
             condition,
-            reuseEligibleRecordClones typeReg thenBranch,
-            reuseEligibleRecordClones typeReg elseBranch
+            reuseEligibleFixedBlocks typeReg thenBranch,
+            reuseEligibleFixedBlocks typeReg elseBranch
         )
     | Let (boundId, cexpr, body) ->
-        let body = reuseEligibleRecordClones typeReg body
+        let body = reuseEligibleFixedBlocks typeReg body
         match cexpr with
         | RecordAlloc (descriptor, _)
         | RecordClone (descriptor, _, _)
-        | RecordReuse (descriptor, _, _)
+        | RecordReuse (_, descriptor, _, _)
             when descriptor.Fields
                  |> List.forall (snd >> hasNonObservableDestruction typeReg) ->
-            let rewritten =
-                reuseUniqueRecordClone descriptor (Set.singleton boundId) body
-                |> Option.defaultValue body
+            let candidate =
+                match descriptor.ValueType with
+                | AST.TSum _ ->
+                    reuseUniqueSumConstructor
+                        typeReg
+                        descriptor
+                        boundId
+                        (Set.singleton boundId)
+                        Set.empty
+                        body
+                | _ -> reuseUniqueRecordClone descriptor (Set.singleton boundId) body
+            let rewritten = candidate |> Option.defaultValue body
             Let (boundId, cexpr, rewritten)
         | _ -> Let (boundId, cexpr, body)
 
@@ -327,7 +397,7 @@ let private scalarReplaceFunction
     { func with
         Body =
             scalarReplaceExpr returnTypes scalarParams Map.empty func.Body
-            |> reuseEligibleRecordClones typeReg }
+            |> reuseEligibleFixedBlocks typeReg }
 
 let scalarReplaceProgram
     (typeReg: TypeRegistries.TypeRegistry)
@@ -340,5 +410,5 @@ let scalarReplaceProgram
     Program (
         functions |> List.map (scalarReplaceFunction typeReg returnTypes),
         scalarReplaceExpr returnTypes Set.empty Map.empty mainExpr
-        |> reuseEligibleRecordClones typeReg
+        |> reuseEligibleFixedBlocks typeReg
     )

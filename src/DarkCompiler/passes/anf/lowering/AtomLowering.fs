@@ -733,13 +733,29 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             match tryFindVariantByTag constructorTypeName (AST.constructorTag constructorReference.ConstructorId) variantLookup with
             | None ->
                 Error $"Unknown constructor tag: {AST.constructorTag constructorReference.ConstructorId}"
-            | Some (typeName, _, tag, _) ->
+            | Some (typeName, typeParams, tag, variantFieldTypes) ->
                 // Check if ANY variant in this type has a payload
                 // Note: We get typeName from variantLookup, not from AST (which may be empty)
                 let typeHasPayloadVariants =
                     variantLookup
                     |> Map.exists (fun _ (tName, _, _, variantFields) ->
                         tName = typeName && not (List.isEmpty variantFields))
+
+                let boxedDescriptor () =
+                    inferTypeCore
+                        sumTypeNames
+                        expr
+                        (typeEnvFromVarEnv env)
+                        typeReg
+                        variantLookup
+                        funcReg
+                        functionNames
+                        moduleRegistry
+                    |> Result.bind (function
+                        | AST.TSum (inferredName, typeArgs) when inferredName = typeName ->
+                            boxedSumDescriptor typeName typeParams typeArgs variantFieldTypes
+                        | inferredType ->
+                            Error $"Constructor '{typeName}' inferred unexpected type '{inferredType}'")
 
                 match fields with
                 | [] when not typeHasPayloadVariants ->
@@ -749,25 +765,28 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                     // No payload but type has other variants with payloads
                     // Heap-allocate as [tag, 0] for uniform 2-element structure
                     // This enables consistent structural equality comparison
-                    let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
-                    let dummyPayload = ANF.IntLiteral (ANF.Int64 0L)
-                    let (tempVar, varGen1) = ANF.freshVar varGen
-                    let tupleCExpr = ANF.TupleAlloc [tagAtom; dummyPayload]
-                    Ok (ANF.Var tempVar, [(tempVar, tupleCExpr)], varGen1)
+                    boxedDescriptor ()
+                    |> Result.map (fun descriptor ->
+                        let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
+                        let dummyPayload = ANF.IntLiteral (ANF.Int64 0L)
+                        let (tempVar, varGen1) = ANF.freshVar varGen
+                        let allocation = ANF.RecordAlloc (descriptor, [tagAtom; dummyPayload])
+                        (ANF.Var tempVar, [(tempVar, allocation)], varGen1))
                 | _ ->
                     // Variant with payload: allocate [tag, payload] on heap
                     let payloadExpr =
                         match fields with
                         | [field] -> field
                         | _ -> CheckedAST.TupleLiteral fields
-                    toAtomCore sumTypeNames inertScopes payloadExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
-                    |> Result.map (fun (payloadAtom, payloadBindings, varGen1) ->
-                        let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
-                        // Create TupleAlloc [tag, payload] and bind to fresh variable
-                        let (tempVar, varGen2) = ANF.freshVar varGen1
-                        let tupleCExpr = ANF.TupleAlloc [tagAtom; payloadAtom]
-                        let allBindings = payloadBindings @ [(tempVar, tupleCExpr)]
-                        (ANF.Var tempVar, allBindings, varGen2))
+                    boxedDescriptor ()
+                    |> Result.bind (fun descriptor ->
+                        toAtomCore sumTypeNames inertScopes payloadExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                        |> Result.map (fun (payloadAtom, payloadBindings, varGen1) ->
+                            let tagAtom = ANF.IntLiteral (ANF.Int64 (int64 tag))
+                            let (tempVar, varGen2) = ANF.freshVar varGen1
+                            let allocation = ANF.RecordAlloc (descriptor, [tagAtom; payloadAtom])
+                            let allBindings = payloadBindings @ [(tempVar, allocation)]
+                            (ANF.Var tempVar, allBindings, varGen2)))
 
     | CheckedAST.ListLiteral elements ->
         // Compile list literal as SkewList in atom position

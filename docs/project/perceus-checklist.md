@@ -89,9 +89,11 @@ representation and safety boundaries are documented in
   registry and concrete generic arguments prove every nested field safe. It
   retains replacement children, releases displaced children with their complete
   recursive release plans in field order, and then overwrites the block.
-  Streams and containers holding them fail closed; sums, recursive nominal
-  records, closures, and interprocedural reuse remain before this item is
-  complete.
+  Straight-line boxed sums now preserve instantiated type and variant payload
+  metadata through ANF and reuse the same two-word block with source-layout
+  cleanup before target-layout stores. Streams and containers holding them fail
+  closed; cross-branch and recursive sum reuse, recursive nominal records,
+  closures, and interprocedural reuse remain before this item is complete.
 - [ ] **Support managed elements and observable destruction.** Extend reuse to
   collections containing managed values and broader function bodies. Track
   destruction effects so cleanup preserves Stream finalizers and other

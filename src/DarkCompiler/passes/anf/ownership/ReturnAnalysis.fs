@@ -40,7 +40,7 @@ let internal tryOwnershipPreservingAliasSource (cexpr: CExpr) : TempId option =
     | Atom (Var sourceId) -> Some sourceId
     | TypedAtom (Var _, AST.TStream _) -> None
     | TypedAtom (Var sourceId, _) -> Some sourceId
-    | RecordReuse (_, Var sourceId, _) -> Some sourceId
+    | RecordReuse (_, _, Var sourceId, _) -> Some sourceId
     | _ -> None
 
 /// Analyze return values and track alias chains in a single pass

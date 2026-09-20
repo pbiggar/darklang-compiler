@@ -217,11 +217,12 @@ prebuilt functions and for selecting reachable standard-library functions.
 **Input**: Specialized ANF
 **Output**: ANF with eligible local aggregates scalar-replaced or uniquely reused
 
-The first escape-analysis scope scalar-replaces fixed-layout tuple and record
-allocations whose fields are all immediate scalar values, including Float64.
+The first escape-analysis scope scalar-replaces fixed-layout tuple, record, and
+boxed-sum allocations whose fields are all immediate scalar values, including
+Float64.
 An allocation is removed only when its complete lexical use set consists of
-field projections, local aliases, and representation-only record-clone
-sources. A remaining uniquely owned record can transfer its allocation to a
+field projections, local aliases, and representation-only constructor sources.
+A remaining uniquely owned record can transfer its allocation to a
 sole compatible clone when every field has structurally non-observable
 destruction: immediate values and `String`, `Blob`, or `Int` buffers, plus
 tuples, lists, dictionaries, and nonrecursive nominal records built recursively
@@ -230,17 +231,24 @@ arguments before eligibility is decided. Reference-count elaboration retains
 replacement child edges, releases displaced children with their complete
 recursive release plans in field order, and then overwrites the block.
 
+Boxed-sum lowering preserves the instantiated nominal type and each variant's
+payload layout in the same fixed-block descriptor. A uniquely local sum can
+transfer its two-word `[tag, payload]` block to a later straight-line
+constructor of the same instantiated type. Cleanup uses the source variant
+descriptor while stores and the result type use the target descriptor, so
+cross-variant payload types cannot be confused.
+
 Returns, calls, closure capture, storage, raw-pointer operations, composite or
 potentially observable managed fields without that proof, and every unmodelled
 use preserve the ordinary allocation. Streams and containers holding them are
-rejected recursively; nominal sums and closures fail closed until this pass
-receives complete destruction metadata. Missing registry entries, generic arity
-mismatches, and recursive nominal records also fail closed.
-Escaping clones retain their own allocation while eligible immediate source
-and intermediate aggregates are scalar-replaced.
+rejected recursively; nested sums and closures fail closed. Missing registry
+entries, generic arity mismatches, recursive nominal records, and sum
+candidates that cross branches or joins also remain unchanged.
+Escaping constructors retain their own allocation while eligible immediate
+source and intermediate aggregates are scalar-replaced.
 
 Running before reference-count insertion ensures eliminated aggregates never
-acquire root retain or release operations and allows reused records to be
+acquire root retain or release operations and allows reused fixed blocks to be
 treated as one ownership family. Stack allocation, scalar replacement of
 managed fields, observable-destruction reuse, and interprocedural
 representation changes are outside the current scope.

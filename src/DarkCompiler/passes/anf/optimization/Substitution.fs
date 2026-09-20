@@ -72,8 +72,8 @@ let private substCExprValue (env: Map<TempId, Atom>) (cexpr: CExpr) : CExpr =
     | RecordGet (descriptor, record, idx) -> RecordGet (descriptor, s record, idx)
     | RecordClone (descriptor, record, fields) ->
         RecordClone (descriptor, s record, substAtoms env fields)
-    | RecordReuse (descriptor, record, fields) ->
-        RecordReuse (descriptor, s record, substAtoms env fields)
+    | RecordReuse (sourceDescriptor, targetDescriptor, record, fields) ->
+        RecordReuse (sourceDescriptor, targetDescriptor, s record, substAtoms env fields)
     | StringConcat (first, second, remaining) ->
         StringConcat (s first, s second, List.map s remaining)
     | CanonicalBufferEq (kind, left, right) -> CanonicalBufferEq (kind, s left, s right)

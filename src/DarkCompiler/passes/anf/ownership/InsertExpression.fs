@@ -383,7 +383,7 @@ let rec insertRCWithAnalysis
                         |> List.rev
                     | RecordAlloc (_, fields)
                     | RecordClone (_, _, fields)
-                    | RecordReuse (_, _, fields) ->
+                    | RecordReuse (_, _, _, fields) ->
                         fields
                         |> List.fold (fun acc atom ->
                             match atom with
@@ -654,8 +654,8 @@ let rec insertRCWithAnalysis
                 AllocationIncTargets = allocationIncTargetsAfterTransfers
                 RecordReuseCleanup =
                     match cexprAfterTransfers with
-                    | RecordReuse (descriptor, Var sourceId, _) ->
-                        descriptor.Fields
+                    | RecordReuse (sourceDescriptor, _, Var sourceId, _) ->
+                        sourceDescriptor.Fields
                         |> List.mapi (fun index (_, typ) ->
                             let shape = rcShapeForType ctx typ
                             if rcShapeNeedsOwnedScopeRelease shape then
@@ -665,7 +665,7 @@ let rec insertRCWithAnalysis
                         |> List.choose id
                         |> fun fields ->
                             Some {
-                                Descriptor = descriptor
+                                Descriptor = sourceDescriptor
                                 Source = sourceId
                                 Fields = fields
                             }

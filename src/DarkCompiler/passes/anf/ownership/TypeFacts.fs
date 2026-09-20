@@ -169,6 +169,14 @@ let private tryGetMonomorphizedIntrinsicReturnType (ctx: TypeContext) (funcName:
 
 /// Infer the type of a CExpr in the given context
 let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
+    // Constructor descriptors retain the nominal sum identity for reuse, while
+    // ownership remains variant-specific as it was for tuple-backed sums. This
+    // avoids a dynamic sum release when the concrete payload layout is known.
+    let fixedBlockType (descriptor: RecordDescriptor) =
+        match descriptor.ValueType with
+        | AST.TSum _ -> descriptor.Fields |> List.map snd |> AST.TTuple
+        | valueType -> valueType
+
     match cexpr with
     | Atom atom -> inferAtomType ctx atom
     | TypedAtom (_, typ) -> Some typ  // Use the explicit type annotation
@@ -373,11 +381,11 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                     | None -> Crash.crash $"RefCountInsertion: Type not found for function {funcName} in TupleAlloc")
         Some (AST.TTuple elemTypes)
     | RecordAlloc (descriptor, _) ->
-        Some (AST.TRecord (descriptor.RuntimeTypeName, descriptor.TypeArgs))
+        Some (fixedBlockType descriptor)
     | RecordClone (descriptor, _, _) ->
-        Some (AST.TRecord (descriptor.RuntimeTypeName, descriptor.TypeArgs))
-    | RecordReuse (descriptor, _, _) ->
-        Some (AST.TRecord (descriptor.RuntimeTypeName, descriptor.TypeArgs))
+        Some (fixedBlockType descriptor)
+    | RecordReuse (_, descriptor, _, _) ->
+        Some (fixedBlockType descriptor)
     | RecordGet (descriptor, _, index) ->
         descriptor.Fields
         |> List.tryItem index

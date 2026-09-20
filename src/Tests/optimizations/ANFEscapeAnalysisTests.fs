@@ -15,7 +15,8 @@ let private pointDescriptor fieldType =
     { SourceTypeName = "Point"
       RuntimeTypeName = "Point"
       TypeArgs = []
-      Fields = ["x", fieldType; "y", fieldType] }
+      Fields = ["x", fieldType; "y", fieldType]
+      ValueType = AST.TRecord ("Point", []) }
 
 let rec private containsAggregateAllocation (expr: AExpr) : bool =
     match expr with
@@ -261,7 +262,7 @@ let testFloatRecordCloneReusesNonScalarizedSourceAllocation () : TestResult =
         Let (
             TempId 1,
             RecordAlloc _,
-            Let (TempId 2, RecordReuse (_, Var (TempId 1), _), Return (Var (TempId 2)))
+            Let (TempId 2, RecordReuse (_, _, Var (TempId 1), _), Return (Var (TempId 2)))
         )
       ) -> Ok ()
     | _ -> Error $"Expected the escaping Float clone to reuse its dead source allocation, got {body}"
@@ -478,6 +479,133 @@ let testNestedRecordsReuseOnlyWithSafeInstantiatedFields () : TestResult =
        | Some (fieldType, shouldReuse, body) ->
            Error $"Expected nested {fieldType} reuse={shouldReuse}, got {body}"
 
+let testBoxedSumConstructorReusesUniqueAllocation () : TestResult =
+    let sourceDescriptor = {
+        SourceTypeName = "ReuseBox"
+        RuntimeTypeName = "ReuseBox"
+        TypeArgs = []
+        Fields = ["$tag", AST.TInt64; "$payload", AST.TList AST.TInt64]
+        ValueType = AST.TSum ("ReuseBox", [])
+    }
+    let targetDescriptor = {
+        sourceDescriptor with
+            Fields = ["$tag", AST.TInt64; "$payload", AST.TString]
+    }
+    let body =
+        Let (
+            TempId 4,
+            Call (fid "makeOldItems", []),
+            Let (
+                TempId 0,
+                RecordAlloc (sourceDescriptor, [IntLiteral (Int64 0L); Var (TempId 4)]),
+                Let (
+                    TempId 1,
+                    TupleGet (Var (TempId 0), 1),
+                    Let (
+                        TempId 5,
+                        Call (fid "makeNewLabel", []),
+                        Let (
+                            TempId 2,
+                            RecordAlloc (targetDescriptor, [IntLiteral (Int64 1L); Var (TempId 5)]),
+                            Return (Var (TempId 2))
+                        )
+                    )
+                )
+            )
+        )
+        |> optimizeBody
+    if aggregateAllocationCount body = 1 && containsRecordReuse body then Ok ()
+    else Error $"Expected the unique boxed-sum allocation to be reused, got {body}"
+
+let testBoxedSumReuseRejectsObservablePayloads () : TestResult =
+    let optimized sourcePayloadType targetPayloadType =
+        let sourceDescriptor = {
+            SourceTypeName = "UnsafeReuseBox"
+            RuntimeTypeName = "UnsafeReuseBox"
+            TypeArgs = []
+            Fields = ["$tag", AST.TInt64; "$payload", sourcePayloadType]
+            ValueType = AST.TSum ("UnsafeReuseBox", [])
+        }
+        let targetDescriptor = {
+            sourceDescriptor with
+                Fields = ["$tag", AST.TInt64; "$payload", targetPayloadType]
+        }
+        Let (
+            TempId 4,
+            Call (fid "makeOldPayload", []),
+            Let (
+                TempId 0,
+                RecordAlloc (sourceDescriptor, [IntLiteral (Int64 0L); Var (TempId 4)]),
+                Let (
+                    TempId 1,
+                    TupleGet (Var (TempId 0), 1),
+                    Let (
+                        TempId 5,
+                        Call (fid "makeNewPayload", []),
+                        Let (
+                            TempId 2,
+                            RecordAlloc (targetDescriptor, [IntLiteral (Int64 1L); Var (TempId 5)]),
+                            Return (Var (TempId 2))
+                        )
+                    )
+                )
+            )
+        )
+        |> optimizeBody
+    let samples = [
+        (AST.TStream AST.TInt64, AST.TList AST.TInt64)
+        (AST.TList AST.TInt64, AST.TStream AST.TInt64)
+        (AST.TFunction ([], AST.TInt64), AST.TString)
+        (AST.TString, AST.TSum ("Nested", []))
+    ]
+    samples
+    |> List.tryPick (fun (sourceType, targetType) ->
+        let body = optimized sourceType targetType
+        if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then None
+        else Some (sourceType, targetType, body))
+    |> function
+       | None -> Ok ()
+       | Some (sourceType, targetType, body) ->
+           Error $"Expected boxed-sum reuse from {sourceType} to {targetType} to be rejected, got {body}"
+
+let testBoxedSumReuseRejectsSurvivingPayloadProjection () : TestResult =
+    let descriptor = {
+        SourceTypeName = "ProjectedReuseBox"
+        RuntimeTypeName = "ProjectedReuseBox"
+        TypeArgs = []
+        Fields = ["$tag", AST.TInt64; "$payload", AST.TList AST.TInt64]
+        ValueType = AST.TSum ("ProjectedReuseBox", [])
+    }
+    let body =
+        Let (
+            TempId 4,
+            Call (fid "makeOldItems", []),
+            Let (
+                TempId 0,
+                RecordAlloc (descriptor, [IntLiteral (Int64 0L); Var (TempId 4)]),
+                Let (
+                    TempId 1,
+                    TupleGet (Var (TempId 0), 1),
+                    Let (
+                        TempId 5,
+                        Call (fid "makeNewItems", []),
+                        Let (
+                            TempId 2,
+                            RecordAlloc (descriptor, [IntLiteral (Int64 0L); Var (TempId 5)]),
+                            Let (
+                                TempId 6,
+                                Call (fid "consumeOldItems", [Var (TempId 1)]),
+                                Return (Var (TempId 2))
+                            )
+                        )
+                    )
+                )
+            )
+        )
+        |> optimizeBody
+    if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then Ok ()
+    else Error $"Expected a surviving boxed-sum payload projection to reject reuse, got {body}"
+
 let testManagedLeafRecordReusesUniqueAllocation () : TestResult =
     let descriptor =
         { pointDescriptor AST.TString with
@@ -560,6 +688,9 @@ let tests =
       ("Composite managed records reuse unique allocations", testCompositeManagedRecordsReuseUniqueAllocations)
       ("Unsupported composite records reject reuse", testUnsupportedCompositeRecordsRejectReuse)
       ("Nested records reuse only with safe instantiated fields", testNestedRecordsReuseOnlyWithSafeInstantiatedFields)
+      ("Boxed sum constructor reuses unique allocation", testBoxedSumConstructorReusesUniqueAllocation)
+      ("Boxed sum reuse rejects observable payloads", testBoxedSumReuseRejectsObservablePayloads)
+      ("Boxed sum reuse rejects surviving payload projection", testBoxedSumReuseRejectsSurvivingPayloadProjection)
       ("Managed leaf record reuses unique allocation", testManagedLeafRecordReusesUniqueAllocation)
       ("Float record alias use after clone retains escaping source", testFloatRecordAliasUseAfterCloneRetainsEscapingSource)
       ("Float record branch clones scalarize shared source", testFloatRecordBranchClonesScalarizeSharedSource) ]

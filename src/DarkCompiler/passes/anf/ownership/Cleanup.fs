@@ -316,8 +316,10 @@ type LetFrame = {
     TempId: TempId
     CExpr: CExpr
     AllocationIncTargets: (TempId * AST.Type * RcShape) list
-    /// Managed child edges displaced by RecordReuse. Replacements are retained
-    /// before these fields are loaded and released; stores happen afterward.
+    /// Managed child edges displaced by RecordReuse. The source descriptor may
+    /// differ from the target for boxed-sum variant changes. Replacements are
+    /// retained before these fields are loaded and released; stores happen
+    /// afterward.
     RecordReuseCleanup: RecordReuseCleanup option
     /// The pass owns exactly one pending release for this value, and its next
     /// use transfers that ownership into a closed returned aggregate suffix.

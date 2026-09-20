@@ -232,8 +232,18 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: CheckedAST.Expr) (typeE
             |> Result.bind (fun leftType ->
                 inferTypeCore sumTypeNames right typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.bind (fun rightType ->
-                    if leftType = rightType then Ok leftType
-                    else Error $"Binary operator operands must match: left={leftType}, right={rightType}"))
+                    if leftType = AST.TRuntimeError then
+                        Ok rightType
+                    elif rightType = AST.TRuntimeError then
+                        Ok leftType
+                    elif leftType = rightType then
+                        Ok leftType
+                    else
+                        matchTypePattern leftType rightType
+                        |> Result.bind consolidateTypeBindings
+                        |> Result.map (fun subst -> applySubstToType subst leftType)
+                        |> Result.mapError (fun _ ->
+                            $"Binary operator operands must match: left={leftType}, right={rightType}")))
         match op with
         | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod | AST.Pow ->
             ensureSameType ()

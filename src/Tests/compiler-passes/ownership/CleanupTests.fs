@@ -1133,6 +1133,7 @@ let private elaborateSingleFieldRecordReuseWithTypes
         RuntimeTypeName = typeName
         TypeArgs = []
         Fields = [fieldName, fieldType; "count", AST.TInt64]
+        ValueType = AST.TRecord (typeName, [])
     }
     let recordType = AST.TRecord (descriptor.RuntimeTypeName, [])
     let makeOldName = $"makeOld{typeName}"
@@ -1176,7 +1177,7 @@ let private elaborateSingleFieldRecordReuseWithTypes
                     RecordAlloc (descriptor, [Var oldId; IntLiteral (Int64 1L)]),
                     Let (
                         resultId,
-                        RecordReuse (descriptor, Var sourceId, [Var replacementId; IntLiteral (Int64 2L)]),
+                        RecordReuse (descriptor, descriptor, Var sourceId, [Var replacementId; IntLiteral (Int64 2L)]),
                         Return (Var resultId)
                     )
                 )
@@ -1204,7 +1205,7 @@ let testRecordReuseRetainsReplacementBeforeReleasingOldChild () : TestResult =
             | Let (_, RefCountDecString (Var releasedId), rest) when releasedId = fieldId ->
                 hasOrderedReset retained true rest
             | _ -> false
-        | Let (_, RecordReuse (_, Var id, _), _) when id = sourceId ->
+        | Let (_, RecordReuse (_, _, Var id, _), _) when id = sourceId ->
             retained && oldFieldReleased
         | Let (_, _, body) ->
             hasOrderedReset retained oldFieldReleased body
@@ -1233,7 +1234,7 @@ let testCompositeRecordReuseCarriesRecursiveReleasePlan () : TestResult =
                      && Option.isSome metadata.ReleasePlan ->
                 hasOrderedReset retained true afterRelease
             | _ -> false
-        | Let (_, RecordReuse (_, Var id, _), _) when id = sourceId ->
+        | Let (_, RecordReuse (_, _, Var id, _), _) when id = sourceId ->
             retained && oldFieldReleased
         | Let (_, _, rest) ->
             hasOrderedReset retained oldFieldReleased rest
@@ -1271,7 +1272,7 @@ let testNestedRecordReuseCarriesRecursiveReleasePlan () : TestResult =
                      && Option.isSome metadata.ReleasePlan ->
                 hasOrderedReset retained true afterRelease
             | _ -> false
-        | Let (_, RecordReuse (_, Var id, _), _) when id = sourceId ->
+        | Let (_, RecordReuse (_, _, Var id, _), _) when id = sourceId ->
             retained && oldFieldReleased
         | Let (_, _, rest) ->
             hasOrderedReset retained oldFieldReleased rest
@@ -1283,3 +1284,102 @@ let testNestedRecordReuseCarriesRecursiveReleasePlan () : TestResult =
 
     if hasOrderedReset false false body then Ok ()
     else Error $"Expected nested record reuse to carry ordered recursive cleanup; got {body}"
+
+let testBoxedSumReuseReleasesSourceVariantBeforeOverwrite () : TestResult =
+    let typeName = "ReuseChoice"
+    let sumType = AST.TSum (typeName, [])
+    let oldPayloadType = AST.TList AST.TInt64
+    let newPayloadType = AST.TString
+    let sourceDescriptor = {
+        SourceTypeName = typeName
+        RuntimeTypeName = typeName
+        TypeArgs = []
+        Fields = ["$tag", AST.TInt64; "$payload", oldPayloadType]
+        ValueType = sumType
+    }
+    let targetDescriptor = {
+        sourceDescriptor with
+            Fields = ["$tag", AST.TInt64; "$payload", newPayloadType]
+    }
+    let makeOldName = "makeOldReuseChoice"
+    let fixtureName = "reuseChoice"
+    let makeOld = AST.functionIdForName makeOldName
+    let fixture = AST.functionIdForName fixtureName
+    let replacementId = TempId 0
+    let oldId = TempId 1
+    let sourceId = TempId 2
+    let resultId = TempId 3
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg =
+            Map.ofList [
+                typeName,
+                { TypeParams = []
+                  Payloads = [(0, Some oldPayloadType); (1, Some newPayloadType)] }
+            ]
+        FuncReg =
+            functionRegistry [
+                makeOldName, AST.TFunction ([], oldPayloadType)
+                fixtureName, AST.TFunction ([newPayloadType], sumType)
+            ]
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+        TypePlanning = createRcTypePlanningContext ()
+    }
+    let func : Function = {
+        Id = fixture
+        Name = fixtureName
+        TypedParams = [{ Id = replacementId; Type = newPayloadType }]
+        ReturnType = sumType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                oldId,
+                Call (makeOld, []),
+                Let (
+                    sourceId,
+                    RecordAlloc (
+                        sourceDescriptor,
+                        [IntLiteral (Int64 0L); Var oldId]
+                    ),
+                    Let (
+                        resultId,
+                        RecordReuse (
+                            sourceDescriptor,
+                            targetDescriptor,
+                            Var sourceId,
+                            [IntLiteral (Int64 1L); Var replacementId]
+                        ),
+                        Return (Var resultId)
+                    )
+                )
+            )
+    }
+    let transformed, _, _ = insertRCInFunction ctx func initialVarGen
+    let rec hasOrderedReset retained oldPayloadReleased expression =
+        match expression with
+        | Let (_, RefCountIncString (Var id), rest) when id = replacementId ->
+            hasOrderedReset true oldPayloadReleased rest
+        | Let (payloadId, RecordGet (_, Var id, 1), rest) when retained && id = sourceId ->
+            match rest with
+            | Let (_, RefCountDec (Var releasedId, _, _, Some metadata), afterRelease)
+                when releasedId = payloadId
+                     && metadata.SourceType = Some oldPayloadType
+                     && Option.isSome metadata.ReleasePlan ->
+                hasOrderedReset retained true afterRelease
+            | _ -> false
+        | Let (_, RecordReuse (_, target, Var id, _), _)
+            when id = sourceId && target = targetDescriptor ->
+            retained && oldPayloadReleased
+        | Let (_, _, rest) ->
+            hasOrderedReset retained oldPayloadReleased rest
+        | Join (_, continuation, entry)
+        | If (_, continuation, entry) ->
+            hasOrderedReset retained oldPayloadReleased continuation
+            || hasOrderedReset retained oldPayloadReleased entry
+        | Jump _ | Return _ -> false
+
+    if hasOrderedReset false false transformed.Body then Ok ()
+    else Error $"Expected boxed-sum payload release before variant overwrite; got {transformed.Body}"

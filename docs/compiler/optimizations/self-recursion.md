@@ -51,7 +51,7 @@ multiplication. This applies to every signed and unsigned 8-, 16-, 32-, and
 64-bit width, including the corresponding pure `Stdlib` operator wrappers.
 
 Linear recursion beneath immutable constructors uses destination passing.
-Tuple-backed sum constructors and records allocate their outer block before the
+Fixed-block sum constructors and records allocate their outer block before the
 backedge and fill the recursive slot through a compiler-private raw view. List
 prepending uses a reverse accumulator and the existing `__reverseInto` kernel,
 so it remains linear-time without depending on the skew-list representation.

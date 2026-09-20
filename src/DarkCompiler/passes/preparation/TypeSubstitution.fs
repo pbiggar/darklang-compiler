@@ -79,7 +79,31 @@ let internal recordDescriptor
         RuntimeTypeName = typeName
         TypeArgs = reference.TypeArgs
         Fields = concreteFields
+        ValueType = AST.TRecord (typeName, reference.TypeArgs)
     }
+
+let internal boxedSumDescriptor
+    (typeName: string)
+    (typeParams: string list)
+    (typeArgs: AST.Type list)
+    (fieldTypes: AST.Type list)
+    : Result<ANF.RecordDescriptor, string> =
+    if List.length typeParams <> List.length typeArgs then
+        Error $"Boxed sum '{typeName}' has inconsistent type arguments"
+    else
+        let subst = List.zip typeParams typeArgs |> Map.ofList
+        let payloadType =
+            match fieldTypes |> List.map (applySubstToType subst) with
+            | [] -> AST.TInt64
+            | [fieldType] -> fieldType
+            | concreteFields -> AST.TTuple concreteFields
+        Ok {
+            SourceTypeName = typeName
+            RuntimeTypeName = typeName
+            TypeArgs = typeArgs
+            Fields = ["$tag", AST.TInt64; "$payload", payloadType]
+            ValueType = AST.TSum (typeName, typeArgs)
+        }
 
 /// Match a type pattern (may contain type variables) against a concrete type.
 let rec matchTypePattern (pattern: AST.Type) (actual: AST.Type) : Result<(string * AST.Type) list, string> =
