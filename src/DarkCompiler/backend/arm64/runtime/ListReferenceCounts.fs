@@ -192,7 +192,7 @@ let private generateListRefCountDecHelperWith
             ARM64Symbolic.STP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
             ARM64Symbolic.STR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
             ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X8)
-            ARM64Symbolic.BL (recursiveSumRefCountDecHelperLabel sourceType)
+            ARM64Symbolic.BL (recursiveNominalRefCountDecHelperLabel sourceType)
             ARM64Symbolic.LDR (ARM64Symbolic.X30, ARM64Symbolic.SP, 80s)
             ARM64Symbolic.LDP (ARM64Symbolic.X8, ARM64Symbolic.X9, ARM64Symbolic.SP, 64s)
             ARM64Symbolic.LDP (ARM64Symbolic.X6, ARM64Symbolic.X7, ARM64Symbolic.SP, 48s)

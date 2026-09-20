@@ -894,11 +894,11 @@ let private generatePreparedARM64WithOptionsAndCache
                 if needsStreamRcDecHelper then generateStreamRefCountDecHelper ctx else []
             recordPhase "ARM64 Helper Closure Stream Generation" closureHelperTimer
             let recursiveHelperTimer = startPhase ()
-            let recursiveSumRcHelpers =
+            let recursiveNominalRcHelpers =
                 programMetadata.Facts.RecursiveReleaseTypes
                 |> Set.toList
-                |> List.collect (generateRecursiveSumRefCountDecHelper ctx)
-            recordPhase "ARM64 Helper Recursive Sum Generation" recursiveHelperTimer
+                |> List.collect (generateRecursiveNominalRefCountDecHelper ctx)
+            recordPhase "ARM64 Helper Recursive Nominal Generation" recursiveHelperTimer
             let cliHelperTimer = startPhase ()
             let cliArgvHelpers =
                 programMetadata.Facts.CliArgvHelperLabels
@@ -922,7 +922,7 @@ let private generatePreparedARM64WithOptionsAndCache
                 @ dictRcHelpers
                 @ closureRcHelpers
                 @ streamRcHelpers
-                @ recursiveSumRcHelpers
+                @ recursiveNominalRcHelpers
                 @ cliHelpers
                 @ runtimeErrorHelper
             let peepholeTimer = startPhase ()

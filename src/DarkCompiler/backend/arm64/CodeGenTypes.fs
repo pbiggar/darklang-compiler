@@ -113,8 +113,8 @@ let internal callerOwnsSinglePayloadSum (functionName: string) : bool =
     functionName.StartsWith("Darklang.Stdlib.Dict.")
     || not (functionName.StartsWith("Darklang.Stdlib."))
 
-let internal recursiveSumRefCountDecHelperLabel (sourceType: AST.Type) : string =
-    $"__dark_recursive_sum_rc_dec_{ReleasePlanFingerprint.rcSourceTypeFingerprint sourceType}"
+let internal recursiveNominalRefCountDecHelperLabel (sourceType: AST.Type) : string =
+    $"__dark_recursive_nominal_rc_dec_{ReleasePlanFingerprint.rcSourceTypeFingerprint sourceType}"
 
 let internal plannedListDecHelperLabelForFingerprint (fingerprint: string) : string =
     $"{plannedListRefCountDecHelperLabelPrefix}{fingerprint}"
@@ -206,7 +206,7 @@ let internal slotInitRootRetainTarget
                 match valueType with
                 | AST.TSum _ -> Some (LIR.SlotInitGenericRootRetain payloadSize)
                 | _ -> None
-            | MemoryModel.RecursiveSumRef _ ->
+            | MemoryModel.RecursiveNominalRef _ ->
                 Some (LIR.SlotInitGenericRootRetain 16)
             | MemoryModel.Immediate
             | MemoryModel.StaticString

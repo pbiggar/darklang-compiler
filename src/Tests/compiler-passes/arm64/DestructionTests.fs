@@ -488,7 +488,7 @@ let testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases () : TestResult =
         else
             Error "Generic mixed boxed-sum payload release did not branch past remaining variant cases after a match"
 
-/// Recursive-sum release dispatch shape is not observable in an executable
+/// Recursive-nominal release dispatch shape is not observable in an executable
 /// E2E test. A variant without managed fields must not consume a tag case in
 /// the generated helper, while the recursive variant must remain dispatched.
 let testRecursiveSumReleaseSkipsVariantWithoutManagedFields () : TestResult =
@@ -532,7 +532,7 @@ let testRecursiveSumReleaseSkipsVariantWithoutManagedFields () : TestResult =
         let rec findHelperBody remaining =
             match remaining with
             | ARM64Symbolic.Label helperLabel :: rest
-                when helperLabel.StartsWith("__dark_recursive_sum_rc_dec_") ->
+                when helperLabel.StartsWith("__dark_recursive_nominal_rc_dec_") ->
                 Some (rest |> List.takeWhile (fun instr -> instr <> ARM64Symbolic.RET))
             | _ :: rest ->
                 findHelperBody rest
@@ -541,7 +541,7 @@ let testRecursiveSumReleaseSkipsVariantWithoutManagedFields () : TestResult =
 
         match findHelperBody instrs with
         | None ->
-            Error "Recursive-sum release helper was not generated"
+            Error "Recursive-nominal release helper was not generated"
         | Some helperBody ->
             let dispatchesLeaf =
                 helperBody
@@ -556,9 +556,9 @@ let testRecursiveSumReleaseSkipsVariantWithoutManagedFields () : TestResult =
                 |> List.contains (ARM64Symbolic.CMP_imm (ARM64.X1, 1us))
 
             if dispatchesLeaf then
-                Error "Recursive-sum release helper dispatched a variant without managed fields"
+                Error "Recursive-nominal release helper dispatched a variant without managed fields"
             else if not dispatchesNode then
-                Error "Recursive-sum release helper omitted the recursive variant"
+                Error "Recursive-nominal release helper omitted the recursive variant"
             else
                 Ok ()
 

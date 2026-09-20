@@ -1383,3 +1383,43 @@ let testBoxedSumReuseReleasesSourceVariantBeforeOverwrite () : TestResult =
 
     if hasOrderedReset false false transformed.Body then Ok ()
     else Error $"Expected boxed-sum payload release before variant overwrite; got {transformed.Body}"
+
+let testRecursiveRecordReuseCarriesTypedBackEdgeReleasePlan () : TestResult =
+    let nodeName = "RecursiveReuseNode"
+    let nodeType = AST.TRecord (nodeName, [])
+    let childrenType = AST.TList nodeType
+    let nodeInfo : TypeRegistries.RecordTypeInfo = {
+        TypeParams = []
+        Fields = ["value", AST.TInt64; "children", childrenType]
+    }
+    let body, replacementId, sourceId =
+        elaborateSingleFieldRecordReuseWithTypes
+            [(nodeName, nodeInfo)]
+            "RecursiveReuseContainer"
+            "children"
+            childrenType
+    let rec hasOrderedReset retained oldFieldReleased expression =
+        match expression with
+        | Let (_, RefCountInc (Var id, _, _, _), rest) when id = replacementId ->
+            hasOrderedReset true oldFieldReleased rest
+        | Let (fieldId, RecordGet (_, Var id, 0), rest) when retained && id = sourceId ->
+            match rest with
+            | Let (_, RefCountDec (Var releasedId, _, _, Some metadata), afterRelease)
+                when releasedId = fieldId
+                     && metadata.SourceType = Some childrenType
+                     && metadata.ReleasePlan
+                        |> Option.exists (MemoryPlanning.recursiveReleaseTypes >> Set.contains nodeType) ->
+                hasOrderedReset retained true afterRelease
+            | _ -> false
+        | Let (_, RecordReuse (_, _, Var id, _), _) when id = sourceId ->
+            retained && oldFieldReleased
+        | Let (_, _, rest) ->
+            hasOrderedReset retained oldFieldReleased rest
+        | Join (_, continuation, entry)
+        | If (_, continuation, entry) ->
+            hasOrderedReset retained oldFieldReleased continuation
+            || hasOrderedReset retained oldFieldReleased entry
+        | Jump _ | Return _ -> false
+
+    if hasOrderedReset false false body then Ok ()
+    else Error $"Expected recursive record reuse to carry a typed back-edge cleanup; got {body}"

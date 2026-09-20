@@ -29,7 +29,7 @@ type RcShape =
     | FixedBlock of payloadSize:int * fieldShapes:RcShape list
     | StreamRoot
     | BoxedSum of payloadSize:int * fieldShapes:(int * RcShape) list * variants:RcBoxedSumVariantShape list
-    | RecursiveSumRef of sourceType:AST.Type
+    | RecursiveNominalRef of sourceType:AST.Type
     | TaggedListShape of elementShape:RcShape
     | DictRoot of keyShape:RcShape * valueShape:RcShape
     | DynamicString
