@@ -5,6 +5,21 @@ Read [`docs/index.md`](docs/index.md) first. It owns navigation. Follow
 contract; this file contains the additional rules specific to agents changing
 this repository and takes precedence where it is stricter.
 
+## Primary checkout boundary
+
+- `/Users/paulbiggar/projects/c4d-for-dcb` is the primary coordination checkout.
+  Coding and task agents must treat it as read-only: do not edit or generate
+  files, build, test, format, commit, switch branches, or run any other command
+  that mutates its working tree. Read-only discovery and creating a separate
+  task worktree from it are allowed.
+- At the start of every task, check the current worktree root with
+  `git rev-parse --show-toplevel`. If it is the primary coordination checkout,
+  create a dedicated task branch and worktree from the current local integration
+  ref, then change into that worktree before the first mutating command. A task
+  started from the primary checkout, an interactive coding-agent session, and
+  repository utility work are not exceptions. If a separate worktree cannot be
+  created, stop and ask for direction instead of working in the primary checkout.
+
 ## F# conventions
 
 - Use functional constructs: no mutation, exceptions, `exit`, or throwing
@@ -82,15 +97,13 @@ this repository and takes precedence where it is stricter.
 
 ## Git workflow
 
-- By default, create a dedicated worktree once when beginning a new task and
+- Create a dedicated worktree once when beginning a new task and
   base its branch on the current local value of the configured integration ref
   (`origin/main` by default) before making changes. Do not fetch or otherwise
   contact the remote first; another process owns integration-ref updates.
-  Perform all task work there, never in the primary checkout. For repository
-  utility work, or work performed through an interactive process with a coding
-  agent, keep all related work in the current worktree instead. Reuse that
-  worktree across turns and follow-up tasks; do not create or move to another
-  worktree during that process.
+  Perform all task work there, never in the primary checkout. Reuse that
+  task worktree across turns and follow-up tasks; do not create or move to
+  another worktree during that process.
   After work begins, do not pull, merge, rebase, reset, or otherwise incorporate
   later integration-ref changes into that task worktree merely because the
   integration ref advanced or a new agent turn began. Once enqueued, keep the
