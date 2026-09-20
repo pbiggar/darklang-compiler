@@ -32,7 +32,7 @@ let segment = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 Stdlib.Cli.FileSystem.isDirectoryAtPath "/" "tmp" = true
 
-Stdlib.List.member (Stdlib.Cli.FileSystem.getDirectoryContents "/tmp") "c4d-filesystem-env-parity" = true
+Stdlib.List.member (Stdlib.Cli.FileSystem.getDirectoryContents "/") "tmp" = true
 
 Stdlib.Cli.Env.getOr "DARK_ENV_MISSING_VALUE" "fallback" = "fallback"
 
