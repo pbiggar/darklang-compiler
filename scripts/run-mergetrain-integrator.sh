@@ -3,7 +3,8 @@
 
 set -euo pipefail
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+integrator_source_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+repo_root="$integrator_source_root"
 interval_seconds=15
 attempt_dir="/tmp/dark-compiler-mergetrain-codex-attempts"
 run_once=false
@@ -13,10 +14,10 @@ usage() {
   cat <<EOF
 Usage: $0 [OPTIONS]
 
-Continuously validate and deploy auto-approved merge-train jobs. When a job is
-blocked by a merge conflict, local non-fast-forward update, or an unrecorded
-benchmark improvement, invoke Codex once for that exact job revision, verify
-its committed repair, and retry the job.
+Continuously validate and deploy auto-approved merge-train jobs. Recover
+transient gate failures, dismiss patch-equivalent work, and ask Codex to repair
+semantic conflicts or reproducible gates in a fresh worktree. Independently
+verify each committed repair before replacing the blocked queue row.
 
 Options:
   --repo PATH          Repository whose merge-train queue is processed.
@@ -188,214 +189,61 @@ print_log_excerpt() {
   fi
 }
 
-last_message_summary() {
-  local message_file="$1"
-
-  python3 - "$message_file" <<'PY'
-import pathlib
-import sys
-
-text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
-summary = " ".join(text.split())
-print(summary[:500] + ("…" if len(summary) > 500 else ""))
-PY
-}
-
-failed_gate_name() {
+attention_job_ids() {
   python3 -c '
 import json
-import re
 import sys
 
 payload = json.load(sys.stdin)
-for event in reversed(payload.get("events", [])):
-    match = re.fullmatch(r"Failed gate [0-9]+/[0-9]+: (.+)", str(event.get("message", "")))
-    if event.get("state") == "failure" and match:
-        print(match.group(1))
-        break
+seen = set()
+for job in payload.get("attention_jobs", []):
+    job_id = job.get("id")
+    if isinstance(job_id, int) and job_id not in seen:
+        seen.add(job_id)
+        print(job_id)
+target = payload.get("next_action", {}).get("target_job_id")
+if isinstance(target, int) and target not in seen:
+    print(target)
 '
 }
 
-repair_job() {
+repair_attention_jobs() {
   local snapshot="$1"
   local daemon_output="$2"
-  local job_id details category reason worktree branch old_head attempt_marker output_file
-  local current_branch new_head dirty git_common_dir codex_log daemon_log inspect_log
-  local summary retry_log failed_gate repair_instructions failure_label
-
-  job_id="$(json_value next_action.target_job_id <<<"$snapshot")"
-  if [[ -z "$job_id" ]]; then
-    daemon_log="$attempt_dir/unknown-job-$(date -u +%Y%m%dT%H%M%SZ)-$$.daemon.log"
-    mv "$daemon_output" "$daemon_log"
-    log_error "Mergetrain requested conflict repair without a target job"
+  local job_id failed=false processed=false daemon_log
+  daemon_log="$attempt_dir/attention-$(date -u +%Y%m%dT%H%M%SZ)-$$.daemon.log"
+  mv "$daemon_output" "$daemon_log"
+  while read -r job_id; do
+    [[ -n "$job_id" ]] || continue
+    processed=true
+    if [[ " $failed_recovery_job_ids " == *" $job_id "* ]]; then
+      continue
+    fi
+    if ! python3 "$integrator_source_root/scripts/mergetrain_recovery.py" \
+      --repo "$repo_root" \
+      --attempt-dir "$attempt_dir" \
+      --job-id "$job_id"; then
+      failed=true
+      failed_recovery_job_ids="$failed_recovery_job_ids $job_id"
+    fi
+  done < <(attention_job_ids <<<"$snapshot")
+  if [[ "$processed" == false ]]; then
+    log_error "Mergetrain requested recovery without identifying an attention job"
     log_info "Daemon log: $daemon_log"
     return 1
   fi
-
-  inspect_log="$attempt_dir/$job_id.inspect.log"
-  if ! details="$(
-    mergetrain --repo "$repo_root" inspect "$job_id" --json 2>"$inspect_log"
-  )"; then
-    daemon_log="$attempt_dir/$job_id-unknown.daemon.log"
-    mv "$daemon_output" "$daemon_log"
-    log_job log_error "$job_id" "Mergetrain inspection failed"
-    print_log_excerpt "$inspect_log" 8 "$job_id"
-    log_job log_info "$job_id" "Full inspection log: $inspect_log"
-    log_job log_info "$job_id" "Daemon log: $daemon_log"
+  if [[ "$failed" == true ]]; then
+    log_warn "One or more merge-train problems remain; other jobs will continue"
+    log_info "Daemon log: $daemon_log"
     return 1
   fi
-  rm -f "$inspect_log"
-  category="$(json_value outcome.failure_category <<<"$details")"
-  reason="$(json_value outcome.message <<<"$details")"
-  old_head="$(json_value job.head_sha <<<"$details")"
-  daemon_log="$attempt_dir/$job_id-${old_head:-unknown}.daemon.log"
-  mv "$daemon_output" "$daemon_log"
-  branch="$(json_value job.branch <<<"$details")"
-  failure_label="${category//_/ }"
-  case "$category" in
-    merge_conflict|semantic_conflict)
-      repair_instructions="$(cat <<'EOF'
-Resolve the rebase without discarding either source change.
-
-Special generated-benchmark rule: if the rebase conflicts in
-benchmarks/RESULTS.md, do not hand-merge it, choose ours/theirs, or edit its
-conflict markers. First resolve the source changes, then run
-./benchmarks/run_benchmarks.sh full in recording mode from the rebased tree.
-That run must prove an aggregate improvement, advance the canonical Dark
-snapshot, and regenerate benchmarks/RESULTS.md; stage the regenerated benchmark
-files. If it fails or does not replace the conflicted RESULTS.md, abort the
-rebase so failed recording artifacts are not committed, and explain that the
-required improvement was not established.
-EOF
-)"
-      ;;
-    gate_failed)
-      failed_gate="$(failed_gate_name <<<"$details")"
-      if [[ "$failed_gate" != benchmarks ]]; then
-        log_error "Job #$job_id needs operator attention ($category); refusing an automatic repair"
-        log_info "Daemon log: $daemon_log"
-        return 1
-      fi
-      failure_label="benchmark gate failure"
-      repair_instructions="$(cat <<'EOF'
-The read-only integration benchmark gate reran the complete suite and found
-that the canonical benchmark files do not describe this candidate. Run
-./benchmarks/run_benchmarks.sh full in recording mode from the rebased tree.
-The recording command is the decision boundary: it must compare with the
-snapshot from the integration parent and must not advance it on a regression.
-
-If the run improves the aggregate result, commit the regenerated benchmark files,
-including benchmarks/RESULTS.md. If the recording run reports a regression,
-produces no tracked benchmark change, or cannot complete, do not
-commit or retry it; restore the branch to its original clean commit and explain
-the blocker. Never manufacture, hand-edit, or select an older generated result.
-EOF
-)"
-      ;;
-    push_rejected)
-      if [[ "$reason" != *non-fast-forward* ]]; then
-        log_job log_error "$job_id" "Non-recoverable push rejection: $reason"
-        log_job log_info "$job_id" "Daemon log: $daemon_log"
-        return 1
-      fi
-      repair_instructions="$(cat <<'EOF'
-Rebase the task branch onto the current configured integration ref, preserving
-both sides of the change, then run the repository's required verification and
-commit the repaired result.
-EOF
-)"
-      ;;
-    *)
-      log_job log_error "$job_id" "Needs operator attention ($category); refusing an automatic repair"
-      log_job log_info "$job_id" "Daemon log: $daemon_log"
-      return 1
-      ;;
-  esac
-  log_job log_run "$job_id" "Repairing $branch after $failure_label"
-
-  worktree="$(json_value job.worktree_path <<<"$details")"
-  if [[ -z "$worktree" || -z "$branch" || -z "$old_head" || ! -d "$worktree" ]]; then
-    log_job log_error "$job_id" "Does not identify a usable owning worktree"
-    log_job log_info "$job_id" "Daemon log: $daemon_log"
-    return 1
-  fi
-
-  attempt_marker="$attempt_dir/$job_id-$old_head.attempted"
-  output_file="$attempt_dir/$job_id-$old_head.last-message.txt"
-  codex_log="$attempt_dir/$job_id-$old_head.codex.log"
-  if [[ -e "$attempt_marker" ]]; then
-    log_job log_error "$job_id" "Codex already attempted revision $old_head; operator review required"
-    log_job log_info "$job_id" "Daemon log: $daemon_log"
-    return 1
-  fi
-  touch "$attempt_marker"
-
-  git_common_dir="$(git -C "$worktree" rev-parse --path-format=absolute --git-common-dir)"
-  log_job log_run "$job_id" "Starting Codex repair; full output: $codex_log"
-
-  if ! printf '%s\n' "$details" |
-    codex exec \
-      -C "$worktree" \
-      --sandbox workspace-write \
-      --add-dir "$git_common_dir" \
-      --ephemeral \
-      --output-last-message "$output_file" \
-      "Repair mergetrain job #$job_id on branch $branch after a $category failure.
-
-Read and follow AGENTS.md and the repository documentation. The mergetrain
-inspection JSON is provided on stdin. Fetch the configured integration ref,
-rebase this task branch onto it, understand both sides of any conflict, and
-follow the repair instructions below. Work only in this job's owning worktree.
-Run all relevant verification and commit the repair.
-
-$repair_instructions
-
-For this recovery run, do not invoke ./land. Do not push, deploy, enqueue,
-retry, reconcile, cancel, dismiss, or modify mergetrain queue state; the
-integrator owns the retry. If a confident repair is not possible, leave the
-branch unchanged and explain the blocker." >"$codex_log" 2>&1; then
-    log_job log_error "$job_id" "Codex repair failed ($category)"
-    if [[ -s "$output_file" ]]; then
-      summary="$(last_message_summary "$output_file")"
-      if [[ -n "$summary" ]]; then
-        log_job log_warn "$job_id" "Codex summary: $summary"
-      fi
-      log_job log_info "$job_id" "Final message: $output_file"
-    else
-      print_log_excerpt "$codex_log" 8 "$job_id"
-    fi
-    log_job log_info "$job_id" "Full execution log: $codex_log"
-    log_job log_info "$job_id" "Daemon log: $daemon_log"
-    return 1
-  fi
-
-  log_job log_run "$job_id" "Codex finished; verifying the committed repair"
-  current_branch="$(git -C "$worktree" branch --show-current)"
-  new_head="$(git -C "$worktree" rev-parse HEAD)"
-  dirty="$(git -C "$worktree" status --porcelain)"
-  if [[ "$current_branch" != "$branch" || "$new_head" == "$old_head" || -n "$dirty" ]]; then
-    log_job log_error "$job_id" "Codex did not leave a clean, newly committed $branch"
-    log_job log_info "$job_id" "Final message: $output_file"
-    log_job log_info "$job_id" "Full execution log: $codex_log"
-    log_job log_info "$job_id" "Daemon log: $daemon_log"
-    return 1
-  fi
-
-  retry_log="$attempt_dir/$job_id-$new_head.retry.log"
-  log_job log_run "$job_id" "Retrying at ${new_head:0:10}"
-  if ! mergetrain --repo "$repo_root" retry "$job_id" --json >"$retry_log" 2>&1; then
-    log_job log_error "$job_id" "Mergetrain retry failed"
-    print_log_excerpt "$retry_log" 8 "$job_id"
-    log_job log_info "$job_id" "Full retry log: $retry_log"
-    return 1
-  fi
-  rm -f "$retry_log"
-  log_job log_ok "$job_id" "Retried after Codex committed a repair"
+  rm -f "$daemon_log"
 }
 
 last_queue_signature=""
 last_progress_event_id=0
 active_progress_job_ids=""
+failed_recovery_job_ids=""
 
 report_queue_status() {
   local snapshot="$1"
@@ -598,9 +446,7 @@ while true; do
 
   case "$next_action" in
     fix_blocked_job)
-      if ! repair_job "$snapshot" "$daemon_output"; then
-        log_warn "Mergetrain problem remains; monitoring will continue"
-      fi
+      repair_attention_jobs "$snapshot" "$daemon_output" || true
       ;;
     enqueue_clean_branch|gc_available|run_daemon_when_approved|validate_queued_jobs)
       rm -f "$daemon_output"

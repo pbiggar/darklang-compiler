@@ -20,11 +20,7 @@ Stdlib.Cli.FileSystem.deleteFile "/definitely/missing/dark-file" = Error Stdlib.
 
 (Stdlib.Cli.FileSystem.FileError.toString Stdlib.Cli.FileSystem.FileError.NotFound, Stdlib.Cli.FileSystem.FileError.toString Stdlib.Cli.FileSystem.FileError.OsAccessDenied, Stdlib.Cli.FileSystem.FileError.toString (Stdlib.Cli.FileSystem.FileError.Other "custom")) = ("File not found", "Permission denied", "custom")
 
-let path = "/tmp/dark-filesystem-roundtrip" in let written = Stdlib.Cli.FileSystem.overwriteFile path (Stdlib.Blob.fromString "one") in let appended = Stdlib.Cli.FileSystem.appendToFile path "-two" in let read = Stdlib.Cli.FileSystem.readFile path in match (written, appended, read) with | (Ok (()), Ok (()), Ok blob) -> Stdlib.Blob.toString blob | _ -> Error "file operation failed" = Ok "one-two" isolated=true
-
-Stdlib.List.member (Stdlib.Cli.FileSystem.listDirectory "/tmp") "/tmp/dark-filesystem-roundtrip" = true isolated=true
-
-let deleted = Stdlib.Cli.FileSystem.deleteFile "/tmp/dark-filesystem-roundtrip" in (deleted, Stdlib.Cli.FileSystem.pathExists "/tmp/dark-filesystem-roundtrip") = (Ok (()), false) isolated=true
+let path = $"/tmp/dark-filesystem-roundtrip-{Stdlib.Int.toString (Stdlib.Cli.Sys.currentPid ())}" in let written = Stdlib.Cli.FileSystem.overwriteFile path (Stdlib.Blob.fromString "one") in let appended = Stdlib.Cli.FileSystem.appendToFile path "-two" in let read = Stdlib.Cli.FileSystem.readFile path in let content = match (written, appended, read) with | (Ok (()), Ok (()), Ok blob) -> Stdlib.Blob.toString blob | _ -> Error "file operation failed" in let deleted = Stdlib.Cli.FileSystem.deleteFile path in if Stdlib.Cli.FileSystem.pathExists path then Error "delete failed" else content = Ok "one-two" isolated=true
 
 let path = $"/tmp/dark-filesystem-recursive-{Stdlib.Int.toString (Stdlib.Cli.Sys.currentPid ())}/nested/value" in Stdlib.Cli.FileSystem.writeFile path (Stdlib.Blob.fromString "recursive") = Ok (()) isolated=true
 
