@@ -187,7 +187,7 @@ if [ -z "$PREBUILT_DIR" ]; then
         pretty_fail "Dark compiler build failed"
         exit 1
     fi
-    COMPILER_DLL="$PROJECT_ROOT/bin/DarkCompiler/Debug/net10.0/DarkCompiler.dll"
+    COMPILER_DLL="$PROJECT_ROOT/bin/DarkCompiler/Debug/net11.0/DarkCompiler.dll"
     if [ ! -f "$COMPILER_DLL" ]; then
         pretty_fail "Dark compiler output is missing: $COMPILER_DLL"
         exit 1

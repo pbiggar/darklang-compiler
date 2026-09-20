@@ -26,8 +26,8 @@ class X86_64BuildTests(unittest.TestCase):
     def test_benchmark_sources_use_the_public_parser_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            (root / "bin/DarkCompiler/Debug/net10.0").mkdir(parents=True)
-            (root / "bin/DarkCompiler/Debug/net10.0/DarkCompiler.dll").touch()
+            (root / "bin/DarkCompiler/Debug/net11.0").mkdir(parents=True)
+            (root / "bin/DarkCompiler/Debug/net11.0/DarkCompiler.dll").touch()
             (root / "benchmarks/problems/example/dark").mkdir(parents=True)
             (root / "benchmarks/problems/example/dark/main.dark").touch()
 

@@ -61,10 +61,10 @@ ARG HERDR_VERSION
 
 USER root
 
-# Keep .NET 10 as the default host for existing worktrees. New worktrees use
-# global.json to discover the isolated .NET 11 SDK first.
+# Install both SDK/runtime generations in the default host. This makes .NET 11
+# the default while preserving .NET 10 for existing worktrees and binaries.
 COPY --from=dotnet10 /usr/share/dotnet /usr/share/dotnet
-COPY --from=dotnet11 /usr/share/dotnet /opt/dotnet11
+COPY --from=dotnet11 /usr/share/dotnet /usr/share/dotnet
 COPY --from=node /usr/local /usr/local
 COPY --from=claude --chown=agent:agent /home/agent/.local/bin/claude /home/agent/.local/bin/claude
 COPY --from=claude --chown=agent:agent /home/agent/.local/share/claude /home/agent/.local/share/claude

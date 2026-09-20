@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Path to the compiled DLL
-COMPILER_DLL="$SCRIPT_DIR/bin/DarkCompiler/Debug/net10.0/DarkCompiler.dll"
+COMPILER_DLL="$SCRIPT_DIR/bin/DarkCompiler/Debug/net11.0/DarkCompiler.dll"
 
 # Check if the compiler exists, if not, build it
 if [ ! -f "$COMPILER_DLL" ]; then
@@ -16,4 +16,4 @@ if [ ! -f "$COMPILER_DLL" ]; then
 fi
 
 # Run the compiler with all arguments passed through
-exec dotnet "$COMPILER_DLL" "$@"
+exec "$SCRIPT_DIR/scripts/dotnet-host" "$COMPILER_DLL" "$@"
