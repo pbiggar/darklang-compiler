@@ -52,8 +52,8 @@ def human_age(timestamp: str | datetime, *, now: datetime | None = None) -> str:
     )
     for duration, suffix in units:
         if seconds >= duration:
-            return f"{seconds // duration}{suffix} ago"
-    return f"{seconds}s ago"
+            return f"{seconds // duration}{suffix}"
+    return f"{seconds}s"
 
 
 def history_line(
@@ -92,6 +92,42 @@ def active_jobs(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [by_id[job_id] for job_id in sorted(by_id)]
 
 
+def running_train_step(repo: Path, jobs: list[dict[str, Any]]) -> str | None:
+    running = next((job for job in jobs if job.get("state") == "running"), None)
+    if running is None:
+        return None
+    completed = subprocess.run(
+        [
+            "mergetrain",
+            "--repo",
+            str(repo),
+            "inspect",
+            str(running["id"]),
+            "--json",
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return None
+    try:
+        inspection = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(inspection, dict) or inspection.get("contract_version") != 4:
+        return None
+    progress = inspection.get("progress")
+    if not isinstance(progress, dict):
+        return None
+    message = progress.get("message")
+    if isinstance(message, str) and message:
+        return message
+    phase = progress.get("phase")
+    return str(phase).replace("_", " ") if phase else None
+
+
 def is_conflict_reason(reason: object) -> bool:
     return isinstance(reason, str) and "conflict" in reason.casefold()
 
@@ -102,15 +138,6 @@ def displayed_benchmark_ratio(contents: str) -> str | None:
         if line.startswith(header_prefix) and ") |" in line:
             return line[len(header_prefix) :].split(") |", 1)[0]
     return None
-
-
-def benchmark_ratio(repo: Path) -> str | None:
-    results_path = repo / "benchmarks" / "RESULTS.md"
-    return (
-        displayed_benchmark_ratio(results_path.read_text(encoding="utf-8"))
-        if results_path.is_file()
-        else None
-    )
 
 
 def benchmark_rows(contents: str) -> dict[str, tuple[int, int]]:
@@ -159,6 +186,8 @@ def percentage(value: float | None) -> str:
         return "n/a"
     if value == 0:
         return "0%"
+    if abs(value) < 0.01:
+        return "~0%"
     return f"{value:+.2g}%"
 
 
@@ -545,8 +574,12 @@ def render(
         for warning in payload.get("warnings", [])
     )
 
-    lines.append(styled("in train:", BOLD, color))
     jobs = active_jobs(payload)
+    step = running_train_step(repo, jobs)
+    train_header = styled("in train:", BOLD, color)
+    if step:
+        train_header += f" {styled(step, CYAN, color)}"
+    lines.append(train_header)
     has_conflict = False
     if jobs:
         for job in jobs:
@@ -578,20 +611,20 @@ def render(
     )
 
     changes = benchmark_changes(repo)
-    ratio = benchmark_ratio(repo)
     lines.append("")
-    lines.append(f"benchmark ratio: {styled(ratio or 'unavailable', CYAN, color)}")
     lines.append(styled("recent benchmark results:", BOLD, color))
     ratio_width = max((len(change.ratio) for change in changes), default=0)
     changes_text = [percentage(change.change) for change in changes]
     change_width = max((len(value) + 2 for value in changes_text), default=0)
+    ages = [human_age(change.date, now=now) for change in changes]
+    age_width = max(map(len, ages), default=0)
     lines.extend(
         [
-            f"[{index if index < 10 else 0}] "
+            f"{index}. "
             + styled(change.short_commit, CYAN, color)
             + " "
             + styled(
-                f"{human_age(change.date, now=now):<8}",
+                f"{age:<{age_width}}",
                 DIM,
                 color,
             )
@@ -605,7 +638,9 @@ def render(
             )
             + " "
             + change.subject
-            for index, change in enumerate(changes, start=1)
+            for index, (change, age) in enumerate(
+                zip(changes, ages, strict=True), start=1
+            )
         ]
         or ["(none)"]
     )

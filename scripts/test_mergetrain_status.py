@@ -17,6 +17,7 @@ from scripts.render_mergetrain_status import (
     benchmark_detail,
     benchmark_diff,
     human_age,
+    percentage,
     render,
 )
 
@@ -25,10 +26,15 @@ class MergetrainStatusTests(unittest.TestCase):
     def test_human_age_uses_compact_units(self) -> None:
         now = datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc)
 
-        self.assertEqual(human_age(now - timedelta(seconds=12), now=now), "12s ago")
-        self.assertEqual(human_age(now - timedelta(minutes=5), now=now), "5m ago")
-        self.assertEqual(human_age(now - timedelta(hours=2), now=now), "2h ago")
-        self.assertEqual(human_age(now - timedelta(days=3), now=now), "3d ago")
+        self.assertEqual(human_age(now - timedelta(seconds=12), now=now), "12s")
+        self.assertEqual(human_age(now - timedelta(minutes=5), now=now), "5m")
+        self.assertEqual(human_age(now - timedelta(hours=2), now=now), "2h")
+        self.assertEqual(human_age(now - timedelta(days=3), now=now), "3d")
+
+    def test_tiny_benchmark_changes_render_as_approximately_zero(self) -> None:
+        self.assertEqual(percentage(-0.009), "~0%")
+        self.assertEqual(percentage(0.009), "~0%")
+        self.assertEqual(percentage(-0.01), "-0.01%")
 
     @patch("scripts.render_mergetrain_status.git_file")
     def test_benchmark_detail_data_contains_only_changed_workloads(
@@ -184,14 +190,12 @@ class MergetrainStatusTests(unittest.TestCase):
                     process.wait(timeout=10)
                 os.close(master)
 
-    @patch("scripts.render_mergetrain_status.benchmark_ratio", return_value=None)
     @patch("scripts.render_mergetrain_status.benchmark_changes", return_value=[])
     @patch("scripts.render_mergetrain_status.recent_merges", return_value=[])
     def test_conflict_details_are_collapsed_and_can_be_toggled(
         self,
         _recent_merges: object,
         _benchmark_changes: object,
-        _benchmark_ratio: object,
     ) -> None:
         reason = "merge conflict in src/Compiler.fs\nfull conflicting hunk"
         payload = {
@@ -334,10 +338,20 @@ class MergetrainStatusTests(unittest.TestCase):
 import json
 import sys
 
-assert "status" in sys.argv
 assert "--json" in sys.argv
-assert sys.argv[sys.argv.index("--limit") + 1] == "1000"
-print(json.dumps({
+if "inspect" in sys.argv:
+    assert sys.argv[sys.argv.index("inspect") + 1] == "10"
+    print(json.dumps({
+        "contract_version": 4,
+        "progress": {
+            "phase": "gating",
+            "message": "Running gate 2/4: tests"
+        }
+    }))
+else:
+    assert "status" in sys.argv
+    assert sys.argv[sys.argv.index("--limit") + 1] == "1000"
+    print(json.dumps({
     "contract_version": 4,
     "health": "healthy",
     "state": "running",
@@ -376,7 +390,7 @@ print(json.dumps({
             "state": "running"
         }
     ]
-}))
+    }))
 """,
                 encoding="utf-8",
             )
@@ -403,7 +417,7 @@ print(json.dumps({
             self.assertNotIn("\x1b", completed.stdout)
             self.assertIn("health: healthy", completed.stdout)
             self.assertIn("RUNNING: 1 job(s) are running", completed.stdout)
-            self.assertIn("in train:\n", completed.stdout)
+            self.assertIn("in train: Running gate 2/4: tests\n", completed.stdout)
             self.assertIn("\n\nrecent merges:\n", completed.stdout)
             self.assertIn("\nrecent benchmark results:\n", completed.stdout)
             attention = completed.stdout.index(
@@ -418,27 +432,27 @@ print(json.dumps({
             self.assertLess(attention, running)
             self.assertLess(running, waiting)
             self.assertNotIn("Already deployed", completed.stdout)
-            self.assertIn("benchmark ratio: 2.8x", completed.stdout)
+            self.assertNotIn("benchmark ratio:", completed.stdout)
             self.assertRegex(
                 completed.stdout,
-                r"recent merges:\n[0-9a-f]{7,12} \d+s ago feature-6 — Add feature 6",
+                r"recent merges:\n[0-9a-f]{7,12} \d+s feature-6 — Add feature 6",
             )
             self.assertEqual(completed.stdout.count(" — Add feature "), 5)
             self.assertNotIn("feature-1 — Add feature 1", completed.stdout)
             self.assertRegex(
                 completed.stdout,
-                r"\[1\] [0-9a-f]{7,12} +\d+s ago +2.8x \(n/a\) +"
+                r"1\. [0-9a-f]{7,12} +\d+s +2.8x \(n/a\) +"
                 r"Change benchmark contract",
             )
             self.assertRegex(
                 completed.stdout,
-                r"\[2\] [0-9a-f]{7,12} +\d+s ago +2.8x \(-6.7%\) +"
+                r"2\. [0-9a-f]{7,12} +\d+s +2.8x \(-6.7%\) +"
                 r"Record benchmark improvement",
             )
             benchmark_lines = [
                 line
                 for line in completed.stdout.splitlines()
-                if line.startswith(("[1]", "[2]", "[3]"))
+                if line.startswith(("1. ", "2. ", "3. "))
             ]
             subject_columns = {
                 line.index(subject)
