@@ -1,0 +1,45 @@
+// list-array-runtime-sharing.e2e - Runtime copy-on-write for compiler-owned Int64 arrays.
+let arraySum (buffer: RawPtr) : Int64 =
+    let length = __raw_get<Int64> buffer 0L in
+    Stdlib.List.__arrayFold buffer 0L length 0L (fun acc value -> acc + value)
+
+let mutateUnique (count: Int) : Int64 =
+    let source = Stdlib.List.__arrayRepeat count 1L in
+    let destination = Stdlib.List.__arrayPrepareMutation source in
+    let length = __raw_get<Int64> destination 0L in
+    let _ = Stdlib.List.__arrayMap destination 0L length (fun value -> value + 1L) in
+    let result = arraySum destination in
+    let _ = Stdlib.List.__arrayRelease destination in
+    result
+
+let mutateShared (count: Int) : Int64 =
+    let source = Stdlib.List.__arrayRepeat count 1L in
+    let _ = Stdlib.List.__arrayRetain source in
+    let destination = Stdlib.List.__arrayPrepareMutation source in
+    let length = __raw_get<Int64> destination 0L in
+    let _ = Stdlib.List.__arrayMap destination 0L length (fun value -> value + 1L) in
+    let original = arraySum source in
+    let changed = arraySum destination in
+    let _ = Stdlib.List.__arrayRelease source in
+    let _ = Stdlib.List.__arrayRelease destination in
+    original * 1000L + changed
+
+let mutateWithThreeOwners () : Int64 =
+    let source = Stdlib.List.__arrayRepeat 3 1L in
+    let _ = Stdlib.List.__arrayRetain source in
+    let _ = Stdlib.List.__arrayRetain source in
+    let first = Stdlib.List.__arrayPrepareMutation source in
+    let second = Stdlib.List.__arrayPrepareMutation source in
+    let _ = Stdlib.List.__arrayMap first 0L 3L (fun value -> value + 1L) in
+    let _ = Stdlib.List.__arrayMap second 0L 3L (fun value -> value + 2L) in
+    let result = arraySum source * 1000000L + arraySum first * 1000L + arraySum second in
+    let _ = Stdlib.List.__arrayRelease source in
+    let _ = Stdlib.List.__arrayRelease first in
+    let _ = Stdlib.List.__arrayRelease second in
+    result
+
+mutateUnique 3 = 6L
+mutateShared 3 = 3006L
+mutateUnique 32 = 64L
+mutateShared 32 = 32064L
+mutateWithThreeOwners () = 3006009L

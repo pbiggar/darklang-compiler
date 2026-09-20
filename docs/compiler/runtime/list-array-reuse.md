@@ -102,9 +102,14 @@ establish fresh certificates.
 The list ownership solver now emits each destruction as an explicit `Drop` in
 the same ordered position used by native lowering. The shared verifier tracks
 unit multiplicity, so `Dup` can justify repeated consuming uses and exact unit
-counts must agree at branch joins and function returns. Closed list regions
-remain statically unique and therefore reject `Dup`; enabling it for escaping
-arrays first requires a shareable representation and corresponding lowering.
+counts must agree at branch joins and function returns. Array lowering now
+materializes `Dup` as a retain and supports a `ConsumeOrCopy` transform for a
+consumed unit without a static exclusivity certificate. That transform checks
+the array RC: one owner reuses storage, while multiple owners allocate and copy
+before removing the consumed source unit. Both recyclable and mapped buffers
+use the same retain/release contract when shared. The current extraction solver
+still chooses static consume-or-copy decisions; production selection of this
+runtime decision for escaping array boundaries remains later work.
 
 The shared ownership interface also models managed block arguments beyond the
 current list extraction grammar. Mutually exclusive arms transfer their
@@ -223,10 +228,10 @@ plan with no child destructors. Runtime allocation and release dispatch on
 the validated length. The small branch has RC at offset 248 and uses the same
 fixed-block release plan, exposed through an internal array-release intrinsic;
 it never disguises the buffer as a source-level managed value. A shared release
-helper keeps conditional cleanup out of initial region continuations.
-Larger arrays own an independent mapping and explicitly unmap it at their verified final release.
-The common array header and RC word remain
-uniform; mapped-region lifetime is controlled by the ownership plan, not RC.
+helper keeps conditional cleanup out of initial region continuations. Larger
+arrays own an independent mapping. Statically exclusive releases unmap it
+directly; shared releases decrement the common RC and unmap only its last
+ownership unit. The common array header and RC word remain uniform.
 The compiler never tags array storage as a source-level list, reinterprets it
 as a Blob/String, or uses the 8-byte-only `RawFree` primitive to reclaim it.
 
@@ -325,8 +330,9 @@ include:
 3. Carry the registered HIR call boundary through whole-function construction,
    then add representation interfaces, bounded specialization, explicit
    conversion profitability, specialization scheduling, and cache integration.
-4. Runtime uniqueness tests for consumed arrays whose sharing is not statically
-   known; surviving borrowed aliases must remain protected.
+4. Select the implemented runtime consume-or-copy decision at escaping array
+   boundaries whose sharing is not statically known; borrowed aliases must
+   remain outside the consumed ownership transfer.
 5. Managed elements and destruction-effect propagation. Stream finalizers are
    observable, including through containers, so general last-use release cannot
    move them arbitrarily. This slice excludes managed elements and captures.
