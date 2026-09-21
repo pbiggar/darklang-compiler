@@ -70,11 +70,11 @@ let internal requiredRcMetadataReleasePlan (context: string) (metadata: MemoryMo
     | Some releasePlan -> releasePlan
     | None -> Crash.crash $"{context}: missing RC release plan metadata"
 
-let internal generateRecursiveSumRefCountDecHelper
+let internal generateRecursiveNominalRefCountDecHelper
     (ctx: CodeGenContext)
     (sourceType: AST.Type)
     : ARM64Symbolic.Instr list =
-    let helperLabel = recursiveSumRefCountDecHelperLabel sourceType
+    let helperLabel = recursiveNominalRefCountDecHelperLabel sourceType
     let label suffix = $"{helperLabel}_{suffix}"
     let releasePlan =
         MemoryPlanning.rcReleasePlanOfTypeWithSums ctx.RecordRegistry ctx.SumShapeRegistry sourceType
@@ -126,7 +126,7 @@ let internal generateRecursiveSumRefCountDecHelper
             @ leakRelease
             @ [ARM64Symbolic.Label doneLabel]
         | MemoryModel.RecursiveRelease recursiveType ->
-            [ARM64Symbolic.BL (recursiveSumRefCountDecHelperLabel recursiveType)]
+            [ARM64Symbolic.BL (recursiveNominalRefCountDecHelperLabel recursiveType)]
         | MemoryModel.RootRelease (_, MemoryModel.TaggedList, MemoryModel.TaggedListPayloadRelease elementRelease) ->
             let helper =
                 match elementRelease with
@@ -191,7 +191,7 @@ let internal generateRecursiveSumRefCountDecHelper
                 ARM64Symbolic.Label doneLabel
             ]
         | unsupported ->
-            Crash.crash $"ARM64 recursive sum RC helper does not support nested release plan {unsupported}"
+            Crash.crash $"ARM64 recursive nominal RC helper does not support nested release plan {unsupported}"
 
     and releaseField (path: string) (index: int) (MemoryModel.FieldRelease (offset, plan)) : ARM64Symbolic.Instr list =
         [
@@ -233,7 +233,7 @@ let internal generateRecursiveSumRefCountDecHelper
                 |> List.concat
             cases @ [ARM64Symbolic.Label doneLabel]
         | unsupported ->
-            Crash.crash $"ARM64 recursive sum RC helper does not support payload release plan {unsupported}"
+            Crash.crash $"ARM64 recursive nominal RC helper does not support payload release plan {unsupported}"
 
     match releasePlan with
     | MemoryModel.RootRelease (_, MemoryModel.GenericHeap, _) ->
@@ -241,7 +241,7 @@ let internal generateRecursiveSumRefCountDecHelper
         @ releaseFromX0 "root" releasePlan
         @ [ARM64Symbolic.RET]
     | _ ->
-        Crash.crash $"ARM64 recursive sum RC helper requires a generic root release plan, got {releasePlan}"
+        Crash.crash $"ARM64 recursive nominal RC helper requires a generic root release plan, got {releasePlan}"
 
 let internal generateClosureRefCountDecHelper
     (dictHelperForReleasePlan: MemoryModel.RcReleasePlan -> string)

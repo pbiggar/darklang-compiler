@@ -9,60 +9,68 @@ open MemoryModel
 /// The classifier is intentionally pure and side-effect free. Ownership
 /// insertion and backend helper selection use this as the source of truth for
 /// runtime retain/release shape decisions.
-let rec rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcShape =
-    match t with
-    | AST.TInt8
-    | AST.TInt16
-    | AST.TInt32
-    | AST.TInt64
-    | AST.TUInt8
-    | AST.TUInt16
-    | AST.TUInt32
-    | AST.TUInt64
-    | AST.TBool
-    | AST.TFloat64
-    | AST.TDateTime
-    | AST.TUnit
-    | AST.TRuntimeError
-    | AST.TVar _ ->
-        Immediate
-    // Arbitrary Int uses tagged immediates or a limb buffer. Fixed-width 128-bit
-    // values are immutable two-limb blocks with the refcount after the payload.
-    | AST.TInt -> DynamicInt
-    | AST.TInt128
-    | AST.TUInt128 -> FixedBlock (16, [])
-    | AST.TTuple elemTypes ->
-        let fieldShapes = elemTypes |> List.map (rcShapeOfType typeReg)
-        FixedBlock (List.length elemTypes * 8, fieldShapes)
-    | AST.TRecord (name, _) ->
-        match Map.tryFind name typeReg with
-        | Some fields ->
-            let fieldShapes =
-                fields
-                |> List.map (fun (_, fieldType) -> rcShapeOfType typeReg fieldType)
-            FixedBlock (List.length fields * 8, fieldShapes)
-        | None ->
-            Crash.crash $"rcShapeOfType: Record type '{name}' not found in typeReg"
-    | AST.TSum (_, []) ->
-        Immediate
-    | AST.TSum (_, [payloadType]) ->
-        BoxedSum (16, [(8, rcShapeOfType typeReg payloadType)], [])
-    | AST.TSum _ ->
-        BoxedSum (16, [], [])
-    | AST.TList elemType ->
-        TaggedListShape (rcShapeOfType typeReg elemType)
-    | AST.TStream _ -> StreamRoot
-    | AST.TDict (keyType, valueType) ->
-        DictRoot (rcShapeOfType typeReg keyType, rcShapeOfType typeReg valueType)
-    | AST.TString
-    | AST.TChar ->
-        DynamicString
-    | AST.TBlob ->
-        DynamicBlob
-    | AST.TFunction _ ->
-        ClosureShape []
-    | AST.TRawPtr ->
-        RawUnmanaged
+let rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcShape =
+    let rec classify (expandingRecords: Set<AST.Type>) t =
+        match t with
+        | AST.TInt8
+        | AST.TInt16
+        | AST.TInt32
+        | AST.TInt64
+        | AST.TUInt8
+        | AST.TUInt16
+        | AST.TUInt32
+        | AST.TUInt64
+        | AST.TBool
+        | AST.TFloat64
+        | AST.TDateTime
+        | AST.TUnit
+        | AST.TRuntimeError
+        | AST.TVar _ ->
+            Immediate
+        // Arbitrary Int uses tagged immediates or a limb buffer. Fixed-width 128-bit
+        // values are immutable two-limb blocks with the refcount after the payload.
+        | AST.TInt -> DynamicInt
+        | AST.TInt128
+        | AST.TUInt128 -> FixedBlock (16, [])
+        | AST.TTuple elemTypes ->
+            let fieldShapes = elemTypes |> List.map (classify expandingRecords)
+            FixedBlock (List.length elemTypes * 8, fieldShapes)
+        | AST.TRecord (name, typeArgs) ->
+            let sourceType = AST.TRecord (name, typeArgs)
+            if Set.contains sourceType expandingRecords then
+                RecursiveNominalRef sourceType
+            else
+                match Map.tryFind name typeReg with
+                | Some fields ->
+                    let expandingRecords = Set.add sourceType expandingRecords
+                    let fieldShapes =
+                        fields
+                        |> List.map (fun (_, fieldType) -> classify expandingRecords fieldType)
+                    FixedBlock (List.length fields * 8, fieldShapes)
+                | None ->
+                    Crash.crash $"rcShapeOfType: Record type '{name}' not found in typeReg"
+        | AST.TSum (_, []) ->
+            Immediate
+        | AST.TSum (_, [payloadType]) ->
+            BoxedSum (16, [(8, classify expandingRecords payloadType)], [])
+        | AST.TSum _ ->
+            BoxedSum (16, [], [])
+        | AST.TList elemType ->
+            TaggedListShape (classify expandingRecords elemType)
+        | AST.TStream _ -> StreamRoot
+        | AST.TDict (keyType, valueType) ->
+            DictRoot (classify expandingRecords keyType, classify expandingRecords valueType)
+        | AST.TString
+        | AST.TChar ->
+            DynamicString
+        | AST.TBlob ->
+            DynamicBlob
+        | AST.TFunction _ ->
+            ClosureShape []
+        | AST.TRawPtr ->
+            RawUnmanaged
+
+    classify Set.empty t
 
 let private rcShapeTypeSubstitution (typeParams: string list) (typeArgs: AST.Type list) : Map<string, AST.Type> =
     if List.isEmpty typeParams then
@@ -168,45 +176,51 @@ let rcShapeOfTypeWithSums
     (sumReg: RcSumShapeRegistry)
     (t: AST.Type)
     : RcShape =
-    let rec classify (expandingSums: Set<string>) (t: AST.Type) : RcShape =
+    let rec classify (expandingNominals: Set<AST.Type>) (t: AST.Type) : RcShape =
         match t with
         | AST.TTuple elemTypes ->
-            FixedBlock (List.length elemTypes * 8, elemTypes |> List.map (classify expandingSums))
+            FixedBlock (List.length elemTypes * 8, elemTypes |> List.map (classify expandingNominals))
         | AST.TRecord (name, typeArgs) ->
-            match Map.tryFind name typeReg with
-            | Some fields ->
-                let typeParams =
-                    match Map.tryFind name recordTypeParams with
-                    | Some declared -> declared
-                    | None -> Crash.crash $"rcShapeOfTypeWithSums: Record metadata '{name}' not found"
-                let subst = rcShapeTypeSubstitution typeParams typeArgs
-                let fieldShapes =
-                    fields
-                    |> List.map (fun (_, fieldType) ->
-                        fieldType |> applyRcShapeTypeSubstitution subst |> classify expandingSums)
-                FixedBlock (List.length fields * 8, fieldShapes)
-            | None when Map.containsKey name sumReg ->
-                // Bare nominal references are parsed before constructor
-                // metadata is available. Classify the equivalent internal sum
-                // spelling here so recursive JSON trees retain correctly.
-                classify expandingSums (AST.TSum (name, typeArgs))
-            | None ->
-                Crash.crash $"rcShapeOfTypeWithSums: Record type '{name}' not found in typeReg"
+            let sourceType = AST.TRecord (name, typeArgs)
+            if Set.contains sourceType expandingNominals then
+                RecursiveNominalRef sourceType
+            else
+                match Map.tryFind name typeReg with
+                | Some fields ->
+                    let typeParams =
+                        match Map.tryFind name recordTypeParams with
+                        | Some declared -> declared
+                        | None -> Crash.crash $"rcShapeOfTypeWithSums: Record metadata '{name}' not found"
+                    let subst = rcShapeTypeSubstitution typeParams typeArgs
+                    let expandingNominals = Set.add sourceType expandingNominals
+                    let fieldShapes =
+                        fields
+                        |> List.map (fun (_, fieldType) ->
+                            fieldType |> applyRcShapeTypeSubstitution subst |> classify expandingNominals)
+                    FixedBlock (List.length fields * 8, fieldShapes)
+                | None when Map.containsKey name sumReg ->
+                    // Bare nominal references are parsed before constructor
+                    // metadata is available. Classify the equivalent internal sum
+                    // spelling here so recursive JSON trees retain correctly.
+                    classify expandingNominals (AST.TSum (name, typeArgs))
+                | None ->
+                    Crash.crash $"rcShapeOfTypeWithSums: Record type '{name}' not found in typeReg"
         | AST.TSum (name, typeArgs) ->
-            if Set.contains name expandingSums then
-                RecursiveSumRef (AST.TSum (name, typeArgs))
+            let sourceType = AST.TSum (name, typeArgs)
+            if Set.contains sourceType expandingNominals then
+                RecursiveNominalRef sourceType
             else
                 match Map.tryFind name sumReg with
                 | Some sumInfo ->
                     let subst = rcShapeTypeSubstitution sumInfo.TypeParams typeArgs
-                    let expandingSums = Set.add name expandingSums
+                    let expandingNominals = Set.add sourceType expandingNominals
 
                     let variantShapes =
                         sumInfo.Payloads
                         |> List.map (fun maybePayload ->
                             match maybePayload with
                             | tag, Some payload ->
-                                let payloadShape = payload |> applyRcShapeTypeSubstitution subst |> classify expandingSums
+                                let payloadShape = payload |> applyRcShapeTypeSubstitution subst |> classify expandingNominals
                                 { Tag = tag; FieldShapes = [(8, payloadShape)] }
                             | tag, None ->
                                 { Tag = tag; FieldShapes = [] })
@@ -224,14 +238,14 @@ let rcShapeOfTypeWithSums
                     else
                         Immediate
                 | None when Map.containsKey name typeReg ->
-                    classify expandingSums (AST.TRecord (name, typeArgs))
+                    classify expandingNominals (AST.TRecord (name, typeArgs))
                 | None ->
                     Crash.crash $"rcShapeOfTypeWithSums: Sum type '{name}' not found in sumReg"
         | AST.TList elemType ->
-            TaggedListShape (classify expandingSums elemType)
+            TaggedListShape (classify expandingNominals elemType)
         | AST.TStream _ -> StreamRoot
         | AST.TDict (keyType, valueType) ->
-            DictRoot (classify expandingSums keyType, classify expandingSums valueType)
+            DictRoot (classify expandingNominals keyType, classify expandingNominals valueType)
         | AST.TFunction _ ->
             ClosureShape []
         | AST.TString
@@ -278,7 +292,7 @@ let rcShapeNeedsOwnedScopeRelease (shape: RcShape) : bool =
     | FixedBlock _
     | StreamRoot
     | BoxedSum _
-    | RecursiveSumRef _
+    | RecursiveNominalRef _
     | TaggedListShape _
     | DictRoot _
     | ClosureShape _ ->
@@ -291,7 +305,7 @@ let rcShapeIsRootManaged (shape: RcShape) : bool =
     | FixedBlock _
     | StreamRoot
     | BoxedSum _
-    | RecursiveSumRef _
+    | RecursiveNominalRef _
     | TaggedListShape _
     | DictRoot _
     | ClosureShape _ ->
@@ -315,7 +329,7 @@ let rec rcShapeNeedsRecursiveRelease (shape: RcShape) : bool =
     | BoxedSum (_, fieldShapes, _) ->
         fieldShapes
         |> List.exists (fun (_, fieldShape) -> rcShapeNeedsOwnedScopeRelease fieldShape)
-    | RecursiveSumRef _ ->
+    | RecursiveNominalRef _ ->
         true
     | TaggedListShape elementShape ->
         rcShapeNeedsOwnedScopeRelease elementShape
@@ -338,7 +352,7 @@ let rcShapeRootKind (shape: RcShape) : RcKind option =
     match shape with
     | FixedBlock _
     | BoxedSum _
-    | RecursiveSumRef _ ->
+    | RecursiveNominalRef _ ->
         Some GenericHeap
     | StreamRoot -> Some StreamHeap
     | TaggedListShape _ ->
@@ -362,7 +376,7 @@ let rcShapePayloadSize (shape: RcShape) : int option =
     | BoxedSum (payloadSize, _, _) ->
         Some payloadSize
     | StreamRoot -> Some 24
-    | RecursiveSumRef _ ->
+    | RecursiveNominalRef _ ->
         Some 16
     | TaggedListShape _ ->
         Some 24
@@ -489,7 +503,7 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
             DictPayloadRelease (rcShapeReleasePlan keyShape, rcShapeReleasePlan valueShape)
         | ClosureShape captureShapes ->
             ClosurePayloadRelease (fieldReleasePlans captureShapes)
-        | RecursiveSumRef _ ->
+        | RecursiveNominalRef _ ->
             NoPayloadRelease
         | Immediate
         | DynamicString
@@ -502,7 +516,7 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
     match rcShapeStorageClass shape with
     | ManagedRcRoot (payloadSize, kind) ->
         match shape with
-        | RecursiveSumRef sourceType -> RecursiveRelease sourceType
+        | RecursiveNominalRef sourceType -> RecursiveRelease sourceType
         | _ -> RootRelease (payloadSize, kind, rootPayloadPlan shape)
     | UnmanagedStorage ->
         NoReleasePlan
@@ -523,7 +537,7 @@ let rec rcReleasePlanOfTypeWithSums
     |> rcShapeOfTypeWithSums typeReg (inferredRecordTypeParamsRegistry typeReg) sumReg
     |> rcShapeReleasePlan
 
-/// Collect the concrete recursive sum roots referenced by a finite release plan.
+/// Collect the concrete recursive nominal roots referenced by a finite release plan.
 let rec recursiveReleaseTypes (releasePlan: RcReleasePlan) : Set<AST.Type> =
     let fromFields fieldReleases =
         fieldReleases

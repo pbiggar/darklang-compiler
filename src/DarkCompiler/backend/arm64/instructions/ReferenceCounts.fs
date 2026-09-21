@@ -275,7 +275,7 @@ let internal emitRefCountDec (ctx: CodeGenContext) (addr: LIR.Reg) (payloadSize:
                     releaseListFieldFromHelper
                         baseReg
                         fieldOffset
-                        (recursiveSumRefCountDecHelperLabel sourceType)
+                        (recursiveNominalRefCountDecHelperLabel sourceType)
                 | _ ->
                     []
 

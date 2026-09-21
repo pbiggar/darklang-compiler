@@ -31,7 +31,7 @@ from Git history.
   propagation, bounded scalar-literal cloning, ownership-safe tuple projection
   forwarding, projection-only scalar tuple and record replacement, unique
   fixed-layout record-clone allocation reuse across Float, non-observable
-  buffers, structurally safe composite fields, and nonrecursive nominal
+  buffers, structurally safe composite fields, and regular recursive nominal
   records; straight-line boxed-sum constructor reuse for safe payloads; and
   unused ANF binding elimination.
 - **Loops and control flow:** bounded recursive-loop unrolling, tail recursion
@@ -124,15 +124,16 @@ their own allocation even when an eligible source allocation is removed.
 After scalar replacement, a remaining uniquely owned record may transfer its
 fixed block to a sole compatible clone. Eligible layouts contain immediate
 fields, non-observable `String`, `Blob`, and `Int` buffers, or tuples, lists,
-and dictionaries recursively composed from those leaves. Nonrecursive nominal
-records are admitted when registry metadata and concrete generic substitution
-prove every nested field safe. Replacement children are retained before
-displaced children are released with their recursive plans and the block is
-overwritten. Straight-line boxed sums carry their instantiated nominal type and
-source and target variant payload layouts through ANF, so a compatible later
-constructor can perform the same ordered transfer. Streams and containers
-holding them are rejected; recursive records, nested sums, closures, returns,
-calls, closure capture, storage, candidates that cross branches or joins, raw
+and dictionaries recursively composed from those leaves. Nominal records are
+admitted when registry metadata and concrete generic substitution prove every
+nested field safe; regular recursive cycles use a typed release-plan back-edge.
+Replacement children are retained before displaced children are released with
+their recursive plans and the block is overwritten. Straight-line boxed sums
+carry their instantiated nominal type and source and target variant payload
+layouts through ANF, so a compatible later constructor can perform the same
+ordered transfer. Streams and containers holding them are rejected;
+polymorphically growing recursion, nested sums, closures, returns, calls,
+closure capture, storage, candidates that cross branches or joins, raw
 operations, and unknown uses preserve the ordinary allocation.
 Focused tests cover projection, alias, clone-chain, ownership ordering, and
 branch shapes plus the conservative call and observable-field boundaries.

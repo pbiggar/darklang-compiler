@@ -158,7 +158,7 @@ let internal genRefCountDecGenericWithPlan
     (payloadSize: int)
     (releasePlan: MemoryModel.RcReleasePlan option)
     : X86_64.Instr list =
-    genRefCountDecGenericWithPlanUsing recursiveSumRefCountDecHelperLabel true ctx addrReg payloadSize releasePlan
+    genRefCountDecGenericWithPlanUsing recursiveNominalRefCountDecHelperLabel true ctx addrReg payloadSize releasePlan
 
 let internal genRefCountDecGeneric (ctx: FuncCtx) (addrReg: X86_64.Reg) (payloadSize: int) (metadata: MemoryModel.RcMetadata option) : X86_64.Instr list =
     genRefCountDecGenericWithPlan ctx addrReg payloadSize (rcMetadataReleasePlan metadata)
@@ -176,7 +176,7 @@ let private genRefCountDecStream
     let alreadyClosedLabel = freshLabel "stream_rc_dec_closed"
     let fieldReleases =
         genFixedBlockFieldReleases
-            recursiveSumRefCountDecHelperLabel
+            recursiveNominalRefCountDecHelperLabel
             true
             ctx
             (rcMetadataReleasePlan metadata)
@@ -229,7 +229,7 @@ let internal generateStreamRefCountDecHelper (ctx: FuncCtx) : X86_64.Instr list 
     @ genRefCountDecStream ctx X86_64.RAX (Some metadata)
     @ [X86_64.RET]
 
-let internal generateRecursiveSumRefCountDecHelper
+let internal generateRecursiveNominalRefCountDecHelper
     (enableLeakCheck: bool)
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
@@ -246,8 +246,8 @@ let internal generateRecursiveSumRefCountDecHelper
         SumShapeRegistry = sumShapeRegistry
         FunctionNames = Map.empty
     }
-    let helperLabel = recursiveSumRefCountDecHelperLabel sourceType
-    let workerLabel (typ: AST.Type) = $"{recursiveSumRefCountDecHelperLabel typ}_worker"
+    let helperLabel = recursiveNominalRefCountDecHelperLabel sourceType
+    let workerLabel (typ: AST.Type) = $"{recursiveNominalRefCountDecHelperLabel typ}_worker"
     let savedRegs =
         [ X86_64.RAX
           X86_64.RDI
@@ -271,7 +271,7 @@ let internal generateRecursiveSumRefCountDecHelper
         @ genRefCountDecGenericWithPlanUsing workerLabel false helperCtx X86_64.RAX payloadSize (Some releasePlan)
         @ [X86_64.RET]
     | _ ->
-        Crash.crash $"x64 recursive sum RC helper requires a generic root release plan, got {releasePlan}"
+        Crash.crash $"x64 recursive nominal RC helper requires a generic root release plan, got {releasePlan}"
 
 let internal recursiveReleaseTypesInFunctions (functions: LIR.Function list) : Set<AST.Type> =
     functions

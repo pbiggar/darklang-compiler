@@ -85,15 +85,17 @@ representation and safety boundaries are documented in
   child references correctly, extending reuse to records and other supported
   data. Fixed-layout record reuse now accepts immediate and non-observable
   `String`, `Blob`, or `Int` leaves plus tuples, lists, and dictionaries built
-  recursively from them. Nonrecursive nominal records join that set when the
-  registry and concrete generic arguments prove every nested field safe. It
-  retains replacement children, releases displaced children with their complete
+  recursively from them. Nominal records join that set when the registry and
+  concrete generic arguments prove every nested field safe, including regular
+  recursive records through typed release-plan back-edges. It retains
+  replacement children, releases displaced children with their complete
   recursive release plans in field order, and then overwrites the block.
   Straight-line boxed sums now preserve instantiated type and variant payload
   metadata through ANF and reuse the same two-word block with source-layout
   cleanup before target-layout stores. Streams and containers holding them fail
-  closed; cross-branch and recursive sum reuse, recursive nominal records,
-  closures, and interprocedural reuse remain before this item is complete.
+  closed; cross-branch and recursive sum reuse, polymorphically growing
+  recursion, closures, and interprocedural reuse remain before this item is
+  complete.
 - [ ] **Support managed elements and observable destruction.** Extend reuse to
   collections containing managed values and broader function bodies. Track
   destruction effects so cleanup preserves Stream finalizers and other

@@ -463,7 +463,7 @@ let testNestedRecordsReuseOnlyWithSafeInstantiatedFields () : TestResult =
         (AST.TRecord ("NestedGeneric", [AST.TString]), true)
         (AST.TRecord ("NestedGeneric", [AST.TStream AST.TInt64]), false)
         (AST.TRecord ("NestedStream", []), false)
-        (AST.TRecord ("NestedRecursive", []), false)
+        (AST.TRecord ("NestedRecursive", []), true)
         (AST.TRecord ("NestedGrowing", [AST.TString]), false)
         (AST.TRecord ("Missing", []), false)
     ]

@@ -214,7 +214,7 @@ let private generateListRefCountDecHelperWith
              X86_64.PUSH X86_64.RSI
              X86_64.PUSH X86_64.RCX
              X86_64.MOV_load (X86_64.RAX, X86_64.RDI, 0)
-             X86_64.CALL (recursiveSumRefCountDecHelperLabel sourceType)
+             X86_64.CALL (recursiveNominalRefCountDecHelperLabel sourceType)
              X86_64.POP X86_64.RCX
              X86_64.POP X86_64.RSI
              X86_64.POP X86_64.RDI

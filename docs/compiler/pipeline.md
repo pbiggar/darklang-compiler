@@ -225,11 +225,12 @@ field projections, local aliases, and representation-only constructor sources.
 A remaining uniquely owned record can transfer its allocation to a
 sole compatible clone when every field has structurally non-observable
 destruction: immediate values and `String`, `Blob`, or `Int` buffers, plus
-tuples, lists, dictionaries, and nonrecursive nominal records built recursively
-from those leaves. Nominal fields are instantiated with their concrete generic
-arguments before eligibility is decided. Reference-count elaboration retains
-replacement child edges, releases displaced children with their complete
-recursive release plans in field order, and then overwrites the block.
+tuples, lists, dictionaries, and nominal records built recursively from those
+leaves. Nominal fields are instantiated with their concrete generic arguments
+before eligibility is decided. Regular recursive records are represented by a
+typed release-plan back-edge. Reference-count elaboration retains replacement
+child edges, releases displaced children with their complete recursive release
+plans in field order, and then overwrites the block.
 
 Boxed-sum lowering preserves the instantiated nominal type and each variant's
 payload layout in the same fixed-block descriptor. A uniquely local sum can
@@ -242,8 +243,8 @@ Returns, calls, closure capture, storage, raw-pointer operations, composite or
 potentially observable managed fields without that proof, and every unmodelled
 use preserve the ordinary allocation. Streams and containers holding them are
 rejected recursively; nested sums and closures fail closed. Missing registry
-entries, generic arity mismatches, recursive nominal records, and sum
-candidates that cross branches or joins also remain unchanged.
+entries, generic arity mismatches, polymorphically growing recursive records,
+and sum candidates that cross branches or joins also remain unchanged.
 Escaping constructors retain their own allocation while eligible immediate
 source and intermediate aggregates are scalar-replaced.
 

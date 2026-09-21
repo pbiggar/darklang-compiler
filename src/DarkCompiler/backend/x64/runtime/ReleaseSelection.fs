@@ -119,7 +119,7 @@ let internal slotInitRootRetainTarget
                 match valueType with
                 | AST.TSum _ -> Some (SlotInitGenericRootRetain payloadSize)
                 | _ -> None
-            | MemoryModel.RecursiveSumRef _ ->
+            | MemoryModel.RecursiveNominalRef _ ->
                 Some (SlotInitGenericRootRetain 16)
             | MemoryModel.Immediate
             | MemoryModel.StaticString
@@ -186,14 +186,14 @@ let private stableRcReleasePlanHash (releasePlan: MemoryModel.RcReleasePlan) : s
         fnvOffset
     |> fun hash -> hash.ToString("x16")
 
-let internal recursiveSumRefCountDecHelperLabel (sourceType: AST.Type) : string =
+let internal recursiveNominalRefCountDecHelperLabel (sourceType: AST.Type) : string =
     let hash =
         $"{sourceType}"
         |> Seq.fold (fun hash ch ->
             (hash ^^^ (uint64 (int ch))) * 1099511628211UL)
             14695981039346656037UL
         |> fun value -> value.ToString("x16")
-    $"__dark_recursive_sum_rc_dec_{hash}"
+    $"__dark_recursive_nominal_rc_dec_{hash}"
 
 let internal plannedListDecHelperLabelForReleasePlan (releasePlan: MemoryModel.RcReleasePlan) : string =
     $"{plannedListRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"

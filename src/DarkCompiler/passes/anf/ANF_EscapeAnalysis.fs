@@ -33,12 +33,13 @@ let private isScalarType (typ: AST.Type) : bool =
 
 /// Prove that releasing a displaced field cannot run a language-visible
 /// finalizer. Nominal records use the complete registry and concrete type
-/// arguments; recursive records, sums and closures still fail closed.
+/// arguments. Regular recursive records are admitted coinductively; type-growing
+/// recursion, sums and closures still fail closed.
 let private hasNonObservableDestruction
     (typeReg: TypeRegistries.TypeRegistry)
     (typ: AST.Type)
     : bool =
-    let rec prove (expandingRecords: Set<string>) typ =
+    let rec prove (expandingRecords: Map<string, AST.Type>) typ =
         isScalarType typ
         || match typ with
            | AST.TString | AST.TBlob | AST.TInt -> true
@@ -48,13 +49,14 @@ let private hasNonObservableDestruction
                prove expandingRecords key
                && prove expandingRecords value
            | AST.TRecord (name, typeArgs) ->
-               if Set.contains name expandingRecords then
-                   false
-               else
+               let recordType = AST.TRecord (name, typeArgs)
+               match Map.tryFind name expandingRecords with
+               | Some expandingType -> expandingType = recordType
+               | None ->
                    match Map.tryFind name typeReg with
                    | Some info when List.length info.TypeParams = List.length typeArgs ->
                        let subst = List.zip info.TypeParams typeArgs |> Map.ofList
-                       let expandingRecords = Set.add name expandingRecords
+                       let expandingRecords = Map.add name recordType expandingRecords
                        info.Fields
                        |> List.forall (fun (_, fieldType) ->
                            fieldType
@@ -62,7 +64,7 @@ let private hasNonObservableDestruction
                            |> prove expandingRecords)
                    | _ -> false
            | _ -> false
-    prove Set.empty typ
+    prove Map.empty typ
 
 let private atomIsScalar (scalarTemps: Set<TempId>) (atom: Atom) : bool =
     match atom with

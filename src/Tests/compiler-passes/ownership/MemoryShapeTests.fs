@@ -641,6 +641,24 @@ let testRecursiveSumReleasePlanUsesTypedBackEdge () : TestResult =
     else
         Error $"Expected recursive Tree release plan to contain one typed back-edge, got {plan}"
 
+let testRecursiveRecordReleasePlanUsesTypedBackEdge () : TestResult =
+    let nodeType = AST.TRecord ("RecursiveNode", [])
+    let typeReg =
+        Map.ofList [
+            ("RecursiveNode",
+             [
+                 "value", AST.TInt64
+                 "children", AST.TList nodeType
+             ])
+        ]
+
+    let plan = rcReleasePlanOfTypeWithSums typeReg Map.empty nodeType
+    let recursiveTypes = recursiveReleaseTypes plan
+    if recursiveTypes = Set.singleton nodeType then
+        Ok ()
+    else
+        Error $"Expected recursive RecursiveNode release plan to contain one typed back-edge, got {plan}"
+
 let testRcReleasePlanOfTypeClassifiesRemainingRootKinds () : TestResult =
     let samples = [
         (AST.TSum ("Color", []), NoReleasePlan)
