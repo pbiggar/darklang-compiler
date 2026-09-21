@@ -245,14 +245,16 @@ payload layout in the same fixed-block descriptor. A uniquely local sum can
 transfer its two-word `[tag, payload]` block to a later straight-line
 constructor of the same instantiated type. Cleanup uses the source variant
 descriptor while stores and the result type use the target descriptor, so
-cross-variant payload types cannot be confused.
+cross-variant payload types cannot be confused. Complete sum-shape metadata
+proves nested and regular recursive payloads coinductively; recursive cleanup
+uses a typed release-plan back-edge.
 
 Returns, calls, closure capture, storage, raw-pointer operations, composite or
 potentially observable managed fields without that proof, and every unmodelled
 use preserve the ordinary allocation. Streams and containers holding them are
-rejected recursively; nested sums and closures fail closed. Missing registry
-entries, generic arity mismatches, polymorphically growing recursive records,
-and sum candidates that cross branches or joins also remain unchanged.
+rejected recursively; closures fail closed. Missing registry entries, generic
+arity mismatches, type-growing record or sum cycles, and sum candidates that
+cross branches or joins also remain unchanged.
 Escaping constructors retain their own allocation while eligible immediate
 source and intermediate aggregates are scalar-replaced.
 

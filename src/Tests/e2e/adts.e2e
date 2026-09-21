@@ -114,6 +114,11 @@ let oldItems = [1L, 2L, 3L] in let original = ReuseBox oldItems in let updated =
 type GenericReuseBox<'a> = GenericReuseBox of List<a>
 let oldItems = [6L, 7L] in let original = GenericReuseBox oldItems in let updated = match original with | GenericReuseBox _ -> GenericReuseBox [8L, 9L] in match updated with | GenericReuseBox newItems -> oldItems == [6L, 7L] && newItems == [8L, 9L] = true
 
+// A regular recursive sum can reuse its unique outer block while an alias
+// keeps the displaced recursive payload alive.
+type RecursiveReuseChain = RecursiveReuseChain of List<RecursiveReuseChain>
+let leaf = RecursiveReuseChain [] in let oldChildren = [leaf] in let original = RecursiveReuseChain oldChildren in let updated = match original with | RecursiveReuseChain _ -> RecursiveReuseChain [] in match updated with | RecursiveReuseChain newChildren -> Stdlib.List.length oldChildren == 1 && Stdlib.List.length newChildren == 0 = true
+
 // ===================================================================
 // Type Aliases to Primitive Types (must NOT be parsed as sum types)
 // ===================================================================

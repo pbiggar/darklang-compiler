@@ -1423,3 +1423,94 @@ let testRecursiveRecordReuseCarriesTypedBackEdgeReleasePlan () : TestResult =
 
     if hasOrderedReset false false body then Ok ()
     else Error $"Expected recursive record reuse to carry a typed back-edge cleanup; got {body}"
+
+let testRecursiveBoxedSumReuseCarriesTypedBackEdgeReleasePlan () : TestResult =
+    let typeName = "RecursiveReuseChain"
+    let sumType = AST.TSum (typeName, [])
+    let payloadType = AST.TList sumType
+    let descriptor = {
+        SourceTypeName = typeName
+        RuntimeTypeName = typeName
+        TypeArgs = []
+        Fields = ["$tag", AST.TInt64; "$payload", payloadType]
+        ValueType = sumType
+    }
+    let makeOldName = "makeOldRecursiveReuseChain"
+    let fixtureName = "reuseRecursiveReuseChain"
+    let makeOld = TestIds.functionIdForName makeOldName
+    let fixture = TestIds.functionIdForName fixtureName
+    let replacementId = TempId 0
+    let oldId = TempId 1
+    let sourceId = TempId 2
+    let resultId = TempId 3
+    let ctx : TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg =
+            Map.ofList [
+                typeName,
+                { TypeParams = []
+                  Payloads = [(0, Some payloadType)] }
+            ]
+        FuncReg =
+            functionRegistry [
+                makeOldName, AST.TFunction ([], payloadType)
+                fixtureName, AST.TFunction ([payloadType], sumType)
+            ]
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+        TypePlanning = createRcTypePlanningContext ()
+    }
+    let func : Function = {
+        Id = fixture
+        Name = fixtureName
+        TypedParams = [{ Id = replacementId; Type = payloadType }]
+        ReturnType = sumType
+        ReturnOwnership = OwnedReturn
+        Body =
+            Let (
+                oldId,
+                Call (makeOld, []),
+                Let (
+                    sourceId,
+                    RecordAlloc (descriptor, [IntLiteral (Int64 0L); Var oldId]),
+                    Let (
+                        resultId,
+                        RecordReuse (
+                            descriptor,
+                            descriptor,
+                            Var sourceId,
+                            [IntLiteral (Int64 0L); Var replacementId]
+                        ),
+                        Return (Var resultId)
+                    )
+                )
+            )
+    }
+    let transformed, _, _ = insertRCInFunction ctx func initialVarGen
+    let rec hasOrderedReset retained oldPayloadReleased expression =
+        match expression with
+        | Let (_, RefCountInc (Var id, _, _, _), rest) when id = replacementId ->
+            hasOrderedReset true oldPayloadReleased rest
+        | Let (payloadId, RecordGet (_, Var id, 1), rest) when retained && id = sourceId ->
+            match rest with
+            | Let (_, RefCountDec (Var releasedId, _, _, Some metadata), afterRelease)
+                when releasedId = payloadId
+                     && metadata.SourceType = Some payloadType
+                     && metadata.ReleasePlan
+                        |> Option.exists (MemoryPlanning.recursiveReleaseTypes >> Set.contains sumType) ->
+                hasOrderedReset retained true afterRelease
+            | _ -> false
+        | Let (_, RecordReuse (_, _, Var id, _), _) when id = sourceId ->
+            retained && oldPayloadReleased
+        | Let (_, _, rest) ->
+            hasOrderedReset retained oldPayloadReleased rest
+        | Join (_, continuation, entry)
+        | If (_, continuation, entry) ->
+            hasOrderedReset retained oldPayloadReleased continuation
+            || hasOrderedReset retained oldPayloadReleased entry
+        | Jump _ | Return _ -> false
+
+    if hasOrderedReset false false transformed.Body then Ok ()
+    else Error $"Expected recursive boxed-sum reuse to carry typed back-edge cleanup; got {transformed.Body}"

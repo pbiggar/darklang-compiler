@@ -32,22 +32,30 @@ let private isScalarType (typ: AST.SemanticType) : bool =
     | _ -> false
 
 /// Prove that releasing a displaced field cannot run a language-visible
-/// finalizer. Nominal records use the complete registry and concrete type
-/// arguments. Regular recursive records are admitted coinductively; type-growing
-/// recursion, sums and closures still fail closed.
+/// finalizer. Nominal records and sums use complete registry metadata and
+/// concrete type arguments. Regular recursive cycles are admitted
+/// coinductively; sums are considered only for boxed-sum reuse candidates, and
+/// type-growing recursion and closures fail closed.
 let private hasNonObservableDestruction
     (typeReg: TypeRegistries.TypeRegistry)
+    (sumReg: MemoryModel.RcSumShapeRegistry)
+    (allowSums: bool)
     (typ: AST.SemanticType)
     : bool =
-    let rec prove (expandingRecords: Map<string, AST.SemanticType>) typ =
+    let rec prove
+        (expandingRecords: Map<string, AST.SemanticType>)
+        (expandingSums: Map<string, AST.SemanticType>)
+        typ
+        =
         isScalarType typ
         || match typ with
            | AST.TString | AST.TBlob | AST.TInt -> true
-           | AST.TTuple elements -> List.forall (prove expandingRecords) elements
-           | AST.TList element -> prove expandingRecords element
+           | AST.TTuple elements ->
+               List.forall (prove expandingRecords expandingSums) elements
+           | AST.TList element -> prove expandingRecords expandingSums element
            | AST.TDict (key, value) ->
-               prove expandingRecords key
-               && prove expandingRecords value
+               prove expandingRecords expandingSums key
+               && prove expandingRecords expandingSums value
            | AST.TRecord (name, typeArgs) ->
                let recordType = AST.TRecord (name, typeArgs)
                match Map.tryFind name expandingRecords with
@@ -61,10 +69,41 @@ let private hasNonObservableDestruction
                        |> List.forall (fun (_, fieldType) ->
                            fieldType
                            |> TypeSubstitution.applySubstToType subst
-                           |> prove expandingRecords)
+                           |> prove expandingRecords expandingSums)
+                   | None when allowSums && Map.containsKey name sumReg ->
+                       prove expandingRecords expandingSums (AST.TSum (name, typeArgs))
+                   | _ -> false
+           | AST.TSum (name, typeArgs) when allowSums ->
+               let sumType = AST.TSum (name, typeArgs)
+               match Map.tryFind name expandingSums with
+               | Some expandingType -> expandingType = sumType
+               | None ->
+                   match Map.tryFind name sumReg with
+                   | Some info when List.length info.TypeParams = List.length typeArgs ->
+                       let subst = List.zip info.TypeParams typeArgs |> Map.ofList
+                       let expandingSums = Map.add name sumType expandingSums
+                       info.Payloads
+                       |> List.forall (fun (_, payload) ->
+                           payload
+                           |> Option.forall (fun payloadType ->
+                               payloadType
+                               |> TypeSubstitution.applySubstToType subst
+                               |> prove expandingRecords expandingSums))
                    | _ -> false
            | _ -> false
-    prove Map.empty typ
+    prove Map.empty Map.empty typ
+
+let private descriptorHasNonObservableDestruction
+    (typeReg: TypeRegistries.TypeRegistry)
+    (sumReg: MemoryModel.RcSumShapeRegistry)
+    (descriptor: RecordDescriptor)
+    : bool =
+    let allowSums =
+        match descriptor.ValueType with
+        | AST.TSum _ -> true
+        | _ -> false
+    descriptor.Fields
+    |> List.forall (snd >> hasNonObservableDestruction typeReg sumReg allowSums)
 
 let private atomIsScalar (scalarTemps: Set<TempId>) (atom: Atom) : bool =
     match atom with
@@ -143,6 +182,7 @@ let rec private reuseUniqueRecordClone
 /// attached so RC elaboration releases the displaced variant payload type.
 let rec private reuseUniqueSumConstructor
     (typeReg: TypeRegistries.TypeRegistry)
+    (sumReg: MemoryModel.RcSumShapeRegistry)
     (sourceDescriptor: RecordDescriptor)
     (sourceId: TempId)
     (tracked: Set<TempId>)
@@ -155,7 +195,7 @@ let rec private reuseUniqueSumConstructor
         when targetDescriptor.ValueType = sourceDescriptor.ValueType
              && List.length targetDescriptor.Fields = List.length sourceDescriptor.Fields
              && targetDescriptor.Fields
-                |> List.forall (snd >> hasNonObservableDestruction typeReg) ->
+                |> List.forall (snd >> hasNonObservableDestruction typeReg sumReg true) ->
         if not (atomsUseTracked tracked fields)
            && not (exprUsesTracked tracked body)
            && not (exprUsesTracked projections body) then
@@ -169,32 +209,33 @@ let rec private reuseUniqueSumConstructor
         else
             None
     | Let (boundId, Atom (Var sourceId), body) when Set.contains sourceId tracked ->
-        reuseUniqueSumConstructor typeReg sourceDescriptor sourceId (Set.add boundId tracked) projections body
+        reuseUniqueSumConstructor typeReg sumReg sourceDescriptor sourceId (Set.add boundId tracked) projections body
         |> Option.map (fun rewritten -> Let (boundId, Atom (Var sourceId), rewritten))
     | Let (boundId, TypedAtom (Var sourceId, typ), body) when Set.contains sourceId tracked ->
-        reuseUniqueSumConstructor typeReg sourceDescriptor sourceId (Set.add boundId tracked) projections body
+        reuseUniqueSumConstructor typeReg sumReg sourceDescriptor sourceId (Set.add boundId tracked) projections body
         |> Option.map (fun rewritten -> Let (boundId, TypedAtom (Var sourceId, typ), rewritten))
     | Let (boundId, Atom (Var projectionId), body) when Set.contains projectionId projections ->
-        reuseUniqueSumConstructor typeReg sourceDescriptor sourceId tracked (Set.add boundId projections) body
+        reuseUniqueSumConstructor typeReg sumReg sourceDescriptor sourceId tracked (Set.add boundId projections) body
         |> Option.map (fun rewritten -> Let (boundId, Atom (Var projectionId), rewritten))
     | Let (boundId, TypedAtom (Var projectionId, typ), body)
         when Set.contains projectionId projections ->
-        reuseUniqueSumConstructor typeReg sourceDescriptor sourceId tracked (Set.add boundId projections) body
+        reuseUniqueSumConstructor typeReg sumReg sourceDescriptor sourceId tracked (Set.add boundId projections) body
         |> Option.map (fun rewritten -> Let (boundId, TypedAtom (Var projectionId, typ), rewritten))
     | Let (boundId, (TupleGet (Var projectedSourceId, _) as cexpr), body)
     | Let (boundId, (RecordGet (_, Var projectedSourceId, _) as cexpr), body)
         when Set.contains projectedSourceId tracked ->
-        reuseUniqueSumConstructor typeReg sourceDescriptor sourceId tracked (Set.add boundId projections) body
+        reuseUniqueSumConstructor typeReg sumReg sourceDescriptor sourceId tracked (Set.add boundId projections) body
         |> Option.map (fun rewritten -> Let (boundId, cexpr, rewritten))
     | Let (boundId, cexpr, body) ->
         if not (cexprUsesTracked tracked cexpr) then
-            reuseUniqueSumConstructor typeReg sourceDescriptor sourceId tracked projections body
+            reuseUniqueSumConstructor typeReg sumReg sourceDescriptor sourceId tracked projections body
             |> Option.map (fun rewritten -> Let (boundId, cexpr, rewritten))
         else
             None
 
 let rec private reuseEligibleFixedBlocks
     (typeReg: TypeRegistries.TypeRegistry)
+    (sumReg: MemoryModel.RcSumShapeRegistry)
     (expr: AExpr)
     : AExpr =
     match expr with
@@ -202,28 +243,28 @@ let rec private reuseEligibleFixedBlocks
     | Join (parameter, continuation, entry) ->
         Join (
             parameter,
-            reuseEligibleFixedBlocks typeReg continuation,
-            reuseEligibleFixedBlocks typeReg entry
+            reuseEligibleFixedBlocks typeReg sumReg continuation,
+            reuseEligibleFixedBlocks typeReg sumReg entry
         )
     | If (condition, thenBranch, elseBranch) ->
         If (
             condition,
-            reuseEligibleFixedBlocks typeReg thenBranch,
-            reuseEligibleFixedBlocks typeReg elseBranch
+            reuseEligibleFixedBlocks typeReg sumReg thenBranch,
+            reuseEligibleFixedBlocks typeReg sumReg elseBranch
         )
     | Let (boundId, cexpr, body) ->
-        let body = reuseEligibleFixedBlocks typeReg body
+        let body = reuseEligibleFixedBlocks typeReg sumReg body
         match cexpr with
         | RecordAlloc (descriptor, _)
         | RecordClone (descriptor, _, _)
         | RecordReuse (_, descriptor, _, _)
-            when descriptor.Fields
-                 |> List.forall (snd >> hasNonObservableDestruction typeReg) ->
+            when descriptorHasNonObservableDestruction typeReg sumReg descriptor ->
             let candidate =
                 match descriptor.ValueType with
                 | AST.TSum _ ->
                     reuseUniqueSumConstructor
                         typeReg
+                        sumReg
                         descriptor
                         boundId
                         (Set.singleton boundId)
@@ -389,6 +430,7 @@ let rec private scalarReplaceExpr
 
 let private scalarReplaceFunction
     (typeReg: TypeRegistries.TypeRegistry)
+    (sumReg: MemoryModel.RcSumShapeRegistry)
     (returnTypes: Map<AST.FunctionId, AST.SemanticType>)
     (func: Function)
     : Function =
@@ -399,10 +441,11 @@ let private scalarReplaceFunction
     { func with
         Body =
             scalarReplaceExpr returnTypes scalarParams Map.empty func.Body
-            |> reuseEligibleFixedBlocks typeReg }
+            |> reuseEligibleFixedBlocks typeReg sumReg }
 
 let scalarReplaceProgram
     (typeReg: TypeRegistries.TypeRegistry)
+    (sumReg: MemoryModel.RcSumShapeRegistry)
     (Program (functions, mainExpr): Program)
     : Program =
     let returnTypes =
@@ -410,7 +453,7 @@ let scalarReplaceProgram
         |> List.map (fun func -> func.Id, func.ReturnType)
         |> Map.ofList
     Program (
-        functions |> List.map (scalarReplaceFunction typeReg returnTypes),
+        functions |> List.map (scalarReplaceFunction typeReg sumReg returnTypes),
         scalarReplaceExpr returnTypes Set.empty Map.empty mainExpr
-        |> reuseEligibleFixedBlocks typeReg
+        |> reuseEligibleFixedBlocks typeReg sumReg
     )

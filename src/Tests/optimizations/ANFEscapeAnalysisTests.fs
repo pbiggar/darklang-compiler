@@ -57,8 +57,9 @@ let rec private containsRecordReuse (expr: AExpr) : bool =
     | If (_, thenBranch, elseBranch) ->
         containsRecordReuse thenBranch || containsRecordReuse elseBranch
 
-let private optimizeBodyWithTypes
+let private optimizeBodyWithRegistries
     (typeReg: TypeRegistries.TypeRegistry)
+    (sumReg: MemoryModel.RcSumShapeRegistry)
     (body: AExpr)
     : AExpr =
     let func =
@@ -69,14 +70,20 @@ let private optimizeBodyWithTypes
           ReturnOwnership = OwnedReturn
           Body = body }
     let (Program (functions, _)) =
-        ANF_EscapeAnalysis.scalarReplaceProgram typeReg
+        ANF_EscapeAnalysis.scalarReplaceProgram typeReg sumReg
             (Program ([func], Return UnitLiteral))
     match functions with
     | [optimized] -> optimized.Body
     | _ -> Crash.crash "ANFEscapeAnalysisTests: fixture function disappeared"
 
 let private optimizeBody (body: AExpr) : AExpr =
-    optimizeBodyWithTypes Map.empty body
+    optimizeBodyWithRegistries Map.empty Map.empty body
+
+let private optimizeBodyWithTypes
+    (typeReg: TypeRegistries.TypeRegistry)
+    (body: AExpr)
+    : AExpr =
+    optimizeBodyWithRegistries typeReg Map.empty body
 
 let testScalarRecordProjectionRemovesAllocation () : TestResult =
     let descriptor = pointDescriptor AST.TInt64
@@ -517,6 +524,127 @@ let testBoxedSumConstructorReusesUniqueAllocation () : TestResult =
     if aggregateAllocationCount body = 1 && containsRecordReuse body then Ok ()
     else Error $"Expected the unique boxed-sum allocation to be reused, got {body}"
 
+let testRecursiveBoxedSumConstructorReusesUniqueAllocation () : TestResult =
+    let sumType = AST.TSum ("RecursiveReuseChain", [])
+    let sumReg : MemoryModel.RcSumShapeRegistry =
+        Map.ofList [
+            ("RecursiveReuseChain",
+             { TypeParams = []
+               Payloads = [(0, Some (AST.TList sumType))] })
+        ]
+    let descriptor = {
+        SourceTypeName = "RecursiveReuseChain"
+        RuntimeTypeName = "RecursiveReuseChain"
+        TypeArgs = []
+        Fields = ["$tag", AST.TInt64; "$payload", AST.TList sumType]
+        ValueType = sumType
+    }
+    let body =
+        Let (
+            TempId 4,
+            Call (fid "makeOldChildren", []),
+            Let (
+                TempId 0,
+                RecordAlloc (descriptor, [IntLiteral (Int64 0L); Var (TempId 4)]),
+                Let (
+                    TempId 1,
+                    TupleGet (Var (TempId 0), 1),
+                    Let (
+                        TempId 5,
+                        Call (fid "makeNewChildren", []),
+                        Let (
+                            TempId 2,
+                            RecordAlloc (descriptor, [IntLiteral (Int64 0L); Var (TempId 5)]),
+                            Return (Var (TempId 2))
+                        )
+                    )
+                )
+            )
+        )
+        |> optimizeBodyWithRegistries Map.empty sumReg
+    if aggregateAllocationCount body = 1 && containsRecordReuse body then Ok ()
+    else Error $"Expected the unique recursive boxed-sum allocation to be reused, got {body}"
+
+let testRecursiveBoxedSumReuseRejectsUnsafeCycles () : TestResult =
+    let optimized sumReg sumType payloadType =
+        let typeName =
+            match sumType with
+            | AST.TSum (name, _) -> name
+            | _ -> Crash.crash "Recursive boxed-sum test requires a sum type"
+        let descriptor = {
+            SourceTypeName = typeName
+            RuntimeTypeName = typeName
+            TypeArgs =
+                match sumType with
+                | AST.TSum (_, typeArgs) -> typeArgs
+                | _ -> []
+            Fields = ["$tag", AST.TInt64; "$payload", payloadType]
+            ValueType = sumType
+        }
+        Let (
+            TempId 4,
+            Call (fid "makeOldRecursivePayload", []),
+            Let (
+                TempId 0,
+                RecordAlloc (descriptor, [IntLiteral (Int64 0L); Var (TempId 4)]),
+                Let (
+                    TempId 5,
+                    Call (fid "makeNewRecursivePayload", []),
+                    Let (
+                        TempId 2,
+                        RecordAlloc (descriptor, [IntLiteral (Int64 0L); Var (TempId 5)]),
+                        Return (Var (TempId 2))
+                    )
+                )
+            )
+        )
+        |> optimizeBodyWithRegistries Map.empty sumReg
+
+    let streamType = AST.TSum ("RecursiveStream", [])
+    let growingType = AST.TSum ("RecursiveGrowing", [AST.TString])
+    let missingType = AST.TSum ("RecursiveMissing", [])
+    let arityType = AST.TSum ("RecursiveArity", [])
+    let samples :
+        (MemoryModel.RcSumShapeRegistry * AST.SemanticType * AST.SemanticType) list = [
+        (Map.ofList [
+             ("RecursiveStream",
+              { MemoryModel.TypeParams = []
+                Payloads = [
+                    0, Some (AST.TList streamType)
+                    1, Some (AST.TStream AST.TInt64)
+                ] })
+         ],
+         streamType,
+         AST.TList streamType)
+        (Map.ofList [
+             ("RecursiveGrowing",
+              { MemoryModel.TypeParams = ["a"]
+                Payloads = [
+                    0, Some (AST.TSum ("RecursiveGrowing", [AST.TList (AST.TVar "a")]))
+                ] })
+         ],
+         growingType,
+         AST.TSum ("RecursiveGrowing", [AST.TList AST.TString]))
+        (Map.empty, missingType, missingType)
+        (Map.ofList [
+             ("RecursiveArity",
+              { MemoryModel.TypeParams = ["a"]
+                Payloads = [0, Some (AST.TVar "a")] })
+         ],
+         arityType,
+         arityType)
+    ]
+
+    samples
+    |> List.tryPick (fun (sumReg, sumType, payloadType) ->
+        let body = optimized sumReg sumType payloadType
+        if aggregateAllocationCount body = 2 && not (containsRecordReuse body) then None
+        else Some (sumType, body))
+    |> function
+       | None -> Ok ()
+       | Some (sumType, body) ->
+           Error $"Expected unsafe recursive sum {sumType} to reject reuse, got {body}"
+
 let testBoxedSumReuseRejectsObservablePayloads () : TestResult =
     let optimized sourcePayloadType targetPayloadType =
         let sourceDescriptor = {
@@ -689,6 +817,8 @@ let tests =
       ("Unsupported composite records reject reuse", testUnsupportedCompositeRecordsRejectReuse)
       ("Nested records reuse only with safe instantiated fields", testNestedRecordsReuseOnlyWithSafeInstantiatedFields)
       ("Boxed sum constructor reuses unique allocation", testBoxedSumConstructorReusesUniqueAllocation)
+      ("Recursive boxed sum constructor reuses unique allocation", testRecursiveBoxedSumConstructorReusesUniqueAllocation)
+      ("Recursive boxed sum reuse rejects unsafe cycles", testRecursiveBoxedSumReuseRejectsUnsafeCycles)
       ("Boxed sum reuse rejects observable payloads", testBoxedSumReuseRejectsObservablePayloads)
       ("Boxed sum reuse rejects surviving payload projection", testBoxedSumReuseRejectsSurvivingPayloadProjection)
       ("Managed leaf record reuses unique allocation", testManagedLeafRecordReusesUniqueAllocation)

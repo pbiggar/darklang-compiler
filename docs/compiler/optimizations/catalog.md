@@ -32,8 +32,8 @@ from Git history.
   forwarding, projection-only scalar tuple and record replacement, unique
   fixed-layout record-clone allocation reuse across Float, non-observable
   buffers, structurally safe composite fields, and regular recursive nominal
-  records; straight-line boxed-sum constructor reuse for safe payloads; and
-  unused ANF binding elimination.
+  records; straight-line boxed-sum constructor reuse for structurally safe,
+  regularly recursive payloads; and unused ANF binding elimination.
 - **Loops and control flow:** bounded recursive-loop unrolling, tail recursion
   modulo native-width wrapping addition, recursive-left subtraction,
   multiplication, or immutable list/sum/record constructors; effect-free call
@@ -131,10 +131,12 @@ Replacement children are retained before displaced children are released with
 their recursive plans and the block is overwritten. Straight-line boxed sums
 carry their instantiated nominal type and source and target variant payload
 layouts through ANF, so a compatible later constructor can perform the same
-ordered transfer. Streams and containers holding them are rejected;
-polymorphically growing recursion, nested sums, closures, returns, calls,
-closure capture, storage, candidates that cross branches or joins, raw
-operations, and unknown uses preserve the ordinary allocation.
+ordered transfer. Complete sum-shape metadata
+admits safe nested and regular recursive sums through typed release-plan
+back-edges. Streams and containers holding them are rejected; type-growing
+record or sum cycles, closures, returns, calls, closure capture, storage,
+candidates that cross branches or joins, raw operations, and unknown uses
+preserve the ordinary allocation.
 Focused tests cover projection, alias, clone-chain, ownership ordering, and
 branch shapes plus the conservative call and observable-field boundaries.
 

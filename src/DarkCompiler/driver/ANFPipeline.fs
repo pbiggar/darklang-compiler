@@ -174,7 +174,10 @@ let internal buildAnf
         if options.DisableANFOpt then
             anfSpecialized
         else
-            ANF_EscapeAnalysis.scalarReplaceProgram registries.TypeReg anfSpecialized
+            ANF_EscapeAnalysis.scalarReplaceProgram
+                registries.TypeReg
+                registries.RcSumShapeReg
+                anfSpecialized
     let escapeAnalysisElapsed = sw.Elapsed.TotalMilliseconds - escapeAnalysisStart
     if not options.DisableANFOpt then
         recordPassTiming passTimingRecorder "ANF Escape Analysis" escapeAnalysisElapsed
