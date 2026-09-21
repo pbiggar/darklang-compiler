@@ -236,8 +236,6 @@ let fuse
         |> Seq.tryPick (fun (id, name) ->
             if name = "Darklang.Stdlib.List.__arrayOwnershipBoundary_i64" then Some id
             else None)
-        |> Option.defaultWith (fun () ->
-            Crash.crash "Ownership boundary function is absent from semantic function metadata")
     let checkedById = functions |> List.map (fun definition -> definition.Id, definition) |> Map.ofList
     let rewrites =
         MaterializeOwnershipVariants.rewrites plan
@@ -278,6 +276,11 @@ let fuse
                     | Some ownership, Some callee
                         when eligible functionNames callee ownership
                              && (AST.NonEmptyList.toList arguments |> List.forall isSafeArgument) ->
+                        let boundaryId =
+                            boundaryId
+                            |> Option.defaultWith (fun () ->
+                                Crash.crash
+                                    "Ownership boundary function is absent from semantic function metadata")
                         match
                             substitutions
                                 boundaryId
