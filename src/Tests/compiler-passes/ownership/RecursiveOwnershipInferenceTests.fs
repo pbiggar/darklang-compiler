@@ -87,6 +87,18 @@ let private infer semantics head tail =
             |> List.map (fun functionBoundary ->
                 functionBoundary.Name, functionBoundary.Ownership)))
 
+let private inferForDemand semantics target uniqueArguments head tail =
+    InferRecursiveOwnership.inferDemand
+        semantics
+        (TestIds.functionIdForName target)
+        uniqueArguments
+        { Head = head; Tail = tail }
+    |> Result.map (Option.map (fun boundary ->
+        boundary
+        |> InferRecursiveOwnership.boundaryToList
+        |> List.map (fun functionBoundary ->
+            functionBoundary.Name, functionBoundary.Ownership)))
+
 let private testInfersSelfRecursiveUniqueness () =
     let input = value 0
     let reused = value 1
@@ -111,6 +123,32 @@ let private testInfersSelfRecursiveUniqueness () =
     let actual = infer semantics definition []
     if actual = Ok expected then Ok ()
     else Error $"Expected one verified recursive uniqueness boundary {expected}, got {actual}"
+
+let private testInfersSelfRecursiveCallDemand () =
+    let input = value 0
+    let reused = value 1
+    let result = value 2
+    let semantics = semantics [(input, "input"); (reused, "reused"); (result, "result")]
+    let body =
+        block
+            [parameter "input" input]
+            [
+                Evaluate (HIR.Leaf (Reuse ("input", "reused")))
+                call "loop" [reused] result
+            ]
+            result
+    let definition =
+        functionDefinition
+            "loop"
+            (signature [ConsumedParameter "input"] (ProducedResult "result"))
+            body
+    let expected = Some [
+        "loop", signature [UniqueParameter "input"] (UniqueProducedResult "result")
+    ]
+    let unavailable = inferForDemand semantics "loop" Set.empty definition []
+    let available = inferForDemand semantics "loop" (Set.singleton 0) definition []
+    if unavailable = Ok None && available = Ok expected then Ok ()
+    else Error $"Expected atomic recursive inference only for the usable demand, got unavailable={unavailable}, available={available}"
 
 let private testInfersMutualBoundaryTradeoffs () =
     let firstInput = value 10
@@ -205,6 +243,7 @@ let private testBoundsGroupSearch () =
 
 let tests = [
     "Recursive uniqueness inference verifies self calls as one group", testInfersSelfRecursiveUniqueness
+    "Recursive uniqueness inference resolves one concrete call demand", testInfersSelfRecursiveCallDemand
     "Recursive uniqueness inference retains mutual boundary tradeoffs", testInfersMutualBoundaryTradeoffs
     "Recursive uniqueness inference rejects invalid function groups", testRejectsInvalidFunctionGroup
     "Recursive uniqueness inference bounds group-wide variants", testBoundsGroupSearch

@@ -276,26 +276,23 @@ binaries retain their previous layout.
 This is the first end-to-end region slice, not a replacement for the entire
 ANF pipeline or a complete Perceus implementation.
 
-Owned HIR can refine an established borrow/consume function boundary into a
-bounded set of verifier-proven uniqueness variants. It upgrades only consumed
-parameters and produced results, rejects variants that fail ownership
-verification, and removes a variant only when another requires no stronger
-inputs while promising no weaker result. Keeping incomparable boundaries makes
-the later specialization policy explicit. Mutually visible and recursive
-functions are inferred as one bounded candidate group, with internal call
-contracts derived from that same candidate before group verification.
-Program-level inference discovers those groups in callee-first order, delegates
-acyclic singletons and recursive SCCs to their respective solvers, and retains
-each group's dependency metadata and every nondominated candidate. Cross-group
-calls continue to use their established ownership registry contract during
-inference. Call-site selection indexes every group member, accepts explicit
-argument-uniqueness facts, and chooses a candidate only when its ordinary
-borrow/consume/produce shape matches that established contract. It prefers a
-unique result and then fewer unique-input requirements. Candidate identities
-are structural across the complete group and independent of discovery order
-and local ownership identities, so recursive SCC selection remains atomic.
-When no inferred candidate applies, the established contract remains
-the fallback.
+Owned HIR can refine an established borrow/consume function boundary after a
+verified call site supplies concrete argument-uniqueness facts. Production
+scheduling does not enumerate variants for every function. It indexes SCCs
+without candidate proof, then lazily tries only refinements usable by the call,
+preferring a unique result with the fewest unique-input requirements and
+stopping at the first verified boundary. Search is bounded; exhaustion or an
+unprovable request keeps the established contract instead of failing
+compilation. Positive and negative demand results are cached within the
+schedule, so equivalent calls share proof work and uncalled functions perform
+none.
+
+Mutually visible and recursive functions remain one proof unit. A call entering
+an SCC creates an atomic group request, candidate-owned contracts verify its
+internal calls, and recursive backedges never become independent selection
+roots. Cross-group calls continue to use their established ownership registry
+contracts during proof. Candidate identities are structural across the complete
+group and independent of discovery order and local ownership identities.
 
 Variant materialization now returns a verified plan with rewritten original
 functions, deduplicated specialized groups, and explicit call rewrites. Each

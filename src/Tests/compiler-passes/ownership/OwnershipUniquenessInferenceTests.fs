@@ -80,6 +80,17 @@ let private infer semantics signature body =
     InferOwnershipUniqueness.infer semantics functionDefinition
     |> Result.map InferOwnershipUniqueness.toList
 
+let private inferForDemand semantics uniqueArguments signature body =
+    let functionDefinition : Function<TestLeaf, string> = {
+        Definition = {
+            Id = TestIds.functionIdForName "test"
+            Name = "test"
+            Body = body
+        }
+        Ownership = signature
+    }
+    InferOwnershipUniqueness.inferDemand semantics uniqueArguments functionDefinition
+
 let private signature parameters result : FunctionSignature<string> = {
     Parameters = parameters
     Result = result
@@ -97,6 +108,20 @@ let private testRequiresAndReturnsUniqueReuse () =
     let actual = infer semantics initial body
     if actual = Ok expected then Ok ()
     else Error $"Expected the verified unique reuse boundary {expected}, got {actual}"
+
+let private testInfersOnlyConcreteCallDemand () =
+    let semantics = semantics [(inputValue, "input"); (outputValue, "output")]
+    let body =
+        block
+            [parameter "input" inputValue]
+            [Evaluate (HIR.Leaf (Reuse ("input", "output")))]
+            outputValue
+    let initial = signature [ConsumedParameter "input"] (ProducedResult "output")
+    let expected = signature [UniqueParameter "input"] (UniqueProducedResult "output")
+    let unavailable = inferForDemand semantics Set.empty initial body
+    let available = inferForDemand semantics (Set.singleton 0) initial body
+    if unavailable = Ok None && available = Ok (Some expected) then Ok ()
+    else Error $"Expected inference only for the usable call demand, got unavailable={unavailable}, available={available}"
 
 let private testRetainsInputOutputTradeoffs () =
     let semantics = semantics [(inputValue, "value")]
@@ -181,6 +206,7 @@ let private testDefersRecursiveInference () =
 
 let tests = [
     "Uniqueness inference proves required reuse boundaries", testRequiresAndReturnsUniqueReuse
+    "Uniqueness inference resolves only concrete call demand", testInfersOnlyConcreteCallDemand
     "Uniqueness inference retains input and output tradeoffs", testRetainsInputOutputTradeoffs
     "Scalar escapes revoke inferred unique results", testEscapeRevokesUniqueResult
     "Uniqueness inference rejects unprovable boundaries", testRejectsUnprovableBoundary

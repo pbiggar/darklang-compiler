@@ -45,8 +45,12 @@ representation and safety boundaries are documented in
   specializations by their bodies, contracts, and dependencies. Implemented by
   [ScheduleOwnershipVariants](../../src/DarkCompiler/passes/ownership/ScheduleOwnershipVariants.fs),
   which is invoked by production whole-function analysis and returns the
-  materialization, iteration history, and structural cache descriptors. These
-  foundation stages alone are not expected to improve runtime performance.
+  materialization, iteration history, and structural cache descriptors.
+  Candidate proof is demand-driven from verified call-site facts: uncalled
+  groups perform no variant search, equivalent positive and negative demands
+  share local proof results, and calls entering recursive SCCs request one
+  atomic group candidate. These foundation stages alone are not expected to
+  improve runtime performance.
 - [x] **Carry ownership through lowering.** Preserve contracts through calls,
   returns, branches, tail calls, ANF, and native code generation. Integrate with
   reference counting so ownership is neither duplicated nor lost. Scheduled

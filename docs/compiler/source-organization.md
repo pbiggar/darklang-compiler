@@ -121,22 +121,24 @@ mutually recursive groups. Calls retained inside opaque scalar expressions do
 not acquire normalized call-graph edges.
 `ElaborateFunctionOwnership` consumes the same callee-first order when deriving
 established boundaries: it infers a nonrecursive singleton once and iterates
-only within each recursive SCC. `InferOwnedFunctionGroups` then dispatches
-nonrecursive singletons to candidate inference and recursive SCCs to group-wide
-inference. Its result keeps every group and candidate boundary nonempty,
-preserves internal dependencies and external targets, and retains all
-nondominated variants for later call-site selection. Calls across groups use
-the already registered ownership boundary during proof; inference does not
-silently select a callee specialization.
-`SelectOwnershipVariants` builds a function-to-group catalog and assigns each
-candidate a structural identity from the complete group boundary, ordered by
-function name and independent of local ownership identities. A
-call site supplies its established transfer contract and the argument positions
-proven unique by ownership analysis. Selection preserves the transfer shape,
-prefers stronger result uniqueness and then fewer unique-input requirements,
-and returns the complete candidate for recursive groups. An inapplicable
-inferred candidate leaves the established verified contract in place; this
-stage does not inspect runtime reference counts or materialize specialized functions.
+only within each recursive SCC. `InferOwnedFunctionGroups` prepares an SCC index
+without inferring variants. After established-program verification exposes a
+real call site's unique arguments, the scheduler requests only refinements that
+the call can satisfy. Candidate verification is lazy, prefers a unique result
+with the fewest unique-input requirements, and stops at the first proof. The
+bounded search returns no specialization rather than rejecting a valid program.
+Calls entering a recursive SCC request one atomic group candidate; internal
+recursive edges never create independent demand. Positive and negative results
+are cached by target, established contract, and refinable unique positions for
+the remainder of the schedule. Uncalled groups perform no candidate
+verification. Calls across groups use the already registered ownership boundary
+during proof.
+`SelectOwnershipVariants` assigns a selected candidate a structural identity
+from the complete group boundary, ordered by function name and independent of
+local ownership identities. Selection preserves the established transfer shape
+and returns the complete candidate for recursive groups. An inapplicable demand
+leaves the established verified contract in place; this stage does not inspect
+runtime reference counts or materialize specialized functions.
 `MaterializeOwnershipVariants` turns selected calls into an explicit plan of
 original functions, specialized groups, and call rewrites. It deduplicates by
 structural candidate identity, names clones with a versioned canonical digest,

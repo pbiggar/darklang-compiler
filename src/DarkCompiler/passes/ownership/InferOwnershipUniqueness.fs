@@ -44,16 +44,76 @@ let internal withinVariantLimit refinableModes =
         else doubleWithinLimit (remaining - 1) (variants * 2)
     doubleWithinLimit refinableModes 1
 
+let rec private parameterSignatures = function
+    | [] -> Seq.singleton []
+    | ownership :: rest ->
+        seq {
+            for variant in parameterVariants ownership do
+                for remaining in parameterSignatures rest do
+                    yield variant :: remaining
+        }
+
+let internal signatureSequence
+    (signature: FunctionSignature<'id>)
+    : FunctionSignature<'id> seq =
+    seq {
+        for parameterModes in parameterSignatures signature.Parameters do
+            for resultMode in resultVariants signature.Result do
+                yield ({ Parameters = parameterModes; Result = resultMode }: FunctionSignature<'id>)
+    }
+
 let internal signatures (signature: FunctionSignature<'id>) : FunctionSignature<'id> list =
-    let parameters =
-        signature.Parameters
-        |> List.fold (fun combinations ownership ->
-            [ for combination in combinations do
-                for variant in parameterVariants ownership do
-                    yield combination @ [variant] ]) [[]]
-    [ for parameterModes in parameters do
-        for resultMode in resultVariants signature.Result do
-            yield ({ Parameters = parameterModes; Result = resultMode }: FunctionSignature<'id>) ]
+    signatureSequence signature |> Seq.toList
+
+let rec private combinations size values =
+    seq {
+        match size, values with
+        | 0, _ -> yield []
+        | _, [] -> ()
+        | size, head :: tail when size > 0 ->
+            for rest in combinations (size - 1) tail do
+                yield head :: rest
+            yield! combinations size tail
+        | _ -> ()
+    }
+
+/// Produce only refinements that a concrete call can satisfy. Candidates are
+/// ordered by the number and then positions of required unique arguments, so
+/// verification may stop at the first successful boundary.
+let internal demandedSignatures
+    (uniqueArguments: Set<int>)
+    (signature: FunctionSignature<'id>)
+    : FunctionSignature<'id> seq =
+    match signature.Result with
+    | ProducedResult result ->
+        let available =
+            signature.Parameters
+            |> List.indexed
+            |> List.choose (fun (index, ownership) ->
+                match ownership with
+                | ConsumedParameter _ when Set.contains index uniqueArguments -> Some index
+                | UnmanagedParameter
+                | BorrowedParameter _
+                | ConsumedParameter _
+                | UniqueParameter _ -> None)
+        seq {
+            for size in 0 .. List.length available do
+                for selected in combinations size available do
+                    let selected = Set.ofList selected
+                    let parameters =
+                        signature.Parameters
+                        |> List.mapi (fun index ownership ->
+                            match ownership with
+                            | ConsumedParameter id when Set.contains index selected -> UniqueParameter id
+                            | _ -> ownership)
+                    yield ({
+                        Parameters = parameters
+                        Result = UniqueProducedResult result
+                    } : FunctionSignature<'id>)
+        }
+    | UnmanagedResult
+    | BorrowedResult _
+    | UniqueProducedResult _ -> Seq.empty
 
 let private parameterStrength = function
     | UnmanagedParameter | BorrowedParameter _ -> 0
@@ -144,3 +204,24 @@ let infer
         | head :: tail, _ -> Ok (Candidates (head, tail))
         | [], Some error -> Error (NoVerifiedBoundary error)
         | [], None -> Crash.crash "Ownership uniqueness inference generated no boundary candidates"
+
+/// Verify the best ownership refinement usable by one concrete call. Search is
+/// lazy and bounded: inability to prove an optimization retains the established
+/// boundary instead of rejecting an otherwise valid program.
+let inferDemand
+    (semantics: Semantics<'leaf, 'id>)
+    (uniqueArguments: Set<int>)
+    (functionDefinition: Function<'leaf, 'id>)
+    : Result<FunctionSignature<'id> option, InferenceError<'id>> =
+    let root = functionDefinition.Definition.Body
+    if callsTarget functionDefinition.Definition.Id root then
+        Error (RecursiveFunctionRequiresGroupInference functionDefinition.Definition.Id)
+    else
+        functionDefinition.Ownership
+        |> demandedSignatures uniqueArguments
+        |> Seq.truncate maximumVariants
+        |> Seq.tryPick (fun candidate ->
+            match VerifyOwnership.verifyFunction semantics candidate root with
+            | Ok () -> Some candidate
+            | Error _ -> None)
+        |> Ok

@@ -9,7 +9,7 @@ type private Leaf = Fresh of HIR.Value
 let private fid = TestIds.functionIdForName
 let private value id : HIR.Value = { Id = HIR.ValueId id; Type = AST.TList AST.TInt64 }
 let private parameter (value: HIR.Value) : HIR.Parameter = {
-    Name = "value"
+    Name = sprintf "value%i" (match value.Id with HIR.ValueId id -> id)
     Binding = AST.bindingId (match value.Id with HIR.ValueId id -> id)
     Value = value
 }
@@ -30,6 +30,12 @@ let private call target argument result : HIR.FunctionCall = {
     Result = result
 }
 
+let private condition : HIR.Operand = {
+    Expression = CheckedAST.BoolLiteral true
+    Type = AST.TBool
+    Inputs = Map.empty
+}
+
 let private semantics : Semantics<Leaf, HIR.ValueId> = {
     Leaf = fun (Fresh output) -> { Inputs = []; Outputs = [output.Id] }
     LeafUniqueness = fun (Fresh output) -> {
@@ -39,7 +45,8 @@ let private semantics : Semantics<Leaf, HIR.ValueId> = {
     CallOwnership = fun _ -> None
     ScalarUses = fun operand -> operand.Inputs |> Map.values |> Seq.map (fun input -> input.Id) |> Set.ofSeq
     ScalarEscapes = fun _ -> Set.empty
-    BlockArgument = fun input -> Managed input.Id
+    BlockArgument = fun input ->
+        if input.Type = AST.TUnit then Unmanaged else Managed input.Id
 }
 
 let private contracts : VerifyOwnedHIR.HIRContracts<Leaf> = {
@@ -100,6 +107,73 @@ let private testBoundsConvergence () =
     match ScheduleOwnershipVariants.schedule limits contracts semantics Set.empty definitions with
     | Error (ScheduleOwnershipVariants.IterationLimitExceeded 1) -> Ok ()
     | actual -> Error (sprintf "Expected the scheduler iteration bound, got %A" actual)
+
+let private testSkipsUnusedWideVariantSearch () =
+    let unitInput : HIR.Value = { Id = HIR.ValueId 100; Type = AST.TUnit }
+    let managedInputs = [0 .. 8] |> List.map value
+    let wide =
+        definition
+            "unusedWide"
+            (signature
+                (UnmanagedParameter
+                 :: (managedInputs |> List.map (fun input -> ConsumedParameter input.Id)))
+                UnmanagedResult)
+            (block
+                (unitInput :: managedInputs)
+                (managedInputs |> List.map (fun input -> Drop input.Id))
+                unitInput)
+    ScheduleOwnershipVariants.schedule
+        ScheduleOwnershipVariants.defaultLimits
+        contracts
+        semantics
+        Set.empty
+        [wide]
+    |> Result.mapError (sprintf "%A")
+    |> Result.bind (fun plan ->
+        let materialized = ScheduleOwnershipVariants.materialization plan
+        if List.isEmpty (MaterializeOwnershipVariants.groups materialized)
+           && List.isEmpty (MaterializeOwnershipVariants.rewrites materialized) then Ok ()
+        else Error "Expected an uncalled wide function to produce no ownership variants")
+
+let private testSchedulesRecursiveDemandAtomically () =
+    let loopInput, recursiveResult, loopResult = value 20, value 21, value 22
+    let recursiveCall = call "loop" loopInput recursiveResult
+    let recursiveBranch = block [] [Evaluate (HIR.Call recursiveCall)] recursiveResult
+    let baseBranch = block [] [] loopInput
+    let loop =
+        definition
+            "loop"
+            (signature [ConsumedParameter loopInput.Id] (ProducedResult loopResult.Id))
+            (block
+                [loopInput]
+                [Evaluate (HIR.Branch (loopResult, condition, recursiveBranch, baseBranch))]
+                loopResult)
+    let callerInput, callerResult = value 30, value 31
+    let externalCall = call "loop" callerInput callerResult
+    let caller =
+        definition
+            "recursiveCaller"
+            (signature [UniqueParameter callerInput.Id] (ProducedResult callerResult.Id))
+            (block [callerInput] [Evaluate (HIR.Call externalCall)] callerResult)
+    ScheduleOwnershipVariants.schedule
+        ScheduleOwnershipVariants.defaultLimits
+        contracts
+        semantics
+        Set.empty
+        [loop; caller]
+    |> Result.mapError (sprintf "%A")
+    |> Result.bind (fun plan ->
+        let materialized = ScheduleOwnershipVariants.materialization plan
+        match MaterializeOwnershipVariants.groups materialized,
+              MaterializeOwnershipVariants.rewrites materialized with
+        | [group], [rewrite]
+            when List.length (AST.NonEmptyList.toList group.Members) = 1
+                 && rewrite.Site.Result = externalCall.Result.Id
+                 && rewrite.Ownership = {
+                     Parameters = [UniqueCallParameter]
+                     Result = UniqueProducedCallResult
+                 } -> Ok ()
+        | actual -> Error (sprintf "Expected one atomic recursive specialization, got %A" actual))
 
 let private testLowersSpecializedCallsAndContracts () =
     let definitions, _, _ = fixture ()
@@ -169,5 +243,7 @@ let private testLowersSpecializedCallsAndContracts () =
 let tests = [
     "Ownership specialization propagates uniqueness to a fixed point", testPropagatesUniquenessToFixedPoint
     "Ownership specialization has an explicit convergence bound", testBoundsConvergence
+    "Ownership specialization skips unused wide functions", testSkipsUnusedWideVariantSearch
+    "Ownership specialization schedules recursive demand atomically", testSchedulesRecursiveDemandAtomically
     "Ownership specialization lowers clones calls and contracts into ANF", testLowersSpecializedCallsAndContracts
 ]

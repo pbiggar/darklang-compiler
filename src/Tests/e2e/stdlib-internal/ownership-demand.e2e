@@ -1,0 +1,30 @@
+// ownership-demand.e2e - Demand-driven specialization keeps wide valid functions compilable.
+let reverseEight
+    (a: List<Int64>)
+    (b: List<Int64>)
+    (c: List<Int64>)
+    (d: List<Int64>)
+    (e: List<Int64>)
+    (f: List<Int64>)
+    (g: List<Int64>)
+    (h: List<Int64>)
+    : List<Int64> =
+    let a = Stdlib.List.reverse a in
+    let b = Stdlib.List.reverse b in
+    let c = Stdlib.List.reverse c in
+    let d = Stdlib.List.reverse d in
+    let e = Stdlib.List.reverse e in
+    let f = Stdlib.List.reverse f in
+    let g = Stdlib.List.reverse g in
+    let h = Stdlib.List.reverse h in
+    let discardedLengths =
+        Stdlib.List.length b
+        + Stdlib.List.length c
+        + Stdlib.List.length d
+        + Stdlib.List.length e
+        + Stdlib.List.length f
+        + Stdlib.List.length g
+        + Stdlib.List.length h in
+    if discardedLengths >= 0 then a else []
+
+reverseEight [1L, 2L] [2L] [3L] [4L] [5L] [6L] [7L] [8L] = [2L, 1L]

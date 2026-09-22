@@ -50,6 +50,19 @@ let private variants (functions: Function<'leaf, 'id> list) =
             for ownership in signatures functionDefinition.Ownership do
                 yield group @ [{ functionDefinition with Ownership = ownership }] ]) [[]]
 
+let rec private variantsWithTarget target targetOwnership functions =
+    seq {
+        match functions with
+        | [] -> yield []
+        | functionDefinition :: rest ->
+            let boundaries =
+                if functionDefinition.Definition.Id = target then Seq.singleton targetOwnership
+                else signatureSequence functionDefinition.Ownership
+            for ownership in boundaries do
+                for group in variantsWithTarget target targetOwnership rest do
+                    yield { functionDefinition with Ownership = ownership } :: group
+    }
+
 let private boundary = function
     | [] -> Crash.crash "Ownership uniqueness inference produced an empty function group"
     | head :: tail ->
@@ -60,6 +73,18 @@ let private boundary = function
         }
         GroupBoundary (functionBoundary head, List.map functionBoundary tail)
 
+let private withCandidateGroupSemantics semantics definitions =
+    let members =
+        definitions
+        |> List.map (fun definition -> definition.Definition.Id)
+        |> Set.ofList
+    {
+        semantics with
+            CallOwnership = fun call ->
+                if Set.contains call.Target members then None
+                else semantics.CallOwnership call
+    }
+
 /// Infer a mutually visible function group as one proof unit. Internal direct
 /// and recursive calls receive ownership contracts derived from each candidate
 /// group, while external call contracts continue to come from the dialect.
@@ -69,6 +94,7 @@ let infer
     (definitions: AST.NonEmptyList<Function<'leaf, 'id>>)
     : Result<Candidates<'id>, InferenceError<'id>> =
     let definitions = AST.NonEmptyList.toList definitions
+    let candidateSemantics = withCandidateGroupSemantics semantics definitions
     let refinableModes =
         definitions
         |> List.sumBy (fun definition -> refinableModeCount definition.Ownership)
@@ -78,7 +104,7 @@ let infer
         let verified, firstFailure =
             variants definitions
             |> List.fold (fun (verified, firstFailure) candidate ->
-                match VerifyOwnership.verifyFunctions semantics candidate with
+                match VerifyOwnership.verifyFunctions candidateSemantics candidate with
                 | Ok () -> candidate :: verified, firstFailure
                 | Error error ->
                     let firstFailure =
@@ -98,3 +124,31 @@ let infer
             Ok (Candidates (boundary head, List.map boundary tail))
         | [], Some error -> Error (NoVerifiedFunctionGroup error)
         | [], None -> Crash.crash "Ownership uniqueness inference generated no function-group candidates"
+
+/// Resolve one concrete call demand against a recursive SCC. The target
+/// boundary is restricted to refinements usable by that call; remaining member
+/// boundaries are explored lazily because recursive proof remains atomic.
+/// Exhausting the bounded search is an optimization miss, not a compile error.
+let inferDemand
+    (semantics: Semantics<'leaf, 'id>)
+    target
+    (uniqueArguments: Set<int>)
+    (definitions: AST.NonEmptyList<Function<'leaf, 'id>>)
+    : Result<GroupBoundary<'id> option, InferenceError<'id>> =
+    let definitions = AST.NonEmptyList.toList definitions
+    let candidateSemantics = withCandidateGroupSemantics semantics definitions
+    let targetDefinition =
+        definitions
+        |> List.tryFind (fun definition -> definition.Definition.Id = target)
+        |> Option.defaultWith (fun () ->
+            Crash.crash "Recursive ownership demand target is outside its function group")
+    targetDefinition.Ownership
+    |> demandedSignatures uniqueArguments
+    |> Seq.collect (fun targetOwnership ->
+        variantsWithTarget target targetOwnership definitions)
+    |> Seq.truncate maximumVariants
+    |> Seq.tryPick (fun candidate ->
+        match VerifyOwnership.verifyFunctions candidateSemantics candidate with
+        | Ok () -> Some (boundary candidate)
+        | Error _ -> None)
+    |> Ok

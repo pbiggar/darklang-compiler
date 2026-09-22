@@ -52,6 +52,16 @@ type SchedulingError<'id when 'id: comparison> =
     | RewrittenCallLimitExceeded of int
     | MissingOriginalCall of CallSiteIdentity
 
+type private DemandKey = {
+    Target: AST.FunctionId
+    Established: CallSignature
+    UniqueArguments: Set<int>
+}
+
+type private DemandResolution<'id> = {
+    Selection: SelectOwnershipVariants.Selection<'id>
+}
+
 let materialization plan = plan.Materialization
 let functions plan = MaterializeOwnershipVariants.functions plan.Materialization
 let hirContracts plan source = MaterializeOwnershipVariants.hirContracts plan.Materialization source
@@ -112,6 +122,18 @@ let private validateLimits limits =
        || limits.MaxRewrittenCalls < 0 then Error (InvalidLimits limits)
     else Ok ()
 
+let private refinableUniqueArguments established uniqueArguments =
+    established.Parameters
+    |> List.indexed
+    |> List.choose (fun (index, ownership) ->
+        match ownership with
+        | ConsumedCallParameter when Set.contains index uniqueArguments -> Some index
+        | UnmanagedCallParameter
+        | BorrowedCallParameter
+        | ConsumedCallParameter
+        | UniqueCallParameter -> None)
+    |> Set.ofList
+
 let private withInternalOwnership semantics definitions =
     definitions
     |> List.fold (fun result definition ->
@@ -141,21 +163,68 @@ let schedule
     |> Result.bind (fun () ->
         withInternalOwnership semantics definitions)
     |> Result.bind (fun programSemantics ->
-        InferOwnedFunctionGroups.infer programSemantics definitions
-        |> Result.mapError InferenceFailed)
-    |> Result.bind (fun groups ->
-        SelectOwnershipVariants.create groups
-        |> Result.mapError CatalogFailed
-        |> Result.map (fun catalog -> groups, catalog))
-    |> Result.bind (fun (groups, catalog) ->
+        InferOwnedFunctionGroups.prepare definitions
+        |> Result.mapError InferenceFailed
+        |> Result.map (fun program -> programSemantics, program))
+    |> Result.bind (fun (programSemantics, program) ->
         let originalIds = definitions |> List.map (fun definition -> definition.Definition.Id) |> Set.ofList
         let definitionsById = definitions |> List.map (fun definition -> definition.Definition.Id, definition) |> Map.ofList
         let definitionsByName = definitions |> List.map (fun definition -> definition.Definition.Name, definition) |> Map.ofList
         let sourceCalls = originalCalls definitions
+        let resolveDemand
+            (fact: CallSiteFacts)
+            (demandCache: Map<DemandKey, DemandResolution<'id> option>)
+            inferredGroups =
+            let uniqueArguments =
+                refinableUniqueArguments fact.Established fact.UniqueArguments
+            let key = {
+                Target = fact.Call.Target
+                Established = fact.Established
+                UniqueArguments = uniqueArguments
+            }
+            match Map.tryFind key demandCache with
+            | Some resolution -> Ok (resolution, demandCache, inferredGroups)
+            | None ->
+                let target =
+                    match Map.tryFind fact.Call.Target definitionsById with
+                    | Some definition -> definition.Definition.Name
+                    | None -> Crash.crash "Filtered original call target has no definition"
+                InferOwnedFunctionGroups.inferDemand
+                    programSemantics
+                    program
+                    fact.Call.Target
+                    uniqueArguments
+                |> Result.mapError InferenceFailed
+                |> Result.bind (function
+                    | None -> Ok (None, Map.add key None demandCache, inferredGroups)
+                    | Some group ->
+                        SelectOwnershipVariants.create [group]
+                        |> Result.mapError CatalogFailed
+                        |> Result.bind (fun catalog ->
+                            SelectOwnershipVariants.select catalog {
+                                Target = target
+                                Established = fact.Established
+                                UniqueArguments = fact.UniqueArguments
+                            }
+                            |> Result.mapError (fun error ->
+                                SelectionFailed (callSiteIdentity fact, error)))
+                        |> Result.map (function
+                            | SelectOwnershipVariants.EstablishedBoundary _ ->
+                                None, Map.add key None demandCache, inferredGroups
+                            | SelectOwnershipVariants.InferredVariant selected
+                                when SelectOwnershipVariants.selectedCallSignature selected = fact.Established ->
+                                None, Map.add key None demandCache, inferredGroups
+                            | SelectOwnershipVariants.InferredVariant _ as selection ->
+                                let resolution = { Selection = selection }
+                                Some resolution,
+                                Map.add key (Some resolution) demandCache,
+                                group :: inferredGroups))
         let rec loop
             number
             (requests: Map<CallSiteIdentity, MaterializeOwnershipVariants.Request<'id>>)
-            history =
+            history
+            demandCache
+            inferredGroups =
             if number > limits.MaxIterations then Error (IterationLimitExceeded limits.MaxIterations)
             else
                 let orderedRequests = requests |> Map.toList |> List.map snd
@@ -177,36 +246,30 @@ let schedule
                             |> List.filter (fun fact ->
                                 Set.contains fact.Caller originalIds
                                 && Set.contains fact.Call.Target originalIds
+                                && not (InferOwnedFunctionGroups.isInternalRecursiveCall
+                                    program
+                                    fact.Caller
+                                    fact.Call.Target)
                                 && not (Map.containsKey (callSiteIdentity fact) requests))
                             |> List.sortBy callSiteIdentity
                             |> List.fold (fun result fact ->
-                                result |> Result.bind (fun additions ->
-                                    let target =
-                                        match Map.tryFind fact.Call.Target definitionsById with
-                                        | Some definition -> definition.Definition.Name
-                                        | None -> Crash.crash "Filtered original call target has no definition"
-                                    SelectOwnershipVariants.select catalog {
-                                        Target = target
-                                        Established = fact.Established
-                                        UniqueArguments = fact.UniqueArguments
-                                    }
-                                    |> Result.mapError (fun error -> SelectionFailed (callSiteIdentity fact, error))
-                                    |> Result.bind (function
-                                        | SelectOwnershipVariants.EstablishedBoundary _ -> Ok additions
-                                        | SelectOwnershipVariants.InferredVariant selected
-                                            when SelectOwnershipVariants.selectedCallSignature selected = fact.Established ->
-                                            Ok additions
-                                        | SelectOwnershipVariants.InferredVariant _ as selection ->
+                                result |> Result.bind (fun (additions, demandCache, inferredGroups) ->
+                                    resolveDemand fact demandCache inferredGroups
+                                    |> Result.bind (fun (resolution, demandCache, inferredGroups) ->
+                                        match resolution with
+                                        | None -> Ok (additions, demandCache, inferredGroups)
+                                        | Some resolution ->
                                             match Map.tryFind (callSiteIdentity fact) sourceCalls with
                                             | None -> Error (MissingOriginalCall (callSiteIdentity fact))
                                             | Some original ->
                                                 let request : MaterializeOwnershipVariants.Request<'id> = {
                                                     Caller = fact.Caller
                                                     Call = original
-                                                    Selection = selection
+                                                    Selection = resolution.Selection
                                                 }
-                                                Ok (request :: additions)))) (Ok [])
-                            |> Result.bind (fun additions ->
+                                                Ok (request :: additions, demandCache, inferredGroups))))
+                                (Ok ([], demandCache, inferredGroups))
+                            |> Result.bind (fun (additions, demandCache, inferredGroups) ->
                                 let additions = additions |> List.rev
                                 if List.isEmpty additions then
                                     let identities =
@@ -214,7 +277,7 @@ let schedule
                                         |> List.map (fun group -> group.Identity)
                                     let cache =
                                         identities
-                                        |> List.choose (cacheDescriptor definitionsByName groups)
+                                        |> List.choose (cacheDescriptor definitionsByName inferredGroups)
                                     Ok {
                                         Materialization = materialized
                                         Iterations = List.rev history
@@ -230,5 +293,10 @@ let schedule
                                         AddedCalls = additions |> List.map (fun request -> { Caller = request.Caller; Result = request.Call.Result.Id })
                                         GeneratedGroups = groupCount
                                     }
-                                    loop (number + 1) next (iteration :: history))))
-        loop 1 Map.empty [])
+                                    loop
+                                        (number + 1)
+                                        next
+                                        (iteration :: history)
+                                        demandCache
+                                        inferredGroups)))
+        loop 1 Map.empty [] Map.empty [])
