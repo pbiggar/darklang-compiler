@@ -275,6 +275,55 @@ let testTypedParamAllocationPreservesOrder () : TestResult =
     | _ ->
         Error $"Expected ordered typed params t0, t1, t2 and next VarGen 3, got {typedParams} and {nextVarGen}"
 
+let testOverlayFunctionIdsContainOnlyLocalDefinitions () : TestResult =
+    let baseId, symbols =
+        CheckedAST.internFunction "Test.baseFunction" (CheckedAST.emptySymbols ())
+    let baseParam, baseSymbols = CheckedAST.allocateBinding "baseParam" symbols
+    let baseFunction : CheckedAST.FunctionDef = {
+        Id = baseId
+        Name = "Test.baseFunction"
+        TypeParams = []
+        Params = AST.NonEmptyList.singleton (baseParam, AST.TInt64)
+        ReturnType = AST.TInt64
+        Body = CheckedAST.Local baseParam
+        Recursion = None
+    }
+    let localId, symbols =
+        CheckedAST.internFunction "Test.localFunction" baseSymbols
+    let localParam, overlaySymbols = CheckedAST.allocateBinding "localParam" symbols
+    let localFunction : CheckedAST.FunctionDef = {
+        Id = localId
+        Name = "Test.localFunction"
+        TypeParams = []
+        Params = AST.NonEmptyList.singleton (localParam, AST.TInt64)
+        ReturnType = AST.TInt64
+        Body = CheckedAST.Local localParam
+        Recursion = None
+    }
+    let baseRegistries =
+        buildRegistries
+            baseSymbols
+            emptyModuleRegistry
+            []
+            Map.empty
+            [baseFunction]
+    let overlayRegistries =
+        buildOverlayRegistries
+            overlaySymbols
+            emptyModuleRegistry
+            []
+            Map.empty
+            [localFunction]
+    let merged = mergeRegistries baseRegistries overlayRegistries
+    if overlayRegistries.FunctionIds <> Map.ofList [("Test.localFunction", localId)] then
+        Error $"Expected the overlay function index to contain only its local definition, got {overlayRegistries.FunctionIds}"
+    elif Map.tryFind "Test.baseFunction" merged.FunctionIds <> Some baseId then
+        Error "Merged function index lost the base definition"
+    elif Map.tryFind "Test.localFunction" merged.FunctionIds <> Some localId then
+        Error "Merged function index lost the local definition"
+    else
+        Ok ()
+
 let tests = [
     ("Missing constructor payload type errors", testMissingVariantPayloadTypeErrors)
     ("Lambda lowering ignores shadowed functions", testNeedsLambdaLoweringIgnoresShadowedFunc)
@@ -288,4 +337,5 @@ let tests = [
     ("Typed list-head pattern remains owned call", testTypedListHeadPatternRemainsOwnedCall)
 
     ("Typed parameter allocation preserves order", testTypedParamAllocationPreservesOrder)
+    ("Overlay function IDs contain only local definitions", testOverlayFunctionIdsContainOnlyLocalDefinitions)
 ]

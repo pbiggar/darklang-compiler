@@ -883,11 +883,15 @@ let private freshHelperName (usedNames: Set<string>) (funcName: string) : string
         if Set.contains candidate usedNames then choose (suffix + 1) else candidate
     choose 0
 
-let private plannedHelpers (functionNames: FunctionNameRegistry) =
+let private plannedHelpers
+    (functionNames: FunctionNameRegistry)
+    (eligibleFunctions: Set<AST.FunctionId>) =
     let initialNames = functionNames |> Map.values |> Set.ofSeq
     let helperNames, _ =
         functionNames
         |> Map.toList
+        |> List.filter (fun (functionId, _) ->
+            Set.contains functionId eligibleFunctions)
         |> List.sortBy snd
         |> List.mapFold (fun usedNames (functionId, functionName) ->
             let helperName = freshHelperName usedNames functionName
@@ -939,7 +943,7 @@ let internal transformTailRecursionModuloFixedConstructors
     (program: Program)
     : Program =
     let (Program (functions, mainExpr)) = program
-    let helpers = plannedHelpers functionNames
+    let helpers = plannedHelpers functionNames eligibleFunctions
     let initialNames =
         Set.union
             (functions |> List.map (fun func -> func.Name) |> Set.ofList)
@@ -1002,7 +1006,7 @@ let internal transformTailRecursionModuloAddition
     (program: Program)
     : Program =
     let (Program (functions, mainExpr)) = program
-    let helpers = plannedHelpers functionNames
+    let helpers = plannedHelpers functionNames eligibleFunctions
     let initialNames =
         Set.union
             (functions |> List.map (fun func -> func.Name) |> Set.ofList)
@@ -1069,7 +1073,7 @@ let internal transformTailRecursionModuloMultiplication
     (program: Program)
     : Program =
     let (Program (functions, mainExpr)) = program
-    let helpers = plannedHelpers functionNames
+    let helpers = plannedHelpers functionNames eligibleFunctions
     let initialNames =
         Set.union
             (functions |> List.map (fun func -> func.Name) |> Set.ofList)
@@ -1126,7 +1130,7 @@ let internal transformTailRecursionModuloSubtraction
     (program: Program)
     : Program =
     let (Program (functions, mainExpr)) = program
-    let helpers = plannedHelpers functionNames
+    let helpers = plannedHelpers functionNames eligibleFunctions
     let initialNames =
         Set.union
             (functions |> List.map (fun func -> func.Name) |> Set.ofList)
@@ -1191,7 +1195,7 @@ let internal transformTailRecursionModuloListConstructors
     (program: Program)
     : Program =
     let (Program (functions, mainExpr)) = program
-    let helpers = plannedHelpers functionNames
+    let helpers = plannedHelpers functionNames eligibleFunctions
     let initialNames =
         Set.union
             (functions |> List.map (fun func -> func.Name) |> Set.ofList)

@@ -65,6 +65,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                         userOnly.MainExpr
                 let userRegistries : AST_to_ANF.Registries = {
                     ScopeContracts = userOnly.ScopeContracts
+                    InertFunctionScopes = userOnly.InertFunctionScopes
                     TypeReg = userOnly.TypeReg
                     TypeNames = userOnly.TypeNames
                     RecordFieldsReg = userOnly.RecordFieldsReg

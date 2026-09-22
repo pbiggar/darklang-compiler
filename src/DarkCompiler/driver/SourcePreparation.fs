@@ -39,6 +39,7 @@ let internal returnTypesByName
 let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Registries =
     {
         ScopeContracts = Map.empty
+        InertFunctionScopes = Set.empty
         TypeReg = Map.empty
         TypeNames = TypeRegistries.emptyTypeNames
         RecordFieldsReg = Map.empty
@@ -485,10 +486,11 @@ let internal convertTypedProgramToUserOnlyWithMode
         result
     let sourceSymbols = CheckedAST.programSymbols typedProgram
     let symbols, topLevels =
-        CheckedAST.importTopLevels
-            sourceSymbols
-            baseContext.Symbols
-            (CheckedAST.programTopLevels typedProgram)
+        measure "AST -> ANF Symbol Import" (fun () ->
+            CheckedAST.importTopLevels
+                sourceSymbols
+                baseContext.Symbols
+                (CheckedAST.programTopLevels typedProgram))
     let typedProgram = CheckedAST.Program (symbols, topLevels)
 
     // Late AOT plans (notably Json) may introduce concrete calls to generic
@@ -670,6 +672,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                         UserFunctions = converted.Functions
                         OwnershipContracts = converted.OwnershipContracts
                         ScopeContracts = registries.ScopeContracts
+                        InertFunctionScopes = registries.InertFunctionScopes
                         NonInlineableFunctionNames =
                             Set.union
                                 nonInlineableFunctionNames
@@ -704,6 +707,20 @@ let convertTypedProgramToUserOnly
         baseContext.TypeCheckEnv
         None
         None
+        typedProgram
+    |> Result.map fst
+
+let convertTypedProgramToUserOnlyWithTrace
+    (baseContext: PipelineContext)
+    (passTimingRecorder: PassTimingRecorder option)
+    (typedProgram: CheckedAST.Program)
+    : Result<AST_to_ANF.UserOnlyResult, string> =
+    convertTypedProgramToUserOnlyWithMode
+        baseContext
+        (Monomorphize (Some baseContext.GenericFuncDefs))
+        baseContext.TypeCheckEnv
+        None
+        passTimingRecorder
         typedProgram
     |> Result.map fst
 

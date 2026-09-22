@@ -1278,7 +1278,12 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 elif loweredFileName.Contains("mir") then TestDSL.OptimizationFormat.MIR
                 elif loweredFileName.Contains("lir") then TestDSL.OptimizationFormat.LIR
                 else TestDSL.OptimizationFormat.ANF
-            TestDSL.OptimizationTestRunner.runTestFile stdlib stage testFile
+            TestDSL.OptimizationTestRunner.runTestFile
+                stdlib
+                (Some recordPassTiming)
+                (fun test -> matchesFilter filter test.Name)
+                stage
+                testFile
         let handleOptimizationSuccess
             (progress: ProgressBar.State)
             (testPath: string)

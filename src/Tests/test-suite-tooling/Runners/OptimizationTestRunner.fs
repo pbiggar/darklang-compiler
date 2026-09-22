@@ -14,6 +14,20 @@ open LIRPrinter
 open TestDSL.LIRParser
 open TestDSL.ARM64SymbolicParser
 open TestDSL.X86_64Parser
+
+let private measure
+    (passTimingRecorder: CompilerOptions.PassTimingRecorder option)
+    (name: string)
+    (operation: unit -> 'a)
+    : 'a =
+    let timer = System.Diagnostics.Stopwatch.StartNew()
+    let result = operation ()
+    timer.Stop()
+    passTimingRecorder
+    |> Option.iter (fun record ->
+        record { CompilerOptions.PassTiming.Pass = name; Elapsed = timer.Elapsed })
+    result
+
 /// Result of running an optimization test
 type OptimizationTestResult = {
     Success: bool
@@ -69,9 +83,13 @@ let private parseOptimizationSource (source: string) : Result<AST.ParsedProgram 
 
 let private convertTypedProgram
     (stdlib: CompilationContexts.StdlibResult)
+    (passTimingRecorder: CompilerOptions.PassTimingRecorder option)
     (typedAst: CheckedAST.Program)
     : Result<AST_to_ANF.ConversionResult, string> =
-    SourcePreparation.convertTypedProgramToUserOnly stdlib.Context typedAst
+    SourcePreparation.convertTypedProgramToUserOnlyWithTrace
+        stdlib.Context
+        passTimingRecorder
+        typedAst
     |> Result.map (fun converted ->
         {
             Program = ANF.Program (converted.UserFunctions, converted.MainExpr)
@@ -150,27 +168,33 @@ let private formatLIRForOptimizationTest (syntheticMain: bool) (program: LIR.Pro
         formatLIR program
 
 /// Compile source and get ANF after optimization
-let getOptimizedANF (stdlib: CompilationContexts.StdlibResult) (source: string) : Result<string, string> =
-    match parseOptimizationSource source with
+let getOptimizedANF
+    (stdlib: CompilationContexts.StdlibResult)
+    (passTimingRecorder: CompilerOptions.PassTimingRecorder option)
+    (source: string)
+    : Result<string, string> =
+    match measure passTimingRecorder "Optimization detail: Parse" (fun () -> parseOptimizationSource source) with
     | Error e -> Error e
     | Ok (ast, syntheticMain) ->
         // Type check
-        match typeCheckWithStdlib stdlib ast with
+        match measure passTimingRecorder "Optimization detail: Type checking" (fun () -> typeCheckWithStdlib stdlib ast) with
         | Error e -> Error e
         | Ok (programType, typedAst) ->
             // Convert to ANF
-            match convertTypedProgram stdlib typedAst with
+            match measure passTimingRecorder "Optimization detail: AST to ANF" (fun () -> convertTypedProgram stdlib passTimingRecorder typedAst) with
             | Error e -> Error $"ANF conversion error: {e}"
             | Ok convResult ->
                 // Optimize ANF
                 let optimized =
-                    ANF_Optimize.optimizeProgramWithOptions
-                        (optimizeContextFromConversionResult convResult)
-                        ANFConstants.defaultOptimizeOptions
-                        convResult.Program
+                    measure passTimingRecorder "Optimization detail: ANF optimization" (fun () ->
+                        ANF_Optimize.optimizeProgramWithOptions
+                            (optimizeContextFromConversionResult convResult)
+                            ANFConstants.defaultOptimizeOptions
+                            convResult.Program)
 
                 // Pretty-print the result
-                Ok (formatANFForOptimizationTest syntheticMain optimized)
+                measure passTimingRecorder "Optimization detail: IR formatting" (fun () ->
+                    Ok (formatANFForOptimizationTest syntheticMain optimized))
 
 let getOptimizedStdlibANF (stdlib: CompilationContexts.StdlibResult) (functionName: string) : Result<string, string> =
     match Map.tryFind functionName stdlib.StdlibANFFunctions with
@@ -184,18 +208,22 @@ let getOptimizedStdlibANF (stdlib: CompilationContexts.StdlibResult) (functionNa
         Ok (formatANFFunction functionNames func)
 
 /// Compile source and get MIR after optimization
-let getOptimizedMIR (stdlib: CompilationContexts.StdlibResult) (source: string) : Result<string, string> =
-    match parseOptimizationSource source with
+let getOptimizedMIR
+    (stdlib: CompilationContexts.StdlibResult)
+    (passTimingRecorder: CompilerOptions.PassTimingRecorder option)
+    (source: string)
+    : Result<string, string> =
+    match measure passTimingRecorder "Optimization detail: Parse" (fun () -> parseOptimizationSource source) with
     | Error e -> Error e
     | Ok (ast, syntheticMain) ->
         // Type check
-        match typeCheckWithStdlib stdlib ast with
+        match measure passTimingRecorder "Optimization detail: Type checking" (fun () -> typeCheckWithStdlib stdlib ast) with
         | Error e -> Error e
         | Ok (programType, typedAst) ->
             // Convert to ANF
-            match convertTypedProgram stdlib typedAst with
+            match measure passTimingRecorder "Optimization detail: AST to ANF" (fun () -> convertTypedProgram stdlib passTimingRecorder typedAst) with
             | Error e -> Error $"ANF conversion error: {e}"
-            | Ok convResult ->
+            | Ok convResult -> measure passTimingRecorder "Optimization detail: MIR pipeline" (fun () ->
                 // Optimize ANF
                 let optimized =
                     ANF_Optimize.optimizeProgramWithOptions
@@ -226,21 +254,25 @@ let getOptimizedMIR (stdlib: CompilationContexts.StdlibResult) (source: string) 
                         // Pretty-print the optimized MIR (still in SSA form)
                         let functionNames =
                             convResultOptimized.FuncReg |> Map.map (fun _ (name, _) -> name)
-                        Ok (formatMIRForOptimizationTest functionNames syntheticMain optimizedMir)
+                        Ok (formatMIRForOptimizationTest functionNames syntheticMain optimizedMir))
 
 /// Compile source and get LIR after optimization
-let getOptimizedLIR (stdlib: CompilationContexts.StdlibResult) (source: string) : Result<string, string> =
-    match parseOptimizationSource source with
+let getOptimizedLIR
+    (stdlib: CompilationContexts.StdlibResult)
+    (passTimingRecorder: CompilerOptions.PassTimingRecorder option)
+    (source: string)
+    : Result<string, string> =
+    match measure passTimingRecorder "Optimization detail: Parse" (fun () -> parseOptimizationSource source) with
     | Error e -> Error e
     | Ok (ast, syntheticMain) ->
         // Type check
-        match typeCheckWithStdlib stdlib ast with
+        match measure passTimingRecorder "Optimization detail: Type checking" (fun () -> typeCheckWithStdlib stdlib ast) with
         | Error e -> Error e
         | Ok (programType, typedAst) ->
             // Convert to ANF
-            match convertTypedProgram stdlib typedAst with
+            match measure passTimingRecorder "Optimization detail: AST to ANF" (fun () -> convertTypedProgram stdlib passTimingRecorder typedAst) with
             | Error e -> Error $"ANF conversion error: {e}"
-            | Ok convResult ->
+            | Ok convResult -> measure passTimingRecorder "Optimization detail: LIR pipeline" (fun () ->
                 // Optimize ANF
                 let optimized =
                     ANF_Optimize.optimizeProgramWithOptions
@@ -273,16 +305,20 @@ let getOptimizedLIR (stdlib: CompilationContexts.StdlibResult) (source: string) 
                             // LIR optimization
                             let optimizedLir = LIR_Peephole.optimizeProgram lirProgram
                             // Pretty-print
-                            Ok (formatLIRForOptimizationTest syntheticMain optimizedLir)
+                            Ok (formatLIRForOptimizationTest syntheticMain optimizedLir))
 
 /// Run a single optimization test
-let runOptimizationTest (stdlib: CompilationContexts.StdlibResult) (test: OptimizationTest) : OptimizationTestResult =
+let runOptimizationTest
+    (stdlib: CompilationContexts.StdlibResult)
+    (passTimingRecorder: CompilerOptions.PassTimingRecorder option)
+    (test: OptimizationTest)
+    : OptimizationTestResult =
     let sourceIRResult =
         match test.Stage, test.Input with
-        | ANF, Source source -> getOptimizedANF stdlib source
+        | ANF, Source source -> getOptimizedANF stdlib passTimingRecorder source
         | ANF, StdlibFunction functionName -> getOptimizedStdlibANF stdlib functionName
-        | MIR, Source source -> getOptimizedMIR stdlib source
-        | LIR, Source source -> getOptimizedLIR stdlib source
+        | MIR, Source source -> getOptimizedMIR stdlib passTimingRecorder source
+        | LIR, Source source -> getOptimizedLIR stdlib passTimingRecorder source
         | MIR, StdlibFunction _ | LIR, StdlibFunction _ -> Error "STDLIB-FUNCTION is supported only for ANF optimization tests"
         | DirectLIR, _ | DirectARM64, _ | DirectLIR2X64, _ -> Error "Direct optimization stages use structural comparison"
 
@@ -361,9 +397,19 @@ let runOptimizationTest (stdlib: CompilationContexts.StdlibResult) (test: Optimi
                   Actual = Some normalizedActual }
 
 /// Load and run tests from a file
-let runTestFile (stdlib: CompilationContexts.StdlibResult) (stage: IRStage) (path: string) : Result<(OptimizationTest * OptimizationTestResult) list, string> =
+let runTestFile
+    (stdlib: CompilationContexts.StdlibResult)
+    (passTimingRecorder: CompilerOptions.PassTimingRecorder option)
+    (shouldRun: OptimizationTest -> bool)
+    (stage: IRStage)
+    (path: string)
+    : Result<(OptimizationTest * OptimizationTestResult) list, string> =
     match parseTestFile stage path with
     | Error e -> Error e
     | Ok tests ->
-        let results = tests |> List.map (fun test -> (test, runOptimizationTest stdlib test))
+        let results =
+            tests
+            |> List.filter shouldRun
+            |> List.map (fun test ->
+                (test, runOptimizationTest stdlib passTimingRecorder test))
         Ok results

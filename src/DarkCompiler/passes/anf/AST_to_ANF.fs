@@ -200,6 +200,7 @@ type ConversionResult = {
 type UserOnlyResult = {
     Symbols: CheckedAST.Symbols
     ScopeContracts: Map<AST.FunctionId, DestructionAnalysis.FunctionScopeContract>
+    InertFunctionScopes: Set<AST.FunctionId>
     UserFunctions: ANF.Function list   // Only user functions, not merged with stdlib
     OwnershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>
     NonInlineableFunctionNames: Set<AST.FunctionId> // Late external specializations compiled in this unit
@@ -225,6 +226,7 @@ type UserOnlyResult = {
 /// Registry bundle used during ANF conversion
 type Registries = {
     ScopeContracts: Map<AST.FunctionId, DestructionAnalysis.FunctionScopeContract>
+    InertFunctionScopes: Set<AST.FunctionId>
     TypeReg: TypeRegistry
     TypeNames: TypeNameRegistry
     RecordFieldsReg: Map<string, (string * AST.SemanticType) list>
@@ -379,10 +381,20 @@ let private buildRegistriesInternal
             (f.Id, (f.Name, funcType)))
         |> Map.ofList
 
+    let localFunctionNames : FunctionNameRegistry =
+        functions
+        |> List.map (fun func -> func.Id, func.Name)
+        |> Map.ofList
     let functionNames : FunctionNameRegistry =
         functions
         |> List.fold (fun names func -> Map.add func.Id func.Name names) (CheckedAST.functionNames symbols)
-    let functionIds = functionIdsFromNames functionNames
+    // Overlay symbols already include the inherited namespace, but their
+    // reverse index is merged with the base registry immediately afterward.
+    // Retain only local entries here so small compilation units do not rebuild
+    // and merge the complete stdlib index.
+    let functionIds =
+        if includeModuleFunctionParams then functionIdsFromNames functionNames
+        else functionIdsFromNames localFunctionNames
 
     let userFuncParams : Map<string, (string * AST.SemanticType) list> =
         functions
@@ -407,13 +419,20 @@ let private buildRegistriesInternal
     let funcParams =
         Map.fold (fun acc k v -> Map.add k v acc) userFuncParams moduleFuncParams
 
+    let scopeContracts =
+        ExtractListRegions.scopeContracts
+            (fun types expr -> inferTypeCore sumTypeNames (typeNamesFromSymbols symbols) expr types typeReg variantLookup funcReg functionNames moduleRegistry)
+            functions
+    let inertFunctionScopes =
+        if includeModuleFunctionParams then
+            DestructionAnalysis.inertFunctionScopes functionNames scopeContracts
+        else
+            Set.empty
     {
         TypeReg = typeReg
         TypeNames = typeNamesFromSymbols symbols
-        ScopeContracts =
-            ExtractListRegions.scopeContracts
-                (fun types expr -> inferTypeCore sumTypeNames (typeNamesFromSymbols symbols) expr types typeReg variantLookup funcReg functionNames moduleRegistry)
-                functions
+        ScopeContracts = scopeContracts
+        InertFunctionScopes = inertFunctionScopes
         RecordFieldsReg = recordFieldsRegistry typeReg
         RecordTypeParamsReg = recordTypeParamsRegistry typeReg
         VariantLookup = variantLookup
@@ -452,6 +471,8 @@ let buildOverlayRegistries
 /// Merge registries with overlay taking precedence (module registry stays from base)
 let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
     let mergeMaps m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
+    let functionNames = mergeMaps baseRegs.FunctionNames overlay.FunctionNames
+    let scopeContracts = mergeMaps baseRegs.ScopeContracts overlay.ScopeContracts
     {
         TypeReg = mergeMaps baseRegs.TypeReg overlay.TypeReg
         TypeNames = ({
@@ -459,7 +480,9 @@ let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
             ConstructorTags = mergeMaps baseRegs.TypeNames.ConstructorTags overlay.TypeNames.ConstructorTags
             FieldIndices = mergeMaps baseRegs.TypeNames.FieldIndices overlay.TypeNames.FieldIndices
         } : TypeNameRegistry)
-        ScopeContracts = mergeMaps baseRegs.ScopeContracts overlay.ScopeContracts
+        ScopeContracts = scopeContracts
+        InertFunctionScopes =
+            DestructionAnalysis.inertFunctionScopes functionNames scopeContracts
         RecordFieldsReg = mergeMaps baseRegs.RecordFieldsReg overlay.RecordFieldsReg
         RecordTypeParamsReg = mergeMaps baseRegs.RecordTypeParamsReg overlay.RecordTypeParamsReg
         VariantLookup = mergeMaps baseRegs.VariantLookup overlay.VariantLookup
@@ -467,7 +490,7 @@ let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
         RcSumShapeReg = mergeMaps baseRegs.RcSumShapeReg overlay.RcSumShapeReg
         FuncReg = mergeMaps baseRegs.FuncReg overlay.FuncReg
         FunctionIds = mergeMaps baseRegs.FunctionIds overlay.FunctionIds
-        FunctionNames = mergeMaps baseRegs.FunctionNames overlay.FunctionNames
+        FunctionNames = functionNames
         FuncParams = mergeMaps baseRegs.FuncParams overlay.FuncParams
         ModuleRegistry = baseRegs.ModuleRegistry
         RecursiveMembers = mergeMaps baseRegs.RecursiveMembers overlay.RecursiveMembers
@@ -509,7 +532,7 @@ let convertFunctionsWithOwnershipWithTrace
         |> Option.iter (fun record -> record name timer.Elapsed)
         result
     let sumTypeNames = registries.SumTypeNames
-    let inertScopes = DestructionAnalysis.inertFunctionScopes registries.FunctionNames registries.ScopeContracts
+    let inertScopes = registries.InertFunctionScopes
     let rec loop funcs vg acc =
         match funcs with
         | [] -> Ok (List.rev acc, vg)
@@ -592,7 +615,7 @@ let convertExprToAnf
     : Result<ANF.AExpr * ANF.VarGen, string> =
     let emptyEnv : VarEnv = Map.empty
     let sumTypeNames = registries.SumTypeNames
-    toANFCore registries.FunctionIds sumTypeNames registries.TypeNames (DestructionAnalysis.inertFunctionScopes registries.FunctionNames registries.ScopeContracts) expr varGen emptyEnv registries.TypeReg registries.VariantLookup registries.FuncReg registries.FunctionNames registries.ModuleRegistry
+    toANFCore registries.FunctionIds sumTypeNames registries.TypeNames registries.InertFunctionScopes expr varGen emptyEnv registries.TypeReg registries.VariantLookup registries.FuncReg registries.FunctionNames registries.ModuleRegistry
 
 /// Synthesize an entrypoint function from a main expression
 let synthesizeEntryFunction

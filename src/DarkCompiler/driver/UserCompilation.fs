@@ -185,6 +185,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             |> List.exists (fun func -> func.Name = programEntryName)
                         let userRegistries : AST_to_ANF.Registries = {
                             ScopeContracts = userOnly.ScopeContracts
+                            InertFunctionScopes = userOnly.InertFunctionScopes
                             TypeReg = userOnly.TypeReg
                             TypeNames = userOnly.TypeNames
                             RecordFieldsReg = userOnly.RecordFieldsReg
