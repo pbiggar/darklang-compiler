@@ -2,6 +2,7 @@
 
 module ElaborateFunctionOwnership
 
+open System.Diagnostics
 open HIR
 open OwnedIR
 
@@ -399,21 +400,34 @@ let private elaborateFunction
               Ownership = boundary
           }))
 
-let elaborateFunctions
+let elaborateFunctionsWithTrace
+    (recordTiming: (string -> System.TimeSpan -> unit) option)
     (dialect: Dialect<'leaf, 'block>)
     (definitions: HIR.Function<'block> list)
     : Result<Analysis<'leaf>, ElaborationError> =
-    convergeBoundaries dialect definitions
+    let measure name operation =
+        let timer = Stopwatch.StartNew()
+        let result = operation ()
+        timer.Stop()
+        recordTiming
+        |> Option.iter (fun record -> record name timer.Elapsed)
+        result
+    measure
+        "Ownership detail: Boundary inference"
+        (fun () -> convergeBoundaries dialect definitions)
     |> Result.bind (fun (boundaries, ownership) ->
-        definitions
-        |> List.fold (fun result definition ->
-            result
-            |> Result.bind (fun functions ->
-                match Map.tryFind definition.Id boundaries with
-                | None -> Crash.crash "Whole-function ownership boundary disappeared during elaboration"
-                | Some boundary ->
-                    elaborateFunction dialect ownership boundary definition
-                    |> Result.map (fun owned -> owned :: functions))) (Ok [])
+        measure
+            "Ownership detail: Ownership elaboration"
+            (fun () ->
+                definitions
+                |> List.fold (fun result definition ->
+                    result
+                    |> Result.bind (fun functions ->
+                        match Map.tryFind definition.Id boundaries with
+                        | None -> Crash.crash "Whole-function ownership boundary disappeared during elaboration"
+                        | Some boundary ->
+                            elaborateFunction dialect ownership boundary definition
+                            |> Result.map (fun owned -> owned :: functions))) (Ok []))
         |> Result.map (fun functions ->
             let ownershipSemantics : Semantics<'leaf, HIR.ValueId> = {
                 Leaf = dialect.LeafOwnership
@@ -429,3 +443,6 @@ let elaborateFunctions
                     | None -> Unmanaged
             }
             { Functions = List.rev functions; Semantics = ownershipSemantics }))
+
+let elaborateFunctions dialect definitions =
+    elaborateFunctionsWithTrace None dialect definitions

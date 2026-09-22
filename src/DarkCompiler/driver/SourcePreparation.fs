@@ -341,7 +341,8 @@ let internal splitDeclarations
             topLevels |> List.choose (function CheckedAST.FunctionDef definition -> Some definition | _ -> None)
         )
 
-let internal convertTypedDeclarations
+let internal convertTypedDeclarationsWithTrace
+    (passTimingRecorder: PassTimingRecorder option)
     (baseContext: PipelineContext option)
     (monomorphization: MonomorphizationMode)
     (typedProgram: CheckedAST.Program)
@@ -396,7 +397,7 @@ let internal convertTypedDeclarations
         baseFuncParams
         baseFuncReturnTypes
         (baseContext |> Option.map (fun context -> context.CheckedValues) |> Option.defaultValue Map.empty)
-        None
+        passTimingRecorder
         typedProgram
     |> Result.bind (fun liftedProgram ->
         splitDeclarations liftedProgram
@@ -409,16 +410,22 @@ let internal convertTypedDeclarations
                     baseRegistries
                     typeDefs
                     functions
-            AST_to_ANF.convertFunctions
+            let ownershipTiming name (elapsed: TimeSpan) =
+                recordPassTiming passTimingRecorder name elapsed.TotalMilliseconds
+            AST_to_ANF.convertFunctionsWithOwnershipWithTrace
+                (Some ownershipTiming)
                 (CheckedAST.programSymbols liftedProgram)
                 registries
                 (ANF.VarGen 0)
                 resolvedFunctions
-            |> Result.map (fun (anfFunctions, _) ->
+            |> Result.map (fun converted ->
                 { Symbols = CheckedAST.programSymbols liftedProgram
-                  Functions = anfFunctions
+                  Functions = converted.Functions
                   Registries = registries
                   LocalReturnTypes = extractReturnTypes localRegistries.FuncReg })))
+
+let internal convertTypedDeclarations baseContext monomorphization typedProgram =
+    convertTypedDeclarationsWithTrace None baseContext monomorphization typedProgram
 
 let private convertTypedProgramToConversionResult
     (moduleRegistry: AST.ModuleRegistry)
@@ -618,7 +625,17 @@ let internal convertTypedProgramToUserOnlyWithMode
             }
             let convert () =
                 measure "AST -> ANF Dependency Conversion" (fun () ->
-                    AST_to_ANF.convertFunctionsWithOwnership symbols registries varGen resolvedFunctions)
+                    let ownershipTiming name (elapsed: TimeSpan) =
+                        recordPassTiming
+                            passTimingRecorder
+                            name
+                            elapsed.TotalMilliseconds
+                    AST_to_ANF.convertFunctionsWithOwnershipWithTrace
+                        (Some ownershipTiming)
+                        symbols
+                        registries
+                        varGen
+                        resolvedFunctions)
             let convertedDependencies =
                 measure "AST -> ANF Dependency Lookup" (fun () ->
                     match session with

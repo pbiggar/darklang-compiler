@@ -70,6 +70,7 @@ let allocateTypedParams
         ({ ANF.TypedParam.Id = tempId; Type = typ }, vg')) varGen
 
 let private convertFunctionWithSumTypeNames
+    (recordTiming: (string -> System.TimeSpan -> unit) option)
     (symbols: CheckedAST.Symbols)
     (sumTypeNames: Set<string>)
     (inertScopes: Set<AST.FunctionId>)
@@ -81,23 +82,59 @@ let private convertFunctionWithSumTypeNames
     (functionNames: FunctionNameRegistry)
     (moduleRegistry: AST.ModuleRegistry)
     : Result<ANF.Function * ANF.VarGen, string> =
-    let loweredParams = paramsToList funcDef.Params |> normalizeSyntheticNullaryParams symbols
+    let measure name operation =
+        let timer = System.Diagnostics.Stopwatch.StartNew()
+        let result = operation ()
+        timer.Stop()
+        recordTiming
+        |> Option.iter (fun record -> record name timer.Elapsed)
+        result
+    let loweredParams, typedParams, varGen1, paramEnv =
+        measure
+            "AST -> ANF detail: Function parameter setup"
+            (fun () ->
+                let loweredParams =
+                    paramsToList funcDef.Params
+                    |> normalizeSyntheticNullaryParams symbols
 
-    // Allocate TempIds for parameters, bundled with their types
-    let (typedParams, varGen1) =
-        allocateTypedParams loweredParams varGen
+                // Allocate TempIds for parameters, bundled with their types
+                let (typedParams, varGen1) =
+                    allocateTypedParams loweredParams varGen
 
-    // Build environment mapping param names to (TempId, Type)
-    let paramEnv : VarEnv =
-        List.zip loweredParams typedParams
-        |> List.map (fun ((name, _), typedParam) -> (name, (typedParam.Id, typedParam.Type)))
-        |> Map.ofList
+                // Build environment mapping param names to (TempId, Type)
+                let paramEnv : VarEnv =
+                    List.zip loweredParams typedParams
+                    |> List.map (fun ((name, _), typedParam) ->
+                        (name, (typedParam.Id, typedParam.Type)))
+                    |> Map.ofList
+                loweredParams, typedParams, varGen1, paramEnv)
 
     let unboundLocals =
-        ClosureAnalysis.freeVars funcDef.Body (loweredParams |> List.map fst |> Set.ofList)
+        measure
+            "AST -> ANF detail: Function free-variable analysis"
+            (fun () ->
+                ClosureAnalysis.freeVars
+                    funcDef.Body
+                    (loweredParams |> List.map fst |> Set.ofList))
     let bodyResult =
         if Set.isEmpty unboundLocals then
-            toANFCore sumTypeNames (typeNamesFromSymbols symbols) inertScopes funcDef.Body varGen1 paramEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            let typeNames =
+                measure
+                    "AST -> ANF detail: Function type-name projection"
+                    (fun () -> typeNamesFromSymbols symbols)
+            let timer = System.Diagnostics.Stopwatch.StartNew()
+            let result =
+                toANFCore sumTypeNames typeNames inertScopes funcDef.Body varGen1 paramEnv typeReg variantLookup funcReg functionNames moduleRegistry
+            timer.Stop()
+            recordTiming
+            |> Option.iter (fun record ->
+                record
+                    "AST -> ANF detail: Function expression lowering"
+                    timer.Elapsed
+                record
+                    $"AST -> ANF function: {funcDef.Name}"
+                    timer.Elapsed)
+            result
         else
             let names =
                 unboundLocals
@@ -126,6 +163,7 @@ let convertFunction
     (moduleRegistry: AST.ModuleRegistry)
     : Result<ANF.Function * ANF.VarGen, string> =
     convertFunctionWithSumTypeNames
+        None
         symbols
         (sumTypeNamesFromVariantLookup variantLookup)
         (DestructionAnalysis.inertFunctionScopes Map.empty Map.empty)
@@ -446,12 +484,20 @@ let extendFunctionRegistryWithConverted
                  functionDefinition.ReturnType))
             registry) registry
 
-let convertFunctionsWithOwnership
+let convertFunctionsWithOwnershipWithTrace
+    (recordTiming: (string -> System.TimeSpan -> unit) option)
     (symbols: CheckedAST.Symbols)
     (registries: Registries)
     (varGen: ANF.VarGen)
     (functions: CheckedAST.FunctionDef list)
     : Result<FunctionConversion, string> =
+    let measure name operation =
+        let timer = System.Diagnostics.Stopwatch.StartNew()
+        let result = operation ()
+        timer.Stop()
+        recordTiming
+        |> Option.iter (fun record -> record name timer.Elapsed)
+        result
     let sumTypeNames = registries.SumTypeNames
     let inertScopes = DestructionAnalysis.inertFunctionScopes registries.FunctionNames registries.ScopeContracts
     let rec loop funcs vg acc =
@@ -459,6 +505,7 @@ let convertFunctionsWithOwnership
         | [] -> Ok (List.rev acc, vg)
         | func :: rest ->
             convertFunctionWithSumTypeNames
+                recordTiming
                 symbols
                 sumTypeNames
                 inertScopes
@@ -483,31 +530,44 @@ let convertFunctionsWithOwnership
         FunctionNames = registries.FunctionNames
         ModuleRegistry = registries.ModuleRegistry
     }
-    AnalyzeFunctionOwnership.analyze ownershipContext functions
+    measure
+        "Ownership detail: Total"
+        (fun () -> AnalyzeFunctionOwnership.analyzeWithTrace recordTiming ownershipContext functions)
     |> Result.mapError (fun error -> $"Whole-function ownership analysis failed: {error}")
     |> Result.bind (fun analysis ->
         let materialization =
             AnalyzeFunctionOwnership.schedule analysis
             |> ScheduleOwnershipVariants.materialization
         let fusion =
-            FuseOwnershipListCalls.fuse
-                registries.FunctionNames
-                materialization
-                functions
-        loop fusion.Functions varGen []
+            measure
+                "AST -> ANF detail: Ownership list-call fusion"
+                (fun () ->
+                    FuseOwnershipListCalls.fuse
+                        registries.FunctionNames
+                        materialization
+                        functions)
+        measure
+            "AST -> ANF detail: Checked function lowering"
+            (fun () -> loop fusion.Functions varGen [])
         |> Result.bind (fun (anfFunctions, nextVarGen) ->
-            LowerOwnershipVariants.lower
-                (AnalyzeFunctionOwnership.originalFunctions analysis)
-                materialization
-                anfFunctions
-                nextVarGen
-                fusion.FusedSites
+            measure
+                "AST -> ANF detail: Ownership variant lowering"
+                (fun () ->
+                    LowerOwnershipVariants.lower
+                        (AnalyzeFunctionOwnership.originalFunctions analysis)
+                        materialization
+                        anfFunctions
+                        nextVarGen
+                        fusion.FusedSites)
             |> Result.mapError (fun error -> $"Ownership lowering failed: {error}")
             |> Result.map (fun lowered -> {
                 Functions = lowered.Functions
                 VarGen = lowered.VarGen
                 OwnershipContracts = lowered.Contracts
             })))
+
+let convertFunctionsWithOwnership symbols registries varGen functions =
+    convertFunctionsWithOwnershipWithTrace None symbols registries varGen functions
 
 let convertFunctions symbols registries varGen functions =
     convertFunctionsWithOwnership symbols registries varGen functions

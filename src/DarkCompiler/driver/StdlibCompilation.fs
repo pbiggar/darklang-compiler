@@ -9,6 +9,7 @@ open System.Diagnostics
 open System.Reflection
 open System.Collections.Generic
 open CompilerOptions
+open PipelineDiagnostics
 open CompilationSession
 open NativePipeline
 open ANFPipeline
@@ -220,11 +221,21 @@ let buildStdlibWithTrace
     (target: Platform.Target)
     (passTimingRecorder: PassTimingRecorder option)
     : Result<StdlibResult, string> =
-    match loadStdlib() with
+    let measure name operation =
+        let timer = Stopwatch.StartNew()
+        let result = operation ()
+        timer.Stop()
+        recordPassTiming passTimingRecorder name timer.Elapsed.TotalMilliseconds
+        result
+    match measure "Stdlib detail: Source loading and parsing" loadStdlib with
     | Error e ->
         Error e
     | Ok stdlibAst ->
-        match TypeChecking.checkParsedDeclarationProgramWithEnv stdlibAst with
+        match
+            measure
+                "Stdlib detail: Type checking"
+                (fun () -> TypeChecking.checkParsedDeclarationProgramWithEnv stdlibAst)
+        with
         | Error e ->
             let msg = CheckingDiagnostics.typeErrorToString e
             Error msg
@@ -234,10 +245,14 @@ let buildStdlibWithTrace
             // Build module registry once (reused across all compilations)
             let moduleRegistry = Stdlib.buildModuleRegistry ()
             match
-                convertTypedDeclarations
-                    None
-                    (Monomorphize None)
-                    typedStdlib
+                measure
+                    "Stdlib detail: Declaration conversion"
+                    (fun () ->
+                        convertTypedDeclarationsWithTrace
+                            passTimingRecorder
+                            None
+                            (Monomorphize None)
+                            typedStdlib)
             with
             | Error e ->
                 Error e

@@ -2,6 +2,7 @@
 
 module ScheduleOwnershipVariants
 
+open System.Diagnostics
 open OwnedIR
 
 type Limits = {
@@ -152,18 +153,28 @@ let private withInternalOwnership semantics definitions =
 /// Reanalyze the complete cumulatively materialized program after each round.
 /// Only calls in original functions to original functions are scheduling
 /// roots; recursive edges remain atomic inside their selected SCC clone.
-let schedule
+let scheduleWithTrace
+    (recordTiming: (string -> System.TimeSpan -> unit) option)
     limits
     (hir: VerifyOwnedHIR.HIRContracts<'leaf>)
     (semantics: Semantics<'leaf, 'id>)
     reservedSymbols
     (definitions: Function<'leaf, 'id> list)
     : Result<Plan<'leaf, 'id>, SchedulingError<'id>> =
+    let measure name operation =
+        let timer = Stopwatch.StartNew()
+        let result = operation ()
+        timer.Stop()
+        recordTiming
+        |> Option.iter (fun record -> record name timer.Elapsed)
+        result
     validateLimits limits
     |> Result.bind (fun () ->
-        withInternalOwnership semantics definitions)
+        measure
+            "Ownership detail: Scheduling registry construction"
+            (fun () -> withInternalOwnership semantics definitions))
     |> Result.bind (fun programSemantics ->
-        InferOwnedFunctionGroups.prepare definitions
+        InferOwnedFunctionGroups.prepareWithTrace recordTiming definitions
         |> Result.mapError InferenceFailed
         |> Result.map (fun program -> programSemantics, program))
     |> Result.bind (fun (programSemantics, program) ->
@@ -189,7 +200,8 @@ let schedule
                     match Map.tryFind fact.Call.Target definitionsById with
                     | Some definition -> definition.Definition.Name
                     | None -> Crash.crash "Filtered original call target has no definition"
-                InferOwnedFunctionGroups.inferDemand
+                InferOwnedFunctionGroups.inferDemandWithTrace
+                    recordTiming
                     programSemantics
                     program
                     fact.Call.Target
@@ -198,7 +210,9 @@ let schedule
                 |> Result.bind (function
                     | None -> Ok (None, Map.add key None demandCache, inferredGroups)
                     | Some group ->
-                        SelectOwnershipVariants.create [group]
+                        measure
+                            "Ownership detail: Candidate catalog construction"
+                            (fun () -> SelectOwnershipVariants.create [group])
                         |> Result.mapError CatalogFailed
                         |> Result.bind (fun catalog ->
                             SelectOwnershipVariants.select catalog {
@@ -228,7 +242,10 @@ let schedule
             if number > limits.MaxIterations then Error (IterationLimitExceeded limits.MaxIterations)
             else
                 let orderedRequests = requests |> Map.toList |> List.map snd
-                MaterializeOwnershipVariants.materialize hir semantics reservedSymbols definitions orderedRequests
+                measure
+                    "Ownership detail: Scheduling materialization round"
+                    (fun () ->
+                        MaterializeOwnershipVariants.materialize hir semantics reservedSymbols definitions orderedRequests)
                 |> Result.mapError MaterializationFailed
                 |> Result.bind (fun materialized ->
                     let groupCount = MaterializeOwnershipVariants.groups materialized |> List.length
@@ -236,39 +253,45 @@ let schedule
                     if groupCount > limits.MaxGeneratedGroups then Error (GeneratedGroupLimitExceeded limits.MaxGeneratedGroups)
                     elif rewriteCount > limits.MaxRewrittenCalls then Error (RewrittenCallLimitExceeded limits.MaxRewrittenCalls)
                     else
-                        VerifyOwnedHIR.analyzeFunctions
-                            (MaterializeOwnershipVariants.hirContracts materialized hir)
-                            (MaterializeOwnershipVariants.ownershipSemantics materialized semantics)
-                            (MaterializeOwnershipVariants.functions materialized)
+                        measure
+                            "Ownership detail: Scheduling program analysis round"
+                            (fun () ->
+                                VerifyOwnedHIR.analyzeFunctions
+                                    (MaterializeOwnershipVariants.hirContracts materialized hir)
+                                    (MaterializeOwnershipVariants.ownershipSemantics materialized semantics)
+                                    (MaterializeOwnershipVariants.functions materialized))
                         |> Result.mapError AnalysisFailed
                         |> Result.bind (fun facts ->
-                            facts
-                            |> List.filter (fun fact ->
-                                Set.contains fact.Caller originalIds
-                                && Set.contains fact.Call.Target originalIds
-                                && not (InferOwnedFunctionGroups.isInternalRecursiveCall
-                                    program
-                                    fact.Caller
-                                    fact.Call.Target)
-                                && not (Map.containsKey (callSiteIdentity fact) requests))
-                            |> List.sortBy callSiteIdentity
-                            |> List.fold (fun result fact ->
-                                result |> Result.bind (fun (additions, demandCache, inferredGroups) ->
-                                    resolveDemand fact demandCache inferredGroups
-                                    |> Result.bind (fun (resolution, demandCache, inferredGroups) ->
-                                        match resolution with
-                                        | None -> Ok (additions, demandCache, inferredGroups)
-                                        | Some resolution ->
-                                            match Map.tryFind (callSiteIdentity fact) sourceCalls with
-                                            | None -> Error (MissingOriginalCall (callSiteIdentity fact))
-                                            | Some original ->
-                                                let request : MaterializeOwnershipVariants.Request<'id> = {
-                                                    Caller = fact.Caller
-                                                    Call = original
-                                                    Selection = resolution.Selection
-                                                }
-                                                Ok (request :: additions, demandCache, inferredGroups))))
-                                (Ok ([], demandCache, inferredGroups))
+                            measure
+                                "Ownership detail: Scheduling call selection round"
+                                (fun () ->
+                                    facts
+                                    |> List.filter (fun fact ->
+                                        Set.contains fact.Caller originalIds
+                                        && Set.contains fact.Call.Target originalIds
+                                        && not (InferOwnedFunctionGroups.isInternalRecursiveCall
+                                            program
+                                            fact.Caller
+                                            fact.Call.Target)
+                                        && not (Map.containsKey (callSiteIdentity fact) requests))
+                                    |> List.sortBy callSiteIdentity
+                                    |> List.fold (fun result fact ->
+                                        result |> Result.bind (fun (additions, demandCache, inferredGroups) ->
+                                            resolveDemand fact demandCache inferredGroups
+                                            |> Result.bind (fun (resolution, demandCache, inferredGroups) ->
+                                                match resolution with
+                                                | None -> Ok (additions, demandCache, inferredGroups)
+                                                | Some resolution ->
+                                                    match Map.tryFind (callSiteIdentity fact) sourceCalls with
+                                                    | None -> Error (MissingOriginalCall (callSiteIdentity fact))
+                                                    | Some original ->
+                                                        let request : MaterializeOwnershipVariants.Request<'id> = {
+                                                            Caller = fact.Caller
+                                                            Call = original
+                                                            Selection = resolution.Selection
+                                                        }
+                                                        Ok (request :: additions, demandCache, inferredGroups))))
+                                        (Ok ([], demandCache, inferredGroups)))
                             |> Result.bind (fun (additions, demandCache, inferredGroups) ->
                                 let additions = additions |> List.rev
                                 if List.isEmpty additions then
@@ -276,8 +299,11 @@ let schedule
                                         MaterializeOwnershipVariants.groups materialized
                                         |> List.map (fun group -> group.Identity)
                                     let cache =
-                                        identities
-                                        |> List.choose (cacheDescriptor definitionsByName inferredGroups)
+                                        measure
+                                            "Ownership detail: Scheduling cache descriptor construction"
+                                            (fun () ->
+                                                identities
+                                                |> List.choose (cacheDescriptor definitionsByName inferredGroups))
                                     Ok {
                                         Materialization = materialized
                                         Iterations = List.rev history
@@ -300,3 +326,6 @@ let schedule
                                         demandCache
                                         inferredGroups)))
         loop 1 Map.empty [] Map.empty [])
+
+let schedule limits hir semantics reservedSymbols definitions =
+    scheduleWithTrace None limits hir semantics reservedSymbols definitions

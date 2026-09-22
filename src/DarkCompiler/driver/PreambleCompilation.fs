@@ -56,7 +56,8 @@ let buildPreambleContext
 
                 // Convert preamble to ANF (mono → inline → lift → ANF)
                 match
-                    convertTypedDeclarations
+                    convertTypedDeclarationsWithTrace
+                        passTimingRecorder
                         (Some stdlib.Context)
                         (Monomorphize (Some stdlib.Context.GenericFuncDefs))
                         typedPreambleAst
@@ -185,7 +186,8 @@ let buildPreambleContextFromAnalysis
             specializedAndOriginalTopLevels
     let programWithSpecializations = CheckedAST.Program (symbols, materializedTopLevels)
 
-    convertTypedDeclarations
+    convertTypedDeclarationsWithTrace
+        passTimingRecorder
         (Some stdlib.Context)
         (ReplaceTypeApps combinedSpecRegistry)
         programWithSpecializations

@@ -67,6 +67,7 @@ type TestRunState = {
     FailedTests: ResizeArray<FailedTestInfo>
     Timings: ResizeArray<TestTiming>
     mutable PassTimings: Map<string, TimeSpan>
+    mutable PassTimingCounts: Map<string, int>
     PassTimingOrder: ResizeArray<string>
     CompletedTestReporter: (int -> unit) option
 }
@@ -83,6 +84,7 @@ let createStateWithProgressReporter (completedTestReporter: (int -> unit) option
       FailedTests = ResizeArray()
       Timings = ResizeArray()
       PassTimings = Map.empty
+      PassTimingCounts = Map.empty
       PassTimingOrder = ResizeArray()
       CompletedTestReporter = completedTestReporter }
 
@@ -100,6 +102,11 @@ let recordPassTiming (state: TestRunState) (timing: CompilerOptions.PassTiming) 
         |> Option.defaultValue TimeSpan.Zero
     let updated = existing + timing.Elapsed
     state.PassTimings <- Map.add timing.Pass updated state.PassTimings
+    let invocationCount =
+        Map.tryFind timing.Pass state.PassTimingCounts
+        |> Option.defaultValue 0
+    state.PassTimingCounts <-
+        Map.add timing.Pass (invocationCount + 1) state.PassTimingCounts
 
 let recordResults
     (state: TestRunState)
@@ -138,7 +145,10 @@ let calculatePassTimingsTotal (passTimings: Map<string, TimeSpan>) : TimeSpan =
 let filterPassTimingsForOverhead (passTimings: Map<string, TimeSpan>) : Map<string, TimeSpan> =
     let overlapTimingNames =
         Set.ofList [
+            "Unit Test Suite Execution"
             "Start Function Compilation"
+            "E2E Suite Execution"
+            "Verification Suite Execution"
             "JSON Planning"
             "ARM64 Codegen Metadata"
             "ARM64 Codegen Functions"
@@ -149,10 +159,26 @@ let filterPassTimingsForOverhead (passTimings: Map<string, TimeSpan>) : Map<stri
     passTimings
     |> Map.filter (fun name _ ->
         not (Set.contains name overlapTimingNames)
+        && not (name.StartsWith("Ownership detail: "))
+        && not (name.StartsWith("AST -> ANF detail: "))
+        && not (name.StartsWith("AST -> ANF function: "))
+        && not (name.StartsWith("Stdlib detail: "))
         && not (name.StartsWith("TypeCheck: "))
         && not (name.StartsWith("AST -> ANF Preparation: "))
+        && not (name.StartsWith("AST -> ANF "))
+        && name <> "Value Rendering"
+        && name <> "ANF Higher-Order Specialization"
+        && name <> "ANF Direct-Call Specialization"
+        && not (name.StartsWith("Reference Count ") && name <> "Reference Count Insertion")
+        && not (name.StartsWith("ANF -> MIR "))
         && not (name.StartsWith("SSA: "))
-        && not (name.StartsWith("RegAlloc: ")))
+        && not (name.StartsWith("MIR ") && name <> "MIR Optimizations" && name <> "MIR -> LIR")
+        && not (name.StartsWith("MIR -> LIR "))
+        && not (name.StartsWith("RegAlloc: "))
+        && not (
+            name.StartsWith("ARM64 ")
+            && name <> "ARM64 Function Metadata Planning"
+            && name <> "ARM64 Emit"))
 
 let calculatePassTimingsTotalForOverhead (passTimings: Map<string, TimeSpan>) : TimeSpan =
     passTimings
@@ -195,7 +221,10 @@ let buildPassTimingColumns
         ]
     let consolidated =
         passTimings
-        |> Map.filter (fun name _ -> not (Set.contains name hiddenTimingNames))
+        |> filterPassTimingsForOverhead
+        |> Map.filter (fun name _ ->
+            not (Set.contains name hiddenTimingNames)
+            && not (name.StartsWith("Ownership detail: ")))
 
     let passDefinitions : (string * string * string) list =
         [
@@ -229,6 +258,12 @@ let buildPassTimingColumns
     let overheadDefinitions : (string * string) list =
         [
             ("Pass Test Suite Execution", "Pass Test Suite Execution")
+            ("ANF to MIR Test Suite Execution", "ANF to MIR Test Suite Execution")
+            ("MIR to LIR Test Suite Execution", "MIR to LIR Test Suite Execution")
+            ("LIR to ARM64 Test Suite Execution", "LIR to ARM64 Test Suite Execution")
+            ("ARM64 Encoding Test Suite Execution", "ARM64 Encoding Test Suite Execution")
+            ("Type Checking Test Suite Execution", "Type Checking Test Suite Execution")
+            ("Optimization Test Suite Execution", "Optimization Test Suite Execution")
             ("Stdlib Build Overhead", "Stdlib Build Overhead")
             ("E2E Test Parse", "E2E Test Parse")
             ("Suite Context Planning", "Suite Context Planning")

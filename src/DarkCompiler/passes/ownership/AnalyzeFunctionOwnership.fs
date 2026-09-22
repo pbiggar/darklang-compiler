@@ -2,6 +2,7 @@
 
 module AnalyzeFunctionOwnership
 
+open System.Diagnostics
 open TypeRegistries
 open LoweringPrimitives
 
@@ -59,10 +60,18 @@ let private callContract isManaged (call: HIR.FunctionCall) : HIR.PrimitiveContr
     Effects = Set.singleton HIR.MayInvokeUserCode
 }
 
-let analyze
+let analyzeWithTrace
+    (recordTiming: (string -> System.TimeSpan -> unit) option)
     (context: Context)
     (functions: CheckedAST.FunctionDef list)
     : Result<Analysis, AnalysisError> =
+    let measure name operation =
+        let timer = Stopwatch.StartNew()
+        let result = operation ()
+        timer.Stop()
+        recordTiming
+        |> Option.iter (fun record -> record name timer.Elapsed)
+        result
     let infer types expression =
         LoweringTypeInference.inferTypeCore
             context.SumTypeNames
@@ -78,12 +87,15 @@ let analyze
         ExternalSignature = fun _ -> None
         Contract = fun _ -> Some (callContract (isManaged context))
     }
-    ConstructHIRFunctions.constructFunctionsWithOpaqueFallback
-        context.FunctionNames
-        infer
-        (fun expression -> ClosureAnalysis.freeVars expression Set.empty)
-        calls
-        functions
+    measure
+        "Ownership detail: HIR construction"
+        (fun () ->
+            ConstructHIRFunctions.constructFunctionsWithOpaqueFallback
+                context.FunctionNames
+                infer
+                (fun expression -> ClosureAnalysis.freeVars expression Set.empty)
+                calls
+                functions)
     |> Result.mapError HIRConstructionFailed
     |> Result.bind (fun definitions ->
         let leafOwnership primitive =
@@ -131,7 +143,7 @@ let analyze
             IsManaged = isManaged context
             ExternalCallOwnership = fun _ -> None
         }
-        ElaborateFunctionOwnership.elaborateFunctions dialect definitions
+        ElaborateFunctionOwnership.elaborateFunctionsWithTrace recordTiming dialect definitions
         |> Result.mapError OwnershipElaborationFailed
         |> Result.bind (fun analysis ->
             let hir : VerifyOwnedHIR.HIRContracts<ConstructHIRFunctions.Primitive> = {
@@ -141,10 +153,13 @@ let analyze
             }
             let ownedFunctions = ElaborateFunctionOwnership.functions analysis
             let ownership = ElaborateFunctionOwnership.semantics analysis
-            VerifyOwnedHIR.verifyFunctions
-                hir
-                ownership
-                ownedFunctions
+            measure
+                "Ownership detail: Initial HIR and ownership verification"
+                (fun () ->
+                    VerifyOwnedHIR.verifyFunctions
+                        hir
+                        ownership
+                        ownedFunctions)
             |> Result.mapError (fun error ->
                 match error with
                 | VerifyOwnedHIR.OwnershipVerificationFailed _ ->
@@ -159,15 +174,22 @@ let analyze
             |> Result.bind (fun () ->
                 let reservedSymbols =
                     context.FunctionNames |> Map.values |> Set.ofSeq
-                ScheduleOwnershipVariants.schedule
-                    ScheduleOwnershipVariants.defaultLimits
-                    hir
-                    ownership
-                    reservedSymbols
-                    ownedFunctions
+                measure
+                    "Ownership detail: Specialization scheduling"
+                    (fun () ->
+                        ScheduleOwnershipVariants.scheduleWithTrace
+                            recordTiming
+                            ScheduleOwnershipVariants.defaultLimits
+                            hir
+                            ownership
+                            reservedSymbols
+                            ownedFunctions)
                 |> Result.mapError SpecializationSchedulingFailed
                 |> Result.map (fun scheduled -> {
                     Ownership = analysis
                     HIR = hir
                     Schedule = scheduled
                 }))))
+
+let analyze context functions =
+    analyzeWithTrace None context functions

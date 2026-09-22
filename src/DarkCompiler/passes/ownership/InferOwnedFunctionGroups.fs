@@ -2,6 +2,7 @@
 
 module InferOwnedFunctionGroups
 
+open System.Diagnostics
 open OwnedIR
 
 type FunctionBoundary<'id> = InferRecursiveOwnership.FunctionBoundary<'id>
@@ -29,6 +30,26 @@ type InferenceError<'id when 'id: comparison> =
     | GroupInferenceFailed of
         functionNames: AST.NonEmptyList<string> *
         cause: InferOwnershipUniqueness.InferenceError<'id>
+
+let private measure recordTiming name operation =
+    let timer = Stopwatch.StartNew()
+    let result = operation ()
+    timer.Stop()
+    recordTiming
+    |> Option.iter (fun record -> record name timer.Elapsed)
+    result
+
+let private inferenceLabel discovered =
+    let refinableModes =
+        OwnedFunctionGroups.functions discovered
+        |> List.sumBy (fun definition ->
+            InferOwnershipUniqueness.refinableModeCount definition.Ownership)
+    let variants =
+        if InferOwnershipUniqueness.withinVariantLimit refinableModes then
+            string (1 <<< refinableModes)
+        else
+            $">{InferOwnershipUniqueness.maximumVariants}"
+    $"Ownership detail: Candidate inference ({variants} theoretical variants)"
 
 let candidateBoundaries (Candidate (head, tail)) = head :: tail
 let candidates (Group (head, tail, _, _, _)) = head :: tail
@@ -95,10 +116,14 @@ let private inferGroup
 
 /// Discover proof groups without inferring any variants. A function maps back
 /// to its complete SCC so a later concrete call demand can be solved atomically.
-let prepare
+let prepareWithTrace
+    (recordTiming: (string -> System.TimeSpan -> unit) option)
     (definitions: Function<'leaf, 'id> list)
     : Result<Program<'leaf, 'id>, InferenceError<'id>> =
-    OwnedFunctionGroups.discover definitions
+    measure
+        recordTiming
+        "Ownership detail: Candidate SCC discovery"
+        (fun () -> OwnedFunctionGroups.discover definitions)
     |> Result.mapError FunctionGroupingFailed
     |> Result.map (fun groups ->
         groups
@@ -107,6 +132,8 @@ let prepare
             |> List.fold (fun index definition ->
                 Map.add definition.Definition.Id group index) index) Map.empty
         |> Program)
+
+let prepare definitions = prepareWithTrace None definitions
 
 /// Recursive edges are implementation details of an atomic SCC candidate, not
 /// independent external demands. Materialization rewrites them when the group
@@ -123,7 +150,8 @@ let isInternalRecursiveCall (Program groups) caller target =
 /// Infer at most one best candidate for an actual call demand. Uncalled groups
 /// never reach uniqueness verification, and an unprovable demand safely keeps
 /// the established boundary.
-let inferDemand
+let inferDemandWithTrace
+    (recordTiming: (string -> System.TimeSpan -> unit) option)
     (semantics: Semantics<'leaf, 'id>)
     (Program groups)
     target
@@ -141,37 +169,54 @@ let inferDemand
             result
             |> Result.mapError (fun error -> GroupInferenceFailed (names, error))
             |> Result.map (Option.map (fun candidate -> inferredGroup discovered [candidate]))
-        match definitions, OwnedFunctionGroups.isRecursive discovered with
-        | [definition], false ->
-            InferOwnershipUniqueness.inferDemand semantics uniqueArguments definition
-            |> Result.map (Option.map (fun ownership ->
-                singletonCandidate definition.Definition.Id definition.Definition.Name ownership))
-            |> wrap
-        | head :: tail, true ->
-            InferRecursiveOwnership.inferDemand
-                semantics
-                target
-                uniqueArguments
-                { Head = head; Tail = tail }
-            |> Result.map (Option.map recursiveCandidate)
-            |> wrap
-        | _ :: _, false ->
-            Crash.crash "Owned function discovery produced a nonrecursive multi-function group"
-        | [], _ -> Crash.crash "Owned function discovery returned an empty group"
+        measure
+            recordTiming
+            (inferenceLabel discovered)
+            (fun () ->
+                match definitions, OwnedFunctionGroups.isRecursive discovered with
+                | [definition], false ->
+                    InferOwnershipUniqueness.inferDemand semantics uniqueArguments definition
+                    |> Result.map (Option.map (fun ownership ->
+                        singletonCandidate definition.Definition.Id definition.Definition.Name ownership))
+                    |> wrap
+                | head :: tail, true ->
+                    InferRecursiveOwnership.inferDemand
+                        semantics
+                        target
+                        uniqueArguments
+                        { Head = head; Tail = tail }
+                    |> Result.map (Option.map recursiveCandidate)
+                    |> wrap
+                | _ :: _, false ->
+                    Crash.crash "Owned function discovery produced a nonrecursive multi-function group"
+                | [], _ -> Crash.crash "Owned function discovery returned an empty group")
+
+let inferDemand semantics program target uniqueArguments =
+    inferDemandWithTrace None semantics program target uniqueArguments
 
 /// Discover callee-first owned-HIR SCCs and infer every nondominated uniqueness
 /// boundary for each proof unit. Cross-group calls deliberately retain the
 /// ownership contracts registered in `semantics`; selecting inferred callee
 /// variants at call sites is a later specialization policy.
-let infer
+let inferWithTrace
+    (recordTiming: (string -> System.TimeSpan -> unit) option)
     (semantics: Semantics<'leaf, 'id>)
     (definitions: Function<'leaf, 'id> list)
     : Result<Group<'id> list, InferenceError<'id>> =
     let rec inferGroups inferred = function
         | [] -> Ok (List.rev inferred)
         | discovered :: rest ->
-            inferGroup semantics discovered
+            measure
+                recordTiming
+                (inferenceLabel discovered)
+                (fun () -> inferGroup semantics discovered)
             |> Result.bind (fun group -> inferGroups (group :: inferred) rest)
-    OwnedFunctionGroups.discover definitions
+    measure
+        recordTiming
+        "Ownership detail: Candidate SCC discovery"
+        (fun () -> OwnedFunctionGroups.discover definitions)
     |> Result.mapError FunctionGroupingFailed
     |> Result.bind (inferGroups [])
+
+let infer semantics definitions =
+    inferWithTrace None semantics definitions

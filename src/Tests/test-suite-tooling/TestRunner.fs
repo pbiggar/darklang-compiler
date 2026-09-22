@@ -120,7 +120,8 @@ type TimingJsonTest =
 
 type TimingJsonPass =
     { name: string
-      elapsed_ms: float }
+      elapsed_ms: float
+      invocations: int }
 
 type TimingJsonPayload =
     { summary: TimingJsonSummary
@@ -524,6 +525,11 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                     |> Option.defaultValue TimeSpan.Zero
                 target.PassTimings <- Map.add passName (existing + elapsed) target.PassTimings
             | None -> ()
+        target.PassTimingCounts <-
+            source.PassTimingCounts
+            |> Map.fold (fun counts name count ->
+                let existing = Map.tryFind name counts |> Option.defaultValue 0
+                Map.add name (existing + count) counts) target.PassTimingCounts
         match target.CompletedTestReporter with
         | Some reportCompletedTest ->
             let completedDelta = source.Passed + source.Failed
@@ -1119,7 +1125,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let runANF2MIRFile =
         runPassTestFile loadANF2MIRTest (fun (input, expected) -> runANF2MIRTest input expected)
     runSuiteWithExecutionTiming
-        "Pass Test Suite Execution"
+        "ANF to MIR Test Suite Execution"
         (fun () ->
             runFileSuite
                 runState
@@ -1138,7 +1144,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let runMIR2LIRFile =
         runPassTestFile loadMIR2LIRTest (fun (input, expected) -> runMIR2LIRTest input expected)
     runSuiteWithExecutionTiming
-        "Pass Test Suite Execution"
+        "MIR to LIR Test Suite Execution"
         (fun () ->
             runFileSuite
                 runState
@@ -1157,7 +1163,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let runLIR2ARM64File =
         runPassTestFile loadLIR2ARM64Test (fun (input, expected) -> runLIR2ARM64Test input expected)
     runSuiteWithExecutionTiming
-        "Pass Test Suite Execution"
+        "LIR to ARM64 Test Suite Execution"
         (fun () ->
             runFileSuite
                 runState
@@ -1178,7 +1184,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
             TestDSL.ARM64EncodingTestRunner.loadARM64EncodingTest
             TestDSL.ARM64EncodingTestRunner.runARM64EncodingTest
     runSuiteWithExecutionTiming
-        "Pass Test Suite Execution"
+        "ARM64 Encoding Test Suite Execution"
         (fun () ->
             runFileSuite
                 runState
@@ -1245,7 +1251,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         ProgressBar.update progress
         { Passed = 0; Failed = 1; FailedTests = [ failedInfo ] }
     runSuiteWithExecutionTiming
-        "Pass Test Suite Execution"
+        "Type Checking Test Suite Execution"
         (fun () ->
             runFileSuite
                 runState
@@ -1318,7 +1324,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
             ProgressBar.update progress
             { Passed = 0; Failed = 1; FailedTests = [ failedInfo ] }
         runSuiteWithExecutionTiming
-            "Pass Test Suite Execution"
+            "Optimization Test Suite Execution"
             (fun () ->
                 runFileSuite
                     runState
@@ -1391,6 +1397,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                         runE2ESuite baseStdlib "E2E" "E2E" testsArray
 
                 sectionTimer.Stop()
+                recordNonPassTiming "E2E Suite Execution" sectionTimer.Elapsed
                 println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
                 println ""
 
@@ -1421,13 +1428,20 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                         runE2ESuite baseStdlib "Verification" "Verification" testsArray
 
                 sectionTimer.Stop()
+                recordNonPassTiming "Verification Suite Execution" sectionTimer.Elapsed
                 println $"  {Colors.gray}└─ Completed in {formatTime sectionTimer.Elapsed}{Colors.reset}"
                 println ""
 
     let runUnitSuitesInParallel () : Task<TestRunState> =
         Task.Run(fun () ->
             let unitState = TestFramework.createState ()
+            let unitTimer = Stopwatch.StartNew()
             runUnitTestSuites unitState symbols "🔧 Unit Tests" "Unit" unitTestsOrdered
+            unitTimer.Stop()
+            TestFramework.recordPassTiming unitState {
+                Pass = "Unit Test Suite Execution"
+                Elapsed = unitTimer.Elapsed
+            }
             unitState)
 
     println $"{Colors.gray}  Unit and E2E suites: running in parallel{Colors.reset}"
@@ -1494,7 +1508,10 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 Map.tryFind name runState.PassTimings
                 |> Option.map (fun elapsed ->
                     { name = name
-                      elapsed_ms = milliseconds elapsed }))
+                      elapsed_ms = milliseconds elapsed
+                      invocations =
+                        Map.tryFind name runState.PassTimingCounts
+                        |> Option.defaultValue 0 }))
             |> List.toArray
         let payload =
             { summary =
