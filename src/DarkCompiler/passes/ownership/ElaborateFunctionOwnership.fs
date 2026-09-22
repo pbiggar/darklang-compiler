@@ -50,24 +50,22 @@ let private initialBoundary dialect (definition: HIR.Function<'block>) : OwnedIR
             | None -> UnmanagedResult
     }
 
-let private callRegistry
-    externalOwnership
+let private signatureRegistry
     (boundaries: Map<AST.FunctionId, OwnedIR.FunctionSignature<HIR.ValueId>>)
-    : Result<HIR.FunctionCall -> OwnedIR.CallSignature option, ElaborationError> =
-    let internalCalls =
-        boundaries
-        |> Map.toList
-        |> List.fold (fun result (target, boundary) ->
-            result
-            |> Result.bind (fun registry ->
-                VerifyOwnership.callSignatureOfFunction boundary
-                |> Result.mapError (fun error -> InvalidFunctionBoundary (target, error))
-                |> Result.map (fun signature -> Map.add target signature registry))) (Ok Map.empty)
-    internalCalls
-    |> Result.map (fun registry call ->
-        match Map.tryFind call.Target registry with
-        | Some signature -> Some signature
-        | None -> externalOwnership call)
+    : Result<Map<AST.FunctionId, OwnedIR.CallSignature>, ElaborationError> =
+    boundaries
+    |> Map.toList
+    |> List.fold (fun result (target, boundary) ->
+        result
+        |> Result.bind (fun registry ->
+            VerifyOwnership.callSignatureOfFunction boundary
+            |> Result.mapError (fun error -> InvalidFunctionBoundary (target, error))
+            |> Result.map (fun signature -> Map.add target signature registry))) (Ok Map.empty)
+
+let private resolveCall externalOwnership registry (call: HIR.FunctionCall) =
+    match Map.tryFind call.Target registry with
+    | Some signature -> Some signature
+    | None -> externalOwnership call
 
 let private callInputs dialect signature (call: HIR.FunctionCall) =
     if List.length signature.Parameters <> List.length call.Arguments then
@@ -149,6 +147,16 @@ let private inferBoundary
                 | None -> UnmanagedResult
         })
 
+let rec private blockCalls dialect block =
+    (dialect.Body block).Operations
+    |> List.fold (fun calls operation ->
+        match operation with
+        | HIR.Call call -> Set.add call.Target calls
+        | HIR.Branch (_, _, yes, no) ->
+            Set.unionMany [calls; blockCalls dialect yes; blockCalls dialect no]
+        | HIR.Leaf _
+        | HIR.ScalarBinding _ -> calls) Set.empty
+
 let private convergeBoundaries
     (dialect: Dialect<'leaf, 'block>)
     (definitions: HIR.Function<'block> list) =
@@ -156,22 +164,80 @@ let private convergeBoundaries
         definitions
         |> List.map (fun definition -> definition.Id, initialBoundary dialect definition)
         |> Map.ofList
-    let rec loop seen boundaries =
-        if Set.contains boundaries seen then
-            Crash.crash "Whole-function ownership boundary inference did not converge"
-        else
-            callRegistry dialect.ExternalCallOwnership boundaries
-            |> Result.bind (fun ownership ->
-                definitions
-                |> List.fold (fun result definition ->
-                    result
-                    |> Result.bind (fun inferred ->
-                        inferBoundary dialect ownership definition
-                        |> Result.map (fun boundary -> Map.add definition.Id boundary inferred))) (Ok Map.empty)
-                |> Result.bind (fun next ->
-                    if next = boundaries then Ok (next, ownership)
-                    else loop (Set.add boundaries seen) next))
-    loop Set.empty initial
+    let callsByFunction =
+        definitions
+        |> List.map (fun definition -> definition.Id, blockCalls dialect definition.Body)
+        |> Map.ofList
+    let groups =
+        callsByFunction
+        |> Map.map (fun _ calls -> Set.toList calls)
+        |> OwnedFunctionGroups.orderedFunctionIds (definitions |> List.map (fun definition -> definition.Id))
+    let definitionsById =
+        definitions |> List.map (fun definition -> definition.Id, definition) |> Map.ofList
+    let boundaryState group boundaries =
+        group
+        |> List.map (fun definition ->
+            match Map.tryFind definition.Id boundaries with
+            | Some boundary -> definition.Id, boundary
+            | None -> Crash.crash "Whole-function ownership group lost its boundary")
+        |> Map.ofList
+    let updateSignatures boundaries signatures group =
+        group
+        |> List.fold (fun result definition ->
+            result
+            |> Result.bind (fun signatures ->
+                match Map.tryFind definition.Id boundaries with
+                | None -> Crash.crash "Inferred ownership group lost its boundary"
+                | Some boundary ->
+                    VerifyOwnership.callSignatureOfFunction boundary
+                    |> Result.mapError (fun error -> InvalidFunctionBoundary (definition.Id, error))
+                    |> Result.map (fun signature -> Map.add definition.Id signature signatures))) (Ok signatures)
+    let inferGroup (boundaries, signatures) group =
+        let ownership = resolveCall dialect.ExternalCallOwnership signatures
+        group
+        |> List.fold (fun result definition ->
+            result
+            |> Result.bind (fun inferred ->
+                inferBoundary dialect ownership definition
+                |> Result.map (fun boundary -> Map.add definition.Id boundary inferred))) (Ok boundaries)
+        |> Result.bind (fun nextBoundaries ->
+            updateSignatures nextBoundaries signatures group
+            |> Result.map (fun nextSignatures -> nextBoundaries, nextSignatures))
+    let convergeGroup state group =
+        let rec loop seen (boundaries, _ as state) =
+            let current = boundaryState group boundaries
+            if Set.contains current seen then
+                Crash.crash "Recursive whole-function ownership boundary inference did not converge"
+            else
+                inferGroup state group
+                |> Result.bind (fun (nextBoundaries, _ as next) ->
+                    if boundaryState group nextBoundaries = current then Ok next
+                    else loop (Set.add current seen) next)
+        loop Set.empty state
+    signatureRegistry initial
+    |> Result.bind (fun initialSignatures ->
+        groups
+        |> List.fold (fun result ids ->
+            result
+            |> Result.bind (fun state ->
+                let group =
+                    ids
+                    |> List.map (fun id ->
+                        match Map.tryFind id definitionsById with
+                        | Some definition -> definition
+                        | None -> Crash.crash "Whole-function ownership group lost its definition")
+                match group with
+                | [definition] ->
+                    let recursive =
+                        match Map.tryFind definition.Id callsByFunction with
+                        | Some calls -> Set.contains definition.Id calls
+                        | None -> Crash.crash "Whole-function ownership group lost its call set"
+                    if recursive then convergeGroup state group
+                    else inferGroup state group
+                | _ :: _ -> convergeGroup state group
+                | [] -> Crash.crash "Whole-function ownership SCC discovery returned an empty group")) (Ok (initial, initialSignatures)))
+    |> Result.map (fun (boundaries, signatures) ->
+        boundaries, resolveCall dialect.ExternalCallOwnership signatures)
 
 let private collectDefinitions
     (dialect: Dialect<'leaf, 'block>)

@@ -126,8 +126,9 @@ ownership unit. A recursive call is accepted only
 when its target is present in the verified function group and its independent
 effect/alias and ownership registries; unknown and indirect calls remain opaque
 evaluation rather than receiving guessed facts. Checked-source whole-function
-analysis derives conservative borrowed and consumed parameter boundaries to a
-fixed point, treats managed results as ownership transfers, and inserts `Dup`
+analysis processes call-graph components callee-first, derives each acyclic
+function boundary once, and confines fixed-point iteration to a recursive
+component. It treats managed results as ownership transfers and inserts `Dup`
 and `Drop` steps for consuming calls, dead results, and branch edges. Joint
 verification runs before ANF, but the artifact is not yet carried into lowering,
 so this boundary does not change emitted code or list representation selection.

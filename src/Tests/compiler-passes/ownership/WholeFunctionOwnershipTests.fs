@@ -327,6 +327,64 @@ let private testStabilizesMutualRecursiveBoundaries () =
         else Error "Expected consumption to stabilize across the mutually visible call group"
     | Error error -> Error error
 
+let private testStabilizesActualMutualRecursion () =
+    let firstInput = managed 0
+    let firstResult = unitValue 1
+    let first =
+        definition
+            "recursiveFirst"
+            [parameter "input" firstInput]
+            [call "recursiveSecond" [firstInput] firstResult]
+            firstResult
+    let secondInput = managed 0
+    let secondResult = unitValue 1
+    let second =
+        definition
+            "recursiveSecond"
+            [parameter "input" secondInput]
+            [call "recursiveFirst" [secondInput] secondResult]
+            secondResult
+    match elaborate [first; second] with
+    | Ok analysis ->
+        let consumed name (input: HIR.Value) =
+            findFunction name analysis
+            |> Option.exists (fun owned ->
+                owned.Ownership = {
+                    Parameters = [ConsumedParameter input.Id]
+                    Result = UnmanagedResult
+                })
+        if consumed "recursiveFirst" firstInput
+           && consumed "recursiveSecond" secondInput then Ok ()
+        else Error "Expected a mutually recursive ownership group to converge atomically"
+    | Error error -> Error error
+
+let private testInfersDeepAcyclicBoundariesCalleeFirst () =
+    let functionCount = 256
+    let name index = sprintf "ownershipChain%04i" index
+    let definitions =
+        [0 .. functionCount - 1]
+        |> List.map (fun index ->
+            let input = managed 0
+            let result = unitValue 1
+            let operations =
+                if index + 1 < functionCount then
+                    [call (name (index + 1)) [input] result]
+                else
+                    [scalar result ["input", input]]
+            definition (name index) [parameter "input" input] operations result)
+    match elaborate definitions with
+    | Ok analysis ->
+        let everyBoundaryBorrowed =
+            ElaborateFunctionOwnership.functions analysis
+            |> List.forall (fun owned ->
+                owned.Ownership = {
+                    Parameters = [BorrowedParameter (HIR.ValueId 0)]
+                    Result = UnmanagedResult
+                })
+        if everyBoundaryBorrowed then Ok ()
+        else Error "Expected deep acyclic ownership boundaries to propagate callee-first"
+    | Error error -> Error error
+
 let private testRejectsMissingCallOwnership () =
     let input = managed 0
     let result = managed 1
@@ -371,6 +429,8 @@ let tests = [
     "Whole-function ownership cleans unused managed results", testCleansUnusedManagedResults
     "Whole-function ownership stabilizes recursive boundaries", testStabilizesRecursiveBoundaries
     "Whole-function ownership stabilizes mutual call boundaries", testStabilizesMutualRecursiveBoundaries
+    "Whole-function ownership stabilizes an actual recursive group", testStabilizesActualMutualRecursion
+    "Whole-function ownership infers a deep call chain callee-first", testInfersDeepAcyclicBoundariesCalleeFirst
     "Whole-function ownership rejects calls without contracts", testRejectsMissingCallOwnership
     "Whole-function ownership rejects mismatched call contracts", testRejectsMismatchedCallOwnership
 ]

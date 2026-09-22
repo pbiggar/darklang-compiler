@@ -119,8 +119,10 @@ groups callee-first with source-stable ties. It records calls to earlier interna
 groups separately from external targets and marks both self-recursive and
 mutually recursive groups. Calls retained inside opaque scalar expressions do
 not acquire normalized call-graph edges.
-`InferOwnedFunctionGroups` consumes that callee-first order and dispatches
-nonrecursive singletons to boundary inference and recursive SCCs to group-wide
+`ElaborateFunctionOwnership` consumes the same callee-first order when deriving
+established boundaries: it infers a nonrecursive singleton once and iterates
+only within each recursive SCC. `InferOwnedFunctionGroups` then dispatches
+nonrecursive singletons to candidate inference and recursive SCCs to group-wide
 inference. Its result keeps every group and candidate boundary nonempty,
 preserves internal dependencies and external targets, and retains all
 nondominated variants for later call-site selection. Calls across groups use

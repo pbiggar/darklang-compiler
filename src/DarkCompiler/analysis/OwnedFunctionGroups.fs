@@ -97,34 +97,131 @@ let private stronglyConnectedComponents vertices sourceIndex adjacency =
     finishOrder vertices adjacency
     |> fun order -> partition order Set.empty []
 
-type private Component<'leaf, 'id> = {
+type private NameComponent = {
     Index: int
-    Head: Function<'leaf, 'id>
-    Tail: Function<'leaf, 'id> list
-    Names: Set<AST.FunctionId>
-    InternalDependencies: Set<AST.FunctionId>
-    ExternalTargets: Set<AST.FunctionId>
-    Recursive: bool
+    Members: AST.FunctionId list
+    Dependencies: Set<int>
 }
 
-let private components definitions sourceIndices names callsByFunction adjacency =
+/// Return call-graph SCC members callee-first. Independent components retain
+/// the source position of their earliest member.
+let internal orderedFunctionIds vertices adjacency =
+    let vertexNames = Set.ofList vertices
+    if Set.count vertexNames <> List.length vertices then
+        Crash.crash "Function call graph contains duplicate definitions"
+    let sourcePositions =
+        vertices |> List.mapi (fun index name -> name, index) |> Map.ofList
     let sourceIndex name =
-        match Map.tryFind name sourceIndices with
+        match Map.tryFind name sourcePositions with
         | Some index -> index
-        | None -> Crash.crash "Owned function SCC lost its source position"
+        | None -> Crash.crash "Function call graph lost its source position"
+    let graph =
+        vertices
+        |> List.map (fun name ->
+            let targets =
+                match Map.tryFind name adjacency with
+                | Some values -> values
+                | None -> []
+            name,
+            (targets
+             |> List.filter (fun target -> Set.contains target vertexNames)
+             |> Set.ofList
+             |> Set.toList
+             |> List.sortBy sourceIndex))
+        |> Map.ofList
+    let discovered =
+        stronglyConnectedComponents vertices sourceIndex graph
+        |> List.map (fun names ->
+            let members =
+                names
+                |> Set.toList
+                |> List.sortBy sourceIndex
+            match members with
+            | head :: _ -> sourceIndex head, members, names
+            | [] -> Crash.crash "Function SCC discovery returned an empty component")
+        |> List.sortBy (fun (index, _, _) -> index)
+    let ownerByName =
+        discovered
+        |> List.collect (fun (index, _, names) ->
+            names |> Set.toList |> List.map (fun name -> name, index))
+        |> Map.ofList
+    let components =
+        discovered
+        |> List.map (fun (index, members, _) ->
+            let dependencies =
+                members
+                |> List.collect (adjacent graph)
+                |> List.fold (fun dependencies target ->
+                    match Map.tryFind target ownerByName with
+                    | Some dependency when dependency <> index -> Set.add dependency dependencies
+                    | Some _ -> dependencies
+                    | None -> Crash.crash "Function dependency lost its component") Set.empty
+            {
+                Index = index
+                Members = members
+                Dependencies = dependencies
+            })
+    let byIndex =
+        components |> List.map (fun groupInfo -> groupInfo.Index, groupInfo) |> Map.ofList
+    let dependents =
+        components
+        |> List.map (fun groupInfo -> groupInfo.Index, Set.empty)
+        |> Map.ofList
+        |> fun initial ->
+            components
+            |> List.fold (fun dependents caller ->
+                caller.Dependencies
+                |> Set.fold (fun dependents dependency ->
+                    match Map.tryFind dependency dependents with
+                    | Some callers -> Map.add dependency (Set.add caller.Index callers) dependents
+                    | None -> Crash.crash "Function dependency target lost its component") dependents) initial
+    let unresolved =
+        components
+        |> List.map (fun groupInfo -> groupInfo.Index, Set.count groupInfo.Dependencies)
+        |> Map.ofList
+    let ready =
+        unresolved
+        |> Map.fold (fun ready index count ->
+            if count = 0 then Set.add index ready else ready) Set.empty
+    let rec order remaining unresolved ready ordered =
+        if remaining = 0 then List.rev ordered
+        else
+            match ready |> Set.toSeq |> Seq.tryHead with
+            | None -> Crash.crash "Function SCC condensation graph contains a cycle"
+            | Some selectedIndex ->
+                let selected =
+                    match Map.tryFind selectedIndex byIndex with
+                    | Some groupInfo -> groupInfo
+                    | None -> Crash.crash "Function ordering lost a ready component"
+                let selectedDependents =
+                    match Map.tryFind selectedIndex dependents with
+                    | Some values -> values
+                    | None -> Crash.crash "Function ordering lost dependent components"
+                let unresolved, ready =
+                    selectedDependents
+                    |> Set.fold (fun (unresolved, ready) dependent ->
+                        match Map.tryFind dependent unresolved with
+                        | Some count when count > 0 ->
+                            let next = count - 1
+                            let ready = if next = 0 then Set.add dependent ready else ready
+                            Map.add dependent next unresolved, ready
+                        | _ -> Crash.crash "Function dependency count became invalid")
+                        (unresolved, Set.remove selectedIndex ready)
+                order (remaining - 1) unresolved ready (selected.Members :: ordered)
+    order components.Length unresolved ready []
+
+let private groups definitions names callsByFunction adjacency =
     let definitionsByName =
         definitions
         |> List.map (fun definition -> definition.Definition.Id, definition)
         |> Map.ofList
-    stronglyConnectedComponents
+    orderedFunctionIds
         (definitions |> List.map (fun definition -> definition.Definition.Id))
-        sourceIndex
         adjacency
-    |> List.map (fun componentNames ->
+    |> List.map (fun memberNames ->
+        let componentNames = Set.ofList memberNames
         let members =
-            componentNames
-            |> Set.toList
-            |> List.sortBy sourceIndex
+            memberNames
             |> List.map (fun name ->
                 match Map.tryFind name definitionsByName with
                 | Some definition -> definition
@@ -139,83 +236,13 @@ let private components definitions sourceIndices names callsByFunction adjacency
         match members with
         | memberHead :: memberTail ->
             let headName = memberHead.Definition.Id
-            {
-                Index = sourceIndex headName
-                Head = memberHead
-                Tail = memberTail
-                Names = componentNames
-                InternalDependencies =
-                    Set.difference (Set.intersect calls names) componentNames
-                ExternalTargets = Set.difference calls names
-                Recursive =
-                    Set.count componentNames > 1 || Set.contains headName calls
-            }
+            Group (
+                memberHead,
+                memberTail,
+                Set.count componentNames > 1 || Set.contains headName calls,
+                Set.difference (Set.intersect calls names) componentNames,
+                Set.difference calls names)
         | [] -> Crash.crash "Owned function SCC partition produced an empty component")
-    |> List.sortBy (fun groupInfo -> groupInfo.Index)
-
-let private orderComponents components =
-    let byIndex = components |> List.map (fun groupInfo -> groupInfo.Index, groupInfo) |> Map.ofList
-    let ownerByName =
-        components
-        |> List.collect (fun groupInfo ->
-            groupInfo.Names
-            |> Set.toList
-            |> List.map (fun name -> name, groupInfo.Index))
-        |> Map.ofList
-    let dependencies =
-        components
-        |> List.map (fun groupInfo ->
-            let dependencyIndices =
-                groupInfo.InternalDependencies
-                |> Set.fold (fun indices name ->
-                    match Map.tryFind name ownerByName with
-                    | Some index -> Set.add index indices
-                    | None -> Crash.crash "Owned function dependency lost its component") Set.empty
-            groupInfo.Index, dependencyIndices)
-        |> Map.ofList
-    let dependents =
-        components
-        |> List.map (fun groupInfo -> groupInfo.Index, Set.empty)
-        |> Map.ofList
-        |> fun initial ->
-            dependencies
-            |> Map.fold (fun dependents caller dependencyIndices ->
-                dependencyIndices
-                |> Set.fold (fun dependents dependency ->
-                    match Map.tryFind dependency dependents with
-                    | Some callers -> Map.add dependency (Set.add caller callers) dependents
-                    | None -> Crash.crash "Owned function dependency target lost its component") dependents) initial
-    let unresolved = dependencies |> Map.map (fun _ values -> Set.count values)
-    let ready =
-        unresolved
-        |> Map.fold (fun ready index count ->
-            if count = 0 then Set.add index ready else ready) Set.empty
-    let rec order remaining unresolved ready ordered =
-        if remaining = 0 then List.rev ordered
-        else
-            match ready |> Set.toSeq |> Seq.tryHead with
-            | None -> Crash.crash "Owned function SCC condensation graph contains a cycle"
-            | Some selectedIndex ->
-                let selected =
-                    match Map.tryFind selectedIndex byIndex with
-                    | Some groupInfo -> groupInfo
-                    | None -> Crash.crash "Owned function ordering lost a ready component"
-                let selectedDependents =
-                    match Map.tryFind selectedIndex dependents with
-                    | Some values -> values
-                    | None -> Crash.crash "Owned function ordering lost dependent components"
-                let unresolved, ready =
-                    selectedDependents
-                    |> Set.fold (fun (unresolved, ready) dependent ->
-                        match Map.tryFind dependent unresolved with
-                        | Some count when count > 0 ->
-                            let next = count - 1
-                            let ready = if next = 0 then Set.add dependent ready else ready
-                            Map.add dependent next unresolved, ready
-                        | _ -> Crash.crash "Owned function dependency count became invalid")
-                        (unresolved, Set.remove selectedIndex ready)
-                order (remaining - 1) unresolved ready (selected :: ordered)
-    order components.Length unresolved ready []
 
 /// Partition mutually visible owned functions into call-graph SCCs. Groups are
 /// callee-first; independent groups retain the source order of their earliest
@@ -240,27 +267,8 @@ let discover
                 definition.Definition.Id,
                 blockCalls definition.Definition.Body)
             |> Map.ofList
-        let sourceIndices =
-            definitions
-            |> List.mapi (fun index definition -> definition.Definition.Id, index)
-            |> Map.ofList
-        let sourceIndex name =
-            match Map.tryFind name sourceIndices with
-            | Some index -> index
-            | None -> Crash.crash "Owned function call graph lost its source position"
         let adjacency =
             callsByFunction
-            |> Map.map (fun _ calls ->
-                Set.intersect names calls
-                |> Set.toList
-                |> List.sortBy sourceIndex)
-        components definitions sourceIndices names callsByFunction adjacency
-        |> orderComponents
-        |> List.map (fun groupInfo ->
-            Group (
-                groupInfo.Head,
-                groupInfo.Tail,
-                groupInfo.Recursive,
-                groupInfo.InternalDependencies,
-                groupInfo.ExternalTargets))
+            |> Map.map (fun _ calls -> Set.toList calls)
+        groups definitions names callsByFunction adjacency
         |> Ok
