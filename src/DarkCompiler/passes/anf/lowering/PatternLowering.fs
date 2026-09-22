@@ -15,12 +15,10 @@ open LoweringTypeInference
 open ANFContinuations
 open LoweringCallbacks
 
-let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (scrutinee: CheckedAST.Expr) (cases: CheckedAST.MatchCase list) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (scrutinee: CheckedAST.Expr) (cases: CheckedAST.MatchCase list) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     let constructorTag id =
         tryFindConstructorTag id typeNames
         |> Option.defaultWith (fun () -> Crash.crash "Checked constructor identity is absent from layout metadata")
-    let functionIds =
-        functionNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
     let functionId name =
         Map.tryFind name functionIds
         |> Option.defaultWith (fun () ->
@@ -283,7 +281,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         | p :: rest ->
                             // Lists are SkewLists - use headUnsafe/tail to extract
                             let (headVar, vg1) = ANF.freshVar vg
-                            let headExpr = listHeadUnsafeExpr funcReg elemType currentList
+                            let headExpr = listHeadUnsafeExpr functionIds elemType currentList
                             let headBinding = (headVar, headExpr)
                             collectPatternBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                             |> Result.bind (fun (env', bindings', vg') ->
@@ -313,7 +311,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         | p :: rest ->
                             // Lists are SkewLists - use headUnsafe/tail to extract
                             let (rawHeadVar, vg1) = ANF.freshVar vg
-                            let rawHeadExpr = listHeadUnsafeExpr funcReg elemType currentList
+                            let rawHeadExpr = listHeadUnsafeExpr functionIds elemType currentList
                             let rawHeadBinding = (rawHeadVar, rawHeadExpr)
                             // Wrap with TypedAtom to preserve correct element type in TypeMap
                             let (headVar, vg1') = ANF.freshVar vg1
@@ -531,7 +529,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             | p :: rest ->
                                 // Lists are SkewLists - use headUnsafe/tail to extract
                                 let (headVar, vg1) = ANF.freshVar vg
-                                let headExpr = listHeadUnsafeExpr funcReg elemType currentList
+                                let headExpr = listHeadUnsafeExpr functionIds elemType currentList
                                 let headBinding = (headVar, headExpr)
                                 collectPatternBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                 |> Result.bind (fun (env', bindings', vg') ->
@@ -561,7 +559,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             | p :: rest ->
                                 // Lists are SkewLists - use headUnsafe/tail to extract
                                 let (rawHeadVar, vg1) = ANF.freshVar vg
-                                let rawHeadExpr = listHeadUnsafeExpr funcReg elemType currentList
+                                let rawHeadExpr = listHeadUnsafeExpr functionIds elemType currentList
                                 let rawHeadBinding = (rawHeadVar, rawHeadExpr)
                                 // Wrap with TypedAtom to preserve correct element type in TypeMap
                                 let (headVar, vg1') = ANF.freshVar vg1
@@ -714,7 +712,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         | [] -> Ok (env, bindings, vg)
                         | pat :: rest ->
                             let (rawValueVar, vg1) = ANF.freshVar vg
-                            let rawValueExpr = listHeadUnsafeExpr funcReg elemType currentList
+                            let rawValueExpr = listHeadUnsafeExpr functionIds elemType currentList
                             let (typedValueVar, vg2) = ANF.freshVar vg1
                             let typedValueExpr = ANF.TypedAtom (ANF.Var rawValueVar, elemType)
                             let (rawTailVar, vg3) = ANF.freshVar vg2
@@ -774,7 +772,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     | pat :: rest ->
                         // Extract head using SkewList.headUnsafe_i64
                         let (rawHeadVar, vg1) = ANF.freshVar vg
-                        let rawHeadExpr = listHeadUnsafeExpr funcReg elemType listAtom
+                        let rawHeadExpr = listHeadUnsafeExpr functionIds elemType listAtom
                         let rawHeadBinding = (rawHeadVar, rawHeadExpr)
                         // Wrap with TypedAtom to preserve correct element type in TypeMap
                         let (headVar, vg1') = ANF.freshVar vg1
@@ -1057,7 +1055,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             | p :: rest ->
                                 // Lists are SkewLists - use headUnsafe/tail to extract
                                 let (headVar, vg1) = ANF.freshVar vg
-                                let headExpr = listHeadUnsafeExpr funcReg elemType currentList
+                                let headExpr = listHeadUnsafeExpr functionIds elemType currentList
                                 let headBinding = (headVar, headExpr)
                                 collectBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                 |> Result.bind (fun (env', bindings', vg') ->
@@ -1098,7 +1096,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             | p :: rest ->
                                 // Lists are SkewLists - use headUnsafe/tail to extract
                                 let (headVar, vg1) = ANF.freshVar vg
-                                let headExpr = listHeadUnsafeExpr funcReg elemType currentList
+                                let headExpr = listHeadUnsafeExpr functionIds elemType currentList
                                 let headBinding = (headVar, headExpr)
                                 collectBindings p (ANF.Var headVar) elemType env (headBinding :: bindings) vg1
                                 |> Result.bind (fun (env', bindings', vg') ->
@@ -1643,7 +1641,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         | [] -> Ok (currentEnv, currentBindings, currentVg)
                         | pat :: rest ->
                             let (headVar, vg1) = ANF.freshVar currentVg
-                            let headExpr = listHeadUnsafeExpr funcReg elemType currentList
+                            let headExpr = listHeadUnsafeExpr functionIds elemType currentList
                             collectNestedPatternBindings pat (ANF.Var headVar) elemType currentEnv (currentBindings @ [(headVar, headExpr)]) vg1
                             |> Result.bind (fun (env', bindings', vg') ->
                                 if List.isEmpty rest then
@@ -1676,7 +1674,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         | [] -> Ok (currentEnv, currentBindings, currentList, currentVg)
                         | pat :: rest ->
                             let (headVar, vg1) = ANF.freshVar currentVg
-                            let headExpr = listHeadUnsafeExpr funcReg elemType currentList
+                            let headExpr = listHeadUnsafeExpr functionIds elemType currentList
                             let (tailVar, vg2) = ANF.freshVar vg1
                             let tailExpr = ANF.Call (functionId "Darklang.Stdlib.List.__tail_i64", [currentList])
                             collectNestedPatternBindings pat (ANF.Var headVar) elemType currentEnv (currentBindings @ [(headVar, headExpr); (tailVar, tailExpr)]) vg2
@@ -2461,7 +2459,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         // Call head to get current element
                         let (headResultVar, vg1) = ANF.freshVar vg
                         let headCallExpr =
-                            listHeadUnsafeExpr funcReg elemType (ANF.Var currentListVar)
+                            listHeadUnsafeExpr functionIds elemType (ANF.Var currentListVar)
                         // Call tail to get rest
                         let (tailResultVar, vg2) = ANF.freshVar vg1
                         let tailCallExpr = ANF.Call (functionId "Darklang.Stdlib.List.__tail_i64", [ANF.Var currentListVar])
@@ -2783,7 +2781,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let (rawTailVar, vg3) = ANF.freshVar vg2
                         let (tailVar, vg4) = ANF.freshVar vg3
                         let headLoads =
-                            [(rawHeadVar, listHeadUnsafeExpr funcReg elemType current)
+                            [(rawHeadVar, listHeadUnsafeExpr functionIds elemType current)
                              (headVar, ANF.TypedAtom (ANF.Var rawHeadVar, elemType))]
                         let tailLoads =
                             [(rawTailVar, ANF.Call (functionId "Darklang.Stdlib.List.__tail_i64", [current]))

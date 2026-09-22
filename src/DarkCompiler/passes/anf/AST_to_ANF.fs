@@ -25,7 +25,9 @@ let toANFWithMetadata
     (funcReg: FunctionRegistry)
     (moduleRegistry: AST.ModuleRegistry)
     : Result<ANF.AExpr * ANF.VarGen, string> =
+    let functionNames = funcReg |> Map.map (fun _ (name, _) -> name)
     toANFCore
+        (functionIdsFromNames functionNames)
         (sumTypeNamesFromVariantLookup variantLookup)
         typeNames
         (DestructionAnalysis.inertFunctionScopes Map.empty Map.empty)
@@ -35,7 +37,7 @@ let toANFWithMetadata
         typeReg
         variantLookup
         funcReg
-        (funcReg |> Map.map (fun _ (name, _) -> name))
+        functionNames
         moduleRegistry
 
 let toANF
@@ -79,6 +81,7 @@ let private convertFunctionWithSumTypeNames
     (typeReg: TypeRegistry)
     (variantLookup: VariantLookup)
     (funcReg: FunctionRegistry)
+    (functionIds: FunctionIdRegistry)
     (functionNames: FunctionNameRegistry)
     (moduleRegistry: AST.ModuleRegistry)
     : Result<ANF.Function * ANF.VarGen, string> =
@@ -124,7 +127,7 @@ let private convertFunctionWithSumTypeNames
                     (fun () -> typeNamesFromSymbols symbols)
             let timer = System.Diagnostics.Stopwatch.StartNew()
             let result =
-                toANFCore sumTypeNames typeNames inertScopes funcDef.Body varGen1 paramEnv typeReg variantLookup funcReg functionNames moduleRegistry
+                toANFCore functionIds sumTypeNames typeNames inertScopes funcDef.Body varGen1 paramEnv typeReg variantLookup funcReg functionNames moduleRegistry
             timer.Stop()
             recordTiming
             |> Option.iter (fun record ->
@@ -162,6 +165,7 @@ let convertFunction
     (funcReg: FunctionRegistry)
     (moduleRegistry: AST.ModuleRegistry)
     : Result<ANF.Function * ANF.VarGen, string> =
+    let functionNames = funcReg |> Map.map (fun _ (name, _) -> name)
     convertFunctionWithSumTypeNames
         None
         symbols
@@ -172,7 +176,8 @@ let convertFunction
         typeReg
         variantLookup
         funcReg
-        (funcReg |> Map.map (fun _ (name, _) -> name))
+        (functionIdsFromNames functionNames)
+        functionNames
         moduleRegistry
 
 /// Result type that includes registries needed for later passes
@@ -209,6 +214,7 @@ type UserOnlyResult = {
     LocalVariantLookup: VariantLookup
     RcSumShapeReg: MemoryModel.RcSumShapeRegistry
     FuncReg: FunctionRegistry
+    FunctionIds: FunctionIdRegistry
     FunctionNames: FunctionNameRegistry
     LocalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>
     FuncParams: Map<string, (string * AST.SemanticType) list>
@@ -227,6 +233,7 @@ type Registries = {
     SumTypeNames: Set<string>
     RcSumShapeReg: MemoryModel.RcSumShapeRegistry
     FuncReg: FunctionRegistry
+    FunctionIds: FunctionIdRegistry
     FunctionNames: FunctionNameRegistry
     FuncParams: Map<string, (string * AST.SemanticType) list>
     ModuleRegistry: AST.ModuleRegistry
@@ -375,6 +382,7 @@ let private buildRegistriesInternal
     let functionNames : FunctionNameRegistry =
         functions
         |> List.fold (fun names func -> Map.add func.Id func.Name names) (CheckedAST.functionNames symbols)
+    let functionIds = functionIdsFromNames functionNames
 
     let userFuncParams : Map<string, (string * AST.SemanticType) list> =
         functions
@@ -412,6 +420,7 @@ let private buildRegistriesInternal
         SumTypeNames = sumTypeNames
         RcSumShapeReg = rcSumShapeRegistryFromVariantLookup variantLookup
         FuncReg = funcReg
+        FunctionIds = functionIds
         FunctionNames = functionNames
         FuncParams = funcParams
         ModuleRegistry = moduleRegistry
@@ -457,6 +466,7 @@ let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
         SumTypeNames = Set.union baseRegs.SumTypeNames overlay.SumTypeNames
         RcSumShapeReg = mergeMaps baseRegs.RcSumShapeReg overlay.RcSumShapeReg
         FuncReg = mergeMaps baseRegs.FuncReg overlay.FuncReg
+        FunctionIds = mergeMaps baseRegs.FunctionIds overlay.FunctionIds
         FunctionNames = mergeMaps baseRegs.FunctionNames overlay.FunctionNames
         FuncParams = mergeMaps baseRegs.FuncParams overlay.FuncParams
         ModuleRegistry = baseRegs.ModuleRegistry
@@ -514,6 +524,7 @@ let convertFunctionsWithOwnershipWithTrace
                 registries.TypeReg
                 registries.VariantLookup
                 registries.FuncReg
+                registries.FunctionIds
                 registries.FunctionNames
                 registries.ModuleRegistry
             |> Result.bind (fun (anfFunc, vg') ->
@@ -581,7 +592,7 @@ let convertExprToAnf
     : Result<ANF.AExpr * ANF.VarGen, string> =
     let emptyEnv : VarEnv = Map.empty
     let sumTypeNames = registries.SumTypeNames
-    toANFCore sumTypeNames registries.TypeNames (DestructionAnalysis.inertFunctionScopes registries.FunctionNames registries.ScopeContracts) expr varGen emptyEnv registries.TypeReg registries.VariantLookup registries.FuncReg registries.FunctionNames registries.ModuleRegistry
+    toANFCore registries.FunctionIds sumTypeNames registries.TypeNames (DestructionAnalysis.inertFunctionScopes registries.FunctionNames registries.ScopeContracts) expr varGen emptyEnv registries.TypeReg registries.VariantLookup registries.FuncReg registries.FunctionNames registries.ModuleRegistry
 
 /// Synthesize an entrypoint function from a main expression
 let synthesizeEntryFunction

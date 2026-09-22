@@ -11,8 +11,7 @@ open LiftFunctions
 open LoweringTypeInference
 open ANFContinuations
 
-let rec toANFCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
-    let functionIds = functionNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
+let rec toANFCore (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     let resolveFunction name =
         Map.tryFind name functionIds
         |> Option.defaultWith (fun () -> Crash.crash $"List-region helper '{name}' is absent from registries")
@@ -21,18 +20,18 @@ let rec toANFCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (ine
         inferTypeCore sumTypeNames typeNames value types typeReg variantLookup funcReg functionNames moduleRegistry
     match ExtractListRegions.tryExtract inertScopes functionNames (typeEnvFromVarEnv env) infer (fun value -> freeVars value Set.empty) expr with
     | Some region ->
-        let lower value vg environment = toANFUnplannedCore sumTypeNames typeNames inertScopes value vg environment typeReg variantLookup funcReg functionNames moduleRegistry
+        let lower value vg environment = toANFUnplannedCore functionIds sumTypeNames typeNames inertScopes value vg environment typeReg variantLookup funcReg functionNames moduleRegistry
         ListLiveness.verifyFunctional region |> Result.bind (fun () ->
             region |> SelectListStorage.selectStorage |> ElaborateListOwnership.elaborateOwnership |> LowerListRegions.lower resolveFunction lower env varGen)
-    | None -> toANFUnplannedCore sumTypeNames typeNames inertScopes expr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+    | None -> toANFUnplannedCore functionIds sumTypeNames typeNames inertScopes expr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
 
-and private toANFUnplannedCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
-    ExpressionLowering.lowerExpression toANFCore toAtomCore toANFBoundAtomCore sumTypeNames typeNames inertScopes expr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+and private toANFUnplannedCore (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+    ExpressionLowering.lowerExpression (toANFCore functionIds) (toAtomCore functionIds) (toANFBoundAtomCore functionIds) functionIds sumTypeNames typeNames inertScopes expr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
 
-and toAtomCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
-    AtomLowering.lowerAtom toANFCore toAtomCore toANFBoundAtomCore sumTypeNames typeNames inertScopes expr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+and toAtomCore (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+    AtomLowering.lowerAtom (toANFCore functionIds) (toAtomCore functionIds) (toANFBoundAtomCore functionIds) functionIds sumTypeNames typeNames inertScopes expr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
 
-and toANFBoundAtomCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>)
+and toANFBoundAtomCore (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>)
     (expr: CheckedAST.Expr)
     (varGen: ANF.VarGen)
     (env: VarEnv)
@@ -42,7 +41,7 @@ and toANFBoundAtomCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry)
     (functionNames: FunctionNameRegistry)
     (moduleRegistry: AST.ModuleRegistry)
     : Result<ANF.AExpr * ANF.Atom * ANF.VarGen, string> =
-    match toAtomCore sumTypeNames typeNames inertScopes expr varGen env typeReg variantLookup funcReg functionNames moduleRegistry with
+    match toAtomCore functionIds sumTypeNames typeNames inertScopes expr varGen env typeReg variantLookup funcReg functionNames moduleRegistry with
     | Ok (atom, bindings, vg1) ->
         // Keep existing atom lowering behavior unchanged when toAtom succeeds:
         // do not introduce extra temp ids in the common path.
@@ -50,7 +49,7 @@ and toANFBoundAtomCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry)
     | Error _ ->
         let lowerWithBranchLocalBinding () =
             let (boundVar, vg1) = ANF.freshVar varGen
-            toANFCore sumTypeNames typeNames inertScopes expr vg1 env typeReg variantLookup funcReg functionNames moduleRegistry
+            toANFCore functionIds sumTypeNames typeNames inertScopes expr vg1 env typeReg variantLookup funcReg functionNames moduleRegistry
             |> Result.map (fun (exprA, vg2) ->
                 let boundExpr =
                     bindReturns exprA (fun atom ->
@@ -71,7 +70,7 @@ and toANFBoundAtomCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry)
             |> Result.bind (fun resultType ->
                 if isSupportedJoinArgumentType resultType then
                     let (boundVar, vg1) = ANF.freshVar varGen
-                    toANFCore sumTypeNames typeNames inertScopes expr vg1 env typeReg variantLookup funcReg functionNames moduleRegistry
+                    toANFCore functionIds sumTypeNames typeNames inertScopes expr vg1 env typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (exprA, vg2) ->
                         // Pattern-bound generic values can retain a TVar in the recovered
                         // TypeMap even though checking established the match result type.

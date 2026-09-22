@@ -16,15 +16,13 @@ open LoweringTypeInference
 open LoweringAggregates
 open LoweringCallbacks
 
-let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     let fieldIndex id =
         tryFindFieldIndex id typeNames
         |> Option.defaultWith (fun () -> Crash.crash "Checked field identity is absent from layout metadata")
     let constructorTag id =
         tryFindConstructorTag id typeNames
         |> Option.defaultWith (fun () -> Crash.crash "Checked constructor identity is absent from layout metadata")
-    let functionIds =
-        functionNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
     let functionId name =
         Map.tryFind name functionIds
         |> Option.defaultWith (fun () ->

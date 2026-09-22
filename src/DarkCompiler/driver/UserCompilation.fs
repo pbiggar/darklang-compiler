@@ -193,6 +193,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             SumTypeNames = userOnly.SumTypeNames
                             RcSumShapeReg = userOnly.RcSumShapeReg
                             FuncReg = userOnly.FuncReg
+                            FunctionIds = userOnly.FunctionIds
                             FunctionNames = userOnly.FunctionNames
                             FuncParams = userOnly.FuncParams
                             ModuleRegistry = userOnly.ModuleRegistry

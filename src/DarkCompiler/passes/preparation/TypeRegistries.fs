@@ -83,6 +83,18 @@ type FunctionRegistry = Map<AST.FunctionId, string * AST.SemanticType>
 /// Display metadata for every resolved function identity, including compiler
 /// intrinsics that do not have ordinary checked definitions.
 type FunctionNameRegistry = Map<AST.FunctionId, string>
+
+/// Resolve the small set of explicitly named lowering conventions to their
+/// canonical semantic identities without rebuilding the inverse name table at
+/// every recursive expression-lowering step.
+type FunctionIdRegistry = Map<string, AST.FunctionId>
+
+let functionIdsFromNames (names: FunctionNameRegistry) : FunctionIdRegistry =
+    names
+    |> Map.toSeq
+    |> Seq.map (fun (id, name) -> name, id)
+    |> Map.ofSeq
+
 type TypeNameRegistry = CheckedAST.SemanticMetadata
 
 let emptyTypeNames : TypeNameRegistry = {
@@ -98,13 +110,11 @@ let tryFindConstructorTag id (registry: TypeNameRegistry) = Map.tryFind id regis
 let tryFindFieldIndex id (registry: TypeNameRegistry) = Map.tryFind id registry.FieldIndices
 
 let private listHeadUnsafeFunction
-    (funcReg: FunctionRegistry)
+    (functionIds: FunctionIdRegistry)
     (elementType: AST.SemanticType)
     : AST.FunctionId * bool =
-    let idsByName =
-        funcReg |> Map.toSeq |> Seq.map (fun (id, (name, _)) -> name, id) |> Map.ofSeq
     let resolve name =
-        Map.tryFind name idsByName
+        Map.tryFind name functionIds
         |> Option.defaultWith (fun () ->
             Crash.crash $"List pattern helper '{name}' is absent from the function registry")
     let valueViewType = AST.TString
@@ -115,7 +125,7 @@ let private listHeadUnsafeFunction
             Some "Darklang.Stdlib.Json.__viewFieldListHead"
         | _ -> None
     match jsonAccessor with
-    | Some name when Map.containsKey name idsByName -> (resolve name, false)
+    | Some name when Map.containsKey name functionIds -> (resolve name, false)
     | _ when elementType = AST.TFloat64 -> (resolve "Darklang.Stdlib.List.__headUnsafeFloat", false)
     | _ -> (resolve "Darklang.Stdlib.List.__headUnsafe_i64", true)
 
@@ -124,11 +134,11 @@ let private listHeadUnsafeFunction
 /// i64 accessor cannot, because its compiled return type carries no managed
 /// payload shape for reference-count insertion.
 let internal listHeadUnsafeExpr
-    (funcReg: FunctionRegistry)
+    (functionIds: FunctionIdRegistry)
     (elementType: AST.SemanticType)
     (listAtom: ANF.Atom)
     : ANF.CExpr =
-    let functionId, borrowed = listHeadUnsafeFunction funcReg elementType
+    let functionId, borrowed = listHeadUnsafeFunction functionIds elementType
     if borrowed then
         ANF.BorrowedCall (functionId, [listAtom])
     else

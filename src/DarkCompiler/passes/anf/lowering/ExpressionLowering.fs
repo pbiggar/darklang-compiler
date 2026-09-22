@@ -17,15 +17,13 @@ open LoweringAggregates
 open ANFContinuations
 open LoweringCallbacks
 
-let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     let fieldIndex id =
         tryFindFieldIndex id typeNames
         |> Option.defaultWith (fun () -> Crash.crash "Checked field identity is absent from layout metadata")
     let constructorTag id =
         tryFindConstructorTag id typeNames
         |> Option.defaultWith (fun () -> Crash.crash "Checked constructor identity is absent from layout metadata")
-    let functionIds =
-        functionNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
     let functionId name =
         Map.tryFind name functionIds
         |> Option.defaultWith (fun () ->
@@ -1255,7 +1253,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 Ok (exprWithElements, varGen3))
 
     | CheckedAST.Match (scrutinee, cases) ->
-        PatternLowering.lowerMatch toANFCore toAtomCore toANFBoundAtomCore sumTypeNames typeNames inertScopes scrutinee cases varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+        PatternLowering.lowerMatch toANFCore toAtomCore toANFBoundAtomCore functionIds sumTypeNames typeNames inertScopes scrutinee cases varGen env typeReg variantLookup funcReg functionNames moduleRegistry
 
     | CheckedAST.InterpolatedString parts ->
         // Desugar interpolated string to StringConcat chain

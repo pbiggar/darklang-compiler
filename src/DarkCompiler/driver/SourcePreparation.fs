@@ -47,6 +47,7 @@ let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Re
         SumTypeNames = Set.empty
         RcSumShapeReg = Map.empty
         FuncReg = Map.empty
+        FunctionIds = Map.empty
         FunctionNames = Map.empty
         FuncParams = Map.empty
         ModuleRegistry = moduleRegistry
@@ -684,6 +685,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                         LocalVariantLookup = localRegistries.VariantLookup
                         RcSumShapeReg = registries.RcSumShapeReg
                         FuncReg = convertedFuncReg
+                        FunctionIds = registries.FunctionIds
                         FunctionNames = registries.FunctionNames
                         LocalReturnTypes = convertedReturnTypes
                         FuncParams = registries.FuncParams
