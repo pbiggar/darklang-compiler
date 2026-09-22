@@ -78,7 +78,7 @@ let internal validateTopLevelTypeDeclarations
             Map.tryFind candidate typeArities
             |> Option.map (fun arity -> (candidate, arity)))
 
-    let rec validateTypeReference (owner: string) (typ: Type) : Result<unit, TypeError> =
+    let rec validateTypeReference (owner: string) (typ: SemanticType) : Result<unit, TypeError> =
         let validateAll types =
             types
             |> List.fold (fun result item ->
@@ -102,7 +102,7 @@ let internal validateTopLevelTypeDeclarations
         | TDict (key, value) -> validateAll [key; value]
         | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr -> Ok ()
+        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr -> Ok ()
 
     let duplicateTypeName =
         typeDefs
@@ -132,7 +132,7 @@ let internal validateTopLevelTypeDeclarations
             | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
             | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
             | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit
-            | TRuntimeError | TRawPtr -> Set.empty
+            | TNever | TInternalRawPtr -> Set.empty
         let graph =
             typeDefs
             |> List.choose (function

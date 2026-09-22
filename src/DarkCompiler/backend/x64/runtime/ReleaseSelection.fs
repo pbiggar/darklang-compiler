@@ -80,9 +80,9 @@ type internal SlotInitRootRetainTarget =
 let internal slotInitRootRetainTarget
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
-    (valueType: AST.Type)
+    (valueType: AST.SemanticType)
     : SlotInitRootRetainTarget option =
-    let shapeOfKnownType (typ: AST.Type) : MemoryModel.RcShape option =
+    let shapeOfKnownType (typ: AST.SemanticType) : MemoryModel.RcShape option =
         match typ with
         | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
             None
@@ -129,7 +129,7 @@ let internal slotInitRootRetainTarget
 let internal tryRcReleasePlanOfType
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     : MemoryModel.RcReleasePlan option =
     match typ with
     | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
@@ -186,7 +186,7 @@ let private stableRcReleasePlanHash (releasePlan: MemoryModel.RcReleasePlan) : s
         fnvOffset
     |> fun hash -> hash.ToString("x16")
 
-let internal recursiveNominalRefCountDecHelperLabel (sourceType: AST.Type) : string =
+let internal recursiveNominalRefCountDecHelperLabel (sourceType: AST.SemanticType) : string =
     let hash =
         $"{sourceType}"
         |> Seq.fold (fun hash ch ->
@@ -228,7 +228,7 @@ let private typeReleasePlanContains
     (predicate: MemoryModel.RcReleasePlan -> bool)
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     : bool =
     typ
     |> tryRcReleasePlanOfType recordRegistry sumShapeRegistry
@@ -304,7 +304,7 @@ let rec internal listDecHelperForReleasePlan (releasePlan: MemoryModel.RcRelease
 let internal listDecHelperForType
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
-    (fieldType: AST.Type)
+    (fieldType: AST.SemanticType)
     : string =
     match tryRcReleasePlanOfType recordRegistry sumShapeRegistry fieldType with
     | Some releasePlan -> listDecHelperForReleasePlan releasePlan

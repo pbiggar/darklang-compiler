@@ -44,7 +44,7 @@ let buildPreambleContext
             Error msg
         | Ok preambleAst ->
             // Type-check preamble with stdlib context
-            match TypeChecking.checkDeclarationProgramWithBaseEnv stdlib.Context.TypeCheckEnv preambleAst with
+            match TypeChecking.checkParsedDeclarationProgramWithBaseEnv stdlib.Context.TypeCheckEnv preambleAst with
             | Error typeErr ->
                 let msg = $"Preamble type error: {CheckingDiagnostics.typeErrorToString typeErr}"
                 Error msg

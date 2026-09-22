@@ -6,18 +6,18 @@ open AST
 open CheckingDiagnostics
 
 /// Type environment - maps variable names to their types
-type TypeEnv = Map<string, Type>
+type TypeEnv = Map<string, SemanticType>
 
 /// Function parameter-name registry - maps function names to ordered parameter names
 type FuncParamNameRegistry = Map<string, string list>
 
 /// Type registry - maps record type names to their ordered field definitions.
-type TypeRegistry = Map<string, (string * Type) list>
+type TypeRegistry = Map<string, (string * SemanticType) list>
 
 /// Precomputed record metadata reused across separate type-checking invocations.
 type RecordTypeInfo = {
-    Fields: (string * Type) list
-    FieldTypes: Map<string, Type>
+    Fields: (string * SemanticType) list
+    FieldTypes: Map<string, SemanticType>
     TypeParams: string list
 }
 
@@ -25,9 +25,9 @@ type RecordTypeInfo = {
 type IndexedTypeRegistry = Map<string, RecordTypeInfo>
 
 /// Sum type registry - maps sum type names to their variant lists (name, tag, fields)
-type SumTypeRegistry = Map<string, (string * int * Type list) list>
+type SumTypeRegistry = Map<string, (string * int * SemanticType list) list>
 
-type SumVariantInfo = { Name: string; Tag: int; Fields: Type list }
+type SumVariantInfo = { Name: string; Tag: int; Fields: SemanticType list }
 
 type SumTypeInfo = {
     TypeParams: string list
@@ -40,13 +40,13 @@ type IndexedSumTypeRegistry = Map<string, SumTypeInfo>
 
 /// Variant lookup - maps variant names to (type name, type params, tag index, field types)
 /// Type params are the generic type parameters of the containing sum type
-type VariantLookup = Map<string, (string * string list * int * Type list)>
+type VariantLookup = Map<string, (string * string list * int * SemanticType list)>
 
 let internal tryFindVariant
     (constructorReference: ConstructorReference)
     (variantName: string)
     (variantLookup: VariantLookup)
-    : (string * string list * int * Type list) option =
+    : (string * string list * int * SemanticType list) option =
     match constructorReferenceTypeName constructorReference with
     | None -> Map.tryFind variantName variantLookup
     | Some constructorTypeName ->
@@ -73,10 +73,10 @@ type GenericFuncRegistry = {
 /// Alias registry - maps type alias names to (type params, target type)
 /// Example: type Id = String -> ("Id", ([], TString))
 /// Example: type Outer<a> = Inner<a, Int64> -> ("Outer", (["a"], TSum("Inner", [TVar "a"; TInt64])))
-type AliasRegistry = Map<string, (string list * Type)>
+type AliasRegistry = Map<string, (string list * SemanticType)>
 
 /// Type substitution - maps type variable names to concrete types
-type Substitution = Map<string, Type>
+type Substitution = Map<string, SemanticType>
 
 /// Collected type checking environment - can be passed to compile user code with stdlib
 type TypeCheckEnv = {
@@ -87,7 +87,7 @@ type TypeCheckEnv = {
     IndexedSumTypeReg: IndexedSumTypeRegistry
     SumTypeNames: Set<string>
     FuncEnv: TypeEnv
-    Values: Map<string, Type * Expr>
+    Values: Map<string, SemanticType * Expr>
     FuncParamNames: FuncParamNameRegistry
     GenericFuncReg: GenericFuncRegistry
     GenericFuncDefs: Map<string, FunctionDef>
@@ -132,7 +132,7 @@ let rec resolveTypeName (aliasReg: AliasRegistry) (typeName: string) : string =
     | _ -> typeName
 
 /// Apply a substitution to a type, replacing type variables with concrete types
-let rec private applySubstWithSeen (seen: Set<string>) (subst: Substitution) (typ: Type) : Type =
+let rec private applySubstWithSeen (seen: Set<string>) (subst: Substitution) (typ: SemanticType) : SemanticType =
     match typ with
     | TVar name ->
         if Set.contains name seen then
@@ -160,17 +160,17 @@ let rec private applySubstWithSeen (seen: Set<string>) (subst: Substitution) (ty
         TDict (applySubstWithSeen seen subst keyType, applySubstWithSeen seen subst valueType)
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr ->
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr ->
         typ  // Concrete types are unchanged
 
 /// Apply a substitution to a type, replacing type variables with concrete types
-let applySubst (subst: Substitution) (typ: Type) : Type =
+let applySubst (subst: Substitution) (typ: SemanticType) : SemanticType =
     applySubstWithSeen Set.empty subst typ
 
 /// Instantiate declared type parameters simultaneously. A replacement may use
 /// the same name as a parameter in a nested declaration and must not itself be
 /// substituted (for example Outer<'a> = Inner<String, 'a>).
-let rec internal applyTypeArguments (subst: Substitution) (typ: Type) : Type =
+let rec internal applyTypeArguments (subst: Substitution) (typ: SemanticType) : SemanticType =
     match typ with
     | TVar name -> Map.tryFind name subst |> Option.defaultValue typ
     | TFunction (paramTypes, returnType) ->
@@ -184,10 +184,10 @@ let rec internal applyTypeArguments (subst: Substitution) (typ: Type) : Type =
         TDict (applyTypeArguments subst keyType, applyTypeArguments subst valueType)
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr -> typ
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr -> typ
 
 /// Collect type variable names in first-seen order.
-let rec collectTypeVarsInType (typ: Type) (acc: string list) : string list =
+let rec collectTypeVarsInType (typ: SemanticType) (acc: string list) : string list =
     let add name =
         if List.contains name acc then acc else acc @ [name]
 
@@ -211,10 +211,10 @@ let rec collectTypeVarsInType (typ: Type) (acc: string list) : string list =
         collectTypeVarsInType valueType withKey
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr ->
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr ->
         acc
 
-let private recordTypeInfo (typeParams: string list) (fields: (string * Type) list) : RecordTypeInfo =
+let private recordTypeInfo (typeParams: string list) (fields: (string * SemanticType) list) : RecordTypeInfo =
     let (firstDeclaredFieldsRev, firstDeclaredFieldTypes) =
         fields
         |> List.fold (fun (orderedFields, fieldTypes) ((name, fieldType) as field) ->
@@ -230,7 +230,7 @@ let private recordTypeInfo (typeParams: string list) (fields: (string * Type) li
 
 let internal buildRecordFieldSubstitutionFromParams
     (typeParams: string list)
-    (typeArgs: Type list)
+    (typeArgs: SemanticType list)
     : Result<Substitution, string> =
     if List.length typeParams <> List.length typeArgs then
         Error
@@ -239,7 +239,7 @@ let internal buildRecordFieldSubstitutionFromParams
         Ok (List.zip typeParams typeArgs |> Map.ofList)
 
 /// Build a substitution for generic record fields from concrete type arguments.
-let rec internal resolveAliasTargetType (aliasReg: AliasRegistry) (typ: Type) : Type =
+let rec internal resolveAliasTargetType (aliasReg: AliasRegistry) (typ: SemanticType) : SemanticType =
     match typ with
     | TRecord (name, typeArgs) ->
         match Map.tryFind name aliasReg with
@@ -267,14 +267,14 @@ let rec internal resolveAliasTargetType (aliasReg: AliasRegistry) (typ: Type) : 
         TDict (resolveAliasTargetType aliasReg keyType, resolveAliasTargetType aliasReg valueType)
     | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr ->
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr ->
         typ
 
 let private tryResolveGenericRecordAliasFields
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
     (typeName: string)
-    : (string * (string * Type) list) option =
+    : (string * (string * SemanticType) list) option =
     match resolveAliasTargetType aliasReg (TRecord (typeName, [])) with
     | TRecord (targetName, targetTypeArgs)
     | TSum (targetName, targetTypeArgs) when targetName <> typeName || not (List.isEmpty targetTypeArgs) ->
@@ -297,7 +297,7 @@ let internal tryResolveRecordLiteralInfo
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
     (reference: RecordReference)
-    : (string * Type list * RecordTypeInfo) option =
+    : (string * SemanticType list * RecordTypeInfo) option =
     match
         resolveAliasTargetType
             aliasReg
@@ -310,7 +310,7 @@ let internal tryResolveRecordLiteralInfo
     | _ -> None
 
 /// Build a substitution from type parameters and type arguments
-let buildSubstitution (typeParams: string list) (typeArgs: Type list) : Result<Substitution, string> =
+let buildSubstitution (typeParams: string list) (typeArgs: SemanticType list) : Result<Substitution, string> =
     if List.length typeParams <> List.length typeArgs then
         Error $"Expected {List.length typeParams} type arguments, got {List.length typeArgs}"
     else
@@ -340,7 +340,7 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
     match expr with
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
-    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ -> expr
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | RuntimeError _ -> expr
     | BoundaryRender (renderer, value) -> BoundaryRender (renderer, applySubstToExpr subst value)
     | BinOp (op, left, right) ->
         BinOp (op, applySubstToExpr subst left, applySubstToExpr subst right)
@@ -354,11 +354,13 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
         If (applySubstToExpr subst cond, applySubstToExpr subst thenBr, applySubstToExpr subst elseBr)
     | Sequence (first, next) ->
         Sequence (applySubstToExpr subst first, applySubstToExpr subst next)
-    | Call (funcName, args) ->
-        Call (funcName, NonEmptyList.map (applySubstToExpr subst) args)
-    | TypeApp (funcName, typeArgs, args) ->
+    | Apply (func, typeArgs, args) ->
         // Apply substitution to both type arguments and value arguments
-        TypeApp (funcName, List.map (applySubst subst) typeArgs, NonEmptyList.map (applySubstToExpr subst) args)
+        Apply (
+            applySubstToExpr subst func,
+            List.map (applySubst subst) typeArgs,
+            NonEmptyList.map (applySubstToExpr subst) args
+        )
     | TupleLiteral elements ->
         TupleLiteral (List.map (applySubstToExpr subst) elements)
     | TupleAccess (tuple, index) ->
@@ -394,8 +396,6 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
                     SourceAnnotation = parameter.SourceAnnotation |> Option.map (applySubst subst)
                     InferredType = parameter.InferredType |> Option.map (applySubst subst) })
         Lambda (concreteParams, returnAnnotation |> Option.map (applySubst subst), applySubstToExpr subst body)
-    | Apply (func, args) ->
-        Apply (applySubstToExpr subst func, NonEmptyList.map (applySubstToExpr subst) args)
     | IndirectApply (func, args) ->
         IndirectApply (applySubstToExpr subst func, NonEmptyList.map (applySubstToExpr subst) args)
     | Closure (funcName, captures) ->
@@ -407,7 +407,7 @@ let rec applySubstToExpr (subst: Substitution) (expr: Expr) : Expr =
 
 /// Resolve a type by expanding any type aliases (recursively)
 /// Returns the fully resolved type with all aliases replaced by their targets
-let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
+let rec resolveType (aliasReg: AliasRegistry) (typ: SemanticType) : SemanticType =
     match typ with
     | TRecord (name, typeArgs) ->
         // Resolve type arguments first.
@@ -456,7 +456,7 @@ let rec resolveType (aliasReg: AliasRegistry) (typ: Type) : Type =
         TDict (resolveType aliasReg keyType, resolveType aliasReg valueType)
     | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr ->
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr ->
         typ  // Primitive types and type variables are unchanged
 
 let resolveAliasesInTypeRegistry (aliasReg: AliasRegistry) (typeReg: TypeRegistry) : TypeRegistry =
@@ -504,8 +504,8 @@ let internal indexSumTypeRegistry
 
 let internal canonicalizeBareSumTypeRefsWithNames
     (sumTypeNames: Set<string>)
-    (typ: Type)
-    : Type =
+    (typ: SemanticType)
+    : SemanticType =
     let rec canonicalize typ =
         match typ with
         | TRecord (name, []) when Set.contains name sumTypeNames ->
@@ -526,7 +526,7 @@ let internal canonicalizeBareSumTypeRefsWithNames
             TDict (canonicalize keyType, canonicalize valueType)
         | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr ->
+        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr ->
             typ
 
     canonicalize typ
@@ -537,8 +537,8 @@ let internal canonicalizeBareSumTypeRefsWithNames
 let internal canonicalizeDeclaredTypeRefsWithSumTypeNames
     (typeReg: Map<string, 'recordInfo>)
     (sumTypeNames: Set<string>)
-    (typ: Type)
-    : Type =
+    (typ: SemanticType)
+    : SemanticType =
     let rec canonicalize current =
         match current with
         | TSum (name, typeArgs) when Map.containsKey name typeReg && not (Set.contains name sumTypeNames) ->
@@ -555,7 +555,7 @@ let internal canonicalizeDeclaredTypeRefsWithSumTypeNames
         | TDict (keyType, valueType) -> TDict (canonicalize keyType, canonicalize valueType)
         | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr -> current
+        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr -> current
 
     canonicalize typ
 
@@ -584,7 +584,7 @@ let indexTypeRegistry
 
 /// Compare two types for equality, resolving type aliases first
 /// This allows "Vec" and "Point" to be considered equal when Vec aliases Point
-let typesEqual (aliasReg: AliasRegistry) (t1: Type) (t2: Type) : bool =
+let typesEqual (aliasReg: AliasRegistry) (t1: SemanticType) (t2: SemanticType) : bool =
     resolveType aliasReg t1 = resolveType aliasReg t2
 
 let private truncateLegacyRecordValueText (text: string) : string =
@@ -596,8 +596,8 @@ let private truncateLegacyRecordValueText (text: string) : string =
 let internal formatLegacyRecordFieldTypeError
     (aliasReg: AliasRegistry)
     (fieldName: string)
-    (expectedType: Type)
-    (actualType: Type)
+    (expectedType: SemanticType)
+    (actualType: SemanticType)
     (actualExpr: Expr)
     : string =
     let expectedText = expectedType |> resolveType aliasReg |> typeToString

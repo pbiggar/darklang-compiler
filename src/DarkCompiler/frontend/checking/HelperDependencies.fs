@@ -15,9 +15,9 @@ let private collectDirectEqHelperDeps
     (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
-    (typ: Type)
-    : Type list =
-    let addIfHelperType (candidate: Type) : Type option =
+    (typ: SemanticType)
+    : SemanticType list =
+    let addIfHelperType (candidate: SemanticType) : SemanticType option =
         let resolved = candidate |> resolveType aliasReg |> canonicalEqualityType variantLookup
         if needsEqHelperForResolvedType variantLookup resolved then Some resolved else None
 
@@ -71,7 +71,7 @@ let rec internal ensureEqHelperForType
     (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
-    (typ: Type)
+    (typ: SemanticType)
     (state: EqHelperGenerationState)
     : EqHelperGenerationState =
     let resolvedType = typ |> resolveType aliasReg |> canonicalEqualityType variantLookup
@@ -151,8 +151,8 @@ let private collectDirectCompareHelperDeps
     (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
-    (typ: Type)
-    : Type list =
+    (typ: SemanticType)
+    : SemanticType list =
     let resolvedType = resolveType aliasReg typ
     let deps =
         match resolvedType with
@@ -196,7 +196,7 @@ let rec internal ensureCompareHelperForType
     (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
-    (typ: Type)
+    (typ: SemanticType)
     (state: CompareHelperGenerationState)
     : CompareHelperGenerationState =
     let resolvedType = resolveType aliasReg typ
@@ -247,7 +247,7 @@ let rec internal ensureCompareHelperForType
             Generated = Map.add helper helperDef stateWithDeps.Generated
         }
 
-let rec internal collectCompareHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Expr) : Set<Type> =
+let rec internal collectCompareHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Expr) : Set<SemanticType> =
     let collectFromExprs expressions =
         expressions
         |> List.map (collectCompareHelperTypesFromExpr aliasReg)
@@ -258,7 +258,7 @@ let rec internal collectCompareHelperTypesFromExpr (aliasReg: AliasRegistry) (ex
     | BoundaryRender (_, value) -> recurse value
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
-    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ -> Set.empty
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | RuntimeError _ -> Set.empty
     | BinOp (_, left, right) -> Set.union (recurse left) (recurse right)
     | UnaryOp (_, inner) -> recurse inner
     | Let (_, value, body) -> Set.union (recurse value) (recurse body)
@@ -266,22 +266,21 @@ let rec internal collectCompareHelperTypesFromExpr (aliasReg: AliasRegistry) (ex
     | If (condition, thenBranch, elseBranch) ->
         Set.union (recurse condition) (Set.union (recurse thenBranch) (recurse elseBranch))
     | Sequence (first, next) -> Set.union (recurse first) (recurse next)
-    | Call (_, args) -> collectFromExprs (NonEmptyList.toList args)
-    | TypeApp ("__compare", [targetType], args) ->
+    | Apply (Var "__compare", [targetType], args) ->
         let nested = collectFromExprs (NonEmptyList.toList args)
         let resolvedType = resolveType aliasReg targetType
         if containsTVar resolvedType then nested else Set.add resolvedType nested
-    | TypeApp (("Darklang.Stdlib.List.sort" | "Darklang.Stdlib.List.unique"), [valueType], args)
-    | TypeApp ("Darklang.Stdlib.List.uniqueBy", [valueType; _], args) ->
+    | Apply (Var ("Darklang.Stdlib.List.sort" | "Darklang.Stdlib.List.unique"), [valueType], args)
+    | Apply (Var "Darklang.Stdlib.List.uniqueBy", [valueType; _], args) ->
         let nested = collectFromExprs (NonEmptyList.toList args)
         let resolvedType = resolveType aliasReg valueType
         if containsTVar resolvedType then nested else Set.add resolvedType nested
-    | TypeApp ("Darklang.Stdlib.List.sortBy", [valueType; keyType], args) ->
+    | Apply (Var "Darklang.Stdlib.List.sortBy", [valueType; keyType], args) ->
         let nested = collectFromExprs (NonEmptyList.toList args)
         let pairType = TTuple [resolveType aliasReg keyType; resolveType aliasReg valueType]
         if containsTVar pairType then nested else Set.add pairType nested
-    | TypeApp (_, _, args) ->
-        collectFromExprs (NonEmptyList.toList args)
+    | Apply (funcExpr, _, args) ->
+        Set.union (recurse funcExpr) (collectFromExprs (NonEmptyList.toList args))
     | TupleLiteral elements | ListLiteral elements -> collectFromExprs elements
     | TupleAccess (tupleExpr, _) -> recurse tupleExpr
     | DictLiteral (_, _, entries) ->
@@ -300,7 +299,7 @@ let rec internal collectCompareHelperTypesFromExpr (aliasReg: AliasRegistry) (ex
             |> List.fold Set.union Set.empty
         Set.union (recurse scrutinee) caseTypes
     | Lambda (_, _, body) -> recurse body
-    | Apply (funcExpr, args) | IndirectApply (funcExpr, args) ->
+    | IndirectApply (funcExpr, args) ->
         Set.union (recurse funcExpr) (collectFromExprs (NonEmptyList.toList args))
     | Closure (_, captures) -> collectFromExprs captures
     | InterpolatedString parts ->
@@ -308,8 +307,8 @@ let rec internal collectCompareHelperTypesFromExpr (aliasReg: AliasRegistry) (ex
         |> List.choose (function StringText _ -> None | StringExpr partExpr -> Some (recurse partExpr))
         |> List.fold Set.union Set.empty
 
-let rec internal collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Expr) : Set<Type> =
-    let collectFromExprs (exprs: Expr list) : Set<Type> =
+let rec internal collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: Expr) : Set<SemanticType> =
+    let collectFromExprs (exprs: Expr list) : Set<SemanticType> =
         exprs
         |> List.map (collectEqHelperTypesFromExpr aliasReg)
         |> List.fold Set.union Set.empty
@@ -318,7 +317,7 @@ let rec internal collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: E
     | BoundaryRender (_, value) -> collectEqHelperTypesFromExpr aliasReg value
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
-    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ ->
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | RuntimeError _ ->
         Set.empty
     | BinOp (_, left, right) ->
         Set.union (collectEqHelperTypesFromExpr aliasReg left) (collectEqHelperTypesFromExpr aliasReg right)
@@ -338,9 +337,7 @@ let rec internal collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: E
         Set.union
             (collectEqHelperTypesFromExpr aliasReg first)
             (collectEqHelperTypesFromExpr aliasReg next)
-    | Call (_, args) ->
-        collectFromExprs (NonEmptyList.toList args)
-    | TypeApp (_, typeArgs, args) as typeAppExpr ->
+    | Apply (funcExpr, typeArgs, args) as typeAppExpr ->
         match tryDecodeInternalTypeApp typeAppExpr with
         | Some (EqHelperDispatchTypeApp (targetType, leftExpr, rightExpr)) ->
             Set.add
@@ -354,7 +351,9 @@ let rec internal collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: E
             |> List.filter (containsTVar >> not)
             |> List.fold
                 (fun helpers typ -> Set.add typ helpers)
-                (collectFromExprs (NonEmptyList.toList args))
+                (Set.union
+                    (collectEqHelperTypesFromExpr aliasReg funcExpr)
+                    (collectFromExprs (NonEmptyList.toList args)))
     | TupleLiteral elements ->
         collectFromExprs elements
     | TupleAccess (tupleExpr, _) ->
@@ -389,7 +388,6 @@ let rec internal collectEqHelperTypesFromExpr (aliasReg: AliasRegistry) (expr: E
         collectFromExprs elements
     | Lambda (_, _, body) ->
         collectEqHelperTypesFromExpr aliasReg body
-    | Apply (funcExpr, args)
     | IndirectApply (funcExpr, args) ->
         Set.union (collectEqHelperTypesFromExpr aliasReg funcExpr) (collectFromExprs (NonEmptyList.toList args))
     | Closure (_, captures) ->

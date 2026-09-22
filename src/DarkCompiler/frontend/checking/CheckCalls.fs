@@ -9,7 +9,7 @@ open ComparisonPlanning
 open TypeUnification
 open CheckExpressionSupport
 
-let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string, string list>) (indexedSumTypeReg: IndexedSumTypeRegistry) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: Type option) (funcName: string) (args: NonEmptyList<Expr>) : Result<Type * Expr, TypeError> =
+let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string, string list>) (indexedSumTypeReg: IndexedSumTypeRegistry) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: SemanticType option) (funcName: string) (args: NonEmptyList<Expr>) : Result<SemanticType * Expr, TypeError> =
     // The resolution boundary has already attached the canonical callable
     // identity. Type checking only validates that identity's signature.
     let args = NonEmptyList.toList args
@@ -54,11 +54,11 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                     | Some expected ->
                         match reconcileTypes (Some aliasReg) expected normalizedOutputType with
                         | Some reconciledType ->
-                            Ok (reconciledType, Call ("Builtin.unwrap", NonEmptyList.singleton argExpr'))
+                            Ok (reconciledType, applyNamed "Builtin.unwrap" (NonEmptyList.singleton argExpr'))
                         | None ->
                             Error (TypeMismatch (expected, normalizedOutputType, $"result of call to {funcName}"))
                     | None ->
-                        Ok (normalizedOutputType, Call ("Builtin.unwrap", NonEmptyList.singleton argExpr'))))
+                        Ok (normalizedOutputType, applyNamed "Builtin.unwrap" (NonEmptyList.singleton argExpr'))))
         | _ ->
             Error (GenericError $"Function {funcName} expects 1 arguments, got {List.length args}")
     elif isRuntimeFailureName funcName then
@@ -70,8 +70,8 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                     match expectedType with
                     | Some (TVar _) -> TUnit
                     | Some expected -> expected
-                    | None -> TRuntimeError
-                Ok (outputType, Call (funcName, NonEmptyList.singleton argExpr')))
+                    | None -> TNever
+                Ok (outputType, applyNamed funcName (NonEmptyList.singleton argExpr')))
         | _ ->
             Error (GenericError $"Function {funcName} expects 1 arguments, got {List.length args}")
     else
@@ -131,7 +131,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
 
                             // Create the lambda body: TypeApp with all args
                             let allArgs = concreteArgs @ (remainingParams |> List.map (fun (name, _) -> Var name))
-                            let lambdaBody = TypeApp (resolvedFuncName, inferredTypeArgs, toCallArgs allArgs)
+                            let lambdaBody = applyNamedWithTypes resolvedFuncName inferredTypeArgs (toCallArgs allArgs)
 
                             // Create the lambda: fun p0 p1 ... -> funcName<types>(providedArgs, p0, p1, ...)
                             let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
@@ -219,7 +219,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                                 // Transform Call to TypeApp with inferred type arguments (using resolved name)
                                 Ok (
                                     concreteReturnType,
-                                    TypeApp (resolvedFuncName, inferredTypeArgs, toCallArgs concreteArgs)
+                                    applyNamedWithTypes resolvedFuncName inferredTypeArgs (toCallArgs concreteArgs)
                                 ))))
 
         | None ->
@@ -254,7 +254,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
 
                     // Create the lambda body: call the original function with all args (using resolved name)
                     let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
-                    let lambdaBody = Call (resolvedFuncName, toCallArgs allArgs)
+                    let lambdaBody = applyNamed resolvedFuncName (toCallArgs allArgs)
 
                     // Create the lambda: fun p0 p1 ... -> funcName(providedArgs, p0, p1, ...)
                     let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
@@ -278,7 +278,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                         checkExpr arg env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some paramT)
                         |> Result.mapError (fun err ->
                             match err with
-                            | TypeMismatch (_, actualType, _) when not (isRuntimeErrorType actualType) ->
+                            | TypeMismatch (_, actualType, _) when not (isNeverType actualType) ->
                                 GenericError
                                     (formatLegacyParamTypeError
                                         funcName
@@ -310,7 +310,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                             match expectedType with
                             | Some expected when not (typesCompatibleWithAliases aliasReg expected origReturnType) ->
                                 Error (TypeMismatch (expected, origReturnType, $"result of call to {funcName}"))
-                            | _ -> Ok (origReturnType, Call (resolvedFuncName, toCallArgs args')))
+                            | _ -> Ok (origReturnType, applyNamed resolvedFuncName (toCallArgs args')))
             )
         | Some (TVar funcTypeVar, resolvedFuncName) ->
             // In public source, higher-order generic parameters may reach call sites
@@ -330,7 +330,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                     match expectedType with
                     | Some expected -> expected
                     | None -> TVar $"__call_result_{funcTypeVar}"
-                (inferredReturnType, Call (resolvedFuncName, toCallArgs args')))
+                (inferredReturnType, applyNamed resolvedFuncName (toCallArgs args')))
         | Some (other, _) ->
             Error (GenericError $"{funcName} is not a function (has type {typeToString other})")
         | None ->
@@ -375,7 +375,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
 
                     // Create the lambda body: call the original function with all args (using resolved name)
                     let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
-                    let lambdaBody = Call (resolvedFuncName, toCallArgs allArgs)
+                    let lambdaBody = applyNamed resolvedFuncName (toCallArgs allArgs)
 
                     // Create the lambda: fun p0 p1 ... -> funcName(providedArgs, p0, p1, ...)
                     let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
@@ -434,7 +434,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
 
                         // Create the lambda body: TypeApp call with all args (using resolved name)
                         let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
-                        let lambdaBody = TypeApp (resolvedFuncName, inferredTypeArgs, toCallArgs allArgs)
+                        let lambdaBody = applyNamedWithTypes resolvedFuncName inferredTypeArgs (toCallArgs allArgs)
 
                         // Create the lambda
                         let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
@@ -507,7 +507,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                                 // Transform Call to TypeApp with inferred type arguments (using resolved name)
                                 Ok (
                                     concreteReturnType,
-                                    TypeApp (resolvedFuncName, inferredTypeArgs, toCallArgs args')
+                                    applyNamedWithTypes resolvedFuncName inferredTypeArgs (toCallArgs args')
                                 ))))
             else
                 // Non-generic module function: regular call
@@ -529,7 +529,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                     match expectedType with
                     | Some expected when not (typesCompatibleWithAliases aliasReg expected returnType) ->
                         Error (TypeMismatch (expected, returnType, $"result of call to {funcName}"))
-                    | _ -> Ok (returnType, Call (resolvedFuncName, toCallArgs args')))
+                    | _ -> Ok (returnType, applyNamed resolvedFuncName (toCallArgs args')))
                 )
             | None ->
                 Error (UndefinedCallTarget funcName)

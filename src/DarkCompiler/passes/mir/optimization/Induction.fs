@@ -17,7 +17,7 @@ type private AffineInductionCandidate = {
     Offset: Operand
     PreheaderOffset: Operand
     OffsetOperator: BinOp
-    ValueType: AST.Type
+    ValueType: AST.SemanticType
     ScaleInstr: Instr
     AffineInstr: Instr
 }
@@ -53,14 +53,14 @@ let internal resolveLatchCopy (instrs: Instr list) (register: VReg) : VReg =
             | None -> current
     resolve Set.empty register
 
-let private isNativeWrappingIntegerType (valueType: AST.Type) : bool =
+let private isNativeWrappingIntegerType (valueType: AST.SemanticType) : bool =
     match valueType with
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 -> true
     | _ -> false
 
 let internal isIncrementByOne
-    (valueType: AST.Type)
+    (valueType: AST.SemanticType)
     (inductionPhi: VReg)
     (nextValue: VReg)
     (instr: Instr)
@@ -89,7 +89,7 @@ let private isAffineOperandLoopInvariant
     (latch: Label)
     (loopBlocks: Set<Label>)
     (cfg: CFG)
-    (valueType: AST.Type)
+    (valueType: AST.SemanticType)
     (operand: Operand)
     : bool =
     match operand with
@@ -120,7 +120,7 @@ let private isAffineOperandLoopInvariant
 let private affineOperandAtPreheader
     (headerInstrs: Instr list)
     (preheader: Label)
-    (valueType: AST.Type)
+    (valueType: AST.SemanticType)
     (operand: Operand)
     : Operand =
     match operand with
@@ -140,7 +140,7 @@ let private tryAffineExpression
     (latchLabel: Label)
     (latch: BasicBlock)
     (inductionPhi: VReg)
-    (valueType: AST.Type)
+    (valueType: AST.SemanticType)
     (isLoopInvariant: Operand -> bool)
     : (VReg * Operand * Operand * BinOp * Instr * Instr) option =
     let candidates =

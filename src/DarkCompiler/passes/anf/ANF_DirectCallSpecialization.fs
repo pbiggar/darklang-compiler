@@ -223,7 +223,7 @@ let private atomForScalarLiteral (literal: ScalarLiteral) : Atom =
     | FloatScalar bits -> FloatLiteral (System.BitConverter.Int64BitsToDouble bits)
     | StringScalar value -> StringLiteral value
 
-let private isScalarLiteralType (typ: AST.Type) : bool =
+let private isScalarLiteralType (typ: AST.SemanticType) : bool =
     match typ with
     | AST.TInt8
     | AST.TInt16
@@ -242,7 +242,7 @@ let private isScalarLiteralType (typ: AST.Type) : bool =
     | AST.TSum _ -> true
     | _ -> false
 
-let private isConstructionValueType (typ: AST.Type) : bool =
+let private isConstructionValueType (typ: AST.SemanticType) : bool =
     match typ with
     | AST.TInt128
     | AST.TUInt128 -> true
@@ -250,10 +250,10 @@ let private isConstructionValueType (typ: AST.Type) : bool =
     | AST.TRecord _ -> true
     | _ -> false
 
-let private isSpecializableValueType (typ: AST.Type) : bool =
+let private isSpecializableValueType (typ: AST.SemanticType) : bool =
     isScalarLiteralType typ || isConstructionValueType typ
 
-let rec private scalarLiteralMatchesType (typ: AST.Type) (literal: ScalarLiteral) : bool =
+let rec private scalarLiteralMatchesType (typ: AST.SemanticType) (literal: ScalarLiteral) : bool =
     match typ, literal with
     | AST.TUnit, UnitScalar
     | AST.TInt8, IntScalar (Int8 _)
@@ -272,7 +272,7 @@ let rec private scalarLiteralMatchesType (typ: AST.Type) (literal: ScalarLiteral
     | AST.TSum _, IntScalar (Int64 _) -> true
     | _ -> false
 
-let private knownValueMatchesType (typ: AST.Type) (value: KnownValue) : bool =
+let private knownValueMatchesType (typ: AST.SemanticType) (value: KnownValue) : bool =
     match typ, value with
     | _, LiteralValue literal -> scalarLiteralMatchesType typ literal
     | AST.TInt128, Int128Value _

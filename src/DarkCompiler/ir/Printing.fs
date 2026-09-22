@@ -19,7 +19,7 @@ let internal escapeStringContent (input: string) : string =
         | _ -> string c)
 
 /// Append a type suffix when available
-let internal appendTypeSuffix (typOpt: AST.Type option) (value: string) : string =
+let internal appendTypeSuffix (typOpt: AST.SemanticType option) (value: string) : string =
     match typOpt with
     | None -> value
     | Some typ -> $"{value} : {typ}"

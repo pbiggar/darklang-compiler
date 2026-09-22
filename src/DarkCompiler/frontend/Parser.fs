@@ -790,50 +790,50 @@ let rec lex (input: string) : Result<Token list, string> =
     |> fun cs -> lexHelper cs []
 
 /// Base type parser (no function types - used to parse function type components)
-let rec parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Type * Token list, string> =
+let rec parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<ParsedType * Token list, string> =
     match tokens with
-    | TIdent "Int8" :: rest -> Ok (AST.TInt8, rest)
-    | TIdent "Int16" :: rest -> Ok (AST.TInt16, rest)
-    | TIdent "Int32" :: rest -> Ok (AST.TInt32, rest)
-    | TIdent "Int64" :: rest -> Ok (AST.TInt64, rest)
-    | TIdent "Int128" :: rest -> Ok (AST.TInt128, rest)
-    | TIdent "Int" :: rest -> Ok (AST.TInt, rest)
-    | TIdent "UInt8" :: rest -> Ok (AST.TUInt8, rest)
-    | TIdent "UInt16" :: rest -> Ok (AST.TUInt16, rest)
-    | TIdent "UInt32" :: rest -> Ok (AST.TUInt32, rest)
-    | TIdent "UInt64" :: rest -> Ok (AST.TUInt64, rest)
-    | TIdent "UInt128" :: rest -> Ok (AST.TUInt128, rest)
-    | TIdent "Bool" :: rest -> Ok (AST.TBool, rest)
-    | TIdent "String" :: rest -> Ok (AST.TString, rest)
-    | TIdent "Blob" :: rest -> Ok (AST.TBlob, rest)
-    | TIdent "Char" :: rest -> Ok (AST.TChar, rest)
-    | TIdent "DateTime" :: rest -> Ok (AST.TDateTime, rest)
-    | TIdent "Float" :: rest -> Ok (AST.TFloat64, rest)
-    | TIdent "Unit" :: rest -> Ok (AST.TUnit, rest)
-    | TIdent "RawPtr" :: rest -> Ok (AST.TRawPtr, rest)  // Internal raw pointer type
+    | TIdent "Int8" :: rest -> Ok (AST.PTInt8, rest)
+    | TIdent "Int16" :: rest -> Ok (AST.PTInt16, rest)
+    | TIdent "Int32" :: rest -> Ok (AST.PTInt32, rest)
+    | TIdent "Int64" :: rest -> Ok (AST.PTInt64, rest)
+    | TIdent "Int128" :: rest -> Ok (AST.PTInt128, rest)
+    | TIdent "Int" :: rest -> Ok (AST.PTInt, rest)
+    | TIdent "UInt8" :: rest -> Ok (AST.PTUInt8, rest)
+    | TIdent "UInt16" :: rest -> Ok (AST.PTUInt16, rest)
+    | TIdent "UInt32" :: rest -> Ok (AST.PTUInt32, rest)
+    | TIdent "UInt64" :: rest -> Ok (AST.PTUInt64, rest)
+    | TIdent "UInt128" :: rest -> Ok (AST.PTUInt128, rest)
+    | TIdent "Bool" :: rest -> Ok (AST.PTBool, rest)
+    | TIdent "String" :: rest -> Ok (AST.PTString, rest)
+    | TIdent "Blob" :: rest -> Ok (AST.PTBlob, rest)
+    | TIdent "Char" :: rest -> Ok (AST.PTChar, rest)
+    | TIdent "DateTime" :: rest -> Ok (AST.PTDateTime, rest)
+    | TIdent "Float" :: rest -> Ok (AST.PTFloat64, rest)
+    | TIdent "Unit" :: rest -> Ok (AST.PTUnit, rest)
+    | TIdent "RawPtr" :: rest -> Ok (AST.PTInternalRawPtr, rest)  // Internal raw pointer type
     | TIdent typeName :: rest when Set.contains typeName typeParams ->
-        Ok (TVar typeName, rest)
+        Ok (PTVar typeName, rest)
     | TTypeVar typeName :: rest ->
-        Ok (TVar typeName, rest)
+        Ok (PTVar typeName, rest)
     | TIdent typeName :: rest when
         typeName.Length > 0 && (System.Char.IsLower(typeName.[0]) || typeName.StartsWith "_") ->
         // The upstream interpreter permits bare lowercase type-variable references;
         // declaration binders themselves still require apostrophes.
-        Ok (TVar typeName, rest)
+        Ok (PTVar typeName, rest)
     | TIdent "List" :: TLt :: rest ->
         // List type: List<ElementType>
         parseTypeWithContext typeParams rest
         |> Result.bind (fun (elemType, afterElem) ->
             match afterElem with
-            | TGt :: remaining -> Ok (TList elemType, remaining)
-            | TDoubleRightAngle :: remaining -> Ok (TList elemType, TGt :: remaining)  // >> is two >'s
+            | TGt :: remaining -> Ok (PTList elemType, remaining)
+            | TDoubleRightAngle :: remaining -> Ok (PTList elemType, TGt :: remaining)  // >> is two >'s
             | _ -> Error "Expected '>' after List element type")
     | TIdent "Stream" :: TLt :: rest ->
         parseTypeWithContext typeParams rest
         |> Result.bind (fun (elemType, afterElem) ->
             match afterElem with
-            | TGt :: remaining -> Ok (TStream elemType, remaining)
-            | TDoubleRightAngle :: remaining -> Ok (TStream elemType, TGt :: remaining)
+            | TGt :: remaining -> Ok (PTStream elemType, remaining)
+            | TDoubleRightAngle :: remaining -> Ok (PTStream elemType, TGt :: remaining)
             | _ -> Error "Expected '>' after Stream element type")
     | TIdent "Dict" :: TLt :: rest ->
         // Dict type: Dict<KeyType, ValueType>
@@ -844,15 +844,15 @@ let rec parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Ty
                 parseTypeWithContext typeParams valueRest
                 |> Result.bind (fun (valueType, afterValue) ->
                     match afterValue with
-                    | TGt :: remaining -> Ok (TDict (firstTypeArg, valueType), remaining)
-                    | TDoubleRightAngle :: remaining -> Ok (TDict (firstTypeArg, valueType), TGt :: remaining)  // >> is two >'s
+                    | TGt :: remaining -> Ok (PTDict (firstTypeArg, valueType), remaining)
+                    | TDoubleRightAngle :: remaining -> Ok (PTDict (firstTypeArg, valueType), TGt :: remaining)  // >> is two >'s
                     | _ -> Error "Expected '>' after Dict value type")
             | TGt :: remaining ->
                 // Upstream interpreter syntax uses Dict<ValueType> shorthand
                 // with implicit String keys.
-                Ok (TDict (AST.TString, firstTypeArg), remaining)
+                Ok (PTDict (AST.PTString, firstTypeArg), remaining)
             | TDoubleRightAngle :: remaining ->
-                Ok (TDict (AST.TString, firstTypeArg), TGt :: remaining)  // >> is two >'s
+                Ok (PTDict (AST.PTString, firstTypeArg), TGt :: remaining)  // >> is two >'s
             | _ -> Error "Expected ',' or '>' after Dict type argument")
     | TIdent typeName :: rest when typeName.Length > 0 && System.Char.IsUpper(typeName.[0]) ->
         // Could be a simple type or a qualified type like Stdlib.Option.Option
@@ -878,7 +878,7 @@ let rec parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Ty
         | TLt :: typeArgsStart ->
             // Generic type: TypeName<args>
             // Need to parse type args allowing lowercase type variables
-            let rec parseTypeArgsInType (toks: Token list) (acc: Type list) : Result<Type list * Token list, string> =
+            let rec parseTypeArgsInType (toks: Token list) (acc: ParsedType list) : Result<ParsedType list * Token list, string> =
                 parseTypeWithContext typeParams toks
                 |> Result.bind (fun (ty, remaining) ->
                     match remaining with
@@ -888,11 +888,11 @@ let rec parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Ty
                     | _ -> Error "Expected ',' or '>' after type argument in generic type")
             parseTypeArgsInType typeArgsStart []
             |> Result.map (fun (typeArgs, remaining) ->
-                // Store as TSum with type arguments - type checker will validate
-                (TSum (fullTypeName, typeArgs), remaining))
+                // Store as PTSum with type arguments - type checker will validate
+                (PTSum (fullTypeName, typeArgs), remaining))
         | _ ->
             // Simple type without type arguments
-            Ok (TRecord (fullTypeName, []), afterTypeName)
+            Ok (PTRecord (fullTypeName, []), afterTypeName)
     | TLParen :: rest ->
         parseTypeWithContext typeParams rest
         |> Result.bind (fun (innerType, remaining) ->
@@ -903,8 +903,8 @@ let rec parseTypeBase (typeParams: Set<string>) (tokens: Token list) : Result<Ty
     | _ -> Error "Expected type annotation (Int64, Bool, String, Float, TypeName, type variable, or function type)"
 
 /// Parse a type annotation with context for type parameters in scope
-and parseTypeWithContext (typeParams: Set<string>) (tokens: Token list) : Result<Type * Token list, string> =
-    let rec parseTupleTail (acc: Type list) (remaining: Token list) : Result<Type * Token list, string> =
+and parseTypeWithContext (typeParams: Set<string>) (tokens: Token list) : Result<ParsedType * Token list, string> =
+    let rec parseTupleTail (acc: ParsedType list) (remaining: Token list) : Result<ParsedType * Token list, string> =
         match remaining with
         | TStar :: rest ->
             parseTypeBase typeParams rest
@@ -914,7 +914,7 @@ and parseTypeWithContext (typeParams: Set<string>) (tokens: Token list) : Result
             let allTypes = List.rev acc
             match allTypes with
             | [single] -> Ok (single, remaining)
-            | _ -> Ok (TTuple allTypes, remaining)
+            | _ -> Ok (PTTuple allTypes, remaining)
     parseTypeBase typeParams tokens
     |> Result.bind (fun (firstType, remaining) ->
         parseTupleTail [firstType] remaining
@@ -924,15 +924,15 @@ and parseTypeWithContext (typeParams: Set<string>) (tokens: Token list) : Result
                 parseTypeWithContext typeParams returnRest
                 |> Result.map (fun (returnType, remaining') ->
                     match returnType with
-                    | TFunction (remainingParams, finalReturn) ->
-                        (TFunction (parsedType :: remainingParams, finalReturn), remaining')
+                    | PTFunction (remainingParams, finalReturn) ->
+                        (PTFunction (parsedType :: remainingParams, finalReturn), remaining')
                     | _ ->
-                        (TFunction ([parsedType], returnType), remaining'))
+                        (PTFunction ([parsedType], returnType), remaining'))
             | _ ->
                 Ok (parsedType, afterType)))
 
 /// Parse a type annotation (no type parameters in scope)
-let parseType (tokens: Token list) : Result<Type * Token list, string> =
+let parseType (tokens: Token list) : Result<ParsedType * Token list, string> =
     parseTypeWithContext Set.empty tokens
 
 /// Parse type parameters: <t, u, v> (names only, for function definitions)
@@ -953,11 +953,11 @@ let rec parseTypeParams (tokens: Token list) (acc: string list) : Result<string 
 
 /// Parse type for type arguments context (allows lowercase as type variables)
 /// This is used when parsing call sites like func<t>(args) where t is a type variable
-let rec parseTypeArgType (tokens: Token list) : Result<Type * Token list, string> =
+let rec parseTypeArgType (tokens: Token list) : Result<ParsedType * Token list, string> =
     parseTypeWithContext Set.empty tokens
 
 /// Parse tuple elements in type argument context: Type1, Type2, ... )
-and parseTypeArgTupleElements (tokens: Token list) (acc: Type list) : Result<Type list * Token list, string> =
+and parseTypeArgTupleElements (tokens: Token list) (acc: ParsedType list) : Result<ParsedType list * Token list, string> =
     match tokens with
     | TRParen :: rest ->
         // End of tuple/parameter list
@@ -972,7 +972,7 @@ and parseTypeArgTupleElements (tokens: Token list) (acc: Type list) : Result<Typ
             | _ -> Error "Expected ',' or ')' in tuple type")
 
 /// Parse type arguments: <Int64, Bool, Point, t> (concrete types or type vars, for call sites)
-let rec parseTypeArgs (tokens: Token list) (acc: Type list) : Result<Type list * Token list, string> =
+let rec parseTypeArgs (tokens: Token list) (acc: ParsedType list) : Result<ParsedType list * Token list, string> =
     parseTypeArgType tokens
     |> Result.bind (fun (ty, remaining) ->
         match remaining with
@@ -988,7 +988,7 @@ let rec parseTypeArgs (tokens: Token list) (acc: Type list) : Result<Type list *
         | _ -> Error "Expected ',' or '>' after type argument")
 
 /// Parse a single parameter: IDENT : type (with type parameter context)
-let parseParamWithContext (typeParams: Set<string>) (tokens: Token list) : Result<(string * Type) * Token list, string> =
+let parseParamWithContext (typeParams: Set<string>) (tokens: Token list) : Result<(string * ParsedType) * Token list, string> =
     match tokens with
     | TIdent name :: TColon :: rest ->
         parseTypeWithContext typeParams rest
@@ -996,7 +996,7 @@ let parseParamWithContext (typeParams: Set<string>) (tokens: Token list) : Resul
     | _ -> Error "Expected parameter (name : type)"
 
 /// Parse parameter list: param (, param)* (with type parameter context)
-let rec parseParamsWithContext (typeParams: Set<string>) (tokens: Token list) (acc: (string * Type) list) : Result<(string * Type) list * Token list, string> =
+let rec parseParamsWithContext (typeParams: Set<string>) (tokens: Token list) (acc: (string * ParsedType) list) : Result<(string * ParsedType) list * Token list, string> =
     match tokens with
     | TRParen :: _ ->
         // End of parameters
@@ -1014,16 +1014,16 @@ let rec parseParamsWithContext (typeParams: Set<string>) (tokens: Token list) (a
             | _ -> Error "Expected ',' or ')' after parameter")
 
 /// Parse parameter list: param (, param)* (no type parameters in scope)
-let rec parseParams (tokens: Token list) (acc: (string * Type) list) : Result<(string * Type) list * Token list, string> =
+let rec parseParams (tokens: Token list) (acc: (string * ParsedType) list) : Result<(string * ParsedType) list * Token list, string> =
     parseParamsWithContext Set.empty tokens acc
 
-/// Parse record fields in a type definition: { name: Type, name: Type, ... }
+/// Parse record fields in a type definition: { name: ParsedType, name: ParsedType, ... }
 /// Uses parseTypeWithContext so generic record fields can reference in-scope type parameters.
 let rec parseRecordFieldsWithContext
     (typeParams: Set<string>)
     (tokens: Token list)
-    (acc: (string * Type) list)
-    : Result<(string * Type) list * Token list, string> =
+    (acc: (string * ParsedType) list)
+    : Result<(string * ParsedType) list * Token list, string> =
     match tokens with
     | TRBrace :: rest ->
         match acc with
@@ -1047,12 +1047,12 @@ let rec parseRecordFieldsWithContext
     | _ -> Error "Expected field name in record definition"
 
 /// Parse record fields in a type definition with no type parameters in scope.
-let parseRecordFields (tokens: Token list) (acc: (string * Type) list) : Result<(string * Type) list * Token list, string> =
+let parseRecordFields (tokens: Token list) (acc: (string * ParsedType) list) : Result<(string * ParsedType) list * Token list, string> =
     parseRecordFieldsWithContext Set.empty tokens acc
 
-/// Parse sum type variants: Variant1 | Variant2 of Type | ...
+/// Parse sum type variants: Variant1 | Variant2 of ParsedType | ...
 /// Returns list of variants and remaining tokens
-let private parseVariantFieldTypes (tokens: Token list) : Result<Type list * Token list, string> =
+let private parseVariantFieldTypes (tokens: Token list) : Result<ParsedType list * Token list, string> =
     let rec stripLabels (expectLabel: bool) (remainingTokens: Token list) (acc: Token list) : Token list =
         match remainingTokens with
         | TIdent _ :: TColon :: rest when expectLabel ->
@@ -1073,13 +1073,13 @@ let private parseVariantFieldTypes (tokens: Token list) : Result<Type list * Tok
     parseType normalizedTokens
     |> Result.map (fun (payloadType, remaining) ->
         match isParenthesizedField, payloadType with
-        | false, TTuple fields -> (fields, remaining)
+        | false, PTTuple fields -> (fields, remaining)
         | _ -> ([payloadType], remaining))
 
 let private parseVariantFieldTypesWithContext
     (typeParamSet: Set<string>)
     (tokens: Token list)
-    : Result<Type list * Token list, string> =
+    : Result<ParsedType list * Token list, string> =
     let rec stripLabels (expectLabel: bool) (remainingTokens: Token list) (acc: Token list) : Token list =
         match remainingTokens with
         | TIdent _ :: TColon :: rest when expectLabel ->
@@ -1100,13 +1100,13 @@ let private parseVariantFieldTypesWithContext
     parseTypeWithContext typeParamSet normalizedTokens
     |> Result.map (fun (payloadType, remaining) ->
         match isParenthesizedField, payloadType with
-        | false, TTuple fields -> (fields, remaining)
+        | false, PTTuple fields -> (fields, remaining)
         | _ -> ([payloadType], remaining))
 
-let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant list * Token list, string> =
+let rec parseVariants (tokens: Token list) (acc: ParsedVariant list) : Result<ParsedVariant list * Token list, string> =
     match tokens with
     | TIdent variantName :: TOf :: rest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
-        // Variant with payload: Variant of Type
+        // ParsedVariant with payload: ParsedVariant of ParsedType
         parseVariantFieldTypes rest
         |> Result.bind (fun (fields, afterType) ->
             let variant = { Name = variantName; Fields = fields }
@@ -1131,11 +1131,11 @@ let rec parseVariants (tokens: Token list) (acc: Variant list) : Result<Variant 
 
 /// Parse sum type variants with type parameter context: Variant1 | Variant2 of t | ...
 /// Uses parseTypeWithContext to resolve type parameters
-let rec parseVariantsWithContext (typeParams: string list) (tokens: Token list) (acc: Variant list) : Result<Variant list * Token list, string> =
+let rec parseVariantsWithContext (typeParams: string list) (tokens: Token list) (acc: ParsedVariant list) : Result<ParsedVariant list * Token list, string> =
     let typeParamSet = Set.ofList typeParams
     match tokens with
     | TIdent variantName :: TOf :: rest when variantName.Length > 0 && System.Char.IsUpper(variantName.[0]) ->
-        // Variant with payload: Variant of Type
+        // ParsedVariant with payload: ParsedVariant of ParsedType
         parseVariantFieldTypesWithContext typeParamSet rest
         |> Result.bind (fun (fields, afterType) ->
             let variant = { Name = variantName; Fields = fields }
@@ -1158,10 +1158,10 @@ let rec parseVariantsWithContext (typeParams: string list) (tokens: Token list) 
             Ok (List.rev (variant :: acc), rest)
     | _ -> Error "Expected variant name (must start with uppercase letter)"
 
-/// Parse a type definition: type Name = { fields } or type Name = Variant1 | Variant2 of Type | ...
+/// Parse a type definition: type Name = { fields } or type Name = Variant1 | Variant2 of ParsedType | ...
 /// Also supports type aliases: type Id = String, type MyList = List<Int64>
 /// Supports generic types: type Result<'t, 'e> = | Ok of t | Error of e
-let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
+let parseTypeDef (tokens: Token list) : Result<ParsedTypeDef * Token list, string> =
     match tokens with
     | TType :: TIdent firstName :: rest ->
         let typeName = firstName
@@ -1170,7 +1170,7 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
         let parseBody typeParams afterTypeParams =
             match afterTypeParams with
             | TEquals :: TLBrace :: bodyRest ->
-                // Record type: type Name = { field: Type, ... }
+                // Record type: type Name = { field: ParsedType, ... }
                 let typeParamSet = Set.ofList typeParams
                 parseRecordFieldsWithContext typeParamSet bodyRest []
                 |> Result.map (fun (fields, remaining) ->
@@ -1179,7 +1179,7 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
                 // Sum type where the first variant starts on the next line:
                 // type Name =
                 //   | Variant1
-                //   | Variant2 of Type
+                //   | Variant2 of ParsedType
                 parseVariantsWithContext typeParams bodyRest []
                 |> Result.map (fun (variants, remaining) ->
                     (SumTypeDef (typeName, typeParams, variants), remaining))
@@ -1220,26 +1220,26 @@ let parseTypeDef (tokens: Token list) : Result<TypeDef * Token list, string> =
             parseBody [] afterName
     | _ -> Error "Expected type definition: type Name = { fields } or type Name = Variant1 | Variant2"
 
-let private generatedUnitParam (index: int) : string * Type =
-    ($"$unit{index}", TUnit)
+let private generatedUnitParam (index: int) : string * ParsedType =
+    ($"$unit{index}", PTUnit)
 
-let private ensureParamGroupNonEmpty (paramIndex: int) (parameters: (string * Type) list) : (string * Type) list =
+let private ensureParamGroupNonEmpty (paramIndex: int) (parameters: (string * ParsedType) list) : (string * ParsedType) list =
     if List.isEmpty parameters then [generatedUnitParam paramIndex] else parameters
 
 /// Restore parameter groups accumulated in reverse order without repeatedly
 /// copying the complete parameter prefix as each curried group is parsed.
-let flattenParamGroups (paramGroupsRev: (string * Type) list list) : (string * Type) list =
+let flattenParamGroups (paramGroupsRev: (string * ParsedType) list list) : (string * ParsedType) list =
     paramGroupsRev |> List.rev |> List.concat
 
 /// Parse a function declaration after `let` has been normalized to the private
 /// TFunctionDeclaration marker. Declaration names are unqualified.
-let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr * Token list, string>) : Result<FunctionDef * Token list, string> =
+let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<ParsedExpr * Token list, string>) : Result<ParsedFunctionDef * Token list, string> =
     let rec parseAdditionalParamGroups
-        (parseGroup: Token list -> Result<(string * Type) list * Token list, string>)
-        (paramGroupsRev: (string * Type) list list)
+        (parseGroup: Token list -> Result<(string * ParsedType) list * Token list, string>)
+        (paramGroupsRev: (string * ParsedType) list list)
         (paramCount: int)
         (remaining: Token list)
-        : Result<(string * Type) list * Token list, string> =
+        : Result<(string * ParsedType) list * Token list, string> =
         match remaining with
         | TRParen :: TLParen :: nextGroupStart ->
             let nextGroupResult =
@@ -1585,7 +1585,7 @@ let rec parseLetPattern (tokens: Token list) : Result<LetPattern * Token list, s
 
 /// Parse a single case: | pat1 | pat2 when guard -> expr
 /// Supports multiple patterns (pattern grouping) and optional guard clause
-let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<Expr * Token list, string>) : Result<MatchCase * Token list, string> =
+let parseCase (tokens: Token list) (parseExprFn: Token list -> Result<ParsedExpr * Token list, string>) : Result<ParsedMatchCase * Token list, string> =
     // Parse patterns until we see TWhen or TArrow
     let rec parsePatterns (toks: Token list) (acc: Pattern list) : Result<Pattern list * Token list, string> =
         match toks with
@@ -1674,7 +1674,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | TIdent _ :: TEquals :: _ -> true
         | _ -> false
 
-    let canStartNegativeNumericApplicationArg (callee: Expr) (toks: Token list) : bool =
+    let canStartNegativeNumericApplicationArg (callee: ParsedExpr) (toks: Token list) : bool =
         if not (startsWithNegativeNumericLiteral toks) then
             false
         else
@@ -1683,38 +1683,37 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             // but allow negative numeric literals as call args in contexts
             // that are clearly call-like in space-application syntax.
             | Var funcName when funcName.Contains "." -> true
-            | Call _ | TypeApp _ | Apply _ | Constructor _ -> true
+            | Apply _ | Constructor _ -> true
             | _ -> false
 
-    let rec canAcceptSpaceApplication (expr: Expr) : bool =
+    let rec canAcceptSpaceApplication (expr: ParsedExpr) : bool =
         match expr with
-        | Var _ | Call _ | TypeApp _ | Lambda _ | FuncRef _ | Closure _ -> true
+        | Var _ | Lambda _ | Closure _ -> true
         | Constructor _ -> true
         | Apply _ -> true
         // Allow values that can evaluate to callable values, such as `record.fn`.
         | RecordAccess _ | TupleAccess _ -> true
         | _ -> false
 
-    let appendCallArg (callee: Expr) (argExpr: Expr) : Expr =
+    let appendCallArg (callee: ParsedExpr) (argExpr: ParsedExpr) : ParsedExpr =
         match callee with
-        | Var funcName -> Call (funcName, NonEmptyList.singleton argExpr)
-        | Call (funcName, args) -> Call (funcName, NonEmptyList.snoc args argExpr)
-        | TypeApp (funcName, typeArgs, args) ->
-            TypeApp (funcName, typeArgs, NonEmptyList.snoc args argExpr)
+        | Var funcName -> Apply (Var funcName, [], NonEmptyList.singleton argExpr)
         | Constructor (typeName, variantName, fields) ->
             Constructor (typeName, variantName, fields @ [argExpr])
-        | Apply (funcExpr, existingArgs) ->
+        | Apply (Var funcName, typeArgs, existingArgs) ->
+            Apply (Var funcName, typeArgs, NonEmptyList.snoc existingArgs argExpr)
+        | Apply (funcExpr, typeArgs, existingArgs) ->
             match funcExpr with
             // Preserve uncurried lambda applications as a single Apply node
             // while still allowing curried chains to remain left-associated.
             | Lambda (parameters, _, _) when NonEmptyList.length existingArgs < NonEmptyList.length parameters ->
-                Apply (funcExpr, NonEmptyList.snoc existingArgs argExpr)
+                Apply (funcExpr, typeArgs, NonEmptyList.snoc existingArgs argExpr)
             | _ ->
-                Apply (callee, NonEmptyList.singleton argExpr)
-        | _ -> Apply (callee, NonEmptyList.singleton argExpr)
+                Apply (callee, [], NonEmptyList.singleton argExpr)
+        | _ -> Apply (callee, [], NonEmptyList.singleton argExpr)
 
     /// Parse multiple cases for pattern matching: | p1 -> e1 | p2 -> e2 ...
-    let rec parseCases (toks: Token list) (acc: MatchCase list) : Result<MatchCase list * Token list, string> =
+    let rec parseCases (toks: Token list) (acc: ParsedMatchCase list) : Result<ParsedMatchCase list * Token list, string> =
         match toks with
         | TSemicolon :: rest ->
             parseCases rest acc
@@ -1730,12 +1729,12 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             else
                 Ok (List.rev acc, toks)
 
-    and parseNestedFunctionLet (functionTokens: Token list) : Result<Expr * Token list, string> =
+    and parseNestedFunctionLet (functionTokens: Token list) : Result<ParsedExpr * Token list, string> =
         let buildNestedFunctionLet
-            (funcDef: FunctionDef)
-            (body: Expr)
+            (funcDef: ParsedFunctionDef)
+            (body: ParsedExpr)
             (remainingAfterBody: Token list)
-            : Expr * Token list =
+            : ParsedExpr * Token list =
             let lambdaParameters =
                 funcDef.Params
                 |> NonEmptyList.map (fun (name, typ) -> typedLambdaVariable name typ)
@@ -1751,9 +1750,9 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
              ), remainingAfterBody)
 
         let betterSplit
-            (currentBest: (Expr * Token list) option)
-            (candidate: Expr * Token list)
-            : (Expr * Token list) option =
+            (currentBest: (ParsedExpr * Token list) option)
+            (candidate: ParsedExpr * Token list)
+            : (ParsedExpr * Token list) option =
             match currentBest with
             | None -> Some candidate
             // The first complete function/body split is the lexical declaration
@@ -1764,8 +1763,8 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         let rec trySplits
             (functionTokensRev: Token list)
             (remainingTokens: Token list)
-            (bestCandidate: (Expr * Token list) option)
-            : Result<Expr * Token list, string> =
+            (bestCandidate: (ParsedExpr * Token list) option)
+            : Result<ParsedExpr * Token list, string> =
             match remainingTokens with
             | [] ->
                 match bestCandidate with
@@ -1802,7 +1801,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
 
     /// An expression, then the statements the layout pass found after it in the
     /// same block, as a Sequence.
-    and parseExpr (toks: Token list) : Result<Expr * Token list, string> =
+    and parseExpr (toks: Token list) : Result<ParsedExpr * Token list, string> =
         parseSingleExpr toks
         |> Result.bind (fun (expr, remaining) ->
             match remaining with
@@ -1811,7 +1810,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 |> Result.map (fun (next, remaining') -> (Sequence (expr, next), remaining'))
             | _ -> Ok (expr, remaining))
 
-    and parseSingleExpr (toks: Token list) : Result<Expr * Token list, string> =
+    and parseSingleExpr (toks: Token list) : Result<ParsedExpr * Token list, string> =
         match toks with
         | TSemicolon :: rest ->
             parseExpr rest
@@ -1830,7 +1829,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             // Supports simple let (let x = ...) and pattern matching (let (a, b) = ...)
             parseLetPattern rest
             |> Result.bind (fun (pattern, remaining) ->
-                let buildLetExpression (value: Expr) (body: Expr) (remaining'': Token list) =
+                let buildLetExpression (value: ParsedExpr) (body: ParsedExpr) (remaining'': Token list) =
                     let expression =
                         match pattern, value with
                         | LPVariable name, Lambda _ ->
@@ -1846,7 +1845,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     (expression, remaining'')
                 match remaining with
                 | TEquals :: rest' ->
-                    let tryParseWithoutInFallback () : Result<Expr * Token list, string> =
+                    let tryParseWithoutInFallback () : Result<ParsedExpr * Token list, string> =
                         // Upstream interpreter syntax allows newline-delimited let bindings:
                         //   let x = <value>
                         //   <body>
@@ -1854,9 +1853,9 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                         // splits after '=' and choosing the split that leaves the smallest
                         // remaining token tail after parsing the body.
                         let betterSplit
-                            (currentBest: (Expr * Token list) option)
-                            (candidate: Expr * Token list)
-                            : (Expr * Token list) option =
+                            (currentBest: (ParsedExpr * Token list) option)
+                            (candidate: ParsedExpr * Token list)
+                            : (ParsedExpr * Token list) option =
                             match currentBest with
                             | None ->
                                 Some candidate
@@ -1870,8 +1869,8 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                         let rec trySplits
                             (valueTokensRev: Token list)
                             (remainingTokens: Token list)
-                            (bestCandidate: (Expr * Token list) option)
-                            : Result<Expr * Token list, string> =
+                            (bestCandidate: (ParsedExpr * Token list) option)
+                            : Result<ParsedExpr * Token list, string> =
                             match remainingTokens with
                             | [] ->
                                 match bestCandidate with
@@ -1913,7 +1912,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | TIf :: rest ->
             // Parse: if cond then thenBranch [elif cond then branch ...] [else elseBranch]
             // Elif chains are represented as nested else-if AST nodes.
-            let rec parseElseOrElif (tokens: Token list) : Result<Expr * Token list, string> =
+            let rec parseElseOrElif (tokens: Token list) : Result<ParsedExpr * Token list, string> =
                 match tokens with
                 // Layout normalization can separate a complete branch from its
                 // following `else`. The separator is structural, not an empty
@@ -1960,12 +1959,12 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | _ ->
             parsePipe toks
 
-    and parsePipe (toks: Token list) : Result<Expr * Token list, string> =
+    and parsePipe (toks: Token list) : Result<ParsedExpr * Token list, string> =
         // Pipe operator |> has lowest precedence, left-associative
         // x |> f desugars to f(x) - Call if f is a name, Apply if f is an expression
         parseOr toks
         |> Result.bind (fun (left, remaining) ->
-            let rec parsePipeRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+            let rec parsePipeRest (leftExpr: ParsedExpr) (toks: Token list) : Result<ParsedExpr * Token list, string> =
                 match toks with
                 | TPipe :: rest ->
                     parseOr rest
@@ -1977,36 +1976,28 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                             match right with
                             | Var funcName ->
                                 // Simple function reference: f becomes f(left)
-                                Call (funcName, NonEmptyList.singleton leftExpr)
-                            | Call (funcName, args) ->
+                                Apply (Var funcName, [], NonEmptyList.singleton leftExpr)
+                            | Apply (Var funcName, typeArgs, args) ->
                                 // Partial application: f(a) becomes f(left, a)
                                 match NonEmptyList.toList args with
                                 | [UnitLiteral] ->
                                     // Unit-argument placeholder: f () |> g ()
-                                    Call (funcName, NonEmptyList.singleton leftExpr)
+                                    Apply (Var funcName, typeArgs, NonEmptyList.singleton leftExpr)
                                 | _ ->
-                                    Call (funcName, NonEmptyList.cons leftExpr args)
-                            | TypeApp (funcName, typeArgs, args) ->
-                                // Generic partial application: f<T>(a) becomes f<T>(left, a)
-                                match NonEmptyList.toList args with
-                                | [UnitLiteral] ->
-                                    // Unit-argument placeholder for piped generic calls.
-                                    TypeApp (funcName, typeArgs, NonEmptyList.singleton leftExpr)
-                                | _ ->
-                                    TypeApp (funcName, typeArgs, NonEmptyList.cons leftExpr args)
+                                    Apply (Var funcName, typeArgs, NonEmptyList.cons leftExpr args)
                             | Constructor (reference, variantName, fields) ->
                                 Constructor (reference, variantName, leftExpr :: fields)
                             | _ ->
                                 // Lambda or other expression: apply left to it
-                                Apply (right, NonEmptyList.singleton leftExpr)
+                                Apply (right, [], NonEmptyList.singleton leftExpr)
                         parsePipeRest pipedExpr remaining')
                 | _ -> Ok (leftExpr, toks)
             parsePipeRest left remaining)
 
-    and parseOr (toks: Token list) : Result<Expr * Token list, string> =
+    and parseOr (toks: Token list) : Result<ParsedExpr * Token list, string> =
         parseAnd toks
         |> Result.bind (fun (left, remaining) ->
-            let rec parseOrRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+            let rec parseOrRest (leftExpr: ParsedExpr) (toks: Token list) : Result<ParsedExpr * Token list, string> =
                 match toks with
                 | TOr :: rest ->
                     parseAnd rest
@@ -2015,10 +2006,10 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | _ -> Ok (leftExpr, toks)
             parseOrRest left remaining)
 
-    and parseAnd (toks: Token list) : Result<Expr * Token list, string> =
+    and parseAnd (toks: Token list) : Result<ParsedExpr * Token list, string> =
         parseComparison toks
         |> Result.bind (fun (left, remaining) ->
-            let rec parseAndRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+            let rec parseAndRest (leftExpr: ParsedExpr) (toks: Token list) : Result<ParsedExpr * Token list, string> =
                 match toks with
                 | TAnd :: rest ->
                     parseComparison rest
@@ -2027,7 +2018,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | _ -> Ok (leftExpr, toks)
             parseAndRest left remaining)
 
-    and parseComparison (toks: Token list) : Result<Expr * Token list, string> =
+    and parseComparison (toks: Token list) : Result<ParsedExpr * Token list, string> =
         parseListAppend toks
         |> Result.bind (fun (left, remaining) ->
             // Comparison operators are non-associative (no chaining)
@@ -2058,21 +2049,21 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     (BinOp (Gte, left, right), remaining'))
             | _ -> Ok (left, remaining))
 
-    and parseListAppend (toks: Token list) : Result<Expr * Token list, string> =
+    and parseListAppend (toks: Token list) : Result<ParsedExpr * Token list, string> =
         parseAdditive toks
         |> Result.bind (fun (left, remaining) ->
             match remaining with
             | TAt :: rest ->
                 parseListAppend rest
                 |> Result.map (fun (right, remaining') ->
-                    (Call ("Darklang.Stdlib.List.append", NonEmptyList.fromList [left; right]), remaining'))
+                    (Apply (Var "Darklang.Stdlib.List.append", [], NonEmptyList.fromList [left; right]), remaining'))
             | _ ->
                 Ok (left, remaining))
 
-    and parseAdditive (toks: Token list) : Result<Expr * Token list, string> =
+    and parseAdditive (toks: Token list) : Result<ParsedExpr * Token list, string> =
         parseMultiplicative toks
         |> Result.bind (fun (left, remaining) ->
-            let rec parseAdditiveRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+            let rec parseAdditiveRest (leftExpr: ParsedExpr) (toks: Token list) : Result<ParsedExpr * Token list, string> =
                 match toks with
                 | TPlus :: rest ->
                     parseMultiplicative rest
@@ -2089,10 +2080,10 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | _ -> Ok (leftExpr, toks)
             parseAdditiveRest left remaining)
 
-    and parseMultiplicative (toks: Token list) : Result<Expr * Token list, string> =
+    and parseMultiplicative (toks: Token list) : Result<ParsedExpr * Token list, string> =
         parsePower toks
         |> Result.bind (fun (left, remaining) ->
-            let rec parseMultiplicativeRest (leftExpr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+            let rec parseMultiplicativeRest (leftExpr: ParsedExpr) (toks: Token list) : Result<ParsedExpr * Token list, string> =
                 match toks with
                 | TStar :: rest ->
                     parsePower rest
@@ -2109,7 +2100,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | _ -> Ok (leftExpr, toks)
             parseMultiplicativeRest left remaining)
 
-    and parsePower (toks: Token list) : Result<Expr * Token list, string> =
+    and parsePower (toks: Token list) : Result<ParsedExpr * Token list, string> =
         parseUnary toks
         |> Result.bind (fun (left, remaining) ->
             match remaining with
@@ -2119,7 +2110,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     (BinOp (Pow, left, right), remaining'))
             | _ -> Ok (left, remaining))
 
-    and parseUnary (toks: Token list) : Result<Expr * Token list, string> =
+    and parseUnary (toks: Token list) : Result<ParsedExpr * Token list, string> =
         match toks with
         // Negative integer literals - parse directly as negative values
         | TMinus :: TInt64 n :: rest -> Ok (Int64Literal (-n), rest)
@@ -2144,7 +2135,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | _ ->
             parsePrimary toks
 
-    and parsePrimary (toks: Token list) : Result<Expr * Token list, string> =
+    and parsePrimary (toks: Token list) : Result<ParsedExpr * Token list, string> =
         // Parse a primary expression, then handle postfix operations and
         // Space application: f x y
         let startsWithGroupedExpression =
@@ -2159,11 +2150,11 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 parseApplication postfixExpr remaining' (not startsWithGroupedExpression) false))
 
     and parseApplication
-        (callee: Expr)
+        (callee: ParsedExpr)
         (toks: Token list)
         (mayStartNegativeNumericArg: bool)
         (hasAppliedArgument: bool)
-        : Result<Expr * Token list, string> =
+        : Result<ParsedExpr * Token list, string> =
         let negativeNumericArg =
             mayStartNegativeNumericArg
             && canStartNegativeNumericApplicationArg callee toks
@@ -2173,7 +2164,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             // Negative numeric literals are tokenized as `-` + literal.
             // Parse those with unary parsing so expressions like `f -1.0` become
             // function application rather than subtraction from `f`.
-            let parseOneArg () : Result<Expr * Token list, string> =
+            let parseOneArg () : Result<ParsedExpr * Token list, string> =
                 if negativeNumericArg then
                     parseUnary toks
                 else
@@ -2185,8 +2176,8 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             |> Result.bind (fun (argExpr, afterArg) ->
                 let applied =
                     match callee, hasAppliedArgument with
-                    | TypeApp (funcName, typeArgs, { Head = UnitLiteral; Tail = [] }), false ->
-                        TypeApp (funcName, typeArgs, NonEmptyList.singleton argExpr)
+                    | Apply (func, typeArgs, { Head = UnitLiteral; Tail = [] }), false when not (List.isEmpty typeArgs) ->
+                        Apply (func, typeArgs, NonEmptyList.singleton argExpr)
                     | _ ->
                         appendCallArg callee argExpr
                 let mayStartNextNegativeNumericArg =
@@ -2210,7 +2201,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             parseQualifiedIdent (NameSyntax.append nextSegment qualifiedName) nextSegment rest
         | _ -> (qualifiedName, toks)
 
-    and parsePrimaryBase (toks: Token list) : Result<Expr * Token list, string> =
+    and parsePrimaryBase (toks: Token list) : Result<ParsedExpr * Token list, string> =
         match toks with
         | TInt64 n :: rest -> Ok (Int64Literal n, rest)
         | TInt128 n :: rest -> Ok (Int128Literal n, rest)
@@ -2228,7 +2219,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
         | TCharLit s :: rest -> Ok (CharLiteral s, rest)
         | TInterpString parts :: rest ->
             // Parse interpolated string into AST.InterpolatedString
-            let rec parseInterpParts (parts: InterpPart list) (acc: AST.StringPart list) : Result<AST.StringPart list, string> =
+            let rec parseInterpParts (parts: InterpPart list) (acc: AST.ParsedStringPart list) : Result<AST.ParsedStringPart list, string> =
                 match parts with
                 | [] -> Ok (List.rev acc)
                 | InterpText s :: remaining ->
@@ -2318,7 +2309,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 Ok (Constructor (UnresolvedConstructor (Some typeName), variantName, []), afterQualified)
             | TLParen :: TRParen :: rest ->
                 // Qualified unit-argument call: Stdlib.Module.fn ()
-                Ok (Call (fullName, NonEmptyList.singleton UnitLiteral), rest)
+                Ok (Apply (Var fullName, [], NonEmptyList.singleton UnitLiteral), rest)
             | TLt :: typeArgsStart ->
                 // Qualified generic function call: Stdlib.List.length<t>(args)
                 // Accept whenever we can successfully parse a type argument list.
@@ -2331,7 +2322,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     |> Result.map (fun (typeArgs, afterTypes) ->
                         // The parser expects argument application to be
                         // space-based (handled by parseApplication).
-                        (TypeApp (fullName, typeArgs, NonEmptyList.singleton UnitLiteral), afterTypes))
+                        (Apply (Var fullName, typeArgs, NonEmptyList.singleton UnitLiteral), afterTypes))
                 else
                     // Not type args, treat as variable reference and leave < for comparison
                     Ok (Var fullName, TLt :: typeArgsStart)
@@ -2340,7 +2331,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 Ok (Var fullName, afterQualified)
         | TIdent name :: TLParen :: TRParen :: rest when name.Length = 0 || not (System.Char.IsUpper(name.[0])) ->
             // Unit-argument call: fn ()
-            Ok (Call (name, NonEmptyList.singleton UnitLiteral), rest)
+            Ok (Apply (Var name, [], NonEmptyList.singleton UnitLiteral), rest)
         | TIdent name :: TLt :: rest when name.Length = 0 || not (System.Char.IsUpper(name.[0])) ->
             // Could be generic function application: name<type, ...> args
             // Or could be comparison: name < expr
@@ -2355,7 +2346,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 |> Result.map (fun (typeArgs, afterTypes) ->
                     // The parser expects argument application to be
                     // space-based (handled by parseApplication).
-                    (TypeApp (name, typeArgs, NonEmptyList.singleton UnitLiteral), afterTypes))
+                    (Apply (Var name, typeArgs, NonEmptyList.singleton UnitLiteral), afterTypes))
             else
                 // Not a type application, treat name as variable and let comparison parsing handle <
                 Ok (Var name, TLt :: rest)
@@ -2391,7 +2382,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             let parsePipeOperatorSection
                 (op: BinOp)
                 (afterOp: Token list)
-                : Result<Expr * Token list, string> =
+                : Result<ParsedExpr * Token list, string> =
                 parseUnary afterOp
                 |> Result.map (fun (rightArg, remaining) ->
                     let lambda =
@@ -2404,12 +2395,12 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             let parseGeneratedPipeOperatorSection
                 (op: BinOp)
                 (afterOp: Token list)
-                : Result<Expr * Token list, string> =
+                : Result<ParsedExpr * Token list, string> =
                 parsePipeOperatorSection op afterOp
             let parseOperatorFunctionSection
                 (op: BinOp)
                 (afterOp: Token list)
-                : Result<Expr * Token list, string> =
+                : Result<ParsedExpr * Token list, string> =
                 Ok (
                     Lambda (
                         NonEmptyList.fromList
@@ -2465,9 +2456,9 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                         parseTupleElements rest' [firstExpr]
                     | TSemicolon :: rest' ->
                         let rec parseSequenceTail
-                            (previousExpr: Expr)
+                            (previousExpr: ParsedExpr)
                             (sequenceTokens: Token list)
-                            : Result<Expr * Token list, string> =
+                            : Result<ParsedExpr * Token list, string> =
                             parseExpr sequenceTokens
                             |> Result.bind (fun (nextExpr, afterNext) ->
                                 match afterNext with
@@ -2531,7 +2522,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             parseListLiteralElements rest []
         | _ -> Error "Expected expression"
 
-    and parseTupleElements (toks: Token list) (acc: Expr list) : Result<Expr * Token list, string> =
+    and parseTupleElements (toks: Token list) (acc: ParsedExpr list) : Result<ParsedExpr * Token list, string> =
         // Parse remaining tuple elements after the first comma
         parseExpr toks
         |> Result.bind (fun (expr, remaining) ->
@@ -2545,7 +2536,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 Ok (TupleLiteral elements, rest)
             | _ -> Error "Expected ',' or ')' in tuple literal")
 
-    and parseRecordLiteralFieldsWithTypeName (reference: RecordReference) (toks: Token list) (acc: (string * Expr) list) : Result<Expr * Token list, string> =
+    and parseRecordLiteralFieldsWithTypeName (reference: ParsedRecordReference) (toks: Token list) (acc: (string * ParsedExpr) list) : Result<ParsedExpr * Token list, string> =
         // Parse record literal fields with explicit type name: TypeName { name = expr, ... }
         match toks with
         | TRBrace :: rest ->
@@ -2581,7 +2572,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | _ -> Error "Expected ',' or '}' after record field value")
         | _ -> Error "Expected field name in record literal"
 
-    and parseDictLiteralFields (toks: Token list) (acc: (Expr * Expr) list) : Result<Expr * Token list, string> =
+    and parseDictLiteralFields (toks: Token list) (acc: (ParsedExpr * ParsedExpr) list) : Result<ParsedExpr * Token list, string> =
         let publicKey name = if name = "___" then "" else name
         let finishEntry key value remaining =
             let entry = (key, value)
@@ -2592,10 +2583,10 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
             | TStringLit _ :: TColon :: _ ->
                 parseDictLiteralFields remaining (entry :: acc)
             | TRBrace :: rest' ->
-                Ok (DictLiteral (TVar "dictKey", TVar "dictValue", List.rev (entry :: acc)), rest')
+                Ok (DictLiteral (PTVar "dictKey", PTVar "dictValue", List.rev (entry :: acc)), rest')
             | _ -> Error "Expected ',', ';', or '}' after dictionary entry value"
         match toks with
-        | TRBrace :: rest -> Ok (DictLiteral (TVar "dictKey", TVar "dictValue", List.rev acc), rest)
+        | TRBrace :: rest -> Ok (DictLiteral (PTVar "dictKey", PTVar "dictValue", List.rev acc), rest)
         // Canonical source uses identifier keys with `=`, while imported
         // interpreter tests retain string keys with `:`.
         | TIdent keyName :: TEquals :: rest ->
@@ -2610,7 +2601,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     |> Result.bind (fun (value, remaining) -> finishEntry key value remaining)
                 | _ -> Error "Expected ':' after dictionary key")
 
-    and parseRecordUpdateFields (toks: Token list) (acc: (string * Expr) list) : Result<(string * Expr) list * Token list, string> =
+    and parseRecordUpdateFields (toks: Token list) (acc: (string * ParsedExpr) list) : Result<(string * ParsedExpr) list * Token list, string> =
         // Parse record update fields: field = expr, field = expr, ... }
         match toks with
         | TRBrace :: rest ->
@@ -2633,7 +2624,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | _ -> Error "Expected ',' or '}' after record update field value")
         | _ -> Error "Expected field name in record update"
 
-    and parseListLiteralElements (toks: Token list) (acc: Expr list) : Result<Expr * Token list, string> =
+    and parseListLiteralElements (toks: Token list) (acc: ParsedExpr list) : Result<ParsedExpr * Token list, string> =
         // Parse list literal elements with semicolon, comma, or newline separators.
         match toks with
         | TRBracket :: rest ->
@@ -2651,7 +2642,7 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                     Ok (ListLiteral (List.rev (expr :: acc)), rest)
                 | _ -> Error "Expected ';', ',', or ']' in list literal")
 
-    and parsePostfix (expr: Expr) (toks: Token list) : Result<Expr * Token list, string> =
+    and parsePostfix (expr: ParsedExpr) (toks: Token list) : Result<ParsedExpr * Token list, string> =
         // Handle postfix operations: tuple access (.0, .1), field access
         // (.fieldName), and parenthesized arguments in space application.
         match toks with
@@ -2846,7 +2837,27 @@ let rec private validatePattern (pattern: Pattern) : Result<unit, string> =
     | PChar _
     | PFloat _ -> Ok ()
 
-let rec private validateExpr (expr: Expr) : Result<unit, string> =
+let rec private validatePublicType (typ: ParsedType) : Result<unit, string> =
+    let validateMany types =
+        types
+        |> List.fold
+            (fun result nested -> result |> Result.bind (fun () -> validatePublicType nested))
+            (Ok ())
+    match typ with
+    | AST.PTInternalRawPtr -> Error "RawPtr is reserved for compiler-internal source"
+    | AST.PTFunction (parameters, returnType) ->
+        validateMany parameters |> Result.bind (fun () -> validatePublicType returnType)
+    | AST.PTTuple elements -> validateMany elements
+    | AST.PTRecord (_, typeArgs) | AST.PTSum (_, typeArgs) -> validateMany typeArgs
+    | AST.PTList element | AST.PTStream element -> validatePublicType element
+    | AST.PTDict (keyType, valueType) ->
+        validatePublicType keyType |> Result.bind (fun () -> validatePublicType valueType)
+    | AST.PTInt8 | AST.PTInt16 | AST.PTInt32 | AST.PTInt64 | AST.PTInt128 | AST.PTInt
+    | AST.PTUInt8 | AST.PTUInt16 | AST.PTUInt32 | AST.PTUInt64 | AST.PTUInt128
+    | AST.PTBool | AST.PTFloat64 | AST.PTString | AST.PTBlob | AST.PTChar | AST.PTDateTime | AST.PTUnit
+    | AST.PTVar _ -> Ok ()
+
+let rec private validateExpr (expr: ParsedExpr) : Result<unit, string> =
     match expr with
     | BoundaryRender (_, value) -> validateExpr value
     | RuntimeError _ -> Ok ()
@@ -2862,14 +2873,12 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
         |> Result.bind (fun () -> validateExpr value)
         |> Result.bind (fun () -> validateExpr body)
     | Var name -> validateNoInternalIdentifier name
-    | Call (funcName, args) ->
-        validateNoInternalIdentifier funcName
-        |> Result.bind (fun () ->
-            args
-            |> NonEmptyList.toList
-            |> List.fold (fun acc arg -> Result.bind (fun () -> validateExpr arg) acc) (Ok ()))
-    | TypeApp (funcName, _, args) ->
-        validateNoInternalIdentifier funcName
+    | Apply (funcExpr, typeArgs, args) ->
+        typeArgs
+        |> List.fold
+            (fun result typ -> result |> Result.bind (fun () -> validatePublicType typ))
+            (Ok ())
+        |> Result.bind (fun () -> validateExpr funcExpr)
         |> Result.bind (fun () ->
             args
             |> NonEmptyList.toList
@@ -2892,14 +2901,22 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
     | TupleLiteral elems ->
         elems |> List.fold (fun acc e -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
     | TupleAccess (tupleExpr, _) -> validateExpr tupleExpr
-    | DictLiteral (_, _, entries) ->
-        entries
-        |> List.fold (fun acc (key, value) ->
-            acc
-            |> Result.bind (fun () -> validateExpr key)
-            |> Result.bind (fun () -> validateExpr value)) (Ok ())
-    | RecordLiteral (_, fields) ->
-        fields |> List.fold (fun acc (_, e) -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
+    | DictLiteral (keyType, valueType, entries) ->
+        validatePublicType keyType
+        |> Result.bind (fun () -> validatePublicType valueType)
+        |> Result.bind (fun () ->
+            entries
+            |> List.fold (fun acc (key, value) ->
+                acc
+                |> Result.bind (fun () -> validateExpr key)
+                |> Result.bind (fun () -> validateExpr value)) (Ok ()))
+    | RecordLiteral (reference, fields) ->
+        reference.TypeArgs
+        |> List.fold
+            (fun result typ -> result |> Result.bind (fun () -> validatePublicType typ))
+            (Ok ())
+        |> Result.bind (fun () ->
+            fields |> List.fold (fun acc (_, e) -> Result.bind (fun () -> validateExpr e) acc) (Ok ()))
     | RecordUpdate (recordExpr, updates) ->
         validateExpr recordExpr
         |> Result.bind (fun () ->
@@ -2909,7 +2926,7 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
         fields
         |> List.fold (fun acc field -> Result.bind (fun () -> validateExpr field) acc) (Ok ())
     | Match (scrutinee, cases) ->
-        let validateCase (case: MatchCase) : Result<unit, string> =
+        let validateCase (case: ParsedMatchCase) : Result<unit, string> =
             let patternsResult =
                 case.Patterns
                 |> NonEmptyList.toList
@@ -2934,15 +2951,26 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
         |> Result.bind (fun names ->
             names
             |> List.fold (fun acc name -> Result.bind (fun () -> validateNoInternalIdentifier name) acc) (Ok ()))
+        |> Result.bind (fun () ->
+            parameters
+            |> NonEmptyList.toList
+            |> List.fold (fun result parameter ->
+                result
+                |> Result.bind (fun () ->
+                    parameter.SourceAnnotation
+                    |> Option.map validatePublicType
+                    |> Option.defaultValue (Ok ()))) (Ok ()))
+        |> Result.bind (fun () ->
+            returnAnnotation
+            |> Option.map validatePublicType
+            |> Option.defaultValue (Ok ()))
         |> Result.bind (fun () -> validateExpr body)
-    | Apply (funcExpr, args)
     | IndirectApply (funcExpr, args) ->
         validateExpr funcExpr
         |> Result.bind (fun () ->
             args
             |> NonEmptyList.toList
             |> List.fold (fun acc e -> Result.bind (fun () -> validateExpr e) acc) (Ok ()))
-    | FuncRef funcName -> validateNoInternalIdentifier funcName
     | Closure (funcName, captures) ->
         validateNoInternalIdentifier funcName
         |> Result.bind (fun () ->
@@ -2951,19 +2979,34 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
     | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ -> Ok ()
 
-let private validateNoInternalIdentifiers (Program items) : Result<Program, string> =
-    let validateTopLevel (item: TopLevel) : Result<unit, string> =
+let private validateNoInternalIdentifiers (Program items) : Result<ParsedProgram, string> =
+    let validateTopLevel (item: ParsedTopLevel) : Result<unit, string> =
         match item with
         | FunctionDef def ->
             validateNoInternalIdentifier def.Name
             |> Result.bind (fun () ->
                 def.Params
                 |> NonEmptyList.toList
-                |> List.fold (fun acc (name, _) -> Result.bind (fun () -> validateNoInternalIdentifier name) acc) (Ok ()))
+                |> List.fold (fun acc (name, typ) ->
+                    acc
+                    |> Result.bind (fun () -> validateNoInternalIdentifier name)
+                    |> Result.bind (fun () -> validatePublicType typ)) (Ok ()))
+            |> Result.bind (fun () -> validatePublicType def.ReturnType)
             |> Result.bind (fun () -> validateExpr def.Body)
-        | TypeDef _ -> Ok ()
+        | TypeDef (RecordDef (_, _, fields)) ->
+            fields
+            |> List.fold (fun result (_, typ) -> result |> Result.bind (fun () -> validatePublicType typ)) (Ok ())
+        | TypeDef (SumTypeDef (_, _, variants)) ->
+            variants
+            |> List.collect (fun variant -> variant.Fields)
+            |> List.fold (fun result typ -> result |> Result.bind (fun () -> validatePublicType typ)) (Ok ())
+        | TypeDef (TypeAlias (_, _, targetType)) -> validatePublicType targetType
         | ValueDef valueDef ->
             validateNoInternalIdentifier (valueDefName valueDef)
+            |> Result.bind (fun () ->
+                match valueDef with
+                | CheckedValueDef (_, typ, _) -> validatePublicType typ
+                | UncheckedValueDef _ -> Ok ())
             |> Result.bind (fun () -> validateExpr (valueDefBody valueDef))
         | Expression (_, expr) -> validateExpr expr
     items
@@ -3378,13 +3421,13 @@ let parseSourceString (allowInternal: bool) (input: string) : Result<NameSyntax.
 let lowerParsedSource
     (allowInternal: bool)
     (parsed: NameSyntax.ParsedSource)
-    : Result<Program, string> =
+    : Result<ParsedProgram, string> =
     NameSyntax.normalizeSource parsed
     |> Result.bind (fun program ->
         if allowInternal then Ok program
         else validateNoInternalIdentifiers program)
 
 /// Parse and cross the explicit source-tree to compiler-AST boundary.
-let parseString (allowInternal: bool) (input: string) : Result<Program, string> =
+let parseString (allowInternal: bool) (input: string) : Result<ParsedProgram, string> =
     parseSourceString allowInternal input
     |> Result.bind (lowerParsedSource allowInternal)

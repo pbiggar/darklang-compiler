@@ -9,7 +9,7 @@ open CheckedFreeVariables
 open TypeUnification
 open CheckExpressionSupport
 
-let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (indexedSumTypeReg: IndexedSumTypeRegistry) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: Type option) (scrutinee: Expr) (cases: MatchCase list) : Result<Type * Expr, TypeError> =
+let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (indexedSumTypeReg: IndexedSumTypeRegistry) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: SemanticType option) (scrutinee: Expr) (cases: MatchCase list) : Result<SemanticType * Expr, TypeError> =
     let scrutineeExpectedType =
         match scrutinee with
         | ListLiteral [] -> Some (TList (TVar emptyListElementVar))
@@ -21,16 +21,16 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
         // Extract bindings from a pattern based on scrutinee type
         let rec extractPatternBindings
             (pattern: Pattern)
-            (patternType: Type)
+            (patternType: SemanticType)
             (allowNoMatchForKnownListLengthMismatch: bool)
-            : Result<(string * Type) list, TypeError> =
+            : Result<(string * SemanticType) list, TypeError> =
             let ensureLiteralType
-                (expectedType: Type)
-                : Result<(string * Type) list, TypeError> =
+                (expectedType: SemanticType)
+                : Result<(string * SemanticType) list, TypeError> =
                 let expectedPatternTypeTextOverride = None
                 let resolvedPatternType = resolveType aliasReg patternType
                 match resolvedPatternType with
-                | t when isRuntimeErrorType t ->
+                | t when isNeverType t ->
                     // Runtime error scrutinees are bottom-like: allow typechecking to proceed
                     // so evaluation order preserves the runtime failure at execution time.
                     Ok []
@@ -49,10 +49,10 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                             expectedPatternTypeTextOverride
                     Error (GenericError message)
 
-            let ensureStringOrCharPatternType () : Result<(string * Type) list, TypeError> =
+            let ensureStringOrCharPatternType () : Result<(string * SemanticType) list, TypeError> =
                 let resolvedPatternType = resolveType aliasReg patternType
                 match resolvedPatternType with
-                | t when isRuntimeErrorType t ->
+                | t when isNeverType t ->
                     // See ensureLiteralType: preserve runtime-error propagation by not
                     // rejecting pattern type checks on known failing scrutinees.
                     Ok []
@@ -153,7 +153,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                         || containsVariableBinding tailPattern
                     | _ -> false
 
-                let collectTupleBindingsWithTypes (elementTypes: Type list) : Result<(string * Type) list, TypeError> =
+                let collectTupleBindingsWithTypes (elementTypes: SemanticType list) : Result<(string * SemanticType) list, TypeError> =
                     List.zip patterns elementTypes
                     |> List.map (fun (p, t) ->
                         extractPatternBindings p t allowNoMatchForKnownListLengthMismatch)
@@ -178,7 +178,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                     // Match lowering emits a false condition for this pattern shape.
                     Ok []
                 | _ ->
-                    if isRuntimeErrorType resolvedPatternType then
+                    if isNeverType resolvedPatternType then
                         // Preserve runtime error propagation for known failing scrutinees.
                         Ok []
                     elif patterns |> List.exists containsVariableBinding then
@@ -256,7 +256,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                         | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
                         | Error e, _ -> Error e
                         | _, Error e -> Error e) (Ok [])
-                | TRuntimeError ->
+                | TNever ->
                     let unresolvedElemType = TVar "__list_elem_runtime_error"
                     patterns
                     |> List.map (fun p ->
@@ -318,7 +318,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                     | Ok hb, Ok tb -> Ok (hb @ tb)
                     | Error e, _ -> Error e
                     | _, Error e -> Error e
-                | TRuntimeError ->
+                | TNever ->
                     let unresolvedElemType = TVar "__list_elem_runtime_error"
                     let headBindings =
                         headPatterns
@@ -423,7 +423,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
 
         let allowNoMatchForKnownListLengthMismatchInThisMatch = List.length cases = 1
 
-        let rec patternAlwaysMatchesType (pattern: Pattern) (patternType: Type) : bool =
+        let rec patternAlwaysMatchesType (pattern: Pattern) (patternType: SemanticType) : bool =
             let resolvedPatternType = resolveType aliasReg patternType
             match pattern, resolvedPatternType with
             | PWildcard, _
@@ -574,7 +574,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
         // Exhaustiveness is an AOT property: lowering must never need a
         // synthetic runtime match-failure arm. A guarded case cannot cover
         // any value because its guard may be false.
-        let rec patternCoversType (pattern: Pattern) (patternType: Type) : bool =
+        let rec patternCoversType (pattern: Pattern) (patternType: SemanticType) : bool =
             match pattern, resolveType aliasReg patternType with
             | PVar _, _
             | PWildcard, _
@@ -598,7 +598,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
             | PTuple elements -> elements |> List.forall patternIsIrrefutablePayload
             | _ -> false
 
-        let payloadPatternCoversType (pattern: Pattern) (patternType: Type) : bool =
+        let payloadPatternCoversType (pattern: Pattern) (patternType: SemanticType) : bool =
             patternCoversType pattern patternType || patternIsIrrefutablePayload pattern
 
         let variantNamesMatchForExhaustiveness (leftName: string) (rightName: string) : bool =
@@ -620,9 +620,9 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
 
         let instantiateVariantFieldsForExhaustiveness
             (typeParams: string list)
-            (typeArgs: Type list)
-            (fieldTypes: Type list)
-            : Type list =
+            (typeArgs: SemanticType list)
+            (fieldTypes: SemanticType list)
+            : SemanticType list =
             let substitution =
                 if List.length typeParams = List.length typeArgs then
                     List.zip typeParams typeArgs |> Map.ofList
@@ -636,8 +636,8 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
 
         let variantsForExhaustiveness
             (sumTypeName: string)
-            (sumTypeArgs: Type list)
-            : (string * Type list) list =
+            (sumTypeArgs: SemanticType list)
+            : (string * SemanticType list) list =
             let sumInfo =
                 match Map.tryFind sumTypeName indexedSumTypeReg with
                 | Some info -> Some info
@@ -665,7 +665,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
         // columns cover every resulting row. This covers, for example,
         // Result.map2's (Ok, Ok), (Error, _), (_, Error) matrix.
         let rec tupleDecisionMatrixIsExhaustive
-            (remainingTypes: Type list)
+            (remainingTypes: SemanticType list)
             (rows: Pattern list list)
             : bool =
             match remainingTypes with
@@ -708,7 +708,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                 | _ ->
                     tupleDecisionMatrixIsExhaustive restTypes rowsCoveringCurrentType
 
-        let tupleMatchIsExhaustive (elementTypes: Type list) (patterns: Pattern list) : bool =
+        let tupleMatchIsExhaustive (elementTypes: SemanticType list) (patterns: Pattern list) : bool =
             let rows =
                 patterns
                 |> List.choose (function
@@ -721,7 +721,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
         // `Ok(Linux) | Ok(MacOS) | ...` covers `Ok(OS)` when the nested
         // OS constructors are complete; requiring one `Ok(_)` arm loses
         // that information and rejects valid interpreter programs.
-        let rec patternsCoverType (patternType: Type) (patterns: Pattern list) : bool =
+        let rec patternsCoverType (patternType: SemanticType) (patterns: Pattern list) : bool =
             if patterns |> List.exists (fun pattern -> patternCoversType pattern patternType) then
                 true
             else
@@ -775,7 +775,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                            || tupleDecisionMatrixIsExhaustive fieldTypes matchingFields)
                 | _ -> false
 
-        let rec listPatternCoverage (elementType: Type) (pattern: Pattern) : Set<int> * int option =
+        let rec listPatternCoverage (elementType: SemanticType) (pattern: Pattern) : Set<int> * int option =
             match pattern with
             | PList elements when elements |> List.forall (fun element -> patternCoversType element elementType) ->
                 (Set.singleton (List.length elements), None)
@@ -790,7 +790,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                      tailMinimum |> Option.map (fun minimum -> headCount + minimum))
             | _ -> (Set.empty, None)
 
-        let listPatternsCoverAllLengths (elementType: Type) (patterns: Pattern list) : bool =
+        let listPatternsCoverAllLengths (elementType: SemanticType) (patterns: Pattern list) : bool =
             let (exactLengths, minimumLengths) =
                 patterns
                 |> List.fold (fun (allExact, allMinimums) pattern ->
@@ -822,7 +822,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
 
         // Type check each case and ensure they all return the same type
         // Returns (resultType, transformedCases)
-        let rec resolvePatternConstructors (patternType: Type) (pattern: Pattern) : Pattern =
+        let rec resolvePatternConstructors (patternType: SemanticType) (pattern: Pattern) : Pattern =
             let recurse = resolvePatternConstructors
             let resolveFields typeParams fieldTypes fields =
                 let typeArgs =
@@ -837,7 +837,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                 if List.length fields = List.length concreteFieldTypes then
                     List.map2 recurse concreteFieldTypes fields
                 else
-                    List.map (recurse TRuntimeError) fields
+                    List.map (recurse TNever) fields
             match pattern with
             | PConstructor (variantName, fields) ->
                 let resolved =
@@ -874,19 +874,19 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                 match resolveType aliasReg patternType with
                 | TTuple types when List.length types = List.length patterns ->
                     PTuple (List.map2 recurse types patterns)
-                | _ -> PTuple (List.map (recurse TRuntimeError) patterns)
+                | _ -> PTuple (List.map (recurse TNever) patterns)
             | PList patterns ->
                 match resolveType aliasReg patternType with
                 | TList elementType -> PList (List.map (recurse elementType) patterns)
-                | _ -> PList (List.map (recurse TRuntimeError) patterns)
+                | _ -> PList (List.map (recurse TNever) patterns)
             | PListCons (heads, tail) ->
                 match resolveType aliasReg patternType with
                 | TList elementType ->
                     PListCons (List.map (recurse elementType) heads, recurse patternType tail)
                 | _ ->
                     PListCons (
-                        List.map (recurse TRuntimeError) heads,
-                        recurse TRuntimeError tail
+                        List.map (recurse TNever) heads,
+                        recurse TNever tail
                     )
             | POr alternatives -> POr (NonEmptyList.map (recurse patternType) alternatives)
             | _ -> pattern
@@ -912,7 +912,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
             |> List.map (fun case ->
                 { case with Patterns = NonEmptyList.map reopenResolvedPattern case.Patterns })
 
-        let rec checkCases (remaining: MatchCase list) (resultType: Type option) (accCases: MatchCase list) : Result<Type * MatchCase list, TypeError> =
+        let rec checkCases (remaining: MatchCase list) (resultType: SemanticType option) (accCases: MatchCase list) : Result<SemanticType * MatchCase list, TypeError> =
             match remaining with
             | [] ->
                 match resultType with

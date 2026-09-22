@@ -14,7 +14,7 @@ type internal InternalTypeAppMarker =
 /// Internal type-app values carried in `Expr.TypeApp` nodes.
 /// We encode/decode them through marker names at the pass boundary.
 type internal InternalTypeApp =
-    | EqHelperDispatchTypeApp of targetType: Type * leftExpr: Expr * rightExpr: Expr
+    | EqHelperDispatchTypeApp of targetType: SemanticType * leftExpr: Expr * rightExpr: Expr
 
 let internal internalTypeAppMarkerName (marker: InternalTypeAppMarker) : string =
     match marker with
@@ -29,15 +29,15 @@ let private tryParseInternalTypeAppMarker (funcName: string) : InternalTypeAppMa
 let internal makeInternalTypeApp (internalTypeApp: InternalTypeApp) : Expr =
     match internalTypeApp with
     | EqHelperDispatchTypeApp (targetType, leftExpr, rightExpr) ->
-        TypeApp (
-            internalTypeAppMarkerName EqHelperDispatch,
+        Apply (
+            Var (internalTypeAppMarkerName EqHelperDispatch),
             [targetType],
             NonEmptyList.fromList [leftExpr; rightExpr]
         )
 
 let internal tryDecodeInternalTypeApp (expr: Expr) : InternalTypeApp option =
     match expr with
-    | TypeApp (funcName, [targetType], { Head = leftExpr; Tail = [rightExpr] }) ->
+    | Apply (Var funcName, [targetType], { Head = leftExpr; Tail = [rightExpr] }) ->
         match tryParseInternalTypeAppMarker funcName with
         | Some EqHelperDispatch ->
             Some (EqHelperDispatchTypeApp (targetType, leftExpr, rightExpr))
@@ -53,7 +53,7 @@ let internal sumTypeHasPayload (variantLookup: VariantLookup) (sumTypeName: stri
 
 /// Parsed source names are initially represented as TRecord. Canonicalize
 /// names owned by the variant registry before constructing equality plans.
-let rec internal canonicalEqualityType (variantLookup: VariantLookup) (typ: Type) : Type =
+let rec internal canonicalEqualityType (variantLookup: VariantLookup) (typ: SemanticType) : SemanticType =
     let canonical = canonicalEqualityType variantLookup
     match typ with
     | TRecord (name, typeArgs) when
@@ -76,7 +76,7 @@ let internal validateJsonTargetType
     (typeReg: IndexedTypeRegistry)
     (variantLookup: VariantLookup)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
-    (targetType: Type)
+    (targetType: SemanticType)
     : Result<unit, TypeError> =
     let unsupported typ =
         Error (
@@ -116,11 +116,11 @@ let internal validateJsonTargetType
                         info.Variants
                         |> List.collect (fun variant -> List.map (applySubst subst) variant.Fields)
                         |> validateAll
-            | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _ | TDict _ -> unsupported typ
+            | TFunction _ | TBlob | TInternalRawPtr | TNever | TStream _ | TVar _ | TDict _ -> unsupported typ
     validate Set.empty targetType
 
 /// Every concrete compound comparable type has one equality entry point.
-let rec needsEqHelperForResolvedType (variantLookup: VariantLookup) (typ: Type) : bool =
+let rec needsEqHelperForResolvedType (variantLookup: VariantLookup) (typ: SemanticType) : bool =
     match canonicalEqualityType variantLookup typ with
     | TFunction _ | TList _ | TDict _ | TTuple _ | TRecord _ -> true
     | TSum (sumTypeName, _) -> sumTypeHasPayload variantLookup sumTypeName
@@ -146,14 +146,14 @@ let private stableHelperNameHash (input: string) : uint64 =
     |> Seq.fold (fun acc ch -> (acc ^^^ uint64 (int ch)) * prime) initial
 
 /// Name for a concrete structural equality helper.
-let eqHelperName (typ: Type) : string =
+let eqHelperName (typ: SemanticType) : string =
     let typeText = typeToString typ
     let prefix = sanitizeHelperNamePrefix typeText
     let hash = stableHelperNameHash typeText
     $"__dark_eq_{prefix}_{hash:x16}"
 
 /// Name for a concrete canonical three-way comparison helper.
-let compareHelperName (typ: Type) : string =
+let compareHelperName (typ: SemanticType) : string =
     let typeText = typeToString typ
     let prefix = sanitizeHelperNamePrefix typeText
     let hash = stableHelperNameHash typeText
@@ -173,7 +173,7 @@ let internal chainAndExpr (exprs: Expr list) : Expr =
 let internal buildEqExprForType
     (aliasReg: AliasRegistry)
     (variantLookup: VariantLookup)
-    (typ: Type)
+    (typ: SemanticType)
     (leftExpr: Expr)
     (rightExpr: Expr)
     : Expr =
@@ -188,11 +188,11 @@ let internal buildEqExprForType
     | TString ->
         BinOp (Eq, leftExpr, rightExpr)
     | TInt ->
-        Call ("Darklang.Stdlib.Int.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
+        Apply (Var "Darklang.Stdlib.Int.__equals", [], NonEmptyList.fromList [leftExpr; rightExpr])
     | TInt128 ->
-        Call ("Darklang.Stdlib.Int128.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
+        Apply (Var "Darklang.Stdlib.Int128.__equals", [], NonEmptyList.fromList [leftExpr; rightExpr])
     | TUInt128 ->
-        Call ("Darklang.Stdlib.UInt128.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
+        Apply (Var "Darklang.Stdlib.UInt128.__equals", [], NonEmptyList.fromList [leftExpr; rightExpr])
     | TList elemType ->
         let resolvedElemType = resolveType aliasReg elemType
         makeInternalTypeApp (EqHelperDispatchTypeApp (TList resolvedElemType, leftExpr, rightExpr))
@@ -206,10 +206,10 @@ let internal buildEqExprForType
 /// internal typed marker carries them through substitution and is materialized
 /// only after a concrete specialization exists.
 type internal ComparisonPlan =
-    | EqualityComparison of comparableType:Type
-    | OrderingComparison of numericType:Type
+    | EqualityComparison of comparableType:SemanticType
+    | OrderingComparison of numericType:SemanticType
 
-let private comparisonNumericType (typ: Type) : bool =
+let private comparisonNumericType (typ: SemanticType) : bool =
     match typ with
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
@@ -220,9 +220,9 @@ let private equalityComparableType
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
-    (typ: Type)
+    (typ: SemanticType)
     : bool =
-    let rec comparable (seen: Set<Type>) (candidate: Type) : bool =
+    let rec comparable (seen: Set<SemanticType>) (candidate: SemanticType) : bool =
         let resolved = resolveType aliasReg candidate
         if Set.contains resolved seen then
             // Recursive nominal types are admissible when the cycle itself has
@@ -272,7 +272,7 @@ let private equalityComparableType
                         variant.Fields
                         |> List.forall (fun field -> recurse (applySubst subst field)))
             | TBlob -> true
-            | TRawPtr | TRuntimeError -> false
+            | TInternalRawPtr | TNever -> false
 
     comparable Set.empty typ
 
@@ -282,9 +282,9 @@ let internal canonicalSortableType
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
-    (typ: Type)
+    (typ: SemanticType)
     : bool =
-    let rec sortable (seen: Set<Type>) (candidate: Type) : bool =
+    let rec sortable (seen: Set<SemanticType>) (candidate: SemanticType) : bool =
         let resolved = resolveType aliasReg candidate
         if Set.contains resolved seen then
             true
@@ -322,7 +322,7 @@ let internal canonicalSortableType
                     |> List.forall (fun variant ->
                         variant.Fields
                         |> List.forall (fun field -> recurse (applySubst subst field)))
-            | TDict _ | TFunction _ | TBlob | TRawPtr | TRuntimeError -> false
+            | TDict _ | TFunction _ | TBlob | TInternalRawPtr | TNever -> false
 
     sortable Set.empty typ
 
@@ -332,9 +332,9 @@ let internal dictKeyAdmissibleType
     (aliasReg: AliasRegistry)
     (typeReg: IndexedTypeRegistry)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
-    (typ: Type)
+    (typ: SemanticType)
     : bool =
-    let rec admissible (seen: Set<Type>) (candidate: Type) : bool =
+    let rec admissible (seen: Set<SemanticType>) (candidate: SemanticType) : bool =
         let resolved = resolveType aliasReg candidate
         if Set.contains resolved seen then
             true
@@ -373,7 +373,7 @@ let internal dictKeyAdmissibleType
                     |> List.forall (fun variant ->
                         variant.Fields
                         |> List.forall (fun field -> recurse (applySubst subst field)))
-            | TFunction _ | TStream _ | TBlob | TRawPtr | TRuntimeError -> false
+            | TFunction _ | TStream _ | TBlob | TInternalRawPtr | TNever -> false
 
     admissible Set.empty typ
 
@@ -382,7 +382,7 @@ let internal validateDictKeyCall
     (typeReg: IndexedTypeRegistry)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
     (funcName: string)
-    (typeArgs: Type list)
+    (typeArgs: SemanticType list)
     : Result<unit, TypeError> =
     match funcName, typeArgs with
     | name, keyType :: _ when
@@ -402,7 +402,7 @@ let internal validateCanonicalSortableCall
     (typeReg: IndexedTypeRegistry)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
     (funcName: string)
-    (typeArgs: Type list)
+    (typeArgs: SemanticType list)
     : Result<unit, TypeError> =
     let requiredTypes =
         match funcName, typeArgs with
@@ -423,9 +423,9 @@ let internal validateCanonicalSortableCall
 
 let rec private reconcileComparisonTypes
     (aliasReg: AliasRegistry)
-    (leftType: Type)
-    (rightType: Type)
-    : Type option =
+    (leftType: SemanticType)
+    (rightType: SemanticType)
+    : SemanticType option =
     let leftResolved = resolveType aliasReg leftType
     let rightResolved = resolveType aliasReg rightType
     let rec reconcileMany leftTypes rightTypes acc =
@@ -441,8 +441,8 @@ let rec private reconcileComparisonTypes
         Some leftResolved
     else
         match leftResolved, rightResolved with
-        | TRuntimeError, other
-        | other, TRuntimeError -> Some other
+        | TNever, other
+        | other, TNever -> Some other
         | TVar _, other
         | other, TVar _ -> Some other
         | TList leftElement, TList rightElement ->
@@ -479,8 +479,8 @@ let internal classifyComparison
     (variantLookup: VariantLookup)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
     (op: BinOp)
-    (leftType: Type)
-    (rightType: Type)
+    (leftType: SemanticType)
+    (rightType: SemanticType)
     : Result<ComparisonPlan, TypeError> =
     let leftResolved = resolveType aliasReg leftType
     let rightResolved = resolveType aliasReg rightType
@@ -514,22 +514,22 @@ let private orderingFunctionName (op: BinOp) : string =
 
 let internal buildOrderingExprForType
     (op: BinOp)
-    (numericType: Type)
+    (numericType: SemanticType)
     (leftExpr: Expr)
     (rightExpr: Expr)
     : Expr =
     let convertedOperands =
         match numericType with
         | TInt128 ->
-            (Call ("__int128_to_int", NonEmptyList.singleton leftExpr),
-             Call ("__int128_to_int", NonEmptyList.singleton rightExpr))
+            (Apply (Var "__int128_to_int", [], NonEmptyList.singleton leftExpr),
+             Apply (Var "__int128_to_int", [], NonEmptyList.singleton rightExpr))
         | TUInt128 ->
-            (Call ("__uint128_to_int", NonEmptyList.singleton leftExpr),
-             Call ("__uint128_to_int", NonEmptyList.singleton rightExpr))
+            (Apply (Var "__uint128_to_int", [], NonEmptyList.singleton leftExpr),
+             Apply (Var "__uint128_to_int", [], NonEmptyList.singleton rightExpr))
         | _ ->
             (leftExpr, rightExpr)
     match numericType, convertedOperands with
     | (TInt128 | TUInt128), (leftInt, rightInt) ->
-        Call (orderingFunctionName op, NonEmptyList.fromList [leftInt; rightInt])
+        Apply (Var (orderingFunctionName op), [], NonEmptyList.fromList [leftInt; rightInt])
     | _ ->
         BinOp (op, leftExpr, rightExpr)

@@ -15,26 +15,38 @@ annotations; let bindings have optional annotations.
   global constraint solving
 - **Fast compilation**: Single-pass, no iteration to fixed point for types
 
-## Type System
+## Type representations
 
 Defined in `src/DarkCompiler/AST.fs`:
 
 ```fsharp
-type Type =
+type ParsedType =
+    // Source spellings only: primitives, functions, tuples, nominal names,
+    // collections, and source type variables.
+    // Privileged compiler sources may additionally spell PTInternalRawPtr.
+
+type SemanticType =
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
     | TBool | TFloat64 | TString | TBlob | TChar | TUnit
-    | TRuntimeError
-    | TFunction of Type list * Type
-    | TTuple of Type list
-    | TRecord of string * Type list
-    | TSum of string * Type list
-    | TList of Type
-    | TStream of Type
+    | TNever
+    | TFunction of SemanticType list * SemanticType
+    | TTuple of SemanticType list
+    | TRecord of string * SemanticType list
+    | TSum of string * SemanticType list
+    | TList of SemanticType
+    | TStream of SemanticType
     | TVar of string
-    | TRawPtr
-    | TDict of keyType:Type * valueType:Type
+    | TInternalRawPtr
+    | TDict of keyType:SemanticType * valueType:SemanticType
 ```
+
+The parser returns `ParsedProgram`, whose generic syntax nodes contain only
+`ParsedType`. Source-driven type-checker entry points cross once through
+`semanticProgramOfParsed` before name resolution. `TNever` is therefore a
+semantic bottom type and cannot occur in parsed source. `TInternalRawPtr` is an
+internal-signature capability: public parsing rejects `RawPtr`, while
+privileged compiler sources use it for the unsafe runtime-support layer.
 
 `Blob` is the sole binary type. Blob equality is admitted as handle identity;
 there is no `Bytes` type or function namespace.
@@ -50,27 +62,27 @@ The type checker maintains several registries:
 ### TypeEnv
 Maps variable names to types:
 ```fsharp
-type TypeEnv = Map<string, Type>
+type TypeEnv = Map<string, SemanticType>
 ```
 
 ### TypeRegistry
 Maps record type names to field definitions:
 ```fsharp
-type TypeRegistry = Map<string, (string * Type) list>
+type TypeRegistry = Map<string, (string * SemanticType) list>
 // "Point" -> [("x", TInt64); ("y", TInt64)]
 ```
 
 ### SumTypeRegistry
 Maps sum type names to variants:
 ```fsharp
-type SumTypeRegistry = Map<string, (string * int * Type option) list>
+type SumTypeRegistry = Map<string, (string * int * SemanticType option) list>
 // "Option" -> [("Some", 0, Some TVar "t"); ("None", 1, None)]
 ```
 
 ### VariantLookup
 Maps variant names to their containing type:
 ```fsharp
-type VariantLookup = Map<string, (string * string list * int * Type option)>
+type VariantLookup = Map<string, (string * string list * int * SemanticType option)>
 // "Some" -> ("Option", ["t"], 0, Some TVar "t")
 ```
 

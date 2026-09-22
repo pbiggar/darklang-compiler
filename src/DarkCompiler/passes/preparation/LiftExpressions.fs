@@ -195,7 +195,7 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                 let stateWithComparison =
                     { stateWithComparison with Symbols = functionSymbols }
                 let metadataTypes =
-                    comparisonInfo |> Option.map (fun _ -> [AST.TRawPtr]) |> Option.defaultValue []
+                    comparisonInfo |> Option.map (fun _ -> [AST.TInternalRawPtr]) |> Option.defaultValue []
                 let closureTupleTypes =
                     AST.TInt64 :: (metadataTypes @ plan.CaptureTypes)
                 let (closureId, symbols) =
@@ -347,7 +347,7 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                             |> Option.map (fun (_, _, nextState) -> nextState)
                             |> Option.defaultValue stateWithName
                         let metadataTypes =
-                            comparisonInfo |> Option.map (fun _ -> [AST.TRawPtr]) |> Option.defaultValue []
+                            comparisonInfo |> Option.map (fun _ -> [AST.TInternalRawPtr]) |> Option.defaultValue []
                         let closureTupleTypes =
                             AST.TInt64 :: (metadataTypes @ plan.CaptureTypes)
                         let (closureId, symbols) =
@@ -478,7 +478,7 @@ and liftLambdasInDictEntries (entries: (CheckedAST.Expr * CheckedAST.Expr) list)
 /// Helper to lift lambdas in match cases
 and liftLambdasInCases
     (cases: CheckedAST.MatchCase list)
-    (scrutineeType: AST.Type option)
+    (scrutineeType: AST.SemanticType option)
     (state: LiftState)
     : Result<CheckedAST.MatchCase list * LiftState, string> =
     let rec loop (remaining: CheckedAST.MatchCase list) (state: LiftState) (acc: CheckedAST.MatchCase list) =

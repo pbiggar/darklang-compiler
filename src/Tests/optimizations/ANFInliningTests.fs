@@ -249,7 +249,7 @@ let testExternalInlineCandidateRejectsRawAllocBody () : TestResult =
         { Id = TestIds.functionIdForName "Darklang.Stdlib.Test.allocate"
           Name = "Darklang.Stdlib.Test.allocate"
           TypedParams = [param]
-          ReturnType = AST.TRawPtr
+          ReturnType = AST.TInternalRawPtr
           ReturnOwnership = OwnedReturn
           Body =
             Let (

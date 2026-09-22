@@ -39,7 +39,7 @@ let convertBinOp (op: AST.BinOp) : ANF.BinOp =
 /// machine primitives.
 let internal integerFunctionForBinOp
     (resolveFunction: string -> AST.FunctionId)
-    (operandType: AST.Type)
+    (operandType: AST.SemanticType)
     (op: AST.BinOp)
     : AST.FunctionId option =
     let moduleName =
@@ -90,7 +90,7 @@ let convertUnaryOp (op: AST.UnaryOp) : ANF.UnaryOp =
     | AST.BitNot -> ANF.BitNot
 
 /// Check if a type requires structural equality (compound types)
-let isCompoundType (typ: AST.Type) : bool =
+let isCompoundType (typ: AST.SemanticType) : bool =
     match typ with
     | AST.TTuple _ -> true
     | AST.TRecord _ -> true
@@ -103,7 +103,7 @@ let rec generateStructuralEquality
     (resolveFunction: string -> AST.FunctionId)
     (leftAtom: ANF.Atom)
     (rightAtom: ANF.Atom)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     (varGen: ANF.VarGen)
     (typeReg: TypeRegistry)
     (variantLookup: VariantLookup)
@@ -144,7 +144,7 @@ let rec generateStructuralEquality
             let bindingsRev = (trueVar, ANF.Atom (ANF.BoolLiteral true)) :: accBindingsRev
             (List.rev bindingsRev, ANF.Var trueVar, vg')
 
-    let primitiveEquality (valueType: AST.Type) (left: ANF.Atom) (right: ANF.Atom) : ANF.CExpr =
+    let primitiveEquality (valueType: AST.SemanticType) (left: ANF.Atom) (right: ANF.Atom) : ANF.CExpr =
         match valueType with
         | AST.TInt128 ->
             ANF.Call (resolveFunction "Darklang.Stdlib.Int128.__equals", [left; right])
@@ -160,7 +160,7 @@ let rec generateStructuralEquality
     | AST.TTuple elemTypes ->
         let rec compareElements
             (index: int)
-            (types: AST.Type list)
+            (types: AST.SemanticType list)
             (accResult: ANF.Atom option)
             (accBindingsRev: (ANF.TempId * ANF.CExpr) list)
             (vg: ANF.VarGen)
@@ -226,7 +226,7 @@ let rec generateStructuralEquality
 
             let rec compareFields
                 (index: int)
-                (fieldList: (string * AST.Type) list)
+                (fieldList: (string * AST.SemanticType) list)
                 (accResult: ANF.Atom option)
                 (accBindingsRev: (ANF.TempId * ANF.CExpr) list)
                 (vg: ANF.VarGen)

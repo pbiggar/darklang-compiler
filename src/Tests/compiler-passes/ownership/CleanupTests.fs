@@ -153,7 +153,7 @@ let internal pathHasRetainsBeforeDec
     loop Map.empty Set.empty expr
 
 let private rawSlotTransferTestFunction
-    (valueType: AST.Type)
+    (valueType: AST.SemanticType)
     (usesValueAfterSlot: bool)
     : TypeContext * Function * TempId =
     let listType = AST.TList valueType
@@ -268,7 +268,7 @@ let testRawSlotRetainsFreshStreamValue () : TestResult =
     else
         Ok ()
 
-let rec internal tryRefCountDecSourceTypeForTemp (target: TempId) (expr: AExpr) : AST.Type option =
+let rec internal tryRefCountDecSourceTypeForTemp (target: TempId) (expr: AExpr) : AST.SemanticType option =
     match expr with
     | Jump _ | Return _ ->
         None
@@ -1126,7 +1126,7 @@ let private elaborateSingleFieldRecordReuseWithTypes
     (additionalTypes: (string * TypeRegistries.RecordTypeInfo) list)
     (typeName: string)
     (fieldName: string)
-    (fieldType: AST.Type)
+    (fieldType: AST.SemanticType)
     : AExpr * TempId * TempId =
     let descriptor = {
         SourceTypeName = typeName
@@ -1189,7 +1189,7 @@ let private elaborateSingleFieldRecordReuseWithTypes
 let private elaborateSingleFieldRecordReuse
     (typeName: string)
     (fieldName: string)
-    (fieldType: AST.Type)
+    (fieldType: AST.SemanticType)
     : AExpr * TempId * TempId =
     elaborateSingleFieldRecordReuseWithTypes [] typeName fieldName fieldType
 

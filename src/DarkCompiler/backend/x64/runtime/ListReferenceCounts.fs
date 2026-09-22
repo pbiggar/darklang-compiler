@@ -14,7 +14,7 @@ open X64FieldReferenceCounts
 type internal ListLeafPayloadRelease =
     | NoLeafPayloadRelease
     | FixedBlockPlannedLeafPayload of payloadSize: int * releasePlan: MemoryModel.RcReleasePlan
-    | RecursivePlannedLeafPayload of sourceType: AST.Type
+    | RecursivePlannedLeafPayload of sourceType: AST.SemanticType
     | ListLeafPayload
     | ClosureLeafPayload
     | DictLeafPayload

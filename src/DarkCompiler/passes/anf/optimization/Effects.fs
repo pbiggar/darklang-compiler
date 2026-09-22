@@ -7,7 +7,7 @@ open MemoryPlanning
 open ANF
 open ANFConstants
 
-let private typeNeedsTypedAtomDceProtection (context: OptimizeContext) (typ: AST.Type) : bool =
+let private typeNeedsTypedAtomDceProtection (context: OptimizeContext) (typ: AST.SemanticType) : bool =
     typ
     |> rcShapeOfTypeWithSums context.TypeReg context.RecordTypeParams context.SumShapeReg
     |> rcShapeNeedsOwnedScopeRelease

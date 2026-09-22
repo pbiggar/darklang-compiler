@@ -19,17 +19,17 @@ let internal buildBaseFuncNames
     |> Map.fold (fun acc name _ -> Set.add name acc) Set.empty
 
 let internal reserveBaseFunctionParams
-    (funcParams: Map<string, (string * AST.Type) list>)
+    (funcParams: Map<string, (string * AST.SemanticType) list>)
     (baseFuncNames: Set<string>)
-    : Map<string, (string * AST.Type) list> =
+    : Map<string, (string * AST.SemanticType) list> =
     baseFuncNames
     |> Set.fold (fun acc name ->
         if Map.containsKey name acc then acc else Map.add name [] acc) funcParams
 
 let internal mergeReturnTypes
-    (baseReturnTypes: Map<AST.FunctionId, string * AST.Type>)
-    (overlayReturnTypes: Map<AST.FunctionId, string * AST.Type>)
-    : Map<AST.FunctionId, string * AST.Type> =
+    (baseReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
+    (overlayReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
+    : Map<AST.FunctionId, string * AST.SemanticType> =
     Map.fold (fun acc k v -> Map.add k v acc) baseReturnTypes overlayReturnTypes
 
 let internal packageCatalogFunctionNames =
@@ -71,7 +71,7 @@ let private buildPackageCatalogGenericCallers
 /// Shared compilation context used across pipeline steps
 type CheckedValueArtifact = {
     Symbols: CheckedAST.Symbols
-    Type: AST.Type
+    Type: AST.SemanticType
     Body: CheckedAST.Expr
 }
 
@@ -89,11 +89,11 @@ type PipelineContext = {
     SpecRegistry: SpecializationIdentity.SpecRegistry
     Registries: AST_to_ANF.Registries
     BaseFuncNames: Set<string>
-    LambdaLiftFuncParams: Map<string, (string * AST.Type) list>
+    LambdaLiftFuncParams: Map<string, (string * AST.SemanticType) list>
     LambdaLiftTypeReg: TypeRegistries.TypeRegistry
     LambdaLiftVariantLookup: LoweringPrimitives.VariantLookup
     ProjectedMirRegistries: MIR.VariantRegistry * MIR.RecordRegistry
-    ReturnTypes: Map<AST.FunctionId, string * AST.Type>
+    ReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>
     PackageCatalogGenericCallers: Set<string>
 }
 
@@ -106,7 +106,7 @@ let internal buildContext
     (specRegistry: SpecializationIdentity.SpecRegistry)
     (registries: AST_to_ANF.Registries)
     (baseFuncNames: Set<string>)
-    (returnTypes: Map<AST.FunctionId, string * AST.Type>)
+    (returnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
     : PipelineContext =
     let (lambdaLiftTypeReg, lambdaLiftVariantLookup) =
         LiftFunctions.prepareLambdaLiftBaseTypes
@@ -156,7 +156,7 @@ type PreambleAnalysis = {
 /// Result of compiling stdlib - can be reused across compilations
 type StdlibResult = {
     /// Parsed stdlib AST (for merging with user AST)
-    AST: AST.Program
+    AST: AST.ParsedProgram
     /// Type-checked stdlib with inferred types
     TypedAST: CheckedAST.Program
     /// Shared compilation context (typecheck env + registries)
@@ -210,7 +210,7 @@ type PackageValueEvaluatorState =
 /// The evaluator's concrete result type is checked before its expression can
 /// cross into a monomorphized ValueSearch caller.
 type TypedPackageValueEvaluator = {
-    ResultType: AST.Type
+    ResultType: AST.SemanticType
     State: PackageValueEvaluatorState
 }
 

@@ -334,7 +334,7 @@ type internal CompiledDependencyConfig = {
 type internal StartCompilationConfig = {
     Target: Platform.Target
     Options: CompilerOptions
-    BoundaryProgramType: AST.Type
+    BoundaryProgramType: AST.SemanticType
 }
 
 type internal SsaFunctionCache =
@@ -443,7 +443,7 @@ let private mergeMirRegistryOverlay baseRegistry overlay =
 let internal projectMirRegistryOverlay
     ((baseVariants, baseRecords): MIR.VariantRegistry * MIR.RecordRegistry)
     (localVariantLookup: LoweringPrimitives.VariantLookup)
-    (localRecordFields: Map<string, (string * AST.Type) list>)
+    (localRecordFields: Map<string, (string * AST.SemanticType) list>)
     : MIR.VariantRegistry * MIR.RecordRegistry =
     let localVariants = ANF_to_MIR.buildVariantRegistry localVariantLookup
     let localRecords = ANF_to_MIR.buildRecordRegistry localRecordFields

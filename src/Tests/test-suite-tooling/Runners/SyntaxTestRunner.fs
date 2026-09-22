@@ -7,8 +7,8 @@ open TestDSL.PassTestRunner
 open TestDSL.SyntaxFormat
 
 let private parse source = Parser.parseString false source
-let private format program = ASTPrettyPrinter.formatProgram program
-let private normalized (program: Program) = sprintf "%A" program
+let private format program = ASTPrettyPrinter.formatParsedProgram program
+let private normalized (program: ParsedProgram) = sprintf "%A" program
 let private result success message expected actual : PassTestResult = { Success = success; Message = message; Expected = expected; Actual = actual }
 
 let runSyntaxTest test =

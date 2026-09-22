@@ -8,7 +8,7 @@ open OwnedIR
 open ListRegion
 open VerifyListOwnership
 
-type LowerScalar = CheckedAST.Expr -> ANF.VarGen -> Map<AST.BindingId, ANF.TempId * AST.Type> -> Result<ANF.AExpr * ANF.VarGen, string>
+type LowerScalar = CheckedAST.Expr -> ANF.VarGen -> Map<AST.BindingId, ANF.TempId * AST.SemanticType> -> Result<ANF.AExpr * ANF.VarGen, string>
 
 let private word value = ANF.IntLiteral (ANF.Int64 (int64 value))
 
@@ -220,7 +220,7 @@ let lower resolveFunction (lowerScalar: LowerScalar) env vg (OwnedRegion (block,
                     |> Result.map (fun (body, final) ->
                         bindReturns evaluation (fun _ ->
                             bindReturns preparation (fun selected ->
-                                ANF.Let (destination, ANF.TypedAtom (selected, AST.TRawPtr), wrap (List.concat mutations) body))), final))
+                                ANF.Let (destination, ANF.TypedAtom (selected, AST.TInternalRawPtr), wrap (List.concat mutations) body))), final))
             | Leaf (Fold (result, input, initial, fn)) ->
                 lowerValue values vg initial |> Result.bind (fun (initialExpr, accumulator, next) ->
                     lowerValue values next fn |> Result.bind (fun (callbackExpr, callback, afterCallback) ->

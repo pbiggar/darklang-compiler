@@ -13,15 +13,15 @@ type LiftState = {
     Symbols: CheckedAST.Symbols
     Counter: int
     LiftedFunctions: CheckedAST.FunctionDef list
-    ComparisonFuncs: Map<AST.FunctionId * AST.Type list, string>
-    ComparableFunctionParams: Set<AST.Type list>
-    TypeEnv: Map<AST.BindingId, AST.Type>
-    FuncParams: Map<AST.FunctionId, (AST.BindingId * AST.Type) list>
-    FuncReturnTypes: Map<AST.FunctionId, AST.Type>
-    GenericFuncDefs: Map<AST.FunctionId, string list * AST.Type>
+    ComparisonFuncs: Map<AST.FunctionId * AST.SemanticType list, string>
+    ComparableFunctionParams: Set<AST.SemanticType list>
+    TypeEnv: Map<AST.BindingId, AST.SemanticType>
+    FuncParams: Map<AST.FunctionId, (AST.BindingId * AST.SemanticType) list>
+    FuncReturnTypes: Map<AST.FunctionId, AST.SemanticType>
+    GenericFuncDefs: Map<AST.FunctionId, string list * AST.SemanticType>
     TypeReg: TypeRegistry
     VariantLookup: VariantLookup
-    RecursiveSelf: (AST.BindingId * AST.BindingId * AST.Type * AST.TypedRecursiveMember) option
+    RecursiveSelf: (AST.BindingId * AST.BindingId * AST.SemanticType * AST.TypedRecursiveMember) option
 }
 
 let private liftedNameExists (state: LiftState) (name: string) : bool =
@@ -50,8 +50,8 @@ let rec internal matchPatternBindingTypes
     (variantLookup: VariantLookup)
     (typeNames: TypeNameRegistry)
     (pattern: CheckedAST.Pattern)
-    (scrutineeType: AST.Type)
-    : Map<AST.BindingId, AST.Type> =
+    (scrutineeType: AST.SemanticType)
+    : Map<AST.BindingId, AST.SemanticType> =
     let merge left right = Map.fold (fun current name typ -> Map.add name typ current) left right
     match pattern with
     | CheckedAST.POr alternatives ->
@@ -205,8 +205,8 @@ let rec freeVars (expr: CheckedAST.Expr) (bound: Set<AST.BindingId>) : Set<AST.B
 /// carry what a literal leaves open (`[]` is a List<t>, `None` an Option<t>):
 /// the concrete side wins at every position; two variables keep the first; a
 /// real shape mismatch is None.
-let rec reconcileBranchTypes (left: AST.Type) (right: AST.Type) : AST.Type option =
-    let reconcileAll (lefts: AST.Type list) (rights: AST.Type list) : AST.Type list option =
+let rec reconcileBranchTypes (left: AST.SemanticType) (right: AST.SemanticType) : AST.SemanticType option =
+    let reconcileAll (lefts: AST.SemanticType list) (rights: AST.SemanticType list) : AST.SemanticType list option =
         if List.length lefts <> List.length rights then None
         else
             List.zip lefts rights
@@ -218,8 +218,8 @@ let rec reconcileBranchTypes (left: AST.Type) (right: AST.Type) : AST.Type optio
         match left, right with
         | AST.TVar _, concrete
         | concrete, AST.TVar _ -> Some concrete
-        | AST.TRuntimeError, concrete
-        | concrete, AST.TRuntimeError -> Some concrete
+        | AST.TNever, concrete
+        | concrete, AST.TNever -> Some concrete
         | AST.TSum (leftName, leftArgs), AST.TSum (rightName, rightArgs) when leftName = rightName ->
             reconcileAll leftArgs rightArgs |> Option.map (fun args -> AST.TSum (leftName, args))
         | AST.TRecord (leftName, leftArgs), AST.TRecord (rightName, rightArgs) when leftName = rightName ->
@@ -234,21 +234,21 @@ let rec reconcileBranchTypes (left: AST.Type) (right: AST.Type) : AST.Type optio
 
 let rec simpleInferType
     (expr: CheckedAST.Expr)
-    (typeEnv: Map<AST.BindingId, AST.Type>)
-    (funcParams: Map<AST.FunctionId, (AST.BindingId * AST.Type) list>)
-    (funcReturnTypes: Map<AST.FunctionId, AST.Type>)
-    (genericFuncDefs: Map<AST.FunctionId, string list * AST.Type>)
+    (typeEnv: Map<AST.BindingId, AST.SemanticType>)
+    (funcParams: Map<AST.FunctionId, (AST.BindingId * AST.SemanticType) list>)
+    (funcReturnTypes: Map<AST.FunctionId, AST.SemanticType>)
+    (genericFuncDefs: Map<AST.FunctionId, string list * AST.SemanticType>)
     (typeReg: TypeRegistry)
     (variantLookup: VariantLookup)
     (typeNames: TypeNameRegistry)
-    : AST.Type option =
+    : AST.SemanticType option =
     let fieldIndex id =
         tryFindFieldIndex id typeNames
         |> Option.defaultWith (fun () -> Crash.crash "Checked field identity is absent from layout metadata")
     let constructorTag id =
         tryFindConstructorTag id typeNames
         |> Option.defaultWith (fun () -> Crash.crash "Checked constructor identity is absent from layout metadata")
-    let isIntType (typ: AST.Type) : bool =
+    let isIntType (typ: AST.SemanticType) : bool =
         match typ with
         | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
         | AST.TInt128 | AST.TInt
@@ -256,19 +256,19 @@ let rec simpleInferType
         | AST.TUInt128 -> true
         | _ -> false
 
-    let isNumericType (typ: AST.Type) : bool =
+    let isNumericType (typ: AST.SemanticType) : bool =
         isIntType typ || typ = AST.TFloat64
 
     let mergeBindings
-        (bindings: Map<AST.BindingId, AST.Type>)
-        (extra: Map<AST.BindingId, AST.Type>)
-        : Map<AST.BindingId, AST.Type> =
+        (bindings: Map<AST.BindingId, AST.SemanticType>)
+        (extra: Map<AST.BindingId, AST.SemanticType>)
+        : Map<AST.BindingId, AST.SemanticType> =
         Map.fold (fun acc name typ -> Map.add name typ acc) bindings extra
 
     let rec extractPatternBindings
         (pattern: CheckedAST.Pattern)
-        (scrutType: AST.Type)
-        : Map<AST.BindingId, AST.Type> =
+        (scrutType: AST.SemanticType)
+        : Map<AST.BindingId, AST.SemanticType> =
         match pattern with
         | CheckedAST.POr alternatives ->
             extractPatternBindings (AST.NonEmptyList.head alternatives) scrutType
@@ -526,8 +526,8 @@ let rec simpleInferType
             Some (AST.TSum (thenName, thenArgs))
         | Some (AST.TSum (thenName, [])), Some (AST.TSum (elseName, elseArgs)) when thenName = elseName ->
             Some (AST.TSum (elseName, elseArgs))
-        | Some AST.TRuntimeError, Some elseType -> Some elseType
-        | Some thenType, Some AST.TRuntimeError -> Some thenType
+        | Some AST.TNever, Some elseType -> Some elseType
+        | Some thenType, Some AST.TNever -> Some thenType
         | Some thenType, Some elseType -> reconcileBranchTypes thenType elseType
         | _ -> None
     | CheckedAST.Sequence (_, next) ->
@@ -583,9 +583,9 @@ let rec simpleInferType
     | CheckedAST.IndirectApply _ -> Some AST.TBool
     | _ -> None  // Complex expressions require full type inference
 
-let inferLambdaReturnType (body: CheckedAST.Expr) (state: LiftState) : Result<AST.Type, string> =
+let inferLambdaReturnType (body: CheckedAST.Expr) (state: LiftState) : Result<AST.SemanticType, string> =
     match simpleInferType body state.TypeEnv state.FuncParams state.FuncReturnTypes state.GenericFuncDefs state.TypeReg state.VariantLookup (typeNamesFromSymbols state.Symbols) with
-    | Some AST.TRuntimeError -> Ok AST.TUnit
+    | Some AST.TNever -> Ok AST.TUnit
     | Some returnType -> Ok returnType
     | None ->
         let target =

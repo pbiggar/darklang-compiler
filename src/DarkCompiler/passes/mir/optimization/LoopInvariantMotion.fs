@@ -10,7 +10,7 @@ open MIRInduction
 open MIRUnrolling
 
 /// Scalar results can move across loop iterations without changing ownership.
-let private isScalarReturnType (returnType: AST.Type) : bool =
+let private isScalarReturnType (returnType: AST.SemanticType) : bool =
     isScalarValueType returnType
 
 /// Check if an instruction is safe to hoist out of a loop.

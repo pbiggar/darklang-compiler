@@ -25,7 +25,7 @@ let private isInternalTestFile (sourceFile: string) : bool =
 // Build the source expression to execute for a test.
 // For `lhs = rhs` value tests, run a synthesized equality assertion.
 
-let private asSingleExpression (program: Program) : Expr option =
+let private asSingleExpression (program: ParsedProgram) : ParsedExpr option =
     let (Program topLevels) = program
     match topLevels with
     | [Expression (_, expr)] -> Some expr
@@ -33,26 +33,29 @@ let private asSingleExpression (program: Program) : Expr option =
 
 let private valueFloatEpsilon : float = 0.00000000001
 
-let private isFloatExpectedExpr (expr: Expr) : bool =
+let private isFloatExpectedExpr (expr: ParsedExpr) : bool =
     match expr with
     | FloatLiteral _ -> true
     | UnaryOp (Neg, FloatLiteral _) -> true
     | _ -> false
 
-let private buildValueComparisonExpr (lhsExpr: Expr) (rhsExpr: Expr) : Expr =
+let private buildValueComparisonExpr
+    (lhsExpr: ParsedExpr)
+    (rhsExpr: ParsedExpr)
+    : ParsedExpr =
     if isFloatExpectedExpr rhsExpr then
         // For float value tests, compare with epsilon tolerance.
         let absDiff =
-            Call ("Darklang.Stdlib.Float.absoluteValue", NonEmptyList.singleton (BinOp (Sub, lhsExpr, rhsExpr)))
+            applyNamed "Darklang.Stdlib.Float.absoluteValue" (NonEmptyList.singleton (BinOp (Sub, lhsExpr, rhsExpr)))
         BinOp (Lt, absDiff, FloatLiteral valueFloatEpsilon)
     else
         BinOp (Eq, lhsExpr, rhsExpr)
 
 let private tryFormatProgramIfStable
     (allowInternal: bool)
-    (program: Program)
+    (program: ParsedProgram)
     : string option =
-    let formatted = ASTPrettyPrinter.formatProgram program
+    let formatted = ASTPrettyPrinter.formatParsedProgram program
     match PackageCatalog.parseProgram allowInternal formatted with
     | Ok _ ->
         // Stable recursive identities include structural declaration paths.
@@ -62,7 +65,7 @@ let private tryFormatProgramIfStable
         Some formatted
     | Error _ -> None
 
-let private pickValueCheckFuncName (topLevels: TopLevel list) : string =
+let private pickValueCheckFuncName (topLevels: ParsedTopLevel list) : string =
     let existingNames =
         topLevels
         |> List.choose (function
@@ -320,12 +323,15 @@ let rec private collectLetPatternBoundNames (pattern: LetPattern) : Set<string> 
 let rec private collectExprReferencedPreambleFuncsWithBound
     (knownPreambleFunctions: Set<string>)
     (boundVars: Set<string>)
-    (expr: Expr)
+    (expr: ParsedExpr)
     : Set<string> =
     let combineMany (sets: Set<string> list) : Set<string> =
         sets |> List.fold Set.union Set.empty
 
-    let collectCallLike (funcName: string) (args: NonEmptyList<Expr>) : Set<string> =
+    let collectCallLike
+        (funcName: string)
+        (args: NonEmptyList<ParsedExpr>)
+        : Set<string> =
         let fromFuncName =
             if Set.contains funcName knownPreambleFunctions
                && not (Set.contains funcName boundVars) then
@@ -406,9 +412,7 @@ let rec private collectExprReferencedPreambleFuncsWithBound
         Set.union
             (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars firstExpr)
             (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars nextExpr)
-    | Call (funcName, args) ->
-        collectCallLike funcName args
-    | TypeApp (funcName, _typeArgs, args) ->
+    | Apply (Var funcName, _, args) ->
         collectCallLike funcName args
     | TupleLiteral elements ->
         elements
@@ -480,7 +484,15 @@ let rec private collectExprReferencedPreambleFuncsWithBound
             |> List.fold Set.union Set.empty
             |> Set.union boundVars
         collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions lambdaBoundVars bodyExpr
-    | Apply (funcExpr, args)
+    | Apply (funcExpr, _, args) ->
+        let funcRefs =
+            collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars funcExpr
+        let argRefs =
+            args
+            |> NonEmptyList.toList
+            |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
+            |> combineMany
+        Set.union funcRefs argRefs
     | IndirectApply (funcExpr, args) ->
         let funcRefs =
             collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars funcExpr
@@ -490,12 +502,6 @@ let rec private collectExprReferencedPreambleFuncsWithBound
             |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
             |> combineMany
         Set.union funcRefs argRefs
-    | FuncRef funcName ->
-        if Set.contains funcName knownPreambleFunctions
-           && not (Set.contains funcName boundVars) then
-            Set.singleton funcName
-        else
-            Set.empty
     | Closure (funcName, captures) ->
         let fromFunc =
             if Set.contains funcName knownPreambleFunctions
@@ -511,13 +517,13 @@ let rec private collectExprReferencedPreambleFuncsWithBound
 
 let private collectExprReferencedPreambleFuncs
     (knownPreambleFunctions: Set<string>)
-    (expr: Expr)
+    (expr: ParsedExpr)
     : Set<string> =
     collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions Set.empty expr
 
 let private collectProgramReferencedPreambleFuncs
     (knownPreambleFunctions: Set<string>)
-    (program: Program)
+    (program: ParsedProgram)
     : Set<string> =
     let (Program topLevels) = program
     topLevels
@@ -539,7 +545,7 @@ let private collectProgramReferencedPreambleFuncs
 
 let private collectFunctionReferencedPreambleFuncs
     (knownPreambleFunctions: Set<string>)
-    (funcDef: FunctionDef)
+    (funcDef: ParsedFunctionDef)
     : Set<string> =
     let paramBoundVars =
         funcDef.Params
@@ -550,7 +556,7 @@ let private collectFunctionReferencedPreambleFuncs
 
 let private buildPreambleFunctionDependencyMap
     (preambleFunctionNames: Set<string>)
-    (preambleFunctionDefs: FunctionDef list)
+    (preambleFunctionDefs: ParsedFunctionDef list)
     : Map<string, Set<string>> =
     preambleFunctionDefs
     |> List.map (fun funcDef ->
@@ -579,8 +585,8 @@ let private expandRequiredPreambleFunctions
 
 let private reducePreambleTopLevelsToRequiredFunctions
     (requiredFunctions: Set<string>)
-    (preambleTopLevels: TopLevel list)
-    : TopLevel list =
+    (preambleTopLevels: ParsedTopLevel list)
+    : ParsedTopLevel list =
     preambleTopLevels
     |> List.filter (function
         | TypeDef _ -> true
@@ -591,7 +597,7 @@ let private reducePreambleTopLevelsToRequiredFunctions
 let private parsePreambleAsProgram
     (allowInternal: bool)
     (preamble: string)
-    : Result<Program, string> =
+    : Result<ParsedProgram, string> =
     PackageCatalog.parseProgram allowInternal preamble
 
 let private countLeadingSpaces (lineText: string) : int =
@@ -700,7 +706,7 @@ let private analyzePreambleWithReducedFunctionSet
 
         let reducedProgram = Program reducedTopLevels
 
-        TypeChecking.checkSyntheticPreambleWithBaseEnvAndSettings
+        TypeChecking.checkParsedSyntheticPreambleWithBaseEnvAndSettings
             stdlib.Context.TypeCheckEnv
             true
             CompilerOptions.defaultWarningSettings
@@ -1479,7 +1485,7 @@ let private tryBuildReducedPreambleForTest
         let reducedTopLevels =
             reducePreambleTopLevelsToRequiredFunctions requiredFunctions preambleTopLevels
 
-        let reducedPreambleSource = ASTPrettyPrinter.formatProgram (Program reducedTopLevels)
+        let reducedPreambleSource = ASTPrettyPrinter.formatParsedProgram (Program reducedTopLevels)
         Some reducedPreambleSource
     | _ ->
         None

@@ -17,16 +17,16 @@ open AST_to_ANF
 /// a reference object carried by those copies.
 type RcTypePlanningContext = {
     mutable RecordRegistries:
-        (Map<string, (string * AST.Type) list> * Map<string, string list>) option
-    Shapes: System.Collections.Generic.Dictionary<AST.Type, RcShape>
-    Metadata: System.Collections.Generic.Dictionary<AST.Type, RcMetadata>
+        (Map<string, (string * AST.SemanticType) list> * Map<string, string list>) option
+    Shapes: System.Collections.Generic.Dictionary<AST.SemanticType, RcShape>
+    Metadata: System.Collections.Generic.Dictionary<AST.SemanticType, RcMetadata>
 }
 
 let createRcTypePlanningContext () : RcTypePlanningContext =
     {
         RecordRegistries = None
-        Shapes = System.Collections.Generic.Dictionary<AST.Type, RcShape>()
-        Metadata = System.Collections.Generic.Dictionary<AST.Type, RcMetadata>()
+        Shapes = System.Collections.Generic.Dictionary<AST.SemanticType, RcShape>()
+        Metadata = System.Collections.Generic.Dictionary<AST.SemanticType, RcMetadata>()
     }
 
 /// Type context for inferring types during RC insertion
@@ -35,9 +35,9 @@ type TypeContext = {
     VariantLookup: VariantLookup
     SumShapeReg: RcSumShapeRegistry
     FuncReg: FunctionRegistry
-    FuncParams: Map<string, (string * AST.Type) list>
+    FuncParams: Map<string, (string * AST.SemanticType) list>
     /// Maps TempId -> Type for values we've seen
-    TempTypes: Map<TempId, AST.Type>
+    TempTypes: Map<TempId, AST.SemanticType>
     /// Maps TempId -> function name for closures (to resolve closure call return types)
     ClosureFuncs: Map<TempId, AST.FunctionId>
     /// Registry projections and canonical ownership plans shared across local
@@ -69,7 +69,7 @@ let createContext (result: ConversionResult) : TypeContext =
       ClosureFuncs = Map.empty
       TypePlanning = createRcTypePlanningContext () }
 
-let internal withTempTypes (ctx: TypeContext) (types: Map<TempId, AST.Type>) : TypeContext =
+let internal withTempTypes (ctx: TypeContext) (types: Map<TempId, AST.SemanticType>) : TypeContext =
     { ctx with TempTypes = types }
 
 /// Add a closure TempId -> function name mapping to context
@@ -83,18 +83,18 @@ let tryGetClosureFunc (ctx: TypeContext) (atom: Atom) : AST.FunctionId option =
     | _ -> None
 
 /// Try to get the type of a TempId
-let tryGetType (ctx: TypeContext) (tempId: TempId) : AST.Type option =
+let tryGetType (ctx: TypeContext) (tempId: TempId) : AST.SemanticType option =
     Map.tryFind tempId ctx.TempTypes
 
 /// Try to get a function's return type from the function registry
-let tryGetFuncReturnTypeFromReg (ctx: TypeContext) (funcName: AST.FunctionId) : AST.Type option =
+let tryGetFuncReturnTypeFromReg (ctx: TypeContext) (funcName: AST.FunctionId) : AST.SemanticType option =
     match Map.tryFind funcName ctx.FuncReg with
     | Some (_, AST.TFunction (_, retType)) -> Some retType
     | Some (_, otherType) -> Some otherType
     | None -> None
 
 /// Infer the type of an atom (best-effort)
-let inferAtomType (ctx: TypeContext) (atom: Atom) : AST.Type option =
+let inferAtomType (ctx: TypeContext) (atom: Atom) : AST.SemanticType option =
     match atom with
     | UnitLiteral -> Some AST.TUnit
     | IntLiteral n -> Some (ANF.sizedIntToType n)
@@ -104,13 +104,13 @@ let inferAtomType (ctx: TypeContext) (atom: Atom) : AST.Type option =
     | Var tid -> tryGetType ctx tid
     | FuncRef funcName -> Map.tryFind funcName ctx.FuncReg |> Option.map snd
 
-let private isIntegerType (typ: AST.Type) : bool =
+let private isIntegerType (typ: AST.SemanticType) : bool =
     match typ with
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 -> true
     | _ -> false
 
-let private inferArithmeticType (leftType: AST.Type option) (rightType: AST.Type option) : AST.Type option =
+let private inferArithmeticType (leftType: AST.SemanticType option) (rightType: AST.SemanticType option) : AST.SemanticType option =
     match leftType, rightType with
     | Some AST.TFloat64, _
     | _, Some AST.TFloat64 ->
@@ -124,7 +124,7 @@ let private inferArithmeticType (leftType: AST.Type option) (rightType: AST.Type
     | _ ->
         None
 
-let private isHeapLikeForBitwiseTagging (typ: AST.Type) : bool =
+let private isHeapLikeForBitwiseTagging (typ: AST.SemanticType) : bool =
     match typ with
     | AST.TTuple _
     | AST.TRecord _
@@ -136,8 +136,8 @@ let private isHeapLikeForBitwiseTagging (typ: AST.Type) : bool =
         false
 
 /// Return types for monomorphized intrinsics that are not always present in FuncReg
-let private tryGetMonomorphizedIntrinsicReturnType (ctx: TypeContext) (funcName: string) : AST.Type option =
-    let tryParseMangled (mangled: string) : AST.Type option =
+let private tryGetMonomorphizedIntrinsicReturnType (ctx: TypeContext) (funcName: string) : AST.SemanticType option =
+    let tryParseMangled (mangled: string) : AST.SemanticType option =
         match tryParseMangledType ctx.VariantLookup mangled with
         | Ok typ -> Some typ
         | Error _ -> None
@@ -154,13 +154,13 @@ let private tryGetMonomorphizedIntrinsicReturnType (ctx: TypeContext) (funcName:
     elif funcName.StartsWith("__empty_dict_") then Some AST.TInt64
     elif funcName.StartsWith("__dict_is_null_") then Some AST.TBool
     elif funcName.StartsWith("__dict_get_tag_") then Some AST.TInt64
-    elif funcName.StartsWith("__dict_to_rawptr_") then Some AST.TRawPtr
+    elif funcName.StartsWith("__dict_to_rawptr_") then Some AST.TInternalRawPtr
     elif funcName.StartsWith("__rawptr_to_dict_") then
         funcName.Substring("__rawptr_to_dict_".Length)
         |> fun suffix -> tryParseMangled $"dict_{suffix}"
     elif funcName.StartsWith("__list_is_null_") then Some AST.TBool
     elif funcName.StartsWith("__list_get_tag_") then Some AST.TInt64
-    elif funcName.StartsWith("__list_to_rawptr_") then Some AST.TRawPtr
+    elif funcName.StartsWith("__list_to_rawptr_") then Some AST.TInternalRawPtr
     elif funcName.StartsWith("__rawptr_to_list_") then
         funcName.Substring("__rawptr_to_list_".Length)
         |> tryParseMangled
@@ -168,7 +168,7 @@ let private tryGetMonomorphizedIntrinsicReturnType (ctx: TypeContext) (funcName:
     else None
 
 /// Infer the type of a CExpr in the given context
-let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
+let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.SemanticType option =
     // Constructor descriptors retain the nominal sum identity for reuse, while
     // ownership remains variant-specific as it was for tuple-backed sums. This
     // avoids a dynamic sum release when the concrete payload layout is known.
@@ -316,7 +316,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
             | Some (AST.TFunction (_, retType)) -> Some retType
             // Raw code pointers are pointer-sized integers after projection
             // from the internal function-closure layout.
-            | Some AST.TRawPtr | Some AST.TInt64 -> Some AST.TBool
+            | Some AST.TInternalRawPtr | Some AST.TInt64 -> Some AST.TBool
             | _ -> None
         | _ -> None
     | IndirectTailCall (funcAtom, _) ->
@@ -325,7 +325,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
         | Var tid ->
             match tryGetType ctx tid with
             | Some (AST.TFunction (_, retType)) -> Some retType
-            | Some AST.TRawPtr | Some AST.TInt64 -> Some AST.TBool
+            | Some AST.TInternalRawPtr | Some AST.TInt64 -> Some AST.TBool
             | _ -> None
         | _ -> None
     | ClosureAlloc (funcName, _) ->
@@ -374,11 +374,11 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
                 | Var tid ->
                     match tryGetType ctx tid with
                     | Some t -> t
-                    | None -> Crash.crash $"RefCountInsertion: Type not found for temp {tid} in TupleAlloc"
+                    | None -> Crash.crash $"RefCountInsertion: type not found for temp {tid} in TupleAlloc"
                 | FuncRef funcName ->
                     match Map.tryFind funcName ctx.FuncReg with
                     | Some (_, typ) -> typ
-                    | None -> Crash.crash $"RefCountInsertion: Type not found for function {funcName} in TupleAlloc")
+                    | None -> Crash.crash $"RefCountInsertion: type not found for function {funcName} in TupleAlloc")
         Some (AST.TTuple elemTypes)
     | RecordAlloc (descriptor, _) ->
         Some (fixedBlockType descriptor)
@@ -442,8 +442,8 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | FileSetExecutable _ -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TUnit; AST.TString]))  // Result<Unit, String>
     | FileWriteFromPtr _ -> Some AST.TBool  // Returns Bool (success/failure)
     // Raw memory intrinsics (no ref counting - manually managed)
-    | RawAlloc _ -> Some AST.TRawPtr  // Returns raw pointer
-    | MappedAlloc _ -> Some AST.TRawPtr  // Returns raw pointer
+    | RawAlloc _ -> Some AST.TInternalRawPtr  // Returns raw pointer
+    | MappedAlloc _ -> Some AST.TInternalRawPtr  // Returns raw pointer
     | RawFree _ -> Some AST.TUnit  // Returns unit
     | MappedFree _ -> Some AST.TUnit  // Returns unit
     | RawGet (_, _, valueType) -> valueType
@@ -452,16 +452,16 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.Type option =
     | RawWriteWord _ -> Some AST.TUnit  // Returns unit
     | RawWriteByte _ -> Some AST.TUnit  // Returns unit
     | RawSlotInit _ -> Some AST.TUnit  // Returns unit
-    | StringToRawPtr _ -> Some AST.TRawPtr
+    | StringToRawPtr _ -> Some AST.TInternalRawPtr
     | RawPtrToString _ -> Some AST.TString
-    | BlobToRawPtr _ -> Some AST.TRawPtr
+    | BlobToRawPtr _ -> Some AST.TInternalRawPtr
     | RawPtrToBlob _ -> Some AST.TBlob
     | RawPtrToInt128 _ -> Some AST.TInt128
     | RawPtrToUInt128 _ -> Some AST.TUInt128
-    | DictToRawPtr _ -> Some AST.TRawPtr
+    | DictToRawPtr _ -> Some AST.TInternalRawPtr
     | RawPtrToDict (_, _, dictType) -> Some dictType
-    | ListToRawPtr _ -> Some AST.TRawPtr
-    | FixedBlockToRawPtr _ -> Some AST.TRawPtr
+    | ListToRawPtr _ -> Some AST.TInternalRawPtr
+    | FixedBlockToRawPtr _ -> Some AST.TInternalRawPtr
     | RawPtrToList (_, _, listType) -> Some listType
     // Dynamic buffer refcount intrinsics
     | RefCountIncString _ -> Some AST.TUnit  // Returns unit

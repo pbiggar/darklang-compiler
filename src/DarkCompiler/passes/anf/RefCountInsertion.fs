@@ -130,8 +130,8 @@ let private insertRCInFunctionInternal
     (ctx: TypeContext)
     (func: Function)
     (varGen: VarGen)
-    (types: Map<TempId, AST.Type>)
-    : Function * VarGen * Map<TempId, AST.Type> * FunctionPhaseTimings =
+    (types: Map<TempId, AST.SemanticType>)
+    : Function * VarGen * Map<TempId, AST.SemanticType> * FunctionPhaseTimings =
     let typesWithParams =
         func.TypedParams
         |> List.fold (fun m tp -> Map.add tp.Id tp.Type m) types
@@ -254,8 +254,8 @@ let private insertRCInFunctionInternal
                 typesWithParams)
     let retainInternalParam
         ((param, shape, _): TypedParam * RcShape * InternalOwnedParamKind)
-        (body: AExpr, currentVarGen: VarGen, currentTypes: Map<TempId, AST.Type>)
-        : AExpr * VarGen * Map<TempId, AST.Type> =
+        (body: AExpr, currentVarGen: VarGen, currentTypes: Map<TempId, AST.SemanticType>)
+        : AExpr * VarGen * Map<TempId, AST.SemanticType> =
         let (dummyId, nextVarGen) = freshVar currentVarGen
         let retain = retainExprForShape ctxWithParams param.Id param.Type shape
         (Let (dummyId, retain, body), nextVarGen, Map.add dummyId AST.TUnit currentTypes)
@@ -309,7 +309,7 @@ let private insertRCInFunctionInternal
 
 /// Insert RC operations into a function
 /// Returns (transformed function, varGen, accumulated TempTypes)
-let insertRCInFunction (ctx: TypeContext) (func: Function) (varGen: VarGen) : Function * VarGen * Map<TempId, AST.Type> =
+let insertRCInFunction (ctx: TypeContext) (func: Function) (varGen: VarGen) : Function * VarGen * Map<TempId, AST.SemanticType> =
     let (func', varGen', types', _timings) =
         insertRCInFunctionInternal false ctx func varGen Map.empty
     (func', varGen', types')
@@ -470,9 +470,9 @@ let private insertRCInProgramInternal
         (funcs: Function list)
         (vg: VarGen)
         (accFuncs: Function list)
-        (accTypes: Map<TempId, AST.Type>)
+        (accTypes: Map<TempId, AST.SemanticType>)
         (accTimings: FunctionPhaseTimings)
-        : Function list * VarGen * Map<TempId, AST.Type> * FunctionPhaseTimings =
+        : Function list * VarGen * Map<TempId, AST.SemanticType> * FunctionPhaseTimings =
         match funcs with
         | [] -> (List.rev accFuncs, vg, accTypes, accTimings)
         | f :: rest ->

@@ -9,7 +9,7 @@ open MIRLoopTopology
 open MIRInduction
 
 /// Scalar values can be duplicated or moved without changing ownership.
-let internal isScalarValueType (valueType: AST.Type) : bool =
+let internal isScalarValueType (valueType: AST.SemanticType) : bool =
     match valueType with
     | AST.TInt8
     | AST.TInt16

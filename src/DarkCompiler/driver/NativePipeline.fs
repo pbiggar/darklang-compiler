@@ -241,7 +241,7 @@ let internal lowerToAllocatedLir
     (typeMap: ANF.TypeMap)
     (registries: AST_to_ANF.Registries)
     (projectedMirRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.Type>)
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
     : Result<LIR.Function list, string> =
 
     let suffix = if stageSuffix = "" then "" else $" ({stageSuffix})"

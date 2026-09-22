@@ -49,7 +49,7 @@ let private finishRcReleasePlanFingerprint
 /// Deterministic identity for an RC source type. A compilation has one record
 /// and sum registry, so a canonical source type uniquely selects its release
 /// plan without traversing the registry-expanded plan itself.
-let rcSourceTypeFingerprint (sourceType: AST.Type) : string =
+let rcSourceTypeFingerprint (sourceType: AST.SemanticType) : string =
     let state = newRcReleasePlanFingerprintState ()
     let addByte = addRcReleasePlanFingerprintByte state
     let addInt = addRcReleasePlanFingerprintInt state
@@ -75,7 +75,7 @@ let rcSourceTypeFingerprint (sourceType: AST.Type) : string =
         | AST.TChar -> addByte 15uy
         | AST.TDateTime -> addByte 16uy
         | AST.TUnit -> addByte 17uy
-        | AST.TRuntimeError -> addByte 18uy
+        | AST.TNever -> addByte 18uy
         | AST.TFunction (paramTypes, returnType) ->
             addByte 19uy
             addTypes paramTypes
@@ -100,7 +100,7 @@ let rcSourceTypeFingerprint (sourceType: AST.Type) : string =
         | AST.TVar name ->
             addByte 26uy
             addString name
-        | AST.TRawPtr -> addByte 27uy
+        | AST.TInternalRawPtr -> addByte 27uy
         | AST.TDict (keyType, valueType) ->
             addByte 28uy
             addType keyType
@@ -282,7 +282,7 @@ let rcReleasePlanCompactKeyNodeThreshold = 24
 /// Compact key only for plans large enough that structural map comparisons are
 /// measurably more expensive than hashing their canonical source type.
 let rcReleasePlanCacheKey
-    (sourceType: AST.Type)
+    (sourceType: AST.SemanticType)
     (releasePlan: RcReleasePlan)
     : string option =
     if rcReleasePlanExceedsNodeCount rcReleasePlanCompactKeyNodeThreshold releasePlan then

@@ -631,19 +631,19 @@ let private renderEntity (entity: LocatedEntity) : Result<ResolvedSource, string
                         | _ -> Error $"Invalid package type declaration {entity.Location}"
     with ex -> Error $"Could not render package {entity.Location}: {ex.Message}"
 
-let rec private typeNames (typ: AST.Type) : string list =
+let rec private typeNames (typ: AST.ParsedType) : string list =
     match typ with
-    | AST.TFunction (parameters, result) -> List.collect typeNames parameters @ typeNames result
-    | AST.TTuple elements -> List.collect typeNames elements
-    | AST.TRecord (name, arguments)
-    | AST.TSum (name, arguments) -> name :: List.collect typeNames arguments
-    | AST.TList inner
-    | AST.TStream inner -> typeNames inner
-    | AST.TDict (key, value) -> typeNames key @ typeNames value
-    | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
-    | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
-    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
-    | AST.TUnit | AST.TRuntimeError | AST.TVar _ | AST.TRawPtr -> []
+    | AST.PTFunction (parameters, result) -> List.collect typeNames parameters @ typeNames result
+    | AST.PTTuple elements -> List.collect typeNames elements
+    | AST.PTRecord (name, arguments)
+    | AST.PTSum (name, arguments) -> name :: List.collect typeNames arguments
+    | AST.PTList inner
+    | AST.PTStream inner -> typeNames inner
+    | AST.PTDict (key, value) -> typeNames key @ typeNames value
+    | AST.PTInt8 | AST.PTInt16 | AST.PTInt32 | AST.PTInt64 | AST.PTInt128 | AST.PTInt
+    | AST.PTUInt8 | AST.PTUInt16 | AST.PTUInt32 | AST.PTUInt64 | AST.PTUInt128
+    | AST.PTBool | AST.PTFloat64 | AST.PTString | AST.PTBlob | AST.PTChar | AST.PTDateTime
+    | AST.PTUnit | AST.PTVar _ | AST.PTInternalRawPtr -> []
 
 let rec private patternNames (pattern: AST.Pattern) : string list =
     match pattern with
@@ -653,7 +653,7 @@ let rec private patternNames (pattern: AST.Pattern) : string list =
     | AST.POr alternatives -> alternatives |> AST.NonEmptyList.toList |> List.collect patternNames
     | _ -> []
 
-let rec private expressionNames (expr: AST.Expr) : string list =
+let rec private expressionNames (expr: AST.ParsedExpr) : string list =
     let many expressions = List.collect expressionNames expressions
     match expr with
     | AST.BinOp (_, left, right) -> expressionNames left @ expressionNames right
@@ -662,8 +662,8 @@ let rec private expressionNames (expr: AST.Expr) : string list =
     | AST.RecursiveLet (_, value, body)
     | AST.Sequence (value, body) -> expressionNames value @ expressionNames body
     | AST.If (condition, yes, no) -> expressionNames condition @ expressionNames yes @ expressionNames no
-    | AST.Call (name, arguments) -> name :: (arguments |> AST.NonEmptyList.toList |> many)
-    | AST.TypeApp (name, types, arguments) -> name :: List.collect typeNames types @ (arguments |> AST.NonEmptyList.toList |> many)
+    | AST.Apply (callee, types, arguments) ->
+        many [callee] @ List.collect typeNames types @ (arguments |> AST.NonEmptyList.toList |> many)
     | AST.TupleLiteral values | AST.ListLiteral values -> many values
     | AST.TupleAccess (value, _) | AST.RecordAccess (value, _) -> expressionNames value
     | AST.DictLiteral (keyType, valueType, entries) ->
@@ -690,9 +690,8 @@ let rec private expressionNames (expr: AST.Expr) : string list =
          |> List.collect (fun parameter -> parameter.SourceAnnotation |> Option.map typeNames |> Option.defaultValue []))
         @ (returnType |> Option.map typeNames |> Option.defaultValue [])
         @ expressionNames body
-    | AST.Apply (fn, arguments) | AST.IndirectApply (fn, arguments) ->
+    | AST.IndirectApply (fn, arguments) ->
         expressionNames fn @ (arguments |> AST.NonEmptyList.toList |> many)
-    | AST.FuncRef name -> [name]
     | AST.Closure (name, captures) -> name :: many captures
     | AST.BoundaryRender (_, value) -> expressionNames value
     | AST.InterpolatedString parts ->
@@ -732,7 +731,7 @@ let private sourceCandidates
 let resolve
     (config: Config)
     (resolutionEnv: NameResolution.ResolutionEnvironment)
-    (program: AST.Program)
+    (program: AST.ParsedProgram)
     : Result<ResolvedSource list, string> =
     use client = new HttpClient()
     client.Timeout <- TimeSpan.FromSeconds 30.0

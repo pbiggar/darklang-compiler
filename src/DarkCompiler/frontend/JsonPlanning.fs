@@ -103,7 +103,7 @@ let private stableHash (value: string) : uint64 =
 // the union directly: F#'s default union formatting uses reflection, which is
 // disproportionately expensive when the same primitive codecs are requested
 // by many separate compilations.
-let rec private structuralTypeKey (typ: Type) : string =
+let rec private structuralTypeKey (typ: SemanticType) : string =
     let encodeText tag (value: string) = $"{tag}{value.Length}:{value}"
     let encodeTypes tag types =
         let encoded =
@@ -131,8 +131,8 @@ let rec private structuralTypeKey (typ: Type) : string =
     | TChar -> "char"
     | TDateTime -> "datetime"
     | TUnit -> "unit"
-    | TRuntimeError -> "runtime-error"
-    | TRawPtr -> "raw-ptr"
+    | TNever -> "runtime-error"
+    | TInternalRawPtr -> "raw-ptr"
     | TVar name -> encodeText "var" name
     | TList elementType -> encodeTypes "list" [elementType]
     | TStream elementType -> encodeTypes "stream" [elementType]
@@ -266,7 +266,7 @@ let rec private typeReference env typ =
     | TRecord (name, typeArgs)
     | TSum (name, typeArgs) -> custom name typeArgs
     | TVar name -> unary "TVariable" (StringLiteral name)
-    | TTuple [] | TTuple [_] | TRawPtr | TRuntimeError | TDict _ ->
+    | TTuple [] | TTuple [_] | TInternalRawPtr | TNever | TDict _ ->
         unary "TVariable" (StringLiteral (CheckingDiagnostics.typeToString typ))
 
 let private cantMatch env typ raw path =
@@ -329,7 +329,7 @@ let private resolveJsonType (env: Env) typ =
         | other -> other
     resolve typ
 
-let private canonicalCodecTypeKey (env: Env) (rootType: Type) : string =
+let private canonicalCodecTypeKey (env: Env) (rootType: SemanticType) : string =
     // Include only declarations reachable from the requested type. This is
     // deliberately narrower than fingerprinting the complete type-checking
     // environment: most E2E files add unrelated declarations, and those must
@@ -663,7 +663,7 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
                                      :: acc))
                 loop (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
                 |> Result.map (fun (cases, nextState) -> (Match (value, cases), nextState)))
-    | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _
+    | TFunction _ | TBlob | TInternalRawPtr | TNever | TStream _ | TVar _
     | TDict _ ->
         Error
             $"Unsupported type in JSON: {CheckingDiagnostics.typeToString typ}. Some types are not supported in Json serialization"
@@ -1237,7 +1237,7 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
                                   tooMany
                               makeCase PWildcard failure ])
                     (objectBody, nextState)))
-    | TFunction _ | TBlob | TRawPtr | TRuntimeError | TStream _ | TVar _ | TDict _ ->
+    | TFunction _ | TBlob | TInternalRawPtr | TNever | TStream _ | TVar _ | TDict _ ->
         Error $"Unsupported type in JSON: {CheckingDiagnostics.typeToString typ}. Some types are not supported in Json serialization"
 
 let rec private mapExpr rewrite symbols expr =
@@ -1507,8 +1507,8 @@ let rewriteProgramWithSession
 
     let planCached
         (direction: string)
-        (ensure: Env -> Type -> State -> Result<string * State, string>)
-        (typ: Type)
+        (ensure: Env -> SemanticType -> State -> Result<string * State, string>)
+        (typ: SemanticType)
         (state: State)
         : Result<State, string> =
         let concrete = resolveJsonType planningEnv typ

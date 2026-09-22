@@ -9,8 +9,8 @@ open MemoryModel
 /// The classifier is intentionally pure and side-effect free. Ownership
 /// insertion and backend helper selection use this as the source of truth for
 /// runtime retain/release shape decisions.
-let rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcShape =
-    let rec classify (expandingRecords: Set<AST.Type>) t =
+let rcShapeOfType (typeReg: Map<string, (string * AST.SemanticType) list>) (t: AST.SemanticType) : RcShape =
+    let rec classify (expandingRecords: Set<AST.SemanticType>) t =
         match t with
         | AST.TInt8
         | AST.TInt16
@@ -24,7 +24,7 @@ let rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type)
         | AST.TFloat64
         | AST.TDateTime
         | AST.TUnit
-        | AST.TRuntimeError
+        | AST.TNever
         | AST.TVar _ ->
             Immediate
         // Arbitrary Int uses tagged immediates or a limb buffer. Fixed-width 128-bit
@@ -67,12 +67,12 @@ let rcShapeOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type)
             DynamicBlob
         | AST.TFunction _ ->
             ClosureShape []
-        | AST.TRawPtr ->
+        | AST.TInternalRawPtr ->
             RawUnmanaged
 
     classify Set.empty t
 
-let private rcShapeTypeSubstitution (typeParams: string list) (typeArgs: AST.Type list) : Map<string, AST.Type> =
+let private rcShapeTypeSubstitution (typeParams: string list) (typeArgs: AST.SemanticType list) : Map<string, AST.SemanticType> =
     if List.isEmpty typeParams then
         Map.empty
     elif List.length typeParams = List.length typeArgs then
@@ -80,7 +80,7 @@ let private rcShapeTypeSubstitution (typeParams: string list) (typeArgs: AST.Typ
     else
         Crash.crash $"rcShapeOfTypeWithSums: sum type argument mismatch: params={typeParams.Length}, args={typeArgs.Length}"
 
-let private collectTypeVarsInOrder (typ: AST.Type) : string list =
+let private collectTypeVarsInOrder (typ: AST.SemanticType) : string list =
     let rec collect t =
         match t with
         | AST.TVar name -> [name]
@@ -110,13 +110,13 @@ let private collectTypeVarsInOrder (typ: AST.Type) : string list =
         | AST.TChar
         | AST.TDateTime
         | AST.TUnit
-        | AST.TRawPtr
-        | AST.TRuntimeError ->
+        | AST.TInternalRawPtr
+        | AST.TNever ->
             []
     collect typ |> List.distinct
 
 let inferredRecordTypeParamsRegistry
-    (typeReg: Map<string, (string * AST.Type) list>)
+    (typeReg: Map<string, (string * AST.SemanticType) list>)
     : Map<string, string list> =
     typeReg
     |> Map.map (fun _ fields ->
@@ -124,7 +124,7 @@ let inferredRecordTypeParamsRegistry
         |> List.collect (fun (_, fieldType) -> collectTypeVarsInOrder fieldType)
         |> List.distinct)
 
-let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
+let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.SemanticType>) (typ: AST.SemanticType) : AST.SemanticType =
     match typ with
     | AST.TVar name ->
         match Map.tryFind name subst with
@@ -165,18 +165,18 @@ let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.Type>) (typ
     | AST.TChar
     | AST.TDateTime
     | AST.TUnit
-    | AST.TRawPtr
-    | AST.TRuntimeError ->
+    | AST.TInternalRawPtr
+    | AST.TNever ->
         typ
 
 /// Classify a source type using record metadata and optional named-sum metadata.
 let rcShapeOfTypeWithSums
-    (typeReg: Map<string, (string * AST.Type) list>)
+    (typeReg: Map<string, (string * AST.SemanticType) list>)
     (recordTypeParams: Map<string, string list>)
     (sumReg: RcSumShapeRegistry)
-    (t: AST.Type)
+    (t: AST.SemanticType)
     : RcShape =
-    let rec classify (expandingNominals: Set<AST.Type>) (t: AST.Type) : RcShape =
+    let rec classify (expandingNominals: Set<AST.SemanticType>) (t: AST.SemanticType) : RcShape =
         match t with
         | AST.TTuple elemTypes ->
             FixedBlock (List.length elemTypes * 8, elemTypes |> List.map (classify expandingNominals))
@@ -258,7 +258,7 @@ let rcShapeOfTypeWithSums
             FixedBlock (16, [])
         | AST.TBlob ->
             DynamicBlob
-        | AST.TRawPtr ->
+        | AST.TInternalRawPtr ->
             RawUnmanaged
         | AST.TInt8
         | AST.TInt16
@@ -272,7 +272,7 @@ let rcShapeOfTypeWithSums
         | AST.TFloat64
         | AST.TDateTime
         | AST.TUnit
-        | AST.TRuntimeError
+        | AST.TNever
         | AST.TVar _ ->
             Immediate
 
@@ -524,21 +524,21 @@ let rec rcShapeReleasePlan (shape: RcShape) : RcReleasePlan =
         DynamicBufferRelease operation
 
 /// Release plan for a source type using the current representation registry.
-let rec rcReleasePlanOfType (typeReg: Map<string, (string * AST.Type) list>) (t: AST.Type) : RcReleasePlan =
+let rec rcReleasePlanOfType (typeReg: Map<string, (string * AST.SemanticType) list>) (t: AST.SemanticType) : RcReleasePlan =
     t |> rcShapeOfType typeReg |> rcShapeReleasePlan
 
 /// Release plan for a source type using record and named-sum metadata.
 let rec rcReleasePlanOfTypeWithSums
-    (typeReg: Map<string, (string * AST.Type) list>)
+    (typeReg: Map<string, (string * AST.SemanticType) list>)
     (sumReg: RcSumShapeRegistry)
-    (t: AST.Type)
+    (t: AST.SemanticType)
     : RcReleasePlan =
     t
     |> rcShapeOfTypeWithSums typeReg (inferredRecordTypeParamsRegistry typeReg) sumReg
     |> rcShapeReleasePlan
 
 /// Collect the concrete recursive nominal roots referenced by a finite release plan.
-let rec recursiveReleaseTypes (releasePlan: RcReleasePlan) : Set<AST.Type> =
+let rec recursiveReleaseTypes (releasePlan: RcReleasePlan) : Set<AST.SemanticType> =
     let fromFields fieldReleases =
         fieldReleases
         |> List.map (fun (FieldRelease (_, fieldPlan)) -> recursiveReleaseTypes fieldPlan)

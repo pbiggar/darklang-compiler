@@ -14,7 +14,7 @@ type private ScalarAggregate = {
     Fields: Atom list
 }
 
-let private isScalarType (typ: AST.Type) : bool =
+let private isScalarType (typ: AST.SemanticType) : bool =
     match typ with
     | AST.TInt8
     | AST.TInt16
@@ -28,7 +28,7 @@ let private isScalarType (typ: AST.Type) : bool =
     | AST.TFloat64
     | AST.TDateTime
     | AST.TUnit
-    | AST.TRuntimeError -> true
+    | AST.TNever -> true
     | _ -> false
 
 /// Prove that releasing a displaced field cannot run a language-visible
@@ -37,9 +37,9 @@ let private isScalarType (typ: AST.Type) : bool =
 /// recursion, sums and closures still fail closed.
 let private hasNonObservableDestruction
     (typeReg: TypeRegistries.TypeRegistry)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     : bool =
-    let rec prove (expandingRecords: Map<string, AST.Type>) typ =
+    let rec prove (expandingRecords: Map<string, AST.SemanticType>) typ =
         isScalarType typ
         || match typ with
            | AST.TString | AST.TBlob | AST.TInt -> true
@@ -289,7 +289,7 @@ let private rewriteProjection
     | _ -> cexpr
 
 let private cexprProducesScalar
-    (returnTypes: Map<AST.FunctionId, AST.Type>)
+    (returnTypes: Map<AST.FunctionId, AST.SemanticType>)
     (scalarTemps: Set<TempId>)
     (cexpr: CExpr)
     : bool =
@@ -339,7 +339,7 @@ let private tryScalarAggregate
     | _ -> None
 
 let rec private scalarReplaceExpr
-    (returnTypes: Map<AST.FunctionId, AST.Type>)
+    (returnTypes: Map<AST.FunctionId, AST.SemanticType>)
     (scalarTemps: Set<TempId>)
     (aggregates: Map<TempId, ScalarAggregate>)
     (expr: AExpr)
@@ -389,7 +389,7 @@ let rec private scalarReplaceExpr
 
 let private scalarReplaceFunction
     (typeReg: TypeRegistries.TypeRegistry)
-    (returnTypes: Map<AST.FunctionId, AST.Type>)
+    (returnTypes: Map<AST.FunctionId, AST.SemanticType>)
     (func: Function)
     : Function =
     let scalarParams =

@@ -5,7 +5,7 @@ module ARM64InstructionContext
 open ARM64CodeGenTypes
 open ARM64HeapAllocation
 
-let generatePrintListInstrs (ctx: CodeGenContext) (listReg: ARM64Symbolic.Reg) (elemType: AST.Type) (includeNewline: bool) : ARM64Symbolic.Instr list =
+let generatePrintListInstrs (ctx: CodeGenContext) (listReg: ARM64Symbolic.Reg) (elemType: AST.SemanticType) (includeNewline: bool) : ARM64Symbolic.Instr list =
     let syscalls = ARM64.targetSyscalls ctx.Target
 
     // Generate element print code based on type (uses X0 for value)

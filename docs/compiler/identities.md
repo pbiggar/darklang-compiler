@@ -99,7 +99,7 @@ where that ID model exists.
 
 ### Nominal types and type variables
 
-`AST.Type` still represents `TRecord`, `TSum`, and `TVar` with strings. As a
+`AST.SemanticType` still represents `TRecord`, `TSum`, and `TVar` with strings. As a
 result, type, alias, record-layout, sum-layout, memory-planning, JSON-planning,
 and rendering registries are still commonly keyed by type name. `TypeId`
 currently protects checked nominal references, but it is not yet the identity

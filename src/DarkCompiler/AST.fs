@@ -21,8 +21,43 @@ type WarningSettings =
 
 let defaultWarningSettings : WarningSettings = WarningSettings
 
-/// Type system shared by parsing, type checking, ANF lowering, and later passes.
-type Type =
+/// Type spellings accepted by the parser. Semantic-only states such as `Never`
+/// cannot be represented before name resolution and checking.
+type ParsedType =
+    | PTInt8
+    | PTInt16
+    | PTInt32
+    | PTInt64
+    | PTInt128
+    | PTInt
+    | PTUInt8
+    | PTUInt16
+    | PTUInt32
+    | PTUInt64
+    | PTUInt128
+    | PTBool
+    | PTFloat64
+    | PTString
+    | PTBlob
+    | PTChar
+    | PTDateTime
+    | PTUnit
+    | PTFunction of ParsedType list * ParsedType
+    | PTTuple of ParsedType list
+    | PTRecord of string * ParsedType list
+    | PTSum of string * ParsedType list
+    | PTList of ParsedType
+    | PTStream of ParsedType
+    | PTVar of string
+    /// Accepted only by privileged compiler sources and rejected at the public
+    /// parser boundary. The parsed/semantic boundary turns it into the
+    /// privileged internal-signature pointer type.
+    | PTInternalRawPtr
+    | PTDict of keyType:ParsedType * valueType:ParsedType
+
+/// Types used by semantic checking and the currently shared lowering pipeline.
+/// Parsed source reaches this representation only through name resolution.
+type SemanticType =
     // Signed integers
     | TInt8
     | TInt16
@@ -44,31 +79,34 @@ type Type =
     | TChar      // Extended Grapheme Cluster (single visual character)
     | TDateTime  // Opaque UTC instant stored as signed 100ns Unix ticks
     | TUnit
-    | TRuntimeError                 // Bottom-like type for guaranteed runtime-failing expressions
-    | TFunction of Type list * Type  // parameter types * return type
-    | TTuple of Type list             // tuple type: (Int, Bool, String)
-    | TRecord of string * Type list   // record type by name with type args: Point<T>, Pair<A, B>, etc.
-    | TSum of string * Type list      // sum type by name with type args: Result<Int64, String>
-    | TList of Type                    // List<T> - polymorphic list type
-    | TStream of Type                  // Stream<T> - opaque, lazy, single-consumer handle
+    | TNever                          // Semantic bottom: expressions which do not return
+    | TFunction of SemanticType list * SemanticType  // parameter types * return type
+    | TTuple of SemanticType list             // tuple type: (Int, Bool, String)
+    | TRecord of string * SemanticType list   // record type by name with type args: Point<T>, Pair<A, B>, etc.
+    | TSum of string * SemanticType list      // sum type by name with type args: Result<Int64, String>
+    | TList of SemanticType                    // List<T> - polymorphic list type
+    | TStream of SemanticType                  // Stream<T> - opaque, lazy, single-consumer handle
     | TVar of string                  // type variable: T, A, B, etc. (for generics)
-    | TRawPtr                         // Raw pointer to unmanaged memory (internal, for HAMT)
+    | TInternalRawPtr                         // Raw pointer to unmanaged memory (internal, for HAMT)
     // Native HAMT machinery retains both components. Public source syntax is
     // String-keyed and renders only the value component as Dict<Value>.
-    | TDict of keyType:Type * valueType:Type
+    | TDict of keyType:SemanticType * valueType:SemanticType
 
 /// Nominal identity carried by record construction from parsing onward.
 /// SourceTypeName preserves an alias spelling for diagnostics, while
 /// ResolvedTypeName is filled with the canonical declaration identity during
 /// name/type resolution. TypeArgs always follows declaration parameter order,
 /// including parameters that do not occur in any field.
-type RecordReference = {
+type RecordReferenceNode<'t> = {
     SourceTypeName: string
     ResolvedTypeName: string
-    TypeArgs: Type list
+    TypeArgs: 't list
 }
 
-let unresolvedRecordReference (sourceTypeName: string) (typeArgs: Type list) : RecordReference =
+type RecordReference = RecordReferenceNode<SemanticType>
+type ParsedRecordReference = RecordReferenceNode<ParsedType>
+
+let unresolvedRecordReference (sourceTypeName: string) (typeArgs: 't list) : RecordReferenceNode<'t> =
     { SourceTypeName = sourceTypeName; ResolvedTypeName = sourceTypeName; TypeArgs = typeArgs }
 
 /// A field spelling before or after the checker proves its declaring record.
@@ -211,19 +249,22 @@ type LetPattern =
 
 /// A lambda binder is parsed without an annotation. Type checking fills in its
 /// inferred type without changing the source-level binding pattern.
-type LambdaParameter = {
+type LambdaParameterNode<'t> = {
     Pattern: LetPattern
-    SourceAnnotation: Type option
-    InferredType: Type option
+    SourceAnnotation: 't option
+    InferredType: 't option
 }
 
-let lambdaParameter (pattern: LetPattern) : LambdaParameter =
+type LambdaParameter = LambdaParameterNode<SemanticType>
+type ParsedLambdaParameter = LambdaParameterNode<ParsedType>
+
+let lambdaParameter (pattern: LetPattern) : LambdaParameterNode<'t> =
     { Pattern = pattern; SourceAnnotation = None; InferredType = None }
 
-let typedLambdaVariable (name: string) (typ: Type) : LambdaParameter =
+let typedLambdaVariable (name: string) (typ: 't) : LambdaParameterNode<'t> =
     { Pattern = LPVariable name; SourceAnnotation = Some typ; InferredType = Some typ }
 
-let inferredLambdaVariable (name: string) (typ: Type) : LambdaParameter =
+let inferredLambdaVariable (name: string) (typ: 't) : LambdaParameterNode<'t> =
     { Pattern = LPVariable name; SourceAnnotation = None; InferredType = Some typ }
 
 let rec letPatternBindings (pattern: LetPattern) : string list =
@@ -344,7 +385,7 @@ type ResolvedRecursiveMember = {
 
 type TypedRecursiveMember = {
     Resolved: ResolvedRecursiveMember
-    MonomorphicType: Type
+    MonomorphicType: SemanticType
 }
 
 type LoweredRecursiveMember = {
@@ -448,12 +489,12 @@ let validateBinders (structure: BinderStructure) : Result<string list, string> =
     | None -> Ok usableNames
 
 /// Part of an interpolated string: either a literal or an expression
-type StringPart =
+type StringPartNode<'t> =
     | StringText of string    // Literal text: "Hello "
-    | StringExpr of Expr      // Interpolated expression: {name}
+    | StringExpr of ExprNode<'t>      // Interpolated expression: {name}
 
 /// Expression nodes
-and Expr =
+and ExprNode<'t> =
     | UnitLiteral                           // Unit value: ()
     | Int64Literal of int64                 // 64-bit signed (default): 42, 42L
     | Int128Literal of System.Int128        // 42Q
@@ -470,81 +511,106 @@ and Expr =
     | StringLiteral of string
     | CharLiteral of string   // Single Extended Grapheme Cluster stored as UTF-8 string
     | FloatLiteral of float
-    | InterpolatedString of StringPart list // $"Hello {name}!"
-    | BinOp of BinOp * Expr * Expr
-    | UnaryOp of UnaryOp * Expr
-    | Let of pattern:LetPattern * value:Expr * body:Expr  // Atomic non-recursive binding
-    | RecursiveLet of recursion:RecursiveBindingInfo * value:Expr * body:Expr
+    | InterpolatedString of StringPartNode<'t> list // $"Hello {name}!"
+    | BinOp of BinOp * ExprNode<'t> * ExprNode<'t>
+    | UnaryOp of UnaryOp * ExprNode<'t>
+    | Let of pattern:LetPattern * value:ExprNode<'t> * body:ExprNode<'t>  // Atomic non-recursive binding
+    | RecursiveLet of recursion:RecursiveBindingInfo * value:ExprNode<'t> * body:ExprNode<'t>
     | Var of string  // Variable reference
-    | If of cond:Expr * thenBranch:Expr * elseBranch:Expr  // If expression: if cond then thenBranch else elseBranch
-    | Sequence of first:Expr * next:Expr  // Statement sequence: first must produce Unit; next supplies the value
-    | Call of funcName:string * args:NonEmptyList<Expr>  // Function call: funcName(arg1, arg2, ...)
-    | TypeApp of funcName:string * typeArgs:Type list * args:NonEmptyList<Expr>  // Generic call: funcName<T, U>(args)
-    | TupleLiteral of Expr list              // Tuple literal: (1, 2, 3)
-    | TupleAccess of tuple:Expr * index:int  // Tuple access: t.0, t.1, etc.
-    | DictLiteral of keyType:Type * valueType:Type * entries:(Expr * Expr) list
-    | RecordLiteral of reference:RecordReference * fields:(RecordFieldReference * Expr) list
-    | RecordUpdate of record:Expr * updates:(RecordFieldReference * Expr) list // { record with x = 1, y = 2 }
-    | RecordAccess of record:Expr * field:RecordFieldReference        // p.x, p.y
-    | Constructor of reference:ConstructorReference * variantName:string * fields:Expr list
-    | Match of scrutinee:Expr * cases:MatchCase list  // match e with | p1 when g -> e1 | p2 -> e2
-    | ListLiteral of Expr list                               // [1, 2, 3]
-    | Lambda of parameters:NonEmptyList<LambdaParameter> * returnAnnotation:Type option * body:Expr
-    | Apply of func:Expr * args:NonEmptyList<Expr>                    // Apply function expr: f(x) where f is expression
-    | IndirectApply of func:Expr * args:NonEmptyList<Expr>            // Compiler-generated call through a raw function pointer
-    | FuncRef of funcName:string                             // Reference to a function (for passing as value)
-    | Closure of funcName:string * captures:Expr list        // Closure: function + captured values
+    | If of cond:ExprNode<'t> * thenBranch:ExprNode<'t> * elseBranch:ExprNode<'t>  // If expression: if cond then thenBranch else elseBranch
+    | Sequence of first:ExprNode<'t> * next:ExprNode<'t>  // Statement sequence: first must produce Unit; next supplies the value
+    /// A source-level call.  Resolution classifies the callee as a direct
+    /// function, intrinsic, or dynamic value at the checked-AST boundary.
+    | Apply of callee:ExprNode<'t> * typeArgs:'t list * args:NonEmptyList<ExprNode<'t>>
+    | TupleLiteral of ExprNode<'t> list              // Tuple literal: (1, 2, 3)
+    | TupleAccess of tuple:ExprNode<'t> * index:int  // Tuple access: t.0, t.1, etc.
+    | DictLiteral of keyType:'t * valueType:'t * entries:(ExprNode<'t> * ExprNode<'t>) list
+    | RecordLiteral of reference:RecordReferenceNode<'t> * fields:(RecordFieldReference * ExprNode<'t>) list
+    | RecordUpdate of record:ExprNode<'t> * updates:(RecordFieldReference * ExprNode<'t>) list // { record with x = 1, y = 2 }
+    | RecordAccess of record:ExprNode<'t> * field:RecordFieldReference        // p.x, p.y
+    | Constructor of reference:ConstructorReference * variantName:string * fields:ExprNode<'t> list
+    | Match of scrutinee:ExprNode<'t> * cases:MatchCaseNode<'t> list  // match e with | p1 when g -> e1 | p2 -> e2
+    | ListLiteral of ExprNode<'t> list                               // [1, 2, 3]
+    | Lambda of parameters:NonEmptyList<LambdaParameterNode<'t>> * returnAnnotation:'t option * body:ExprNode<'t>
+    | IndirectApply of func:ExprNode<'t> * args:NonEmptyList<ExprNode<'t>>            // Compiler-generated call through a raw function pointer
+    | Closure of funcName:string * captures:ExprNode<'t> list        // Closure: function + captured values
     | RuntimeError of message:string                         // Compiler-generated interpreter runtime error
-    | BoundaryRender of renderer:string * value:Expr        // Compiler-generated eval-result rendering
+    | BoundaryRender of renderer:string * value:ExprNode<'t>        // Compiler-generated eval-result rendering
 
 /// Match case with optional guard clause and pattern grouping
 /// Syntax: | pat1 | pat2 when guard -> body
-and MatchCase = {
+and MatchCaseNode<'t> = {
     Patterns: NonEmptyList<Pattern>  // One or more patterns (pattern grouping via |)
-    Guard: Expr option               // Optional guard clause (when condition)
-    Body: Expr                       // Body expression
+    Guard: ExprNode<'t> option               // Optional guard clause (when condition)
+    Body: ExprNode<'t>                       // Body expression
 }
 
+type Expr = ExprNode<SemanticType>
+type ParsedExpr = ExprNode<ParsedType>
+type StringPart = StringPartNode<SemanticType>
+type ParsedStringPart = StringPartNode<ParsedType>
+type MatchCase = MatchCaseNode<SemanticType>
+type ParsedMatchCase = MatchCaseNode<ParsedType>
+
+let applyNamed (name: string) (args: NonEmptyList<ExprNode<'t>>) : ExprNode<'t> =
+    Apply (Var name, [], args)
+
+let applyNamedWithTypes
+    (name: string)
+    (typeArgs: 't list)
+    (args: NonEmptyList<ExprNode<'t>>)
+    : ExprNode<'t> =
+    Apply (Var name, typeArgs, args)
+
 /// Function definition
-type FunctionDef = {
+type FunctionDefNode<'t> = {
     Name: string
     TypeParams: string list           // Type parameters for generics: ["T", "U", etc.], empty for non-generic
-    Params: NonEmptyList<(string * Type)>  // Parameter names with REQUIRED type annotations
-    ReturnType: Type                  // REQUIRED return type annotation
-    Body: Expr
+    Params: NonEmptyList<(string * 't)>  // Parameter names with REQUIRED type annotations
+    ReturnType: 't                  // REQUIRED return type annotation
+    Body: ExprNode<'t>
     Recursion: RecursiveBindingInfo option
 }
 
 /// Variant in a sum type with zero or more ordered constructor fields.
-type Variant = {
+type VariantNode<'t> = {
     Name: string
-    Fields: Type list
+    Fields: 't list
 }
 
 /// Type definition (record types, sum types, etc.)
-type TypeDef =
-    | RecordDef of name:string * typeParams:string list * fields:(string * Type) list  // type Point<T> = { x: T, y: T }
-    | SumTypeDef of name:string * typeParams:string list * variants:Variant list       // type Result<T, E> = Ok of T | Error of E
-    | TypeAlias of name:string * typeParams:string list * targetType:Type              // type Id = String
+type TypeDefNode<'t> =
+    | RecordDef of name:string * typeParams:string list * fields:(string * 't) list  // type Point<T> = { x: T, y: T }
+    | SumTypeDef of name:string * typeParams:string list * variants:VariantNode<'t> list       // type Result<T, E> = Ok of T | Error of E
+    | TypeAlias of name:string * typeParams:string list * targetType:'t              // type Id = String
 
 /// A source value before and after its body has been type checked.
-type ValueDef =
-    | UncheckedValueDef of name:string * body:Expr
-    | CheckedValueDef of name:string * typ:Type * body:Expr
+type ValueDefNode<'t> =
+    | UncheckedValueDef of name:string * body:ExprNode<'t>
+    | CheckedValueDef of name:string * typ:'t * body:ExprNode<'t>
 
-let valueDefName (valueDef: ValueDef) : string =
+type FunctionDef = FunctionDefNode<SemanticType>
+type ParsedFunctionDef = FunctionDefNode<ParsedType>
+type Variant = VariantNode<SemanticType>
+type ParsedVariant = VariantNode<ParsedType>
+type TypeDef = TypeDefNode<SemanticType>
+type ParsedTypeDef = TypeDefNode<ParsedType>
+type ValueDef = ValueDefNode<SemanticType>
+type ParsedValueDef = ValueDefNode<ParsedType>
+
+let valueDefName (valueDef: ValueDefNode<'t>) : string =
     match valueDef with
     | UncheckedValueDef (name, _)
     | CheckedValueDef (name, _, _) -> name
 
-let valueDefBody (valueDef: ValueDef) : Expr =
+let valueDefBody (valueDef: ValueDefNode<'t>) : ExprNode<'t> =
     match valueDef with
     | UncheckedValueDef (_, body)
     | CheckedValueDef (_, _, body) -> body
 
 /// Case names that require a nominal native tag because they occur in more
 /// than one declaring type in the same compilation unit.
-let collidingConstructorCaseNames (typeDefs: TypeDef list) : Set<string> =
+let collidingConstructorCaseNames (typeDefs: TypeDefNode<'t> list) : Set<string> =
     typeDefs
     |> List.collect (function
         | SumTypeDef (typeName, _, variants) ->
@@ -557,21 +623,164 @@ let collidingConstructorCaseNames (typeDefs: TypeDef list) : Set<string> =
     |> Set.ofList
 
 /// Top-level program elements
-type TopLevel =
-    | FunctionDef of FunctionDef
-    | TypeDef of TypeDef
-    | ValueDef of ValueDef
-    | Expression of modulePath:string list * Expr
+type TopLevelNode<'t> =
+    | FunctionDef of FunctionDefNode<'t>
+    | TypeDef of TypeDefNode<'t>
+    | ValueDef of ValueDefNode<'t>
+    | Expression of modulePath:string list * ExprNode<'t>
 
 /// Program is a list of top-level definitions (functions and/or expressions)
-type Program = Program of TopLevel list
+type ProgramNode<'t> = Program of TopLevelNode<'t> list
+
+type TopLevel = TopLevelNode<SemanticType>
+type ParsedTopLevel = TopLevelNode<ParsedType>
+type Program = ProgramNode<SemanticType>
+type ParsedProgram = ProgramNode<ParsedType>
+
+let rec semanticTypeOfParsed (typ: ParsedType) : SemanticType =
+    let recurse = semanticTypeOfParsed
+    match typ with
+    | PTInt8 -> TInt8
+    | PTInt16 -> TInt16
+    | PTInt32 -> TInt32
+    | PTInt64 -> TInt64
+    | PTInt128 -> TInt128
+    | PTInt -> TInt
+    | PTUInt8 -> TUInt8
+    | PTUInt16 -> TUInt16
+    | PTUInt32 -> TUInt32
+    | PTUInt64 -> TUInt64
+    | PTUInt128 -> TUInt128
+    | PTBool -> TBool
+    | PTFloat64 -> TFloat64
+    | PTString -> TString
+    | PTBlob -> TBlob
+    | PTChar -> TChar
+    | PTDateTime -> TDateTime
+    | PTUnit -> TUnit
+    | PTFunction (parameters, returnType) ->
+        TFunction (List.map recurse parameters, recurse returnType)
+    | PTTuple elements -> TTuple (List.map recurse elements)
+    | PTRecord (name, typeArgs) -> TRecord (name, List.map recurse typeArgs)
+    | PTSum (name, typeArgs) -> TSum (name, List.map recurse typeArgs)
+    | PTList element -> TList (recurse element)
+    | PTStream element -> TStream (recurse element)
+    | PTVar name -> TVar name
+    | PTInternalRawPtr -> TInternalRawPtr
+    | PTDict (keyType, valueType) -> TDict (recurse keyType, recurse valueType)
+
+let semanticProgramOfParsed (Program topLevels: ParsedProgram) : Program =
+    let rec mapExpr (expr: ParsedExpr) : Expr =
+        let mapArgs = NonEmptyList.map mapExpr
+        match expr with
+        | InterpolatedString parts ->
+            parts
+            |> List.map (function StringText text -> StringText text | StringExpr value -> StringExpr (mapExpr value))
+            |> InterpolatedString
+        | BinOp (op, left, right) -> BinOp (op, mapExpr left, mapExpr right)
+        | UnaryOp (op, value) -> UnaryOp (op, mapExpr value)
+        | Let (pattern, value, body) -> Let (pattern, mapExpr value, mapExpr body)
+        | RecursiveLet (recursion, value, body) -> RecursiveLet (recursion, mapExpr value, mapExpr body)
+        | If (condition, thenBranch, elseBranch) -> If (mapExpr condition, mapExpr thenBranch, mapExpr elseBranch)
+        | Sequence (first, next) -> Sequence (mapExpr first, mapExpr next)
+        | Apply (callee, typeArgs, args) ->
+            Apply (mapExpr callee, List.map semanticTypeOfParsed typeArgs, mapArgs args)
+        | TupleLiteral values -> TupleLiteral (List.map mapExpr values)
+        | TupleAccess (tuple, index) -> TupleAccess (mapExpr tuple, index)
+        | DictLiteral (keyType, valueType, entries) ->
+            DictLiteral (
+                semanticTypeOfParsed keyType,
+                semanticTypeOfParsed valueType,
+                entries |> List.map (fun (key, value) -> (mapExpr key, mapExpr value)))
+        | RecordLiteral (reference, fields) ->
+            let reference' : RecordReference =
+                { SourceTypeName = reference.SourceTypeName
+                  ResolvedTypeName = reference.ResolvedTypeName
+                  TypeArgs = List.map semanticTypeOfParsed reference.TypeArgs }
+            RecordLiteral (reference', fields |> List.map (fun (field, value) -> (field, mapExpr value)))
+        | RecordUpdate (record, updates) ->
+            RecordUpdate (mapExpr record, updates |> List.map (fun (field, value) -> (field, mapExpr value)))
+        | RecordAccess (record, field) -> RecordAccess (mapExpr record, field)
+        | Constructor (reference, name, fields) -> Constructor (reference, name, List.map mapExpr fields)
+        | Match (scrutinee, cases) ->
+            let cases' =
+                cases
+                |> List.map (fun case ->
+                    { Patterns = case.Patterns
+                      Guard = Option.map mapExpr case.Guard
+                      Body = mapExpr case.Body })
+            Match (mapExpr scrutinee, cases')
+        | ListLiteral values -> ListLiteral (List.map mapExpr values)
+        | Lambda (parameters, returnAnnotation, body) ->
+            let parameters' =
+                parameters
+                |> NonEmptyList.map (fun parameter ->
+                    { Pattern = parameter.Pattern
+                      SourceAnnotation = Option.map semanticTypeOfParsed parameter.SourceAnnotation
+                      InferredType = Option.map semanticTypeOfParsed parameter.InferredType })
+            Lambda (parameters', Option.map semanticTypeOfParsed returnAnnotation, mapExpr body)
+        | IndirectApply (func, args) -> IndirectApply (mapExpr func, mapArgs args)
+        | Closure (name, captures) -> Closure (name, List.map mapExpr captures)
+        | BoundaryRender (renderer, value) -> BoundaryRender (renderer, mapExpr value)
+        | UnitLiteral -> UnitLiteral
+        | Int64Literal value -> Int64Literal value
+        | Int128Literal value -> Int128Literal value
+        | Int8Literal value -> Int8Literal value
+        | Int16Literal value -> Int16Literal value
+        | Int32Literal value -> Int32Literal value
+        | UInt8Literal value -> UInt8Literal value
+        | UInt16Literal value -> UInt16Literal value
+        | UInt32Literal value -> UInt32Literal value
+        | UInt64Literal value -> UInt64Literal value
+        | UInt128Literal value -> UInt128Literal value
+        | BigIntLiteral value -> BigIntLiteral value
+        | BoolLiteral value -> BoolLiteral value
+        | StringLiteral value -> StringLiteral value
+        | CharLiteral value -> CharLiteral value
+        | FloatLiteral value -> FloatLiteral value
+        | Var name -> Var name
+        | RuntimeError message -> RuntimeError message
+
+    let mapFunction (definition: ParsedFunctionDef) : FunctionDef =
+        { Name = definition.Name
+          TypeParams = definition.TypeParams
+          Params = definition.Params |> NonEmptyList.map (fun (name, typ) -> (name, semanticTypeOfParsed typ))
+          ReturnType = semanticTypeOfParsed definition.ReturnType
+          Body = mapExpr definition.Body
+          Recursion = definition.Recursion }
+    let mapTypeDef (definition: ParsedTypeDef) : TypeDef =
+        match definition with
+        | RecordDef (name, typeParams, fields) ->
+            RecordDef (name, typeParams, fields |> List.map (fun (field, typ) -> (field, semanticTypeOfParsed typ)))
+        | SumTypeDef (name, typeParams, variants) ->
+            SumTypeDef (
+                name,
+                typeParams,
+                variants
+                |> List.map (fun variant ->
+                    { Name = variant.Name
+                      Fields = List.map semanticTypeOfParsed variant.Fields }))
+        | TypeAlias (name, typeParams, targetType) ->
+            TypeAlias (name, typeParams, semanticTypeOfParsed targetType)
+    let mapValueDef (definition: ParsedValueDef) : ValueDef =
+        match definition with
+        | UncheckedValueDef (name, body) -> UncheckedValueDef (name, mapExpr body)
+        | CheckedValueDef (name, typ, body) ->
+            CheckedValueDef (name, semanticTypeOfParsed typ, mapExpr body)
+    topLevels
+    |> List.map (function
+        | FunctionDef definition -> FunctionDef (mapFunction definition)
+        | TypeDef definition -> TypeDef (mapTypeDef definition)
+        | ValueDef definition -> ValueDef (mapValueDef definition)
+        | Expression (modulePath, expr) -> Expression (modulePath, mapExpr expr))
+    |> Program
 
 /// Module function definition - a function within a module
 type ModuleFunc = {
     Name: string                     // Function name (e.g., "add")
     TypeParams: string list          // Type parameters (e.g., ["v"] for generic intrinsics)
-    ParamTypes: Type list            // Parameter types (may contain TVar references)
-    ReturnType: Type                 // Return type (may contain TVar references)
+    ParamTypes: SemanticType list            // Parameter types (may contain TVar references)
+    ReturnType: SemanticType                 // Return type (may contain TVar references)
 }
 
 /// Module definition - represents a namespace of functions

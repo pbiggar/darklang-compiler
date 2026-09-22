@@ -349,7 +349,7 @@ let internal emitRawWriteWord (ctx: FuncCtx) (ptr: LIR.Reg) (byteOffset: LIR.Reg
                      X86_64.ADD_reg (scratch, o)
                      X86_64.MOV_store (scratch, 0, v)])))
 
-let internal emitRawSlotInit (ctx: FuncCtx) (ptr: LIR.Reg) (byteOffset: LIR.Reg) (value: LIR.Reg) (valueType: AST.Type) : Result<X86_64.Instr list, string> =
+let internal emitRawSlotInit (ctx: FuncCtx) (ptr: LIR.Reg) (byteOffset: LIR.Reg) (value: LIR.Reg) (valueType: AST.SemanticType) : Result<X86_64.Instr list, string> =
     resolveReg ptr |> Result.bind (fun p ->
         resolveReg byteOffset |> Result.bind (fun o ->
             resolveReg value |> Result.map (fun v ->

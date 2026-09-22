@@ -27,7 +27,7 @@ type private VRegIndex = {
 }
 
 type private PhiTypeEvidence =
-    | KnownPhiType of AST.Type
+    | KnownPhiType of AST.SemanticType
     | ConflictingPhiTypes
 
 type SSAConstructionTiming = {
@@ -588,7 +588,7 @@ let computeLiveness (cfg: CFG) : Map<Label, Set<VReg>> * Map<Label, Set<VReg>> =
 ///   For each block d in DF(b):
 ///     Insert phi node for v in d (if not already present AND v is live-in at d)
 ///     This also counts as a definition, so recursively process
-let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) (liveIn: Map<Label, Set<VReg>>) (funcParams: VReg list) (paramTypes: AST.Type list) : CFG =
+let insertPhiNodes (cfg: CFG) (df: DominanceFrontier) (preds: Predecessors) (liveIn: Map<Label, Set<VReg>>) (funcParams: VReg list) (paramTypes: AST.SemanticType list) : CFG =
     // Create a map from parameter VReg to its type
     let paramTypeMap =
         List.zip funcParams paramTypes

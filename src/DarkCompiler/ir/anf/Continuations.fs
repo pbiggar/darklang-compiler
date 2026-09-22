@@ -6,7 +6,7 @@ let isSupportedJoinArgumentType = function
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
     | AST.TBool | AST.TDateTime | AST.TUnit
-    | AST.TRawPtr -> true
+    | AST.TInternalRawPtr -> true
     | _ -> false
 
 let rec bindReturns (expr: ANF.AExpr) (k: ANF.Atom -> ANF.AExpr) : ANF.AExpr =

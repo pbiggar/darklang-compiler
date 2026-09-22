@@ -9,8 +9,8 @@ open LiftExpressions
 open LiftFunctions
 
 let internal buildSkewListLiteral
-    (listType: AST.Type)
-    (elements: (ANF.Atom * AST.Type) list)
+    (listType: AST.SemanticType)
+    (elements: (ANF.Atom * AST.SemanticType) list)
     (varGen: ANF.VarGen)
     (initialBindings: (ANF.TempId * ANF.CExpr) list)
     : ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
@@ -29,7 +29,7 @@ let internal buildSkewListLiteral
 
     let allocLeaf
         (value: ANF.Atom)
-        (valueType: AST.Type)
+        (valueType: AST.SemanticType)
         (vg: ANF.VarGen)
         (bindingsRev: (ANF.TempId * ANF.CExpr) list)
         : ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
@@ -45,7 +45,7 @@ let internal buildSkewListLiteral
 
     let allocNode
         (value: ANF.Atom)
-        (valueType: AST.Type)
+        (valueType: AST.SemanticType)
         (left: ANF.Atom)
         (right: ANF.Atom)
         (vg: ANF.VarGen)
@@ -90,7 +90,7 @@ let internal buildSkewListLiteral
         tagRawPtr 1L ptrVar vg6 nextBindings
 
     let rec buildTrees
-        (remaining: (ANF.Atom * AST.Type) list)
+        (remaining: (ANF.Atom * AST.SemanticType) list)
         (vg: ANF.VarGen)
         (bindings: (ANF.TempId * ANF.CExpr) list)
         : (int * ANF.Atom) list * (ANF.TempId * ANF.CExpr) list * ANF.VarGen =
@@ -128,7 +128,7 @@ let internal buildSkewListLiteral
 let rec internal lowerLetPatternBindings
     (pattern: CheckedAST.LetPattern)
     (sourceAtom: ANF.Atom)
-    (sourceType: AST.Type)
+    (sourceType: AST.SemanticType)
     (env: VarEnv)
     (bindingsRev: (ANF.TempId * ANF.CExpr) list)
     (varGen: ANF.VarGen)
@@ -165,7 +165,7 @@ let rec internal lowerLetPatternBindings
 
 let rec internal letPatternAcceptsType
     (pattern: CheckedAST.LetPattern)
-    (valueType: AST.Type)
+    (valueType: AST.SemanticType)
     : bool =
     match pattern, valueType with
     | CheckedAST.LPVariable _, _ | CheckedAST.LPWildcard, _ -> true

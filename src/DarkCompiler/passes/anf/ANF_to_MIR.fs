@@ -28,7 +28,7 @@ module ANF_to_MIR
 open ResultList
 
 /// Helper to create VariantInfo record
-let private mkVariantInfo (name: string) (tag: int) (fields: AST.Type list) : MIR.VariantInfo =
+let private mkVariantInfo (name: string) (tag: int) (fields: AST.SemanticType list) : MIR.VariantInfo =
     let payload =
         match fields with
         | [] -> None
@@ -41,7 +41,7 @@ let private mkTypeVariants (typeParams: string list) (variants: MIR.VariantInfo 
     { MIR.TypeVariants.TypeParams = typeParams; MIR.TypeVariants.Variants = variants }
 
 /// Helper to create RecordField record
-let private mkRecordField (name: string) (typ: AST.Type) : MIR.RecordField =
+let private mkRecordField (name: string) (typ: AST.SemanticType) : MIR.RecordField =
     { MIR.RecordField.Name = name; MIR.RecordField.Type = typ }
 
 /// Build VariantRegistry from VariantLookup
@@ -88,7 +88,7 @@ let buildVariantRegistry (variantLookup: LoweringPrimitives.VariantLookup) : MIR
 /// Build RecordRegistry from TypeReg
 /// TypeReg: typeName -> (fieldName, fieldType) list
 /// RecordRegistry: typeName -> RecordField list
-let buildRecordRegistry (typeReg: Map<string, (string * AST.Type) list>) : MIR.RecordRegistry =
+let buildRecordRegistry (typeReg: Map<string, (string * AST.SemanticType) list>) : MIR.RecordRegistry =
     typeReg
     |> Map.map (fun _typeName fields ->
         fields |> List.map (fun (name, typ) -> mkRecordField name typ))
@@ -179,7 +179,7 @@ let private appendInstrsRev (instrs: MIR.Instr list) (revInstrs: MIR.Instr list)
     (List.rev instrs) @ revInstrs
 
 /// Build a dense type lookup array for TempIds up to maxId
-let private buildTypeById (maxId: int) (typeMap: ANF.TypeMap) : AST.Type option array =
+let private buildTypeById (maxId: int) (typeMap: ANF.TypeMap) : AST.SemanticType option array =
     if maxId < 0 then
         [||]
     else
@@ -336,7 +336,7 @@ let isFloatAtom (floatRegs: Set<int>) (atom: ANF.Atom) : bool =
 
 /// Helper to check if a CExpr produces a float value
 /// returnTypeReg: map from function name to return type (for checking Call results)
-let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<AST.FunctionId, AST.Type>) (cexpr: ANF.CExpr) : bool =
+let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>) (cexpr: ANF.CExpr) : bool =
     match cexpr with
     | ANF.Prim (op, left, right) ->
         // Comparisons and boolean ops always produce Bool, not Float
@@ -373,8 +373,8 @@ let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<AST.FunctionId,
 /// externalReturnTypes: return types for functions not in `functions` (e.g., specialized functions compiled elsewhere)
 let buildReturnTypeReg
     (functions: ANF.Function list)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.Type>)
-    : Map<AST.FunctionId, AST.Type> =
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
+    : Map<AST.FunctionId, AST.SemanticType> =
     let externalById =
         externalReturnTypes
         |> Map.map (fun _ (_, typ) -> typ)
@@ -384,7 +384,7 @@ let buildReturnTypeReg
         externalById
 
 /// Return type for monomorphized intrinsics not tracked in the return type registry
-let tryGetIntrinsicReturnType (funcName: string) : AST.Type option =
+let tryGetIntrinsicReturnType (funcName: string) : AST.SemanticType option =
     if funcName = "Builtin.pmFindValuesByValueType" then
         Some (AST.TList (AST.TSum ("Darklang.LanguageTools.ProgramTypes.Hash", [])))
     elif funcName = "Builtin.pmGetLocationsByValue" then
@@ -393,18 +393,18 @@ let tryGetIntrinsicReturnType (funcName: string) : AST.Type option =
         Crash.crash $"ANF_to_MIR: monomorphized raw_get return type missing from registry: {funcName}"
     elif funcName.StartsWith("__raw_take_") then
         Crash.crash $"ANF_to_MIR: monomorphized raw_take return type missing from registry: {funcName}"
-    elif funcName.StartsWith("__stream_to_rawptr_") then Some AST.TRawPtr
+    elif funcName.StartsWith("__stream_to_rawptr_") then Some AST.TInternalRawPtr
     elif funcName.StartsWith("__raw_slot_init_") then Some AST.TUnit
     elif funcName.StartsWith("__hash_") then Some AST.TInt64
     elif funcName.StartsWith("__key_eq_") then Some AST.TBool
     elif funcName.StartsWith("__empty_dict_") then Some AST.TInt64
     elif funcName.StartsWith("__dict_is_null_") then Some AST.TBool
     elif funcName.StartsWith("__dict_get_tag_") then Some AST.TInt64
-    elif funcName.StartsWith("__dict_to_rawptr_") then Some AST.TRawPtr
+    elif funcName.StartsWith("__dict_to_rawptr_") then Some AST.TInternalRawPtr
     elif funcName.StartsWith("__rawptr_to_dict_") then Some (AST.TDict (AST.TVar "k", AST.TVar "v"))
     elif funcName.StartsWith("__list_is_null_") then Some AST.TBool
     elif funcName.StartsWith("__list_get_tag_") then Some AST.TInt64
-    elif funcName.StartsWith("__list_to_rawptr_") then Some AST.TRawPtr
+    elif funcName.StartsWith("__list_to_rawptr_") then Some AST.TInternalRawPtr
     elif funcName.StartsWith("__rawptr_to_list_") then Some (AST.TList (AST.TVar "a"))
     else None
 
@@ -412,15 +412,15 @@ let tryGetIntrinsicReturnType (funcName: string) : AST.Type option =
 /// which would cause race conditions in parallel test execution
 type CFGBuilder = {
     Blocks: Map<MIR.Label, MIR.BasicBlock>
-    Joins: Map<ANF.TempId, MIR.Label * AST.Type>
+    Joins: Map<ANF.TempId, MIR.Label * AST.SemanticType>
     LabelGen: MIR.LabelGen
     RegGen: MIR.RegGen
-    TypeById: AST.Type option array
+    TypeById: AST.SemanticType option array
     // Fresh MIR registers start above this function's source TempIds and must use ExtraTypeMap.
     SourceTempIdMax: int
-    ExtraTypeMap: Map<ANF.TempId, AST.Type>
-    TypeReg: Map<string, (string * AST.Type) list>
-    ReturnTypeReg: Map<AST.FunctionId, AST.Type>  // Function identity -> return type
+    ExtraTypeMap: Map<ANF.TempId, AST.SemanticType>
+    TypeReg: Map<string, (string * AST.SemanticType) list>
+    ReturnTypeReg: Map<AST.FunctionId, AST.SemanticType>  // Function identity -> return type
     FunctionNames: Map<AST.FunctionId, string>
     FuncId: AST.FunctionId
     FuncName: string  // For generating unique labels per function
@@ -434,7 +434,7 @@ type CFGBuilder = {
 }
 
 /// Lookup a TempId by raw integer id, checking extra types for newly created regs
-let private tryFindTypeById (builder: CFGBuilder) (id: int) : AST.Type option =
+let private tryFindTypeById (builder: CFGBuilder) (id: int) : AST.SemanticType option =
     match Map.tryFind (ANF.TempId id) builder.ExtraTypeMap with
     | Some typ -> Some typ
     | None when id >= 0 && id <= builder.SourceTempIdMax && id < builder.TypeById.Length ->
@@ -442,7 +442,7 @@ let private tryFindTypeById (builder: CFGBuilder) (id: int) : AST.Type option =
     | None -> None
 
 /// Lookup a TempId, checking extra types for newly created regs
-let private tryFindType (builder: CFGBuilder) (tempId: ANF.TempId) : AST.Type option =
+let private tryFindType (builder: CFGBuilder) (tempId: ANF.TempId) : AST.SemanticType option =
     let (ANF.TempId id) = tempId
     tryFindTypeById builder id
 
@@ -467,7 +467,7 @@ let private rcKindToMIR (kind: MemoryModel.RcKind) : MIR.RcKind =
     | MemoryModel.ClosureHeap -> MIR.ClosureHeap
 
 /// Get the type of an ANF Atom (for generating type-specific instructions)
-let atomType (builder: CFGBuilder) (atom: ANF.Atom) : AST.Type =
+let atomType (builder: CFGBuilder) (atom: ANF.Atom) : AST.SemanticType =
     match atom with
     | ANF.UnitLiteral -> AST.TUnit
     | ANF.IntLiteral n -> ANF.sizedIntToType n  // Use the actual type from SizedInt
@@ -490,7 +490,7 @@ let atomType (builder: CFGBuilder) (atom: ANF.Atom) : AST.Type =
 
 /// Get the operand type for a binary operation (checks both operands)
 /// If either operand is float, the operation is float
-let binOpType (builder: CFGBuilder) (leftAtom: ANF.Atom) (rightAtom: ANF.Atom) : AST.Type =
+let binOpType (builder: CFGBuilder) (leftAtom: ANF.Atom) (rightAtom: ANF.Atom) : AST.SemanticType =
     let leftType = atomType builder leftAtom
     let rightType = atomType builder rightAtom
     match leftType, rightType with
@@ -501,7 +501,7 @@ let binOpType (builder: CFGBuilder) (leftAtom: ANF.Atom) (rightAtom: ANF.Atom) :
 /// A closure temp may still have its concrete allocation target in ClosureFuncs;
 /// higher-order values passed through parameters or containers are resolved from
 /// the already-required ANF result temp type.
-let private closureCallReturnType (builder: CFGBuilder) (resultTempId: ANF.TempId) (closure: ANF.Atom) : AST.Type =
+let private closureCallReturnType (builder: CFGBuilder) (resultTempId: ANF.TempId) (closure: ANF.Atom) : AST.SemanticType =
     let resultTempType () =
         match tryFindType builder resultTempId with
         | Some (AST.TFunction (_, retType)) -> retType
@@ -518,7 +518,7 @@ let private closureCallReturnType (builder: CFGBuilder) (resultTempId: ANF.TempI
         | None -> resultTempType ()
     | _ -> resultTempType ()
 
-let private directCallReturnType (builder: CFGBuilder) (funcName: AST.FunctionId) : AST.Type =
+let private directCallReturnType (builder: CFGBuilder) (funcName: AST.FunctionId) : AST.SemanticType =
     match Map.tryFind funcName builder.ReturnTypeReg with
     | Some t -> t
     | None ->
@@ -560,10 +560,10 @@ let private directCallReturnType (builder: CFGBuilder) (funcName: AST.FunctionId
 let private tupleGetDestType
     (builder: CFGBuilder)
     (tempId: ANF.TempId)
-    (tupleGetAliasType: AST.Type option)
+    (tupleGetAliasType: AST.SemanticType option)
     (tupleId: ANF.TempId)
     (index: int)
-    : AST.Type option =
+    : AST.SemanticType option =
     match tupleGetAliasType with
     | Some AST.TFloat64 -> Some AST.TFloat64
     | _ ->
@@ -590,9 +590,9 @@ let private tupleGetDestType
 let private inferSimpleCExprDestType
     (builder: CFGBuilder)
     (tempId: ANF.TempId)
-    (tupleGetAliasType: AST.Type option)
+    (tupleGetAliasType: AST.SemanticType option)
     (cexpr: ANF.CExpr)
-    : AST.Type option =
+    : AST.SemanticType option =
     match cexpr with
     | ANF.Atom atom -> Some (atomType builder atom)
     | ANF.TypedAtom (_, aType) -> Some aType
@@ -612,7 +612,7 @@ let private inferSimpleCExprDestType
     | ANF.IndirectCall (func, _) ->
         match atomType builder func with
         | AST.TFunction (_, retType) -> Some retType
-        | AST.TRawPtr | AST.TInt64 -> Some AST.TBool
+        | AST.TInternalRawPtr | AST.TInt64 -> Some AST.TBool
         | other -> Crash.crash $"IndirectCall: Expected TFunction type for func, got {other}"
     | ANF.ClosureCall (closure, _) -> Some (closureCallReturnType builder tempId closure)
     | ANF.TupleGet (ANF.Var tupleId, index) ->
@@ -627,8 +627,8 @@ let private inferSimpleCExprDestType
     | ANF.StringToRawPtr _
     | ANF.BlobToRawPtr _
     | ANF.DictToRawPtr _
-    | ANF.ListToRawPtr _ -> Some AST.TRawPtr
-    | ANF.FixedBlockToRawPtr _ -> Some AST.TRawPtr
+    | ANF.ListToRawPtr _ -> Some AST.TInternalRawPtr
+    | ANF.FixedBlockToRawPtr _ -> Some AST.TInternalRawPtr
     | ANF.RawPtrToString _ -> Some AST.TString
     | ANF.RawPtrToBlob _ -> Some AST.TBlob
     | ANF.RawPtrToInt128 _ -> Some AST.TInt128
@@ -644,7 +644,7 @@ let private inferSimpleCExprDestType
     | _ -> None
 
 /// Get the type of an MIR operand (for generating type-specific instructions)
-let operandType (builder: CFGBuilder) (operand: MIR.Operand) : AST.Type =
+let operandType (builder: CFGBuilder) (operand: MIR.Operand) : AST.SemanticType =
     match operand with
     | MIR.Int64Const _ -> AST.TInt64
     | MIR.BoolConst _ -> AST.TBool
@@ -915,7 +915,7 @@ let private redirectReturn resultReg joinLabel exit (builder: CFGBuilder) =
 /// Returned blocks are complete CFG blocks; an enclosing join may redirect only
 /// the returned exit. Terminal transfers are never patched.
 let rec convertExpr
-    (resultType: AST.Type)
+    (resultType: AST.SemanticType)
     (expr: ANF.AExpr)
     (currentLabel: MIR.Label)
     (currentInstrsRev: MIR.Instr list)
@@ -1184,7 +1184,7 @@ let rec convertExpr
                     let returnType =
                         match atomType builder func with
                         | AST.TFunction (_, retType) -> retType
-                        | AST.TRawPtr | AST.TInt64 -> AST.TBool
+                        | AST.TInternalRawPtr | AST.TInt64 -> AST.TBool
                         | other -> Crash.crash $"IndirectCall: Expected TFunction type for func, got {other}"
                     atomToOperand builder func
                     |> Result.bind (fun funcOp ->
@@ -1237,7 +1237,7 @@ let rec convertExpr
                     let returnType =
                         match atomType builder func with
                         | AST.TFunction (_, retType) -> retType
-                        | AST.TRawPtr | AST.TInt64 -> AST.TBool
+                        | AST.TInternalRawPtr | AST.TInt64 -> AST.TBool
                         | other -> Crash.crash $"IndirectTailCall: Expected TFunction type for func, got {other}"
                     atomToOperand builder func
                     |> Result.bind (fun funcOp ->
@@ -1486,7 +1486,7 @@ let rec convertExpr
                     |> Result.map (fun listOp -> [MIR.ListToRawPtr (destReg, listOp)])
                 | ANF.FixedBlockToRawPtr valueAtom ->
                     atomToOperand builder valueAtom
-                    |> Result.map (fun valueOp -> [MIR.Mov (destReg, valueOp, Some AST.TRawPtr)])
+                    |> Result.map (fun valueOp -> [MIR.Mov (destReg, valueOp, Some AST.TInternalRawPtr)])
                 | ANF.RawPtrToList (ptrAtom, tagAtom, _listType) ->
                     atomToOperand builder ptrAtom
                     |> Result.bind (fun ptrOp ->
@@ -1622,9 +1622,9 @@ let rec convertExpr
 let convertANFFunction
     (anfFunc: ANF.Function)
     (typeMap: ANF.TypeMap)
-    (typeById: AST.Type option array)
-    (typeReg: Map<string, (string * AST.Type) list>)
-    (returnTypeReg: Map<AST.FunctionId, AST.Type>)
+    (typeById: AST.SemanticType option array)
+    (typeReg: Map<string, (string * AST.SemanticType) list>)
+    (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
     (functionNames: Map<AST.FunctionId, string>)
     (enableCoverage: bool)
     : Result<MIR.Function, string> =
@@ -1768,12 +1768,12 @@ let convertANFFunction
 let toMIR
     (program: ANF.Program)
     (typeMap: ANF.TypeMap)
-    (typeReg: Map<string, (string * AST.Type) list>)
-    (mainExprType: AST.Type)
+    (typeReg: Map<string, (string * AST.SemanticType) list>)
+    (mainExprType: AST.SemanticType)
     (variantLookup: LoweringPrimitives.VariantLookup)
-    (typeRegForRecords: Map<string, (string * AST.Type) list>)
+    (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.Type>)
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
     : Result<MIR.Program, string> =
     let (ANF.Program (functions, mainExpr)) = program
     // TypeMap spans the whole program, so materialize its dense lookup once and
@@ -1860,12 +1860,12 @@ let private toMIRFunctionsOnlyInternal
     (projectedRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
     (program: ANF.Program)
     (typeMap: ANF.TypeMap)
-    (typeReg: Map<string, (string * AST.Type) list>)
+    (typeReg: Map<string, (string * AST.SemanticType) list>)
     (variantLookup: LoweringPrimitives.VariantLookup)
-    (typeRegForRecords: Map<string, (string * AST.Type) list>)
+    (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
     (knownFunctionNames: Map<AST.FunctionId, string>)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.Type>)
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let startPhase () =
         phaseRecorder |> Option.map (fun _ -> System.Diagnostics.Stopwatch.StartNew())
@@ -1916,11 +1916,11 @@ let private toMIRFunctionsOnlyInternal
 let toMIRFunctionsOnly
     (program: ANF.Program)
     (typeMap: ANF.TypeMap)
-    (typeReg: Map<string, (string * AST.Type) list>)
+    (typeReg: Map<string, (string * AST.SemanticType) list>)
     (variantLookup: LoweringPrimitives.VariantLookup)
-    (typeRegForRecords: Map<string, (string * AST.Type) list>)
+    (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.Type>)
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     toMIRFunctionsOnlyInternal
         None
@@ -1939,12 +1939,12 @@ let toMIRFunctionsOnlyWithTrace
     (projectedRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
     (program: ANF.Program)
     (typeMap: ANF.TypeMap)
-    (typeReg: Map<string, (string * AST.Type) list>)
+    (typeReg: Map<string, (string * AST.SemanticType) list>)
     (variantLookup: LoweringPrimitives.VariantLookup)
-    (typeRegForRecords: Map<string, (string * AST.Type) list>)
+    (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
     (functionNames: Map<AST.FunctionId, string>)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.Type>)
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     toMIRFunctionsOnlyInternal
         phaseRecorder

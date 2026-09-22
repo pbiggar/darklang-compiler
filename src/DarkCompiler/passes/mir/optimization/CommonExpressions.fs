@@ -10,10 +10,10 @@ open MIRLoopTopology
 
 /// Expression key for CSE - represents a pure computation
 type ExprKey =
-    | BinExpr of BinOp * Operand * Operand * AST.Type
+    | BinExpr of BinOp * Operand * Operand * AST.SemanticType
     | UnaryExpr of UnaryOp * Operand
-    | ScalarHeapLoadExpr of VReg * int * AST.Type
-    | DirectCallExpr of funcName:AST.FunctionId * args:Operand list * returnType:AST.Type
+    | ScalarHeapLoadExpr of VReg * int * AST.SemanticType
+    | DirectCallExpr of funcName:AST.FunctionId * args:Operand list * returnType:AST.SemanticType
 
 type private ExprAvailability = {
     Arithmetic: Map<ExprKey, VReg>
@@ -66,7 +66,7 @@ let normalizeOperands (op: BinOp) (left: Operand) (right: Operand) : Operand * O
         (left, right)
 
 /// Build expression key for a BinOp
-let makeBinExprKey (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type) : ExprKey =
+let makeBinExprKey (op: BinOp) (left: Operand) (right: Operand) (opType: AST.SemanticType) : ExprKey =
     let (l, r) = normalizeOperands op left right
     BinExpr (op, l, r, opType)
 
@@ -75,10 +75,10 @@ let makeUnaryExprKey (op: UnaryOp) (src: Operand) : ExprKey =
     UnaryExpr (op, src)
 
 /// Build an availability key for an exact typed scalar heap load.
-let makeScalarHeapLoadExprKey (addr: VReg) (offset: int) (valueType: AST.Type) : ExprKey =
+let makeScalarHeapLoadExprKey (addr: VReg) (offset: int) (valueType: AST.SemanticType) : ExprKey =
     ScalarHeapLoadExpr (addr, offset, valueType)
 
-let private isCrossBlockCSEType (opType: AST.Type) : bool =
+let private isCrossBlockCSEType (opType: AST.SemanticType) : bool =
     match opType with
     | AST.TInt64 | AST.TInt32 | AST.TInt16 | AST.TInt8
     | AST.TUInt64 | AST.TUInt32 | AST.TUInt16 | AST.TUInt8
@@ -109,7 +109,7 @@ type private PartialRedundancyCandidate = {
     Dest: VReg
     Key: ExprKey
     Instr: Instr
-    ValueType: AST.Type option
+    ValueType: AST.SemanticType option
     Operands: Operand list
 }
 

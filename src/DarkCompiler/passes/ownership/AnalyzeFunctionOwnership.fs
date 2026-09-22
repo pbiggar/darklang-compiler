@@ -8,7 +8,7 @@ open LoweringPrimitives
 type Context = {
     TypeReg: TypeRegistry
     TypeNames: TypeNameRegistry
-    RecordFieldsReg: Map<string, (string * AST.Type) list>
+    RecordFieldsReg: Map<string, (string * AST.SemanticType) list>
     RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
     SumTypeNames: Set<string>

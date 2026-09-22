@@ -14,7 +14,7 @@ open RcReturnAnalysis
 open RcShapePlanning
 
 type internal ReturnDec =
-    TempId * AST.Type * RcShape * RcKind option * RcMetadata option
+    TempId * AST.SemanticType * RcShape * RcKind option * RcMetadata option
 
 type internal InternalOwnedParamKind =
     | ReturnedAccumulator
@@ -29,7 +29,7 @@ type internal OwnedParamDec = {
 let internal createReturnDec
     (ctx: TypeContext)
     (tempId: TempId)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     (shape: RcShape)
     (kindOverride: RcKind option)
     : ReturnDec =
@@ -47,7 +47,7 @@ let internal createReturnDec
 let internal retainExprForShape
     (ctx: TypeContext)
     (tempId: TempId)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     (shape: RcShape)
     : CExpr =
     match rcShapeRetainOperation shape with
@@ -68,7 +68,7 @@ let internal retainExprForShape
 
 let private releaseExprForShape
     (tempId: TempId)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     (shape: RcShape)
     (kindOverride: RcKind option)
     (metadata: RcMetadata option)
@@ -100,7 +100,7 @@ let internal functionParamReturnTransfersOwnedAccumulator
     (ctx: TypeContext)
     (funcName: AST.FunctionId)
     (paramIndex: int)
-    (paramType: AST.Type)
+    (paramType: AST.SemanticType)
     : bool =
     let displayName =
         Map.tryFind funcName ctx.FuncReg |> Option.map fst |> Option.defaultValue ""
@@ -270,12 +270,12 @@ let internal internalOwnedTailParamHasSafeReplacements
 /// Insert RefCountInc for returned parameters at a Return node
 let insertParamIncsAtReturn
     (ctx: TypeContext)
-    (paramIncs: (TempId * AST.Type * RcShape) list)
+    (paramIncs: (TempId * AST.SemanticType * RcShape) list)
     (returned: Set<TempId>)
     (expr: AExpr)
     (varGen: VarGen)
-    (types: Map<TempId, AST.Type>)
-    : AExpr * VarGen * Map<TempId, AST.Type> =
+    (types: Map<TempId, AST.SemanticType>)
+    : AExpr * VarGen * Map<TempId, AST.SemanticType> =
     let active =
         paramIncs
         |> List.filter (fun (tempId, _, _) -> Set.contains tempId returned)
@@ -293,8 +293,8 @@ let insertReturnDecs
     (returnDecs: ReturnDec list)
     (expr: AExpr)
     (varGen: VarGen)
-    (types: Map<TempId, AST.Type>)
-    : AExpr * VarGen * Map<TempId, AST.Type> =
+    (types: Map<TempId, AST.SemanticType>)
+    : AExpr * VarGen * Map<TempId, AST.SemanticType> =
     let decsInOrder = List.rev returnDecs
     List.fold
         (fun (accExpr, accVarGen, accTypes) (tempId, typ, shape, kindOverride, metadata) ->
@@ -308,14 +308,14 @@ let insertReturnDecs
 type RecordReuseCleanup = {
     Descriptor: RecordDescriptor
     Source: TempId
-    Fields: (int * AST.Type * RcShape) list
+    Fields: (int * AST.SemanticType * RcShape) list
 }
 
 /// Stored state for rebuilding a Let while unwinding an expression spine
 type LetFrame = {
     TempId: TempId
     CExpr: CExpr
-    AllocationIncTargets: (TempId * AST.Type * RcShape) list
+    AllocationIncTargets: (TempId * AST.SemanticType * RcShape) list
     /// Managed child edges displaced by RecordReuse. The source descriptor may
     /// differ from the target for boxed-sum variant changes. Replacements are
     /// retained before these fields are loaded and released; stores happen
@@ -324,7 +324,7 @@ type LetFrame = {
     /// The pass owns exactly one pending release for this value, and its next
     /// use transfers that ownership into a closed returned aggregate suffix.
     TransferableOwnership: ReturnDec option
-    ReturnInc: (AST.Type * RcShape) option
+    ReturnInc: (AST.SemanticType * RcShape) option
     BranchDec: ReturnDec option
 }
 
@@ -332,8 +332,8 @@ type LetFrame = {
 let applyLetFrame
     (ctx: TypeContext)
     (frame: LetFrame)
-    (expr: AExpr, varGen: VarGen, types: Map<TempId, AST.Type>)
-    : AExpr * VarGen * Map<TempId, AST.Type> =
+    (expr: AExpr, varGen: VarGen, types: Map<TempId, AST.SemanticType>)
+    : AExpr * VarGen * Map<TempId, AST.SemanticType> =
     let (incBindingsRev, varGen1) =
         frame.AllocationIncTargets
         |> List.fold (fun (acc, vg) (tid, typ, shape) ->
@@ -388,12 +388,12 @@ let applyLetFrame
 let applyLetFrames
     (ctx: TypeContext)
     (frames: LetFrame list)
-    (expr: AExpr, varGen: VarGen, types: Map<TempId, AST.Type>)
-    : AExpr * VarGen * Map<TempId, AST.Type> =
+    (expr: AExpr, varGen: VarGen, types: Map<TempId, AST.SemanticType>)
+    : AExpr * VarGen * Map<TempId, AST.SemanticType> =
     let folder
-        ((accExpr, accVarGen, accTypes): AExpr * VarGen * Map<TempId, AST.Type>)
+        ((accExpr, accVarGen, accTypes): AExpr * VarGen * Map<TempId, AST.SemanticType>)
         (frame: LetFrame)
-        : AExpr * VarGen * Map<TempId, AST.Type> =
+        : AExpr * VarGen * Map<TempId, AST.SemanticType> =
         applyLetFrame ctx frame (accExpr, accVarGen, accTypes)
     List.fold folder (expr, varGen, types) frames
 
@@ -531,8 +531,8 @@ let internal insertOwnedAccumulatorDecsBeforeSelfTailCalls
     (ownedParamDecs: OwnedParamDec list)
     (expr: AExpr)
     (varGen: VarGen)
-    (types: Map<TempId, AST.Type>)
-    : AExpr * VarGen * Map<TempId, AST.Type> =
+    (types: Map<TempId, AST.SemanticType>)
+    : AExpr * VarGen * Map<TempId, AST.SemanticType> =
     let decsForSelfTailCall (args: Atom list) : ReturnDec list =
         ownedParamDecs
         |> List.choose (fun owned ->
@@ -550,8 +550,8 @@ let internal insertOwnedAccumulatorDecsBeforeSelfTailCalls
         (decs: ReturnDec list)
         (tailExpr: AExpr)
         (varGen: VarGen)
-        (types: Map<TempId, AST.Type>)
-        : AExpr * VarGen * Map<TempId, AST.Type> =
+        (types: Map<TempId, AST.SemanticType>)
+        : AExpr * VarGen * Map<TempId, AST.SemanticType> =
         decs
         |> List.fold
             (fun (accExpr, accVarGen, accTypes) (tempId, typ, shape, kindOverride, metadata) ->
@@ -565,8 +565,8 @@ let internal insertOwnedAccumulatorDecsBeforeSelfTailCalls
         (releaseTerminalState: bool)
         (expr: AExpr)
         (varGen: VarGen)
-        (types: Map<TempId, AST.Type>)
-        : AExpr * VarGen * Map<TempId, AST.Type> =
+        (types: Map<TempId, AST.SemanticType>)
+        : AExpr * VarGen * Map<TempId, AST.SemanticType> =
         match expr with
         | Jump _ -> (expr, varGen, types)
         | Join (parameter, continuation, entry) ->
@@ -646,8 +646,8 @@ let rec internal insertClosureMapSourceRetainsBeforeHelperCalls
     (currentFuncName: AST.FunctionId)
     (expr: AExpr)
     (varGen: VarGen)
-    (types: Map<TempId, AST.Type>)
-    : AExpr * VarGen * Map<TempId, AST.Type> =
+    (types: Map<TempId, AST.SemanticType>)
+    : AExpr * VarGen * Map<TempId, AST.SemanticType> =
     let currentIsMapHelper = isClosureMapHelperTarget ctx currentFuncName
 
     let targetReturnsClosureList (targetFunc: AST.FunctionId) : bool =
@@ -660,8 +660,8 @@ let rec internal insertClosureMapSourceRetainsBeforeHelperCalls
         (args: Atom list)
         (callExpr: AExpr)
         (varGen: VarGen)
-        (types: Map<TempId, AST.Type>)
-        : AExpr * VarGen * Map<TempId, AST.Type> =
+        (types: Map<TempId, AST.SemanticType>)
+        : AExpr * VarGen * Map<TempId, AST.SemanticType> =
         match currentIsMapHelper, targetReturnsClosureList targetFunc, args with
         | false, true, Var sourceTemp :: _ ->
             match tryGetType (withTempTypes ctx types) sourceTemp with

@@ -10,7 +10,7 @@ module PrintInsertion
 
 open ANF
 
-let unsupportedListDisplay (elemType: AST.Type) : 'a =
+let unsupportedListDisplay (elemType: AST.SemanticType) : 'a =
     Crash.crash $"Unsupported list result display element type: {CheckingDiagnostics.typeToString elemType}"
 
 /// Wrap the return value with a Print instruction
@@ -18,7 +18,7 @@ let unsupportedListDisplay (elemType: AST.Type) : 'a =
 /// For list types, generates: Call toDisplayString, then Print the string
 let rec wrapReturnWithPrint
     (resolveFunction: string -> AST.FunctionId)
-    (programType: AST.Type)
+    (programType: AST.SemanticType)
     (varGen: VarGen)
     (expr: AExpr)
     : AExpr * VarGen =
@@ -26,7 +26,7 @@ let rec wrapReturnWithPrint
         match programType with
         // Builtin.testRuntimeError has a bottom-like compile-time type.
         // Printing should stay concrete so downstream passes never see it.
-        | AST.TRuntimeError -> AST.TUnit
+        | AST.TNever -> AST.TUnit
         | _ -> programType
 
     match expr with
@@ -112,7 +112,7 @@ let rec wrapReturnWithPrint
         (If (cond, thenBranch', elseBranch'), varGen2)
 
 /// Insert Print at the end of the main expression
-let insertPrint (functions: ANF.Function list) (mainExpr: ANF.AExpr) (programType: AST.Type) : ANF.Program =
+let insertPrint (functions: ANF.Function list) (mainExpr: ANF.AExpr) (programType: AST.SemanticType) : ANF.Program =
     let idsByName = functions |> List.map (fun fn -> fn.Name, fn.Id) |> Map.ofList
     let resolveFunction name =
         Map.tryFind name idsByName
@@ -125,7 +125,7 @@ let insertPrint (functions: ANF.Function list) (mainExpr: ANF.AExpr) (programTyp
 let insertPrintInEntry
     (functionNames: Map<AST.FunctionId, string>)
     (entryName: string)
-    (programType: AST.Type)
+    (programType: AST.SemanticType)
     (functions: ANF.Function list)
     : Result<ANF.Function list, string> =
     let idsByName =

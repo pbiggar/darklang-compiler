@@ -6,7 +6,7 @@ open MIR
 
 /// Truncate a 64-bit value to the appropriate integer type width
 /// This ensures proper overflow/wraparound behavior for smaller integer types
-let truncateToType (value: int64) (opType: AST.Type) : int64 =
+let truncateToType (value: int64) (opType: AST.SemanticType) : int64 =
     match opType with
     | AST.TInt8 -> int64 (int8 value)      // Truncate to signed 8-bit
     | AST.TInt16 -> int64 (int16 value)    // Truncate to signed 16-bit
@@ -16,7 +16,7 @@ let truncateToType (value: int64) (opType: AST.Type) : int64 =
     | AST.TUInt32 -> int64 (uint32 value)  // Truncate to unsigned 32-bit
     | _ -> value                            // Int64/UInt64 and other types: no truncation
 
-let truncateOperandToType (operand: Operand) (opType: AST.Type) : Operand =
+let truncateOperandToType (operand: Operand) (opType: AST.SemanticType) : Operand =
     match operand with
     | Int64Const value -> Int64Const (truncateToType value opType)
     | _ -> operand
@@ -28,7 +28,7 @@ let euclideanMod (a: int64) (b: int64) : int64 =
     elif (remainder > 0L && b < 0L) || (remainder < 0L && b > 0L) then remainder + b
     else remainder
 
-let isReflexiveEqualityType (opType: AST.Type) : bool =
+let isReflexiveEqualityType (opType: AST.SemanticType) : bool =
     match opType with
     | AST.TInt8
     | AST.TInt16
@@ -46,7 +46,7 @@ let isReflexiveEqualityType (opType: AST.Type) : bool =
     | AST.TUnit -> true
     | _ -> false
 
-let isTotallyOrderedIntegerType (opType: AST.Type) : bool =
+let isTotallyOrderedIntegerType (opType: AST.SemanticType) : bool =
     match opType with
     | AST.TInt8
     | AST.TInt16
@@ -60,7 +60,7 @@ let isTotallyOrderedIntegerType (opType: AST.Type) : bool =
     | AST.TUInt128 -> true
     | _ -> false
 
-let isUnsignedIntegerType (opType: AST.Type) : bool =
+let isUnsignedIntegerType (opType: AST.SemanticType) : bool =
     match opType with
     | AST.TUInt8
     | AST.TUInt16
@@ -70,7 +70,7 @@ let isUnsignedIntegerType (opType: AST.Type) : bool =
 
 /// Constant Folding for MIR
 /// Evaluate operations on constants at compile time
-let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) (opType: AST.Type) : Operand option =
+let tryFoldBinOp (op: BinOp) (left: Operand) (right: Operand) (opType: AST.SemanticType) : Operand option =
     match op, left, right with
     // Integer arithmetic - apply truncation for proper overflow behavior
     | Add, Int64Const a, Int64Const b -> Some (Int64Const (truncateToType (a + b) opType))

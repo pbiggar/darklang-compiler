@@ -42,11 +42,11 @@ type IdentifierToken =
 /// their lexical role here; the legacy AST string boundary is crossed only by
 /// `normalizeSource`.
 type SourceDeclaration =
-    | SourceFunction of Identifier * FunctionDef
-    | SourceType of Identifier * TypeDef
-    | SourceValue of Identifier * Expr
+    | SourceFunction of Identifier * ParsedFunctionDef
+    | SourceType of Identifier * ParsedTypeDef
+    | SourceValue of Identifier * ParsedExpr
     | SourceNestedModule of QualifiedName * ParsedSource
-    | SourceExpression of Expr
+    | SourceExpression of ParsedExpr
 
 and ParsedSource =
     | SourceDeclarations of NonEmptyList<SourceDeclaration>
@@ -84,7 +84,7 @@ type EntryCandidate = {
     SourceUnit: SourceUnitName
     ModulePath: QualifiedName list
     DeclarationIndex: int
-    Expression: Expr
+    Expression: ParsedExpr
 }
 
 /// Executable program after whole-program entry validation. The entry is not
@@ -338,7 +338,7 @@ let validateDeclarationProgram (program: SourceProgram) : Result<SourceProgram, 
 /// Assign deterministic compact identities after parsing, while declaration
 /// and lexical boundaries are still explicit. One source-order traversal owns
 /// allocation; later passes never recreate identity from a spelling.
-let private assignParsedRecursiveIdentities (Program topLevels) : Program =
+let private assignParsedRecursiveIdentities (Program topLevels) : ParsedProgram =
     let parsedMember boundary ordinal (candidate: RecursiveCandidate) : RecursiveBindingInfo =
         ParsedRecursiveBinding {
             Binding = bindingId ordinal
@@ -395,12 +395,10 @@ let private assignParsedRecursiveIdentities (Program topLevels) : Program =
         | Sequence (first, next) ->
             let (first', next', following) = assignPair first next nextOrdinal
             (Sequence (first', next'), following)
-        | Call (name, args) ->
-            let (args', following) = assignNonEmpty args nextOrdinal
-            (Call (name, args'), following)
-        | TypeApp (name, types, args) ->
-            let (args', following) = assignNonEmpty args nextOrdinal
-            (TypeApp (name, types, args'), following)
+        | Apply (callee, types, args) ->
+            let (callee', afterCallee) = assignExpr boundary nextOrdinal callee
+            let (args', following) = assignNonEmpty args afterCallee
+            (Apply (callee', types, args'), following)
         | TupleLiteral values ->
             let (values', following) = assignList values nextOrdinal
             (TupleLiteral values', following)
@@ -449,12 +447,10 @@ let private assignParsedRecursiveIdentities (Program topLevels) : Program =
             let lambdaBoundary = nextOrdinal
             let (body', following) = assignExpr lambdaBoundary (nextOrdinal + 1) body
             (Lambda (parameters, returnAnnotation, body'), following)
-        | Apply (func, args) | IndirectApply (func, args) ->
+        | IndirectApply (func, args) ->
             let (func', afterFunc) = assignExpr boundary nextOrdinal func
             let (args', following) = assignNonEmpty args afterFunc
-            match expr with
-            | Apply _ -> (Apply (func', args'), following)
-            | _ -> (IndirectApply (func', args'), following)
+            (IndirectApply (func', args'), following)
         | Closure (name, captures) ->
             let (captures', following) = assignList captures nextOrdinal
             (Closure (name, captures'), following)
@@ -472,7 +468,7 @@ let private assignParsedRecursiveIdentities (Program topLevels) : Program =
         | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
         | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
         | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _
-        | Var _ | FuncRef _ | RuntimeError _ -> (expr, nextOrdinal)
+        | Var _ | RuntimeError _ -> (expr, nextOrdinal)
 
     let assignTopLevel nextOrdinal topLevel =
         let topLevelBoundary = nextOrdinal
@@ -501,7 +497,7 @@ let private assignParsedRecursiveIdentities (Program topLevels) : Program =
     let (assigned, _) = topLevels |> List.mapFold assignTopLevel 1
     Program assigned
 
-let normalizeSource (source: ParsedSource) : Result<Program, string> =
+let normalizeSource (source: ParsedSource) : Result<ParsedProgram, string> =
     let nameAtPrefix prefix identifier =
         match prefix with
         | None -> identifierText identifier

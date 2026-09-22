@@ -521,7 +521,7 @@ let testExpressionTypeCheckingReusesBaseRegistries
         "Stdlib.List.map<Int64, Int64> [1L, 2L] (fun x -> x + 1L) == [2L, 3L]"
     PackageCatalog.parseProgram false source
     |> Result.bind (fun program ->
-        TypeChecking.checkProgramWithBaseEnvAndSettings
+        TypeChecking.checkParsedProgramWithBaseEnvAndSettings
             baseEnv
             true
             CompilerOptions.defaultWarningSettings

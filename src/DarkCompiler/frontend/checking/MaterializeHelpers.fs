@@ -21,7 +21,7 @@ let rec private materializeHelperCallsInExpr
     | BoundaryRender (renderer, value) -> BoundaryRender (renderer, recurse value)
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
-    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ ->
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | RuntimeError _ ->
         expr
     | BinOp (op, left, right) ->
         BinOp (op, recurse left, recurse right)
@@ -35,22 +35,20 @@ let rec private materializeHelperCallsInExpr
         If (recurse cond, recurse thenBranch, recurse elseBranch)
     | Sequence (first, next) ->
         Sequence (recurse first, recurse next)
-    | Call (funcName, args) ->
-        Call (funcName, NonEmptyList.map recurse args)
-    | TypeApp (funcName, typeArgs, args) as typeAppExpr ->
+    | Apply (Var funcName, typeArgs, args) as typeAppExpr ->
         match tryDecodeInternalTypeApp typeAppExpr with
         | Some (EqHelperDispatchTypeApp (targetType, leftExpr, rightExpr)) when includeEquality ->
             let helperType = resolveType aliasReg targetType
             if needsEqHelperForResolvedType variantLookup helperType then
-                Call (eqHelperName helperType, NonEmptyList.fromList [recurse leftExpr; recurse rightExpr])
+                applyNamed (eqHelperName helperType) (NonEmptyList.fromList [recurse leftExpr; recurse rightExpr])
             else
-                TypeApp (funcName, typeArgs, NonEmptyList.fromList [recurse leftExpr; recurse rightExpr])
+                applyNamedWithTypes funcName typeArgs (NonEmptyList.fromList [recurse leftExpr; recurse rightExpr])
         | _ ->
             match funcName, typeArgs with
             | "__compare", [targetType] when not (containsTVar targetType) ->
                 let helperType = resolveType aliasReg targetType
-                Call (compareHelperName helperType, NonEmptyList.map recurse args)
-            | _ -> TypeApp (funcName, typeArgs, NonEmptyList.map recurse args)
+                applyNamed (compareHelperName helperType) (NonEmptyList.map recurse args)
+            | _ -> applyNamedWithTypes funcName typeArgs (NonEmptyList.map recurse args)
     | TupleLiteral elements ->
         TupleLiteral (List.map recurse elements)
     | TupleAccess (tupleExpr, index) ->
@@ -79,8 +77,8 @@ let rec private materializeHelperCallsInExpr
         ListLiteral (List.map recurse elements)
     | Lambda (parameters, returnAnnotation, body) ->
         Lambda (parameters, returnAnnotation, recurse body)
-    | Apply (funcExpr, args) ->
-        Apply (recurse funcExpr, NonEmptyList.map recurse args)
+    | Apply (funcExpr, typeArgs, args) ->
+        Apply (recurse funcExpr, typeArgs, NonEmptyList.map recurse args)
     | IndirectApply (funcExpr, args) ->
         IndirectApply (recurse funcExpr, NonEmptyList.map recurse args)
     | Closure (funcName, captures) ->
@@ -101,7 +99,7 @@ let private materializeHelpersInTopLevels
     (indexedSumTypeReg: IndexedSumTypeRegistry)
     (topLevels: TopLevel list)
     : TopLevel list =
-    let collectFromTopLevel (topLevel: TopLevel) : Set<Type> =
+    let collectFromTopLevel (topLevel: TopLevel) : Set<SemanticType> =
         match topLevel with
         | FunctionDef funcDef when List.isEmpty funcDef.TypeParams ->
             collectEqHelperTypesFromExpr aliasReg funcDef.Body
@@ -116,7 +114,7 @@ let private materializeHelpersInTopLevels
         | TypeDef _ ->
             Set.empty
 
-    let collectCompareFromTopLevel (topLevel: TopLevel) : Set<Type> =
+    let collectCompareFromTopLevel (topLevel: TopLevel) : Set<SemanticType> =
         match topLevel with
         | FunctionDef funcDef when List.isEmpty funcDef.TypeParams ->
             collectCompareHelperTypesFromExpr aliasReg funcDef.Body

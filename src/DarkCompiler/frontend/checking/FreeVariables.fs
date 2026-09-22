@@ -47,12 +47,7 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
         Set.union condFree (Set.union thenFree elseFree)
     | Sequence (first, next) ->
         Set.union (collectFreeVars first bound) (collectFreeVars next bound)
-    | Call (_, args) ->
-        args
-        |> NonEmptyList.toList
-        |> List.map (fun e -> collectFreeVars e bound)
-        |> List.fold Set.union Set.empty
-    | TypeApp (_, _, args) ->
+    | Apply (Var _, _, args) ->
         args
         |> NonEmptyList.toList
         |> List.map (fun e -> collectFreeVars e bound)
@@ -99,7 +94,14 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
             |> List.collect (fun parameter -> letPatternBindings parameter.Pattern)
             |> Set.ofList
         collectFreeVars body (Set.union bound paramNames)
-    | Apply (func, args)
+    | Apply (func, _, args) ->
+        let funcFree = collectFreeVars func bound
+        let argsFree =
+            args
+            |> NonEmptyList.toList
+            |> List.map (fun e -> collectFreeVars e bound)
+            |> List.fold Set.union Set.empty
+        Set.union funcFree argsFree
     | IndirectApply (func, args) ->
         let funcFree = collectFreeVars func bound
         let argsFree =
@@ -108,9 +110,6 @@ let rec collectFreeVars (expr: Expr) (bound: Set<string>) : Set<string> =
             |> List.map (fun e -> collectFreeVars e bound)
             |> List.fold Set.union Set.empty
         Set.union funcFree argsFree
-    | FuncRef _ ->
-        // Function references don't contribute free variables
-        Set.empty
     | Closure (_, captures) ->
         // Closures capture expressions which may have free variables
         captures |> List.map (fun e -> collectFreeVars e bound) |> List.fold Set.union Set.empty

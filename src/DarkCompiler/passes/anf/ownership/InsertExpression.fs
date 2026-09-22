@@ -22,9 +22,9 @@ let rec insertRCWithAnalysis
     (varGen: VarGen)
     (returnDecs: ReturnDec list)
     (inheritedTransferableOwnership: ReturnDec list)
-    (paramIncs: (TempId * AST.Type * RcShape) list)
-    (types: Map<TempId, AST.Type>)
-    : AExpr * VarGen * Map<TempId, AST.Type> =
+    (paramIncs: (TempId * AST.SemanticType * RcShape) list)
+    (types: Map<TempId, AST.SemanticType>)
+    : AExpr * VarGen * Map<TempId, AST.SemanticType> =
     let functionHasName id expected =
         Map.tryFind id ctx.FuncReg
         |> Option.map (fun (name, _) -> name = expected)
@@ -78,8 +78,8 @@ let rec insertRCWithAnalysis
         (inheritedTransferableOwnership: ReturnDec list)
         (inheritedBranchDecs: ReturnDec list)
         (frames: LetFrame list)
-        (types: Map<TempId, AST.Type>)
-        : AExpr * VarGen * Map<TempId, AST.Type> =
+        (types: Map<TempId, AST.SemanticType>)
+        : AExpr * VarGen * Map<TempId, AST.SemanticType> =
         match expr with
         | RJump (target, atom, _) ->
             let deferred =
@@ -184,8 +184,8 @@ let rec insertRCWithAnalysis
 
             // When a temp is aliased through one or more let-bound vars, infer its type
             // from the first concrete use-site (typically a call argument position).
-            let rec inferAliasedVarTypeFromUse (aliasedTemp: TempId) (nextBody: ReturnAnnotatedExpr) : AST.Type option =
-                let inferFromCall (funcName: AST.FunctionId) (args: Atom list) : AST.Type option =
+            let rec inferAliasedVarTypeFromUse (aliasedTemp: TempId) (nextBody: ReturnAnnotatedExpr) : AST.SemanticType option =
+                let inferFromCall (funcName: AST.FunctionId) (args: Atom list) : AST.SemanticType option =
                     match Map.tryFind funcName ctx.FuncReg with
                     | Some (_, AST.TFunction (paramTypes, _)) ->
                         args
@@ -525,8 +525,8 @@ let rec insertRCWithAnalysis
             let allocationIncTargetsAfterTransfers =
                 let removeFirstTarget
                     (targetId: TempId)
-                    (targets: (TempId * AST.Type * RcShape) list)
-                    : (TempId * AST.Type * RcShape) list =
+                    (targets: (TempId * AST.SemanticType * RcShape) list)
+                    : (TempId * AST.SemanticType * RcShape) list =
                     let rec loop prefix remaining =
                         match remaining with
                         | [] -> List.rev prefix
@@ -577,7 +577,7 @@ let rec insertRCWithAnalysis
                             candidate)
 
             let returnInc =
-                let retainedTypeFromAtom (atom: Atom) : (AST.Type * RcShape) option =
+                let retainedTypeFromAtom (atom: Atom) : (AST.SemanticType * RcShape) option =
                     match atom with
                     | Var tid ->
                         match tryGetType ctx tid with
@@ -698,13 +698,13 @@ let internal insertRCInternal
     (ctx: TypeContext)
     (expr: AExpr)
     (varGen: VarGen)
-    (types: Map<TempId, AST.Type>)
-    : AExpr * VarGen * Map<TempId, AST.Type> =
+    (types: Map<TempId, AST.SemanticType>)
+    : AExpr * VarGen * Map<TempId, AST.SemanticType> =
     let ctxWithTypes = withTempTypes ctx types
     let analyzed = analyzeReturns Map.empty Map.empty expr
     insertRCWithAnalysis Map.empty [] ctxWithTypes None analyzed varGen [] [] [] types
 
 /// Insert reference counting operations into an AExpr
 /// Returns (transformed expr, varGen, accumulated TempTypes)
-let insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen * Map<TempId, AST.Type> =
+let insertRC (ctx: TypeContext) (expr: AExpr) (varGen: VarGen) : AExpr * VarGen * Map<TempId, AST.SemanticType> =
     insertRCInternal ctx expr varGen Map.empty

@@ -10,7 +10,7 @@ open TestDSL.LIRExecutionFormat
 
 type private TypedShape = {
     Shape: ManagedShape
-    Type: AST.Type
+    Type: AST.SemanticType
     Path: string
     Children: TypedShape list
 }

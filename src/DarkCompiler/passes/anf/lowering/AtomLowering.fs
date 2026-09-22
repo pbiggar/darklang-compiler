@@ -772,7 +772,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
 
         // Tag a raw pointer as a list value without routing through Stdlib wrappers.
         // Keep a typed binding so RC/type inference still treats the result as List<a>.
-        let tagRawPtrAsList (listNode: AST.Type) (tag: int64) (ptrVar: ANF.TempId) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let tagRawPtrAsList (listNode: AST.SemanticType) (tag: int64) (ptrVar: ANF.TempId) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (taggedRawVar, vg1) = ANF.freshVar vg
             let tagExpr = ANF.Prim (ANF.BitOr, ANF.Var ptrVar, ANF.IntLiteral (ANF.Int64 tag))
             let (taggedVar, vg2) = ANF.freshVar vg1
@@ -780,7 +780,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             (ANF.Var taggedVar, bindings @ [(taggedRawVar, tagExpr); (taggedVar, typedExpr)], vg2)
 
         // Helper to create a LEAF node wrapping an element
-        let allocLeaf (elemAtom: ANF.Atom) (elemType: AST.Type) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocLeaf (elemAtom: ANF.Atom) (elemType: AST.SemanticType) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (ptrVar, vg1) = ANF.freshVar vg
             let (setVar, vg2) = ANF.freshVar vg1
             let (setRcVar, vg3) = ANF.freshVar vg2
@@ -793,7 +793,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             tagRawPtrAsList leafListType 5L ptrVar vg4 bindings4
 
         // Helper to create a SINGLE node containing a TreeNode
-        let allocSingle (listNode: AST.Type) (nodeAtom: ANF.Atom) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocSingle (listNode: AST.SemanticType) (nodeAtom: ANF.Atom) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (ptrVar, vg1) = ANF.freshVar vg
             let (setVar, vg2) = ANF.freshVar vg1
             let (setRcVar, vg3) = ANF.freshVar vg2
@@ -804,7 +804,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             tagRawPtrAsList listNode 1L ptrVar vg3 bindings1
 
         // Helper to create a DEEP node
-        let allocDeep (listNode: AST.Type) (measure: int) (prefixNodes: ANF.Atom list) (middle: ANF.Atom) (suffixNodes: ANF.Atom list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocDeep (listNode: AST.SemanticType) (measure: int) (prefixNodes: ANF.Atom list) (middle: ANF.Atom) (suffixNodes: ANF.Atom list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let prefixCount = List.length prefixNodes
             let suffixCount = List.length suffixNodes
             let (ptrVar, vg1) = ANF.freshVar vg
@@ -853,7 +853,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
         let nodeMeasure (_node: ANF.Atom, measure: int) = measure
 
         // Helper to create a NODE2 (tag 3): [child0:8][child1:8][measure:8]
-        let allocNode2 (listNode: AST.Type) (left: ANF.Atom * int) (right: ANF.Atom * int) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocNode2 (listNode: AST.SemanticType) (left: ANF.Atom * int) (right: ANF.Atom * int) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (ptrVar, vg1) = ANF.freshVar vg
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 32L))
             let (set0Var, vg2) = ANF.freshVar vg1
@@ -872,7 +872,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             ((taggedNode, measure), bindings2, vg6)
 
         // Helper to create a NODE3 (tag 4): [child0:8][child1:8][child2:8][measure:8]
-        let allocNode3 (listNode: AST.Type) (first: ANF.Atom * int) (second: ANF.Atom * int) (third: ANF.Atom * int) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let allocNode3 (listNode: AST.SemanticType) (first: ANF.Atom * int) (second: ANF.Atom * int) (third: ANF.Atom * int) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let (ptrVar, vg1) = ANF.freshVar vg
             let allocExpr = ANF.RawAlloc (ANF.IntLiteral (ANF.Int64 40L))
             let (set0Var, vg2) = ANF.freshVar vg1
@@ -930,7 +930,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                     | _ ->
                         Error $"List literal: unexpected group size {size}")
 
-        let rec buildTree (listNode: AST.Type) (nodes: (ANF.Atom * int) list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
+        let rec buildTree (listNode: AST.SemanticType) (nodes: (ANF.Atom * int) list) (vg: ANF.VarGen) (bindings: (ANF.TempId * ANF.CExpr) list) =
             let nodeCount = List.length nodes
             match nodes with
             | [] -> Ok (emptyTree, bindings, vg)
@@ -970,7 +970,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             let typeEnv = typeEnvFromVarEnv env
 
             // Convert all elements to atoms first
-            let rec convertElements (elems: CheckedAST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * AST.Type * (ANF.TempId * ANF.CExpr) list) list) =
+            let rec convertElements (elems: CheckedAST.Expr list) (vg: ANF.VarGen) (acc: (ANF.Atom * AST.SemanticType * (ANF.TempId * ANF.CExpr) list) list) =
                 match elems with
                 | [] -> Ok (List.rev acc, vg)
                 | e :: rest ->

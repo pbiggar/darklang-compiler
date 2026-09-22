@@ -27,7 +27,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
     | Error err -> Error $"Parse error: {err}"
     | Ok userAst ->
         // Type check with stdlib environment
-        match TypeChecking.checkPublicProgramWithBaseEnvAndSettings
+        match TypeChecking.checkParsedPublicProgramWithBaseEnvAndSettings
             stdlib.Context.TypeCheckEnv
             false
             defaultWarningSettings

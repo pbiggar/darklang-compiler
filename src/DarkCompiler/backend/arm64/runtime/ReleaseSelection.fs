@@ -178,7 +178,7 @@ let internal listDecHelperForReleasePlan (releasePlan: MemoryModel.RcReleasePlan
     | _ ->
         listRefCountDecHelperLabel
 
-let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Type) : string =
+let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.SemanticType) : string =
     match tryRcReleasePlanOfType ctx.RecordRegistry ctx.SumShapeRegistry sourceType with
     | Some releasePlan -> listDecHelperForReleasePlan releasePlan
     | None -> Crash.crash $"listDecHelperForType: missing RC metadata for list element type {sourceType}"

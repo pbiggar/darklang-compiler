@@ -14,7 +14,7 @@ type internal TopLevelDeclarationSummary = {
     RecordTypeParams: Map<string, string list>
     AliasReg: AliasRegistry
     VariantLookup: VariantLookup
-    FuncSigs: Map<string, Type list * Type>
+    FuncSigs: Map<string, SemanticType list * SemanticType>
     FuncParamNames: FuncParamNameRegistry
     GenericFuncs: Map<string, string list>
 }
@@ -194,13 +194,13 @@ let rec private collectDeclarationCalls (expr: Expr) : Set<string> =
     | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
     | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
     | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _
-    | Var _ | FuncRef _ | RuntimeError _ -> Set.empty
+    | Var _ | RuntimeError _ -> Set.empty
     | BoundaryRender (_, value) | UnaryOp (_, value) | TupleAccess (value, _)
     | RecordAccess (value, _) -> collectDeclarationCalls value
     | BinOp (_, left, right) | Sequence (left, right)
     | Let (_, left, right) | RecursiveLet (_, left, right) -> combine [left; right]
     | If (condition, thenBranch, elseBranch) -> combine [condition; thenBranch; elseBranch]
-    | Call (name, args) | TypeApp (name, _, args) ->
+    | Apply (Var name, _, args) ->
         Set.add name (combine (NonEmptyList.toList args))
     | TupleLiteral values | ListLiteral values -> combine values
     | DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> combine
@@ -215,7 +215,9 @@ let rec private collectDeclarationCalls (expr: Expr) : Set<string> =
             |> combine
         Set.union (collectDeclarationCalls scrutinee) caseCalls
     | Lambda (_, _, body) -> collectDeclarationCalls body
-    | Apply (func, args) | IndirectApply (func, args) ->
+    | Apply (func, _, args) ->
+        combine (func :: NonEmptyList.toList args)
+    | IndirectApply (func, args) ->
         combine (func :: NonEmptyList.toList args)
     | Closure (name, captures) -> Set.add name (combine captures)
     | InterpolatedString parts ->
@@ -382,7 +384,7 @@ let internal resolveProgramNames
             |> Result.bind (fun key' -> recurse valueType |> Result.map (fun value' -> TDict (key', value')))
         | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr -> Ok typ
+        | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr -> Ok typ
 
     let rec patternBoundNames pattern =
         match pattern with
@@ -426,15 +428,13 @@ let internal resolveProgramNames
         | Var name ->
             resolveName currentModule self NameResolution.ResolutionContext.Value localNames name
             |> Result.map Var
-        | Call (name, args) ->
-            resolveName currentModule self NameResolution.ResolutionContext.Callable localNames name
-            |> Result.bind (fun resolvedName -> resolveArgs args |> Result.map (fun args' -> Call (resolvedName, args')))
-        | TypeApp (name, typeArgs, args) ->
+        | Apply (Var name, typeArgs, args) ->
             resolveName currentModule self NameResolution.ResolutionContext.Callable localNames name
             |> Result.bind (fun resolvedName ->
                 ResultList.traverse (resolveTypeRefs currentModule) typeArgs
-                |> Result.bind (fun types' -> resolveArgs args |> Result.map (fun args' -> TypeApp (resolvedName, types', args'))))
-        | FuncRef name -> resolveName currentModule self NameResolution.ResolutionContext.Callable localNames name |> Result.map FuncRef
+                |> Result.bind (fun types' ->
+                    resolveArgs args
+                    |> Result.map (fun args' -> Apply (Var resolvedName, types', args'))))
         | Constructor (constructorReference, variantName, fields) ->
             let resolvedConstructor (resolvedName: string) =
                 let segments = resolvedName.Split('.') |> Array.toList
@@ -608,7 +608,11 @@ let internal resolveProgramNames
             |> Result.bind (fun record' -> updates |> ResultList.traverse (fun (field, value) -> recurse value |> Result.map (fun value' -> (field, value'))) |> Result.map (fun updates' -> RecordUpdate (record', updates')))
         | RecordAccess (record, fieldName) -> recurse record |> Result.map (fun record' -> RecordAccess (record', fieldName))
         | ListLiteral elements -> ResultList.traverse recurse elements |> Result.map ListLiteral
-        | Apply (func, args) -> recurse func |> Result.bind (fun func' -> resolveArgs args |> Result.map (fun args' -> Apply (func', args')))
+        | Apply (func, [], args) ->
+            recurse func
+            |> Result.bind (fun func' -> resolveArgs args |> Result.map (fun args' -> Apply (func', [], args')))
+        | Apply (_, _ :: _, _) ->
+            Error (GenericError "Explicit type arguments require a named function")
         | IndirectApply (func, args) ->
             recurse func
             |> Result.bind (fun func' -> resolveArgs args |> Result.map (fun args' -> IndirectApply (func', args')))

@@ -14,12 +14,12 @@ open TypeUnification
 /// Check expression type top-down, potentially transforming the expression.
 /// Parameters:
 ///   - expr: Expression to type-check
-///   - env: Type environment (variable name -> type mappings)
-///   - typeReg: Type registry (record type name -> field definitions)
+///   - env: SemanticType environment (variable name -> type mappings)
+///   - typeReg: SemanticType registry (record type name -> field definitions)
 ///   - variantLookup: Maps variant names to (type name, tag index)
 ///   - genericFuncReg: Registry of generic functions (function name -> type params)
 ///   - expectedType: Optional expected type from context (for checking)
-/// Returns: Result<Type * Expr, TypeError>
+/// Returns: Result<SemanticType * Expr, TypeError>
 ///   - Type: The type of the expression
 ///   - Expr: The (possibly transformed) expression
 let rec internal checkExprWithParamNamesAndSumTypeNames
@@ -34,8 +34,8 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
     (warningSettings: WarningSettings)
     (moduleRegistry: ModuleRegistry)
     (aliasReg: AliasRegistry)
-    (expectedType: Type option)
-    : Result<Type * Expr, TypeError> =
+    (expectedType: SemanticType option)
+    : Result<SemanticType * Expr, TypeError> =
     let checkExpr
         (innerExpr: Expr)
         (innerEnv: TypeEnv)
@@ -45,8 +45,8 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
         (innerWarningSettings: WarningSettings)
         (innerModuleRegistry: ModuleRegistry)
         (innerAliasReg: AliasRegistry)
-        (innerExpectedType: Type option)
-        : Result<Type * Expr, TypeError> =
+        (innerExpectedType: SemanticType option)
+        : Result<SemanticType * Expr, TypeError> =
         checkExprWithParamNamesAndSumTypeNames
             funcParamNameReg
             sumTypeNames
@@ -75,8 +75,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
             |> Result.defaultValue true
 
         match candidate with
-        | Call (name, args) when name = targetName -> Some (NonEmptyList.toList args)
-        | Apply (Var name, args) when name = targetName -> Some (NonEmptyList.toList args)
+        | Apply (Var name, _, args) when name = targetName -> Some (NonEmptyList.toList args)
         | Let (pattern, value, body) ->
             match tryFindCallArguments targetName value with
             | Some args -> Some args
@@ -119,15 +118,13 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
         | Sequence (left, right) -> tryChildren [left; right]
         | If (condition, thenBranch, elseBranch) ->
             tryChildren [condition; thenBranch; elseBranch]
-        | Call (_, args)
-        | TypeApp (_, _, args) -> args |> NonEmptyList.toList |> tryChildren
         | TupleLiteral elements
         | ListLiteral elements -> tryChildren elements
         | DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> tryChildren
         | RecordLiteral (_, fields) -> fields |> List.map snd |> tryChildren
         | RecordUpdate (record, fields) -> record :: (fields |> List.map snd) |> tryChildren
         | Constructor (_, _, fields) -> tryChildren fields
-        | Apply (func, args)
+        | Apply (func, _, args) -> func :: NonEmptyList.toList args |> tryChildren
         | IndirectApply (func, args) -> func :: NonEmptyList.toList args |> tryChildren
         | Closure (_, captures) -> tryChildren captures
         | InterpolatedString parts ->
@@ -138,12 +135,12 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
         | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
         | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
         | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _
-        | Var _ | FuncRef _ | RuntimeError _ -> None
+        | Var _ | RuntimeError _ -> None
 
     let inferFunctionExpectationFromArguments
         (parameterCount: int)
         (arguments: Expr list)
-        : Type option =
+        : SemanticType option =
         if List.length arguments <> parameterCount then
             None
         else
@@ -158,7 +155,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
     let rec tryFindFunctionValueExpectation
         (targetName: string)
         (candidate: Expr)
-        : Type option =
+        : SemanticType option =
         let tryChildren children =
             children |> List.tryPick (tryFindFunctionValueExpectation targetName)
         let fromCall (functionName: string) (arguments: Expr list) =
@@ -195,8 +192,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
             | _ -> tryChildren arguments
 
         match candidate with
-        | Call (functionName, arguments) -> fromCall functionName (NonEmptyList.toList arguments)
-        | TypeApp (functionName, _, arguments) -> fromCall functionName (NonEmptyList.toList arguments)
+        | Apply (Var functionName, _, arguments) -> fromCall functionName (NonEmptyList.toList arguments)
         | Let (pattern, value, body) ->
             tryFindFunctionValueExpectation targetName value
             |> Option.orElseWith (fun () ->
@@ -228,7 +224,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
             scrutinee
             :: (cases |> List.collect (fun case -> Option.toList case.Guard @ [case.Body]))
             |> tryChildren
-        | Apply (func, arguments)
+        | Apply (func, _, arguments) -> func :: NonEmptyList.toList arguments |> tryChildren
         | IndirectApply (func, arguments) -> func :: NonEmptyList.toList arguments |> tryChildren
         | Closure (_, captures) -> tryChildren captures
         | InterpolatedString parts ->
@@ -239,13 +235,13 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
         | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
         | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
         | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _
-        | Var _ | FuncRef _ | RuntimeError _ -> None
+        | Var _ | RuntimeError _ -> None
 
     match expr with
     | BoundaryRender (renderer, value) ->
         checkExpr value env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
         |> Result.map (fun (_, value') -> (TString, BoundaryRender (renderer, value')))
-    | RuntimeError message -> Ok (TRuntimeError, RuntimeError message)
+    | RuntimeError message -> Ok (TNever, RuntimeError message)
     | UnitLiteral ->
         // Unit literal is always TUnit
         match expectedType with
@@ -426,7 +422,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
 
         | BitNot ->
             // Bitwise NOT works on integer types and preserves the operand type
-            let isIntegerType (typ: Type) =
+            let isIntegerType (typ: SemanticType) =
                 match typ with
                 | TInt8 | TInt16 | TInt32 | TInt64 | TInt
                 | TUInt8 | TUInt16 | TUInt32 | TUInt64 -> true
@@ -556,7 +552,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                         let message =
                             $"Could not deconstruct value {renderedValue} into pattern {formatLetDeconstructionPattern currentPattern}"
                         let runtimeError = Let (currentPattern, value', RuntimeError message)
-                        Ok (TRuntimeError, rebuildLets checkedLets runtimeError)
+                        Ok (TNever, rebuildLets checkedLets runtimeError)
                     | Some bindings ->
                         let nextEnv =
                             bindings
@@ -729,10 +725,10 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
             |> Result.map (fun (nextType, next') ->
                 (nextType, Sequence (first', next'))))
 
-    | Call (funcName, args) ->
+    | Apply (Var funcName, [], args) ->
         CheckCalls.check checkExpr funcParamNameReg indexedSumTypeReg env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedType funcName args
 
-    | TypeApp (funcName, [targetType], { Head = leftExpr; Tail = [rightExpr] })
+    | Apply (Var funcName, [targetType], { Head = leftExpr; Tail = [rightExpr] })
         when funcName = internalTypeAppMarkerName EqHelperDispatch ->
         // Specialized programs can be checked again by the E2E preamble
         // planner. Keep this compiler-internal plan well typed without
@@ -751,7 +747,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                             (EqHelperDispatchTypeApp (targetType, leftExpr', rightExpr'))
                     )))
 
-    | TypeApp (funcName, typeArgs, args) ->
+    | Apply (Var funcName, typeArgs, args) ->
         // Generic function call with explicit type arguments: func<Type1, Type2>(args)
         // 1. Look up the canonical function identity
         let args = NonEmptyList.toList args
@@ -830,7 +826,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                                     checkExpr arg env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some paramT)
                                     |> Result.mapError (fun err ->
                                         match err with
-                                        | TypeMismatch (_, actualType, _) when not (isRuntimeErrorType actualType) ->
+                                        | TypeMismatch (_, actualType, _) when not (isNeverType actualType) ->
                                             GenericError
                                                 (formatLegacyParamTypeError
                                                     funcName
@@ -865,7 +861,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
 
                                 // Create the lambda body: TypeApp call with all args (using resolved name)
                                 let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
-                                let lambdaBody = TypeApp (resolvedFuncName, typeArgs, toCallArgs allArgs)
+                                let lambdaBody = applyNamedWithTypes resolvedFuncName typeArgs (toCallArgs allArgs)
 
                                 // Create the lambda
                                 let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
@@ -889,7 +885,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                                     checkExpr arg env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some paramT)
                                     |> Result.mapError (fun err ->
                                         match err with
-                                        | TypeMismatch (_, actualType, _) when not (isRuntimeErrorType actualType) ->
+                                        | TypeMismatch (_, actualType, _) when not (isNeverType actualType) ->
                                             GenericError
                                                 (formatLegacyParamTypeError
                                                     funcName
@@ -927,7 +923,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                                 | _ ->
                                     Ok (
                                         concreteReturnType,
-                                        TypeApp (resolvedFuncName, typeArgs, toCallArgs args')
+                                        applyNamedWithTypes resolvedFuncName typeArgs (toCallArgs args')
                                     )))
             | None ->
                 Error (GenericError $"Function {funcName} is not generic, use regular call syntax")
@@ -989,7 +985,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                                     checkExpr arg env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some paramT)
                                     |> Result.mapError (fun err ->
                                         match err with
-                                        | TypeMismatch (_, actualType, _) when not (isRuntimeErrorType actualType) ->
+                                        | TypeMismatch (_, actualType, _) when not (isNeverType actualType) ->
                                             GenericError
                                                 (formatLegacyParamTypeError
                                                     funcName
@@ -1024,7 +1020,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
 
                                 // Create the lambda body: TypeApp call with all args (using resolved name)
                                 let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
-                                let lambdaBody = TypeApp (resolvedFuncName, typeArgs, toCallArgs allArgs)
+                                let lambdaBody = applyNamedWithTypes resolvedFuncName typeArgs (toCallArgs allArgs)
 
                                 // Create the lambda
                                 let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
@@ -1048,7 +1044,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                                     checkExpr arg env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some paramT)
                                     |> Result.mapError (fun err ->
                                         match err with
-                                        | TypeMismatch (_, actualType, _) when not (isRuntimeErrorType actualType) ->
+                                        | TypeMismatch (_, actualType, _) when not (isNeverType actualType) ->
                                             GenericError
                                                 (formatLegacyParamTypeError
                                                     funcName
@@ -1085,7 +1081,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                                 | _ ->
                                     Ok (
                                         concreteReturnType,
-                                        TypeApp (resolvedFuncName, typeArgs, toCallArgs args')
+                                        applyNamedWithTypes resolvedFuncName typeArgs (toCallArgs args')
                                     )))
             | Some (_, _) ->
                 Error (GenericError $"Function {funcName} is not generic, use regular call syntax")
@@ -1125,20 +1121,19 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                 let outputType =
                     match expectedType with
                     | Some expected -> expected
-                    | None -> TRuntimeError
+                    | None -> TNever
 
                 let runtimeErrCall =
                     match runtimeErrExpr with
-                    | Call (funcName, { Head = argExpr; Tail = [] }) when isBuiltinTestRuntimeErrorName funcName ->
-                        Call ("Builtin.testRuntimeError", NonEmptyList.singleton argExpr)
+                    | Apply (Var funcName, [], { Head = argExpr; Tail = [] }) when isBuiltinTestRuntimeErrorName funcName ->
+                        applyNamed "Builtin.testRuntimeError" (NonEmptyList.singleton argExpr)
                     | _ ->
                         match tryExtractKnownTestRuntimeErrorMessage Map.empty runtimeErrExpr with
-                        | Some msg -> Call ("Builtin.testRuntimeError", NonEmptyList.singleton (StringLiteral msg))
+                        | Some msg -> applyNamed "Builtin.testRuntimeError" (NonEmptyList.singleton (StringLiteral msg))
                         | None ->
-                            Call (
-                                "Builtin.testRuntimeError",
-                                NonEmptyList.singleton (StringLiteral "<runtime error>")
-                            )
+                            applyNamed
+                                "Builtin.testRuntimeError"
+                                (NonEmptyList.singleton (StringLiteral "<runtime error>"))
 
                 Ok (outputType, runtimeErrCall)
             | None ->
@@ -1500,7 +1495,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
     | Lambda (parameters, returnAnnotation, body) ->
         CheckLambdas.check checkExpr env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedType parameters returnAnnotation body
 
-    | Apply (func, args) ->
+    | Apply (func, [], args) ->
         let argsList = NonEmptyList.toList args
         let functionExpectedType =
             match func with
@@ -1526,7 +1521,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                     let remainingParamTypes = List.skip numArgs paramTypes
 
                     // Type-check the provided arguments
-                    let rec checkProvidedArgs (argExprs: Expr list) (paramTys: Type list) (checkedArgs: Expr list) : Result<Expr list, TypeError> =
+                    let rec checkProvidedArgs (argExprs: Expr list) (paramTys: SemanticType list) (checkedArgs: Expr list) : Result<Expr list, TypeError> =
                         match argExprs, paramTys with
                         | [], [] -> Ok (List.rev checkedArgs)
                         | arg :: restArgs, paramTy :: restParams ->
@@ -1546,7 +1541,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
 
                         // Create the lambda body: apply the original function with all args
                         let allArgs = args' @ (remainingParams |> List.map (fun (name, _) -> Var name))
-                        let lambdaBody = Apply (func', toCallArgs allArgs)
+                        let lambdaBody = Apply (func', [], toCallArgs allArgs)
 
                         // Create the lambda: fun p0 p1 ... -> func(providedArgs, p0, p1, ...)
                         let lambdaExpr = Lambda (toLambdaParams remainingParams, None, lambdaBody)
@@ -1560,7 +1555,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                         | _ -> Ok (partialType, lambdaExpr))
                 else
                     // Check each argument against expected param type
-                    let rec checkArgs (argExprs: Expr list) (paramTys: Type list) (checkedArgs: Expr list) : Result<Expr list, TypeError> =
+                    let rec checkArgs (argExprs: Expr list) (paramTys: SemanticType list) (checkedArgs: Expr list) : Result<Expr list, TypeError> =
                         match argExprs, paramTys with
                         | [], [] -> Ok (List.rev checkedArgs)
                         | arg :: restArgs, paramTy :: restParams ->
@@ -1576,23 +1571,15 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                         match expectedType with
                         | Some expected when not (typesEqual aliasReg expected returnType) ->
                             Error (TypeMismatch (expected, returnType, "function application result"))
-                        | _ -> Ok (returnType, Apply (func', toCallArgs args')))
+                        | _ -> Ok (returnType, Apply (func', [], toCallArgs args')))
             | _ ->
                 Error (GenericError $"Cannot apply non-function type: {typeToString funcType}"))
 
+    | Apply (_, _ :: _, _) ->
+        Error (GenericError "Explicit type arguments require a named function")
+
     | IndirectApply _ ->
         Crash.crash "IndirectApply is compiler-generated after expression type checking"
-
-    | FuncRef funcName ->
-        // Function reference: look up function signature
-        match Map.tryFind funcName env with
-        | Some funcType ->
-            match expectedType with
-            | Some expected when expected <> funcType ->
-                Error (TypeMismatch (expected, funcType, $"function reference {funcName}"))
-            | _ -> Ok (funcType, expr)
-        | None ->
-            Error (UndefinedVariable funcName)
 
     | Closure (funcName, captures) ->
         // Closure: function with captured values

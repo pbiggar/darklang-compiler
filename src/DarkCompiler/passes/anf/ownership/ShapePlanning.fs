@@ -11,7 +11,7 @@ open LiftExpressions
 open LiftFunctions
 open RcTypeFacts
 
-let private canonicalRcTypeForShape (ctx: TypeContext) (typ: AST.Type) : AST.Type =
+let private canonicalRcTypeForShape (ctx: TypeContext) (typ: AST.SemanticType) : AST.SemanticType =
     let canonicalBareSum name =
         AST.TSum (name, [])
 
@@ -38,12 +38,12 @@ let private canonicalRcTypeForShape (ctx: TypeContext) (typ: AST.Type) : AST.Typ
         | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
         | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
-        | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
+        | AST.TUnit | AST.TInternalRawPtr | AST.TNever ->
             typ
 
     canonicalize typ
 
-let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.Type) : AST.Type =
+let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.SemanticType) : AST.SemanticType =
     let rec canonicalize typ =
         match typ with
         | AST.TRecord (name, []) when Map.containsKey name ctx.SumShapeReg ->
@@ -65,12 +65,12 @@ let private canonicalRcSourceType (ctx: TypeContext) (typ: AST.Type) : AST.Type 
         | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
         | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
-        | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
+        | AST.TUnit | AST.TInternalRawPtr | AST.TNever ->
             typ
 
     canonicalize typ
 
-let internal rcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape =
+let internal rcShapeForType (ctx: TypeContext) (typ: AST.SemanticType) : RcShape =
     match ctx.TypePlanning.Shapes.TryGetValue typ with
     | true, shape -> shape
     | false, _ ->
@@ -95,7 +95,7 @@ let internal rcShapeForType (ctx: TypeContext) (typ: AST.Type) : RcShape =
 
 let internal rcMetadataForTypeAndShape
     (ctx: TypeContext)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     (shape: RcShape)
     : RcMetadata =
     let canonicalType = canonicalRcSourceType ctx typ
@@ -111,13 +111,13 @@ let internal rcMetadataForTypeAndShape
         ctx.TypePlanning.Metadata.[canonicalType] <- metadata
         metadata
 
-let internal shapeNeedsManagedAliasRootPreservation (ctx: TypeContext) (typ: AST.Type) : bool =
+let internal shapeNeedsManagedAliasRootPreservation (ctx: TypeContext) (typ: AST.SemanticType) : bool =
     typ |> rcShapeForType ctx |> rcShapeNeedsManagedAliasRootPreservation
 
 let internal bindingNeedsShapeAutomaticDec
     (ctx: TypeContext)
     (cexpr: CExpr)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     (shape: RcShape)
     : bool =
     rcShapeNeedsAutomaticBindingDec shape

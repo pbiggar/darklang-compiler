@@ -16,7 +16,7 @@ let rec private collectHelperTypes
     (symbols: CheckedAST.Symbols)
     (aliasReg: AliasRegistry)
     (expr: CheckedAST.Expr)
-    : Set<AST.Type> * Set<AST.Type> =
+    : Set<AST.SemanticType> * Set<AST.SemanticType> =
     let collect = collectHelperTypes symbols aliasReg
     let combine expressions =
         expressions

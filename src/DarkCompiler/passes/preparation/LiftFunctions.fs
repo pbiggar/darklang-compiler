@@ -24,22 +24,22 @@ let liftLambdasInFunc (funcDef: CheckedAST.FunctionDef) (state: LiftState) : Res
 /// State extended to include known function names and their parameters
 type LiftStateWithFuncs = {
     State: LiftState
-    FuncParams: Map<string, (AST.BindingId * AST.Type) list>
+    FuncParams: Map<string, (AST.BindingId * AST.SemanticType) list>
     GeneratedWrappers: Map<string, AST.FunctionId * AST.FunctionId * AST.FunctionId>
 }
 
 /// Generate a wrapper for a named function used as a value
 let generateFuncWrapper
     (origFuncName: string)
-    (funcParams: Map<string, (AST.BindingId * AST.Type) list>)
-    (funcReturnTypes: Map<string, AST.Type>)
+    (funcParams: Map<string, (AST.BindingId * AST.SemanticType) list>)
+    (funcReturnTypes: Map<string, AST.SemanticType>)
     (stateWithFuncs: LiftStateWithFuncs)
     : Result<(CheckedAST.FunctionDef * LiftStateWithFuncs), string> =
     match Map.tryFind origFuncName funcParams, Map.tryFind origFuncName funcReturnTypes with
     | Some parameters, Some returnType ->
         // Create wrapper: __funcref_wrapper_N(__closure, ...params) = origFunc(...params)
         let (wrapperName, stateWithName) = freshLiftedName stateWithFuncs.State "__funcref_wrapper_"
-        let comparatorStorageType = AST.TRawPtr
+        let comparatorStorageType = AST.TInternalRawPtr
         let (closureId, symbols) =
             CheckedAST.allocateBinding "__closure" stateWithName.Symbols
         let parameters, symbols =
@@ -145,9 +145,9 @@ let rec private containsIndirectApply (expr: CheckedAST.Expr) : bool =
 let private collectEscapingFunctionParams
     (typeReg: TypeRegistry)
     (variantLookup: VariantLookup)
-    (typ: AST.Type)
-    : Set<AST.Type list> =
-    let rec collect (visited: Set<AST.Type>) (current: AST.Type) =
+    (typ: AST.SemanticType)
+    : Set<AST.SemanticType list> =
+    let rec collect (visited: Set<AST.SemanticType>) (current: AST.SemanticType) =
         if Set.contains current visited then
             Set.empty
         else
@@ -194,7 +194,7 @@ let private collectEscapingFunctionParams
             | AST.TInt64 | AST.TInt128 | AST.TInt | AST.TInt32 | AST.TInt16 | AST.TInt8
             | AST.TUInt64 | AST.TUInt128 | AST.TUInt32 | AST.TUInt16 | AST.TUInt8
             | AST.TBool | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
-            | AST.TFloat64 | AST.TUnit | AST.TRuntimeError | AST.TRawPtr | AST.TVar _ ->
+            | AST.TFloat64 | AST.TUnit | AST.TNever | AST.TInternalRawPtr | AST.TVar _ ->
                 Set.empty
     collect Set.empty typ
 
@@ -239,8 +239,8 @@ let prepareLambdaLiftBaseTypes
 let rec liftLambdasInProgram
     (baseTypeReg: TypeRegistry)
     (baseVariantLookup: VariantLookup)
-    (baseFuncParams: Map<string, (string * AST.Type) list>)
-    (baseFuncReturnTypes: Map<string, AST.Type>)
+    (baseFuncParams: Map<string, (string * AST.SemanticType) list>)
+    (baseFuncReturnTypes: Map<string, AST.SemanticType>)
     (program: CheckedAST.Program)
     : Result<CheckedAST.Program, string> =
     let (CheckedAST.Program (symbols, topLevels)) = program
@@ -326,7 +326,7 @@ let rec liftLambdasInProgram
                              canonicalizeNamedTypeRefs recordNames mergedSumTypeNames fieldType)) })
 
     // First pass: collect all function definitions and their parameters
-    let userFuncParams : Map<string, (AST.BindingId * AST.Type) list> =
+    let userFuncParams : Map<string, (AST.BindingId * AST.SemanticType) list> =
         topLevels
         |> List.choose (function
             | CheckedAST.FunctionDef f -> Some (f.Name, paramsToList f.Params)
@@ -334,7 +334,7 @@ let rec liftLambdasInProgram
         |> Map.ofList
 
     // Collect user function return types
-    let userFuncReturnTypes : Map<string, AST.Type> =
+    let userFuncReturnTypes : Map<string, AST.SemanticType> =
         topLevels
         |> List.choose (function
             | CheckedAST.FunctionDef f -> Some (f.Name, f.ReturnType)
@@ -343,7 +343,7 @@ let rec liftLambdasInProgram
 
     // Add module function parameters from Stdlib
     let moduleRegistry = Stdlib.buildModuleRegistry ()
-    let moduleFuncParamsWithNames : Map<string, (string * AST.Type) list> =
+    let moduleFuncParamsWithNames : Map<string, (string * AST.SemanticType) list> =
         moduleRegistry
         |> Map.toList
         |> List.map (fun (qualifiedName, moduleFunc) ->
@@ -354,8 +354,8 @@ let rec liftLambdasInProgram
 
     let allocateParamIds
         (symbols: CheckedAST.Symbols)
-        (paramMap: Map<string, (string * AST.Type) list>)
-        : Map<string, (AST.BindingId * AST.Type) list> * CheckedAST.Symbols =
+        (paramMap: Map<string, (string * AST.SemanticType) list>)
+        : Map<string, (AST.BindingId * AST.SemanticType) list> * CheckedAST.Symbols =
         paramMap
         |> Map.toList
         |> List.mapFold (fun symbols (funcName, parameters) ->
@@ -371,14 +371,14 @@ let rec liftLambdasInProgram
     let moduleFuncParams, symbols = allocateParamIds symbols moduleFuncParamsWithNames
 
     // Collect module function return types
-    let moduleFuncReturnTypes : Map<string, AST.Type> =
+    let moduleFuncReturnTypes : Map<string, AST.SemanticType> =
         moduleRegistry
         |> Map.toList
         |> List.map (fun (qualifiedName, moduleFunc) -> (qualifiedName, moduleFunc.ReturnType))
         |> Map.ofList
 
     // Collect user generic function definitions (for TypeApp substitution)
-    let userGenericFuncDefs : Map<string, string list * AST.Type> =
+    let userGenericFuncDefs : Map<string, string list * AST.SemanticType> =
         topLevels
         |> List.choose (function
             | CheckedAST.FunctionDef f when not (List.isEmpty f.TypeParams) ->
@@ -387,7 +387,7 @@ let rec liftLambdasInProgram
         |> Map.ofList
 
     // Collect module generic function definitions (for TypeApp substitution)
-    let moduleGenericFuncDefs : Map<string, string list * AST.Type> =
+    let moduleGenericFuncDefs : Map<string, string list * AST.SemanticType> =
         moduleRegistry
         |> Map.toList
         |> List.choose (fun (qualifiedName, moduleFunc) ->
@@ -443,7 +443,7 @@ let rec liftLambdasInProgram
         [ "Builtin.testRuntimeError"; "Builtin.crash" ]
         |> List.fold (fun returnTypes name ->
             match CheckedAST.tryFindFunctionId name symbols with
-            | Some id -> Map.add id AST.TRuntimeError returnTypes
+            | Some id -> Map.add id AST.TNever returnTypes
             | None -> returnTypes) (byFunctionId funcReturnTypes)
 
     let initialState = {
@@ -516,7 +516,7 @@ let rec liftLambdasInProgram
 and collectFuncRefsInExpr
     (symbols: CheckedAST.Symbols)
     (expr: CheckedAST.Expr)
-    (knownFuncs: Map<string, (AST.BindingId * AST.Type) list>)
+    (knownFuncs: Map<string, (AST.BindingId * AST.SemanticType) list>)
     : string list =
     let rec collect (bound: Set<AST.BindingId>) candidate =
         let collectChildren children = children |> List.collect (collect bound)

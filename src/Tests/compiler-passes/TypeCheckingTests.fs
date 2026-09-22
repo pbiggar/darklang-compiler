@@ -15,7 +15,7 @@ open TypeChecking
 type TestResult = Result<unit, string>
 
 /// Helper to check that type checking succeeds with expected type
-let expectType (expr: Expr) (expectedType: Type) : TestResult =
+let expectType (expr: Expr) (expectedType: SemanticType) : TestResult =
     let program = Program [Expression ([], expr)]
     match checkProgram program with
     | Ok (actualType, _) ->
@@ -343,7 +343,7 @@ let testRecursiveGroupsReceiveStableTypedIdentities () : TestResult =
     Parser.parseString false source
     |> Result.mapError (fun error -> $"Recursive group parse failed: {error}")
     |> Result.bind (fun program ->
-        checkProgram program
+        checkParsedProgram program
         |> Result.mapError (fun error -> $"Recursive group type check failed: {typeErrorToString error}"))
     |> Result.bind (fun (_, CheckedAST.Program (_, topLevels)) ->
         let recursionByName =
@@ -386,7 +386,7 @@ let testManyTopLevelFunctionsAndLetsAreStackSafe () : TestResult =
             (fun index body ->
                 Let (
                     LPVariable $"stackSafeResult{index}",
-                    Call ($"stackSafeTypeCheck{index}", NonEmptyList.singleton (Int64Literal (int64 index))),
+                    applyNamed $"stackSafeTypeCheck{index}" (NonEmptyList.singleton (Int64Literal (int64 index))),
                     body
                 ))
             [0 .. programSize - 1]

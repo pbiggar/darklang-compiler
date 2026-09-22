@@ -28,8 +28,8 @@ let private runtimeBytes constant terms : ListRegion.AllocationBytes = { Constan
 
 let private functions : TypeRegistries.FunctionRegistry =
     [
-        "mapCallback", AST.TFunction ([AST.TRawPtr; AST.TInt64], AST.TInt64)
-        "foldCallback", AST.TFunction ([AST.TRawPtr; AST.TInt64; AST.TInt64], AST.TInt64)
+        "mapCallback", AST.TFunction ([AST.TInternalRawPtr; AST.TInt64], AST.TInt64)
+        "foldCallback", AST.TFunction ([AST.TInternalRawPtr; AST.TInt64; AST.TInt64], AST.TInt64)
         "Darklang.Stdlib.List.map_i64_i64", AST.TFunction ([AST.TList AST.TInt64; AST.TFunction ([AST.TInt64], AST.TInt64)], AST.TList AST.TInt64)
         "Darklang.Stdlib.List.reverse_i64", AST.TFunction ([AST.TList AST.TInt64], AST.TList AST.TInt64)
         "Darklang.Stdlib.List.fold_i64_i64", AST.TFunction ([AST.TList AST.TInt64; AST.TInt64; AST.TFunction ([AST.TInt64; AST.TInt64], AST.TInt64)], AST.TInt64)

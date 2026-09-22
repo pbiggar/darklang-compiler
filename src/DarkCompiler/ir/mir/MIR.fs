@@ -19,7 +19,7 @@ module MIR
 type VReg = VReg of int
 
 /// Parameter with register and type bundled (makes invalid states unrepresentable)
-type TypedMIRParam = { Reg: VReg; Type: AST.Type }
+type TypedMIRParam = { Reg: VReg; Type: AST.SemanticType }
 
 /// Operands
 type Operand =
@@ -96,20 +96,20 @@ type Label = Label of string
 
 /// Instructions (non-control-flow)
 type Instr =
-    | Mov of dest:VReg * src:Operand * valueType:AST.Type option  // valueType for float/int distinction
-    | BinOp of dest:VReg * op:BinOp * left:Operand * right:Operand * operandType:AST.Type
+    | Mov of dest:VReg * src:Operand * valueType:AST.SemanticType option  // valueType for float/int distinction
+    | BinOp of dest:VReg * op:BinOp * left:Operand * right:Operand * operandType:AST.SemanticType
     | UnaryOp of dest:VReg * op:UnaryOp * src:Operand
-    | Call of dest:VReg * funcName:AST.FunctionId * args:Operand list * argTypes:AST.Type list * returnType:AST.Type  // Direct function call (BL instruction)
-    | TailCall of funcName:AST.FunctionId * args:Operand list * argTypes:AST.Type list * returnType:AST.Type  // Tail call (B instruction, no return)
-    | IndirectCall of dest:VReg * func:Operand * args:Operand list * argTypes:AST.Type list * returnType:AST.Type  // Call through function pointer (BLR instruction)
-    | IndirectTailCall of func:Operand * args:Operand list * argTypes:AST.Type list * returnType:AST.Type  // Indirect tail call (BR instruction)
+    | Call of dest:VReg * funcName:AST.FunctionId * args:Operand list * argTypes:AST.SemanticType list * returnType:AST.SemanticType  // Direct function call (BL instruction)
+    | TailCall of funcName:AST.FunctionId * args:Operand list * argTypes:AST.SemanticType list * returnType:AST.SemanticType  // Tail call (B instruction, no return)
+    | IndirectCall of dest:VReg * func:Operand * args:Operand list * argTypes:AST.SemanticType list * returnType:AST.SemanticType  // Call through function pointer (BLR instruction)
+    | IndirectTailCall of func:Operand * args:Operand list * argTypes:AST.SemanticType list * returnType:AST.SemanticType  // Indirect tail call (BR instruction)
     | ClosureAlloc of dest:VReg * funcName:AST.FunctionId * captures:Operand list  // Allocate closure: (func_addr, caps...)
-    | ClosureCall of dest:VReg * closure:Operand * args:Operand list * argTypes:AST.Type list * returnType:AST.Type  // Call through closure with hidden first arg
-    | ClosureTailCall of closure:Operand * args:Operand list * argTypes:AST.Type list  // Tail call through closure (BR instruction)
+    | ClosureCall of dest:VReg * closure:Operand * args:Operand list * argTypes:AST.SemanticType list * returnType:AST.SemanticType  // Call through closure with hidden first arg
+    | ClosureTailCall of closure:Operand * args:Operand list * argTypes:AST.SemanticType list  // Tail call through closure (BR instruction)
     // Heap operations for tuples and other compound types
     | HeapAlloc of dest:VReg * sizeBytes:int       // Allocate heap memory
-    | HeapStore of addr:VReg * offset:int * src:Operand * valueType:AST.Type option  // Store at heap[addr+offset], valueType for float/int
-    | HeapLoad of dest:VReg * addr:VReg * offset:int * valueType:AST.Type option  // Load from heap[addr+offset]
+    | HeapStore of addr:VReg * offset:int * src:Operand * valueType:AST.SemanticType option  // Store at heap[addr+offset], valueType for float/int
+    | HeapLoad of dest:VReg * addr:VReg * offset:int * valueType:AST.SemanticType option  // Load from heap[addr+offset]
     // String operations
     /// Concatenate at least two strings with one allocation and ordered copies.
     | StringConcat of dest:VReg * first:Operand * second:Operand * remaining:Operand list
@@ -118,7 +118,7 @@ type Instr =
     | RefCountInc of addr:VReg * payloadSize:int * kind:RcKind * metadata:MemoryModel.RcMetadata option   // Increment ref count at [addr + payloadSize]
     | RefCountDec of addr:VReg * payloadSize:int * kind:RcKind * metadata:MemoryModel.RcMetadata option   // Decrement ref count, free if zero
     // Output operations (for main expression result printing)
-    | Print of src:Operand * valueType:AST.Type    // Print value with type-appropriate formatting
+    | Print of src:Operand * valueType:AST.SemanticType    // Print value with type-appropriate formatting
     | StdoutWrite of effectId:int * value:Operand * appendNewline:bool // Explicit stdout effect
     | StdinReadLine of dest:VReg                       // Read one line from stdin
     | RuntimeError of message:string               // Print runtime error to stderr and exit with code 1
@@ -144,11 +144,11 @@ type Instr =
     | MappedAlloc of dest:VReg * numBytes:Operand // Checked independent mapping with a private size prefix
     | RawFree of ptr:Operand                      // Manually free raw memory
     | MappedFree of ptr:Operand                  // Release an independent mapping, not a heap block
-    | RawGet of dest:VReg * ptr:Operand * byteOffset:Operand * valueType:AST.Type option  // Read 8 bytes at offset, valueType for float
+    | RawGet of dest:VReg * ptr:Operand * byteOffset:Operand * valueType:AST.SemanticType option  // Read 8 bytes at offset, valueType for float
     | RawGetByte of dest:VReg * ptr:Operand * byteOffset:Operand  // Read 1 byte at offset (zero-extended)
     | RawWriteWord of ptr:Operand * byteOffset:Operand * value:Operand  // Write 8 unmanaged bytes at offset
     | RawWriteByte of ptr:Operand * byteOffset:Operand * value:Operand  // Write 1 unmanaged byte at offset
-    | RawSlotInit of ptr:Operand * byteOffset:Operand * value:Operand * valueType:AST.Type  // Initialize typed 8-byte slot edge at offset
+    | RawSlotInit of ptr:Operand * byteOffset:Operand * value:Operand * valueType:AST.SemanticType  // Initialize typed 8-byte slot edge at offset
     | StringToRawPtr of dest:VReg * value:Operand // Borrow raw backing pointer from String
     | RawPtrToString of dest:VReg * ptr:Operand   // Reinterpret raw allocation as owned String
     | BlobToRawPtr of dest:VReg * value:Operand  // Borrow raw backing pointer from Blob
@@ -175,7 +175,7 @@ type Instr =
     // SSA phi node - merges values from different predecessor blocks
     // Phi nodes must appear at the beginning of a basic block, before other instructions
     // valueType distinguishes between integer (X registers) and float (D registers) phi nodes
-    | Phi of dest:VReg * sources:(Operand * Label) list * valueType:AST.Type option
+    | Phi of dest:VReg * sources:(Operand * Label) list * valueType:AST.SemanticType option
     // Coverage instrumentation - records that expression was executed
     | CoverageHit of exprId:int
 
@@ -203,7 +203,7 @@ type Function = {
     Id: AST.FunctionId
     Name: string
     TypedParams: TypedMIRParam list  // Parameters with types bundled
-    ReturnType: AST.Type             // Return type (for distinguishing int vs float returns)
+    ReturnType: AST.SemanticType             // Return type (for distinguishing int vs float returns)
     CFG: CFG
     FloatRegs: Set<int>              // VReg IDs that hold float values (for SSA phi nodes)
 }
@@ -212,7 +212,7 @@ type Function = {
 type VariantInfo = {
     Name: string
     Tag: int
-    Payload: AST.Type option
+    Payload: AST.SemanticType option
 }
 
 /// All variants for a sum type, with type parameters
@@ -227,7 +227,7 @@ type VariantRegistry = Map<string, TypeVariants>
 /// Info about a single record field (makes structure explicit)
 type RecordField = {
     Name: string
-    Type: AST.Type
+    Type: AST.SemanticType
 }
 
 /// Maps type name -> list of fields

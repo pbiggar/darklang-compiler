@@ -8,7 +8,7 @@ open ANF
 type ConstEnv = Map<TempId, Atom>
 
 /// Environment mapping TempIds to source types for type-sensitive rewrites.
-type TypeEnv = Map<TempId, AST.Type>
+type TypeEnv = Map<TempId, AST.SemanticType>
 
 /// Environment mapping locally allocated tuples to ownership-safe element atoms.
 type TupleEnv = Map<TempId, Map<int, Atom>>
@@ -26,7 +26,7 @@ type OptimizeOptions = {
 
 /// Type metadata needed for ownership-sensitive optimizer decisions.
 type OptimizeContext = {
-    TypeReg: Map<string, (string * AST.Type) list>
+    TypeReg: Map<string, (string * AST.SemanticType) list>
     RecordTypeParams: Map<string, string list>
     SumShapeReg: RcSumShapeRegistry
     FunctionNames: Map<AST.FunctionId, string>

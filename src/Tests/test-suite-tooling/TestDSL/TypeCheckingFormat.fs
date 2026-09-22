@@ -19,7 +19,7 @@ open System
 
 /// Type checking test expectation
 type TypeExpectation =
-    | ExpectType of AST.Type
+    | ExpectType of AST.SemanticType
     | ExpectError
 
 /// Type checking test specification
@@ -29,8 +29,8 @@ type TypeCheckingTest = {
     Expectation: TypeExpectation
 }
 
-/// Parse type string to AST.Type
-let private parseType (typeStr: string) : Result<AST.Type, string> =
+/// Parse type string to AST.SemanticType
+let private parseType (typeStr: string) : Result<AST.SemanticType, string> =
     match typeStr.Trim().ToLowerInvariant() with
     | "int" | "int64" -> Ok AST.TInt64
     | "bool" | "boolean" -> Ok AST.TBool

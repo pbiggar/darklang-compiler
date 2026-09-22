@@ -41,7 +41,7 @@ let testRcShapeClassifiesPrimitivesAsImmediate () : TestResult =
         AST.TBool
         AST.TFloat64
         AST.TUnit
-        AST.TRuntimeError
+        AST.TNever
         AST.TVar "a"
     ]
 
@@ -76,7 +76,7 @@ let testRcShapeClassifiesRemainingRuntimeShapes () : TestResult =
         (AST.TString, DynamicString)
         (AST.TChar, DynamicString)
         (AST.TBlob, DynamicBlob)
-        (AST.TRawPtr, RawUnmanaged)
+        (AST.TInternalRawPtr, RawUnmanaged)
         (AST.TFunction ([AST.TInt64], AST.TString), ClosureShape [])
         (AST.TSum ("Color", []), Immediate)
         (AST.TSum ("Option", [AST.TString]), BoxedSum (16, [(8, DynamicString)], []))
@@ -680,7 +680,7 @@ let testRcReleasePlanOfTypeClassifiesRemainingRootKinds () : TestResult =
                 8,
                 DictHeap,
                 DictPayloadRelease (DynamicBufferRelease DynamicStringBuffer, DynamicBufferRelease DynamicBlobBuffer)))
-        (AST.TRawPtr, NoReleasePlan)
+        (AST.TInternalRawPtr, NoReleasePlan)
     ]
 
     match samples |> List.tryFind (fun (typ, expected) -> rcReleasePlanOfType Map.empty typ <> expected) with

@@ -12,7 +12,7 @@ let private plannedSource
     : Result<string, string> =
     PackageCatalog.parseProgram false source
     |> Result.bind (fun program ->
-        TypeChecking.checkPublicProgramWithBaseEnvAndSettings
+        TypeChecking.checkParsedPublicProgramWithBaseEnvAndSettings
             stdlib.Context.TypeCheckEnv
             true
             CompilerOptions.defaultWarningSettings
@@ -84,7 +84,7 @@ let testNonJsonProgramIsUnchanged
     : TestResult =
     PackageCatalog.parseProgram false "1L + 2L"
     |> Result.bind (fun program ->
-        TypeChecking.checkPublicProgramWithBaseEnvAndSettings
+        TypeChecking.checkParsedPublicProgramWithBaseEnvAndSettings
             stdlib.Context.TypeCheckEnv
             true
             CompilerOptions.defaultWarningSettings

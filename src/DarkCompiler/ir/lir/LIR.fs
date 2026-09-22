@@ -34,7 +34,7 @@ type FReg =
     | FVirtual of int
 
 /// Parameter with register and type bundled (makes invalid states unrepresentable)
-type TypedLIRParam = { Reg: Reg; Type: AST.Type }
+type TypedLIRParam = { Reg: Reg; Type: AST.SemanticType }
 
 /// Operands (symbolic string/float references)
 type Operand =
@@ -95,7 +95,7 @@ type Label = Label of string
 /// Instructions (symbolic)
 type Instr =
     | Mov of dest:Reg * src:Operand
-    | Phi of dest:Reg * sources:(Operand * Label) list * valueType:AST.Type option
+    | Phi of dest:Reg * sources:(Operand * Label) list * valueType:AST.SemanticType option
     | Store of stackSlot:int * src:Reg
     | Add of dest:Reg * left:Reg * right:Operand
     | Sub of dest:Reg * left:Reg * right:Operand
@@ -156,9 +156,9 @@ type Instr =
     | PrintHeapStringNoNewline of Reg
     | PrintChars of byte list
     | PrintBlob of Reg
-    | PrintList of listPtr:Reg * elemType:AST.Type
-    | PrintSum of sumPtr:Reg * variants:(string * int * AST.Type option) list
-    | PrintRecord of recordPtr:Reg * typeName:string * fields:(string * AST.Type) list
+    | PrintList of listPtr:Reg * elemType:AST.SemanticType
+    | PrintSum of sumPtr:Reg * variants:(string * int * AST.SemanticType option) list
+    | PrintRecord of recordPtr:Reg * typeName:string * fields:(string * AST.SemanticType) list
     | Exit
     | FPhi of dest:FReg * sources:(FReg * Label) list
     | FMov of dest:FReg * src:FReg
@@ -180,7 +180,7 @@ type Instr =
     | GpToFp of dest:FReg * src:Reg
     | FpToGp of dest:Reg * src:FReg
     | HeapAlloc of dest:Reg * sizeBytes:int
-    | HeapStore of addr:Reg * offset:int * src:Operand * valueType:AST.Type option
+    | HeapStore of addr:Reg * offset:int * src:Operand * valueType:AST.SemanticType option
     | HeapLoad of dest:Reg * addr:Reg * offset:int
     | RefCountInc of addr:Reg * payloadSize:int * kind:RcKind * metadata:MemoryModel.RcMetadata option
     | RefCountDec of addr:Reg * payloadSize:int * kind:RcKind * metadata:MemoryModel.RcMetadata option
@@ -205,7 +205,7 @@ type Instr =
     | RawGetByte of dest:Reg * ptr:Reg * byteOffset:Reg
     | RawWriteWord of ptr:Reg * byteOffset:Reg * value:Reg
     | RawWriteByte of ptr:Reg * byteOffset:Reg * value:Reg
-    | RawSlotInit of ptr:Reg * byteOffset:Reg * value:Reg * valueType:AST.Type
+    | RawSlotInit of ptr:Reg * byteOffset:Reg * value:Reg * valueType:AST.SemanticType
     | RefCountIncString of str:Operand
     | RefCountDecString of str:Operand
     | RefCountIncBlob of bytes:Operand
@@ -391,18 +391,18 @@ type Arm64SlotInitRootRetainTarget =
 /// rescanning every instruction in every executable.
 type FunctionCodegenFacts = {
     ClosurePayloadSizeFromParams: int option
-    ClosureCaptureTypes: AST.Type list option
+    ClosureCaptureTypes: AST.SemanticType list option
     ClosurePayloadSizesFromAllocs: (AST.FunctionId * int) list
-    RecursiveReleaseTypes: Set<AST.Type>
+    RecursiveReleaseTypes: Set<AST.SemanticType>
     /// Deduplicated by kind and compact plan identity. Keeping recursive
     /// metadata out of the ordered key prevents deep structural comparisons.
     RefCountDecRequirements: Map<RcKind * RcReleasePlanMemoKey, MemoryModel.RcMetadata option>
     RefCountIncRequirements: Set<RcKind>
-    RawSlotInitTypes: Set<AST.Type>
+    RawSlotInitTypes: Set<AST.SemanticType>
     /// Some after ARM64 preparation. Values are None for slot types that do
     /// not need a root retain; the outer option distinguishes an empty plan
     /// from legacy/unprepared LIR.
-    Arm64RawSlotInitRetainTargets: Map<AST.Type, Arm64SlotInitRootRetainTarget option> option
+    Arm64RawSlotInitRetainTargets: Map<AST.SemanticType, Arm64SlotInitRootRetainTarget option> option
     /// Semantic function names from the compilation partition that produced
     /// this function. Cached partitions can assign later generated ordinals
     /// independently, so final code generation resolves calls locally.
@@ -534,13 +534,13 @@ let attachFunctionCodegenFacts (func: Function) : Function =
     { func with CodegenFacts = Some (analyzeFunctionCodegenFacts func) }
 
 /// Record definitions needed by late, type-specialized runtime helpers.
-type RecordRegistry = Map<string, (string * AST.Type) list>
+type RecordRegistry = Map<string, (string * AST.SemanticType) list>
 
 /// Info about a single sum variant needed by late, type-specialized runtime helpers.
 type VariantInfo = {
     Name: string
     Tag: int
-    Payload: AST.Type option
+    Payload: AST.SemanticType option
 }
 
 /// All variants for a sum type, with type parameters.

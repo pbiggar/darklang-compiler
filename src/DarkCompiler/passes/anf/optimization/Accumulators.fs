@@ -31,7 +31,7 @@ type private WrappedSubtraction = {
     ResultId: TempId
 }
 
-let private nativeIntegerTypeName (typ: AST.Type) : string option =
+let private nativeIntegerTypeName (typ: AST.SemanticType) : string option =
     match typ with
     | AST.TInt8 -> Some "Int8"
     | AST.TInt16 -> Some "Int16"
@@ -45,7 +45,7 @@ let private nativeIntegerTypeName (typ: AST.Type) : string option =
 
 let private safeOperatorName
     (functionNames: FunctionNameRegistry)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     (operation: string)
     : AST.FunctionId option =
     nativeIntegerTypeName typ
@@ -55,7 +55,7 @@ let private safeOperatorName
         |> Map.toSeq
         |> Seq.tryPick (fun (id, name) -> if name = expected then Some id else None))
 
-let private integerLiteral (typ: AST.Type) (value: int) : Atom =
+let private integerLiteral (typ: AST.SemanticType) (value: int) : Atom =
     match typ with
     | AST.TInt8 -> IntLiteral (Int8 (sbyte value))
     | AST.TInt16 -> IntLiteral (Int16 (int16 value))
@@ -69,7 +69,7 @@ let private integerLiteral (typ: AST.Type) (value: int) : Atom =
 
 let private isIntegerBinary
     (functionNames: FunctionNameRegistry)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     (primitive: BinOp)
     (safeName: string)
     (cexpr: CExpr)
@@ -98,8 +98,8 @@ type private ConstructorLayer = {
     ResultId: TempId
     Kind: ConstructorLayerKind
     HoleIndex: int
-    ResultType: AST.Type
-    ChildType: AST.Type
+    ResultType: AST.SemanticType
+    ChildType: AST.SemanticType
 }
 
 type private ConstructorContext = {
@@ -123,7 +123,7 @@ let private tryLinearBindings (expr: AExpr) : ((TempId * CExpr) list * Atom) opt
 /// Recognize a complete linear sibling-recursion arm. Requiring exactly two
 /// self calls and a final addition keeps effect order and the rewrite boundary
 /// explicit; the function-level gate rejects any recursion outside this shape.
-let private trySiblingAddition (functionNames: FunctionNameRegistry) (funcName: AST.FunctionId) (returnType: AST.Type) (expr: AExpr) : SiblingAddition option =
+let private trySiblingAddition (functionNames: FunctionNameRegistry) (funcName: AST.FunctionId) (returnType: AST.SemanticType) (expr: AExpr) : SiblingAddition option =
     match tryLinearBindings expr with
     | Some (bindings, Var returnedId) ->
         match List.rev bindings with
@@ -161,7 +161,7 @@ let private isIntegerParameterOrLiteral (integerParams: Set<TempId>) (atom: Atom
 let private tryWrappedMultiplication
     (functionNames: FunctionNameRegistry)
     (funcName: AST.FunctionId)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (integerParams: Set<TempId>)
     (expr: AExpr)
     : WrappedMultiplication option =
@@ -200,7 +200,7 @@ let private tryWrappedMultiplication
 let private tryWrappedSubtraction
     (functionNames: FunctionNameRegistry)
     (funcName: AST.FunctionId)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (integerParams: Set<TempId>)
     (expr: AExpr)
     : WrappedSubtraction option =
@@ -281,7 +281,7 @@ let private tryWrappedListPrepend
 
 let private tryConstructorContext
     (funcName: AST.FunctionId)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (expr: AExpr)
     : ConstructorContext option =
     let allocationFields cexpr =
@@ -373,7 +373,7 @@ let private selfCallCount (funcName: AST.FunctionId) (expr: AExpr) : int =
             count thenBranch + count elseBranch
     count expr
 
-let private siblingAdditionCount (functionNames: FunctionNameRegistry) (funcName: AST.FunctionId) (returnType: AST.Type) (expr: AExpr) : int =
+let private siblingAdditionCount (functionNames: FunctionNameRegistry) (funcName: AST.FunctionId) (returnType: AST.SemanticType) (expr: AExpr) : int =
     let rec count expr =
         match trySiblingAddition functionNames funcName returnType expr with
         | Some _ -> 1
@@ -388,7 +388,7 @@ let private siblingAdditionCount (functionNames: FunctionNameRegistry) (funcName
 let private wrappedMultiplicationCount
     (functionNames: FunctionNameRegistry)
     (funcName: AST.FunctionId)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (integerParams: Set<TempId>)
     (expr: AExpr)
     : int =
@@ -406,7 +406,7 @@ let private wrappedMultiplicationCount
 let private wrappedSubtractionCount
     (functionNames: FunctionNameRegistry)
     (funcName: AST.FunctionId)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (integerParams: Set<TempId>)
     (expr: AExpr)
     : int =
@@ -456,7 +456,7 @@ let private listPrependCallCount
 
 let private constructorContextCount
     (funcName: AST.FunctionId)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (expr: AExpr)
     : int =
     let rec count current =
@@ -510,7 +510,7 @@ let private transformSiblingAddition
 let rec private transformAccumulatorBody
     (functionNames: FunctionNameRegistry)
     (funcName: AST.FunctionId)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (helperName: AST.FunctionId)
     (accumulatorId: TempId)
     (zero: Atom)
@@ -565,7 +565,7 @@ let private transformWrappedMultiplication
 let rec private transformMultiplicationAccumulatorBody
     (functionNames: FunctionNameRegistry)
     (funcName: AST.FunctionId)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (integerParams: Set<TempId>)
     (helperName: AST.FunctionId)
     (accumulatorId: TempId)
@@ -624,7 +624,7 @@ let private transformWrappedSubtraction
 let rec private transformSubtractionAccumulatorBody
     (functionNames: FunctionNameRegistry)
     (funcName: AST.FunctionId)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (integerParams: Set<TempId>)
     (helperName: AST.FunctionId)
     (accumulatorId: TempId)
@@ -692,7 +692,7 @@ let rec private transformListAccumulatorBody
     (listPushIds: Set<AST.FunctionId>)
     (funcName: AST.FunctionId)
     (helperName: AST.FunctionId)
-    (listType: AST.Type)
+    (listType: AST.SemanticType)
     (accumulatorId: TempId)
     (suffixCellId: TempId)
     (varGen: VarGen)
@@ -826,7 +826,7 @@ let private transformConstructorContext
 
 let rec private transformConstructorBody
     (funcName: AST.FunctionId)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (helperName: AST.FunctionId)
     (destinationId: TempId)
     (destinationOffsetId: TempId)
@@ -903,7 +903,7 @@ let private plannedHelpers (functionNames: FunctionNameRegistry) =
 
 let rec private transformConstructorWrapperBody
     (funcName: AST.FunctionId)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (helperName: AST.FunctionId)
     (varGen: VarGen)
     (expr: AExpr)
@@ -984,7 +984,7 @@ let internal transformTailRecursionModuloFixedConstructors
                             Name = helperName
                             TypedParams =
                                 func.TypedParams
-                                @ [ { Id = destinationId; Type = AST.TRawPtr }
+                                @ [ { Id = destinationId; Type = AST.TInternalRawPtr }
                                     { Id = destinationOffsetId; Type = AST.TInt64 }
                                     { Id = rootId; Type = func.ReturnType } ]
                             Body = helperBody

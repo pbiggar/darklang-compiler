@@ -155,16 +155,16 @@ let internal emitPrintFloatNoNewline (ctx: FuncCtx) (freg: LIR.FReg) : Result<X8
             @ genWriteSyscall)
     | _ -> Error "PrintFloatNoNewline with virtual FP register"
 
-let internal emitPrintList (ctx: FuncCtx) (listPtr: LIR.Reg) (_elemType: AST.Type) : Result<X86_64.Instr list, string> =
+let internal emitPrintList (ctx: FuncCtx) (listPtr: LIR.Reg) (_elemType: AST.SemanticType) : Result<X86_64.Instr list, string> =
     // TODO: implement list printing
     resolveReg listPtr
     |> Result.map (fun _ -> loadImm64 X86_64.RDI 0L @ genExitSyscall)
 
-let internal emitPrintSum (ctx: FuncCtx) (sumPtr: LIR.Reg) (_variants: (string * int * AST.Type option) list) : Result<X86_64.Instr list, string> =
+let internal emitPrintSum (ctx: FuncCtx) (sumPtr: LIR.Reg) (_variants: (string * int * AST.SemanticType option) list) : Result<X86_64.Instr list, string> =
     resolveReg sumPtr
     |> Result.map (fun _ -> loadImm64 X86_64.RDI 0L @ genExitSyscall)
 
-let internal emitPrintRecord (ctx: FuncCtx) (recordPtr: LIR.Reg) (_typeName: string) (_fields: (string * AST.Type) list) : Result<X86_64.Instr list, string> =
+let internal emitPrintRecord (ctx: FuncCtx) (recordPtr: LIR.Reg) (_typeName: string) (_fields: (string * AST.SemanticType) list) : Result<X86_64.Instr list, string> =
     resolveReg recordPtr
     |> Result.map (fun _ -> loadImm64 X86_64.RDI 0L @ genExitSyscall)
 

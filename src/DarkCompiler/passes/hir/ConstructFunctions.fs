@@ -108,7 +108,7 @@ let private signatureOfCheckedFunction (definition: CheckedAST.FunctionDef) : HI
 
 let private constructWithSignatures
     (functionHasName: AST.FunctionId -> string -> bool)
-    (infer: Map<AST.BindingId, AST.Type> -> CheckedAST.Expr -> Result<AST.Type, string>)
+    (infer: Map<AST.BindingId, AST.SemanticType> -> CheckedAST.Expr -> Result<AST.SemanticType, string>)
     (dependencies: CheckedAST.Expr -> Set<AST.BindingId>)
     (calls: CallContracts)
     (callSignature: AST.FunctionId -> HIR.FunctionSignature option)
