@@ -7,7 +7,7 @@ open CheckingDiagnostics
 open CheckingTypes
 open TypeUnification
 
-type internal ExpressionChecker = Expr -> TypeEnv -> IndexedTypeRegistry -> VariantLookup -> GenericFuncRegistry -> WarningSettings -> ModuleRegistry -> AliasRegistry -> Type option -> Result<Type * Expr, TypeError>
+type internal ExpressionChecker = Expr -> TypeEnv -> IndexedTypeRegistry -> VariantLookup -> GenericFuncRegistry -> WarningSettings -> ModuleRegistry -> AliasRegistry -> SemanticType option -> Result<SemanticType * Expr, TypeError>
 
 let internal paramNameForLegacyError
     (funcParamNameReg: Map<string, string list>)

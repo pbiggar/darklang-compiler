@@ -17,7 +17,7 @@ let private mergeFixtureVariantRegistries (left: LIR.VariantRegistry) (right: LI
         left
         right
 
-let rec private inferFixtureVariantsFromType (typ: AST.Type) : LIR.VariantRegistry =
+let rec private inferFixtureVariantsFromType (typ: AST.SemanticType) : LIR.VariantRegistry =
     match typ with
     | AST.TSum (name, typeArgs) ->
         let self =
@@ -78,8 +78,8 @@ let rec private inferFixtureVariantsFromType (typ: AST.Type) : LIR.VariantRegist
     | AST.TChar
     | AST.TDateTime
     | AST.TUnit
-    | AST.TRawPtr
-    | AST.TRuntimeError
+    | AST.TInternalRawPtr
+    | AST.TNever
     | AST.TVar _ ->
         Map.empty
 
@@ -304,12 +304,12 @@ let private assertCallsPlannedDictHelper (context: string) (program: LIR.Program
         else
             Error $"{context} did not call a planned dict helper; calls were {labels}"
 
-let private rcMetadata (typ: AST.Type) : MemoryModel.RcMetadata =
+let private rcMetadata (typ: AST.SemanticType) : MemoryModel.RcMetadata =
     { MemoryModel.ReleasePlanCacheKey = None
       MemoryModel.ReleasePlan = None
       MemoryModel.SourceType = Some typ }
 
-let private rcMetadataWithSumShapes (sumShapes: MemoryModel.RcSumShapeRegistry) (typ: AST.Type) : MemoryModel.RcMetadata =
+let private rcMetadataWithSumShapes (sumShapes: MemoryModel.RcSumShapeRegistry) (typ: AST.SemanticType) : MemoryModel.RcMetadata =
     let releasePlan = MemoryPlanning.rcReleasePlanOfTypeWithSums Map.empty sumShapes typ
     { MemoryModel.ReleasePlanCacheKey = ReleasePlanFingerprint.rcReleasePlanCacheKey typ releasePlan
       MemoryModel.ReleasePlan = Some releasePlan
@@ -1289,13 +1289,13 @@ let testTaggedListRefCountDecTuple3DynamicPayloadCombinations () : Result<unit, 
         | 2 -> LIR.X4
         | _ -> Crash.crash $"Unexpected tuple3 field index {index}"
 
-    let isDynamicField (fieldType: AST.Type) : bool =
+    let isDynamicField (fieldType: AST.SemanticType) : bool =
         match fieldType with
         | AST.TString
         | AST.TBlob -> true
         | _ -> false
 
-    let runCase (name: string, fields: AST.Type list) : Result<unit, string> =
+    let runCase (name: string, fields: AST.SemanticType list) : Result<unit, string> =
         let tupleType = AST.TTuple fields
         let dynamicAllocs =
             fields
@@ -1332,7 +1332,7 @@ let testTaggedListRefCountDecTuple3DynamicPayloadCombinations () : Result<unit, 
             if stderr.Trim() = "" then Ok ()
             else Error $"Expected list tuple3 {name} dynamic payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
-    let rec runCases (cases: (string * AST.Type list) list) : Result<unit, string> =
+    let rec runCases (cases: (string * AST.SemanticType list) list) : Result<unit, string> =
         match cases with
         | [] -> Ok ()
         | case :: rest ->
@@ -1349,7 +1349,7 @@ let testTaggedListRefCountDecTuple3DynamicPayloadCombinations () : Result<unit, 
 
 /// Test: x64 tagged-list RefCountDec releases nested tuple dynamic payloads at later offsets.
 let testTaggedListRefCountDecTuple2NestedTupleDynamicPayloadCombinations () : Result<unit, string> =
-    let runCase (name: string, nestedTupleType: AST.Type, setup: LIR.Instr list, nestedStores: LIR.Instr list) : Result<unit, string> =
+    let runCase (name: string, nestedTupleType: AST.SemanticType, setup: LIR.Instr list, nestedStores: LIR.Instr list) : Result<unit, string> =
         let tupleType = AST.TTuple [AST.TInt64; nestedTupleType]
         let program =
             makeSimpleProgram
@@ -1372,7 +1372,7 @@ let testTaggedListRefCountDecTuple2NestedTupleDynamicPayloadCombinations () : Re
             if stderr.Trim() = "" then Ok ()
             else Error $"Expected list tuple2 nested tuple {name} dynamic payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
-    let rec runCases (cases: (string * AST.Type * LIR.Instr list * LIR.Instr list) list) : Result<unit, string> =
+    let rec runCases (cases: (string * AST.SemanticType * LIR.Instr list * LIR.Instr list) list) : Result<unit, string> =
         match cases with
         | [] -> Ok ()
         | case :: rest ->
@@ -1400,13 +1400,13 @@ let testTaggedListRefCountDecRecord3DynamicPayloadCombinations () : Result<unit,
         | 2 -> LIR.X4
         | _ -> Crash.crash $"Unexpected record3 field index {index}"
 
-    let isDynamicField (fieldType: AST.Type) : bool =
+    let isDynamicField (fieldType: AST.SemanticType) : bool =
         match fieldType with
         | AST.TString
         | AST.TBlob -> true
         | _ -> false
 
-    let runCase (name: string, fields: AST.Type list) : Result<unit, string> =
+    let runCase (name: string, fields: AST.SemanticType list) : Result<unit, string> =
         let recordName = $"X64ListRcRecord3{name}"
         let recordType = AST.TRecord (recordName, [])
         let records =
@@ -1449,7 +1449,7 @@ let testTaggedListRefCountDecRecord3DynamicPayloadCombinations () : Result<unit,
             if stderr.Trim() = "" then Ok ()
             else Error $"Expected list record3 {name} dynamic payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
-    let rec runCases (cases: (string * AST.Type list) list) : Result<unit, string> =
+    let rec runCases (cases: (string * AST.SemanticType list) list) : Result<unit, string> =
         match cases with
         | [] -> Ok ()
         | case :: rest ->
@@ -1523,7 +1523,7 @@ let testTaggedListRefCountDecMixedSumDynamicPayloadUsesVariantDispatch () : Resu
 
 /// Test: x64 tagged-list RefCountDec releases boxed sum tuple2 dynamic combinations.
 let testTaggedListRefCountDecSumTuple2DynamicPayloadCombinations () : Result<unit, string> =
-    let runCase (name: string, tupleType: AST.Type, setup: LIR.Instr list, stores: LIR.Instr list) : Result<unit, string> =
+    let runCase (name: string, tupleType: AST.SemanticType, setup: LIR.Instr list, stores: LIR.Instr list) : Result<unit, string> =
         let sumType = AST.TSum ($"X64ListRcSumTuple{name}", [tupleType])
         let program =
             makeSimpleProgram
@@ -1546,7 +1546,7 @@ let testTaggedListRefCountDecSumTuple2DynamicPayloadCombinations () : Result<uni
             if stderr.Trim() = "" then Ok ()
             else Error $"Expected list sum tuple2 {name} payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
-    let rec runCases (cases: (string * AST.Type * LIR.Instr list * LIR.Instr list) list) : Result<unit, string> =
+    let rec runCases (cases: (string * AST.SemanticType * LIR.Instr list * LIR.Instr list) list) : Result<unit, string> =
         match cases with
         | [] -> Ok ()
         | case :: rest ->
@@ -1576,13 +1576,13 @@ let testTaggedListRefCountDecSumTuple3DynamicPayloadCombinations () : Result<uni
         | 2 -> LIR.X4
         | _ -> Crash.crash $"Unexpected sum tuple3 field index {index}"
 
-    let isDynamicField (fieldType: AST.Type) : bool =
+    let isDynamicField (fieldType: AST.SemanticType) : bool =
         match fieldType with
         | AST.TString
         | AST.TBlob -> true
         | _ -> false
 
-    let runCase (name: string, fields: AST.Type list) : Result<unit, string> =
+    let runCase (name: string, fields: AST.SemanticType list) : Result<unit, string> =
         let tupleType = AST.TTuple fields
         let sumType = AST.TSum ($"X64ListRcSumTuple3{name}", [tupleType])
         let dynamicAllocs =
@@ -1623,7 +1623,7 @@ let testTaggedListRefCountDecSumTuple3DynamicPayloadCombinations () : Result<uni
             if stderr.Trim() = "" then Ok ()
             else Error $"Expected list sum tuple3 {name} payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
-    let rec runCases (cases: (string * AST.Type list) list) : Result<unit, string> =
+    let rec runCases (cases: (string * AST.SemanticType list) list) : Result<unit, string> =
         match cases with
         | [] -> Ok ()
         | case :: rest ->
@@ -1649,13 +1649,13 @@ let testTaggedListRefCountDecSumRecord3DynamicPayloadCombinations () : Result<un
         | 2 -> LIR.X4
         | _ -> Crash.crash $"Unexpected sum record3 field index {index}"
 
-    let isDynamicField (fieldType: AST.Type) : bool =
+    let isDynamicField (fieldType: AST.SemanticType) : bool =
         match fieldType with
         | AST.TString
         | AST.TBlob -> true
         | _ -> false
 
-    let runCase (name: string, fields: AST.Type list) : Result<unit, string> =
+    let runCase (name: string, fields: AST.SemanticType list) : Result<unit, string> =
         let recordName = $"X64ListRcSumRecord3{name}"
         let recordType = AST.TRecord (recordName, [])
         let records =
@@ -1702,7 +1702,7 @@ let testTaggedListRefCountDecSumRecord3DynamicPayloadCombinations () : Result<un
             if stderr.Trim() = "" then Ok ()
             else Error $"Expected list sum record3 {name} dynamic payload release to balance leak counter, got stderr '{stderr.Trim()}'"
 
-    let rec runCases (cases: (string * AST.Type list) list) : Result<unit, string> =
+    let rec runCases (cases: (string * AST.SemanticType list) list) : Result<unit, string> =
         match cases with
         | [] -> Ok ()
         | case :: rest ->

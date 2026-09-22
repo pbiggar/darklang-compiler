@@ -4,7 +4,7 @@ module CheckingDiagnostics
 
 open AST
 
-let internal makePartialParams (funcName: string) (types: Type list) : (string * Type) list =
+let internal makePartialParams (funcName: string) (types: SemanticType list) : (string * SemanticType) list =
     let safeName = funcName.Replace('.', '_')
     types |> List.mapi (fun i t -> ($"__partial_{safeName}_{i}", t))
 
@@ -19,21 +19,21 @@ let internal normalizeNullaryCallArgs (expectedParamCount: int) (args: Expr list
     else
         args
 
-let internal toLambdaParams (parameters: (string * Type) list) : NonEmptyList<LambdaParameter> =
+let internal toLambdaParams (parameters: (string * SemanticType) list) : NonEmptyList<LambdaParameter> =
     match parameters |> List.map (fun (name, typ) -> inferredLambdaVariable name typ) |> NonEmptyList.tryFromList with
     | Some nel -> nel
     | None -> Crash.crash "Type checker attempted to construct a lambda with zero parameters"
 
 /// Type errors
 type TypeError =
-    | TypeMismatch of expected:Type * actual:Type * context:string
-    | IfBranchTypeMismatch of expected:Type * actual:Type
+    | TypeMismatch of expected:SemanticType * actual:SemanticType * context:string
+    | IfBranchTypeMismatch of expected:SemanticType * actual:SemanticType
     | UndefinedVariable of name:string
     | UndefinedCallTarget of name:string
     | MissingTypeAnnotation of context:string
-    | InvalidOperation of op:string * types:Type list
-    | IncompatibleEqualityOperands of left:Type * right:Type
-    | IncompatibleOrderingOperands of left:Type * right:Type
+    | InvalidOperation of op:string * types:SemanticType list
+    | IncompatibleEqualityOperands of left:SemanticType * right:SemanticType
+    | IncompatibleOrderingOperands of left:SemanticType * right:SemanticType
     | PolymorphicRecursion of memberName:string
     | ResolutionFailure of NameResolution.ResolutionError
     | GenericError of string
@@ -43,7 +43,7 @@ type internal AliasVisitState =
     | AliasValidated
 
 /// Pretty-print a type for error messages
-let rec typeToString (t: Type) : string =
+let rec typeToString (t: SemanticType) : string =
     match t with
     | TInt8 -> "Int8"
     | TInt16 -> "Int16"
@@ -63,7 +63,7 @@ let rec typeToString (t: Type) : string =
     | TChar -> "Char"
     | TDateTime -> "DateTime"
     | TUnit -> "Unit"
-    | TRuntimeError -> "RuntimeError"
+    | TNever -> "RuntimeError"
     | TFunction (params', ret) ->
         let paramStr = params' |> List.map typeToString |> String.concat ", "
         $"({paramStr}) -> {typeToString ret}"
@@ -81,7 +81,7 @@ let rec typeToString (t: Type) : string =
     | TList elemType -> $"List<{typeToString elemType}>"
     | TStream elemType -> $"Stream<{typeToString elemType}>"
     | TVar name -> name  // Type variable (for generics)
-    | TRawPtr -> "RawPtr"  // Internal raw pointer type
+    | TInternalRawPtr -> "RawPtr"  // Internal raw pointer type
     | TDict (_, valueType) -> $"Dict<{typeToString valueType}>"
 
 /// Pretty-print a type error
@@ -123,7 +123,7 @@ let internal withIndefiniteArticle (s: string) : string =
         | 'u' -> $"an {s}"
         | _ -> $"a {s}"
 
-let private describeIfConditionActual (expr: Expr) (actualType: Type) : string =
+let private describeIfConditionActual (expr: Expr) (actualType: SemanticType) : string =
     match expr with
     | UnitLiteral -> "Unit (())"
     | Int64Literal i -> $"Int64 ({i})"
@@ -143,11 +143,11 @@ let private describeIfConditionActual (expr: Expr) (actualType: Type) : string =
     | BoolLiteral false -> "Bool (false)"
     | _ -> typeToString actualType
 
-let internal ifConditionTypeMismatchMessage (expr: Expr) (actualType: Type) : string =
+let internal ifConditionTypeMismatchMessage (expr: Expr) (actualType: SemanticType) : string =
     let actual = describeIfConditionActual expr actualType
     $"Encountered a condition that must be a Bool, but got {withIndefiniteArticle actual}"
 
-let private describeInterpolationActual (expr: Expr) (actualType: Type) : string =
+let private describeInterpolationActual (expr: Expr) (actualType: SemanticType) : string =
     match expr with
     | FloatLiteral f ->
         let formatted = string f
@@ -158,7 +158,7 @@ let private describeInterpolationActual (expr: Expr) (actualType: Type) : string
     | Int64Literal i -> $"an Int64 ({i})"
     | _ -> withIndefiniteArticle (typeToString actualType)
 
-let internal interpolationTypeMismatchMessage (expr: Expr) (actualType: Type) : string =
+let internal interpolationTypeMismatchMessage (expr: Expr) (actualType: SemanticType) : string =
     let actual = describeInterpolationActual expr actualType
     let conversionModule =
         match actualType with
@@ -216,8 +216,7 @@ let rec internal substituteInterpolationLiteral (name: string) (literal: Expr) (
     | UnaryOp (op, inner) -> UnaryOp (op, recurse inner)
     | If (condition, thenBranch, elseBranch) -> If (recurse condition, recurse thenBranch, recurse elseBranch)
     | Sequence (first, next) -> Sequence (recurse first, recurse next)
-    | Call (functionName, callArgs) -> Call (functionName, NonEmptyList.map recurse callArgs)
-    | TypeApp (functionName, typeArgs, callArgs) -> TypeApp (functionName, typeArgs, NonEmptyList.map recurse callArgs)
+    | Apply (func, typeArgs, callArgs) -> Apply (recurse func, typeArgs, NonEmptyList.map recurse callArgs)
     | TupleLiteral elements -> TupleLiteral (List.map recurse elements)
     | TupleAccess (tuple, index) -> TupleAccess (recurse tuple, index)
     | DictLiteral (keyType, valueType, entries) ->
@@ -235,13 +234,12 @@ let rec internal substituteInterpolationLiteral (name: string) (literal: Expr) (
         )
     | ListLiteral elements -> ListLiteral (List.map recurse elements)
     | Lambda (parameters, returnAnnotation, body) -> Lambda (parameters, returnAnnotation, recurse body)
-    | Apply (func, callArgs) -> Apply (recurse func, NonEmptyList.map recurse callArgs)
     | IndirectApply (func, callArgs) -> IndirectApply (recurse func, NonEmptyList.map recurse callArgs)
     | Closure (functionName, captures) -> Closure (functionName, List.map recurse captures)
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _
     | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
-    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | RuntimeError _ -> expr
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | RuntimeError _ -> expr
 
 let internal isBuiltinUnwrapName (funcName: string) : bool =
     funcName = "Builtin.unwrap"
@@ -266,9 +264,11 @@ let internal isBuiltinTestInfinityName (name: string) : bool =
 let internal isBuiltinBlobEmptyName (name: string) : bool =
     name = "Builtin.blobEmpty"
 
-let internal isRuntimeErrorType (typ: Type) : bool =
+/// Whether a checked expression has semantic bottom type and therefore does
+/// not constrain a surrounding value-producing expression.
+let internal isNeverType (typ: SemanticType) : bool =
     match typ with
-    | TRuntimeError -> true
+    | TNever -> true
     | _ -> false
 
 let private variantNameEndsWith (suffix: string) (variantName: string) : bool =
@@ -299,7 +299,7 @@ let rec internal isKnownUnwrapFailureExpr (boundExprs: Map<string, Expr>) (expr:
                 false
 
     match expr with
-    | Call (funcName, { Head = argExpr; Tail = [] }) when isBuiltinUnwrapName funcName ->
+    | Apply (Var funcName, [], { Head = argExpr; Tail = [] }) when isBuiltinUnwrapName funcName ->
         argIsKnownFailure argExpr
     | Let (LPVariable name, valueExpr, bodyExpr) ->
         isKnownUnwrapFailureExpr (Map.add name valueExpr boundExprs) bodyExpr
@@ -310,7 +310,7 @@ let rec internal isKnownUnwrapFailureExpr (boundExprs: Map<string, Expr>) (expr:
 /// Detect known runtime-failing testRuntimeError expressions, including let-bound forms.
 let rec internal isKnownTestRuntimeErrorExpr (boundExprs: Map<string, Expr>) (expr: Expr) : bool =
     match expr with
-    | Call (funcName, { Head = _; Tail = [] }) when isRuntimeFailureName funcName ->
+    | Apply (Var funcName, [], { Head = _; Tail = [] }) when isRuntimeFailureName funcName ->
         true
     | Let (LPVariable name, valueExpr, bodyExpr) ->
         isKnownTestRuntimeErrorExpr (Map.add name valueExpr boundExprs) bodyExpr
@@ -347,7 +347,7 @@ let rec internal tryExtractKnownTestRuntimeErrorMessage
     (expr: Expr)
     : string option =
     match expr with
-    | Call (funcName, { Head = argExpr; Tail = [] }) when isRuntimeFailureName funcName ->
+    | Apply (Var funcName, [], { Head = argExpr; Tail = [] }) when isRuntimeFailureName funcName ->
         tryExtractStringLiteral boundExprs argExpr
     | Let (LPVariable name, valueExpr, bodyExpr) ->
         let boundExprs' = Map.add name valueExpr boundExprs
@@ -413,7 +413,7 @@ let rec internal formatLetDeconstructionPattern (pattern: LetPattern) : string =
         |> String.concat ", "
         |> fun text -> $"({text})"
 
-let rec internal inferredLetPatternType (path: string) (pattern: LetPattern) : Type =
+let rec internal inferredLetPatternType (path: string) (pattern: LetPattern) : SemanticType =
     match pattern with
     | LPUnit -> TUnit
     | LPVariable name -> TVar $"binding_{path}_{name}"
@@ -426,8 +426,8 @@ let rec internal inferredLetPatternType (path: string) (pattern: LetPattern) : T
 /// Check the entire let pattern shape before returning any bindings.
 let rec internal bindLetPatternTypes
     (pattern: LetPattern)
-    (valueType: Type)
-    : (string * Type) list option =
+    (valueType: SemanticType)
+    : (string * SemanticType) list option =
     match pattern, valueType with
     | LPVariable name, typ -> Some [(name, typ)]
     | LPWildcard, _ -> Some []
@@ -499,7 +499,7 @@ let rec internal formatPatternMismatchValue (expr: Expr) : string option =
     | _ ->
         tryFormatLiteralValue expr
 
-let rec private narrowPatternMismatchExprByType (actualType: Type) (expr: Expr) : Expr =
+let rec private narrowPatternMismatchExprByType (actualType: SemanticType) (expr: Expr) : Expr =
     match actualType, expr with
     | TList _, _ -> expr
     | TTuple _, _ -> expr
@@ -507,13 +507,13 @@ let rec private narrowPatternMismatchExprByType (actualType: Type) (expr: Expr) 
     | _, TupleLiteral (first :: _) -> narrowPatternMismatchExprByType actualType first
     | _, _ -> expr
 
-let private patternMismatchActualTypeText (actualType: Type) (_scrutineeExpr: Expr) : string =
+let private patternMismatchActualTypeText (actualType: SemanticType) (_scrutineeExpr: Expr) : string =
     typeToString actualType
 
 let internal formatPatternMismatchError
     (scrutineeExpr: Expr)
-    (actualType: Type)
-    (expectedPatternType: Type)
+    (actualType: SemanticType)
+    (expectedPatternType: SemanticType)
     (expectedPatternTypeTextOverride: string option)
     : string =
     let narrowedExpr = narrowPatternMismatchExprByType actualType scrutineeExpr
@@ -532,8 +532,8 @@ let internal formatLegacyParamTypeError
     (functionName: string)
     (paramIndex: int)
     (paramName: string)
-    (expectedType: Type)
-    (actualType: Type)
+    (expectedType: SemanticType)
+    (actualType: SemanticType)
     (actualExpr: Expr)
     : string =
     let ordinal =
@@ -575,7 +575,7 @@ let freshenTypeParamsAvoiding
     (freshParams, subst)
 
 /// Apply type variable renaming to a type
-let rec applyTypeVarRenaming (subst: Map<string, string>) (t: Type) : Type =
+let rec applyTypeVarRenaming (subst: Map<string, string>) (t: SemanticType) : SemanticType =
     match t with
     | TVar name ->
         match Map.tryFind name subst with
@@ -591,4 +591,4 @@ let rec applyTypeVarRenaming (subst: Map<string, string>) (t: Type) : Type =
     | TRecord (name, args) -> TRecord (name, List.map (applyTypeVarRenaming subst) args)
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr -> t
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr -> t

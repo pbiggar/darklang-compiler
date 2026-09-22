@@ -80,14 +80,14 @@ let internal emitPrintHeapStringNoNewline (ctx: CodeGenContext) (reg: LIR.Reg) :
             let loadFromSaved = [ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X11, 8s); ARM64Symbolic.ADD_imm (ARM64Symbolic.X9, ARM64Symbolic.X11, 16us)]
             saveReg @ loadFromSaved @ runtimeInstrs (ARM64PrintValues.generatePrintStringNoNewline ctx.Target))
 
-let internal emitPrintList (ctx: CodeGenContext) (listPtr: LIR.Reg) (elemType: AST.Type) : Result<ARM64Symbolic.Instr list, string> =
+let internal emitPrintList (ctx: CodeGenContext) (listPtr: LIR.Reg) (elemType: AST.SemanticType) : Result<ARM64Symbolic.Instr list, string> =
     // Print list as [elem1, elem2, ...]
     // List layout: Nil = 0, Cons = [tag=1, head, tail]
     // Uses X19 for list pointer (callee-saved), X20 for first flag
     lirRegToARM64Reg listPtr
     |> Result.map (fun listReg -> generatePrintListInstrs ctx listReg elemType true)
 
-let internal emitPrintSum (ctx: CodeGenContext) (convertInstr: CodeGenContext -> LIR.Instr -> Result<ARM64Symbolic.Instr list, string>) (sumPtr: LIR.Reg) (variants: (string * int * AST.Type option) list) : Result<ARM64Symbolic.Instr list, string> =
+let internal emitPrintSum (ctx: CodeGenContext) (convertInstr: CodeGenContext -> LIR.Instr -> Result<ARM64Symbolic.Instr list, string>) (sumPtr: LIR.Reg) (variants: (string * int * AST.SemanticType option) list) : Result<ARM64Symbolic.Instr list, string> =
     // Print sum type: variant name + optional payload + newline
     // Sum layout depends on whether ANY variant has a payload:
     // - If any payload: [tag, payload] on heap
@@ -215,7 +215,7 @@ let internal emitPrintSum (ctx: CodeGenContext) (convertInstr: CodeGenContext ->
 
         setup @ variantCode @ printNewline)
 
-let internal emitPrintRecord (ctx: CodeGenContext) (recordPtr: LIR.Reg) (typeName: string) (fields: (string * AST.Type) list) : Result<ARM64Symbolic.Instr list, string> =
+let internal emitPrintRecord (ctx: CodeGenContext) (recordPtr: LIR.Reg) (typeName: string) (fields: (string * AST.SemanticType) list) : Result<ARM64Symbolic.Instr list, string> =
     // Print record: TypeName { field1 = val1, field2 = val2, ... }\n
     // Record layout: [field0, field1, field2, ...] on heap (each 8 bytes)
     lirRegToARM64Reg recordPtr

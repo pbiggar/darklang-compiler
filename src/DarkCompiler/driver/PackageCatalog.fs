@@ -46,7 +46,7 @@ type internal UserCompilePlan = {
 let parseProgram
     (allowInternal: bool)
     (source: string)
-    : Result<AST.Program, string> =
+    : Result<AST.ParsedProgram, string> =
     Parser.parseString allowInternal source
 
 let private parseSourceTree
@@ -55,7 +55,9 @@ let private parseSourceTree
     : Result<NameSyntax.ParsedSource, string> =
     Parser.parseSourceString allowInternal source
 
-let private applyDeclarationOverlays (topLevels: AST.TopLevel list) : AST.TopLevel list =
+let private applyDeclarationOverlays
+    (topLevels: AST.ParsedTopLevel list)
+    : AST.ParsedTopLevel list =
     let declarationKey topLevel =
         match topLevel with
         | AST.FunctionDef definition -> Some ("function", definition.Name)
@@ -82,7 +84,7 @@ let private applyDeclarationOverlays (topLevels: AST.TopLevel list) : AST.TopLev
 let parseSourceProgram
     (allowInternal: bool)
     (sources: AST.NonEmptyList<SourceUnit>)
-    : Result<NameSyntax.ValidatedExecutableProgram * AST.Program, string> =
+    : Result<NameSyntax.ValidatedExecutableProgram * AST.ParsedProgram, string> =
     let rec parseUnits remaining parsedUnits loweredTopLevels =
         match remaining with
         | [] ->
@@ -118,7 +120,7 @@ let private packageLocationType =
 let private runtimeValueType =
     AST.TSum ("Darklang.LanguageTools.RuntimeTypes.ValueType", [])
 
-let private optionType (innerType: AST.Type) =
+let private optionType (innerType: AST.SemanticType) =
     AST.TSum ("Darklang.Stdlib.Option.Option", [innerType])
 
 let private constructor
@@ -141,7 +143,7 @@ let private optionSomeExpr (value: AST.Expr) : AST.Expr =
     constructor "Darklang.Stdlib.Option.Option" "Some" (Some value)
 
 let private call (name: string) (args: AST.Expr list) : AST.Expr =
-    AST.Call (name, AST.NonEmptyList.fromList args)
+    AST.applyNamed name (AST.NonEmptyList.fromList args)
 
 let private addOrderedGroup
     (key: 'key)
@@ -168,8 +170,8 @@ let private nestedIf
 
 let private catalogFunction
     (name: string)
-    (parameters: (string * AST.Type) list)
-    (returnType: AST.Type)
+    (parameters: (string * AST.SemanticType) list)
+    (returnType: AST.SemanticType)
     (body: AST.Expr)
     : AST.FunctionDef =
     {
@@ -341,7 +343,7 @@ let private materializeReachablePackageValueCatalog
                     (AST.TList packageLocationType)
                     locationsBody
 
-            let evaluatorFunction (resultType: AST.Type) =
+            let evaluatorFunction (resultType: AST.SemanticType) =
                 let name = SpecializationIdentity.specName "Builtin.pmEvaluateValue" [resultType]
                 let cases =
                     reachableEntries

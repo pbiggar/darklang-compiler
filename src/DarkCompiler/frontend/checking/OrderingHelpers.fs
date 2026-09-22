@@ -41,23 +41,22 @@ let rec internal buildCompareHelperExpr
     (variantLookup: VariantLookup)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
     (mode: EqHelperExprMode)
-    (typ: Type)
+    (typ: SemanticType)
     (leftExpr: Expr)
     (rightExpr: Expr)
     : Expr =
     let resolvedType = resolveType aliasReg typ
     let callHelper helperType left right =
-        Call (
-            compareHelperName (resolveType aliasReg helperType),
-            NonEmptyList.fromList [left; right]
-        )
+        applyNamed
+            (compareHelperName (resolveType aliasReg helperType))
+            (NonEmptyList.fromList [left; right])
     let compareNative left right =
         compareFromPredicates (BinOp (Lt, left, right)) (BinOp (Gt, left, right))
     let compareString left right =
         let resultName = "__dark_compare_string_result"
         Let (
             LPVariable resultName,
-            Call ("Darklang.Stdlib.Dict.__compareString", NonEmptyList.fromList [left; right]),
+            applyNamed "Darklang.Stdlib.Dict.__compareString" (NonEmptyList.fromList [left; right]),
             compareFromPredicates
                 (BinOp (Lt, Var resultName, Int32Literal 0))
                 (BinOp (Gt, Var resultName, Int32Literal 0))
@@ -74,23 +73,21 @@ let rec internal buildCompareHelperExpr
             If (leftExpr, comparisonResultLiteral 1L, comparisonResultLiteral -1L)
         )
     | ExpandCurrent, TInt ->
-        Call ("Darklang.Stdlib.Int.__compare", NonEmptyList.fromList [leftExpr; rightExpr])
+        applyNamed "Darklang.Stdlib.Int.__compare" (NonEmptyList.fromList [leftExpr; rightExpr])
     | ExpandCurrent, TInt128 ->
-        Call (
-            "Darklang.Stdlib.Int.__compare",
-            NonEmptyList.fromList [
-                Call ("__int128_to_int", NonEmptyList.singleton leftExpr)
-                Call ("__int128_to_int", NonEmptyList.singleton rightExpr)
-            ]
-        )
+        applyNamed
+            "Darklang.Stdlib.Int.__compare"
+            (NonEmptyList.fromList [
+                applyNamed "__int128_to_int" (NonEmptyList.singleton leftExpr)
+                applyNamed "__int128_to_int" (NonEmptyList.singleton rightExpr)
+            ])
     | ExpandCurrent, TUInt128 ->
-        Call (
-            "Darklang.Stdlib.Int.__compare",
-            NonEmptyList.fromList [
-                Call ("__uint128_to_int", NonEmptyList.singleton leftExpr)
-                Call ("__uint128_to_int", NonEmptyList.singleton rightExpr)
-            ]
-        )
+        applyNamed
+            "Darklang.Stdlib.Int.__compare"
+            (NonEmptyList.fromList [
+                applyNamed "__uint128_to_int" (NonEmptyList.singleton leftExpr)
+                applyNamed "__uint128_to_int" (NonEmptyList.singleton rightExpr)
+            ])
     | ExpandCurrent, TFloat64 ->
         let leftNan = BinOp (Neq, leftExpr, leftExpr)
         let rightNan = BinOp (Neq, rightExpr, rightExpr)
@@ -105,8 +102,8 @@ let rec internal buildCompareHelperExpr
     | ExpandCurrent, (TString | TChar) -> compareString leftExpr rightExpr
     | ExpandCurrent, TDateTime ->
         compareFromPredicates
-            (Call ("Darklang.Stdlib.DateTime.lessThan", NonEmptyList.fromList [leftExpr; rightExpr]))
-            (Call ("Darklang.Stdlib.DateTime.greaterThan", NonEmptyList.fromList [leftExpr; rightExpr]))
+            (applyNamed "Darklang.Stdlib.DateTime.lessThan" (NonEmptyList.fromList [leftExpr; rightExpr]))
+            (applyNamed "Darklang.Stdlib.DateTime.greaterThan" (NonEmptyList.fromList [leftExpr; rightExpr]))
 
     | ExpandCurrent, TList elemType ->
         let leftHead = "__dark_compare_list_left_head"
@@ -144,9 +141,9 @@ let rec internal buildCompareHelperExpr
             TTuple [resolveType aliasReg keyType; resolveType aliasReg valueType]
         let listType = TList entryType
         let leftEntries =
-            TypeApp ("Darklang.Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton leftExpr)
+            applyNamedWithTypes "Darklang.Stdlib.Dict.toList" [keyType; valueType] (NonEmptyList.singleton leftExpr)
         let rightEntries =
-            TypeApp ("Darklang.Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton rightExpr)
+            applyNamedWithTypes "Darklang.Stdlib.Dict.toList" [keyType; valueType] (NonEmptyList.singleton rightExpr)
         callHelper listType leftEntries rightEntries
 
     | ExpandCurrent, TTuple elemTypes ->

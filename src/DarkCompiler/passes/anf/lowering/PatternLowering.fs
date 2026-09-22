@@ -156,11 +156,11 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 alternatives |> AST.NonEmptyList.head |> patternBindsVariables
             | _ -> false
 
-        let rec extractAndCompileBody (pattern: CheckedAST.Pattern) (body: CheckedAST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
+        let rec extractAndCompileBody (pattern: CheckedAST.Pattern) (body: CheckedAST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.SemanticType) (currentEnv: VarEnv) (vg: ANF.VarGen) : Result<ANF.AExpr * ANF.VarGen, string> =
             // Recursively collect all variable bindings from a pattern
             // Returns: updated env, list of bindings, updated vargen
             // sourceType is the type of the source being matched, used to get correct element types
-            let rec collectPatternBindings (pat: CheckedAST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+            let rec collectPatternBindings (pat: CheckedAST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.SemanticType) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                 match pat with
                 | _ when not (patternBindsVariables pat) ->
                     Ok (env, bindings, vg)
@@ -196,7 +196,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         |> List.mapi (fun idx _ -> AST.TVar $"__tuple_elem_{idx}")
 
                     // Extract each element and recursively collect bindings
-                    let rec collectFromTuple (pats: CheckedAST.Pattern list) (types: AST.Type list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
+                    let rec collectFromTuple (pats: CheckedAST.Pattern list) (types: AST.SemanticType list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                         match pats, types with
                         | [], _ -> Ok (env, bindings, vg)
                         | p :: rest, t :: restTypes ->
@@ -222,7 +222,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                     collectFromTuple innerPatterns elemTypes 0 env bindings vg
                 | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
-                    let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
+                    let rec substituteType (subst: Map<string, AST.SemanticType>) (typ: AST.SemanticType) : AST.SemanticType =
                         match typ with
                         | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
                         | AST.TTuple elems -> AST.TTuple (List.map (substituteType subst) elems)
@@ -233,7 +233,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteType subst) args, substituteType subst ret)
                         | _ -> typ
 
-                    let resolveFieldTypes (constructorId: AST.ConstructorId) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
+                    let resolveFieldTypes (constructorId: AST.ConstructorId) (scrutineeType: AST.SemanticType) : Result<AST.SemanticType list, string> =
                         match tryFindVariantForTypeById constructorId scrutineeType typeNames variantLookup with
                         | Some (_, typeParams, _, fieldTypeTemplates) ->
                             let fieldTypes =
@@ -410,7 +410,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 // Recursively collect all variable bindings from a pattern
                 // Returns: updated env, list of bindings, updated vargen
                 // sourceType is the type of the source being matched, used to get correct element types
-                let rec collectPatternBindings (pat: CheckedAST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                let rec collectPatternBindings (pat: CheckedAST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.SemanticType) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                     match pat with
                     | _ when not (patternBindsVariables pat) ->
                         Ok (env, bindings, vg)
@@ -446,7 +446,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             |> List.mapi (fun idx _ -> AST.TVar $"__tuple_elem_{idx}")
 
                         // Extract each element and recursively collect bindings
-                        let rec collectFromTuple (pats: CheckedAST.Pattern list) (types: AST.Type list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
+                        let rec collectFromTuple (pats: CheckedAST.Pattern list) (types: AST.SemanticType list) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) =
                             match pats, types with
                             | [], _ -> Ok (env, bindings, vg)
                             | p :: rest, t :: restTypes ->
@@ -472,7 +472,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                         collectFromTuple innerPatterns elemTypes 0 env bindings vg
                     | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
-                        let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
+                        let rec substituteType (subst: Map<string, AST.SemanticType>) (typ: AST.SemanticType) : AST.SemanticType =
                             match typ with
                             | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
                             | AST.TTuple elems -> AST.TTuple (List.map (substituteType subst) elems)
@@ -483,7 +483,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteType subst) args, substituteType subst ret)
                             | _ -> typ
 
-                        let resolveFieldTypes (constructorId: AST.ConstructorId) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
+                        let resolveFieldTypes (constructorId: AST.ConstructorId) (scrutineeType: AST.SemanticType) : Result<AST.SemanticType list, string> =
                             match tryFindVariantForTypeById constructorId scrutineeType typeNames variantLookup with
                             | Some (_, typeParams, _, fieldTypeTemplates) ->
                                 let fieldTypes =
@@ -598,7 +598,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     match scrutType with
                     | AST.TList t -> t
                     | AST.TVar scrutTypeVar -> AST.TVar $"__list_elem_{scrutTypeVar}"
-                    | AST.TRuntimeError -> AST.TVar "__list_elem_runtime_error"
+                    | AST.TNever -> AST.TVar "__list_elem_runtime_error"
                     | _ -> AST.TVar "__list_elem_unknown"
 
                 // Helper to unwrap a LEAF node and get the value
@@ -613,7 +613,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                 // Helper to extract tuple elements from a value
                 // tupleType is the type of the tuple being destructured
-                let rec collectTupleBindings (tupPats: CheckedAST.Pattern list) (tupleAtom: ANF.Atom) (tupleType: AST.Type) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                let rec collectTupleBindings (tupPats: CheckedAST.Pattern list) (tupleAtom: ANF.Atom) (tupleType: AST.SemanticType) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                     let tupleElemTypesResult =
                         match tupleType with
                         | AST.TTuple types when List.length types >= List.length tupPats -> Ok types
@@ -808,7 +808,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     innerPatterns
                                     |> List.mapi (fun idx _ ->
                                         AST.TVar $"__tuple_elem_{tupleTypeVar}_{idx}")
-                                | AST.TRuntimeError ->
+                                | AST.TNever ->
                                     innerPatterns
                                     |> List.mapi (fun idx _ ->
                                         AST.TVar $"__tuple_elem_runtime_error_{idx}")
@@ -816,7 +816,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     innerPatterns
                                     |> List.mapi (fun idx _ ->
                                         AST.TVar $"__tuple_elem_unknown_{idx}")
-                            let rec collectTupleBindings (tupPats: CheckedAST.Pattern list) (types: AST.Type list) (tupleAtom: ANF.Atom) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+                            let rec collectTupleBindings (tupPats: CheckedAST.Pattern list) (types: AST.SemanticType list) (tupleAtom: ANF.Atom) (idx: int) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                                 match tupPats with
                                 | [] -> Ok (env, bindings, vg)
                                 | tupPat :: tupRest ->
@@ -895,7 +895,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         // Extract pattern bindings, check guard, and compile body
         // Returns: if guard is true, execute body; otherwise execute elseExpr
         // scrutType is the type of the scrutinee for correct pattern variable typing
-        and extractAndCompileBodyWithGuard (pattern: CheckedAST.Pattern) (guardExpr: CheckedAST.Expr) (body: CheckedAST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.Type) (currentEnv: VarEnv) (vg: ANF.VarGen) (elseExpr: ANF.AExpr) : Result<ANF.AExpr * ANF.VarGen, string> =
+        and extractAndCompileBodyWithGuard (pattern: CheckedAST.Pattern) (guardExpr: CheckedAST.Expr) (body: CheckedAST.Expr) (scrutAtom: ANF.Atom) (scrutType: AST.SemanticType) (currentEnv: VarEnv) (vg: ANF.VarGen) (elseExpr: ANF.AExpr) : Result<ANF.AExpr * ANF.VarGen, string> =
             // First, we need to extract bindings from the pattern
             // Then compile the guard with those bindings in scope
             // Then compile the body with those bindings in scope
@@ -903,7 +903,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
             // Return true only when we can prove a pattern can never match this type.
             // Used to preserve "fall through" semantics for guarded patterns that should not bind.
-            let rec patternDefinitelyCannotMatchType (pat: CheckedAST.Pattern) (patType: AST.Type) : bool =
+            let rec patternDefinitelyCannotMatchType (pat: CheckedAST.Pattern) (patType: AST.SemanticType) : bool =
                 match pat with
                 | CheckedAST.PTuple innerPatterns ->
                     match patType with
@@ -938,7 +938,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
             // Helper to collect pattern variable bindings (simplified version for common patterns)
             // sourceType is the type of the source being matched
-            let rec collectBindings (pat: CheckedAST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.Type) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+            let rec collectBindings (pat: CheckedAST.Pattern) (sourceAtom: ANF.Atom) (sourceType: AST.SemanticType) (env: VarEnv) (bindings: (ANF.TempId * ANF.CExpr) list) (vg: ANF.VarGen) : Result<VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                 match pat with
                 | CheckedAST.POr alternatives ->
                     collectBindings (AST.NonEmptyList.head alternatives) sourceAtom sourceType env bindings vg
@@ -988,7 +988,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 $"collectBindings(PTuple): missing tuple element type at index {idx}; {remaining} pattern elements remain"
                     collectFromTuple innerPatterns elemTypes 0 env bindings vg
                 | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
-                    let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
+                    let rec substituteType (subst: Map<string, AST.SemanticType>) (typ: AST.SemanticType) : AST.SemanticType =
                         match typ with
                         | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
                         | AST.TTuple elems -> AST.TTuple (List.map (substituteType subst) elems)
@@ -999,7 +999,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteType subst) args, substituteType subst ret)
                         | _ -> typ
 
-                    let resolveFieldTypes (constructorId: AST.ConstructorId) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
+                    let resolveFieldTypes (constructorId: AST.ConstructorId) (scrutineeType: AST.SemanticType) : Result<AST.SemanticType list, string> =
                         match tryFindVariantForTypeById constructorId scrutineeType typeNames variantLookup with
                         | Some (_, typeParams, _, fieldTypeTemplates) ->
                             let fieldTypes =
@@ -1036,7 +1036,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         match sourceType with
                         | AST.TList t -> Ok t
                         | AST.TVar _
-                        | AST.TRuntimeError -> Ok (AST.TVar "__list_elem_unknown")
+                        | AST.TNever -> Ok (AST.TVar "__list_elem_unknown")
                         | _ ->
                             Error
                                 $"collectBindings(PList): expected list-compatible source type, got {typeToString sourceType}"
@@ -1075,7 +1075,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         match sourceType with
                         | AST.TList t -> Ok t
                         | AST.TVar _
-                        | AST.TRuntimeError -> Ok (AST.TVar "__list_elem_unknown")
+                        | AST.TNever -> Ok (AST.TVar "__list_elem_unknown")
                         | _ ->
                             Error
                                 $"collectBindings(PListCons): expected list-compatible source type, got {typeToString sourceType}"
@@ -1134,7 +1134,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         // Option<Json> found whatever type registered a `String` variant last, with
         // that type's tag, and then compared the payload as a string: wrong arm on
         // a Number, SIGSEGV on a Float payload.
-        let rec substituteTypeParams (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
+        let rec substituteTypeParams (subst: Map<string, AST.SemanticType>) (typ: AST.SemanticType) : AST.SemanticType =
             match typ with
             | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
             | AST.TTuple elems -> AST.TTuple (List.map (substituteTypeParams subst) elems)
@@ -1147,7 +1147,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
         /// `patType` is the static type of the value `scrutAtom` holds, when known;
         /// None falls back to the match scrutinee's type.
-        let rec buildPatternComparison (pattern: CheckedAST.Pattern) (scrutAtom: ANF.Atom) (patType: AST.Type option) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
+        let rec buildPatternComparison (pattern: CheckedAST.Pattern) (scrutAtom: ANF.Atom) (patType: AST.SemanticType option) (vg: ANF.VarGen) : Result<(ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen) option, string> =
             let testedType = defaultArg patType scrutType
             let variantHere constructorId = tryFindVariantForTypeById constructorId testedType typeNames variantLookup
             let typeHasAnyPayloadHere (constructorId: AST.ConstructorId) : bool =
@@ -1326,9 +1326,9 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 let elementTypes =
                     match testedType with
                     | AST.TTuple types when List.length types = List.length innerPatterns -> types
-                    | _ -> List.replicate (List.length innerPatterns) AST.TRuntimeError
+                    | _ -> List.replicate (List.length innerPatterns) AST.TNever
                 // Tuple patterns with literals need to compare each element
-                let rec buildTupleComparisons (patternsAndTypes: (CheckedAST.Pattern * AST.Type) list) (index: int) (vg: ANF.VarGen) (accBindings: (ANF.TempId * ANF.CExpr) list) (accConditions: ANF.Atom list) =
+                let rec buildTupleComparisons (patternsAndTypes: (CheckedAST.Pattern * AST.SemanticType) list) (index: int) (vg: ANF.VarGen) (accBindings: (ANF.TempId * ANF.CExpr) list) (accConditions: ANF.Atom list) =
                     match patternsAndTypes with
                     | [] ->
                         if List.isEmpty accConditions then
@@ -1415,7 +1415,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 (headPatterns |> List.exists patternBindsVariables) || patternBindsVariables tailPattern
             | _ -> false
 
-        let rec substituteTypeForStaticPatternCheck (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
+        let rec substituteTypeForStaticPatternCheck (subst: Map<string, AST.SemanticType>) (typ: AST.SemanticType) : AST.SemanticType =
             match typ with
             | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
             | AST.TTuple elems -> AST.TTuple (List.map (substituteTypeForStaticPatternCheck subst) elems)
@@ -1431,7 +1431,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 )
             | _ -> typ
 
-        let rec patternStaticallyCannotMatchType (pattern: CheckedAST.Pattern) (sourceType: AST.Type) : bool =
+        let rec patternStaticallyCannotMatchType (pattern: CheckedAST.Pattern) (sourceType: AST.SemanticType) : bool =
             match pattern with
             | CheckedAST.PTuple innerPatterns ->
                 match sourceType with
@@ -1443,12 +1443,12 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         |> List.exists (fun (innerPattern, elemType) ->
                             patternStaticallyCannotMatchType innerPattern elemType)
                 | AST.TVar _
-                | AST.TRuntimeError -> false
+                | AST.TNever -> false
                 | _ -> true
             | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
                 match sourceType with
                 | AST.TVar _
-                | AST.TRuntimeError -> false
+                | AST.TNever -> false
                 | AST.TSum (_, typeArgs)
                 | AST.TRecord (_, typeArgs) ->
                     match tryFindVariantForTypeById constructorId sourceType typeNames variantLookup with
@@ -1476,7 +1476,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     |> List.exists (fun innerPattern ->
                         patternStaticallyCannotMatchType innerPattern elemType)
                 | AST.TVar _
-                | AST.TRuntimeError -> false
+                | AST.TNever -> false
                 | _ -> true
             | CheckedAST.PListCons (headPatterns, tailPattern) ->
                 match sourceType with
@@ -1486,7 +1486,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         patternStaticallyCannotMatchType headPattern elemType))
                     || patternStaticallyCannotMatchType tailPattern sourceType
                 | AST.TVar _
-                | AST.TRuntimeError -> false
+                | AST.TNever -> false
                 | _ -> true
             | _ ->
                 false
@@ -1503,7 +1503,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         let rec collectNestedPatternBindings
             (pattern: CheckedAST.Pattern)
             (sourceAtom: ANF.Atom)
-            (sourceType: AST.Type)
+            (sourceType: AST.SemanticType)
             (env: VarEnv)
             (bindings: (ANF.TempId * ANF.CExpr) list)
             (vg: ANF.VarGen)
@@ -1547,7 +1547,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             |> List.mapi (fun idx _ ->
                                 AST.TVar $"__tuple_elem_{sourceTypeVar}_{idx}")
                         )
-                    | AST.TRuntimeError ->
+                    | AST.TNever ->
                         Some (
                             patterns
                             |> List.mapi (fun idx _ ->
@@ -1561,7 +1561,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     Ok (env, bindings, vg)
                 | Some elemTypes ->
                     let rec loop
-                        (remaining: (CheckedAST.Pattern * AST.Type) list)
+                        (remaining: (CheckedAST.Pattern * AST.SemanticType) list)
                         (idx: int)
                         (currentEnv: VarEnv)
                         (currentBindings: (ANF.TempId * ANF.CExpr) list)
@@ -1579,7 +1579,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
 
                     loop (List.zip patterns elemTypes) 0 env bindings vg
             | CheckedAST.PConstructor (constructorId, fieldPatterns) ->
-                let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
+                let rec substituteType (subst: Map<string, AST.SemanticType>) (typ: AST.SemanticType) : AST.SemanticType =
                     match typ with
                     | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
                     | AST.TTuple elems -> AST.TTuple (List.map (substituteType subst) elems)
@@ -1589,7 +1589,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     | AST.TSum (name, args) -> AST.TSum (name, List.map (substituteType subst) args)
                     | AST.TFunction (args, ret) -> AST.TFunction (List.map (substituteType subst) args, substituteType subst ret)
                     | _ -> typ
-                let resolveFieldTypes (constructorId: AST.ConstructorId) (scrutineeType: AST.Type) : Result<AST.Type list, string> =
+                let resolveFieldTypes (constructorId: AST.ConstructorId) (scrutineeType: AST.SemanticType) : Result<AST.SemanticType list, string> =
                     match tryFindVariantForTypeById constructorId scrutineeType typeNames variantLookup with
                     | Some (_, typeParams, _, fieldTypeTemplates) ->
                         let fieldTypes =
@@ -1626,7 +1626,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     | AST.TList t -> Ok t
                     | AST.TVar sourceTypeVar ->
                         Ok (AST.TVar $"__list_elem_{sourceTypeVar}")
-                    | AST.TRuntimeError ->
+                    | AST.TNever ->
                         Ok (AST.TVar "__list_elem_runtime_error")
                     | _ ->
                         Error $"PList nested binding expects list source type, got {typeToString sourceType}"
@@ -1659,7 +1659,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                     | AST.TList t -> Ok t
                     | AST.TVar sourceTypeVar ->
                         Ok (AST.TVar $"__list_elem_{sourceTypeVar}")
-                    | AST.TRuntimeError ->
+                    | AST.TNever ->
                         Ok (AST.TVar "__list_elem_runtime_error")
                     | _ ->
                         Error $"PListCons nested binding expects list source type, got {typeToString sourceType}"
@@ -1695,7 +1695,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         let compileListPatternWithChecks
             (patterns: CheckedAST.Pattern list)
             (listAtom: ANF.Atom)
-            (listType: AST.Type)
+            (listType: AST.SemanticType)
             (currentEnv: VarEnv)
             (body: CheckedAST.Expr)
             (elseExpr: ANF.AExpr)
@@ -1724,7 +1724,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 let rec extractTupleBindings
                     (tupPats: CheckedAST.Pattern list)
                     (tupleAtom: ANF.Atom)
-                    (tupleType: AST.Type)
+                    (tupleType: AST.SemanticType)
                     (idx: int)
                     (env: VarEnv)
                     (bindings: (ANF.TempId * ANF.CExpr) list)
@@ -2061,7 +2061,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             (headPatterns: CheckedAST.Pattern list)
             (tailPattern: CheckedAST.Pattern)
             (listAtom: ANF.Atom)
-            (listType: AST.Type)
+            (listType: AST.SemanticType)
             (currentEnv: VarEnv)
             (body: CheckedAST.Expr)
             (elseExpr: ANF.AExpr)
@@ -2069,7 +2069,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             : Result<ANF.AExpr * ANF.VarGen, string> =
 
             // Extract element type from list type
-            let elemTypeResult : Result<AST.Type, string> =
+            let elemTypeResult : Result<AST.SemanticType, string> =
                 match listType with
                 | AST.TList t -> Ok t
                 | _ ->
@@ -2095,7 +2095,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             let rec extractTupleBindings
                 (tupPats: CheckedAST.Pattern list)
                 (tupleAtom: ANF.Atom)
-                (tupleType: AST.Type)
+                (tupleType: AST.SemanticType)
                 (idx: int)
                 (env: VarEnv)
                 (bindings: (ANF.TempId * ANF.CExpr) list)
@@ -2134,9 +2134,9 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         Error $"Nested pattern in tuple element not yet supported: {tupPat}"
 
             let tupleHeadPatternType
-                (candidateElemType: AST.Type)
+                (candidateElemType: AST.SemanticType)
                 (patterns: CheckedAST.Pattern list)
-                : AST.Type option =
+                : AST.SemanticType option =
                 match candidateElemType with
                 | AST.TTuple elemTypes when List.length elemTypes = List.length patterns ->
                     Some candidateElemType
@@ -2146,7 +2146,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         |> List.mapi (fun idx _ ->
                             AST.TVar $"__tuple_elem_{tupleTypeVar}_{idx}")
                     Some (AST.TTuple unresolvedElemTypes)
-                | AST.TRuntimeError ->
+                | AST.TNever ->
                     let unresolvedElemTypes =
                         patterns
                         |> List.mapi (fun idx _ ->
@@ -2684,7 +2684,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
         // None or on a Some(Number) was a SIGSEGV. An arm compiled from stages
         // nests one `If` per stage instead. The else branch is repeated per
         // stage, which is what the list-pattern compilers already do.
-        let rec buildPatternStages (pattern: CheckedAST.Pattern) (scrutAtom: ANF.Atom) (patType: AST.Type option) (vg: ANF.VarGen) : Result<((ANF.TempId * ANF.CExpr) list * ANF.Atom) list * ANF.VarGen, string> =
+        let rec buildPatternStages (pattern: CheckedAST.Pattern) (scrutAtom: ANF.Atom) (patType: AST.SemanticType option) (vg: ANF.VarGen) : Result<((ANF.TempId * ANF.CExpr) list * ANF.Atom) list * ANF.VarGen, string> =
             let testedType = defaultArg patType scrutType
             let prependBindings (bindings: (ANF.TempId * ANF.CExpr) list) (stages: ((ANF.TempId * ANF.CExpr) list * ANF.Atom) list) =
                 match stages with

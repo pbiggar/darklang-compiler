@@ -9,7 +9,7 @@ open CheckedFreeVariables
 open TypeUnification
 open CheckExpressionSupport
 
-let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: Type option) (parameters: NonEmptyList<LambdaParameter>) (returnAnnotation: Type option) (body: Expr) : Result<Type * Expr, TypeError> =
+let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: SemanticType option) (parameters: NonEmptyList<LambdaParameter>) (returnAnnotation: SemanticType option) (body: Expr) : Result<SemanticType * Expr, TypeError> =
     let parametersList = NonEmptyList.toList parameters
     let parameterNames =
         parametersList
@@ -36,7 +36,7 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
             | StringLiteral _ -> Some TString
             | CharLiteral _ -> Some TChar
             | Var name -> Map.tryFind name env
-            | Call (name, _) ->
+            | Apply (Var name, _, _) ->
                 match Map.tryFind name env with
                 | Some (TFunction (_, returnType)) -> Some returnType
                 | _ ->
@@ -80,14 +80,24 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
             | And | Or -> constraints |> collect (Some TBool) left |> collect (Some TBool) right
         | UnaryOp (Not, inner) -> collect (Some TBool) inner constraints
         | UnaryOp (_, inner) -> collect expected inner constraints
-        | Call (name, arguments) ->
+        | Apply (Var name, _, arguments) ->
             let argumentList = NonEmptyList.toList arguments
             match Map.tryFind name env with
             | Some (TFunction (parameterTypes, _)) when List.length parameterTypes = List.length argumentList ->
                 List.zip parameterTypes argumentList
                 |> List.fold (fun state (parameterType, argument) -> collect (Some parameterType) argument state) constraints
             | _ -> collectChildren argumentList constraints
-        | Apply (func, arguments)
+        | Apply (func, _, arguments) ->
+            let argumentList = NonEmptyList.toList arguments
+            let constraints = collect None func constraints
+            match func with
+            | Var name ->
+                match Map.tryFind name env with
+                | Some (TFunction (parameterTypes, _)) when List.length argumentList <= List.length parameterTypes ->
+                    List.zip (List.take (List.length argumentList) parameterTypes) argumentList
+                    |> List.fold (fun state (parameterType, argument) -> collect (Some parameterType) argument state) constraints
+                | _ -> collectChildren argumentList constraints
+            | _ -> collectChildren argumentList constraints
         | IndirectApply (func, arguments) ->
             let argumentList = NonEmptyList.toList arguments
             let constraints = collect None func constraints
@@ -127,7 +137,6 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
             |> collect (Some TBool) condition
             |> collect expected thenBranch
             |> collect expected elseBranch
-        | TypeApp (_, _, arguments) -> collectChildren (NonEmptyList.toList arguments) constraints
         | TupleLiteral elements | ListLiteral elements -> collectChildren elements constraints
         | DictLiteral (_, _, entries) ->
             collectChildren (entries |> List.collect (fun (key, value) -> [key; value])) constraints
@@ -150,7 +159,7 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
         | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
         | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
         | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _
-        | FuncRef _ | RuntimeError _ -> constraints
+        | RuntimeError _ -> constraints
 
     let bodyConstraints = collectConstraints returnAnnotation body Map.empty
 
@@ -167,9 +176,9 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
         | _ -> typ
 
     let typeCheckLambdaWithParams
-        (resolvedParams: (LambdaParameter * Type) list)
-        (bodyExpectedType: Type option)
-        : Result<Type * Expr, TypeError> =
+        (resolvedParams: (LambdaParameter * SemanticType) list)
+        (bodyExpectedType: SemanticType option)
+        : Result<SemanticType * Expr, TypeError> =
         let bindingResults =
             resolvedParams
             |> List.map (fun (parameter, typ) -> bindLetPatternTypes parameter.Pattern typ)
@@ -227,9 +236,9 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
             Error (GenericError $"Expected {List.length parametersList} arguments, got {List.length expectedParams}")
         else
             let rec reconcileParamTypes
-                (remaining: ((LambdaParameter * Type) * Type) list)
-                (acc: (LambdaParameter * Type) list)
-                : Result<(LambdaParameter * Type) list, TypeError> =
+                (remaining: ((LambdaParameter * SemanticType) * SemanticType) list)
+                (acc: (LambdaParameter * SemanticType) list)
+                : Result<(LambdaParameter * SemanticType) list, TypeError> =
                 match remaining with
                 | [] -> Ok (List.rev acc)
                 | ((parameter, declaredParamType), expectedParamType) :: rest ->
@@ -255,7 +264,7 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
                             Error (TypeMismatch (expectedRet, bodyType, "lambda return type"))
                         | Some reconciledRetType ->
                             let concreteReturnType =
-                                if bodyType = TRuntimeError && containsTVar expectedRet then
+                                if bodyType = TNever && containsTVar expectedRet then
                                     // Bottom has no runtime payload representation. Unit is
                                     // the canonical monomorphic witness when the result is
                                     // otherwise unconstrained.

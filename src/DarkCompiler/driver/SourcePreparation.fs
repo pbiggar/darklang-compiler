@@ -22,7 +22,7 @@ open CompilationContexts
 /// but we need return types for all callable functions (including stdlib)
 let internal extractReturnTypes
     (funcReg: TypeRegistries.FunctionRegistry)
-    : Map<AST.FunctionId, string * AST.Type> =
+    : Map<AST.FunctionId, string * AST.SemanticType> =
     funcReg
     |> Map.toSeq
     |> Seq.choose (fun (id, (name, typ)) ->
@@ -32,8 +32,8 @@ let internal extractReturnTypes
     |> Map.ofSeq
 
 let internal returnTypesByName
-    (returnTypes: Map<AST.FunctionId, string * AST.Type>)
-    : Map<string, AST.Type> =
+    (returnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
+    : Map<string, AST.SemanticType> =
     returnTypes |> Map.toSeq |> Seq.map snd |> Map.ofSeq
 
 let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Registries =
@@ -56,8 +56,8 @@ let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Re
 let private liftLambdasWithBase
     (baseTypeReg: TypeRegistries.TypeRegistry)
     (baseVariantLookup: LoweringPrimitives.VariantLookup)
-    (baseFuncParams: Map<string, (string * AST.Type) list>)
-    (baseFuncReturnTypes: Map<string, AST.Type>)
+    (baseFuncParams: Map<string, (string * AST.SemanticType) list>)
+    (baseFuncReturnTypes: Map<string, AST.SemanticType>)
     (passTimingRecorder: PassTimingRecorder option)
     (program: CheckedAST.Program)
     : Result<CheckedAST.Program, string> =
@@ -238,8 +238,8 @@ let internal prepareProgramForAnf
     (baseTypeReg: TypeRegistries.TypeRegistry)
     (baseVariantLookup: LoweringPrimitives.VariantLookup)
     (baseFuncNames: Set<string>)
-    (baseFuncParams: Map<string, (string * AST.Type) list>)
-    (baseFuncReturnTypes: Map<string, AST.Type>)
+    (baseFuncParams: Map<string, (string * AST.SemanticType) list>)
+    (baseFuncReturnTypes: Map<string, AST.SemanticType>)
     (inheritedValues: Map<string, CheckedValueArtifact>)
     (passTimingRecorder: PassTimingRecorder option)
     (program: CheckedAST.Program)
@@ -325,7 +325,7 @@ type internal DeclarationConversion = {
     Symbols: CheckedAST.Symbols
     Functions: ANF.Function list
     Registries: AST_to_ANF.Registries
-    LocalReturnTypes: Map<AST.FunctionId, string * AST.Type>
+    LocalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>
 }
 
 let internal splitDeclarations

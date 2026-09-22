@@ -81,7 +81,7 @@ let internal emitHeapAlloc (ctx: CodeGenContext) (dest: LIR.Reg) (sizeBytes: int
             @ bumpAlloc
             @ generateLeakCounterInc ctx)
 
-let internal emitHeapStore (ctx: CodeGenContext) (addr: LIR.Reg) (offset: int) (src: LIR.Operand) (valueType: AST.Type option) : Result<ARM64Symbolic.Instr list, string> =
+let internal emitHeapStore (ctx: CodeGenContext) (addr: LIR.Reg) (offset: int) (src: LIR.Operand) (valueType: AST.SemanticType option) : Result<ARM64Symbolic.Instr list, string> =
     // Store value at addr + offset (offset is in bytes)
     lirRegToARM64Reg addr
     |> Result.bind (fun addrReg ->
@@ -316,7 +316,7 @@ let internal emitRawWriteWord (ctx: CodeGenContext) (ptr: LIR.Reg) (byteOffset: 
                     ARM64Symbolic.STR (valueReg, tempReg, 0s)            // [temp] = value
                 ])))
 
-let internal emitRawSlotInit (ctx: CodeGenContext) (ptr: LIR.Reg) (byteOffset: LIR.Reg) (value: LIR.Reg) (valueType: AST.Type) : Result<ARM64Symbolic.Instr list, string> =
+let internal emitRawSlotInit (ctx: CodeGenContext) (ptr: LIR.Reg) (byteOffset: LIR.Reg) (value: LIR.Reg) (valueType: AST.SemanticType) : Result<ARM64Symbolic.Instr list, string> =
     // Store 8 bytes at ptr + byteOffset.
     // If the stored value is RC-managed, increment ownership because the parent now owns that edge.
     lirRegToARM64Reg ptr

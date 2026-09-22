@@ -47,8 +47,8 @@ type MetadataGroupCache =
 type HelperCacheKey = {
     ClosurePayloadSizesFromParams: (string * int) list
     ClosurePayloadSizesFromAllocs: (AST.FunctionId * int) list
-    ClosureCaptureTypes: (string * AST.Type list) list
-    RecursiveReleaseTypes: AST.Type list
+    ClosureCaptureTypes: (string * AST.SemanticType list) list
+    RecursiveReleaseTypes: AST.SemanticType list
     CliArgvHelperLabels: string list
     NeedsCliExecuteHelper: bool
     NeedsCliRunProcessHelper: bool

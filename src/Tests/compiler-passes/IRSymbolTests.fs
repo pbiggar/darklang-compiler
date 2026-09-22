@@ -160,7 +160,7 @@ let testMirToLirUsesImmediateMaskForListToRawPtr () : TestResult =
         { Id = TestIds.functionIdForName "list_to_raw_ptr"
           Name = "list_to_raw_ptr"
           TypedParams = [{ Reg = listReg; Type = AST.TList AST.TInt64 }]
-          ReturnType = AST.TRawPtr
+          ReturnType = AST.TInternalRawPtr
           CFG = cfg
           FloatRegs = Set.empty }
     let program = MIR.Program ([func], Map.empty, Map.empty)

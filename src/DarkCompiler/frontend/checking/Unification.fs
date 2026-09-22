@@ -19,8 +19,8 @@ open CheckedFreeVariables
 /// Returns a list of (typeVarName, concreteType) pairs.
 /// Example: matchTypes (TVar "T") TInt64 = Ok [("T", TInt64)]
 /// Helper for matching concrete types - also handles when actual is a TVar
-let matchConcrete (expectedType: Type) (actual: Type) : Result<(string * Type) list, string> =
-    if expectedType = TRuntimeError || actual = TRuntimeError then
+let matchConcrete (expectedType: SemanticType) (actual: SemanticType) : Result<(string * SemanticType) list, string> =
+    if expectedType = TNever || actual = TNever then
         // Runtime-error expressions are bottom-like and can inhabit any expected type.
         Ok []
     else
@@ -29,7 +29,7 @@ let matchConcrete (expectedType: Type) (actual: Type) : Result<(string * Type) l
         | TVar name -> Ok [(name, expectedType)]  // Bind TVar to concrete type
         | _ -> Error $"Expected {typeToString expectedType}, got {typeToString actual}"
 
-let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list, string> =
+let rec matchTypes (pattern: SemanticType) (actual: SemanticType) : Result<(string * SemanticType) list, string> =
     match pattern with
     | TVar name ->
         // Type variable matches anything - record the binding
@@ -61,8 +61,8 @@ let rec matchTypes (pattern: Type) (actual: Type) : Result<(string * Type) list,
         | TString -> Ok []
         | _ -> matchConcrete TChar actual
     | TUnit -> matchConcrete TUnit actual
-    | TRuntimeError -> matchConcrete TRuntimeError actual
-    | TRawPtr -> matchConcrete TRawPtr actual
+    | TNever -> matchConcrete TNever actual
+    | TInternalRawPtr -> matchConcrete TInternalRawPtr actual
     | TList patternElem ->
         match actual with
         | TList actualElem -> matchTypes patternElem actualElem
@@ -167,7 +167,7 @@ let isInferenceVar (name: string) : bool =
     || name.StartsWith "__"
     || name.StartsWith "recursiveParameter"
 
-let rec containsTVar (typ: Type) : bool =
+let rec containsTVar (typ: SemanticType) : bool =
     match typ with
     | TVar _ -> true
     | TList elemType -> containsTVar elemType
@@ -182,14 +182,14 @@ let rec containsTVar (typ: Type) : bool =
 
 /// Check if two types are compatible (can be unified)
 /// Type variables in either type can match concrete types
-let typesCompatible (expected: Type) (actual: Type) : bool =
+let typesCompatible (expected: SemanticType) (actual: SemanticType) : bool =
     match matchTypes expected actual with
     | Ok _ -> true
     | Error _ -> false
 
 /// Check if two types are compatible after resolving type aliases
 /// Combines alias resolution with type variable unification
-let typesCompatibleWithAliases (aliasReg: AliasRegistry) (expected: Type) (actual: Type) : bool =
+let typesCompatibleWithAliases (aliasReg: AliasRegistry) (expected: SemanticType) (actual: SemanticType) : bool =
     let resolvedExpected = resolveType aliasReg expected
     let resolvedActual = resolveType aliasReg actual
     let rec nominalComparisonType typ =
@@ -209,7 +209,7 @@ let typesCompatibleWithAliases (aliasReg: AliasRegistry) (expected: Type) (actua
 /// Consolidate bindings, checking for conflicts where the same type variable
 /// is bound to different types. Returns a map from type var name to concrete type.
 /// When a type var is bound to both a type containing TVars and a concrete type, prefer the concrete type.
-let consolidateBindings (bindings: (string * Type) list) : Result<Map<string, Type>, string> =
+let consolidateBindings (bindings: (string * SemanticType) list) : Result<Map<string, SemanticType>, string> =
     bindings
     |> List.fold (fun acc (name, typ) ->
         acc |> Result.bind (fun m ->
@@ -232,7 +232,7 @@ let consolidateBindings (bindings: (string * Type) list) : Result<Map<string, Ty
                     // (List<a>, Int) the lambda returns), bind those to the
                     // other side and keep the other side; the caller applies
                     // the map transitively. Otherwise keep the first.
-                    let freshenedOnly (bindings: (string * Type) list) =
+                    let freshenedOnly (bindings: (string * SemanticType) list) =
                         bindings |> List.forall (fun (n, _) -> isInferenceVar n)
                     match matchTypes existingType typ with
                     | Ok extra when freshenedOnly extra ->
@@ -252,7 +252,7 @@ let consolidateBindings (bindings: (string * Type) list) : Result<Map<string, Ty
 /// Unify a type pattern (may contain TVar) with a concrete type.
 /// Returns a substitution mapping type variables to concrete types.
 /// Example: unifyTypes (TVar "t") TInt64 = Ok (Map.ofList [("t", TInt64)])
-let unifyTypes (pattern: Type) (actual: Type) : Result<Substitution, string> =
+let unifyTypes (pattern: SemanticType) (actual: SemanticType) : Result<Substitution, string> =
     matchTypes pattern actual
     |> Result.bind consolidateBindings
 
@@ -261,7 +261,7 @@ let unifyTypes (pattern: Type) (actual: Type) : Result<Substitution, string> =
 /// returns the concrete type. If both are concrete and equal, returns the type.
 /// If both are concrete and different, returns None.
 /// The optional aliasReg parameter allows type alias resolution before comparison.
-let reconcileTypes (aliasReg: AliasRegistry option) (t1: Type) (t2: Type) : Type option =
+let reconcileTypes (aliasReg: AliasRegistry option) (t1: SemanticType) (t2: SemanticType) : SemanticType option =
     // Resolve type aliases if registry is provided
     let t1' = aliasReg |> Option.map (fun reg -> resolveType reg t1) |> Option.defaultValue t1
     let t2' = aliasReg |> Option.map (fun reg -> resolveType reg t2) |> Option.defaultValue t2
@@ -272,7 +272,7 @@ let reconcileTypes (aliasReg: AliasRegistry option) (t1: Type) (t2: Type) : Type
     // and arguments agree. A source program cannot declare a record and sum
     // with the same fully-qualified name, so this does not erase a meaningful
     // nominal distinction.
-    let rec nominalComparisonType (typ: Type) : Type =
+    let rec nominalComparisonType (typ: SemanticType) : SemanticType =
         match typ with
         | TSum (name, typeArgs)
         | TRecord (name, typeArgs) ->
@@ -289,9 +289,9 @@ let reconcileTypes (aliasReg: AliasRegistry option) (t1: Type) (t2: Type) : Type
 
     if nominalComparisonType t1' = nominalComparisonType t2' then
         Some t1'
-    elif t1' = TRuntimeError then
+    elif t1' = TNever then
         Some t2'
-    elif t2' = TRuntimeError then
+    elif t2' = TNever then
         Some t1'
     elif t1' = TString && t2' = TChar then
         Some TString
@@ -330,7 +330,7 @@ let reconcileTypes (aliasReg: AliasRegistry option) (t1: Type) (t2: Type) : Type
 /// Given type parameters, parameter types (with type variables), and actual argument types,
 /// returns the inferred type arguments in order matching typeParams.
 /// Also takes optional function return type and expected return type for additional inference.
-let inferTypeArgs (typeParams: string list) (paramTypes: Type list) (argTypes: Type list) (returnType: Type option) (expectedReturnType: Type option) : Result<Type list, string> =
+let inferTypeArgs (typeParams: string list) (paramTypes: SemanticType list) (argTypes: SemanticType list) (returnType: SemanticType option) (expectedReturnType: SemanticType option) : Result<SemanticType list, string> =
     if List.length paramTypes <> List.length argTypes then
         Error $"Argument count mismatch: expected {List.length paramTypes}, got {List.length argTypes}"
     else

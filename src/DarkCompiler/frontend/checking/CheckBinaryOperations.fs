@@ -9,7 +9,7 @@ open ComparisonPlanning
 open TypeUnification
 open CheckExpressionSupport
 
-let internal check (checkExpr: ExpressionChecker) (indexedSumTypeReg: IndexedSumTypeRegistry) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: Type option) (op: BinOp) (left: Expr) (right: Expr) : Result<Type * Expr, TypeError> =
+let internal check (checkExpr: ExpressionChecker) (indexedSumTypeReg: IndexedSumTypeRegistry) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: SemanticType option) (op: BinOp) (left: Expr) (right: Expr) : Result<SemanticType * Expr, TypeError> =
     match op with
     // Arithmetic operators: T -> T -> T (where T is int or float)
     | Add | Sub | Mul | Div | Mod ->
@@ -22,7 +22,7 @@ let internal check (checkExpr: ExpressionChecker) (indexedSumTypeReg: IndexedSum
             | Mod -> "%"
             | _ -> Crash.crash $"Non-arithmetic operator reached arithmetic type-checking path: {op}"
 
-        let tryAsNumericType (typ: Type) : Type option =
+        let tryAsNumericType (typ: SemanticType) : SemanticType option =
             match resolveType aliasReg typ with
             | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
             | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
@@ -106,7 +106,7 @@ let internal check (checkExpr: ExpressionChecker) (indexedSumTypeReg: IndexedSum
             | Gte -> ">="
             | _ -> Crash.crash $"Non-comparison operator reached comparison type-checking path: {op}"
 
-        let lambdaLiteralFastPath : Result<Type * Expr, TypeError> option =
+        let lambdaLiteralFastPath : Result<SemanticType * Expr, TypeError> option =
             let comparisonResult =
                 checkExpr left env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
                 |> Result.bind (fun (leftType, left') ->
@@ -195,7 +195,7 @@ let internal check (checkExpr: ExpressionChecker) (indexedSumTypeReg: IndexedSum
                         | None ->
                             Error (TypeMismatch (leftType, rightType, $"right operand of {opName}"))
                         | Some comparableType ->
-                            let tryNamedPartialState (candidate: Expr) : (string * (Type * Expr) list) option =
+                            let tryNamedPartialState (candidate: Expr) : (string * (SemanticType * Expr) list) option =
                                 match candidate with
                                 | Lambda (parameters, returnAnnotation, body) ->
                                     let parameterList = NonEmptyList.toList parameters
@@ -208,8 +208,7 @@ let internal check (checkExpr: ExpressionChecker) (indexedSumTypeReg: IndexedSum
 
                                     let callDetails =
                                         match body with
-                                        | Call (name, args) -> Some (name, [], NonEmptyList.toList args)
-                                        | TypeApp (name, typeArgs, args) -> Some (name, typeArgs, NonEmptyList.toList args)
+                                        | Apply (Var name, typeArgs, args) -> Some (name, typeArgs, NonEmptyList.toList args)
                                         | _ -> None
 
                                     match generatedPartial, callDetails with
@@ -258,8 +257,8 @@ let internal check (checkExpr: ExpressionChecker) (indexedSumTypeReg: IndexedSum
                                 | _ -> None
 
                             let buildNamedPartialEquality
-                                (leftIdentity: string, leftState: (Type * Expr) list)
-                                (rightIdentity: string, rightState: (Type * Expr) list)
+                                (leftIdentity: string, leftState: (SemanticType * Expr) list)
+                                (rightIdentity: string, rightState: (SemanticType * Expr) list)
                                 : Expr =
                                 let leftBindings =
                                     leftState
@@ -378,7 +377,7 @@ let internal check (checkExpr: ExpressionChecker) (indexedSumTypeReg: IndexedSum
     // Exponentiation is defined by the canonical numeric modules. The
     // 128-bit modules intentionally have no power operation.
     | Pow ->
-        let supportsPower (typ: Type) =
+        let supportsPower (typ: SemanticType) =
             match typ with
             | TInt | TInt8 | TInt16 | TInt32 | TInt64
             | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TFloat64 -> true
@@ -412,7 +411,7 @@ let internal check (checkExpr: ExpressionChecker) (indexedSumTypeReg: IndexedSum
             | BitXor -> "^"
             | _ -> Crash.crash $"Non-bitwise operator reached bitwise type-checking path: {op}"
 
-        let isIntegerType (typ: Type) =
+        let isIntegerType (typ: SemanticType) =
             match typ with
             | TInt8 | TInt16 | TInt32 | TInt64 | TInt
             | TUInt8 | TUInt16 | TUInt32 | TUInt64 -> true

@@ -18,7 +18,7 @@ let private checkProgramInternalWithTrace
     (requireEntry: bool)
     (warningSettings: WarningSettings)
     (program: Program)
-    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    : Result<SemanticType * Program * TypeCheckEnv, TypeError> =
     let sw = System.Diagnostics.Stopwatch.StartNew()
     let measure phase operation =
         match phaseRecorder with
@@ -138,7 +138,7 @@ let private checkProgramInternal
     (requireEntry: bool)
     (warningSettings: WarningSettings)
     (program: Program)
-    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    : Result<SemanticType * Program * TypeCheckEnv, TypeError> =
     checkProgramInternalWithTrace
         None
         baseEnv
@@ -151,7 +151,7 @@ let private checkProgramInternal
 
 let private constructCheckedProgram
     (typ, program, (env: TypeCheckEnv))
-    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
     CheckedAST.ofTypedProgram env.VariantLookup (env.Values |> Map.keys |> Set.ofSeq) program
     |> Result.map (fun checkedProgram -> (typ, checkedProgram, env))
     |> Result.mapError GenericError
@@ -159,7 +159,7 @@ let private constructCheckedProgram
 /// Type-check a program
 /// Returns the type of the main expression and the transformed program
 /// The transformed program has Call nodes converted to TypeApp where type inference was applied
-let checkProgram (program: Program) : Result<Type * CheckedAST.Program, TypeError> =
+let checkProgram (program: Program) : Result<SemanticType * CheckedAST.Program, TypeError> =
     checkProgramInternal None false false true true AST.defaultWarningSettings program
     |> Result.bind constructCheckedProgram
     |> Result.map (fun (typ, prog, _env) -> (typ, prog))
@@ -167,33 +167,33 @@ let checkProgram (program: Program) : Result<Type * CheckedAST.Program, TypeErro
 /// Type-check the public source policy without a base environment.
 /// Used by focused declaration tests and tools that already parsed an isolated
 /// public program.
-let checkPublicProgram (program: Program) : Result<Type * CheckedAST.Program, TypeError> =
+let checkPublicProgram (program: Program) : Result<SemanticType * CheckedAST.Program, TypeError> =
     checkProgramInternal None false true true true AST.defaultWarningSettings program
     |> Result.bind constructCheckedProgram
     |> Result.map (fun (typ, prog, _env) -> (typ, prog))
 
 /// Type-check a program and return the type checking environment
 /// Use this when you need to reuse the environment (e.g., for stdlib caching)
-let checkProgramWithEnv (program: Program) : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
+let checkProgramWithEnv (program: Program) : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal None false false true true AST.defaultWarningSettings program
     |> Result.bind constructCheckedProgram
 
 /// Type-check a declaration-only program without synthesizing an expression.
-let checkDeclarationProgramWithEnv (program: Program) : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
+let checkDeclarationProgramWithEnv (program: Program) : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal None false false true false AST.defaultWarningSettings program
     |> Result.bind constructCheckedProgram
 
 /// Type-check a program with a pre-populated base environment (for separate compilation)
 /// The program's definitions are merged with the base environment, allowing lookups
 /// of types/functions from both the base (e.g., stdlib) and the program (e.g., user code)
-let checkProgramWithBaseEnv (baseEnv: TypeCheckEnv) (program: Program) : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
+let checkProgramWithBaseEnv (baseEnv: TypeCheckEnv) (program: Program) : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal (Some baseEnv) false false true true AST.defaultWarningSettings program
     |> Result.bind constructCheckedProgram
 
 let checkDeclarationProgramWithBaseEnv
     (baseEnv: TypeCheckEnv)
     (program: Program)
-    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal (Some baseEnv) false false true false AST.defaultWarningSettings program
     |> Result.bind constructCheckedProgram
 
@@ -204,7 +204,7 @@ let checkProgramWithBaseEnvAndSettings
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
     (program: Program)
-    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal (Some baseEnv) false requireExplicitTypeArgsForBareCalls true true warningSettings program
     |> Result.bind constructCheckedProgram
 
@@ -214,7 +214,7 @@ let checkProgramWithBaseEnvAndSettingsWithTrace
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
     (program: Program)
-    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternalWithTrace
         (Some phaseRecorder)
         (Some baseEnv)
@@ -231,7 +231,7 @@ let checkDeclarationProgramWithBaseEnvAndSettings
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
     (program: Program)
-    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal (Some baseEnv) false requireExplicitTypeArgsForBareCalls true false warningSettings program
     |> Result.bind constructCheckedProgram
 
@@ -244,7 +244,7 @@ let checkSyntheticPreambleWithBaseEnvAndSettings
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
     (program: Program)
-    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal (Some baseEnv) false requireExplicitTypeArgsForBareCalls false false warningSettings program
     |> Result.bind constructCheckedProgram
 
@@ -255,6 +255,101 @@ let checkPublicProgramWithBaseEnvAndSettings
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
     (program: Program)
-    : Result<Type * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
     checkProgramInternal (Some baseEnv) true requireExplicitTypeArgsForBareCalls true true warningSettings program
     |> Result.bind constructCheckedProgram
+
+/// Cross the parsed/semantic boundary exactly once, immediately before name
+/// resolution. Tests and compiler-generated programs may use the semantic
+/// entry points above; source-driven callers use these wrappers.
+let checkParsedProgram (program: ParsedProgram) : Result<SemanticType * CheckedAST.Program, TypeError> =
+    program |> semanticProgramOfParsed |> checkProgram
+
+let checkParsedPublicProgram (program: ParsedProgram) : Result<SemanticType * CheckedAST.Program, TypeError> =
+    program |> semanticProgramOfParsed |> checkPublicProgram
+
+let checkParsedProgramWithEnv
+    (program: ParsedProgram)
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    program |> semanticProgramOfParsed |> checkProgramWithEnv
+
+let checkParsedDeclarationProgramWithEnv
+    (program: ParsedProgram)
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    program |> semanticProgramOfParsed |> checkDeclarationProgramWithEnv
+
+let checkParsedProgramWithBaseEnv
+    (baseEnv: TypeCheckEnv)
+    (program: ParsedProgram)
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    program |> semanticProgramOfParsed |> checkProgramWithBaseEnv baseEnv
+
+let checkParsedDeclarationProgramWithBaseEnv
+    (baseEnv: TypeCheckEnv)
+    (program: ParsedProgram)
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    program |> semanticProgramOfParsed |> checkDeclarationProgramWithBaseEnv baseEnv
+
+let checkParsedProgramWithBaseEnvAndSettings
+    (baseEnv: TypeCheckEnv)
+    (requireExplicitTypeArgsForBareCalls: bool)
+    (warningSettings: WarningSettings)
+    (program: ParsedProgram)
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    program
+    |> semanticProgramOfParsed
+    |> checkProgramWithBaseEnvAndSettings baseEnv requireExplicitTypeArgsForBareCalls warningSettings
+
+let checkParsedProgramWithBaseEnvAndSettingsWithTrace
+    (phaseRecorder: string -> float -> unit)
+    (baseEnv: TypeCheckEnv)
+    (requireExplicitTypeArgsForBareCalls: bool)
+    (warningSettings: WarningSettings)
+    (program: ParsedProgram)
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    program
+    |> semanticProgramOfParsed
+    |> checkProgramWithBaseEnvAndSettingsWithTrace
+        phaseRecorder
+        baseEnv
+        requireExplicitTypeArgsForBareCalls
+        warningSettings
+
+let checkParsedDeclarationProgramWithBaseEnvAndSettings
+    (baseEnv: TypeCheckEnv)
+    (requireExplicitTypeArgsForBareCalls: bool)
+    (warningSettings: WarningSettings)
+    (program: ParsedProgram)
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    program
+    |> semanticProgramOfParsed
+    |> checkDeclarationProgramWithBaseEnvAndSettings
+        baseEnv
+        requireExplicitTypeArgsForBareCalls
+        warningSettings
+
+let checkParsedSyntheticPreambleWithBaseEnvAndSettings
+    (baseEnv: TypeCheckEnv)
+    (requireExplicitTypeArgsForBareCalls: bool)
+    (warningSettings: WarningSettings)
+    (program: ParsedProgram)
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    program
+    |> semanticProgramOfParsed
+    |> checkSyntheticPreambleWithBaseEnvAndSettings
+        baseEnv
+        requireExplicitTypeArgsForBareCalls
+        warningSettings
+
+let checkParsedPublicProgramWithBaseEnvAndSettings
+    (baseEnv: TypeCheckEnv)
+    (requireExplicitTypeArgsForBareCalls: bool)
+    (warningSettings: WarningSettings)
+    (program: ParsedProgram)
+    : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    program
+    |> semanticProgramOfParsed
+    |> checkPublicProgramWithBaseEnvAndSettings
+        baseEnv
+        requireExplicitTypeArgsForBareCalls
+        warningSettings

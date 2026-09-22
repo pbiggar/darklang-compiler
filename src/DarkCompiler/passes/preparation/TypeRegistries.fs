@@ -8,13 +8,13 @@ open LoweringPrimitives
 
 type RecordTypeInfo = {
     TypeParams: string list
-    Fields: (string * AST.Type) list
+    Fields: (string * AST.SemanticType) list
 }
 
 /// Type registry - maps nominal record identities to declared metadata.
 type TypeRegistry = Map<string, RecordTypeInfo>
 
-let recordFieldsRegistry (typeReg: TypeRegistry) : Map<string, (string * AST.Type) list> =
+let recordFieldsRegistry (typeReg: TypeRegistry) : Map<string, (string * AST.SemanticType) list> =
     typeReg |> Map.map (fun _ info -> info.Fields)
 
 let recordTypeParamsRegistry (typeReg: TypeRegistry) : Map<string, string list> =
@@ -41,7 +41,7 @@ let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : MemoryM
         | _ -> typ
 
     let addVariant
-        (acc: Map<string, string list * (int * AST.Type option) list>)
+        (acc: Map<string, string list * (int * AST.SemanticType option) list>)
         (_variantName: string, (typeName, typeParams, tag, fieldTypes))
         =
         let payloadType =
@@ -78,7 +78,7 @@ let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : MemoryM
 
 /// Function registry keyed by semantic identity. Names are retained as
 /// definition metadata for diagnostics and backend symbol emission.
-type FunctionRegistry = Map<AST.FunctionId, string * AST.Type>
+type FunctionRegistry = Map<AST.FunctionId, string * AST.SemanticType>
 
 /// Display metadata for every resolved function identity, including compiler
 /// intrinsics that do not have ordinary checked definitions.
@@ -99,7 +99,7 @@ let tryFindFieldIndex id (registry: TypeNameRegistry) = Map.tryFind id registry.
 
 let private listHeadUnsafeFunction
     (funcReg: FunctionRegistry)
-    (elementType: AST.Type)
+    (elementType: AST.SemanticType)
     : AST.FunctionId * bool =
     let idsByName =
         funcReg |> Map.toSeq |> Seq.map (fun (id, (name, _)) -> name, id) |> Map.ofSeq
@@ -125,7 +125,7 @@ let private listHeadUnsafeFunction
 /// payload shape for reference-count insertion.
 let internal listHeadUnsafeExpr
     (funcReg: FunctionRegistry)
-    (elementType: AST.Type)
+    (elementType: AST.SemanticType)
     (listAtom: ANF.Atom)
     : ANF.CExpr =
     let functionId, borrowed = listHeadUnsafeFunction funcReg elementType
@@ -136,12 +136,12 @@ let internal listHeadUnsafeExpr
 
 /// Alias registry - maps type alias names to their type params and target types
 /// For simple record aliases: "Vec" -> ([], TRecord "Point")
-type AliasRegistry = Map<string, string list * AST.Type>
+type AliasRegistry = Map<string, string list * AST.SemanticType>
 
 let private canonicalizeBareSumTypeRefsWithPredicate
     (isSumTypeName: string -> bool)
-    (typ: AST.Type)
-    : AST.Type =
+    (typ: AST.SemanticType)
+    : AST.SemanticType =
     let rec canonicalize typ =
         match typ with
         | AST.TRecord (name, []) when isSumTypeName name ->
@@ -163,18 +163,18 @@ let private canonicalizeBareSumTypeRefsWithPredicate
         | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
         | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
-        | AST.TUnit | AST.TRawPtr | AST.TRuntimeError ->
+        | AST.TUnit | AST.TInternalRawPtr | AST.TNever ->
             typ
 
     canonicalize typ
 
 let internal canonicalizeBareSumTypeRefsWithNames
     (sumTypeNames: Set<string>)
-    (typ: AST.Type)
-    : AST.Type =
+    (typ: AST.SemanticType)
+    : AST.SemanticType =
     canonicalizeBareSumTypeRefsWithPredicate (fun name -> Set.contains name sumTypeNames) typ
 
-let internal canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: AST.Type) : AST.Type =
+let internal canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: AST.SemanticType) : AST.SemanticType =
     let isSumTypeName name =
         variantLookup
         |> Map.exists (fun _ (typeName, _, _, _) -> typeName = name)
@@ -183,8 +183,8 @@ let internal canonicalizeBareSumTypeRefs (variantLookup: VariantLookup) (typ: AS
 let internal canonicalizeNamedTypeRefs
     (recordNames: Set<string>)
     (sumTypeNames: Set<string>)
-    (typ: AST.Type)
-    : AST.Type =
+    (typ: AST.SemanticType)
+    : AST.SemanticType =
     let rec canonicalize current =
         match current with
         | AST.TSum (name, args) when Set.contains name recordNames && not (Set.contains name sumTypeNames) ->
@@ -210,7 +210,7 @@ let rec resolveRecordTypeName (aliasReg: AliasRegistry) (typeName: string) : str
     | Some ([], AST.TSum (targetName, _)) -> resolveRecordTypeName aliasReg targetName
     | _ -> typeName
 
-let rec private resolveAliasTypeForRegistry (aliasReg: AliasRegistry) (typ: AST.Type) : AST.Type =
+let rec private resolveAliasTypeForRegistry (aliasReg: AliasRegistry) (typ: AST.SemanticType) : AST.SemanticType =
     match typ with
     | AST.TRecord (name, []) ->
         match Map.tryFind name aliasReg with
@@ -256,11 +256,11 @@ let rec private resolveAliasTypeForRegistry (aliasReg: AliasRegistry) (typ: AST.
     | AST.TChar
     | AST.TDateTime
     | AST.TUnit
-    | AST.TRawPtr
-    | AST.TRuntimeError ->
+    | AST.TInternalRawPtr
+    | AST.TNever ->
         typ
 
-let private resolveRegistryFields (aliasReg: AliasRegistry) (fields: (string * AST.Type) list) : (string * AST.Type) list =
+let private resolveRegistryFields (aliasReg: AliasRegistry) (fields: (string * AST.SemanticType) list) : (string * AST.SemanticType) list =
     fields
     |> List.map (fun (fieldName, fieldType) ->
         (fieldName, resolveAliasTypeForRegistry aliasReg fieldType))
@@ -287,10 +287,10 @@ let expandTypeRegWithAliases (typeReg: TypeRegistry) (aliasReg: AliasRegistry) :
 
 /// Variable environment - maps variable names to their TempIds and types
 /// The type information is used for type-directed field lookup in record access
-type VarEnv = Map<AST.BindingId, ANF.TempId * AST.Type>
+type VarEnv = Map<AST.BindingId, ANF.TempId * AST.SemanticType>
 
 /// Extract just the type environment from VarEnv for use with inferType
-let typeEnvFromVarEnv (varEnv: VarEnv) : Map<AST.BindingId, AST.Type> =
+let typeEnvFromVarEnv (varEnv: VarEnv) : Map<AST.BindingId, AST.SemanticType> =
     varEnv |> Map.map (fun _ (_, t) -> t)
 
 // ============================================================================

@@ -12,7 +12,7 @@ open ClosureAnalysis
 type internal LambdaComparisonPlan = {
     Identity: AST.FunctionId option
     CaptureNames: AST.BindingId list
-    CaptureTypes: AST.Type list
+    CaptureTypes: AST.SemanticType list
     CaptureExprs: CheckedAST.Expr list
     Body: CheckedAST.Expr
     CompareCaptures: bool
@@ -20,7 +20,7 @@ type internal LambdaComparisonPlan = {
 
 let internal comparisonNameForIdentity
     (identity: AST.FunctionId option)
-    (captureTypes: AST.Type list)
+    (captureTypes: AST.SemanticType list)
     (state: LiftState)
     : string * bool * LiftState =
     match identity with
@@ -142,7 +142,7 @@ let internal planLambdaComparison
 let private comparisonForCapturedValue
     (symbols: CheckedAST.Symbols)
     (_variantLookup: VariantLookup)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     (left: CheckedAST.Expr)
     (right: CheckedAST.Expr)
     : CheckedAST.Expr =
@@ -171,12 +171,12 @@ let private comparisonForCapturedValue
 
 let internal makeClosureComparator
     (comparisonName: string)
-    (captureTypes: AST.Type list)
+    (captureTypes: AST.SemanticType list)
     (compareCaptures: bool)
     (variantLookup: VariantLookup)
     (symbols: CheckedAST.Symbols)
     : CheckedAST.FunctionDef * CheckedAST.Symbols =
-    let comparatorStorageType = AST.TRawPtr
+    let comparatorStorageType = AST.TInternalRawPtr
     let runtimeClosureType =
         AST.TTuple (AST.TInt64 :: comparatorStorageType :: captureTypes)
     let (leftId, symbols) = CheckedAST.allocateBinding "__comparison_left_closure" symbols

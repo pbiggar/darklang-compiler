@@ -44,7 +44,7 @@ let testLetBoundTupleReturnType () : TestResult =
     match parseString false source with
     | Error err -> Error $"Parse error: {err}"
     | Ok ast ->
-        match checkProgram ast with
+        match checkParsedProgram ast with
         | Error err -> Error $"Type error: {typeErrorToString err}"
         | Ok (_, typedAst) ->
             match convertProgramToAnf typedAst with

@@ -20,7 +20,7 @@ let private roundtripSyntax (testCase: FormattingRoundtripCase) : TestResult =
             + $"Source: {testCase.Source}\nError: {err}"
         )
     | Ok ast0 ->
-        let printed0 = ASTPrettyPrinter.formatProgram ast0
+        let printed0 = ASTPrettyPrinter.formatParsedProgram ast0
         match Parser.parseString false printed0 with
         | Error err ->
             Error (
@@ -28,7 +28,7 @@ let private roundtripSyntax (testCase: FormattingRoundtripCase) : TestResult =
                 + $"Source: {testCase.Source}\nPretty: {printed0}\nError: {err}"
             )
         | Ok ast1 ->
-            let printed1 = ASTPrettyPrinter.formatProgram ast1
+            let printed1 = ASTPrettyPrinter.formatParsedProgram ast1
             if ast0 <> ast1 then
                 Error (
                     "AST changed after roundtrip.\n"

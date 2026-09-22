@@ -8,7 +8,7 @@ open CheckingTypes
 open TypeUnification
 open CheckExpressionSupport
 
-let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: Type option) (reference: RecordReference) (fields: (RecordFieldReference * Expr) list) : Result<Type * Expr, TypeError> =
+let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: IndexedTypeRegistry) (variantLookup: VariantLookup) (genericFuncReg: GenericFuncRegistry) (warningSettings: WarningSettings) (moduleRegistry: ModuleRegistry) (aliasReg: AliasRegistry) (expectedType: SemanticType option) (reference: RecordReference) (fields: (RecordFieldReference * Expr) list) : Result<SemanticType * Expr, TypeError> =
     let typeName = reference.SourceTypeName
     // Type name is required (parser enforces this, but check for safety)
     if typeName = "" then
@@ -93,8 +93,8 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
                     let rec checkFieldsInOrder
                         (remaining: (string * Expr) list)
                         (accFields: (RecordFieldReference * Expr) list)
-                        (accBindings: (string * Type) list)
-                        : Result<(RecordFieldReference * Expr) list * (string * Type) list, TypeError> =
+                        (accBindings: (string * SemanticType) list)
+                        : Result<(RecordFieldReference * Expr) list * (string * SemanticType) list, TypeError> =
                         match remaining with
                         | [] -> Ok (List.rev accFields, accBindings)
                         | (fname, fieldExpr) :: rest ->

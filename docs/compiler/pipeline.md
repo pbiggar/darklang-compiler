@@ -16,8 +16,8 @@ The Dark compiler transforms source code through a series of passes, each with a
 
 | #    | Pass                    | File                                                        | Transform                                     |
 |------|-------------------------|-------------------------------------------------------------|-----------------------------------------------|
-| 1    | Parser                  | `frontend/Parser.fs`                             | Source → parsed AST                           |
-| 1.5  | Type checking           | `frontend/TypeChecking.fs`                       | Parsed AST → checked AST                      |
+| 1    | Parser                  | `frontend/Parser.fs`                             | Source → `ParsedProgram` with `ParsedType`    |
+| 1.5  | Type checking           | `frontend/TypeChecking.fs`                       | Parsed types → semantic types → checked AST   |
 | 1.9  | Function ownership analysis | `passes/ownership/AnalyzeFunctionOwnership.fs` | Checked AST → verified owned HIR (analysis artifact) |
 | 2    | AST → ANF               | `passes/anf/AST_to_ANF.fs`                       | Checked AST → ANF                             |
 | 2 (regions) | List representation and ownership | `passes/hir/`, `passes/storage/`, `passes/ownership/`, `passes/anf/LowerListRegions.fs` | Closed semantic lists → storage → owned arrays → ANF |
@@ -53,6 +53,10 @@ selects the backend from that explicit target.
 **Input**: Source code string
 **Output**: Abstract Syntax Tree (AST)
 
+The output is `ParsedProgram`; its type-bearing nodes contain `ParsedType`, so
+semantic bottom and privileged internal signature cases are not legal parsed
+states.
+
 ### Responsibilities
 - **Lexical analysis**: Convert character stream to tokens
 - **Syntactic analysis**: Build AST using recursive descent parsing
@@ -77,6 +81,10 @@ Output: Let("x", BinOp(Add, IntLiteral(1), IntLiteral(2)),
 
 **Input**: Parsed AST
 **Output**: Checked AST with phase invariants represented by node shape
+
+Source entry points first map parsed annotations to `SemanticType`. Runtime
+failure expressions have semantic type `TNever`; privileged compiler sources
+alone may introduce `TInternalRawPtr` signatures.
 
 ### Responsibilities
 - **Type validation**: Ensure expressions have consistent types

@@ -59,7 +59,7 @@ let private generateListRefCountDecHelperWith
     (releaseLeafListPayload: bool)
     (releaseLeafDictPayload: bool)
     (releaseLeafClosurePayload: bool)
-    (managedLeafFieldTypes: AST.Type list)
+    (managedLeafFieldTypes: AST.SemanticType list)
     : ARM64Symbolic.Instr list =
     let label (name: string) : string = $"{helperLabel}_{name}"
     let leakDec =
@@ -181,7 +181,7 @@ let private generateListRefCountDecHelperWith
         @ refcountUpdate
         @ [ARM64Symbolic.Label leafPayloadDone]
 
-    let releaseRecursivePayload (sourceType: AST.Type) =
+    let releaseRecursivePayload (sourceType: AST.SemanticType) =
         [
             ARM64Symbolic.LDR (ARM64Symbolic.X8, ARM64Symbolic.X3, 0s)
             ARM64Symbolic.CBZ (ARM64Symbolic.X8, leafPayloadDone)
@@ -486,7 +486,7 @@ let private generateListRefCountDecHelperWith
         | _ ->
             []
 
-    let managedLeafFieldReleasePlan (fieldType: AST.Type) : MemoryModel.RcReleasePlan option =
+    let managedLeafFieldReleasePlan (fieldType: AST.SemanticType) : MemoryModel.RcReleasePlan option =
         match fieldType with
         | AST.TRecord (name, _) when not (Map.containsKey name ctx.RecordRegistry) ->
             None

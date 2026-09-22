@@ -40,7 +40,7 @@ let private formatIdentifierPath (name: string) : string =
     | Some parsed -> NameSyntax.formatQualifiedName parsed
     | None -> formatIdentifierSegment name
 
-let rec private formatType (typ: Type) : string =
+let rec private formatType (typ: SemanticType) : string =
     match typ with
     | TInt8 -> "Int8"
     | TInt16 -> "Int16"
@@ -60,8 +60,8 @@ let rec private formatType (typ: Type) : string =
     | TChar -> "Char"
     | TDateTime -> "DateTime"
     | TUnit -> "Unit"
-    | TRuntimeError -> "RuntimeError"
-    | TRawPtr -> "RawPtr"
+    | TNever -> "RuntimeError"
+    | TInternalRawPtr -> "RawPtr"
     | TVar name -> formatIdentifierSegment name
     | TList elemType -> $"List<{formatType elemType}>"
     | TStream elemType -> $"Stream<{formatType elemType}>"
@@ -204,9 +204,6 @@ let rec private isAtomicExpr (expr: Expr) : bool =
     | FloatLiteral _
     | InterpolatedString _
     | Var _
-    | FuncRef _
-    | Call _
-    | TypeApp _
     | Apply _ | IndirectApply _
     | TupleLiteral _
     | DictLiteral _
@@ -228,7 +225,7 @@ let private parenthesizeTupleBaseIfNeeded (expr: Expr) (text: string) : string =
 let private isUnitLambdaParameter (parameter: LambdaParameter) : bool =
     parameter.Pattern = LPUnit
 
-let private isSyntheticUnitParamList (parameters: NonEmptyList<string * Type>) : bool =
+let private isSyntheticUnitParamList (parameters: NonEmptyList<string * SemanticType>) : bool =
     match NonEmptyList.toList parameters with
     | [(paramName, TUnit)] -> paramName.StartsWith("$unit")
     | _ -> false
@@ -350,8 +347,6 @@ let rec private formatExpr (expr: Expr) : string =
         | _ when isNegativeNumericLiteral arg -> $"({argText})"
         | Constructor (_, _, []) -> $"({argText})"
         | TupleLiteral _ -> $"({argText})"
-        | Call _
-        | TypeApp _
         | Apply _ | IndirectApply _ -> $"({argText})"
         | _ -> parenthesizeIfNeeded arg argText
 
@@ -425,8 +420,6 @@ let rec private formatExpr (expr: Expr) : string =
         let leftCanConsumeNegativeNumericArg (expr: Expr) : bool =
             match expr with
             | Var funcName when funcName.Contains "." -> true
-            | Call _
-            | TypeApp _
             | Apply _ | IndirectApply _
             | Constructor (_, _, []) -> true
             | _ -> false
@@ -497,19 +490,13 @@ let rec private formatExpr (expr: Expr) : string =
         $"if {formatExpr cond} then {formatExpr thenBranch} else {formatExpr elseBranch}"
     | Sequence (first, next) ->
         $"({formatExpr first}; {formatExpr next})"
-    | Call (funcName, args) ->
-        let argsList = NonEmptyList.toList args
-        let formattedName = formatIdentifierPath funcName
-        if isUnitArgumentList args then
-            $"{formattedName} ()"
-        else
-            let argsText = argsList |> formatAppArgs |> String.concat " "
-            $"{formattedName} {argsText}"
-    | TypeApp (funcName, typeArgs, args) ->
+    | Apply (funcExpr, typeArgs, args) ->
         let argsList = NonEmptyList.toList args
         let typeArgsText = typeArgs |> List.map formatType |> String.concat ", "
-        let formattedName = formatIdentifierPath funcName
-        let head = $"{formattedName}<{typeArgsText}>"
+        let formattedCallee = parenthesizeIfNeeded funcExpr (formatExpr funcExpr)
+        let head =
+            if List.isEmpty typeArgs then formattedCallee
+            else $"{formattedCallee}<{typeArgsText}>"
         if isUnitArgumentList args then
             $"{head} ()"
         else
@@ -522,7 +509,7 @@ let rec private formatExpr (expr: Expr) : string =
         let tupleBaseText = formatExpr tupleExpr
         let tupleText =
             match tupleExpr with
-            | Call _ | TypeApp _ | Apply _ | IndirectApply _ ->
+            | Apply _ | IndirectApply _ ->
                 // Space application has no mandatory wrapping.
                 // Parenthesize before postfix access so `.0` binds to the call result.
                 $"({tupleBaseText})"
@@ -563,7 +550,7 @@ let rec private formatExpr (expr: Expr) : string =
         let recordBaseText = formatExpr recordExpr
         let recordText =
             match recordExpr with
-            | Call _ | TypeApp _ | Apply _ | IndirectApply _ ->
+            | Apply _ | IndirectApply _ ->
                 // Same ambiguity as tuple access: ensure `.field` applies to call result.
                 $"({recordBaseText})"
             | _ ->
@@ -629,7 +616,6 @@ let rec private formatExpr (expr: Expr) : string =
                 |> List.map (fun parameter -> formatLetPattern parameter.Pattern)
                 |> String.concat " "
             $"fun {paramsText} -> {formatExpr body}"
-    | Apply (funcExpr, args)
     | IndirectApply (funcExpr, args) ->
         let argsList = NonEmptyList.toList args
         match funcExpr, argsList with
@@ -644,7 +630,6 @@ let rec private formatExpr (expr: Expr) : string =
                 else
                     let argsText = argsList |> formatAppArgs |> String.concat " "
                     $"{funcText} {argsText}"
-    | FuncRef funcName -> formatIdentifierPath funcName
     | Closure (funcName, captures) ->
         let capturesText = captures |> List.map formatExpr |> String.concat ", "
         $"Closure({formatIdentifierPath funcName}, [{capturesText}])"
@@ -761,3 +746,6 @@ let formatProgram (Program items: Program) : string =
             |> String.concat separator
         $"module {NameSyntax.formatQualifiedName firstModule}\n{declarations}"
     | _ -> items |> List.map formatTopLevel |> String.concat separator
+
+let formatParsedProgram (program: ParsedProgram) : string =
+    program |> semanticProgramOfParsed |> formatProgram

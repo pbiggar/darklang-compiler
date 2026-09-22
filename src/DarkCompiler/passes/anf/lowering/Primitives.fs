@@ -36,7 +36,7 @@ let internal materializeFunctionComparisonPlan
         )
     | _ -> Crash.crash "Function comparison plan expected exactly two operands"
 
-let internal canonicalBufferKindForType (typ: AST.Type) : MemoryModel.CanonicalBufferKind option =
+let internal canonicalBufferKindForType (typ: AST.SemanticType) : MemoryModel.CanonicalBufferKind option =
     match typ with
     | AST.TString -> Some MemoryModel.Utf8String
     | AST.TChar -> Some MemoryModel.GraphemeCluster
@@ -44,7 +44,7 @@ let internal canonicalBufferKindForType (typ: AST.Type) : MemoryModel.CanonicalB
 
 let internal materializeComparisonPlan
     (resolveFunction: string -> AST.FunctionId)
-    (targetType: AST.Type)
+    (targetType: AST.SemanticType)
     (args: CheckedAST.Expr list)
     : CheckedAST.Expr =
     match args with
@@ -70,7 +70,7 @@ let internal materializeComparisonPlan
     | _ -> Crash.crash "Comparison plan expected exactly two operands"
 
 /// Variant lookup - maps variant names to (type name, type params, tag index, field types)
-type VariantLookup = Map<string, (string * string list * int * AST.Type list)>
+type VariantLookup = Map<string, (string * string list * int * AST.SemanticType list)>
 
 let sumTypeNamesFromVariantLookup (variantLookup: VariantLookup) : Set<string> =
     variantLookup
@@ -90,9 +90,9 @@ let internal tryFindSumTypeNameById
 
 let internal tryFindVariantForType
     (variantName: string)
-    (sourceType: AST.Type)
+    (sourceType: AST.SemanticType)
     (variantLookup: VariantLookup)
-    : (string * string list * int * AST.Type list) option =
+    : (string * string list * int * AST.SemanticType list) option =
     match sourceType with
     | AST.TSum (typeName, _)
     | AST.TRecord (typeName, _) ->
@@ -104,7 +104,7 @@ let internal tryFindVariantByTag
     (typeName: string)
     (tag: int)
     (variantLookup: VariantLookup)
-    : (string * string list * int * AST.Type list) option =
+    : (string * string list * int * AST.SemanticType list) option =
     variantLookup
     |> Map.toSeq
     |> Seq.tryPick (fun (_, ((declaringType, _, variantTag, _) as variant)) ->
@@ -112,10 +112,10 @@ let internal tryFindVariantByTag
 
 let internal tryFindVariantForTypeById
     (constructorId: AST.ConstructorId)
-    (sourceType: AST.Type)
+    (sourceType: AST.SemanticType)
     (typeNames: CheckedAST.SemanticMetadata)
     (variantLookup: VariantLookup)
-    : (string * string list * int * AST.Type list) option =
+    : (string * string list * int * AST.SemanticType list) option =
     match sourceType with
     | AST.TSum (typeName, _)
     | AST.TRecord (typeName, _) ->
@@ -165,8 +165,8 @@ let internal uint128LiteralComparison (resolveFunction: string -> AST.FunctionId
     let (low, high) = uint128Words value
     ANF.Call (resolveFunction "Darklang.Stdlib.UInt128.__equalsWords", [valueAtom; ANF.IntLiteral (ANF.UInt64 low); ANF.IntLiteral (ANF.UInt64 high)])
 
-/// Convert AST.Type to a string for specialization keys
-let rec typeToString (ty: AST.Type) : string =
+/// Convert AST.SemanticType to a string for specialization keys
+let rec typeToString (ty: AST.SemanticType) : string =
     match ty with
     | AST.TInt64 -> "i64"
     | AST.TInt128 -> "i128"
@@ -186,8 +186,8 @@ let rec typeToString (ty: AST.Type) : string =
     | AST.TDateTime -> "datetime"
     | AST.TFloat64 -> "f64"
     | AST.TUnit -> "unit"
-    | AST.TRuntimeError -> "runtime_error"
-    | AST.TRawPtr -> "ptr"
+    | AST.TNever -> "runtime_error"
+    | AST.TInternalRawPtr -> "ptr"
     | AST.TVar name -> name
     | AST.TRecord (name, args) -> name + (if List.isEmpty args then "" else "<" + (args |> List.map typeToString |> String.concat ",") + ">")
     | AST.TSum (name, args) -> name + "<" + (args |> List.map typeToString |> String.concat ",") + ">"
@@ -283,16 +283,16 @@ let tryPresentationIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExp
 let internal tryParseMangledTypeWithSumTypeNames
     (sumTypeNames: Set<string>)
     (mangled: string)
-    : Result<AST.Type, string> =
+    : Result<AST.SemanticType, string> =
     let tokens = mangled.Split('_') |> Array.toList
 
-    let mkNamedType (name: string) (args: AST.Type list) : AST.Type =
+    let mkNamedType (name: string) (args: AST.SemanticType list) : AST.SemanticType =
         if Set.contains name sumTypeNames then AST.TSum (name, args) else AST.TRecord (name, args)
 
     let isFreshenedTypeVarName (tok: string) : bool =
         tok.Contains("$")
 
-    let tryPrimitive (tok: string) : AST.Type option =
+    let tryPrimitive (tok: string) : AST.SemanticType option =
         match tok with
         | "i8" -> Some AST.TInt8
         | "i16" -> Some AST.TInt16
@@ -312,10 +312,10 @@ let internal tryParseMangledTypeWithSumTypeNames
         | "char" -> Some AST.TChar
         | "datetime" -> Some AST.TDateTime
         | "unit" -> Some AST.TUnit
-        | "rawptr" -> Some AST.TRawPtr
+        | "rawptr" -> Some AST.TInternalRawPtr
         | _ -> None
 
-    let rec parseType (toks: string list) : (AST.Type * string list) list =
+    let rec parseType (toks: string list) : (AST.SemanticType * string list) list =
         match toks with
         | [] -> []
         | tok :: rest ->
@@ -350,7 +350,7 @@ let internal tryParseMangledTypeWithSumTypeNames
                         |> List.map (fun (args, rem) -> (mkNamedType tok args, rem))
                     baseType :: withArgs
 
-    and parseExactly (count: int) (toks: string list) : (AST.Type list * string list) list =
+    and parseExactly (count: int) (toks: string list) : (AST.SemanticType list * string list) list =
         if count = 0 then
             [([], toks)]
         else
@@ -359,7 +359,7 @@ let internal tryParseMangledTypeWithSumTypeNames
                 parseExactly (count - 1) rem1
                 |> List.map (fun (restTs, rem2) -> (firstT :: restTs, rem2)))
 
-    and parseTupleElems (toks: string list) : (AST.Type list * string list) list =
+    and parseTupleElems (toks: string list) : (AST.SemanticType list * string list) list =
         parseType toks
         |> List.collect (fun (firstT, rem1) ->
             let single = ([firstT], rem1)
@@ -368,7 +368,7 @@ let internal tryParseMangledTypeWithSumTypeNames
                 |> List.map (fun (restTs, rem2) -> (firstT :: restTs, rem2))
             single :: more)
 
-    and parseFunction (toks: string list) : (AST.Type * string list) list =
+    and parseFunction (toks: string list) : (AST.SemanticType * string list) list =
         let rec splitParams (acc: string list) (remaining: string list) =
             match remaining with
             | [] -> None
@@ -394,7 +394,7 @@ let internal tryParseMangledTypeWithSumTypeNames
     | [] -> Error $"Could not parse mangled type: {mangled}"
     | _ -> Error $"Ambiguous mangled type: {mangled}"
 
-let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Result<AST.Type, string> =
+let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Result<AST.SemanticType, string> =
     tryParseMangledTypeWithSumTypeNames
         (sumTypeNamesFromVariantLookup variantLookup)
         mangled
@@ -403,7 +403,7 @@ let tryParseMangledType (variantLookup: VariantLookup) (mangled: string) : Resul
 let private tryParseMangledTypeForRawIntrinsic
     (sumTypeNames: Set<string>)
     (mangled: string)
-    : AST.Type option =
+    : AST.SemanticType option =
     match tryParseMangledTypeWithSumTypeNames sumTypeNames mangled with
     | Ok typ -> Some typ
     | Error _ -> None
@@ -458,7 +458,7 @@ let tryRawMemoryIntrinsic
     (args: ANF.Atom list)
     : ANF.CExpr option =
     let args = normalizeNullaryIntrinsicArgs args
-    let tryMonomorphizedValueType (prefix: string) (name: string) : AST.Type option =
+    let tryMonomorphizedValueType (prefix: string) (name: string) : AST.SemanticType option =
         if name = prefix then
             None
         elif name.StartsWith(prefix + "_") then
@@ -471,7 +471,7 @@ let tryRawMemoryIntrinsic
             Some (name.Substring(prefix.Length + 1))
         else
             None
-    let dictTypeFromRawPtrIntrinsicName (name: string) : AST.Type =
+    let dictTypeFromRawPtrIntrinsicName (name: string) : AST.SemanticType =
         match tryMonomorphizedSuffix "__rawptr_to_dict" name with
         | Some suffix ->
             match tryParseMangledTypeForRawIntrinsic sumTypeNames $"dict_{suffix}" with
@@ -479,7 +479,7 @@ let tryRawMemoryIntrinsic
             | None -> Crash.crash $"Could not recover Dict type from intrinsic '{name}'"
         | None ->
             AST.TDict (AST.TVar "k", AST.TVar "v")
-    let listTypeFromRawPtrIntrinsicName (name: string) : AST.Type =
+    let listTypeFromRawPtrIntrinsicName (name: string) : AST.SemanticType =
         match tryMonomorphizedSuffix "__rawptr_to_list" name with
         | Some suffix ->
             match tryParseMangledTypeForRawIntrinsic sumTypeNames suffix with
@@ -533,12 +533,12 @@ let tryRawMemoryIntrinsic
     | "__rawptr_to_string", [ptrAtom] ->
         Some (ANF.RawPtrToString ptrAtom)
     | "__int_to_rawptr", [valueAtom] ->
-        Some (ANF.TypedAtom (valueAtom, AST.TRawPtr))
+        Some (ANF.TypedAtom (valueAtom, AST.TInternalRawPtr))
     | "__rawptr_to_int", [ptrAtom] ->
         Some (ANF.TypedAtom (ptrAtom, AST.TInt))
     | "__int128_to_rawptr", [valueAtom]
     | "__uint128_to_rawptr", [valueAtom] ->
-        Some (ANF.TypedAtom (valueAtom, AST.TRawPtr))
+        Some (ANF.TypedAtom (valueAtom, AST.TInternalRawPtr))
     | "__rawptr_to_int128", [ptrAtom] ->
         Some (ANF.RawPtrToInt128 ptrAtom)
     | "__rawptr_to_uint128", [ptrAtom] ->
@@ -580,7 +580,7 @@ let tryRawMemoryIntrinsic
     | "__rawptr_to_blob", [ptrAtom] ->
         Some (ANF.RawPtrToBlob ptrAtom)
     | name, [streamAtom] when name = "__stream_to_rawptr" || name.StartsWith("__stream_to_rawptr_") ->
-        Some (ANF.TypedAtom (streamAtom, AST.TRawPtr))
+        Some (ANF.TypedAtom (streamAtom, AST.TInternalRawPtr))
     | name, [ptrAtom] when name = "__rawptr_to_stream" || name.StartsWith("__rawptr_to_stream_") ->
         let streamType =
             if name = "__rawptr_to_stream" then AST.TStream (AST.TVar "a")

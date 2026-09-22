@@ -26,7 +26,7 @@ open MemoryModel
 type TempId = TempId of int
 
 /// Parameter with type information bundled together (makes invalid states unrepresentable)
-type TypedParam = { Id: TempId; Type: AST.Type }
+type TypedParam = { Id: TempId; Type: AST.SemanticType }
 
 /// Integer value with explicit size - invalid states unrepresentable
 /// Following "make invalid states unrepresentable" principle
@@ -65,8 +65,8 @@ let sizedIntToString (si: SizedInt) : string =
     | UInt32 n -> string n
     | UInt64 n -> string n
 
-/// Get the AST.Type corresponding to a SizedInt
-let sizedIntToType (si: SizedInt) : AST.Type =
+/// Get the AST.SemanticType corresponding to a SizedInt
+let sizedIntToType (si: SizedInt) : AST.SemanticType =
     match si with
     | Int8 _ -> AST.TInt8
     | Int16 _ -> AST.TInt16
@@ -152,18 +152,18 @@ type CliOperation =
 type RecordDescriptor = {
     SourceTypeName: string
     RuntimeTypeName: string
-    TypeArgs: AST.Type list
-    Fields: (string * AST.Type) list
+    TypeArgs: AST.SemanticType list
+    Fields: (string * AST.SemanticType) list
     /// The nominal value represented by this fixed block. Constructor lowering
     /// also uses this descriptor for boxed sums whose physical layout is
     /// [tag, payload].
-    ValueType: AST.Type
+    ValueType: AST.SemanticType
 }
 
 /// Complex expressions (produce values)
 type CExpr =
     | Atom of Atom
-    | TypedAtom of Atom * AST.Type  // Atom with explicit type (for pattern matching where inferred types would be wrong)
+    | TypedAtom of Atom * AST.SemanticType  // Atom with explicit type (for pattern matching where inferred types would be wrong)
     | Prim of BinOp * Atom * Atom
     | UnaryPrim of UnaryOp * Atom
     | IfValue of cond:Atom * thenValue:Atom * elseValue:Atom  // If-expression that produces a value
@@ -189,7 +189,7 @@ type CExpr =
     | RefCountInc of Atom * payloadSize:int * kind:RcKind * metadata:RcMetadata option    // Increment ref count of heap value
     | RefCountDec of Atom * payloadSize:int * kind:RcKind * metadata:RcMetadata option    // Decrement ref count, free if zero
     // Output operations (for main expression result)
-    | Print of Atom * AST.Type                 // Print value with type-appropriate formatting
+    | Print of Atom * AST.SemanticType                 // Print value with type-appropriate formatting
     | StdoutWrite of value:Atom * appendNewline:bool // Explicit stdout effect; returns Unit
     | StdinReadLine                            // Read one UTF-8 line from stdin; returns String
     | RuntimeError of message:string           // Print runtime error to stderr and exit with code 1
@@ -215,12 +215,12 @@ type CExpr =
     | MappedAlloc of numBytes:Atom             // Independent mapping, private size prefix, explicit lifetime
     | RawFree of ptr:Atom                     // Manually free raw memory
     | MappedFree of ptr:Atom                   // Unmap exactly one MappedAlloc payload; never a heap pointer
-    | RawGet of ptr:Atom * byteOffset:Atom * valueType:AST.Type option  // Read 8 bytes at offset, valueType for float
-    | RawTake of ptr:Atom * byteOffset:Atom * valueType:AST.Type option // Transfer a typed slot edge to the result
+    | RawGet of ptr:Atom * byteOffset:Atom * valueType:AST.SemanticType option  // Read 8 bytes at offset, valueType for float
+    | RawTake of ptr:Atom * byteOffset:Atom * valueType:AST.SemanticType option // Transfer a typed slot edge to the result
     | RawGetByte of ptr:Atom * byteOffset:Atom  // Read 1 byte at offset, returns Int64 (zero-extended)
     | RawWriteWord of ptr:Atom * byteOffset:Atom * value:Atom  // Write 8 bytes without retaining; RC insertion also uses this for transferred typed edges
     | RawWriteByte of ptr:Atom * byteOffset:Atom * value:Atom  // Write 1 unmanaged byte at offset
-    | RawSlotInit of ptr:Atom * byteOffset:Atom * value:Atom * valueType:AST.Type  // Initialize typed 8-byte slot edge at offset
+    | RawSlotInit of ptr:Atom * byteOffset:Atom * value:Atom * valueType:AST.SemanticType  // Initialize typed 8-byte slot edge at offset
     | StringToRawPtr of value:Atom              // Borrow raw backing pointer from String
     | RawPtrToString of ptr:Atom                // Reinterpret raw allocation as owned String
     | BlobToRawPtr of value:Atom               // Borrow raw backing pointer from Blob
@@ -228,10 +228,10 @@ type CExpr =
     | RawPtrToInt128 of ptr:Atom               // Adopt an initialized fixed Int128 block
     | RawPtrToUInt128 of ptr:Atom              // Adopt an initialized fixed UInt128 block
     | DictToRawPtr of dict:Atom                 // Strip Dict tag bits, returning RawPtr
-    | RawPtrToDict of ptr:Atom * tag:Atom * dictType:AST.Type  // Re-tag RawPtr as Dict
+    | RawPtrToDict of ptr:Atom * tag:Atom * dictType:AST.SemanticType  // Re-tag RawPtr as Dict
     | ListToRawPtr of list:Atom                 // Strip List tag bits, returning RawPtr
     | FixedBlockToRawPtr of value:Atom          // Borrow an untagged fixed-block payload pointer
-    | RawPtrToList of ptr:Atom * tag:Atom * listType:AST.Type  // Re-tag RawPtr as List
+    | RawPtrToList of ptr:Atom * tag:Atom * listType:AST.SemanticType  // Re-tag RawPtr as List
     // Dynamic buffer reference counting at the value pointer
     | RefCountIncString of Atom               // Increment string ref count
     | RefCountDecString of Atom               // Decrement string ref count, free if zero
@@ -264,7 +264,7 @@ type Function = {
     Id: AST.FunctionId
     Name: string
     TypedParams: TypedParam list  // Parameter IDs with their types bundled
-    ReturnType: AST.Type
+    ReturnType: AST.SemanticType
     ReturnOwnership: ReturnOwnership
     Body: AExpr
 }
@@ -284,7 +284,7 @@ let initialVarGen = VarGen 0
 
 /// Type map for tracking TempId -> Type mappings
 /// Used by reference counting pass to determine which values are heap-allocated
-type TypeMap = Map<TempId, AST.Type>
+type TypeMap = Map<TempId, AST.SemanticType>
 
 /// Program with type information for reference counting
 type TypedProgram = {

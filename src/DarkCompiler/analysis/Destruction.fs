@@ -10,7 +10,7 @@ let rec hasInertDestruction = function
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
     | AST.TInt | AST.TInt128 | AST.TUInt128
     | AST.TBool | AST.TFloat64 | AST.TString | AST.TChar
-    | AST.TBlob | AST.TUnit | AST.TDateTime | AST.TRawPtr | AST.TRuntimeError -> true
+    | AST.TBlob | AST.TUnit | AST.TDateTime | AST.TInternalRawPtr | AST.TNever -> true
     | AST.TList element -> hasInertDestruction element
     | AST.TTuple elements -> List.forall hasInertDestruction elements
     | AST.TDict (key, value) -> hasInertDestruction key && hasInertDestruction value

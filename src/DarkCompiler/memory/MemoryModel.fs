@@ -29,7 +29,7 @@ type RcShape =
     | FixedBlock of payloadSize:int * fieldShapes:RcShape list
     | StreamRoot
     | BoxedSum of payloadSize:int * fieldShapes:(int * RcShape) list * variants:RcBoxedSumVariantShape list
-    | RecursiveNominalRef of sourceType:AST.Type
+    | RecursiveNominalRef of sourceType:AST.SemanticType
     | TaggedListShape of elementShape:RcShape
     | DictRoot of keyShape:RcShape * valueShape:RcShape
     | DynamicString
@@ -46,7 +46,7 @@ and RcBoxedSumVariantShape = {
 /// Minimal sum metadata needed by RcShape without depending on later IR modules.
 type RcSumShapeInfo = {
     TypeParams: string list
-    Payloads: (int * AST.Type option) list
+    Payloads: (int * AST.SemanticType option) list
 }
 
 type RcSumShapeRegistry = Map<string, RcSumShapeInfo>
@@ -73,7 +73,7 @@ type RcStorageClass =
 type RcReleasePlan =
     | NoReleasePlan
     | DynamicBufferRelease of operation:RcOperation
-    | RecursiveRelease of sourceType:AST.Type
+    | RecursiveRelease of sourceType:AST.SemanticType
     | RootRelease of payloadSize:int * kind:RcKind * payload:RcPayloadReleasePlan
 and RcPayloadReleasePlan =
     | NoPayloadRelease
@@ -101,5 +101,5 @@ type RcMetadata = {
     /// remain plan-derived so equivalent shapes continue to share code.
     ReleasePlanCacheKey: string option
     ReleasePlan: RcReleasePlan option
-    SourceType: AST.Type option
+    SourceType: AST.SemanticType option
 }

@@ -18,7 +18,7 @@ open PreambleAnalysis
 
 /// Load the stdlib and unicode_data.dark files
 /// Returns the merged stdlib AST or an error message
-let private loadStdlib () : Result<AST.Program, string> =
+let private loadStdlib () : Result<AST.ParsedProgram, string> =
     let stdlibFiles = [
         "stdlib/Types.dark"
         "stdlib/NoModule.dark"
@@ -202,7 +202,10 @@ let private loadStdlib () : Result<AST.Program, string> =
         "stdlib/JsonParseError.dark"
         "stdlib/Json.dark"
     ]
-    let mergeFile (acc: AST.TopLevel list) (filename: string) : Result<AST.TopLevel list, string> =
+    let mergeFile
+        (acc: AST.ParsedTopLevel list)
+        (filename: string)
+        : Result<AST.ParsedTopLevel list, string> =
         match loadDarkFileAllowInternal filename with
         | Error err -> Error err
         | Ok (AST.Program items) ->
@@ -221,7 +224,7 @@ let buildStdlibWithTrace
     | Error e ->
         Error e
     | Ok stdlibAst ->
-        match TypeChecking.checkDeclarationProgramWithEnv stdlibAst with
+        match TypeChecking.checkParsedDeclarationProgramWithEnv stdlibAst with
         | Error e ->
             let msg = CheckingDiagnostics.typeErrorToString e
             Error msg

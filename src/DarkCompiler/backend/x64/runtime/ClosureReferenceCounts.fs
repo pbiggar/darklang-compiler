@@ -22,7 +22,7 @@ let internal closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<
                     None)))
     |> Map.ofList
 
-let internal closureCaptureTypesFromParams (functions: LIR.Function list) : Map<string, AST.Type list> =
+let internal closureCaptureTypesFromParams (functions: LIR.Function list) : Map<string, AST.SemanticType list> =
     functions
     |> List.choose (fun func ->
         match func.TypedParams with
@@ -81,7 +81,7 @@ let internal generateClosureRefCountDecHelper
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
     (closurePayloadSizes: Map<string, int>)
-    (closureCaptureTypes: Map<string, AST.Type list>)
+    (closureCaptureTypes: Map<string, AST.SemanticType list>)
     : X86_64.Instr list =
     let label name = $"__dark_closure_rc_dec_{name}"
     let helperRet = label "ret"
@@ -166,7 +166,7 @@ let internal generateClosureRefCountDecHelper
         @ restores
         @ [X86_64.Label doneLabel]
 
-    let releaseFixedBlockCapture (fieldOffset: int) (captureType: AST.Type) : X86_64.Instr list =
+    let releaseFixedBlockCapture (fieldOffset: int) (captureType: AST.SemanticType) : X86_64.Instr list =
         match tryRcReleasePlanOfType recordRegistry sumShapeRegistry captureType with
         | Some (MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, (MemoryModel.FixedBlockPayloadRelease _ | MemoryModel.BoxedSumPayloadRelease _)) as releasePlan) ->
             [X86_64.MOV_load (X86_64.R9, X86_64.RAX, fieldOffset)

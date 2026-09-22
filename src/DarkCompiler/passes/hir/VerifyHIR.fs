@@ -11,7 +11,7 @@ type VerificationError =
     | DuplicateFunctionName of AST.FunctionId
     | InconsistentValueType of ValueId
     | BindingTypeMismatch of result: ValueId
-    | InvalidBranchCondition of AST.Type
+    | InvalidBranchCondition of AST.SemanticType
     | InconsistentBranchResult of result: ValueId
     | InvalidAliasSource of result: ValueId * source: ValueId
     | IncompatibleAliasTypes of result: ValueId * source: ValueId
@@ -33,7 +33,7 @@ type Dialect<'leaf, 'block> = {
 }
 
 let verify (dialect: Dialect<'leaf, 'block>) (root: 'block) =
-    let require (visible: Map<ValueId, AST.Type>) (value: Value) =
+    let require (visible: Map<ValueId, AST.SemanticType>) (value: Value) =
         match Map.tryFind value.Id visible with
         | None -> Error (UnknownValue value.Id)
         | Some typ when typ = value.Type -> Ok ()

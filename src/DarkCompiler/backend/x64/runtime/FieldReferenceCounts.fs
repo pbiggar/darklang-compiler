@@ -7,7 +7,7 @@ open X64CodeGenTypes
 open X64ReleaseSelection
 
 let rec private genFieldReleases
-    (recursiveHelperLabel: AST.Type -> string)
+    (recursiveHelperLabel: AST.SemanticType -> string)
     (preserveRegisters: bool)
     (ctx: FuncCtx)
     (fieldReleases: MemoryModel.RcFieldRelease list)
@@ -41,7 +41,7 @@ let rec private genFieldReleases
                 [])
 
 and private genBoxedSumVariantFieldReleases
-    (recursiveHelperLabel: AST.Type -> string)
+    (recursiveHelperLabel: AST.SemanticType -> string)
     (preserveRegisters: bool)
     (ctx: FuncCtx)
     (variants: MemoryModel.RcBoxedSumVariantRelease list)
@@ -74,7 +74,7 @@ and private genBoxedSumVariantFieldReleases
         @ [X86_64.Label doneLabel]
 
 and private genFixedBlockFieldReleases
-    (recursiveHelperLabel: AST.Type -> string)
+    (recursiveHelperLabel: AST.SemanticType -> string)
     (preserveRegisters: bool)
     (ctx: FuncCtx)
     (releasePlan: MemoryModel.RcReleasePlan option)
@@ -90,7 +90,7 @@ and private genFixedBlockFieldReleases
         []
 
 and private genFixedBlockFieldRelease
-    (recursiveHelperLabel: AST.Type -> string)
+    (recursiveHelperLabel: AST.SemanticType -> string)
     (preserveRegisters: bool)
     (ctx: FuncCtx)
     (fieldOffset: int)
@@ -109,7 +109,7 @@ and private genFixedBlockFieldRelease
 /// Public lowering preserves scratch registers; recursive workers preserve only
 /// parent roots at nested fixed-block boundaries to keep deep release bounded.
 and private genRefCountDecGenericWithPlanUsing
-    (recursiveHelperLabel: AST.Type -> string)
+    (recursiveHelperLabel: AST.SemanticType -> string)
     (preserveRegisters: bool)
     (ctx: FuncCtx)
     (addrReg: X86_64.Reg)
@@ -233,7 +233,7 @@ let internal generateRecursiveNominalRefCountDecHelper
     (enableLeakCheck: bool)
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
-    (sourceType: AST.Type)
+    (sourceType: AST.SemanticType)
     : X86_64.Instr list =
     let releasePlan =
         MemoryPlanning.rcReleasePlanOfTypeWithSums recordRegistry sumShapeRegistry sourceType
@@ -247,7 +247,7 @@ let internal generateRecursiveNominalRefCountDecHelper
         FunctionNames = Map.empty
     }
     let helperLabel = recursiveNominalRefCountDecHelperLabel sourceType
-    let workerLabel (typ: AST.Type) = $"{recursiveNominalRefCountDecHelperLabel typ}_worker"
+    let workerLabel (typ: AST.SemanticType) = $"{recursiveNominalRefCountDecHelperLabel typ}_worker"
     let savedRegs =
         [ X86_64.RAX
           X86_64.RDI
@@ -273,7 +273,7 @@ let internal generateRecursiveNominalRefCountDecHelper
     | _ ->
         Crash.crash $"x64 recursive nominal RC helper requires a generic root release plan, got {releasePlan}"
 
-let internal recursiveReleaseTypesInFunctions (functions: LIR.Function list) : Set<AST.Type> =
+let internal recursiveReleaseTypesInFunctions (functions: LIR.Function list) : Set<AST.SemanticType> =
     functions
     |> List.collect (fun func ->
         func.CFG.Blocks

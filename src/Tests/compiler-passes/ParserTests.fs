@@ -32,7 +32,7 @@ let private testSpaceApplicationKeepsMultipleArguments () : TestResult =
     match Parser.parseString false source with
     | Ok (Program [FunctionDef definition]) ->
         match definition.Body with
-        | Call ("recurse", args) when NonEmptyList.toList args = [Var "a"; Var "b"] -> Ok ()
+        | Apply (Var "recurse", [], args) when NonEmptyList.toList args = [Var "a"; Var "b"] -> Ok ()
         | body -> Error $"Expected a two-argument call, got {body}"
     | Ok program -> Error $"Expected one function declaration, got {program}"
     | Error err -> Error err
@@ -43,7 +43,7 @@ let private testSubtractionFollowsParenthesizedCall () : TestResult =
     match Parser.parseString true source with
     | Ok (Program [FunctionDef definition]) ->
         match definition.Body with
-        | BinOp (Sub, Call ("Stdlib.String.__byteLength", args), Int64Literal 1L)
+        | BinOp (Sub, Apply (Var "Stdlib.String.__byteLength", [], args), Int64Literal 1L)
             when NonEmptyList.toList args = [Var "value"] -> Ok ()
         | body -> Error $"Expected subtraction from a one-argument call, got {body}"
     | Ok program -> Error $"Expected one function declaration, got {program}"
@@ -55,7 +55,7 @@ let private testNegativeLiteralRemainsAFunctionArgument () : TestResult =
     match Parser.parseString true source with
     | Ok (Program [FunctionDef definition]) ->
         match definition.Body with
-        | Call ("Stdlib.String.__byteLength", args)
+        | Apply (Var "Stdlib.String.__byteLength", [], args)
             when NonEmptyList.toList args = [Var "value"; Int64Literal -1L] -> Ok ()
         | body -> Error $"Expected a negative second argument, got {body}"
     | Ok program -> Error $"Expected one function declaration, got {program}"
@@ -67,7 +67,7 @@ let private testSpaceApplicationStaysCurried () : TestResult =
     match Parser.parseString false source with
     | Ok (Program [FunctionDef definition]) ->
         match definition.Body with
-        | Call ("fn", args)
+        | Apply (Var "fn", [], args)
             when NonEmptyList.toList args = [Int64Literal 1L; Int64Literal 2L] -> Ok ()
         | body -> Error $"Expected two space-applied arguments, got {body}"
     | Ok program -> Error $"Expected one function declaration, got {program}"
@@ -79,7 +79,7 @@ let private testTopLevelExpressionFollowsFunctionDeclaration () : TestResult =
     match Parser.parseString false source with
     | Ok (Program [FunctionDef definition; Expression (_, expression)]) ->
         match definition.Body, expression with
-        | Var "value", Call ("identity", args)
+        | Var "value", Apply (Var "identity", [], args)
             when NonEmptyList.toList args = [Int64Literal 1L] -> Ok ()
         | body, result ->
             Error $"Expected a separate function body and top-level call, got {body} and {result}"
@@ -95,10 +95,10 @@ let private testModuleExpressionRetainsItsResolutionScope () : TestResult =
 
 let private testFlattenParamGroupsRestoresSourceOrder () : TestResult =
     let groupsRev =
-        [[("third", AST.TString)]; [("second", AST.TBool)]; [("first", AST.TInt64)]]
+        [[("third", AST.PTString)]; [("second", AST.PTBool)]; [("first", AST.PTInt64)]]
 
     match Parser.flattenParamGroups groupsRev with
-    | [("first", AST.TInt64); ("second", AST.TBool); ("third", AST.TString)] -> Ok ()
+    | [("first", AST.PTInt64); ("second", AST.PTBool); ("third", AST.PTString)] -> Ok ()
     | parameters -> Error $"Expected parameter groups in source order, got {parameters}"
 
 let tests : (string * (unit -> TestResult)) list = [

@@ -9,12 +9,12 @@ type ValueId = ValueId of int
 
 type Value = {
     Id: ValueId
-    Type: AST.Type
+    Type: AST.SemanticType
 }
 
 type Operand = {
     Expression: CheckedAST.Expr
-    Type: AST.Type
+    Type: AST.SemanticType
     Inputs: Map<AST.BindingId, Value>
 }
 
@@ -22,8 +22,8 @@ type Operand = {
 /// alias provenance remain separate primitive contracts, while ownership is
 /// supplied by OwnedIR.
 type FunctionSignature = {
-    Parameters: AST.Type list
-    Result: AST.Type
+    Parameters: AST.SemanticType list
+    Result: AST.SemanticType
 }
 
 /// Only resolved direct calls enter normalized HIR. Unknown and indirect calls

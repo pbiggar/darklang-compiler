@@ -126,7 +126,7 @@ let runANF2MIRTest (input: ANF.Program) (expected: MIR.Program) : PassTestResult
             [0 .. maxId]
             |> List.map (fun id -> (ANF.TempId id, AST.TInt64))
             |> Map.ofList
-    let emptyTypeReg : Map<string, (string * AST.Type) list> = Map.empty
+    let emptyTypeReg : Map<string, (string * AST.SemanticType) list> = Map.empty
     match ANF_to_MIR.toMIR input typeMap emptyTypeReg AST.TInt64 Map.empty Map.empty false Map.empty with
     | Error err ->
         { Success = false

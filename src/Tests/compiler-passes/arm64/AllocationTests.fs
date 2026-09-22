@@ -723,7 +723,7 @@ let testListTuple3BytesListDictListValueUsesTypedDictHelper () : TestResult =
         else
             Error "List of tuple(bytes, list, dict<int, list<int>>) did not emit typed dict-list value release helper"
 
-let private assertListElementUsesTypedDictListHelper (elementType: AST.Type) (caseName: string) : TestResult =
+let private assertListElementUsesTypedDictListHelper (elementType: AST.SemanticType) (caseName: string) : TestResult =
     let program =
         makeSimpleProgramWithVariants
             [
@@ -919,7 +919,7 @@ let testListTuple4NestedTupleClosureDictListValueUsesTypedDictHelper () : TestRe
         ])
         "List of tuple(int, int, int, tuple(closure, string, list<int>, dict<int, list<int>>))"
 
-let private assertListSumPayloadUsesTypedDictListHelper (payloadType: AST.Type) (caseName: string) : TestResult =
+let private assertListSumPayloadUsesTypedDictListHelper (payloadType: AST.SemanticType) (caseName: string) : TestResult =
     let sanitizedName =
         caseName
             .Replace(" ", "")
@@ -1048,7 +1048,7 @@ let testDictDictListValueUsesPlannedDictHelper () : TestResult =
             Ok ()
 
 let private assertDictRefCountDecUsesPlannedDictHelper
-    (dictType: AST.Type)
+    (dictType: AST.SemanticType)
     (caseName: string)
     : TestResult =
     let program =

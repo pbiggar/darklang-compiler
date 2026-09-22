@@ -1,0 +1,3 @@
+// Compiler representation types are not part of the public source language.
+
+Stdlib.List.empty<RawPtr> () = compileerror="RawPtr is reserved for compiler-internal source"

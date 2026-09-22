@@ -375,7 +375,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
         (contextIdentity: obj)
         ((baseVariants, baseRecords): MIR.VariantRegistry * MIR.RecordRegistry)
         (localVariantLookup: LoweringPrimitives.VariantLookup)
-        (localRecordFields: Map<string, (string * AST.Type) list>)
+        (localRecordFields: Map<string, (string * AST.SemanticType) list>)
         : MIR.VariantRegistry * MIR.RecordRegistry =
         let projectLocalOverlay () =
             projectMirRegistryOverlay

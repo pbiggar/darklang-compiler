@@ -61,7 +61,7 @@ let toANF
 /// VarGen is passed in and out to maintain globally unique TempIds across functions
 /// (needed for TypeMap which maps TempId -> Type across the whole program)
 let allocateTypedParams
-    (loweredParams: (AST.BindingId * AST.Type) list)
+    (loweredParams: (AST.BindingId * AST.SemanticType) list)
     (varGen: ANF.VarGen)
     : ANF.TypedParam list * ANF.VarGen =
     loweredParams
@@ -143,12 +143,12 @@ type ConversionResult = {
     OwnershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>
     RecursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>
     TypeReg: TypeRegistry
-    RecordFieldsReg: Map<string, (string * AST.Type) list>
+    RecordFieldsReg: Map<string, (string * AST.SemanticType) list>
     RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
     RcSumShapeReg: MemoryModel.RcSumShapeRegistry
     FuncReg: FunctionRegistry
-    FuncParams: Map<string, (string * AST.Type) list>  // Function name -> param list with types
+    FuncParams: Map<string, (string * AST.SemanticType) list>  // Function name -> param list with types
     ModuleRegistry: AST.ModuleRegistry
 }
 
@@ -163,17 +163,17 @@ type UserOnlyResult = {
     MainExpr: ANF.AExpr                // User's main expression
     TypeReg: TypeRegistry              // Merged registries (for lookups)
     TypeNames: TypeNameRegistry
-    RecordFieldsReg: Map<string, (string * AST.Type) list>
+    RecordFieldsReg: Map<string, (string * AST.SemanticType) list>
     RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
     SumTypeNames: Set<string>
-    LocalRecordFieldsReg: Map<string, (string * AST.Type) list>
+    LocalRecordFieldsReg: Map<string, (string * AST.SemanticType) list>
     LocalVariantLookup: VariantLookup
     RcSumShapeReg: MemoryModel.RcSumShapeRegistry
     FuncReg: FunctionRegistry
     FunctionNames: FunctionNameRegistry
-    LocalReturnTypes: Map<AST.FunctionId, string * AST.Type>
-    FuncParams: Map<string, (string * AST.Type) list>
+    LocalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>
+    FuncParams: Map<string, (string * AST.SemanticType) list>
     ModuleRegistry: AST.ModuleRegistry
     RecursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>
 }
@@ -183,14 +183,14 @@ type Registries = {
     ScopeContracts: Map<AST.FunctionId, DestructionAnalysis.FunctionScopeContract>
     TypeReg: TypeRegistry
     TypeNames: TypeNameRegistry
-    RecordFieldsReg: Map<string, (string * AST.Type) list>
+    RecordFieldsReg: Map<string, (string * AST.SemanticType) list>
     RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
     SumTypeNames: Set<string>
     RcSumShapeReg: MemoryModel.RcSumShapeRegistry
     FuncReg: FunctionRegistry
     FunctionNames: FunctionNameRegistry
-    FuncParams: Map<string, (string * AST.Type) list>
+    FuncParams: Map<string, (string * AST.SemanticType) list>
     ModuleRegistry: AST.ModuleRegistry
     RecursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>
 }
@@ -338,7 +338,7 @@ let private buildRegistriesInternal
         functions
         |> List.fold (fun names func -> Map.add func.Id func.Name names) (CheckedAST.functionNames symbols)
 
-    let userFuncParams : Map<string, (string * AST.Type) list> =
+    let userFuncParams : Map<string, (string * AST.SemanticType) list> =
         functions
         |> List.map (fun f ->
             let parameters =
@@ -350,7 +350,7 @@ let private buildRegistriesInternal
             (f.Name, parameters))
         |> Map.ofList
 
-    let moduleFuncParams : Map<string, (string * AST.Type) list> =
+    let moduleFuncParams : Map<string, (string * AST.SemanticType) list> =
         if includeModuleFunctionParams then
             moduleRegistry
             |> Map.map (fun _ moduleFunc ->
@@ -527,7 +527,7 @@ let convertExprToAnf
 let synthesizeEntryFunction
     (id: AST.FunctionId)
     (name: string)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (body: ANF.AExpr)
     : ANF.Function =
     { Id = id

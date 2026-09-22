@@ -95,8 +95,8 @@ let scopeContracts infer (functions: CheckedAST.FunctionDef list) =
 let tryExtract
     (inertScopes: Set<AST.FunctionId>)
     (functionNames: Map<AST.FunctionId, string>)
-    (parameterTypes: Map<AST.BindingId, AST.Type>)
-    (infer: Map<AST.BindingId, AST.Type> -> CheckedAST.Expr -> Result<AST.Type, string>)
+    (parameterTypes: Map<AST.BindingId, AST.SemanticType>)
+    (infer: Map<AST.BindingId, AST.SemanticType> -> CheckedAST.Expr -> Result<AST.SemanticType, string>)
     (freeVariables: CheckedAST.Expr -> Set<AST.BindingId>)
     (expression: CheckedAST.Expr)
     : FunctionalRegion option =

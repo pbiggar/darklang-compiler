@@ -59,15 +59,15 @@ let private stableHash (value: string) : uint64 =
         (fun hash ch -> (hash ^^^ uint64 (int ch)) * 1099511628211UL)
         14695981039346656037UL
 
-let private rendererName (typ: Type) : string =
+let private rendererName (typ: SemanticType) : string =
     let text = CheckingDiagnostics.typeToString typ
     $"__dark_render_value_{stableHash text:x16}"
 
-let private listItemsRendererName (typ: Type) : string =
+let private listItemsRendererName (typ: SemanticType) : string =
     let text = CheckingDiagnostics.typeToString typ
     $"__dark_render_list_items_{stableHash text:x16}"
 
-let private dictItemsRendererName (typ: Type) : string =
+let private dictItemsRendererName (typ: SemanticType) : string =
     let text = CheckingDiagnostics.typeToString typ
     $"__dark_render_dict_items_{stableHash text:x16}"
 
@@ -92,7 +92,7 @@ let private runtimeFunctionNames =
       "Darklang.Stdlib.UInt8.toString"
       "Darklang.Stdlib.Uuid.toString" ]
 
-let private applySubstitution (subst: Map<string, Type>) (typ: Type) : Type =
+let private applySubstitution (subst: Map<string, SemanticType>) (typ: SemanticType) : SemanticType =
     let rec apply typ =
         match typ with
         | TVar name -> Map.tryFind name subst |> Option.defaultValue typ
@@ -106,10 +106,10 @@ let private applySubstitution (subst: Map<string, Type>) (typ: Type) : Type =
         | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
         | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit
-        | TRuntimeError | TRawPtr -> typ
+        | TNever | TInternalRawPtr -> typ
     apply typ
 
-let private typeSubstitution (typeParams: string list) (typeArgs: Type list) : Map<string, Type> =
+let private typeSubstitution (typeParams: string list) (typeArgs: SemanticType list) : Map<string, SemanticType> =
     if List.length typeParams = List.length typeArgs then
         List.zip typeParams typeArgs |> Map.ofList
     else
@@ -133,7 +133,7 @@ let private escapedString symbols (quote: string) (value: Expr) : Expr =
 let private makeCase (pattern: Pattern) (body: Expr) : MatchCase =
     { Patterns = NonEmptyList.singleton pattern; Guard = None; Body = body }
 
-let rec private canonicalRenderType (env: RenderEnv) (typ: Type) : Type =
+let rec private canonicalRenderType (env: RenderEnv) (typ: SemanticType) : SemanticType =
     let canonical = canonicalRenderType env
     match typ with
     | TRecord (name, typeArgs) when Map.containsKey name env.Sums.Value ->
@@ -149,7 +149,7 @@ let rec private canonicalRenderType (env: RenderEnv) (typ: Type) : Type =
 
 let rec private ensureRenderer
     (env: RenderEnv)
-    (typ: Type)
+    (typ: SemanticType)
     (state: RenderState)
     : string * RenderState =
     let typ = canonicalRenderType env typ
@@ -177,7 +177,7 @@ let rec private ensureRenderer
 
 and private renderCall
     (env: RenderEnv)
-    (typ: Type)
+    (typ: SemanticType)
     (value: Expr)
     (state: RenderState)
     : Expr * RenderState =
@@ -186,7 +186,7 @@ and private renderCall
 
 and private renderDelimited
     (env: RenderEnv)
-    (items: (Type * Expr) list)
+    (items: (SemanticType * Expr) list)
     (state: RenderState)
     : Expr list * RenderState =
     let rec loop remaining currentState acc =
@@ -199,7 +199,7 @@ and private renderDelimited
 
 and private ensureListItemsRenderer
     (env: RenderEnv)
-    (elemType: Type)
+    (elemType: SemanticType)
     (state: RenderState)
     : string * RenderState =
     let listType = TList elemType
@@ -242,8 +242,8 @@ and private ensureListItemsRenderer
 
 and private ensureDictItemsRenderer
     (env: RenderEnv)
-    (keyType: Type)
-    (valueType: Type)
+    (keyType: SemanticType)
+    (valueType: SemanticType)
     (state: RenderState)
     : string * RenderState =
     let entryType = TTuple [keyType; valueType]
@@ -300,7 +300,7 @@ and private ensureDictItemsRenderer
 
 and private renderBody
     (env: RenderEnv)
-    (typ: Type)
+    (typ: SemanticType)
     (value: Expr)
     (state: RenderState)
     : Expr * RenderState =
@@ -491,16 +491,16 @@ and private renderBody
         // The interpreter deliberately does not expose ephemeral Blob payloads
         // or process-local identities through value rendering.
         (StringLiteral "<Blob: ephemeral>", state)
-    | TRawPtr ->
+    | TInternalRawPtr ->
         (call state.Symbols "Darklang.Stdlib.Int64.toString" [value], state)
-    | TRuntimeError -> (StringLiteral "()", state)
+    | TNever -> (StringLiteral "()", state)
     | TVar name -> Crash.crash $"Unresolved type variable in value renderer: {name}"
 
 let rewriteProgram
     (recordMetadata: CheckingTypes.IndexedTypeRegistry)
     (sumMetadata: CheckingTypes.IndexedSumTypeRegistry)
-    (baseFunctions: Map<string, Type>)
-    (programType: Type)
+    (baseFunctions: Map<string, SemanticType>)
+    (programType: SemanticType)
     (Program (symbols, topLevels))
     : Program =
     let symbols =

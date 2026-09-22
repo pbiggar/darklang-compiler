@@ -190,7 +190,8 @@ Leaf Node:
 
 **Trade-offs**:
 
-- **TRawPtr type**: Internal type not exposed to users, enables unsafe memory ops
+- **TInternalRawPtr type**: Privileged internal-signature type rejected in
+  public source, enabling unsafe runtime-support memory operations
 - **Explicit RC integration**: Raw HAMT memory uses typed slot initialization
   and dict release helpers rather than implicit GC scanning
 - **Complexity**: HAMT is more complex than simple hash tables, but necessary for immutability

@@ -23,7 +23,7 @@ let rec internal buildEqHelperExpr
     (variantLookup: VariantLookup)
     (indexedSumTypeReg: IndexedSumTypeRegistry)
     (mode: EqHelperExprMode)
-    (typ: Type)
+    (typ: SemanticType)
     (leftExpr: Expr)
     (rightExpr: Expr)
     : Expr =
@@ -31,7 +31,7 @@ let rec internal buildEqHelperExpr
 
     match (mode, resolvedType) with
     | UseHelperCall, helperType when needsEqHelperForResolvedType variantLookup helperType ->
-        Call (eqHelperName helperType, NonEmptyList.fromList [leftExpr; rightExpr])
+        applyNamed (eqHelperName helperType) (NonEmptyList.fromList [leftExpr; rightExpr])
 
     | ExpandCurrent, TFunction _ ->
         // Lambda lifting stores semantic identity and a capture-aware comparator
@@ -77,10 +77,9 @@ let rec internal buildEqHelperExpr
                 (Var leftHead)
                 (Var rightHead)
         let tailsEqual =
-            Call (
-                eqHelperName resolvedType,
-                NonEmptyList.fromList [Var leftTail; Var rightTail]
-            )
+            applyNamed
+                (eqHelperName resolvedType)
+                (NonEmptyList.fromList [Var leftTail; Var rightTail])
         let bothEmpty =
             makeSimpleMatchCase (PTuple [PList []; PList []]) (BoolLiteral true)
         let bothNonEmpty =
@@ -93,10 +92,9 @@ let rec internal buildEqHelperExpr
         Match (TupleLiteral [leftExpr; rightExpr], [bothEmpty; bothNonEmpty; makeSimpleMatchCase PWildcard (BoolLiteral false)])
 
     | UseHelperCall, TList elemType ->
-        Call (
-            eqHelperName (TList (resolveType aliasReg elemType)),
-            NonEmptyList.fromList [leftExpr; rightExpr]
-        )
+        applyNamed
+            (eqHelperName (TList (resolveType aliasReg elemType)))
+            (NonEmptyList.fromList [leftExpr; rightExpr])
 
     | ExpandCurrent, TString ->
         BinOp (Eq, leftExpr, rightExpr)
@@ -105,16 +103,16 @@ let rec internal buildEqHelperExpr
         BinOp (Eq, leftExpr, rightExpr)
 
     | _, TInt ->
-        Call ("Darklang.Stdlib.Int.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
+        applyNamed "Darklang.Stdlib.Int.__equals" (NonEmptyList.fromList [leftExpr; rightExpr])
 
     | ExpandCurrent, TDict (keyType, valueType) ->
         let entryType =
             TTuple [resolveType aliasReg keyType; resolveType aliasReg valueType]
         let listType = TList entryType
         let leftEntries =
-            TypeApp ("Darklang.Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton leftExpr)
+            applyNamedWithTypes "Darklang.Stdlib.Dict.toList" [keyType; valueType] (NonEmptyList.singleton leftExpr)
         let rightEntries =
-            TypeApp ("Darklang.Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton rightExpr)
+            applyNamedWithTypes "Darklang.Stdlib.Dict.toList" [keyType; valueType] (NonEmptyList.singleton rightExpr)
         buildEqHelperExpr
             aliasReg
             typeReg

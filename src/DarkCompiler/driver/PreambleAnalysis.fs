@@ -15,13 +15,13 @@ let internal checkProgramWithBaseEnv
     (passTimingRecorder: PassTimingRecorder option)
     (warningSettings: AST.WarningSettings)
     (baseEnv: CheckingTypes.TypeCheckEnv)
-    (program: AST.Program)
-    : Result<AST.Type * CheckedAST.Program * CheckingTypes.TypeCheckEnv, CheckingDiagnostics.TypeError> =
+    (program: AST.ParsedProgram)
+    : Result<AST.SemanticType * CheckedAST.Program * CheckingTypes.TypeCheckEnv, CheckingDiagnostics.TypeError> =
     match passTimingRecorder with
     | None ->
-        TypeChecking.checkProgramWithBaseEnvAndSettings baseEnv true warningSettings program
+        TypeChecking.checkParsedProgramWithBaseEnvAndSettings baseEnv true warningSettings program
     | Some recorder ->
-        TypeChecking.checkProgramWithBaseEnvAndSettingsWithTrace
+        TypeChecking.checkParsedProgramWithBaseEnvAndSettingsWithTrace
             (fun phase elapsedMs ->
                 recorder {
                     Pass = phase
@@ -35,9 +35,9 @@ let internal checkProgramWithBaseEnv
 let private checkSyntheticPreambleWithBaseEnv
     (warningSettings: AST.WarningSettings)
     (baseEnv: CheckingTypes.TypeCheckEnv)
-    (program: AST.Program)
-    : Result<AST.Type * CheckedAST.Program * CheckingTypes.TypeCheckEnv, CheckingDiagnostics.TypeError> =
-    TypeChecking.checkSyntheticPreambleWithBaseEnvAndSettings
+    (program: AST.ParsedProgram)
+    : Result<AST.SemanticType * CheckedAST.Program * CheckingTypes.TypeCheckEnv, CheckingDiagnostics.TypeError> =
+    TypeChecking.checkParsedSyntheticPreambleWithBaseEnvAndSettings
         baseEnv
         true
         warningSettings
@@ -66,7 +66,7 @@ let analyzePreamble
             }))
 
 /// Load a .dark file allowing internal identifiers (for stdlib sources)
-let internal loadDarkFileAllowInternal (filename: string) : Result<AST.Program, string> =
+let internal loadDarkFileAllowInternal (filename: string) : Result<AST.ParsedProgram, string> =
     let exePath = Assembly.GetExecutingAssembly().Location
     let exeDir = Path.GetDirectoryName(exePath)
     let possiblePaths = [

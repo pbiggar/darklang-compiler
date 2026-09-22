@@ -132,7 +132,7 @@ let rec private containsCExpr (predicate: ANF.CExpr -> bool) (expr: ANF.AExpr) :
     | ANF.Jump _ | ANF.Return _ ->
         false
 
-let private lowerTwoElementListPattern (elementType: AST.Type) : Result<ANF.AExpr, string> =
+let private lowerTwoElementListPattern (elementType: AST.SemanticType) : Result<ANF.AExpr, string> =
     let valueId = AST.bindingId 1
     let headId = AST.bindingId 2
     let listType = AST.TList elementType

@@ -5,7 +5,7 @@
 
 module ListDisplay
 
-let getDisplayStringFunc (elemType: AST.Type) : string option =
+let getDisplayStringFunc (elemType: AST.SemanticType) : string option =
     match elemType with
     | AST.TInt64 -> Some "Darklang.Stdlib.List.__toDisplayString_i64"
     | AST.TInt -> Some "Darklang.Stdlib.List.__toDisplayString_int"
@@ -26,7 +26,7 @@ let getDisplayStringFunc (elemType: AST.Type) : string option =
     | AST.TBlob
     | AST.TDateTime
     | AST.TUnit
-    | AST.TRuntimeError
+    | AST.TNever
     | AST.TFunction _
     | AST.TTuple _
     | AST.TRecord _
@@ -34,5 +34,5 @@ let getDisplayStringFunc (elemType: AST.Type) : string option =
     | AST.TList _
     | AST.TStream _
     | AST.TVar _
-    | AST.TRawPtr
+    | AST.TInternalRawPtr
     | AST.TDict _ -> None

@@ -25,7 +25,7 @@ type private SpecializationRequest = {
 
 type private TargetShape = {
     ValueParameters: TypedParam list
-    CaptureTypes: AST.Type list
+    CaptureTypes: AST.SemanticType list
     ClosureParameter: TempId option
 }
 

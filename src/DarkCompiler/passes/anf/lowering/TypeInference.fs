@@ -12,7 +12,7 @@ open ClosureAnalysis
 open LiftExpressions
 open LiftFunctions
 
-let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (expr: CheckedAST.Expr) (typeEnv: Map<AST.BindingId, AST.Type>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<AST.Type, string> =
+let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (expr: CheckedAST.Expr) (typeEnv: Map<AST.BindingId, AST.SemanticType>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<AST.SemanticType, string> =
     let fieldIndex id =
         tryFindFieldIndex id typeNames
         |> Option.defaultWith (fun () -> Crash.crash "Checked field identity is absent from layout metadata")
@@ -21,7 +21,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
         |> Option.defaultWith (fun () -> Crash.crash "Checked constructor identity is absent from layout metadata")
     match expr with
     | CheckedAST.BoundaryRender _ -> Ok AST.TString
-    | CheckedAST.RuntimeError _ -> Ok AST.TRuntimeError
+    | CheckedAST.RuntimeError _ -> Ok AST.TNever
     | CheckedAST.UnitLiteral -> Ok AST.TUnit
     | CheckedAST.Int64Literal _ -> Ok AST.TInt64
     | CheckedAST.Int128Literal _ -> Ok AST.TInt128
@@ -65,9 +65,9 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                 let typeParams = recordInfo.TypeParams
 
                 let rec inferBindings
-                    (remainingFields: (int * AST.Type) list)
-                    (accBindings: (string * AST.Type) list)
-                    : Result<(string * AST.Type) list, string> =
+                    (remainingFields: (int * AST.SemanticType) list)
+                    (accBindings: (string * AST.SemanticType) list)
+                    : Result<(string * AST.SemanticType) list, string> =
                     match remainingFields with
                     | [] -> Ok accBindings
                     | (fieldIndex, expectedFieldType) :: rest ->
@@ -188,10 +188,10 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                 functionNames
                 moduleRegistry)
     | CheckedAST.If (_, thenExpr, elseExpr) ->
-        let inferBranchType (branchExpr: CheckedAST.Expr) : Result<AST.Type, string> =
+        let inferBranchType (branchExpr: CheckedAST.Expr) : Result<AST.SemanticType, string> =
             inferTypeCore sumTypeNames typeNames branchExpr typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
 
-        let resolveBranchType (preferred: AST.Type) (other: AST.Type) : Result<AST.Type, string> =
+        let resolveBranchType (preferred: AST.SemanticType) (other: AST.SemanticType) : Result<AST.SemanticType, string> =
             match matchTypePattern preferred other with
             | Error _ -> Error "Branch type mismatch"
             | Ok bindings ->
@@ -205,9 +205,9 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
             |> Result.bind (fun elseType ->
                 if thenType = elseType then
                     Ok thenType
-                elif thenType = AST.TRuntimeError then
+                elif thenType = AST.TNever then
                     Ok elseType
-                elif elseType = AST.TRuntimeError then
+                elif elseType = AST.TNever then
                     Ok thenType
                 else
                     match resolveBranchType thenType elseType, resolveBranchType elseType thenType with
@@ -231,9 +231,9 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
             |> Result.bind (fun leftType ->
                 inferTypeCore sumTypeNames typeNames right typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
                 |> Result.bind (fun rightType ->
-                    if leftType = AST.TRuntimeError then
+                    if leftType = AST.TNever then
                         Ok rightType
-                    elif rightType = AST.TRuntimeError then
+                    elif rightType = AST.TNever then
                         Ok leftType
                     elif leftType = rightType then
                         Ok leftType
@@ -297,7 +297,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
         // Infer scrutinee type to help with pattern variable typing
         let scrutineeTypeResult = inferTypeCore sumTypeNames typeNames scrutinee typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
 
-        let rec substituteType (subst: Map<string, AST.Type>) (typ: AST.Type) : AST.Type =
+        let rec substituteType (subst: Map<string, AST.SemanticType>) (typ: AST.SemanticType) : AST.SemanticType =
             match typ with
             | AST.TVar name -> Map.tryFind name subst |> Option.defaultValue typ
             | AST.TTuple elems -> AST.TTuple (List.map (substituteType subst) elems)
@@ -309,7 +309,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
             | _ -> typ
 
         // Helper to extract pattern variable names and infer their types
-        let rec extractPatternBindings (pattern: AST.Pattern) (scrutType: AST.Type) : Map<string, AST.Type> =
+        let rec extractPatternBindings (pattern: AST.Pattern) (scrutType: AST.SemanticType) : Map<string, AST.SemanticType> =
             match pattern with
             | AST.POr alternatives ->
                 extractPatternBindings (AST.NonEmptyList.head alternatives) scrutType
@@ -339,7 +339,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                         innerPats
                         |> List.mapi (fun idx _ -> AST.TVar $"__tuple_elem_{tupleTypeVar}_{idx}")
                         |> Some
-                    | AST.TRuntimeError ->
+                    | AST.TNever ->
                         innerPats
                         |> List.mapi (fun idx _ -> AST.TVar $"__tuple_elem_runtime_error_{idx}")
                         |> Some
@@ -392,7 +392,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                     match scrutType with
                     | AST.TList t -> Some t
                     | AST.TVar _
-                    | AST.TRuntimeError -> Some (AST.TVar "__list_elem_unknown")
+                    | AST.TNever -> Some (AST.TVar "__list_elem_unknown")
                     | _ -> None
                 match elemTypeOpt with
                 | None ->
@@ -407,7 +407,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                     match scrutType with
                     | AST.TList t -> Some t
                     | AST.TVar _
-                    | AST.TRuntimeError -> Some (AST.TVar "__list_elem_unknown")
+                    | AST.TNever -> Some (AST.TVar "__list_elem_unknown")
                     | _ -> None
                 match elemTypeOpt with
                 | None ->
@@ -420,7 +420,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                     let tailBindings = extractPatternBindings tailPat scrutType
                     Map.fold (fun m k v -> Map.add k v m) headBindings tailBindings
 
-        let resolveCaseType (preferred: AST.Type) (other: AST.Type) : Result<AST.Type, string> =
+        let resolveCaseType (preferred: AST.SemanticType) (other: AST.SemanticType) : Result<AST.SemanticType, string> =
             match matchTypePattern preferred other with
             | Error _ -> Error "Match case type mismatch"
             | Ok bindings ->
@@ -428,12 +428,12 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                 | Error e -> Error e
                 | Ok subst -> Ok (applySubstToType subst preferred)
 
-        let mergeCaseTypes (accType: AST.Type) (nextType: AST.Type) : Result<AST.Type, string> =
+        let mergeCaseTypes (accType: AST.SemanticType) (nextType: AST.SemanticType) : Result<AST.SemanticType, string> =
             if accType = nextType then
                 Ok accType
-            elif accType = AST.TRuntimeError then
+            elif accType = AST.TNever then
                 Ok nextType
-            elif nextType = AST.TRuntimeError then
+            elif nextType = AST.TNever then
                 Ok accType
             else
                 match resolveCaseType accType nextType, resolveCaseType nextType accType with
@@ -450,7 +450,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                     Error
                         $"Match cases have incompatible types: {typeToString accType} vs {typeToString nextType}"
 
-        let inferCaseType (patternType: AST.Type) (mc: CheckedAST.MatchCase) : Result<AST.Type, string> =
+        let inferCaseType (patternType: AST.SemanticType) (mc: CheckedAST.MatchCase) : Result<AST.SemanticType, string> =
             let patBindings =
                 mc.Patterns
                 |> AST.NonEmptyList.toList
@@ -529,7 +529,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
             match argList with
             // Runtime errors are bottom-like: branch and match inference select
             // the type of the reachable value-producing alternatives.
-            | [_] -> Ok AST.TRuntimeError
+            | [_] -> Ok AST.TNever
             | _ ->
                 Error $"Internal error: runtime failure function expects 1 argument, got {List.length argList}"
         else
@@ -566,7 +566,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                         let suffix = funcName.Substring("__raw_take_".Length)
                         tryParseMangledTypeWithSumTypeNames sumTypeNames suffix
                     elif funcName.StartsWith("__stream_to_rawptr_") then
-                        Ok AST.TRawPtr
+                        Ok AST.TInternalRawPtr
                     elif funcName.StartsWith("__rawptr_to_stream_") then
                         let suffix = funcName.Substring("__rawptr_to_stream_".Length)
                         tryParseMangledTypeWithSumTypeNames sumTypeNames suffix |> Result.map AST.TStream
@@ -592,7 +592,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                         Ok AST.TInt64
                     elif funcName.StartsWith("__dict_to_rawptr_") then
                         // __dict_to_rawptr<k, v> returns RawPtr
-                        Ok AST.TRawPtr
+                        Ok AST.TInternalRawPtr
                     elif funcName.StartsWith("__rawptr_to_dict_") then
                         // __rawptr_to_dict<k, v> returns Dict<k, v>
                         let suffix = funcName.Substring("__rawptr_to_dict_".Length)
@@ -606,7 +606,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                         Ok AST.TInt64
                     elif funcName.StartsWith("__list_to_rawptr_") then
                         // __list_to_rawptr<a> returns RawPtr
-                        Ok AST.TRawPtr
+                        Ok AST.TInternalRawPtr
                     elif funcName.StartsWith("__rawptr_to_list_") then
                         // __rawptr_to_list<a> returns List<a> - parse element type from mangled name
                         let suffix = funcName.Substring("__rawptr_to_list_".Length)

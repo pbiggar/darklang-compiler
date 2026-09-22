@@ -480,12 +480,12 @@ let rec private isExternalExprWith
 let private isSimpleExternalExpr (expr: AExpr) : bool =
     isExternalExprWith isSimpleExternalCExpr expr
 
-let private isScalarRawReadReturnType (typ: AST.Type) : bool =
+let private isScalarRawReadReturnType (typ: AST.SemanticType) : bool =
     match typ with
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
     | AST.TBool | AST.TFloat64 | AST.TChar | AST.TDateTime | AST.TUnit -> true
-    | AST.TString | AST.TBlob | AST.TRuntimeError | AST.TRawPtr
+    | AST.TString | AST.TBlob | AST.TNever | AST.TInternalRawPtr
     | AST.TFunction _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _ | AST.TList _
     | AST.TDict _ | AST.TStream _ | AST.TVar _ -> false
 
@@ -954,7 +954,7 @@ let rec inlineInExpr (scope: InlineScope) (funcs: Map<AST.FunctionId, FunctionIn
                 | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
                 | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
                 | AST.TBool | AST.TDateTime | AST.TUnit
-                | AST.TRawPtr -> true
+                | AST.TInternalRawPtr -> true
                 | _ -> false
             let returns = countReturns inlinedBody'
             let rec continuationSize (expr: AExpr) : int =

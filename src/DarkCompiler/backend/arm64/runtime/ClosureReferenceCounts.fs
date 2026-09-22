@@ -54,7 +54,7 @@ let internal generateClosureRefCountIncHelper (ctx: CodeGenContext) : ARM64Symbo
 let internal tryRcReleasePlanOfType
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     : MemoryModel.RcReleasePlan option =
     match typ with
     | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
@@ -72,7 +72,7 @@ let internal requiredRcMetadataReleasePlan (context: string) (metadata: MemoryMo
 
 let internal generateRecursiveNominalRefCountDecHelper
     (ctx: CodeGenContext)
-    (sourceType: AST.Type)
+    (sourceType: AST.SemanticType)
     : ARM64Symbolic.Instr list =
     let helperLabel = recursiveNominalRefCountDecHelperLabel sourceType
     let label suffix = $"{helperLabel}_{suffix}"

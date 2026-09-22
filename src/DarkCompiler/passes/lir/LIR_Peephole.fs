@@ -1365,7 +1365,7 @@ let private tryRegisterPhiSources
         | Some AST.TInt8 | Some AST.TInt16 | Some AST.TInt32 | Some AST.TInt64
         | Some AST.TUInt8 | Some AST.TUInt16 | Some AST.TUInt32 | Some AST.TUInt64
         | Some AST.TBool | Some AST.TUnit | Some AST.TChar | Some AST.TDateTime
-        | Some AST.TRawPtr -> true
+        | Some AST.TInternalRawPtr -> true
         | _ -> false
 
     let rec collect selects remaining =

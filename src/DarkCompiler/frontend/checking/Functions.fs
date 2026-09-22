@@ -72,7 +72,7 @@ let internal checkFunctionDefWithSumTypeNames
                 match err with
                 | TypeMismatch (expectedType, actualType, _) when
                     typesCompatibleWithAliases aliasReg expectedType canonicalReturnType
-                    && not (isRuntimeErrorType actualType) ->
+                    && not (isNeverType actualType) ->
                     let actualValue =
                         match tryFormatLiteralValue funcDef.Body with
                         | Some value -> value
@@ -136,7 +136,7 @@ let internal checkFunctionDefWithSumTypeNames
 
 let internal specializeFunctionForTypeCheck
     (funcDef: FunctionDef)
-    (typeArgs: Type list)
+    (typeArgs: SemanticType list)
     : Result<FunctionDef, TypeError> =
     match buildSubstitution funcDef.TypeParams typeArgs with
     | Error msg ->
@@ -152,12 +152,12 @@ let internal specializeFunctionForTypeCheck
                 ReturnType = applySubst subst funcDef.ReturnType
                 Body = applySubstToExpr subst funcDef.Body }
 
-let rec internal collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
+let rec internal collectTypeAppSpecs (expr: Expr) : Set<string * SemanticType list> =
     match expr with
     | BoundaryRender (_, value) -> collectTypeAppSpecs value
     | UnitLiteral | Int64Literal _ | Int128Literal _ | BigIntLiteral _ | Int8Literal _ | Int16Literal _ | Int32Literal _
     | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
-    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | FuncRef _ | Closure _ | RuntimeError _ ->
+    | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _ | Var _ | Closure _ | RuntimeError _ ->
         Set.empty
     | BinOp (_, left, right) ->
         Set.union (collectTypeAppSpecs left) (collectTypeAppSpecs right)
@@ -171,12 +171,10 @@ let rec internal collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
         Set.union (collectTypeAppSpecs cond) (Set.union (collectTypeAppSpecs thenBranch) (collectTypeAppSpecs elseBranch))
     | Sequence (first, next) ->
         Set.union (collectTypeAppSpecs first) (collectTypeAppSpecs next)
-    | Call (_, args) ->
-        args |> NonEmptyList.toList |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
-    | TypeApp (funcName, typeArgs, args) ->
+    | Apply (Var funcName, typeArgs, args) ->
         let argSpecs =
             args |> NonEmptyList.toList |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
-        Set.add (funcName, typeArgs) argSpecs
+        if List.isEmpty typeArgs then argSpecs else Set.add (funcName, typeArgs) argSpecs
     | TupleLiteral elements ->
         elements |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
     | TupleAccess (tuple, _) ->
@@ -210,7 +208,10 @@ let rec internal collectTypeAppSpecs (expr: Expr) : Set<string * Type list> =
         elements |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty
     | Lambda (_, _, body) ->
         collectTypeAppSpecs body
-    | Apply (funcExpr, args)
+    | Apply (funcExpr, _, args) ->
+        Set.union
+            (collectTypeAppSpecs funcExpr)
+            (args |> NonEmptyList.toList |> List.map collectTypeAppSpecs |> List.fold Set.union Set.empty)
     | IndirectApply (funcExpr, args) ->
         Set.union
             (collectTypeAppSpecs funcExpr)

@@ -15,6 +15,12 @@ ANF → MIR → LIR → target ISA → Binary
 - **LIR**: Shared low-level instructions with virtual registers and abstract
   physical register names that each backend maps to its target ISA
 
+Before ANF, parsing produces `AST.ParsedProgram` parameterized by
+`AST.ParsedType`. Source-driven checking crosses once to `AST.SemanticType`;
+semantic-only `TNever` and the privileged `TInternalRawPtr` signature type
+cannot occur in public parsed trees. `CheckedAST.fs` then supplies the
+phase-safe expression tree consumed by preparation and lowering.
+
 Before ANF, `ir/hir/HIR.fs` supplies typed value identities and structured
 control flow shared by semantic leaf dialects. Primitive contracts expose
 ordered inputs and operands, execution effects, and result alias provenance.
@@ -296,7 +302,7 @@ for both ARM64 and x86_64 code generators:
 ```fsharp
 type Instr =
     | Mov of dest:Reg * src:Operand
-    | Phi of dest:Reg * sources:(Operand * Label) list * valueType:AST.Type option
+    | Phi of dest:Reg * sources:(Operand * Label) list * valueType:AST.SemanticType option
     | Add of dest:Reg * left:Reg * right:Operand
     | Sub of dest:Reg * left:Reg * right:Operand
     | Mul of dest:Reg * left:Reg * right:Reg

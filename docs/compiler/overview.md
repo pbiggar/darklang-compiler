@@ -37,8 +37,9 @@ Each IR is designed to make specific transformations easier:
 
 ### Parsed and checked ASTs
 
-- `AST.fs` closely mirrors source syntax and is used for name resolution,
-  checking, and source diagnostics.
+- `AST.fs` uses one generic syntax shape with distinct `ParsedType` and
+  `SemanticType` annotations. Parsing returns `ParsedProgram`; source-driven
+  checking performs the explicit conversion before name resolution.
 - Successful checking constructs the distinct recursive nodes in
   `CheckedAST.fs`. Required lambda types, typed recursion evidence, canonical
   nominal references, and checked value definitions are structural there,

@@ -41,9 +41,9 @@ type CodeGenContext = {
     Options: CodeGenOptions
     SumShapeRegistry: MemoryModel.RcSumShapeRegistry
     RecordRegistry: LIR.RecordRegistry
-    RawSlotInitRetainTargets: Map<AST.Type, LIR.Arm64SlotInitRootRetainTarget option> option
+    RawSlotInitRetainTargets: Map<AST.SemanticType, LIR.Arm64SlotInitRootRetainTarget option> option
     ClosurePayloadSizes: Map<string, int>
-    ClosureCaptureTypes: Map<string, AST.Type list>
+    ClosureCaptureTypes: Map<string, AST.SemanticType list>
     FunctionNames: Map<AST.FunctionId, string>
     FunctionName: string
     /// Deterministic block/instruction identity for labels emitted by an effect.
@@ -113,7 +113,7 @@ let internal callerOwnsSinglePayloadSum (functionName: string) : bool =
     functionName.StartsWith("Darklang.Stdlib.Dict.")
     || not (functionName.StartsWith("Darklang.Stdlib."))
 
-let internal recursiveNominalRefCountDecHelperLabel (sourceType: AST.Type) : string =
+let internal recursiveNominalRefCountDecHelperLabel (sourceType: AST.SemanticType) : string =
     $"__dark_recursive_nominal_rc_dec_{ReleasePlanFingerprint.rcSourceTypeFingerprint sourceType}"
 
 let internal plannedListDecHelperLabelForFingerprint (fingerprint: string) : string =
@@ -148,8 +148,8 @@ type internal RcHelperRequirements = LIR.Arm64RcHelperRequirements
 type Arm64ProgramFacts = {
     ClosurePayloadSizesFromParams: Map<string, int>
     ClosurePayloadSizesFromAllocs: Map<AST.FunctionId, int>
-    ClosureCaptureTypes: Map<string, AST.Type list>
-    RecursiveReleaseTypes: Set<AST.Type>
+    ClosureCaptureTypes: Map<string, AST.SemanticType list>
+    RecursiveReleaseTypes: Set<AST.SemanticType>
     CliArgvHelperLabels: Set<string>
     NeedsCliExecuteHelper: bool
     NeedsCliRunProcessHelper: bool
@@ -167,9 +167,9 @@ type Arm64ProgramMetadata = {
 let internal slotInitRootRetainTarget
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
-    (valueType: AST.Type)
+    (valueType: AST.SemanticType)
     : LIR.Arm64SlotInitRootRetainTarget option =
-    let shapeOfKnownType (typ: AST.Type) : MemoryModel.RcShape option =
+    let shapeOfKnownType (typ: AST.SemanticType) : MemoryModel.RcShape option =
         match typ with
         | AST.TRecord (name, _) when not (Map.containsKey name recordRegistry) ->
             None

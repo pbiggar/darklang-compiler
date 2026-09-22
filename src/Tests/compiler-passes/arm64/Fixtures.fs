@@ -15,19 +15,19 @@ let private generatePreparedARM64WithOptions target options program =
 let internal generatePreparedARM64 target program =
     generatePreparedARM64WithOptions target ARM64CodeGenTypes.defaultOptions program
 
-let internal rcMetadata (typ: AST.Type) : MemoryModel.RcMetadata =
+let internal rcMetadata (typ: AST.SemanticType) : MemoryModel.RcMetadata =
     let releasePlan = MemoryPlanning.rcReleasePlanOfTypeWithSums Map.empty Map.empty typ
     { MemoryModel.ReleasePlanCacheKey = ReleasePlanFingerprint.rcReleasePlanCacheKey typ releasePlan
       MemoryModel.ReleasePlan = Some releasePlan
       MemoryModel.SourceType = Some typ }
 
-let internal rcMetadataWithSumShapes (sumShapes: MemoryModel.RcSumShapeRegistry) (typ: AST.Type) : MemoryModel.RcMetadata =
+let internal rcMetadataWithSumShapes (sumShapes: MemoryModel.RcSumShapeRegistry) (typ: AST.SemanticType) : MemoryModel.RcMetadata =
     let releasePlan = MemoryPlanning.rcReleasePlanOfTypeWithSums Map.empty sumShapes typ
     { MemoryModel.ReleasePlanCacheKey = ReleasePlanFingerprint.rcReleasePlanCacheKey typ releasePlan
       MemoryModel.ReleasePlan = Some releasePlan
       MemoryModel.SourceType = Some typ }
 
-let internal rcMetadataWithRecords (records: LIR.RecordRegistry) (typ: AST.Type) : MemoryModel.RcMetadata =
+let internal rcMetadataWithRecords (records: LIR.RecordRegistry) (typ: AST.SemanticType) : MemoryModel.RcMetadata =
     let releasePlan = MemoryPlanning.rcReleasePlanOfTypeWithSums records Map.empty typ
     { MemoryModel.ReleasePlanCacheKey = ReleasePlanFingerprint.rcReleasePlanCacheKey typ releasePlan
       MemoryModel.ReleasePlan = Some releasePlan

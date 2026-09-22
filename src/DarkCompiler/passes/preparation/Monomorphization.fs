@@ -13,7 +13,7 @@ let private resolvedFunctionId (symbols: CheckedAST.Symbols) (name: string) : AS
     |> Option.defaultWith (fun () ->
         Crash.crash $"Resolved function '{name}' is absent from symbols")
 
-let private hasPredefinedKeyIntrinsic (typ: AST.Type) : bool =
+let private hasPredefinedKeyIntrinsic (typ: AST.SemanticType) : bool =
     match typ with
     | AST.TInt64 | AST.TBool | AST.TString | AST.TBlob -> true
     | _ -> false
@@ -367,7 +367,7 @@ let private isIntrinsicTypeAppName (funcName: string) : bool =
     | "Builtin.pmEvaluateValue" -> true
     | _ -> false
 
-let private missingSpecMessage (funcName: string) (typeArgs: AST.Type list) : string =
+let private missingSpecMessage (funcName: string) (typeArgs: AST.SemanticType list) : string =
     let typeArgText =
         typeArgs
         |> List.map typeToMangledName

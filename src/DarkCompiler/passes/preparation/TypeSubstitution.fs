@@ -8,10 +8,10 @@ open LoweringPrimitives
 open TypeRegistries
 open SpecializationIdentity
 
-type Substitution = Map<string, AST.Type>
+type Substitution = Map<string, AST.SemanticType>
 
 /// Apply a substitution to a type, replacing type variables with concrete types
-let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
+let rec applySubstToType (subst: Substitution) (typ: AST.SemanticType) : AST.SemanticType =
     match typ with
     | AST.TVar name ->
         match Map.tryFind name subst with
@@ -36,15 +36,15 @@ let rec applySubstToType (subst: Substitution) (typ: AST.Type) : AST.Type =
     | AST.TInt
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
     | AST.TUInt128
-    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime | AST.TUnit | AST.TRuntimeError | AST.TRawPtr ->
+    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime | AST.TUnit | AST.TNever | AST.TInternalRawPtr ->
         typ  // Concrete types are unchanged
 
 /// Native record layouts have one keyed slot per field. When a declaration
 /// repeats a name, the interpreter's head-first lookup makes the first
 /// declaration authoritative and the later declarations do not add slots.
 let internal firstDeclaredRecordFields
-    (fields: (string * AST.Type) list)
-    : (string * AST.Type) list =
+    (fields: (string * AST.SemanticType) list)
+    : (string * AST.SemanticType) list =
     fields
     |> List.fold (fun (seen, retainedRev) ((name, _) as field) ->
         if Set.contains name seen then (seen, retainedRev)
@@ -54,7 +54,7 @@ let internal firstDeclaredRecordFields
 
 let internal buildDeclaredRecordFieldSubst
     (recordInfo: RecordTypeInfo)
-    (typeArgs: AST.Type list)
+    (typeArgs: AST.SemanticType list)
     : Substitution option =
     if List.length recordInfo.TypeParams = List.length typeArgs then
         Some (List.zip recordInfo.TypeParams typeArgs |> Map.ofList)
@@ -63,7 +63,7 @@ let internal buildDeclaredRecordFieldSubst
 
 let internal recordDescriptor
     (typeName: string)
-    (typeArgs: AST.Type list)
+    (typeArgs: AST.SemanticType list)
     (recordInfo: RecordTypeInfo)
     : ANF.RecordDescriptor =
     let fields = recordInfo.Fields
@@ -85,8 +85,8 @@ let internal recordDescriptor
 let internal boxedSumDescriptor
     (typeName: string)
     (typeParams: string list)
-    (typeArgs: AST.Type list)
-    (fieldTypes: AST.Type list)
+    (typeArgs: AST.SemanticType list)
+    (fieldTypes: AST.SemanticType list)
     : Result<ANF.RecordDescriptor, string> =
     if List.length typeParams <> List.length typeArgs then
         Error $"Boxed sum '{typeName}' has inconsistent type arguments"
@@ -106,7 +106,7 @@ let internal boxedSumDescriptor
         }
 
 /// Match a type pattern (may contain type variables) against a concrete type.
-let rec matchTypePattern (pattern: AST.Type) (actual: AST.Type) : Result<(string * AST.Type) list, string> =
+let rec matchTypePattern (pattern: AST.SemanticType) (actual: AST.SemanticType) : Result<(string * AST.SemanticType) list, string> =
     match pattern with
     | AST.TVar name ->
         match actual with
@@ -186,7 +186,7 @@ let rec matchTypePattern (pattern: AST.Type) (actual: AST.Type) : Result<(string
                 if pattern = actual then Ok [] else Error "Type mismatch"
 
 /// Consolidate type variable bindings, preferring concrete types when both appear.
-let consolidateTypeBindings (bindings: (string * AST.Type) list) : Result<Map<string, AST.Type>, string> =
+let consolidateTypeBindings (bindings: (string * AST.SemanticType) list) : Result<Map<string, AST.SemanticType>, string> =
     bindings
     |> List.fold (fun acc (name, typ) ->
         acc |> Result.bind (fun m ->
@@ -283,7 +283,7 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
         CheckedAST.InterpolatedString (List.map substPart parts)
 
 /// Resolve type aliases to their target types
-let rec resolveAliasType (aliasReg: AliasRegistry) (typ: AST.Type) : AST.Type =
+let rec resolveAliasType (aliasReg: AliasRegistry) (typ: AST.SemanticType) : AST.SemanticType =
     match typ with
     | AST.TRecord (name, []) ->
         match Map.tryFind name aliasReg with
@@ -338,7 +338,7 @@ let resolveAliasesInFunction (aliasReg: AliasRegistry) (funcDef: CheckedAST.Func
 let specializeFunction
     (specializedId: AST.FunctionId)
     (funcDef: CheckedAST.FunctionDef)
-    (typeArgs: AST.Type list)
+    (typeArgs: AST.SemanticType list)
     : CheckedAST.FunctionDef =
     // Build substitution from type parameters to type args
     let subst =

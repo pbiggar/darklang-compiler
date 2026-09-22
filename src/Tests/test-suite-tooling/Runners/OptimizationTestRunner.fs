@@ -22,7 +22,7 @@ type OptimizationTestResult = {
     Actual: string option
 }
 
-let private externalReturnTypes : Map<AST.FunctionId, string * AST.Type> =
+let private externalReturnTypes : Map<AST.FunctionId, string * AST.SemanticType> =
     Map.ofList [
         (TestIds.functionIdForName "__hash_i64", ("__hash_i64", TInt64))
         (TestIds.functionIdForName "__hash_str", ("__hash_str", TInt64))
@@ -43,24 +43,26 @@ let private returnTypesFor (stdlib: CompilationContexts.StdlibResult) =
     externalReturnTypes
     |> Map.fold (fun returnTypes id value -> Map.add id value returnTypes) stdlib.Context.ReturnTypes
 
-let private typeCheckWithStdlib (stdlib: CompilationContexts.StdlibResult) (ast: AST.Program) : Result<AST.Type * CheckedAST.Program, string> =
-    match TypeChecking.checkProgramWithBaseEnv stdlib.Context.TypeCheckEnv ast with
+let private typeCheckWithStdlib (stdlib: CompilationContexts.StdlibResult) (ast: AST.ParsedProgram) : Result<AST.SemanticType * CheckedAST.Program, string> =
+    match TypeChecking.checkParsedProgramWithBaseEnv stdlib.Context.TypeCheckEnv ast with
     | Error e -> Error $"Type error: {CheckingDiagnostics.typeErrorToString e}"
     | Ok (programType, typedAst, _env) -> Ok (programType, typedAst)
 
-let private hasTopLevelExpression (AST.Program topLevels: AST.Program) : bool =
+let private hasTopLevelExpression (AST.Program topLevels: AST.ParsedProgram) : bool =
     topLevels
     |> List.exists (function
         | AST.Expression _ -> true
         | AST.FunctionDef _ | AST.TypeDef _ | AST.ValueDef _ -> false)
 
-let private addSyntheticMainExpressionIfNeeded (AST.Program topLevels: AST.Program) : AST.Program * bool =
+let private addSyntheticMainExpressionIfNeeded
+    (AST.Program topLevels: AST.ParsedProgram)
+    : AST.ParsedProgram * bool =
     if hasTopLevelExpression (AST.Program topLevels) then
         (AST.Program topLevels, false)
     else
         (AST.Program (topLevels @ [ AST.Expression ([], AST.Int64Literal 0L) ]), true)
 
-let private parseOptimizationSource (source: string) : Result<AST.Program * bool, string> =
+let private parseOptimizationSource (source: string) : Result<AST.ParsedProgram * bool, string> =
     match Parser.parseString true source with
     | Error e -> Error $"Parse error: {e}"
     | Ok ast -> Ok (addSyntheticMainExpressionIfNeeded ast)

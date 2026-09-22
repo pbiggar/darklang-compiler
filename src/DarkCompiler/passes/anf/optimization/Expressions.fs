@@ -62,7 +62,7 @@ let private binaryCSEKey (op: BinOp) (left: Atom) (right: Atom) : CSEKey =
         BinaryValue (op, right, left)
     | _ -> BinaryValue (op, left, right)
 
-let private isRecordProjectionCSEType (fieldType: AST.Type) : bool =
+let private isRecordProjectionCSEType (fieldType: AST.SemanticType) : bool =
     match fieldType with
     | AST.TInt64 | AST.TInt32 | AST.TInt16 | AST.TInt8
     | AST.TUInt64 | AST.TUInt32 | AST.TUInt16 | AST.TUInt8
@@ -73,7 +73,7 @@ let private isRecordProjectionCSEType (fieldType: AST.Type) : bool =
     | AST.TString
     | AST.TBlob
     | AST.TUnit
-    | AST.TRuntimeError
+    | AST.TNever
     | AST.TFunction _
     | AST.TTuple _
     | AST.TRecord _
@@ -81,7 +81,7 @@ let private isRecordProjectionCSEType (fieldType: AST.Type) : bool =
     | AST.TList _
     | AST.TStream _
     | AST.TVar _
-    | AST.TRawPtr
+    | AST.TInternalRawPtr
     | AST.TDict _ -> false
 
 /// Return a value-numbering key only when merging two evaluations preserves

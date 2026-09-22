@@ -12,7 +12,7 @@ open CheckFunctions
 open ResolveDeclarations
 open CheckDeclarations
 
-/// Internal: Type-check a program and return the type checking environment
+/// Internal: type-check a program and return the type checking environment
 /// This is the core implementation used by checkProgram, checkProgramWithEnv, and checkProgramWithBaseEnv
 /// When baseEnv is provided, registries are merged with it (for separate compilation)
 let internal checkResolvedProgramInternal
@@ -21,7 +21,7 @@ let internal checkResolvedProgramInternal
     (warningSettings: WarningSettings)
     (requireEntry: bool)
     (program: Program)
-    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    : Result<SemanticType * Program * TypeCheckEnv, TypeError> =
     let (Program topLevels) = program
     let declarationSummary = summarizeTopLevelDeclarations topLevels
     let programTypeReg =
@@ -419,7 +419,7 @@ let internal checkResolvedExpressionWithBaseEnv
     (requireExplicitTypeArgsForBareCalls: bool)
     (warningSettings: WarningSettings)
     (expr: Expr)
-    : Result<Type * Program * TypeCheckEnv, TypeError> =
+    : Result<SemanticType * Program * TypeCheckEnv, TypeError> =
     let genericFuncReg = {
         baseEnv.GenericFuncReg with
             RequireExplicitTypeArgsForBareCalls =

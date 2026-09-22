@@ -98,7 +98,7 @@ let private valueForType valueType value =
         | AST.TString, Constant (StringSymbol _)
         | AST.TChar, Constant (StringSymbol _)
         | AST.TBool, Constant (BoolConst _)
-        | (AST.TInt64 | AST.TRawPtr | AST.TFunction _), Constant (FuncAddr _)
+        | (AST.TInt64 | AST.TInternalRawPtr | AST.TFunction _), Constant (FuncAddr _)
         | (AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
           | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
           | AST.TDateTime | AST.TUnit), Constant (Int64Const _)

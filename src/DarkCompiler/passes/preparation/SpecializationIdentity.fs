@@ -14,7 +14,7 @@ type GenericFunctionArtifact = {
 type GenericFuncDefs = Map<string, GenericFunctionArtifact>
 
 /// Specialization key - a generic function instantiated with specific types
-type SpecKey = string * AST.Type list  // (funcName, typeArgs)
+type SpecKey = string * AST.SemanticType list  // (funcName, typeArgs)
 
 /// Specialization registry - tracks which specializations are needed
 /// Maps (funcName, typeArgs) -> specialized name
@@ -66,7 +66,7 @@ let private mangleTypeVarName (name: string) : string =
     name.Replace("_", "$u")
 
 /// Convert a type to a string for name mangling
-let rec typeToMangledName (t: AST.Type) : string =
+let rec typeToMangledName (t: AST.SemanticType) : string =
     match t with
     | AST.TInt8 -> "i8"
     | AST.TInt16 -> "i16"
@@ -86,7 +86,7 @@ let rec typeToMangledName (t: AST.Type) : string =
     | AST.TChar -> "char"
     | AST.TDateTime -> "datetime"
     | AST.TUnit -> "unit"
-    | AST.TRuntimeError -> "runtime_error"
+    | AST.TNever -> "runtime_error"
     | AST.TFunction (paramTypes, retType) ->
         let paramStr = paramTypes |> List.map typeToMangledName |> String.concat "_"
         let retStr = typeToMangledName retType
@@ -106,10 +106,10 @@ let rec typeToMangledName (t: AST.Type) : string =
     | AST.TStream elemType -> $"stream_{typeToMangledName elemType}"
     | AST.TDict (keyType, valueType) -> $"dict_{typeToMangledName keyType}_{typeToMangledName valueType}"
     | AST.TVar name -> mangleTypeVarName name  // Should not appear after monomorphization
-    | AST.TRawPtr -> "rawptr"  // Internal raw pointer type
+    | AST.TInternalRawPtr -> "rawptr"  // Internal raw pointer type
 
 /// Check if a type contains any type variables
-let rec containsTypeVar (t: AST.Type) : bool =
+let rec containsTypeVar (t: AST.SemanticType) : bool =
     match t with
     | AST.TVar _ -> true
     | AST.TFunction (paramTypes, retType) ->
@@ -122,7 +122,7 @@ let rec containsTypeVar (t: AST.Type) : bool =
     | _ -> false
 
 /// Generate a specialized function name
-let specName (funcName: string) (typeArgs: AST.Type list) : string =
+let specName (funcName: string) (typeArgs: AST.SemanticType list) : string =
     if List.isEmpty typeArgs then
         funcName
     else
@@ -141,17 +141,17 @@ let internal exprArgsFromList (args: CheckedAST.Expr list) : AST.NonEmptyList<Ch
     | None -> AST.NonEmptyList.singleton CheckedAST.UnitLiteral
 
 let internal paramsToList
-    (parameters: AST.NonEmptyList<AST.BindingId * AST.Type>)
-    : (AST.BindingId * AST.Type) list =
+    (parameters: AST.NonEmptyList<AST.BindingId * AST.SemanticType>)
+    : (AST.BindingId * AST.SemanticType) list =
     AST.NonEmptyList.toList parameters
 
-let internal lambdaParameterType (parameter: CheckedAST.LambdaParameter) : AST.Type =
+let internal lambdaParameterType (parameter: CheckedAST.LambdaParameter) : AST.SemanticType =
     parameter.Type
 
 let rec internal letPatternBindingTypes
     (pattern: CheckedAST.LetPattern)
-    (typ: AST.Type)
-    : (AST.BindingId * AST.Type) list =
+    (typ: AST.SemanticType)
+    : (AST.BindingId * AST.SemanticType) list =
     match pattern, typ with
     | CheckedAST.LPVariable name, bindingType -> [(name, bindingType)]
     | CheckedAST.LPWildcard, _ | CheckedAST.LPUnit, _ -> []
@@ -168,14 +168,14 @@ let rec internal letPatternBindingTypes
 
 let internal lambdaParameterBindings
     (parameter: CheckedAST.LambdaParameter)
-    : (AST.BindingId * AST.Type) list =
+    : (AST.BindingId * AST.SemanticType) list =
     letPatternBindingTypes parameter.Pattern (lambdaParameterType parameter)
 
 let internal lowerLambdaParameters
     (symbols: CheckedAST.Symbols)
     (parameters: AST.NonEmptyList<CheckedAST.LambdaParameter>)
     (body: CheckedAST.Expr)
-    : (AST.BindingId * AST.Type) list * CheckedAST.Expr * CheckedAST.Symbols =
+    : (AST.BindingId * AST.SemanticType) list * CheckedAST.Expr * CheckedAST.Symbols =
     parameters
     |> AST.NonEmptyList.toList
     |> List.mapi (fun index parameter -> index, parameter)
@@ -198,8 +198,8 @@ let internal lowerLambdaParameters
 
 let internal paramsFromList
     (context: string)
-    (parameters: (AST.BindingId * AST.Type) list)
-    : AST.NonEmptyList<AST.BindingId * AST.Type> =
+    (parameters: (AST.BindingId * AST.SemanticType) list)
+    : AST.NonEmptyList<AST.BindingId * AST.SemanticType> =
     match AST.NonEmptyList.tryFromList parameters with
     | Some nonEmptyParams -> nonEmptyParams
     | None -> Crash.crash $"Internal error: {context} produced zero parameters"
@@ -208,7 +208,7 @@ let private syntheticUnitParamPrefix = "$unit"
 
 let private isSyntheticUnitParam
     (symbols: CheckedAST.Symbols)
-    ((paramId, paramType): AST.BindingId * AST.Type)
+    ((paramId, paramType): AST.BindingId * AST.SemanticType)
     : bool =
     paramType = AST.TUnit
     && (CheckedAST.bindingName paramId symbols
@@ -217,14 +217,14 @@ let private isSyntheticUnitParam
 
 let internal normalizeSyntheticNullaryParams
     (symbols: CheckedAST.Symbols)
-    (parameters: (AST.BindingId * AST.Type) list)
-    : (AST.BindingId * AST.Type) list =
+    (parameters: (AST.BindingId * AST.SemanticType) list)
+    : (AST.BindingId * AST.SemanticType) list =
     match parameters with
     | [singleParam] when isSyntheticUnitParam symbols singleParam -> []
     | _ -> parameters
 
 let internal normalizeSyntheticNullaryArgAtoms
-    (paramTypes: AST.Type list)
+    (paramTypes: AST.SemanticType list)
     (argExprs: CheckedAST.Expr list)
     (argAtoms: ANF.Atom list)
     : ANF.Atom list =

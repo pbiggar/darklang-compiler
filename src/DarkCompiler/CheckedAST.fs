@@ -42,12 +42,12 @@ type Pattern =
 
 type LambdaParameter = {
     Pattern: LetPattern
-    Type: AST.Type
+    Type: AST.SemanticType
 }
 
 type RecordReference = {
     TypeId: AST.TypeId
-    TypeArgs: AST.Type list
+    TypeArgs: AST.SemanticType list
 }
 
 type ConstructorReference = {
@@ -86,17 +86,17 @@ and Expr =
     | If of cond:Expr * thenBranch:Expr * elseBranch:Expr
     | Sequence of first:Expr * next:Expr
     | Call of functionId:AST.FunctionId * args:AST.NonEmptyList<Expr>
-    | TypeApp of functionId:AST.FunctionId * typeArgs:AST.Type list * args:AST.NonEmptyList<Expr>
+    | TypeApp of functionId:AST.FunctionId * typeArgs:AST.SemanticType list * args:AST.NonEmptyList<Expr>
     | TupleLiteral of Expr list
     | TupleAccess of tuple:Expr * index:int
-    | DictLiteral of keyType:AST.Type * valueType:AST.Type * entries:(Expr * Expr) list
+    | DictLiteral of keyType:AST.SemanticType * valueType:AST.SemanticType * entries:(Expr * Expr) list
     | RecordLiteral of reference:RecordReference * fields:(AST.FieldId * Expr) list
     | RecordUpdate of record:Expr * updates:(AST.FieldId * Expr) list
     | RecordAccess of record:Expr * field:AST.FieldId
     | Constructor of reference:ConstructorReference * fields:Expr list
     | Match of scrutinee:Expr * cases:MatchCase list
     | ListLiteral of Expr list
-    | Lambda of parameters:AST.NonEmptyList<LambdaParameter> * returnAnnotation:AST.Type option * body:Expr
+    | Lambda of parameters:AST.NonEmptyList<LambdaParameter> * returnAnnotation:AST.SemanticType option * body:Expr
     | Apply of func:Expr * args:AST.NonEmptyList<Expr>
     | IndirectApply of func:Expr * args:AST.NonEmptyList<Expr>
     | FuncRef of AST.FunctionId
@@ -114,8 +114,8 @@ type FunctionDef = {
     Id: AST.FunctionId
     Name: string
     TypeParams: string list
-    Params: AST.NonEmptyList<AST.BindingId * AST.Type>
-    ReturnType: AST.Type
+    Params: AST.NonEmptyList<AST.BindingId * AST.SemanticType>
+    ReturnType: AST.SemanticType
     Body: Expr
     Recursion: AST.TypedRecursiveMember option
 }
@@ -123,7 +123,7 @@ type FunctionDef = {
 type ValueDef = {
     Id: AST.BindingId
     Name: string
-    Type: AST.Type
+    Type: AST.SemanticType
     Body: Expr
 }
 
@@ -599,7 +599,7 @@ let valueDefId (valueDef: ValueDef) : AST.BindingId = valueDef.Id
 
 let valueDefBody (valueDef: ValueDef) : Expr = valueDef.Body
 
-let programValues (Program (_, topLevels)) : Map<string, AST.Type * Expr> =
+let programValues (Program (_, topLevels)) : Map<string, AST.SemanticType * Expr> =
     topLevels
     |> List.choose (function
         | ValueDef valueDef -> Some (valueDef.Name, (valueDef.Type, valueDef.Body))
@@ -886,19 +886,17 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
     | AST.Sequence (first, next) ->
         convertPair first next symbols
         |> Result.map (fun (first', next', state) -> (Sequence (first', next'), state))
-    | AST.Call (name, args) ->
+    | AST.Apply (AST.Var name, typeArgs, args) ->
         convertNonEmpty args symbols
         |> Result.map (fun (converted, state) ->
-            match Map.tryFind name environment with
-            | Some id -> (Apply (Local id, converted), state)
-            | None ->
+            match typeArgs, Map.tryFind name environment with
+            | [], Some id -> (Apply (Local id, converted), state)
+            | [], None ->
                 let (functionId, state) = internFunction name state
-                (Call (functionId, converted), state))
-    | AST.TypeApp (name, typeArgs, args) ->
-        convertNonEmpty args symbols
-        |> Result.map (fun (converted, state) ->
-            let (functionId, state) = internFunction name state
-            (TypeApp (functionId, typeArgs, converted), state))
+                (Call (functionId, converted), state)
+            | _, _ ->
+                let (functionId, state) = internFunction name state
+                (TypeApp (functionId, typeArgs, converted), state))
     | AST.TupleLiteral elements ->
         convertList elements symbols |> Result.map (fun (values, state) -> (TupleLiteral values, state))
     | AST.TupleAccess (tuple, index) ->
@@ -986,19 +984,18 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
             |> Result.map (fun (body', following) ->
                 (Lambda (AST.NonEmptyList.fromList (List.rev convertedParameters), returnAnnotation, body'),
                  following)))
-    | AST.Apply (func, args) ->
+    | AST.Apply (func, [], args) ->
         convert symbols func
         |> Result.bind (fun (func', afterFunc) ->
             convertNonEmpty args afterFunc
             |> Result.map (fun (args', following) -> (Apply (func', args'), following)))
+    | AST.Apply (_, _ :: _, _) ->
+        conversionError location "explicit type arguments require a named function"
     | AST.IndirectApply (func, args) ->
         convert symbols func
         |> Result.bind (fun (func', afterFunc) ->
             convertNonEmpty args afterFunc
             |> Result.map (fun (args', following) -> (IndirectApply (func', args'), following)))
-    | AST.FuncRef name ->
-        let (functionId, symbols) = internFunction name symbols
-        Ok (FuncRef functionId, symbols)
     | AST.Closure (name, captures) ->
         convertList captures symbols
         |> Result.map (fun (values, state) ->
@@ -1049,7 +1046,7 @@ let private convertFunctionWithEnvironment
                  following)))
 
 let ofTypedFunction
-    (variantLookup: Map<string, string * string list * int * AST.Type list>)
+    (variantLookup: Map<string, string * string list * int * AST.SemanticType list>)
     symbols
     funcDef
     : Result<FunctionDef * Symbols, string> =
@@ -1061,7 +1058,7 @@ let ofTypedFunction
     convertFunctionWithEnvironment Map.empty symbols funcDef
 
 let ofTypedProgram
-    (variantLookup: Map<string, string * string list * int * AST.Type list>)
+    (variantLookup: Map<string, string * string list * int * AST.SemanticType list>)
     (externalValueNames: Set<string>)
     (AST.Program topLevels)
     : Result<Program, string> =

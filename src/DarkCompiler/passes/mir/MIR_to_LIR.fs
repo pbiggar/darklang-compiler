@@ -62,7 +62,7 @@ let convertOperand (operand: MIR.Operand) : LIR.Operand =
     | MIR.FuncAddr name -> LIR.FuncAddr name  // Function address (for higher-order functions)
 
 /// Apply type substitution - replaces type variables with concrete types
-let rec applyTypeSubst (typeParams: string list) (typeArgs: AST.Type list) (typ: AST.Type) : AST.Type =
+let rec applyTypeSubst (typeParams: string list) (typeArgs: AST.SemanticType list) (typ: AST.SemanticType) : AST.SemanticType =
     // Build substitution map from type params to type args
     let subst =
         if List.length typeParams = List.length typeArgs then
@@ -84,7 +84,7 @@ let rec applyTypeSubst (typeParams: string list) (typeArgs: AST.Type list) (typ:
         | _ -> t  // Concrete types unchanged
     substitute typ
 
-let private collectTypeVars (typ: AST.Type) : string list =
+let private collectTypeVars (typ: AST.SemanticType) : string list =
     let rec collect t =
         match t with
         | AST.TVar name -> [name]
@@ -121,7 +121,7 @@ let private rcSumShapeRegistryFromVariantRegistry (variantRegistry: MIR.VariantR
             |> List.map (fun variant -> variant.Tag, variant.Payload) })
 
 type PrintRcContext = {
-    RecordFields: Map<string, (string * AST.Type) list>
+    RecordFields: Map<string, (string * AST.SemanticType) list>
     RecordTypeParams: Map<string, string list>
     SumShapes: MemoryModel.RcSumShapeRegistry
 }
@@ -142,7 +142,7 @@ let private printRcContextFromMirRegistries
 
 let private rcMetadataForPrintType
     (rcContext: PrintRcContext)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     : MemoryModel.RcMetadata =
     let releasePlan =
         MemoryPlanning.rcReleasePlanOfTypeWithSums
@@ -156,7 +156,7 @@ let private rcMetadataForPrintType
 let private releasePrintedValueFromReg
     (rcContext: PrintRcContext)
     (reg: LIR.Reg)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     : LIR.Instr list =
     let shape =
         MemoryPlanning.rcShapeOfTypeWithSums
@@ -190,7 +190,7 @@ let private releasePrintedValueFromReg
 let private releasePrintedValue
     (rcContext: PrintRcContext)
     (src: MIR.Operand)
-    (typ: AST.Type)
+    (typ: AST.SemanticType)
     : LIR.Instr list =
     match src with
     | MIR.Register vreg ->
@@ -254,7 +254,7 @@ let ensureInFRegister (operand: MIR.Operand) (state: TempState) : Result<LIR.Ins
 /// Generate truncation instruction for sized integer arithmetic
 /// After a 64-bit operation, this sign/zero extends the result to the target width
 /// to ensure proper overflow behavior (e.g., 127y + 1y = -128)
-let truncateForType (destReg: LIR.Reg) (operandType: AST.Type) : LIR.Instr list =
+let truncateForType (destReg: LIR.Reg) (operandType: AST.SemanticType) : LIR.Instr list =
     match operandType with
     | AST.TInt8 -> [LIR.Sxtb (destReg, destReg)]      // Sign-extend byte
     | AST.TInt16 -> [LIR.Sxth (destReg, destReg)]     // Sign-extend halfword
@@ -265,17 +265,17 @@ let truncateForType (destReg: LIR.Reg) (operandType: AST.Type) : LIR.Instr list 
     | AST.TInt64 | AST.TUInt64 -> []                  // No truncation needed for 64-bit
     | _ -> []                                          // Non-integer types
 
-let shouldCheckNegativeDivisor (operandType: AST.Type) : bool =
+let shouldCheckNegativeDivisor (operandType: AST.SemanticType) : bool =
     match operandType with
     | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 -> true
     | _ -> false
 
-let isUnsignedIntegerType (operandType: AST.Type) : bool =
+let isUnsignedIntegerType (operandType: AST.SemanticType) : bool =
     match operandType with
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 -> true
     | _ -> false
 
-let shiftCountMask (operandType: AST.Type) : int64 =
+let shiftCountMask (operandType: AST.SemanticType) : int64 =
     match operandType with
     | AST.TInt8 | AST.TInt16 | AST.TInt32
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 -> 31L
@@ -286,12 +286,12 @@ let shiftCountMask (operandType: AST.Type) : int64 =
 /// For native 64-bit operands that is exactly the language mask, so emitting
 /// an explicit AND is redundant. Narrow integers retain an explicit mask
 /// because their declared count width is smaller than the machine width.
-let usesNativeVariableShiftMask (operandType: AST.Type) : bool =
+let usesNativeVariableShiftMask (operandType: AST.SemanticType) : bool =
     match operandType with
     | AST.TInt64 | AST.TUInt64 -> true
     | _ -> false
 
-let comparisonCondition (operandType: AST.Type) (op: MIR.BinOp) : LIR.Condition =
+let comparisonCondition (operandType: AST.SemanticType) (op: MIR.BinOp) : LIR.Condition =
     let unsigned = isUnsignedIntegerType operandType
     match op, unsigned with
     | MIR.Eq, _ -> LIR.EQ
@@ -310,7 +310,7 @@ let buildIntegerModuloParts
     (destReg: LIR.Reg)
     (left: MIR.Operand)
     (right: MIR.Operand)
-    (operandType: AST.Type)
+    (operandType: AST.SemanticType)
     (state: TempState)
     : Result<LIR.Instr list * LIR.Reg * LIR.Instr list * TempState, string> =
     match ensureInRegister left state with
@@ -1316,7 +1316,7 @@ let selectInstr
         | AST.TUnit ->
             // Unit: print "()" with newline
             finishPrint [LIR.PrintChars [byte '('; byte ')'; byte '\n']]
-        | AST.TRuntimeError ->
+        | AST.TNever ->
             // Runtime-error expressions are normalized to Unit before print insertion,
             // but keep this branch explicit for exhaustiveness.
             finishPrint [LIR.PrintChars [byte '('; byte ')'; byte '\n']]
@@ -1328,7 +1328,7 @@ let selectInstr
                 | LIR.Reg (LIR.Physical LIR.X0) -> []
                 | _ -> [LIR.Mov (LIR.Physical LIR.X0, lirSrc)]
             finishPrint (moveToX0 @ [LIR.PrintInt64 (LIR.Physical LIR.X0)])
-        | AST.TRawPtr ->
+        | AST.TInternalRawPtr ->
             // Raw pointer: print address
             let lirSrc = convertOperand src
             let moveToX0 =
@@ -1347,7 +1347,7 @@ let selectInstr
             finishPrintFromReg (LIR.Physical LIR.X19) (moveToX19 @ [LIR.PrintBlob (LIR.Physical LIR.X19)])
         | AST.TVar _ ->
             // Type variables should be monomorphized away before reaching LIR
-            Error "Internal error: Type variable reached MIR_to_LIR (should be monomorphized)"
+            Error "Internal error: type variable reached MIR_to_LIR (should be monomorphized)"
 
     | MIR.RuntimeError message ->
         Ok ([LIR.RuntimeError message], state)
@@ -1739,7 +1739,7 @@ let selectInstr
 /// Printing is now handled by MIR.Print instruction, not in terminator
 let selectTerminator
     (terminator: MIR.Terminator)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (state: TempState)
     : Result<LIR.Instr list * LIR.Terminator * TempState, string> =
     match terminator with
@@ -1962,7 +1962,7 @@ let selectBlocksWithModuloChecks
     (variantRegistry: MIR.VariantRegistry)
     (recordRegistry: MIR.RecordRegistry)
     (printRcContext: PrintRcContext)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (floatRegs: Set<int>)
     (errorLabels: IntegerErrorLabels)
     (state: TempState)
@@ -2091,7 +2091,7 @@ let selectCFG
     (variantRegistry: MIR.VariantRegistry)
     (recordRegistry: MIR.RecordRegistry)
     (printRcContext: PrintRcContext)
-    (returnType: AST.Type)
+    (returnType: AST.SemanticType)
     (floatRegs: Set<int>)
     (errorLabels: IntegerErrorLabels)
     (state: TempState)
@@ -2179,7 +2179,7 @@ let selectCFG
                 Blocks = remappedBlocks |> List.map (fun block -> (block.Label, block)) |> Map.ofList
             }
 
-let private argRegisterCounts (types: AST.Type list) : int * int =
+let private argRegisterCounts (types: AST.SemanticType list) : int * int =
     types
     |> List.fold (fun (intCount, floatCount) typ ->
         if typ = AST.TFloat64 then
@@ -2341,7 +2341,7 @@ let toLIRFunctionsForWithTrace
 let toLIRFunctionsForWithTraceAndRcRegistries
     (phaseRecorder: (string -> float -> unit) option)
     (arch: Platform.Arch)
-    (recordFields: Map<string, (string * AST.Type) list>)
+    (recordFields: Map<string, (string * AST.SemanticType) list>)
     (recordTypeParams: Map<string, string list>)
     (sumShapes: MemoryModel.RcSumShapeRegistry)
     (MIR.Program (mirFuncs, variantRegistry, recordRegistry))

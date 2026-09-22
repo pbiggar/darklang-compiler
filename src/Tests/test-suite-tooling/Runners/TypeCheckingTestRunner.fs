@@ -16,8 +16,8 @@ open Parser
 type TypeCheckingTestResult = {
     Success: bool
     Message: string
-    ExpectedType: Type option
-    ActualType: Type option
+    ExpectedType: SemanticType option
+    ActualType: SemanticType option
     ExpectedError: bool
     ActualError: string option
 }
@@ -48,7 +48,7 @@ let runTypeCheckingTest (test: TypeCheckingTest) : TypeCheckingTestResult =
 
     | Ok program ->
         // Type check the program
-        let typeCheckResult = checkProgram program
+        let typeCheckResult = checkParsedProgram program
 
         match typeCheckResult, test.Expectation with
         | Ok (actualType, _), ExpectType expectedType ->
