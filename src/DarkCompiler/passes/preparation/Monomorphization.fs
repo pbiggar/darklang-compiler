@@ -176,16 +176,13 @@ let specializeFromSpecs (genericFuncDefs: GenericFuncDefs) (initialSpecs: Set<Sp
         : SpecializationResult =
         let newSpecs = Set.difference pendingSpecs processedSpecs
         if Set.isEmpty newSpecs then
-            let referencedNames =
-                (genericFuncDefs |> Map.keys |> Seq.toList)
-                @ (specRegistry |> Map.values |> Seq.toList)
-                @ (externalSpecs |> Set.toList |> List.map (fun (name, typeArgs) -> specName name typeArgs))
             let specializedFuncs =
                 accFuncs
                 |> List.map (fun artifact ->
                     let symbols =
-                        referencedNames
-                        |> List.fold (fun symbols name -> CheckedAST.internFunction name symbols |> snd) artifact.Symbols
+                        CheckedAST.symbolsForTopLevels
+                            artifact.Symbols
+                            [CheckedAST.FunctionDef artifact.Function]
                     { artifact with Symbols = symbols })
             { SpecializedFuncs = specializedFuncs
               SpecRegistry = specRegistry

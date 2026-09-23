@@ -78,7 +78,10 @@ type CheckedValueArtifact = {
 let internal checkedValueArtifacts (program: CheckedAST.Program) : Map<string, CheckedValueArtifact> =
     let symbols = CheckedAST.programSymbols program
     CheckedAST.programValues program
-    |> Map.map (fun _ (typ, body) -> { Symbols = symbols; Type = typ; Body = body })
+    |> Map.map (fun _ (typ, body) ->
+        let artifactSymbols =
+            CheckedAST.symbolsForTopLevels symbols [CheckedAST.Expression body]
+        { Symbols = artifactSymbols; Type = typ; Body = body })
 
 type PipelineContext = {
     Symbols: CheckedAST.Symbols

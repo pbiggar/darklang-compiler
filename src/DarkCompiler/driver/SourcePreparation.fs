@@ -120,39 +120,28 @@ let private importInheritedValues
         inheritedValues
         |> Map.toList
         |> List.filter (fun (name, _) -> not (Set.contains name currentNames))
-    let rec groupBySymbolNamespace entries =
-        match entries with
-        | [] -> []
-        | (_, (first: CheckedValueArtifact)) :: _ ->
-            let same, rest =
-                entries
-                |> List.partition (fun (_, (artifact: CheckedValueArtifact)) ->
-                    CheckedAST.sameSymbolNamespace first.Symbols artifact.Symbols)
-            same :: groupBySymbolNamespace rest
     let inheritedDefinitions, symbols =
-        groupBySymbolNamespace inheritedEntries
-        |> List.fold (fun (collected, symbols) group ->
-            let sourceSymbols = (group |> List.head |> snd).Symbols
+        inheritedEntries
+        |> List.fold (fun (collected, symbols) (name, artifact) ->
             let symbols, imported =
-                group
-                |> List.map (fun (_, artifact) -> CheckedAST.Expression artifact.Body)
-                |> CheckedAST.importTopLevels sourceSymbols symbols
-            let importedBodies =
-                imported
-                |> List.map (function
-                    | CheckedAST.Expression body -> body
-                    | _ -> Crash.crash "Checked value import changed its top-level shape")
-            let importedEntries =
-                List.zip3
-                    (group |> List.map fst)
-                    (group |> List.map (fun (_, artifact) -> artifact.Type))
-                    importedBodies
-            let definitions, symbols =
-                importedEntries
-                |> List.mapFold (fun symbols (name, typ, body) ->
-                    let (id, symbols) = CheckedAST.internValue name symbols
-                    (CheckedAST.ValueDef { Id = id; Name = name; Type = typ; Body = body }, symbols)) symbols
-            (collected @ definitions, symbols)) ([], symbols)
+                CheckedAST.importTopLevels
+                    artifact.Symbols
+                    symbols
+                    [CheckedAST.Expression artifact.Body]
+            let importedBody =
+                match imported with
+                | [CheckedAST.Expression body] -> body
+                | _ -> Crash.crash "Checked value import changed its top-level shape"
+            let id, symbols = CheckedAST.internValue name symbols
+            let definition =
+                CheckedAST.ValueDef {
+                    Id = id
+                    Name = name
+                    Type = artifact.Type
+                    Body = importedBody
+                }
+            (definition :: collected, symbols)) ([], symbols)
+        |> fun (definitions, symbols) -> (List.rev definitions, symbols)
     CheckedAST.Program (symbols, inheritedDefinitions @ topLevels)
 
 /// Materialize checked module values as one lexical binding per execution

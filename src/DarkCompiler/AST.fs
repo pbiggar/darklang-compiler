@@ -297,10 +297,15 @@ type BindingId = private BindingId of int
 
 [<Struct; StructuralEquality; StructuralComparison>]
 type FunctionId =
-    private FunctionId of int
+    private
+    | FunctionOrdinal of ordinal:int
+    | FunctionName of canonicalName:string
 
 [<Struct; StructuralEquality; StructuralComparison>]
-type TypeId = private TypeId of int
+type TypeId =
+    private
+    | TypeOrdinal of ordinal:int
+    | TypeName of canonicalName:string
 
 [<Struct; StructuralEquality; StructuralComparison>]
 type ConstructorId = private ConstructorId of int
@@ -318,22 +323,22 @@ type RecursiveGroupId = private RecursiveGroupId of int
 type RecursiveMemberId = private RecursiveMemberId of int
 
 let bindingId ordinal = BindingId ordinal
-let functionId ordinal = FunctionId ordinal
-let functionIdOrdinal (FunctionId ordinal) = ordinal
-let allocateFunctionIds (existing: seq<FunctionId>) (names: seq<string>) : Map<string, FunctionId> =
-    let nextOrdinal =
-        existing
-        |> Seq.map functionIdOrdinal
-        |> Seq.fold (fun highest ordinal -> max highest ordinal) -1
-        |> fun highest -> highest + 1
+let functionId ordinal = FunctionOrdinal ordinal
+let functionIdForName canonicalName = FunctionName canonicalName
+let functionIdValue = function
+    | FunctionOrdinal ordinal -> $"ordinal:{ordinal}"
+    | FunctionName canonicalName -> canonicalName
+let tryFunctionCanonicalName = function
+    | FunctionOrdinal _ -> None
+    | FunctionName canonicalName -> Some canonicalName
+let allocateFunctionIds (_existing: seq<FunctionId>) (names: seq<string>) : Map<string, FunctionId> =
     names
     |> Seq.distinct
     |> Seq.sort
-    |> Seq.mapFold (fun ordinal name -> ((name, functionId ordinal), ordinal + 1)) nextOrdinal
-    |> fst
+    |> Seq.map (fun name -> name, functionIdForName name)
     |> Map.ofSeq
-let typeId ordinal = TypeId ordinal
-let functionIdValue (FunctionId ordinal) = string ordinal
+let typeId ordinal = TypeOrdinal ordinal
+let typeIdForName canonicalName = TypeName canonicalName
 let constructorId ordinal = ConstructorId ordinal
 let fieldId ordinal = FieldId ordinal
 let scopeBoundaryId ordinal = ScopeBoundaryId ordinal

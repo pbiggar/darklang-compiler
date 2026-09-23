@@ -35,7 +35,9 @@ let extractGenericFuncDefs (program: CheckedAST.Program) : GenericFuncDefs =
     topLevels
     |> List.choose (function
         | CheckedAST.FunctionDef f when not (List.isEmpty f.TypeParams) ->
-            Some (f.Name, { Symbols = symbols; Function = f })
+            let artifactSymbols =
+                CheckedAST.symbolsForTopLevels symbols [CheckedAST.FunctionDef f]
+            Some (f.Name, { Symbols = artifactSymbols; Function = f })
         | _ -> None)
     |> Map.ofList
 

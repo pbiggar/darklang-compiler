@@ -18,6 +18,19 @@ let testFunctionIdentitiesDoNotHashCollide () : TestResult =
     if generated <> stdlib then Ok ()
     else Error "Distinct function names received the same semantic identity"
 
+/// Independently checked units and later optimization-generated functions
+/// must compose without sharing an ordinal allocator.
+let testFunctionIdentitiesComposeAcrossUnits () : TestResult =
+    let name = "User.Module.generated<Int64>"
+    let first, _ = CheckedAST.internFunction name (CheckedAST.emptySymbols ())
+    let second, _ = CheckedAST.internFunction name (CheckedAST.emptySymbols ())
+    let generated =
+        AST.allocateFunctionIds Seq.empty [name]
+        |> Map.tryFind name
+    match generated with
+    | Some generated when first = second && second = generated -> Ok ()
+    | _ -> Error "Independent units assigned different identities to the same canonical function"
+
 let testMirToLirSymbolicOperands () : TestResult =
     let label = MIR.Label "entry"
     let instrs = [
@@ -180,6 +193,7 @@ let testMirToLirUsesImmediateMaskForListToRawPtr () : TestResult =
 
 let tests = [
     ("function identities preserve colliding names", testFunctionIdentitiesDoNotHashCollide)
+    ("function identities compose across units", testFunctionIdentitiesComposeAcrossUnits)
     ("mir → lir symbolic operands", testMirToLirSymbolicOperands)
     ("mir → lir reports missing entry block", testMirToLirReportsMissingEntryBlock)
     ("mir → lir uses native Int64 shift mask", testMirToLirUsesNativeInt64ShiftMask)

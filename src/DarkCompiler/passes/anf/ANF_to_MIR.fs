@@ -1791,7 +1791,7 @@ let toMIR
         functionNames
         |> Map.toSeq
         |> Seq.tryPick (fun (id, name) -> if name = "_start" then Some id else None)
-        |> Option.defaultValue (AST.functionId 0)
+        |> Option.defaultValue (AST.functionIdForName "_start")
     // Phase 2: Convert all functions to MIR
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
     match

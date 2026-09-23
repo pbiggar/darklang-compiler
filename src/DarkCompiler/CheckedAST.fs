@@ -146,10 +146,8 @@ type Symbols = private {
     NextBindingOrdinal: int
     FunctionNames: Map<AST.FunctionId, string>
     FunctionIds: Map<string, AST.FunctionId>
-    NextFunctionOrdinal: int
     TypeNames: Map<AST.TypeId, string>
     TypeIds: Map<string, AST.TypeId>
-    NextTypeOrdinal: int
     ConstructorNames: Map<AST.ConstructorId, string * string>
     ConstructorTags: Map<AST.ConstructorId, int>
     ConstructorIds: Map<string * string, AST.ConstructorId>
@@ -163,8 +161,8 @@ type Symbols = private {
 type Program = Program of Symbols * TopLevel list
 
 let emptySymbols () =
-    let startId = AST.functionId 0
-    let programEntryId = AST.functionId 1
+    let startId = AST.functionIdForName "_start"
+    let programEntryId = AST.functionIdForName "__dark_compiler_program_entry"
     { NamespaceToken = System.Object()
       BindingNames = Map.empty
       ValueIds = Map.empty
@@ -173,10 +171,8 @@ let emptySymbols () =
         Map.ofList [startId, "_start"; programEntryId, "__dark_compiler_program_entry"]
       FunctionIds =
         Map.ofList ["_start", startId; "__dark_compiler_program_entry", programEntryId]
-      NextFunctionOrdinal = 2
       TypeNames = Map.empty
       TypeIds = Map.empty
-      NextTypeOrdinal = 0
       ConstructorNames = Map.empty
       ConstructorTags = Map.empty
       ConstructorIds = Map.empty
@@ -225,23 +221,21 @@ let internFunction name symbols =
     match Map.tryFind name symbols.FunctionIds with
     | Some id -> (id, symbols)
     | None ->
-        let id = AST.functionId symbols.NextFunctionOrdinal
+        let id = AST.functionIdForName name
         (id,
          { symbols with
              FunctionIds = Map.add name id symbols.FunctionIds
-             FunctionNames = Map.add id name symbols.FunctionNames
-             NextFunctionOrdinal = symbols.NextFunctionOrdinal + 1 })
+             FunctionNames = Map.add id name symbols.FunctionNames })
 
 let internType name symbols =
     match Map.tryFind name symbols.TypeIds with
     | Some id -> (id, symbols)
     | None ->
-        let id = AST.typeId symbols.NextTypeOrdinal
+        let id = AST.typeIdForName name
         (id,
          { symbols with
              TypeIds = Map.add name id symbols.TypeIds
-             TypeNames = Map.add id name symbols.TypeNames
-             NextTypeOrdinal = symbols.NextTypeOrdinal + 1 })
+             TypeNames = Map.add id name symbols.TypeNames })
 
 let internConstructor typeName name tag symbols =
     let (_, symbols) = internType typeName symbols
@@ -306,6 +300,159 @@ let programTopLevels (Program (_, topLevels)) : TopLevel list = topLevels
 
 let withProgramTopLevels topLevels (Program (symbols, _)) : Program =
     Program (symbols, topLevels)
+
+/// Retain only the symbol metadata referenced by the supplied checked
+/// declarations.  Prepared artifacts must not capture the complete symbol
+/// namespace from which they were produced: doing so makes importing one
+/// small function proportional to the size of the stdlib.
+let symbolsForTopLevels (symbols: Symbols) (topLevels: TopLevel list) : Symbols =
+    let addBinding id (bindings, functions, types, constructors, fields) =
+        (Set.add id bindings, functions, types, constructors, fields)
+    let addFunction id (bindings, functions, types, constructors, fields) =
+        (bindings, Set.add id functions, types, constructors, fields)
+    let addType id (bindings, functions, types, constructors, fields) =
+        (bindings, functions, Set.add id types, constructors, fields)
+    let addConstructor id (bindings, functions, types, constructors, fields) =
+        (bindings, functions, types, Set.add id constructors, fields)
+    let addField id (bindings, functions, types, constructors, fields) =
+        (bindings, functions, types, constructors, Set.add id fields)
+    let rec collectLetPattern state pattern =
+        match pattern with
+        | LPUnit | LPWildcard -> state
+        | LPVariable id -> addBinding id state
+        | LPTuple (first, second, rest) ->
+            first :: second :: rest |> List.fold collectLetPattern state
+    let rec collectPattern state pattern =
+        match pattern with
+        | PVariable id -> addBinding id state
+        | PConstructor (id, fields) ->
+            fields |> List.fold collectPattern (addConstructor id state)
+        | PTuple patterns | PList patterns ->
+            patterns |> List.fold collectPattern state
+        | PListCons (heads, tail) ->
+            collectPattern (heads |> List.fold collectPattern state) tail
+        | POr alternatives ->
+            alternatives |> AST.NonEmptyList.toList |> List.fold collectPattern state
+        | PUnit | PWildcard | PInt64 _ | PBigInt _ | PInt128Literal _ | PInt8Literal _
+        | PInt16Literal _ | PInt32Literal _ | PUInt8Literal _ | PUInt16Literal _
+        | PUInt32Literal _ | PUInt64Literal _ | PUInt128Literal _ | PBool _ | PString _
+        | PChar _ | PFloat _ -> state
+    let addRecursion state (recursion: AST.TypedRecursiveMember) =
+        addBinding recursion.Resolved.Parsed.Binding state
+    let rec collectExpr state expr =
+        let collectArgs state args =
+            args |> AST.NonEmptyList.toList |> List.fold collectExpr state
+        match expr with
+        | Local id -> addBinding id state
+        | Let (pattern, value, body) ->
+            collectExpr (collectExpr (collectLetPattern state pattern) value) body
+        | RecursiveLet (recursion, value, body) ->
+            collectExpr (collectExpr (addRecursion state recursion) value) body
+        | Lambda (parameters, _, body) ->
+            let state =
+                parameters
+                |> AST.NonEmptyList.toList
+                |> List.fold (fun state parameter -> collectLetPattern state parameter.Pattern) state
+            collectExpr state body
+        | Match (scrutinee, cases) ->
+            let state = collectExpr state scrutinee
+            cases
+            |> List.fold (fun state case ->
+                let state =
+                    case.Patterns
+                    |> AST.NonEmptyList.toList
+                    |> List.fold collectPattern state
+                let state = case.Guard |> Option.map (collectExpr state) |> Option.defaultValue state
+                collectExpr state case.Body) state
+        | BoundaryRender (renderer, value) -> collectExpr (addFunction renderer state) value
+        | BinOp (_, left, right) -> collectExpr (collectExpr state left) right
+        | UnaryOp (_, value) -> collectExpr state value
+        | If (condition, thenBranch, elseBranch) ->
+            collectExpr (collectExpr (collectExpr state condition) thenBranch) elseBranch
+        | Sequence (first, next) -> collectExpr (collectExpr state first) next
+        | Call (id, args) | TypeApp (id, _, args) -> collectArgs (addFunction id state) args
+        | TupleLiteral values | ListLiteral values -> values |> List.fold collectExpr state
+        | TupleAccess (tuple, _) -> collectExpr state tuple
+        | DictLiteral (_, _, entries) ->
+            entries
+            |> List.fold (fun state (key, value) -> collectExpr (collectExpr state key) value) state
+        | RecordLiteral (reference, fieldValues) ->
+            fieldValues
+            |> List.fold (fun state (field, value) -> collectExpr (addField field state) value)
+                (addType reference.TypeId state)
+        | RecordUpdate (record, fieldValues) ->
+            fieldValues
+            |> List.fold (fun state (field, value) -> collectExpr (addField field state) value)
+                (collectExpr state record)
+        | RecordAccess (record, field) -> collectExpr (addField field state) record
+        | Constructor (reference, values) ->
+            values
+            |> List.fold collectExpr
+                (state |> addType reference.TypeId |> addConstructor reference.ConstructorId)
+        | Apply (func, args) | IndirectApply (func, args) ->
+            collectArgs (collectExpr state func) args
+        | FuncRef id -> addFunction id state
+        | Closure (id, captures) -> captures |> List.fold collectExpr (addFunction id state)
+        | InterpolatedString parts ->
+            parts
+            |> List.fold (fun state part ->
+                match part with
+                | StringText _ -> state
+                | StringExpr value -> collectExpr state value) state
+        | UnitLiteral | Int64Literal _ | Int128Literal _ | Int8Literal _ | Int16Literal _
+        | Int32Literal _ | UInt8Literal _ | UInt16Literal _ | UInt32Literal _ | UInt64Literal _
+        | UInt128Literal _ | BigIntLiteral _ | BoolLiteral _ | StringLiteral _ | BlobLiteral _
+        | CharLiteral _ | FloatLiteral _ | RuntimeError _ -> state
+    let empty = (Set.empty, Set.empty, Set.empty, Set.empty, Set.empty)
+    let bindings, functions, types, constructors, fields =
+        topLevels
+        |> List.fold (fun state topLevel ->
+            match topLevel with
+            | FunctionDef functionDef ->
+                let state = addFunction functionDef.Id state
+                let state =
+                    functionDef.Params
+                    |> AST.NonEmptyList.toList
+                    |> List.fold (fun state (id, _) -> addBinding id state) state
+                let state = functionDef.Recursion |> Option.map (addRecursion state) |> Option.defaultValue state
+                collectExpr state functionDef.Body
+            | ValueDef valueDef -> collectExpr (addBinding valueDef.Id state) valueDef.Body
+            | TypeDef (id, _) -> addType id state
+            | Expression expr -> collectExpr state expr) empty
+    let retainKeys keys map = map |> Map.filter (fun key _ -> Set.contains key keys)
+    let bindingNames = retainKeys bindings symbols.BindingNames
+    let functionNames =
+        functions
+        |> Seq.choose (fun id ->
+            symbols.FunctionNames
+            |> Map.tryFind id
+            |> Option.orElseWith (fun () -> AST.tryFunctionCanonicalName id)
+            |> Option.map (fun name -> id, name))
+        |> Map.ofSeq
+    let typeNames = retainKeys types symbols.TypeNames
+    let constructorNames = retainKeys constructors symbols.ConstructorNames
+    let fieldNames = retainKeys fields symbols.FieldNames
+    { symbols with
+        BindingNames = bindingNames
+        ValueIds = symbols.ValueIds |> Map.filter (fun _ id -> Set.contains id bindings)
+        FunctionNames = functionNames
+        FunctionIds = functionNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
+        TypeNames = typeNames
+        TypeIds = typeNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
+        ConstructorNames = constructorNames
+        ConstructorTags = retainKeys constructors symbols.ConstructorTags
+        ConstructorIds =
+            constructorNames
+            |> Map.toSeq
+            |> Seq.map (fun (id, key) -> key, id)
+            |> Map.ofSeq
+        FieldNames = fieldNames
+        FieldIndices = retainKeys fields symbols.FieldIndices
+        FieldIds =
+            fieldNames
+            |> Map.toSeq
+            |> Seq.map (fun (id, key) -> key, id)
+            |> Map.ofSeq }
 
 /// Import checked declarations from another independently allocated symbol
 /// namespace. Every source binding receives a fresh target identity, while
