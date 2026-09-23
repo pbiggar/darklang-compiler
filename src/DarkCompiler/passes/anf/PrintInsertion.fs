@@ -113,28 +113,18 @@ let rec wrapReturnWithPrint
 
 /// Insert Print at the end of the main expression
 let insertPrint (functions: ANF.Function list) (mainExpr: ANF.AExpr) (programType: AST.SemanticType) : ANF.Program =
-    let idsByName = functions |> List.map (fun fn -> fn.Name, fn.Id) |> Map.ofList
-    let resolveFunction name =
-        Map.tryFind name idsByName
-        |> Option.defaultWith (fun () -> Crash.crash $"Print helper '{name}' is absent from ANF functions")
+    let resolveFunction = AST.functionIdForName
     let varGen = VarGen 2000  // Start high to avoid conflicts
     let (exprWithPrint, _) = wrapReturnWithPrint resolveFunction programType varGen mainExpr
     ANF.Program (functions, exprWithPrint)
 
 /// Insert Print into a named entry function
 let insertPrintInEntry
-    (functionNames: Map<AST.FunctionId, string>)
     (entryName: string)
     (programType: AST.SemanticType)
     (functions: ANF.Function list)
     : Result<ANF.Function list, string> =
-    let idsByName =
-        functionNames
-        |> Map.fold (fun names id name -> Map.add name id names) Map.empty
-        |> fun names -> functions |> List.fold (fun names fn -> Map.add fn.Name fn.Id names) names
-    let resolveFunction name =
-        Map.tryFind name idsByName
-        |> Option.defaultWith (fun () -> Crash.crash $"Print helper '{name}' is absent from ANF functions")
+    let resolveFunction = AST.functionIdForName
     let varGen = VarGen 2000  // Start high to avoid conflicts
     let rec update found remaining =
         match remaining with

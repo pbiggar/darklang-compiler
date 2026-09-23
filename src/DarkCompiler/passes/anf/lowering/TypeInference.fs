@@ -484,6 +484,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
             Map.tryFind funcName funcReg
             |> Option.map fst
             |> Option.orElseWith (fun () -> Map.tryFind funcName functionNames)
+            |> Option.orElseWith (fun () -> AST.tryFunctionCanonicalName funcName)
         if displayName = Some "Builtin.unwrap" then
             match argList with
             | [argExpr] ->
@@ -544,15 +545,10 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                 | None ->
                     // Check if it's a monomorphized intrinsic (e.g., __raw_get_i64)
                     // These are raw memory operations that work with 8-byte values
-                    let functionId = funcName
-                    let missingFunctionIdentity = Option.isNone displayName
                     let funcName =
                         displayName
-                        |> Option.defaultValue
-                            $"__missing_function_identity_{AST.functionIdValue funcName}"
-                    if missingFunctionIdentity then
-                        Error $"Function identity {AST.functionIdValue functionId} is absent from lowering registries"
-                    elif funcName.StartsWith("Builtin.pmEvaluateValue_") then
+                        |> Option.defaultValue (AST.functionIdValue funcName)
+                    if funcName.StartsWith("Builtin.pmEvaluateValue_") then
                         let suffix = funcName.Substring("Builtin.pmEvaluateValue_".Length)
                         tryParseMangledTypeWithSumTypeNames sumTypeNames suffix
                         |> Result.map (fun resultType ->

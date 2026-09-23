@@ -883,26 +883,23 @@ let private freshHelperName (usedNames: Set<string>) (funcName: string) : string
         if Set.contains candidate usedNames then choose (suffix + 1) else candidate
     choose 0
 
-let private plannedHelpers
+let internal planTailRecursionModuloHelpers
     (functionNames: FunctionNameRegistry)
     (eligibleFunctions: Set<AST.FunctionId>) =
     let initialNames = functionNames |> Map.values |> Set.ofSeq
     let helperNames, _ =
-        functionNames
-        |> Map.toList
-        |> List.filter (fun (functionId, _) ->
-            Set.contains functionId eligibleFunctions)
+        eligibleFunctions
+        |> Set.toList
+        |> List.choose (fun functionId ->
+            Map.tryFind functionId functionNames
+            |> Option.map (fun functionName -> functionId, functionName))
         |> List.sortBy snd
         |> List.mapFold (fun usedNames (functionId, functionName) ->
             let helperName = freshHelperName usedNames functionName
             ((functionId, helperName), Set.add helperName usedNames)) initialNames
-    let helperIds =
-        AST.allocateFunctionIds
-            (functionNames |> Map.keys)
-            (helperNames |> List.map snd)
     helperNames
     |> List.map (fun (functionId, helperName) ->
-        functionId, (helperName, Map.find helperName helperIds))
+        functionId, (helperName, AST.functionIdForName helperName))
     |> Map.ofList
 
 let rec private transformConstructorWrapperBody
@@ -938,32 +935,26 @@ let rec private transformConstructorWrapperBody
 /// constructors with destination passing. Constructor fields other than the
 /// recursive path must already be atoms, so no effects move across the call.
 let internal transformTailRecursionModuloFixedConstructors
-    (functionNames: FunctionNameRegistry)
-    (eligibleFunctions: Set<AST.FunctionId>)
+    (helpers: Map<AST.FunctionId, string * AST.FunctionId>)
     (program: Program)
     : Program =
     let (Program (functions, mainExpr)) = program
-    let helpers = plannedHelpers functionNames eligibleFunctions
-    let initialNames =
-        Set.union
-            (functions |> List.map (fun func -> func.Name) |> Set.ofList)
-            (functionNames |> Map.values |> Set.ofSeq)
     let initialVarGen = freshVarGenForProgram program
-    let functionsReversed, _, _ =
+    let functionsReversed, _ =
         functions
         |> List.fold
-            (fun (rewritten, usedNames, varGen) func ->
+            (fun (rewritten, varGen) func ->
                 let contexts = constructorContextCount func.Id func.ReturnType func.Body
                 let recursiveCalls = selfCallCount func.Id func.Body
                 let managedReturn =
                     match func.ReturnType with
                     | AST.TRecord _ | AST.TSum _ -> true
                     | _ -> false
-                if not (Set.contains func.Id eligibleFunctions)
+                if not (Map.containsKey func.Id helpers)
                    || not managedReturn
                    || contexts = 0
                    || contexts <> recursiveCalls then
-                    (func :: rewritten, Set.add func.Name usedNames, varGen)
+                    (func :: rewritten, varGen)
                 else
                     let helperName, helperId = Map.find func.Id helpers
                     let destinationId, afterDestination = freshVar varGen
@@ -994,37 +985,30 @@ let internal transformTailRecursionModuloFixedConstructors
                             Body = helperBody
                     }
                     let wrapper = { func with Body = wrapperBody }
-                    (helper :: wrapper :: rewritten,
-                     Set.add helperName usedNames,
-                     afterWrapper))
-            ([], initialNames, initialVarGen)
+                    (helper :: wrapper :: rewritten, afterWrapper))
+            ([], initialVarGen)
     Program (List.rev functionsReversed, mainExpr)
 
 let internal transformTailRecursionModuloAddition
     (functionNames: FunctionNameRegistry)
-    (eligibleFunctions: Set<AST.FunctionId>)
+    (helpers: Map<AST.FunctionId, string * AST.FunctionId>)
     (program: Program)
     : Program =
     let (Program (functions, mainExpr)) = program
-    let helpers = plannedHelpers functionNames eligibleFunctions
-    let initialNames =
-        Set.union
-            (functions |> List.map (fun func -> func.Name) |> Set.ofList)
-            (functionNames |> Map.values |> Set.ofSeq)
     let initialVarGen = freshVarGenForProgram program
-    let (functionsReversed, _, _) =
+    let (functionsReversed, _) =
         functions
         |> List.fold
-            (fun (rewritten, usedNames, varGen) func ->
+            (fun (rewritten, varGen) func ->
                 let pairs = siblingAdditionCount functionNames func.Id func.ReturnType func.Body
                 let recursiveCalls = selfCallCount func.Id func.Body
                 let eligible =
-                    Set.contains func.Id eligibleFunctions
+                    Map.containsKey func.Id helpers
                     && (nativeIntegerTypeName func.ReturnType |> Option.isSome)
                     && pairs > 0
                     && recursiveCalls = pairs * 2
                 if not eligible then
-                    (func :: rewritten, Set.add func.Name usedNames, varGen)
+                    (func :: rewritten, varGen)
                 else
                     let helperName, helperId = Map.find func.Id helpers
                     let (accumulatorId, varGenAfterAccumulator) = freshVar varGen
@@ -1060,8 +1044,8 @@ let internal transformTailRecursionModuloAddition
                                     Return (Var wrapperResultId)
                                 )
                     }
-                    (helper :: wrapper :: rewritten, Set.add helperName usedNames, varGenAfterWrapper))
-            ([], initialNames, initialVarGen)
+                    (helper :: wrapper :: rewritten, varGenAfterWrapper))
+            ([], initialVarGen)
     Program (List.rev functionsReversed, mainExpr)
 
 /// Turn direct recursive native-integer multiplication with a pure
@@ -1069,20 +1053,15 @@ let internal transformTailRecursionModuloAddition
 /// multiplication is associative at every supported width.
 let internal transformTailRecursionModuloMultiplication
     (functionNames: FunctionNameRegistry)
-    (eligibleFunctions: Set<AST.FunctionId>)
+    (helpers: Map<AST.FunctionId, string * AST.FunctionId>)
     (program: Program)
     : Program =
     let (Program (functions, mainExpr)) = program
-    let helpers = plannedHelpers functionNames eligibleFunctions
-    let initialNames =
-        Set.union
-            (functions |> List.map (fun func -> func.Name) |> Set.ofList)
-            (functionNames |> Map.values |> Set.ofSeq)
     let initialVarGen = freshVarGenForProgram program
-    let (functionsReversed, _, _) =
+    let (functionsReversed, _) =
         functions
         |> List.fold
-            (fun (rewritten, usedNames, varGen) func ->
+            (fun (rewritten, varGen) func ->
                 let integerParams =
                     func.TypedParams
                     |> List.choose (fun param -> if param.Type = func.ReturnType then Some param.Id else None)
@@ -1091,12 +1070,12 @@ let internal transformTailRecursionModuloMultiplication
                     wrappedMultiplicationCount functionNames func.Id func.ReturnType integerParams func.Body
                 let recursiveCalls = selfCallCount func.Id func.Body
                 let eligible =
-                    Set.contains func.Id eligibleFunctions
+                    Map.containsKey func.Id helpers
                     && (nativeIntegerTypeName func.ReturnType |> Option.isSome)
                     && wrappedCalls > 0
                     && recursiveCalls = wrappedCalls
                 if not eligible then
-                    (func :: rewritten, Set.add func.Name usedNames, varGen)
+                    (func :: rewritten, varGen)
                 else
                     let helperName, helperId = Map.find func.Id helpers
                     let (accumulatorId, varGenAfterAccumulator) = freshVar varGen
@@ -1120,26 +1099,21 @@ let internal transformTailRecursionModuloMultiplication
                                     Return (Var wrapperResultId)
                                 )
                     }
-                    (helper :: wrapper :: rewritten, Set.add helperName usedNames, varGenAfterWrapper))
-            ([], initialNames, initialVarGen)
+                    (helper :: wrapper :: rewritten, varGenAfterWrapper))
+            ([], initialVarGen)
     Program (List.rev functionsReversed, mainExpr)
 
 let internal transformTailRecursionModuloSubtraction
     (functionNames: FunctionNameRegistry)
-    (eligibleFunctions: Set<AST.FunctionId>)
+    (helpers: Map<AST.FunctionId, string * AST.FunctionId>)
     (program: Program)
     : Program =
     let (Program (functions, mainExpr)) = program
-    let helpers = plannedHelpers functionNames eligibleFunctions
-    let initialNames =
-        Set.union
-            (functions |> List.map (fun func -> func.Name) |> Set.ofList)
-            (functionNames |> Map.values |> Set.ofSeq)
     let initialVarGen = freshVarGenForProgram program
-    let functionsReversed, _, _ =
+    let functionsReversed, _ =
         functions
         |> List.fold
-            (fun (rewritten, usedNames, varGen) func ->
+            (fun (rewritten, varGen) func ->
                 let integerParams =
                     func.TypedParams
                     |> List.choose (fun param -> if param.Type = func.ReturnType then Some param.Id else None)
@@ -1148,12 +1122,12 @@ let internal transformTailRecursionModuloSubtraction
                     wrappedSubtractionCount functionNames func.Id func.ReturnType integerParams func.Body
                 let recursiveCalls = selfCallCount func.Id func.Body
                 let eligible =
-                    Set.contains func.Id eligibleFunctions
+                    Map.containsKey func.Id helpers
                     && (nativeIntegerTypeName func.ReturnType |> Option.isSome)
                     && wrappedCalls > 0
                     && recursiveCalls = wrappedCalls
                 if not eligible then
-                    (func :: rewritten, Set.add func.Name usedNames, varGen)
+                    (func :: rewritten, varGen)
                 else
                     let helperName, helperId = Map.find func.Id helpers
                     let accumulatorId, afterAccumulator = freshVar varGen
@@ -1181,8 +1155,8 @@ let internal transformTailRecursionModuloSubtraction
                                     Return (Var wrapperResultId)
                                 )
                     }
-                    (helper :: wrapper :: rewritten, Set.add helperName usedNames, afterWrapper))
-            ([], initialNames, initialVarGen)
+                    (helper :: wrapper :: rewritten, afterWrapper))
+            ([], initialVarGen)
     Program (List.rev functionsReversed, mainExpr)
 
 /// Turn recursive `List.push (self ...) value` construction into a reverse
@@ -1190,16 +1164,11 @@ let internal transformTailRecursionModuloSubtraction
 /// kernel. Every recursive call must have the same constructor boundary.
 let internal transformTailRecursionModuloListConstructors
     (functionNames: FunctionNameRegistry)
-    (eligibleFunctions: Set<AST.FunctionId>)
+    (helpers: Map<AST.FunctionId, string * AST.FunctionId>)
     (externalFunctions: Map<string, Function>)
     (program: Program)
     : Program =
     let (Program (functions, mainExpr)) = program
-    let helpers = plannedHelpers functionNames eligibleFunctions
-    let initialNames =
-        Set.union
-            (functions |> List.map (fun func -> func.Name) |> Set.ofList)
-            (functionNames |> Map.values |> Set.ofSeq)
     let initialVarGen = freshVarGenForProgram program
     let externalNamesById =
         externalFunctions
@@ -1211,10 +1180,10 @@ let internal transformTailRecursionModuloListConstructors
         |> Map.filter (fun _ name -> name.StartsWith("Darklang.Stdlib.List.push_"))
         |> Map.keys
         |> Set.ofSeq
-    let (functionsReversed, _, _) =
+    let (functionsReversed, _) =
         functions
         |> List.fold
-            (fun (rewritten, usedNames, varGen) func ->
+            (fun (rewritten, varGen) func ->
                 let wrappedCalls = wrappedListPrependCount listPushIds func.Id func.Body
                 let prependCalls = listPrependCallCount listPushIds func.Body
                 let recursiveCalls = selfCallCount func.Id func.Body
@@ -1240,14 +1209,14 @@ let internal transformTailRecursionModuloListConstructors
                 let eligible =
                     match func.ReturnType, finishTarget with
                     | AST.TList _, Some target ->
-                        Set.contains func.Id eligibleFunctions
+                        Map.containsKey func.Id helpers
                         && wrappedCalls > 0
                         && recursiveCalls = wrappedCalls
                         && prependCalls = wrappedCalls
                         && Map.containsKey target externalFunctions
                     | _ -> false
                 if not eligible then
-                    (func :: rewritten, Set.add func.Name usedNames, varGen)
+                    (func :: rewritten, varGen)
                 else
                     let targetName = finishTarget |> Option.defaultWith (fun () -> Crash.crash "Eligible list TRMC function lost its finish target")
                     let target =
@@ -1314,6 +1283,6 @@ let internal transformTailRecursionModuloListConstructors
                                     )
                                 )
                     }
-                    (helper :: wrapper :: rewritten, Set.add helperName usedNames, varGenAfterWrapper))
-            ([], initialNames, initialVarGen)
+                    (helper :: wrapper :: rewritten, varGenAfterWrapper))
+            ([], initialVarGen)
     Program (List.rev functionsReversed, mainExpr)

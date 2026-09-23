@@ -89,7 +89,7 @@ let internal planLambdaComparison
                         let (id, symbols) =
                             CheckedAST.allocateBinding $"__comparison_applied_{index}" current.Symbols
                         (id, { current with Symbols = symbols })) state
-                let captureTypes = targetParams |> List.take providedCount |> List.map snd
+                let captureTypes = targetParams |> List.take providedCount
                 let replacementArgs =
                     (captureNames |> List.map CheckedAST.Local) @ remainingArgs
                     |> exprArgsFromList

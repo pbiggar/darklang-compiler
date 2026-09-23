@@ -79,12 +79,16 @@ let optimizeProgramWithOptionsAndExternalFunctions
     let optimizedProgram =
         Program (functions', devirtualizeCaptureFreeClosures mainOptimized.Body)
     if options.EnableTailRecursionModuloOperation then
+        let helpers =
+            planTailRecursionModuloHelpers
+                context.FunctionNames
+                eligibleTailRecursionNames
         optimizedProgram
-        |> transformTailRecursionModuloAddition context.FunctionNames eligibleTailRecursionNames
-        |> transformTailRecursionModuloSubtraction context.FunctionNames eligibleTailRecursionNames
-        |> transformTailRecursionModuloMultiplication context.FunctionNames eligibleTailRecursionNames
-        |> transformTailRecursionModuloFixedConstructors context.FunctionNames eligibleTailRecursionNames
-        |> transformTailRecursionModuloListConstructors context.FunctionNames eligibleTailRecursionNames externalFunctions
+        |> transformTailRecursionModuloAddition context.FunctionNames helpers
+        |> transformTailRecursionModuloSubtraction context.FunctionNames helpers
+        |> transformTailRecursionModuloMultiplication context.FunctionNames helpers
+        |> transformTailRecursionModuloFixedConstructors helpers
+        |> transformTailRecursionModuloListConstructors context.FunctionNames helpers externalFunctions
     else
         optimizedProgram
 

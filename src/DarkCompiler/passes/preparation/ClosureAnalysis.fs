@@ -16,7 +16,7 @@ type LiftState = {
     ComparisonFuncs: Map<AST.FunctionId * AST.SemanticType list, string>
     ComparableFunctionParams: Set<AST.SemanticType list>
     TypeEnv: Map<AST.BindingId, AST.SemanticType>
-    FuncParams: Map<AST.FunctionId, (AST.BindingId * AST.SemanticType) list>
+    FuncParams: Map<AST.FunctionId, AST.SemanticType list>
     FuncReturnTypes: Map<AST.FunctionId, AST.SemanticType>
     GenericFuncDefs: Map<AST.FunctionId, string list * AST.SemanticType>
     TypeReg: TypeRegistry
@@ -235,7 +235,7 @@ let rec reconcileBranchTypes (left: AST.SemanticType) (right: AST.SemanticType) 
 let rec simpleInferType
     (expr: CheckedAST.Expr)
     (typeEnv: Map<AST.BindingId, AST.SemanticType>)
-    (funcParams: Map<AST.FunctionId, (AST.BindingId * AST.SemanticType) list>)
+    (funcParams: Map<AST.FunctionId, AST.SemanticType list>)
     (funcReturnTypes: Map<AST.FunctionId, AST.SemanticType>)
     (genericFuncDefs: Map<AST.FunctionId, string list * AST.SemanticType>)
     (typeReg: TypeRegistry)
@@ -340,7 +340,7 @@ let rec simpleInferType
     | CheckedAST.FuncRef name ->
         match Map.tryFind name funcParams, Map.tryFind name funcReturnTypes with
         | Some parameters, Some returnType ->
-            Some (AST.TFunction (parameters |> List.map snd, returnType))
+            Some (AST.TFunction (parameters, returnType))
         | _ -> None
     | CheckedAST.Let (pattern, value, body) ->
         let valueType = simpleInferType value typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup typeNames

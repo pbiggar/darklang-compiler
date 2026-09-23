@@ -101,10 +101,6 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             (ValueRendering.rewriteProgram
                                 userEnv.IndexedTypeReg
                                 userEnv.IndexedSumTypeReg
-                                (plan.BaseContext.Registries.FuncReg
-                                 |> Map.toList
-                                 |> List.map (fun (_, (name, typ)) -> name, typ)
-                                 |> Map.ofList)
                                 plannedProgramType
                                 plannedUserAst,
                              AST.TString)
@@ -335,7 +331,6 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     println "  [anf.print-result] Print Insertion..."
                                 let printStart = sw.Elapsed.TotalMilliseconds
                                 PrintInsertion.insertPrintInEntry
-                                    userOnly.FunctionNames
                                     programEntryName
                                     boundaryProgramType
                                     functions

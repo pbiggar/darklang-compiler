@@ -499,7 +499,6 @@ and private renderBody
 let rewriteProgram
     (recordMetadata: CheckingTypes.IndexedTypeRegistry)
     (sumMetadata: CheckingTypes.IndexedSumTypeRegistry)
-    (baseFunctions: Map<string, SemanticType>)
     (programType: SemanticType)
     (Program (symbols, topLevels))
     : Program =
@@ -511,12 +510,6 @@ let rewriteProgram
     let records = lazy recordMetadata
     let sums = lazy sumMetadata
 
-    let namedFunctions =
-        lazy
-            topLevels
-            |> List.choose (function FunctionDef fn -> Some fn.Name | _ -> None)
-            |> Set.ofList
-            |> Set.union (baseFunctions |> Map.keys |> Set.ofSeq)
     let env = { Records = records; Sums = sums }
     let (renderName, state) =
         match programType with
