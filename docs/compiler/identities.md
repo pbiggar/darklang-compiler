@@ -41,23 +41,26 @@ constructor identity.
 
 The semantic IDs do not all have the same allocation model.
 
-`BindingId`, `ConstructorId`, and `FieldId` are allocated inside a checked
-program's symbol namespace. `CheckedAST.importTopLevels` remaps them when
-combining independently built checked programs. `ConstructorId` additionally
-carries the runtime case tag, and `FieldId` carries the runtime field index;
-their separately allocated identity component prevents equal layout numbers
-from making declarations equal. The recursion IDs are deterministic structural
-IDs assigned to one parsed program and travel with that program's recursion
-evidence; imported recursion metadata remaps its associated `BindingId`.
+Lexical `BindingId`s are local to one checked body and retain their diagnostic
+name directly. Top-level value bindings use their canonical declaration name.
+This means independently checked bodies can be composed without allocating a
+global binding namespace or recursively rewriting either body. The recursion
+IDs remain deterministic structural IDs assigned to one parsed program and
+travel with that body's recursion evidence.
 
-`FunctionId` and `TypeId` have two private forms: an ordinal form used by
-explicit construction and a canonical-name form used for source programs.
-The canonical-name form is intentional. Functions and types from independently
-compiled stdlib, preamble, generated, and user units need to acquire the same
-identity without sharing an allocator. Keeping the complete canonical name
-also avoids the collisions that occurred when these IDs were derived from a
-31-bit name hash. Although the representation is name-backed, downstream code
-handles a `FunctionId` or `TypeId`, not an interchangeable raw string.
+`FunctionId` and `TypeId` each have one private, canonical-name-backed form.
+`ConstructorId` and `FieldId` combine their canonical owner and member name
+with the already-validated runtime tag or field index. Independently compiled
+stdlib, preamble, generated, and user units therefore agree without a shared
+allocator. Lowering reads layout directly from the ID instead of consulting a
+global tag/index map. Although these representations are name-backed,
+downstream code handles distinct ID types, not interchangeable raw strings.
+
+Reusable checked units pair their syntax with a small declaration catalog.
+Composition merges those catalogs structurally and reuses the original syntax;
+it never performs an AST import/conversion pass. Generic artifacts additionally
+store their direct dependency summary, recomputing it only when specialization
+creates a new body.
 
 Names remain metadata beside these IDs. For example, every ANF/MIR/LIR
 function has both `Id` and `Name`: `Id` is the key for calls and analyses;

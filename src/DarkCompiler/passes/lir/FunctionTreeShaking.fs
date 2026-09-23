@@ -60,7 +60,7 @@ let getReachableStdlibNames
     : Set<AST.FunctionId> =
     let (ANF.Program (userFuncs, userMainExpr)) = userProgram
     let startFunc : ANF.Function =
-        { Id = AST.functionId System.Int32.MaxValue
+        { Id = AST.functionIdForName "__dark_tree_shaking_start"
           Name = "_start"
           TypedParams = []
           ReturnType = AST.TUnit

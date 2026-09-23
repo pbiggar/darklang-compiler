@@ -135,12 +135,13 @@ type TopLevel =
 
 type SemanticMetadata = {
     TypeNames: Map<AST.TypeId, string>
-    ConstructorTags: Map<AST.ConstructorId, int>
-    FieldIndices: Map<AST.FieldId, int>
 }
 
-type Symbols = private {
-    NamespaceToken: obj
+/// Immutable declaration catalog shared by independently checked units.
+/// Checked bodies own their lexical BindingIds; this catalog contains only
+/// cross-unit declarations and an allocation cursor used while constructing a
+/// new body.
+type GlobalCatalog = private {
     BindingNames: Map<AST.BindingId, string>
     ValueIds: Map<string, AST.BindingId>
     NextBindingOrdinal: int
@@ -149,22 +150,19 @@ type Symbols = private {
     TypeNames: Map<AST.TypeId, string>
     TypeIds: Map<string, AST.TypeId>
     ConstructorNames: Map<AST.ConstructorId, string * string>
-    ConstructorTags: Map<AST.ConstructorId, int>
     ConstructorIds: Map<string * string, AST.ConstructorId>
-    NextConstructorOrdinal: int
     FieldNames: Map<AST.FieldId, string * string>
-    FieldIndices: Map<AST.FieldId, int>
     FieldIds: Map<string * string, AST.FieldId>
-    NextFieldOrdinal: int
 }
+
+type Symbols = GlobalCatalog
 
 type Program = Program of Symbols * TopLevel list
 
 let emptySymbols () =
     let startId = AST.functionIdForName "_start"
     let programEntryId = AST.functionIdForName "__dark_compiler_program_entry"
-    { NamespaceToken = System.Object()
-      BindingNames = Map.empty
+    { BindingNames = Map.empty
       ValueIds = Map.empty
       NextBindingOrdinal = -1
       FunctionNames =
@@ -174,19 +172,15 @@ let emptySymbols () =
       TypeNames = Map.empty
       TypeIds = Map.empty
       ConstructorNames = Map.empty
-      ConstructorTags = Map.empty
       ConstructorIds = Map.empty
-      NextConstructorOrdinal = 0
       FieldNames = Map.empty
-      FieldIndices = Map.empty
-      FieldIds = Map.empty
-      NextFieldOrdinal = 0 }
+      FieldIds = Map.empty }
 
 let private registerBinding id name symbols =
     { symbols with BindingNames = Map.add id name symbols.BindingNames }
 
 let allocateBinding name symbols =
-    let id = AST.bindingId symbols.NextBindingOrdinal
+    let id = AST.namedBindingId symbols.NextBindingOrdinal name
     let symbols' =
         { symbols with
             BindingNames = Map.add id name symbols.BindingNames
@@ -197,10 +191,10 @@ let internValue name symbols =
     match Map.tryFind name symbols.ValueIds with
     | Some id -> (id, symbols)
     | None ->
-        let (id, symbols) = allocateBinding name symbols
+        let id = AST.topLevelValueId name
         (id, { symbols with ValueIds = Map.add name id symbols.ValueIds })
 
-let bindingName id symbols : string option = Map.tryFind id symbols.BindingNames
+let bindingName id (_symbols: Symbols) : string option = AST.bindingDisplayName id
 let tryFindValueId name symbols = Map.tryFind name symbols.ValueIds
 
 let private intern
@@ -242,13 +236,14 @@ let internConstructor typeName name tag symbols =
     match Map.tryFind (typeName, name) symbols.ConstructorIds with
     | Some id -> (id, symbols)
     | None ->
-        let id = AST.constructorId symbols.NextConstructorOrdinal
+        let owner =
+            Map.tryFind typeName symbols.TypeIds
+            |> Option.defaultWith (fun () -> Crash.crash $"Constructor owner '{typeName}' is absent")
+        let id = AST.constructorId owner name tag
         let symbols =
             { symbols with
                 ConstructorIds = Map.add (typeName, name) id symbols.ConstructorIds
-                ConstructorNames = Map.add id (typeName, name) symbols.ConstructorNames
-                ConstructorTags = Map.add id tag symbols.ConstructorTags
-                NextConstructorOrdinal = symbols.NextConstructorOrdinal + 1 }
+                ConstructorNames = Map.add id (typeName, name) symbols.ConstructorNames }
         (id, symbols)
 
 let internField typeName name index symbols =
@@ -256,43 +251,41 @@ let internField typeName name index symbols =
     match Map.tryFind (typeName, name) symbols.FieldIds with
     | Some id -> (id, symbols)
     | None ->
-        let id = AST.fieldId symbols.NextFieldOrdinal
+        let owner =
+            Map.tryFind typeName symbols.TypeIds
+            |> Option.defaultWith (fun () -> Crash.crash $"Field owner '{typeName}' is absent")
+        let id = AST.fieldId owner name index
         let symbols =
             { symbols with
                 FieldIds = Map.add (typeName, name) id symbols.FieldIds
-                FieldNames = Map.add id (typeName, name) symbols.FieldNames
-                FieldIndices = Map.add id index symbols.FieldIndices
-                NextFieldOrdinal = symbols.NextFieldOrdinal + 1 }
+                FieldNames = Map.add id (typeName, name) symbols.FieldNames }
         (id, symbols)
 
-let functionName id symbols = Map.tryFind id symbols.FunctionNames
+let functionName id symbols =
+    Map.tryFind id symbols.FunctionNames
+    |> Option.orElse (AST.tryFunctionCanonicalName id)
 
 let functionNames symbols = symbols.FunctionNames
 let tryFindFunctionId name symbols = Map.tryFind name symbols.FunctionIds
-let typeName id symbols = Map.tryFind id symbols.TypeNames
+let typeName id symbols =
+    Map.tryFind id symbols.TypeNames
+    |> Option.orElse (Some (AST.typeIdValue id))
 let typeNames symbols = symbols.TypeNames
 let tryFindTypeId name symbols = Map.tryFind name symbols.TypeIds
 let constructorInfo id symbols = Map.tryFind id symbols.ConstructorNames
-let constructorTag id symbols = Map.tryFind id symbols.ConstructorTags
-let constructorTags symbols = symbols.ConstructorTags
+let constructorTag id (_symbols: Symbols) = Some (AST.constructorRuntimeTag id)
 
 let tryFindConstructorId typeName name symbols =
     Map.tryFind (typeName, name) symbols.ConstructorIds
 let fieldInfo id symbols = Map.tryFind id symbols.FieldNames
-let fieldIndex id symbols = Map.tryFind id symbols.FieldIndices
-let fieldIndices symbols = symbols.FieldIndices
+let fieldIndex id (_symbols: Symbols) = Some (AST.fieldRuntimeIndex id)
 
 let semanticMetadata symbols : SemanticMetadata = {
     TypeNames = symbols.TypeNames
-    ConstructorTags = symbols.ConstructorTags
-    FieldIndices = symbols.FieldIndices
 }
 
 let tryFindFieldId typeName name symbols =
     Map.tryFind (typeName, name) symbols.FieldIds
-
-let sameSymbolNamespace first second =
-    obj.ReferenceEquals(first.NamespaceToken, second.NamespaceToken)
 
 let programSymbols (Program (symbols, _)) : Symbols = symbols
 
@@ -305,7 +298,7 @@ let withProgramTopLevels topLevels (Program (symbols, _)) : Program =
 /// declarations.  Prepared artifacts must not capture the complete symbol
 /// namespace from which they were produced: doing so makes importing one
 /// small function proportional to the size of the stdlib.
-let symbolsForTopLevels (symbols: Symbols) (topLevels: TopLevel list) : Symbols =
+let private legacySymbolsForTopLevels (symbols: Symbols) (topLevels: TopLevel list) : Symbols =
     let addBinding id (bindings, functions, types, constructors, fields) =
         (Set.add id bindings, functions, types, constructors, fields)
     let addFunction id (bindings, functions, types, constructors, fields) =
@@ -420,7 +413,6 @@ let symbolsForTopLevels (symbols: Symbols) (topLevels: TopLevel list) : Symbols 
             | TypeDef (id, _) -> addType id state
             | Expression expr -> collectExpr state expr) empty
     let retainKeys keys map = map |> Map.filter (fun key _ -> Set.contains key keys)
-    let bindingNames = retainKeys bindings symbols.BindingNames
     let functionNames =
         functions
         |> Seq.choose (fun id ->
@@ -433,31 +425,36 @@ let symbolsForTopLevels (symbols: Symbols) (topLevels: TopLevel list) : Symbols 
     let constructorNames = retainKeys constructors symbols.ConstructorNames
     let fieldNames = retainKeys fields symbols.FieldNames
     { symbols with
-        BindingNames = bindingNames
+        BindingNames = retainKeys bindings symbols.BindingNames
         ValueIds = symbols.ValueIds |> Map.filter (fun _ id -> Set.contains id bindings)
         FunctionNames = functionNames
         FunctionIds = functionNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
         TypeNames = typeNames
         TypeIds = typeNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
         ConstructorNames = constructorNames
-        ConstructorTags = retainKeys constructors symbols.ConstructorTags
         ConstructorIds =
             constructorNames
             |> Map.toSeq
             |> Seq.map (fun (id, key) -> key, id)
             |> Map.ofSeq
         FieldNames = fieldNames
-        FieldIndices = retainKeys fields symbols.FieldIndices
         FieldIds =
             fieldNames
             |> Map.toSeq
             |> Seq.map (fun (id, key) -> key, id)
             |> Map.ofSeq }
 
+/// A checked unit is self-describing: semantic IDs carry canonical identity
+/// and lexical IDs carry body-local presentation metadata. Reusable artifacts
+/// therefore retain only their fresh-binding cursor, not a projection of the
+/// global declaration catalog and not a walk-derived symbol slice.
+let catalogForCheckedUnit (symbols: Symbols) : Symbols =
+    { emptySymbols () with NextBindingOrdinal = symbols.NextBindingOrdinal }
+
 /// Import checked declarations from another independently allocated symbol
 /// namespace. Every source binding receives a fresh target identity, while
 /// all references and recursive metadata are rewritten consistently.
-let importTopLevels
+let private legacyImportTopLevels
     (sourceSymbols: Symbols)
     (targetSymbols: Symbols)
     (topLevels: TopLevel list)
@@ -644,6 +641,31 @@ let importTopLevels
             | Expression expr -> Expression (mapExpr expr)
             | TypeDef (id, typeDef) -> TypeDef (mapTypeId id, typeDef))
     (symbols, mapped)
+
+/// Compose independently checked units structurally. Cross-unit declarations
+/// have canonical identities and lexical BindingIds are body-local, so neither
+/// checked expressions nor recursive evidence require rewriting.
+let composeTopLevels
+    (sourceCatalog: Symbols)
+    (targetCatalog: Symbols)
+    (topLevels: TopLevel list)
+    : Symbols * TopLevel list =
+    let merge source target =
+        Map.fold (fun combined key value -> Map.add key value combined) target source
+    let catalog = {
+        BindingNames = merge sourceCatalog.BindingNames targetCatalog.BindingNames
+        ValueIds = merge sourceCatalog.ValueIds targetCatalog.ValueIds
+        NextBindingOrdinal = min sourceCatalog.NextBindingOrdinal targetCatalog.NextBindingOrdinal
+        FunctionNames = merge sourceCatalog.FunctionNames targetCatalog.FunctionNames
+        FunctionIds = merge sourceCatalog.FunctionIds targetCatalog.FunctionIds
+        TypeNames = merge sourceCatalog.TypeNames targetCatalog.TypeNames
+        TypeIds = merge sourceCatalog.TypeIds targetCatalog.TypeIds
+        ConstructorNames = merge sourceCatalog.ConstructorNames targetCatalog.ConstructorNames
+        ConstructorIds = merge sourceCatalog.ConstructorIds targetCatalog.ConstructorIds
+        FieldNames = merge sourceCatalog.FieldNames targetCatalog.FieldNames
+        FieldIds = merge sourceCatalog.FieldIds targetCatalog.FieldIds
+    }
+    (catalog, topLevels)
 
 let resolveUnboundValueLocals
     (symbols: Symbols)

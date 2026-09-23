@@ -900,6 +900,7 @@ let buildSuiteContexts
                                                 ANFFunctions = []
                                                 TypeMap = specializedStdlib.StdlibTypeMap
                                                 SymbolicFunctions = []
+                                                SymbolicCallGraph = Map.empty
                                             } : CompilationContexts.PreambleContext)
                                     | Some analysis ->
                                         PreambleCompilation.buildPreambleContextFromAnalysis

@@ -50,7 +50,7 @@ let private buildPackageCatalogGenericCallers
         |> Map.toList
         |> List.map (fun (name, definition) ->
             name,
-            Monomorphization.collectCalledFunctions definition.Function.Body
+            definition.DirectDependencies
             |> Set.toList
             |> List.choose (fun id -> CheckedAST.functionName id definition.Symbols)
             |> Set.ofList)
@@ -79,8 +79,7 @@ let internal checkedValueArtifacts (program: CheckedAST.Program) : Map<string, C
     let symbols = CheckedAST.programSymbols program
     CheckedAST.programValues program
     |> Map.map (fun _ (typ, body) ->
-        let artifactSymbols =
-            CheckedAST.symbolsForTopLevels symbols [CheckedAST.Expression body]
+        let artifactSymbols = CheckedAST.catalogForCheckedUnit symbols
         { Symbols = artifactSymbols; Type = typ; Body = body })
 
 type PipelineContext = {
@@ -147,6 +146,8 @@ type PreambleContext = {
     TypeMap: ANF.TypeMap
     /// Preamble's symbolic LIR functions after register allocation
     SymbolicFunctions: LIR.Function list
+    /// Direct-call summary computed once with the reusable preamble unit.
+    SymbolicCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>
 }
 
 /// Parsed and typechecked preamble analysis for suite-level specialization

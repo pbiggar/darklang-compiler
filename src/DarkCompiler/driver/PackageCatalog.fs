@@ -35,6 +35,7 @@ type internal UserCompilePlan = {
     Monomorphization: MonomorphizationMode
     ExternalInlineCandidates: Map<AST.FunctionId, ANF_Inlining.FunctionInfo>
     PrebuiltSymbolicFunctions: LIR.Function list
+    PrebuiltCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>
     SkipFunctionNames: Set<string>
     EmitFunctionEvents: bool
     TreeShakeUserFunctions: bool
@@ -392,7 +393,7 @@ let private materializeReachablePackageValueCatalog
             |> Result.map (fun (_, CheckedAST.Program (generatedSymbols, generatedTopLevels), _) ->
                 let (CheckedAST.Program (userSymbols, userTopLevels)) = typedProgram
                 let symbols, importedGenerated =
-                    CheckedAST.importTopLevels generatedSymbols userSymbols generatedTopLevels
+                    CheckedAST.composeTopLevels generatedSymbols userSymbols generatedTopLevels
                 CheckedAST.Program (symbols, importedGenerated @ userTopLevels)))
 
 let internal materializePackageValueCatalog

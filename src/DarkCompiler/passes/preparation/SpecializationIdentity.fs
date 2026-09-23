@@ -7,7 +7,48 @@ open ANF
 type GenericFunctionArtifact = {
     Symbols: CheckedAST.Symbols
     Function: CheckedAST.FunctionDef
+    DirectDependencies: Set<AST.FunctionId>
 }
+
+/// Summarize direct semantic dependencies once at the checked-unit boundary.
+/// Specialized bodies receive a fresh summary after type substitution.
+let rec directDependencies (expr: CheckedAST.Expr) : Set<AST.FunctionId> =
+    let combine expressions =
+        expressions |> List.fold (fun calls item -> Set.union calls (directDependencies item)) Set.empty
+    let args values = values |> AST.NonEmptyList.toList |> combine
+    match expr with
+    | CheckedAST.FuncRef id -> Set.singleton id
+    | CheckedAST.BoundaryRender (id, value) -> Set.add id (directDependencies value)
+    | CheckedAST.Call (id, values) | CheckedAST.TypeApp (id, _, values) -> Set.add id (args values)
+    | CheckedAST.Closure (id, captures) -> Set.add id (combine captures)
+    | CheckedAST.UnaryOp (_, value) | CheckedAST.TupleAccess (value, _)
+    | CheckedAST.RecordAccess (value, _) -> directDependencies value
+    | CheckedAST.BinOp (_, left, right) | CheckedAST.Sequence (left, right)
+    | CheckedAST.Let (_, left, right) | CheckedAST.RecursiveLet (_, left, right) -> combine [left; right]
+    | CheckedAST.If (condition, thenBranch, elseBranch) -> combine [condition; thenBranch; elseBranch]
+    | CheckedAST.TupleLiteral values | CheckedAST.ListLiteral values -> combine values
+    | CheckedAST.DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> combine
+    | CheckedAST.RecordLiteral (_, fields) -> fields |> List.map snd |> combine
+    | CheckedAST.RecordUpdate (record, fields) -> combine (record :: List.map snd fields)
+    | CheckedAST.Constructor (_, fields) -> combine fields
+    | CheckedAST.Match (scrutinee, cases) ->
+        cases
+        |> List.collect (fun case -> case.Body :: Option.toList case.Guard)
+        |> fun bodies -> combine (scrutinee :: bodies)
+    | CheckedAST.Lambda (_, _, body) -> directDependencies body
+    | CheckedAST.Apply (func, values) | CheckedAST.IndirectApply (func, values) ->
+        combine (func :: AST.NonEmptyList.toList values)
+    | CheckedAST.InterpolatedString parts ->
+        parts
+        |> List.choose (function CheckedAST.StringExpr value -> Some value | CheckedAST.StringText _ -> None)
+        |> combine
+    | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _
+    | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
+    | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _
+    | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BigIntLiteral _
+    | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.BlobLiteral _
+    | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.Local _
+    | CheckedAST.RuntimeError _ -> Set.empty
 
 /// Generic function registry - maps names to definitions together with the
 /// symbol namespace in which their local identities were allocated.
@@ -35,9 +76,12 @@ let extractGenericFuncDefs (program: CheckedAST.Program) : GenericFuncDefs =
     topLevels
     |> List.choose (function
         | CheckedAST.FunctionDef f when not (List.isEmpty f.TypeParams) ->
-            let artifactSymbols =
-                CheckedAST.symbolsForTopLevels symbols [CheckedAST.FunctionDef f]
-            Some (f.Name, { Symbols = artifactSymbols; Function = f })
+            let artifactSymbols = CheckedAST.catalogForCheckedUnit symbols
+            Some (f.Name, {
+                Symbols = artifactSymbols
+                Function = f
+                DirectDependencies = directDependencies f.Body
+            })
         | _ -> None)
     |> Map.ofList
 
@@ -53,7 +97,7 @@ let importSpecializedFunctions
         // Import each artifact through its names so the destination owns one
         // collision-free identity namespace.
         let symbols, imported =
-            CheckedAST.importTopLevels
+            CheckedAST.composeTopLevels
                 artifact.Symbols
                 symbols
                 [CheckedAST.FunctionDef artifact.Function]

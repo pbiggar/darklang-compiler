@@ -35,6 +35,7 @@ let buildPreambleContext
             ANFFunctions = []
             TypeMap = stdlib.StdlibTypeMap
             SymbolicFunctions = []
+            SymbolicCallGraph = Map.empty
         }
         Ok (stdlib, emptyContext)
     else
@@ -154,6 +155,7 @@ let buildPreambleContext
                                 ANFFunctions = tcoFunctions
                                 TypeMap = mergedTypeMap
                                 SymbolicFunctions = preambleSymbolicFuncs
+                                SymbolicCallGraph = DeadCodeElimination.buildCallGraph preambleSymbolicFuncs
                             }
                             Ok (stdlib, context)
 
@@ -265,4 +267,5 @@ let buildPreambleContextFromAnalysis
                     ANFFunctions = tcoFunctions
                     TypeMap = mergedTypeMap
                     SymbolicFunctions = preambleSymbolicFuncs
+                    SymbolicCallGraph = DeadCodeElimination.buildCallGraph preambleSymbolicFuncs
                 }))

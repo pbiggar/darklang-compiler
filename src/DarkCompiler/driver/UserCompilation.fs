@@ -490,9 +490,14 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     let userCallGraph =
                                         if plan.Options.DisableFunctionTreeShaking then Map.empty
                                         else
-                                            DeadCodeElimination.buildCallGraphWithNames
-                                                userRegistries.FunctionNames
-                                                allSymbolicUserFuncs
+                                            let localCallGraph =
+                                                DeadCodeElimination.buildCallGraphWithNames
+                                                    userRegistries.FunctionNames
+                                                    allocatedUserFuncs
+                                            Map.fold
+                                                (fun graph id calls -> Map.add id calls graph)
+                                                plan.PrebuiltCallGraph
+                                                localCallGraph
                                     let userCallGraphElapsed =
                                         sw.Elapsed.TotalMilliseconds - userCallGraphStart
                                     recordPassTiming
@@ -586,83 +591,6 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                         finalUserFuncs
                                                         plan.Stdlib.AllocatedFunctions
                                             filtered
-                                            |> fun initiallyReachable ->
-                                                let stdlibByName =
-                                                    plan.Stdlib.AllocatedFunctions
-                                                    |> List.map (fun func -> func.Name, func)
-                                                    |> Map.ofList
-                                                let stdlibNamesById =
-                                                    plan.Stdlib.AllocatedFunctions
-                                                    |> List.fold (fun byId func ->
-                                                        let names =
-                                                            Map.tryFind func.Id byId
-                                                            |> Option.defaultValue Set.empty
-                                                            |> Set.add func.Name
-                                                        Map.add func.Id names byId) Map.empty
-                                                let calledStdlibNames func =
-                                                    let resolved =
-                                                        DeadCodeElimination.getCalledFunctionNames
-                                                            userRegistries.FunctionNames
-                                                            func
-                                                        |> Set.filter (fun name -> Map.containsKey name stdlibByName)
-                                                    let identityCandidates =
-                                                        DeadCodeElimination.getCalledFunctions func
-                                                        |> Set.fold (fun names id ->
-                                                            Set.union
-                                                                names
-                                                                (Map.tryFind id stdlibNamesById
-                                                                 |> Option.defaultValue Set.empty)) Set.empty
-                                                    Set.union resolved identityCandidates
-                                                let rec close reachableNames pendingNames =
-                                                    match Set.isEmpty pendingNames with
-                                                    | true -> reachableNames
-                                                    | false ->
-                                                        let discovered =
-                                                            pendingNames
-                                                            |> Set.toList
-                                                            |> List.choose (fun name -> Map.tryFind name stdlibByName)
-                                                            |> List.fold (fun names func ->
-                                                                Set.union
-                                                                    names
-                                                                    (calledStdlibNames func)) Set.empty
-                                                            |> Set.filter (fun name ->
-                                                                Map.containsKey name stdlibByName
-                                                                && not (Set.contains name reachableNames))
-                                                        close
-                                                            (Set.union reachableNames discovered)
-                                                            discovered
-                                                let initialNames =
-                                                    initiallyReachable
-                                                    |> List.map (fun func -> func.Name)
-                                                    |> Set.ofList
-                                                let directUserNames =
-                                                    finalUserFuncs
-                                                    |> List.fold (fun names func ->
-                                                        Set.union
-                                                            names
-                                                            (calledStdlibNames func)) Set.empty
-                                                let directUserNames =
-                                                    if
-                                                        (directUserNames
-                                                         |> Set.exists (fun name ->
-                                                             name.StartsWith("Darklang.Stdlib.List.__toDisplayString_")))
-                                                        || (finalUserFuncs
-                                                            |> List.exists DeadCodeElimination.requiresListDisplayHelpers)
-                                                    then
-                                                        stdlibByName
-                                                        |> Map.keys
-                                                        |> Seq.filter (fun name ->
-                                                            name.StartsWith("Darklang.Stdlib.List."))
-                                                        |> Set.ofSeq
-                                                        |> Set.union directUserNames
-                                                    else
-                                                        directUserNames
-                                                let reachableNames =
-                                                    close
-                                                        (Set.union initialNames directUserNames)
-                                                        directUserNames
-                                                plan.Stdlib.AllocatedFunctions
-                                                |> List.filter (fun func -> Set.contains func.Name reachableNames)
                                             |> fun shakenStdlib ->
                                                 let treeShakeElapsed = sw.Elapsed.TotalMilliseconds - treeShakeStart
                                                 recordPassTiming plan.PassTimingRecorder "Function Tree Shaking" treeShakeElapsed

@@ -179,10 +179,7 @@ let specializeFromSpecs (genericFuncDefs: GenericFuncDefs) (initialSpecs: Set<Sp
             let specializedFuncs =
                 accFuncs
                 |> List.map (fun artifact ->
-                    let symbols =
-                        CheckedAST.symbolsForTopLevels
-                            artifact.Symbols
-                            [CheckedAST.FunctionDef artifact.Function]
+                    let symbols = CheckedAST.catalogForCheckedUnit artifact.Symbols
                     { artifact with Symbols = symbols })
             { SpecializedFuncs = specializedFuncs
               SpecRegistry = specRegistry
@@ -201,7 +198,9 @@ let specializeFromSpecs (genericFuncDefs: GenericFuncDefs) (initialSpecs: Set<Sp
                             let specialized =
                                 specializeFunction specializedId artifact.Function typeArgs
                             let specializedArtifact =
-                                { Symbols = specializedSymbols; Function = specialized }
+                                { Symbols = specializedSymbols
+                                  Function = specialized
+                                  DirectDependencies = directDependencies specialized.Body }
                             let registry' = Map.add (funcName, typeArgs) specialized.Name registry
                             let bodySpecs = collectTypeAppsFromFunc artifact.Symbols specialized
                             (specializedArtifact :: funcs, Set.union pending bodySpecs, registry', external)

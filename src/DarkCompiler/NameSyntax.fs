@@ -341,7 +341,7 @@ let validateDeclarationProgram (program: SourceProgram) : Result<SourceProgram, 
 let private assignParsedRecursiveIdentities (Program topLevels) : ParsedProgram =
     let parsedMember boundary ordinal (candidate: RecursiveCandidate) : RecursiveBindingInfo =
         ParsedRecursiveBinding {
-            Binding = bindingId ordinal
+            Binding = namedBindingId ordinal candidate.SourceName
             Boundary = scopeBoundaryId boundary
             Member = recursiveMemberId ordinal
             SourceName = candidate.SourceName

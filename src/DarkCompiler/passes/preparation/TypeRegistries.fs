@@ -99,15 +99,13 @@ type TypeNameRegistry = CheckedAST.SemanticMetadata
 
 let emptyTypeNames : TypeNameRegistry = {
     TypeNames = Map.empty
-    ConstructorTags = Map.empty
-    FieldIndices = Map.empty
 }
 
 let typeNamesFromSymbols (symbols: CheckedAST.Symbols) : TypeNameRegistry =
     CheckedAST.semanticMetadata symbols
 
-let tryFindConstructorTag id (registry: TypeNameRegistry) = Map.tryFind id registry.ConstructorTags
-let tryFindFieldIndex id (registry: TypeNameRegistry) = Map.tryFind id registry.FieldIndices
+let tryFindConstructorTag id (_registry: TypeNameRegistry) = Some (AST.constructorRuntimeTag id)
+let tryFindFieldIndex id (_registry: TypeNameRegistry) = Some (AST.fieldRuntimeIndex id)
 
 let private listHeadUnsafeFunction
     (functionIds: FunctionIdRegistry)

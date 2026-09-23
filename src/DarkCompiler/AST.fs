@@ -293,25 +293,24 @@ type BinderStructure =
 /// Stable semantic identities assigned at the parsed-program boundary. The
 /// representation is private so source spellings cannot be used as identities.
 [<Struct; StructuralEquality; StructuralComparison>]
-type BindingId = private BindingId of int
-
-[<Struct; StructuralEquality; StructuralComparison>]
-type FunctionId =
+type BindingId =
     private
-    | FunctionOrdinal of ordinal:int
-    | FunctionName of canonicalName:string
+    | LocalBindingId of ordinal:int * sourceName:string option
+    | TopLevelValueId of canonicalName:string
 
 [<Struct; StructuralEquality; StructuralComparison>]
-type TypeId =
-    private
-    | TypeOrdinal of ordinal:int
-    | TypeName of canonicalName:string
+type FunctionId = private FunctionId of canonicalName:string
 
 [<Struct; StructuralEquality; StructuralComparison>]
-type ConstructorId = private ConstructorId of int
+type TypeId = private TypeId of canonicalName:string
 
 [<Struct; StructuralEquality; StructuralComparison>]
-type FieldId = private FieldId of int
+type ConstructorId =
+    private ConstructorId of owner:TypeId * canonicalName:string * runtimeTag:int
+
+[<Struct; StructuralEquality; StructuralComparison>]
+type FieldId =
+    private FieldId of owner:TypeId * canonicalName:string * runtimeIndex:int
 
 [<Struct; StructuralEquality; StructuralComparison>]
 type ScopeBoundaryId = private ScopeBoundaryId of int
@@ -322,25 +321,33 @@ type RecursiveGroupId = private RecursiveGroupId of int
 [<Struct; StructuralEquality; StructuralComparison>]
 type RecursiveMemberId = private RecursiveMemberId of int
 
-let bindingId ordinal = BindingId ordinal
-let functionId ordinal = FunctionOrdinal ordinal
-let functionIdForName canonicalName = FunctionName canonicalName
-let functionIdValue = function
-    | FunctionOrdinal ordinal -> $"ordinal:{ordinal}"
-    | FunctionName canonicalName -> canonicalName
-let tryFunctionCanonicalName = function
-    | FunctionOrdinal _ -> None
-    | FunctionName canonicalName -> Some canonicalName
+let bindingId ordinal = LocalBindingId (ordinal, None)
+let namedBindingId ordinal sourceName = LocalBindingId (ordinal, Some sourceName)
+let topLevelValueId canonicalName = TopLevelValueId canonicalName
+let bindingDisplayName = function
+    | LocalBindingId (_, sourceName) -> sourceName
+    | TopLevelValueId canonicalName -> Some canonicalName
+let functionIdForName canonicalName = FunctionId canonicalName
+let functionIdValue (FunctionId canonicalName) = canonicalName
+let tryFunctionCanonicalName (FunctionId canonicalName) = Some canonicalName
 let allocateFunctionIds (_existing: seq<FunctionId>) (names: seq<string>) : Map<string, FunctionId> =
     names
     |> Seq.distinct
     |> Seq.sort
     |> Seq.map (fun name -> name, functionIdForName name)
     |> Map.ofSeq
-let typeId ordinal = TypeOrdinal ordinal
-let typeIdForName canonicalName = TypeName canonicalName
-let constructorId ordinal = ConstructorId ordinal
-let fieldId ordinal = FieldId ordinal
+let typeIdForName canonicalName = TypeId canonicalName
+let typeIdValue (TypeId canonicalName) = canonicalName
+let constructorId owner canonicalName runtimeTag =
+    ConstructorId (owner, canonicalName, runtimeTag)
+let constructorIdOwner (ConstructorId (owner, _, _)) = owner
+let constructorIdValue (ConstructorId (_, canonicalName, _)) = canonicalName
+let constructorRuntimeTag (ConstructorId (_, _, runtimeTag)) = runtimeTag
+let fieldId owner canonicalName runtimeIndex =
+    FieldId (owner, canonicalName, runtimeIndex)
+let fieldIdOwner (FieldId (owner, _, _)) = owner
+let fieldIdValue (FieldId (_, canonicalName, _)) = canonicalName
+let fieldRuntimeIndex (FieldId (_, _, runtimeIndex)) = runtimeIndex
 let scopeBoundaryId ordinal = ScopeBoundaryId ordinal
 // Group IDs share one compact namespace: declaration groups are even and
 // singleton local-recursion groups are odd.

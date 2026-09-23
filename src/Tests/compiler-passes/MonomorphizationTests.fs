@@ -84,7 +84,13 @@ let testSpecializeFromSpecs () : TestResult =
           Recursion = None }
 
     let genericDefs : GenericFuncDefs =
-        Map.ofList [ ("id", { Symbols = symbols; Function = funcDef }) ]
+        Map.ofList [
+            ("id", {
+                Symbols = symbols
+                Function = funcDef
+                DirectDependencies = directDependencies funcDef.Body
+            })
+        ]
     let initialSpecs : Set<SpecKey> = Set.ofList [ ("id", [TInt64]) ]
     let result = specializeFromSpecs genericDefs initialSpecs
     let hasFunction =

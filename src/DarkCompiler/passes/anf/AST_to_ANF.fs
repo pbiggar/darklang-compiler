@@ -473,16 +473,19 @@ let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
     let mergeMaps m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
     let functionNames = mergeMaps baseRegs.FunctionNames overlay.FunctionNames
     let scopeContracts = mergeMaps baseRegs.ScopeContracts overlay.ScopeContracts
+    let localInertFunctionScopes =
+        DestructionAnalysis.inertFunctionScopesWithBase
+            baseRegs.InertFunctionScopes
+            functionNames
+            overlay.ScopeContracts
     {
         TypeReg = mergeMaps baseRegs.TypeReg overlay.TypeReg
         TypeNames = ({
             TypeNames = mergeMaps baseRegs.TypeNames.TypeNames overlay.TypeNames.TypeNames
-            ConstructorTags = mergeMaps baseRegs.TypeNames.ConstructorTags overlay.TypeNames.ConstructorTags
-            FieldIndices = mergeMaps baseRegs.TypeNames.FieldIndices overlay.TypeNames.FieldIndices
         } : TypeNameRegistry)
         ScopeContracts = scopeContracts
         InertFunctionScopes =
-            DestructionAnalysis.inertFunctionScopes functionNames scopeContracts
+            Set.union baseRegs.InertFunctionScopes localInertFunctionScopes
         RecordFieldsReg = mergeMaps baseRegs.RecordFieldsReg overlay.RecordFieldsReg
         RecordTypeParamsReg = mergeMaps baseRegs.RecordTypeParamsReg overlay.RecordTypeParamsReg
         VariantLookup = mergeMaps baseRegs.VariantLookup overlay.VariantLookup

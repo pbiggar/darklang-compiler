@@ -119,8 +119,7 @@ let internal tryFindVariantForTypeById
     match sourceType with
     | AST.TSum (typeName, _)
     | AST.TRecord (typeName, _) ->
-        Map.tryFind constructorId typeNames.ConstructorTags
-        |> Option.bind (fun tag -> tryFindVariantByTag typeName tag variantLookup)
+        tryFindVariantByTag typeName (AST.constructorRuntimeTag constructorId) variantLookup
     | _ -> None
 
 let internal constructorReferenceMatches
@@ -134,7 +133,7 @@ let internal constructorReferenceMatches
     | Some (declaringType, _, tag, _) ->
         declaringType = typeName
         && Map.tryFind reference.TypeId typeNames.TypeNames = Some typeName
-        && Map.tryFind reference.ConstructorId typeNames.ConstructorTags = Some tag
+        && AST.constructorRuntimeTag reference.ConstructorId = tag
     | None -> false
 
 let internal int128ToCanonicalString (value: System.Int128) : string =

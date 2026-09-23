@@ -29,7 +29,8 @@ let private inertPrimitiveNames = Set.ofList ["Builtin.printLine"; "Builtin.prin
 
 /// Reject callers transitively from locally unproven scopes and unavailable
 /// callees. Safe recursive components are accepted without unfolding paths.
-let inertFunctionScopes
+let inertFunctionScopesWithBase
+    (knownInert: Set<AST.FunctionId>)
     (functionNames: Map<AST.FunctionId, string>)
     (contracts: Map<AST.FunctionId, FunctionScopeContract>) =
     let names = contracts |> Map.keys |> Set.ofSeq
@@ -38,7 +39,9 @@ let inertFunctionScopes
         |> Map.toSeq
         |> Seq.choose (fun (id, name) -> if Set.contains name inertPrimitiveNames then Some id else None)
         |> Set.ofSeq
-    let primitives = Set.difference inertPrimitives names
+    let primitives =
+        Set.union knownInert inertPrimitives
+        |> fun inert -> Set.difference inert names
     let unavailable calls = not (Set.isSubset calls (Set.union names primitives))
     let unproven =
         contracts |> Map.toSeq |> Seq.choose (fun (name, contract) ->
@@ -52,3 +55,6 @@ let inertFunctionScopes
                 Map.change target (fun previous -> Some (Set.add name (Option.defaultValue Set.empty previous))) callers) callers) Map.empty
     let rejected = CallGraphReachability.findReachable callers unproven
     Set.union primitives (Set.difference names rejected)
+
+let inertFunctionScopes functionNames contracts =
+    inertFunctionScopesWithBase Set.empty functionNames contracts

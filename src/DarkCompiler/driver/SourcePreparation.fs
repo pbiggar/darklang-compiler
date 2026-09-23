@@ -124,7 +124,7 @@ let private importInheritedValues
         inheritedEntries
         |> List.fold (fun (collected, symbols) (name, artifact) ->
             let symbols, imported =
-                CheckedAST.importTopLevels
+                CheckedAST.composeTopLevels
                     artifact.Symbols
                     symbols
                     [CheckedAST.Expression artifact.Body]
@@ -344,7 +344,7 @@ let internal convertTypedDeclarationsWithTrace
         | Some context ->
             let sourceSymbols = CheckedAST.programSymbols typedProgram
             let symbols, topLevels =
-                CheckedAST.importTopLevels
+                CheckedAST.composeTopLevels
                     sourceSymbols
                     context.Symbols
                     (CheckedAST.programTopLevels typedProgram)
@@ -476,7 +476,7 @@ let internal convertTypedProgramToUserOnlyWithMode
     let sourceSymbols = CheckedAST.programSymbols typedProgram
     let symbols, topLevels =
         measure "AST -> ANF Symbol Import" (fun () ->
-            CheckedAST.importTopLevels
+            CheckedAST.composeTopLevels
                 sourceSymbols
                 baseContext.Symbols
                 (CheckedAST.programTopLevels typedProgram))

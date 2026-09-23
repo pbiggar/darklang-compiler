@@ -68,7 +68,7 @@ let optimizeProgramWithOptionsAndExternalFunctions
             { optimized with Body = devirtualizeCaptureFreeClosures optimized.Body })
 
     // Optimize main expression
-    let mainFunc = { Id = AST.functionId -1
+    let mainFunc = { Id = AST.functionIdForName "__dark_anf_optimization_main"
                      Name = "__main__"
                      TypedParams = []
                      ReturnType = AST.TUnit
