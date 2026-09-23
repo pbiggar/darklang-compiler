@@ -316,7 +316,6 @@ let internal lowerToAllocatedLir
                                          }))
                                 registries.RecordFieldsReg
                                 registries.RcSumShapeReg
-                                registries.FunctionNames
                                 lirFuncs
                         | Platform.X86_64 ->
                             lirFuncs

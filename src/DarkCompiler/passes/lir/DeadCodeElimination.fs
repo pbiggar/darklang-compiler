@@ -5,7 +5,7 @@
 
 module DeadCodeElimination
 
-/// Add a function name referenced by an operand to the current call set.
+/// Add a function identity referenced by an operand to the current call set.
 let private addCallFromOperand (op: LIR.Operand) (calls: Set<AST.FunctionId>) : Set<AST.FunctionId> =
     match op with
     | LIR.FuncAddr name -> Set.add name calls
@@ -14,9 +14,8 @@ let private addCallFromOperand (op: LIR.Operand) (calls: Set<AST.FunctionId>) : 
 let private addCallsFromOperands (ops: LIR.Operand list) (calls: Set<AST.FunctionId>) : Set<AST.FunctionId> =
     ops |> List.fold (fun calls op -> addCallFromOperand op calls) calls
 
-/// Add function names referenced by one instruction to the current call set.
+/// Add function identities referenced by one instruction to the current call set.
 let private addCallsFromInstr
-    (idsByName: Map<string, AST.FunctionId>)
     (instr: LIR.Instr)
     (calls: Set<AST.FunctionId>)
     : Set<AST.FunctionId> =
@@ -147,10 +146,7 @@ let private addCallsFromInstr
             match payloadType with
             | Some (AST.TList elemType) ->
                 match ListDisplay.getDisplayStringFunc elemType with
-                | Some funcName ->
-                    match Map.tryFind funcName idsByName with
-                    | Some id -> Set.add id calls
-                    | None -> calls
+                | Some funcName -> Set.add (AST.functionIdForName funcName) calls
                 | None -> calls
             | _ -> calls) calls
     | LIR.HeapStore (_, _, src, _) -> addCallFromOperand src calls
@@ -177,60 +173,15 @@ let private addCallsFromInstr
         calls |> addCallFromOperand path |> addCallFromOperand content
 
 /// Add every function-call edge in one LIR function to an existing call set.
-let private addCalledFunctions idsByName (func: LIR.Function) (calls: Set<AST.FunctionId>) : Set<AST.FunctionId> =
+let private addCalledFunctions (func: LIR.Function) (calls: Set<AST.FunctionId>) : Set<AST.FunctionId> =
     func.CFG.Blocks
     |> Map.fold (fun calls _ block ->
         block.Instrs
-        |> List.fold (fun calls instr -> addCallsFromInstr idsByName instr calls) calls) calls
+        |> List.fold (fun calls instr -> addCallsFromInstr instr calls) calls) calls
 
-/// Extract function names called from a LIR function
+/// Extract function identities called from a LIR function.
 let getCalledFunctions (func: LIR.Function) : Set<AST.FunctionId> =
-    addCalledFunctions (Map.ofList [func.Name, func.Id]) func Set.empty
-
-let getCalledFunctionsWithNames functionNames (func: LIR.Function) : Set<AST.FunctionId> =
-    let idsByName = functionNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
-    let partitionFunctionNames =
-        func.CodegenFacts
-        |> Option.bind (fun facts -> facts.Arm64FunctionNames)
-        |> Option.defaultValue functionNames
-    addCalledFunctions idsByName func Set.empty
-    |> Set.map (fun id ->
-        partitionFunctionNames
-        |> Map.tryFind id
-        |> Option.bind (fun name -> Map.tryFind name idsByName)
-        |> Option.defaultValue id)
-
-/// Resolve direct-call identities through the immutable symbol table attached
-/// to the compilation partition that produced the function.
-let getCalledFunctionNames
-    (fallbackFunctionNames: Map<AST.FunctionId, string>)
-    (func: LIR.Function)
-    : Set<string> =
-    let partitionFunctionNames =
-        func.CodegenFacts
-        |> Option.bind (fun facts -> facts.Arm64FunctionNames)
-        |> Option.defaultValue fallbackFunctionNames
-    let helperNames =
-        func.CodegenFacts
-        |> Option.bind (fun facts -> facts.Arm64GenericDecHelperIds)
-        |> Option.defaultValue Map.empty
-        |> Map.toSeq
-        |> Seq.map (fun (name, id) -> id, name)
-        |> Map.ofSeq
-    let allFunctionNames =
-        Map.fold (fun names id name -> Map.add id name names) fallbackFunctionNames partitionFunctionNames
-        |> fun names -> Map.fold (fun current id name -> Map.add id name current) names helperNames
-    let idsByName =
-        allFunctionNames
-        |> Map.toSeq
-        |> Seq.map (fun (id, name) -> name, id)
-        |> Map.ofSeq
-    addCalledFunctions idsByName func Set.empty
-    |> Seq.choose (fun id ->
-        Map.tryFind id helperNames
-        |> Option.orElseWith (fun () -> Map.tryFind id partitionFunctionNames)
-        |> Option.orElseWith (fun () -> Map.tryFind id fallbackFunctionNames))
-    |> Set.ofSeq
+    addCalledFunctions func Set.empty
 
 let requiresListDisplayHelpers (func: LIR.Function) : bool =
     func.CFG.Blocks
@@ -246,14 +197,10 @@ let requiresListDisplayHelpers (func: LIR.Function) : bool =
             | _ -> false))
 
 /// Build call graph from list of functions
-let buildCallGraphWithNames functionNames (funcs: LIR.Function list) : Map<AST.FunctionId, Set<AST.FunctionId>> =
-    funcs
-    |> List.map (fun f -> f.Id, getCalledFunctionsWithNames functionNames f)
-    |> Map.ofList
-
 let buildCallGraph (funcs: LIR.Function list) : Map<AST.FunctionId, Set<AST.FunctionId>> =
-    let functionNames = funcs |> List.map (fun func -> func.Id, func.Name) |> Map.ofList
-    buildCallGraphWithNames functionNames funcs
+    funcs
+    |> List.map (fun f -> f.Id, getCalledFunctions f)
+    |> Map.ofList
 
 /// Compute transitive closure of reachable functions.
 let findReachable (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>) (roots: Set<AST.FunctionId>) : Set<AST.FunctionId> =

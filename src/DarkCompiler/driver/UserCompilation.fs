@@ -491,9 +491,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         if plan.Options.DisableFunctionTreeShaking then Map.empty
                                         else
                                             let localCallGraph =
-                                                DeadCodeElimination.buildCallGraphWithNames
-                                                    userRegistries.FunctionNames
-                                                    allocatedUserFuncs
+                                                DeadCodeElimination.buildCallGraph allocatedUserFuncs
                                             Map.fold
                                                 (fun graph id calls -> Map.add id calls graph)
                                                 plan.PrebuiltCallGraph
@@ -527,9 +525,9 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                            || plan.Options.DisableFunctionTreeShaking then
                                             finalUserFuncs
                                         else
-                                            let allUserByName =
+                                            let allUserById =
                                                 allSymbolicUserFuncs
-                                                |> List.map (fun func -> func.Name, func)
+                                                |> List.map (fun func -> func.Id, func)
                                                 |> Map.ofList
                                             let rec close reachable pending =
                                                 if Set.isEmpty pending then reachable
@@ -537,32 +535,30 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                     let discovered =
                                                         pending
                                                         |> Set.toList
-                                                        |> List.choose (fun name -> Map.tryFind name allUserByName)
-                                                        |> List.fold (fun names func ->
+                                                        |> List.choose (fun id -> Map.tryFind id allUserById)
+                                                        |> List.fold (fun ids func ->
                                                             Set.union
-                                                                names
-                                                                (DeadCodeElimination.getCalledFunctionNames
-                                                                    userRegistries.FunctionNames
-                                                                    func)) Set.empty
-                                                        |> Set.filter (fun name ->
-                                                            Map.containsKey name allUserByName
-                                                            && not (Set.contains name reachable))
+                                                                ids
+                                                                (DeadCodeElimination.getCalledFunctions func)) Set.empty
+                                                        |> Set.filter (fun id ->
+                                                            Map.containsKey id allUserById
+                                                            && not (Set.contains id reachable))
                                                     close (Set.union reachable discovered) discovered
                                             let initial =
                                                 finalUserFuncs
-                                                |> List.map (fun func -> func.Name)
+                                                |> List.map (fun func -> func.Id)
                                                 |> Set.ofList
                                                 |> Set.union
                                                     (allSymbolicUserFuncs
-                                                     |> List.map (fun func -> func.Name)
-                                                     |> List.filter (fun name ->
-                                                         name = "Builtin.pmFindValuesByValueType"
-                                                         || name = "Builtin.pmGetLocationsByValue"
-                                                         || name.StartsWith("Builtin.pmEvaluateValue_"))
+                                                     |> List.filter (fun func ->
+                                                         func.Name = "Builtin.pmFindValuesByValueType"
+                                                         || func.Name = "Builtin.pmGetLocationsByValue"
+                                                         || func.Name.StartsWith("Builtin.pmEvaluateValue_"))
+                                                     |> List.map (fun func -> func.Id)
                                                      |> Set.ofList)
                                             let reachable = close initial initial
                                             allSymbolicUserFuncs
-                                            |> List.filter (fun func -> Set.contains func.Name reachable)
+                                            |> List.filter (fun func -> Set.contains func.Id reachable)
 
                                     if plan.EmitFunctionEvents && plan.Verbosity >= 3 then
                                         println $"  [COMBINED] fresh: {allocatedUserFuncs.Length}, total: {allSymbolicUserFuncs.Length}"
