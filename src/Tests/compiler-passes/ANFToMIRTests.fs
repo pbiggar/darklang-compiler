@@ -102,7 +102,6 @@ let testNestedTerminalBranchesHaveNoInventedReturn () : TestResult =
         denseTypes
         Map.empty
         (Map.ofList [(TestIds.functionIdForName name, AST.TFloat64)])
-        (Map.ofList [(TestIds.functionIdForName name, name)])
         false
     |> Result.bind (fun lowered ->
         let rec visit seen pending =

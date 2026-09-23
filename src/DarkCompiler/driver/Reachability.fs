@@ -43,10 +43,6 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     (ValueRendering.rewriteProgram
                         userEnv.IndexedTypeReg
                         userEnv.IndexedSumTypeReg
-                        (stdlib.Context.Registries.FuncReg
-                         |> Map.toList
-                         |> List.map (fun (_, (name, typ)) -> name, typ)
-                         |> Map.ofList)
                         plannedProgramType
                         plannedUserAst,
                      AST.TString)
@@ -81,7 +77,6 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     RecursiveMembers = userOnly.RecursiveMembers
                 }
                 PrintInsertion.insertPrintInEntry
-                    userOnly.FunctionNames
                     "_start"
                     boundaryProgramType
                     (entryFunction :: userOnly.UserFunctions)

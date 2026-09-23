@@ -421,7 +421,6 @@ type CFGBuilder = {
     ExtraTypeMap: Map<ANF.TempId, AST.SemanticType>
     TypeReg: Map<string, (string * AST.SemanticType) list>
     ReturnTypeReg: Map<AST.FunctionId, AST.SemanticType>  // Function identity -> return type
-    FunctionNames: Map<AST.FunctionId, string>
     FuncId: AST.FunctionId
     FuncName: string  // For generating unique labels per function
     ParamRegs: MIR.VReg list  // Parameter VRegs for self-recursive tail call loop optimization
@@ -522,13 +521,12 @@ let private directCallReturnType (builder: CFGBuilder) (funcName: AST.FunctionId
     match Map.tryFind funcName builder.ReturnTypeReg with
     | Some t -> t
     | None ->
-        let displayName = Map.tryFind funcName builder.FunctionNames
-        match displayName |> Option.bind tryGetIntrinsicReturnType with
+        let canonicalName = AST.functionIdValue funcName
+        match tryGetIntrinsicReturnType canonicalName with
         | Some t -> t
-        | None when displayName |> Option.exists (fun name -> name.StartsWith("__dark_eq_")) -> AST.TBool
-        | None when displayName |> Option.exists (fun name -> name.StartsWith("Builtin.pmEvaluateValue_")) ->
-            let name = displayName |> Option.defaultWith (fun () -> Crash.crash "Package evaluator identity lost its display name")
-            let suffix = name.Substring("Builtin.pmEvaluateValue_".Length)
+        | None when canonicalName.StartsWith("__dark_eq_") -> AST.TBool
+        | None when canonicalName.StartsWith("Builtin.pmEvaluateValue_") ->
+            let suffix = canonicalName.Substring("Builtin.pmEvaluateValue_".Length)
             let resultType =
                 match suffix with
                 | "i8" -> AST.TInt8
@@ -553,9 +551,8 @@ let private directCallReturnType (builder: CFGBuilder) (funcName: AST.FunctionId
                 | nominal -> AST.TSum (nominal, [])
             AST.TSum ("Darklang.Stdlib.Option.Option", [resultType])
         | None ->
-            let renderedName = displayName |> Option.defaultValue "<missing>"
             Crash.crash
-                $"ANF_to_MIR: Return type not found for function identity {AST.functionIdValue funcName} ({renderedName})"
+                $"ANF_to_MIR: Return type not found for function identity {canonicalName}"
 
 let private tupleGetDestType
     (builder: CFGBuilder)
@@ -1625,7 +1622,6 @@ let convertANFFunction
     (typeById: AST.SemanticType option array)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
     (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
-    (functionNames: Map<AST.FunctionId, string>)
     (enableCoverage: bool)
     : Result<MIR.Function, string> =
     let convertCore () : Result<MIR.Function, string> =
@@ -1671,7 +1667,6 @@ let convertANFFunction
             ExtraTypeMap = functionParamTypes
             TypeReg = typeReg
             ReturnTypeReg = returnTypeReg
-            FunctionNames = functionNames
             FuncId = anfFunc.Id
             FuncName = anfFunc.Name
             ParamRegs = paramVRegs  // For self-recursive tail call loop optimization
@@ -1782,21 +1777,12 @@ let toMIR
 
     // Build return type registry for all functions (needed for caller to know return type)
     let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
-    let functionNames =
-        (externalReturnTypes |> Map.toList)
-        |> List.map (fun (id, (name, _)) -> id, name)
-        |> List.append (functions |> List.map (fun func -> func.Id, func.Name))
-        |> Map.ofList
-    let startId =
-        functionNames
-        |> Map.toSeq
-        |> Seq.tryPick (fun (id, name) -> if name = "_start" then Some id else None)
-        |> Option.defaultValue (AST.functionIdForName "_start")
+    let startId = AST.functionIdForName "_start"
     // Phase 2: Convert all functions to MIR
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
     match
         mapResults
-            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg functionNames enableCoverage)
+            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg enableCoverage)
             functions
     with
     | Error err -> Error err
@@ -1817,7 +1803,6 @@ let toMIR
         ExtraTypeMap = Map.empty
         TypeReg = typeReg
         ReturnTypeReg = returnTypeReg
-        FunctionNames = functionNames
         FuncId = startId
         FuncName = "_start"
         ParamRegs = []  // _start has no params
@@ -1864,8 +1849,7 @@ let private toMIRFunctionsOnlyInternal
     (variantLookup: LoweringPrimitives.VariantLookup)
     (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
-    (knownFunctionNames: Map<AST.FunctionId, string>)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
+    (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let startPhase () =
         phaseRecorder |> Option.map (fun _ -> System.Diagnostics.Stopwatch.StartNew())
@@ -1882,22 +1866,12 @@ let private toMIRFunctionsOnlyInternal
     let typeById = buildTypeById (maxTempIdInProgram program) typeMap
     recordPhase "ANF -> MIR Type Lookup Preparation" typeLookupTimer
 
-    // Build return type registry for all functions (needed for caller to know return type)
-    let returnTypeTimer = startPhase ()
-    let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
-    let functionNames =
-        (externalReturnTypes |> Map.toList)
-        |> List.map (fun (id, (name, _)) -> id, name)
-        |> List.append (functions |> List.map (fun func -> func.Id, func.Name))
-        |> List.fold (fun names (id, name) -> Map.add id name names) knownFunctionNames
-    recordPhase "ANF -> MIR Return Type Preparation" returnTypeTimer
-
     // Phase 2: Convert all functions to MIR (skip main/_start)
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
     let conversionTimer = startPhase ()
     match
         mapResults
-            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg functionNames enableCoverage)
+            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg enableCoverage)
             functions
     with
     | Error err -> Error err
@@ -1922,6 +1896,8 @@ let toMIRFunctionsOnly
     (enableCoverage: bool)
     (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
+    let (ANF.Program (functions, _)) = program
+    let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
     toMIRFunctionsOnlyInternal
         None
         None
@@ -1931,8 +1907,7 @@ let toMIRFunctionsOnly
         variantLookup
         typeRegForRecords
         enableCoverage
-        Map.empty
-        externalReturnTypes
+        returnTypeReg
 
 let toMIRFunctionsOnlyWithTrace
     (phaseRecorder: (string -> float -> unit) option)
@@ -1943,8 +1918,7 @@ let toMIRFunctionsOnlyWithTrace
     (variantLookup: LoweringPrimitives.VariantLookup)
     (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
-    (functionNames: Map<AST.FunctionId, string>)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
+    (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     toMIRFunctionsOnlyInternal
         phaseRecorder
@@ -1955,5 +1929,4 @@ let toMIRFunctionsOnlyWithTrace
         variantLookup
         typeRegForRecords
         enableCoverage
-        functionNames
-        externalReturnTypes
+        returnTypeReg

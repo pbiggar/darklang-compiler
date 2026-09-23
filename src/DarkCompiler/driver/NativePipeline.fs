@@ -249,11 +249,7 @@ let internal lowerToAllocatedLir
     let functionOrder = functions |> List.map (fun f -> f.Name)
     // Function-affinity batches still call helpers compiled in sibling batches.
     // Keep the complete AOT return-type plan available while lowering each one.
-    let allReturnTypes =
-        functions
-        |> List.fold
-            (fun returnTypes func -> Map.add func.Id (func.Name, func.ReturnType) returnTypes)
-            externalReturnTypes
+    let returnTypeReg = ANF_to_MIR.buildReturnTypeReg functions externalReturnTypes
     let compileFunctions (functionsToCompile: ANF.Function list) : Result<LIR.Function list, string> =
         if List.isEmpty functionsToCompile then
             Ok []
@@ -279,8 +275,7 @@ let internal lowerToAllocatedLir
                     registries.VariantLookup
                     registries.RecordFieldsReg
                     options.EnableCoverage
-                    registries.FunctionNames
-                    allReturnTypes
+                    returnTypeReg
             match mirResult with
             | Error err -> Error $"MIR conversion error: {err}"
             | Ok (mirFuncs, variantRegistry, mirRecordRegistry) ->

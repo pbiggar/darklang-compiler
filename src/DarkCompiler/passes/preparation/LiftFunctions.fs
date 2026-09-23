@@ -24,14 +24,14 @@ let liftLambdasInFunc (funcDef: CheckedAST.FunctionDef) (state: LiftState) : Res
 /// State extended to include known function names and their parameters
 type LiftStateWithFuncs = {
     State: LiftState
-    FuncParams: Map<string, (AST.BindingId * AST.SemanticType) list>
+    FuncParams: Map<string, AST.SemanticType list>
     GeneratedWrappers: Map<string, AST.FunctionId * AST.FunctionId * AST.FunctionId>
 }
 
 /// Generate a wrapper for a named function used as a value
 let generateFuncWrapper
     (origFuncName: string)
-    (funcParams: Map<string, (AST.BindingId * AST.SemanticType) list>)
+    (funcParams: Map<string, AST.SemanticType list>)
     (funcReturnTypes: Map<string, AST.SemanticType>)
     (stateWithFuncs: LiftStateWithFuncs)
     : Result<(CheckedAST.FunctionDef * LiftStateWithFuncs), string> =
@@ -44,7 +44,7 @@ let generateFuncWrapper
             CheckedAST.allocateBinding "__closure" stateWithName.Symbols
         let parameters, symbols =
             parameters
-            |> List.mapi (fun index (_, typ) -> (index, typ))
+            |> List.mapi (fun index typ -> (index, typ))
             |> List.mapFold (fun symbols (index, typ) ->
                 let (id, symbols) = CheckedAST.allocateBinding $"__arg{index}" symbols
                 ((id, typ), symbols)) symbols
@@ -326,10 +326,11 @@ let rec liftLambdasInProgram
                              canonicalizeNamedTypeRefs recordNames mergedSumTypeNames fieldType)) })
 
     // First pass: collect all function definitions and their parameters
-    let userFuncParams : Map<string, (AST.BindingId * AST.SemanticType) list> =
+    let userFuncParams : Map<string, AST.SemanticType list> =
         topLevels
         |> List.choose (function
-            | CheckedAST.FunctionDef f -> Some (f.Name, paramsToList f.Params)
+            | CheckedAST.FunctionDef f ->
+                Some (f.Name, f.Params |> paramsToList |> List.map snd)
             | _ -> None)
         |> Map.ofList
 
@@ -343,32 +344,12 @@ let rec liftLambdasInProgram
 
     // Add module function parameters from Stdlib
     let moduleRegistry = Stdlib.buildModuleRegistry ()
-    let moduleFuncParamsWithNames : Map<string, (string * AST.SemanticType) list> =
+    let moduleFuncParams : Map<string, AST.SemanticType list> =
         moduleRegistry
         |> Map.toList
         |> List.map (fun (qualifiedName, moduleFunc) ->
-            // Create parameter names like "arg0", "arg1" for each parameter type
-            let paramList = moduleFunc.ParamTypes |> List.mapi (fun i t -> ($"arg{i}", t))
-            (qualifiedName, paramList))
+            (qualifiedName, moduleFunc.ParamTypes))
         |> Map.ofList
-
-    let allocateParamIds
-        (symbols: CheckedAST.Symbols)
-        (paramMap: Map<string, (string * AST.SemanticType) list>)
-        : Map<string, (AST.BindingId * AST.SemanticType) list> * CheckedAST.Symbols =
-        paramMap
-        |> Map.toList
-        |> List.mapFold (fun symbols (funcName, parameters) ->
-            let parameters, symbols =
-                parameters
-                |> List.mapFold (fun symbols (name, typ) ->
-                    let (id, symbols) = CheckedAST.allocateBinding name symbols
-                    ((id, typ), symbols)) symbols
-            ((funcName, parameters), symbols)) symbols
-        |> fun (entries, symbols) -> (Map.ofList entries, symbols)
-
-    let baseFuncParams, symbols = allocateParamIds symbols baseFuncParams
-    let moduleFuncParams, symbols = allocateParamIds symbols moduleFuncParamsWithNames
 
     // Collect module function return types
     let moduleFuncReturnTypes : Map<string, AST.SemanticType> =
@@ -398,7 +379,8 @@ let rec liftLambdasInProgram
         |> Map.ofList
 
     let funcParams =
-        Map.fold (fun acc k v -> Map.add k v acc) baseFuncParams (Map.fold (fun acc k v -> Map.add k v acc) userFuncParams moduleFuncParams)
+        let baseFuncParamTypes = baseFuncParams |> Map.map (fun _ parameters -> parameters |> List.map snd)
+        Map.fold (fun acc k v -> Map.add k v acc) baseFuncParamTypes (Map.fold (fun acc k v -> Map.add k v acc) userFuncParams moduleFuncParams)
     let funcReturnTypes =
         Map.fold (fun acc k v -> Map.add k v acc) baseFuncReturnTypes (Map.fold (fun acc k v -> Map.add k v acc) userFuncReturnTypes moduleFuncReturnTypes)
     let genericFuncDefs = Map.fold (fun acc k v -> Map.add k v acc) userGenericFuncDefs moduleGenericFuncDefs
@@ -516,7 +498,7 @@ let rec liftLambdasInProgram
 and collectFuncRefsInExpr
     (symbols: CheckedAST.Symbols)
     (expr: CheckedAST.Expr)
-    (knownFuncs: Map<string, (AST.BindingId * AST.SemanticType) list>)
+    (knownFuncs: Map<string, AST.SemanticType list>)
     : string list =
     let rec collect (bound: Set<AST.BindingId>) candidate =
         let collectChildren children = children |> List.collect (collect bound)

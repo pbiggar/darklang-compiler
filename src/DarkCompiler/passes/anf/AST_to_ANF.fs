@@ -385,6 +385,15 @@ let private buildRegistriesInternal
         functions
         |> List.map (fun func -> func.Id, func.Name)
         |> Map.ofList
+    let localTypeNames : TypeNameRegistry =
+        let names =
+            typeDefs
+            |> List.map (function
+                | AST.RecordDef (name, _, _)
+                | AST.SumTypeDef (name, _, _)
+                | AST.TypeAlias (name, _, _) -> AST.typeIdForName name, name)
+            |> Map.ofList
+        { TypeNames = names }
     let functionNames : FunctionNameRegistry =
         functions
         |> List.fold (fun names func -> Map.add func.Id func.Name names) (CheckedAST.functionNames symbols)
@@ -430,7 +439,9 @@ let private buildRegistriesInternal
             Set.empty
     {
         TypeReg = typeReg
-        TypeNames = typeNamesFromSymbols symbols
+        TypeNames =
+            if includeModuleFunctionParams then typeNamesFromSymbols symbols
+            else localTypeNames
         ScopeContracts = scopeContracts
         InertFunctionScopes = inertFunctionScopes
         RecordFieldsReg = recordFieldsRegistry typeReg
@@ -440,7 +451,9 @@ let private buildRegistriesInternal
         RcSumShapeReg = rcSumShapeRegistryFromVariantLookup variantLookup
         FuncReg = funcReg
         FunctionIds = functionIds
-        FunctionNames = functionNames
+        FunctionNames =
+            if includeModuleFunctionParams then functionNames
+            else localFunctionNames
         FuncParams = funcParams
         ModuleRegistry = moduleRegistry
         RecursiveMembers = loweredRecursiveMemberRegistry functions
