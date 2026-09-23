@@ -68,9 +68,7 @@ let attachARM64CodegenFactsToFunctions
             func.CodegenFacts
             |> Option.map (fun facts ->
                 { facts with
-                    Arm64RawSlotInitRetainTargets = None
-                    Arm64FunctionNames = None
-                    Arm64GenericDecHelperIds = None })
+                    Arm64RawSlotInitRetainTargets = None })
         { func with CodegenFacts = facts })
 
 let private outlineExpensiveGenericReleasesInFunction
@@ -89,19 +87,6 @@ let private outlineExpensiveGenericReleasesInFunction
                 |> Set.toList
                 |> List.map (fun memoKey -> memoKey, label))
             |> Map.ofList
-    let functionHelperIds =
-        helperLabelsByMemoKey
-        |> Map.values
-        |> Set.ofSeq
-        |> Set.toList
-        |> List.map (fun label -> label, Map.find label helperIds)
-        |> Map.ofList
-    let func =
-        { func with
-            CodegenFacts =
-                func.CodegenFacts
-                |> Option.map (fun facts ->
-                    { facts with Arm64GenericDecHelperIds = Some functionHelperIds }) }
     if Map.isEmpty helperLabelsByMemoKey then func
     else
         let outlineInstr instr =
@@ -138,7 +123,6 @@ let prepareARM64FunctionsForAllocationWithCache
     (phaseRecorder: (string -> float -> unit) option)
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
-    (reservedFunctionNames: Map<AST.FunctionId, string>)
     (functions: LIR.Function list)
     : LIR.Function list =
     let recordPhase name (timer: System.Diagnostics.Stopwatch) =
@@ -156,23 +140,10 @@ let prepareARM64FunctionsForAllocationWithCache
             sumShapeRegistry
     recordPhase "ARM64 Function Facts Planning" factsTimer
     let outliningTimer = System.Diagnostics.Stopwatch.StartNew()
-    let partitionFunctionNames =
-        functionsWithFacts
-        |> List.fold
-            (fun names func -> Map.add func.Id func.Name names)
-            reservedFunctionNames
-    let functionsWithFacts =
-        functionsWithFacts
-        |> List.map (fun func ->
-            { func with
-                CodegenFacts =
-                    func.CodegenFacts
-                    |> Option.map (fun facts ->
-                        { facts with Arm64FunctionNames = Some partitionFunctionNames }) })
     let helperLabels = helperLabelsForFunctions functionsWithFacts
     let helperIds =
         AST.allocateFunctionIds
-            (partitionFunctionNames |> Map.keys)
+            (functionsWithFacts |> List.map (fun func -> func.Id))
             helperLabels
     let outlinedFunctions =
         functionsWithFacts |> List.map (outlineExpensiveGenericReleasesInFunction helperIds)
@@ -204,5 +175,4 @@ let prepareARM64Program
             None
             records
             sumShapeRegistry
-            (functions |> List.map (fun func -> func.Id, func.Name) |> Map.ofList)
     LIR.Program (functionsWithFacts, variants, records)

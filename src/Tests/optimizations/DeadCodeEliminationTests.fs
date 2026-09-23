@@ -40,6 +40,14 @@ let testArgMovesFunctionAddressIsReachable () : TestResult =
             (LIR.X0, LIR.FuncAddr (TestIds.functionIdForName "Darklang.Stdlib.List.map"))
           ] ]
 
+let testListDisplayHelperIsReachableByCanonicalIdentity () : TestResult =
+    expectCalls
+        ["Darklang.Stdlib.List.__toDisplayString_i64"]
+        [ LIR.PrintSum (
+              LIR.Physical LIR.X0,
+              [("Values", 0, Some (AST.TList AST.TInt64))]
+          ) ]
+
 let testFilteredFunctionsPreserveReachableSetAndInputOrder () : TestResult =
     let userFunctions =
         [ namedFunctionWith
@@ -71,6 +79,7 @@ let testFilteredFunctionsPreserveReachableSetAndInputOrder () : TestResult =
 
 let tests = [
     ("arg moves function address is reachable", testArgMovesFunctionAddressIsReachable)
+    ("list display helper is reachable by canonical identity", testListDisplayHelperIsReachableByCanonicalIdentity)
     ("filtered functions preserve reachable set and input order", testFilteredFunctionsPreserveReachableSetAndInputOrder)
 ]
 

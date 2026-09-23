@@ -522,19 +522,7 @@ let private generatePreparedARM64WithOptionsAndCache
         // user expression lives behind its __dark_compiler_program_entry call.
         // Cache each finalized chunk and never rescan it per executable.
         let generate () =
-            let partitionFunctionNames =
-                func.CodegenFacts
-                |> Option.bind (fun facts -> facts.Arm64FunctionNames)
-                |> Option.defaultValue Map.empty
-            let functionNames =
-                match func.CodegenFacts |> Option.bind (fun facts -> facts.Arm64GenericDecHelperIds) with
-                | Some localHelperIds ->
-                    localHelperIds
-                    |> Map.fold (fun names label id -> Map.add id label names) partitionFunctionNames
-                | None -> partitionFunctionNames
-            let functionNames =
-                Map.fold (fun names id name -> Map.add id name names) ctx.FunctionNames functionNames
-            convertFunction heapOverflowTrapBody { ctx with FunctionNames = functionNames } func
+            convertFunction heapOverflowTrapBody ctx func
             |> Result.map peepholeOptimize
         let reusableAcrossCompilations = Option.isSome functionCache
         let converted =

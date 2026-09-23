@@ -403,14 +403,6 @@ type FunctionCodegenFacts = {
     /// not need a root retain; the outer option distinguishes an empty plan
     /// from legacy/unprepared LIR.
     Arm64RawSlotInitRetainTargets: Map<AST.SemanticType, Arm64SlotInitRootRetainTarget option> option
-    /// Semantic function names from the compilation partition that produced
-    /// this function. Cached partitions can assign later generated ordinals
-    /// independently, so final code generation resolves calls locally.
-    Arm64FunctionNames: Map<AST.FunctionId, string> option
-    /// Function-local identities assigned to outlined generic-release helpers.
-    /// Their labels remain stable when cached compilation partitions are later
-    /// combined with partitions that assigned the same ordinal elsewhere.
-    Arm64GenericDecHelperIds: Map<string, AST.FunctionId> option
     NeedsCliRuntimeState: bool
     NeedsCliArgvHelper: bool
     NeedsCliExecuteHelper: bool
@@ -508,8 +500,6 @@ let analyzeFunctionCodegenFacts (func: Function) : FunctionCodegenFacts =
         RefCountIncRequirements = refCountIncRequirements
         RawSlotInitTypes = rawSlotInitTypes
         Arm64RawSlotInitRetainTargets = None
-        Arm64FunctionNames = None
-        Arm64GenericDecHelperIds = None
         NeedsCliRuntimeState = needsCliRuntimeState
         NeedsCliArgvHelper = needsCliArgvHelper
         NeedsCliExecuteHelper = needsCliExecuteHelper
