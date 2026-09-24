@@ -487,7 +487,7 @@ let private isScalarRawReadReturnType (typ: AST.SemanticType) : bool =
     | AST.TBool | AST.TFloat64 | AST.TChar | AST.TDateTime | AST.TUnit -> true
     | AST.TString | AST.TBlob | AST.TNever | AST.TInternalRawPtr
     | AST.TFunction _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _ | AST.TList _
-    | AST.TDict _ | AST.TStream _ | AST.TVar _ -> false
+    | AST.TDict _ | AST.TStream _ | AST.TVar _ | AST.TInferenceVar _ -> false
 
 let rec private countCallsToNames (names: Set<AST.FunctionId>) (expr: AExpr) : int =
     match expr with

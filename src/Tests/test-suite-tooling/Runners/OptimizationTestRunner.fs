@@ -115,11 +115,38 @@ let private optimizeContextFromConversionResult (convResult: AST_to_ANF.Conversi
 /// - Trim whitespace
 /// - Normalize line endings
 /// - Remove trailing whitespace from each line
+/// - Alpha-rename temporary IDs, which are allocation-order details shared
+///   with unrelated functions in the compiled standard library.
 let normalizeIR (ir: string) : string =
-    ir.Split([|'\n'; '\r'|], StringSplitOptions.RemoveEmptyEntries)
-    |> Array.map (fun line -> line.TrimEnd())
-    |> Array.filter (fun line -> line.Length > 0)
-    |> String.concat "\n"
+    let normalized =
+        ir.Split([|'\n'; '\r'|], StringSplitOptions.RemoveEmptyEntries)
+        |> Array.map (fun line -> line.TrimEnd())
+        |> Array.filter (fun line -> line.Length > 0)
+        |> String.concat "\n"
+    let matches =
+        System.Text.RegularExpressions.Regex.Matches(
+            normalized,
+            "\"(?:\\\\.|[^\"\\\\])*\"|(?<![A-Za-z0-9_])(?:TempId |t)(\\d+)\\b")
+        |> Seq.cast<System.Text.RegularExpressions.Match>
+        |> Seq.toList
+    let lastOffset, _, _, reversedParts =
+        matches
+        |> List.fold (fun (offset, nextId, ids, parts) token ->
+            let prefix = normalized.Substring(offset, token.Index - offset)
+            if not token.Groups.[1].Success then
+                (token.Index + token.Length, nextId, ids, (prefix + token.Value) :: parts)
+            else
+                let originalId = token.Groups.[1].Value
+                let canonicalId, nextId, ids =
+                    match Map.tryFind originalId ids with
+                    | Some id -> (id, nextId, ids)
+                    | None -> (nextId, nextId + 1, Map.add originalId nextId ids)
+                let replacement =
+                    if token.Value.StartsWith("t", StringComparison.Ordinal) then $"t{canonicalId}"
+                    else $"TempId {canonicalId}"
+                (token.Index + token.Length, nextId, ids, (prefix + replacement) :: parts))
+            (0, 0, Map.empty, [])
+    String.concat "" (List.rev reversedParts) + normalized.Substring(lastOffset)
 
 let private withoutSyntheticANFMain (ir: string) : string =
     let suffix = "\n\nMain:\nreturn 0"

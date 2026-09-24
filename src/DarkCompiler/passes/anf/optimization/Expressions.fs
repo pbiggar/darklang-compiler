@@ -81,6 +81,7 @@ let private isRecordProjectionCSEType (fieldType: AST.SemanticType) : bool =
     | AST.TList _
     | AST.TStream _
     | AST.TVar _
+    | AST.TInferenceVar _
     | AST.TInternalRawPtr
     | AST.TDict _ -> false
 

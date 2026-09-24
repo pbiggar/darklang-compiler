@@ -36,7 +36,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                     Ok []
                 | t when t = expectedType ->
                     Ok []
-                | TVar _ ->
+                | TVar _ | TInferenceVar _ ->
                     // Leave unresolved pattern literals flexible until concrete type information arrives.
                     // This is important for patterns like `match [] with | [1L] -> ...`.
                     Ok []
@@ -58,7 +58,7 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                     Ok []
                 | TString
                 | TChar
-                | TVar _ ->
+                | TVar _ | TInferenceVar _ ->
                     Ok []
                 | _ ->
                     let message =
@@ -173,6 +173,12 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                         patterns
                         |> List.mapi (fun idx _ -> TVar $"__tuple_elem_{tupleTypeVar}_{idx}")
                     collectTupleBindingsWithTypes unresolvedElementTypes
+                | TInferenceVar (_, identity) ->
+                    let unresolvedElementTypes =
+                        patterns
+                        |> List.mapi (fun idx _ ->
+                            TInferenceVar ($"tuple_element_{idx}", $"{identity}/tuple_element_{idx}"))
+                    collectTupleBindingsWithTypes unresolvedElementTypes
                 | TTuple _ ->
                     // Tuple arity mismatch in pattern should be treated as a non-match.
                     // Match lowering emits a false condition for this pattern shape.
@@ -201,11 +207,11 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                         let resolvedElemType = resolveType aliasReg elemType
                         let isKnownMismatch expectedType =
                             match resolvedElemType with
-                            | TVar _ -> false
+                            | TVar _ | TInferenceVar _ -> false
                             | _ -> resolvedElemType <> expectedType
                         let isKnownStringPatternMismatch () =
                             match resolvedElemType with
-                            | TVar _
+                            | TVar _ | TInferenceVar _
                             | TString
                             | TChar -> false
                             | _ -> true
@@ -248,6 +254,16 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                             | _, Error e -> Error e) (Ok [])
                 | TVar patternTypeVar ->
                     let unresolvedElemType = TVar $"__list_elem_{patternTypeVar}"
+                    patterns
+                    |> List.map (fun p ->
+                        extractPatternBindings p unresolvedElemType allowNoMatchForKnownListLengthMismatch)
+                    |> List.fold (fun acc res ->
+                        match acc, res with
+                        | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
+                        | Error e, _ -> Error e
+                        | _, Error e -> Error e) (Ok [])
+                | TInferenceVar (_, identity) ->
+                    let unresolvedElemType = TInferenceVar ("list_element", $"{identity}/list_element")
                     patterns
                     |> List.map (fun p ->
                         extractPatternBindings p unresolvedElemType allowNoMatchForKnownListLengthMismatch)
@@ -300,6 +316,26 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                     | _, Error e -> Error e
                 | TVar patternTypeVar ->
                     let unresolvedElemType = TVar $"__list_elem_{patternTypeVar}"
+                    let headBindings =
+                        headPatterns
+                        |> List.map (fun p ->
+                            extractPatternBindings p unresolvedElemType allowNoMatchForKnownListLengthMismatch)
+                        |> List.fold (fun acc res ->
+                            match acc, res with
+                            | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
+                            | Error e, _ -> Error e
+                            | _, Error e -> Error e) (Ok [])
+                    let tailBindings =
+                        extractPatternBindings
+                            tailPattern
+                            (TList unresolvedElemType)
+                            allowNoMatchForKnownListLengthMismatch
+                    match headBindings, tailBindings with
+                    | Ok hb, Ok tb -> Ok (hb @ tb)
+                    | Error e, _ -> Error e
+                    | _, Error e -> Error e
+                | TInferenceVar (_, identity) ->
+                    let unresolvedElemType = TInferenceVar ("list_element", $"{identity}/list_element")
                     let headBindings =
                         headPatterns
                         |> List.map (fun p ->

@@ -95,7 +95,8 @@ let private runtimeFunctionNames =
 let private applySubstitution (subst: Map<string, SemanticType>) (typ: SemanticType) : SemanticType =
     let rec apply typ =
         match typ with
-        | TVar name -> Map.tryFind name subst |> Option.defaultValue typ
+        | TVar name
+        | TInferenceVar (_, name) -> Map.tryFind name subst |> Option.defaultValue typ
         | TList elemType -> TList (apply elemType)
         | TStream elemType -> TStream (apply elemType)
         | TDict (keyType, valueType) -> TDict (apply keyType, apply valueType)
@@ -346,7 +347,10 @@ and private renderBody
         (StringLiteral "<stream>", state)
     // An unconstrained Dict value can only be the polymorphic empty literal;
     // no value renderer is needed because there are no entries to inspect.
-    | TDict (TVar _, TVar _) -> (StringLiteral "Dict { }", state)
+    | TDict (TVar _, TVar _)
+    | TDict (TInferenceVar _, TVar _)
+    | TDict (TVar _, TInferenceVar _)
+    | TDict (TInferenceVar _, TInferenceVar _) -> (StringLiteral "Dict { }", state)
     | TDict (keyType, valueType) ->
         let (itemsName, nextState) = ensureDictItemsRenderer env keyType valueType state
         let (entriesId, nextState) = freshBinding "__dict_entries" nextState
@@ -382,7 +386,8 @@ and private renderBody
                 |> List.collect (fun (_, fieldType) ->
                     let rec collect typ =
                         match typ with
-                        | TVar name -> [name]
+                        | TVar name
+                        | TInferenceVar (_, name) -> [name]
                         | TList elem -> collect elem
                         | TDict (key, value) -> collect key @ collect value
                         | TFunction (parameters, result) -> List.collect collect parameters @ collect result
@@ -495,6 +500,7 @@ and private renderBody
         (call state.Symbols "Darklang.Stdlib.Int64.toString" [value], state)
     | TNever -> (StringLiteral "()", state)
     | TVar name -> Crash.crash $"Unresolved type variable in value renderer: {name}"
+    | TInferenceVar (displayName, _) -> Crash.crash $"Unresolved inference variable in value renderer: {displayName}"
 
 let rewriteProgram
     (recordMetadata: CheckingTypes.IndexedTypeRegistry)

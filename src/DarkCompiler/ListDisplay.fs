@@ -34,5 +34,6 @@ let getDisplayStringFunc (elemType: AST.SemanticType) : string option =
     | AST.TList _
     | AST.TStream _
     | AST.TVar _
+    | AST.TInferenceVar _
     | AST.TInternalRawPtr
     | AST.TDict _ -> None

@@ -81,6 +81,7 @@ let rec typeToString (t: SemanticType) : string =
     | TList elemType -> $"List<{typeToString elemType}>"
     | TStream elemType -> $"Stream<{typeToString elemType}>"
     | TVar name -> name  // Type variable (for generics)
+    | TInferenceVar (displayName, _) -> displayName
     | TInternalRawPtr -> "RawPtr"  // Internal raw pointer type
     | TDict (_, valueType) -> $"Dict<{typeToString valueType}>"
 
@@ -432,8 +433,10 @@ let rec internal bindLetPatternTypes
     | LPVariable name, typ -> Some [(name, typ)]
     | LPWildcard, _ -> Some []
     | LPUnit, TUnit -> Some []
-    | LPUnit, TVar _ -> Some []
-    | LPTuple (first, second, rest), TVar _ ->
+    | LPUnit, TVar _
+    | LPUnit, TInferenceVar _ -> Some []
+    | LPTuple (first, second, rest), TVar _
+    | LPTuple (first, second, rest), TInferenceVar _ ->
         bindLetPatternTypes pattern (inferredLetPatternType "tuple" pattern)
     | LPTuple (first, second, rest), TTuple elementTypes ->
         let patterns = first :: second :: rest
@@ -550,26 +553,28 @@ let internal formatLegacyParamTypeError
 
     $"{functionName}'s {ordinal} parameter `{paramName}` expects {typeToString expectedType}, but got {typeToString actualType} ({actualValue})"
 
-/// Freshen type parameters - generate new unique names for each type param
-/// Returns (fresh type params, substitution map from old to fresh names)
-/// Uses deterministic function scope and index naming (no global state).
-let freshenTypeParamsAvoiding
+/// Each invocation gets a fresh, structurally separate inference identity.
+/// The internal key cannot be a source type-variable spelling, so no caller
+/// environment scan is necessary.
+let inferenceVarForKey (key: string) : SemanticType =
+    if key.StartsWith("#infer:", System.StringComparison.Ordinal) then
+        let lastSeparator = key.LastIndexOf(':')
+        let displayName =
+            if lastSeparator < 7 then Crash.crash "Malformed inference-variable identity"
+            else key.Substring(7, lastSeparator - 7)
+        TInferenceVar (displayName, key)
+    else TVar key
+
+let freshenTypeParams
     (scopeName: string option)
-    (unavailableNames: Set<string>)
     (typeParams: string list)
     : string list * Map<string, string> =
     let freshName index baseName =
-        let rec find suffix =
-            let scopedBase =
-                match scopeName with
-                | Some scope -> $"{baseName}${scope}${index}"
-                | None -> $"{baseName}${index}"
-            let candidate =
-                if suffix = 0 then scopedBase
-                else $"{scopedBase}${suffix}"
-            if Set.contains candidate unavailableNames then find (suffix + 1)
-            else candidate
-        find 0
+        let displayName =
+            match scopeName with
+            | Some scope -> $"{baseName}${scope}${index}"
+            | None -> $"{baseName}${index}"
+        $"#infer:{displayName}:{System.Guid.NewGuid():N}"
     let freshParams = typeParams |> List.mapi freshName
     let subst = List.zip typeParams freshParams |> Map.ofList
     (freshParams, subst)
@@ -579,8 +584,9 @@ let rec applyTypeVarRenaming (subst: Map<string, string>) (t: SemanticType) : Se
     match t with
     | TVar name ->
         match Map.tryFind name subst with
-        | Some newName -> TVar newName
+        | Some newName -> inferenceVarForKey newName
         | None -> t
+    | TInferenceVar _ -> t
     | TList elem -> TList (applyTypeVarRenaming subst elem)
     | TStream elem -> TStream (applyTypeVarRenaming subst elem)
     | TDict (k, v) -> TDict (applyTypeVarRenaming subst k, applyTypeVarRenaming subst v)

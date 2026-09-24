@@ -7,6 +7,11 @@ open CheckingDiagnostics
 open CheckingTypes
 open CheckedFreeVariables
 
+let (|UnificationVar|_|) = function
+    | TVar name -> Some name
+    | TInferenceVar (_, identity) -> Some identity
+    | _ -> None
+
 // =============================================================================
 // Type Inference for Generic Function Calls
 // =============================================================================
@@ -26,15 +31,16 @@ let matchConcrete (expectedType: SemanticType) (actual: SemanticType) : Result<(
     else
         match actual with
         | t when t = expectedType -> Ok []
-        | TVar name -> Ok [(name, expectedType)]  // Bind TVar to concrete type
+        | UnificationVar name -> Ok [(name, expectedType)]  // Bind a type variable to a concrete type
         | _ -> Error $"Expected {typeToString expectedType}, got {typeToString actual}"
 
 let rec matchTypes (pattern: SemanticType) (actual: SemanticType) : Result<(string * SemanticType) list, string> =
     match pattern with
-    | TVar name ->
+    | TVar name
+    | TInferenceVar (_, name) ->
         // Type variable matches anything - record the binding
         match actual with
-        | TVar actualName when actualName = name -> Ok []  // Same var, no binding needed
+        | same when same = pattern -> Ok []  // Same var, no binding needed
         | _ -> Ok [(name, actual)]
     | TInt8 -> matchConcrete TInt8 actual
     | TInt16 -> matchConcrete TInt16 actual
@@ -66,12 +72,12 @@ let rec matchTypes (pattern: SemanticType) (actual: SemanticType) : Result<(stri
     | TList patternElem ->
         match actual with
         | TList actualElem -> matchTypes patternElem actualElem
-        | TVar name -> Ok [(name, pattern)]  // Bind TVar to List type
+        | UnificationVar name -> Ok [(name, pattern)]  // Bind type variable to List type
         | _ -> Error $"Expected List<...>, got {typeToString actual}"
     | TStream patternElem ->
         match actual with
         | TStream actualElem -> matchTypes patternElem actualElem
-        | TVar name -> Ok [(name, pattern)]
+        | UnificationVar name -> Ok [(name, pattern)]
         | _ -> Error $"Expected Stream<...>, got {typeToString actual}"
     | TRecord (name, patternArgs) ->
         match actual with
@@ -88,7 +94,7 @@ let rec matchTypes (pattern: SemanticType) (actual: SemanticType) : Result<(stri
                     | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
                     | Error e, _ -> Error e
                     | _, Error e -> Error e) (Ok [])
-        | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Record type
+        | UnificationVar varName -> Ok [(varName, pattern)]  // Bind type variable to Record type
         | _ -> Error $"Expected {name}, got {typeToString actual}"
     | TSum (name, patternArgs) ->
         match actual with
@@ -104,7 +110,7 @@ let rec matchTypes (pattern: SemanticType) (actual: SemanticType) : Result<(stri
                     | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
                     | Error e, _ -> Error e
                     | _, Error e -> Error e) (Ok [])
-        | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Sum type
+        | UnificationVar varName -> Ok [(varName, pattern)]  // Bind type variable to Sum type
         | _ -> Error $"Expected {name}, got {typeToString actual}"
     | TFunction (patternParams, patternRet) ->
         match actual with
@@ -123,7 +129,7 @@ let rec matchTypes (pattern: SemanticType) (actual: SemanticType) : Result<(stri
                     | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
                     | Error e, _ -> Error e
                     | _, Error e -> Error e) retResult paramResults
-        | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Function type
+        | UnificationVar varName -> Ok [(varName, pattern)]  // Bind type variable to Function type
         | _ -> Error $"Expected function, got {typeToString actual}"
     | TTuple patternElems ->
         match actual with
@@ -138,7 +144,7 @@ let rec matchTypes (pattern: SemanticType) (actual: SemanticType) : Result<(stri
                     | Ok bindings, Ok newBindings -> Ok (bindings @ newBindings)
                     | Error e, _ -> Error e
                     | _, Error e -> Error e) (Ok [])
-        | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Tuple type
+        | UnificationVar varName -> Ok [(varName, pattern)]  // Bind type variable to Tuple type
         | _ -> Error $"Expected tuple, got {typeToString actual}"
     | TDict (patternKey, patternValue) ->
         match actual with
@@ -148,7 +154,7 @@ let rec matchTypes (pattern: SemanticType) (actual: SemanticType) : Result<(stri
             | Ok keyBindings, Ok valueBindings -> Ok (keyBindings @ valueBindings)
             | Error e, _ -> Error e
             | _, Error e -> Error e
-        | TVar varName -> Ok [(varName, pattern)]  // Bind TVar to Dict type
+        | UnificationVar varName -> Ok [(varName, pattern)]  // Bind type variable to Dict type
         | _ -> Error $"Expected Dict<...>, got {typeToString actual}"
 
 /// Check if a type contains type variables
@@ -162,14 +168,15 @@ let emptyListElementVar = "t$empty"
 /// (an untyped lambda binding, a call result through a variable, a pattern's
 /// element). A declared type parameter is not one.
 let isInferenceVar (name: string) : bool =
-    name.Contains "$"
+    name.StartsWith("#infer:", System.StringComparison.Ordinal)
+    || name.Contains "$"
     || name.StartsWith "binding_"
     || name.StartsWith "__"
     || name.StartsWith "recursiveParameter"
 
 let rec containsTVar (typ: SemanticType) : bool =
     match typ with
-    | TVar _ -> true
+    | TVar _ | TInferenceVar _ -> true
     | TList elemType -> containsTVar elemType
     | TStream elemType -> containsTVar elemType
     | TDict (keyType, valueType) -> containsTVar keyType || containsTVar valueType
@@ -246,7 +253,8 @@ let consolidateBindings (bindings: (string * SemanticType) list) : Result<Map<st
                         | _ -> Ok m
                 else
                     // Both are concrete but different - that's an error
-                    Error $"Type variable {name} has conflicting inferences: {typeToString existingType} vs {typeToString typ}"))
+                    let displayName = inferenceVarForKey name |> typeToString
+                    Error $"Type variable {displayName} has conflicting inferences: {typeToString existingType} vs {typeToString typ}"))
         (Ok Map.empty)
 
 /// Unify a type pattern (may contain TVar) with a concrete type.
@@ -360,7 +368,7 @@ let inferTypeArgs (typeParams: string list) (paramTypes: SemanticType list) (arg
                 acc |> Result.bind (fun args ->
                     match Map.tryFind paramName bindingMap with
                     | Some typ -> Ok (args @ [applySubst bindingMap typ])
-                    | None -> Ok (args @ [TVar paramName])))
+                    | None -> Ok (args @ [inferenceVarForKey paramName])))
                 (Ok []))
 
 /// Look up a name already resolved and canonicalized by the semantic boundary.

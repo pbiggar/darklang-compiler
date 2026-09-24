@@ -182,61 +182,154 @@ let private materializeProgramValues
         |> List.map (fun (_, id, body) ->
             id, Set.intersect valueIds (ClosureAnalysis.freeVars body Set.empty))
         |> Map.ofList
+    // Outlining a literal replaces one cheap instruction with a call and can
+    // regress runtime code. Share bodies that have actual lowering work.
+    let cheapValueIds =
+        bindings
+        |> List.choose (fun (_, id, body) ->
+            match body with
+            | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _
+            | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
+            | CheckedAST.UInt8Literal _ | CheckedAST.UInt16Literal _ | CheckedAST.UInt32Literal _
+            | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BigIntLiteral _
+            | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.BlobLiteral _
+            | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.Local _
+            | CheckedAST.ListLiteral [] | CheckedAST.TupleLiteral []
+            | CheckedAST.DictLiteral (_, _, []) | CheckedAST.Constructor (_, []) -> Some id
+            | _ -> None)
+        |> Set.ofList
+    let valueTypes = currentValues |> List.map (fun (_, (id, typ, _)) -> id, typ) |> Map.ofList
+    let helperName name = $"__dark_value_materializer_{name}"
+    let helperIds =
+        bindings
+        |> List.map (fun (name, id, _) -> id, AST.functionIdForName (helperName name))
+        |> Map.ofList
+    let bindingOrder =
+        bindings
+        |> List.mapi (fun index (_, id, _) -> id, index)
+        |> Map.ofList
+    let dependencyArgs =
+        dependencies
+        |> Map.map (fun _ required ->
+            required
+            |> Set.toList
+            |> List.sortBy (fun dependencyId ->
+                Map.tryFind dependencyId bindingOrder
+                |> Option.defaultWith (fun () -> Crash.crash "Missing checked value dependency")))
     let wrap excluded body =
-        let eligible = bindings |> List.filter (fun (_, id, _) -> not (Set.contains id excluded))
-        let eligibleIds = eligible |> List.map (fun (_, id, _) -> id) |> Set.ofList
-        let rec required fixedPoint =
-            let next =
-                eligible
-                |> List.fold (fun names (_, id, _) ->
-                    if Set.contains id names then
-                        let referenced =
-                            Map.tryFind id dependencies
-                            |> Option.defaultValue Set.empty
-                        Set.union names (Set.intersect eligibleIds referenced)
-                    else names) fixedPoint
-            if Set.count next = Set.count fixedPoint then next else required next
         let direct =
-            Set.intersect eligibleIds (ClosureAnalysis.freeVars body Set.empty)
-        let needed = required direct
-        let selected = eligible |> List.filter (fun (_, id, _) -> Set.contains id needed)
-        let rec orderByDependencies ordered remaining =
-            match remaining with
-            | [] -> ordered
-            | _ ->
-                let remainingNames = remaining |> List.map (fun (_, id, _) -> id) |> Set.ofList
-                let ready =
-                    remaining
-                    |> List.filter (fun (_, id, _) ->
-                        remainingNames
-                        |> Set.remove id
-                        |> Set.intersect (Map.tryFind id dependencies |> Option.defaultValue Set.empty)
-                        |> Set.isEmpty)
-                match ready with
-                | [] ->
-                    Crash.crash "Checked top-level values contain a cyclic materialization dependency"
+            Set.intersect valueIds (ClosureAnalysis.freeVars body Set.empty)
+            |> fun values -> Set.difference values excluded
+        if Set.isEmpty direct then (Set.empty, body)
+        else
+            let rec required pending needed =
+                match pending with
+                | [] -> needed
+                | id :: rest when Set.contains id needed -> required rest needed
+                | id :: rest ->
+                    let next =
+                        Map.tryFind id dependencies
+                        |> Option.defaultValue Set.empty
+                        |> fun values -> Set.difference values excluded
+                        |> Set.toList
+                    required (next @ rest) (Set.add id needed)
+            let needed = required (Set.toList direct) Set.empty
+            let selected = bindings |> List.filter (fun (_, id, _) -> Set.contains id needed)
+            let rec orderByDependencies ordered remaining =
+                match remaining with
+                | [] -> ordered
                 | _ ->
-                    let readyNames = ready |> List.map (fun (_, id, _) -> id) |> Set.ofList
-                    let pending = remaining |> List.filter (fun (_, id, _) -> not (Set.contains id readyNames))
-                    orderByDependencies (ordered @ ready) pending
-        let ordered = orderByDependencies [] selected
-        List.foldBack (fun (_, id, value) result ->
-            if Set.contains id excluded then result
-            else CheckedAST.Let (CheckedAST.LPVariable id, value, result)) ordered body
-    let materialized =
+                    let remainingNames = remaining |> List.map (fun (_, id, _) -> id) |> Set.ofList
+                    let ready =
+                        remaining
+                        |> List.filter (fun (_, id, _) ->
+                            remainingNames
+                            |> Set.remove id
+                            |> Set.intersect (Map.tryFind id dependencies |> Option.defaultValue Set.empty)
+                            |> Set.isEmpty)
+                    match ready with
+                    | [] ->
+                        Crash.crash "Checked top-level values contain a cyclic materialization dependency"
+                    | _ ->
+                        let readyNames = ready |> List.map (fun (_, id, _) -> id) |> Set.ofList
+                        let pending = remaining |> List.filter (fun (_, id, _) -> not (Set.contains id readyNames))
+                        orderByDependencies (ordered @ ready) pending
+            let ordered = orderByDependencies [] selected
+            let materialized =
+                List.foldBack (fun (_, id, value) result ->
+                    let initializer =
+                        if Set.contains id cheapValueIds then value
+                        else
+                            let arguments =
+                                Map.tryFind id dependencyArgs
+                                |> Option.defaultValue []
+                                |> List.map CheckedAST.Local
+                            let arguments =
+                                match arguments with
+                                | [] -> AST.NonEmptyList.singleton CheckedAST.UnitLiteral
+                                | first :: rest -> { Head = first; Tail = rest }
+                            let helperId =
+                                Map.tryFind id helperIds
+                                |> Option.defaultWith (fun () -> Crash.crash "Missing checked value materializer")
+                            CheckedAST.Call (helperId, arguments)
+                    CheckedAST.Let (CheckedAST.LPVariable id, initializer, result)) ordered body
+            (needed, materialized)
+    let materialized, usedValues =
         topLevels
-        |> List.choose (function
-            | CheckedAST.ValueDef _ -> None
+        |> List.fold (fun (items, used) item ->
+            match item with
+            | CheckedAST.ValueDef _ -> (items, used)
             | CheckedAST.FunctionDef funcDef ->
                 let parameters =
                     funcDef.Params
                     |> AST.NonEmptyList.toList
                     |> List.map fst
                     |> Set.ofList
-                Some (CheckedAST.FunctionDef { funcDef with Body = wrap parameters funcDef.Body })
-            | CheckedAST.Expression expr -> Some (CheckedAST.Expression (wrap Set.empty expr))
-            | CheckedAST.TypeDef (id, typeDef) -> Some (CheckedAST.TypeDef (id, typeDef)))
-    CheckedAST.Program (symbols, materialized)
+                let needed, body = wrap parameters funcDef.Body
+                (CheckedAST.FunctionDef { funcDef with Body = body } :: items, Set.union used needed)
+            | CheckedAST.Expression expr ->
+                let needed, body = wrap Set.empty expr
+                (CheckedAST.Expression body :: items, Set.union used needed)
+            | CheckedAST.TypeDef (id, typeDef) ->
+                (CheckedAST.TypeDef (id, typeDef) :: items, used)) ([], Set.empty)
+    // A helper owns each checked value body once. Calls still bind its result
+    // in each execution scope, in dependency order, so effects are not cached.
+    let helpers =
+        currentValues
+        |> List.choose (fun (name, (id, typ, body)) ->
+            if not (Set.contains id usedValues) || Set.contains id cheapValueIds then None
+            else
+                let parameters =
+                    Map.tryFind id dependencyArgs
+                    |> Option.defaultValue []
+                    |> List.map (fun dependencyId ->
+                        let typ =
+                            Map.tryFind dependencyId valueTypes
+                            |> Option.defaultWith (fun () -> Crash.crash "Missing checked value type")
+                        (dependencyId, typ))
+                let parameters =
+                    match parameters with
+                    | [] ->
+                        AST.NonEmptyList.singleton (AST.topLevelValueId $"{name}#unit", AST.TUnit)
+                    | first :: rest -> { Head = first; Tail = rest }
+                Some (CheckedAST.FunctionDef {
+                    Id =
+                        Map.tryFind id helperIds
+                        |> Option.defaultWith (fun () -> Crash.crash "Missing checked value materializer")
+                    Name = helperName name
+                    TypeParams = []
+                    Params = parameters
+                    ReturnType = typ
+                    Body = body
+                    Recursion = None
+                }))
+    let symbols =
+        currentValues
+        |> List.fold (fun symbols (name, (id, _, _)) ->
+            if Set.contains id usedValues && not (Set.contains id cheapValueIds) then
+                CheckedAST.internFunction (helperName name) symbols |> snd
+            else symbols) symbols
+    CheckedAST.Program (symbols, List.rev materialized @ helpers)
 
 let internal prepareProgramForAnf
     (monomorphization: MonomorphizationMode)

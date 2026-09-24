@@ -200,7 +200,7 @@ let private collectEscapingFunctionParams
             | AST.TInt64 | AST.TInt128 | AST.TInt | AST.TInt32 | AST.TInt16 | AST.TInt8
             | AST.TUInt64 | AST.TUInt128 | AST.TUInt32 | AST.TUInt16 | AST.TUInt8
             | AST.TBool | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
-            | AST.TFloat64 | AST.TUnit | AST.TNever | AST.TInternalRawPtr | AST.TVar _ ->
+            | AST.TFloat64 | AST.TUnit | AST.TNever | AST.TInternalRawPtr | AST.TVar _ | AST.TInferenceVar _ ->
                 Set.empty
     collect Set.empty typ
 

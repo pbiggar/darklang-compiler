@@ -134,6 +134,7 @@ let rec private structuralTypeKey (typ: SemanticType) : string =
     | TNever -> "runtime-error"
     | TInternalRawPtr -> "raw-ptr"
     | TVar name -> encodeText "var" name
+    | TInferenceVar (displayName, _) -> encodeText "var" displayName
     | TList elementType -> encodeTypes "list" [elementType]
     | TStream elementType -> encodeTypes "stream" [elementType]
     | TDict (keyType, valueType) -> encodeTypes "dict" [keyType; valueType]
@@ -264,6 +265,7 @@ let rec private typeReference env typ =
     | TRecord (name, typeArgs)
     | TSum (name, typeArgs) -> custom name typeArgs
     | TVar name -> unary "TVariable" (StringLiteral name)
+    | TInferenceVar (displayName, _) -> unary "TVariable" (StringLiteral displayName)
     | TTuple [] | TTuple [_] | TInternalRawPtr | TNever | TDict _ ->
         unary "TVariable" (StringLiteral (CheckingDiagnostics.typeToString typ))
 
@@ -288,7 +290,8 @@ let private resultCases env okId okBody errorId =
 let private applySubstitution subst typ =
     let rec apply typ =
         match typ with
-        | TVar name -> Map.tryFind name subst |> Option.defaultValue typ
+        | TVar name
+        | TInferenceVar (_, name) -> Map.tryFind name subst |> Option.defaultValue typ
         | TList inner -> TList (apply inner)
         | TDict (keyType, valueType) -> TDict (apply keyType, apply valueType)
         | TTuple types -> TTuple (List.map apply types)
@@ -661,7 +664,7 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
                                      :: acc))
                 loop (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
                 |> Result.map (fun (cases, nextState) -> (Match (value, cases), nextState)))
-    | TFunction _ | TBlob | TInternalRawPtr | TNever | TStream _ | TVar _
+    | TFunction _ | TBlob | TInternalRawPtr | TNever | TStream _ | TVar _ | TInferenceVar _
     | TDict _ ->
         Error
             $"Unsupported type in JSON: {CheckingDiagnostics.typeToString typ}. Some types are not supported in Json serialization"
@@ -1235,7 +1238,7 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
                                   tooMany
                               makeCase PWildcard failure ])
                     (objectBody, nextState)))
-    | TFunction _ | TBlob | TInternalRawPtr | TNever | TStream _ | TVar _ | TDict _ ->
+    | TFunction _ | TBlob | TInternalRawPtr | TNever | TStream _ | TVar _ | TInferenceVar _ | TDict _ ->
         Error $"Unsupported type in JSON: {CheckingDiagnostics.typeToString typ}. Some types are not supported in Json serialization"
 
 let rec private mapExpr rewrite symbols expr =

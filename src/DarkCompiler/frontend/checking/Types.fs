@@ -134,7 +134,8 @@ let rec resolveTypeName (aliasReg: AliasRegistry) (typeName: string) : string =
 /// Apply a substitution to a type, replacing type variables with concrete types
 let rec private applySubstWithSeen (seen: Set<string>) (subst: Substitution) (typ: SemanticType) : SemanticType =
     match typ with
-    | TVar name ->
+    | TVar name
+    | TInferenceVar (_, name) ->
         if Set.contains name seen then
             typ
         else
@@ -172,7 +173,8 @@ let applySubst (subst: Substitution) (typ: SemanticType) : SemanticType =
 /// substituted (for example Outer<'a> = Inner<String, 'a>).
 let rec internal applyTypeArguments (subst: Substitution) (typ: SemanticType) : SemanticType =
     match typ with
-    | TVar name -> Map.tryFind name subst |> Option.defaultValue typ
+    | TVar name
+    | TInferenceVar (_, name) -> Map.tryFind name subst |> Option.defaultValue typ
     | TFunction (paramTypes, returnType) ->
         TFunction (List.map (applyTypeArguments subst) paramTypes, applyTypeArguments subst returnType)
     | TTuple elemTypes -> TTuple (List.map (applyTypeArguments subst) elemTypes)
@@ -192,7 +194,8 @@ let rec collectTypeVarsInType (typ: SemanticType) (acc: string list) : string li
         if List.contains name acc then acc else acc @ [name]
 
     match typ with
-    | TVar name -> add name
+    | TVar name
+    | TInferenceVar (_, name) -> add name
     | TFunction (paramTypes, returnType) ->
         let withParams = paramTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
         collectTypeVarsInType returnType withParams
@@ -265,7 +268,7 @@ let rec internal resolveAliasTargetType (aliasReg: AliasRegistry) (typ: Semantic
         TStream (resolveAliasTargetType aliasReg elemType)
     | TDict (keyType, valueType) ->
         TDict (resolveAliasTargetType aliasReg keyType, resolveAliasTargetType aliasReg valueType)
-    | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+    | TVar _ | TInferenceVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
     | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr ->
         typ
@@ -454,7 +457,7 @@ let rec resolveType (aliasReg: AliasRegistry) (typ: SemanticType) : SemanticType
         TStream (resolveType aliasReg elemType)
     | TDict (keyType, valueType) ->
         TDict (resolveType aliasReg keyType, resolveType aliasReg valueType)
-    | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+    | TVar _ | TInferenceVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
     | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr ->
         typ  // Primitive types and type variables are unchanged
@@ -524,7 +527,7 @@ let internal canonicalizeBareSumTypeRefsWithNames
             TStream (canonicalize elemType)
         | TDict (keyType, valueType) ->
             TDict (canonicalize keyType, canonicalize valueType)
-        | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+        | TVar _ | TInferenceVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
         | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr ->
             typ
@@ -553,7 +556,7 @@ let internal canonicalizeDeclaredTypeRefsWithSumTypeNames
         | TList elementType -> TList (canonicalize elementType)
         | TStream elementType -> TStream (canonicalize elementType)
         | TDict (keyType, valueType) -> TDict (canonicalize keyType, canonicalize valueType)
-        | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+        | TVar _ | TInferenceVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
         | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr -> current
 

@@ -71,7 +71,8 @@ let rec applyTypeSubst (typeParams: string list) (typeArgs: AST.SemanticType lis
             Crash.crash $"applyTypeSubst: type argument mismatch: params={typeParams.Length}, args={typeArgs.Length}"
     let rec substitute t =
         match t with
-        | AST.TVar name ->
+        | AST.TVar name
+        | AST.TInferenceVar (_, name) ->
             match Map.tryFind name subst with
             | Some concrete -> concrete
             | None -> t  // Unbound - keep as-is
@@ -87,7 +88,8 @@ let rec applyTypeSubst (typeParams: string list) (typeArgs: AST.SemanticType lis
 let private collectTypeVars (typ: AST.SemanticType) : string list =
     let rec collect t =
         match t with
-        | AST.TVar name -> [name]
+        | AST.TVar name
+        | AST.TInferenceVar (_, name) -> [name]
         | AST.TFunction (paramTypes, retType) -> List.collect collect paramTypes @ collect retType
         | AST.TTuple elemTypes -> List.collect collect elemTypes
         | AST.TList elemType -> collect elemType
@@ -1345,7 +1347,7 @@ let selectInstr
                 | LIR.Reg r -> [LIR.Mov (LIR.Physical LIR.X19, LIR.Reg r)]
                 | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
             finishPrintFromReg (LIR.Physical LIR.X19) (moveToX19 @ [LIR.PrintBlob (LIR.Physical LIR.X19)])
-        | AST.TVar _ ->
+        | AST.TVar _ | AST.TInferenceVar _ ->
             // Type variables should be monomorphized away before reaching LIR
             Error "Internal error: type variable reached MIR_to_LIR (should be monomorphized)"
 

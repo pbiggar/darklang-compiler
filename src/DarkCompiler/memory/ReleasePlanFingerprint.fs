@@ -100,6 +100,10 @@ let rcSourceTypeFingerprint (sourceType: AST.SemanticType) : string =
         | AST.TVar name ->
             addByte 26uy
             addString name
+        | AST.TInferenceVar (displayName, identity) ->
+            addByte 29uy
+            addString displayName
+            addString identity
         | AST.TInternalRawPtr -> addByte 27uy
         | AST.TDict (keyType, valueType) ->
             addByte 28uy

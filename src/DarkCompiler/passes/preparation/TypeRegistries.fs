@@ -168,7 +168,7 @@ let private canonicalizeBareSumTypeRefsWithPredicate
             AST.TStream (canonicalize elemType)
         | AST.TDict (keyType, valueType) ->
             AST.TDict (canonicalize keyType, canonicalize valueType)
-        | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
+        | AST.TVar _ | AST.TInferenceVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
         | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
         | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
         | AST.TUnit | AST.TInternalRawPtr | AST.TNever ->
@@ -246,6 +246,7 @@ let rec private resolveAliasTypeForRegistry (aliasReg: AliasRegistry) (typ: AST.
             resolveAliasTypeForRegistry aliasReg returnType
         )
     | AST.TVar _
+    | AST.TInferenceVar _
     | AST.TInt8
     | AST.TInt16
     | AST.TInt32

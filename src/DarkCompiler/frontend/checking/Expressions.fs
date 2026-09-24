@@ -1330,7 +1330,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                     List.zip typeParams expectedArgs
                     |> List.filter (fun (_, argument) ->
                         match argument with
-                        | TVar _ -> false
+                        | TVar _ | TInferenceVar _ -> false
                         | _ -> true)
                     |> Map.ofList
                 let rec checkFields fieldTypes fieldExprs subst checkedFields =
@@ -1343,7 +1343,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                             |> canonicalizeBareSumTypeRefsWithNames sumTypeNames
                         let fieldExpectedType =
                             match expectedFieldType with
-                            | TVar _ -> None
+                            | TVar _ | TInferenceVar _ -> None
                             | _ -> Some expectedFieldType
                         checkExpr
                             fieldExpr
@@ -1456,7 +1456,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
             // of a fold) takes the list; the element stays open for the other
             // arguments to fix. `Stdlib.List.fold xs [] (fun acc x -> [x])` was a
             // mismatch reported as the enclosing function's return value.
-            | Some (TVar _) | None -> Ok (TList (TVar emptyListElementVar), ListLiteral [])
+            | Some (TVar _) | Some (TInferenceVar _) | None -> Ok (TList (TVar emptyListElementVar), ListLiteral [])
             | Some other -> Error (TypeMismatch (other, TList (TVar emptyListElementVar), "empty list"))
         | first :: rest ->
             // Use expected list element type for the first element when available, so
@@ -1465,7 +1465,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                 match expectedType |> Option.map (resolveType aliasReg) with
                 // A bare type variable must be inferred from the element. Passing it into
                 // expression checking would hide concrete requirements such as arithmetic.
-                | Some (TList (TVar _)) -> None
+                | Some (TList (TVar _)) | Some (TList (TInferenceVar _)) -> None
                 // Structured generic types still carry useful constraints. In particular,
                 // checking (String, a) contextually preserves the precise error at a bad key.
                 | Some (TList expectedElemType) -> Some expectedElemType

@@ -63,6 +63,7 @@ let rec private formatType (typ: SemanticType) : string =
     | TNever -> "RuntimeError"
     | TInternalRawPtr -> "RawPtr"
     | TVar name -> formatIdentifierSegment name
+    | TInferenceVar (displayName, _) -> formatIdentifierSegment displayName
     | TList elemType -> $"List<{formatType elemType}>"
     | TStream elemType -> $"Stream<{formatType elemType}>"
     | TDict (TString, valueType) -> $"Dict<{formatType valueType}>"

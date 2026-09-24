@@ -1030,6 +1030,8 @@ let internal generateLinuxCliProcessLifecycleHelpers (enableLeakCheck: bool) : X
             X86_64.MOV_load (X86_64.RSI, X86_64.RSP, 72)
             X86_64.MOV_load (X86_64.RDX, X86_64.RSI, 8)
             X86_64.MOV_store (X86_64.RSP, 16, X86_64.RDX)
+            X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
+            X86_64.MOV_store (X86_64.RSP, 64, X86_64.RAX)
             X86_64.CMP_imm (X86_64.RDX, 0)
             X86_64.Jcc (X86_64.EQ, "__dark_process_io_read_stdout")
             X86_64.MOV_load (X86_64.RDI, X86_64.RBX, 16)
@@ -1043,6 +1045,7 @@ let internal generateLinuxCliProcessLifecycleHelpers (enableLeakCheck: bool) : X
         @ syscall 1L
         @ [ X86_64.XOR_reg (X86_64.RCX, X86_64.RCX)
             X86_64.MOV_store (X86_64.RSP, 40, X86_64.RCX)
+            X86_64.MOV_store (X86_64.RSP, 64, X86_64.RCX)
             X86_64.Label "__dark_process_io_read_stdout"
             X86_64.MOV_load (X86_64.R10, X86_64.R12, 0)
             X86_64.LEA (X86_64.RSI, X86_64.R12, 8)
@@ -1088,14 +1091,32 @@ let internal generateLinuxCliProcessLifecycleHelpers (enableLeakCheck: bool) : X
             X86_64.MOV_load (X86_64.RAX, X86_64.RSP, 16)
             X86_64.CMP_imm (X86_64.RAX, 0)
             X86_64.Jcc (X86_64.EQ, "__dark_process_io_running")
+            X86_64.MOV_load (X86_64.R10, X86_64.R12, 0)
+            X86_64.MOV_load (X86_64.R11, X86_64.R13, 0)
+            X86_64.ADD_reg (X86_64.R10, X86_64.R11)
+            X86_64.MOV_load (X86_64.R11, X86_64.RSP, 0)
+            X86_64.SUB_reg (X86_64.R10, X86_64.R11)
+            X86_64.MOV_load (X86_64.R11, X86_64.RSP, 8)
+            X86_64.SUB_reg (X86_64.R10, X86_64.R11)
+            X86_64.MOV_load (X86_64.R11, X86_64.RSP, 64)
+            X86_64.CMP_reg (X86_64.R10, X86_64.R11)
+            X86_64.Jcc (X86_64.NE, "__dark_process_io_response_changed")
+            X86_64.CMP_imm (X86_64.R10, 0)
+            X86_64.Jcc (X86_64.NE, "__dark_process_io_running")
+            X86_64.JMP "__dark_process_io_poll"
+            X86_64.Label "__dark_process_io_response_changed"
+            X86_64.MOV_store (X86_64.RSP, 64, X86_64.R10)
+            X86_64.XOR_reg (X86_64.R10, X86_64.R10)
+            X86_64.MOV_store (X86_64.RSP, 40, X86_64.R10)
+            X86_64.Label "__dark_process_io_poll"
             X86_64.MOV_load (X86_64.R10, X86_64.RSP, 40)
             X86_64.ADD_imm (X86_64.R10, 1)
             X86_64.MOV_store (X86_64.RSP, 40, X86_64.R10)
-            X86_64.CMP_imm (X86_64.R10, 100)
+            X86_64.CMP_imm (X86_64.R10, 10)
             X86_64.Jcc (X86_64.GE, "__dark_process_io_running")
             X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
             X86_64.MOV_store (X86_64.RSP, 48, X86_64.RAX) ]
-        @ loadImm64 X86_64.RAX 10000000L
+        @ loadImm64 X86_64.RAX 100000000L
         @ [ X86_64.MOV_store (X86_64.RSP, 56, X86_64.RAX)
             X86_64.LEA (X86_64.RDI, X86_64.RSP, 48)
             X86_64.XOR_reg (X86_64.RSI, X86_64.RSI) ]

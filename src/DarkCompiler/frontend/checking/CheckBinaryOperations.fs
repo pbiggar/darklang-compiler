@@ -63,7 +63,7 @@ let internal check (checkExpr: ExpressionChecker) (indexedSumTypeReg: IndexedSum
                             | _ -> Ok (leftNumericType, BinOp (op, left', right')))
                 | None ->
                     match leftType with
-                    | TVar _ ->
+                    | TVar _ | TInferenceVar _ ->
                         let rightExpectedType =
                             match expectedType with
                             | Some expected ->

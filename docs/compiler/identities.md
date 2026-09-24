@@ -111,16 +111,23 @@ where that ID model exists.
 
 ### Nominal types and type variables
 
-`AST.SemanticType` still represents `TRecord`, `TSum`, and `TVar` with strings. As a
-result, type, alias, record-layout, sum-layout, memory-planning, JSON-planning,
-and rendering registries are still commonly keyed by type name. `TypeId`
-currently protects checked nominal references, but it is not yet the identity
-carried by every occurrence inside the compiler's type representation. This is
-the largest remaining semantic name-based area.
+`AST.SemanticType` still represents `TRecord`, `TSum`, and declared `TVar`
+with strings. Call-local generic inference variables use the distinct
+`TInferenceVar` case with an opaque fresh identity, so instantiation does not
+scan the caller's type environment for available names. Type, alias,
+record-layout, sum-layout, memory-planning, JSON-planning, and rendering
+registries are still commonly keyed by nominal type name. `TypeId` protects
+checked nominal references, but it is not yet carried by every occurrence
+inside the compiler's type representation.
 
-Type-parameter names are a separate case. They are locally bound variables
-used by substitution and unification; replacing them would improve alpha-
-renaming robustness, but they do not denote nominal declarations.
+The checked-program construction boundary erases any still-open inference
+identity to its stable display variable while it converts the typed AST. Thus
+separate call sites stay distinct during checking, but alpha-equivalent open
+specializations can share downstream compiled work.
+
+Declared type-parameter names remain locally bound variables used by
+substitution. Only a fresh instance made for a generic call has the opaque
+inference identity; neither kind denotes a nominal declaration.
 
 ### Values and preparation registries
 

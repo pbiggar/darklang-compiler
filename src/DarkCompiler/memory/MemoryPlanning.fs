@@ -25,7 +25,7 @@ let rcShapeOfType (typeReg: Map<string, (string * AST.SemanticType) list>) (t: A
         | AST.TDateTime
         | AST.TUnit
         | AST.TNever
-        | AST.TVar _ ->
+        | AST.TVar _ | AST.TInferenceVar _ ->
             Immediate
         // Arbitrary Int uses tagged immediates or a limb buffer. Fixed-width 128-bit
         // values are immutable two-limb blocks with the refcount after the payload.
@@ -83,7 +83,8 @@ let private rcShapeTypeSubstitution (typeParams: string list) (typeArgs: AST.Sem
 let private collectTypeVarsInOrder (typ: AST.SemanticType) : string list =
     let rec collect t =
         match t with
-        | AST.TVar name -> [name]
+        | AST.TVar name
+        | AST.TInferenceVar (_, name) -> [name]
         | AST.TTuple elemTypes -> elemTypes |> List.collect collect
         | AST.TRecord (_, typeArgs) -> typeArgs |> List.collect collect
         | AST.TList elemType -> collect elemType
@@ -126,7 +127,8 @@ let inferredRecordTypeParamsRegistry
 
 let rec private applyRcShapeTypeSubstitution (subst: Map<string, AST.SemanticType>) (typ: AST.SemanticType) : AST.SemanticType =
     match typ with
-    | AST.TVar name ->
+    | AST.TVar name
+    | AST.TInferenceVar (_, name) ->
         match Map.tryFind name subst with
         | Some concrete -> concrete
         | None -> typ
@@ -273,7 +275,7 @@ let rcShapeOfTypeWithSums
         | AST.TDateTime
         | AST.TUnit
         | AST.TNever
-        | AST.TVar _ ->
+        | AST.TVar _ | AST.TInferenceVar _ ->
             Immediate
 
     classify Set.empty t

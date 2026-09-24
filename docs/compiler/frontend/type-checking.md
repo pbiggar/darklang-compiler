@@ -37,6 +37,7 @@ type SemanticType =
     | TList of SemanticType
     | TStream of SemanticType
     | TVar of string
+    | TInferenceVar of displayName:string * identity:string
     | TInternalRawPtr
     | TDict of keyType:SemanticType * valueType:SemanticType
 ```
@@ -223,4 +224,4 @@ type TypeError =
 | `checkFunctionDef` | Type check a function definition |
 | `unifyTypes` | Check type compatibility and collect substitutions |
 | `applySubst` | Apply type variable substitution |
-| `freshenTypeParams` | Generate fresh type variable names |
+| `freshenTypeParams` | Give each generic-call instantiation distinct inference identities without scanning the caller environment |

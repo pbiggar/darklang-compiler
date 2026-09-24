@@ -13,7 +13,8 @@ type Substitution = Map<string, AST.SemanticType>
 /// Apply a substitution to a type, replacing type variables with concrete types
 let rec applySubstToType (subst: Substitution) (typ: AST.SemanticType) : AST.SemanticType =
     match typ with
-    | AST.TVar name ->
+    | AST.TVar name
+    | AST.TInferenceVar (_, name) ->
         match Map.tryFind name subst with
         | Some concreteType -> concreteType
         | None -> typ  // Unbound type variable remains as-is
@@ -108,13 +109,14 @@ let internal boxedSumDescriptor
 /// Match a type pattern (may contain type variables) against a concrete type.
 let rec matchTypePattern (pattern: AST.SemanticType) (actual: AST.SemanticType) : Result<(string * AST.SemanticType) list, string> =
     match pattern with
-    | AST.TVar name ->
+    | AST.TVar name
+    | AST.TInferenceVar (_, name) ->
         match actual with
-        | AST.TVar actualName when actualName = name -> Ok []
+        | same when same = pattern -> Ok []
         | _ -> Ok [(name, actual)]
     | _ ->
         match actual with
-        | AST.TVar _ ->
+        | AST.TVar _ | AST.TInferenceVar _ ->
             // ANF-side inference may observe unresolved constructor type args.
             // Treat unconstrained actual type variables as compatible placeholders.
             Ok []

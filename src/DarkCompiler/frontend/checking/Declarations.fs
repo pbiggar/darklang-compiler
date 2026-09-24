@@ -100,7 +100,7 @@ let internal validateTopLevelTypeDeclarations
         | TList element -> validateTypeReference owner element
         | TStream element -> validateTypeReference owner element
         | TDict (key, value) -> validateAll [key; value]
-        | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+        | TVar _ | TInferenceVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
         | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr -> Ok ()
 
@@ -129,7 +129,7 @@ let internal validateTopLevelTypeDeclarations
             | TList element
             | TStream element -> referencedAliases element
             | TDict (key, value) -> combine [key; value]
-            | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+            | TVar _ | TInferenceVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
             | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
             | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit
             | TNever | TInternalRawPtr -> Set.empty

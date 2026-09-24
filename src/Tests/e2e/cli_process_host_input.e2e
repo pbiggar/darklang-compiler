@@ -76,6 +76,9 @@ let handle = Stdlib.Cli.Process.spawn "read line; sleep 0.3; printf 'later:%s\\n
 
 let handle = Stdlib.Cli.Process.spawn "while read line; do printf 'reply:%s\\n' \"$line\"; done" in let first = Stdlib.Cli.Process.communicate handle "one" in let second = Stdlib.Cli.Process.communicate handle "two" in let final = Stdlib.Cli.Process.terminate handle in (first.stdout, second.stdout, final.stdout) = ("reply:one\n", "reply:two\n", "reply:one\nreply:two\n")
 
+// A live child's response may arrive in pieces; communicate must return both pieces.
+let handle = Stdlib.Cli.Process.spawn "while read line; do printf 'reply:'; sleep 0.03; printf '%s\\n' \"$line\"; done" in let response = Stdlib.Cli.Process.communicate handle "chunked" in let final = Stdlib.Cli.Process.terminate handle in (response.stdout, final.stdout) = ("reply:chunked\n", "reply:chunked\n")
+
 let handle = Stdlib.Cli.Process.spawn "printf started; sleep 10" in let _ = Stdlib.Cli.Posix.sleep 100.0 in let result = Stdlib.Cli.Process.terminate handle in (Stdlib.String.startsWith result.stdout "started", result.stderr) = (true, "")
 
 match Stdlib.Cli.Host.getRuntimeHost () with | Ok _ -> true | Error _ -> false = true

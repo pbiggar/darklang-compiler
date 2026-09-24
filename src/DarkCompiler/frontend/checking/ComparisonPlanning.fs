@@ -116,7 +116,7 @@ let internal validateJsonTargetType
                         info.Variants
                         |> List.collect (fun variant -> List.map (applySubst subst) variant.Fields)
                         |> validateAll
-            | TFunction _ | TBlob | TInternalRawPtr | TNever | TStream _ | TVar _ | TDict _ -> unsupported typ
+            | TFunction _ | TBlob | TInternalRawPtr | TNever | TStream _ | TVar _ | TInferenceVar _ | TDict _ -> unsupported typ
     validate Set.empty targetType
 
 /// Every concrete compound comparable type has one equality entry point.
@@ -179,7 +179,7 @@ let internal buildEqExprForType
     : Expr =
     let resolvedType = typ |> resolveType aliasReg |> canonicalEqualityType variantLookup
     match resolvedType with
-    | TVar _ ->
+    | TVar _ | TInferenceVar _ ->
         // A generic comparison cannot select a representation-level operation
         // until specialization. Preserve the typed plan through substitution.
         makeInternalTypeApp (EqHelperDispatchTypeApp (resolvedType, leftExpr, rightExpr))
@@ -232,7 +232,7 @@ let private equalityComparableType
             let seen = Set.add resolved seen
             let recurse = comparable seen
             match resolved with
-            | TVar _ -> true
+            | TVar _ | TInferenceVar _ -> true
             | TUnit | TBool | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
             | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
             | TFloat64 | TChar | TString | TDateTime -> true
@@ -292,7 +292,7 @@ let internal canonicalSortableType
             let seen = Set.add resolved seen
             let recurse = sortable seen
             match resolved with
-            | TVar _ -> true
+            | TVar _ | TInferenceVar _ -> true
             | TUnit | TBool | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
             | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
             | TFloat64 | TChar | TString | TDateTime -> true
@@ -342,7 +342,7 @@ let internal dictKeyAdmissibleType
             let seen = Set.add resolved seen
             let recurse = admissible seen
             match resolved with
-            | TVar _ -> true
+            | TVar _ | TInferenceVar _ -> true
             | TUnit | TBool | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
             | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
             | TFloat64 | TChar | TString | TDateTime -> true
@@ -445,6 +445,8 @@ let rec private reconcileComparisonTypes
         | other, TNever -> Some other
         | TVar _, other
         | other, TVar _ -> Some other
+        | TInferenceVar _, other
+        | other, TInferenceVar _ -> Some other
         | TList leftElement, TList rightElement ->
             reconcileComparisonTypes aliasReg leftElement rightElement
             |> Option.map TList

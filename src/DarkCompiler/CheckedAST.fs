@@ -747,12 +747,32 @@ let private map2 f first second =
     |> Result.bind (fun firstValue ->
         second |> Result.map (fun secondValue -> f firstValue secondValue))
 
+/// Inference identities are meaningful only while checking a call. Erase them
+/// as types cross the checked-program boundary; downstream specialization
+/// needs stable, alpha-equivalent names for still-open generic arguments.
+let rec normalizeInferenceType (typ: AST.SemanticType) : AST.SemanticType =
+    match typ with
+    | AST.TInferenceVar (displayName, _) -> AST.TVar displayName
+    | AST.TFunction (parameters, result) ->
+        AST.TFunction (List.map normalizeInferenceType parameters, normalizeInferenceType result)
+    | AST.TTuple elements -> AST.TTuple (List.map normalizeInferenceType elements)
+    | AST.TRecord (name, arguments) -> AST.TRecord (name, List.map normalizeInferenceType arguments)
+    | AST.TSum (name, arguments) -> AST.TSum (name, List.map normalizeInferenceType arguments)
+    | AST.TList element -> AST.TList (normalizeInferenceType element)
+    | AST.TStream element -> AST.TStream (normalizeInferenceType element)
+    | AST.TDict (keyType, valueType) ->
+        AST.TDict (normalizeInferenceType keyType, normalizeInferenceType valueType)
+    | AST.TVar _ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
+    | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
+    | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
+    | AST.TUnit | AST.TNever | AST.TInternalRawPtr -> typ
+
 let private convertRecordReference
     (reference: AST.RecordReference)
     (symbols: Symbols)
     : RecordReference * Symbols =
     let typeId, symbols = internType reference.ResolvedTypeName symbols
-    ({ TypeId = typeId; TypeArgs = reference.TypeArgs }, symbols)
+    ({ TypeId = typeId; TypeArgs = List.map normalizeInferenceType reference.TypeArgs }, symbols)
 
 let private convertConstructorReference
     (location: string)
@@ -943,7 +963,9 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
             convertExpr location valueEnvironment withSymbol value
             |> Result.bind (fun (value', afterValue) ->
                 convertExpr location bodyEnvironment afterValue body
-                |> Result.map (fun (body', following) -> (RecursiveLet (typed, value', body'), following)))
+                |> Result.map (fun (body', following) ->
+                    let typed = { typed with MonomorphicType = normalizeInferenceType typed.MonomorphicType }
+                    (RecursiveLet (typed, value', body'), following)))
         | _ -> conversionError location "recursive let has no typed recursion evidence"
     | AST.Var name ->
         if name = "Builtin.testNan" then Ok (FloatLiteral System.Double.NaN, symbols)
@@ -984,7 +1006,7 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
                 (Call (functionId, converted), state)
             | _, _ ->
                 let (functionId, state) = internFunction name state
-                (TypeApp (functionId, typeArgs, converted), state))
+                (TypeApp (functionId, List.map normalizeInferenceType typeArgs, converted), state))
     | AST.TupleLiteral elements ->
         convertList elements symbols |> Result.map (fun (values, state) -> (TupleLiteral values, state))
     | AST.TupleAccess (tuple, index) ->
@@ -996,7 +1018,8 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
             |> Result.bind (fun (converted, state) ->
                 convertPair key value state
                 |> Result.map (fun (key', value', next) -> ((key', value') :: converted, next)))) (Ok ([], symbols))
-        |> Result.map (fun (converted, state) -> (DictLiteral (keyType, valueType, List.rev converted), state))
+        |> Result.map (fun (converted, state) ->
+            (DictLiteral (normalizeInferenceType keyType, normalizeInferenceType valueType, List.rev converted), state))
     | AST.RecordLiteral (reference, fields) ->
         convertFields fields symbols
         |> Result.map (fun (converted, state) ->
@@ -1063,14 +1086,15 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
                 | None -> conversionError location "lambda parameter has no inferred type"
                 | Some typ ->
                     let (pattern', patternBindings, next) = allocateLetPattern state parameter.Pattern
-                    Ok ({ Pattern = pattern'; Type = typ } :: converted,
+                    Ok ({ Pattern = pattern'; Type = normalizeInferenceType typ } :: converted,
                         bindings @ patternBindings,
                         next))) (Ok ([], [], symbols))
         |> Result.bind (fun (convertedParameters, bindings, afterParameters) ->
             let bodyEnvironment = extendEnvironment bindings environment
             convertExpr location bodyEnvironment afterParameters body
             |> Result.map (fun (body', following) ->
-                (Lambda (AST.NonEmptyList.fromList (List.rev convertedParameters), returnAnnotation, body'),
+                (Lambda (AST.NonEmptyList.fromList (List.rev convertedParameters),
+                         Option.map normalizeInferenceType returnAnnotation, body'),
                  following)))
     | AST.Apply (func, [], args) ->
         convert symbols func
@@ -1104,7 +1128,8 @@ let private convertFunctionWithEnvironment
     let recursion =
         match funcDef.Recursion with
         | None -> Ok None
-        | Some (AST.TypedRecursiveBinding typed) -> Ok (Some typed)
+        | Some (AST.TypedRecursiveBinding typed) ->
+            Ok (Some { typed with MonomorphicType = normalizeInferenceType typed.MonomorphicType })
         | Some _ -> conversionError $"function '{funcDef.Name}'" "function has no typed recursion evidence"
     recursion
     |> Result.bind (fun recursion' ->
@@ -1117,7 +1142,7 @@ let private convertFunctionWithEnvironment
         |> AST.NonEmptyList.toList
         |> List.mapFold (fun currentSymbols (name, typ) ->
             let (id, next) = allocateBinding name currentSymbols
-            ((id, typ), next)) symbols
+            ((id, normalizeInferenceType typ), next)) symbols
         |> fun (parameters, afterParameters) ->
             let environment =
                 List.zip (funcDef.Params |> AST.NonEmptyList.toList |> List.map fst) (parameters |> List.map fst)
@@ -1128,7 +1153,7 @@ let private convertFunctionWithEnvironment
                    Name = funcDef.Name
                    TypeParams = funcDef.TypeParams
                    Params = AST.NonEmptyList.fromList parameters
-                   ReturnType = funcDef.ReturnType
+                   ReturnType = normalizeInferenceType funcDef.ReturnType
                    Body = body
                    Recursion = recursion' },
                  following)))
@@ -1202,7 +1227,7 @@ let ofTypedProgram
                     match Map.tryFind name valueEnvironment with
                     | Some id -> id
                     | None -> Crash.crash "Checked value identity allocation was lost"
-                (ValueDef { Id = id; Name = name; Type = typ; Body = checkedBody }, state))
+                (ValueDef { Id = id; Name = name; Type = normalizeInferenceType typ; Body = checkedBody }, state))
         | AST.ValueDef (AST.UncheckedValueDef (name, _)) ->
             conversionError $"value '{name}'" "value definition was not checked"
         | AST.Expression (_, expr) ->

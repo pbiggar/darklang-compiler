@@ -152,12 +152,13 @@ let rec typeToMangledName (t: AST.SemanticType) : string =
     | AST.TStream elemType -> $"stream_{typeToMangledName elemType}"
     | AST.TDict (keyType, valueType) -> $"dict_{typeToMangledName keyType}_{typeToMangledName valueType}"
     | AST.TVar name -> mangleTypeVarName name  // Should not appear after monomorphization
+    | AST.TInferenceVar (displayName, _) -> mangleTypeVarName displayName
     | AST.TInternalRawPtr -> "rawptr"  // Internal raw pointer type
 
 /// Check if a type contains any type variables
 let rec containsTypeVar (t: AST.SemanticType) : bool =
     match t with
-    | AST.TVar _ -> true
+    | AST.TVar _ | AST.TInferenceVar _ -> true
     | AST.TFunction (paramTypes, retType) ->
         List.exists containsTypeVar paramTypes || containsTypeVar retType
     | AST.TTuple elemTypes -> List.exists containsTypeVar elemTypes

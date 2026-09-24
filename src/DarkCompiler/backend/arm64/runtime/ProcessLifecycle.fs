@@ -372,6 +372,8 @@ let internal generateLinuxCliProcessLifecycleHelpers (ctx: CodeGenContext) : ARM
           ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 8s)
           ARM64Symbolic.Label "__dark_process_io_suffix_ready"
           zero ARM64Symbolic.X24
+          zero ARM64Symbolic.X9
+          ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 56s)
           // Write input plus the interpreter's WriteLine newline.
           ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X20, 8s)
           ARM64Symbolic.STR (ARM64Symbolic.X2, ARM64Symbolic.SP, 16s)
@@ -385,7 +387,9 @@ let internal generateLinuxCliProcessLifecycleHelpers (ctx: CodeGenContext) : ARM
             ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.SP, 56us)
             ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 1us, 0) ]
         @ syscall 64us
-        @ [ ARM64Symbolic.Label "__dark_process_io_read_stdout"
+        @ [ zero ARM64Symbolic.X9
+            ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 56s)
+            ARM64Symbolic.Label "__dark_process_io_read_stdout"
             ARM64Symbolic.LDR (ARM64Symbolic.X19, ARM64Symbolic.X22, 0s)
             ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X22, 8us)
             ARM64Symbolic.ADD_reg (ARM64Symbolic.X1, ARM64Symbolic.X1, ARM64Symbolic.X19) ]
@@ -431,6 +435,24 @@ let internal generateLinuxCliProcessLifecycleHelpers (ctx: CodeGenContext) : ARM
             ARM64Symbolic.CBNZ (ARM64Symbolic.X0, "__dark_process_io_finished")
             ARM64Symbolic.LDR (ARM64Symbolic.X9, ARM64Symbolic.SP, 16s)
             ARM64Symbolic.CBZ (ARM64Symbolic.X9, "__dark_process_io_running")
+            // A live child may await more input. Return after its response has
+            // been quiet for one poll, while still allowing chunked output.
+            ARM64Symbolic.LDR (ARM64Symbolic.X19, ARM64Symbolic.X22, 0s)
+            ARM64Symbolic.LDR (ARM64Symbolic.X20, ARM64Symbolic.X23, 0s)
+            ARM64Symbolic.ADD_reg (ARM64Symbolic.X9, ARM64Symbolic.X19, ARM64Symbolic.X20)
+            ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.SP, 0s)
+            ARM64Symbolic.SUB_reg (ARM64Symbolic.X9, ARM64Symbolic.X9, ARM64Symbolic.X10)
+            ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.SP, 8s)
+            ARM64Symbolic.SUB_reg (ARM64Symbolic.X9, ARM64Symbolic.X9, ARM64Symbolic.X10)
+            ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.SP, 56s)
+            ARM64Symbolic.CMP_reg (ARM64Symbolic.X9, ARM64Symbolic.X10)
+            ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, "__dark_process_io_response_changed")
+            ARM64Symbolic.CBNZ (ARM64Symbolic.X9, "__dark_process_io_running")
+            ARM64Symbolic.B_label "__dark_process_io_poll"
+            ARM64Symbolic.Label "__dark_process_io_response_changed"
+            ARM64Symbolic.STR (ARM64Symbolic.X9, ARM64Symbolic.SP, 56s)
+            zero ARM64Symbolic.X24
+            ARM64Symbolic.Label "__dark_process_io_poll"
             ARM64Symbolic.ADD_imm (ARM64Symbolic.X24, ARM64Symbolic.X24, 1us)
             ARM64Symbolic.CMP_imm (ARM64Symbolic.X24, 100us)
             ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, "__dark_process_io_running")

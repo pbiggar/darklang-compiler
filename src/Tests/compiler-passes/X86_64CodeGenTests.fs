@@ -80,7 +80,8 @@ let rec private inferFixtureVariantsFromType (typ: AST.SemanticType) : LIR.Varia
     | AST.TUnit
     | AST.TInternalRawPtr
     | AST.TNever
-    | AST.TVar _ ->
+    | AST.TVar _
+    | AST.TInferenceVar _ ->
         Map.empty
 
 let private inferFixtureVariantsFromRcMetadata (metadata: MemoryModel.RcMetadata option) : LIR.VariantRegistry =

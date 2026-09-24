@@ -87,6 +87,7 @@ type SemanticType =
     | TList of SemanticType                    // List<T> - polymorphic list type
     | TStream of SemanticType                  // Stream<T> - opaque, lazy, single-consumer handle
     | TVar of string                  // type variable: T, A, B, etc. (for generics)
+    | TInferenceVar of displayName:string * identity:string
     | TInternalRawPtr                         // Raw pointer to unmanaged memory (internal, for HAMT)
     // Native HAMT machinery retains both components. Public source syntax is
     // String-keyed and renders only the value component as Dict<Value>.

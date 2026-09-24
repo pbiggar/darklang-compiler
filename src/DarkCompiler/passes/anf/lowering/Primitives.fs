@@ -188,6 +188,7 @@ let rec typeToString (ty: AST.SemanticType) : string =
     | AST.TNever -> "runtime_error"
     | AST.TInternalRawPtr -> "ptr"
     | AST.TVar name -> name
+    | AST.TInferenceVar (displayName, _) -> displayName
     | AST.TRecord (name, args) -> name + (if List.isEmpty args then "" else "<" + (args |> List.map typeToString |> String.concat ",") + ">")
     | AST.TSum (name, args) -> name + "<" + (args |> List.map typeToString |> String.concat ",") + ">"
     | AST.TList elemType -> "List<" + typeToString elemType + ">"

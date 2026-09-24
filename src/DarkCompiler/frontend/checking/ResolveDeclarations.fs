@@ -382,7 +382,7 @@ let internal resolveProgramNames
         | TDict (keyType, valueType) ->
             recurse keyType
             |> Result.bind (fun key' -> recurse valueType |> Result.map (fun value' -> TDict (key', value')))
-        | TVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+        | TVar _ | TInferenceVar _ | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
         | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
         | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr -> Ok typ
 

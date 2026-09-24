@@ -13,15 +13,6 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
     // The resolution boundary has already attached the canonical callable
     // identity. Type checking only validates that identity's signature.
     let args = NonEmptyList.toList args
-    let unavailableTypeVars =
-        let fromEnv =
-            env
-            |> Map.values
-            |> Seq.fold (fun names typ -> collectTypeVarsInType typ names) []
-        expectedType
-        |> Option.map (fun typ -> collectTypeVarsInType typ fromEnv)
-        |> Option.defaultValue fromEnv
-        |> Set.ofList
     if isBuiltinUnwrapName funcName then
         match args with
         | [argExpr] ->
@@ -68,7 +59,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
             |> Result.bind (fun (_argType, argExpr') ->
                 let outputType =
                     match expectedType with
-                    | Some (TVar _) -> TUnit
+                    | Some (TVar _) | Some (TInferenceVar _) -> TUnit
                     | Some expected -> expected
                     | None -> TNever
                 Ok (outputType, applyNamed funcName (NonEmptyList.singleton argExpr')))
@@ -86,7 +77,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                 let scopeName =
                     if resolvedFuncName.StartsWith "Darklang.Stdlib." then None
                     else Some resolvedFuncName
-                freshenTypeParamsAvoiding scopeName unavailableTypeVars origTypeParams
+                freshenTypeParams scopeName origTypeParams
             let paramTypes = origParamTypes |> List.map (applyTypeVarRenaming renaming)
             let returnType = applyTypeVarRenaming renaming origReturnType
             let typeParams = freshTypeParams
@@ -312,7 +303,8 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                                 Error (TypeMismatch (expected, origReturnType, $"result of call to {funcName}"))
                             | _ -> Ok (origReturnType, applyNamed resolvedFuncName (toCallArgs args')))
             )
-        | Some (TVar funcTypeVar, resolvedFuncName) ->
+        | Some (TVar funcTypeVar, resolvedFuncName)
+        | Some (TInferenceVar (_, funcTypeVar), resolvedFuncName) ->
             // In public source, higher-order generic parameters may reach call sites
             // before their function shape is concretized (for example in nested List.map).
             // Keep the call typable and let surrounding generic reconciliation specialize it.
@@ -340,7 +332,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                 (
             // Freshen type params to avoid name clashes with caller's scope
             let (freshTypeParams, renaming) =
-                freshenTypeParamsAvoiding None unavailableTypeVars moduleFunc.TypeParams
+                freshenTypeParams None moduleFunc.TypeParams
             let paramTypes = moduleFunc.ParamTypes |> List.map (applyTypeVarRenaming renaming)
             let returnType = applyTypeVarRenaming renaming moduleFunc.ReturnType
             let typeParams = freshTypeParams
@@ -420,7 +412,7 @@ let internal check (checkExpr: ExpressionChecker) (funcParamNameReg: Map<string,
                             |> List.map (fun paramName ->
                                 match Map.tryFind paramName bindingMap with
                                 | Some typ -> typ
-                                | None -> TVar paramName)  // Keep as type variable if not inferred
+                                | None -> inferenceVarForKey paramName)  // Keep as type variable if not inferred
 
                         // Build full substitution (inferred types only, not type vars)
                         let subst = bindingMap
