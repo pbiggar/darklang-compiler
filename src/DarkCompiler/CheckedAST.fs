@@ -137,6 +137,16 @@ type SemanticMetadata = {
     TypeNames: Map<AST.TypeId, string>
 }
 
+/// Stable IDs inherited by the next checked unit; only names touched by that
+/// unit are copied into its own Symbols table during conversion.
+type TypeCatalog = private {
+    Names: Map<AST.TypeId, string>
+    Ids: Map<string, AST.TypeId>
+    NextOrdinal: int
+}
+
+let emptyTypeCatalog = { Names = Map.empty; Ids = Map.empty; NextOrdinal = 0 }
+
 /// Immutable declaration catalog shared by independently checked units.
 /// Checked bodies own their lexical BindingIds; this catalog contains only
 /// cross-unit declarations and an allocation cursor used while constructing a
@@ -149,6 +159,8 @@ type GlobalCatalog = private {
     FunctionIds: Map<string, AST.FunctionId>
     TypeNames: Map<AST.TypeId, string>
     TypeIds: Map<string, AST.TypeId>
+    BaseTypes: TypeCatalog
+    NextTypeOrdinal: int
     ConstructorNames: Map<AST.ConstructorId, string * string>
     ConstructorIds: Map<string * string, AST.ConstructorId>
     ConstructorLookups: Map<string, string * string list * int * AST.SemanticType list> list
@@ -160,7 +172,7 @@ type Symbols = GlobalCatalog
 
 type Program = Program of Symbols * TopLevel list
 
-let emptySymbols () =
+let private emptySymbolsWithTypes baseTypes =
     let startId = AST.functionIdForName "_start"
     let programEntryId = AST.functionIdForName "__dark_compiler_program_entry"
     { BindingNames = Map.empty
@@ -172,11 +184,15 @@ let emptySymbols () =
         Map.ofList ["_start", startId; "__dark_compiler_program_entry", programEntryId]
       TypeNames = Map.empty
       TypeIds = Map.empty
+      BaseTypes = baseTypes
+      NextTypeOrdinal = baseTypes.NextOrdinal
       ConstructorNames = Map.empty
       ConstructorIds = Map.empty
       ConstructorLookups = []
       FieldNames = Map.empty
       FieldIds = Map.empty }
+
+let emptySymbols () = emptySymbolsWithTypes emptyTypeCatalog
 
 let private registerBinding id name symbols =
     { symbols with BindingNames = Map.add id name symbols.BindingNames }
@@ -227,11 +243,15 @@ let internType name symbols =
     match Map.tryFind name symbols.TypeIds with
     | Some id -> (id, symbols)
     | None ->
-        let id = AST.typeIdForName name
+        let id, nextOrdinal =
+            match Map.tryFind name symbols.BaseTypes.Ids with
+            | Some id -> id, symbols.NextTypeOrdinal
+            | None -> AST.typeId symbols.NextTypeOrdinal, symbols.NextTypeOrdinal + 1
         (id,
          { symbols with
              TypeIds = Map.add name id symbols.TypeIds
-             TypeNames = Map.add id name symbols.TypeNames })
+             TypeNames = Map.add id name symbols.TypeNames
+             NextTypeOrdinal = nextOrdinal })
 
 let internConstructor typeName name tag symbols =
     let (_, symbols) = internType typeName symbols
@@ -271,9 +291,16 @@ let functionNames symbols = symbols.FunctionNames
 let tryFindFunctionId name symbols = Map.tryFind name symbols.FunctionIds
 let typeName id symbols =
     Map.tryFind id symbols.TypeNames
-    |> Option.orElse (Some (AST.typeIdValue id))
+    |> Option.orElseWith (fun () -> Map.tryFind id symbols.BaseTypes.Names)
 let typeNames symbols = symbols.TypeNames
-let tryFindTypeId name symbols = Map.tryFind name symbols.TypeIds
+let tryFindTypeId name symbols =
+    Map.tryFind name symbols.TypeIds
+    |> Option.orElseWith (fun () -> Map.tryFind name symbols.BaseTypes.Ids)
+let typeCatalog symbols = {
+    Names = Map.fold (fun names id name -> Map.add id name names) symbols.BaseTypes.Names symbols.TypeNames
+    Ids = Map.fold (fun ids name id -> Map.add name id ids) symbols.BaseTypes.Ids symbols.TypeIds
+    NextOrdinal = symbols.NextTypeOrdinal
+}
 let constructorInfo id symbols = Map.tryFind id symbols.ConstructorNames
 let constructorTag id (_symbols: Symbols) = Some (AST.constructorRuntimeTag id)
 
@@ -285,7 +312,8 @@ let tryFindConstructorId typeName name symbols =
             Map.tryFind $"{typeName}.{name}" lookup
             |> Option.bind (fun (owner, _, tag, _) ->
                 if owner = typeName then
-                    Some (AST.constructorId (AST.typeIdForName owner) name tag)
+                    tryFindTypeId owner symbols
+                    |> Option.map (fun ownerId -> AST.constructorId ownerId name tag)
                 else
                     None)))
 let fieldInfo id symbols = Map.tryFind id symbols.FieldNames
@@ -668,14 +696,26 @@ let composeTopLevels
     : Symbols * TopLevel list =
     let merge source target =
         Map.fold (fun combined key value -> Map.add key value combined) target source
+    let mergeTypeName names id name =
+        match Map.tryFind id names with
+        | Some existing when existing <> name ->
+            Crash.crash "Composed type catalogs assign one TypeId to different names"
+        | _ -> Map.add id name names
+    let mergeTypeId ids name id =
+        match Map.tryFind name ids with
+        | Some existing when existing <> id ->
+            Crash.crash "Composed type catalogs assign different TypeIds to one name"
+        | _ -> Map.add name id ids
     let catalog = {
         BindingNames = merge sourceCatalog.BindingNames targetCatalog.BindingNames
         ValueIds = merge sourceCatalog.ValueIds targetCatalog.ValueIds
         NextBindingOrdinal = min sourceCatalog.NextBindingOrdinal targetCatalog.NextBindingOrdinal
         FunctionNames = merge sourceCatalog.FunctionNames targetCatalog.FunctionNames
         FunctionIds = merge sourceCatalog.FunctionIds targetCatalog.FunctionIds
-        TypeNames = merge sourceCatalog.TypeNames targetCatalog.TypeNames
-        TypeIds = merge sourceCatalog.TypeIds targetCatalog.TypeIds
+        TypeNames = Map.fold mergeTypeName targetCatalog.TypeNames sourceCatalog.TypeNames
+        TypeIds = Map.fold mergeTypeId targetCatalog.TypeIds sourceCatalog.TypeIds
+        BaseTypes = targetCatalog.BaseTypes
+        NextTypeOrdinal = max sourceCatalog.NextTypeOrdinal targetCatalog.NextTypeOrdinal
         ConstructorNames = merge sourceCatalog.ConstructorNames targetCatalog.ConstructorNames
         ConstructorIds = merge sourceCatalog.ConstructorIds targetCatalog.ConstructorIds
         ConstructorLookups = sourceCatalog.ConstructorLookups @ targetCatalog.ConstructorLookups
@@ -1169,6 +1209,7 @@ let ofTypedFunction
 let ofTypedProgram
     (variantLookup: Map<string, string * string list * int * AST.SemanticType list>)
     (externalValueNames: Set<string>)
+    (baseTypes: TypeCatalog)
     (AST.Program topLevels)
     : Result<Program, string> =
     let valueEnvironment, initialSymbols =
@@ -1181,7 +1222,7 @@ let ofTypedProgram
         |> Set.toList
         |> List.fold (fun (environment, symbols) name ->
             let (id, symbols) = internValue name symbols
-            (Map.add name id environment, symbols)) (Map.empty, emptySymbols ())
+            (Map.add name id environment, symbols)) (Map.empty, emptySymbolsWithTypes baseTypes)
     let initialSymbols =
         topLevels
         |> List.fold (fun symbols topLevel ->

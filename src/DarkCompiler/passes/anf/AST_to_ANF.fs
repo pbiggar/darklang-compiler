@@ -393,7 +393,11 @@ let private buildRegistriesInternal
             |> List.map (function
                 | AST.RecordDef (name, _, _)
                 | AST.SumTypeDef (name, _, _)
-                | AST.TypeAlias (name, _, _) -> AST.typeIdForName name, name)
+                | AST.TypeAlias (name, _, _) ->
+                    let id =
+                        CheckedAST.tryFindTypeId name symbols
+                        |> Option.defaultWith (fun () -> Crash.crash $"Alias type was not interned: {name}")
+                    id, name)
             |> Map.ofList
         { TypeNames = names }
     let functionNames : FunctionNameRegistry =

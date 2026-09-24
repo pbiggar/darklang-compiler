@@ -303,7 +303,7 @@ type BindingId =
 type FunctionId = private FunctionId of canonicalName:string
 
 [<Struct; StructuralEquality; StructuralComparison>]
-type TypeId = private TypeId of canonicalName:string
+type TypeId = private TypeId of int
 
 [<Struct; StructuralEquality; StructuralComparison>]
 type ConstructorId =
@@ -337,8 +337,7 @@ let allocateFunctionIds (_existing: seq<FunctionId>) (names: seq<string>) : Map<
     |> Seq.sort
     |> Seq.map (fun name -> name, functionIdForName name)
     |> Map.ofSeq
-let typeIdForName canonicalName = TypeId canonicalName
-let typeIdValue (TypeId canonicalName) = canonicalName
+let typeId ordinal = TypeId ordinal
 let constructorId owner canonicalName runtimeTag =
     ConstructorId (owner, canonicalName, runtimeTag)
 let constructorIdOwner (ConstructorId (owner, _, _)) = owner

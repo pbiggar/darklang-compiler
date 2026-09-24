@@ -208,6 +208,10 @@ let internal checkResolvedProgramInternal
 
     // Build the type check environment for THIS program
     let programEnv : TypeCheckEnv = {
+        TypeCatalog =
+            baseEnv
+            |> Option.map (fun existing -> existing.TypeCatalog)
+            |> Option.defaultValue CheckedAST.emptyTypeCatalog
         TypeReg = canonicalProgramTypeReg
         IndexedTypeReg = programIndexedTypeReg
         RecordTypeNames = programIndexedTypeReg |> Map.keys |> Set.ofSeq

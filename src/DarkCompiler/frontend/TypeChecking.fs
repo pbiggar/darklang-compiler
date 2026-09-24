@@ -152,8 +152,13 @@ let private checkProgramInternal
 let private constructCheckedProgram
     (typ, program, (env: TypeCheckEnv))
     : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
-    CheckedAST.ofTypedProgram env.VariantLookup (env.Values |> Map.keys |> Set.ofSeq) program
-    |> Result.map (fun checkedProgram -> (CheckedAST.normalizeInferenceType typ, checkedProgram, env))
+    CheckedAST.ofTypedProgram env.VariantLookup (env.Values |> Map.keys |> Set.ofSeq) env.TypeCatalog program
+    |> Result.map (fun checkedProgram ->
+        let catalog =
+            checkedProgram
+            |> CheckedAST.programSymbols
+            |> CheckedAST.typeCatalog
+        (CheckedAST.normalizeInferenceType typ, checkedProgram, { env with TypeCatalog = catalog }))
     |> Result.mapError GenericError
 
 /// Type-check a program

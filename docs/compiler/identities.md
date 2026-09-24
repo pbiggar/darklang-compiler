@@ -48,15 +48,19 @@ global binding namespace or recursively rewriting either body. The recursion
 IDs remain deterministic structural IDs assigned to one parsed program and
 travel with that body's recursion evidence.
 
-`FunctionId` and `TypeId` each have one private, canonical-name-backed form.
-`ConstructorId` combines its canonical owner and case name with the
-already-validated runtime tag. `FieldId` combines its canonical owner with
+`FunctionId` retains a private, canonical-name-backed form. `TypeId` is a
+compact integer allocated while constructing checked syntax. The immutable
+type catalog from a checked base is threaded into later construction: imported
+names reuse their existing IDs, and only newly encountered canonical type
+names consume the next integer. Each checked unit retains only the names it
+uses, while its updated type catalog can seed the next unit. Composition
+reuses syntax without renumbering or traversing it.
+
+`ConstructorId` combines its integer `TypeId` owner and case name with the
+already-validated runtime tag. `FieldId` combines the same kind of owner with
 the physical field index; field names remain in the declaration catalog.
-Independently compiled stdlib, preamble, generated, and user units therefore
-agree without a shared allocator. Lowering reads layout directly from the ID
-instead of consulting a global tag/index map. Although these representations
-retain name-backed owner IDs, downstream code handles distinct ID types, not
-interchangeable raw strings.
+Lowering reads layout directly from the ID instead of consulting a global
+tag/index map. These distinct ID types are not interchangeable raw integers.
 
 Reusable checked units pair their syntax with a small declaration catalog.
 Composition merges those catalogs structurally and reuses the original syntax;
