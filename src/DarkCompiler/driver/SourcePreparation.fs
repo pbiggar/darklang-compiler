@@ -153,30 +153,32 @@ let private materializeProgramValues
         currentValues
         |> List.map (fun (name, (id, _, body)) -> (name, (id, body)))
         |> List.map (fun (name, (id, body)) -> (name, id, body))
-    let valueIds =
-        rawBindings |> List.map (fun (name, id, _) -> name, id) |> Map.ofList
-    let bindings =
-        rawBindings
-        |> List.map (fun (name, id, body) ->
-            (name, id, CheckedAST.resolveUnboundValueLocals symbols valueIds body))
+    // Checked top-level value references already carry canonical BindingIds.
+    // The old name-based repair walked every body again, including programs
+    // with no references requiring repair.
+    let bindings = rawBindings
+    let valueIds = bindings |> List.map (fun (_, id, _) -> id) |> Set.ofList
+    let dependencies =
+        bindings
+        |> List.map (fun (_, id, body) ->
+            id, Set.intersect valueIds (ClosureAnalysis.freeVars body Set.empty))
+        |> Map.ofList
     let wrap excluded body =
-        let body = CheckedAST.resolveUnboundValueLocals symbols valueIds body
         let eligible = bindings |> List.filter (fun (_, id, _) -> not (Set.contains id excluded))
+        let eligibleIds = eligible |> List.map (fun (_, id, _) -> id) |> Set.ofList
         let rec required fixedPoint =
             let next =
                 eligible
-                |> List.fold (fun names (_, id, value) ->
+                |> List.fold (fun names (_, id, _) ->
                     if Set.contains id names then
-                        eligible
-                        |> List.fold (fun dependencies (_, candidateId, _) ->
-                            if InlineLambdas.varOccursInExpr candidateId value then Set.add candidateId dependencies
-                            else dependencies) names
+                        let referenced =
+                            Map.tryFind id dependencies
+                            |> Option.defaultValue Set.empty
+                        Set.union names (Set.intersect eligibleIds referenced)
                     else names) fixedPoint
             if Set.count next = Set.count fixedPoint then next else required next
         let direct =
-            eligible
-            |> List.fold (fun names (_, id, _) ->
-                if InlineLambdas.varOccursInExpr id body then Set.add id names else names) Set.empty
+            Set.intersect eligibleIds (ClosureAnalysis.freeVars body Set.empty)
         let needed = required direct
         let selected = eligible |> List.filter (fun (_, id, _) -> Set.contains id needed)
         let rec orderByDependencies ordered remaining =
@@ -186,11 +188,11 @@ let private materializeProgramValues
                 let remainingNames = remaining |> List.map (fun (_, id, _) -> id) |> Set.ofList
                 let ready =
                     remaining
-                    |> List.filter (fun (_, id, value) ->
+                    |> List.filter (fun (_, id, _) ->
                         remainingNames
                         |> Set.remove id
-                        |> Set.forall (fun candidate ->
-                            not (InlineLambdas.varOccursInExpr candidate value)))
+                        |> Set.intersect (Map.tryFind id dependencies |> Option.defaultValue Set.empty)
+                        |> Set.isEmpty)
                 match ready with
                 | [] ->
                     Crash.crash "Checked top-level values contain a cyclic materialization dependency"
@@ -233,7 +235,9 @@ let internal prepareProgramForAnf
         timer.Stop()
         recordPassTiming passTimingRecorder name timer.Elapsed.TotalMilliseconds
         result
-    let program = importInheritedValues inheritedValues program
+    let program =
+        measure "AST -> ANF Preparation: Value Import" (fun () ->
+            importInheritedValues inheritedValues program)
     let monomorphizedResult =
         measure "AST -> ANF Preparation: Monomorphization" (fun () ->
             match monomorphization with
@@ -261,7 +265,9 @@ let internal prepareProgramForAnf
     match monomorphizedResult with
     | Error err -> Error err
     | Ok monomorphized ->
-        let monomorphized = materializeProgramValues monomorphized
+        let monomorphized =
+            measure "AST -> ANF Preparation: Value Materialization" (fun () ->
+                materializeProgramValues monomorphized)
         let needsLowering =
             measure "AST -> ANF Preparation: Lambda Analysis" (fun () ->
                 let (CheckedAST.Program (_, topLevels)) = monomorphized

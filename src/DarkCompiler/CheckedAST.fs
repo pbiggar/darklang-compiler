@@ -151,6 +151,7 @@ type GlobalCatalog = private {
     TypeIds: Map<string, AST.TypeId>
     ConstructorNames: Map<AST.ConstructorId, string * string>
     ConstructorIds: Map<string * string, AST.ConstructorId>
+    ConstructorLookups: Map<string, string * string list * int * AST.SemanticType list> list
     FieldNames: Map<AST.FieldId, string * string>
     FieldIds: Map<string * string, AST.FieldId>
 }
@@ -173,6 +174,7 @@ let emptySymbols () =
       TypeIds = Map.empty
       ConstructorNames = Map.empty
       ConstructorIds = Map.empty
+      ConstructorLookups = []
       FieldNames = Map.empty
       FieldIds = Map.empty }
 
@@ -277,6 +279,15 @@ let constructorTag id (_symbols: Symbols) = Some (AST.constructorRuntimeTag id)
 
 let tryFindConstructorId typeName name symbols =
     Map.tryFind (typeName, name) symbols.ConstructorIds
+    |> Option.orElseWith (fun () ->
+        symbols.ConstructorLookups
+        |> List.tryPick (fun lookup ->
+            Map.tryFind $"{typeName}.{name}" lookup
+            |> Option.bind (fun (owner, _, tag, _) ->
+                if owner = typeName then
+                    Some (AST.constructorId (AST.typeIdForName owner) name tag)
+                else
+                    None)))
 let fieldInfo id symbols = Map.tryFind id symbols.FieldNames
 let fieldIndex id (_symbols: Symbols) = Some (AST.fieldRuntimeIndex id)
 
@@ -662,105 +673,11 @@ let composeTopLevels
         TypeIds = merge sourceCatalog.TypeIds targetCatalog.TypeIds
         ConstructorNames = merge sourceCatalog.ConstructorNames targetCatalog.ConstructorNames
         ConstructorIds = merge sourceCatalog.ConstructorIds targetCatalog.ConstructorIds
+        ConstructorLookups = sourceCatalog.ConstructorLookups @ targetCatalog.ConstructorLookups
         FieldNames = merge sourceCatalog.FieldNames targetCatalog.FieldNames
         FieldIds = merge sourceCatalog.FieldIds targetCatalog.FieldIds
     }
     (catalog, topLevels)
-
-let resolveUnboundValueLocals
-    (symbols: Symbols)
-    (values: Map<string, AST.BindingId>)
-    (expr: Expr)
-    : Expr =
-    let rec letBindings pattern =
-        match pattern with
-        | LPVariable id -> [id]
-        | LPTuple (first, second, rest) ->
-            first :: second :: rest |> List.collect letBindings
-        | LPUnit | LPWildcard -> []
-    let rec matchBindings pattern =
-        match pattern with
-        | PVariable id -> [id]
-        | PConstructor (_, fields) -> fields |> List.collect matchBindings
-        | PTuple patterns | PList patterns -> List.collect matchBindings patterns
-        | PListCons (heads, tail) -> List.collect matchBindings heads @ matchBindings tail
-        | POr alternatives -> alternatives |> AST.NonEmptyList.head |> matchBindings
-        | _ -> []
-    let rec rewrite bound expression =
-        let recurse = rewrite bound
-        let mapArgs = AST.NonEmptyList.map recurse
-        match expression with
-        | Local id when not (Set.contains id bound) ->
-            bindingName id symbols
-            |> Option.bind (fun name -> Map.tryFind name values)
-            |> Option.map Local
-            |> Option.defaultValue expression
-        | Let (pattern, value, body) ->
-            Let (
-                pattern,
-                recurse value,
-                rewrite (Set.union bound (letBindings pattern |> Set.ofList)) body
-            )
-        | RecursiveLet (recursion, value, body) ->
-            let id = recursion.Resolved.Parsed.Binding
-            let bodyBound = Set.add id bound
-            let valueBound =
-                match recursion.Resolved.Availability with
-                | AST.OrdinaryBinding -> bound
-                | _ -> bodyBound
-            RecursiveLet (recursion, rewrite valueBound value, rewrite bodyBound body)
-        | Lambda (parameters, annotation, body) ->
-            let parameterIds =
-                parameters
-                |> AST.NonEmptyList.toList
-                |> List.collect (fun parameter -> letBindings parameter.Pattern)
-                |> Set.ofList
-            Lambda (parameters, annotation, rewrite (Set.union bound parameterIds) body)
-        | Match (scrutinee, cases) ->
-            Match (
-                recurse scrutinee,
-                cases
-                |> List.map (fun case ->
-                    let caseIds =
-                        case.Patterns
-                        |> AST.NonEmptyList.head
-                        |> matchBindings
-                        |> Set.ofList
-                    let caseBound = Set.union bound caseIds
-                    { case with
-                        Guard = Option.map (rewrite caseBound) case.Guard
-                        Body = rewrite caseBound case.Body })
-            )
-        | BoundaryRender (renderer, value) -> BoundaryRender (renderer, recurse value)
-        | BinOp (op, left, right) -> BinOp (op, recurse left, recurse right)
-        | UnaryOp (op, value) -> UnaryOp (op, recurse value)
-        | If (condition, thenBranch, elseBranch) -> If (recurse condition, recurse thenBranch, recurse elseBranch)
-        | Sequence (first, next) -> Sequence (recurse first, recurse next)
-        | Call (name, args) -> Call (name, mapArgs args)
-        | TypeApp (name, types, args) -> TypeApp (name, types, mapArgs args)
-        | TupleLiteral elements -> TupleLiteral (List.map recurse elements)
-        | TupleAccess (tuple, index) -> TupleAccess (recurse tuple, index)
-        | DictLiteral (keyType, valueType, entries) ->
-            DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> recurse key, recurse value))
-        | RecordLiteral (reference, fields) ->
-            RecordLiteral (reference, fields |> List.map (fun (name, value) -> name, recurse value))
-        | RecordUpdate (record, fields) ->
-            RecordUpdate (recurse record, fields |> List.map (fun (name, value) -> name, recurse value))
-        | RecordAccess (record, field) -> RecordAccess (recurse record, field)
-        | Constructor (reference, fields) -> Constructor (reference, List.map recurse fields)
-        | ListLiteral elements -> ListLiteral (List.map recurse elements)
-        | Apply (func, args) -> Apply (recurse func, mapArgs args)
-        | IndirectApply (func, args) -> IndirectApply (recurse func, mapArgs args)
-        | Closure (name, captures) -> Closure (name, List.map recurse captures)
-        | InterpolatedString parts ->
-            InterpolatedString (
-                parts
-                |> List.map (function
-                    | StringText _ as text -> text
-                    | StringExpr value -> StringExpr (recurse value))
-            )
-        | _ -> expression
-    rewrite Set.empty expr
 
 let valueDefName (valueDef: ValueDef) : string = valueDef.Name
 
@@ -844,10 +761,7 @@ let private convertConstructorReference
         | Some typeName ->
             match tryFindConstructorId typeName variantName symbols with
             | Some id ->
-                let typeId =
-                    tryFindTypeId typeName symbols
-                    |> Option.defaultWith (fun () ->
-                        Crash.crash $"Constructor owner '{typeName}' is absent from type symbols")
+                let typeId = AST.constructorIdOwner id
                 Ok { TypeId = typeId; ConstructorId = id }
             | None -> conversionError location "resolved constructor has no semantic identity"
         | None -> conversionError location "resolved constructor has no declaring type"
@@ -1219,11 +1133,7 @@ let ofTypedFunction
     symbols
     funcDef
     : Result<FunctionDef * Symbols, string> =
-    let symbols =
-        variantLookup
-        |> Map.fold (fun symbols lookupName (typeName, _, tag, _) ->
-            let variantName = lookupName.Split('.') |> Array.last
-            internConstructor typeName variantName tag symbols |> snd) symbols
+    let symbols = { symbols with ConstructorLookups = [variantLookup] }
     convertFunctionWithEnvironment Map.empty symbols funcDef
 
 let ofTypedProgram
@@ -1256,11 +1166,7 @@ let ofTypedProgram
                     | AST.TypeAlias (name, _, _) -> name
                 internType name symbols |> snd
             | _ -> symbols) initialSymbols
-    let initialSymbols =
-        variantLookup
-        |> Map.fold (fun symbols lookupName (typeName, _, tag, _) ->
-            let variantName = lookupName.Split('.') |> Array.last
-            internConstructor typeName variantName tag symbols |> snd) initialSymbols
+    let initialSymbols = { initialSymbols with ConstructorLookups = [variantLookup] }
     let initialSymbols =
         topLevels
         |> List.fold (fun symbols topLevel ->

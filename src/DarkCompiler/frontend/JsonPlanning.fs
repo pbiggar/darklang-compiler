@@ -172,9 +172,7 @@ let private decodeDictName typ =
 let private makeCase pattern body =
     { Patterns = NonEmptyList.singleton pattern; Guard = None; Body = body }
 
-let private typeId (env: Env) name =
-    tryFindTypeId name env.Symbols
-    |> Option.defaultWith (fun () -> Crash.crash $"Generated JSON type was not interned: {name}")
+let private typeId (_env: Env) name = AST.typeIdForName name
 
 let private constructor (env: Env) owner caseName payload =
     match tryFindConstructorId owner caseName env.Symbols with

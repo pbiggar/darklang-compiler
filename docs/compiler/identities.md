@@ -62,6 +62,13 @@ it never performs an AST import/conversion pass. Generic artifacts additionally
 store their direct dependency summary, recomputing it only when specialization
 creates a new body.
 
+Constructor IDs needed by a checked unit are obtained from its validated
+variant lookup on demand. The immutable lookup is shared with the unit instead
+of copying every stdlib constructor into two catalog indexes for each small
+program or generated helper. Checked top-level value references likewise keep
+their canonical binding IDs through import; materialization does not resolve
+their names again.
+
 Names remain metadata beside these IDs. For example, every ANF/MIR/LIR
 function has both `Id` and `Name`: `Id` is the key for calls and analyses;
 `Name` is used for readable dumps, diagnostics, emitted symbols, and the small

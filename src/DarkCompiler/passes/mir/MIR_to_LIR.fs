@@ -2215,28 +2215,34 @@ let private checkParameterLimits (mirFuncs: MIR.Function list) : Result<unit, st
 let private checkCallArgLimits (mirFuncs: MIR.Function list) : Result<unit, string> =
     let validateCall description argTypes =
         let (intCount, floatCount) = argRegisterCounts argTypes
-        validateRegisterBankLimits description intCount floatCount
+        if intCount > 8 || floatCount > 8 then
+            validateRegisterBankLimits (description ()) intCount floatCount
+        else
+            None
 
     let validateClosureCall description argTypes =
         let (intArgCount, floatCount) = argRegisterCounts argTypes
-        validateRegisterBankLimits description (intArgCount + 1) floatCount
+        if intArgCount + 1 > 8 || floatCount > 8 then
+            validateRegisterBankLimits (description ()) (intArgCount + 1) floatCount
+        else
+            None
 
     let checkBlock (block: MIR.BasicBlock) =
         block.Instrs
         |> List.tryPick (fun instr ->
             match instr with
             | MIR.Call (_, funcName, _, argTypes, _) ->
-                validateCall $"Call to '{funcName}'" argTypes
+                validateCall (fun () -> $"Call to '{AST.functionIdValue funcName}'") argTypes
             | MIR.TailCall (funcName, _, argTypes, _) ->
-                validateCall $"Tail call to '{funcName}'" argTypes
+                validateCall (fun () -> $"Tail call to '{AST.functionIdValue funcName}'") argTypes
             | MIR.IndirectCall (_, _, _, argTypes, _) ->
-                validateCall "Indirect call" argTypes
+                validateCall (fun () -> "Indirect call") argTypes
             | MIR.IndirectTailCall (_, _, argTypes, _) ->
-                validateCall "Indirect tail call" argTypes
+                validateCall (fun () -> "Indirect tail call") argTypes
             | MIR.ClosureCall (_, _, _, argTypes, _) ->
-                validateClosureCall "Closure call" argTypes
+                validateClosureCall (fun () -> "Closure call") argTypes
             | MIR.ClosureTailCall (_, _, argTypes) ->
-                validateClosureCall "Closure tail call" argTypes
+                validateClosureCall (fun () -> "Closure tail call") argTypes
             | _ -> None)
 
     let checkFunc (func: MIR.Function) =
@@ -2266,10 +2272,16 @@ let private convertFunctionsForWithTrace
             record name timer.Elapsed.TotalMilliseconds
         | _ -> ()
     // Pre-check: verify all functions have ≤8 parameters and calls have ≤8 arguments
-    match checkParameterLimits mirFuncs with
+    let parameterCheckTimer = startPhase ()
+    let parameterCheck = checkParameterLimits mirFuncs
+    recordPhase "MIR -> LIR Parameter Limit Check" parameterCheckTimer
+    match parameterCheck with
     | Error err -> Error err
     | Ok () ->
-    match checkCallArgLimits mirFuncs with
+    let callCheckTimer = startPhase ()
+    let callCheck = checkCallArgLimits mirFuncs
+    recordPhase "MIR -> LIR Call Argument Limit Check" callCheckTimer
+    match callCheck with
     | Error err -> Error err
     | Ok () ->
 
