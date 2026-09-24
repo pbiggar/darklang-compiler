@@ -256,7 +256,7 @@ let internField typeName name index symbols =
         let owner =
             Map.tryFind typeName symbols.TypeIds
             |> Option.defaultWith (fun () -> Crash.crash $"Field owner '{typeName}' is absent")
-        let id = AST.fieldId owner name index
+        let id = AST.fieldId owner index
         let symbols =
             { symbols with
                 FieldIds = Map.add (typeName, name) id symbols.FieldIds
