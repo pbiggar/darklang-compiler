@@ -22,7 +22,12 @@ let private convertProgramToAnf (typedAst: CheckedAST.Program) : Result<ANF.Prog
     let moduleRegistry = Stdlib.buildModuleRegistry ()
     let monomorphized = monomorphize typedAst
     let inlined = inlineLambdasInProgram monomorphized
-    liftLambdasInProgram Map.empty Map.empty Map.empty Map.empty inlined
+    let functionCatalog : FunctionCatalog = {
+        Params = Map.empty
+        ReturnTypes = Map.empty
+        GenericDefs = Map.empty
+    }
+    liftLambdasInProgram Map.empty Map.empty functionCatalog inlined
     |> Result.bind (fun lifted ->
         splitTopLevels lifted
         |> Result.bind (fun (typeDefs, functions, expr) ->

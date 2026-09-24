@@ -487,10 +487,6 @@ let specializeProgramWithExternalFunctionsAndNames
             Map.tryFind request.HelperName definitions
             |> Option.exists (fun helper -> countNodes helper.Body <= maxHelperNodes))
         |> List.distinctBy requestKey |> List.sortBy requestKey |> withinPairBudget
-    let existingNames =
-        Set.union
-            (definitions |> Map.values |> Seq.map (fun func -> func.Name) |> Set.ofSeq)
-            (reservedFunctionNames |> Map.values |> Set.ofSeq)
     let targetCloneNames =
         requests |> List.collect (fun request -> request.KnownArguments)
         |> List.filter (fun argument -> argument.Callable.Convention = ClosureValue)
@@ -500,20 +496,24 @@ let specializeProgramWithExternalFunctionsAndNames
         requests
         |> List.filter (fun request ->
             let helperName = specializedHelperName definitions request
+            let helperId = AST.functionIdForName helperName
             let targets =
                 request.KnownArguments
                 |> List.filter (fun argument -> argument.Callable.Convention = ClosureValue)
                 |> List.map (fun argument -> specializedTargetName definitions argument.Callable.TargetName)
-            not (Set.contains helperName existingNames)
+            let idExists id =
+                Map.containsKey id definitions || Map.containsKey id reservedFunctionNames
+            not (idExists helperId)
             && not (Set.contains helperName targetCloneNames)
             && (targets |> List.forall (fun name ->
-                not (Set.contains name existingNames) && not (Set.contains name helperCloneNames))))
+                not (idExists (AST.functionIdForName name))
+                && not (Set.contains name helperCloneNames))))
 
     let generatedNames = Set.union targetCloneNames helperCloneNames
     let generatedIds =
-        AST.allocateFunctionIds
-            (Seq.append (definitions |> Map.keys) (reservedFunctionNames |> Map.keys))
-            generatedNames
+        generatedNames
+        |> Seq.map (fun name -> name, AST.functionIdForName name)
+        |> Map.ofSeq
 
     let allDefinitions = definitions |> Map.values |> Seq.toList
     let targetCallables =

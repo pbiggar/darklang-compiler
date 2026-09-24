@@ -330,7 +330,7 @@ let private testSpecializationHandoff () =
                 SelectOwnershipVariants.select catalog
                     { Target = identity.Definition.Name; Established = fact.Established; UniqueArguments = fact.UniqueArguments } |> report)
             |> Result.bind (fun selection ->
-                MaterializeOwnershipVariants.materialize contracts semantics Set.empty definitions
+                MaterializeOwnershipVariants.materialize contracts semantics Map.empty definitions
                     [{ Caller = fact.Caller; Call = fact.Call; Selection = selection }] |> report)
             |> Result.bind (fun plan ->
                 VerifyOwnedHIR.analyzeFunctions

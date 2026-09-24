@@ -28,6 +28,24 @@ generation and equality, and collection storage/copying. It is intended to
 measure the fixed-block `Int128` and `UInt128` representation and guard its
 arithmetic, textual-boundary, UUID, ownership, and collection costs.
 
+## Standard-mode compilation latency
+
+The compile-latency probe starts a fresh compiler process for every sample and
+compiles a representative program through the ordinary CLI. It therefore does
+not benefit from the batch compiler's prepared context or in-process caches:
+
+```bash
+./build --ai
+python3 benchmarks/targeted/compile-latency/measure.py \
+  --output /tmp/dark-compile-latency.json
+```
+
+The JSON result records both end-to-end process wall time and the compiler's
+reported pipeline time for every sample, together with their medians, the
+source hash, and compiler commit. This separates standard-library/process setup
+from work on the requested program. It is a diagnostic latency measurement
+rather than the canonical runtime-performance gate.
+
 ## Closed-list array diagnostics
 
 The independent `list-array` comparison uses built Debug compilers from two

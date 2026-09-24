@@ -69,7 +69,7 @@ let private request caller call selection : Request<HIR.ValueId> = {
     Call = call
     Selection = selection
 }
-let private run definitions requests = materialize (contracts definitions) semantics Set.empty definitions requests
+let private run definitions requests = materialize (contracts definitions) semantics Map.empty definitions requests
 
 let private identity () =
     let input = value 0
@@ -261,7 +261,13 @@ let private testRejectsCollisions () =
                     callee with
                         Definition = { callee.Definition with Id = symbol; Name = symbolName }
                 }
-                let reserved = materialize (contracts definitions) semantics (Set.singleton symbolName) definitions requests
+                let reserved =
+                    materialize
+                        (contracts definitions)
+                        semantics
+                        (Map.ofList [symbol, symbolName])
+                        definitions
+                        requests
                 let declared = run (definitions @ [shadow]) requests
                 match reserved, declared with
                 | Error (SymbolCollision first), Error (SymbolCollision second)
@@ -344,7 +350,7 @@ let private testRejectsStaleBodyProof () =
                 { definition with Definition = { definition.Definition with Body = body } }
             else definition)
         let escaping = { semantics with ScalarEscapes = semantics.ScalarUses }
-        match materialize (contracts changed) escaping Set.empty changed [request "first" firstCall chosen] with
+        match materialize (contracts changed) escaping Map.empty changed [request "first" firstCall chosen] with
         | Error (InvalidMaterializedProgram (VerifyOwnedHIR.OwnershipVerificationFailed (NonUniqueUse id)))
             when id = (value 0).Id -> Ok ()
         | actual -> Error (sprintf "Expected changed body provenance to invalidate the old candidate proof, got %A" actual))
@@ -370,8 +376,8 @@ let private testRejectsRegisteredCollisions () =
                             else None
                 }
                 let owned = { semantics with CallOwnership = fun call -> if call.Target = symbol then Some unique else None }
-                match materialize typed semantics Set.empty definitions requests,
-                      materialize (contracts definitions) owned Set.empty definitions requests with
+                match materialize typed semantics Map.empty definitions requests,
+                      materialize (contracts definitions) owned Map.empty definitions requests with
                 | Error (SymbolCollision first), Error (SymbolCollision second)
                     when first = symbolName && second = symbolName -> Ok ()
                 | actual -> Error (sprintf "Expected registered symbol collisions to be rejected, got %A" actual)

@@ -158,7 +158,7 @@ let scheduleWithTrace
     limits
     (hir: VerifyOwnedHIR.HIRContracts<'leaf>)
     (semantics: Semantics<'leaf, 'id>)
-    reservedSymbols
+    reservedFunctions
     (definitions: Function<'leaf, 'id> list)
     : Result<Plan<'leaf, 'id>, SchedulingError<'id>> =
     let measure name operation =
@@ -242,10 +242,15 @@ let scheduleWithTrace
             if number > limits.MaxIterations then Error (IterationLimitExceeded limits.MaxIterations)
             else
                 let orderedRequests = requests |> Map.toList |> List.map snd
-                measure
-                    "Ownership detail: Scheduling materialization round"
-                    (fun () ->
-                        MaterializeOwnershipVariants.materialize hir semantics reservedSymbols definitions orderedRequests)
+                (if List.isEmpty orderedRequests then
+                    measure
+                        "Ownership detail: Scheduling materialization round"
+                        (fun () -> Ok (MaterializeOwnershipVariants.unchanged definitions))
+                 else
+                    measure
+                        "Ownership detail: Scheduling materialization round"
+                        (fun () ->
+                            MaterializeOwnershipVariants.materialize hir semantics reservedFunctions definitions orderedRequests))
                 |> Result.mapError MaterializationFailed
                 |> Result.bind (fun materialized ->
                     let groupCount = MaterializeOwnershipVariants.groups materialized |> List.length

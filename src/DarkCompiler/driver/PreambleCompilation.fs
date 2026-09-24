@@ -141,10 +141,11 @@ let buildPreambleContext
                             let pipelineContextWithLiftedNames = {
                                 pipelineContext with
                                     BaseFuncNames = baseFuncNames
-                                    LambdaLiftFuncParams =
-                                        reserveBaseFunctionParams
-                                            pipelineContext.Registries.FuncParams
+                                    LambdaLiftFunctions =
+                                        buildLambdaLiftFunctionCatalog
+                                            pipelineContext.Registries
                                             baseFuncNames
+                                            pipelineContext.ReturnTypes
                             }
 
                             // Merge TypeMaps (stdlib + preamble)

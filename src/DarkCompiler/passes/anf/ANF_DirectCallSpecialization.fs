@@ -516,15 +516,14 @@ let private knownLiteralsForAtoms (env: ValueEnv) (atoms: Atom list) : ScalarLit
     loop atoms []
 
 let private knownValueForCExpr
-    (functionNames: Map<AST.FunctionId, string>)
     (env: ValueEnv)
     (cexpr: CExpr)
     : KnownValue option =
     let words name =
-        match Map.tryFind name functionNames with
-        | Some "Darklang.Stdlib.Int128.__fromWords" ->
+        match AST.functionIdValue name with
+        | "Darklang.Stdlib.Int128.__fromWords" ->
             Some (fun low high -> Int128Value (name, low, high))
-        | Some "Darklang.Stdlib.UInt128.__fromWords" ->
+        | "Darklang.Stdlib.UInt128.__fromWords" ->
             Some (fun low high -> UInt128Value (name, low, high))
         | _ -> None
     match cexpr with
@@ -539,8 +538,8 @@ let private knownValueForCExpr
         |> Option.map (fun literals -> RecordValue (descriptor, literals))
     | _ -> None
 
-let private addKnownBinding functionNames (id: TempId) (cexpr: CExpr) (env: ValueEnv) : ValueEnv =
-    match knownValueForCExpr functionNames env cexpr with
+let private addKnownBinding (id: TempId) (cexpr: CExpr) (env: ValueEnv) : ValueEnv =
+    match knownValueForCExpr env cexpr with
     | Some value -> Map.add id value env
     | None -> Map.remove id env
 
@@ -555,7 +554,6 @@ let private addKnownCall
     Map.add name (values :: existing) calls
 
 let rec private collectKnownCalls
-    (functionNames: Map<AST.FunctionId, string>)
     (env: ValueEnv)
     (expr: AExpr)
     (calls: Map<AST.FunctionId, KnownValue option list list>)
@@ -570,18 +568,18 @@ let rec private collectKnownCalls
             | BorrowedCall (name, args)
             | TailCall (name, args) -> addKnownCall name args env calls
             | _ -> calls
-        collectKnownCalls functionNames (addKnownBinding functionNames id cexpr env) body calls'
+        collectKnownCalls (addKnownBinding id cexpr env) body calls'
     | Join (parameter, continuation, entry) ->
-        let calls' = collectKnownCalls functionNames (Map.remove parameter.Id env) continuation calls
-        collectKnownCalls functionNames env entry calls'
+        let calls' = collectKnownCalls (Map.remove parameter.Id env) continuation calls
+        collectKnownCalls env entry calls'
     | If (_, thenBranch, elseBranch) ->
-        let calls' = collectKnownCalls functionNames env thenBranch calls
-        collectKnownCalls functionNames env elseBranch calls'
+        let calls' = collectKnownCalls env thenBranch calls
+        collectKnownCalls env elseBranch calls'
 
-let private knownCallsInProgram functionNames (functions: Function list) (main: AExpr) =
+let private knownCallsInProgram (functions: Function list) (main: AExpr) =
     functions
-    |> List.fold (fun calls func -> collectKnownCalls functionNames Map.empty func.Body calls) Map.empty
-    |> collectKnownCalls functionNames Map.empty main
+    |> List.fold (fun calls func -> collectKnownCalls Map.empty func.Body calls) Map.empty
+    |> collectKnownCalls Map.empty main
 
 let private literalPatternAt
     (eligibleIndices: Set<int>)
@@ -704,8 +702,7 @@ let private boundedCloneGroups
     |> List.rev
 
 let private buildLiteralClones
-    (existingIds: AST.FunctionId list)
-    (existingNames: Set<string>)
+    (idExists: AST.FunctionId -> bool)
     (groups: (AST.FunctionId * string * LiteralPattern list) list)
     : LiteralClone list =
     let proposedSpecs =
@@ -718,12 +715,11 @@ let private buildLiteralClones
     let proposedNames = proposedSpecs |> List.map (fun (_, name, _) -> name)
     let namesAreUnique = List.length proposedNames = (proposedNames |> List.distinct |> List.length)
     if namesAreUnique
-       && proposedNames |> List.forall (fun name -> not (Set.contains name existingNames)) then
-        let ids = AST.allocateFunctionIds existingIds proposedNames
+       && proposedNames |> List.forall (AST.functionIdForName >> idExists >> not) then
         proposedSpecs
         |> List.map (fun (originalId, cloneName, pattern) ->
             { OriginalId = originalId
-              CloneId = Map.find cloneName ids
+              CloneId = AST.functionIdForName cloneName
               CloneName = cloneName
               Pattern = pattern })
     else
@@ -774,7 +770,6 @@ let private routeCExpr
     | _ -> cexpr
 
 let rec private routeExpr
-    (functionNames: Map<AST.FunctionId, string>)
     (clonesByName: Map<AST.FunctionId, LiteralClone list>)
     (env: ValueEnv)
     (expr: AExpr)
@@ -784,18 +779,18 @@ let rec private routeExpr
     | Join (parameter, continuation, entry) ->
         Join (
             parameter,
-            routeExpr functionNames clonesByName (Map.remove parameter.Id env) continuation,
-            routeExpr functionNames clonesByName env entry
+            routeExpr clonesByName (Map.remove parameter.Id env) continuation,
+            routeExpr clonesByName env entry
         )
     | Let (id, cexpr, body) ->
         let cexpr' = routeCExpr clonesByName env cexpr
-        Let (id, cexpr', routeExpr functionNames clonesByName (addKnownBinding functionNames id cexpr env) body)
+        Let (id, cexpr', routeExpr clonesByName (addKnownBinding id cexpr env) body)
     | Return atom -> Return atom
     | If (condition, thenBranch, elseBranch) ->
         If (
             condition,
-            routeExpr functionNames clonesByName env thenBranch,
-            routeExpr functionNames clonesByName env elseBranch
+            routeExpr clonesByName env thenBranch,
+            routeExpr clonesByName env elseBranch
         )
 
 let private cexprForKnownValue (value: KnownValue) : CExpr =
@@ -816,7 +811,6 @@ let private cexprForKnownValue (value: KnownValue) : CExpr =
     | RecordValue (descriptor, fields) -> RecordAlloc (descriptor, atoms fields)
 
 let private cloneFunction
-    (functionNames: Map<AST.FunctionId, string>)
     (clonesByName: Map<AST.FunctionId, LiteralClone list>)
     (functionsByName: Map<AST.FunctionId, Function>)
     (clone: LiteralClone)
@@ -859,7 +853,7 @@ let private cloneFunction
         Id = clone.CloneId
         Name = clone.CloneName
         TypedParams = parameters
-        Body = routeExpr functionNames clonesByName Map.empty substitutedBody }
+        Body = routeExpr clonesByName Map.empty substitutedBody }
 
 let rec private exprUsesTemp (id: TempId) (expr: AExpr) : bool =
     match expr with
@@ -875,65 +869,61 @@ let rec private exprUsesTemp (id: TempId) (expr: AExpr) : bool =
         || exprUsesTemp id thenBranch
         || exprUsesTemp id elseBranch
 
-let private isRematerializedValue functionNames (cexpr: CExpr) : bool =
-    match knownValueForCExpr functionNames Map.empty cexpr with
+let private isRematerializedValue (cexpr: CExpr) : bool =
+    match knownValueForCExpr Map.empty cexpr with
     | Some _ -> true
     | None -> false
 
 // Routing a construction-valued argument removes its sole use. Eliminate only
 // the exact, side-effect-free recipes that this pass knows how to recreate;
 // arbitrary calls and allocations retain their original evaluation boundary.
-let rec private removeUnusedRematerializedValues functionNames (expr: AExpr) : AExpr =
+let rec private removeUnusedRematerializedValues (expr: AExpr) : AExpr =
     match expr with
     | Return _
     | Jump _ -> expr
     | Let (id, cexpr, body) ->
-        let body' = removeUnusedRematerializedValues functionNames body
-        if isRematerializedValue functionNames cexpr && not (exprUsesTemp id body') then body'
+        let body' = removeUnusedRematerializedValues body
+        if isRematerializedValue cexpr && not (exprUsesTemp id body') then body'
         else Let (id, cexpr, body')
     | Join (parameter, continuation, entry) ->
         Join (
             parameter,
-            removeUnusedRematerializedValues functionNames continuation,
-            removeUnusedRematerializedValues functionNames entry
+            removeUnusedRematerializedValues continuation,
+            removeUnusedRematerializedValues entry
         )
     | If (condition, thenBranch, elseBranch) ->
         If (
             condition,
-            removeUnusedRematerializedValues functionNames thenBranch,
-            removeUnusedRematerializedValues functionNames elseBranch
+            removeUnusedRematerializedValues thenBranch,
+            removeUnusedRematerializedValues elseBranch
         )
 
 let private specializeFiniteLiterals functionNames (Program (functions, main)) : Program =
     let analysis = analyzeProgram functions main
-    let knownCalls = knownCallsInProgram functionNames functions main
+    let knownCalls = knownCallsInProgram functions main
+    let localFunctionIds = functions |> List.map (fun func -> func.Id) |> Set.ofList
+    let idExists id =
+        Set.contains id localFunctionIds || Map.containsKey id functionNames
     let clones =
         cloneGroups analysis knownCalls functions
         |> boundedCloneGroups
-        |> buildLiteralClones
-            (Seq.append
-                (functions |> Seq.map (fun func -> func.Id))
-                (functionNames |> Map.keys)
-             |> Seq.toList)
-            (Set.union
-                (functions |> List.map (fun func -> func.Name) |> Set.ofList)
-                (functionNames |> Map.values |> Set.ofSeq))
+        |> buildLiteralClones idExists
     let clonesByName =
         clones
         |> List.groupBy (fun clone -> clone.OriginalId)
         |> Map.ofList
     let functionsByName = functions |> List.map (fun func -> (func.Id, func)) |> Map.ofList
-    let clonedFunctions = clones |> List.map (cloneFunction functionNames clonesByName functionsByName)
+    let clonedFunctions = clones |> List.map (cloneFunction clonesByName functionsByName)
     let routedFunctions =
         functions
         |> List.map (fun func ->
             { func with
                 Body =
-                    routeExpr functionNames clonesByName Map.empty func.Body
-                    |> removeUnusedRematerializedValues functionNames })
+                    routeExpr clonesByName Map.empty func.Body
+                    |> removeUnusedRematerializedValues })
     let main' =
-        routeExpr functionNames clonesByName Map.empty main
-        |> removeUnusedRematerializedValues functionNames
+        routeExpr clonesByName Map.empty main
+        |> removeUnusedRematerializedValues
     Program (clonedFunctions @ routedFunctions, main')
 
 let specializeProgramWithFunctionNames (functionNames: Map<AST.FunctionId, string>) (program: Program) : Program =

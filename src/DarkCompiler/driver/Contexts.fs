@@ -18,13 +18,46 @@ let internal buildBaseFuncNames
     registries.FuncParams
     |> Map.fold (fun acc name _ -> Set.add name acc) Set.empty
 
-let internal reserveBaseFunctionParams
-    (funcParams: Map<string, (string * AST.SemanticType) list>)
+let internal buildLambdaLiftFunctionCatalog
+    (registries: AST_to_ANF.Registries)
     (baseFuncNames: Set<string>)
-    : Map<string, (string * AST.SemanticType) list> =
-    baseFuncNames
-    |> Set.fold (fun acc name ->
-        if Map.containsKey name acc then acc else Map.add name [] acc) funcParams
+    (returnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
+    : LiftFunctions.FunctionCatalog =
+    let parameters =
+        registries.FuncParams
+        |> Map.toSeq
+        |> Seq.map (fun (name, parameters) ->
+            AST.functionIdForName name, parameters |> List.map snd)
+        |> Map.ofSeq
+        |> fun parameters ->
+            registries.ModuleRegistry
+            |> Map.fold (fun current name moduleFunc ->
+                Map.add (AST.functionIdForName name) moduleFunc.ParamTypes current) parameters
+        |> fun parameters ->
+            baseFuncNames
+            |> Set.fold (fun current name ->
+                let id = AST.functionIdForName name
+                if Map.containsKey id current then current else Map.add id [] current) parameters
+    let genericDefs =
+        registries.ModuleRegistry
+        |> Map.toSeq
+        |> Seq.choose (fun (name, moduleFunc) ->
+            if List.isEmpty moduleFunc.TypeParams then None
+            else
+                Some (
+                    AST.functionIdForName name,
+                    (moduleFunc.TypeParams, moduleFunc.ReturnType)
+                ))
+        |> Map.ofSeq
+    {
+        Params = parameters
+        ReturnTypes =
+            registries.ModuleRegistry
+            |> Map.fold (fun current name moduleFunc ->
+                Map.add (AST.functionIdForName name) moduleFunc.ReturnType current)
+                (returnTypes |> Map.map (fun _ (_, returnType) -> returnType))
+        GenericDefs = genericDefs
+    }
 
 let internal mergeReturnTypes
     (baseReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
@@ -91,7 +124,7 @@ type PipelineContext = {
     SpecRegistry: SpecializationIdentity.SpecRegistry
     Registries: AST_to_ANF.Registries
     BaseFuncNames: Set<string>
-    LambdaLiftFuncParams: Map<string, (string * AST.SemanticType) list>
+    LambdaLiftFunctions: LiftFunctions.FunctionCatalog
     LambdaLiftTypeReg: TypeRegistries.TypeRegistry
     LambdaLiftVariantLookup: LoweringPrimitives.VariantLookup
     ProjectedMirRegistries: MIR.VariantRegistry * MIR.RecordRegistry
@@ -123,8 +156,8 @@ let internal buildContext
         SpecRegistry = specRegistry
         Registries = registries
         BaseFuncNames = baseFuncNames
-        LambdaLiftFuncParams =
-            reserveBaseFunctionParams registries.FuncParams baseFuncNames
+        LambdaLiftFunctions =
+            buildLambdaLiftFunctionCatalog registries baseFuncNames returnTypes
         LambdaLiftTypeReg = lambdaLiftTypeReg
         LambdaLiftVariantLookup = lambdaLiftVariantLookup
         ProjectedMirRegistries =

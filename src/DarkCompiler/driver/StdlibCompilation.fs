@@ -295,10 +295,11 @@ let buildStdlibWithTrace
                     let contextWithLiftedNames = {
                         context with
                             BaseFuncNames = baseFuncNames
-                            LambdaLiftFuncParams =
-                                reserveBaseFunctionParams
-                                    context.Registries.FuncParams
+                            LambdaLiftFunctions =
+                                buildLambdaLiftFunctionCatalog
+                                    context.Registries
                                     baseFuncNames
+                                    context.ReturnTypes
                     }
                     let stdlibANFCallGraph = ANFDeadCodeElimination.buildCallGraph tcoFunctions
 
@@ -454,8 +455,7 @@ let buildStdlibSpecializations
                     stdlib.Context.LambdaLiftTypeReg
                     stdlib.Context.LambdaLiftVariantLookup
                     stdlib.Context.BaseFuncNames
-                    stdlib.Context.LambdaLiftFuncParams
-                    (returnTypesByName stdlib.Context.ReturnTypes)
+                    stdlib.Context.LambdaLiftFunctions
                     stdlib.Context.CheckedValues
                     passTimingRecorder
                     specializationProgram
@@ -563,8 +563,6 @@ let buildStdlibSpecializations
                                     |> List.fold
                                         (fun names func -> Set.add func.Name names)
                                         stdlib.Context.BaseFuncNames
-                                let lambdaLiftFuncParams =
-                                    reserveBaseFunctionParams registries.FuncParams baseFuncNames
                                 let (lambdaLiftTypeReg, lambdaLiftVariantLookup) =
                                     LiftFunctions.prepareLambdaLiftBaseTypes
                                         registries.TypeReg
@@ -575,7 +573,11 @@ let buildStdlibSpecializations
                                         Registries = registries
                                         SpecRegistry = combinedSpecRegistry
                                         BaseFuncNames = baseFuncNames
-                                        LambdaLiftFuncParams = lambdaLiftFuncParams
+                                        LambdaLiftFunctions =
+                                            buildLambdaLiftFunctionCatalog
+                                                registries
+                                                baseFuncNames
+                                                externalReturnTypes
                                         LambdaLiftTypeReg = lambdaLiftTypeReg
                                         LambdaLiftVariantLookup = lambdaLiftVariantLookup
                                         ReturnTypes = externalReturnTypes

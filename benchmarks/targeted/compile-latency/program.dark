@@ -1,0 +1,2 @@
+// Representative standard-mode compilation: generic list calls, closures, ownership, and native code generation.
+let xs = [1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L] in let ys = Stdlib.List.map xs (fun x -> x + 1L) in Stdlib.List.fold (Stdlib.List.reverse ys) 0L (fun acc x -> acc + x)

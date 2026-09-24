@@ -51,6 +51,7 @@ type MaterializationError<'id when 'id: comparison> =
 
 let groups plan = plan.Groups
 let rewrites plan = plan.Rewrites
+let unchanged definitions = { Originals = definitions; Groups = []; Rewrites = [] }
 let functions plan =
     plan.Originals
     @ (plan.Groups
@@ -249,10 +250,11 @@ let private validateRequests definitions discovered semantics requests =
 let private cloneGroups
     (hir: VerifyOwnedHIR.HIRContracts<'leaf>)
     (semantics: Semantics<'leaf, 'id>)
-    reserved
+    (reservedFunctions: Map<AST.FunctionId, string>)
     definitions
     requests =
     let definitionsByName = definitions |> List.map (fun definition -> definition.Definition.Name, definition) |> Map.ofList
+    let definitionsById = definitions |> List.map (fun definition -> definition.Definition.Id, definition) |> Map.ofList
     let selections =
         requests
         |> List.choose (fun request ->
@@ -261,7 +263,6 @@ let private cloneGroups
             | InferredVariant selected -> Some selected)
         |> List.map (fun selected -> selectedIdentity selected, selectedCandidate selected)
         |> Map.ofList
-    let occupied = Set.union reserved (definitions |> List.map (fun definition -> definition.Definition.Name) |> Set.ofList)
     let cloneNames =
         selections
         |> Map.toList
@@ -270,13 +271,13 @@ let private cloneGroups
             InferOwnedFunctionGroups.candidateBoundaries candidate
             |> List.map (fun boundary -> boundary.Name + suffix))
     let cloneIds =
-        AST.allocateFunctionIds
-            (definitions |> List.map (fun definition -> definition.Definition.Id))
-            cloneNames
+        cloneNames
+        |> List.map (fun name -> name, AST.functionIdForName name)
+        |> Map.ofList
     selections
     |> Map.toList
     |> List.fold (fun result (identity, candidate) ->
-        result |> Result.bind (fun (occupied, groups) ->
+        result |> Result.bind (fun (generatedIds, groups) ->
             let suffix = symbolSuffix identity
             let boundaries = InferOwnedFunctionGroups.candidateBoundaries candidate |> List.sortBy (fun boundary -> boundary.Name)
             let symbols =
@@ -294,32 +295,35 @@ let private cloneGroups
                 | None -> call
             boundaries
             |> List.fold (fun result boundary ->
-                result |> Result.bind (fun (occupied, members) ->
+                result |> Result.bind (fun (generatedIds, members) ->
                     match Map.tryFind boundary.Name definitionsByName with
                     | None -> Error (MissingGroupMember boundary.Name)
                     | Some original ->
                         let name = boundary.Name + suffix
+                        let cloneId = Map.find name cloneIds
                         let clone = {
                             Ownership = boundary.Ownership
                             Definition = {
                                 original.Definition with
-                                    Id = Map.find name cloneIds
+                                    Id = cloneId
                                     Name = name
                                     Body = rewriteCalls rewrite original.Definition.Body
                             }
                         }
-                        if Set.contains name occupied
+                        if Map.containsKey cloneId reservedFunctions
+                           || Map.containsKey cloneId definitionsById
+                           || Set.contains cloneId generatedIds
                            || Option.isSome (hir.CallSignature clone.Definition.Id)
                            || Option.isSome (semantics.CallOwnership (boundaryCall clone)) then
                             Error (SymbolCollision name)
                         else
                             Ok (
-                                Set.add name occupied,
-                                { Original = original.Definition.Id; Function = clone } :: members))) (Ok (occupied, []))
-            |> Result.map (fun (occupied, members) ->
+                                Set.add cloneId generatedIds,
+                                { Original = original.Definition.Id; Function = clone } :: members))) (Ok (generatedIds, []))
+            |> Result.map (fun (generatedIds, members) ->
                 match AST.NonEmptyList.tryFromList (List.rev members) with
                 | None -> Crash.crash "Selected ownership candidate has no members"
-                | Some members -> occupied, { Identity = identity; Members = members } :: groups))) (Ok (occupied, []))
+                | Some members -> generatedIds, { Identity = identity; Members = members } :: groups))) (Ok (Set.empty, []))
     |> Result.map (snd >> List.rev)
 
 /// Requests address calls in the supplied original definitions. A recursive
@@ -330,7 +334,7 @@ let private cloneGroups
 let materialize
     (hir: VerifyOwnedHIR.HIRContracts<'leaf>)
     (semantics: Semantics<'leaf, 'id>)
-    (reservedSymbols: Set<string>)
+    (reservedFunctions: Map<AST.FunctionId, string>)
     (definitions: Function<'leaf, 'id> list)
     (requests: Request<'id> list)
     : Result<Plan<'leaf, 'id>, MaterializationError<'id>> =
@@ -341,7 +345,7 @@ let materialize
         |> Result.bind (fun () ->
             VerifyOwnedHIR.verifyFunctions hir semantics definitions
             |> Result.mapError InvalidOriginalProgram))
-    |> Result.bind (fun () -> cloneGroups hir semantics reservedSymbols definitions requests)
+    |> Result.bind (fun () -> cloneGroups hir semantics reservedFunctions definitions requests)
     |> Result.bind (fun groups ->
         let targets =
             groups

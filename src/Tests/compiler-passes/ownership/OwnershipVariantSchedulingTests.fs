@@ -88,7 +88,7 @@ let private testPropagatesUniquenessToFixedPoint () =
         ScheduleOwnershipVariants.defaultLimits
         contracts
         semantics
-        Set.empty
+        Map.empty
         definitions
     |> Result.mapError (sprintf "%A")
     |> Result.bind (fun plan ->
@@ -104,7 +104,7 @@ let private testPropagatesUniquenessToFixedPoint () =
 let private testBoundsConvergence () =
     let definitions, _, _ = fixture ()
     let limits = { ScheduleOwnershipVariants.defaultLimits with MaxIterations = 1 }
-    match ScheduleOwnershipVariants.schedule limits contracts semantics Set.empty definitions with
+    match ScheduleOwnershipVariants.schedule limits contracts semantics Map.empty definitions with
     | Error (ScheduleOwnershipVariants.IterationLimitExceeded 1) -> Ok ()
     | actual -> Error (sprintf "Expected the scheduler iteration bound, got %A" actual)
 
@@ -126,7 +126,7 @@ let private testSkipsUnusedWideVariantSearch () =
         ScheduleOwnershipVariants.defaultLimits
         contracts
         semantics
-        Set.empty
+        Map.empty
         [wide]
     |> Result.mapError (sprintf "%A")
     |> Result.bind (fun plan ->
@@ -159,7 +159,7 @@ let private testSchedulesRecursiveDemandAtomically () =
         ScheduleOwnershipVariants.defaultLimits
         contracts
         semantics
-        Set.empty
+        Map.empty
         [loop; caller]
     |> Result.mapError (sprintf "%A")
     |> Result.bind (fun plan ->
@@ -181,7 +181,7 @@ let private testLowersSpecializedCallsAndContracts () =
         ScheduleOwnershipVariants.defaultLimits
         contracts
         semantics
-        Set.empty
+        Map.empty
         definitions
     |> Result.mapError (sprintf "%A")
     |> Result.bind (fun scheduled ->

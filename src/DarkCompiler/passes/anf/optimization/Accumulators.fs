@@ -875,28 +875,33 @@ let rec private transformConstructorBody
                     funcName returnType helperName destinationId destinationOffsetId rootId next elseBranch
             (If (cond, thenBranch', elseBranch'), final)
 
-let private freshHelperName (usedNames: Set<string>) (funcName: string) : string =
+let private freshHelperName
+    (functionNames: FunctionNameRegistry)
+    (generatedNames: Set<string>)
+    (funcName: string)
+    : string =
     let rec choose suffix =
         let candidate =
             if suffix = 0 then $"{funcName}$trmo"
             else $"{funcName}$trmo{suffix}"
-        if Set.contains candidate usedNames then choose (suffix + 1) else candidate
+        if Map.containsKey (AST.functionIdForName candidate) functionNames
+           || Set.contains candidate generatedNames then
+            choose (suffix + 1)
+        else
+            candidate
     choose 0
 
 let internal planTailRecursionModuloHelpers
     (functionNames: FunctionNameRegistry)
     (eligibleFunctions: Set<AST.FunctionId>) =
-    let initialNames = functionNames |> Map.values |> Set.ofSeq
     let helperNames, _ =
         eligibleFunctions
         |> Set.toList
-        |> List.choose (fun functionId ->
-            Map.tryFind functionId functionNames
-            |> Option.map (fun functionName -> functionId, functionName))
+        |> List.map (fun functionId -> functionId, AST.functionIdValue functionId)
         |> List.sortBy snd
-        |> List.mapFold (fun usedNames (functionId, functionName) ->
-            let helperName = freshHelperName usedNames functionName
-            ((functionId, helperName), Set.add helperName usedNames)) initialNames
+        |> List.mapFold (fun generatedNames (functionId, functionName) ->
+            let helperName = freshHelperName functionNames generatedNames functionName
+            ((functionId, helperName), Set.add helperName generatedNames)) Set.empty
     helperNames
     |> List.map (fun (functionId, helperName) ->
         functionId, (helperName, AST.functionIdForName helperName))

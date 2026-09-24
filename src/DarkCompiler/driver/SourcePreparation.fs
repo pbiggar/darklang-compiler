@@ -31,11 +31,6 @@ let internal extractReturnTypes
         | other -> Crash.crash $"extractReturnTypes: Non-function type '{other}' found in FuncReg for '{name}'")
     |> Map.ofSeq
 
-let internal returnTypesByName
-    (returnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
-    : Map<string, AST.SemanticType> =
-    returnTypes |> Map.toSeq |> Seq.map snd |> Map.ofSeq
-
 let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Registries =
     {
         ScopeContracts = Map.empty
@@ -58,8 +53,7 @@ let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Re
 let private liftLambdasWithBase
     (baseTypeReg: TypeRegistries.TypeRegistry)
     (baseVariantLookup: LoweringPrimitives.VariantLookup)
-    (baseFuncParams: Map<string, (string * AST.SemanticType) list>)
-    (baseFuncReturnTypes: Map<string, AST.SemanticType>)
+    (baseFunctions: LiftFunctions.FunctionCatalog)
     (passTimingRecorder: PassTimingRecorder option)
     (program: CheckedAST.Program)
     : Result<CheckedAST.Program, string> =
@@ -73,8 +67,7 @@ let private liftLambdasWithBase
         LiftFunctions.liftLambdasInProgram
             baseTypeReg
             baseVariantLookup
-            baseFuncParams
-            baseFuncReturnTypes
+            baseFunctions
             program)
 
 let internal mergeSpecRegistries
@@ -229,8 +222,7 @@ let internal prepareProgramForAnf
     (baseTypeReg: TypeRegistries.TypeRegistry)
     (baseVariantLookup: LoweringPrimitives.VariantLookup)
     (baseFuncNames: Set<string>)
-    (baseFuncParams: Map<string, (string * AST.SemanticType) list>)
-    (baseFuncReturnTypes: Map<string, AST.SemanticType>)
+    (baseFunctions: LiftFunctions.FunctionCatalog)
     (inheritedValues: Map<string, CheckedValueArtifact>)
     (passTimingRecorder: PassTimingRecorder option)
     (program: CheckedAST.Program)
@@ -287,8 +279,7 @@ let internal prepareProgramForAnf
                 liftLambdasWithBase
                     baseTypeReg
                     baseVariantLookup
-                    baseFuncParams
-                    baseFuncReturnTypes
+                    baseFunctions
                     passTimingRecorder
                     inlined)
         else
@@ -361,17 +352,14 @@ let internal convertTypedDeclarationsWithTrace
         baseContext
         |> Option.map (fun context -> context.BaseFuncNames)
         |> Option.defaultValue (buildBaseFuncNames baseRegistries)
-    let baseFuncParams =
+    let baseFunctions =
         baseContext
-        |> Option.map (fun context -> context.LambdaLiftFuncParams)
+        |> Option.map (fun context -> context.LambdaLiftFunctions)
         |> Option.defaultWith (fun () ->
-            reserveBaseFunctionParams baseRegistries.FuncParams baseFuncNames)
-    let baseFuncReturnTypes =
-        baseContext
-        |> Option.map (fun context ->
-            returnTypesByName context.ReturnTypes)
-        |> Option.defaultWith (fun () ->
-            extractReturnTypes baseRegistries.FuncReg |> returnTypesByName)
+            buildLambdaLiftFunctionCatalog
+                baseRegistries
+                baseFuncNames
+                (extractReturnTypes baseRegistries.FuncReg))
     let (baseTypeReg, baseVariantLookup) =
         match baseContext with
         | Some context ->
@@ -385,8 +373,7 @@ let internal convertTypedDeclarationsWithTrace
         baseTypeReg
         baseVariantLookup
         baseFuncNames
-        baseFuncParams
-        baseFuncReturnTypes
+        baseFunctions
         (baseContext |> Option.map (fun context -> context.CheckedValues) |> Option.defaultValue Map.empty)
         passTimingRecorder
         typedProgram
@@ -424,13 +411,14 @@ let private convertTypedProgramToConversionResult
     : Result<AST_to_ANF.ConversionResult, string> =
     let baseRegistries = emptyRegistries moduleRegistry
     let baseFuncNames = buildBaseFuncNames baseRegistries
+    let baseFunctions =
+        buildLambdaLiftFunctionCatalog baseRegistries baseFuncNames Map.empty
     prepareProgramForAnf
         (Monomorphize None)
         Map.empty
         Map.empty
         baseFuncNames
-        baseRegistries.FuncParams
-        Map.empty
+        baseFunctions
         Map.empty
         None
         typedProgram
@@ -586,11 +574,7 @@ let internal convertTypedProgramToUserOnlyWithMode
             baseContext.LambdaLiftTypeReg
             baseContext.LambdaLiftVariantLookup
             baseFuncNames
-            baseContext.LambdaLiftFuncParams
-            (baseContext.ReturnTypes
-             |> Map.toSeq
-             |> Seq.map snd
-             |> Map.ofSeq)
+            baseContext.LambdaLiftFunctions
             baseContext.CheckedValues
             passTimingRecorder
             typedProgram)

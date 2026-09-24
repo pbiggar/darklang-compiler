@@ -172,8 +172,6 @@ let analyzeWithTrace
                     |> Option.defaultValue (OwnedHIRVerificationFailed error)
                 | VerifyOwnedHIR.HIRVerificationFailed _ -> OwnedHIRVerificationFailed error)
             |> Result.bind (fun () ->
-                let reservedSymbols =
-                    context.FunctionNames |> Map.values |> Set.ofSeq
                 measure
                     "Ownership detail: Specialization scheduling"
                     (fun () ->
@@ -182,7 +180,7 @@ let analyzeWithTrace
                             ScheduleOwnershipVariants.defaultLimits
                             hir
                             ownership
-                            reservedSymbols
+                            context.FunctionNames
                             ownedFunctions)
                 |> Result.mapError SpecializationSchedulingFailed
                 |> Result.map (fun scheduled -> {
