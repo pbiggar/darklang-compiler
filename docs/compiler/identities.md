@@ -49,12 +49,14 @@ IDs remain deterministic structural IDs assigned to one parsed program and
 travel with that body's recursion evidence.
 
 `FunctionId` and `TypeId` each have one private, canonical-name-backed form.
-`ConstructorId` and `FieldId` combine their canonical owner and member name
-with the already-validated runtime tag or field index. Independently compiled
-stdlib, preamble, generated, and user units therefore agree without a shared
-allocator. Lowering reads layout directly from the ID instead of consulting a
-global tag/index map. Although these representations are name-backed,
-downstream code handles distinct ID types, not interchangeable raw strings.
+`ConstructorId` combines its canonical owner and case name with the
+already-validated runtime tag. `FieldId` combines its canonical owner with
+the physical field index; field names remain in the declaration catalog.
+Independently compiled stdlib, preamble, generated, and user units therefore
+agree without a shared allocator. Lowering reads layout directly from the ID
+instead of consulting a global tag/index map. Although these representations
+retain name-backed owner IDs, downstream code handles distinct ID types, not
+interchangeable raw strings.
 
 Reusable checked units pair their syntax with a small declaration catalog.
 Composition merges those catalogs structurally and reuses the original syntax;

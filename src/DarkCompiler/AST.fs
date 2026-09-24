@@ -311,7 +311,7 @@ type ConstructorId =
 
 [<Struct; StructuralEquality; StructuralComparison>]
 type FieldId =
-    private FieldId of owner:TypeId * canonicalName:string * runtimeIndex:int
+    private FieldId of owner:TypeId * runtimeIndex:int
 
 [<Struct; StructuralEquality; StructuralComparison>]
 type ScopeBoundaryId = private ScopeBoundaryId of int
@@ -344,11 +344,9 @@ let constructorId owner canonicalName runtimeTag =
 let constructorIdOwner (ConstructorId (owner, _, _)) = owner
 let constructorIdValue (ConstructorId (_, canonicalName, _)) = canonicalName
 let constructorRuntimeTag (ConstructorId (_, _, runtimeTag)) = runtimeTag
-let fieldId owner canonicalName runtimeIndex =
-    FieldId (owner, canonicalName, runtimeIndex)
-let fieldIdOwner (FieldId (owner, _, _)) = owner
-let fieldIdValue (FieldId (_, canonicalName, _)) = canonicalName
-let fieldRuntimeIndex (FieldId (_, _, runtimeIndex)) = runtimeIndex
+let fieldId owner runtimeIndex = FieldId (owner, runtimeIndex)
+let fieldIdOwner (FieldId (owner, _)) = owner
+let fieldRuntimeIndex (FieldId (_, runtimeIndex)) = runtimeIndex
 let scopeBoundaryId ordinal = ScopeBoundaryId ordinal
 // Group IDs share one compact namespace: declaration groups are even and
 // singleton local-recursion groups are odd.
