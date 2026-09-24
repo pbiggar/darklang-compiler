@@ -100,6 +100,7 @@ type internal MonomorphizationMode =
 /// Import inherited checked values before specialization so their bodies cross
 /// every preparation boundary together with local declarations.
 let private importInheritedValues
+    (passTimingRecorder: PassTimingRecorder option)
     (inheritedValues: Map<string, CheckedValueArtifact>)
     (CheckedAST.Program (symbols, topLevels))
     : CheckedAST.Program =
@@ -113,28 +114,46 @@ let private importInheritedValues
         inheritedValues
         |> Map.toList
         |> List.filter (fun (name, _) -> not (Set.contains name currentNames))
-    let inheritedDefinitions, symbols =
+    let inheritedDefinitions, symbols, compositionTicks, definitionTicks =
         inheritedEntries
-        |> List.fold (fun (collected, symbols) (name, artifact) ->
-            let symbols, imported =
-                CheckedAST.composeTopLevels
-                    artifact.Symbols
-                    symbols
-                    [CheckedAST.Expression artifact.Body]
-            let importedBody =
-                match imported with
-                | [CheckedAST.Expression body] -> body
-                | _ -> Crash.crash "Checked value import changed its top-level shape"
+        |> List.fold (fun (collected, symbols, compositionTicks, definitionTicks) (name, artifact) ->
+            let compositionStart =
+                if Option.isSome passTimingRecorder then Stopwatch.GetTimestamp() else 0L
+            // Checked value bodies carry canonical IDs. Their reusable
+            // artifacts retain only the cursor needed for later fresh binders.
+            let symbols =
+                CheckedAST.includeBindingCursor artifact.BindingCursor symbols
+            let compositionTicks =
+                if Option.isSome passTimingRecorder then
+                    compositionTicks + Stopwatch.GetTimestamp() - compositionStart
+                else compositionTicks
+            let definitionStart =
+                if Option.isSome passTimingRecorder then Stopwatch.GetTimestamp() else 0L
             let id, symbols = CheckedAST.internValue name symbols
             let definition =
                 CheckedAST.ValueDef {
                     Id = id
                     Name = name
                     Type = artifact.Type
-                    Body = importedBody
+                    Body = artifact.Body
                 }
-            (definition :: collected, symbols)) ([], symbols)
-        |> fun (definitions, symbols) -> (List.rev definitions, symbols)
+            let definitionTicks =
+                if Option.isSome passTimingRecorder then
+                    definitionTicks + Stopwatch.GetTimestamp() - definitionStart
+                else definitionTicks
+            (definition :: collected, symbols, compositionTicks, definitionTicks))
+            ([], symbols, 0L, 0L)
+        |> fun (definitions, symbols, compositionTicks, definitionTicks) ->
+            (List.rev definitions, symbols, compositionTicks, definitionTicks)
+    let milliseconds ticks = float ticks * 1000.0 / float Stopwatch.Frequency
+    recordPassTiming
+        passTimingRecorder
+        "AST -> ANF Value Import: Binding Cursor Composition"
+        (milliseconds compositionTicks)
+    recordPassTiming
+        passTimingRecorder
+        "AST -> ANF Value Import: Definition Construction"
+        (milliseconds definitionTicks)
     CheckedAST.Program (symbols, inheritedDefinitions @ topLevels)
 
 /// Materialize checked module values as one lexical binding per execution
@@ -237,7 +256,7 @@ let internal prepareProgramForAnf
         result
     let program =
         measure "AST -> ANF Preparation: Value Import" (fun () ->
-            importInheritedValues inheritedValues program)
+            importInheritedValues passTimingRecorder inheritedValues program)
     let monomorphizedResult =
         measure "AST -> ANF Preparation: Monomorphization" (fun () ->
             match monomorphization with
@@ -292,6 +311,7 @@ let internal prepareProgramForAnf
             Ok monomorphized
 
 let internal buildRegistriesForProgram
+    (passTimingRecorder: PassTimingRecorder option)
     (symbols: CheckedAST.Symbols)
     (baseProvidesModuleFunctionParams: bool)
     (moduleRegistry: AST.ModuleRegistry)
@@ -299,14 +319,38 @@ let internal buildRegistriesForProgram
     (typeDefs: AST.TypeDef list)
     (functions: CheckedAST.FunctionDef list)
     : AST_to_ANF.Registries * AST_to_ANF.Registries * CheckedAST.FunctionDef list =
-    let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
-    let resolvedFunctions = AST_to_ANF.resolveAliasesInFunctions aliasReg functions
+    let measure name operation =
+        match passTimingRecorder with
+        | None -> operation ()
+        | Some _ ->
+            let start = Stopwatch.GetTimestamp()
+            let result = operation ()
+            let elapsed =
+                float (Stopwatch.GetTimestamp() - start)
+                * 1000.0 / float Stopwatch.Frequency
+            recordPassTiming passTimingRecorder name elapsed
+            result
+    let aliasReg, resolvedFunctions =
+        measure "AST -> ANF Registry: Alias Resolution" (fun () ->
+            let aliasReg = AST_to_ANF.buildAliasRegistry typeDefs
+            (aliasReg, AST_to_ANF.resolveAliasesInFunctions aliasReg functions))
+    let phaseRecorder =
+        passTimingRecorder
+        |> Option.map (fun recorder ->
+            fun name (elapsed: float) ->
+                recorder { Pass = name; Elapsed = TimeSpan.FromMilliseconds elapsed })
     let localRegistries =
-        if baseProvidesModuleFunctionParams then
-            AST_to_ANF.buildOverlayRegistries symbols moduleRegistry typeDefs aliasReg resolvedFunctions
-        else
-            AST_to_ANF.buildRegistries symbols moduleRegistry typeDefs aliasReg resolvedFunctions
-    let mergedRegistries = AST_to_ANF.mergeRegistries baseRegistries localRegistries
+        measure "AST -> ANF Registry: Local Construction" (fun () ->
+            if baseProvidesModuleFunctionParams then
+                AST_to_ANF.buildOverlayRegistriesWithTrace
+                    phaseRecorder symbols moduleRegistry typeDefs aliasReg resolvedFunctions
+            else
+                AST_to_ANF.buildRegistriesWithTrace
+                    phaseRecorder symbols moduleRegistry typeDefs aliasReg resolvedFunctions)
+    let mergedRegistries =
+        measure "AST -> ANF Registry: Base Overlay Merge" (fun () ->
+            AST_to_ANF.mergeRegistriesWithTrace
+                phaseRecorder baseRegistries localRegistries)
     (mergedRegistries, localRegistries, resolvedFunctions)
 
 type internal DeclarationConversion = {
@@ -388,6 +432,7 @@ let internal convertTypedDeclarationsWithTrace
         |> Result.bind (fun (typeDefs, functions) ->
             let (registries, localRegistries, resolvedFunctions) =
                 buildRegistriesForProgram
+                    passTimingRecorder
                     (CheckedAST.programSymbols liftedProgram)
                     (Option.isSome baseContext)
                     moduleRegistry
@@ -433,6 +478,7 @@ let private convertTypedProgramToConversionResult
         |> Result.bind (fun (typeDefs, functions, expr) ->
             let (registries, _localRegistries, resolvedFunctions) =
                 buildRegistriesForProgram
+                    None
                     (CheckedAST.programSymbols liftedProgram)
                     false
                     moduleRegistry
@@ -590,6 +636,7 @@ let internal convertTypedProgramToUserOnlyWithMode
             |> Result.map (fun (typeDefs, functions, expr) ->
                 let (registries, localRegistries, resolvedFunctions) =
                     buildRegistriesForProgram
+                        passTimingRecorder
                         (CheckedAST.programSymbols liftedProgram)
                         true
                         baseContext.Registries.ModuleRegistry

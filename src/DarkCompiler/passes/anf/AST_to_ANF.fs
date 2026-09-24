@@ -2,6 +2,7 @@
 
 module AST_to_ANF
 
+open System.Diagnostics
 open MemoryModel
 open ANF
 open LoweringPrimitives
@@ -309,6 +310,7 @@ let resolveAliasesInFunctions (aliasReg: AliasRegistry) (functions: CheckedAST.F
     functions |> List.map (resolveAliasesInFunction aliasReg)
 
 let private buildRegistriesInternal
+    (phaseRecorder: (string -> float -> unit) option)
     (symbols: CheckedAST.Symbols)
     (includeModuleFunctionParams: bool)
     (moduleRegistry: AST.ModuleRegistry)
@@ -428,10 +430,18 @@ let private buildRegistriesInternal
     let funcParams =
         Map.fold (fun acc k v -> Map.add k v acc) userFuncParams moduleFuncParams
 
+    let scopeContractsStart =
+        if Option.isSome phaseRecorder then Stopwatch.GetTimestamp() else 0L
     let scopeContracts =
         ExtractListRegions.scopeContracts
             (fun types expr -> inferTypeCore sumTypeNames (typeNamesFromSymbols symbols) expr types typeReg variantLookup funcReg functionNames moduleRegistry)
             functions
+    phaseRecorder
+    |> Option.iter (fun record ->
+        let elapsed =
+            float (Stopwatch.GetTimestamp() - scopeContractsStart)
+            * 1000.0 / float Stopwatch.Frequency
+        record "AST -> ANF Registry: Scope Contracts" elapsed)
     let inertFunctionScopes =
         if includeModuleFunctionParams then
             DestructionAnalysis.inertFunctionScopes functionNames scopeContracts
@@ -460,38 +470,64 @@ let private buildRegistriesInternal
     }
 
 /// Build standalone registries from type and function definitions.
-let buildRegistries
+let buildRegistriesWithTrace
+    (phaseRecorder: (string -> float -> unit) option)
     (symbols: CheckedAST.Symbols)
     (moduleRegistry: AST.ModuleRegistry)
     (typeDefs: AST.TypeDef list)
     (aliasReg: AliasRegistry)
     (functions: CheckedAST.FunctionDef list)
     : Registries =
-    buildRegistriesInternal symbols true moduleRegistry typeDefs aliasReg functions
+    buildRegistriesInternal phaseRecorder symbols true moduleRegistry typeDefs aliasReg functions
+
+let buildRegistries symbols moduleRegistry typeDefs aliasReg functions =
+    buildRegistriesWithTrace None symbols moduleRegistry typeDefs aliasReg functions
 
 /// Build only the declaration overlay for a context that already contains the
 /// module function parameters. Reconstructing that constant projection for
 /// every separately compiled user unit is both redundant and expensive.
-let buildOverlayRegistries
+let buildOverlayRegistriesWithTrace
+    (phaseRecorder: (string -> float -> unit) option)
     (symbols: CheckedAST.Symbols)
     (moduleRegistry: AST.ModuleRegistry)
     (typeDefs: AST.TypeDef list)
     (aliasReg: AliasRegistry)
     (functions: CheckedAST.FunctionDef list)
     : Registries =
-    buildRegistriesInternal symbols false moduleRegistry typeDefs aliasReg functions
+    buildRegistriesInternal phaseRecorder symbols false moduleRegistry typeDefs aliasReg functions
+
+let buildOverlayRegistries symbols moduleRegistry typeDefs aliasReg functions =
+    buildOverlayRegistriesWithTrace None symbols moduleRegistry typeDefs aliasReg functions
 
 /// Merge registries with overlay taking precedence (module registry stays from base)
-let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
+let mergeRegistriesWithTrace
+    (phaseRecorder: (string -> float -> unit) option)
+    (baseRegs: Registries)
+    (overlay: Registries)
+    : Registries =
+    let measure name operation =
+        match phaseRecorder with
+        | None -> operation ()
+        | Some record ->
+            let start = Stopwatch.GetTimestamp()
+            let result = operation ()
+            let elapsed =
+                float (Stopwatch.GetTimestamp() - start)
+                * 1000.0 / float Stopwatch.Frequency
+            record name elapsed
+            result
     let mergeMaps m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
-    let functionNames = mergeMaps baseRegs.FunctionNames overlay.FunctionNames
+    let functionNames =
+        measure "AST -> ANF Registry: Function Name Merge" (fun () ->
+            mergeMaps baseRegs.FunctionNames overlay.FunctionNames)
     let scopeContracts = mergeMaps baseRegs.ScopeContracts overlay.ScopeContracts
     let localInertFunctionScopes =
-        DestructionAnalysis.inertFunctionScopesWithBase
-            baseRegs.InertFunctionScopes
-            functionNames
-            overlay.ScopeContracts
-    {
+        measure "AST -> ANF Registry: Inert Scope Analysis" (fun () ->
+            DestructionAnalysis.inertFunctionScopesWithBase
+                baseRegs.InertFunctionScopes
+                functionNames
+                overlay.ScopeContracts)
+    measure "AST -> ANF Registry: Other Overlay Maps" (fun () -> {
         TypeReg = mergeMaps baseRegs.TypeReg overlay.TypeReg
         TypeNames = ({
             TypeNames = mergeMaps baseRegs.TypeNames.TypeNames overlay.TypeNames.TypeNames
@@ -510,7 +546,10 @@ let mergeRegistries (baseRegs: Registries) (overlay: Registries) : Registries =
         FuncParams = mergeMaps baseRegs.FuncParams overlay.FuncParams
         ModuleRegistry = baseRegs.ModuleRegistry
         RecursiveMembers = mergeMaps baseRegs.RecursiveMembers overlay.RecursiveMembers
-    }
+    })
+
+let mergeRegistries baseRegs overlay =
+    mergeRegistriesWithTrace None baseRegs overlay
 
 /// Convert functions to ANF, returning updated VarGen
 type FunctionConversion = {

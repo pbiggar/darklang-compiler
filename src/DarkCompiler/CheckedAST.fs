@@ -462,6 +462,11 @@ let private legacySymbolsForTopLevels (symbols: Symbols) (topLevels: TopLevel li
 let catalogForCheckedUnit (symbols: Symbols) : Symbols =
     { emptySymbols () with NextBindingOrdinal = symbols.NextBindingOrdinal }
 
+let bindingCursor (symbols: Symbols) : int = symbols.NextBindingOrdinal
+
+let includeBindingCursor (cursor: int) (symbols: Symbols) : Symbols =
+    { symbols with NextBindingOrdinal = min cursor symbols.NextBindingOrdinal }
+
 /// Import checked declarations from another independently allocated symbol
 /// namespace. Every source binding receives a fresh target identity, while
 /// all references and recursive metadata are rewritten consistently.

@@ -103,17 +103,16 @@ let private buildPackageCatalogGenericCallers
 
 /// Shared compilation context used across pipeline steps
 type CheckedValueArtifact = {
-    Symbols: CheckedAST.Symbols
+    BindingCursor: int
     Type: AST.SemanticType
     Body: CheckedAST.Expr
 }
 
 let internal checkedValueArtifacts (program: CheckedAST.Program) : Map<string, CheckedValueArtifact> =
-    let symbols = CheckedAST.programSymbols program
+    let bindingCursor = CheckedAST.programSymbols program |> CheckedAST.bindingCursor
     CheckedAST.programValues program
     |> Map.map (fun _ (typ, body) ->
-        let artifactSymbols = CheckedAST.catalogForCheckedUnit symbols
-        { Symbols = artifactSymbols; Type = typ; Body = body })
+        { BindingCursor = bindingCursor; Type = typ; Body = body })
 
 type PipelineContext = {
     Symbols: CheckedAST.Symbols

@@ -464,6 +464,7 @@ let buildStdlibSpecializations
                     |> Result.bind (fun (preparedTypeDefs, preparedFunctions) ->
                     let (registries, localRegistries, resolvedFunctions) =
                         buildRegistriesForProgram
+                            passTimingRecorder
                             (CheckedAST.programSymbols preparedProgram)
                             true
                             stdlib.Context.Registries.ModuleRegistry

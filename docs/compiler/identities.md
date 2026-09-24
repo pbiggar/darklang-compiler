@@ -68,6 +68,8 @@ of copying every stdlib constructor into two catalog indexes for each small
 program or generated helper. Checked top-level value references likewise keep
 their canonical binding IDs through import; materialization does not resolve
 their names again.
+Reusable checked values store only the fresh-binding cursor needed when they
+are imported, so importing each value does not compose declaration catalogs.
 
 Names remain metadata beside these IDs. For example, every ANF/MIR/LIR
 function has both `Id` and `Name`: `Id` is the key for calls and analyses;
