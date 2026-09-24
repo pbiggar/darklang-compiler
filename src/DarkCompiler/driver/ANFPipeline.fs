@@ -96,7 +96,10 @@ let internal buildAnf
           FunctionNames = registries.FunctionNames }
     let anfOptimized =
         if shouldRunANFOptimize anfOptions then
-            ANF_Optimize.optimizeProgramWithOptionsAndExternalFunctions
+            ANF_Optimize.optimizeProgramWithOptionsAndExternalFunctionsWithTrace
+                (passTimingRecorder
+                 |> Option.map (fun recorder name elapsed ->
+                     recorder { Pass = name; Elapsed = elapsed }))
                 anfOptimizeContext
                 anfOptions
                 singletonRecursiveNames

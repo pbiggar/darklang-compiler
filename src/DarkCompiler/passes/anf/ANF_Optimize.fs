@@ -43,16 +43,26 @@ let private rewriteInvertedBoolLiteralBranchesInProgram (program: Program) : Pro
     Program (List.rev functionsReversed, mainExpr')
 
 /// Optimize a program with explicit options
-let optimizeProgramWithOptionsAndExternalFunctions
+let optimizeProgramWithOptionsAndExternalFunctionsWithTrace
+    (recordTiming: (string -> System.TimeSpan -> unit) option)
     (context: OptimizeContext)
     (options: OptimizeOptions)
     (eligibleTailRecursionNames: Set<AST.FunctionId>)
     (externalFunctions: Map<string, Function>)
     (program: Program)
     : Program =
+    let measure name operation =
+        match recordTiming with
+        | None -> operation ()
+        | Some record ->
+            let timer = System.Diagnostics.Stopwatch.StartNew()
+            let result = operation ()
+            record name timer.Elapsed
+            result
     let program' =
         if options.EnableConstFolding then
-            rewriteInvertedBoolLiteralBranchesInProgram program
+            measure "ANF Optimize detail: Boolean branch rewrite" (fun () ->
+                rewriteInvertedBoolLiteralBranchesInProgram program)
         else
             program
     let (Program (functions, mainExpr)) = program'
@@ -62,10 +72,11 @@ let optimizeProgramWithOptionsAndExternalFunctions
     // devirtualization afterwards does not need another fixed-point iteration:
     // it only removes a zero-capture allocation and changes known call forms.
     let functions' =
-        functions
-        |> List.map (fun func ->
-            let optimized = optimizeToFixedPoint context options func 10
-            { optimized with Body = devirtualizeCaptureFreeClosures optimized.Body })
+        measure "ANF Optimize detail: Function fixed points" (fun () ->
+            functions
+            |> List.map (fun func ->
+                let optimized = optimizeToFixedPoint context options func 10
+                { optimized with Body = devirtualizeCaptureFreeClosures optimized.Body }))
 
     // Optimize main expression
     let mainFunc = { Id = AST.functionIdForName "__dark_anf_optimization_main"
@@ -74,23 +85,53 @@ let optimizeProgramWithOptionsAndExternalFunctions
                      ReturnType = AST.TUnit
                      ReturnOwnership = OwnedReturn
                      Body = mainExpr }
-    let mainOptimized = optimizeToFixedPoint context options mainFunc 10
+    let mainOptimized =
+        measure "ANF Optimize detail: Main fixed point" (fun () ->
+            optimizeToFixedPoint context options mainFunc 10)
 
     let optimizedProgram =
         Program (functions', devirtualizeCaptureFreeClosures mainOptimized.Body)
     if options.EnableTailRecursionModuloOperation then
+        let programFunctionIds = functions' |> List.map (fun func -> func.Id) |> Set.ofList
+        let activeEligible = Set.intersect eligibleTailRecursionNames programFunctionIds
         let helpers =
-            planTailRecursionModuloHelpers
-                context.FunctionNames
-                eligibleTailRecursionNames
+            measure "ANF Optimize detail: Accumulator helper planning" (fun () ->
+                planTailRecursionModuloHelpers
+                    context.FunctionNames
+                    activeEligible)
         optimizedProgram
-        |> transformTailRecursionModuloAddition context.FunctionNames helpers
-        |> transformTailRecursionModuloSubtraction context.FunctionNames helpers
-        |> transformTailRecursionModuloMultiplication context.FunctionNames helpers
-        |> transformTailRecursionModuloFixedConstructors helpers
-        |> transformTailRecursionModuloListConstructors context.FunctionNames helpers externalFunctions
+        |> fun current ->
+            measure "ANF Optimize detail: Addition rewrite" (fun () ->
+                transformTailRecursionModuloAddition context.FunctionNames helpers current)
+        |> fun current ->
+            measure "ANF Optimize detail: Subtraction rewrite" (fun () ->
+                transformTailRecursionModuloSubtraction context.FunctionNames helpers current)
+        |> fun current ->
+            measure "ANF Optimize detail: Multiplication rewrite" (fun () ->
+                transformTailRecursionModuloMultiplication context.FunctionNames helpers current)
+        |> fun current ->
+            measure "ANF Optimize detail: Fixed constructor rewrite" (fun () ->
+                transformTailRecursionModuloFixedConstructors helpers current)
+        |> fun current ->
+            measure "ANF Optimize detail: List constructor rewrite" (fun () ->
+                transformTailRecursionModuloListConstructors context.FunctionNames helpers externalFunctions current)
     else
         optimizedProgram
+
+let optimizeProgramWithOptionsAndExternalFunctions
+    (context: OptimizeContext)
+    (options: OptimizeOptions)
+    (eligibleTailRecursionNames: Set<AST.FunctionId>)
+    (externalFunctions: Map<string, Function>)
+    (program: Program)
+    : Program =
+    optimizeProgramWithOptionsAndExternalFunctionsWithTrace
+        None
+        context
+        options
+        eligibleTailRecursionNames
+        externalFunctions
+        program
 
 let optimizeProgramWithOptions (context: OptimizeContext) (options: OptimizeOptions) (program: Program) : Program =
     let (Program (functions, _)) = program

@@ -242,15 +242,15 @@ let scheduleWithTrace
             if number > limits.MaxIterations then Error (IterationLimitExceeded limits.MaxIterations)
             else
                 let orderedRequests = requests |> Map.toList |> List.map snd
-                (if List.isEmpty orderedRequests then
-                    measure
-                        "Ownership detail: Scheduling materialization round"
-                        (fun () -> Ok (MaterializeOwnershipVariants.unchanged definitions))
-                 else
-                    measure
-                        "Ownership detail: Scheduling materialization round"
-                        (fun () ->
-                            MaterializeOwnershipVariants.materialize hir semantics reservedFunctions definitions orderedRequests))
+                measure
+                    "Ownership detail: Scheduling materialization round"
+                    (fun () ->
+                        MaterializeOwnershipVariants.materialize
+                            hir
+                            semantics
+                            reservedFunctions
+                            definitions
+                            orderedRequests)
                 |> Result.mapError MaterializationFailed
                 |> Result.bind (fun materialized ->
                     let groupCount = MaterializeOwnershipVariants.groups materialized |> List.length

@@ -51,7 +51,6 @@ type MaterializationError<'id when 'id: comparison> =
 
 let groups plan = plan.Groups
 let rewrites plan = plan.Rewrites
-let unchanged definitions = { Originals = definitions; Groups = []; Rewrites = [] }
 let functions plan =
     plan.Originals
     @ (plan.Groups

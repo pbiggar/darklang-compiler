@@ -135,6 +135,33 @@ let private testSkipsUnusedWideVariantSearch () =
            && List.isEmpty (MaterializeOwnershipVariants.rewrites materialized) then Ok ()
         else Error "Expected an uncalled wide function to produce no ownership variants")
 
+let private testEmptyDemandStillValidatesMaterialization () =
+    let input = value 40
+    let invalid =
+        definition
+            "invalid"
+            (signature [ConsumedParameter input.Id] (ProducedResult input.Id))
+            (block [input] [Drop input.Id] input)
+    match
+        ScheduleOwnershipVariants.schedule
+            ScheduleOwnershipVariants.defaultLimits
+            contracts
+            semantics
+            Map.empty
+            [invalid]
+    with
+    | Error (
+        ScheduleOwnershipVariants.MaterializationFailed (
+            MaterializeOwnershipVariants.InvalidOriginalProgram _
+        )
+      ) -> Ok ()
+    | actual ->
+        Error (
+            sprintf
+                "Expected empty-demand scheduling to run materialization validation, got %A"
+                actual
+        )
+
 let private testSchedulesRecursiveDemandAtomically () =
     let loopInput, recursiveResult, loopResult = value 20, value 21, value 22
     let recursiveCall = call "loop" loopInput recursiveResult
@@ -244,6 +271,7 @@ let tests = [
     "Ownership specialization propagates uniqueness to a fixed point", testPropagatesUniquenessToFixedPoint
     "Ownership specialization has an explicit convergence bound", testBoundsConvergence
     "Ownership specialization skips unused wide functions", testSkipsUnusedWideVariantSearch
+    "Ownership specialization validates empty-demand materialization", testEmptyDemandStillValidatesMaterialization
     "Ownership specialization schedules recursive demand atomically", testSchedulesRecursiveDemandAtomically
     "Ownership specialization lowers clones calls and contracts into ANF", testLowersSpecializedCallsAndContracts
 ]

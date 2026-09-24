@@ -215,6 +215,7 @@ let checkProgramWithBaseEnvAndSettingsWithTrace
     (warningSettings: WarningSettings)
     (program: Program)
     : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
+    let checkedAstStart = System.Diagnostics.Stopwatch.StartNew()
     checkProgramInternalWithTrace
         (Some phaseRecorder)
         (Some baseEnv)
@@ -224,7 +225,11 @@ let checkProgramWithBaseEnvAndSettingsWithTrace
         true
         warningSettings
         program
-    |> Result.bind constructCheckedProgram
+    |> Result.bind (fun checkedResult ->
+        checkedAstStart.Restart()
+        let result = constructCheckedProgram checkedResult
+        phaseRecorder "TypeCheck: Checked AST Construction" checkedAstStart.Elapsed.TotalMilliseconds
+        result)
 
 let checkDeclarationProgramWithBaseEnvAndSettings
     (baseEnv: TypeCheckEnv)
@@ -307,8 +312,10 @@ let checkParsedProgramWithBaseEnvAndSettingsWithTrace
     (warningSettings: WarningSettings)
     (program: ParsedProgram)
     : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
-    program
-    |> semanticProgramOfParsed
+    let semanticStart = System.Diagnostics.Stopwatch.StartNew()
+    let semanticProgram = semanticProgramOfParsed program
+    phaseRecorder "TypeCheck: Parsed AST Conversion" semanticStart.Elapsed.TotalMilliseconds
+    semanticProgram
     |> checkProgramWithBaseEnvAndSettingsWithTrace
         phaseRecorder
         baseEnv
