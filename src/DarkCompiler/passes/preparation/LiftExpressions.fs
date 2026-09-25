@@ -114,8 +114,8 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
         liftLambdasInArgs args state
         |> Result.map (fun (args', state') -> (CheckedAST.TypeApp (funcName, typeArgs, args'), state'))
     | CheckedAST.TupleLiteral elems ->
-        liftLambdasInList elems state
-        |> Result.map (fun (elems', state') -> (CheckedAST.TupleLiteral elems', state'))
+        liftLambdasInList (CheckedAST.tupleElementsToList elems) state
+        |> Result.map (fun (elems', state') -> (CheckedAST.TupleLiteral (CheckedAST.tupleElementsOfList elems'), state'))
     | CheckedAST.ListLiteral elems ->
         liftLambdasInList elems state
         |> Result.map (fun (elems', state') -> (CheckedAST.ListLiteral elems', state'))
@@ -127,7 +127,7 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
         |> Result.map (fun (entries', state') ->
             (CheckedAST.DictLiteral (keyType, valueType, entries'), state'))
     | CheckedAST.RecordLiteral (typeName, fields) ->
-        liftLambdasInFields fields state
+        CheckedAST.traverseStateRecordFields liftLambdasInExpr state fields
         |> Result.map (fun (fields', state') -> (CheckedAST.RecordLiteral (typeName, fields'), state'))
     | CheckedAST.RecordUpdate (record, updates) ->
         liftLambdasInExpr record state
@@ -153,8 +153,8 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                 (typeNamesFromSymbols state.Symbols)
         liftLambdasInExpr scrutinee state
         |> Result.bind (fun (scrutinee', state1) ->
-            liftLambdasInCases cases scrutineeType state1
-            |> Result.map (fun (cases', state2) -> (CheckedAST.Match (scrutinee', cases'), state2)))
+            liftLambdasInCases (AST.NonEmptyList.toList cases) scrutineeType state1
+            |> Result.map (fun (cases', state2) -> (CheckedAST.Match (scrutinee', AST.NonEmptyList.fromList cases'), state2)))
     | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
         // Lambda in expression position - lift it to a closure
         // Add lambda parameters to type environment before processing body

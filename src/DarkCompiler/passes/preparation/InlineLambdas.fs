@@ -32,20 +32,20 @@ let rec varOccursInExpr (name: AST.BindingId) (expr: CheckedAST.Expr) : bool =
     | CheckedAST.Call (funcName, args) ->
         args |> exprArgsToList |> List.exists (varOccursInExpr name)
     | CheckedAST.TypeApp (_, _, args) -> args |> exprArgsToList |> List.exists (varOccursInExpr name)
-    | CheckedAST.TupleLiteral elements -> List.exists (varOccursInExpr name) elements
+    | CheckedAST.TupleLiteral elements -> CheckedAST.tupleElementsToList elements |> List.exists (varOccursInExpr name)
     | CheckedAST.TupleAccess (tuple, _) -> varOccursInExpr name tuple
     | CheckedAST.DictLiteral (_, _, entries) ->
         List.exists (fun (key, value) -> varOccursInExpr name key || varOccursInExpr name value) entries
-    | CheckedAST.RecordLiteral (_, fields) -> List.exists (fun (_, e) -> varOccursInExpr name e) fields
+    | CheckedAST.RecordLiteral (_, fields) -> fields |> CheckedAST.recordFieldsInSourceOrder |> List.exists (fun (_, e) -> varOccursInExpr name e)
     | CheckedAST.RecordUpdate (record, updates) ->
         varOccursInExpr name record || List.exists (fun (_, e) -> varOccursInExpr name e) updates
     | CheckedAST.RecordAccess (record, _) -> varOccursInExpr name record
     | CheckedAST.Constructor (_, fields) -> List.exists (varOccursInExpr name) fields
     | CheckedAST.Match (scrutinee, cases) ->
         varOccursInExpr name scrutinee ||
-        List.exists (fun (mc: CheckedAST.MatchCase) ->
+        AST.NonEmptyList.toList cases |> List.exists (fun (mc: CheckedAST.MatchCase) ->
             (mc.Guard |> Option.map (varOccursInExpr name) |> Option.defaultValue false) ||
-            varOccursInExpr name mc.Body) cases
+            varOccursInExpr name mc.Body)
     | CheckedAST.ListLiteral elements -> List.exists (varOccursInExpr name) elements
     | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
         // If name is shadowed by a parameter, it doesn't occur
@@ -110,7 +110,7 @@ let rec inlineLambdas (expr: CheckedAST.Expr) (lambdaEnv: LambdaEnv) : CheckedAS
     | CheckedAST.TypeApp (funcName, typeArgs, args) ->
         CheckedAST.TypeApp (funcName, typeArgs, AST.NonEmptyList.map (fun a -> inlineLambdas a lambdaEnv) args)
     | CheckedAST.TupleLiteral elements ->
-        CheckedAST.TupleLiteral (List.map (fun e -> inlineLambdas e lambdaEnv) elements)
+        CheckedAST.TupleLiteral (CheckedAST.mapTupleElements (fun e -> inlineLambdas e lambdaEnv) elements)
     | CheckedAST.TupleAccess (tuple, index) ->
         CheckedAST.TupleAccess (inlineLambdas tuple lambdaEnv, index)
     | CheckedAST.DictLiteral (keyType, valueType, entries) ->
@@ -122,7 +122,7 @@ let rec inlineLambdas (expr: CheckedAST.Expr) (lambdaEnv: LambdaEnv) : CheckedAS
                 (inlineLambdas key lambdaEnv, inlineLambdas value lambdaEnv))
         )
     | CheckedAST.RecordLiteral (typeName, fields) ->
-        CheckedAST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, inlineLambdas e lambdaEnv)) fields)
+        CheckedAST.RecordLiteral (typeName, CheckedAST.mapRecordFields (fun e -> inlineLambdas e lambdaEnv) fields)
     | CheckedAST.RecordUpdate (record, updates) ->
         CheckedAST.RecordUpdate (inlineLambdas record lambdaEnv, List.map (fun (n, e) -> (n, inlineLambdas e lambdaEnv)) updates)
     | CheckedAST.RecordAccess (record, fieldName) ->
@@ -132,7 +132,7 @@ let rec inlineLambdas (expr: CheckedAST.Expr) (lambdaEnv: LambdaEnv) : CheckedAS
     | CheckedAST.Match (scrutinee, cases) ->
         let cases' =
             cases
-            |> List.map (fun mc ->
+            |> AST.NonEmptyList.map (fun mc ->
                 let caseBoundNames =
                     mc.Patterns
                     |> AST.NonEmptyList.toList

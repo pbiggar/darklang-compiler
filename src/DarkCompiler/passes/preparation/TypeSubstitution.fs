@@ -239,7 +239,7 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
             AST.NonEmptyList.map (applySubstToExpr subst) args
         )
     | CheckedAST.TupleLiteral elements ->
-        CheckedAST.TupleLiteral (List.map (applySubstToExpr subst) elements)
+        CheckedAST.TupleLiteral (CheckedAST.mapTupleElements (applySubstToExpr subst) elements)
     | CheckedAST.TupleAccess (tuple, index) ->
         CheckedAST.TupleAccess (applySubstToExpr subst tuple, index)
     | CheckedAST.DictLiteral (keyType, valueType, entries) ->
@@ -253,7 +253,7 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
     | CheckedAST.RecordLiteral (reference, fields) ->
         CheckedAST.RecordLiteral (
             { reference with TypeArgs = List.map (applySubstToType subst) reference.TypeArgs },
-            List.map (fun (n, e) -> (n, applySubstToExpr subst e)) fields
+            CheckedAST.mapRecordFields (applySubstToExpr subst) fields
         )
     | CheckedAST.RecordUpdate (record, updates) ->
         CheckedAST.RecordUpdate (applySubstToExpr subst record, List.map (fun (n, e) -> (n, applySubstToExpr subst e)) updates)
@@ -263,7 +263,7 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
         CheckedAST.Constructor (reference, List.map (applySubstToExpr subst) fields)
     | CheckedAST.Match (scrutinee, cases) ->
         CheckedAST.Match (applySubstToExpr subst scrutinee,
-                   cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (applySubstToExpr subst); Body = applySubstToExpr subst mc.Body }))
+                   cases |> AST.NonEmptyList.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (applySubstToExpr subst); Body = applySubstToExpr subst mc.Body }))
     | CheckedAST.ListLiteral elements ->
         CheckedAST.ListLiteral (List.map (applySubstToExpr subst) elements)
     | CheckedAST.Lambda (parameters, returnAnnotation, body) ->

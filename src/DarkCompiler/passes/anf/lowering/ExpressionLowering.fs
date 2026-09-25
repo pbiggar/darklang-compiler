@@ -767,7 +767,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 |> Result.bind (fun (elemExpr, elemAtom, vg') ->
                     convertElements rest vg' (elemExpr :: accExprs) (elemAtom :: accAtoms))
 
-        convertElements elements varGen [] []
+        convertElements (CheckedAST.tupleElementsToList elements) varGen [] []
         |> Result.map (fun (elemExprs, elemAtoms, varGen1) ->
             // Create TupleAlloc and bind to fresh variable
             let (resultVar, varGen2) = ANF.freshVar varGen1
@@ -801,8 +801,6 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             match Map.tryFind typeName typeReg with
             | Some info -> info
             | None -> Crash.crash $"Record type '{typeName}' not found in typeReg"
-        let fieldCount = List.length recordInfo.Fields
-
         let rec convertFields remaining vg acc =
             match remaining with
             | [] -> Ok (List.rev acc, vg)
@@ -811,18 +809,12 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 |> Result.bind (fun (setupExpr, fieldAtom, vg') ->
                     convertFields rest vg' ((fieldId, setupExpr, fieldAtom) :: acc))
 
-        convertFields fields varGen []
+        convertFields (CheckedAST.recordFieldsInSourceOrder fields) varGen []
         |> Result.map (fun (convertedFields, varGen1) ->
-            let atomByIndex =
-                convertedFields
-                |> List.map (fun (fieldId, _, atom) -> (fieldIndex fieldId, atom))
-                |> Map.ofList
             let orderedAtoms =
-                [0 .. fieldCount - 1]
-                |> List.map (fun fieldIndex ->
-                    match Map.tryFind fieldIndex atomByIndex with
-                    | Some atom -> atom
-                    | None -> Crash.crash $"Record literal '{typeName}' is missing field slot {fieldIndex} after type checking")
+                convertedFields
+                |> List.sortBy (fun (fieldId, _, _) -> fieldIndex fieldId)
+                |> List.map (fun (_, _, atom) -> atom)
             let (resultVar, varGen2) = ANF.freshVar varGen1
             let allocation =
                 ANF.Let (
@@ -950,7 +942,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
         | None -> Error "Resolved constructor type identity is absent from the lowering registry"
         | Some constructorTypeName ->
             let tag = constructorTag constructorReference.ConstructorId
-            match tryFindVariantByTag constructorTypeName tag variantLookup with
+            match tryFindVariantByConstructorId constructorReference.TypeId constructorTypeName constructorReference.ConstructorId variantLookup with
             | None ->
                 Error $"Unknown constructor tag: {tag}"
             | Some (typeName, typeParams, tag, variantFieldTypes) ->
@@ -1000,7 +992,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     let payloadExpr =
                         match fields with
                         | [field] -> field
-                        | _ -> CheckedAST.TupleLiteral fields
+                        | _ -> CheckedAST.TupleLiteral (CheckedAST.tupleElementsOfList fields)
                     boxedDescriptor ()
                     |> Result.bind (fun descriptor ->
                         toANFBoundAtomCore sumTypeNames typeNames inertScopes payloadExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
@@ -1252,7 +1244,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 Ok (exprWithElements, varGen3))
 
     | CheckedAST.Match (scrutinee, cases) ->
-        PatternLowering.lowerMatch toANFCore toAtomCore toANFBoundAtomCore functionIds sumTypeNames typeNames inertScopes scrutinee cases varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+        PatternLowering.lowerMatch toANFCore toAtomCore toANFBoundAtomCore functionIds sumTypeNames typeNames inertScopes scrutinee (AST.NonEmptyList.toList cases) varGen env typeReg variantLookup funcReg functionNames moduleRegistry
 
     | CheckedAST.InterpolatedString parts ->
         // Desugar interpolated string to StringConcat chain

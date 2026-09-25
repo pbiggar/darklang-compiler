@@ -84,22 +84,21 @@ let rec countMatches (expr: CheckedAST.Expr) : int =
         | CheckedAST.Call (_, args)
         | CheckedAST.TypeApp (_, _, args) ->
             NonEmptyList.toList args
-        | CheckedAST.TupleLiteral args
-        | CheckedAST.ListLiteral args ->
-            args
+        | CheckedAST.TupleLiteral args -> CheckedAST.tupleElementsToList args
+        | CheckedAST.ListLiteral args -> args
         | CheckedAST.TupleAccess (tuple, _) ->
             [tuple]
         | CheckedAST.DictLiteral (_, _, entries) ->
             entries |> List.collect (fun (key, value) -> [key; value])
         | CheckedAST.RecordLiteral (_, fields) ->
-            fields |> List.map snd
+            fields |> CheckedAST.recordFieldsInSourceOrder |> List.map snd
         | CheckedAST.RecordUpdate (recordExpr, updates) ->
             recordExpr :: (updates |> List.map snd)
         | CheckedAST.RecordAccess (recordExpr, _) ->
             [recordExpr]
         | CheckedAST.Constructor (_, fields) -> fields
         | CheckedAST.Match (scrutinee, cases) ->
-            scrutinee :: (cases |> List.map (fun c -> c.Body))
+            scrutinee :: (cases |> NonEmptyList.toList |> List.map (fun c -> c.Body))
         | CheckedAST.Lambda (_, _, body) ->
             [body]
         | CheckedAST.Apply (func, args)
@@ -168,7 +167,7 @@ let testSumEqualityUsesSinglePairMatch () : TestResult =
                 let helperMatchCount = countMatches helperDef.Body
                 let helperCaseCount =
                     match helperDef.Body with
-                    | CheckedAST.Let (_, _, CheckedAST.Match (_, cases)) -> List.length cases
+                    | CheckedAST.Let (_, _, CheckedAST.Match (_, cases)) -> NonEmptyList.length cases
                     | _ -> 0
                 match expressionMatchCountResult with
                 | Error err ->

@@ -11,6 +11,8 @@ open AST
 open CheckedAST
 open System.Collections.Generic
 
+let private matchExpr (value, cases) = Match (value, NonEmptyList.fromList cases)
+
 /// Bounded, caller-owned cache of generated typed JSON codec declarations.
 /// Entries are keyed by direction plus the complete reachable shape of the
 /// resolved root type, so unrelated declarations do not prevent reuse while
@@ -193,7 +195,17 @@ let private fieldId (env: Env) owner fieldName =
     | Some id -> id
     | None -> Crash.crash $"Generated JSON record field was not interned: {owner}.{fieldName}"
 
-let private tuplePayload values = TupleLiteral values |> Some
+let private recordLiteral env typeName typeArgs fields =
+    let owner = typeId env typeName
+    let fieldCount =
+        match Map.tryFind typeName env.Records with
+        | Some info -> List.length info.Fields
+        | None -> Crash.crash $"Generated JSON record type '{typeName}' is absent"
+    match completeRecordFields owner fieldCount fields with
+    | Ok complete -> RecordLiteral ({ TypeId = owner; TypeArgs = typeArgs }, complete)
+    | Error detail -> Crash.crash $"Generated JSON record '{typeName}': {detail}"
+
+let private tuplePayload values = TupleLiteral (tupleElementsOfList values) |> Some
 let private ok env value = constructor env "Darklang.Stdlib.Result.Result" "Ok" (Some value)
 let private error env value = constructor env "Darklang.Stdlib.Result.Result" "Error" (Some value)
 let private none env = constructor env "Darklang.Stdlib.Option.Option" "None" None
@@ -229,13 +241,12 @@ let rec private typeReference env typ =
         let fqName = constructor env "Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName" "Package" (Some hash)
         let resolved = ok env fqName
         let resolution =
-            RecordLiteral (
-                {
-                    TypeId = typeId env "Darklang.LanguageTools.RuntimeTypes.NameResolution"
-                    TypeArgs = [fqNameType]
-                },
+            recordLiteral
+                env
+                "Darklang.LanguageTools.RuntimeTypes.NameResolution"
+                [fqNameType]
                 [ fieldId env "Darklang.LanguageTools.RuntimeTypes.NameResolution" "originalName", originalName
-                  fieldId env "Darklang.LanguageTools.RuntimeTypes.NameResolution" "resolved", resolved ])
+                  fieldId env "Darklang.LanguageTools.RuntimeTypes.NameResolution" "resolved", resolved ]
         constructor env owner "TCustomType" (tuplePayload [resolution; ListLiteral (List.map (typeReference env) typeArgs)])
     match typ with
     | TUnit -> nullary "TUnit"
@@ -480,7 +491,7 @@ and private ensureListSerializer env elemType state =
         serializeCall env elemType separated (local "__head" bindings) reserved
         |> Result.map (fun (encoded, nextState) ->
             let body =
-                Match (
+                matchExpr (
                     local "__items" bindings,
                     [ makeCase (PList []) (local "__writer" bindings)
                       makeCase
@@ -526,7 +537,7 @@ and private ensureDictSerializer env valueType state =
         serializeCall env valueType withName (TupleAccess (local "__entry" bindings, 1)) reserved
         |> Result.map (fun (encoded, nextState) ->
             let body =
-                Match (
+                matchExpr (
                     local "__entries" bindings,
                     [ makeCase (PList []) (local "__writer" bindings)
                       makeCase
@@ -665,7 +676,7 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
                                         body
                                      :: acc))
                 loop (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
-                |> Result.map (fun (cases, nextState) -> (Match (value, cases), nextState)))
+                |> Result.map (fun (cases, nextState) -> (matchExpr (value, cases), nextState)))
     | TFunction _ | TBlob | TInternalRawPtr | TNever | TStream _ | TVar _ | TInferenceVar _
     | TDict _ ->
         Error
@@ -674,7 +685,7 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
 let private optionDecoder env typ functionName source view path state =
     let (valueId, state) = freshBinding "__value" state
     let failure = cantMatch env typ (rawSource env source view) path
-    (Match (
+    (matchExpr (
         call env functionName [source; view],
         [ makeCase
               (constructorPattern env "Darklang.Stdlib.Option.Option" "Some" [PVariable valueId])
@@ -738,7 +749,7 @@ and private sequenceDecoded env source items build state =
                 let (errorId, next) = freshBinding "__decode_error" next
                 loop rest next ((bindingName, typ) :: bindings)
                 |> Result.map (fun (tail, finalState) ->
-                    (Match (decoded, resultCases env bindingName tail errorId), finalState)))
+                    (matchExpr (decoded, resultCases env bindingName tail errorId), finalState)))
     loop items state []
 
 and private ensureListDecoder env elemType state =
@@ -798,7 +809,7 @@ and private ensureListDecoder env elemType state =
                     (rawSource env (local "__source" bindings) (local "__array_view" bindings))
                     (local "__path" bindings)
             let decodedTailResult =
-                Match (
+                matchExpr (
                     decodedTail,
                     resultCases
                         env
@@ -806,7 +817,7 @@ and private ensureListDecoder env elemType state =
                         (ok env (listPush env elemType (local "__decoded_tail" bindings) (local "__decoded_head" bindings)))
                         (binding "__tail_error"))
             let decodedHeadResult =
-                Match (
+                matchExpr (
                     decodedHead,
                     resultCases
                         env
@@ -882,17 +893,17 @@ and private ensureDictDecoder env valueType state =
                     [TString; valueType],
                     args [local "__dict" bindings; key; local "__decoded_value" bindings])
             let body =
-                Match (
+                matchExpr (
                     local "__fields" bindings,
                     [ makeCase (PList []) (ok env (local "__dict" bindings))
                       makeCase
                           (PListCons ([patternLocal "__entry" bindings], patternLocal "__tail" bindings))
-                          (Match (
+                          (matchExpr (
                               decoded,
                               resultCases
                                   env
                                   (binding "__decoded_value")
-                                  (Match (
+                                  (matchExpr (
                                       call env name [local "__source" bindings; local "__tail" bindings; local "__path" bindings; withValue],
                                       resultCases
                                           env
@@ -1004,11 +1015,11 @@ and private decodeEnumCase
                         @ [patternLocal extraName bindings],
                         PWildcard)
                 let arrayBody =
-                    Match (
+                    matchExpr (
                         local "__enum_args" bindings,
                         missing @ [exact; makeCase extraPattern extraBody])
                 let body =
-                    Match (
+                    matchExpr (
                         call env "Darklang.Stdlib.Json.__arrayItems" [source; caseRaw],
                         [ makeCase
                               (constructorPattern
@@ -1071,9 +1082,9 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
                 | Some id -> id
                 | None -> Crash.crash "JSON tuple value binding was not allocated"
             (elemType, local names[index] bindings, itemPath, valueId))
-        sequenceDecoded env source items (fun decoded -> ok env (TupleLiteral (decoded |> List.map (fst >> Local)))) state
+        sequenceDecoded env source items (fun decoded -> ok env (TupleLiteral (decoded |> List.map (fst >> Local) |> tupleElementsOfList))) state
         |> Result.map (fun (decoded, nextState) ->
-            (Match (
+            (matchExpr (
                 call env "Darklang.Stdlib.Json.__arrayItems" [source; view],
                 [ makeCase
                       (constructorPattern
@@ -1099,10 +1110,7 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
                     | [] ->
                         Ok (
                             ok env (
-                                RecordLiteral (
-                                    { TypeId = typeId env typeName; TypeArgs = typeArgs },
-                                    List.rev decodedFields
-                                )
+                                recordLiteral env typeName typeArgs (List.rev decodedFields)
                             ),
                             current
                         )
@@ -1128,8 +1136,8 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
                             |> Result.map (fun (tail, finalState) ->
                                 let missing = constructor env "Darklang.Stdlib.Json.ParseError.ParseError" "RecordMissingField" (tuplePayload [StringLiteral fieldName; path]) |> error env
                                 let duplicate = constructor env "Darklang.Stdlib.Json.ParseError.ParseError" "RecordDuplicateField" (tuplePayload [StringLiteral fieldName; path]) |> error env
-                                let one = Match (decoded, resultCases env fieldValueId tail fieldErrorId)
-                                (Match (
+                                let one = matchExpr (decoded, resultCases env fieldValueId tail fieldErrorId)
+                                (matchExpr (
                                     matches,
                                     [ makeCase
                                           (constructorPattern
@@ -1151,7 +1159,7 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
                                  finalState)))
                 build fields state []
                 |> Result.map (fun (decoded, nextState) ->
-                    (Match (
+                    (matchExpr (
                         call env "Darklang.Stdlib.Json.__objectFieldMap" [source; view],
                         [ makeCase
                               (constructorPattern
@@ -1168,7 +1176,7 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
             let (objectFieldsId, nextState) = freshBinding "__object_fields" nextState
             let currentEnv = { env with Symbols = nextState.Symbols }
             let empty = DictLiteral (TString, valueType, [])
-            (Match (
+            (matchExpr (
                 call currentEnv "Darklang.Stdlib.Json.__objectFields" [source; view],
                 [ makeCase
                       (constructorPattern
@@ -1204,7 +1212,7 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
                             (tuplePayload [typeReference env typ; Local caseNameId; path])
                         |> error env
                     let oneField =
-                        Match (
+                        matchExpr (
                             Local caseNameId,
                             caseMatches @ [makeCase PWildcard invalidCase])
                     let tooMany =
@@ -1215,7 +1223,7 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
                         |> error env
                     let checkedOneField = oneField
                     let objectBody =
-                        Match (
+                        matchExpr (
                             call env "Darklang.Stdlib.Json.__enumCandidate" [source; view],
                             [ makeCase
                                   (constructorPattern
@@ -1296,8 +1304,8 @@ let rec private mapExpr rewrite symbols expr =
             let (values', next) = mapNonEmpty values symbols
             (TypeApp (name, types, values'), next)
         | TupleLiteral values ->
-            let (values', next) = mapList values symbols
-            (TupleLiteral values', next)
+            let (values', next) = mapList (tupleElementsToList values) symbols
+            (TupleLiteral (tupleElementsOfList values'), next)
         | TupleAccess (value, index) ->
             let (value', next) = mapExpr rewrite symbols value
             (TupleAccess (value', index), next)
@@ -1309,11 +1317,7 @@ let rec private mapExpr rewrite symbols expr =
                     ((key', value'), following)) symbols
             (DictLiteral (keyType, valueType, entries'), next)
         | RecordLiteral (name, fields) ->
-            let (fields', next) =
-                fields
-                |> List.mapFold (fun current (field, value) ->
-                    let (value', following) = mapExpr rewrite current value
-                    ((field, value'), following)) symbols
+            let (fields', next) = fields |> mapFoldRecordFields (mapExpr rewrite) symbols
             (RecordLiteral (name, fields'), next)
         | RecordUpdate (record, fields) ->
             let (record', afterRecord) = mapExpr rewrite symbols record
@@ -1333,6 +1337,7 @@ let rec private mapExpr rewrite symbols expr =
             let (value', afterValue) = mapExpr rewrite symbols value
             let (cases', next) =
                 cases
+                |> NonEmptyList.toList
                 |> List.mapFold (fun current case ->
                     let (guard', afterGuard) =
                         match case.Guard with
@@ -1342,7 +1347,7 @@ let rec private mapExpr rewrite symbols expr =
                             (Some guard', following)
                     let (body', following) = mapExpr rewrite afterGuard case.Body
                     ({ case with Guard = guard'; Body = body' }, following)) afterValue
-            (Match (value', cases'), next)
+            (matchExpr (value', cases'), next)
         | ListLiteral values ->
             let (values', next) = mapList values symbols
             (ListLiteral values', next)
@@ -1390,13 +1395,14 @@ let rewriteProgramWithSession
                 | Let (_, a, b) | RecursiveLet (_, a, b) -> capture b (capture a collected)
                 | If (a, b, c) -> capture c (capture b (capture a collected))
                 | Call (_, values) | TypeApp (_, _, values) -> NonEmptyList.toList values |> List.fold (fun s e -> capture e s) collected
-                | TupleLiteral values | ListLiteral values | Closure (_, values) -> List.fold (fun s e -> capture e s) collected values
+                | TupleLiteral values -> List.fold (fun s e -> capture e s) collected (tupleElementsToList values)
+                | ListLiteral values | Closure (_, values) -> List.fold (fun s e -> capture e s) collected values
                 | DictLiteral (_, _, entries) ->
                     entries |> List.fold (fun state (key, value) -> capture value (capture key state)) collected
-                | RecordLiteral (_, fields) -> fields |> List.fold (fun s (_, e) -> capture e s) collected
+                | RecordLiteral (_, fields) -> fields |> recordFieldsInSourceOrder |> List.fold (fun s (_, e) -> capture e s) collected
                 | RecordUpdate (record, fields) -> fields |> List.fold (fun s (_, e) -> capture e s) (capture record collected)
                 | Constructor (_, fields) -> fields |> List.fold (fun state field -> capture field state) collected
-                | Match (value, cases) -> cases |> List.fold (fun s case -> capture case.Body (case.Guard |> Option.map (fun g -> capture g s) |> Option.defaultValue s)) (capture value collected)
+                | Match (value, cases) -> cases |> NonEmptyList.toList |> List.fold (fun s case -> capture case.Body (case.Guard |> Option.map (fun g -> capture g s) |> Option.defaultValue s)) (capture value collected)
                 | Lambda (_, _, body) -> capture body collected
                 | Apply (fn, values) | IndirectApply (fn, values) -> NonEmptyList.toList values |> List.fold (fun s e -> capture e s) (capture fn collected)
                 | InterpolatedString parts -> parts |> List.fold (fun s part -> match part with StringText _ -> s | StringExpr e -> capture e s) collected
@@ -1602,7 +1608,7 @@ let rewriteProgramWithSession
                         Let (
                             LPVariable parseResultId,
                             parsed,
-                            Match (
+                            matchExpr (
                                 Local parseResultId,
                                 [ makeCase
                                       (constructorPattern

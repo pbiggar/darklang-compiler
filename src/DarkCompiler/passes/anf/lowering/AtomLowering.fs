@@ -525,7 +525,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                 |> Result.bind (fun (elemAtom, elemBindings, vg') ->
                     convertElements rest vg' (elemAtom :: accAtoms) (accBindings @ elemBindings))
 
-        convertElements elements varGen [] []
+        convertElements (CheckedAST.tupleElementsToList elements) varGen [] []
         |> Result.map (fun (elemAtoms, elemBindings, varGen1) ->
             // Create a temporary for the tuple
             let (tempVar, varGen2) = ANF.freshVar varGen1
@@ -555,8 +555,6 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             match Map.tryFind typeName typeReg with
             | Some info -> info
             | None -> Crash.crash $"Record type '{typeName}' not found in typeReg"
-        let fieldCount = List.length recordInfo.Fields
-
         let rec convertFields remaining vg acc =
             match remaining with
             | [] -> Ok (List.rev acc, vg)
@@ -565,18 +563,12 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                 |> Result.bind (fun (fieldAtom, fieldBindings, vg') ->
                     convertFields rest vg' ((fieldId, fieldAtom, fieldBindings) :: acc))
 
-        convertFields fields varGen []
+        convertFields (CheckedAST.recordFieldsInSourceOrder fields) varGen []
         |> Result.map (fun (convertedFields, varGen1) ->
-            let atomByIndex =
-                convertedFields
-                |> List.map (fun (fieldId, atom, _) -> (fieldIndex fieldId, atom))
-                |> Map.ofList
             let orderedAtoms =
-                [0 .. fieldCount - 1]
-                |> List.map (fun fieldIndex ->
-                    match Map.tryFind fieldIndex atomByIndex with
-                    | Some atom -> atom
-                    | None -> Crash.crash $"Record literal '{typeName}' is missing field slot {fieldIndex} after type checking")
+                convertedFields
+                |> List.sortBy (fun (fieldId, _, _) -> fieldIndex fieldId)
+                |> List.map (fun (_, atom, _) -> atom)
             let sourceBindings =
                 convertedFields |> List.collect (fun (_, _, bindings) -> bindings)
             let (tempVar, varGen2) = ANF.freshVar varGen1
@@ -700,7 +692,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
         | None -> Error "Resolved constructor type identity is absent from the lowering registry"
         | Some constructorTypeName ->
             let tag = constructorTag constructorReference.ConstructorId
-            match tryFindVariantByTag constructorTypeName tag variantLookup with
+            match tryFindVariantByConstructorId constructorReference.TypeId constructorTypeName constructorReference.ConstructorId variantLookup with
             | None ->
                 Error $"Unknown constructor tag: {tag}"
             | Some (typeName, typeParams, tag, variantFieldTypes) ->
@@ -748,7 +740,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                     let payloadExpr =
                         match fields with
                         | [field] -> field
-                        | _ -> CheckedAST.TupleLiteral fields
+                        | _ -> CheckedAST.TupleLiteral (CheckedAST.tupleElementsOfList fields)
                     boxedDescriptor ()
                     |> Result.bind (fun descriptor ->
                         toAtomCore sumTypeNames typeNames inertScopes payloadExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry

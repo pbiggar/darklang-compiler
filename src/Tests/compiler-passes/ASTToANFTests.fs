@@ -37,7 +37,7 @@ let testMissingVariantPayloadTypeErrors () : TestResult =
     | None -> Error "NonEmptyList.tryFromList returned None for a non-empty list"
     | Some patterns ->
         let matchCase : CheckedAST.MatchCase = { Patterns = patterns; Guard = None; Body = CheckedAST.Local payloadId }
-        let expr = CheckedAST.Match (CheckedAST.Local xId, [matchCase])
+        let expr = CheckedAST.Match (CheckedAST.Local xId, AST.NonEmptyList.singleton matchCase)
 
         match
             toANFWithMetadata
@@ -145,7 +145,7 @@ let private lowerTwoElementListPattern (elementType: AST.SemanticType) : Result<
         Guard = None
         Body = CheckedAST.Local headId
     }
-    let expr = CheckedAST.Match (CheckedAST.Local valueId, [matchCase])
+    let expr = CheckedAST.Match (CheckedAST.Local valueId, AST.NonEmptyList.singleton matchCase)
 
     let listPatternFunctions : FunctionRegistry =
         [ "Darklang.Stdlib.List.__length_i64", AST.TFunction ([listType], AST.TInt64)

@@ -152,7 +152,16 @@ let private checkProgramInternal
 let private constructCheckedProgram
     (typ, program, (env: TypeCheckEnv))
     : Result<SemanticType * CheckedAST.Program * TypeCheckEnv, TypeError> =
-    CheckedAST.ofTypedProgram env.VariantLookup (env.Values |> Map.keys |> Set.ofSeq) env.TypeCatalog program
+    let recordFieldCounts name =
+        env.IndexedTypeReg
+        |> Map.tryFind name
+        |> Option.map (fun info -> List.length info.Fields)
+    CheckedAST.ofTypedProgram
+        env.VariantLookup
+        (env.Values |> Map.keys |> Set.ofSeq)
+        env.TypeCatalog
+        recordFieldCounts
+        program
     |> Result.map (fun checkedProgram ->
         let catalog =
             checkedProgram

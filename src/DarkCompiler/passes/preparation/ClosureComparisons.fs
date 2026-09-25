@@ -240,7 +240,7 @@ let rec internal rewriteRecursiveSelfReferences
     | CheckedAST.Match (scrutinee, cases) ->
         let cases' =
             cases
-            |> List.map (fun case ->
+            |> AST.NonEmptyList.map (fun case ->
                 { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body })
         CheckedAST.Match (recurse scrutinee, cases')
     | CheckedAST.BoundaryRender (renderer, value) -> CheckedAST.BoundaryRender (renderer, recurse value)
@@ -250,7 +250,7 @@ let rec internal rewriteRecursiveSelfReferences
     | CheckedAST.Sequence (first, next) -> CheckedAST.Sequence (recurse first, recurse next)
     | CheckedAST.Call (name, args) -> CheckedAST.Call (name, mapArgs args)
     | CheckedAST.TypeApp (name, types, args) -> CheckedAST.TypeApp (name, types, mapArgs args)
-    | CheckedAST.TupleLiteral values -> CheckedAST.TupleLiteral (List.map recurse values)
+    | CheckedAST.TupleLiteral values -> CheckedAST.TupleLiteral (CheckedAST.mapTupleElements recurse values)
     | CheckedAST.TupleAccess (tuple, index) -> CheckedAST.TupleAccess (recurse tuple, index)
     | CheckedAST.DictLiteral (keyType, valueType, entries) ->
         CheckedAST.DictLiteral (
@@ -258,7 +258,7 @@ let rec internal rewriteRecursiveSelfReferences
             valueType,
             entries |> List.map (fun (key, value) -> (recurse key, recurse value))
         )
-    | CheckedAST.RecordLiteral (name, fields) -> CheckedAST.RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
+    | CheckedAST.RecordLiteral (name, fields) -> CheckedAST.RecordLiteral (name, CheckedAST.mapRecordFields recurse fields)
     | CheckedAST.RecordUpdate (record, fields) -> CheckedAST.RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | CheckedAST.RecordAccess (record, field) -> CheckedAST.RecordAccess (recurse record, field)
     | CheckedAST.Constructor (reference, fields) -> CheckedAST.Constructor (reference, List.map recurse fields)
@@ -299,7 +299,7 @@ let rec internal rewriteLiftedSelfCalls
     | CheckedAST.Sequence (first, next) -> CheckedAST.Sequence (recurse first, recurse next)
     | CheckedAST.Call (name, args) -> CheckedAST.Call (name, mapArgs args)
     | CheckedAST.TypeApp (name, types, args) -> CheckedAST.TypeApp (name, types, mapArgs args)
-    | CheckedAST.TupleLiteral values -> CheckedAST.TupleLiteral (List.map recurse values)
+    | CheckedAST.TupleLiteral values -> CheckedAST.TupleLiteral (CheckedAST.mapTupleElements recurse values)
     | CheckedAST.TupleAccess (tuple, index) -> CheckedAST.TupleAccess (recurse tuple, index)
     | CheckedAST.DictLiteral (keyType, valueType, entries) ->
         CheckedAST.DictLiteral (
@@ -307,12 +307,12 @@ let rec internal rewriteLiftedSelfCalls
             valueType,
             entries |> List.map (fun (key, value) -> (recurse key, recurse value))
         )
-    | CheckedAST.RecordLiteral (name, fields) -> CheckedAST.RecordLiteral (name, fields |> List.map (fun (field, value) -> (field, recurse value)))
+    | CheckedAST.RecordLiteral (name, fields) -> CheckedAST.RecordLiteral (name, CheckedAST.mapRecordFields recurse fields)
     | CheckedAST.RecordUpdate (record, fields) -> CheckedAST.RecordUpdate (recurse record, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | CheckedAST.RecordAccess (record, field) -> CheckedAST.RecordAccess (recurse record, field)
     | CheckedAST.Constructor (reference, fields) -> CheckedAST.Constructor (reference, List.map recurse fields)
     | CheckedAST.Match (scrutinee, cases) ->
-        CheckedAST.Match (recurse scrutinee, cases |> List.map (fun case -> { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body }))
+        CheckedAST.Match (recurse scrutinee, cases |> AST.NonEmptyList.map (fun case -> { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body }))
     | CheckedAST.ListLiteral values -> CheckedAST.ListLiteral (List.map recurse values)
     | CheckedAST.Lambda (parameters, returnAnnotation, body) -> CheckedAST.Lambda (parameters, returnAnnotation, recurse body)
     | CheckedAST.Apply (func, args) -> CheckedAST.Apply (recurse func, mapArgs args)

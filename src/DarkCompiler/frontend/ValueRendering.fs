@@ -227,13 +227,13 @@ and private ensureListItemsRenderer
         let tailBody =
             Match (
                 Local tailId,
-                [ makeCase (PList []) (StringLiteral "")
-                  makeCase PWildcard (concat reserved.Symbols [StringLiteral ", "; call reserved.Symbols name [Local tailId]]) ]
+                NonEmptyList.fromList [ makeCase (PList []) (StringLiteral "");
+                                        makeCase PWildcard (concat reserved.Symbols [StringLiteral ", "; call reserved.Symbols name [Local tailId]]) ]
             )
         let body =
             Match (
                 Local itemsId,
-                [ makeCase (PList []) (StringLiteral "")
+                NonEmptyList.fromList [ makeCase (PList []) (StringLiteral "");
                   makeCase
                       (PListCons ([PVariable headId], PVariable tailId))
                       (concat withElemRenderer.Symbols [renderedHead; tailBody]) ]
@@ -285,13 +285,13 @@ and private ensureDictItemsRenderer
         let tailBody =
             Match (
                 Local tailId,
-                [ makeCase (PList []) (StringLiteral "")
-                  makeCase PWildcard (concat withValueRenderer.Symbols [StringLiteral "; "; call withValueRenderer.Symbols name [Local tailId]]) ]
+                NonEmptyList.fromList [ makeCase (PList []) (StringLiteral "");
+                                        makeCase PWildcard (concat withValueRenderer.Symbols [StringLiteral "; "; call withValueRenderer.Symbols name [Local tailId]]) ]
             )
         let body =
             Match (
                 Local entriesId,
-                [ makeCase (PList []) (StringLiteral "")
+                NonEmptyList.fromList [ makeCase (PList []) (StringLiteral "");
                   makeCase
                       (PListCons ([PVariable entryId], PVariable tailId))
                       (concat withValueRenderer.Symbols [renderedEntry; tailBody]) ]
@@ -339,7 +339,7 @@ and private renderBody
         let body =
             Match (
                 value,
-                [ makeCase (PList []) (StringLiteral $"{typeName} []")
+                NonEmptyList.fromList [ makeCase (PList []) (StringLiteral $"{typeName} []");
                   makeCase PWildcard (concat nextState.Symbols [StringLiteral "["; call nextState.Symbols itemsName [value]; StringLiteral "]"]) ]
             )
         (body, nextState)
@@ -366,7 +366,7 @@ and private renderBody
                 entries,
                 Match (
                     Local entriesId,
-                    [ makeCase (PList []) (StringLiteral "Dict { }")
+                    NonEmptyList.fromList [ makeCase (PList []) (StringLiteral "Dict { }");
                       makeCase
                           PWildcard
                           (concat nextState.Symbols
@@ -490,7 +490,7 @@ and private renderBody
                                 body
                         buildCases rest nextState (case :: acc)
             let (cases, nextState) = buildCases (List.sortBy (fun variant -> variant.Tag) sumInfo.Variants) state []
-            (Match (value, cases), nextState)
+            (Match (value, NonEmptyList.fromList cases), nextState)
     | TFunction _ -> (StringLiteral "(lambda)", state)
     | TBlob ->
         // The interpreter deliberately does not expose ephemeral Blob payloads

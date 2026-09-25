@@ -64,8 +64,8 @@ let rec private mapExpr rewrite state expr =
             let arguments, next = mapNonEmpty arguments state
             CheckedAST.TypeApp (target, types, arguments), next
         | CheckedAST.TupleLiteral values ->
-            let values, next = mapList values state
-            CheckedAST.TupleLiteral values, next
+            let values, next = mapList (CheckedAST.tupleElementsToList values) state
+            CheckedAST.TupleLiteral (CheckedAST.tupleElementsOfList values), next
         | CheckedAST.TupleAccess (value, index) ->
             let value, next = mapExpr rewrite state value
             CheckedAST.TupleAccess (value, index), next
@@ -78,10 +78,7 @@ let rec private mapExpr rewrite state expr =
             CheckedAST.DictLiteral (keyType, valueType, entries), next
         | CheckedAST.RecordLiteral (reference, fields) ->
             let fields, next =
-                fields
-                |> List.mapFold (fun current (field, value) ->
-                    let value, following = mapExpr rewrite current value
-                    (field, value), following) state
+                fields |> CheckedAST.mapFoldRecordFields (mapExpr rewrite) state
             CheckedAST.RecordLiteral (reference, fields), next
         | CheckedAST.RecordUpdate (record, fields) ->
             let record, afterRecord = mapExpr rewrite state record
@@ -101,6 +98,7 @@ let rec private mapExpr rewrite state expr =
             let value, afterValue = mapExpr rewrite state value
             let cases, next =
                 cases
+                |> AST.NonEmptyList.toList
                 |> List.mapFold (fun current case ->
                     let guard, afterGuard =
                         match case.Guard with
@@ -110,7 +108,7 @@ let rec private mapExpr rewrite state expr =
                             Some guard, following
                     let body, following = mapExpr rewrite afterGuard case.Body
                     { case with Guard = guard; Body = body }, following) afterValue
-            CheckedAST.Match (value, cases), next
+            CheckedAST.Match (value, AST.NonEmptyList.fromList cases), next
         | CheckedAST.ListLiteral values ->
             let values, next = mapList values state
             CheckedAST.ListLiteral values, next

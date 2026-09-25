@@ -119,7 +119,7 @@ let private testReportsBindingInferenceFailure () =
         functionDefinition
             (CheckedAST.Let (
                 variable "unsupported",
-                CheckedAST.TupleLiteral [CheckedAST.Int64Literal 1L],
+                CheckedAST.TupleLiteral (CheckedAST.tupleElementsOfList [CheckedAST.Int64Literal 1L; CheckedAST.Int64Literal 2L]),
                 local "first"))
     match ConstructHIRFunctions.constructFunction infer dependencies noCalls definition with
     | Error (ConstructHIRFunctions.CannotInferExpression ("choose", _)) -> Ok ()
@@ -130,7 +130,7 @@ let private testFallsBackToOpaqueCheckedFunctionForScheduling () =
         functionDefinition
             (CheckedAST.Let (
                 variable "unsupported",
-                CheckedAST.TupleLiteral [CheckedAST.Int64Literal 1L],
+                CheckedAST.TupleLiteral (CheckedAST.tupleElementsOfList [CheckedAST.Int64Literal 1L; CheckedAST.Int64Literal 2L]),
                 local "first"))
     match ConstructHIRFunctions.constructFunctionsWithOpaqueFallback Map.empty infer dependencies noCalls [source] with
     | Ok [constructed] ->

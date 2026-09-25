@@ -142,7 +142,9 @@ let rec freeVars (expr: CheckedAST.Expr) (bound: Set<AST.BindingId>) : Set<AST.B
         args |> exprArgsToList |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
     | CheckedAST.TypeApp (_, _, args) ->
         args |> exprArgsToList |> List.map (fun a -> freeVars a bound) |> List.fold Set.union Set.empty
-    | CheckedAST.TupleLiteral elems | CheckedAST.ListLiteral elems ->
+    | CheckedAST.TupleLiteral elems ->
+        elems |> CheckedAST.tupleElementsToList |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
+    | CheckedAST.ListLiteral elems ->
         elems |> List.map (fun e -> freeVars e bound) |> List.fold Set.union Set.empty
     | CheckedAST.TupleAccess (tuple, _) -> freeVars tuple bound
     | CheckedAST.DictLiteral (_, _, entries) ->
@@ -150,7 +152,7 @@ let rec freeVars (expr: CheckedAST.Expr) (bound: Set<AST.BindingId>) : Set<AST.B
         |> List.collect (fun (key, value) -> [freeVars key bound; freeVars value bound])
         |> List.fold Set.union Set.empty
     | CheckedAST.RecordLiteral (_, fields) ->
-        fields |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
+        fields |> CheckedAST.recordFieldsInSourceOrder |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
     | CheckedAST.RecordUpdate (record, updates) ->
         let recordVars = freeVars record bound
         let updateVars = updates |> List.map (fun (_, e) -> freeVars e bound) |> List.fold Set.union Set.empty
@@ -162,6 +164,7 @@ let rec freeVars (expr: CheckedAST.Expr) (bound: Set<AST.BindingId>) : Set<AST.B
         let scrutineeVars = freeVars scrutinee bound
         let caseVars =
             cases
+            |> AST.NonEmptyList.toList
             |> List.map (fun mc ->
                 let caseNames =
                     mc.Patterns
@@ -360,7 +363,7 @@ let rec simpleInferType
         simpleInferType body typeEnv' funcParams funcReturnTypes genericFuncDefs typeReg variantLookup typeNames
     | CheckedAST.TupleLiteral elements ->
         // Recursively infer types of tuple elements
-        let elemTypes = elements |> List.map (fun e -> simpleInferType e typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup typeNames)
+        let elemTypes = elements |> CheckedAST.tupleElementsToList |> List.map (fun e -> simpleInferType e typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup typeNames)
         let rec collectTypes remaining acc =
             match remaining with
             | [] -> Some (List.rev acc)
@@ -397,7 +400,7 @@ let rec simpleInferType
                         (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
 
                 let fieldMap =
-                    fields
+                    CheckedAST.recordFieldsInSourceOrder fields
                     |> List.map (fun (field, value) -> fieldIndex field, value)
                     |> Map.ofList
                 let typeParams = recordInfo.TypeParams
@@ -449,9 +452,10 @@ let rec simpleInferType
         match
             tryFindSumTypeNameById constructorReference.TypeId typeNames
             |> Option.bind (fun typeName ->
-                tryFindVariantByTag
+                tryFindVariantByConstructorId
+                    constructorReference.TypeId
                     typeName
-                    (constructorTag constructorReference.ConstructorId)
+                    constructorReference.ConstructorId
                     variantLookup)
         with
         | Some (sumTypeName, typeParams, _, fieldPatterns) ->
@@ -536,6 +540,7 @@ let rec simpleInferType
         let scrutineeType = simpleInferType scrutinee typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup typeNames
         let caseTypes =
             cases
+            |> AST.NonEmptyList.toList
             |> List.map (fun mc ->
                 let patterns = AST.NonEmptyList.toList mc.Patterns
                 let caseEnv =

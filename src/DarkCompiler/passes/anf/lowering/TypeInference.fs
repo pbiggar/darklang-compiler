@@ -59,7 +59,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                         (fieldName, canonicalizeBareSumTypeRefs variantLookup fieldType))
 
                 let fieldMap =
-                    fields
+                    CheckedAST.recordFieldsInSourceOrder fields
                     |> List.map (fun (field, value) -> fieldIndex field, value)
                     |> Map.ofList
                 let typeParams = recordInfo.TypeParams
@@ -116,6 +116,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
             | _ -> Error $"Cannot access field on non-record type")
     | CheckedAST.TupleLiteral elems ->
         elems
+        |> CheckedAST.tupleElementsToList
         |> List.map (fun e -> inferTypeCore sumTypeNames typeNames e typeEnv typeReg variantLookup funcReg functionNames moduleRegistry)
         |> List.fold (fun acc r ->
             match acc, r with
@@ -136,7 +137,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
         | None -> Error "Unknown semantic constructor type"
         | Some constructorTypeName ->
             let tag = constructorTag constructorReference.ConstructorId
-            match tryFindVariantByTag constructorTypeName tag variantLookup with
+            match tryFindVariantByConstructorId constructorReference.TypeId constructorTypeName constructorReference.ConstructorId variantLookup with
             | None ->
                 Error $"Unknown constructor tag: {tag}"
             | Some (typeName, typeParams, _, fieldPatterns) ->
@@ -465,19 +466,16 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
             | Ok t -> t
             | Error msg -> Crash.crash $"Pattern match: Could not determine scrutinee type: {msg}"
 
-        match cases with
-        | [] -> Error "Empty match expression"
-        | firstCase :: restCases ->
-            inferCaseType patternType firstCase
-            |> Result.bind (fun firstCaseType ->
-                restCases
-                |> List.fold
-                    (fun accResult mc ->
-                        accResult
-                        |> Result.bind (fun accType ->
-                            inferCaseType patternType mc
-                            |> Result.bind (fun nextType -> mergeCaseTypes accType nextType)))
-                    (Ok firstCaseType))
+        inferCaseType patternType cases.Head
+        |> Result.bind (fun firstCaseType ->
+            cases.Tail
+            |> List.fold
+                (fun accResult mc ->
+                    accResult
+                    |> Result.bind (fun accType ->
+                        inferCaseType patternType mc
+                        |> Result.bind (fun nextType -> mergeCaseTypes accType nextType)))
+                (Ok firstCaseType))
     | CheckedAST.Call (funcName, args) ->
         let argList = exprArgsToList args
         let displayName =

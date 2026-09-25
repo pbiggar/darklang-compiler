@@ -2909,7 +2909,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
             | CheckedAST.StringLiteral s -> Some $"\"{escapeForRuntimeError s}\""
             | CheckedAST.CharLiteral c -> Some $"'{escapeForRuntimeError c}'"
             | CheckedAST.TupleLiteral elements ->
-                formatAll elements []
+                formatAll (CheckedAST.tupleElementsToList elements) []
                 |> Option.map (fun rendered ->
                     let joined = String.concat ", " rendered
                     $"({joined})")

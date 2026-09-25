@@ -15,6 +15,27 @@ type LetPattern =
     | LPVariable of AST.BindingId
     | LPTuple of first:LetPattern * second:LetPattern * rest:LetPattern list
 
+/// Checked source tuple expressions always have at least two elements.
+type TupleElements<'a> = {
+    First: 'a
+    Second: 'a
+    Rest: 'a list
+}
+
+let tupleElementsToList tuple = tuple.First :: tuple.Second :: tuple.Rest
+
+let tupleElementsFromList = function
+    | first :: second :: rest -> Some { First = first; Second = second; Rest = rest }
+    | _ -> None
+
+let tupleElementsOfList elements =
+    match tupleElementsFromList elements with
+    | Some tuple -> tuple
+    | None -> Crash.crash "checked tuple has fewer than two elements"
+
+let mapTupleElements f tuple =
+    { First = f tuple.First; Second = f tuple.Second; Rest = List.map f tuple.Rest }
+
 type Pattern =
     | PUnit
     | PWildcard
@@ -55,6 +76,67 @@ type ConstructorReference = {
     ConstructorId: AST.ConstructorId
 }
 
+/// A checked record literal contains each declaration slot exactly once.
+/// The list retains source evaluation order; layout order is selected only
+/// after every initializer has been evaluated.
+type RecordFields<'a> = private RecordFields of (AST.FieldId * 'a) list
+
+let recordFieldsInSourceOrder (RecordFields fields) = fields
+
+let mapRecordFields f (RecordFields fields) =
+    fields |> List.map (fun (field, value) -> field, f value) |> RecordFields
+
+let traverseRecordFields f (RecordFields fields) =
+    fields
+    |> ResultList.traverse (fun (field, value) -> f value |> Result.map (fun value' -> field, value'))
+    |> Result.map RecordFields
+
+let mapFoldRecordFields f state (RecordFields fields) =
+    let mapped, finalState =
+        fields
+        |> List.mapFold (fun current (field, value) ->
+            let value', next = f current value
+            (field, value'), next) state
+    RecordFields mapped, finalState
+
+let traverseStateRecordFields f state (RecordFields fields) =
+    fields
+    |> List.fold (fun result (field, value) ->
+        result
+        |> Result.bind (fun (reversed, current) ->
+            f value current
+            |> Result.map (fun (value', next) -> ((field, value') :: reversed, next))))
+        (Ok ([], state))
+    |> Result.map (fun (reversed, finalState) -> RecordFields (List.rev reversed), finalState)
+
+let completeRecordFields owner fieldCount fields : Result<RecordFields<'a>, string> =
+    let valid =
+        if fieldCount <= 64 then
+            let count, seen, valid =
+                fields
+                |> List.fold (fun (count, seen, valid) (field, _) ->
+                    let index = AST.fieldRuntimeIndex field
+                    let bit = if index >= 0 && index < fieldCount then 1UL <<< index else 0UL
+                    (count + 1,
+                     seen ||| bit,
+                     valid && AST.fieldIdOwner field = owner && bit <> 0UL && (seen &&& bit) = 0UL))
+                    (0, 0UL, true)
+            valid && count = fieldCount
+        else
+            let count, indices, valid =
+                fields
+                |> List.fold (fun (count, indices, valid) (field, _) ->
+                    let index = AST.fieldRuntimeIndex field
+                    (count + 1,
+                     Set.add index indices,
+                     valid && AST.fieldIdOwner field = owner && index >= 0 && index < fieldCount))
+                    (0, Set.empty, true)
+            valid && count = fieldCount && Set.count indices = fieldCount
+    if not valid then
+        Error "record literal does not contain exactly the declared field slots"
+    else
+        Ok (RecordFields fields)
+
 type StringPart =
     | StringText of string
     | StringExpr of Expr
@@ -87,14 +169,14 @@ and Expr =
     | Sequence of first:Expr * next:Expr
     | Call of functionId:AST.FunctionId * args:AST.NonEmptyList<Expr>
     | TypeApp of functionId:AST.FunctionId * typeArgs:AST.SemanticType list * args:AST.NonEmptyList<Expr>
-    | TupleLiteral of Expr list
+    | TupleLiteral of TupleElements<Expr>
     | TupleAccess of tuple:Expr * index:int
     | DictLiteral of keyType:AST.SemanticType * valueType:AST.SemanticType * entries:(Expr * Expr) list
-    | RecordLiteral of reference:RecordReference * fields:(AST.FieldId * Expr) list
+    | RecordLiteral of reference:RecordReference * fields:RecordFields<Expr>
     | RecordUpdate of record:Expr * updates:(AST.FieldId * Expr) list
     | RecordAccess of record:Expr * field:AST.FieldId
     | Constructor of reference:ConstructorReference * fields:Expr list
-    | Match of scrutinee:Expr * cases:MatchCase list
+    | Match of scrutinee:Expr * cases:AST.NonEmptyList<MatchCase>
     | ListLiteral of Expr list
     | Lambda of parameters:AST.NonEmptyList<LambdaParameter> * returnAnnotation:AST.SemanticType option * body:Expr
     | Apply of func:Expr * args:AST.NonEmptyList<Expr>
@@ -547,8 +629,8 @@ let private allocateMatchBindings symbols pattern =
                 ((name, id), nextSymbols)) symbols
         Ok (bindings |> Map.ofList, symbols')
 
-let rec private convertExpr location environment symbols expr : Result<Expr * Symbols, string> =
-    let convert = convertExpr location environment
+let rec private convertExpr recordFieldCounts location environment symbols expr : Result<Expr * Symbols, string> =
+    let convert = convertExpr recordFieldCounts location environment
     let convertList values currentSymbols =
         values
         |> List.fold (fun result value ->
@@ -618,7 +700,7 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
         |> Result.bind (fun (value', afterValue) ->
             let (pattern', bindings, afterPattern) = allocateLetPattern afterValue pattern
             let bodyEnvironment = extendEnvironment bindings environment
-            convertExpr location bodyEnvironment afterPattern body
+            convertExpr recordFieldCounts location bodyEnvironment afterPattern body
             |> Result.map (fun (body', following) -> (Let (pattern', value', body'), following)))
     | AST.RecursiveLet (recursion, value, body) ->
         match recursion with
@@ -633,9 +715,9 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
                 | AST.SelfRecursiveMember -> bodyEnvironment
                 | AST.MutualRecursiveMember | AST.CompletedGroupMember | AST.ImportedGroupMember ->
                     bodyEnvironment
-            convertExpr location valueEnvironment withSymbol value
+            convertExpr recordFieldCounts location valueEnvironment withSymbol value
             |> Result.bind (fun (value', afterValue) ->
-                convertExpr location bodyEnvironment afterValue body
+                convertExpr recordFieldCounts location bodyEnvironment afterValue body
                 |> Result.map (fun (body', following) ->
                     let typed = { typed with MonomorphicType = normalizeInferenceType typed.MonomorphicType }
                     (RecursiveLet (typed, value', body'), following)))
@@ -681,7 +763,11 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
                 let (functionId, state) = internFunction name state
                 (TypeApp (functionId, List.map normalizeInferenceType typeArgs, converted), state))
     | AST.TupleLiteral elements ->
-        convertList elements symbols |> Result.map (fun (values, state) -> (TupleLiteral values, state))
+        convertList elements symbols
+        |> Result.bind (fun (values, state) ->
+            match tupleElementsFromList values with
+            | Some tuple -> Ok (TupleLiteral tuple, state)
+            | None -> conversionError location "tuple literal has fewer than two elements")
     | AST.TupleAccess (tuple, index) ->
         convert symbols tuple |> Result.map (fun (value, state) -> (TupleAccess (value, index), state))
     | AST.DictLiteral (keyType, valueType, entries) ->
@@ -695,9 +781,14 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
             (DictLiteral (normalizeInferenceType keyType, normalizeInferenceType valueType, List.rev converted), state))
     | AST.RecordLiteral (reference, fields) ->
         convertFields fields symbols
-        |> Result.map (fun (converted, state) ->
-            let reference, state = convertRecordReference reference state
-            (RecordLiteral (reference, converted), state))
+        |> Result.bind (fun (converted, state) ->
+            let recordName = reference.ResolvedTypeName
+            let checkedReference, state = convertRecordReference reference state
+            match recordFieldCounts recordName with
+            | Some fieldCount ->
+                completeRecordFields checkedReference.TypeId fieldCount converted
+                |> Result.map (fun complete -> (RecordLiteral (checkedReference, complete), state))
+            | None -> conversionError location "record declaration layout is absent")
     | AST.RecordUpdate (record, updates) ->
         convert symbols record
         |> Result.bind (fun (record', afterRecord) ->
@@ -737,16 +828,18 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
                             match case.Guard with
                             | None -> Ok (None, afterBindings)
                             | Some guard ->
-                                convertExpr location caseEnvironment afterBindings guard
+                                convertExpr recordFieldCounts location caseEnvironment afterBindings guard
                                 |> Result.map (fun (guard', next) -> (Some guard', next))
                         guardResult
                         |> Result.bind (fun (guard', afterGuard) ->
-                            convertExpr location caseEnvironment afterGuard case.Body
+                            convertExpr recordFieldCounts location caseEnvironment afterGuard case.Body
                             |> Result.map (fun (body', following) ->
                                 ({ Patterns = patterns; Guard = guard'; Body = body' } :: convertedCases,
                                  following)))))) (Ok ([], afterScrutinee))
-            |> Result.map (fun (convertedCases, state) ->
-                (Match (scrutinee', List.rev convertedCases), state)))
+            |> Result.bind (fun (convertedCases, state) ->
+                match AST.NonEmptyList.tryFromList (List.rev convertedCases) with
+                | Some cases -> Ok (Match (scrutinee', cases), state)
+                | None -> conversionError location "match has no cases"))
     | AST.ListLiteral elements ->
         convertList elements symbols |> Result.map (fun (values, state) -> (ListLiteral values, state))
     | AST.Lambda (parameters, returnAnnotation, body) ->
@@ -764,7 +857,7 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
                         next))) (Ok ([], [], symbols))
         |> Result.bind (fun (convertedParameters, bindings, afterParameters) ->
             let bodyEnvironment = extendEnvironment bindings environment
-            convertExpr location bodyEnvironment afterParameters body
+            convertExpr recordFieldCounts location bodyEnvironment afterParameters body
             |> Result.map (fun (body', following) ->
                 (Lambda (AST.NonEmptyList.fromList (List.rev convertedParameters),
                          Option.map normalizeInferenceType returnAnnotation, body'),
@@ -794,6 +887,7 @@ let rec private convertExpr location environment symbols expr : Result<Expr * Sy
             (BoundaryRender (functionId, converted), state))
 
 let private convertFunctionWithEnvironment
+    recordFieldCounts
     (outerEnvironment: Map<string, AST.BindingId>)
     symbols
     (funcDef: AST.FunctionDef)
@@ -820,7 +914,7 @@ let private convertFunctionWithEnvironment
             let environment =
                 List.zip (funcDef.Params |> AST.NonEmptyList.toList |> List.map fst) (parameters |> List.map fst)
                 |> List.fold (fun environment (name, id) -> Map.add name id environment) outerEnvironment
-            convertExpr $"function '{funcDef.Name}'" environment afterParameters funcDef.Body
+            convertExpr recordFieldCounts $"function '{funcDef.Name}'" environment afterParameters funcDef.Body
             |> Result.map (fun (body, following) ->
                 ({ Id = functionId
                    Name = funcDef.Name
@@ -833,16 +927,18 @@ let private convertFunctionWithEnvironment
 
 let ofTypedFunction
     (variantLookup: Map<string, string * string list * int * AST.SemanticType list>)
+    (recordFieldCounts: string -> int option)
     symbols
     funcDef
     : Result<FunctionDef * Symbols, string> =
     let symbols = { symbols with ConstructorLookups = [variantLookup] }
-    convertFunctionWithEnvironment Map.empty symbols funcDef
+    convertFunctionWithEnvironment recordFieldCounts Map.empty symbols funcDef
 
 let ofTypedProgram
     (variantLookup: Map<string, string * string list * int * AST.SemanticType list>)
     (externalValueNames: Set<string>)
     (baseTypes: TypeCatalog)
+    (recordFieldCounts: string -> int option)
     (AST.Program topLevels)
     : Result<Program, string> =
     let valueEnvironment, initialSymbols =
@@ -884,7 +980,7 @@ let ofTypedProgram
     let convertTopLevel symbols topLevel =
         match topLevel with
         | AST.FunctionDef funcDef ->
-            convertFunctionWithEnvironment valueEnvironment symbols funcDef
+            convertFunctionWithEnvironment recordFieldCounts valueEnvironment symbols funcDef
             |> Result.map (fun (converted, state) -> (FunctionDef converted, state))
         | AST.TypeDef typeDef ->
             let name =
@@ -895,7 +991,7 @@ let ofTypedProgram
             let (id, symbols) = internType name symbols
             Ok (TypeDef (id, typeDef), symbols)
         | AST.ValueDef (AST.CheckedValueDef (name, typ, body)) ->
-            convertExpr $"value '{name}'" valueEnvironment symbols body
+            convertExpr recordFieldCounts $"value '{name}'" valueEnvironment symbols body
             |> Result.map (fun (checkedBody, state) ->
                 let id =
                     match Map.tryFind name valueEnvironment with
@@ -905,7 +1001,7 @@ let ofTypedProgram
         | AST.ValueDef (AST.UncheckedValueDef (name, _)) ->
             conversionError $"value '{name}'" "value definition was not checked"
         | AST.Expression (_, expr) ->
-            convertExpr "entry expression" valueEnvironment symbols expr
+            convertExpr recordFieldCounts "entry expression" valueEnvironment symbols expr
             |> Result.map (fun (converted, state) -> (Expression converted, state))
     topLevels
     |> List.fold (fun result topLevel ->

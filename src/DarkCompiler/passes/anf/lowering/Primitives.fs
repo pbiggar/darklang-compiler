@@ -110,6 +110,24 @@ let internal tryFindVariantByTag
     |> Seq.tryPick (fun (_, ((declaringType, _, variantTag, _) as variant)) ->
         if declaringType = typeName && variantTag = tag then Some variant else None)
 
+/// Checked constructors already identify their owner, case, and runtime tag.
+/// Use that identity directly instead of scanning every registered variant.
+let internal tryFindVariantByConstructorId
+    (expectedOwner: AST.TypeId)
+    (typeName: string)
+    (constructorId: AST.ConstructorId)
+    (variantLookup: VariantLookup)
+    : (string * string list * int * AST.SemanticType list) option =
+    if AST.constructorIdOwner constructorId <> expectedOwner then
+        None
+    else
+        let caseName = AST.constructorIdValue constructorId
+        let tag = AST.constructorRuntimeTag constructorId
+        Map.tryFind $"{typeName}.{caseName}" variantLookup
+        |> Option.orElseWith (fun () -> Map.tryFind caseName variantLookup)
+        |> Option.filter (fun (declaringType, _, variantTag, _) ->
+            declaringType = typeName && variantTag = tag)
+
 let internal tryFindVariantForTypeById
     (constructorId: AST.ConstructorId)
     (sourceType: AST.SemanticType)
@@ -119,7 +137,11 @@ let internal tryFindVariantForTypeById
     match sourceType with
     | AST.TSum (typeName, _)
     | AST.TRecord (typeName, _) ->
-        tryFindVariantByTag typeName (AST.constructorRuntimeTag constructorId) variantLookup
+        let owner = AST.constructorIdOwner constructorId
+        if Map.tryFind owner typeNames.TypeNames <> Some typeName then
+            None
+        else
+            tryFindVariantByConstructorId owner typeName constructorId variantLookup
     | _ -> None
 
 let internal constructorReferenceMatches
@@ -132,6 +154,7 @@ let internal constructorReferenceMatches
     match Map.tryFind variantName variantLookup with
     | Some (declaringType, _, tag, _) ->
         declaringType = typeName
+        && AST.constructorIdOwner reference.ConstructorId = reference.TypeId
         && Map.tryFind reference.TypeId typeNames.TypeNames = Some typeName
         && AST.constructorRuntimeTag reference.ConstructorId = tag
     | None -> false

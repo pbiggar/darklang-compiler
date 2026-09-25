@@ -114,12 +114,12 @@ let rec private containsIndirectApply (expr: CheckedAST.Expr) : bool =
     | CheckedAST.Sequence (first, next) -> containsIndirectApply first || containsIndirectApply next
     | CheckedAST.Call (_, args)
     | CheckedAST.TypeApp (_, _, args) -> args |> exprArgsToList |> anyExpr
-    | CheckedAST.TupleLiteral elements
+    | CheckedAST.TupleLiteral elements -> anyExpr (CheckedAST.tupleElementsToList elements)
     | CheckedAST.ListLiteral elements -> anyExpr elements
     | CheckedAST.TupleAccess (tuple, _) -> containsIndirectApply tuple
     | CheckedAST.DictLiteral (_, _, entries) ->
         entries |> List.collect (fun (key, value) -> [key; value]) |> anyExpr
-    | CheckedAST.RecordLiteral (_, entries) -> entries |> List.map snd |> anyExpr
+    | CheckedAST.RecordLiteral (_, entries) -> entries |> CheckedAST.recordFieldsInSourceOrder |> List.map snd |> anyExpr
     | CheckedAST.RecordUpdate (record, updates) ->
         containsIndirectApply record || (updates |> List.map snd |> anyExpr)
     | CheckedAST.RecordAccess (record, _) -> containsIndirectApply record
@@ -127,6 +127,7 @@ let rec private containsIndirectApply (expr: CheckedAST.Expr) : bool =
     | CheckedAST.Match (scrutinee, cases) ->
         containsIndirectApply scrutinee
         || (cases
+            |> AST.NonEmptyList.toList
             |> List.exists (fun case ->
                 Option.exists containsIndirectApply case.Guard
                 || containsIndirectApply case.Body))
@@ -482,15 +483,17 @@ and collectFuncRefsInExpr
             collectChildren [first; next]
         | CheckedAST.UnaryOp (_, value) | CheckedAST.TupleAccess (value, _) | CheckedAST.RecordAccess (value, _) ->
             collect bound value
-        | CheckedAST.TupleLiteral elements | CheckedAST.ListLiteral elements -> collectChildren elements
+        | CheckedAST.TupleLiteral elements -> collectChildren (CheckedAST.tupleElementsToList elements)
+        | CheckedAST.ListLiteral elements -> collectChildren elements
         | CheckedAST.DictLiteral (_, _, entries) ->
             entries |> List.collect (fun (key, value) -> [key; value]) |> collectChildren
-        | CheckedAST.RecordLiteral (_, fields) -> fields |> List.map snd |> collectChildren
+        | CheckedAST.RecordLiteral (_, fields) -> fields |> CheckedAST.recordFieldsInSourceOrder |> List.map snd |> collectChildren
         | CheckedAST.RecordUpdate (record, fields) -> collectChildren (record :: (fields |> List.map snd))
         | CheckedAST.Constructor (_, fields) -> fields |> List.collect (collect bound)
         | CheckedAST.Match (scrutinee, cases) ->
             collect bound scrutinee
             @ (cases
+               |> AST.NonEmptyList.toList
                |> List.collect (fun case ->
                    let caseNames =
                        case.Patterns
@@ -564,7 +567,7 @@ and replaceInExpr
         | CheckedAST.Sequence (first, next) -> CheckedAST.Sequence (replace bound first, replace bound next)
         | CheckedAST.BinOp (op, left, right) -> CheckedAST.BinOp (op, replace bound left, replace bound right)
         | CheckedAST.UnaryOp (op, value) -> CheckedAST.UnaryOp (op, replace bound value)
-        | CheckedAST.TupleLiteral elements -> CheckedAST.TupleLiteral (elements |> List.map (replace bound))
+        | CheckedAST.TupleLiteral elements -> CheckedAST.TupleLiteral (elements |> CheckedAST.mapTupleElements (replace bound))
         | CheckedAST.TupleAccess (value, index) -> CheckedAST.TupleAccess (replace bound value, index)
         | CheckedAST.DictLiteral (keyType, valueType, entries) ->
             CheckedAST.DictLiteral (
@@ -574,7 +577,7 @@ and replaceInExpr
                 |> List.map (fun (key, value) -> (replace bound key, replace bound value))
             )
         | CheckedAST.RecordLiteral (typeName, fields) ->
-            CheckedAST.RecordLiteral (typeName, fields |> List.map (fun (name, value) -> (name, replace bound value)))
+            CheckedAST.RecordLiteral (typeName, CheckedAST.mapRecordFields (replace bound) fields)
         | CheckedAST.RecordUpdate (record, fields) ->
             CheckedAST.RecordUpdate (replace bound record, fields |> List.map (fun (name, value) -> (name, replace bound value)))
         | CheckedAST.RecordAccess (value, field) -> CheckedAST.RecordAccess (replace bound value, field)
@@ -583,7 +586,7 @@ and replaceInExpr
         | CheckedAST.Match (scrutinee, cases) ->
             let cases' =
                 cases
-                |> List.map (fun case ->
+                |> AST.NonEmptyList.map (fun case ->
                     let caseNames =
                         case.Patterns
                         |> AST.NonEmptyList.toList

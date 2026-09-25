@@ -26,13 +26,15 @@ let rec directDependencies (expr: CheckedAST.Expr) : Set<AST.FunctionId> =
     | CheckedAST.BinOp (_, left, right) | CheckedAST.Sequence (left, right)
     | CheckedAST.Let (_, left, right) | CheckedAST.RecursiveLet (_, left, right) -> combine [left; right]
     | CheckedAST.If (condition, thenBranch, elseBranch) -> combine [condition; thenBranch; elseBranch]
-    | CheckedAST.TupleLiteral values | CheckedAST.ListLiteral values -> combine values
+    | CheckedAST.TupleLiteral values -> combine (CheckedAST.tupleElementsToList values)
+    | CheckedAST.ListLiteral values -> combine values
     | CheckedAST.DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> combine
-    | CheckedAST.RecordLiteral (_, fields) -> fields |> List.map snd |> combine
+    | CheckedAST.RecordLiteral (_, fields) -> fields |> CheckedAST.recordFieldsInSourceOrder |> List.map snd |> combine
     | CheckedAST.RecordUpdate (record, fields) -> combine (record :: List.map snd fields)
     | CheckedAST.Constructor (_, fields) -> combine fields
     | CheckedAST.Match (scrutinee, cases) ->
         cases
+        |> AST.NonEmptyList.toList
         |> List.collect (fun case -> case.Body :: Option.toList case.Guard)
         |> fun bodies -> combine (scrutinee :: bodies)
     | CheckedAST.Lambda (_, _, body) -> directDependencies body

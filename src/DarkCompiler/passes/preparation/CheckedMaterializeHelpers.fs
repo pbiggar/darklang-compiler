@@ -73,11 +73,11 @@ let rec private collectHelperTypes
                 if containsTVar pairType then Set.empty else Set.singleton pairType
             | _ -> Set.empty
         withChildren equalityTypes compareTypes arguments
-    | CheckedAST.TupleLiteral elements
+    | CheckedAST.TupleLiteral elements -> combine (CheckedAST.tupleElementsToList elements)
     | CheckedAST.ListLiteral elements -> combine elements
     | CheckedAST.DictLiteral (_, _, entries) ->
         entries |> List.collect (fun (key, value) -> [key; value]) |> combine
-    | CheckedAST.RecordLiteral (_, entries) -> entries |> List.map snd |> combine
+    | CheckedAST.RecordLiteral (_, entries) -> entries |> CheckedAST.recordFieldsInSourceOrder |> List.map snd |> combine
     | CheckedAST.RecordUpdate (record, updates) ->
         combine (record :: (updates |> List.map snd))
     | CheckedAST.Constructor (_, fields) ->
@@ -85,6 +85,7 @@ let rec private collectHelperTypes
     | CheckedAST.Match (scrutinee, cases) ->
         let caseExpressions =
             cases
+            |> AST.NonEmptyList.toList
             |> List.collect (fun case -> case.Body :: (case.Guard |> Option.toList))
         combine (scrutinee :: caseExpressions)
     | CheckedAST.Lambda (_, _, body) -> collect body
@@ -150,7 +151,7 @@ let rec private rewriteHelperCalls
         CheckedAST.Call (resolvedFunctionId (compareHelperName helperType), recurseArgs args)
     | CheckedAST.TypeApp (name, typeArgs, args) ->
         CheckedAST.TypeApp (name, typeArgs, recurseArgs args)
-    | CheckedAST.TupleLiteral elements -> CheckedAST.TupleLiteral (List.map recurse elements)
+    | CheckedAST.TupleLiteral elements -> CheckedAST.TupleLiteral (CheckedAST.mapTupleElements recurse elements)
     | CheckedAST.TupleAccess (tuple, index) -> CheckedAST.TupleAccess (recurse tuple, index)
     | CheckedAST.DictLiteral (keyType, valueType, entries) ->
         CheckedAST.DictLiteral (
@@ -159,7 +160,7 @@ let rec private rewriteHelperCalls
             entries |> List.map (fun (key, value) -> recurse key, recurse value)
         )
     | CheckedAST.RecordLiteral (reference, fields) ->
-        CheckedAST.RecordLiteral (reference, fields |> List.map (fun (name, value) -> name, recurse value))
+        CheckedAST.RecordLiteral (reference, CheckedAST.mapRecordFields recurse fields)
     | CheckedAST.RecordUpdate (record, updates) ->
         CheckedAST.RecordUpdate (recurse record, updates |> List.map (fun (name, value) -> name, recurse value))
     | CheckedAST.RecordAccess (record, fieldName) -> CheckedAST.RecordAccess (recurse record, fieldName)
@@ -169,7 +170,7 @@ let rec private rewriteHelperCalls
         CheckedAST.Match (
             recurse scrutinee,
             cases
-            |> List.map (fun case ->
+            |> AST.NonEmptyList.map (fun case ->
                 { case with Guard = Option.map recurse case.Guard; Body = recurse case.Body })
         )
     | CheckedAST.ListLiteral elements -> CheckedAST.ListLiteral (List.map recurse elements)
@@ -186,8 +187,12 @@ let rec private rewriteHelperCalls
                 | CheckedAST.StringExpr partExpr -> CheckedAST.StringExpr (recurse partExpr))
         )
 
-let private checkedGeneratedFunction variantLookup symbols (funcDef: AST.FunctionDef) : CheckedAST.FunctionDef * CheckedAST.Symbols =
-    match CheckedAST.ofTypedFunction variantLookup symbols funcDef with
+let private checkedGeneratedFunction variantLookup typeReg symbols (funcDef: AST.FunctionDef) : CheckedAST.FunctionDef * CheckedAST.Symbols =
+    let recordFieldCounts name =
+        typeReg
+        |> Map.tryFind name
+        |> Option.map (fun (info: CheckingTypes.RecordTypeInfo) -> List.length info.Fields)
+    match CheckedAST.ofTypedFunction variantLookup recordFieldCounts symbols funcDef with
     | Ok result -> result
     | Error error -> Crash.crash error
 
@@ -238,7 +243,7 @@ let materializeEqHelpersInTopLevelsWithIndexedSums
         |> List.map snd
         |> List.filter (fun helper -> not (Set.contains helper.Name existingNames))
         |> List.mapFold (fun symbols helper ->
-            let (checkedFunction, symbols) = checkedGeneratedFunction variantLookup symbols helper
+            let (checkedFunction, symbols) = checkedGeneratedFunction variantLookup typeReg symbols helper
             (CheckedAST.FunctionDef checkedFunction, symbols)) symbols
     let rewritten =
         topLevels

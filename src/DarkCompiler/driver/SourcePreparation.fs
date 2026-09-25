@@ -194,7 +194,7 @@ let private materializeProgramValues
             | CheckedAST.UInt64Literal _ | CheckedAST.UInt128Literal _ | CheckedAST.BigIntLiteral _
             | CheckedAST.BoolLiteral _ | CheckedAST.StringLiteral _ | CheckedAST.BlobLiteral _
             | CheckedAST.CharLiteral _ | CheckedAST.FloatLiteral _ | CheckedAST.Local _
-            | CheckedAST.ListLiteral [] | CheckedAST.TupleLiteral []
+            | CheckedAST.ListLiteral []
             | CheckedAST.DictLiteral (_, _, []) | CheckedAST.Constructor (_, []) -> Some id
             | _ -> None)
         |> Set.ofList

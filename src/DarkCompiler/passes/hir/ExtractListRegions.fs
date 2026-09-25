@@ -53,7 +53,8 @@ let private inertExpression infer callIsInert =
         | CheckedAST.UnaryOp (_, value) | CheckedAST.TupleAccess (value, _) -> recur value
         | CheckedAST.Call (name, args) ->
             callIsInert name && (AST.NonEmptyList.toList args |> List.forall recur) && typedInert ()
-        | CheckedAST.TupleLiteral values | CheckedAST.ListLiteral values -> List.forall recur values
+        | CheckedAST.TupleLiteral values -> CheckedAST.tupleElementsToList values |> List.forall recur
+        | CheckedAST.ListLiteral values -> List.forall recur values
         | CheckedAST.Local _ -> typedInert ()
         | CheckedAST.UnitLiteral | CheckedAST.Int64Literal _ | CheckedAST.Int128Literal _
         | CheckedAST.Int8Literal _ | CheckedAST.Int16Literal _ | CheckedAST.Int32Literal _
@@ -72,7 +73,8 @@ let scopeContracts infer (functions: CheckedAST.FunctionDef list) =
         let many expressions = expressions |> List.map calls |> Set.unionMany
         match expr with
         | CheckedAST.Call (name, args) -> Set.add name (many (AST.NonEmptyList.toList args))
-        | CheckedAST.Closure (_, captures) | CheckedAST.TupleLiteral captures | CheckedAST.ListLiteral captures -> many captures
+        | CheckedAST.TupleLiteral captures -> many (CheckedAST.tupleElementsToList captures)
+        | CheckedAST.Closure (_, captures) | CheckedAST.ListLiteral captures -> many captures
         | CheckedAST.Let (_, value, body) | CheckedAST.Sequence (value, body)
         | CheckedAST.BinOp (_, value, body) -> many [value; body]
         | CheckedAST.If (condition, yes, no) -> many [condition; yes; no]

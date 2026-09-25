@@ -66,9 +66,8 @@ let collectTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : Set<
                 Set.add ("Darklang.Stdlib.Dict.empty", typeArgs) argSpecs
             else
                 Set.add (funcName, typeArgs) argSpecs
-        | CheckedAST.TupleLiteral elements
-        | CheckedAST.ListLiteral elements ->
-            visitMany specs elements
+        | CheckedAST.TupleLiteral elements -> visitMany specs (CheckedAST.tupleElementsToList elements)
+        | CheckedAST.ListLiteral elements -> visitMany specs elements
         | CheckedAST.DictLiteral (keyType, valueType, entries) ->
             let entrySpecs =
                 entries |> List.fold (fun acc (key, value) -> visit (visit acc key) value) specs
@@ -78,7 +77,7 @@ let collectTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : Set<
                     ("Darklang.Stdlib.Dict.__setOverwriting", [keyType; valueType])
                     entrySpecs
         | CheckedAST.RecordLiteral (_, fields) ->
-            fields |> List.fold (fun acc (_, value) -> visit acc value) specs
+            fields |> CheckedAST.recordFieldsInSourceOrder |> List.fold (fun acc (_, value) -> visit acc value) specs
         | CheckedAST.RecordUpdate (record, updates) ->
             updates
             |> List.fold (fun acc (_, value) -> visit acc value) (visit specs record)
@@ -86,6 +85,7 @@ let collectTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : Set<
             fields |> List.fold visit specs
         | CheckedAST.Match (scrutinee, cases) ->
             cases
+            |> AST.NonEmptyList.toList
             |> List.fold (fun acc case ->
                 let acc = case.Guard |> Option.map (visit acc) |> Option.defaultValue acc
                 visit acc case.Body) (visit specs scrutinee)
@@ -139,11 +139,11 @@ let rec collectCalledFunctions (expr: CheckedAST.Expr) : Set<AST.FunctionId> =
     | CheckedAST.Call (name, args)
     | CheckedAST.TypeApp (name, _, args) ->
         Set.add name (combine (exprArgsToList args))
-    | CheckedAST.TupleLiteral elements
+    | CheckedAST.TupleLiteral elements -> combine (CheckedAST.tupleElementsToList elements)
     | CheckedAST.ListLiteral elements -> combine elements
     | CheckedAST.DictLiteral (_, _, entries) ->
         entries |> List.collect (fun (key, value) -> [key; value]) |> combine
-    | CheckedAST.RecordLiteral (_, fields) -> fields |> List.map snd |> combine
+    | CheckedAST.RecordLiteral (_, fields) -> fields |> CheckedAST.recordFieldsInSourceOrder |> List.map snd |> combine
     | CheckedAST.RecordUpdate (record, fields) ->
         combine (record :: (fields |> List.map snd))
     | CheckedAST.Constructor (_, fields) ->
@@ -151,6 +151,7 @@ let rec collectCalledFunctions (expr: CheckedAST.Expr) : Set<AST.FunctionId> =
     | CheckedAST.Match (scrutinee, cases) ->
         let caseCalls =
             cases
+            |> AST.NonEmptyList.toList
             |> List.collect (fun case ->
                 case.Body :: (case.Guard |> Option.toList))
             |> combine
@@ -301,7 +302,7 @@ let rec replaceTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : 
             let specializedName = specName funcName typeArgs
             CheckedAST.Call (resolvedFunctionId symbols specializedName, AST.NonEmptyList.map replace args)
     | CheckedAST.TupleLiteral elements ->
-        CheckedAST.TupleLiteral (List.map replace elements)
+        CheckedAST.TupleLiteral (CheckedAST.mapTupleElements replace elements)
     | CheckedAST.TupleAccess (tuple, index) ->
         CheckedAST.TupleAccess (replace tuple, index)
     | CheckedAST.DictLiteral (keyType, valueType, entries) ->
@@ -318,7 +319,7 @@ let rec replaceTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : 
                 )) empty
             |> replace
     | CheckedAST.RecordLiteral (typeName, fields) ->
-        CheckedAST.RecordLiteral (typeName, List.map (fun (n, e) -> (n, replace e)) fields)
+        CheckedAST.RecordLiteral (typeName, CheckedAST.mapRecordFields replace fields)
     | CheckedAST.RecordUpdate (record, updates) ->
         CheckedAST.RecordUpdate (replace record, List.map (fun (n, e) -> (n, replace e)) updates)
     | CheckedAST.RecordAccess (record, fieldName) ->
@@ -327,7 +328,7 @@ let rec replaceTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : 
         CheckedAST.Constructor (reference, List.map replace fields)
     | CheckedAST.Match (scrutinee, cases) ->
         CheckedAST.Match (replace scrutinee,
-                   cases |> List.map (fun mc -> { mc with Guard = mc.Guard |> Option.map replace; Body = replace mc.Body }))
+                   cases |> AST.NonEmptyList.map (fun mc -> { mc with Guard = mc.Guard |> Option.map replace; Body = replace mc.Body }))
     | CheckedAST.ListLiteral elements ->
         CheckedAST.ListLiteral (List.map replace elements)
     | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
@@ -518,8 +519,8 @@ let replaceTypeAppsWithRegistry
                             mapResult replace (exprArgsToList args)
                             |> Result.map (fun args' -> CheckedAST.Call (resolvedFunctionId symbols resolvedName, exprArgsFromList args')))
         | CheckedAST.TupleLiteral elements ->
-            mapResult replace elements
-            |> Result.map CheckedAST.TupleLiteral
+            mapResult replace (CheckedAST.tupleElementsToList elements)
+            |> Result.map (CheckedAST.tupleElementsOfList >> CheckedAST.TupleLiteral)
         | CheckedAST.TupleAccess (tuple, index) ->
             replace tuple |> Result.map (fun tuple' -> CheckedAST.TupleAccess (tuple', index))
         | CheckedAST.DictLiteral (keyType, valueType, entries) ->
@@ -537,8 +538,7 @@ let replaceTypeAppsWithRegistry
                 replace lowered
         | CheckedAST.RecordLiteral (typeName, fields) ->
             fields
-            |> mapResult (fun (name, value) ->
-                replace value |> Result.map (fun value' -> (name, value')))
+            |> CheckedAST.traverseRecordFields replace
             |> Result.map (fun fields' -> CheckedAST.RecordLiteral (typeName, fields'))
         | CheckedAST.RecordUpdate (record, updates) ->
             replace record
@@ -557,6 +557,7 @@ let replaceTypeAppsWithRegistry
             replace scrutinee
             |> Result.bind (fun scrutinee' ->
                 cases
+                |> AST.NonEmptyList.toList
                 |> mapResult (fun mc ->
                     let guardResult =
                         match mc.Guard with
@@ -566,7 +567,7 @@ let replaceTypeAppsWithRegistry
                     |> Result.bind (fun guard' ->
                         replace mc.Body
                         |> Result.map (fun body' -> { mc with Guard = guard'; Body = body' })))
-                |> Result.map (fun cases' -> CheckedAST.Match (scrutinee', cases')))
+                |> Result.map (fun cases' -> CheckedAST.Match (scrutinee', AST.NonEmptyList.fromList cases')))
         | CheckedAST.ListLiteral elements ->
             mapResult replace elements |> Result.map CheckedAST.ListLiteral
         | CheckedAST.Lambda (parameters, returnAnnotation, body) ->
@@ -655,8 +656,8 @@ let private materializeFunctionComparisons (program: CheckedAST.Program) : Check
                 let rightId, symbols = CheckedAST.allocateBinding "__comparison_right" symbols
                 (materializeFunctionComparisonPlan leftId rightId (exprArgsToList args), symbols)
         | CheckedAST.TupleLiteral values ->
-            let values, symbols = rewriteList symbols values
-            (CheckedAST.TupleLiteral values, symbols)
+            let values, symbols = rewriteList symbols (CheckedAST.tupleElementsToList values)
+            (CheckedAST.TupleLiteral (CheckedAST.tupleElementsOfList values), symbols)
         | CheckedAST.TupleAccess (tuple, index) ->
             let tuple, symbols = rewrite symbols tuple
             (CheckedAST.TupleAccess (tuple, index), symbols)
@@ -670,10 +671,7 @@ let private materializeFunctionComparisons (program: CheckedAST.Program) : Check
             (CheckedAST.DictLiteral (keyType, valueType, entries), symbols)
         | CheckedAST.RecordLiteral (reference, fields) ->
             let fields, symbols =
-                fields
-                |> List.mapFold (fun symbols (name, value) ->
-                    let value, symbols = rewrite symbols value
-                    ((name, value), symbols)) symbols
+                fields |> CheckedAST.mapFoldRecordFields rewrite symbols
             (CheckedAST.RecordLiteral (reference, fields), symbols)
         | CheckedAST.RecordUpdate (record, fields) ->
             let record, symbols = rewrite symbols record
@@ -693,6 +691,7 @@ let private materializeFunctionComparisons (program: CheckedAST.Program) : Check
             let scrutinee, symbols = rewrite symbols scrutinee
             let cases, symbols =
                 cases
+                |> AST.NonEmptyList.toList
                 |> List.mapFold (fun symbols case ->
                     let guard, symbols =
                         match case.Guard with
@@ -702,7 +701,7 @@ let private materializeFunctionComparisons (program: CheckedAST.Program) : Check
                             (Some guard, symbols)
                     let body, symbols = rewrite symbols case.Body
                     ({ case with Guard = guard; Body = body }, symbols)) symbols
-            (CheckedAST.Match (scrutinee, cases), symbols)
+            (CheckedAST.Match (scrutinee, AST.NonEmptyList.fromList cases), symbols)
         | CheckedAST.ListLiteral values ->
             let values, symbols = rewriteList symbols values
             (CheckedAST.ListLiteral values, symbols)
@@ -870,13 +869,13 @@ let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: CheckedAS
         | CheckedAST.Call (_, args)
         | CheckedAST.TypeApp (_, _, args) ->
             args |> exprArgsToList |> List.exists (exprNeedsLambdaLowering bound)
-        | CheckedAST.TupleLiteral elems
-        | CheckedAST.ListLiteral elems ->
-            elems |> List.exists (exprNeedsLambdaLowering bound)
+        | CheckedAST.TupleLiteral elems ->
+            elems |> CheckedAST.tupleElementsToList |> List.exists (exprNeedsLambdaLowering bound)
+        | CheckedAST.ListLiteral elems -> elems |> List.exists (exprNeedsLambdaLowering bound)
         | CheckedAST.TupleAccess (tuple, _) ->
             exprNeedsLambdaLowering bound tuple
         | CheckedAST.RecordLiteral (_, fields) ->
-            fields |> List.exists (fun (_, e) -> exprNeedsLambdaLowering bound e)
+            fields |> CheckedAST.recordFieldsInSourceOrder |> List.exists (fun (_, e) -> exprNeedsLambdaLowering bound e)
         | CheckedAST.RecordUpdate (record, updates) ->
             exprNeedsLambdaLowering bound record
             || (updates |> List.exists (fun (_, e) -> exprNeedsLambdaLowering bound e))
@@ -886,7 +885,7 @@ let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: CheckedAS
             fields |> List.exists (exprNeedsLambdaLowering bound)
         | CheckedAST.Match (scrutinee, cases) ->
             exprNeedsLambdaLowering bound scrutinee
-            || (cases |> List.exists (fun (mc: CheckedAST.MatchCase) ->
+            || (cases |> AST.NonEmptyList.toList |> List.exists (fun (mc: CheckedAST.MatchCase) ->
                 (mc.Guard |> Option.map (exprNeedsLambdaLowering bound) |> Option.defaultValue false)
                 || exprNeedsLambdaLowering bound mc.Body))
         | CheckedAST.InterpolatedString parts ->
