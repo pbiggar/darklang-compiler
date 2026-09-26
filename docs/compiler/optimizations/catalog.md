@@ -151,7 +151,11 @@ branch shapes plus the conservative call and observable-field boundaries.
   executable predecessor removal. The default MIR pipeline also resolves copy
   chains, folds constant expressions, and rewrites reachable blocks in SCCP's
   output sweep instead of scheduling separate folding, copy, and unreachable-
-  block passes;
+  block passes. SCCP carries Boolean branch outcomes and bounded integer
+  comparison ranges on executable edges. It joins these facts at block entries
+  to prove repeated predicates after CFG joins, defers unresolved branches
+  until the value worklist settles, and then admits both edges when a condition
+  remains unknown;
 - dominator-scoped scalar and effect-free-call common-subexpression reuse;
 - partial-redundancy elimination for non-trapping scalar arithmetic and unary
   expressions, inserting only on unconditional incoming edges and merging the

@@ -21,3 +21,28 @@ let recRow (values: List<Float>) (index: Int) (acc: Float) : Float = if index >=
 // Copies and a shared phi constant must retain only the executable result.
 let foldedCopies (condition: Bool) : Int64 = let value = if condition then let _ = Builtin.print "left" in 20L + 22L else let _ = Builtin.print "right" in 6L * 7L in let copy = value in if copy == 42L then copy else Builtin.testRuntimeError "unreachable"; foldedCopies (true) = stdout="left42\n" stderr="" exact_bytes=true
 let foldedCopies (condition: Bool) : Int64 = let value = if condition then let _ = Builtin.print "left" in 20L + 22L else let _ = Builtin.print "right" in 6L * 7L in let copy = value in if copy == 42L then copy else Builtin.testRuntimeError "unreachable"; foldedCopies (false) = stdout="right42\n" stderr="" exact_bytes=true
+
+// Every incoming path to the inner join inherits the outer true edge.
+let knownAfterJoin (condition: Bool) (choose: Bool) : Int64 = if condition then let value = if choose then 20L else 22L in if condition then value else Builtin.testRuntimeError "contradictory condition" else 0L; knownAfterJoin (true) (true) = 20L
+let knownAfterJoin (condition: Bool) (choose: Bool) : Int64 = if condition then let value = if choose then 20L else 22L in if condition then value else Builtin.testRuntimeError "contradictory condition" else 0L; knownAfterJoin (true) (false) = 22L
+let knownAfterJoin (condition: Bool) (choose: Bool) : Int64 = if condition then let value = if choose then 20L else 22L in if condition then value else Builtin.testRuntimeError "contradictory condition" else 0L; knownAfterJoin (false) (true) = 0L
+
+// A range established on an edge survives a join but cannot escape that edge.
+let boundedAfterJoin (value: Int64) (choose: Bool) : Int64 = if value < 10L then let selected = if choose then 1L else 2L in if value >= 10L then Builtin.testRuntimeError "contradictory range" else selected else 3L; boundedAfterJoin (9L) (true) = 1L
+let boundedAfterJoin (value: Int64) (choose: Bool) : Int64 = if value < 10L then let selected = if choose then 1L else 2L in if value >= 10L then Builtin.testRuntimeError "contradictory range" else selected else 3L; boundedAfterJoin (10L) (false) = 3L
+
+// Both outcomes of a comparison contribute edge facts, including unsigned
+// values at their type bounds.
+let rangeFalseEdge (value: Int64) : Int64 = if value < 10L then 1L else if value < 10L then Builtin.testRuntimeError "contradictory false edge" else 2L; rangeFalseEdge (9L) = 1L
+let rangeFalseEdge (value: Int64) : Int64 = if value < 10L then 1L else if value < 10L then Builtin.testRuntimeError "contradictory false edge" else 2L; rangeFalseEdge (10L) = 2L
+let unsignedBound (value: UInt8) : Int64 = if value < 10uy then if value >= 10uy then Builtin.testRuntimeError "contradictory unsigned edge" else 1L else 2L; unsignedBound (0uy) = 1L
+let unsignedBound (value: UInt8) : Int64 = if value < 10uy then if value >= 10uy then Builtin.testRuntimeError "contradictory unsigned edge" else 1L else 2L; unsignedBound (9uy) = 1L
+let unsignedBound (value: UInt8) : Int64 = if value < 10uy then if value >= 10uy then Builtin.testRuntimeError "contradictory unsigned edge" else 1L else 2L; unsignedBound (10uy) = 2L
+let unsignedBound (value: UInt8) : Int64 = if value < 10uy then if value >= 10uy then Builtin.testRuntimeError "contradictory unsigned edge" else 1L else 2L; unsignedBound (255uy) = 2L
+
+// At a join, a later executable predecessor must remove any fact it disagrees
+// with. Both arms of these later branches remain observable.
+let preserveBoolean (condition: Bool) : Int64 = let selected = if condition then 20L else 22L in if condition then selected else selected + 1L; preserveBoolean (true) = 20L
+let preserveBoolean (condition: Bool) : Int64 = let selected = if condition then 20L else 22L in if condition then selected else selected + 1L; preserveBoolean (false) = 23L
+let preserveRange (value: Int64) : Int64 = let selected = if value < 10L then 20L else 22L in if value < 10L then selected else selected + 1L; preserveRange (9L) = 20L
+let preserveRange (value: Int64) : Int64 = let selected = if value < 10L then 20L else 22L in if value < 10L then selected else selected + 1L; preserveRange (10L) = 23L

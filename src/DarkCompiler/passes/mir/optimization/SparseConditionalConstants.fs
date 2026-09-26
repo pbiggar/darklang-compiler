@@ -6,6 +6,7 @@ open MIR
 open MIROptimizationFacts
 open MIRConstants
 open MIRCopyPropagation
+open SSA_Construction
 
 type private LatticeValue =
     | Unknown
@@ -14,10 +15,24 @@ type private LatticeValue =
     | AggregateRefs of Set<VReg>
     | Overdefined
 
+type private PathFacts = {
+    Booleans: Map<VReg, bool>
+    IntegerRanges: Map<VReg, int64 * int64>
+}
+
+let private emptyPathFacts = {
+    Booleans = Map.empty
+    IntegerRanges = Map.empty
+}
+
 type private AnalysisState = {
     Values: Map<VReg, LatticeValue>
     ExecutableBlocks: Set<Label>
     ExecutableEdges: Set<Label * Label>
+    EdgeFacts: Map<Label * Label, PathFacts>
+    BlockFacts: Map<Label, PathFacts>
+    Predecessors: Map<Label, Label list>
+    Definitions: Map<VReg, Instr>
     HeapValues: Map<VReg, Map<int, LatticeValue>>
     TrackHeapValues: bool
     CallResults: Map<AST.FunctionId, Operand>
@@ -173,6 +188,112 @@ let private tryRangeComparison op left right =
         | Gte when leftMaximum < rightMinimum -> Some (BoolConst false)
         | _ -> None
     | _ -> None
+
+let private mergePathFacts left right =
+    let booleans =
+        left.Booleans
+        |> Map.filter (fun register value -> Map.tryFind register right.Booleans = Some value)
+    let ranges =
+        left.IntegerRanges
+        |> Map.fold (fun merged register (leftMinimum, leftMaximum) ->
+            match Map.tryFind register right.IntegerRanges with
+            | Some (rightMinimum, rightMaximum) ->
+                Map.add register (min leftMinimum rightMinimum, max leftMaximum rightMaximum) merged
+            | None -> merged) Map.empty
+    { Booleans = booleans; IntegerRanges = ranges }
+
+let private pathOperandValue state facts operand =
+    match operand with
+    | Register register ->
+        match Map.tryFind register facts.IntegerRanges with
+        | Some (pathMinimum, pathMaximum) ->
+            match operandValue state.Values operand with
+            | Constant (Int64Const value) -> Constant (Int64Const value)
+            | IntegerRange (minimum, maximum) ->
+                IntegerRange (max minimum pathMinimum, min maximum pathMaximum)
+            | _ -> IntegerRange (pathMinimum, pathMaximum)
+        | None -> operandValue state.Values operand
+    | _ -> operandValue state.Values operand
+
+let private isPathRangeType valueType =
+    match valueType with
+    | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+    | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 -> true
+    | _ -> false
+
+let private conditionValue state label condition =
+    let facts = Map.tryFind label state.BlockFacts |> Option.defaultValue emptyPathFacts
+    match condition with
+    | Register register ->
+        match Map.tryFind register facts.Booleans with
+        | Some value -> Constant (BoolConst value)
+        | None ->
+            let globalValue = operandValue state.Values condition
+            match Map.tryFind register state.Definitions with
+            | Some (BinOp (_, operation, left, right, valueType)) when isPathRangeType valueType ->
+                match
+                    tryRangeComparison
+                        operation
+                        (pathOperandValue state facts left)
+                        (pathOperandValue state facts right)
+                with
+                | Some (BoolConst value) -> Constant (BoolConst value)
+                | _ -> globalValue
+            | _ -> globalValue
+    | _ -> operandValue state.Values condition
+
+let private reversedComparison operation =
+    match operation with
+    | Lt -> Some Gt
+    | Lte -> Some Gte
+    | Gt -> Some Lt
+    | Gte -> Some Lte
+    | Eq | Neq -> Some operation
+    | _ -> None
+
+let private refinedBound operation takeTrue constant =
+    match operation, takeTrue with
+    | Eq, true | Neq, false -> Some (constant, constant)
+    | Lt, true | Gte, false when constant > System.Int64.MinValue ->
+        Some (System.Int64.MinValue, constant - 1L)
+    | Lt, false | Gte, true -> Some (constant, System.Int64.MaxValue)
+    | Lte, true | Gt, false -> Some (System.Int64.MinValue, constant)
+    | Lte, false | Gt, true when constant < System.Int64.MaxValue ->
+        Some (constant + 1L, System.Int64.MaxValue)
+    | _ -> None
+
+let private withComparisonRange definitions condition takeTrue facts =
+    match Map.tryFind condition definitions with
+    | Some (BinOp (_, operation, left, right, valueType)) when isPathRangeType valueType ->
+        let candidate =
+            match left, right with
+            | Register register, Int64Const constant -> Some (register, operation, constant)
+            | Int64Const constant, Register register ->
+                reversedComparison operation
+                |> Option.map (fun reversed -> (register, reversed, constant))
+            | _ -> None
+        match candidate with
+        | Some (register, comparison, constant) ->
+            match refinedBound comparison takeTrue constant with
+            | Some (minimum, maximum) ->
+                let typeMinimum, typeMaximum =
+                    match integerRangeForType valueType with
+                    | Some (IntegerRange (low, high)) -> (low, high)
+                    | _ -> (System.Int64.MinValue, System.Int64.MaxValue)
+                let oldMinimum, oldMaximum =
+                    Map.tryFind register facts.IntegerRanges
+                    |> Option.defaultValue (typeMinimum, typeMaximum)
+                let boundedMinimum = max oldMinimum (max minimum typeMinimum)
+                let boundedMaximum = min oldMaximum (min maximum typeMaximum)
+                if boundedMinimum <= boundedMaximum then
+                    { facts with
+                        IntegerRanges =
+                            Map.add register (boundedMinimum, boundedMaximum) facts.IntegerRanges }
+                else
+                    facts
+            | None -> facts
+        | None -> facts
+    | _ -> facts
 
 let private operationValue values operands folded =
     match folded with
@@ -360,20 +481,63 @@ let private updateValue users destination incoming state =
         |> Option.defaultValue Set.empty
         |> Set.fold (fun acc label -> enqueueBlock label acc) updated
 
+let private factsOnEdge cfg source target state =
+    let sourceFacts =
+        Map.tryFind source state.BlockFacts |> Option.defaultValue emptyPathFacts
+    match Map.tryFind source cfg.Blocks with
+    | Some { Terminator = Branch (Register condition, trueTarget, falseTarget) }
+        when trueTarget <> falseTarget ->
+        let takeTrue = target = trueTarget
+        match Map.tryFind condition sourceFacts.Booleans with
+        | Some established when established <> takeTrue -> emptyPathFacts
+        | _ ->
+            let withBoolean =
+                { sourceFacts with
+                    Booleans = Map.add condition takeTrue sourceFacts.Booleans }
+            withComparisonRange state.Definitions condition takeTrue withBoolean
+    | _ -> sourceFacts
+
+let private refreshBlockFacts cfg target state =
+    if target = cfg.Entry then
+        state
+    else
+        let incoming =
+            Map.tryFind target state.Predecessors
+            |> Option.defaultValue []
+            |> List.distinct
+            |> List.choose (fun predecessor ->
+                let edge = (predecessor, target)
+                if Set.contains edge state.ExecutableEdges then
+                    Some (Map.tryFind edge state.EdgeFacts |> Option.defaultValue emptyPathFacts)
+                else
+                    None)
+        match incoming with
+        | [] -> state
+        | first :: rest ->
+            let merged = List.fold mergePathFacts first rest
+            if Map.tryFind target state.BlockFacts = Some merged then
+                state
+            else
+                { state with BlockFacts = Map.add target merged state.BlockFacts }
+                |> enqueueBlock target
+
 let private activateEdge cfg source target state =
     let edge = (source, target)
-    if Set.contains edge state.ExecutableEdges then
+    let facts = factsOnEdge cfg source target state
+    if Set.contains edge state.ExecutableEdges
+       && Map.tryFind edge state.EdgeFacts = Some facts then
         state
     else
         let withEdge = {
             state with
                 ExecutableEdges = Set.add edge state.ExecutableEdges
                 ExecutableBlocks = Set.add target state.ExecutableBlocks
+                EdgeFacts = Map.add edge facts state.EdgeFacts
         }
         let withTarget =
             if Map.containsKey target cfg.Blocks then enqueueBlock target withEdge
             else Crash.crash $"SCCP edge targets missing block {target}"
-        withTarget
+        refreshBlockFacts cfg target withTarget
 
 let private recordHeapStore users address offset source state =
     if not state.TrackHeapValues then
@@ -408,16 +572,16 @@ let private analyze (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : Ana
     let users = buildRegisterUsers cfg
     let definitions =
         cfg.Blocks
-        |> Map.fold (fun registers _ block ->
+        |> Map.fold (fun instructions _ block ->
             block.Instrs
             |> List.fold (fun acc instr ->
                 match getInstrDest instr with
-                | Some destination -> Set.add destination acc
-                | None -> acc) registers) Set.empty
+                | Some destination -> Map.add destination instr acc
+                | None -> acc) instructions) Map.empty
     let liveIns =
         users
         |> Map.fold (fun registers register _ ->
-            if Set.contains register definitions then registers
+            if Map.containsKey register definitions then registers
             else Set.add register registers) Set.empty
     let initialValues =
         liveIns
@@ -438,6 +602,10 @@ let private analyze (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : Ana
         Values = initialValues
         ExecutableBlocks = Set.singleton cfg.Entry
         ExecutableEdges = Set.empty
+        EdgeFacts = Map.empty
+        BlockFacts = Map.ofList [(cfg.Entry, emptyPathFacts)]
+        Predecessors = buildPredecessors cfg
+        Definitions = definitions
         HeapValues = Map.empty
         TrackHeapValues = trackHeapValues
         CallResults = callResults
@@ -447,7 +615,25 @@ let private analyze (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : Ana
 
     let rec analyzeWorklist state =
         match state.Worklist with
-        | [] -> state
+        | [] ->
+            let unresolved =
+                state.ExecutableBlocks
+                |> Set.toList
+                |> List.tryPick (fun label ->
+                    match Map.tryFind label cfg.Blocks with
+                    | Some { Terminator = Branch (condition, trueTarget, falseTarget) }
+                        when conditionValue state label condition = Unknown
+                             && (not (Set.contains (label, trueTarget) state.ExecutableEdges)
+                                 || not (Set.contains (label, falseTarget) state.ExecutableEdges)) ->
+                        Some (label, trueTarget, falseTarget)
+                    | _ -> None)
+            match unresolved with
+            | None -> state
+            | Some (label, trueTarget, falseTarget) ->
+                state
+                |> activateEdge cfg label trueTarget
+                |> activateEdge cfg label falseTarget
+                |> analyzeWorklist
         | label :: remaining ->
             let withoutCurrent = {
                 state with
@@ -474,12 +660,12 @@ let private analyze (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : Ana
                     | Ret _ -> afterInstructions
                     | Jump target -> activateEdge cfg label target afterInstructions
                     | Branch (condition, trueTarget, falseTarget) ->
-                        match operandValue afterInstructions.Values condition with
+                        match conditionValue afterInstructions label condition with
                         | Constant (BoolConst true) ->
                             activateEdge cfg label trueTarget afterInstructions
                         | Constant (BoolConst false) ->
                             activateEdge cfg label falseTarget afterInstructions
-                        | Unknown
+                        | Unknown -> afterInstructions
                         | Constant _
                         | IntegerRange _
                         | AggregateRefs _
@@ -590,7 +776,7 @@ let private applyToCFG
             | _ -> copied
         | _ -> copied
 
-    let rewriteTerminator terminator =
+    let rewriteTerminator label terminator =
         let terminator = propagateCopyTerminator copies terminator
         match terminator with
         | Branch (_, trueTarget, falseTarget) when trueTarget = falseTarget ->
@@ -598,10 +784,18 @@ let private applyToCFG
         | Branch (BoolConst true, trueTarget, _) -> Jump trueTarget
         | Branch (BoolConst false, _, falseTarget) -> Jump falseTarget
         | Branch (Register condition, trueTarget, falseTarget) ->
-            match constantFor condition with
-            | Some (BoolConst true) -> Jump trueTarget
-            | Some (BoolConst false) -> Jump falseTarget
-            | _ -> terminator
+            let proven =
+                match analysis with
+                | Some facts -> conditionValue facts label (Register condition)
+                | None -> Unknown
+            match proven with
+            | Constant (BoolConst true) -> Jump trueTarget
+            | Constant (BoolConst false) -> Jump falseTarget
+            | _ ->
+                match constantFor condition with
+                | Some (BoolConst true) -> Jump trueTarget
+                | Some (BoolConst false) -> Jump falseTarget
+                | _ -> terminator
         | _ -> terminator
 
     let blocks =
@@ -614,7 +808,7 @@ let private applyToCFG
             {
                 block with
                     Instrs = List.map (rewriteInstruction label) block.Instrs
-                    Terminator = rewriteTerminator block.Terminator
+                    Terminator = rewriteTerminator label block.Terminator
             })
 
     let optimized = { cfg with Blocks = blocks }
