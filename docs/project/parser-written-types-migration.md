@@ -1,156 +1,122 @@
 # Interpreter parser migration
 
-This plan replaces the compiler's source parser with Darklang's parser and makes
-validated `WrittenTypes` the single source syntax tree. The intended source
-path is:
+Replace the compiler's source parser with the Darklang interpreter parser. The
+target source path is:
 
 ```text
-source → validated WrittenTypes → compiler validation, resolution, and checking
-       → CheckedAST
+source → interpreter parser → WrittenTypes → compiler checking → CheckedAST
 ```
 
-The checker may use short-lived semantic facts while it works, but the finished
-source path should not construct a second whole-program parsed or semantic AST.
-Compiler-generated semantic programs can keep their separate entry path where
-they do not originate as source text.
+There is no `WrittenTypes` → `ParsedProgram` adapter in this plan, and source
+checking does not construct the current semantic `AST.Program` as an
+intermediate. Compiler-generated semantic programs may retain their own entry
+path. This plan concerns source compilation, not a rewrite of those generators.
 
-The compatibility baseline is darklang/dark `v0.0.35`, revision
-`0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`, as recorded in the
-[compatibility overview](../compatibility/overview.md). Pin the copied source
-to that revision, record its provenance and Apache-2.0 notices, and review any
-later interpreter changes as separate language changes. In particular, later
-interpreter HEAD uses `**` for exponentiation and `^` for bitwise xor; the
-pinned grammar uses `^` for exponentiation.
+The parser should work the same way as the current interpreter checkout. Copy
+its implementation and keep its parser algorithms, mutable state, error
+recovery, and diagnostics. Only make integration changes required to compile
+and call it in this repository; do not refactor the copied parser to match the
+compiler's F# style. Record the copied revision, source files, and license
+notices. The user selected the current local darklang/dark checkout, revision
+`1cc4bb7f63acdf29dc66458f3c401ed91d444775`. This is newer than the
+compiler's documented `v0.0.35` compatibility baseline and changes grammar,
+including `^` and `**`. Treat resulting differences through the decision rule
+below.
 
-## Invariants throughout the migration
+## Starting point on current main
 
-- Production source paths use one parser and one source grammar for public
-  files, internal compiler sources, package units, and tests. The temporary
-  comparison path does not choose a grammar by source file. Internal access
-  controls may admit privileged names and signatures, but must not create a
-  second grammar.
-- A successful frontend result is fully checked. Invalid syntax, patterns,
-  guards, bindings, exhaustiveness, declarations, types, and entry ownership
-  fail before lowering or execution. Parser recovery nodes and diagnostics
-  never reach `CheckedAST`.
-- Parse each source unit independently. Preserve source order, module scope,
-  duplicate declaration behavior, executable versus dependency purpose, and
-  the exactly-one-entry rule across executable units.
-- Keep source positions and structured parser diagnostics at least until the
-  last stage that needs them. Do not reduce them to generic errors prematurely.
-- Preserve compiler-only semantic nodes for generated programs without
-  exposing them as public `WrittenTypes` syntax.
-- Follow the repository's functional F# conventions when adapting upstream
-  code. The interpreter implementation uses mutable parser and lexer state, so
-  copying its files verbatim is not the final implementation.
+The recent [parsed and checked AST boundary](parsed-checked-ast-plan.md) gave
+source expressions and `ParsedProgram` their own types. Parsing and
+`NameSyntax.normalizeSource` produce that source-only tree. The checker then
+converts it to semantic `AST.Program`, resolves and checks it, and constructs
+`CheckedAST.Program`. The migration replaces the source side of this chain;
+the checked representation and its required proofs remain the destination.
 
-## Stage 0: Freeze the behavior contract
+## Decision rule for every stage
 
-Inventory parser entry points and consumers, including CLI compilation,
-stdlib and preamble loading, package composition, formatting, syntax tests,
-and the compatibility validator. Record the current accepted and rejected
-grammar against the pinned interpreter revision. Add focused failing E2E cases
-before fixing any discovered compiler behavior, including diagnostic phase
-assertions where relevant. Use the existing syntax and E2E corpus as the
-regression baseline.
+Changing the parser will break some tests and may expose behavior differences.
+Do not quietly update test expectations, reinterpret upstream syntax, change
+compiler behavior, or add a compatibility workaround. For each distinct
+failure or design conflict, report a small reproducible source example, the
+current compiler behavior, the selected interpreter behavior, affected tests
+or source files, and viable choices. Ask the user which behavior to keep before
+making the dependent change. Group equivalent failures so the user can make
+one decision per issue, then record the decision and its resulting tests in the
+appropriate compatibility documentation. Continue independent work while a
+decision is pending.
 
-**Done when:** the proposed adapter has a written mapping for every
-`WrittenTypes` expression, declaration, pattern, and type form; unsupported
-forms and intentional compiler extensions have explicit diagnostic decisions.
+## Stage 1: Copy and run the interpreter parser
 
-## Stage 1: Bring in the pinned parser core
+Copy the selected revision's tokenizer, lexer, parser, `WrittenTypes`, and
+validation code with provenance. Add the minimum project and dependency glue
+needed to call its normal parse entry point. Keep parser behavior unchanged.
+Run it against representative compiler source files without switching the
+production compiler. Collect parse successes, diagnostics, and missing
+dependencies. Bring any required parser behavior change or substantial
+dependency decision to the user using the decision rule above.
 
-Adapt the interpreter's tokenizer, lexer, parser, `WrittenTypes`, and structural
-validation into compiler-owned modules. Retain the pinned grammar and parser
-diagnostic behavior. Remove dependencies on interpreter execution, database,
-package-manager, and effect machinery at this syntax boundary; define local
-types or explicit unsupported-feature diagnostics where needed. Refactor
-mutable state and throwing paths to comply with the compiler's F# rules.
+**Exit:** the copied parser runs in this repository and returns the selected
+interpreter's `WrittenTypes` and diagnostics for the same input.
 
-At this stage the existing production parser remains the entry point. Exercise
-the new parser on focused syntax cases and the source corpus, checking that
-successful parse results contain no recovery holes and that invalid input
-returns diagnostics.
+## Stage 2: Check `WrittenTypes` directly
 
-**Done when:** the copied parser builds independently of the interpreter
-projects and accepts the pinned public grammar without changing production
-compilation.
+Build a separate source-checking entry point that accepts successful,
+validated `WrittenTypes` and produces `CheckedAST.Program` and the type
+environment. Move the existing compiler work into this path in small slices:
 
-## Stage 2: Lower `WrittenTypes` through the current frontend
+1. Enumerate declarations and source units, including module and entry
+   information needed for a compile request.
+2. Resolve written type and value names against the compiler's declaration
+   catalog and available dependencies.
+3. Infer and check expressions, calls, patterns, matches, and declarations.
+4. Construct checked identities, types, records, recursion evidence, and
+   checked expressions as each proof succeeds.
 
-Implement one explicit, total adapter from validated `WrittenTypes` into the
-compiler's existing `NameSyntax`/`ParsedProgram` path. Map source type
-references, operator and pipe forms, nested declarations, qualified names,
-patterns, and expression order. Keep file-purpose and whole-program entry
-validation in force. For privileged compiler sources, recognize existing
-internal signatures such as `RawPtr` only after the same syntax pass and
-reject them in public mode.
+Reuse checking rules and data structures where they fit. Do not route source
+through `NameSyntax.ParsedSource`, `AST.ParsedProgram`, or semantic
+`AST.Program`; local environments and resolved or typed facts are fine. Keep
+compiler-generated program checking separate if it still uses semantic AST.
+Invalid matches and other invalid source must fail during compilation.
 
-Run the old and new paths over representative source files, comparing
-observable compile and runtime behavior plus expected compilation failures.
-Differences must become a focused E2E test and either a corrected adapter or
-an explicit compatibility decision; AST-shape comparisons alone are not a
-success criterion.
+**Exit:** the new entry point can compile representative source directly from
+`WrittenTypes` to `CheckedAST`, with no whole-program AST bridge.
 
-**Done when:** the adapter can compile the supported corpus with no unexplained
-behavior or diagnostic-phase differences.
+## Stage 3: Compare and decide differences
 
-## Stage 3: Switch production parsing
+Run the new path alongside the current source path over syntax and E2E tests,
+stdlib and preamble sources, package inputs, and CLI examples. Compare parser
+diagnostics, compilation outcomes, and observable program results. Build a
+decision list for each distinct mismatch and ask the user before altering
+behavior or expectations. Add a focused failing E2E test before fixing a
+compiler behavior, including `compileerror=` where the diagnostic phase
+matters. Re-run affected cases after each decision.
 
-Route all source entry points through the new parser and adapter, including
-stdlib, preambles, packages, CLI, tests, and formatting tools. Remove the old
-lexer, layout rewrites, recursive-descent parser, and obsolete parser-only
-tests. Keep meaningful lexer and syntax invariants covered by focused tests.
-Update parser, pipeline, and compatibility documentation to name the new
-authority.
+**Exit:** every known mismatch has a user decision and a test or documented
+reason for its accepted result. No failing test is hidden by changing only its
+expected output.
 
-**Done when:** there is one production parser, the full applicable test suite
-passes, and the parent benchmark gate shows no regression.
+## Stage 4: Switch production source compilation
 
-## Stage 4: Make `WrittenTypes` the retained source representation
+Route source inputs through the copied parser and direct checker path. Cover
+CLI compilation, source-unit composition, stdlib and preambles, package
+sources, and test tooling. Remove the old production lexer/parser and the
+source-only `ParsedProgram` path once all callers have moved. Remove
+`NameSyntax.ParsedSource` and source-driven semantic `AST.Program` conversion
+when unused; retain independent lexical utilities and generated-program paths
+only where they still have callers. Update pipeline and compatibility docs to
+describe the actual boundaries.
 
-Move source-unit composition and entry validation from
-`NameSyntax.ParsedSource` onto validated `WrittenTypes` plus explicit unit
-name and purpose. Keep the current declaration overlay and module-scope
-semantics. Remove `NameSyntax.ParsedSource` and its superseded conversion after
-all source consumers have moved. Keep lexical name utilities only where they
-still provide an independent contract.
+**Exit:** production source uses the copied parser and reaches `CheckedAST`
+without `ParsedProgram` or semantic `AST.Program` in the source path.
 
-**Done when:** `WrittenTypes` owns retained source-unit structure and
-validation still rejects invalid entry ownership before checking or lowering.
-The adapter's temporary `ParsedProgram` remains until Stage 5.
+## Stage 5: Verify the completed migration
 
-## Stage 5: Remove `ParsedProgram` from the source path
+Review the final diff and repeat the accepted behavior comparisons. Run
+`./build --ai`, `./run-tests --ai`, and
+`./benchmarks/run_benchmarks.sh --verify-parent full` for the applicable host
+target before landing code changes. If a gate fails, investigate and apply the
+decision rule to behavior differences; do not treat a changed expectation as
+the fix. Remove temporary comparison code and stale documentation.
 
-First make the frontend entry point accept validated `WrittenTypes` and return
-`CheckedAST.Program` plus the type environment. Internally it may briefly
-lower to the current semantic `AST.Program` while the checker is being moved.
-Then migrate declaration inventory, name resolution, type checking, and
-checked-node construction to consume `WrittenTypes` and explicit resolved or
-typed facts. Construct `CheckedAST` only after each required proof succeeds;
-keep match validation ahead of time. Delete source-driven
-`ParsedProgram`/`ParsedType` conversion and, once no source checker needs it,
-the whole-program semantic AST intermediary. Preserve a separate path for
-compiler-generated semantic programs if still required.
-
-**Done when:** a successful source compilation flows from validated
-`WrittenTypes` to `CheckedAST` without constructing `ParsedProgram` or a
-second whole-program source AST. No parser recovery or unresolved identity can
-reach lowering.
-
-## Stage 6: Clean up and verify the completed boundary
-
-Remove dead adapters, duplicate validation, obsolete types, and stale
-documentation. Review the final source diff for one-way ownership of parsing,
-source validation, name resolution, and checked construction. Compare
-diagnostics, formatter round trips, and observable language behavior against
-the Stage 0 baseline. Record intentional differences in the relevant
-compatibility ledger.
-
-For every stage that changes compiler behavior, create a failing focused E2E
-test first. Before committing a code stage, run `./build --ai`,
-`./run-tests --ai`, and
-`./benchmarks/run_benchmarks.sh --verify-parent full` on its task branch.
-Each stage is independently reviewable and lands before the next begins; do
-not carry temporary dual parsers or duplicate source representations into the
-final stage.
+**Exit:** relevant tests and benchmarks pass, all decisions are recorded, and
+the checked source path has no duplicate parser or whole-program AST bridge.
