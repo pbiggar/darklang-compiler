@@ -1316,7 +1316,8 @@ let testBoxedSumReuseReleasesSourceVariantBeforeOverwrite () : TestResult =
             Map.ofList [
                 typeName,
                 { TypeParams = []
-                  Payloads = [(0, Some oldPayloadType); (1, Some newPayloadType)] }
+                  Payloads = [(0, Some oldPayloadType); (1, Some newPayloadType)]
+                  UnaryPayloadTags = Set.ofList [0; 1] }
             ]
         FuncReg =
             functionRegistry [
@@ -1450,7 +1451,8 @@ let testRecursiveBoxedSumReuseCarriesTypedBackEdgeReleasePlan () : TestResult =
             Map.ofList [
                 typeName,
                 { TypeParams = []
-                  Payloads = [(0, Some payloadType)] }
+                  Payloads = [(0, Some payloadType)]
+                  UnaryPayloadTags = Set.empty }
             ]
         FuncReg =
             functionRegistry [

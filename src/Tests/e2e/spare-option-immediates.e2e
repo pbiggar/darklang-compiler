@@ -1,0 +1,25 @@
+// Every spare word is outside its payload's representable range.
+let int8Identity (value: Stdlib.Option.Option<Int8>): Stdlib.Option.Option<Int8> = value
+let uint8Identity (value: Stdlib.Option.Option<UInt8>): Stdlib.Option.Option<UInt8> = value
+let int16Identity (value: Stdlib.Option.Option<Int16>): Stdlib.Option.Option<Int16> = value
+let uint16Identity (value: Stdlib.Option.Option<UInt16>): Stdlib.Option.Option<UInt16> = value
+let int32Identity (value: Stdlib.Option.Option<Int32>): Stdlib.Option.Option<Int32> = value
+let uint32Identity (value: Stdlib.Option.Option<UInt32>): Stdlib.Option.Option<UInt32> = value
+let unitIdentity (value: Stdlib.Option.Option<Unit>): Stdlib.Option.Option<Unit> = value
+Stdlib.Option.isNone (unitIdentity None) = true
+Stdlib.Option.isSome (unitIdentity (Some ())) = true
+Stdlib.Option.isNone (int8Identity None) = true
+Stdlib.Option.isSome (int8Identity (Some -128y)) = true
+Stdlib.Option.isSome (uint8Identity (Some 255uy)) = true
+Stdlib.Option.isSome (int16Identity (Some -32768s)) = true
+Stdlib.Option.isSome (uint16Identity (Some 65535us)) = true
+Stdlib.Option.isSome (int32Identity (Some -2147483648l)) = true
+Stdlib.Option.isSome (uint32Identity (Some 4294967295ul)) = true
+match int8Identity (Some -128y) with | Some value -> value == -128y | None -> false = true
+match uint32Identity None with | Some _ -> false | None -> true = true
+Builtin.unwrap (Some 255uy) = 255uy
+Builtin.unwrap (Some ()) = ()
+let nested (value: Stdlib.Option.Option<Stdlib.Option.Option<Bool>>): Bool = match value with | Some None -> true | _ -> false
+nested (Some None) = true // leak_check
+let listOption (value: Stdlib.Option.Option<List<Int64>>): Bool = match value with | Some [] -> true | _ -> false
+listOption (Some []) = true // leak_check

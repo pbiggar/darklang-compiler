@@ -120,7 +120,11 @@ let private rcSumShapeRegistryFromVariantRegistry (variantRegistry: MIR.VariantR
           MemoryModel.Payloads =
             typeVariants.Variants
             |> List.sortBy (fun variant -> variant.Tag)
-            |> List.map (fun variant -> variant.Tag, variant.Payload) })
+            |> List.map (fun variant -> variant.Tag, variant.Payload)
+          MemoryModel.UnaryPayloadTags =
+            typeVariants.Variants
+            |> List.choose (fun variant -> if variant.FieldCount = 1 then Some variant.Tag else None)
+            |> Set.ofList })
 
 type PrintRcContext = {
     RecordFields: Map<string, (string * AST.SemanticType) list>
@@ -168,7 +172,7 @@ let private releasePrintedValueFromReg
             typ
     match MemoryPlanning.rcShapeReleaseOperation shape with
     | Some MemoryModel.DynamicStringBuffer ->
-        if MemoryPlanning.isNullableStringSumType rcContext.SumShapes typ then
+        if MemoryPlanning.isNullablePointerSumType rcContext.SumShapes typ then
             [LIR.RefCountDecInt (LIR.Reg reg)]
         else
             [LIR.RefCountDecString (LIR.Reg reg)]
@@ -230,12 +234,15 @@ let ensureInRegister (operand: MIR.Operand) (state: TempState) : Result<LIR.Inst
         Ok ([LIR.LoadFuncAddr (tempReg, name)], tempReg, nextState)
 
 /// Ensure a Blob handle is in a register. Blob.empty reuses the immutable
-/// dynamic-buffer literal pool but is compared as a handle, never as a String.
+/// dynamic-buffer literal pool; nullable Blob sums also compare against zero.
 let ensureBlobInRegister (operand: MIR.Operand) (state: TempState) : Result<LIR.Instr list * LIR.Reg * TempState, string> =
     match operand with
     | MIR.StringSymbol value ->
         let (tempReg, nextState) = freshTempReg state
         Ok ([LIR.Mov (tempReg, LIR.StringSymbol value)], tempReg, nextState)
+    | MIR.Int64Const 0L ->
+        let (tempReg, nextState) = freshTempReg state
+        Ok ([LIR.Mov (tempReg, LIR.Imm 0L)], tempReg, nextState)
     | MIR.Register vreg -> Ok ([], vregToLIRReg vreg, state)
     | _ -> Error "Internal error: Blob handle must be a literal or register"
 
@@ -2413,7 +2420,8 @@ let toLIRForWithTrace
                     |> List.map (fun variant ->
                         { Name = variant.Name
                           Tag = variant.Tag
-                          Payload = variant.Payload })
+                          Payload = variant.Payload
+                          FieldCount = variant.FieldCount })
                 { LIR.TypeParams = typeVariants.TypeParams
                   LIR.Variants = lirVariants })
         let lirRecordRegistry =

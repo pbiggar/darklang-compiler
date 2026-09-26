@@ -669,7 +669,8 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                            match variant.Fields with
                                                            | [] -> None
                                                            | [field] -> Some field
-                                                           | fields -> Some (AST.TTuple fields) }
+                                                           | fields -> Some (AST.TTuple fields)
+                                                       FieldCount = List.length variant.Fields }
                                                         : LIR.VariantInfo)) }
                                                 : LIR.TypeVariants))
                                     let allocatedProgram =

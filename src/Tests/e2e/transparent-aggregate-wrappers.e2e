@@ -1,0 +1,17 @@
+// Transparent wrappers retain nominal behavior while sharing managed roots.
+type BlobEnvelope = BlobEnvelope of Blob
+let value = BlobEnvelope (Stdlib.Blob.fromString "value") in match value with | BlobEnvelope blob -> Stdlib.Blob.toString blob = Ok "value" // leak_check
+type Int128Envelope = Int128Envelope of Int128
+let value = Int128Envelope 123Q in match value with | Int128Envelope number -> number == 123Q = true // leak_check
+type UInt128Envelope = UInt128Envelope of UInt128
+let value = UInt128Envelope 123Z in match value with | UInt128Envelope number -> number == 123Z = true // leak_check
+type PairEnvelope = PairEnvelope of (Int64 * String)
+let value = PairEnvelope (7L, "value") in match value with | PairEnvelope pair -> let (number, text) = pair in number == 7L && text == "value" = true // leak_check
+PairEnvelope (7L, "value") = stdout="PairEnvelope.PairEnvelope((7, \"value\"))\n" stderr="" // leak_check
+type Payload = { number: Int64, text: String }
+type PayloadEnvelope = PayloadEnvelope of Payload
+let value = PayloadEnvelope (Payload { number = 7L, text = "value" }) in match value with | PayloadEnvelope payload -> payload.number == 7L && payload.text == "value" = true // leak_check
+type Envelope<'t> = Envelope of t
+let value = Envelope (7L, "value") in match value with | Envelope pair -> let (number, text) = pair in number == 7L && text == "value" = true // leak_check
+type GenericPairEnvelope<'a> = GenericPairEnvelope of ('a * String)
+let value = GenericPairEnvelope (7L, "value") in match value with | GenericPairEnvelope pair -> let (number, text) = pair in number == 7L && text == "value" = true // leak_check

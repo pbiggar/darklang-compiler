@@ -1,0 +1,15 @@
+// The spare word must not confuse Some false with None.
+let identity (value: Stdlib.Option.Option<Bool>): Stdlib.Option.Option<Bool> = value
+Stdlib.Option.isNone (identity None) = true
+Stdlib.Option.isSome (identity (Some false)) = true // leak_check
+Stdlib.Option.isSome (identity (Some true)) = true
+match identity (Some false) with | Some value -> value == false | None -> false = true
+match identity None with | Some _ -> false | None -> true = true
+Builtin.unwrap (Some false) = false
+Some false == Some false = true
+Some false != None = true
+identity None = stdout="Darklang.Stdlib.Option.Option<Bool>.None\n" stderr=""
+identity (Some false) = stdout="Darklang.Stdlib.Option.Option<Bool>.Some(false)\n" stderr=""
+identity (Some true) = stdout="Darklang.Stdlib.Option.Option<Bool>.Some(true)\n" stderr=""
+type BoolWrap = BoolWrap of Bool
+BoolWrap false = stdout="BoolWrap.BoolWrap(false)\n" stderr=""

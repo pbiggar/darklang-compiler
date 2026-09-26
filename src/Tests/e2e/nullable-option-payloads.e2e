@@ -1,0 +1,31 @@
+// Nullable pointer representations must preserve Option behavior and ownership.
+let identity (value: Stdlib.Option.Option<Blob>): Stdlib.Option.Option<Blob> = value
+Stdlib.Option.isNone (identity None) = true // leak_check
+Stdlib.Option.isSome (identity (Some (Stdlib.Blob.fromString "ab"))) = true // leak_check
+match identity (Some (Stdlib.Blob.fromString "ab")) with | Some value -> Stdlib.Blob.toString value | None -> Error "missing" = Ok "ab" // leak_check
+let identityChar (value: Stdlib.Option.Option<Char>): Stdlib.Option.Option<Char> = value
+Stdlib.Option.isNone (identityChar None) = true // leak_check
+match identityChar (Some 'a') with | Some value -> value | None -> 'b' = 'a' // leak_check
+Stdlib.String.head "a" = Some 'a' // leak_check
+Stdlib.String.head "😂" = Some '😂' // leak_check
+identityChar None = stdout="Darklang.Stdlib.Option.Option<Char>.None\n" stderr="" // leak_check
+Some 'a' = stdout="Darklang.Stdlib.Option.Option<Char>.Some('a')\n" stderr="" // leak_check
+let identityInt128 (value: Stdlib.Option.Option<Int128>): Stdlib.Option.Option<Int128> = value
+match identityInt128 (Some 123Q) with | Some value -> value == 123Q | None -> false = true // leak_check
+let identityUInt128 (value: Stdlib.Option.Option<UInt128>): Stdlib.Option.Option<UInt128> = value
+match identityUInt128 (Some 123Z) with | Some value -> value == 123Z | None -> false = true // leak_check
+Stdlib.Option.isSome (Stdlib.String.head "😂") = true // leak_check
+let identityTuple (value: Stdlib.Option.Option<(Int64 * String)>): Stdlib.Option.Option<(Int64 * String)> = value
+let value = identityTuple (Some (7L, "value")) in match value with | Some pair -> let (number, text) = pair in number == 7L && text == "value" | None -> false = true // leak_check
+Some (7L, "value") == Some (7L, "value") = true // leak_check
+let equalTuples (left: Stdlib.Option.Option<(Int64 * String)>) (right: Stdlib.Option.Option<(Int64 * String)>): Bool = left == right
+equalTuples (Some (7L, "value")) (Some (7L, "value")) = true // leak_check
+type OptionPayloadRecord = { number: Int64, text: String }
+let identityRecord (value: Stdlib.Option.Option<OptionPayloadRecord>): Stdlib.Option.Option<OptionPayloadRecord> = value
+let value = identityRecord (Some (OptionPayloadRecord { number = 7L, text = "value" })) in match value with | Some payload -> payload.number == 7L && payload.text == "value" | None -> false = true // leak_check
+Some (OptionPayloadRecord { number = 7L, text = "value" }) == Some (OptionPayloadRecord { number = 7L, text = "value" }) = true // leak_check
+let equalRecords (left: Stdlib.Option.Option<OptionPayloadRecord>) (right: Stdlib.Option.Option<OptionPayloadRecord>): Bool = left == right
+equalRecords (Some (OptionPayloadRecord { number = 7L, text = "value" })) (Some (OptionPayloadRecord { number = 7L, text = "value" })) = true // leak_check
+type MaybePair<'a> = AbsentPair | PresentPair of ('a * String)
+let value = PresentPair (7L, "value") in match value with | PresentPair pair -> let (number, text) = pair in number == 7L && text == "value" | AbsentPair -> false = true // leak_check
+let value = AbsentPair in match value with | PresentPair _ -> false | AbsentPair -> true = true // leak_check

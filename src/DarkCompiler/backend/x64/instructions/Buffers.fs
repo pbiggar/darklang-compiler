@@ -64,7 +64,7 @@ let internal emitCanonicalBufferEq (ctx: FuncCtx) (kind: MemoryModel.CanonicalBu
             @ operandInstrs
             @ [X86_64.CMP_reg (leftReg, rightReg)
                X86_64.Jcc (X86_64.EQ, equalLabel)]
-            @ (if kind = MemoryModel.NullableUtf8String then
+            @ (if kind = MemoryModel.NullableUtf8String || kind = MemoryModel.NullableGraphemeCluster then
                    [X86_64.TEST_reg (leftReg, leftReg)
                     X86_64.Jcc (X86_64.EQ, unequalLabel)
                     X86_64.TEST_reg (rightReg, rightReg)

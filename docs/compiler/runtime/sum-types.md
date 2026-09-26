@@ -100,20 +100,30 @@ identities map to the same bounded native tag. This adaptive encoding preserves
 compact matches while ensuring that same-named constructors from different
 nominal types cannot collapse to one runtime identity.
 
-Boxed instances of `Stdlib.Option.Option` and `Stdlib.Result.Result` retain
-their existing 0/1 tags. `Option<String>` instead uses the nullable String
-representation, including when native argv and environment intrinsics produce
-it. The representation is selected for each concrete generic instantiation;
-other `Option` payload types retain their established layout.
+The representation is selected for each concrete generic instantiation.
+`Option` over an eligible managed pointer uses zero for `None` and the payload
+root for `Some`, including when native argv and environment intrinsics produce
+`Option<String>`. `Option` over a payload with a spare immediate uses that
+out-of-range word for `None`. Other `Option` instantiations and `Result` retain
+their boxed layout when they carry a payload.
 
 - A type whose cases are all nullary uses its case tag as an immediate.
-- A concrete single-case sum over Int64, UInt64, Bool, String, or Char uses the
-  payload word directly, without a sum allocation.
-- A two-case sum whose concrete payload is String, including a specialized
-  generic sum, uses
-  zero for the nullary case and the nonzero String buffer pointer for the payload
-  case. Matching tests zero before inspecting the payload; ownership treats the
-  nonzero word as the String buffer.
+- A concrete unary single-case sum over Int64, UInt64, Bool, String, Char,
+  Blob, Int128, UInt128, a tuple, or a record uses its payload word directly,
+  without a sum allocation. A constructor with multiple fields is not a unary
+  tuple constructor, even though its boxed ownership descriptor uses a tuple.
+- A two-case sum with one nullary case and one unary payload case uses zero for
+  the nullary case and the nonzero payload root for String, Char, Blob, Int128,
+  UInt128, tuple, or record payloads. Matching tests zero before inspecting the
+  payload; ownership releases the nonzero word according to its payload shape.
+  Lists and dictionaries are excluded because their valid empty value already
+  occupies zero.
+- A two-case sum with one nullary case and a unary Unit, Bool, Int8/UInt8,
+  Int16/UInt16, or Int32/UInt32 payload reserves an out-of-range immediate for
+  the nullary case: respectively `1`, `2`, `256`, `65536`, or `4294967296`.
+  The payload case keeps its ordinary word, including `Some false = 0` and
+  `Some () = 0`. Full-width integers, arbitrary Int, and Float have no
+  generally safe spare word.
 - Other payload sums use a two-word fixed block: case tag at offset 0 and
   payload (or zero for a nullary case) at offset 8.
 - Multiple enum fields use one payload tuple block, preserving the public field

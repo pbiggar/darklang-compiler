@@ -34,7 +34,10 @@ let private mkVariantInfo (name: string) (tag: int) (fields: AST.SemanticType li
         | [] -> None
         | [field] -> Some field
         | _ -> Some (AST.TTuple fields)
-    { MIR.VariantInfo.Name = name; MIR.VariantInfo.Tag = tag; MIR.VariantInfo.Payload = payload }
+    { MIR.VariantInfo.Name = name
+      MIR.VariantInfo.Tag = tag
+      MIR.VariantInfo.Payload = payload
+      MIR.VariantInfo.FieldCount = List.length fields }
 
 /// Helper to create TypeVariants record
 let private mkTypeVariants (typeParams: string list) (variants: MIR.VariantInfo list) : MIR.TypeVariants =

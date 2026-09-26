@@ -1,0 +1,83 @@
+---NAME---
+None Unit option uses the spare immediate
+---INPUT---
+let identity (value: Stdlib.Option.Option<Unit>): Stdlib.Option.Option<Unit> = value
+identity None
+---EXPECTED---
+root = word(1)
+
+---NAME---
+None Int8 option uses the spare immediate
+---INPUT---
+let identity (value: Stdlib.Option.Option<Int8>): Stdlib.Option.Option<Int8> = value
+identity None
+---EXPECTED---
+root = word(256)
+
+---NAME---
+None UInt8 option uses the spare immediate
+---INPUT---
+let identity (value: Stdlib.Option.Option<UInt8>): Stdlib.Option.Option<UInt8> = value
+identity None
+---EXPECTED---
+root = word(256)
+
+---NAME---
+None Int16 option uses the spare immediate
+---INPUT---
+let identity (value: Stdlib.Option.Option<Int16>): Stdlib.Option.Option<Int16> = value
+identity None
+---EXPECTED---
+root = word(65536)
+
+---NAME---
+None UInt16 option uses the spare immediate
+---INPUT---
+let identity (value: Stdlib.Option.Option<UInt16>): Stdlib.Option.Option<UInt16> = value
+identity None
+---EXPECTED---
+root = word(65536)
+
+---NAME---
+None Int32 option uses the spare immediate
+---INPUT---
+let identity (value: Stdlib.Option.Option<Int32>): Stdlib.Option.Option<Int32> = value
+identity None
+---EXPECTED---
+root = word(4294967296)
+
+---NAME---
+Some Unit option keeps its payload word
+---INPUT---
+Some ()
+---EXPECTED---
+root = word(0)
+
+---NAME---
+Some minimum Int8 option keeps its payload word
+---INPUT---
+Some -128y
+---EXPECTED---
+root = word(-128)
+
+---NAME---
+Some maximum UInt8 option keeps its payload word
+---INPUT---
+Some 255uy
+---EXPECTED---
+root = word(255)
+
+---NAME---
+Some maximum UInt32 option keeps its payload word
+---INPUT---
+Some 4294967295ul
+---EXPECTED---
+root = word(4294967295)
+
+---NAME---
+None UInt32 option uses the spare immediate
+---INPUT---
+let identity (value: Stdlib.Option.Option<UInt32>): Stdlib.Option.Option<UInt32> = value
+identity None
+---EXPECTED---
+root = word(4294967296)

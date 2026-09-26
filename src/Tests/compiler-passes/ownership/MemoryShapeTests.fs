@@ -97,9 +97,9 @@ let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
 
     let variantReg : RcSumShapeRegistry =
         Map.ofList [
-            ("Enum", { TypeParams = []; Payloads = [0, None; 1, None] })
-            ("Maybe", { TypeParams = ["a"]; Payloads = [0, None; 1, Some (AST.TVar "a")] })
-            ("Packet", { TypeParams = []; Payloads = [0, Some (AST.TRecord ("PayloadRecord", [])); 1, Some AST.TBlob] })
+            ("Enum", { TypeParams = []; Payloads = [0, None; 1, None]; UnaryPayloadTags = Set.empty })
+            ("Maybe", { TypeParams = ["a"]; Payloads = [0, None; 1, Some (AST.TVar "a")]; UnaryPayloadTags = Set.singleton 1 })
+            ("Packet", { TypeParams = []; Payloads = [0, Some (AST.TRecord ("PayloadRecord", [])); 1, Some AST.TBlob]; UnaryPayloadTags = Set.ofList [0; 1] })
         ]
 
     let samples = [
@@ -530,9 +530,9 @@ let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
 
     let sumReg : RcSumShapeRegistry =
         Map.ofList [
-            ("Color", { TypeParams = []; Payloads = [0, None; 1, None; 2, None] })
-            ("Maybe", { TypeParams = ["a"]; Payloads = [0, None; 1, Some (AST.TVar "a")] })
-            ("Packet", { TypeParams = []; Payloads = [0, Some (AST.TRecord ("PayloadRecord", [])); 1, Some (AST.TList AST.TString)] })
+            ("Color", { TypeParams = []; Payloads = [0, None; 1, None; 2, None]; UnaryPayloadTags = Set.empty })
+            ("Maybe", { TypeParams = ["a"]; Payloads = [0, None; 1, Some (AST.TVar "a")]; UnaryPayloadTags = Set.singleton 1 })
+            ("Packet", { TypeParams = []; Payloads = [0, Some (AST.TRecord ("PayloadRecord", [])); 1, Some (AST.TList AST.TString)]; UnaryPayloadTags = Set.ofList [0; 1] })
         ]
 
     let samples = [
@@ -612,7 +612,8 @@ let testRecursiveSumReleasePlanUsesTypedBackEdge () : TestResult =
                    [
                        0, Some (AST.TVar "a")
                        1, Some (AST.TTuple [AST.TSum ("Tree", [AST.TVar "a"]); AST.TSum ("Tree", [AST.TVar "a"])])
-                   ] })
+                   ]
+               UnaryPayloadTags = Set.singleton 0 })
         ]
 
     let plan = rcReleasePlanOfTypeWithSums Map.empty sumReg treeType

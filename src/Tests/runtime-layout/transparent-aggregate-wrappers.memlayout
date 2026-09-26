@@ -1,0 +1,56 @@
+---NAME---
+Single-case Blob wrapper shares its payload pointer
+---INPUT---
+type BlobEnvelope = BlobEnvelope of Blob
+let original = Stdlib.Blob.fromString "value" in (original, BlobEnvelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Generic nested tuple wrapper shares its payload pointer
+---INPUT---
+type GenericPairEnvelope<'a> = GenericPairEnvelope of ('a * String)
+let original = (7L, "value") in (original, GenericPairEnvelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Single-case Int128 wrapper shares its payload pointer
+---INPUT---
+type Int128Envelope = Int128Envelope of Int128
+let original = 123Q in (original, Int128Envelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Single-case UInt128 wrapper shares its payload pointer
+---INPUT---
+type UInt128Envelope = UInt128Envelope of UInt128
+let original = 123Z in (original, UInt128Envelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Single-case tuple wrapper shares its payload pointer
+---INPUT---
+type PairEnvelope = PairEnvelope of (Int64 * String)
+let original = (7L, "value") in (original, PairEnvelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Single-case record wrapper shares its payload pointer
+---INPUT---
+type Payload = { number: Int64, text: String }
+type PayloadEnvelope = PayloadEnvelope of Payload
+let original = Payload { number = 7L, text = "value" } in (original, PayloadEnvelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Generic single-case tuple wrapper shares its payload pointer
+---INPUT---
+type Envelope<'t> = Envelope of t
+let original = (7L, "value") in (original, Envelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)

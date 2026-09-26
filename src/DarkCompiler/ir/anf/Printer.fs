@@ -64,6 +64,7 @@ let private prettyPrintANFRcKind = function
 let internal prettyPrintCanonicalBufferKind = function
     | MemoryModel.Utf8String -> "utf8-string"
     | MemoryModel.NullableUtf8String -> "nullable-utf8-string"
+    | MemoryModel.NullableGraphemeCluster -> "nullable-grapheme-cluster"
     | MemoryModel.GraphemeCluster -> "grapheme-cluster"
 
 /// Pretty-print ANF complex expression

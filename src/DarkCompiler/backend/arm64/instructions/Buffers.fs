@@ -40,7 +40,7 @@ let internal emitCanonicalBufferEq (ctx: CodeGenContext) (kind: MemoryModel.Cano
                 @ rightInstrs
                 @ [ARM64Symbolic.CMP_reg (ARM64Symbolic.X8, ARM64Symbolic.X9)
                    ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, equalLabel)]
-                @ (if kind = MemoryModel.NullableUtf8String then
+                @ (if kind = MemoryModel.NullableUtf8String || kind = MemoryModel.NullableGraphemeCluster then
                        [ARM64Symbolic.CMP_imm (ARM64Symbolic.X8, 0us)
                         ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, unequalLabel)
                         ARM64Symbolic.CMP_imm (ARM64Symbolic.X9, 0us)

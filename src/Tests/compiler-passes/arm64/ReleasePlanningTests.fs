@@ -265,14 +265,15 @@ let testGenericReleaseHelpersPreserveOwnershipPolicy () : TestResult =
             (sumName,
              { TypeParams = []
                Variants = [
-                   { Name = "Only"; Tag = 0; Payload = Some payloadType }
+                   { Name = "Only"; Tag = 0; Payload = Some payloadType; FieldCount = 2 }
                ] })
         ]
     let sumShapes : MemoryModel.RcSumShapeRegistry =
         Map.ofList [
             (sumName,
              { TypeParams = []
-               Payloads = [0, Some payloadType] })
+               Payloads = [0, Some payloadType]
+               UnaryPayloadTags = Set.empty })
         ]
     let metadata = rcMetadataWithSumShapes sumShapes sumType
     let makeFunction (name: string) : LIR.Function =

@@ -1,0 +1,58 @@
+---NAME---
+None Blob option is a zero word
+---INPUT---
+let identity (value: Stdlib.Option.Option<Blob>): Stdlib.Option.Option<Blob> = value
+identity None
+---EXPECTED---
+root = word(0)
+
+---NAME---
+Some Blob option shares its payload pointer
+---INPUT---
+let original = Stdlib.Blob.fromString ("a" ++ "b") in (original, Some original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Generic nested tuple nullable case shares its payload pointer
+---INPUT---
+type MaybePair<'a> = AbsentPair | PresentPair of ('a * String)
+let original = (7L, "value") in (original, PresentPair original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Some Int128 option shares its payload pointer
+---INPUT---
+let original = 123Q in (original, Some original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Some UInt128 option shares its payload pointer
+---INPUT---
+let original = 123Z in (original, Some original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Some tuple option shares its payload pointer
+---INPUT---
+let original = (7L, "value") in (original, Some original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Some record option shares its payload pointer
+---INPUT---
+type Payload = { number: Int64, text: String }
+let original = Payload { number = 7L, text = "value" } in (original, Some original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Some Char option shares its payload pointer
+---INPUT---
+let original = 'a' in (original, Some original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)

@@ -392,14 +392,15 @@ let testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch () :
                 { TypeParams = []
                   Variants =
                     [
-                        { Name = "Arm64NestedFixedBlockNoPayload"; Tag = 0; Payload = None }
-                        { Name = "Arm64NestedFixedBlockSumBytesPayload"; Tag = 1; Payload = Some AST.TBlob }
+                        { Name = "Arm64NestedFixedBlockNoPayload"; Tag = 0; Payload = None; FieldCount = 0 }
+                        { Name = "Arm64NestedFixedBlockSumListPayload"; Tag = 1; Payload = Some (AST.TList AST.TBlob); FieldCount = 1 }
                     ] })
         ]
     let sumShapes =
         variants
         |> Map.map (fun _ typeVariants ->
             { MemoryModel.TypeParams = typeVariants.TypeParams
+              MemoryModel.UnaryPayloadTags = typeVariants.Variants |> List.choose (fun variant -> if variant.FieldCount = 1 then Some variant.Tag else None) |> Set.ofList
               MemoryModel.Payloads =
                 typeVariants.Variants
                 |> List.sortBy (fun variant -> variant.Tag)
@@ -440,14 +441,15 @@ let testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases () : TestResult =
                 { TypeParams = []
                   Variants =
                     [
-                        { Name = "Arm64MixedSumBytesPayload"; Tag = 0; Payload = Some AST.TBlob }
-                        { Name = "Arm64MixedSumListPayload"; Tag = 1; Payload = Some (AST.TList AST.TInt64) }
+                        { Name = "Arm64MixedSumBytesPayload"; Tag = 0; Payload = Some AST.TBlob; FieldCount = 1 }
+                        { Name = "Arm64MixedSumListPayload"; Tag = 1; Payload = Some (AST.TList AST.TInt64); FieldCount = 1 }
                     ] })
         ]
     let sumShapes =
         variants
         |> Map.map (fun _ typeVariants ->
             { MemoryModel.TypeParams = typeVariants.TypeParams
+              MemoryModel.UnaryPayloadTags = typeVariants.Variants |> List.choose (fun variant -> if variant.FieldCount = 1 then Some variant.Tag else None) |> Set.ofList
               MemoryModel.Payloads =
                 typeVariants.Variants
                 |> List.sortBy (fun variant -> variant.Tag)
@@ -500,16 +502,18 @@ let testRecursiveSumReleaseSkipsVariantWithoutManagedFields () : TestResult =
                 { TypeParams = []
                   Variants =
                     [
-                        { Name = "Arm64RecursiveReleaseLeaf"; Tag = 0; Payload = Some AST.TInt64 }
+                        { Name = "Arm64RecursiveReleaseLeaf"; Tag = 0; Payload = Some AST.TInt64; FieldCount = 1 }
                         { Name = "Arm64RecursiveReleaseNode"
                           Tag = 1
-                          Payload = Some (AST.TTuple [ sumType; sumType ]) }
+                          Payload = Some (AST.TTuple [ sumType; sumType ])
+                          FieldCount = 2 }
                     ] })
         ]
     let sumShapes =
         variants
         |> Map.map (fun _ typeVariants ->
             { MemoryModel.TypeParams = typeVariants.TypeParams
+              MemoryModel.UnaryPayloadTags = typeVariants.Variants |> List.choose (fun variant -> if variant.FieldCount = 1 then Some variant.Tag else None) |> Set.ofList
               MemoryModel.Payloads =
                 typeVariants.Variants
                 |> List.sortBy (fun variant -> variant.Tag)
@@ -617,7 +621,8 @@ let testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan () : TestResult =
                 { TypeParams = []
                   Variants =
                     [
-                        { Name = "Arm64ClosureCaptureSumBytesPayload"; Tag = 0; Payload = Some AST.TBlob }
+                        { Name = "Arm64ClosureCaptureSumBytesPayload"; Tag = 0; Payload = Some AST.TBlob; FieldCount = 1 }
+                        { Name = "Arm64ClosureCaptureSumIntegerPayload"; Tag = 1; Payload = Some AST.TInt64; FieldCount = 1 }
                     ] })
         ]
     let capturedFunc =

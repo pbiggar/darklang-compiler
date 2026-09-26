@@ -1,0 +1,21 @@
+---NAME---
+None Bool option uses the spare immediate
+---INPUT---
+let identity (value: Stdlib.Option.Option<Bool>): Stdlib.Option.Option<Bool> = value
+identity None
+---EXPECTED---
+root = word(2)
+
+---NAME---
+Some true Bool option uses its payload word
+---INPUT---
+Some true
+---EXPECTED---
+root = word(1)
+
+---NAME---
+Some false Bool option uses its payload word
+---INPUT---
+Some false
+---EXPECTED---
+root = word(0)

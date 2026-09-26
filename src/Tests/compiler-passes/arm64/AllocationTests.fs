@@ -662,8 +662,8 @@ let testRawSlotInitPureEnumDoesNotEmitGenericRetain () : TestResult =
                 { TypeParams = ["a"]
                   Variants =
                     [
-                        { Name = "RawSlotInitPureA"; Tag = 0; Payload = None }
-                        { Name = "RawSlotInitPureB"; Tag = 1; Payload = None }
+                        { Name = "RawSlotInitPureA"; Tag = 0; Payload = None; FieldCount = 0 }
+                        { Name = "RawSlotInitPureB"; Tag = 1; Payload = None; FieldCount = 0 }
                     ] })
         ]
     let program =
@@ -937,14 +937,15 @@ let private assertListSumPayloadUsesTypedDictListHelper (payloadType: AST.Semant
                 { TypeParams = []
                   Variants =
                     [
-                        { Name = $"{sumName}Case"; Tag = 0; Payload = Some payloadType }
+                        { Name = $"{sumName}Case"; Tag = 0; Payload = Some payloadType; FieldCount = 1 }
                     ] })
         ]
     let sumShapes : MemoryModel.RcSumShapeRegistry =
         Map.ofList [
             (sumName,
                 { TypeParams = []
-                  Payloads = [ 0, Some payloadType ] })
+                  Payloads = [ 0, Some payloadType ]
+                  UnaryPayloadTags = Set.singleton 0 })
         ]
     let program =
         makeSimpleProgramWithVariants

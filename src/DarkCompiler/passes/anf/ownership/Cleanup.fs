@@ -42,7 +42,7 @@ let internal createReturnDec
         | Some DynamicIntBuffer
         | None ->
             None
-    (tempId, typ, shape, kindOverride, metadata, isNullableStringSumType ctx.SumShapeReg typ)
+    (tempId, typ, shape, kindOverride, metadata, isNullablePointerSumType ctx.SumShapeReg typ)
 
 let internal retainExprForShape
     (ctx: TypeContext)
@@ -53,7 +53,7 @@ let internal retainExprForShape
     match rcShapeRetainOperation shape with
     | Some DynamicStringBuffer ->
         // The Int buffer operation shares String's header but skips zero.
-        if isNullableStringSumType ctx.SumShapeReg typ then RefCountIncInt (Var tempId)
+        if isNullablePointerSumType ctx.SumShapeReg typ then RefCountIncInt (Var tempId)
         else RefCountIncString (Var tempId)
     | Some DynamicIntBuffer ->
         RefCountIncInt (Var tempId)

@@ -110,7 +110,7 @@ let rec private collectVariants (typed: TypedShape) : LIR.VariantRegistry =
         Map.add
             name
             { TypeParams = []
-              Variants = [{ Name = $"{name}_case"; Tag = 0; Payload = None }] }
+              Variants = [{ Name = $"{name}_case"; Tag = 0; Payload = None; FieldCount = 0 }] }
             nested
     | SumValue _ ->
         let name =
@@ -126,9 +126,9 @@ let rec private collectVariants (typed: TypedShape) : LIR.VariantRegistry =
                   // case keeps String sums boxed even when nullable two-case
                   // String sums use the payload pointer directly.
                   Variants = [
-                      { Name = $"{name}_payload"; Tag = 0; Payload = Some payload.Type }
-                      { Name = $"{name}_empty"; Tag = 1; Payload = None }
-                      { Name = $"{name}_other"; Tag = 2; Payload = Some AST.TInt64 }
+                      { Name = $"{name}_payload"; Tag = 0; Payload = Some payload.Type; FieldCount = 1 }
+                      { Name = $"{name}_empty"; Tag = 1; Payload = None; FieldCount = 0 }
+                      { Name = $"{name}_other"; Tag = 2; Payload = Some AST.TInt64; FieldCount = 1 }
                   ] }
                 nested
         | _ -> Crash.crash "Described sum fixture did not have one payload"
@@ -138,7 +138,11 @@ let private sumShapes (variants: LIR.VariantRegistry) : MemoryModel.RcSumShapeRe
     variants
     |> Map.map (fun _ typeVariants ->
         { TypeParams = typeVariants.TypeParams
-          Payloads = typeVariants.Variants |> List.map (fun variant -> variant.Tag, variant.Payload) })
+          Payloads = typeVariants.Variants |> List.map (fun variant -> variant.Tag, variant.Payload)
+          UnaryPayloadTags =
+            typeVariants.Variants
+            |> List.choose (fun variant -> if variant.FieldCount = 1 then Some variant.Tag else None)
+            |> Set.ofList })
 
 let private append instructions state =
     { state with Instructions = state.Instructions @ instructions }

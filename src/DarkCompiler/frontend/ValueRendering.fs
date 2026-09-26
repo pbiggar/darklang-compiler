@@ -73,6 +73,7 @@ let private dictItemsRendererName (typ: SemanticType) : string =
 
 let private runtimeFunctionNames =
     [ "__string_concat_raw"
+      "Darklang.Stdlib.Bool.toString"
       "Darklang.Stdlib.DateTime.toString"
       "Darklang.Stdlib.Dict.__renderKey"
       "Darklang.Stdlib.Dict.toList"
@@ -307,7 +308,7 @@ and private renderBody
     : Expr * RenderState =
     match typ with
     | TUnit -> (StringLiteral "()", state)
-    | TBool -> (If (value, StringLiteral "true", StringLiteral "false"), state)
+    | TBool -> (call state.Symbols "Darklang.Stdlib.Bool.toString" [value], state)
     | TInt8 -> (call state.Symbols "Darklang.Stdlib.Int8.toString" [value], state)
     | TInt16 -> (call state.Symbols "Darklang.Stdlib.Int16.toString" [value], state)
     | TInt32 -> (call state.Symbols "Darklang.Stdlib.Int32.toString" [value], state)

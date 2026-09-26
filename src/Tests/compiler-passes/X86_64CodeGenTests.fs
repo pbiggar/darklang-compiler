@@ -25,14 +25,14 @@ let rec private inferFixtureVariantsFromType (typ: AST.SemanticType) : LIR.Varia
             | [] ->
                 let variants : LIR.TypeVariants =
                     { TypeParams = []
-                      Variants = [{ Name = $"{name}_case"; Tag = 0; Payload = None }] }
+                      Variants = [{ Name = $"{name}_case"; Tag = 0; Payload = None; FieldCount = 0 }] }
                 Map.ofList [
                     (name, variants)
                 ]
             | [_] ->
                 let variants : LIR.TypeVariants =
                     { TypeParams = ["a"]
-                      Variants = [{ Name = $"{name}_payload"; Tag = 0; Payload = Some (AST.TVar "a") }] }
+                      Variants = [{ Name = $"{name}_payload"; Tag = 0; Payload = Some (AST.TVar "a"); FieldCount = 1 }] }
                 Map.ofList [
                     (name, variants)
                 ]
@@ -850,14 +850,15 @@ let testGenericRefCountDecMixedSumPayloadUsesVariantDispatch () : Result<unit, s
                 { TypeParams = []
                   Variants =
                     [
-                        { Name = "X64MixedSumBytesPayload"; Tag = 0; Payload = Some AST.TBlob }
-                        { Name = "X64MixedSumListPayload"; Tag = 1; Payload = Some (AST.TList AST.TInt64) }
+                        { Name = "X64MixedSumBytesPayload"; Tag = 0; Payload = Some AST.TBlob; FieldCount = 1 }
+                        { Name = "X64MixedSumListPayload"; Tag = 1; Payload = Some (AST.TList AST.TInt64); FieldCount = 1 }
                     ] })
         ]
     let sumShapes =
         variants
         |> Map.map (fun _ typeVariants ->
             { MemoryModel.TypeParams = typeVariants.TypeParams
+              MemoryModel.UnaryPayloadTags = typeVariants.Variants |> List.choose (fun variant -> if variant.FieldCount = 1 then Some variant.Tag else None) |> Set.ofList
               MemoryModel.Payloads =
                 typeVariants.Variants
                 |> List.sortBy (fun variant -> variant.Tag)
@@ -910,14 +911,15 @@ let testGenericRefCountDecNestedMixedSumPayloadUsesVariantDispatch () : Result<u
                 { TypeParams = []
                   Variants =
                     [
-                        { Name = "X64NestedMixedSumNoPayload"; Tag = 0; Payload = None }
-                        { Name = "X64NestedMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBlob }
+                        { Name = "X64NestedMixedSumNoPayload"; Tag = 0; Payload = None; FieldCount = 0 }
+                        { Name = "X64NestedMixedSumListPayload"; Tag = 1; Payload = Some (AST.TList AST.TBlob); FieldCount = 1 }
                     ] })
         ]
     let sumShapes =
         variants
         |> Map.map (fun _ typeVariants ->
             { MemoryModel.TypeParams = typeVariants.TypeParams
+              MemoryModel.UnaryPayloadTags = typeVariants.Variants |> List.choose (fun variant -> if variant.FieldCount = 1 then Some variant.Tag else None) |> Set.ofList
               MemoryModel.Payloads =
                 typeVariants.Variants
                 |> List.sortBy (fun variant -> variant.Tag)
@@ -1209,8 +1211,9 @@ let testClosureRefCountDecMixedSumCaptureUsesVariantDispatch () : Result<unit, s
                 { TypeParams = []
                   Variants =
                     [
-                        { Name = "X64ClosureMixedSumNoPayload"; Tag = 0; Payload = None }
-                        { Name = "X64ClosureMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBlob }
+                        { Name = "X64ClosureMixedSumNoPayload"; Tag = 0; Payload = None; FieldCount = 0 }
+                        { Name = "X64ClosureMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBlob; FieldCount = 1 }
+                        { Name = "X64ClosureMixedSumIntegerPayload"; Tag = 2; Payload = Some AST.TInt64; FieldCount = 1 }
                     ] })
         ]
     let capturedFunc =
@@ -1473,14 +1476,16 @@ let testTaggedListRefCountDecMixedSumDynamicPayloadUsesVariantDispatch () : Resu
                 { TypeParams = []
                   Variants =
                     [
-                        { Name = "X64ListMixedSumNoPayload"; Tag = 0; Payload = None }
-                        { Name = "X64ListMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBlob }
+                        { Name = "X64ListMixedSumNoPayload"; Tag = 0; Payload = None; FieldCount = 0 }
+                        { Name = "X64ListMixedSumBytesPayload"; Tag = 1; Payload = Some AST.TBlob; FieldCount = 1 }
+                        { Name = "X64ListMixedSumIntegerPayload"; Tag = 2; Payload = Some AST.TInt64; FieldCount = 1 }
                     ] })
         ]
     let sumShapes =
         variants
         |> Map.map (fun _ typeVariants ->
             { MemoryModel.TypeParams = typeVariants.TypeParams
+              MemoryModel.UnaryPayloadTags = typeVariants.Variants |> List.choose (fun variant -> if variant.FieldCount = 1 then Some variant.Tag else None) |> Set.ofList
               MemoryModel.Payloads =
                 typeVariants.Variants
                 |> List.sortBy (fun variant -> variant.Tag)

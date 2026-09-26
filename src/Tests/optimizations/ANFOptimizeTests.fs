@@ -50,10 +50,12 @@ let private markerContext : ANFConstants.OptimizeContext =
         Map.ofList [
             ("Marker",
              { TypeParams = ["a"]
-               Payloads = [(0, None); (1, None)] })
+               Payloads = [(0, None); (1, None)]
+               UnaryPayloadTags = Set.empty })
             ("Box",
              { TypeParams = ["a"]
-               Payloads = [(0, Some (AST.TVar "a"))] })
+               Payloads = [(0, Some (AST.TVar "a"))]
+               UnaryPayloadTags = Set.singleton 0 })
         ] }
 
 let private optimizeExpression (typeEnv: ANFConstants.TypeEnv) (expr: AExpr) : AExpr =
@@ -244,6 +246,7 @@ let testCanonicalBufferSelfEqualityFoldsForBothRepresentations () : TestResult =
             | Utf8String -> AST.TString
             | NullableUtf8String -> AST.TSum ("NullableText", [])
             | GraphemeCluster -> AST.TChar
+            | NullableGraphemeCluster -> AST.TSum ("NullableChar", [])
         let parameter = { Id = TempId 0; Type = parameterType }
         let func =
             { Id = TestIds.functionIdForName "bufferEquality"
@@ -262,7 +265,7 @@ let testCanonicalBufferSelfEqualityFoldsForBothRepresentations () : TestResult =
         match functions with
         | [{ Body = Return (BoolLiteral true) }] -> Ok ()
         | _ -> Error $"Expected {kind} self-equality to fold to true"
-    [Utf8String; NullableUtf8String; GraphemeCluster]
+    [Utf8String; NullableUtf8String; GraphemeCluster; NullableGraphemeCluster]
     |> List.fold (fun result kind -> Result.bind (fun () -> check kind) result) (Ok ())
 
 let tests = [

@@ -10,6 +10,7 @@ type CanonicalBufferKind =
     | Utf8String
     | NullableUtf8String
     | GraphemeCluster
+    | NullableGraphemeCluster
 
 /// Reference-count operation kind
 type RcKind =
@@ -48,6 +49,7 @@ and RcBoxedSumVariantShape = {
 type RcSumShapeInfo = {
     TypeParams: string list
     Payloads: (int * AST.SemanticType option) list
+    UnaryPayloadTags: Set<int>
 }
 
 type RcSumShapeRegistry = Map<string, RcSumShapeInfo>

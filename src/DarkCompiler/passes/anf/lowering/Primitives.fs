@@ -72,27 +72,45 @@ let internal materializeComparisonPlan
 /// Variant lookup - maps variant names to (type name, type params, tag index, field types)
 type VariantLookup = Map<string, (string * string list * int * AST.SemanticType list)>
 
-/// Single-case concrete Int64, UInt64, Bool, String, and Char sums carry their payload word without
-/// a wrapper root. Other layouts continue through their boxed representation.
-let internal transparentSumPayloadType (typeName: string) (variantLookup: VariantLookup) : AST.SemanticType option =
+/// A unary single-case sum can share its payload word when the payload has a
+/// one-word native representation. Tuple payloads require unary source arity.
+let internal canUseTransparentPayload = function
+    | AST.TInt64 | AST.TUInt64 | AST.TBool
+    | AST.TString | AST.TChar | AST.TBlob
+    | AST.TInt128 | AST.TUInt128
+    | AST.TTuple _ | AST.TRecord _ -> true
+    | _ -> false
+
+let internal transparentSumPayloadType (typeName: string) (typeArgs: AST.SemanticType list) (variantLookup: VariantLookup) : AST.SemanticType option =
     let cases =
         variantLookup
         |> Map.toList
-        |> List.choose (fun (key, (owner, typeParams, tag, fields)) ->
-            if owner = typeName && List.isEmpty typeParams && key.StartsWith($"{typeName}.") then
-                Some (tag, fields)
+        |> List.choose (fun (key, (owner, typeParams, _, fields)) ->
+            if owner = typeName && List.length typeParams = List.length typeArgs && key.StartsWith($"{typeName}.") then
+                let subst = List.zip typeParams typeArgs |> Map.ofList
+                let concreteFields =
+                    fields
+                    |> List.map (function
+                        | AST.TVar name ->
+                            Map.tryFind name subst
+                            |> Option.defaultWith (fun () -> Crash.crash $"Transparent sum payload variable '{name}' is not declared")
+                        | fieldType -> fieldType)
+                Some concreteFields
             else None)
     match cases with
-    | [(_, [AST.TInt64])] -> Some AST.TInt64
-    | [(_, [AST.TUInt64])] -> Some AST.TUInt64
-    | [(_, [AST.TBool])] -> Some AST.TBool
-    | [(_, [AST.TString])] -> Some AST.TString
-    | [(_, [AST.TChar])] -> Some AST.TChar
+    | [[payloadType]] when canUseTransparentPayload payloadType ->
+        Some payloadType
     | _ -> None
 
-/// A two-case sum whose instantiated payload is String uses zero for its
-/// empty case and the non-null String buffer pointer for its payload case.
-let internal nullableStringSum (typeName: string) (typeArgs: AST.SemanticType list) (variantLookup: VariantLookup) : bool =
+/// These payloads always have a nonzero managed root, even when their contents
+/// are empty. Lists, dictionaries, streams, and arbitrary Int do not qualify.
+let internal canUseNullaryZeroForPayload = function
+    | AST.TString | AST.TChar | AST.TBlob
+    | AST.TInt128 | AST.TUInt128
+    | AST.TTuple _ | AST.TRecord _ -> true
+    | _ -> false
+
+let private unaryPayloadOfTwoCaseSum (typeName: string) (typeArgs: AST.SemanticType list) (variantLookup: VariantLookup) : AST.SemanticType option =
     let cases =
         variantLookup
         |> Map.toList
@@ -109,12 +127,35 @@ let internal nullableStringSum (typeName: string) (typeArgs: AST.SemanticType li
                 Some concreteFields
             else None)
     match cases |> List.sort with
-    | [[]; [AST.TString]] -> true
-    | _ -> false
+    | [[]; [payloadType]] -> Some payloadType
+    | _ -> None
+
+let internal nullablePointerSumPayloadType typeName typeArgs variantLookup =
+    unaryPayloadOfTwoCaseSum typeName typeArgs variantLookup
+    |> Option.filter canUseNullaryZeroForPayload
+
+let internal spareImmediateSumSentinel typeName typeArgs variantLookup =
+    match unaryPayloadOfTwoCaseSum typeName typeArgs variantLookup with
+    | Some AST.TUnit -> Some 1L
+    | Some AST.TBool -> Some 2L
+    | Some (AST.TInt8 | AST.TUInt8) -> Some 256L
+    | Some (AST.TInt16 | AST.TUInt16) -> Some 65536L
+    | Some (AST.TInt32 | AST.TUInt32) -> Some 4294967296L
+    | _ -> None
 
 let internal sumPayloadExpr (sourceType: AST.SemanticType) (sourceAtom: ANF.Atom) (variantLookup: VariantLookup) : ANF.CExpr =
     match sourceType with
-    | AST.TSum (typeName, typeArgs) when Option.isSome (transparentSumPayloadType typeName variantLookup) || nullableStringSum typeName typeArgs variantLookup -> ANF.Atom sourceAtom
+    | AST.TSum (typeName, typeArgs) ->
+        let payloadType =
+            transparentSumPayloadType typeName typeArgs variantLookup
+            |> Option.orElseWith (fun () -> nullablePointerSumPayloadType typeName typeArgs variantLookup)
+            |> Option.orElseWith (fun () ->
+                match spareImmediateSumSentinel typeName typeArgs variantLookup with
+                | Some _ -> unaryPayloadOfTwoCaseSum typeName typeArgs variantLookup
+                | None -> None)
+        match payloadType with
+        | Some payload -> ANF.TypedAtom (sourceAtom, payload)
+        | None -> ANF.TupleGet (sourceAtom, 1)
     | _ -> ANF.TupleGet (sourceAtom, 1)
 
 let sumTypeNamesFromVariantLookup (variantLookup: VariantLookup) : Set<string> =

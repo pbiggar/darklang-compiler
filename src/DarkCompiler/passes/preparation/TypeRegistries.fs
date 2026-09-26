@@ -41,7 +41,7 @@ let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : MemoryM
         | _ -> typ
 
     let addVariant
-        (acc: Map<string, string list * (int * AST.SemanticType option) list>)
+        (acc: Map<string, string list * (int * AST.SemanticType option * int) list>)
         (_variantName: string, (typeName, typeParams, tag, fieldTypes))
         =
         let payloadType =
@@ -51,20 +51,24 @@ let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : MemoryM
             | _ -> Some (AST.TTuple fieldTypes)
         match Map.tryFind typeName acc with
         | None ->
-            Map.add typeName (typeParams, [(tag, payloadType)]) acc
+            Map.add typeName (typeParams, [(tag, payloadType, List.length fieldTypes)]) acc
         | Some (existingTypeParams, variants) ->
             if existingTypeParams = typeParams then
-                Map.add typeName (typeParams, (tag, payloadType) :: variants) acc
+                Map.add typeName (typeParams, (tag, payloadType, List.length fieldTypes) :: variants) acc
             else
-                Map.add typeName (existingTypeParams, (tag, payloadType) :: variants) acc
+                Map.add typeName (existingTypeParams, (tag, payloadType, List.length fieldTypes) :: variants) acc
 
     let toSumShapeInfo _typeName (typeParams, variants) =
         { MemoryModel.TypeParams = typeParams
           MemoryModel.Payloads =
             variants
-            |> List.sortBy fst
-            |> List.map (fun (tag, payload) ->
-                (tag, Option.map canonicalizePayloadType payload)) }
+            |> List.sortBy (fun (tag, _, _) -> tag)
+            |> List.map (fun (tag, payload, _) ->
+                (tag, Option.map canonicalizePayloadType payload))
+          MemoryModel.UnaryPayloadTags =
+            variants
+            |> List.choose (fun (tag, _, fieldCount) -> if fieldCount = 1 then Some tag else None)
+            |> Set.ofList }
 
     variantLookup
     |> Map.toList

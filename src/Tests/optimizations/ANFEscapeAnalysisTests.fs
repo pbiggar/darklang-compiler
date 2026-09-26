@@ -530,7 +530,8 @@ let testRecursiveBoxedSumConstructorReusesUniqueAllocation () : TestResult =
         Map.ofList [
             ("RecursiveReuseChain",
              { TypeParams = []
-               Payloads = [(0, Some (AST.TList sumType))] })
+               Payloads = [(0, Some (AST.TList sumType))]
+               UnaryPayloadTags = Set.singleton 0 })
         ]
     let descriptor = {
         SourceTypeName = "RecursiveReuseChain"
@@ -612,7 +613,8 @@ let testRecursiveBoxedSumReuseRejectsUnsafeCycles () : TestResult =
                 Payloads = [
                     0, Some (AST.TList streamType)
                     1, Some (AST.TStream AST.TInt64)
-                ] })
+                ]
+                UnaryPayloadTags = Set.ofList [0; 1] })
          ],
          streamType,
          AST.TList streamType)
@@ -621,7 +623,8 @@ let testRecursiveBoxedSumReuseRejectsUnsafeCycles () : TestResult =
               { MemoryModel.TypeParams = ["a"]
                 Payloads = [
                     0, Some (AST.TSum ("RecursiveGrowing", [AST.TList (AST.TVar "a")]))
-                ] })
+                ]
+                UnaryPayloadTags = Set.singleton 0 })
          ],
          growingType,
          AST.TSum ("RecursiveGrowing", [AST.TList AST.TString]))
@@ -629,7 +632,8 @@ let testRecursiveBoxedSumReuseRejectsUnsafeCycles () : TestResult =
         (Map.ofList [
              ("RecursiveArity",
               { MemoryModel.TypeParams = ["a"]
-                Payloads = [0, Some (AST.TVar "a")] })
+                Payloads = [0, Some (AST.TVar "a")]
+                UnaryPayloadTags = Set.singleton 0 })
          ],
          arityType,
          arityType)

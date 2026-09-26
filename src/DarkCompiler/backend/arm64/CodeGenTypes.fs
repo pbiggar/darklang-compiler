@@ -68,7 +68,11 @@ let internal rcSumShapeRegistryFromVariantRegistry (variantRegistry: LIR.Variant
           Payloads =
             typeVariants.Variants
             |> List.sortBy (fun variant -> variant.Tag)
-            |> List.map (fun variant -> variant.Tag, variant.Payload) })
+            |> List.map (fun variant -> variant.Tag, variant.Payload)
+          UnaryPayloadTags =
+            typeVariants.Variants
+            |> List.choose (fun variant -> if variant.FieldCount = 1 then Some variant.Tag else None)
+            |> Set.ofList })
 
 let leakCounterLabel = ARM64Symbolic.leakCounterLabelName
 let heapOutOfMemoryMessage = "Out of heap memory"

@@ -217,7 +217,7 @@ let testPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
         VariantLookup = Map.empty
         SumShapeReg =
             Map.ofList [
-                ("Color", { TypeParams = []; Payloads = [0, None; 1, None] })
+                ("Color", { TypeParams = []; Payloads = [0, None; 1, None]; UnaryPayloadTags = Set.empty })
             ]
         FuncReg = Map.empty
         FuncParams = Map.empty
@@ -264,7 +264,7 @@ let testGenericPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
             ]
         SumShapeReg =
             Map.ofList [
-                ("Phantom", { TypeParams = ["a"]; Payloads = [0, None; 1, None] })
+                ("Phantom", { TypeParams = ["a"]; Payloads = [0, None; 1, None]; UnaryPayloadTags = Set.empty })
             ]
         FuncReg = Map.empty
         FuncParams = Map.empty
@@ -406,7 +406,7 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () : TestResult =
             ]
         SumShapeReg =
             Map.ofList [
-                ("Payload", { TypeParams = []; Payloads = [0, None; 1, Some AST.TString] })
+                ("Payload", { TypeParams = []; Payloads = [0, None; 1, Some AST.TString]; UnaryPayloadTags = Set.singleton 1 })
             ]
         FuncReg =
             functionRegistry [

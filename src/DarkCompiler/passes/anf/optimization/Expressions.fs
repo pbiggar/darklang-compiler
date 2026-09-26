@@ -358,6 +358,84 @@ let private trySimplifyAdjacentLet
         )
     | Call (getByteAtInt64Id, [value; index]),
       Let (
+          conditionTid,
+          Prim (Neq, Var optionTid, IntLiteral (Int64 256L)),
+          If (Var branchConditionTid, someBranch, noneBranch)
+      )
+        when hasName getByteAtInt64Id "Darklang.Stdlib.String.__getByteAtInt64"
+             && optionTid = tid
+             && branchConditionTid = conditionTid
+             && not (aExprUsesTemp tid someBranch)
+             && not (aExprUsesTemp tid noneBranch)
+             && not (aExprUsesTemp conditionTid someBranch)
+             && not (aExprUsesTemp conditionTid noneBranch) ->
+        // An unused Some byte only needs the index bounds check; the spare
+        // UInt8 value 256 is never a valid byte. The inner Bool rebinds the
+        // condition only after the outer branch consumed its old value.
+        Some (
+            Let (
+                tid,
+                Call (resolve "Darklang.Stdlib.String.__byteLength", [value]),
+                Let (
+                    conditionTid,
+                    Prim (Gte, index, IntLiteral (Int64 0L)),
+                    If (
+                        Var conditionTid,
+                        Let (
+                            conditionTid,
+                            Prim (Lt, index, Var tid),
+                            If (Var conditionTid, someBranch, noneBranch)
+                        ),
+                        noneBranch
+                    )
+                )
+            )
+        )
+    | Call (getByteAtInt64Id, [value; index]),
+      Let (
+          conditionTid,
+          Prim (Neq, Var optionTid, IntLiteral (Int64 256L)),
+          If (
+              Var branchConditionTid,
+              Let (payloadTid, TypedAtom (Var payloadOptionTid, AST.TUInt8), payloadBody),
+              noneBranch
+          )
+      )
+        when hasName getByteAtInt64Id "Darklang.Stdlib.String.__getByteAtInt64"
+             && optionTid = tid
+             && branchConditionTid = conditionTid
+             && payloadOptionTid = tid
+             && not (aExprUsesTemp tid payloadBody)
+             && not (aExprUsesTemp tid noneBranch)
+             && not (aExprUsesTemp conditionTid payloadBody)
+             && not (aExprUsesTemp conditionTid noneBranch) ->
+        let loadedPayload =
+            Let (
+                payloadTid,
+                Call (resolve "Darklang.Stdlib.String.__byteAtUnchecked", [value; index]),
+                payloadBody
+            )
+        Some (
+            Let (
+                tid,
+                Call (resolve "Darklang.Stdlib.String.__byteLength", [value]),
+                Let (
+                    conditionTid,
+                    Prim (Gte, index, IntLiteral (Int64 0L)),
+                    If (
+                        Var conditionTid,
+                        Let (
+                            conditionTid,
+                            Prim (Lt, index, Var tid),
+                            If (Var conditionTid, loadedPayload, noneBranch)
+                        ),
+                        noneBranch
+                    )
+                )
+            )
+        )
+    | Call (getByteAtInt64Id, [value; index]),
+      Let (
           tagTid,
           TupleGet (Var optionTid, 0),
           Let (

@@ -531,6 +531,7 @@ type VariantInfo = {
     Name: string
     Tag: int
     Payload: AST.SemanticType option
+    FieldCount: int
 }
 
 /// All variants for a sum type, with type parameters.

@@ -4,7 +4,7 @@ module MemoryPlanning
 
 open MemoryModel
 
-let isNullableStringSumType (sumReg: RcSumShapeRegistry) (typ: AST.SemanticType) : bool =
+let nullablePointerSumPayloadType (sumReg: RcSumShapeRegistry) (typ: AST.SemanticType) : AST.SemanticType option =
     match typ with
     | AST.TSum (name, typeArgs) ->
         match Map.tryFind name sumReg with
@@ -16,8 +16,38 @@ let isNullableStringSumType (sumReg: RcSumShapeRegistry) (typ: AST.SemanticType)
                     |> Option.map Some
                     |> Option.defaultWith (fun () -> Crash.crash $"Nullable sum payload variable '{name}' is not declared")
                 | payload -> payload
-            match info.Payloads |> List.map (snd >> concretePayload) |> List.sort with
-            | [None; Some AST.TString] -> true
+            match info.Payloads |> List.sortBy snd with
+            | [(_, None); (payloadTag, Some payloadTemplate)] when Set.contains payloadTag info.UnaryPayloadTags ->
+                match concretePayload (Some payloadTemplate) with
+                | Some ((AST.TString | AST.TChar | AST.TBlob
+                        | AST.TInt128 | AST.TUInt128
+                        | AST.TTuple _ | AST.TRecord _) as payload) -> Some payload
+                | _ -> None
+            | _ -> None
+        | _ -> None
+    | _ -> None
+
+let isNullablePointerSumType sumReg typ =
+    Option.isSome (nullablePointerSumPayloadType sumReg typ)
+
+let isSpareImmediateSumType (sumReg: RcSumShapeRegistry) (typ: AST.SemanticType) : bool =
+    match typ with
+    | AST.TSum (name, typeArgs) ->
+        match Map.tryFind name sumReg with
+        | Some info when List.length info.TypeParams = List.length typeArgs ->
+            let subst = List.zip info.TypeParams typeArgs |> Map.ofList
+            match info.Payloads |> List.sortBy snd with
+            | [(_, None); (payloadTag, Some payload)] when Set.contains payloadTag info.UnaryPayloadTags ->
+                let concretePayload =
+                    match payload with
+                    | AST.TVar name -> Map.tryFind name subst
+                    | other -> Some other
+                match concretePayload with
+                | Some (AST.TUnit | AST.TBool
+                       | AST.TInt8 | AST.TUInt8
+                       | AST.TInt16 | AST.TUInt16
+                       | AST.TInt32 | AST.TUInt32) -> true
+                | _ -> false
             | _ -> false
         | _ -> false
     | _ -> false
@@ -251,23 +281,35 @@ let rcShapeOfTypeWithSums
 
                     let transparentPayloadShape =
                         match sumInfo.Payloads with
-                        | [(_, Some payload)] when List.isEmpty sumInfo.TypeParams ->
+                        | [(tag, Some payload)] when Set.contains tag sumInfo.UnaryPayloadTags ->
                             match applyRcShapeTypeSubstitution subst payload with
                             | AST.TInt64 -> Some Immediate
                             | AST.TUInt64 -> Some Immediate
                             | AST.TBool -> Some Immediate
                             | AST.TString -> Some DynamicString
                             | AST.TChar -> Some DynamicString
+                            | AST.TBlob -> Some DynamicBlob
+                            | AST.TInt128 | AST.TUInt128
+                            | AST.TRecord _ as payloadType ->
+                                Some (classify expandingNominals payloadType)
+                            | AST.TTuple _ as payloadType ->
+                                Some (classify expandingNominals payloadType)
                             | _ -> None
                         | _ -> None
 
-                    let nullableStringShape =
-                        // The dynamic-int helper shares String's buffer header
-                        // and safely ignores the zero word in nested release plans.
-                        if isNullableStringSumType sumReg sourceType then Some DynamicInt else None
+                    let nullablePointerShape =
+                        match nullablePointerSumPayloadType sumReg sourceType with
+                        | Some (AST.TString | AST.TChar | AST.TBlob) ->
+                            // These canonical buffers share a header; the
+                            // dynamic-int operation also skips the zero word.
+                            Some DynamicInt
+                        | Some payloadType ->
+                            Some (payloadType |> applyRcShapeTypeSubstitution subst |> classify expandingNominals)
+                        | None -> None
 
-                    match transparentPayloadShape |> Option.orElse nullableStringShape with
+                    match transparentPayloadShape |> Option.orElse nullablePointerShape with
                     | Some shape -> shape
+                    | None when isSpareImmediateSumType sumReg sourceType -> Immediate
                     | None when hasPayloadVariant ->
                         let fieldShapes =
                             variantShapes

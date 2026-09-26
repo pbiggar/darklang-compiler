@@ -277,17 +277,27 @@ let rec generateStructuralEquality
             |> Map.exists (fun _ (tName, _, _, fields) ->
                 tName = typeName && not (List.isEmpty fields))
 
-        if nullableStringSum typeName typeArgs variantLookup then
+        match nullablePointerSumPayloadType typeName typeArgs variantLookup with
+        | Some AST.TString ->
             let cmpVar, vg' = ANF.freshVar varGen
             ([(cmpVar, ANF.CanonicalBufferEq (MemoryModel.NullableUtf8String, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
-        elif transparentSumPayloadType typeName variantLookup = Some AST.TString
-           || transparentSumPayloadType typeName variantLookup = Some AST.TChar then
+        | Some AST.TChar ->
+            let cmpVar, vg' = ANF.freshVar varGen
+            ([(cmpVar, ANF.CanonicalBufferEq (MemoryModel.NullableGraphemeCluster, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
+        | Some _ ->
+            let cmpVar, vg' = ANF.freshVar varGen
+            ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
+        | None when Option.isSome (spareImmediateSumSentinel typeName typeArgs variantLookup) ->
+            let cmpVar, vg' = ANF.freshVar varGen
+            ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
+        | None when transparentSumPayloadType typeName typeArgs variantLookup = Some AST.TString
+                    || transparentSumPayloadType typeName typeArgs variantLookup = Some AST.TChar ->
             let (cmpVar, vg') = ANF.freshVar varGen
             ([(cmpVar, primitiveEquality AST.TString leftAtom rightAtom)], ANF.Var cmpVar, vg')
-        elif Option.isSome (transparentSumPayloadType typeName variantLookup) || not hasAnyPayload then
+        | None when Option.isSome (transparentSumPayloadType typeName typeArgs variantLookup) || not hasAnyPayload ->
             let (cmpVar, vg') = ANF.freshVar varGen
             ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
-        else
+        | None ->
             let (leftTagVar, vg1) = ANF.freshVar varGen
             let (rightTagVar, vg2) = ANF.freshVar vg1
             let (tagEqVar, vg3) = ANF.freshVar vg2

@@ -27,7 +27,11 @@ let internal rcSumShapeRegistryFromVariantRegistry (variantRegistry: LIR.Variant
           MemoryModel.Payloads =
             typeVariants.Variants
             |> List.sortBy (fun variant -> variant.Tag)
-            |> List.map (fun variant -> variant.Tag, variant.Payload) })
+            |> List.map (fun variant -> variant.Tag, variant.Payload)
+          MemoryModel.UnaryPayloadTags =
+            typeVariants.Variants
+            |> List.choose (fun variant -> if variant.FieldCount = 1 then Some variant.Tag else None)
+            |> Set.ofList })
 
 // ============================================================================
 // Leak Counter (data label _leak_count in ELF data section)

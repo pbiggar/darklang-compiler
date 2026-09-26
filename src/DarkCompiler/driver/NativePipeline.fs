@@ -170,7 +170,8 @@ let private compileMirToLir
                                 |> List.map (fun variant ->
                                     ({ Name = variant.Name
                                        Tag = variant.Tag
-                                       Payload = variant.Payload } : LIR.VariantInfo))
+                                       Payload = variant.Payload
+                                       FieldCount = variant.FieldCount } : LIR.VariantInfo))
                         })
                 let records =
                     mirRecords

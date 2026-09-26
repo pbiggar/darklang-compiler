@@ -496,7 +496,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         Some payload
                     | _ -> None
 
-                let buildUnwrapExpr (successTag: int) (payloadType: AST.SemanticType) (failureMessage: string) : Result<ANF.AExpr * ANF.VarGen, string> =
+                let buildUnwrapExpr (successTag: int) (payloadType: AST.SemanticType) (unboxedPayload: bool) (absentWord: int64) (failureMessage: string) : Result<ANF.AExpr * ANF.VarGen, string> =
                     toAtomCore sumTypeNames typeNames inertScopes argExpr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (argAtom0, argBindings0, vg1) ->
                         let (argAtom, argBindings, vg2) =
@@ -508,10 +508,12 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
 
                         let (tagVar, vg3) = ANF.freshVar vg2
                         let (isSuccessVar, vg4) = ANF.freshVar vg3
-                        let tagBindings = [
-                            (tagVar, ANF.TupleGet (argAtom, 0))
-                            (isSuccessVar, ANF.Prim (ANF.Eq, ANF.Var tagVar, ANF.IntLiteral (ANF.Int64 (int64 successTag))))
-                        ]
+                        let tagBindings =
+                            if unboxedPayload then
+                                [(isSuccessVar, ANF.Prim (ANF.Neq, argAtom, ANF.IntLiteral (ANF.Int64 absentWord)))]
+                            else
+                                [ (tagVar, ANF.TupleGet (argAtom, 0))
+                                  (isSuccessVar, ANF.Prim (ANF.Eq, ANF.Var tagVar, ANF.IntLiteral (ANF.Int64 (int64 successTag)))) ]
 
                         let normalizedPayloadType =
                             if containsTypeVar payloadType then AST.TUnit else payloadType
@@ -521,7 +523,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                         let thenBranch =
                             ANF.Let (
                                 payloadVar,
-                                ANF.TupleGet (argAtom, 1),
+                                (if unboxedPayload then ANF.Atom argAtom else ANF.TupleGet (argAtom, 1)),
                                 ANF.Let (
                                     typedPayloadVar,
                                     ANF.TypedAtom (ANF.Var payloadVar, normalizedPayloadType),
@@ -545,7 +547,10 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 | AST.TSum ("Darklang.Stdlib.Option.Option", [valueType]) ->
                     lookupVariantInfo "Darklang.Stdlib.Option.Option" "Some"
                     |> Result.bind (fun (successTag, _) ->
-                        buildUnwrapExpr successTag valueType "Cannot unwrap None")
+                        let nullablePayload =
+                            Option.isSome (nullablePointerSumPayloadType "Darklang.Stdlib.Option.Option" [valueType] variantLookup)
+                        let spareWord = spareImmediateSumSentinel "Darklang.Stdlib.Option.Option" [valueType] variantLookup
+                        buildUnwrapExpr successTag valueType (nullablePayload || Option.isSome spareWord) (Option.defaultValue 0L spareWord) "Cannot unwrap None")
                 | AST.TSum ("Darklang.Stdlib.Option.Option", []) ->
                     lookupVariantInfo "Darklang.Stdlib.Option.Option" "Some"
                     |> Result.bind (fun (successTag, fieldTypes) ->
@@ -559,7 +564,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                                 | _ -> Ok AST.TUnit
                         payloadTypeResult
                         |> Result.bind (fun payloadType ->
-                            buildUnwrapExpr successTag payloadType "Cannot unwrap None"))
+                            buildUnwrapExpr successTag payloadType false 0L "Cannot unwrap None"))
                 | AST.TSum ("Darklang.Stdlib.Result.Result", [okType; _]) ->
                     lookupVariantInfo "Darklang.Stdlib.Result.Result" "Ok"
                     |> Result.bind (fun (successTag, _) ->
@@ -571,7 +576,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                                 | None -> "Cannot unwrap Error"
                             | _ ->
                                 "Cannot unwrap Error"
-                        buildUnwrapExpr successTag okType failureMessage)
+                        buildUnwrapExpr successTag okType false 0L failureMessage)
                 | AST.TSum ("Darklang.Stdlib.Result.Result", []) ->
                     lookupVariantInfo "Darklang.Stdlib.Result.Result" "Ok"
                     |> Result.bind (fun (successTag, fieldTypes) ->
@@ -593,7 +598,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                                 "Cannot unwrap Error"
                         payloadTypeResult
                         |> Result.bind (fun payloadType ->
-                            buildUnwrapExpr successTag payloadType failureMessage))
+                            buildUnwrapExpr successTag payloadType false 0L failureMessage))
                 | _ ->
                     Error $"Internal error: Builtin.unwrap should have been typechecked as Option/Result, got {typeToString argType}")
         | _ ->
@@ -947,7 +952,8 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                 Error $"Unknown constructor tag: {tag}"
             | Some (typeName, typeParams, tag, variantFieldTypes) ->
                 let typeArgs = CheckedAST.semanticTypeArgs constructorReference.TypeArgs
-                let isNullableString = nullableStringSum typeName typeArgs variantLookup
+                let isNullableBuffer = Option.isSome (nullablePointerSumPayloadType typeName typeArgs variantLookup)
+                let spareWord = spareImmediateSumSentinel typeName typeArgs variantLookup
                 // Check if ANY variant in this type has a payload
                 // If so, all variants must be heap-allocated for consistency
                 // Note: We get typeName from variantLookup, not from AST (which may be empty)
@@ -974,15 +980,16 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                             Error $"Constructor '{typeName}' inferred unexpected type '{inferredType}'")
 
                 match fields with
-                | [field] when Option.isSome (transparentSumPayloadType typeName variantLookup) || isNullableString ->
+                | [field] when Option.isSome (transparentSumPayloadType typeName typeArgs variantLookup) || isNullableBuffer || Option.isSome spareWord ->
                     toANFBoundAtomCore sumTypeNames typeNames inertScopes field varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (setup, payload, next) ->
                         let resultVar, final = ANF.freshVar next
                         let result = ANF.Let (resultVar, ANF.TypedAtom (payload, AST.TSum (typeName, typeArgs)), ANF.Return (ANF.Var resultVar))
                         (bindReturns setup (fun _ -> result), final))
-                | [] when isNullableString ->
+                | [] when isNullableBuffer || Option.isSome spareWord ->
                     let resultVar, next = ANF.freshVar varGen
-                    Ok (ANF.Let (resultVar, ANF.TypedAtom (ANF.IntLiteral (ANF.Int64 0L), AST.TSum (typeName, typeArgs)), ANF.Return (ANF.Var resultVar)), next)
+                    let absentWord = Option.defaultValue 0L spareWord
+                    Ok (ANF.Let (resultVar, ANF.TypedAtom (ANF.IntLiteral (ANF.Int64 absentWord), AST.TSum (typeName, typeArgs)), ANF.Return (ANF.Var resultVar)), next)
                 | [] when not typeHasPayloadVariants ->
                     // Pure enum type (no payloads anywhere): return tag as an integer
                     Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 (int64 tag))), varGen)
