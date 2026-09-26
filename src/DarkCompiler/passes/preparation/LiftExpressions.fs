@@ -236,8 +236,8 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
                         Name = funcName
                         TypeParams = []
                         Params = paramsFromList "lifted lambda" (closureParam :: loweredParameters)
-                                 |> CheckedAST.checkedSignatureParams
-                        ReturnType = CheckedAST.checkedSignatureType returnType
+                                 |> CheckedAST.checkedParams
+                        ReturnType = CheckedAST.checkedType returnType
                         Body = bodyWithExtractions
                         Recursion =
                             state.RecursiveSelf
@@ -385,8 +385,8 @@ and liftLambdasInArgs (args: AST.NonEmptyList<CheckedAST.Expr>) (state: LiftStat
                                 Name = funcName
                                 TypeParams = []
                                 Params = paramsFromList "lifted argument lambda" (closureParam :: loweredParameters)
-                                         |> CheckedAST.checkedSignatureParams
-                                ReturnType = CheckedAST.checkedSignatureType returnType
+                                         |> CheckedAST.checkedParams
+                                ReturnType = CheckedAST.checkedType returnType
                                 Body = bodyWithExtractions
                                 Recursion = None
                             }

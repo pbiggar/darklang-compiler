@@ -318,8 +318,8 @@ let private materializeProgramValues
                         |> Option.defaultWith (fun () -> Crash.crash "Missing checked value materializer")
                     Name = helperName name
                     TypeParams = []
-                    Params = CheckedAST.checkedSignatureParams parameters
-                    ReturnType = CheckedAST.checkedSignatureType typ
+                    Params = CheckedAST.checkedParams parameters
+                    ReturnType = CheckedAST.checkedType typ
                     Body = body
                     Recursion = None
                 }))

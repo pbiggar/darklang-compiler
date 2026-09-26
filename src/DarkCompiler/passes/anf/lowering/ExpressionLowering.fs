@@ -819,7 +819,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             let allocation =
                 ANF.Let (
                     resultVar,
-                    ANF.RecordAlloc (recordDescriptor typeName reference.TypeArgs recordInfo, orderedAtoms),
+                    ANF.RecordAlloc (recordDescriptor typeName (CheckedAST.semanticTypeArgs reference.TypeArgs) recordInfo, orderedAtoms),
                     ANF.Return (ANF.Var resultVar)
                 )
             let withSourceOrderEvaluation =

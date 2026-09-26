@@ -576,7 +576,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
              sourceBindings
              @ [(tempVar,
                  ANF.RecordAlloc (
-                    recordDescriptor typeName reference.TypeArgs recordInfo,
+                    recordDescriptor typeName (CheckedAST.semanticTypeArgs reference.TypeArgs) recordInfo,
                     orderedAtoms
                  ))],
              varGen2))

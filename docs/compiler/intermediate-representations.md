@@ -20,11 +20,11 @@ Before ANF, parsing produces `AST.ParsedProgram` parameterized by
 semantic-only `TNever` and the privileged `TInternalRawPtr` signature type
 cannot occur in public parsed trees. `CheckedAST.fs` then supplies the
 phase-safe expression tree consumed by preparation and lowering.
-Checked function and lambda signature types use a private
-`CheckedSignatureType` constructor. It replaces call-local inference identities
-with stable generic variables when checking produces a callable and when later
-passes generate or specialize one. HIR and ANF recover the full semantic type
-at their input boundaries, retaining nominal arguments and privileged raw
+Checked function and lambda signatures, explicit call type arguments, and
+record-reference type arguments use a private `CheckedType` constructor. It
+replaces call-local inference identities with stable generic variables at the
+checked boundary and after specialization. Preparation, HIR, and ANF recover
+the full semantic type where they need nominal arguments or privileged raw
 pointer signatures. Other checked expression type fields and ANF/MIR still use
 `SemanticType`; representation and ABI classification remain separate work.
 

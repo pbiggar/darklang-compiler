@@ -48,7 +48,8 @@ let collectTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : Set<
             visit (visit (visit specs condition) thenBranch) elseBranch
         | CheckedAST.Call (_, args) ->
             visitMany specs (exprArgsToList args)
-        | CheckedAST.TypeApp (functionId, typeArgs, args) ->
+        | CheckedAST.TypeApp (functionId, checkedTypeArgs, args) ->
+            let typeArgs = CheckedAST.semanticTypeArgs checkedTypeArgs
             let funcName = resolveFunctionName functionId
             let argSpecs = visitMany specs (exprArgsToList args)
             let hasTypeVars = List.exists containsTypeVar typeArgs
@@ -243,7 +244,8 @@ let rec replaceTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : 
         CheckedAST.Sequence (replace first, replace next)
     | CheckedAST.Call (funcName, args) ->
         CheckedAST.Call (funcName, AST.NonEmptyList.map replace args)
-    | CheckedAST.TypeApp (functionId, typeArgs, args) ->
+    | CheckedAST.TypeApp (functionId, checkedTypeArgs, args) ->
+        let typeArgs = CheckedAST.semanticTypeArgs checkedTypeArgs
         let funcName =
             CheckedAST.functionName functionId symbols
             |> Option.defaultWith (fun () -> Crash.crash "Type application function identity is absent from symbols")
@@ -314,7 +316,7 @@ let rec replaceTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : 
             |> List.fold (fun dictExpr (key, value) ->
                 CheckedAST.TypeApp (
                     resolvedFunctionId symbols "Darklang.Stdlib.Dict.__setOverwriting",
-                    [keyType; valueType],
+                    CheckedAST.checkedTypeArgs [keyType; valueType],
                     AST.NonEmptyList.fromList [dictExpr; key; value]
                 )) empty
             |> replace
@@ -437,7 +439,8 @@ let replaceTypeAppsWithRegistry
         | CheckedAST.Call (funcName, args) ->
             mapResult replace (exprArgsToList args)
             |> Result.map (fun args' -> CheckedAST.Call (funcName, exprArgsFromList args'))
-        | CheckedAST.TypeApp (functionId, typeArgs, args) ->
+        | CheckedAST.TypeApp (functionId, checkedTypeArgs, args) ->
+            let typeArgs = CheckedAST.semanticTypeArgs checkedTypeArgs
             let funcName =
                 CheckedAST.functionName functionId symbols
                 |> Option.defaultWith (fun () -> Crash.crash "Type application function identity is absent from symbols")
@@ -532,7 +535,7 @@ let replaceTypeAppsWithRegistry
                     |> List.fold (fun dictExpr (key, value) ->
                         CheckedAST.TypeApp (
                             resolvedFunctionId symbols "Darklang.Stdlib.Dict.__setOverwriting",
-                            [keyType; valueType],
+                            CheckedAST.checkedTypeArgs [keyType; valueType],
                             AST.NonEmptyList.fromList [dictExpr; key; value]
                         )) (CheckedAST.DictLiteral (keyType, valueType, []))
                 replace lowered
@@ -644,7 +647,7 @@ let private materializeFunctionComparisons (program: CheckedAST.Program) : Check
         | CheckedAST.TypeApp (name, types, args) ->
             let args, symbols = rewriteArgs symbols args
             let functionComparisonType =
-                match CheckedAST.functionName name symbols, types with
+                match CheckedAST.functionName name symbols, CheckedAST.semanticTypeArgs types with
                 | Some marker, [AST.TFunction _ as targetType]
                     when marker = eqHelperDispatchMarker -> Some targetType
                 | Some "__key_eq", [AST.TFunction _ as targetType] -> Some targetType

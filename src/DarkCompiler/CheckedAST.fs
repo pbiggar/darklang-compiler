@@ -36,12 +36,14 @@ let tupleElementsOfList elements =
 let mapTupleElements f tuple =
     { First = f tuple.First; Second = f tuple.Second; Rest = List.map f tuple.Rest }
 
-/// A checked callable signature cannot retain a call-local inference identity.
-/// Nominal and internal signature types remain available for specialization
-/// and privileged runtime helpers.
-type CheckedSignatureType = private CheckedSignatureType of AST.SemanticType
+/// Checked type fields cannot retain call-local inference identities. Nominal
+/// and privileged internal types remain available where those types carry
+/// specialization, layout, or runtime signature information.
+type CheckedType = private CheckedType of AST.SemanticType
 
-let signatureSemanticType (CheckedSignatureType typ) = typ
+let semanticType (CheckedType typ) = typ
+
+let semanticTypeArgs args = List.map semanticType args
 
 type Pattern =
     | PUnit
@@ -70,12 +72,12 @@ type Pattern =
 
 type LambdaParameter = {
     Pattern: LetPattern
-    Type: CheckedSignatureType
+    Type: CheckedType
 }
 
 type RecordReference = {
     TypeId: AST.TypeId
-    TypeArgs: AST.SemanticType list
+    TypeArgs: CheckedType list
 }
 
 type ConstructorReference = {
@@ -175,7 +177,7 @@ and Expr =
     | If of cond:Expr * thenBranch:Expr * elseBranch:Expr
     | Sequence of first:Expr * next:Expr
     | Call of functionId:AST.FunctionId * args:AST.NonEmptyList<Expr>
-    | TypeApp of functionId:AST.FunctionId * typeArgs:AST.SemanticType list * args:AST.NonEmptyList<Expr>
+    | TypeApp of functionId:AST.FunctionId * typeArgs:CheckedType list * args:AST.NonEmptyList<Expr>
     | TupleLiteral of TupleElements<Expr>
     | TupleAccess of tuple:Expr * index:int
     | DictLiteral of keyType:AST.SemanticType * valueType:AST.SemanticType * entries:(Expr * Expr) list
@@ -185,7 +187,7 @@ and Expr =
     | Constructor of reference:ConstructorReference * fields:Expr list
     | Match of scrutinee:Expr * cases:AST.NonEmptyList<MatchCase>
     | ListLiteral of Expr list
-    | Lambda of parameters:AST.NonEmptyList<LambdaParameter> * returnAnnotation:CheckedSignatureType option * body:Expr
+    | Lambda of parameters:AST.NonEmptyList<LambdaParameter> * returnAnnotation:CheckedType option * body:Expr
     | Apply of func:Expr * args:AST.NonEmptyList<Expr>
     | IndirectApply of func:Expr * args:AST.NonEmptyList<Expr>
     | FuncRef of AST.FunctionId
@@ -203,18 +205,18 @@ type FunctionDef = {
     Id: AST.FunctionId
     Name: string
     TypeParams: string list
-    Params: AST.NonEmptyList<AST.BindingId * CheckedSignatureType>
-    ReturnType: CheckedSignatureType
+    Params: AST.NonEmptyList<AST.BindingId * CheckedType>
+    ReturnType: CheckedType
     Body: Expr
     Recursion: AST.TypedRecursiveMember option
 }
 
 let functionParameterTypes (definition: FunctionDef) =
     definition.Params
-    |> AST.NonEmptyList.map (fun (id, typ) -> id, signatureSemanticType typ)
+    |> AST.NonEmptyList.map (fun (id, typ) -> id, semanticType typ)
 
 let functionReturnType (definition: FunctionDef) =
-    signatureSemanticType definition.ReturnType
+    semanticType definition.ReturnType
 
 type ValueDef = {
     Id: AST.BindingId
@@ -536,17 +538,19 @@ let rec normalizeInferenceType (typ: AST.SemanticType) : AST.SemanticType =
     | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
     | AST.TUnit | AST.TNever | AST.TInternalRawPtr -> typ
 
-let checkedSignatureType typ = CheckedSignatureType (normalizeInferenceType typ)
+let checkedType typ = CheckedType (normalizeInferenceType typ)
 
-let checkedSignatureParams parameters =
-    AST.NonEmptyList.map (fun (id, typ) -> id, checkedSignatureType typ) parameters
+let checkedTypeArgs args = List.map checkedType args
+
+let checkedParams parameters =
+    AST.NonEmptyList.map (fun (id, typ) -> id, checkedType typ) parameters
 
 let private convertRecordReference
     (reference: AST.RecordReference)
     (symbols: Symbols)
     : RecordReference * Symbols =
     let typeId, symbols = internType reference.ResolvedTypeName symbols
-    ({ TypeId = typeId; TypeArgs = List.map normalizeInferenceType reference.TypeArgs }, symbols)
+    ({ TypeId = typeId; TypeArgs = checkedTypeArgs reference.TypeArgs }, symbols)
 
 let private convertConstructorReference
     (location: string)
@@ -780,7 +784,7 @@ let rec private convertExpr recordFieldCounts location environment symbols expr 
                 (Call (functionId, converted), state)
             | _, _ ->
                 let (functionId, state) = internFunction name state
-                (TypeApp (functionId, List.map normalizeInferenceType typeArgs, converted), state))
+                (TypeApp (functionId, checkedTypeArgs typeArgs, converted), state))
     | AST.TupleLiteral elements ->
         convertList elements symbols
         |> Result.bind (fun (values, state) ->
@@ -871,7 +875,7 @@ let rec private convertExpr recordFieldCounts location environment symbols expr 
                 | None -> conversionError location "lambda parameter has no inferred type"
                 | Some typ ->
                     let (pattern', patternBindings, next) = allocateLetPattern state parameter.Pattern
-                    Ok ({ Pattern = pattern'; Type = checkedSignatureType typ } :: converted,
+                    Ok ({ Pattern = pattern'; Type = checkedType typ } :: converted,
                         bindings @ patternBindings,
                         next))) (Ok ([], [], symbols))
         |> Result.bind (fun (convertedParameters, bindings, afterParameters) ->
@@ -879,7 +883,7 @@ let rec private convertExpr recordFieldCounts location environment symbols expr 
             convertExpr recordFieldCounts location bodyEnvironment afterParameters body
             |> Result.map (fun (body', following) ->
                 (Lambda (AST.NonEmptyList.fromList (List.rev convertedParameters),
-                         Option.map checkedSignatureType returnAnnotation, body'),
+                         Option.map checkedType returnAnnotation, body'),
                  following)))
     | AST.Apply (func, [], args) ->
         convert symbols func
@@ -928,7 +932,7 @@ let private convertFunctionWithEnvironment
         |> AST.NonEmptyList.toList
         |> List.mapFold (fun currentSymbols (name, typ) ->
             let (id, next) = allocateBinding name currentSymbols
-            ((id, checkedSignatureType typ), next)) symbols
+            ((id, checkedType typ), next)) symbols
         |> fun (parameters, afterParameters) ->
             let environment =
                 List.zip (funcDef.Params |> AST.NonEmptyList.toList |> List.map fst) (parameters |> List.map fst)
@@ -939,7 +943,7 @@ let private convertFunctionWithEnvironment
                    Name = funcDef.Name
                    TypeParams = funcDef.TypeParams
                    Params = AST.NonEmptyList.fromList parameters
-                   ReturnType = checkedSignatureType funcDef.ReturnType
+                   ReturnType = checkedType funcDef.ReturnType
                    Body = body
                    Recursion = recursion' },
                  following)))

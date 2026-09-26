@@ -432,7 +432,7 @@ let rec simpleInferType
                             if List.isEmpty reference.TypeArgs then
                                 typeParams
                                 |> List.map (fun name -> Map.tryFind name subst |> Option.defaultValue (AST.TVar name))
-                            else reference.TypeArgs
+                            else CheckedAST.semanticTypeArgs reference.TypeArgs
                         Some (AST.TRecord (typeName, typeArgs))
     | CheckedAST.RecordAccess (recordExpr, fieldName) ->
         match simpleInferType recordExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup typeNames with
@@ -514,6 +514,7 @@ let rec simpleInferType
         Map.tryFind funcName funcReturnTypes
     | CheckedAST.TypeApp (funcName, typeArgs, _) ->
         // Look up the generic function's definition and apply type substitution
+        let typeArgs = CheckedAST.semanticTypeArgs typeArgs
         match Map.tryFind funcName genericFuncDefs with
         | Some (typeParams, returnType) when List.length typeParams = List.length typeArgs ->
             // Build substitution from type params to type args

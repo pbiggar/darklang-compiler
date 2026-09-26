@@ -68,8 +68,8 @@ let generateFuncWrapper
             Name = wrapperName
             TypeParams = []
             Params = paramsFromList "generateFuncWrapper" (closureParam :: parameters)
-                     |> CheckedAST.checkedSignatureParams
-            ReturnType = CheckedAST.checkedSignatureType returnType
+                     |> CheckedAST.checkedParams
+            ReturnType = CheckedAST.checkedType returnType
             Body = wrapperBody
             Recursion = None
         }

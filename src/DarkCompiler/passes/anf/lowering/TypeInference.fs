@@ -92,7 +92,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                             typeParams
                             |> List.map (fun typeParam ->
                                 Map.tryFind typeParam subst |> Option.defaultValue (AST.TVar typeParam))
-                        else reference.TypeArgs
+                        else CheckedAST.semanticTypeArgs reference.TypeArgs
                     AST.TRecord (typeName, typeArgs))
     | CheckedAST.RecordUpdate (recordExpr, _) ->
         // Record update returns the same type as the record being updated

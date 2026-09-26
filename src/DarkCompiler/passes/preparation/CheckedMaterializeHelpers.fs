@@ -48,6 +48,7 @@ let rec private collectHelperTypes
         combine [condition; thenBranch; elseBranch]
     | CheckedAST.Call (_, args) -> args |> AST.NonEmptyList.toList |> combine
     | CheckedAST.TypeApp (name, typeArgs, args) ->
+        let typeArgs = CheckedAST.semanticTypeArgs typeArgs
         let arguments = AST.NonEmptyList.toList args
         let concreteTypeArgs =
             typeArgs
@@ -133,7 +134,7 @@ let rec private rewriteHelperCalls
     | CheckedAST.TypeApp
         (id, [targetType], { Head = left; Tail = [right] })
         when CheckedAST.functionName id symbols = Some "__dark_internal_eq_helper_dispatch" ->
-        let helperType = resolveType aliasReg targetType
+        let helperType = resolveType aliasReg (CheckedAST.semanticType targetType)
         if needsEqHelperForResolvedType variantLookup helperType then
             CheckedAST.Call (
                 resolvedFunctionId (eqHelperName helperType),
@@ -146,8 +147,8 @@ let rec private rewriteHelperCalls
                 AST.NonEmptyList.fromList [recurse left; recurse right]
             )
     | CheckedAST.TypeApp (id, [targetType], args)
-        when CheckedAST.functionName id symbols = Some "__compare" && not (containsTVar targetType) ->
-        let helperType = resolveType aliasReg targetType
+        when CheckedAST.functionName id symbols = Some "__compare" && not (containsTVar (CheckedAST.semanticType targetType)) ->
+        let helperType = resolveType aliasReg (CheckedAST.semanticType targetType)
         CheckedAST.Call (resolvedFunctionId (compareHelperName helperType), recurseArgs args)
     | CheckedAST.TypeApp (name, typeArgs, args) ->
         CheckedAST.TypeApp (name, typeArgs, recurseArgs args)

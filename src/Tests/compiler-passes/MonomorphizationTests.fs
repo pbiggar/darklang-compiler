@@ -25,8 +25,8 @@ let testPreservesTypeVarsInSpecialization () : TestResult =
         { Id = id
           Name = "id"
           TypeParams = ["t"]
-          Params = NonEmptyList.singleton (xId, TVar "t") |> CheckedAST.checkedSignatureParams
-          ReturnType = CheckedAST.checkedSignatureType (TVar "t")
+          Params = NonEmptyList.singleton (xId, TVar "t") |> CheckedAST.checkedParams
+          ReturnType = CheckedAST.checkedType (TVar "t")
           Body = CheckedAST.Local xId
           Recursion = None }
 
@@ -35,7 +35,7 @@ let testPreservesTypeVarsInSpecialization () : TestResult =
             symbols,
             [ CheckedAST.FunctionDef funcDef
               CheckedAST.Expression (
-                  CheckedAST.TypeApp (id, [TVar "t"], NonEmptyList.singleton (CheckedAST.Int64Literal 1L))
+                  CheckedAST.TypeApp (id, [CheckedAST.checkedType (TVar "t")], NonEmptyList.singleton (CheckedAST.Int64Literal 1L))
               ) ]
         )
 
@@ -54,7 +54,7 @@ let testPreservesTypeVarsInSpecialization () : TestResult =
 let testReplaceTypeAppsWithRegistry () : TestResult =
     let id, symbols = CheckedAST.internFunction "id" (CheckedAST.emptySymbols ())
     let specializedId, symbols = CheckedAST.internFunction "id_i64" symbols
-    let expr = TypeApp (id, [TInt64], NonEmptyList.singleton (Int64Literal 1L))
+    let expr = TypeApp (id, [CheckedAST.checkedType TInt64], NonEmptyList.singleton (Int64Literal 1L))
     let registry : SpecRegistry = Map.ofList [ (("id", [TInt64]), "id_i64") ]
     match replaceTypeAppsWithRegistry symbols registry expr with
     | Ok (Call (name, args))
@@ -65,7 +65,7 @@ let testReplaceTypeAppsWithRegistry () : TestResult =
 
 let testReplaceTypeAppsWithRegistryMissingSpec () : TestResult =
     let id, symbols = CheckedAST.internFunction "id" (CheckedAST.emptySymbols ())
-    let expr = TypeApp (id, [TInt64], NonEmptyList.singleton (Int64Literal 1L))
+    let expr = TypeApp (id, [CheckedAST.checkedType TInt64], NonEmptyList.singleton (Int64Literal 1L))
     let registry : SpecRegistry = Map.empty
     match replaceTypeAppsWithRegistry symbols registry expr with
     | Ok _ -> Error "Expected missing specialization error"
@@ -78,8 +78,8 @@ let testSpecializeFromSpecs () : TestResult =
         { Id = id
           Name = "id"
           TypeParams = ["t"]
-          Params = NonEmptyList.singleton (xId, TVar "t") |> CheckedAST.checkedSignatureParams
-          ReturnType = CheckedAST.checkedSignatureType (TVar "t")
+          Params = NonEmptyList.singleton (xId, TVar "t") |> CheckedAST.checkedParams
+          ReturnType = CheckedAST.checkedType (TVar "t")
           Body = CheckedAST.Local xId
           Recursion = None }
 

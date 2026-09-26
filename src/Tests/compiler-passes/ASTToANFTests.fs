@@ -78,7 +78,7 @@ let testNeedsLambdaLoweringDetectsLambda () : TestResult =
     let expr =
         CheckedAST.Lambda (
             AST.NonEmptyList.singleton
-                ({ Pattern = CheckedAST.LPVariable xId; Type = CheckedAST.checkedSignatureType AST.TInt64 }
+                ({ Pattern = CheckedAST.LPVariable xId; Type = CheckedAST.checkedType AST.TInt64 }
                     : CheckedAST.LambdaParameter),
             None,
             CheckedAST.Local xId
@@ -239,8 +239,8 @@ let testSyntheticUnitParamLowersFunctionToZeroParams () : TestResult =
         Id = TestIds.functionIdForName "syntheticNullary"
         Name = "syntheticNullary"
         TypeParams = []
-        Params = AST.NonEmptyList.singleton (unitId, CheckedAST.checkedSignatureType AST.TUnit)
-        ReturnType = CheckedAST.checkedSignatureType AST.TInt64
+        Params = AST.NonEmptyList.singleton (unitId, CheckedAST.checkedType AST.TUnit)
+        ReturnType = CheckedAST.checkedType AST.TInt64
         Body = CheckedAST.Int64Literal 1L
         Recursion = None
     }
@@ -283,8 +283,8 @@ let testOverlayFunctionIdsContainOnlyLocalDefinitions () : TestResult =
         Id = baseId
         Name = "Test.baseFunction"
         TypeParams = []
-        Params = AST.NonEmptyList.singleton (baseParam, CheckedAST.checkedSignatureType AST.TInt64)
-        ReturnType = CheckedAST.checkedSignatureType AST.TInt64
+        Params = AST.NonEmptyList.singleton (baseParam, CheckedAST.checkedType AST.TInt64)
+        ReturnType = CheckedAST.checkedType AST.TInt64
         Body = CheckedAST.Local baseParam
         Recursion = None
     }
@@ -295,8 +295,8 @@ let testOverlayFunctionIdsContainOnlyLocalDefinitions () : TestResult =
         Id = localId
         Name = "Test.localFunction"
         TypeParams = []
-        Params = AST.NonEmptyList.singleton (localParam, CheckedAST.checkedSignatureType AST.TInt64)
-        ReturnType = CheckedAST.checkedSignatureType AST.TInt64
+        Params = AST.NonEmptyList.singleton (localParam, CheckedAST.checkedType AST.TInt64)
+        ReturnType = CheckedAST.checkedType AST.TInt64
         Body = CheckedAST.Local localParam
         Recursion = None
     }

@@ -166,8 +166,8 @@ let rec private ensureRenderer
             Id = functionId
             Name = name
             TypeParams = []
-            Params = NonEmptyList.singleton (valueId, checkedSignatureType typ)
-            ReturnType = checkedSignatureType TString
+            Params = NonEmptyList.singleton (valueId, checkedType typ)
+            ReturnType = checkedType TString
             Body = StringLiteral ""
             Recursion = None
         }
@@ -217,8 +217,8 @@ and private ensureListItemsRenderer
             Id = functionId
             Name = name
             TypeParams = []
-            Params = NonEmptyList.singleton (itemsId, checkedSignatureType listType)
-            ReturnType = checkedSignatureType TString
+            Params = NonEmptyList.singleton (itemsId, checkedType listType)
+            ReturnType = checkedType TString
             Body = StringLiteral ""
             Recursion = None
         }
@@ -262,8 +262,8 @@ and private ensureDictItemsRenderer
             Id = functionId
             Name = name
             TypeParams = []
-            Params = NonEmptyList.singleton (entriesId, checkedSignatureType listType)
-            ReturnType = checkedSignatureType TString
+            Params = NonEmptyList.singleton (entriesId, checkedType listType)
+            ReturnType = checkedType TString
             Body = StringLiteral ""
             Recursion = None
         }
@@ -357,7 +357,7 @@ and private renderBody
         let entries =
             TypeApp (
                 resolveFunction nextState.Symbols "Darklang.Stdlib.Dict.toList",
-                [keyType; valueType],
+                checkedTypeArgs [keyType; valueType],
                 NonEmptyList.singleton value
             )
         let body =

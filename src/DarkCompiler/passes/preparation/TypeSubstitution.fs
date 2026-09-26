@@ -235,7 +235,10 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
         // Substitute in type arguments and value arguments
         CheckedAST.TypeApp (
             funcName,
-            List.map (applySubstToType subst) typeArgs,
+            typeArgs
+            |> CheckedAST.semanticTypeArgs
+            |> List.map (applySubstToType subst)
+            |> CheckedAST.checkedTypeArgs,
             AST.NonEmptyList.map (applySubstToExpr subst) args
         )
     | CheckedAST.TupleLiteral elements ->
@@ -252,7 +255,12 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
         )
     | CheckedAST.RecordLiteral (reference, fields) ->
         CheckedAST.RecordLiteral (
-            { reference with TypeArgs = List.map (applySubstToType subst) reference.TypeArgs },
+            { reference with
+                TypeArgs =
+                    reference.TypeArgs
+                    |> CheckedAST.semanticTypeArgs
+                    |> List.map (applySubstToType subst)
+                    |> CheckedAST.checkedTypeArgs },
             CheckedAST.mapRecordFields (applySubstToExpr subst) fields
         )
     | CheckedAST.RecordUpdate (record, updates) ->
@@ -274,12 +282,12 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
                 { parameter with
                     Type =
                         parameter.Type
-                        |> CheckedAST.signatureSemanticType
+                        |> CheckedAST.semanticType
                         |> applySubstToType subst
-                        |> CheckedAST.checkedSignatureType })
+                        |> CheckedAST.checkedType })
         let annotation =
             returnAnnotation
-            |> Option.map (CheckedAST.signatureSemanticType >> applySubstToType subst >> CheckedAST.checkedSignatureType)
+            |> Option.map (CheckedAST.semanticType >> applySubstToType subst >> CheckedAST.checkedType)
         CheckedAST.Lambda (substParams, annotation, applySubstToExpr subst body)
     | CheckedAST.Apply (func, args) ->
         CheckedAST.Apply (applySubstToExpr subst func, AST.NonEmptyList.map (applySubstToExpr subst) args)
@@ -341,9 +349,9 @@ let resolveAliasesInFunction (aliasReg: AliasRegistry) (funcDef: CheckedAST.Func
     let resolvedParams =
         funcDef.Params
         |> AST.NonEmptyList.map (fun (name, typ) ->
-            (name, CheckedAST.checkedSignatureType (resolveAliasType aliasReg (CheckedAST.signatureSemanticType typ))))
+            (name, CheckedAST.checkedType (resolveAliasType aliasReg (CheckedAST.semanticType typ))))
     let resolvedReturnType =
-        CheckedAST.checkedSignatureType (resolveAliasType aliasReg (CheckedAST.functionReturnType funcDef))
+        CheckedAST.checkedType (resolveAliasType aliasReg (CheckedAST.functionReturnType funcDef))
     { funcDef with Params = resolvedParams; ReturnType = resolvedReturnType }
 
 /// Specialize a generic function definition with specific type arguments
@@ -365,9 +373,9 @@ let specializeFunction
     let specializedParams =
         funcDef.Params
         |> AST.NonEmptyList.map (fun (name, ty) ->
-            name, CheckedAST.checkedSignatureType (applySubstToType subst (CheckedAST.signatureSemanticType ty)))
+            name, CheckedAST.checkedType (applySubstToType subst (CheckedAST.semanticType ty)))
     let specializedReturnType =
-        CheckedAST.checkedSignatureType (applySubstToType subst (CheckedAST.functionReturnType funcDef))
+        CheckedAST.checkedType (applySubstToType subst (CheckedAST.functionReturnType funcDef))
     let specializedBody = applySubstToExpr subst funcDef.Body
     { Id = specializedId
       Name = specializedName

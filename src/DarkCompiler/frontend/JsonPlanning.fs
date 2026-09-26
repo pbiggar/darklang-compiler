@@ -94,7 +94,7 @@ let private resolveFunction (env: Env) name =
     |> Option.defaultWith (fun () -> Crash.crash $"Generated JSON function was not interned: {name}")
 let private call env name values = Call (resolveFunction env name, args values)
 let private listPush env elementType list value =
-    TypeApp (resolveFunction env "Darklang.Stdlib.List.push", [elementType], args [list; value])
+    TypeApp (resolveFunction env "Darklang.Stdlib.List.push", [checkedType elementType], args [list; value])
 
 let private stableHash (value: string) : uint64 =
     value
@@ -202,7 +202,7 @@ let private recordLiteral env typeName typeArgs fields =
         | Some info -> List.length info.Fields
         | None -> Crash.crash $"Generated JSON record type '{typeName}' is absent"
     match completeRecordFields owner fieldCount fields with
-    | Ok complete -> RecordLiteral ({ TypeId = owner; TypeArgs = typeArgs }, complete)
+    | Ok complete -> RecordLiteral ({ TypeId = owner; TypeArgs = checkedTypeArgs typeArgs }, complete)
     | Error detail -> Crash.crash $"Generated JSON record '{typeName}': {detail}"
 
 let private tuplePayload values = TupleLiteral (tupleElementsOfList values) |> Some
@@ -431,8 +431,8 @@ let rec private ensureSerializer (env: Env) typ state : Result<string * State, s
             Id = functionId
             Name = name
             TypeParams = []
-            Params = checkedSignatureParams (args [(writerId, writerType); (valueId, typ)])
-            ReturnType = checkedSignatureType writerType
+            Params = checkedParams (args [(writerId, writerType); (valueId, typ)])
+            ReturnType = checkedType writerType
             Body = Local writerId
             Recursion = None
         }
@@ -477,11 +477,11 @@ and private ensureListSerializer env elemType state =
             Name = name
             TypeParams = []
             Params =
-                checkedSignatureParams (args
+                checkedParams (args
                     [(binding "__items", typ)
                      (binding "__writer", writerType)
                      (binding "__first", TBool)])
-            ReturnType = checkedSignatureType writerType
+            ReturnType = checkedType writerType
             Body = local "__writer" bindings
             Recursion = None
         }
@@ -522,11 +522,11 @@ and private ensureDictSerializer env valueType state =
             Name = name
             TypeParams = []
             Params =
-                checkedSignatureParams (args
+                checkedParams (args
                     [(binding "__entries", listType)
                      (binding "__writer", writerType)
                      (binding "__first", TBool)])
-            ReturnType = checkedSignatureType writerType
+            ReturnType = checkedType writerType
             Body = local "__writer" bindings
             Recursion = None
         }
@@ -592,7 +592,7 @@ and private serializeBody env typ value writer state : Result<Expr * State, stri
             let entries =
                 TypeApp (
                     resolveFunction currentEnv "Darklang.Stdlib.Dict.toList",
-                    [TString; valueType],
+                    checkedTypeArgs [TString; valueType],
                     NonEmptyList.singleton value
                 )
             let encoded = call currentEnv name [Local entriesId; writerBeginObject currentEnv writer; BoolLiteral true]
@@ -713,11 +713,11 @@ let rec private ensureDecoder (env: Env) typ state : Result<string * State, stri
             Name = name
             TypeParams = []
             Params =
-                checkedSignatureParams (NonEmptyList.fromList
+                checkedParams (NonEmptyList.fromList
                     [binding "__source", TString
                      binding "__view", valueViewType
                      binding "__path", pathType])
-            ReturnType = checkedSignatureType (resultType typ)
+            ReturnType = checkedType (resultType typ)
             Body = RuntimeError "unfinished JSON decoder"
             Recursion = None
         }
@@ -776,13 +776,13 @@ and private ensureListDecoder env elemType state =
             Name = name
             TypeParams = []
             Params =
-                checkedSignatureParams (NonEmptyList.fromList
+                checkedParams (NonEmptyList.fromList
                     [binding "__source", TString
                      binding "__array_view", valueViewType
                      binding "__next_index", TInt64
                      binding "__path", pathType
                      binding "__index", TInt64])
-            ReturnType = checkedSignatureType (resultType listType)
+            ReturnType = checkedType (resultType listType)
             Body = RuntimeError "unfinished JSON list decoder"
             Recursion = None
         }
@@ -868,12 +868,12 @@ and private ensureDictDecoder env valueType state =
             Name = name
             TypeParams = []
             Params =
-                checkedSignatureParams (NonEmptyList.fromList
+                checkedParams (NonEmptyList.fromList
                     [binding "__source", TString
                      binding "__fields", viewFieldsType
                      binding "__path", pathType
                      binding "__dict", dictType])
-            ReturnType = checkedSignatureType (resultType dictType)
+            ReturnType = checkedType (resultType dictType)
             Body = RuntimeError "unfinished JSON dictionary decoder"
             Recursion = None
         }
@@ -890,7 +890,7 @@ and private ensureDictDecoder env valueType state =
             let withValue =
                 TypeApp (
                     resolveFunction env "Darklang.Stdlib.Dict.setOverridingDuplicates",
-                    [TString; valueType],
+                    checkedTypeArgs [TString; valueType],
                     args [local "__dict" bindings; key; local "__decoded_value" bindings])
             let body =
                 matchExpr (
@@ -1122,7 +1122,7 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
                         let matches =
                             TypeApp (
                                 resolveFunction env "Darklang.Stdlib.Dict.get",
-                                [TString; valueViewType],
+                                checkedTypeArgs [TString; valueViewType],
                                 args [Local objectMapId; StringLiteral fieldName])
                         let fieldPath =
                             listPush env
@@ -1384,9 +1384,9 @@ let rewriteProgramWithSession
                 let collected =
                     match current with
                     | TypeApp (id, [typ], _) when Some id = serializeId ->
-                        (typ :: fst collected, snd collected)
+                        (semanticType typ :: fst collected, snd collected)
                     | TypeApp (id, [typ], _) when Some id = parseId ->
-                        (fst collected, typ :: snd collected)
+                        (fst collected, semanticType typ :: snd collected)
                     | _ -> collected
                 let capture child = walk child
                 match current with
@@ -1591,11 +1591,11 @@ let rewriteProgramWithSession
                 | TypeApp (id, [typ], values) when Some id = serializeId ->
                     let written =
                         call finalPlanningEnv
-                            (serializeName (resolveJsonType finalPlanningEnv typ))
+                            (serializeName (resolveJsonType finalPlanningEnv (semanticType typ)))
                             (writerEmpty finalPlanningEnv :: NonEmptyList.toList values)
                     (writerFinish finalPlanningEnv written, currentSymbols)
                 | TypeApp (id, [typ], values) when Some id = parseId ->
-                    let concrete = resolveJsonType finalPlanningEnv typ
+                    let concrete = resolveJsonType finalPlanningEnv (semanticType typ)
                     let source = NonEmptyList.head values
                     let (sourceId, symbols1) = allocateBinding "__json_source" currentSymbols
                     let (parseResultId, symbols2) = allocateBinding "__json_parse_result" symbols1
