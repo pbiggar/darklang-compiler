@@ -19,7 +19,8 @@ commands are:
 
 ```bash
 ./build --ai
-./run-tests --ai
+python3 scripts/test_runtime_gate.py run
+python3 scripts/test_runtime_gate.py check --base mergetrain-local/main
 ./benchmarks/run_benchmarks.sh --verify-parent full
 ```
 
@@ -27,6 +28,20 @@ Full verification keeps terminal output concise so automated callers do not
 consume context on repeated per-workload details. Full build and measurement
 logs, the markdown report, and decision JSON remain in the reported results
 directory. Use `--verbose` when interactive diagnosis needs streamed details.
+
+The test runtime gate requires a clean committed worktree, then runs the
+already-built full suite with affinity to two CPUs on Linux, preserving the
+host CPU-count E2E test, and records its wall time in
+`TestResults/ai/test-runtime.json`. It rejects a sample if competing work
+consumed more than 3% of one CPU, then retries on another CPU pair up to
+three times. The comparison uses an
+uncontended measurement of the branch's merge-base with the supplied ref.
+The first comparison for a parent builds and measures that parent in a temporary
+worktree; later comparisons reuse the measurement cached in the common Git
+directory. A candidate fails if it takes over 10% or over 60 seconds longer,
+whichever limit is stricter. Missing, mismatched, and contended measurements
+fail closed. The test gate runs once for each valid candidate measurement;
+the comparison does not rerun tests when the parent is cached.
 
 The benchmark command compares the retained measurements with the snapshot
 stored by the task branch's upstream merge-base and reports the aggregate

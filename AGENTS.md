@@ -59,6 +59,14 @@ this repository and takes precedence where it is stricter.
 - `./run-tests` only executes an already-built test binary; it must never invoke
   a .NET/F# project build. Run `./build --ai` first, and rebuild after changing
   source or project files before treating a test result as current.
+- Before declaring a task branch ready, measure its full test suite with
+  `python3 scripts/test_runtime_gate.py run`, then compare it with the task
+  parent using `python3 scripts/test_runtime_gate.py check --base mergetrain-local/main`.
+  A valid timing run is pinned to two CPUs (required by the host CPU-count
+  E2E test) and rejected if competing work uses more than 3% of one CPU.
+  The candidate must take no more than 10% or 60 seconds longer than its
+  parent, whichever limit is stricter. Report the
+  measured ratio and seconds. A contended run is inconclusive, not a pass.
 - Do not run x64 tests on an ARM64 host unless explicitly testing x64 work.
   Likewise, do not run ARM64 tests on an x64 host unless explicitly testing
   ARM64 work.
@@ -166,6 +174,7 @@ Surprises: <unexpected decisions, tradeoffs, or scope changes and why; omit if n
 Committed: `<short hash>` — <commit subject>
 Merge train: ✅ queued `<branch>` at `<short hash>`
 Tests: ✅ <passed>/<total> passed — `<exact command>`
+Test runtime: ✅ no significant increase vs task parent, ratio <ratio>, delta <seconds>s
 Benchmarks: ✅ no regression vs task parent, ratio <ratio>
   - Parent gate: `./benchmarks/run_benchmarks.sh --verify-parent full`
 Other validation: ✅ <result> — `<exact command>`
