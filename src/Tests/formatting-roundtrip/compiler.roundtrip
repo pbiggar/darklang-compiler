@@ -9,5 +9,6 @@ match [1L] with | [x] -> (match [x] with | [a] -> a | _ -> 0L) | _ -> 0L // nest
 match [1L] with | [x] -> (let y = x in match [y] with | [z] -> z | _ -> 0L) | _ -> 0L // let wrapping nested match branch body keeps required parentheses
 [1L, 2L, 3L] // list elements keep parser-compatible commas
 match [1L, 2L] with | [x, y] -> x + y | _ -> 0L // list pattern elements keep parser-compatible commas
+let id<'t> (value: t) : t = value; id<Dict<String, UInt128>> (Dict { "a": 2Z }) // nested Dict type arguments keep explicit key and value types
 "https://darklang.com/docs" // string literal containing comment marker
 let reserved_param (``let``: Int64) : Int64 = ``let``; reserved_param 1L // function params keep escaped keyword identifiers

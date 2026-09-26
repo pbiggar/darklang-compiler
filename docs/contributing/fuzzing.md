@@ -54,10 +54,11 @@ source literals: the signed and unsigned integer widths, arbitrary-precision
 `Int`, `Bool`, `Float`, `String`, `Char`, and `Unit`. It also combines tuples,
 lists and dictionaries over every literal scalar type, a generated record type
 and function, record updates, `Option` and `Result` constructors, pattern
-matches and guards, lambdas and calls, interpolation, and `Blob`, `DateTime`,
-and `Stream` values constructed through the standard library. It generates
-variables, `let`, `if`, arithmetic, comparisons, boolean operations, and string
-concatenation. Top-level observations remain `Int64` or `Bool`, whose
+matches and guards, lambdas and calls, bounded direct and mutual recursion,
+generic functions with one or two type parameters, interpolation, and `Blob`,
+`DateTime`, and `Stream` values constructed through the standard library. It
+generates variables, `let`, `if`, arithmetic, comparisons, boolean operations,
+and string concatenation. Top-level observations remain `Int64` or `Bool`, whose
 interpreter and native renderings are directly comparable. Other values flow
 through bindings and comparisons. The reducer preserves generated declarations
 while shrinking the expression.

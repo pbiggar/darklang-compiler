@@ -66,9 +66,8 @@ let rec private formatType (typ: SemanticType) : string =
     | TInferenceVar (displayName, _) -> formatIdentifierSegment displayName
     | TList elemType -> $"List<{formatType elemType}>"
     | TStream elemType -> $"Stream<{formatType elemType}>"
-    | TDict (TString, valueType) -> $"Dict<{formatType valueType}>"
     | TDict (keyType, valueType) ->
-        // Preserve both public type arguments for non-String-keyed Dicts.
+        // Explicit key and value arguments also parse inside nested generic calls.
         $"Dict<{formatType keyType}, {formatType valueType}>"
     | TTuple elemTypes ->
         let formatElement elemType =

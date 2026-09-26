@@ -249,7 +249,7 @@ let rec private generateExpr
             | _ -> generateLeaf random typ environment, nextVariable
 
         let generateFeature () =
-            match random.Next(16), typ with
+            match random.Next(20), typ with
             | 0, TInt64 ->
                 let left, afterLeft = generateChild TInt64 nextVariable
                 let right, afterRight = generateChild TBool afterLeft
@@ -378,6 +378,22 @@ let rec private generateExpr
                     { Patterns = NonEmptyList.singleton PWildcard
                       Guard = None; Body = Int64Literal 0L }
                 Match (contents, [one; fallback]), afterFirst
+            | 16, _ ->
+                let value, afterValue = generateChild typ nextVariable
+                Apply (Var "fuzzGeneric", [typ], NonEmptyList.singleton value), afterValue
+            | 17, _ ->
+                let otherType = choose random scalarTypes |> Option.defaultValue TInt64
+                let selected, afterSelected = generateChild typ nextVariable
+                let other, afterOther = generateChild otherType afterSelected
+                Apply (Var "fuzzSelect", [typ; otherType],
+                    { Head = selected; Tail = [other] }), afterOther
+            | 18, TInt64 ->
+                let count = Int64Literal (int64 (random.Next(0, 9)))
+                Apply (Var "fuzzRecur", [], NonEmptyList.singleton count), nextVariable
+            | 19, TBool ->
+                let count = Int64Literal (int64 (random.Next(0, 9)))
+                let name = if random.Next(2) = 0 then "fuzzEven" else "fuzzOdd"
+                Apply (Var name, [], NonEmptyList.singleton count), nextVariable
             | _, _ -> generateTypedOperation ()
 
         match random.Next(7) with
@@ -402,7 +418,55 @@ let generateProgram (random: Random) (maxDepth: int) : Program =
             Body = Var "input"
             Recursion = None
         }
-    Program [recordDefinition; identity; Expression ([], expression)]
+    let genericIdentity =
+        FunctionDef {
+            Name = "fuzzGeneric"
+            TypeParams = ["t"]
+            Params = NonEmptyList.singleton ("input", TVar "t")
+            ReturnType = TVar "t"
+            Body = Var "input"
+            Recursion = None
+        }
+    let genericSelect =
+        FunctionDef {
+            Name = "fuzzSelect"
+            TypeParams = ["a"; "b"]
+            Params = { Head = ("selected", TVar "a"); Tail = [("other", TVar "b")] }
+            ReturnType = TVar "a"
+            Body = Var "selected"
+            Recursion = None
+        }
+    let recursiveCountdown =
+        FunctionDef {
+            Name = "fuzzRecur"
+            TypeParams = []
+            Params = NonEmptyList.singleton ("count", TInt64)
+            ReturnType = TInt64
+            Body =
+                If (BinOp (Lte, Var "count", Int64Literal 0L),
+                    Int64Literal 0L,
+                    BinOp (Add, Int64Literal 1L,
+                        Apply (Var "fuzzRecur", [],
+                            NonEmptyList.singleton (BinOp (Sub, Var "count", Int64Literal 1L)))))
+            Recursion = None
+        }
+    let mutualFunction name callee baseCase =
+        FunctionDef {
+            Name = name
+            TypeParams = []
+            Params = NonEmptyList.singleton ("count", TInt64)
+            ReturnType = TBool
+            Body =
+                If (BinOp (Lte, Var "count", Int64Literal 0L),
+                    BoolLiteral baseCase,
+                    Apply (Var callee, [],
+                        NonEmptyList.singleton (BinOp (Sub, Var "count", Int64Literal 1L))))
+            Recursion = None
+        }
+    Program [recordDefinition; identity; genericIdentity; genericSelect;
+             recursiveCountdown; mutualFunction "fuzzEven" "fuzzOdd" true;
+             mutualFunction "fuzzOdd" "fuzzEven" false;
+             Expression ([], expression)]
 
 let private normalizeOutput (output: string) : string =
     output.TrimEnd('\r', '\n')
@@ -621,6 +685,15 @@ let rec private inferGeneratedType
         else
             inferGeneratedType (typedParameters @ environment) body
             |> Option.map (fun resultType -> TFunction (List.map snd typedParameters, resultType))
+    | Apply (Var "fuzzGeneric", [typeArg], args) when List.isEmpty args.Tail ->
+        if inferGeneratedType environment args.Head = Some typeArg then Some typeArg
+        else None
+    | Apply (Var "fuzzSelect", [selectedType; otherType], args) ->
+        match args.Tail with
+        | [other] when
+            inferGeneratedType environment args.Head = Some selectedType &&
+            inferGeneratedType environment other = Some otherType -> Some selectedType
+        | _ -> None
     | Apply (Var name, [], args) when
         List.contains name
             ["Stdlib.Blob.fromString"; "Stdlib.Blob.length"
@@ -860,14 +933,12 @@ let rec private oneStepSimplifications (expr: Expr) : Expr list =
                                if i = index then { case with Body = candidate } else current))))
                |> List.concat)
         | Apply (callee, typeArgs, args) ->
-            match NonEmptyList.toList args with
-            | [arg] ->
-                [arg]
-                @ (oneStepSimplifications callee |> List.map (fun candidate ->
-                    Apply (candidate, typeArgs, args)))
-                @ (oneStepSimplifications arg |> List.map (fun candidate ->
-                    Apply (callee, typeArgs, NonEmptyList.singleton candidate)))
-            | _ -> []
+            let argumentList = NonEmptyList.toList args
+            (match argumentList with [arg] -> [arg] | _ -> [])
+            @ (oneStepSimplifications callee |> List.map (fun candidate ->
+                Apply (candidate, typeArgs, args)))
+            @ simplifyElements (fun candidates ->
+                Apply (callee, typeArgs, NonEmptyList.fromList candidates)) argumentList
         | RecordAccess (record, field) ->
             oneStepSimplifications record
             |> List.map (fun candidate -> RecordAccess (candidate, field))
@@ -906,17 +977,23 @@ let private minimize
         Parser.parseString false source
         |> Result.map semanticProgramOfParsed
         |> Result.bind (fun (Program topLevels) ->
-            match topLevels with
-            | [Expression (_, expression)] -> Ok ([], expression)
-            | [((TypeDef _) as typeDef); ((FunctionDef _) as functionDef); Expression (_, expression)] ->
-                Ok ([typeDef; functionDef], expression)
-            | _ -> Error "Minimizer input must contain one expression, optionally after the fuzzer declarations")
+            match List.rev topLevels with
+            | Expression (_, expression) :: reversedDeclarations
+                when reversedDeclarations
+                     |> List.forall (function TypeDef _ | FunctionDef _ -> true | _ -> false) ->
+                Ok (List.rev reversedDeclarations, expression)
+            | _ -> Error "Minimizer input must end in one expression after any type and function declarations")
     match parsed with
     | Error message -> Error $"Cannot minimize source: {message}"
     | Ok (declarations, originalExpr) ->
         let initialEnvironment =
-            if List.isEmpty declarations then []
-            else ["fuzzIdentity", TFunction ([TInt64], TInt64)]
+            declarations
+            |> List.choose (function
+                | FunctionDef definition when List.isEmpty definition.TypeParams ->
+                    let parameterTypes =
+                        definition.Params |> NonEmptyList.toList |> List.map snd
+                    Some (definition.Name, TFunction (parameterTypes, definition.ReturnType))
+                | _ -> None)
         match inferGeneratedType initialEnvironment originalExpr with
         | None -> Error "Minimizer input is outside the generated expression subset"
         | Some originalType ->
