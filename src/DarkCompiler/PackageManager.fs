@@ -645,81 +645,80 @@ let rec private typeNames (typ: AST.ParsedType) : string list =
     | AST.PTBool | AST.PTFloat64 | AST.PTString | AST.PTBlob | AST.PTChar | AST.PTDateTime
     | AST.PTUnit | AST.PTVar _ | AST.PTInternalRawPtr -> []
 
-let rec private patternNames (pattern: AST.Pattern) : string list =
+let rec private patternNames (pattern: AST.ParsedPattern) : string list =
     match pattern with
-    | AST.PConstructor (name, fields) -> name :: List.collect patternNames fields
-    | AST.PTuple patterns | AST.PList patterns -> List.collect patternNames patterns
-    | AST.PListCons (head, tail) -> List.collect patternNames head @ patternNames tail
-    | AST.POr alternatives -> alternatives |> AST.NonEmptyList.toList |> List.collect patternNames
+    | AST.Parsed.PConstructor (name, fields) -> name :: List.collect patternNames fields
+    | AST.Parsed.PTuple patterns | AST.Parsed.PList patterns -> List.collect patternNames patterns
+    | AST.Parsed.PListCons (head, tail) -> List.collect patternNames head @ patternNames tail
+    | AST.Parsed.POr alternatives -> alternatives |> AST.NonEmptyList.toList |> List.collect patternNames
     | _ -> []
 
 let rec private expressionNames (expr: AST.ParsedExpr) : string list =
     let many expressions = List.collect expressionNames expressions
     match expr with
-    | AST.BinOp (_, left, right) -> expressionNames left @ expressionNames right
-    | AST.UnaryOp (_, inner) -> expressionNames inner
-    | AST.Let (_, value, body)
-    | AST.RecursiveLet (_, value, body)
-    | AST.Sequence (value, body) -> expressionNames value @ expressionNames body
-    | AST.If (condition, yes, no) -> expressionNames condition @ expressionNames yes @ expressionNames no
-    | AST.Apply (callee, types, arguments) ->
+    | AST.Parsed.BinOp (_, left, right) -> expressionNames left @ expressionNames right
+    | AST.Parsed.UnaryOp (_, inner) -> expressionNames inner
+    | AST.Parsed.Let (_, value, body)
+    | AST.Parsed.RecursiveLet (_, value, body)
+    | AST.Parsed.Sequence (value, body) -> expressionNames value @ expressionNames body
+    | AST.Parsed.If (condition, yes, no) -> expressionNames condition @ expressionNames yes @ expressionNames no
+    | AST.Parsed.Apply (callee, types, arguments) ->
         many [callee] @ List.collect typeNames types @ (arguments |> AST.NonEmptyList.toList |> many)
-    | AST.TupleLiteral values | AST.ListLiteral values -> many values
-    | AST.TupleAccess (value, _) | AST.RecordAccess (value, _) -> expressionNames value
-    | AST.DictLiteral (keyType, valueType, entries) ->
+    | AST.Parsed.TupleLiteral values | AST.Parsed.ListLiteral values -> many values
+    | AST.Parsed.TupleAccess (value, _) | AST.Parsed.RecordAccess (value, _) -> expressionNames value
+    | AST.Parsed.DictLiteral (keyType, valueType, entries) ->
         typeNames keyType
         @ typeNames valueType
         @ (entries
            |> List.collect (fun (key, value) -> expressionNames key @ expressionNames value))
-    | AST.RecordLiteral (reference, fields) ->
+    | AST.Parsed.RecordLiteral (reference, fields) ->
         reference.SourceTypeName :: List.collect typeNames reference.TypeArgs @ (fields |> List.map snd |> many)
-    | AST.RecordUpdate (record, updates) -> expressionNames record @ (updates |> List.map snd |> many)
-    | AST.Constructor (reference, _, fields) ->
-        let declaringType = AST.constructorReferenceTypeName reference |> Option.toList
+    | AST.Parsed.RecordUpdate (record, updates) -> expressionNames record @ (updates |> List.map snd |> many)
+    | AST.Parsed.Constructor (reference, _, fields) ->
+        let declaringType =
+            match reference with
+            | AST.Parsed.UnqualifiedConstructor -> []
+            | AST.Parsed.QualifiedConstructor name -> [name]
         declaringType @ many fields
-    | AST.Match (scrutinee, cases) ->
+    | AST.Parsed.Match (scrutinee, cases) ->
         expressionNames scrutinee
         @ (cases
            |> List.collect (fun matchCase ->
                (matchCase.Patterns |> AST.NonEmptyList.toList |> List.collect patternNames)
                @ (matchCase.Guard |> Option.map expressionNames |> Option.defaultValue [])
                @ expressionNames matchCase.Body))
-    | AST.Lambda (parameters, returnType, body) ->
+    | AST.Parsed.Lambda (parameters, returnType, body) ->
         (parameters
          |> AST.NonEmptyList.toList
          |> List.collect (fun parameter -> parameter.SourceAnnotation |> Option.map typeNames |> Option.defaultValue []))
         @ (returnType |> Option.map typeNames |> Option.defaultValue [])
         @ expressionNames body
-    | AST.IndirectApply (fn, arguments) ->
-        expressionNames fn @ (arguments |> AST.NonEmptyList.toList |> many)
-    | AST.Closure (name, captures) -> name :: many captures
-    | AST.BoundaryRender (_, value) -> expressionNames value
-    | AST.InterpolatedString parts ->
+    | AST.Parsed.InterpolatedString parts ->
         parts
-        |> List.collect (function AST.StringText _ -> [] | AST.StringExpr value -> expressionNames value)
-    | AST.Var name when name.Contains '.' -> [name]
-    | AST.UnitLiteral | AST.Int64Literal _ | AST.Int128Literal _ | AST.Int8Literal _
-    | AST.Int16Literal _ | AST.Int32Literal _ | AST.UInt8Literal _ | AST.UInt16Literal _
-    | AST.UInt32Literal _ | AST.UInt64Literal _ | AST.UInt128Literal _ | AST.BigIntLiteral _
-    | AST.BoolLiteral _ | AST.StringLiteral _ | AST.CharLiteral _ | AST.FloatLiteral _
-    | AST.Var _ | AST.RuntimeError _ -> []
+        |> List.collect (function AST.Parsed.StringText _ -> [] | AST.Parsed.StringExpr value -> expressionNames value)
+    | AST.Parsed.Var name when name.Contains '.' -> [name]
+    | AST.Parsed.UnitLiteral | AST.Parsed.Int64Literal _ | AST.Parsed.Int128Literal _ | AST.Parsed.Int8Literal _
+    | AST.Parsed.Int16Literal _ | AST.Parsed.Int32Literal _ | AST.Parsed.UInt8Literal _ | AST.Parsed.UInt16Literal _
+    | AST.Parsed.UInt32Literal _ | AST.Parsed.UInt64Literal _ | AST.Parsed.UInt128Literal _ | AST.Parsed.BigIntLiteral _
+    | AST.Parsed.BoolLiteral _ | AST.Parsed.StringLiteral _ | AST.Parsed.CharLiteral _ | AST.Parsed.FloatLiteral _
+    | AST.Parsed.Var _ -> []
 
 let private sourceCandidates
     (isKnownName: string -> bool)
-    (AST.Program topLevels)
+    (AST.ParsedProgram topLevels)
     : string list =
     topLevels
     |> List.collect (function
-        | AST.FunctionDef definition ->
+        | AST.ParsedFunctionDef definition ->
             (definition.Params |> AST.NonEmptyList.toList |> List.collect (snd >> typeNames))
             @ typeNames definition.ReturnType
             @ expressionNames definition.Body
-        | AST.ValueDef definition -> expressionNames (AST.valueDefBody definition)
-        | AST.TypeDef (AST.RecordDef (_, _, fields)) -> fields |> List.collect (snd >> typeNames)
-        | AST.TypeDef (AST.SumTypeDef (_, _, variants)) ->
+        | AST.ParsedValueDef definition -> expressionNames ((match definition with AST.ParsedUncheckedValueDef (_, body) -> body))
+        | AST.ParsedTypeDef (AST.RecordDef (_, _, fields)) -> fields |> List.collect (snd >> typeNames)
+        | AST.ParsedTypeDef (AST.SumTypeDef (_, _, variants)) ->
             variants |> List.collect (fun variant -> List.collect typeNames variant.Fields)
-        | AST.TypeDef (AST.TypeAlias (_, _, target)) -> typeNames target
-        | AST.Expression (_, expression) -> expressionNames expression)
+        | AST.ParsedTypeDef (AST.TypeAlias (_, _, target)) -> typeNames target
+        | AST.ParsedExpression (_, expression) -> expressionNames expression)
     |> List.filter (fun name -> name.Contains '.')
     |> List.distinct
     |> List.filter (isKnownName >> not)

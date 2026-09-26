@@ -6,6 +6,7 @@
 module ParserTests
 
 open AST
+open AST.Parsed
 
 type TestResult = Result<unit, string>
 
@@ -30,7 +31,7 @@ let identity (value: String) : String = value"""
 let private testSpaceApplicationKeepsMultipleArguments () : TestResult =
     let source = "let recurse (a: Int8) (b: Int8) : Int8 = recurse a b"
     match Parser.parseString false source with
-    | Ok (Program [FunctionDef definition]) ->
+    | Ok (ParsedProgram [ParsedFunctionDef definition]) ->
         match definition.Body with
         | Apply (Var "recurse", [], args) when NonEmptyList.toList args = [Var "a"; Var "b"] -> Ok ()
         | body -> Error $"Expected a two-argument call, got {body}"
@@ -41,7 +42,7 @@ let private testSubtractionFollowsParenthesizedCall () : TestResult =
     let source =
         "let dropLast (value: String) : Int64 = (Stdlib.String.__byteLength value) - 1L"
     match Parser.parseString true source with
-    | Ok (Program [FunctionDef definition]) ->
+    | Ok (ParsedProgram [ParsedFunctionDef definition]) ->
         match definition.Body with
         | BinOp (Sub, Apply (Var "Stdlib.String.__byteLength", [], args), Int64Literal 1L)
             when NonEmptyList.toList args = [Var "value"] -> Ok ()
@@ -53,7 +54,7 @@ let private testNegativeLiteralRemainsAFunctionArgument () : TestResult =
     let source =
         "let byteLength (value: String) : Int64 = Stdlib.String.__byteLength value -1L"
     match Parser.parseString true source with
-    | Ok (Program [FunctionDef definition]) ->
+    | Ok (ParsedProgram [ParsedFunctionDef definition]) ->
         match definition.Body with
         | Apply (Var "Stdlib.String.__byteLength", [], args)
             when NonEmptyList.toList args = [Var "value"; Int64Literal -1L] -> Ok ()
@@ -65,7 +66,7 @@ let private testSpaceApplicationStaysCurried () : TestResult =
     let source =
         "let apply (fn: Int64 -> Int64 -> Int64) : Int64 = fn 1L 2L"
     match Parser.parseString false source with
-    | Ok (Program [FunctionDef definition]) ->
+    | Ok (ParsedProgram [ParsedFunctionDef definition]) ->
         match definition.Body with
         | Apply (Var "fn", [], args)
             when NonEmptyList.toList args = [Int64Literal 1L; Int64Literal 2L] -> Ok ()
@@ -77,7 +78,7 @@ let private testTopLevelExpressionFollowsFunctionDeclaration () : TestResult =
     let source =
         "let identity (value: Int64) : Int64 = value\nidentity 1L"
     match Parser.parseString false source with
-    | Ok (Program [FunctionDef definition; Expression (_, expression)]) ->
+    | Ok (ParsedProgram [ParsedFunctionDef definition; ParsedExpression (_, expression)]) ->
         match definition.Body, expression with
         | Var "value", Apply (Var "identity", [], args)
             when NonEmptyList.toList args = [Int64Literal 1L] -> Ok ()
@@ -89,7 +90,7 @@ let private testTopLevelExpressionFollowsFunctionDeclaration () : TestResult =
 let private testModuleExpressionRetainsItsResolutionScope () : TestResult =
     let source = "module Darklang.Example.Nested\n\n1L"
     match Parser.parseString false source with
-    | Ok (Program [Expression (["Darklang"; "Example"; "Nested"], Int64Literal 1L)]) -> Ok ()
+    | Ok (ParsedProgram [ParsedExpression (["Darklang"; "Example"; "Nested"], Int64Literal 1L)]) -> Ok ()
     | Ok program -> Error $"Expected a module-scoped expression, got {program}"
     | Error err -> Error err
 

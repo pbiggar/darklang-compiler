@@ -202,7 +202,7 @@ let inlineLambdasInProgram (program: CheckedAST.Program) : CheckedAST.Program =
                 let body = inlineLambdas (CheckedAST.valueDefBody valueDef) Map.empty
                 CheckedAST.ValueDef { valueDef with Body = body }
             | CheckedAST.TypeDef (id, t) -> CheckedAST.TypeDef (id, t))
-    CheckedAST.Program (symbols, topLevels')
+    CheckedAST.programFromCheckedParts (symbols, topLevels')
 
 // ============================================================================
 // Lambda Lifting: Convert Lambdas to Top-Level Functions with Closures

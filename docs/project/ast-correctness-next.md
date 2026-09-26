@@ -17,8 +17,8 @@ resemble Darklang's for its own sake.
 | 3 | Use semantic identities in place of resolved strings | **Mostly done.** Bindings, functions, nominal references, constructors, and fields have distinct IDs. The latest change uses constructor owner/name/tag to do keyed variant lookup instead of scanning by tag. `AST.SemanticType.TRecord` and `TSum` still contain canonical strings, and some registries remain name-keyed. A complete nominal-type-ID migration may clarify those paths but has no established speed or memory benefit; do not replace the canonical-string-backed `FunctionId` merely to make it an integer. See [compiler identities](../compiler/identities.md). |
 | 4 | Make checked record literals layout-complete | **Done.** [`CheckedAST.RecordFields`](../../src/DarkCompiler/CheckedAST.fs) has a private constructor; conversion checks owner, slot bounds, uniqueness, and completeness. Lowering retains source evaluation order, then orders computed atoms for layout. Record **updates** are deliberately different: duplicate updates are allowed and last-wins, so do not impose unique-field semantics on them. |
 | 5 | Encode collection cardinality | **Partly done.** Calls, lambda parameters, and pattern alternatives were already nonempty. Checked tuple *expressions* now have first/second/rest, and checked matches have a nonempty case list. Checked `PTuple` patterns and `AST.SemanticType.TTuple` remain list-backed because compiler-internal payload/storage layouts can use zero or one element. See the specific remaining choice below. |
-| 6 | Separate source types from compiler/internal types | **Partly done.** `AST.ParsedType` and `AST.SemanticType` are distinct. Checked callable signatures, value definitions, dictionary literal types, explicit call and record-reference type arguments, and recursive member types use a private `CheckedType` that excludes live call-local inference identities. Type definitions, checker metadata, and downstream IRs still carry semantic types; see below. |
-| 7 | Keep compiler-generated expressions out of parsed syntax | **Open on main.** `AST.ParsedExpr` is an alias for `ExprNode<ParsedType>`, and that generic union includes `IndirectApply`, `Closure`, `RuntimeError`, and `BoundaryRender`. The parser does not ordinarily emit these, but the type permits them. A distinct parsed expression tree and a preparation-only expression tree could make the boundary structural. This is primarily a correctness/clarity change; do not promise a compiler-speed win without measuring it. |
+| 6 | Separate source types from compiler/internal types | **Partly done.** `AST.ParsedType` and `AST.SemanticType` are distinct. Checked callable signatures, value and type definitions, dictionary literal types, explicit call and record-reference type arguments, and recursive member types use a private `CheckedType` that excludes live call-local inference identities. Checker metadata and downstream IRs still carry semantic types; see below. |
+| 7 | Keep compiler-generated expressions out of parsed syntax | **Done.** `AST.ParsedExpr` is a source-only union without `IndirectApply`, `Closure`, `RuntimeError`, or `BoundaryRender`; parsed patterns and references cannot claim resolved evidence. The checker converts it exhaustively to an internal semantic tree. A separate preparation-only tree remains optional if a later inventory establishes a useful invariant. See the [boundary plan](parsed-checked-ast-plan.md). |
 
 ## What “separate the types” would actually mean
 
@@ -87,12 +87,12 @@ A sensible first implementation slice would be:
 Checked callable signatures, value definitions, dictionary literals, recursive
 members, and generic type arguments now use the certified type. Their producers,
 generated-function paths, alias resolution, specialization, and HIR/ANF
-consumers preserve nominal type arguments,
-`TNever`, and privileged `TInternalRawPtr` where those remain meaningful. The
-next type-design step is to decide whether checked type definitions need a
-separate certified declaration form, and to choose an invariant for backend
-representation/ABI classes. Constructor lookup types are checker metadata and
-should be evaluated at that boundary rather than counted as checked syntax.
+consumers preserve nominal type arguments, `TNever`, and privileged
+`TInternalRawPtr` where those remain meaningful. Checked type definitions now
+have a separate certified declaration wrapper.
+The next type-design step is to choose an invariant for backend representation
+and ABI classes. Constructor lookup types are checker metadata and should be
+evaluated at that boundary rather than counted as checked syntax.
 
 Expected payoff: **moderate to strong** clarity and phase safety if the split
 removes actual impossible states. Speed and memory payoff are **unproven**;
@@ -102,12 +102,10 @@ split and use smaller boundary-specific types instead of a new global IR.
 
 ## Other remaining correctness choices
 
-- **Prepared-expression boundary (#7).** A genuinely distinct `ParsedExpr`
-  should exclude compiler-generated variants; a prepared tree can add the
-  closure/indirect-call/rendering forms only after checking. Determine whether
-  the checker needs any generated forms internally before choosing the
-  conversion point. The goal is an exhaustive phase transition, not a second
-  tree that still accepts every old case.
+- **Prepared-expression boundary (#7).** Parsed expressions now exclude
+  compiler-generated variants. Checker-generated runtime errors, closures,
+  indirect calls, and rendering still belong in the semantic checker tree.
+  Add a prepared tree only for a further proven post-checking invariant.
 - **Recursive binding shape.** `CheckedAST.RecursiveLet` still accepts any
   `Expr` as its value. A lambda-specific checked value would make the
   recursive-lambda invariant structural. This was identified in the later

@@ -45,6 +45,22 @@ let semanticType (CheckedType typ) = typ
 
 let semanticTypeArgs args = List.map semanticType args
 
+/// Checked declarations carry certified types while retaining their source
+/// declaration order and nominal names for downstream layout registries.
+type CheckedTypeDef = private CheckedTypeDef of AST.TypeDefNode<CheckedType>
+
+let semanticTypeDef (CheckedTypeDef definition) : AST.TypeDef =
+    match definition with
+    | AST.RecordDef (name, typeParams, fields) ->
+        AST.RecordDef (name, typeParams, fields |> List.map (fun (field, typ) -> field, semanticType typ))
+    | AST.SumTypeDef (name, typeParams, variants) ->
+        AST.SumTypeDef (
+            name,
+            typeParams,
+            variants |> List.map (fun variant -> { Name = variant.Name; Fields = List.map semanticType variant.Fields }))
+    | AST.TypeAlias (name, typeParams, target) ->
+        AST.TypeAlias (name, typeParams, semanticType target)
+
 type RecursiveMember = {
     Resolved: AST.ResolvedRecursiveMember
     MonomorphicType: CheckedType
@@ -237,7 +253,7 @@ type ValueDef = {
 
 type TopLevel =
     | FunctionDef of FunctionDef
-    | TypeDef of AST.TypeId * AST.TypeDef
+    | TypeDef of AST.TypeId * CheckedTypeDef
     | ValueDef of ValueDef
     | Expression of Expr
 
@@ -278,7 +294,14 @@ type GlobalCatalog = private {
 
 type Symbols = GlobalCatalog
 
-type Program = Program of Symbols * TopLevel list
+type Program = private CheckedProgram of Symbols * TopLevel list
+
+/// Read-only view for passes; constructing a checked program is confined to
+/// successful checker conversion and trusted compiler-internal transformations.
+let (|Program|) (CheckedProgram (symbols, topLevels)) = symbols, topLevels
+
+let internal programFromCheckedParts (symbols, topLevels) : Program =
+    CheckedProgram (symbols, topLevels)
 
 let private emptySymbolsWithTypes baseTypes =
     let startId = AST.functionIdForName "_start"
@@ -424,8 +447,8 @@ let programSymbols (Program (symbols, _)) : Symbols = symbols
 
 let programTopLevels (Program (_, topLevels)) : TopLevel list = topLevels
 
-let withProgramTopLevels topLevels (Program (symbols, _)) : Program =
-    Program (symbols, topLevels)
+let internal withProgramTopLevels topLevels (Program (symbols, _)) : Program =
+    CheckedProgram (symbols, topLevels)
 
 /// A checked unit is self-describing: semantic IDs carry canonical identity
 /// and lexical IDs carry body-local presentation metadata. Reusable artifacts
@@ -549,6 +572,19 @@ let rec normalizeInferenceType (typ: AST.SemanticType) : AST.SemanticType =
     | AST.TUnit | AST.TNever | AST.TInternalRawPtr -> typ
 
 let checkedType typ = CheckedType (normalizeInferenceType typ)
+
+let checkedTypeDef (definition: AST.TypeDef) : CheckedTypeDef =
+    match definition with
+    | AST.RecordDef (name, typeParams, fields) ->
+        AST.RecordDef (name, typeParams, fields |> List.map (fun (field, typ) -> field, checkedType typ)) |> CheckedTypeDef
+    | AST.SumTypeDef (name, typeParams, variants) ->
+        AST.SumTypeDef (
+            name,
+            typeParams,
+            variants |> List.map (fun variant -> { Name = variant.Name; Fields = List.map checkedType variant.Fields }))
+        |> CheckedTypeDef
+    | AST.TypeAlias (name, typeParams, target) ->
+        AST.TypeAlias (name, typeParams, checkedType target) |> CheckedTypeDef
 
 let checkedRecursiveMember (memberInfo: AST.TypedRecursiveMember) : RecursiveMember =
     { Resolved = memberInfo.Resolved; MonomorphicType = checkedType memberInfo.MonomorphicType }
@@ -970,7 +1006,7 @@ let ofTypedFunction
     let symbols = { symbols with ConstructorLookups = [variantLookup] }
     convertFunctionWithEnvironment recordFieldCounts Map.empty symbols funcDef
 
-let ofTypedProgram
+let internal ofTypedProgram
     (variantLookup: Map<string, string * string list * int * AST.SemanticType list>)
     (externalValueNames: Set<string>)
     (baseTypes: TypeCatalog)
@@ -1025,7 +1061,7 @@ let ofTypedProgram
                 | AST.SumTypeDef (name, _, _)
                 | AST.TypeAlias (name, _, _) -> name
             let (id, symbols) = internType name symbols
-            Ok (TypeDef (id, typeDef), symbols)
+            Ok (TypeDef (id, checkedTypeDef typeDef), symbols)
         | AST.ValueDef (AST.CheckedValueDef (name, typ, body)) ->
             convertExpr recordFieldCounts $"value '{name}'" valueEnvironment symbols body
             |> Result.map (fun (checkedBody, state) ->
@@ -1045,4 +1081,4 @@ let ofTypedProgram
         |> Result.bind (fun (converted, symbols) ->
             convertTopLevel symbols topLevel
             |> Result.map (fun (item, next) -> (item :: converted, next)))) (Ok ([], initialSymbols))
-    |> Result.map (fun (converted, symbols) -> Program (symbols, List.rev converted))
+    |> Result.map (fun (converted, symbols) -> CheckedProgram (symbols, List.rev converted))

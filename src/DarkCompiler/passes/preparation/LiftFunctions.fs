@@ -252,18 +252,24 @@ let rec liftLambdasInProgram
     : Result<CheckedAST.Program, string> =
     let (CheckedAST.Program (symbols, topLevels)) = program
 
-    let typeRegBase : TypeRegistry =
+    let semanticTypeDefs =
         topLevels
         |> List.choose (function
-            | CheckedAST.TypeDef (_, AST.RecordDef (name, typeParams, fields)) ->
+            | CheckedAST.TypeDef (_, definition) -> Some (CheckedAST.semanticTypeDef definition)
+            | _ -> None)
+
+    let typeRegBase : TypeRegistry =
+        semanticTypeDefs
+        |> List.choose (function
+            | AST.RecordDef (name, typeParams, fields) ->
                 Some (name, { TypeParams = typeParams; Fields = firstDeclaredRecordFields fields })
             | _ -> None)
         |> Map.ofList
 
     let aliasReg : AliasRegistry =
-        topLevels
+        semanticTypeDefs
         |> List.choose (function
-            | CheckedAST.TypeDef (_, AST.TypeAlias (name, typeParams, targetType)) -> Some (name, (typeParams, targetType))
+            | AST.TypeAlias (name, typeParams, targetType) -> Some (name, (typeParams, targetType))
             | _ -> None)
         |> Map.ofList
 
@@ -273,14 +279,10 @@ let rec liftLambdasInProgram
         |> fun reg -> expandTypeRegWithAliases reg aliasReg
 
     let variantLookup : VariantLookup =
-        let localTypeDefs =
-            topLevels
-            |> List.choose (function | CheckedAST.TypeDef (_, typeDef) -> Some typeDef | _ -> None)
-        let collidingCaseNames = AST.collidingConstructorCaseNames localTypeDefs
-        topLevels
+        let collidingCaseNames = AST.collidingConstructorCaseNames semanticTypeDefs
+        semanticTypeDefs
         |> List.choose (function
-            | CheckedAST.TypeDef (_, AST.SumTypeDef (typeName, typeParams, variants)) ->
-                Some (typeName, typeParams, variants)
+            | AST.SumTypeDef (typeName, typeParams, variants) -> Some (typeName, typeParams, variants)
             | _ -> None)
         |> List.fold (fun lookup (typeName, typeParams, variants) ->
             variants
@@ -457,7 +459,7 @@ let rec liftLambdasInProgram
             let topLevels'' = topLevels' |> List.map (replaceFuncRefsWithWrappers finalStateWithFuncs.GeneratedWrappers)
             // Add wrappers and lifted functions to the program
             let liftedFuncDefs = (wrappers @ finalStateWithFuncs.State.LiftedFunctions) |> List.rev |> List.map CheckedAST.FunctionDef
-            CheckedAST.Program (finalStateWithFuncs.State.Symbols, liftedFuncDefs @ topLevels'')))
+            CheckedAST.programFromCheckedParts (finalStateWithFuncs.State.Symbols, liftedFuncDefs @ topLevels'')))
 
 /// Collect function identities that are used as values (not in call position).
 and collectFuncRefsInExpr

@@ -595,4 +595,4 @@ let rewriteProgram
             | other -> (other, currentState)) state
     let generatedFunctions = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
     let generatedTopLevels = generatedFunctions @ rewrittenTopLevels
-    Program (finalState.Symbols, generatedTopLevels)
+    CheckedAST.programFromCheckedParts (finalState.Symbols, generatedTopLevels)

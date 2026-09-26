@@ -105,7 +105,10 @@ type RecordReferenceNode<'t> = {
 }
 
 type RecordReference = RecordReferenceNode<SemanticType>
-type ParsedRecordReference = RecordReferenceNode<ParsedType>
+type ParsedRecordReference = {
+    SourceTypeName: string
+    TypeArgs: ParsedType list
+}
 
 let unresolvedRecordReference (sourceTypeName: string) (typeArgs: 't list) : RecordReferenceNode<'t> =
     { SourceTypeName = sourceTypeName; ResolvedTypeName = sourceTypeName; TypeArgs = typeArgs }
@@ -257,7 +260,6 @@ type LambdaParameterNode<'t> = {
 }
 
 type LambdaParameter = LambdaParameterNode<SemanticType>
-type ParsedLambdaParameter = LambdaParameterNode<ParsedType>
 
 let lambdaParameter (pattern: LetPattern) : LambdaParameterNode<'t> =
     { Pattern = pattern; SourceAnnotation = None; InferredType = None }
@@ -556,11 +558,120 @@ and MatchCaseNode<'t> = {
 }
 
 type Expr = ExprNode<SemanticType>
-type ParsedExpr = ExprNode<ParsedType>
 type StringPart = StringPartNode<SemanticType>
-type ParsedStringPart = StringPartNode<ParsedType>
 type MatchCase = MatchCaseNode<SemanticType>
-type ParsedMatchCase = MatchCaseNode<ParsedType>
+
+/// Source expressions exclude operations introduced by checking or preparation.
+/// The checker works in ExprNode<SemanticType> after the explicit conversion below.
+module Parsed =
+    type Recursion =
+        | RecursiveBindingCandidate of RecursiveCandidate
+        | ParsedRecursiveBinding of ParsedRecursiveMember
+
+    let recursiveBindingName = function
+        | RecursiveBindingCandidate candidate -> candidate.SourceName
+        | ParsedRecursiveBinding memberInfo -> memberInfo.SourceName
+
+    type FieldReference = FieldReference of string
+
+    type ConstructorReference =
+        | UnqualifiedConstructor
+        | QualifiedConstructor of string
+
+    type Pattern =
+        | PUnit
+        | PWildcard
+        | PVar of string
+        | PConstructor of string * Pattern list
+        | PInt64 of int64
+        | PBigInt of System.Numerics.BigInteger
+        | PInt128Literal of System.Int128
+        | PInt8Literal of sbyte
+        | PInt16Literal of int16
+        | PInt32Literal of int32
+        | PUInt8Literal of byte
+        | PUInt16Literal of uint16
+        | PUInt32Literal of uint32
+        | PUInt64Literal of uint64
+        | PUInt128Literal of System.UInt128
+        | PBool of bool
+        | PString of string
+        | PChar of string
+        | PFloat of float
+        | PTuple of Pattern list
+        | PList of Pattern list
+        | PListCons of Pattern list * Pattern
+        | POr of NonEmptyList<Pattern>
+
+    type LambdaParameter = {
+        Pattern: LetPattern
+        SourceAnnotation: ParsedType option
+    }
+
+    type StringPart =
+        | StringText of string
+        | StringExpr of Expr
+
+    and Expr =
+        | UnitLiteral
+        | Int64Literal of int64
+        | Int128Literal of System.Int128
+        | Int8Literal of sbyte
+        | Int16Literal of int16
+        | Int32Literal of int32
+        | UInt8Literal of byte
+        | UInt16Literal of uint16
+        | UInt32Literal of uint32
+        | UInt64Literal of uint64
+        | UInt128Literal of System.UInt128
+        | BigIntLiteral of System.Numerics.BigInteger
+        | BoolLiteral of bool
+        | StringLiteral of string
+        | CharLiteral of string
+        | FloatLiteral of float
+        | InterpolatedString of StringPart list
+        | BinOp of BinOp * Expr * Expr
+        | UnaryOp of UnaryOp * Expr
+        | Let of LetPattern * Expr * Expr
+        | RecursiveLet of Recursion * Expr * Expr
+        | Var of string
+        | If of Expr * Expr * Expr
+        | Sequence of Expr * Expr
+        | Apply of Expr * ParsedType list * NonEmptyList<Expr>
+        | TupleLiteral of Expr list
+        | TupleAccess of Expr * int
+        | DictLiteral of ParsedType * ParsedType * (Expr * Expr) list
+        | RecordLiteral of ParsedRecordReference * (FieldReference * Expr) list
+        | RecordUpdate of Expr * (FieldReference * Expr) list
+        | RecordAccess of Expr * FieldReference
+        | Constructor of ConstructorReference * string * Expr list
+        | Match of Expr * MatchCase list
+        | ListLiteral of Expr list
+        | Lambda of NonEmptyList<LambdaParameter> * ParsedType option * Expr
+
+    and MatchCase = {
+        Patterns: NonEmptyList<Pattern>
+        Guard: Expr option
+        Body: Expr
+    }
+
+    let recordReference name typeArgs : ParsedRecordReference =
+        { SourceTypeName = name; TypeArgs = typeArgs }
+
+    let fieldReference name = FieldReference name
+
+    let lambdaParameter pattern : LambdaParameter =
+        { Pattern = pattern; SourceAnnotation = None }
+
+    let typedLambdaVariable name typ : LambdaParameter =
+        { Pattern = LPVariable name; SourceAnnotation = Some typ }
+
+type ParsedExpr = Parsed.Expr
+type ParsedStringPart = Parsed.StringPart
+type ParsedMatchCase = Parsed.MatchCase
+type ParsedPattern = Parsed.Pattern
+type ParsedLambdaParameter = Parsed.LambdaParameter
+type ParsedRecursion = Parsed.Recursion
 
 let applyNamed (name: string) (args: NonEmptyList<ExprNode<'t>>) : ExprNode<'t> =
     Apply (Var name, [], args)
@@ -600,13 +711,21 @@ type ValueDefNode<'t> =
     | CheckedValueDef of name:string * typ:'t * body:ExprNode<'t>
 
 type FunctionDef = FunctionDefNode<SemanticType>
-type ParsedFunctionDef = FunctionDefNode<ParsedType>
+type ParsedFunctionDef = {
+    Name: string
+    TypeParams: string list
+    Params: NonEmptyList<string * ParsedType>
+    ReturnType: ParsedType
+    Body: ParsedExpr
+    Recursion: ParsedRecursion option
+}
 type Variant = VariantNode<SemanticType>
 type ParsedVariant = VariantNode<ParsedType>
 type TypeDef = TypeDefNode<SemanticType>
 type ParsedTypeDef = TypeDefNode<ParsedType>
 type ValueDef = ValueDefNode<SemanticType>
-type ParsedValueDef = ValueDefNode<ParsedType>
+type ParsedValueDef =
+    | ParsedUncheckedValueDef of string * ParsedExpr
 
 let valueDefName (valueDef: ValueDefNode<'t>) : string =
     match valueDef with
@@ -643,9 +762,13 @@ type TopLevelNode<'t> =
 type ProgramNode<'t> = Program of TopLevelNode<'t> list
 
 type TopLevel = TopLevelNode<SemanticType>
-type ParsedTopLevel = TopLevelNode<ParsedType>
+type ParsedTopLevel =
+    | ParsedFunctionDef of ParsedFunctionDef
+    | ParsedTypeDef of ParsedTypeDef
+    | ParsedValueDef of ParsedValueDef
+    | ParsedExpression of modulePath:string list * ParsedExpr
 type Program = ProgramNode<SemanticType>
-type ParsedProgram = ProgramNode<ParsedType>
+type ParsedProgram = ParsedProgram of ParsedTopLevel list
 
 let rec semanticTypeOfParsed (typ: ParsedType) : SemanticType =
     let recurse = semanticTypeOfParsed
@@ -679,77 +802,105 @@ let rec semanticTypeOfParsed (typ: ParsedType) : SemanticType =
     | PTInternalRawPtr -> TInternalRawPtr
     | PTDict (keyType, valueType) -> TDict (recurse keyType, recurse valueType)
 
-let semanticProgramOfParsed (Program topLevels: ParsedProgram) : Program =
+let semanticProgramOfParsed (ParsedProgram topLevels: ParsedProgram) : Program =
+    let mapRecursion = function
+        | Parsed.RecursiveBindingCandidate candidate -> RecursiveBindingCandidate candidate
+        | Parsed.ParsedRecursiveBinding memberInfo -> ParsedRecursiveBinding memberInfo
+    let rec mapPattern = function
+        | Parsed.PUnit -> PUnit
+        | Parsed.PWildcard -> PWildcard
+        | Parsed.PVar name -> PVar name
+        | Parsed.PConstructor (name, fields) -> PConstructor (name, List.map mapPattern fields)
+        | Parsed.PInt64 value -> PInt64 value
+        | Parsed.PBigInt value -> PBigInt value
+        | Parsed.PInt128Literal value -> PInt128Literal value
+        | Parsed.PInt8Literal value -> PInt8Literal value
+        | Parsed.PInt16Literal value -> PInt16Literal value
+        | Parsed.PInt32Literal value -> PInt32Literal value
+        | Parsed.PUInt8Literal value -> PUInt8Literal value
+        | Parsed.PUInt16Literal value -> PUInt16Literal value
+        | Parsed.PUInt32Literal value -> PUInt32Literal value
+        | Parsed.PUInt64Literal value -> PUInt64Literal value
+        | Parsed.PUInt128Literal value -> PUInt128Literal value
+        | Parsed.PBool value -> PBool value
+        | Parsed.PString value -> PString value
+        | Parsed.PChar value -> PChar value
+        | Parsed.PFloat value -> PFloat value
+        | Parsed.PTuple values -> PTuple (List.map mapPattern values)
+        | Parsed.PList values -> PList (List.map mapPattern values)
+        | Parsed.PListCons (head, tail) -> PListCons (List.map mapPattern head, mapPattern tail)
+        | Parsed.POr values -> POr (NonEmptyList.map mapPattern values)
     let rec mapExpr (expr: ParsedExpr) : Expr =
         let mapArgs = NonEmptyList.map mapExpr
         match expr with
-        | InterpolatedString parts ->
+        | Parsed.InterpolatedString parts ->
             parts
-            |> List.map (function StringText text -> StringText text | StringExpr value -> StringExpr (mapExpr value))
+            |> List.map (function Parsed.StringText text -> StringText text | Parsed.StringExpr value -> StringExpr (mapExpr value))
             |> InterpolatedString
-        | BinOp (op, left, right) -> BinOp (op, mapExpr left, mapExpr right)
-        | UnaryOp (op, value) -> UnaryOp (op, mapExpr value)
-        | Let (pattern, value, body) -> Let (pattern, mapExpr value, mapExpr body)
-        | RecursiveLet (recursion, value, body) -> RecursiveLet (recursion, mapExpr value, mapExpr body)
-        | If (condition, thenBranch, elseBranch) -> If (mapExpr condition, mapExpr thenBranch, mapExpr elseBranch)
-        | Sequence (first, next) -> Sequence (mapExpr first, mapExpr next)
-        | Apply (callee, typeArgs, args) ->
+        | Parsed.BinOp (op, left, right) -> BinOp (op, mapExpr left, mapExpr right)
+        | Parsed.UnaryOp (op, value) -> UnaryOp (op, mapExpr value)
+        | Parsed.Let (pattern, value, body) -> Let (pattern, mapExpr value, mapExpr body)
+        | Parsed.RecursiveLet (recursion, value, body) -> RecursiveLet (mapRecursion recursion, mapExpr value, mapExpr body)
+        | Parsed.If (condition, thenBranch, elseBranch) -> If (mapExpr condition, mapExpr thenBranch, mapExpr elseBranch)
+        | Parsed.Sequence (first, next) -> Sequence (mapExpr first, mapExpr next)
+        | Parsed.Apply (callee, typeArgs, args) ->
             Apply (mapExpr callee, List.map semanticTypeOfParsed typeArgs, mapArgs args)
-        | TupleLiteral values -> TupleLiteral (List.map mapExpr values)
-        | TupleAccess (tuple, index) -> TupleAccess (mapExpr tuple, index)
-        | DictLiteral (keyType, valueType, entries) ->
+        | Parsed.TupleLiteral values -> TupleLiteral (List.map mapExpr values)
+        | Parsed.TupleAccess (tuple, index) -> TupleAccess (mapExpr tuple, index)
+        | Parsed.DictLiteral (keyType, valueType, entries) ->
             DictLiteral (
                 semanticTypeOfParsed keyType,
                 semanticTypeOfParsed valueType,
                 entries |> List.map (fun (key, value) -> (mapExpr key, mapExpr value)))
-        | RecordLiteral (reference, fields) ->
+        | Parsed.RecordLiteral (reference, fields) ->
             let reference' : RecordReference =
                 { SourceTypeName = reference.SourceTypeName
-                  ResolvedTypeName = reference.ResolvedTypeName
+                  ResolvedTypeName = reference.SourceTypeName
                   TypeArgs = List.map semanticTypeOfParsed reference.TypeArgs }
-            RecordLiteral (reference', fields |> List.map (fun (field, value) -> (field, mapExpr value)))
-        | RecordUpdate (record, updates) ->
-            RecordUpdate (mapExpr record, updates |> List.map (fun (field, value) -> (field, mapExpr value)))
-        | RecordAccess (record, field) -> RecordAccess (mapExpr record, field)
-        | Constructor (reference, name, fields) -> Constructor (reference, name, List.map mapExpr fields)
-        | Match (scrutinee, cases) ->
+            RecordLiteral (reference', fields |> List.map (fun (Parsed.FieldReference field, value) -> (unresolvedRecordFieldReference field, mapExpr value)))
+        | Parsed.RecordUpdate (record, updates) ->
+            RecordUpdate (mapExpr record, updates |> List.map (fun (Parsed.FieldReference field, value) -> (unresolvedRecordFieldReference field, mapExpr value)))
+        | Parsed.RecordAccess (record, Parsed.FieldReference field) -> RecordAccess (mapExpr record, unresolvedRecordFieldReference field)
+        | Parsed.Constructor (reference, name, fields) ->
+            let reference' =
+                match reference with
+                | Parsed.UnqualifiedConstructor -> UnresolvedConstructor None
+                | Parsed.QualifiedConstructor typeName -> UnresolvedConstructor (Some typeName)
+            Constructor (reference', name, List.map mapExpr fields)
+        | Parsed.Match (scrutinee, cases) ->
             let cases' =
                 cases
                 |> List.map (fun case ->
-                    { Patterns = case.Patterns
+                    { Patterns = NonEmptyList.map mapPattern case.Patterns
                       Guard = Option.map mapExpr case.Guard
                       Body = mapExpr case.Body })
             Match (mapExpr scrutinee, cases')
-        | ListLiteral values -> ListLiteral (List.map mapExpr values)
-        | Lambda (parameters, returnAnnotation, body) ->
+        | Parsed.ListLiteral values -> ListLiteral (List.map mapExpr values)
+        | Parsed.Lambda (parameters, returnAnnotation, body) ->
             let parameters' =
                 parameters
                 |> NonEmptyList.map (fun parameter ->
                     { Pattern = parameter.Pattern
                       SourceAnnotation = Option.map semanticTypeOfParsed parameter.SourceAnnotation
-                      InferredType = Option.map semanticTypeOfParsed parameter.InferredType })
+                      InferredType = None })
             Lambda (parameters', Option.map semanticTypeOfParsed returnAnnotation, mapExpr body)
-        | IndirectApply (func, args) -> IndirectApply (mapExpr func, mapArgs args)
-        | Closure (name, captures) -> Closure (name, List.map mapExpr captures)
-        | BoundaryRender (renderer, value) -> BoundaryRender (renderer, mapExpr value)
-        | UnitLiteral -> UnitLiteral
-        | Int64Literal value -> Int64Literal value
-        | Int128Literal value -> Int128Literal value
-        | Int8Literal value -> Int8Literal value
-        | Int16Literal value -> Int16Literal value
-        | Int32Literal value -> Int32Literal value
-        | UInt8Literal value -> UInt8Literal value
-        | UInt16Literal value -> UInt16Literal value
-        | UInt32Literal value -> UInt32Literal value
-        | UInt64Literal value -> UInt64Literal value
-        | UInt128Literal value -> UInt128Literal value
-        | BigIntLiteral value -> BigIntLiteral value
-        | BoolLiteral value -> BoolLiteral value
-        | StringLiteral value -> StringLiteral value
-        | CharLiteral value -> CharLiteral value
-        | FloatLiteral value -> FloatLiteral value
-        | Var name -> Var name
-        | RuntimeError message -> RuntimeError message
+        | Parsed.UnitLiteral -> UnitLiteral
+        | Parsed.Int64Literal value -> Int64Literal value
+        | Parsed.Int128Literal value -> Int128Literal value
+        | Parsed.Int8Literal value -> Int8Literal value
+        | Parsed.Int16Literal value -> Int16Literal value
+        | Parsed.Int32Literal value -> Int32Literal value
+        | Parsed.UInt8Literal value -> UInt8Literal value
+        | Parsed.UInt16Literal value -> UInt16Literal value
+        | Parsed.UInt32Literal value -> UInt32Literal value
+        | Parsed.UInt64Literal value -> UInt64Literal value
+        | Parsed.UInt128Literal value -> UInt128Literal value
+        | Parsed.BigIntLiteral value -> BigIntLiteral value
+        | Parsed.BoolLiteral value -> BoolLiteral value
+        | Parsed.StringLiteral value -> StringLiteral value
+        | Parsed.CharLiteral value -> CharLiteral value
+        | Parsed.FloatLiteral value -> FloatLiteral value
+        | Parsed.Var name -> Var name
 
     let mapFunction (definition: ParsedFunctionDef) : FunctionDef =
         { Name = definition.Name
@@ -757,7 +908,7 @@ let semanticProgramOfParsed (Program topLevels: ParsedProgram) : Program =
           Params = definition.Params |> NonEmptyList.map (fun (name, typ) -> (name, semanticTypeOfParsed typ))
           ReturnType = semanticTypeOfParsed definition.ReturnType
           Body = mapExpr definition.Body
-          Recursion = definition.Recursion }
+          Recursion = Option.map mapRecursion definition.Recursion }
     let mapTypeDef (definition: ParsedTypeDef) : TypeDef =
         match definition with
         | RecordDef (name, typeParams, fields) ->
@@ -774,15 +925,13 @@ let semanticProgramOfParsed (Program topLevels: ParsedProgram) : Program =
             TypeAlias (name, typeParams, semanticTypeOfParsed targetType)
     let mapValueDef (definition: ParsedValueDef) : ValueDef =
         match definition with
-        | UncheckedValueDef (name, body) -> UncheckedValueDef (name, mapExpr body)
-        | CheckedValueDef (name, typ, body) ->
-            CheckedValueDef (name, semanticTypeOfParsed typ, mapExpr body)
+        | ParsedUncheckedValueDef (name, body) -> UncheckedValueDef (name, mapExpr body)
     topLevels
     |> List.map (function
-        | FunctionDef definition -> FunctionDef (mapFunction definition)
-        | TypeDef definition -> TypeDef (mapTypeDef definition)
-        | ValueDef definition -> ValueDef (mapValueDef definition)
-        | Expression (modulePath, expr) -> Expression (modulePath, mapExpr expr))
+        | ParsedFunctionDef definition -> FunctionDef (mapFunction definition)
+        | ParsedTypeDef definition -> TypeDef (mapTypeDef definition)
+        | ParsedValueDef definition -> ValueDef (mapValueDef definition)
+        | ParsedExpression (modulePath, expr) -> Expression (modulePath, mapExpr expr))
     |> Program
 
 /// Module function definition - a function within a module

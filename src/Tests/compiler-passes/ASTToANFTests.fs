@@ -22,6 +22,13 @@ let private emptyVariantLookup : VariantLookup = Map.empty
 let private emptyFuncReg : FunctionRegistry = Map.empty
 let private emptyModuleRegistry : AST.ModuleRegistry = Map.empty
 
+let private checkedProgram source : Result<CheckedAST.Program, string> =
+    Parser.parseString false source
+    |> Result.bind (fun parsed ->
+        TypeChecking.checkParsedProgram parsed
+        |> Result.map (fun (_, program) -> program)
+        |> Result.mapError CheckingDiagnostics.typeErrorToString)
+
 let testMissingVariantPayloadTypeErrors () : TestResult =
     let xId = AST.bindingId 1
     let payloadId = AST.bindingId 2
@@ -57,35 +64,25 @@ let testMissingVariantPayloadTypeErrors () : TestResult =
 
 let testNeedsLambdaLoweringIgnoresShadowedFunc () : TestResult =
     let knownFuncs = Set.ofList ["f"]
-    let fId = AST.bindingId 1
-    let expr = CheckedAST.Let (CheckedAST.LPVariable fId, CheckedAST.Int64Literal 1L, CheckedAST.Local fId)
-    let program = CheckedAST.Program (CheckedAST.emptySymbols (), [CheckedAST.Expression expr])
-    if programNeedsLambdaLowering knownFuncs program then
-        Error "Expected shadowed function name to not trigger lambda lowering"
-    else
-        Ok ()
+    checkedProgram "let f = 1L in f"
+    |> Result.bind (fun program ->
+        if programNeedsLambdaLowering knownFuncs program then
+            Error "Expected shadowed function name to not trigger lambda lowering"
+        else Ok ())
 
 let testNeedsLambdaLoweringDetectsFuncValue () : TestResult =
     let knownFuncs = Set.ofList ["f"]
-    let functionId, symbols = CheckedAST.internFunction "f" (CheckedAST.emptySymbols ())
-    let program = CheckedAST.Program (symbols, [CheckedAST.Expression (CheckedAST.FuncRef functionId)])
-    if programNeedsLambdaLowering knownFuncs program then Ok ()
-    else Error "Expected function value usage to trigger lambda lowering"
+    checkedProgram "let f (x: Int64) : Int64 = x\nf"
+    |> Result.bind (fun program ->
+        if programNeedsLambdaLowering knownFuncs program then Ok ()
+        else Error "Expected function value usage to trigger lambda lowering")
 
 let testNeedsLambdaLoweringDetectsLambda () : TestResult =
     let knownFuncs = Set.empty
-    let xId = AST.bindingId 1
-    let expr =
-        CheckedAST.Lambda (
-            AST.NonEmptyList.singleton
-                ({ Pattern = CheckedAST.LPVariable xId; Type = CheckedAST.checkedType AST.TInt64 }
-                    : CheckedAST.LambdaParameter),
-            None,
-            CheckedAST.Local xId
-        )
-    let program = CheckedAST.Program (CheckedAST.emptySymbols (), [CheckedAST.Expression expr])
-    if programNeedsLambdaLowering knownFuncs program then Ok ()
-    else Error "Expected lambda to trigger lambda lowering"
+    checkedProgram "let apply (f: Int64 -> Int64) : Int64 = f 1L\napply (fun x -> x)"
+    |> Result.bind (fun program ->
+        if programNeedsLambdaLowering knownFuncs program then Ok ()
+        else Error "Expected lambda to trigger lambda lowering")
 
 let testMangledTypePreservesFreshenedTypeVariables () : TestResult =
     match tryParseMangledType Map.empty "k$0" with

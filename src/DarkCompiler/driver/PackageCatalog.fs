@@ -61,12 +61,12 @@ let private applyDeclarationOverlays
     : AST.ParsedTopLevel list =
     let declarationKey topLevel =
         match topLevel with
-        | AST.FunctionDef definition -> Some ("function", definition.Name)
-        | AST.ValueDef definition -> Some ("value", AST.valueDefName definition)
-        | AST.TypeDef (AST.RecordDef (name, _, _))
-        | AST.TypeDef (AST.SumTypeDef (name, _, _))
-        | AST.TypeDef (AST.TypeAlias (name, _, _)) -> Some ("type", name)
-        | AST.Expression _ -> None
+        | AST.ParsedFunctionDef definition -> Some ("function", definition.Name)
+        | AST.ParsedValueDef (AST.ParsedUncheckedValueDef (name, _)) -> Some ("value", name)
+        | AST.ParsedTypeDef (AST.RecordDef (name, _, _))
+        | AST.ParsedTypeDef (AST.SumTypeDef (name, _, _))
+        | AST.ParsedTypeDef (AST.TypeAlias (name, _, _)) -> Some ("type", name)
+        | AST.ParsedExpression _ -> None
     let winningIndices =
         topLevels
         |> List.indexed
@@ -97,14 +97,14 @@ let parseSourceProgram
             NameSyntax.validateExecutableProgram sourceProgram
             |> Result.map (fun validated ->
                 let composedTopLevels = List.rev loweredTopLevels |> List.collect id
-                (validated, AST.Program (applyDeclarationOverlays composedTopLevels)))
+                (validated, AST.ParsedProgram (applyDeclarationOverlays composedTopLevels)))
         | sourceUnit :: rest ->
             NameSyntax.sourceUnitName sourceUnit.Name
             |> Result.bind (fun name ->
                 parseSourceTree allowInternal sourceUnit.Source
                 |> Result.bind (fun parsed ->
                     Parser.lowerParsedSource allowInternal parsed
-                    |> Result.bind (fun (AST.Program topLevels) ->
+                    |> Result.bind (fun (AST.ParsedProgram topLevels) ->
                         let parsedUnit : NameSyntax.ParsedSourceUnit =
                             { Name = name
                               Purpose = sourceUnit.Purpose
@@ -394,7 +394,7 @@ let private materializeReachablePackageValueCatalog
                 let (CheckedAST.Program (userSymbols, userTopLevels)) = typedProgram
                 let symbols, importedGenerated =
                     CheckedAST.composeTopLevels generatedSymbols userSymbols generatedTopLevels
-                CheckedAST.Program (symbols, importedGenerated @ userTopLevels)))
+                CheckedAST.programFromCheckedParts (symbols, importedGenerated @ userTopLevels)))
 
 let internal materializePackageValueCatalog
     (baseContext: PipelineContext)

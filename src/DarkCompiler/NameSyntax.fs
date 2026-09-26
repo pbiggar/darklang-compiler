@@ -6,6 +6,7 @@
 module NameSyntax
 
 open AST
+open AST.Parsed
 
 [<StructuralEquality; StructuralComparison>]
 type Identifier =
@@ -338,9 +339,9 @@ let validateDeclarationProgram (program: SourceProgram) : Result<SourceProgram, 
 /// Assign deterministic compact identities after parsing, while declaration
 /// and lexical boundaries are still explicit. One source-order traversal owns
 /// allocation; later passes never recreate identity from a spelling.
-let private assignParsedRecursiveIdentities (Program topLevels) : ParsedProgram =
-    let parsedMember boundary ordinal (candidate: RecursiveCandidate) : RecursiveBindingInfo =
-        ParsedRecursiveBinding {
+let private assignParsedRecursiveIdentities (ParsedProgram topLevels) : ParsedProgram =
+    let parsedMember boundary ordinal (candidate: RecursiveCandidate) : ParsedRecursion =
+        AST.Parsed.ParsedRecursiveBinding {
             Binding = namedBindingId ordinal candidate.SourceName
             Boundary = scopeBoundaryId boundary
             Member = recursiveMemberId ordinal
@@ -367,7 +368,7 @@ let private assignParsedRecursiveIdentities (Program topLevels) : ParsedProgram 
                 let (value', following) = assignExpr boundary ordinal value
                 ((name, value'), following)) next
         match expr with
-        | RecursiveLet (RecursiveBindingCandidate candidate, value, body) ->
+        | RecursiveLet (AST.Parsed.RecursiveBindingCandidate candidate, value, body) ->
             let memberOrdinal = nextOrdinal
             let (value', afterValue) = assignExpr memberOrdinal (nextOrdinal + 1) value
             let (body', following) = assignExpr memberOrdinal afterValue body
@@ -378,9 +379,6 @@ let private assignParsedRecursiveIdentities (Program topLevels) : ParsedProgram 
         | Let (pattern, value, body) ->
             let (value', body', following) = assignPair value body nextOrdinal
             (Let (pattern, value', body'), following)
-        | BoundaryRender (renderer, value) ->
-            let (value', following) = assignExpr boundary nextOrdinal value
-            (BoundaryRender (renderer, value'), following)
         | BinOp (op, left, right) ->
             let (left', right', following) = assignPair left right nextOrdinal
             (BinOp (op, left', right'), following)
@@ -447,13 +445,6 @@ let private assignParsedRecursiveIdentities (Program topLevels) : ParsedProgram 
             let lambdaBoundary = nextOrdinal
             let (body', following) = assignExpr lambdaBoundary (nextOrdinal + 1) body
             (Lambda (parameters, returnAnnotation, body'), following)
-        | IndirectApply (func, args) ->
-            let (func', afterFunc) = assignExpr boundary nextOrdinal func
-            let (args', following) = assignNonEmpty args afterFunc
-            (IndirectApply (func', args'), following)
-        | Closure (name, captures) ->
-            let (captures', following) = assignList captures nextOrdinal
-            (Closure (name, captures'), following)
         | InterpolatedString parts ->
             let (parts', following) =
                 parts
@@ -468,34 +459,31 @@ let private assignParsedRecursiveIdentities (Program topLevels) : ParsedProgram 
         | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
         | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
         | BoolLiteral _ | StringLiteral _ | CharLiteral _ | FloatLiteral _
-        | Var _ | RuntimeError _ -> (expr, nextOrdinal)
+        | Var _ -> (expr, nextOrdinal)
 
     let assignTopLevel nextOrdinal topLevel =
         let topLevelBoundary = nextOrdinal
         match topLevel with
-        | FunctionDef funcDef ->
+        | ParsedFunctionDef funcDef ->
             let recursion =
                 match funcDef.Recursion with
-                | Some (RecursiveBindingCandidate candidate) ->
+                | Some (AST.Parsed.RecursiveBindingCandidate candidate) ->
                     Some (parsedMember 0 topLevelBoundary candidate)
                 | other -> other
             let (body, following) = assignExpr topLevelBoundary (nextOrdinal + 1) funcDef.Body
-            (FunctionDef { funcDef with Body = body; Recursion = recursion }, following)
-        | ValueDef valueDef ->
+            (ParsedFunctionDef { funcDef with Body = body; Recursion = recursion }, following)
+        | ParsedValueDef valueDef ->
             match valueDef with
-            | UncheckedValueDef (name, body) ->
+            | ParsedUncheckedValueDef (name, body) ->
                 let (body', following) = assignExpr topLevelBoundary (nextOrdinal + 1) body
-                (ValueDef (UncheckedValueDef (name, body')), following)
-            | CheckedValueDef (name, typ, body) ->
-                let (body', following) = assignExpr topLevelBoundary (nextOrdinal + 1) body
-                (ValueDef (CheckedValueDef (name, typ, body')), following)
-        | Expression (modulePath, expr) ->
+                (ParsedValueDef (ParsedUncheckedValueDef (name, body')), following)
+        | ParsedExpression (modulePath, expr) ->
             let (expr', following) = assignExpr topLevelBoundary (nextOrdinal + 1) expr
-            (Expression (modulePath, expr'), following)
-        | TypeDef _ -> (topLevel, nextOrdinal + 1)
+            (ParsedExpression (modulePath, expr'), following)
+        | ParsedTypeDef _ -> (topLevel, nextOrdinal + 1)
 
     let (assigned, _) = topLevels |> List.mapFold assignTopLevel 1
-    Program assigned
+    ParsedProgram assigned
 
 let normalizeSource (source: ParsedSource) : Result<ParsedProgram, string> =
     let nameAtPrefix prefix identifier =
@@ -516,29 +504,29 @@ let normalizeSource (source: ParsedSource) : Result<ParsedProgram, string> =
         | SourceDeclarations declarations ->
             let rec declarationsToProgram acc remaining =
                 match remaining with
-                | [] -> Ok (Program (List.rev acc))
+                | [] -> Ok (ParsedProgram (List.rev acc))
                 | SourceFunction (identifier, definition) :: rest ->
                     let normalized = { definition with Name = nameAtPrefix prefix identifier }
-                    declarationsToProgram (FunctionDef normalized :: acc) rest
+                    declarationsToProgram (ParsedFunctionDef normalized :: acc) rest
                 | SourceType (identifier, definition) :: rest ->
                     let normalized = normalizeTypeName prefix identifier definition
-                    declarationsToProgram (TypeDef normalized :: acc) rest
+                    declarationsToProgram (ParsedTypeDef normalized :: acc) rest
                 | SourceExpression expression :: rest ->
                     let modulePath =
                         prefix
                         |> Option.map (segments >> List.map identifierText)
                         |> Option.defaultValue []
-                    declarationsToProgram (Expression (modulePath, expression) :: acc) rest
+                    declarationsToProgram (ParsedExpression (modulePath, expression) :: acc) rest
                 | SourceNestedModule (moduleName, body) :: rest ->
                     let nestedPrefix =
                         prefix
                         |> Option.map (fun outer -> concat outer moduleName)
                         |> Option.defaultValue moduleName
                     normalize (Some nestedPrefix) body
-                    |> Result.bind (fun (Program nestedItems) ->
+                    |> Result.bind (fun (ParsedProgram nestedItems) ->
                         declarationsToProgram (List.rev nestedItems @ acc) rest)
                 | SourceValue (identifier, body) :: rest ->
-                    let normalized = UncheckedValueDef (nameAtPrefix prefix identifier, body)
-                    declarationsToProgram (ValueDef normalized :: acc) rest
+                    let normalized = ParsedUncheckedValueDef (nameAtPrefix prefix identifier, body)
+                    declarationsToProgram (ParsedValueDef normalized :: acc) rest
             declarations |> NonEmptyList.toList |> declarationsToProgram []
     normalize None source |> Result.map assignParsedRecursiveIdentities

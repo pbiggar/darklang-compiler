@@ -187,7 +187,7 @@ let buildPreambleContextFromAnalysis
             analysis.TypeCheckEnv.VariantLookup
             analysis.TypeCheckEnv.IndexedSumTypeReg
             specializedAndOriginalTopLevels
-    let programWithSpecializations = CheckedAST.Program (symbols, materializedTopLevels)
+    let programWithSpecializations = CheckedAST.programFromCheckedParts (symbols, materializedTopLevels)
 
     convertTypedDeclarationsWithTrace
         passTimingRecorder
