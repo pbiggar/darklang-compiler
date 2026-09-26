@@ -15,9 +15,11 @@ this repository and takes precedence where it is stricter.
 - At the start of every task, check the current worktree root with
   `git rev-parse --show-toplevel`. If it is the primary coordination checkout,
   create a dedicated task branch and worktree from the current local integration
-  ref, then change into that worktree before the first mutating command. A task
-  started from the primary checkout, an interactive coding-agent session, and
-  repository utility work are not exceptions. If a separate worktree cannot be
+  ref, then change into that worktree before the first mutating command. If it
+  is an existing task worktree, apply the Git workflow's task-start refresh
+  rule before making changes. A task started from the primary checkout, an
+  interactive coding-agent session, and repository utility work are not
+  exceptions. If a separate worktree cannot be
   created, stop and ask for direction instead of working in the primary checkout.
 
 ## F# conventions
@@ -105,21 +107,23 @@ this repository and takes precedence where it is stricter.
 
 ## Git workflow
 
-- Create a dedicated worktree once when beginning a new task and
-  base its branch on the current local value of the configured integration ref
-  (`origin/main` by default) before making changes. Do not fetch or otherwise
-  contact the remote first; another process owns integration-ref updates.
-  Perform all task work there, never in the primary checkout. Reuse that
-  task worktree across turns and follow-up tasks; do not create or move to
-  another worktree during that process.
-  After work begins, do not pull, merge, rebase, reset, or otherwise incorporate
-  later integration-ref changes into that task worktree merely because the
-  integration ref advanced or a new agent turn began. Once enqueued, keep the
-  exact commit and worktree unchanged; follow-up work uses a new task branch and
-  worktree based on the latest integration ref. The exceptions are an explicit
-  developer instruction to update that specific existing worktree and
-  authorized merge-conflict recovery under `AGENTS.mergetrain.md`. Task agents
-  never push.
+- At the start of each new task, bring its branch up to the current local value
+  of the configured integration ref (`origin/main` by default) before making
+  changes. Create a dedicated branch and worktree from that ref when starting
+  from the primary checkout. In an existing task worktree whose branch has not
+  been enqueued, fast-forward the branch when possible; otherwise rebase its
+  unpublished commits onto the ref. Preserve uncommitted changes: if they
+  prevent a safe refresh, stop and ask for direction rather than discard work.
+  If a rebase conflicts, abort it and ask for direction. Do not fetch or
+  otherwise contact the remote first; another process owns integration-ref
+  updates.
+  Perform all task work in the task worktree, never in the primary checkout.
+  Reuse that worktree across turns of the same task. An agent turn or an
+  integration-ref advance alone does not start a new task or trigger a refresh.
+  Once enqueued, keep the exact commit and worktree unchanged; follow-up work
+  starts on a new task branch and worktree based on the current local integration
+  ref. Authorized merge-conflict recovery under `AGENTS.mergetrain.md` is the
+  exception. Task agents never push.
 - When work is complete, commit the intended changes automatically.
 - Run `./land --task "<brief task description>"` only when the committed branch
   is ready: the requested scope is complete, the final diff has been
