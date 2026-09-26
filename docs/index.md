@@ -44,6 +44,7 @@ grouped by purpose; each subject has one canonical source.
 - [Parsed and checked AST boundary plan](project/parsed-checked-ast-plan.md)
 - [Interpreter parser migration plan](project/parser-written-types-migration.md)
 - [AST correctness follow-up](project/ast-correctness-next.md)
+- [SSA boundary migration plan](project/ssa-boundary-migration.md)
 - [In-place mutation optimization checklist](project/perceus-checklist.md)
 
 ## Benchmarks

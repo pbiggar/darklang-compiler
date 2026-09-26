@@ -118,11 +118,46 @@ let testNestedTerminalBranchesHaveNoInventedReturn () : TestResult =
                         | MIR.Jump target -> [target]
                         | MIR.Branch (_, yes, no) -> [yes; no]
                     visit (Set.add label seen) (successors @ rest)
-        visit Set.empty [lowered.CFG.Entry]
+        MIR_SSA_Verify.verifyFunction lowered
+        |> Result.bind (fun () -> visit Set.empty [lowered.CFG.Entry])
         |> Result.bind (fun reachable ->
             let all = lowered.CFG.Blocks |> Map.keys |> Set.ofSeq
             if reachable = all then Ok ()
             else Error $"Terminal branches invented unreachable blocks: {Set.difference all reachable}"))
+
+let testPhiEdgesPreserveDistinctPredecessors () : TestResult =
+    let entry = MIR.Label "entry"
+    let yes = MIR.Label "yes"
+    let no = MIR.Label "no"
+    let join = MIR.Label "join"
+    let condition = MIR.VReg 0
+    let result = MIR.VReg 1
+    let block label instrs terminator : MIR.BasicBlock = {
+        Label = label
+        Instrs = instrs
+        Terminator = terminator
+    }
+    let func : MIR.Function = {
+        Id = TestIds.functionIdForName "invalidPhiEdges"
+        Name = "invalidPhiEdges"
+        TypedParams = [{ Reg = condition; Type = AST.TBool }]
+        ReturnType = AST.TInt64
+        CFG = {
+            Entry = entry
+            Blocks =
+                Map.ofList [
+                    entry, block entry [] (MIR.Branch (MIR.Register condition, yes, no))
+                    yes, block yes [] (MIR.Jump join)
+                    no, block no [] (MIR.Jump join)
+                    join, block join [MIR.Phi (result, [(MIR.Int64Const 1L, yes); (MIR.Int64Const 2L, yes)], Some AST.TInt64)] (MIR.Ret (MIR.Register result))
+                ]
+        }
+        FloatRegs = Set.empty
+    }
+    match MIR_SSA_Verify.verifyFunction func with
+    | Error message when message.Contains "phi edges disagree" -> Ok ()
+    | Error message -> Error $"Expected invalid phi edge error, got {message}"
+    | Ok () -> Error "Expected duplicate phi predecessor to be rejected"
 
 let tests : (string * (unit -> TestResult)) list =
     [
@@ -130,4 +165,5 @@ let tests : (string * (unit -> TestResult)) list =
         ("variant registry rejects inconsistent type parameters", testBuildVariantRegistryRejectsInconsistentTypeParams)
         ("record allocation starts fields at offset zero", testRecordAllocationStartsFieldsAtOffsetZero)
         ("nested terminal branches have no invented return", testNestedTerminalBranchesHaveNoInventedReturn)
+        ("phi edges preserve distinct predecessors", testPhiEdgesPreserveDistinctPredecessors)
     ]

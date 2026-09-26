@@ -212,9 +212,6 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             |> Option.filter (fun _ -> not plan.Options.EnableCoverage)
                             |> Option.map (fun current ->
                                 {
-                                    ConvertSsa =
-                                        fun func convert ->
-                                            current.ConvertMirFunctionToSsa func convert
                                     OptimizeMir =
                                         fun key optimize ->
                                             current.OptimizeMirFunction key optimize

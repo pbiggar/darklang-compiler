@@ -30,8 +30,8 @@ The Dark compiler transforms source code through a series of passes, each with a
 | 2.4.6 | Escape analysis        | `passes/anf/ANF_EscapeAnalysis.fs`                        | ANF → scalar-replaced ANF                     |
 | 2.5  | Ref count insertion     | `passes/anf/RefCountInsertion.fs`                           | ANF + memory ops                              |
 | 2.7  | Tail call detection     | `passes/anf/TailCallDetection.fs`                           | ANF → ANF                                     |
-| 3    | ANF → MIR               | `passes/anf/ANF_to_MIR.fs`                                    | ANF → CFG                                     |
-| 3.1  | SSA construction        | `passes/mir/SSA_Construction.fs`                            | MIR → SSA-form MIR                            |
+| 3    | ANF → high-level SSA    | `ir/anf/SSAANF.fs`                                           | Optimized ANF → typed blocks                  |
+| 3.1  | SSA → MIR               | `passes/anf/ANF_to_MIR.fs`                                   | Typed blocks → SSA-form MIR                   |
 | 3.5  | MIR optimizations       | `passes/mir/MIR_Optimize.fs`                                | MIR → MIR                                     |
 | 4    | MIR → LIR               | `passes/mir/MIR_to_LIR.fs`                                    | MIR → LIR (virtual regs)                      |
 | 4.5  | LIR peephole            | `passes/lir/LIR_Peephole.fs`                                | LIR → LIR                                     |
@@ -290,47 +290,29 @@ representation changes are outside the current scope.
 
 ---
 
-## Pass 3: ANF to MIR (`ANF_to_MIR.fs`)
+## Pass 3: ANF to high-level SSA (`SSAANF.fs`)
 
-**Input**: ANF
-**Output**: Mid-level IR as Control Flow Graph (CFG)
-
-### Responsibilities
-- **Build CFG**: Convert structured control flow to basic blocks
-- **Handle branches**: If/else becomes conditional jumps
-- **Literal lowering**: Keep string/float constants as symbolic values
-
-### Key Concepts
-- **Basic block**: Sequence of instructions with single entry/exit
-- **CFG**: Graph of basic blocks connected by jumps
-- **Virtual registers**: Unlimited registers, allocation comes later
-
-### Example Transformation
-```
-Input:  if x > 0 then 1 else 2
-
-Output: block0:
-          cmp x, 0
-          ble block2
-        block1:
-          mov result, 1
-          jmp block3
-        block2:
-          mov result, 2
-        block3:
-          return result
-```
-
----
-
-## Pass 3.1: SSA Construction (`SSA_Construction.fs`)
-
-**Input**: MIR CFG
-**Output**: MIR CFG in SSA form
+**Input**: ANF after tail-call detection
+**Output**: High-level SSA blocks with explicit edges and block parameters
 
 ### Responsibilities
-- **SSA form**: Insert phi nodes and rename variables
-- **Dominance tracking**: Build dominators for SSA placement
+- **Build CFG**: Convert structured ANF joins and branches to basic blocks
+- **Freshen values**: Give reused ANF temporaries distinct SSA definitions
+- **Carry joins**: Pass typed values on edges to block parameters
+
+## Pass 3.1: High-level SSA to MIR (`ANF_to_MIR.fs`)
+
+**Input**: High-level SSA blocks
+**Output**: Mid-level CFG already in SSA form
+
+### Responsibilities
+- **Lower operations**: Expand typed ANF operations into MIR instructions
+- **Lower block arguments**: Emit typed phis with one source per incoming edge
+- **Preserve loop inputs**: Put self-tail-call values on loop-header phi edges
+- **Literal lowering**: Keep string and float constants symbolic until needed
+
+`SSA_Construction.fs` remains available for MIR analysis and independent
+validation. The production pipeline does not run MIR SSA reconstruction.
 
 ---
 

@@ -183,8 +183,6 @@ type CodegenProfileSummary = {
     anf_dependency_cache_misses: int
     compiled_dependency_cache_hits: int
     compiled_dependency_cache_misses: int
-    ssa_function_cache_hits: int
-    ssa_function_cache_misses: int
     mir_optimization_cache_hits: int
     mir_optimization_cache_misses: int
     allocated_lir_function_cache_hits: int
@@ -484,8 +482,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let mutable anfDependencyCacheMisses = 0
     let mutable compiledDependencyCacheHits = 0
     let mutable compiledDependencyCacheMisses = 0
-    let mutable ssaFunctionCacheHits = 0
-    let mutable ssaFunctionCacheMisses = 0
     let mutable mirOptimizationCacheHits = 0
     let mutable mirOptimizationCacheMisses = 0
     let mutable allocatedLirFunctionCacheHits = 0
@@ -1035,10 +1031,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                     compiledDependencyCacheHits + compilationSession.CompiledDependencyHitCount
                 compiledDependencyCacheMisses <-
                     compiledDependencyCacheMisses + compilationSession.CompiledDependencyMissCount
-                ssaFunctionCacheHits <-
-                    ssaFunctionCacheHits + compilationSession.SsaFunctionHitCount
-                ssaFunctionCacheMisses <-
-                    ssaFunctionCacheMisses + compilationSession.SsaFunctionMissCount
                 mirOptimizationCacheHits <-
                     mirOptimizationCacheHits + compilationSession.MirOptimizationHitCount
                 mirOptimizationCacheMisses <-
@@ -1682,8 +1674,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 anf_dependency_cache_misses = anfDependencyCacheMisses
                 compiled_dependency_cache_hits = compiledDependencyCacheHits
                 compiled_dependency_cache_misses = compiledDependencyCacheMisses
-                ssa_function_cache_hits = ssaFunctionCacheHits
-                ssa_function_cache_misses = ssaFunctionCacheMisses
                 mir_optimization_cache_hits = mirOptimizationCacheHits
                 mir_optimization_cache_misses = mirOptimizationCacheMisses
                 allocated_lir_function_cache_hits = allocatedLirFunctionCacheHits

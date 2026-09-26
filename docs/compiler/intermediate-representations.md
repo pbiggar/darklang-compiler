@@ -5,10 +5,10 @@ used in the Dark compiler pipeline.
 
 ## Overview
 
-The compiler uses two IRs between ANF and machine code:
+The compiler uses high-level SSA and two lower IRs between ANF and machine code:
 
 ```
-ANF → MIR → LIR → target ISA → Binary
+ANF → high-level SSA → SSA MIR → LIR → target ISA → Binary
 ```
 
 - **MIR**: Platform-independent three-address code with CFG
@@ -278,9 +278,10 @@ terminal control transfer. Enclosing conditionals redirect only value exits;
 if both alternatives transfer elsewhere, they have no value continuation.
 Function and branch bodies use the same lowering path. Merge registers carry
 the enclosing function's declared return type, rather than a type inferred
-from a non-returning alternative. ANF joins become shared MIR blocks; jumps
-move the scalar argument into the parameter register and terminate the edge.
-They never fabricate a returned value or duplicate the continuation.
+from a non-returning alternative. ANF joins first become high-level SSA blocks
+with typed parameters. Jumps supply values on CFG edges, which MIR lowering
+translates to phis at the destination. The production path does not reconstruct
+SSA in MIR.
 
 Example:
 ```
@@ -405,8 +406,10 @@ type FloatPool = {
 
 ## CFG Optimizations
 
-### SSA Construction (Pass 3.1)
-Converts CFG to SSA form with phi nodes.
+### SSA Construction (Pass 3)
+`SSAANF.fs` converts final optimized ANF into explicit blocks. Repeated ANF
+temporaries receive fresh value IDs, and joins carry typed block arguments.
+`ANF_to_MIR.fs` lowers those arguments directly to MIR phis.
 
 ### Phi Resolution (Pass 5)
 Register allocation resolves phi nodes by inserting parallel moves at

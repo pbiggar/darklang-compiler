@@ -19,20 +19,19 @@ wrapOwnedInner (1L)
 makeOwnedInner:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "makeOwnedInner_L0":
-    v10011 <- HeapAlloc(8)
-    HeapStore(v10011, 0, Imm 0)
-    X0 <- Mov(Reg v10011)
-    Ret
-  Label "makeOwnedInner_L1":
-    v10009 <- Sub(v10007, Imm 1)
-    v10010 <- Mov(Reg v10009)
-    Jump(Label "makeOwnedInner_body")
   Label "makeOwnedInner_body":
-    v10007 <- Phi([(Reg v0, makeOwnedInner_entry), (Reg v10010, makeOwnedInner_L1)])
-    Cmp(v10007, Imm 0)
-    CondBranch(LE, Label "makeOwnedInner_L0", Label "makeOwnedInner_L1")
+    v10006 <- Phi([(Reg v4000, makeOwnedInner_entry), (Reg v10008, makeOwnedInner_ssa_2)])
+    Cmp(v10006, Imm 0)
+    CondBranch(LE, Label "makeOwnedInner_ssa_1", Label "makeOwnedInner_ssa_2")
   Label "makeOwnedInner_entry":
+    Jump(Label "makeOwnedInner_body")
+  Label "makeOwnedInner_ssa_1":
+    v10009 <- HeapAlloc(8)
+    HeapStore(v10009, 0, Imm 0)
+    X0 <- Mov(Reg v10009)
+    Ret
+  Label "makeOwnedInner_ssa_2":
+    v10008 <- Sub(v10006, Imm 1)
     Jump(Label "makeOwnedInner_body")
 wrapOwnedInner:
   StackSize: 0
@@ -80,21 +79,20 @@ let makeTransferEnvelope (depth: Int64) : TransferEnvelope =
 makeTransferChild:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "makeTransferChild_L0":
-    v10011 <- HeapAlloc(16)
-    HeapStore(v10011, 0, Imm 0)
-    HeapStore(v10011, 8, Imm 1)
-    X0 <- Mov(Reg v10011)
-    Ret
-  Label "makeTransferChild_L1":
-    v10009 <- Sub(v10007, Imm 1)
-    v10010 <- Mov(Reg v10009)
-    Jump(Label "makeTransferChild_body")
   Label "makeTransferChild_body":
-    v10007 <- Phi([(Reg v0, makeTransferChild_entry), (Reg v10010, makeTransferChild_L1)])
-    Cmp(v10007, Imm 0)
-    CondBranch(LE, Label "makeTransferChild_L0", Label "makeTransferChild_L1")
+    v10006 <- Phi([(Reg v4000, makeTransferChild_entry), (Reg v10008, makeTransferChild_ssa_2)])
+    Cmp(v10006, Imm 0)
+    CondBranch(LE, Label "makeTransferChild_ssa_1", Label "makeTransferChild_ssa_2")
   Label "makeTransferChild_entry":
+    Jump(Label "makeTransferChild_body")
+  Label "makeTransferChild_ssa_1":
+    v10009 <- HeapAlloc(16)
+    HeapStore(v10009, 0, Imm 0)
+    HeapStore(v10009, 8, Imm 1)
+    X0 <- Mov(Reg v10009)
+    Ret
+  Label "makeTransferChild_ssa_2":
+    v10008 <- Sub(v10006, Imm 1)
     Jump(Label "makeTransferChild_body")
 makeTransferEnvelope:
   StackSize: 0
@@ -135,21 +133,20 @@ let makeDuplicateTransferPair (depth: Int64) : (DuplicateTransferTree * Duplicat
 makeDuplicateTransferChild:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "makeDuplicateTransferChild_L0":
-    v10011 <- HeapAlloc(16)
-    HeapStore(v10011, 0, Imm 0)
-    HeapStore(v10011, 8, Imm 1)
-    X0 <- Mov(Reg v10011)
-    Ret
-  Label "makeDuplicateTransferChild_L1":
-    v10009 <- Sub(v10007, Imm 1)
-    v10010 <- Mov(Reg v10009)
-    Jump(Label "makeDuplicateTransferChild_body")
   Label "makeDuplicateTransferChild_body":
-    v10007 <- Phi([(Reg v0, makeDuplicateTransferChild_entry), (Reg v10010, makeDuplicateTransferChild_L1)])
-    Cmp(v10007, Imm 0)
-    CondBranch(LE, Label "makeDuplicateTransferChild_L0", Label "makeDuplicateTransferChild_L1")
+    v10006 <- Phi([(Reg v4000, makeDuplicateTransferChild_entry), (Reg v10008, makeDuplicateTransferChild_ssa_2)])
+    Cmp(v10006, Imm 0)
+    CondBranch(LE, Label "makeDuplicateTransferChild_ssa_1", Label "makeDuplicateTransferChild_ssa_2")
   Label "makeDuplicateTransferChild_entry":
+    Jump(Label "makeDuplicateTransferChild_body")
+  Label "makeDuplicateTransferChild_ssa_1":
+    v10009 <- HeapAlloc(16)
+    HeapStore(v10009, 0, Imm 0)
+    HeapStore(v10009, 8, Imm 1)
+    X0 <- Mov(Reg v10009)
+    Ret
+  Label "makeDuplicateTransferChild_ssa_2":
+    v10008 <- Sub(v10006, Imm 1)
     Jump(Label "makeDuplicateTransferChild_body")
 makeDuplicateTransferPair:
   StackSize: 0
@@ -184,21 +181,20 @@ let makeReusedTransferNested (depth: Int64) : ((ReusedTransferTree * Int64) * Re
 makeReusedTransferChild:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "makeReusedTransferChild_L0":
-    v10011 <- HeapAlloc(16)
-    HeapStore(v10011, 0, Imm 0)
-    HeapStore(v10011, 8, Imm 1)
-    X0 <- Mov(Reg v10011)
-    Ret
-  Label "makeReusedTransferChild_L1":
-    v10009 <- Sub(v10007, Imm 1)
-    v10010 <- Mov(Reg v10009)
-    Jump(Label "makeReusedTransferChild_body")
   Label "makeReusedTransferChild_body":
-    v10007 <- Phi([(Reg v0, makeReusedTransferChild_entry), (Reg v10010, makeReusedTransferChild_L1)])
-    Cmp(v10007, Imm 0)
-    CondBranch(LE, Label "makeReusedTransferChild_L0", Label "makeReusedTransferChild_L1")
+    v10006 <- Phi([(Reg v4000, makeReusedTransferChild_entry), (Reg v10008, makeReusedTransferChild_ssa_2)])
+    Cmp(v10006, Imm 0)
+    CondBranch(LE, Label "makeReusedTransferChild_ssa_1", Label "makeReusedTransferChild_ssa_2")
   Label "makeReusedTransferChild_entry":
+    Jump(Label "makeReusedTransferChild_body")
+  Label "makeReusedTransferChild_ssa_1":
+    v10009 <- HeapAlloc(16)
+    HeapStore(v10009, 0, Imm 0)
+    HeapStore(v10009, 8, Imm 1)
+    X0 <- Mov(Reg v10009)
+    Ret
+  Label "makeReusedTransferChild_ssa_2":
+    v10008 <- Sub(v10006, Imm 1)
     Jump(Label "makeReusedTransferChild_body")
 makeReusedTransferNested:
   StackSize: 0
@@ -229,34 +225,34 @@ let loop (i: Int64) (limit: Int64) (sum: Float) (sign: Float) : Float =
 loop:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "loop_L1":
-    v10026 <- Add(v10024, Imm 1)
-    fv10027 <- FAdd(fv10022, fv10021)
-    fv10028 <- FNeg(fv10021)
-    Cmp(v10026, Reg v10023)
-    CondBranch(GE, Label "loop_L2_unroll_remainder", Label "loop_L1_unroll_second")
-  Label "loop_L1_unroll_second":
-    v10038 <- Add(v10026, Imm 1)
-    fv10043 <- FAdd(fv10027, fv10028)
-    fv10040 <- FNeg(fv10028)
-    v10041 <- Mov(Reg v10038)
-    v10042 <- Mov(Reg v10023)
-    fv10044 <- FMov(fv10040)
-    Jump(Label "loop_body")
-  Label "loop_L2":
-    D0 <- FMov(fv10022)
-    Ret
-  Label "loop_L2_unroll_remainder":
-    D0 <- FMov(fv10027)
-    Ret
   Label "loop_body":
-    fv10021 <- FPhi([(fv3, loop_entry), (fv10044, loop_L1_unroll_second)])
-    fv10022 <- FPhi([(fv2, loop_entry), (fv10043, loop_L1_unroll_second)])
-    v10023 <- Phi([(Reg v1, loop_entry), (Reg v10042, loop_L1_unroll_second)])
-    v10024 <- Phi([(Reg v0, loop_entry), (Reg v10041, loop_L1_unroll_second)])
-    Cmp(v10024, Reg v10023)
-    CondBranch(GE, Label "loop_L2", Label "loop_L1")
+    v14017 <- Phi([(Reg v4000, loop_entry), (Reg v14033, loop_ssa_2_unroll_second)])
+    v14018 <- Phi([(Reg v4001, loop_entry), (Reg v14034, loop_ssa_2_unroll_second)])
+    fv14019 <- FPhi([(fv4002, loop_entry), (fv14035, loop_ssa_2_unroll_second)])
+    fv14020 <- FPhi([(fv4003, loop_entry), (fv14036, loop_ssa_2_unroll_second)])
+    Cmp(v14017, Reg v14018)
+    CondBranch(GE, Label "loop_ssa_1", Label "loop_ssa_2")
   Label "loop_entry":
+    Jump(Label "loop_body")
+  Label "loop_ssa_1":
+    D0 <- FMov(fv14019)
+    Ret
+  Label "loop_ssa_1_unroll_remainder":
+    D0 <- FMov(fv14023)
+    Ret
+  Label "loop_ssa_2":
+    v14022 <- Add(v14017, Imm 1)
+    fv14023 <- FAdd(fv14019, fv14020)
+    fv14024 <- FNeg(fv14020)
+    Cmp(v14022, Reg v14018)
+    CondBranch(GE, Label "loop_ssa_1_unroll_remainder", Label "loop_ssa_2_unroll_second")
+  Label "loop_ssa_2_unroll_second":
+    v14030 <- Add(v14022, Imm 1)
+    fv14035 <- FAdd(fv14023, fv14024)
+    fv14032 <- FNeg(fv14024)
+    v14033 <- Mov(Reg v14030)
+    v14034 <- Mov(Reg v14018)
+    fv14036 <- FMov(fv14032)
     Jump(Label "loop_body")
 
 ---NAME---
@@ -316,20 +312,19 @@ let sum (n: Int64) (acc: Float) : Float =
 sum:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "sum_L1":
-    v10012 <- Sub(v10010, Imm 1)
-    fv10015 <- FAdd(fv10009, fv10017)
-    v10014 <- Mov(Reg v10012)
+  Label "sum_body":
+    v10008 <- Phi([(Reg v4000, sum_entry), (Reg v10011, sum_ssa_2)])
+    fv10009 <- FPhi([(fv4001, sum_entry), (fv10012, sum_ssa_2)])
+    BranchZero(v10008, Label "sum_ssa_1", Label "sum_ssa_2")
+  Label "sum_entry":
+    fv10013 <- FLoad(float[1.5])
     Jump(Label "sum_body")
-  Label "sum_L2":
+  Label "sum_ssa_1":
     D0 <- FMov(fv10009)
     Ret
-  Label "sum_body":
-    fv10009 <- FPhi([(fv1, sum_entry), (fv10015, sum_L1)])
-    v10010 <- Phi([(Reg v0, sum_entry), (Reg v10014, sum_L1)])
-    BranchZero(v10010, Label "sum_L2", Label "sum_L1")
-  Label "sum_entry":
-    fv10017 <- FLoad(float[1.5])
+  Label "sum_ssa_2":
+    v10011 <- Sub(v10008, Imm 1)
+    fv10012 <- FAdd(fv10009, fv10013)
     Jump(Label "sum_body")
 
 ---NAME---
@@ -343,32 +338,28 @@ let collatzSteps (n: Int64) (steps: Int64) : Int64 =
 collatzSteps:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "collatzSteps_L1":
-    BranchBitZero(v10021, #0, Label "collatzSteps_L3", Label "collatzSteps_L4")
-  Label "collatzSteps_L2":
+  Label "collatzSteps_body":
+    v10019 <- Phi([(Reg v4000, collatzSteps_entry), (Reg v10027, collatzSteps_ssa_3), (Reg v10025, collatzSteps_ssa_4)])
+    v10020 <- Phi([(Reg v4001, collatzSteps_entry), (Reg v10028, collatzSteps_ssa_3), (Reg v10026, collatzSteps_ssa_4)])
+    Cmp(v10019, Imm 1)
+    CondBranch(EQ, Label "collatzSteps_ssa_1", Label "collatzSteps_ssa_2")
+  Label "collatzSteps_entry":
+    v10029 <- Mov(Imm 2)
+    Jump(Label "collatzSteps_body")
+  Label "collatzSteps_ssa_1":
     X0 <- Mov(Reg v10020)
     Ret
-  Label "collatzSteps_L3":
-    v10030 <- Sdiv(v10021, Reg v10034)
-    v10031 <- Add(v10020, Imm 1)
-    v10032 <- Mov(Reg v10030)
-    v10033 <- Mov(Reg v10031)
+  Label "collatzSteps_ssa_2":
+    BranchBitZero(v10019, #0, Label "collatzSteps_ssa_3", Label "collatzSteps_ssa_4")
+  Label "collatzSteps_ssa_3":
+    v10027 <- Sdiv(v10019, Reg v10029)
+    v10028 <- Add(v10020, Imm 1)
     Jump(Label "collatzSteps_body")
-  Label "collatzSteps_L4":
-    v10035 <- Lsl_imm(v10021, #1)
-    v10025 <- Add(v10021, Reg v10035)
-    v10026 <- Add(v10025, Imm 1)
-    v10027 <- Add(v10020, Imm 1)
-    v10028 <- Mov(Reg v10026)
-    v10029 <- Mov(Reg v10027)
-    Jump(Label "collatzSteps_body")
-  Label "collatzSteps_body":
-    v10020 <- Phi([(Reg v1, collatzSteps_entry), (Reg v10029, collatzSteps_L4), (Reg v10033, collatzSteps_L3)])
-    v10021 <- Phi([(Reg v0, collatzSteps_entry), (Reg v10028, collatzSteps_L4), (Reg v10032, collatzSteps_L3)])
-    Cmp(v10021, Imm 1)
-    CondBranch(EQ, Label "collatzSteps_L2", Label "collatzSteps_L1")
-  Label "collatzSteps_entry":
-    v10034 <- Mov(Imm 2)
+  Label "collatzSteps_ssa_4":
+    v10030 <- Lsl_imm(v10019, #1)
+    v10024 <- Add(v10019, Reg v10030)
+    v10025 <- Add(v10024, Imm 1)
+    v10026 <- Add(v10020, Imm 1)
     Jump(Label "collatzSteps_body")
 
 ---NAME---
@@ -381,20 +372,19 @@ let sum (n: Int64) (acc: Float) : Float =
 sum:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "sum_L1":
-    v10012 <- Sub(v10010, Imm 1)
-    fv10015 <- FAdd(fv10009, fv10017)
-    v10014 <- Mov(Reg v10012)
+  Label "sum_body":
+    v10008 <- Phi([(Reg v4000, sum_entry), (Reg v10011, sum_ssa_2)])
+    fv10009 <- FPhi([(fv4001, sum_entry), (fv10012, sum_ssa_2)])
+    BranchZero(v10008, Label "sum_ssa_1", Label "sum_ssa_2")
+  Label "sum_entry":
+    fv10013 <- FLoad(float[1.5])
     Jump(Label "sum_body")
-  Label "sum_L2":
+  Label "sum_ssa_1":
     D0 <- FMov(fv10009)
     Ret
-  Label "sum_body":
-    fv10009 <- FPhi([(fv1, sum_entry), (fv10015, sum_L1)])
-    v10010 <- Phi([(Reg v0, sum_entry), (Reg v10014, sum_L1)])
-    BranchZero(v10010, Label "sum_L2", Label "sum_L1")
-  Label "sum_entry":
-    fv10017 <- FLoad(float[1.5])
+  Label "sum_ssa_2":
+    v10011 <- Sub(v10008, Imm 1)
+    fv10012 <- FAdd(fv10009, fv10013)
     Jump(Label "sum_body")
 
 ---NAME---
@@ -439,30 +429,27 @@ helper:
     v10049 <- Add(v0, Imm 25)
     X0 <- Mov(Reg v10049)
     Ret
-
 loop:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "loop_L1":
-    v10065 <- Sub(v10063, Imm 1)
-    v10070 <- Lsl_imm(v10062, #1)
-    v10066 <- Add(v10062, Reg v10070)
-    SaveRegs([], [])
-    ArgMoves(X0 <- Reg v10066)
-    v10067 <- Call(helper, [Reg v10066])
-    RestoreRegs([], [])
-    v10067 <- Mov(Reg X0)
-    v10068 <- Mov(Reg v10065)
-    v10069 <- Mov(Reg v10067)
+  Label "loop_body":
+    v10061 <- Phi([(Reg v4000, loop_entry), (Reg v10064, loop_ssa_2)])
+    v10062 <- Phi([(Reg v4001, loop_entry), (Reg v10066, loop_ssa_2)])
+    BranchZero(v10061, Label "loop_ssa_1", Label "loop_ssa_2")
+  Label "loop_entry":
     Jump(Label "loop_body")
-  Label "loop_L2":
+  Label "loop_ssa_1":
     X0 <- Mov(Reg v10062)
     Ret
-  Label "loop_body":
-    v10062 <- Phi([(Reg v52, loop_entry), (Reg v10069, loop_L1)])
-    v10063 <- Phi([(Reg v51, loop_entry), (Reg v10068, loop_L1)])
-    BranchZero(v10063, Label "loop_L2", Label "loop_L1")
-  Label "loop_entry":
+  Label "loop_ssa_2":
+    v10064 <- Sub(v10061, Imm 1)
+    v10067 <- Lsl_imm(v10062, #1)
+    v10065 <- Add(v10062, Reg v10067)
+    SaveRegs([], [])
+    ArgMoves(X0 <- Reg v10065)
+    v10066 <- Call(helper, [Reg v10065])
+    RestoreRegs([], [])
+    v10066 <- Mov(Reg X0)
     Jump(Label "loop_body")
 
 ---NAME---
@@ -500,35 +487,35 @@ let choosePartial (value: PartialChoice) : Int64 =
 choose:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "choose_L0":
+  Label "choose_entry":
+    v10007 <- HeapLoad(v0, 0)
+    BranchZero(v10007, Label "choose_ssa_1", Label "choose_ssa_2")
+  Label "choose_ssa_1":
     X0 <- Mov(Imm 1)
     Ret
-  Label "choose_L1":
-    Cmp(v10009, Imm 1)
-    CondBranch(EQ, Label "choose_L3", Label "choose_L4")
-  Label "choose_L3":
-    v10016 <- HeapLoad(v0, 8)
-    X0 <- Mov(Reg v10016)
+  Label "choose_ssa_2":
+    Cmp(v10007, Imm 1)
+    CondBranch(EQ, Label "choose_ssa_3", Label "choose_ssa_4")
+  Label "choose_ssa_3":
+    v10010 <- HeapLoad(v0, 8)
+    X0 <- Mov(Reg v10010)
     Ret
-  Label "choose_L4":
+  Label "choose_ssa_4":
     X0 <- Mov(Imm 3)
     Ret
-  Label "choose_entry":
-    v10009 <- HeapLoad(v0, 0)
-    BranchZero(v10009, Label "choose_L0", Label "choose_L1")
 choosePartial:
   StackSize: 0
   UsedCalleeSaved: []
-  Label "choosePartial_L0":
+  Label "choosePartial_entry":
+    v10015 <- HeapLoad(v10, 0)
+    BranchZero(v10015, Label "choosePartial_ssa_1", Label "choosePartial_ssa_2")
+  Label "choosePartial_ssa_1":
     X0 <- Mov(Imm 1)
     Ret
-  Label "choosePartial_L1":
-    v10019 <- HeapLoad(v10, 8)
-    X0 <- Mov(Reg v10019)
+  Label "choosePartial_ssa_2":
+    v10017 <- HeapLoad(v10, 8)
+    X0 <- Mov(Reg v10017)
     Ret
-  Label "choosePartial_entry":
-    v10016 <- HeapLoad(v10, 0)
-    BranchZero(v10016, Label "choosePartial_L0", Label "choosePartial_L1")
 
 ---NAME---
 closure_devirtualization_capture_free_generated_code

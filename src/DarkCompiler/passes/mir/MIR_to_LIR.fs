@@ -1968,8 +1968,9 @@ let initTempState (mirFunc: MIR.Function) : TempState =
             |> maxVRegIdFromTerminator block.Terminator) maxParamRegId
     let maxFRegId =
         mirFunc.FloatRegs |> Set.fold max -1
-    { NextRegId = maxRegId + 1
-      NextFRegId = maxFRegId + 1 }
+    // LIR reserves virtual IDs through 3999 for spill and ABI temporaries.
+    { NextRegId = max 4000 (maxRegId + 1)
+      NextFRegId = max 4000 (maxFRegId + 1) }
 
 let integerErrorBlock (label: LIR.Label) (message: string) : LIR.BasicBlock =
     {

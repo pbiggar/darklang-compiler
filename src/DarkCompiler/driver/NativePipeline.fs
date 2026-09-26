@@ -16,7 +16,7 @@ open CompilationCacheIdentity
 open CompilationSession
 open PipelineDiagnostics
 
-/// Run SSA + MIR/LIR optimizations, returning an optimized LIR program
+/// Run MIR/LIR optimizations on SSA MIR, returning an optimized LIR program.
 let private compileMirToLir
     (arch: Platform.Arch)
     (verbosity: int)
@@ -31,36 +31,7 @@ let private compileMirToLir
 
     let suffix = if stageSuffix = "" then "" else $" ({stageSuffix})"
 
-    if verbosity >= 1 then println $"  [mir.ssa] SSA Construction{suffix}..."
-    let ssaStart = sw.Elapsed.TotalMilliseconds
-    let convertFunction func =
-        let convert () =
-            match passTimingRecorder with
-            | None -> SSA_Construction.convertFunctionToSSA func
-            | Some recorder ->
-                let (converted, timings) =
-                    SSA_Construction.convertFunctionToSSAWithTiming func
-                timings
-                |> List.iter (fun timing ->
-                    recorder {
-                        Pass = timing.Phase
-                        Elapsed = TimeSpan.FromMilliseconds timing.ElapsedMs
-                    })
-                converted
-        match functionCaches with
-        | Some caches -> caches.ConvertSsa func convert
-        | None -> convert ()
-    let (MIR.Program (mirFunctions, mirVariants, mirRecords)) = mirProgram
-    let ssaProgram =
-        MIR.Program (
-            mirFunctions |> List.map convertFunction,
-            mirVariants,
-            mirRecords)
-    let ssaElapsed = sw.Elapsed.TotalMilliseconds - ssaStart
-    recordPassTiming passTimingRecorder "SSA Construction" ssaElapsed
-    if verbosity >= 2 then
-        let t = System.Math.Round(ssaElapsed, 1)
-        println $"        {t}ms"
+    let ssaProgram = mirProgram
 
     let mirOptions = buildMIROptimizeOptions options
     let mirPassLabel =

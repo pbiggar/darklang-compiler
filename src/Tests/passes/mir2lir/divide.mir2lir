@@ -8,7 +8,7 @@ ret v2
 
 ---OUTPUT-LIR---
 v0 <- Mov(Imm 20)
-v3 <- Mov(Imm 4)
-v2 <- Sdiv(v0, Reg v3)
+v4000 <- Mov(Imm 4)
+v2 <- Sdiv(v0, Reg v4000)
 X0 <- Mov(Reg v2)
 Ret

@@ -28,10 +28,6 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 Result<LIR.Function list, string>>>(ObjectReferenceComparer())
     let compiledStartFunctions =
         Dictionary<StartCompilationConfig, Result<LIR.Function list, string>>()
-    let ssaFunctionsByExactInput =
-        Dictionary<MIR.Function, MIR.Function>(MirFunctionNameHashComparer())
-    let ssaFunctions =
-        Dictionary<MIR.Function, MIR.Function>(MirFunctionNameHashComparer())
     let optimizedMirFunctions =
         Dictionary<MirOptimizationKey, MIR.Function>(MirOptimizationKeyNameHashComparer())
     let allocatedLirFunctions =
@@ -119,8 +115,6 @@ type CompilationSession(collectCodegenMetrics: bool) =
     let mutable compiledDependencyMissCount = 0
     let mutable compiledStartHitCount = 0
     let mutable compiledStartMissCount = 0
-    let mutable ssaFunctionHitCount = 0
-    let mutable ssaFunctionMissCount = 0
     let mutable mirOptimizationHitCount = 0
     let mutable mirOptimizationMissCount = 0
     let mutable allocatedLirFunctionHitCount = 0
@@ -233,31 +227,6 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 compiledStartFunctions.[config] <- result
                 compiledStartMissCount <- compiledStartMissCount + 1
                 result
-
-    member _.ConvertMirFunctionToSsa
-        (func: MIR.Function)
-        (convert: unit -> MIR.Function)
-        : MIR.Function =
-        if disposed then
-            convert ()
-        else
-            match ssaFunctionsByExactInput.TryGetValue func with
-            | true, converted ->
-                ssaFunctionHitCount <- ssaFunctionHitCount + 1
-                converted
-            | false, _ ->
-                let cacheKey = normalizeMirFunctionRegisterOffset func
-                match ssaFunctions.TryGetValue cacheKey with
-                | true, converted ->
-                    ssaFunctionsByExactInput.[func] <- converted
-                    ssaFunctionHitCount <- ssaFunctionHitCount + 1
-                    converted
-                | false, _ ->
-                    let converted = convert ()
-                    ssaFunctions.[cacheKey] <- converted
-                    ssaFunctionsByExactInput.[func] <- converted
-                    ssaFunctionMissCount <- ssaFunctionMissCount + 1
-                    converted
 
     member _.OptimizeMirFunction
         (key: MirOptimizationKey)
@@ -667,7 +636,6 @@ type CompilationSession(collectCodegenMetrics: bool) =
         if disposed then 0
         else compiledDependenciesByIdentity.Values |> Seq.sumBy (fun entries -> entries.Count)
     member _.CachedCompiledStartCount = if disposed then 0 else compiledStartFunctions.Count
-    member _.CachedSsaFunctionCount = if disposed then 0 else ssaFunctions.Count
     member _.CachedMirOptimizationCount = if disposed then 0 else optimizedMirFunctions.Count
     member _.CachedAllocatedLirFunctionCount = if disposed then 0 else allocatedLirFunctions.Count
     member _.CachedStdlibReachabilityCount =
@@ -696,8 +664,6 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member _.CompiledDependencyMissCount = compiledDependencyMissCount
     member _.CompiledStartHitCount = compiledStartHitCount
     member _.CompiledStartMissCount = compiledStartMissCount
-    member _.SsaFunctionHitCount = ssaFunctionHitCount
-    member _.SsaFunctionMissCount = ssaFunctionMissCount
     member _.MirOptimizationHitCount = mirOptimizationHitCount
     member _.MirOptimizationMissCount = mirOptimizationMissCount
     member _.AllocatedLirFunctionHitCount = allocatedLirFunctionHitCount
@@ -738,8 +704,6 @@ type CompilationSession(collectCodegenMetrics: bool) =
             anfDependenciesByContext.Clear()
             compiledDependenciesByIdentity.Clear()
             compiledStartFunctions.Clear()
-            ssaFunctionsByExactInput.Clear()
-            ssaFunctions.Clear()
             optimizedMirFunctions.Clear()
             allocatedLirFunctions.Clear()
             reachableStdlibFunctionsByContext.Clear()

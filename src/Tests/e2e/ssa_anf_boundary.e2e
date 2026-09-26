@@ -1,0 +1,18 @@
+// SSA ANF lowering keeps typed Float branch values and loop arguments.
+let chooseFloat (flag: Bool) : Float =
+    if flag then 0.5 else 1.25
+
+chooseFloat true = 0.5
+chooseFloat false = 1.25
+
+let rotateFloat (a: Float) (b: Float) (n: Int64) : Float =
+    if n <= 0L then a else rotateFloat b a (n - 1L)
+
+rotateFloat 0.5 1.25 3L = 1.25
+
+let repeatString (value: String) (n: Int64) : String =
+    if n <= 0L then value else repeatString (value ++ "!") (n - 1L)
+
+repeatString "x" 2L = "x!!"
+
+Stdlib.String.join (["ab"]) "_" = "ab"

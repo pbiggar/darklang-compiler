@@ -125,6 +125,7 @@
     <Compile Include="passes/anf/RefCountInsertion.fs" />
     <Compile Include="passes/anf/PrintInsertion.fs" />
     <Compile Include="passes/anf/TailCallDetection.fs" />
+    <Compile Include="ir/anf/SSAANF.fs" />
 
     <!-- ANF -> MIR -->
     <Compile Include="ir/mir/MIR.fs" />
@@ -132,6 +133,7 @@
     <Compile Include="passes/anf/ANF_to_MIR.fs" />
     <Compile Include="passes/mir/SSA_Construction.fs" />
     <Compile Include="passes/mir/optimization/Facts.fs" />
+    <Compile Include="passes/mir/MIR_SSA_Verify.fs" />
     <Compile Include="passes/mir/optimization/LoopTopology.fs" />
     <Compile Include="passes/mir/optimization/Induction.fs" />
     <Compile Include="passes/mir/optimization/Unrolling.fs" />

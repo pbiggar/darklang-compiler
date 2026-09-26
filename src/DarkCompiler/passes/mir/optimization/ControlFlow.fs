@@ -83,11 +83,23 @@ let mergeLinearBlocks (cfg: CFG) : CFG * bool =
 
 /// CFG Simplification: Remove empty blocks (just a jump)
 let simplifyEmptyBlocks (cfg: CFG) : CFG * bool =
+    let phiSourceLabels =
+        cfg.Blocks
+        |> Map.fold (fun labels _ block ->
+            block.Instrs
+            |> List.fold (fun current instruction ->
+                match instruction with
+                | Phi (_, sources, _) when List.length sources > 1 ->
+                    sources
+                    |> List.fold (fun acc (_, source) -> Set.add source acc) current
+                | _ -> current) labels) Set.empty
     // Find blocks that only contain a Jump
     let emptyBlocks =
         cfg.Blocks
         |> Map.filter (fun label block ->
             label <> cfg.Entry &&  // Don't remove entry block
+            // Distinct empty predecessors may carry different phi values.
+            not (Set.contains label phiSourceLabels) &&
             List.isEmpty block.Instrs &&
             match block.Terminator with
             | Jump _ -> true

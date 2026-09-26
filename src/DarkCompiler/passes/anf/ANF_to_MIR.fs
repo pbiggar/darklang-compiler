@@ -416,6 +416,8 @@ let tryGetIntrinsicReturnType (funcName: string) : AST.SemanticType option =
 type CFGBuilder = {
     Blocks: Map<MIR.Label, MIR.BasicBlock>
     Joins: Map<ANF.TempId, MIR.Label * AST.SemanticType>
+    JoinIncoming: Map<ANF.TempId, (MIR.Operand * MIR.Label) list>
+    SelfTailIncoming: (MIR.Label * MIR.Operand list) list
     LabelGen: MIR.LabelGen
     RegGen: MIR.RegGen
     TypeById: AST.SemanticType option array
@@ -895,19 +897,17 @@ type ExprExit =
 
 /// Redirect a value exit without inspecting a label's spelling or fabricating
 /// an operand for a path that cannot reach the continuation.
-let private redirectReturn resultReg joinLabel exit (builder: CFGBuilder) =
+let private redirectReturn joinLabel exit (builder: CFGBuilder) =
     match exit with
-    | Terminated -> Ok builder
+    | Terminated -> Ok (builder, [])
     | Returned (operand, label) ->
         match Map.tryFind label builder.Blocks with
         | Some ({ Terminator = MIR.Ret _ } as block) ->
-            let operandType = operandType builder operand
             let redirected = {
                 block with
-                    Instrs = block.Instrs @ [MIR.Mov (resultReg, operand, Some operandType)]
                     Terminator = MIR.Jump joinLabel
             }
-            Ok { builder with Blocks = Map.add label redirected builder.Blocks }
+            Ok ({ builder with Blocks = Map.add label redirected builder.Blocks }, [(operand, label)])
         | Some _ -> Error "ANF to MIR: value exit does not end in a return"
         | None -> Error "ANF to MIR: value exit block is missing"
 
@@ -926,15 +926,20 @@ let rec convertExpr
     | ANF.Jump (target, value) ->
         match Map.tryFind target builder.Joins with
         | None -> Error $"ANF to MIR: jump target {target} is not in lexical scope"
-        | Some (label, typ) ->
+        | Some (label, _) ->
             atomToOperand builder value
             |> Result.map (fun operand ->
                 let block = {
                     MIR.Label = currentLabel
-                    MIR.Instrs = List.rev currentInstrsRev @ [MIR.Mov (tempToVReg target, operand, Some typ)]
+                    MIR.Instrs = List.rev currentInstrsRev
                     MIR.Terminator = MIR.Jump label
                 }
-                Terminated, { builder with Blocks = Map.add currentLabel block builder.Blocks })
+                let incoming = Map.tryFind target builder.JoinIncoming |> Option.defaultValue []
+                Terminated, {
+                    builder with
+                        Blocks = Map.add currentLabel block builder.Blocks
+                        JoinIncoming = Map.add target ((operand, currentLabel) :: incoming) builder.JoinIncoming
+                })
     | ANF.Join (parameter, continuation, entry) ->
         let label, labels = MIR.freshLabelWithPrefix builder.FuncName builder.LabelGen
         let entryBuilder = {
@@ -947,12 +952,18 @@ let rec convertExpr
             match entryExit with
             | Returned _ -> Error "ANF to MIR: a join entry must transfer control, not return a function value"
             | Terminated ->
+                let incoming =
+                    Map.tryFind parameter.Id afterEntry.JoinIncoming
+                    |> Option.defaultValue []
+                    |> List.rev
+                let phi =
+                    MIR.Phi (tempToVReg parameter.Id, incoming, Some parameter.Type)
                 let continuationBuilder = {
                     afterEntry with
                         Joins = builder.Joins
                         ExtraTypeMap = Map.add parameter.Id parameter.Type afterEntry.ExtraTypeMap
                 }
-                convertExpr resultType continuation label [] continuationBuilder)
+                convertExpr resultType continuation label [phi] continuationBuilder)
     | ANF.Return atom ->
         // Return: end current block with Ret terminator
         atomToOperand builder atom
@@ -997,7 +1008,7 @@ let rec convertExpr
                     | _ -> false
                 let needsTemps = argOperands |> List.exists argReferencesParam
 
-                let (captureInstrs, assignInstrs, regGen') =
+                let (captureInstrs, loopArguments, regGen') =
                     if needsTemps then
                         // Use temps to avoid swap issues
                         let (tempRegs, rg) =
@@ -1012,19 +1023,9 @@ let rec convertExpr
                             List.zip3 tempRegs argOperands argTypes
                             |> List.map (fun (temp, argOp, argType) ->
                                 MIR.Mov (temp, argOp, Some argType))
-                        // Then assign temps to params
-                        let assigns =
-                            List.zip3 builder.ParamRegs tempRegs argTypes
-                            |> List.map (fun (paramReg, temp, argType) ->
-                                MIR.Mov (paramReg, MIR.Register temp, Some argType))
-                        (captures, assigns, rg)
+                        (captures, tempRegs |> List.map MIR.Register, rg)
                     else
-                        // No temps needed - just assign directly
-                        let assigns =
-                            List.zip3 builder.ParamRegs argOperands argTypes
-                            |> List.map (fun (paramReg, argOp, argType) ->
-                                MIR.Mov (paramReg, argOp, Some argType))
-                        ([], assigns, builder.RegGen)
+                        ([], argOperands, builder.RegGen)
 
                 let (preCallCleanupInstrs, instrsBeforeCleanupRev) =
                     collectPreSelfTailCallCleanup currentInstrsRev
@@ -1036,19 +1037,23 @@ let rec convertExpr
                         cleanupBeforeTransfers
                         instrsBeforeCleanupRev
 
-                // Create block with accumulated instructions + arg capture + overlap incs + cleanup + param assignments + Jump
+                // The loop header phis select the captured arguments.
                 let instrsRev =
                     instrsBeforeCleanupRev
                     |> appendInstrsRev captureInstrs
                     |> appendInstrsRev overlapArgIncs
                     |> appendInstrsRev cleanupInstrs
-                    |> appendInstrsRev assignInstrs
                 let block = {
                     MIR.Label = currentLabel
                     MIR.Instrs = List.rev instrsRev
                     MIR.Terminator = MIR.Jump loopLabel
                 }
-                let builder' = { builder with Blocks = Map.add currentLabel block builder.Blocks; RegGen = regGen' }
+                let builder' = {
+                    builder with
+                        Blocks = Map.add currentLabel block builder.Blocks
+                        RegGen = regGen'
+                        SelfTailIncoming = (currentLabel, loopArguments) :: builder.SelfTailIncoming
+                }
                 Ok (Terminated, builder')))
 
     | ANF.Let (tempId, cexpr, rest) ->
@@ -1065,9 +1070,7 @@ let rec convertExpr
         | ANF.IfValue (condAtom, thenAtom, elseAtom) ->
             // IfValue requires control flow blocks
             // 1. End current block with branch on condition
-            // 2. Create then-block (assigns thenAtom to destReg, jumps to join)
-            // 3. Create else-block (assigns elseAtom to destReg, jumps to join)
-            // 4. Create join-block (continues with rest)
+            // Both predecessor operands become sources of the join's single definition.
 
             // Add coverage instrumentation for the IfValue expression
             let (coverageInstrs, builderWithCoverage) = withCoverage builder cexpr
@@ -1093,17 +1096,15 @@ let rec convertExpr
                         // Determine the type of the if result (then/else should have same type)
                         let bindingType = atomType builderWithCoverage thenAtom
 
-                        // Then block: assign thenAtom to destReg, jump to join
                         let thenBlock = {
                             MIR.Label = thenLabel
-                            MIR.Instrs = [MIR.Mov (destReg, thenOp, Some bindingType)]
+                            MIR.Instrs = []
                             MIR.Terminator = MIR.Jump joinLabel
                         }
 
-                        // Else block: assign elseAtom to destReg, jump to join
                         let elseBlock = {
                             MIR.Label = elseLabel
-                            MIR.Instrs = [MIR.Mov (destReg, elseOp, Some bindingType)]
+                            MIR.Instrs = []
                             MIR.Terminator = MIR.Jump joinLabel
                         }
 
@@ -1123,8 +1124,12 @@ let rec convertExpr
                             else
                                 builderWithBlocks
 
-                        // Continue with rest in join block (no instructions yet)
-                        convertExpr resultType rest joinLabel [] builder')))
+                        let phi =
+                            MIR.Phi (
+                                destReg,
+                                [(thenOp, thenLabel); (elseOp, elseLabel)],
+                                Some bindingType)
+                        convertExpr resultType rest joinLabel [phi] builder')))
 
         | _ ->
             // Simple CExpr: add instruction(s) to current block, continue
@@ -1596,13 +1601,14 @@ let rec convertExpr
                     match thenExit, elseExit with
                     | Terminated, Terminated -> Ok (Terminated, afterElse)
                     | _ ->
-                        redirectReturn resultReg joinLabel thenExit afterElse
-                        |> Result.bind (redirectReturn resultReg joinLabel elseExit)
-                        |> Result.map (fun redirected ->
+                        redirectReturn joinLabel thenExit afterElse
+                        |> Result.bind (fun (afterFirst, thenSources) ->
+                            redirectReturn joinLabel elseExit afterFirst
+                            |> Result.map (fun (redirected, elseSources) ->
                             let result = MIR.Register resultReg
                             let joinBlock = {
                                 MIR.Label = joinLabel
-                                MIR.Instrs = []
+                                MIR.Instrs = [MIR.Phi (resultReg, thenSources @ elseSources, Some resultType)]
                                 MIR.Terminator = MIR.Ret result
                             }
                             let (MIR.VReg resultId) = resultReg
@@ -1614,11 +1620,298 @@ let rec convertExpr
                                         if resultType = AST.TFloat64 then Set.add resultId redirected.FloatRegs
                                         else redirected.FloatRegs
                             }
-                            Returned (result, joinLabel), joined))))
+                            Returned (result, joinLabel), joined)))))
 
-/// Convert an ANF function to a MIR function
-/// Each function gets its own RegGen starting from (maxTempId + 1) for deterministic VReg assignment.
-/// This ensures the same function always produces identical MIR regardless of compilation context.
+/// MIR phi sources for Float values must be registers before LIR lowering.
+let private materializeFloatPhiSources
+    (regGen: MIR.RegGen)
+    (floatRegs: Set<int>)
+    (blocks: Map<MIR.Label, MIR.BasicBlock>)
+    : Map<MIR.Label, MIR.BasicBlock> * Set<int> =
+    let rewriteInstruction
+        (additions: Map<MIR.Label, MIR.Instr list>, nextReg: MIR.RegGen, floats: Set<int>)
+        instruction =
+        match instruction with
+        | MIR.Phi (dest, sources, Some AST.TFloat64) ->
+            let sources', state =
+                sources
+                |> List.mapFold (fun (added, currentReg, currentFloats) (source, fromLabel) ->
+                    match source with
+                    | MIR.Register _ ->
+                        (source, fromLabel), (added, currentReg, currentFloats)
+                    | _ ->
+                        let temp, followingReg = MIR.freshReg currentReg
+                        let (MIR.VReg id) = temp
+                        let current = Map.tryFind fromLabel added |> Option.defaultValue []
+                        let added' =
+                            Map.add
+                                fromLabel
+                                (current @ [MIR.Mov (temp, source, Some AST.TFloat64)])
+                                added
+                        (MIR.Register temp, fromLabel),
+                        (added', followingReg, Set.add id currentFloats))
+                    (additions, nextReg, floats)
+            MIR.Phi (dest, sources', Some AST.TFloat64), state
+        | _ -> instruction, (additions, nextReg, floats)
+    let rewritten, (additions, _, updatedFloats) =
+        blocks
+        |> Map.fold (fun (rewritten, state) label block ->
+            let instructions, nextState = List.mapFold rewriteInstruction state block.Instrs
+            Map.add label { block with Instrs = instructions } rewritten, nextState)
+            (Map.empty, (Map.empty, regGen, floatRegs))
+    rewritten
+    |> Map.map (fun label block ->
+        let extra = Map.tryFind label additions |> Option.defaultValue []
+        { block with Instrs = block.Instrs @ extra }),
+    updatedFloats
+
+/// Lower the explicit post-ANF block graph without creating mutable MIR
+/// register definitions at joins. CExpr expansion still uses convertExpr so
+/// operation-specific layout and coverage handling stay in one place.
+let convertSSAANFFunction
+    (ssaFunc: SSAANF.Function)
+    (typeById: AST.SemanticType option array)
+    (typeReg: Map<string, (string * AST.SemanticType) list>)
+    (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
+    (enableCoverage: bool)
+    : Result<MIR.Function, string> =
+    let mirLabel (SSAANF.Label id) =
+        if id = 0 then MIR.Label $"{ssaFunc.Name}_body"
+        else MIR.Label $"{ssaFunc.Name}_ssa_{id}"
+    let maxId =
+        let paramMax =
+            ssaFunc.TypedParams
+            |> List.fold (fun largest param ->
+                let (ANF.TempId id) = param.Id
+                max largest id) -1
+        ssaFunc.Blocks
+        |> Map.fold (fun largest _ block ->
+            let withParams =
+                block.Parameters
+                |> List.fold (fun current param ->
+                    let (ANF.TempId id) = param.Id
+                    max current id) largest
+            let withOperations =
+                block.Operations
+                |> List.fold (fun current (ANF.TempId id, operation) ->
+                    max current (max id (maxTempIdInCExpr operation))) withParams
+            let terminalMax =
+                match block.Terminator with
+                | SSAANF.Return value -> maxTempIdInAtom value
+                | SSAANF.Jump (_, args) ->
+                    args |> List.fold (fun current arg -> max current (maxTempIdInAtom arg)) -1
+                | SSAANF.Branch (condition, _, _) -> maxTempIdInAtom condition
+            max withOperations terminalMax) paramMax
+    let bodyParamRegs = ssaFunc.TypedParams |> List.map (fun param -> tempToVReg param.Id)
+    let hasSelfTail =
+        ssaFunc.Blocks
+        |> Map.exists (fun _ block ->
+            block.Operations
+            |> List.exists (fun (_, operation) ->
+                match operation with
+                | ANF.TailCall (target, _) -> target = ssaFunc.Id
+                | _ -> false))
+    // LIR reserves virtual IDs below 4000 for ABI and spill scratch values.
+    let firstExpansionReg = max 4000 (maxId + 1)
+    let inputRegs, regGen =
+        if hasSelfTail then
+            ssaFunc.TypedParams
+            |> List.mapFold (fun current _ -> MIR.freshReg current) (MIR.RegGen firstExpansionReg)
+        else
+            bodyParamRegs, MIR.RegGen firstExpansionReg
+    let inputsById =
+        List.zip (ssaFunc.TypedParams |> List.map (fun param -> param.Id)) inputRegs
+        |> Map.ofList
+    let inputReg id =
+        match Map.tryFind id inputsById with
+        | Some reg -> reg
+        | None -> Crash.crash $"SSA ANF to MIR: missing parameter input {id}"
+    let parameterFloatRegs =
+        ssaFunc.Blocks
+        |> Map.fold (fun floats _ block ->
+            block.Parameters
+            |> List.fold (fun current parameter ->
+                if parameter.Type = AST.TFloat64 then
+                    let (ANF.TempId id) = parameter.Id
+                    Set.add id current
+                else current) floats) Set.empty
+    let floatRegs =
+        List.zip3 ssaFunc.TypedParams bodyParamRegs inputRegs
+        |> List.fold (fun floats (param, MIR.VReg bodyId, MIR.VReg inputId) ->
+            if param.Type = AST.TFloat64 then
+                floats |> Set.add bodyId |> Set.add inputId
+            else
+                floats) parameterFloatRegs
+    let initialBuilder = {
+        RegGen = regGen
+        Joins = Map.empty
+        JoinIncoming = Map.empty
+        SelfTailIncoming = []
+        LabelGen = MIR.initialLabelGen
+        Blocks = Map.empty
+        TypeById = typeById
+        SourceTempIdMax = maxId
+        ExtraTypeMap =
+            ssaFunc.TypedParams
+            |> List.fold (fun types param -> Map.add param.Id param.Type types) ssaFunc.FreshValueTypes
+        TypeReg = typeReg
+        ReturnTypeReg = returnTypeReg
+        FuncId = ssaFunc.Id
+        FuncName = ssaFunc.Name
+        ParamRegs = bodyParamRegs
+        FloatRegs = floatRegs
+        ClosureFuncs = Map.empty
+        EnableCoverage = enableCoverage
+        ExprIdGen = ANF.initialExprIdGen
+        CoverageMapping = ANF.emptyCoverageMapping
+    }
+    let paramIds = ssaFunc.TypedParams |> List.map (fun param -> param.Id) |> Set.ofList
+    let rec splitEntryRetains operations =
+        match operations with
+        | (_, ANF.RefCountInc (ANF.Var id, size, kind, sourceType)) :: rest
+            when Set.contains id paramIds ->
+            let following, body = splitEntryRetains rest
+            (MIR.RefCountInc (inputReg id, size, rcKindToMIR kind, sourceType) :: following, body)
+        | (_, ANF.RefCountIncString (ANF.Var id)) :: rest when Set.contains id paramIds ->
+            let following, body = splitEntryRetains rest
+            (MIR.RefCountIncString (MIR.Register (inputReg id)) :: following, body)
+        | (_, ANF.RefCountIncBlob (ANF.Var id)) :: rest when Set.contains id paramIds ->
+            let following, body = splitEntryRetains rest
+            (MIR.RefCountIncBlob (MIR.Register (inputReg id)) :: following, body)
+        | (_, ANF.RefCountIncInt (ANF.Var id)) :: rest when Set.contains id paramIds ->
+            let following, body = splitEntryRetains rest
+            (MIR.RefCountIncInt (MIR.Register (inputReg id)) :: following, body)
+        | _ -> ([], operations)
+    let entryBlock =
+        match Map.tryFind ssaFunc.Entry ssaFunc.Blocks with
+        | Some block -> block
+        | None -> Crash.crash "SSA ANF to MIR: missing entry block"
+    let entryRetains, entryOperations = splitEntryRetains entryBlock.Operations
+    let blocksToLower =
+        Map.add ssaFunc.Entry { entryBlock with Operations = entryOperations } ssaFunc.Blocks
+    let patchReturn label terminator (builder: CFGBuilder) =
+        match Map.tryFind label builder.Blocks with
+        | Some ({ Terminator = MIR.Ret _ } as block) ->
+            Ok { builder with Blocks = Map.add label { block with Terminator = terminator } builder.Blocks }
+        | Some _ -> Error "SSA ANF to MIR: block exit is not a return"
+        | None -> Error "SSA ANF to MIR: block exit is missing"
+    let lowerBlock (result: Result<CFGBuilder * Map<SSAANF.Label, (MIR.Label * MIR.Operand list) list>, string>)
+                   (_: SSAANF.Label) (block: SSAANF.Block) =
+        result |> Result.bind (fun (builder, incoming) ->
+            let finalAtom =
+                match block.Terminator with
+                | SSAANF.Return value -> value
+                | SSAANF.Jump _ | SSAANF.Branch _ -> ANF.UnitLiteral
+            let expr =
+                List.foldBack
+                    (fun (id, operation) rest -> ANF.Let (id, operation, rest))
+                    block.Operations
+                    (ANF.Return finalAtom)
+            convertExpr ssaFunc.ReturnType expr (mirLabel block.Label) [] builder
+            |> Result.bind (fun (exit, after) ->
+                match block.Terminator, exit with
+                | SSAANF.Return _, _ -> Ok (after, incoming)
+                | SSAANF.Jump (target, args), Returned (_, exitLabel) ->
+                    args
+                    |> List.map (atomToOperand after)
+                    |> sequenceResults
+                    |> Result.bind (fun operands ->
+                        patchReturn exitLabel (MIR.Jump (mirLabel target)) after
+                        |> Result.map (fun patched ->
+                            let current = Map.tryFind target incoming |> Option.defaultValue []
+                            patched, Map.add target ((exitLabel, operands) :: current) incoming))
+                | SSAANF.Branch (condition, ifTrue, ifFalse), Returned (_, exitLabel) ->
+                    atomToOperand after condition
+                    |> Result.bind (fun operand ->
+                        patchReturn
+                            exitLabel
+                            (MIR.Branch (operand, mirLabel ifTrue, mirLabel ifFalse))
+                            after
+                        |> Result.map (fun patched -> patched, incoming))
+                | _ -> Error "SSA ANF to MIR: a control-flow edge has no value exit"))
+    blocksToLower
+    |> Map.fold lowerBlock (Ok (initialBuilder, Map.empty))
+    |> Result.bind (fun (lowered, incoming) ->
+        let addBlockParameters
+            (result: Result<Map<MIR.Label, MIR.BasicBlock>, string>)
+            (_: SSAANF.Label)
+            (block: SSAANF.Block) =
+            result |> Result.bind (fun blocks ->
+                let label = mirLabel block.Label
+                match Map.tryFind label blocks with
+                | None -> Error $"SSA ANF to MIR: missing lowered block {label}"
+                | Some mirBlock ->
+                    let sources =
+                        Map.tryFind block.Label incoming
+                        |> Option.defaultValue []
+                        |> List.rev
+                    if sources |> List.exists (fun (_, args) -> List.length args <> List.length block.Parameters) then
+                        Error $"SSA ANF to MIR: edge arguments do not match {label}"
+                    else
+                        let phis =
+                            block.Parameters
+                            |> List.mapi (fun index parameter ->
+                                let phiSources =
+                                    sources
+                                    |> List.map (fun (fromLabel, args) ->
+                                        match List.tryItem index args with
+                                        | Some arg -> (arg, fromLabel)
+                                        | None -> Crash.crash "SSA ANF to MIR: verified edge lost an argument")
+                                MIR.Phi (tempToVReg parameter.Id, phiSources, Some parameter.Type))
+                        Ok (Map.add label { mirBlock with Instrs = phis @ mirBlock.Instrs } blocks))
+        Map.fold addBlockParameters (Ok lowered.Blocks) blocksToLower
+        |> Result.map (fun withBlockParameters ->
+            let trueEntryLabel = MIR.Label $"{ssaFunc.Name}_entry"
+            let bodyEntryLabel = mirLabel ssaFunc.Entry
+            let withLoopParameters =
+                if not hasSelfTail then
+                    withBlockParameters
+                else
+                    let header =
+                        match Map.tryFind bodyEntryLabel withBlockParameters with
+                        | Some block -> block
+                        | None -> Crash.crash "SSA ANF to MIR: missing loop header"
+                    let backedges = List.rev lowered.SelfTailIncoming
+                    let phis =
+                        List.zip3 ssaFunc.TypedParams bodyParamRegs inputRegs
+                        |> List.mapi (fun index (param, bodyReg, input) ->
+                            let sources =
+                                (MIR.Register input, trueEntryLabel)
+                                :: (backedges
+                                    |> List.map (fun (fromLabel, args) ->
+                                        match List.tryItem index args with
+                                        | Some arg -> (arg, fromLabel)
+                                        | None -> Crash.crash "SSA ANF to MIR: missing self-tail argument"))
+                            MIR.Phi (bodyReg, sources, Some param.Type))
+                    Map.add bodyEntryLabel { header with Instrs = phis @ header.Instrs } withBlockParameters
+            let blocksWithFloatSources, finalFloatRegs =
+                materializeFloatPhiSources lowered.RegGen lowered.FloatRegs withLoopParameters
+            let trueEntry = {
+                MIR.Label = trueEntryLabel
+                MIR.Instrs = entryRetains
+                MIR.Terminator = MIR.Jump bodyEntryLabel
+            }
+            let typedParams =
+                List.zip inputRegs ssaFunc.TypedParams
+                |> List.map (fun (reg, param) ->
+                    ({ Reg = reg; Type = param.Type } : MIR.TypedMIRParam))
+            let entryLabel, allBlocks =
+                if ssaFunc.Name = "_start" && List.isEmpty entryRetains && not hasSelfTail then
+                    bodyEntryLabel, blocksWithFloatSources
+                else
+                    trueEntryLabel, Map.add trueEntryLabel trueEntry blocksWithFloatSources
+            {
+                MIR.Id = ssaFunc.Id
+                MIR.Name = ssaFunc.Name
+                MIR.TypedParams = typedParams
+                MIR.ReturnType = ssaFunc.ReturnType
+                MIR.CFG = {
+                    MIR.Entry = entryLabel
+                    MIR.Blocks = allBlocks
+                }
+                MIR.FloatRegs = finalFloatRegs
+            }))
+
 let convertANFFunction
     (anfFunc: ANF.Function)
     (typeMap: ANF.TypeMap)
@@ -1627,135 +1920,9 @@ let convertANFFunction
     (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
     (enableCoverage: bool)
     : Result<MIR.Function, string> =
-    let convertCore () : Result<MIR.Function, string> =
-        // Calculate RegGen for THIS function only
-        // freshReg must generate VRegs that don't conflict with TempId-derived VRegs.
-        // tempToVReg (TempId n) → VReg n, so freshReg must start past the max TempId used.
-        let paramMax =
-            anfFunc.TypedParams
-            |> List.map (fun tp -> let (ANF.TempId id) = tp.Id in id)
-            |> List.fold max -1
-
-        // Initialize FloatRegs with float parameter IDs (types are now bundled in TypedParams)
-        let floatParamIds =
-            anfFunc.TypedParams
-            |> List.filter (fun tp -> tp.Type = AST.TFloat64)
-            |> List.map (fun tp -> let (ANF.TempId id) = tp.Id in id)
-            |> Set.ofList
-
-        // Convert ANF parameter TempIds to MIR VRegs
-        // Must use tempToVReg to preserve the TempId values, not fresh VRegs,
-        // because the body uses Var (TempId n) which converts to VReg n
-        let paramVRegs = anfFunc.TypedParams |> List.map (fun tp -> tempToVReg tp.Id)
-
-        // Get parameter types from TypedParams (types are now bundled)
-        let paramTypes = anfFunc.TypedParams |> List.map (fun tp -> tp.Type)
-
-        let bodyMaxId = maxTempIdInAExpr anfFunc.Body
-        let maxId = max paramMax bodyMaxId
-        let regGen = MIR.RegGen (maxId + 1)
-
-        // Create initial builder
-        let functionParamTypes =
-            anfFunc.TypedParams
-            |> List.fold (fun types param -> Map.add param.Id param.Type types) Map.empty
-
-        let initialBuilder = {
-            RegGen = regGen
-            Joins = Map.empty
-            LabelGen = MIR.initialLabelGen
-            Blocks = Map.empty
-            TypeById = typeById
-            SourceTempIdMax = maxId
-            ExtraTypeMap = functionParamTypes
-            TypeReg = typeReg
-            ReturnTypeReg = returnTypeReg
-            FuncId = anfFunc.Id
-            FuncName = anfFunc.Name
-            ParamRegs = paramVRegs  // For self-recursive tail call loop optimization
-            FloatRegs = floatParamIds
-            ClosureFuncs = Map.empty
-            EnableCoverage = enableCoverage
-            ExprIdGen = ANF.initialExprIdGen
-            CoverageMapping = ANF.emptyCoverageMapping
-        }
-
-        // Create entry label for CFG (internal to function body)
-        let entryLabel = MIR.Label $"{anfFunc.Name}_body"
-
-        // Parameter retains at the start of ANF are one-time function setup.
-        // Keep them in the true entry block so self-tailcall backedges enter
-        // after setup rather than retaining the loop accumulator each iteration.
-        let paramIds = anfFunc.TypedParams |> List.map (fun param -> param.Id) |> Set.ofList
-        let rec splitLeadingParamRetains
-            (expr: ANF.AExpr)
-            : MIR.Instr list * ANF.AExpr =
-            match expr with
-            | ANF.Let (_, ANF.RefCountInc (ANF.Var tempId, payloadSize, kind, sourceType), body)
-                when Set.contains tempId paramIds ->
-                let (remainingRetains, loopBody) = splitLeadingParamRetains body
-                (MIR.RefCountInc (tempToVReg tempId, payloadSize, rcKindToMIR kind, sourceType)
-                 :: remainingRetains,
-                 loopBody)
-            | ANF.Let (_, ANF.RefCountIncString (ANF.Var tempId), body)
-                when Set.contains tempId paramIds ->
-                let (remainingRetains, loopBody) = splitLeadingParamRetains body
-                (MIR.RefCountIncString (MIR.Register (tempToVReg tempId)) :: remainingRetains, loopBody)
-            | ANF.Let (_, ANF.RefCountIncBlob (ANF.Var tempId), body)
-                when Set.contains tempId paramIds ->
-                let (remainingRetains, loopBody) = splitLeadingParamRetains body
-                (MIR.RefCountIncBlob (MIR.Register (tempToVReg tempId)) :: remainingRetains, loopBody)
-            | ANF.Let (_, ANF.RefCountIncInt (ANF.Var tempId), body)
-                when Set.contains tempId paramIds ->
-                let (remainingRetains, loopBody) = splitLeadingParamRetains body
-                (MIR.RefCountIncInt (MIR.Register (tempToVReg tempId)) :: remainingRetains, loopBody)
-            | _ ->
-                ([], expr)
-        let (entryRetains, loopBody) = splitLeadingParamRetains anfFunc.Body
-
-        // For self-recursive functions, we need a separate entry block that jumps to the body.
-        // This allows the body to be a proper loop header with two predecessors:
-        // 1. The entry block (first call with initial param values)
-        // 2. The recursive block (back-edge with updated param values)
-        // This structure enables SSA to insert phi nodes at the loop header.
-        let trueEntryLabel = MIR.Label $"{anfFunc.Name}_entry"
-        let entryBlock = {
-            MIR.Label = trueEntryLabel
-            // Params are implicitly defined here by the calling convention.
-            MIR.Instrs = entryRetains
-            MIR.Terminator = MIR.Jump entryLabel
-        }
-
-        // Convert function body to CFG
-        match convertExpr anfFunc.ReturnType loopBody entryLabel [] initialBuilder with
-        | Error err -> Error err
-        | Ok (_, finalBuilder) ->
-
-        // Add the entry block to the CFG
-        let allBlocks = Map.add trueEntryLabel entryBlock finalBuilder.Blocks
-
-        let cfg = {
-            MIR.Entry = trueEntryLabel
-            MIR.Blocks = allBlocks
-        }
-
-        // Create TypedMIRParams by zipping VRegs with types
-        let typedMIRParams : MIR.TypedMIRParam list =
-            List.zip paramVRegs paramTypes
-            |> List.map (fun (reg, typ) -> { Reg = reg; Type = typ })
-
-        let mirFunc = {
-            MIR.Id = anfFunc.Id
-            MIR.Name = anfFunc.Name
-            MIR.TypedParams = typedMIRParams
-            MIR.ReturnType = anfFunc.ReturnType
-            MIR.CFG = cfg
-            MIR.FloatRegs = finalBuilder.FloatRegs
-        }
-
-        Ok mirFunc
-
-    convertCore ()
+    SSAANF.convertFunction (maxTempIdInFunction anfFunc) typeMap anfFunc
+    |> Result.bind (fun ssaFunc ->
+        convertSSAANFFunction ssaFunc typeById typeReg returnTypeReg enableCoverage)
 
 /// Convert ANF program to MIR program
 /// mainExprType: the type of the main expression (used for _start's return type)
@@ -1791,47 +1958,18 @@ let toMIR
     | Error err -> Error err
     | Ok mirFuncs ->
 
-    // Convert main expression to a synthetic "_start" function
-    // _start gets its own RegGen based on the main expression's TempIds
-    let startMaxId = maxTempIdInAExpr mainExpr
-    let startRegGen = MIR.RegGen (startMaxId + 1)
-    let entryLabel = MIR.Label "_start_body"
-    let initialBuilder = {
-        RegGen = startRegGen
-        Joins = Map.empty
-        LabelGen = MIR.initialLabelGen
-        Blocks = Map.empty
-        TypeById = typeById
-        SourceTempIdMax = startMaxId
-        ExtraTypeMap = Map.empty
-        TypeReg = typeReg
-        ReturnTypeReg = returnTypeReg
-        FuncId = startId
-        FuncName = "_start"
-        ParamRegs = []  // _start has no params
-        FloatRegs = Set.empty
-        ClosureFuncs = Map.empty
-        EnableCoverage = enableCoverage
-        ExprIdGen = ANF.initialExprIdGen
-        CoverageMapping = ANF.emptyCoverageMapping
+    // The main expression uses the same SSA boundary as named functions.
+    let startFuncANF: ANF.Function = {
+        Id = startId
+        Name = "_start"
+        TypedParams = []
+        ReturnType = mainExprType
+        ReturnOwnership = ANF.OwnedReturn
+        Body = mainExpr
     }
-    match convertExpr mainExprType mainExpr entryLabel [] initialBuilder with
+    match convertANFFunction startFuncANF typeMap typeById typeReg returnTypeReg enableCoverage with
     | Error err -> Error err
-    | Ok (_, finalBuilder) ->
-    let cfg = {
-        MIR.Entry = entryLabel
-        MIR.Blocks = finalBuilder.Blocks
-    }
-    // Use the passed mainExprType for _start's return type
-    // This is needed for proper float handling in the Ret terminator
-    let startFunc = {
-        MIR.Id = startId
-        MIR.Name = "_start"
-        MIR.TypedParams = []
-        MIR.ReturnType = mainExprType
-        MIR.CFG = cfg
-        MIR.FloatRegs = finalBuilder.FloatRegs
-    }
+    | Ok startFunc ->
     let allFuncs = mirFuncs @ [startFunc]
     let variantRegistry = buildVariantRegistry variantLookup
     // Build recordRegistry from typeRegForRecords (converts tuples to RecordField records)
