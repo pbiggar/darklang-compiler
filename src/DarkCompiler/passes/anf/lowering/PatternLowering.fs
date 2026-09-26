@@ -1278,7 +1278,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let cmpExpr = ANF.Atom (ANF.BoolLiteral false)
                         Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                     elif (match testedType with
-                          | AST.TSum (typeName, _) -> nullableStringSum typeName variantLookup
+                          | AST.TSum (typeName, typeArgs) -> nullableStringSum typeName typeArgs variantLookup
                           | _ -> false) then
                         let (cmpVar, vg1) = ANF.freshVar vg
                         let compareWithZero =
@@ -2715,7 +2715,9 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 when not (List.isEmpty fieldPatterns)
                      && not (List.forall patternAlwaysMatches fieldPatterns) ->
                 match tryFindVariantForTypeById constructorId testedType typeNames variantLookup with
-                | Some (typeName, _, _, _) when nullableStringSum typeName variantLookup && not (List.isEmpty fieldPatterns) ->
+                | Some (typeName, _, _, _) when (match testedType with
+                                                  | AST.TSum (_, typeArgs) -> nullableStringSum typeName typeArgs variantLookup
+                                                  | _ -> false) && not (List.isEmpty fieldPatterns) ->
                     match fieldPatterns with
                     | [innerPattern] ->
                         let cmpVar, vg1 = ANF.freshVar vg

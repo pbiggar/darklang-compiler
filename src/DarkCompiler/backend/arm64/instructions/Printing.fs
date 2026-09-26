@@ -98,6 +98,16 @@ let internal emitPrintSum (ctx: CodeGenContext) (convertInstr: CodeGenContext ->
 
         // Check if any variant has a payload
         let hasAnyPayload = variants |> List.exists (fun (_, _, payload) -> Option.isSome payload)
+        let nullableStringTags =
+            if transparentPayload || List.length variants <> 2 then None
+            else
+                let nullaryTag =
+                    variants |> List.tryPick (fun (_, tag, payload) -> if payload = None then Some tag else None)
+                let stringTag =
+                    variants |> List.tryPick (fun (_, tag, payload) -> if payload = Some AST.TString then Some tag else None)
+                match nullaryTag, stringTag with
+                | Some nullary, Some present -> Some (nullary, present)
+                | _ -> None
 
         // Helper: generate code to print a string literal
         let printLiteral (s: string) =
@@ -120,6 +130,15 @@ let internal emitPrintSum (ctx: CodeGenContext) (convertInstr: CodeGenContext ->
         let setup =
             if transparentPayload then
                 [ARM64Symbolic.MOV_reg (ARM64Symbolic.X19, sumReg)]
+            elif Option.isSome nullableStringTags then
+                match nullableStringTags with
+                | Some (nullaryTag, presentTag) ->
+                    [ ARM64Symbolic.MOV_reg (ARM64Symbolic.X19, sumReg)
+                      ARM64Symbolic.CMP_imm (ARM64Symbolic.X19, 0us)
+                      ARM64Symbolic.MOVZ (ARM64Symbolic.X20, uint16 nullaryTag, 0)
+                      ARM64Symbolic.MOVZ (ARM64Symbolic.X21, uint16 presentTag, 0)
+                      ARM64Symbolic.CSEL (ARM64Symbolic.X20, ARM64Symbolic.X20, ARM64Symbolic.X21, ARM64Symbolic.EQ) ]
+                | None -> Crash.crash "Nullable String tags disappeared after classification"
             elif hasAnyPayload then
                 // Heap-allocated: X19 = sum pointer, load tag from [X19, 0] into X20
                 [ARM64Symbolic.MOV_reg (ARM64Symbolic.X19, sumReg); ARM64Symbolic.LDR (ARM64Symbolic.X20, ARM64Symbolic.X19, 0s)]
@@ -149,7 +168,7 @@ let internal emitPrintSum (ctx: CodeGenContext) (convertInstr: CodeGenContext ->
                     | Some pType ->
                         let printOpen = printLiteral "("
                         let loadPayload =
-                            if transparentPayload then [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X19)]
+                            if transparentPayload || Option.isSome nullableStringTags then [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X19)]
                             else [ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X19, 8s)]
                         let printPayloadValue =
                             match pType with

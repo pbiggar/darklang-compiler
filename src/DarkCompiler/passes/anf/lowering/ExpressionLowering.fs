@@ -946,6 +946,8 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
             | None ->
                 Error $"Unknown constructor tag: {tag}"
             | Some (typeName, typeParams, tag, variantFieldTypes) ->
+                let typeArgs = CheckedAST.semanticTypeArgs constructorReference.TypeArgs
+                let isNullableString = nullableStringSum typeName typeArgs variantLookup
                 // Check if ANY variant in this type has a payload
                 // If so, all variants must be heap-allocated for consistency
                 // Note: We get typeName from variantLookup, not from AST (which may be empty)
@@ -972,15 +974,15 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                             Error $"Constructor '{typeName}' inferred unexpected type '{inferredType}'")
 
                 match fields with
-                | [field] when Option.isSome (transparentSumPayloadType typeName variantLookup) || nullableStringSum typeName variantLookup ->
+                | [field] when Option.isSome (transparentSumPayloadType typeName variantLookup) || isNullableString ->
                     toANFBoundAtomCore sumTypeNames typeNames inertScopes field varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (setup, payload, next) ->
                         let resultVar, final = ANF.freshVar next
-                        let result = ANF.Let (resultVar, ANF.TypedAtom (payload, AST.TSum (typeName, [])), ANF.Return (ANF.Var resultVar))
+                        let result = ANF.Let (resultVar, ANF.TypedAtom (payload, AST.TSum (typeName, typeArgs)), ANF.Return (ANF.Var resultVar))
                         (bindReturns setup (fun _ -> result), final))
-                | [] when nullableStringSum typeName variantLookup ->
+                | [] when isNullableString ->
                     let resultVar, next = ANF.freshVar varGen
-                    Ok (ANF.Let (resultVar, ANF.TypedAtom (ANF.IntLiteral (ANF.Int64 0L), AST.TSum (typeName, [])), ANF.Return (ANF.Var resultVar)), next)
+                    Ok (ANF.Let (resultVar, ANF.TypedAtom (ANF.IntLiteral (ANF.Int64 0L), AST.TSum (typeName, typeArgs)), ANF.Return (ANF.Var resultVar)), next)
                 | [] when not typeHasPayloadVariants ->
                     // Pure enum type (no payloads anywhere): return tag as an integer
                     Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 (int64 tag))), varGen)

@@ -4,7 +4,7 @@ module X64Process
 
 open X64Operands
 
-/// Return argv[index + 1] as a boxed Option<String>. RDI carries the zero-based
+/// Return argv[index + 1] as a nullable String pointer. RDI carries the zero-based
 /// positional index. Native argv entries are zero-terminated, so present
 /// values are copied into managed Dark strings. Following the frame-pointer
 /// chain reaches _start's root frame without reserving process-state registers.
@@ -18,8 +18,6 @@ let internal generateCliArgvHelper (enableLeakCheck: bool) : X86_64.Instr list =
     let copyLabel = $"{label}_copy"
     let copyDoneLabel = $"{label}_copy_done"
     let stringHeapOkLabel = $"{label}_string_heap_ok"
-    let boxLabel = $"{label}_box"
-    let boxHeapOkLabel = $"{label}_box_heap_ok"
     let savedRegs =
         [ X86_64.RDI
           X86_64.RSI
@@ -105,21 +103,11 @@ let internal generateCliArgvHelper (enableLeakCheck: bool) : X86_64.Instr list =
         X86_64.JMP copyLabel
         X86_64.Label copyDoneLabel ]
     @ leakInc
-    @ [ X86_64.XOR_reg (X86_64.R8, X86_64.R8)
-        X86_64.JMP boxLabel
+    @ [ X86_64.MOV_reg (X86_64.RAX, X86_64.R10)
+        X86_64.JMP $"{label}_done"
         X86_64.Label missingLabel
-        X86_64.MOV_imm32 (X86_64.R8, 1)
-        X86_64.XOR_reg (X86_64.R10, X86_64.R10)
-        X86_64.Label boxLabel
-        // Allocate the 16-byte Option payload plus its refcount word.
-        X86_64.MOV_reg (X86_64.RAX, heapPtr)
-        X86_64.ADD_imm (heapPtr, 24) ]
-    @ checkHeapBounds boxHeapOkLabel
-    @ [ X86_64.MOV_store (X86_64.RAX, 0, X86_64.R8)
-        X86_64.MOV_store (X86_64.RAX, 8, X86_64.R10)
-        X86_64.MOV_imm32 (X86_64.RDX, 1)
-        X86_64.MOV_store (X86_64.RAX, 16, X86_64.RDX) ]
-    @ leakInc
+        X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
+        X86_64.Label $"{label}_done" ]
     @ restores
     @ [ X86_64.RET ]
 
@@ -643,7 +631,7 @@ let internal generateCliDirectoryListHelper (enableLeakCheck: bool) : X86_64.Ins
         X86_64.RET ]
 
 /// Look up a managed name in the original process environment and return a
-/// boxed Option<String>. This walks _start's native envp directly; no libc or
+/// nullable String pointer. This walks _start's native envp directly; no libc or
 /// child process is involved.
 let internal generateCliGetEnvHelper (enableLeakCheck: bool) : X86_64.Instr list =
     let label = "__dark_cli_getenv"
@@ -659,8 +647,6 @@ let internal generateCliGetEnvHelper (enableLeakCheck: bool) : X86_64.Instr list
     let copyDoneLabel = $"{label}_copy_done"
     let stringHeapOkLabel = $"{label}_string_heap_ok"
     let missingLabel = $"{label}_missing"
-    let boxLabel = $"{label}_box"
-    let boxHeapOkLabel = $"{label}_box_heap_ok"
     let leakInc =
         if enableLeakCheck then
             [ X86_64.LEA_rip (X86_64.R11, "_leak_count")
@@ -752,21 +738,12 @@ let internal generateCliGetEnvHelper (enableLeakCheck: bool) : X86_64.Instr list
         X86_64.JMP copyLabel
         X86_64.Label copyDoneLabel ]
     @ leakInc
-    @ [ X86_64.XOR_reg (X86_64.R8, X86_64.R8)
-        X86_64.JMP boxLabel
+    @ [ X86_64.MOV_reg (X86_64.RAX, X86_64.R10)
+        X86_64.JMP $"{label}_done"
         X86_64.Label missingLabel
-        X86_64.MOV_imm32 (X86_64.R8, 1)
-        X86_64.XOR_reg (X86_64.R10, X86_64.R10)
-        X86_64.Label boxLabel
-        X86_64.MOV_reg (X86_64.RAX, heapPtr)
-        X86_64.ADD_imm (heapPtr, 24) ]
-    @ checkHeapBounds boxHeapOkLabel
-    @ [ X86_64.MOV_store (X86_64.RAX, 0, X86_64.R8)
-        X86_64.MOV_store (X86_64.RAX, 8, X86_64.R10)
-        X86_64.MOV_imm32 (X86_64.RDX, 1)
-        X86_64.MOV_store (X86_64.RAX, 16, X86_64.RDX) ]
-    @ leakInc
-    @ [ X86_64.RET ]
+        X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
+        X86_64.Label $"{label}_done"
+        X86_64.RET ]
 
 /// Start a shell command and retain its pid, descriptors, and raw output in a
 /// fixed process table. The otherwise-unused first free-list slot owns the

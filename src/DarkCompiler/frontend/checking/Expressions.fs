@@ -152,6 +152,52 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
             |> Option.map (fun argumentTypes ->
                 TFunction (argumentTypes, TVar "binding_return"))
 
+    let rec expectedTypeForNestedVariable
+        (targetName: string)
+        (expected: SemanticType)
+        (candidate: Expr)
+        : SemanticType option =
+        match candidate, resolveType aliasReg expected with
+        | Var name, _ when name = targetName -> Some expected
+        | TupleLiteral values, TTuple elementTypes when List.length values = List.length elementTypes ->
+            List.zip values elementTypes
+            |> List.tryPick (fun (value, elementType) -> expectedTypeForNestedVariable targetName elementType value)
+        | ListLiteral values, TList elementType ->
+            values |> List.tryPick (expectedTypeForNestedVariable targetName elementType)
+        | RecordLiteral (_, fields), TRecord (typeName, typeArgs) ->
+            match Map.tryFind typeName typeReg with
+            | Some recordInfo ->
+                match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
+                | Ok subst ->
+                    fields
+                    |> List.tryPick (fun (fieldReference, value) ->
+                        Map.tryFind fieldReference.SourceFieldName recordInfo.FieldTypes
+                        |> Option.bind (fun fieldType ->
+                            expectedTypeForNestedVariable
+                                targetName
+                                (applyTypeArguments subst fieldType)
+                                value))
+                | Error _ -> None
+            | None -> None
+        | Constructor (reference, variantName, fields), TSum (typeName, typeArgs) ->
+            match tryFindVariant reference variantName variantLookup with
+            | Some (owner, typeParams, _, fieldTypes)
+                when owner = typeName
+                     && List.length typeParams = List.length typeArgs
+                     && List.length fields = List.length fieldTypes ->
+                let subst = List.zip typeParams typeArgs |> Map.ofList
+                List.zip fields fieldTypes
+                |> List.tryPick (fun (field, fieldType) ->
+                    expectedTypeForNestedVariable targetName (applySubst subst fieldType) field)
+            | _ -> None
+        | If (_, thenBranch, elseBranch), _ ->
+            [thenBranch; elseBranch]
+            |> List.tryPick (expectedTypeForNestedVariable targetName expected)
+        | Match (_, cases), _ ->
+            cases
+            |> List.tryPick (fun case -> expectedTypeForNestedVariable targetName expected case.Body)
+        | _ -> None
+
     let rec tryFindFunctionValueExpectation
         (targetName: string)
         (candidate: Expr)
@@ -159,33 +205,38 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
         let tryChildren children =
             children |> List.tryPick (tryFindFunctionValueExpectation targetName)
         let fromCall (functionName: string) (arguments: Expr list) =
-            match Map.tryFind functionName env with
+            let functionType =
+                Map.tryFind functionName env
+                |> Option.orElseWith (fun () ->
+                    Stdlib.tryGetFunction moduleRegistry functionName
+                    |> Option.map (fun (moduleFunc, _) -> Stdlib.getFunctionType moduleFunc))
+            match functionType with
             | Some (TFunction (parameterTypes, _)) when List.length parameterTypes = List.length arguments ->
                 let parameterArguments = List.zip parameterTypes arguments
+                let siblingBindings =
+                    parameterArguments
+                    |> ResultList.traverse (fun (parameterType, argument) ->
+                        if Option.isSome (expectedTypeForNestedVariable targetName parameterType argument) then
+                            Ok []
+                        else
+                            checkExpr argument env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
+                            |> Result.bind (fun (argumentType, _) ->
+                                match matchTypes parameterType argumentType with
+                                | Ok bindings -> Ok bindings
+                                | Error _ -> Ok []))
+                    |> Result.map List.concat
+                    |> Result.bind (consolidateBindings >> Result.mapError GenericError)
+                    |> Result.toOption
+                    |> Option.defaultValue Map.empty
                 match
                     parameterArguments
                     |> List.tryPick (fun (parameterType, argument) ->
-                        match argument with
-                        | Var name when name = targetName -> Some parameterType
-                        | _ -> None)
+                        expectedTypeForNestedVariable
+                            targetName
+                            (applySubst siblingBindings parameterType)
+                            argument)
                 with
-                | Some targetParameterType ->
-                    let siblingBindings =
-                        parameterArguments
-                        |> ResultList.traverse (fun (parameterType, argument) ->
-                            match argument with
-                            | Var name when name = targetName -> Ok []
-                            | _ ->
-                                checkExpr argument env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
-                                |> Result.bind (fun (argumentType, _) ->
-                                    match matchTypes parameterType argumentType with
-                                    | Ok bindings -> Ok bindings
-                                    | Error _ -> Ok []))
-                        |> Result.map List.concat
-                        |> Result.bind (consolidateBindings >> Result.mapError GenericError)
-                        |> Result.toOption
-                        |> Option.defaultValue Map.empty
-                    Some (applySubst siblingBindings targetParameterType)
+                | Some targetParameterType -> Some targetParameterType
                 | None ->
                     parameterArguments
                     |> List.tryPick (fun (_, argument) -> tryFindFunctionValueExpectation targetName argument)
@@ -193,6 +244,12 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
 
         match candidate with
         | Apply (Var functionName, _, arguments) -> fromCall functionName (NonEmptyList.toList arguments)
+        | Let (LPVariable bindingName, value, body) when bindingName <> targetName ->
+            tryFindFunctionValueExpectation bindingName body
+            |> Option.bind (fun expected -> expectedTypeForNestedVariable targetName expected value)
+            |> Option.filter (containsTVar >> not)
+            |> Option.orElseWith (fun () -> tryFindFunctionValueExpectation targetName value)
+            |> Option.orElseWith (fun () -> tryFindFunctionValueExpectation targetName body)
         | Let (pattern, value, body) ->
             tryFindFunctionValueExpectation targetName value
             |> Option.orElseWith (fun () ->
@@ -213,13 +270,59 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
         | BoundaryRender (_, value) | UnaryOp (_, value)
         | TupleAccess (value, _) | RecordAccess (value, _) ->
             tryFindFunctionValueExpectation targetName value
+        | BinOp ((Eq | Neq), left, right) ->
+            let expectedFrom other value =
+                checkExpr other env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
+                |> Result.toOption
+                |> Option.bind (fun (typ, _) -> expectedTypeForNestedVariable targetName typ value)
+            expectedFrom right left
+            |> Option.orElseWith (fun () -> expectedFrom left right)
+            |> Option.orElseWith (fun () -> tryChildren [left; right])
         | BinOp (_, left, right) | Sequence (left, right) -> tryChildren [left; right]
-        | If (condition, thenBranch, elseBranch) -> tryChildren [condition; thenBranch; elseBranch]
+        | If (condition, thenBranch, elseBranch) ->
+            let expectedFrom other value =
+                checkExpr other env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
+                |> Result.toOption
+                |> Option.bind (fun (typ, _) -> expectedTypeForNestedVariable targetName typ value)
+            expectedFrom elseBranch thenBranch
+            |> Option.orElseWith (fun () -> expectedFrom thenBranch elseBranch)
+            |> Option.orElseWith (fun () -> tryChildren [condition; thenBranch; elseBranch])
         | TupleLiteral elements | ListLiteral elements -> tryChildren elements
         | DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> tryChildren
-        | RecordLiteral (_, fields) -> fields |> List.map snd |> tryChildren
+        | RecordLiteral (reference, fields) ->
+            let declaredExpectation =
+                match tryResolveRecordLiteralInfo aliasReg typeReg reference with
+                | Some (_, typeArgs, recordInfo) ->
+                    match buildRecordFieldSubstitutionFromParams recordInfo.TypeParams typeArgs with
+                    | Ok subst ->
+                        fields
+                        |> List.tryPick (fun (fieldReference, value) ->
+                            Map.tryFind fieldReference.SourceFieldName recordInfo.FieldTypes
+                            |> Option.bind (fun fieldType ->
+                                expectedTypeForNestedVariable
+                                    targetName
+                                    (applyTypeArguments subst fieldType)
+                                    value))
+                    | Error _ -> None
+                | None -> None
+            declaredExpectation
+            |> Option.orElseWith (fun () -> fields |> List.map snd |> tryChildren)
         | RecordUpdate (record, fields) -> record :: (fields |> List.map snd) |> tryChildren
-        | Constructor (_, _, fields) -> tryChildren fields
+        | Constructor (reference, variantName, fields) ->
+            let declaredExpectation =
+                match tryFindVariant reference variantName variantLookup with
+                | Some (_, typeParams, _, fieldTypes) when List.length fields = List.length fieldTypes ->
+                    let typeArgs =
+                        match reference with
+                        | ResolvedConstructor (_, _, args) when List.length args = List.length typeParams -> args
+                        | _ -> typeParams |> List.map TVar
+                    let subst = List.zip typeParams typeArgs |> Map.ofList
+                    List.zip fields fieldTypes
+                    |> List.tryPick (fun (field, fieldType) ->
+                        expectedTypeForNestedVariable targetName (applySubst subst fieldType) field)
+                | _ -> None
+            declaredExpectation
+            |> Option.orElseWith (fun () -> tryChildren fields)
         | Match (scrutinee, cases) ->
             scrutinee
             :: (cases |> List.collect (fun case -> Option.toList case.Guard @ [case.Body]))
@@ -523,6 +626,9 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                     |> Option.orElseWith (fun () ->
                         tryFindCallArguments name currentBody
                         |> Option.bind (inferFunctionExpectationFromArguments (parameters |> NonEmptyList.toList |> List.length)))
+                | LPVariable name, Constructor (_, _, []) ->
+                    tryFindFunctionValueExpectation name currentBody
+                    |> Option.filter (containsTVar >> not)
                 | _, ListLiteral [] -> Some (TList (TVar emptyListElementVar))
                 | _ -> None
 
@@ -708,12 +814,20 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                         | None ->
                             Error (IfBranchTypeMismatch (thenType, elseType))
                         | Some reconciledType ->
-                            match expectedType with
-                            | Some expected ->
-                                match reconcileTypes (Some aliasReg) expected reconciledType with
-                                | Some reconciledExpected -> Ok (reconciledExpected, If (normalizedCond, then', else'))
-                                | None -> Error (TypeMismatch (expected, reconciledType, "if expression"))
-                            | _ -> Ok (reconciledType, If (normalizedCond, then', else'))))))
+                            let resolvedThen =
+                                if containsTVar thenType && not (containsTVar reconciledType) then
+                                    checkExpr thenBranch env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some reconciledType)
+                                    |> Result.map snd
+                                else
+                                    Ok then'
+                            resolvedThen
+                            |> Result.bind (fun then' ->
+                                match expectedType with
+                                | Some expected ->
+                                    match reconcileTypes (Some aliasReg) expected reconciledType with
+                                    | Some reconciledExpected -> Ok (reconciledExpected, If (normalizedCond, then', else'))
+                                    | None -> Error (TypeMismatch (expected, reconciledType, "if expression"))
+                                | _ -> Ok (reconciledType, If (normalizedCond, then', else')))))))
 
     | Sequence (first, next) ->
         // The interpreter checks this at the statement boundary. The compiler
@@ -1314,7 +1428,6 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
         | None ->
             Error (GenericError $"Unknown constructor: {variantName}")
         | Some (typeName, typeParams, _tag, expectedFields) ->
-            let resolvedReference = resolvedConstructorReference typeName
             if List.length expectedFields <> List.length payload then
                 Error (
                     GenericError
@@ -1379,8 +1492,12 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                     | Some expected ->
                         match reconcileTypes (Some aliasReg) expected sumType with
                         | None -> Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
-                        | Some reconciledType -> Ok (reconciledType, Constructor (resolvedReference, variantName, checkedFields))
-                    | None -> Ok (sumType, Constructor (resolvedReference, variantName, checkedFields)))
+                        | Some reconciledType ->
+                            let resolvedReference = resolvedConstructorReferenceWithTypeArgs typeName typeArgs
+                            Ok (reconciledType, Constructor (resolvedReference, variantName, checkedFields))
+                    | None ->
+                        let resolvedReference = resolvedConstructorReferenceWithTypeArgs typeName typeArgs
+                        Ok (sumType, Constructor (resolvedReference, variantName, checkedFields)))
 
     | Match (scrutinee, cases) ->
         CheckMatches.check checkExpr sumTypeNames indexedSumTypeReg env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedType scrutinee cases

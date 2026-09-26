@@ -104,14 +104,7 @@ let testRcShapeClassifiesSumsWithVariantMetadata () : TestResult =
 
     let samples = [
         AST.TSum ("Enum", []), Immediate
-        AST.TSum ("Maybe", [AST.TString]),
-            BoxedSum (
-                16,
-                [(8, DynamicString)],
-                [
-                    { Tag = 0; FieldShapes = [] }
-                    { Tag = 1; FieldShapes = [(8, DynamicString)] }
-                ])
+        AST.TSum ("Maybe", [AST.TString]), DynamicInt
         AST.TSum ("Packet", []),
             BoxedSum (
                 16,
@@ -544,19 +537,7 @@ let testRcReleasePlanOfTypeWithSumsUsesVariantMetadata () : TestResult =
 
     let samples = [
         (AST.TSum ("Color", []), NoReleasePlan)
-        (AST.TSum ("Maybe", [AST.TString]),
-            RootRelease (
-                16,
-                GenericHeap,
-                BoxedSumPayloadRelease (
-                16,
-                [
-                    FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)
-                ],
-                [
-                    { Tag = 0; FieldReleases = [] }
-                    { Tag = 1; FieldReleases = [FieldRelease (8, DynamicBufferRelease DynamicStringBuffer)] }
-                ])))
+        (AST.TSum ("Maybe", [AST.TString]), DynamicBufferRelease DynamicIntBuffer)
         (AST.TSum ("Packet", []),
             RootRelease (
                 16,

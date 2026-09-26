@@ -109,6 +109,7 @@ type RecordReference = {
 type ConstructorReference = {
     TypeId: AST.TypeId
     ConstructorId: AST.ConstructorId
+    TypeArgs: CheckedType list
 }
 
 /// A checked record literal contains each declaration slot exactly once.
@@ -608,13 +609,13 @@ let private convertConstructorReference
     (symbols: Symbols)
     : Result<ConstructorReference, string> =
     match reference with
-    | AST.ResolvedConstructor _ ->
+    | AST.ResolvedConstructor (_, _, typeArgs) ->
         match AST.constructorReferenceTypeName reference with
         | Some typeName ->
             match tryFindConstructorId typeName variantName symbols with
             | Some id ->
                 let typeId = AST.constructorIdOwner id
-                Ok { TypeId = typeId; ConstructorId = id }
+                Ok { TypeId = typeId; ConstructorId = id; TypeArgs = checkedTypeArgs typeArgs }
             | None -> conversionError location "resolved constructor has no semantic identity"
         | None -> conversionError location "resolved constructor has no declaring type"
     | AST.UnresolvedConstructor _ ->

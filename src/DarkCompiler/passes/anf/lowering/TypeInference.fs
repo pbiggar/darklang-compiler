@@ -142,7 +142,10 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                 Error $"Unknown constructor tag: {tag}"
             | Some (typeName, typeParams, _, fieldPatterns) ->
                 let defaultTypeArgs = typeParams |> List.map AST.TVar
-                if List.length fieldPatterns <> List.length fields then
+                let checkedTypeArgs = CheckedAST.semanticTypeArgs constructorReference.TypeArgs
+                if List.length checkedTypeArgs = List.length typeParams then
+                    Ok (AST.TSum (typeName, checkedTypeArgs))
+                elif List.length fieldPatterns <> List.length fields then
                     Ok (AST.TSum (typeName, defaultTypeArgs))
                 else
                     List.zip fieldPatterns fields

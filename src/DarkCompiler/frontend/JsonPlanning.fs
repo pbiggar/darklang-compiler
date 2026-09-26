@@ -182,7 +182,7 @@ let private typeId (env: Env) name =
 let private constructor (env: Env) owner caseName payload =
     match tryFindConstructorId owner caseName env.Symbols with
     | Some id ->
-        Constructor ({ TypeId = typeId env owner; ConstructorId = id }, Option.toList payload)
+        Constructor ({ TypeId = typeId env owner; ConstructorId = id; TypeArgs = [] }, Option.toList payload)
     | None -> Crash.crash $"JSON constructor was not interned: {owner}.{caseName}"
 
 let private constructorPattern (env: Env) owner caseName fields =
@@ -957,10 +957,14 @@ and private decodeEnumCase
             (fieldType, local rawNames[index] bindings, argumentPath, valueId))
     let constructed =
         let values = valueNames |> List.map (fun name -> local name bindings)
+        let typeArgs =
+            match typ with
+            | TSum (_, args) -> checkedTypeArgs args
+            | _ -> Crash.crash "JSON enum decoder received a non-sum type"
         match tryFindConstructorId typeName variant.Name env.Symbols with
         | Some id ->
             Constructor (
-                { TypeId = typeId env typeName; ConstructorId = id },
+                { TypeId = typeId env typeName; ConstructorId = id; TypeArgs = typeArgs },
                 values
             )
             |> ok env

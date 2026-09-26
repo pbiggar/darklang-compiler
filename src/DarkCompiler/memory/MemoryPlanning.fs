@@ -6,10 +6,17 @@ open MemoryModel
 
 let isNullableStringSumType (sumReg: RcSumShapeRegistry) (typ: AST.SemanticType) : bool =
     match typ with
-    | AST.TSum (name, []) ->
+    | AST.TSum (name, typeArgs) ->
         match Map.tryFind name sumReg with
-        | Some info when List.isEmpty info.TypeParams ->
-            match info.Payloads |> List.map snd |> List.sort with
+        | Some info when List.length info.TypeParams = List.length typeArgs ->
+            let subst = List.zip info.TypeParams typeArgs |> Map.ofList
+            let concretePayload = function
+                | Some (AST.TVar name) ->
+                    Map.tryFind name subst
+                    |> Option.map Some
+                    |> Option.defaultWith (fun () -> Crash.crash $"Nullable sum payload variable '{name}' is not declared")
+                | payload -> payload
+            match info.Payloads |> List.map (snd >> concretePayload) |> List.sort with
             | [None; Some AST.TString] -> true
             | _ -> false
         | _ -> false
@@ -255,7 +262,9 @@ let rcShapeOfTypeWithSums
                         | _ -> None
 
                     let nullableStringShape =
-                        if isNullableStringSumType sumReg sourceType then Some DynamicString else None
+                        // The dynamic-int helper shares String's buffer header
+                        // and safely ignores the zero word in nested release plans.
+                        if isNullableStringSumType sumReg sourceType then Some DynamicInt else None
 
                     match transparentPayloadShape |> Option.orElse nullableStringShape with
                     | Some shape -> shape

@@ -271,13 +271,13 @@ let rec generateStructuralEquality
 
             compareFields 0 concreteFields None [] varGen
 
-    | AST.TSum (typeName, _) ->
+    | AST.TSum (typeName, typeArgs) ->
         let hasAnyPayload =
             variantLookup
             |> Map.exists (fun _ (tName, _, _, fields) ->
                 tName = typeName && not (List.isEmpty fields))
 
-        if nullableStringSum typeName variantLookup then
+        if nullableStringSum typeName typeArgs variantLookup then
             let cmpVar, vg' = ANF.freshVar varGen
             ([(cmpVar, ANF.CanonicalBufferEq (MemoryModel.NullableUtf8String, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
         elif transparentSumPayloadType typeName variantLookup = Some AST.TString

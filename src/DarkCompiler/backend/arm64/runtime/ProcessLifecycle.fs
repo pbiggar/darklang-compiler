@@ -58,7 +58,7 @@ let generateHeapInit (target: ARM64.TargetConfig) : ARM64Symbolic.Instr list =
 
 /// Linux AArch64 shell runner. Generated binaries remain libc-free, and both
 /// redirected streams are made nonblocking and drained on every wait probe.
-/// Return argv[index + 1] as a boxed Option<String>. Native argv entries are
+/// Return argv[index + 1] as a nullable String pointer. Native argv entries are
 /// zero-terminated bytes, so present values are copied into managed Dark strings.
 /// The root _start frame terminates the normal frame-pointer chain. Its initial
 /// stack layout keeps argc at +16, argv[0] at +24, and the first positional
@@ -70,7 +70,6 @@ let internal generateCliArgvHelper (ctx: CodeGenContext) (label: string) : ARM64
     let lengthDoneLabel = $"{label}_length_done"
     let copyLabel = $"{label}_copy"
     let copyDoneLabel = $"{label}_copy_done"
-    let boxLabel = $"{label}_box"
     [ ARM64Symbolic.Label label
       ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
       ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, missingLabel)
@@ -121,20 +120,11 @@ let internal generateCliArgvHelper (ctx: CodeGenContext) (label: string) : ARM64
       ARM64Symbolic.B_label copyLabel
       ARM64Symbolic.Label copyDoneLabel ]
     @ generateLeakCounterInc ctx
-    @ [ ARM64Symbolic.MOVZ (ARM64Symbolic.X6, 0us, 0)
-        ARM64Symbolic.B_label boxLabel
+    @ [ ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X7)
+        ARM64Symbolic.RET
         ARM64Symbolic.Label missingLabel
-        ARM64Symbolic.MOVZ (ARM64Symbolic.X6, 1us, 0)
-        ARM64Symbolic.MOVZ (ARM64Symbolic.X7, 0us, 0)
-        ARM64Symbolic.Label boxLabel
-        ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X28)
-        ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 24us)
-        ARM64Symbolic.STR (ARM64Symbolic.X6, ARM64Symbolic.X0, 0s)
-        ARM64Symbolic.STR (ARM64Symbolic.X7, ARM64Symbolic.X0, 8s)
-        ARM64Symbolic.MOVZ (ARM64Symbolic.X1, 1us, 0)
-        ARM64Symbolic.STR (ARM64Symbolic.X1, ARM64Symbolic.X0, 16s) ]
-    @ generateLeakCounterInc ctx
-    @ [ ARM64Symbolic.RET ]
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
+        ARM64Symbolic.RET ]
 
 /// Start a shell-language command and retain its pid and descriptors in the
 /// fixed process table rooted at X25.

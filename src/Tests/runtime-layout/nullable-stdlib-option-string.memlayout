@@ -1,0 +1,45 @@
+---NAME---
+None String option is a zero word
+---INPUT---
+let stringOption (value: Stdlib.Option.Option<String>): Stdlib.Option.Option<String> = value
+stringOption None
+---EXPECTED---
+root = word(0)
+
+---NAME---
+Generic user sum with String payload uses a zero word for its empty case
+---INPUT---
+type Maybe<'t> = Missing | Present of t
+let identity (value: Maybe<String>): Maybe<String> = value
+identity Missing
+---EXPECTED---
+root = word(0)
+
+---NAME---
+Generic user sum with String payload shares its pointer
+---INPUT---
+type Maybe<'t> = Missing | Present of t
+let original = Stdlib.String.trim (" " ++ "ef" ++ " ") in (original, Present original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Some String option shares its payload pointer
+---INPUT---
+let original = Stdlib.String.trim (" " ++ "ab" ++ " ") in (original, Some original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Missing native environment String option is a zero word
+---INPUT---
+Stdlib.Cli.Env.get "DARK_NULLABLE_STRING_OPTION_ABSENT_87294"
+---EXPECTED---
+root = word(0)
+
+---NAME---
+Mapped String option shares its payload pointer
+---INPUT---
+let original = Stdlib.String.trim (" " ++ "cd" ++ " ") in (original, Stdlib.Option.map (Some original) (fun value -> value))
+---EXPECTED---
+root = tuple(shared_word, shared_word)

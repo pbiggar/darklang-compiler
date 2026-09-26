@@ -123,26 +123,33 @@ let internal check (checkExpr: ExpressionChecker) (indexedSumTypeReg: IndexedSum
                             checkExpr right env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some leftType)
                     rightResult
                     |> Result.bind (fun (rightType, right') ->
-                        classifyComparison
-                            aliasReg
-                            typeReg
-                            variantLookup
-                            indexedSumTypeReg
-                            op
-                            leftType
-                            rightType
-                        |> Result.bind (fun plan ->
-                            let comparisonExpr =
-                                match plan with
-                                | EqualityComparison comparableType ->
-                                    let equality =
-                                        buildEqExprForType aliasReg variantLookup comparableType left' right'
-                                    if op = Neq then UnaryOp (Not, equality) else equality
-                                | OrderingComparison numericType ->
-                                    buildOrderingExprForType op numericType left' right'
-                            match expectedType with
-                            | Some TBool | None -> Ok (TBool, comparisonExpr)
-                            | Some other -> Error (TypeMismatch (other, TBool, $"result of {opName}")))))
+                        let leftResult =
+                            if containsTVar leftType && not (containsTVar rightType) then
+                                checkExpr left env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg (Some rightType)
+                            else
+                                Ok (leftType, left')
+                        leftResult
+                        |> Result.bind (fun (leftType, left') ->
+                            classifyComparison
+                                aliasReg
+                                typeReg
+                                variantLookup
+                                indexedSumTypeReg
+                                op
+                                leftType
+                                rightType
+                            |> Result.bind (fun plan ->
+                                let comparisonExpr =
+                                    match plan with
+                                    | EqualityComparison comparableType ->
+                                        let equality =
+                                            buildEqExprForType aliasReg variantLookup comparableType left' right'
+                                        if op = Neq then UnaryOp (Not, equality) else equality
+                                    | OrderingComparison numericType ->
+                                        buildOrderingExprForType op numericType left' right'
+                                match expectedType with
+                                | Some TBool | None -> Ok (TBool, comparisonExpr)
+                                | Some other -> Error (TypeMismatch (other, TBool, $"result of {opName}"))))))
             Some comparisonResult
 
         match lambdaLiteralFastPath with

@@ -948,11 +948,11 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
             |> List.map (fun case ->
                 { case with Patterns = NonEmptyList.map reopenResolvedPattern case.Patterns })
 
-        let rec checkCases (remaining: MatchCase list) (resultType: SemanticType option) (accCases: MatchCase list) : Result<SemanticType * MatchCase list, TypeError> =
+        let rec checkCases (remaining: MatchCase list) (resultType: SemanticType option) (accCases: MatchCase list) (firstCaseHasTypeVars: bool) : Result<SemanticType * MatchCase list * bool, TypeError> =
             match remaining with
             | [] ->
                 match resultType with
-                | Some t -> Ok (t, List.rev accCases)
+                | Some t -> Ok (t, List.rev accCases, firstCaseHasTypeVars)
                 | None -> Error (GenericError "Match expression must have at least one case")
             | matchCase :: rest ->
                 validatePatternGroupBindings matchCase.Patterns
@@ -1036,26 +1036,34 @@ let internal check (checkExpr: ExpressionChecker) (sumTypeNames: Set<string>) (i
                                 let newCase = { Patterns = resolvedPatterns; Guard = guard'; Body = body' }
                                 match resultType with
                                 | None ->
-                                    checkCases rest (Some bodyType) (newCase :: accCases)
+                                    checkCases rest (Some bodyType) (newCase :: accCases) (containsTVar bodyType)
                                 | Some expected ->
                                     // Use reconcileTypes to handle type variables and type aliases
                                     match reconcileTypes (Some aliasReg) expected bodyType with
                                     | Some reconciledType ->
                                         // Update resultType to the reconciled (concrete) type
-                                        checkCases rest (Some reconciledType) (newCase :: accCases)
+                                        checkCases rest (Some reconciledType) (newCase :: accCases) firstCaseHasTypeVars
                                     | None ->
                                         Error (TypeMismatch (expected, bodyType, "match body"))))))
 
         // Pass expectedType to first case so empty lists, None, etc. get the right type
-        checkCases casesForChecking expectedType []
-        |> Result.bind (fun (matchType, cases') ->
-            if not (matchIsExhaustive casesForChecking) then
-                Error (GenericError $"Non-exhaustive match expression for {typeToString scrutineeType}")
-            else
-                match expectedType with
-                | Some expected ->
-                    // Use reconcileTypes for expected type check too
-                    match reconcileTypes (Some aliasReg) expected matchType with
-                    | Some reconciledType -> Ok (reconciledType, Match (scrutinee', cases'))
-                    | None -> Error (TypeMismatch (expected, matchType, "match expression"))
-                | None -> Ok (matchType, Match (scrutinee', cases'))))
+        checkCases casesForChecking expectedType [] false
+        |> Result.bind (fun (matchType, cases', firstCaseHasTypeVars) ->
+            let resolvedCases =
+                if firstCaseHasTypeVars && not (containsTVar matchType) then
+                    checkCases casesForChecking (Some matchType) [] false
+                    |> Result.map (fun (_, recheckedCases, _) -> recheckedCases)
+                else
+                    Ok cases'
+            resolvedCases
+            |> Result.bind (fun cases' ->
+                if not (matchIsExhaustive casesForChecking) then
+                    Error (GenericError $"Non-exhaustive match expression for {typeToString scrutineeType}")
+                else
+                    match expectedType with
+                    | Some expected ->
+                        // Use reconcileTypes for expected type check too
+                        match reconcileTypes (Some aliasReg) expected matchType with
+                        | Some reconciledType -> Ok (reconciledType, Match (scrutinee', cases'))
+                        | None -> Error (TypeMismatch (expected, matchType, "match expression"))
+                    | None -> Ok (matchType, Match (scrutinee', cases')))))

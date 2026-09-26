@@ -483,20 +483,19 @@ let testCliArgvHelperResolvesAsCodeLabel () : Result<unit, string> =
             | Some _ -> Error "CLI argv helper call was deferred as an ELF data fixup"
 
 /// Native argv entries must be copied into a managed String and returned in a
-/// boxed Some value, matching the LIR type of Stdlib.Cli.__argv.
-let testCliArgvReturnsManagedOptionString () : Result<unit, string> =
+/// nullable String pointer, matching the LIR type of Stdlib.Cli.__argv.
+let testCliArgvReturnsNullableString () : Result<unit, string> =
     let program =
         makeSimpleProgram
             [ LIR.CliNative (LIR.Physical LIR.X1, LIR.GetArgv, [LIR.Imm 0L])
-              LIR.HeapLoad (LIR.Physical LIR.X3, LIR.Physical LIR.X1, 8)
-              LIR.PrintHeapStringNoNewline (LIR.Physical LIR.X3) ]
+              LIR.PrintHeapStringNoNewline (LIR.Physical LIR.X1) ]
             LIR.Ret
 
     match runLIRProgramFullWithOptionsAndArgs program false ["hello"] with
     | Error error -> Error error
     | Ok (exitCode, stdout, stderr) ->
         if exitCode <> 0 then Error $"Expected exit code 0, got {exitCode}: {stderr}"
-        elif stdout <> "hello" then Error $"Expected Some(hello), got '{stdout}'"
+        elif stdout <> "hello" then Error $"Expected nullable Some(hello), got '{stdout}'"
         else Ok ()
 
 /// Run the x64 kernel boundary under QEMU: hostname and environment values
@@ -511,8 +510,7 @@ let testCliHostOperationsExecute () : Result<unit, string> =
               LIR.HeapLoad (LIR.Physical LIR.X1, LIR.Physical LIR.X0, 8)
               LIR.PrintHeapString (LIR.Physical LIR.X1)
               LIR.CliNative (LIR.Physical LIR.X0, LIR.GetEnv, [LIR.StringSymbol "PATH"])
-              LIR.HeapLoad (LIR.Physical LIR.X1, LIR.Physical LIR.X0, 8)
-              LIR.PrintHeapString (LIR.Physical LIR.X1)
+              LIR.PrintHeapString (LIR.Physical LIR.X0)
               LIR.CliNative (LIR.Physical LIR.X0, LIR.GetPid, [])
               LIR.CliNative (LIR.Physical LIR.X0, LIR.Kill, [LIR.Reg (LIR.Physical LIR.X0); LIR.Imm 99999L])
               LIR.HeapLoad (LIR.Physical LIR.X1, LIR.Physical LIR.X0, 8)
@@ -1722,7 +1720,7 @@ let testTaggedListRefCountDecSumRecord3DynamicPayloadCombinations () : Result<un
 let tests : (string * (unit -> Result<unit, string>)) list = [
     ("x64 branch false edge falls through", testBranchFalseEdgeFallsThrough)
     ("LIR CLI argv x64 helper resolves as code label", testCliArgvHelperResolvesAsCodeLabel)
-    ("LIR CLI argv x64 returns managed Option String", testCliArgvReturnsManagedOptionString)
+    ("LIR CLI argv x64 returns nullable String", testCliArgvReturnsNullableString)
     ("LIR CLI host operations execute under x64", testCliHostOperationsExecute)
     ("LIR CLI native call preserves live x64 caller register", testCliNativePreservesLiveCallerRegister)
     ("LIR string literal x64 uses static storage", testStringLiteralUsesStaticStorage)

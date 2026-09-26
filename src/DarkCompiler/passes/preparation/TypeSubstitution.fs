@@ -268,7 +268,14 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
     | CheckedAST.RecordAccess (record, fieldName) ->
         CheckedAST.RecordAccess (applySubstToExpr subst record, fieldName)
     | CheckedAST.Constructor (reference, fields) ->
-        CheckedAST.Constructor (reference, List.map (applySubstToExpr subst) fields)
+        CheckedAST.Constructor (
+            { reference with
+                TypeArgs =
+                    reference.TypeArgs
+                    |> CheckedAST.semanticTypeArgs
+                    |> List.map (applySubstToType subst)
+                    |> CheckedAST.checkedTypeArgs },
+            List.map (applySubstToExpr subst) fields)
     | CheckedAST.Match (scrutinee, cases) ->
         CheckedAST.Match (applySubstToExpr subst scrutinee,
                    cases |> AST.NonEmptyList.map (fun mc -> { mc with Guard = mc.Guard |> Option.map (applySubstToExpr subst); Body = applySubstToExpr subst mc.Body }))

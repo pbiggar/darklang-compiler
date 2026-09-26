@@ -134,20 +134,27 @@ let resolvedRecordFieldReference typeName fieldName fieldIndex : RecordFieldRefe
 /// `None` is the genuinely unqualified form; no empty-name sentinel is used.
 type ConstructorReference =
     | UnresolvedConstructor of declaringType:string option
-    | ResolvedConstructor of declaringModule:string list * declaringType:string
+    | ResolvedConstructor of declaringModule:string list * declaringType:string * typeArgs:SemanticType list
 
 let constructorReferenceTypeName (reference: ConstructorReference) : string option =
     match reference with
     | UnresolvedConstructor declaringType -> declaringType
-    | ResolvedConstructor (declaringModule, declaringType) ->
+    | ResolvedConstructor (declaringModule, declaringType, _) ->
         Some (String.concat "." (declaringModule @ [declaringType]))
 
 let resolvedConstructorReference (canonicalTypeName: string) : ConstructorReference =
     match canonicalTypeName.Split('.') |> Array.toList |> List.rev with
     | declaringType :: reversedModule ->
-        ResolvedConstructor (List.rev reversedModule, declaringType)
+        ResolvedConstructor (List.rev reversedModule, declaringType, [])
     | [] ->
         Crash.crash "Cannot resolve a constructor against an empty declaring type name"
+
+let resolvedConstructorReferenceWithTypeArgs (canonicalTypeName: string) (typeArgs: SemanticType list) : ConstructorReference =
+    match resolvedConstructorReference canonicalTypeName with
+    | ResolvedConstructor (declaringModule, declaringType, _) ->
+        ResolvedConstructor (declaringModule, declaringType, typeArgs)
+    | UnresolvedConstructor _ ->
+        Crash.crash "Resolved constructor helper returned an unresolved reference"
 
 /// Binary operators
 type BinOp =

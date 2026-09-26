@@ -90,15 +90,23 @@ let internal transparentSumPayloadType (typeName: string) (variantLookup: Varian
     | [(_, [AST.TChar])] -> Some AST.TChar
     | _ -> None
 
-/// A concrete two-case String sum can use zero for its empty case and the
-/// non-null String buffer pointer for its payload case.
-let internal nullableStringSum (typeName: string) (variantLookup: VariantLookup) : bool =
+/// A two-case sum whose instantiated payload is String uses zero for its
+/// empty case and the non-null String buffer pointer for its payload case.
+let internal nullableStringSum (typeName: string) (typeArgs: AST.SemanticType list) (variantLookup: VariantLookup) : bool =
     let cases =
         variantLookup
         |> Map.toList
         |> List.choose (fun (key, (owner, typeParams, _, fields)) ->
-            if owner = typeName && List.isEmpty typeParams && key.StartsWith($"{typeName}.") then
-                Some fields
+            if owner = typeName && List.length typeParams = List.length typeArgs && key.StartsWith($"{typeName}.") then
+                let subst = List.zip typeParams typeArgs |> Map.ofList
+                let concreteFields =
+                    fields
+                    |> List.map (function
+                        | AST.TVar name ->
+                            Map.tryFind name subst
+                            |> Option.defaultWith (fun () -> Crash.crash $"Nullable sum payload variable '{name}' is not declared")
+                        | fieldType -> fieldType)
+                Some concreteFields
             else None)
     match cases |> List.sort with
     | [[]; [AST.TString]] -> true
@@ -106,7 +114,7 @@ let internal nullableStringSum (typeName: string) (variantLookup: VariantLookup)
 
 let internal sumPayloadExpr (sourceType: AST.SemanticType) (sourceAtom: ANF.Atom) (variantLookup: VariantLookup) : ANF.CExpr =
     match sourceType with
-    | AST.TSum (typeName, _) when Option.isSome (transparentSumPayloadType typeName variantLookup) || nullableStringSum typeName variantLookup -> ANF.Atom sourceAtom
+    | AST.TSum (typeName, typeArgs) when Option.isSome (transparentSumPayloadType typeName variantLookup) || nullableStringSum typeName typeArgs variantLookup -> ANF.Atom sourceAtom
     | _ -> ANF.TupleGet (sourceAtom, 1)
 
 let sumTypeNamesFromVariantLookup (variantLookup: VariantLookup) : Set<string> =

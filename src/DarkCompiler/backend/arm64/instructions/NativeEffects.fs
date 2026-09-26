@@ -785,7 +785,7 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
                     let copyValue = label "copy_value"
                     let copyDone = label "copy_done"
                     let missing = label "missing"
-                    let box = label "box"
+                    let complete = label "complete"
                     loads
                     @ [ ARM64Symbolic.MOV_reg (ARM64Symbolic.X1, ARM64Symbolic.X29)
                         ARM64Symbolic.Label findRoot
@@ -850,19 +850,11 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
                         ARM64Symbolic.B_label copyValue
                         ARM64Symbolic.Label copyDone ]
                     @ generateLeakCounterInc ctx
-                    @ [ ARM64Symbolic.MOVZ (ARM64Symbolic.X15, 0us, 0)
-                        ARM64Symbolic.B_label box
+                    @ [ ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X7)
+                        ARM64Symbolic.B_label complete
                         ARM64Symbolic.Label missing
-                        ARM64Symbolic.MOVZ (ARM64Symbolic.X15, 1us, 0)
-                        ARM64Symbolic.MOVZ (ARM64Symbolic.X7, 0us, 0)
-                        ARM64Symbolic.Label box
-                        ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X28)
-                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X28, ARM64Symbolic.X28, 24us)
-                        ARM64Symbolic.STR (ARM64Symbolic.X15, destReg, 0s)
-                        ARM64Symbolic.STR (ARM64Symbolic.X7, destReg, 8s)
-                        ARM64Symbolic.MOVZ (ARM64Symbolic.X11, 1us, 0)
-                        ARM64Symbolic.STR (ARM64Symbolic.X11, destReg, 16s) ]
-                    @ generateLeakCounterInc ctx)
+                        ARM64Symbolic.MOVZ (destReg, 0us, 0)
+                        ARM64Symbolic.Label complete ])
             | _ -> Error "CLI getenv expects exactly one name"
         | LIR.GetEnvironmentPacked ->
             Ok (emitEnvironmentPacked ctx destReg)

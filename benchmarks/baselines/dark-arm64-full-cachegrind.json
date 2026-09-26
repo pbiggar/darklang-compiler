@@ -10,127 +10,127 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-26T10:34:31+00:00",
+  "generated_at": "2026-09-26T23:15:07+00:00",
   "compiler": {
-    "commit": "cc885d47c51082be1912827a2bca6c6b94ec19cd",
-    "subject": "Use direct Int64 words for single-case scalar sums"
+    "commit": "11b2d7297c0748f5082c509470a2f4d8e2ab356d",
+    "subject": "Merge commit 'f95dc7ab45f5469703c37e272b2f5e6f25af3d85' into HEAD"
   },
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 145107565
+      "instructions": 145107511
     },
     {
       "name": "binary_trees",
-      "instructions": 11047008
+      "instructions": 11046954
     },
     {
       "name": "collatz",
-      "instructions": 70193722
+      "instructions": 70193695
     },
     {
       "name": "edigits",
-      "instructions": 49935784
+      "instructions": 49935730
     },
     {
       "name": "factorial",
-      "instructions": 59367
+      "instructions": 59313
     },
     {
       "name": "fannkuch",
-      "instructions": 220630043
+      "instructions": 220630016
     },
     {
       "name": "fasta",
-      "instructions": 21292809
+      "instructions": 21292782
     },
     {
       "name": "fft",
-      "instructions": 1802846
+      "instructions": 1802792
     },
     {
       "name": "fib",
-      "instructions": 8265947
+      "instructions": 8265920
     },
     {
       "name": "huffman",
-      "instructions": 411909115
+      "instructions": 411909034
     },
     {
       "name": "leibniz",
-      "instructions": 17006646
+      "instructions": 17006619
     },
     {
       "name": "mandelbrot",
-      "instructions": 15222367
+      "instructions": 15222313
     },
     {
       "name": "matmul",
-      "instructions": 42560545
+      "instructions": 42560518
     },
     {
       "name": "merkletrees",
-      "instructions": 3871356
+      "instructions": 3871302
     },
     {
       "name": "myers_diff",
-      "instructions": 205029680
+      "instructions": 205029599
     },
     {
       "name": "nbody",
-      "instructions": 14536161
+      "instructions": 14536134
     },
     {
       "name": "nqueen",
-      "instructions": 7417785
+      "instructions": 7417758
     },
     {
       "name": "nsieve",
-      "instructions": 131108594
+      "instructions": 131108540
     },
     {
       "name": "pisum",
-      "instructions": 808376
+      "instructions": 808322
     },
     {
       "name": "primes",
-      "instructions": 1672266
+      "instructions": 1672239
     },
     {
       "name": "quicksort",
-      "instructions": 176619935
+      "instructions": 176619881
     },
     {
       "name": "raytracer",
-      "instructions": 47302477
+      "instructions": 47302423
     },
     {
       "name": "regex_lite",
-      "instructions": 64887197
+      "instructions": 64887143
     },
     {
       "name": "spectral_norm",
-      "instructions": 264941406
+      "instructions": 264941352
     },
     {
       "name": "string_equality",
-      "instructions": 1178632
+      "instructions": 1178578
     },
     {
       "name": "sum_to_n",
-      "instructions": 58399
+      "instructions": 58345
     },
     {
       "name": "tak",
-      "instructions": 48005108
+      "instructions": 48005000
     },
     {
       "name": "tinytemplate",
-      "instructions": 309994639
+      "instructions": 309994585
     },
     {
       "name": "warden",
-      "instructions": 44212784
+      "instructions": 44212730
     }
   ]
 }

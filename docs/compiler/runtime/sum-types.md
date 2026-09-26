@@ -100,16 +100,17 @@ identities map to the same bounded native tag. This adaptive encoding preserves
 compact matches while ensuring that same-named constructors from different
 nominal types cannot collapse to one runtime identity.
 
-`Stdlib.Option.Option` and `Stdlib.Result.Result` intentionally retain their
-existing 0/1 native ABI because file, string, and other runtime intrinsics
-construct those values directly. This is an internal compiler divergence from
-the general encoding, not an observable nominal-equality divergence: their
-declaring types remain distinct in type checking, rendering, and equality.
+Boxed instances of `Stdlib.Option.Option` and `Stdlib.Result.Result` retain
+their existing 0/1 tags. `Option<String>` instead uses the nullable String
+representation, including when native argv and environment intrinsics produce
+it. The representation is selected for each concrete generic instantiation;
+other `Option` payload types retain their established layout.
 
 - A type whose cases are all nullary uses its case tag as an immediate.
 - A concrete single-case sum over Int64, UInt64, Bool, String, or Char uses the
   payload word directly, without a sum allocation.
-- A concrete two-case sum with one nullary case and one String payload case uses
+- A two-case sum whose concrete payload is String, including a specialized
+  generic sum, uses
   zero for the nullary case and the nonzero String buffer pointer for the payload
   case. Matching tests zero before inspecting the payload; ownership treats the
   nonzero word as the String buffer.
