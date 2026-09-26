@@ -140,3 +140,44 @@ let insertPrintInEntry
                 update found rest
                 |> Result.map (fun updatedTail -> f :: updatedTail)
     update false functions
+
+/// Observe the source value immediately before the generated value renderer
+/// consumes it. The ordinary result printer sees only the rendered string.
+let insertRootWordProbeInEntry
+    (entryName: string)
+    (functions: ANF.Function list)
+    : Result<ANF.Function list, string> =
+    let rec probeReturns (varGen: VarGen) (expr: AExpr) : AExpr * VarGen =
+        match expr with
+        | Return _ -> (expr, varGen)
+        | Let (id, Call (callee, [value]), body)
+            when (AST.functionIdValue callee).StartsWith("__dark_render_value_") ->
+            let probeId, next = freshVar varGen
+            let body', final = probeReturns next body
+            (Let (probeId, Print (value, AST.TInt64), Let (id, Call (callee, [value]), body')), final)
+        | Let (id, value, body) ->
+            let body', next = probeReturns varGen body
+            (Let (id, value, body'), next)
+        | If (condition, yes, no) ->
+            let yes', afterYes = probeReturns varGen yes
+            let no', afterNo = probeReturns afterYes no
+            (If (condition, yes', no'), afterNo)
+        | Join (parameter, continuation, entry) ->
+            let continuation', afterContinuation = probeReturns varGen continuation
+            let entry', afterEntry = probeReturns afterContinuation entry
+            (Join (parameter, continuation', entry'), afterEntry)
+        | Jump _ -> (expr, varGen)
+
+    let rec update found remaining =
+        match remaining with
+        | [] ->
+            if found then Ok []
+            else Error $"Entry function '{entryName}' not found for root word probe"
+        | func :: rest when func.Name = entryName ->
+            let body, _ = probeReturns (VarGen 3000) func.Body
+            update true rest
+            |> Result.map (fun tail -> { func with Body = body } :: tail)
+        | func :: rest ->
+            update found rest
+            |> Result.map (fun tail -> func :: tail)
+    update false functions

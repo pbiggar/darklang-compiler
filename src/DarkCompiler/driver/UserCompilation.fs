@@ -334,6 +334,12 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     programEntryName
                                     boundaryProgramType
                                     functions
+                                |> Result.bind (fun printedFunctions ->
+                                    if plan.Options.ProbeRootWord then
+                                        PrintInsertion.insertRootWordProbeInEntry
+                                            programEntryName
+                                            printedFunctions
+                                    else Ok printedFunctions)
                                 |> Result.mapError (fun err -> $"Print insertion error: {err}")
                                 |> Result.map (fun printedFunctions ->
                                     let printElapsed = sw.Elapsed.TotalMilliseconds - printStart

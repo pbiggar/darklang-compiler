@@ -77,7 +77,7 @@ let getUsedVRegs (instr: LIR.Instr) : int list =
     | LIR.PrintInt64 reg | LIR.PrintUInt64 reg | LIR.PrintBool reg
     | LIR.PrintInt64NoNewline reg | LIR.PrintUInt64NoNewline reg | LIR.PrintBoolNoNewline reg
     | LIR.PrintHeapStringNoNewline reg | LIR.RuntimeErrorString reg | LIR.PrintList (reg, _)
-    | LIR.PrintSum (reg, _) | LIR.PrintRecord (reg, _, _) ->
+    | LIR.PrintSum (reg, _, _) | LIR.PrintRecord (reg, _, _) ->
         regToVReg reg |> Option.toList
     | LIR.PrintFloatNoNewline _ -> []  // FP register, not GP
     | LIR.PrintChars _ -> []  // No registers used

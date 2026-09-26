@@ -257,7 +257,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     | [fieldPattern], [fieldType] -> fieldPattern, fieldType
                                     | _ -> CheckedAST.PTuple fieldPatterns, AST.TTuple fieldTypes
                                 let (payloadVar, vg1) = ANF.freshVar vg
-                                let payloadExpr = ANF.TupleGet (sourceAtom, 1)
+                                let payloadExpr = sumPayloadExpr sourceType sourceAtom variantLookup
                                 let payloadBinding = (payloadVar, payloadExpr)
                                 collectPatternBindings
                                     innerPattern
@@ -369,11 +369,10 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 | _ ->
                     match tryFindVariantForTypeById constructorId scrutType typeNames variantLookup with
                     | Some (_, typeParams, _, fieldTypeTemplates) ->
-                        // Extract payload from heap-allocated variant
-                        // Variant layout: [tag:8][payload:8], so payload is at index 1
+                        // Project the payload according to this sum's representation.
                         let (payloadVar, vg1) = ANF.freshVar vg
                         let (typedPayloadVar, vg2) = ANF.freshVar vg1
-                        let payloadExpr = ANF.TupleGet (scrutAtom, 1)
+                        let payloadExpr = sumPayloadExpr scrutType scrutAtom variantLookup
                         // Apply type substitution if scrutType has type args
                         let fieldTypes =
                             match scrutType with
@@ -503,9 +502,9 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                     match fieldPatterns, fieldTypes with
                                     | [fieldPattern], [fieldType] -> (fieldPattern, fieldType)
                                     | _ -> (CheckedAST.PTuple fieldPatterns, AST.TTuple fieldTypes)
-                                    // Extract payload (at index 1) and recursively collect
+                                    // Project the payload and recursively collect bindings.
                                 let (payloadVar, vg1) = ANF.freshVar vg
-                                let payloadExpr = ANF.TupleGet (sourceAtom, 1)
+                                let payloadExpr = sumPayloadExpr sourceType sourceAtom variantLookup
                                 let payloadBinding = (payloadVar, payloadExpr)
                                 collectPatternBindings
                                     innerPat
@@ -1021,7 +1020,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                                 | [fieldPattern], [fieldType] -> (fieldPattern, fieldType)
                                 | _ -> (CheckedAST.PTuple fieldPatterns, AST.TTuple fieldTypes)
                             let (payloadVar, vg1) = ANF.freshVar vg
-                            let payloadExpr = ANF.TupleGet (sourceAtom, 1)
+                            let payloadExpr = sumPayloadExpr sourceType sourceAtom variantLookup
                             collectBindings
                                 innerPat
                                 (ANF.Var payloadVar)
@@ -1278,6 +1277,12 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let (cmpVar, vg1) = ANF.freshVar vg
                         let cmpExpr = ANF.Atom (ANF.BoolLiteral false)
                         Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                    elif (match testedType with
+                          | AST.TSum (typeName, _) -> isTransparentInt64Sum typeName variantLookup
+                          | _ -> false) then
+                        match fieldPatterns with
+                        | [innerPattern] -> buildPatternComparison innerPattern scrutAtom (Some AST.TInt64) vg
+                        | _ -> Crash.crash "Transparent Int64 sum must have one field"
                     elif typeHasAnyPayloadHere constructorId then
                         // Mixed or payload-carrying sum type: tag is stored in heap at index 0.
                         let (tagVar, vg1) = ANF.freshVar vg
@@ -1610,7 +1615,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             | [fieldPattern], [fieldType] -> (fieldPattern, fieldType)
                             | _ -> (CheckedAST.PTuple fieldPatterns, AST.TTuple fieldTypes)
                         let (payloadVar, vg1) = ANF.freshVar vg
-                        let payloadExpr = ANF.TupleGet (sourceAtom, 1)
+                        let payloadExpr = sumPayloadExpr sourceType sourceAtom variantLookup
                         collectNestedPatternBindings
                             innerPattern
                             (ANF.Var payloadVar)
@@ -2693,6 +2698,10 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 when not (List.isEmpty fieldPatterns)
                      && not (List.forall patternAlwaysMatches fieldPatterns) ->
                 match tryFindVariantForTypeById constructorId testedType typeNames variantLookup with
+                | Some (typeName, _, _, _) when isTransparentInt64Sum typeName variantLookup ->
+                    match fieldPatterns with
+                    | [innerPattern] -> buildPatternStages innerPattern scrutAtom (Some AST.TInt64) vg
+                    | _ -> Crash.crash "Transparent Int64 sum must have one field"
                 | Some (typeName, typeParams, tag, fieldTypeTemplates)
                     when variantLookup
                          |> Map.exists (fun _ (tName, _, _, fields) ->

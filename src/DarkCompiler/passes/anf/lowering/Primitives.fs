@@ -72,6 +72,26 @@ let internal materializeComparisonPlan
 /// Variant lookup - maps variant names to (type name, type params, tag index, field types)
 type VariantLookup = Map<string, (string * string list * int * AST.SemanticType list)>
 
+/// A single Int64 case needs neither a discriminant nor a heap root. Restrict
+/// this first representation slice to concrete Int64 payloads; other layouts
+/// continue through their existing boxed representation.
+let internal isTransparentInt64Sum (typeName: string) (variantLookup: VariantLookup) : bool =
+    let cases =
+        variantLookup
+        |> Map.toList
+        |> List.choose (fun (key, (owner, typeParams, tag, fields)) ->
+            if owner = typeName && List.isEmpty typeParams && key.StartsWith($"{typeName}.") then
+                Some (tag, fields)
+            else None)
+    match cases with
+    | [(_, [AST.TInt64])] -> true
+    | _ -> false
+
+let internal sumPayloadExpr (sourceType: AST.SemanticType) (sourceAtom: ANF.Atom) (variantLookup: VariantLookup) : ANF.CExpr =
+    match sourceType with
+    | AST.TSum (typeName, _) when isTransparentInt64Sum typeName variantLookup -> ANF.Atom sourceAtom
+    | _ -> ANF.TupleGet (sourceAtom, 1)
+
 let sumTypeNamesFromVariantLookup (variantLookup: VariantLookup) : Set<string> =
     variantLookup
     |> Map.fold (fun names _ (typeName, _, _, _) -> Set.add typeName names) Set.empty

@@ -281,6 +281,14 @@ MIR: v1 <- v0 + 5
      ret v1
 ```
 
+For a concrete, nongeneric sum with exactly one `Int64` payload case, ANF
+keeps the nominal type on a typed scalar alias while its runtime word is the
+payload itself. Pattern projection and equality use that word directly; RC
+planning classifies it as immediate, and native printing supplies the implicit
+case name without reading a heap tag. Other payload sums retain their boxed
+layout. This is a representation choice within one compilation, not a stable
+external ABI.
+
 ## LIR (Low-level IR)
 
 ### Purpose

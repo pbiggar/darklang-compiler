@@ -211,8 +211,8 @@ let private prettyPrintLIRInstr functionNames (instr: LIR.Instr) : string =
         $"PrintHeapStringNoNewline({prettyPrintLIRReg reg})"
     | LIR.PrintList (listPtr, elemType) ->
         $"PrintList({prettyPrintLIRReg listPtr}, {elemType})"
-    | LIR.PrintSum (sumPtr, variants) ->
-        $"PrintSum({prettyPrintLIRReg sumPtr}, {variants})"
+    | LIR.PrintSum (sumPtr, variants, transparentInt64) ->
+        $"PrintSum({prettyPrintLIRReg sumPtr}, {variants}, transparentInt64={transparentInt64})"
     | LIR.PrintRecord (recordPtr, typeName, fields) ->
         $"PrintRecord({prettyPrintLIRReg recordPtr}, {typeName}, {fields})"
     | LIR.Exit -> "Exit"

@@ -101,7 +101,7 @@ let private inferFixtureVariantsFromInstr (instr: LIR.Instr) : LIR.VariantRegist
         inferFixtureVariantsFromRcMetadata metadata
     | LIR.PrintList (_, elemType) ->
         inferFixtureVariantsFromType elemType
-    | LIR.PrintSum (_, variants) ->
+    | LIR.PrintSum (_, variants, _) ->
         variants
         |> List.choose (fun (_, _, payload) -> payload)
         |> List.map inferFixtureVariantsFromType

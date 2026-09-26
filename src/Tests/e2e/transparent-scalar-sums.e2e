@@ -1,0 +1,14 @@
+// Transparent scalar wrappers retain nominal construction and matching behavior.
+type ScalarWrap = ScalarWrap of Int64
+let unwrapScalar (value: ScalarWrap): Int64 =
+    match value with
+    | ScalarWrap inner -> inner
+
+unwrapScalar (ScalarWrap 42L) = 42L
+match ScalarWrap 7L with | ScalarWrap 7L -> true | ScalarWrap _ -> false = true
+ScalarWrap 42L == ScalarWrap 42L = true
+type GenericWrap<'t> = GenericWrap of t
+let unwrapGeneric (value: GenericWrap<Int64>): Int64 = match value with | GenericWrap inner -> inner
+unwrapGeneric (GenericWrap 42L) = 42L
+type Outer = Outer of ScalarWrap
+match Outer (ScalarWrap 5L) with | Outer (ScalarWrap inner) -> inner = 5L

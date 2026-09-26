@@ -993,7 +993,7 @@ let private foldRegUses folder state (instr: Instr) =
     | PrintHeapStringNoNewline src
     | PrintBlob src
     | PrintList (src, _)
-    | PrintSum (src, _)
+    | PrintSum (src, _, _)
     | PrintRecord (src, _, _)
     | Int64ToFloat (_, src)
     | GpToFp (_, src)

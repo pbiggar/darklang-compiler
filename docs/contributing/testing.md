@@ -41,6 +41,21 @@ Value-equality E2E checks normally share a generated executable. Add
 `isolated=true` to a check that must own its process or bounded heap state; the
 runner then compiles and executes that check separately.
 
+## Native memory-layout fixtures
+
+Place `.memlayout` fixtures in `src/Tests/runtime-layout/`. Each `NAME`,
+`INPUT`, and `EXPECTED` case compiles and executes an ordinary test expression;
+the test-only root-word probe prints the source result as a signed 64-bit word
+before its normal value renderer runs. For example, `root = word(42)` verifies
+that a result occupies that machine word at the native boundary. Pair layout
+fixtures with `.e2e` cases for language behavior.
+
+These are snapshots of the current physical representation, not an ABI promise.
+When a later optimization (such as escape analysis or scalar replacement)
+intentionally changes the observed word, update the fixture and explain the
+new representation. Do not preserve an older layout solely to keep this test
+green.
+
 Use `compileerror="message"` when a case must be rejected before native
 execution. Unlike the older `error="message"` expectation, a matching runtime
 failure does not satisfy `compileerror`. Imported upstream `.dark` files retain

@@ -140,7 +140,7 @@ let private addCallsFromInstr
     | LIR.CoverageHit _ ->
         calls
     | LIR.CliNative (_, _, args) -> addCallsFromOperands args calls
-    | LIR.PrintSum (_, variants) ->
+    | LIR.PrintSum (_, variants, _) ->
         variants
         |> List.fold (fun calls (_, _, payloadType) ->
             match payloadType with
@@ -188,7 +188,7 @@ let requiresListDisplayHelpers (func: LIR.Function) : bool =
     |> Map.exists (fun _ block ->
         block.Instrs
         |> List.exists (function
-            | LIR.PrintSum (_, variants) ->
+            | LIR.PrintSum (_, variants, _) ->
                 variants
                 |> List.exists (fun (_, _, payloadType) ->
                     match payloadType with

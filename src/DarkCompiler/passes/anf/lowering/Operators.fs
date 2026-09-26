@@ -277,7 +277,7 @@ let rec generateStructuralEquality
             |> Map.exists (fun _ (tName, _, _, fields) ->
                 tName = typeName && not (List.isEmpty fields))
 
-        if not hasAnyPayload then
+        if isTransparentInt64Sum typeName variantLookup || not hasAnyPayload then
             let (cmpVar, vg') = ANF.freshVar varGen
             ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
         else

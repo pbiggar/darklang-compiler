@@ -84,6 +84,8 @@ type CompilerOptions = {
     EnableCoverage: bool
     /// Enable leak checking (debug only)
     EnableLeakCheck: bool
+    /// Test-only observation of the final machine word before semantic printing.
+    ProbeRootWord: bool
     /// Warning compatibility settings passed into type checking
     Warnings: AST.WarningSettings
     /// Dump ANF representations to stdout
@@ -121,6 +123,7 @@ let defaultOptions : CompilerOptions = {
     DisableFunctionTreeShaking = false
     EnableCoverage = false
     EnableLeakCheck = false
+    ProbeRootWord = false
     Warnings = AST.defaultWarningSettings
     DumpANF = false
     DumpMIR = false

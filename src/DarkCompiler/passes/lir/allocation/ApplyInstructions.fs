@@ -559,9 +559,9 @@ let applyToInstr (arch: Platform.Arch) (mapping: AllocationResult) (instr: LIR.I
         let (ptrFinal, ptrLoads) = loadSpilled mapping listPtr LIR.X12
         ptrLoads @ [LIR.PrintList (ptrFinal, elemType)]
 
-    | LIR.PrintSum (sumPtr, variants) ->
+    | LIR.PrintSum (sumPtr, variants, transparentInt64) ->
         let (ptrFinal, ptrLoads) = loadSpilled mapping sumPtr LIR.X12
-        ptrLoads @ [LIR.PrintSum (ptrFinal, variants)]
+        ptrLoads @ [LIR.PrintSum (ptrFinal, variants, transparentInt64)]
 
     | LIR.PrintRecord (recordPtr, typeName, fields) ->
         let (ptrFinal, ptrLoads) = loadSpilled mapping recordPtr LIR.X12

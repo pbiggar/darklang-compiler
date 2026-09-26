@@ -377,6 +377,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
     let graphColorTestFiles = getTestFiles "algorithms/graph-color" "graphcolor"
     let parallelMoveTestFiles = getTestFiles "algorithms/parallel-moves" "parallelmoves"
     let irFormatSnapshotTestFiles = getTestFiles "formatting/ir" "irformat"
+    let memoryLayoutTestFiles = getTestFiles "runtime-layout" "memlayout"
     let lirExecutionTestFiles = getTestFiles "backend/x64" "lirexec"
     let rcReleaseTestFiles = getTestFiles "backend/reference-release" "rcrelease"
     let formattingRoundtripTestFiles = getTestFiles "formatting-roundtrip" "roundtrip"
@@ -428,6 +429,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "Parallel Move DSL Tests"; Tests = ParallelMoveDSLTests.tests }
         { Name = "IR Format Snapshot DSL Tests"; Tests = IRFormatSnapshotDSLTests.tests }
         { Name = "IR Format Snapshot Fixture Tests"; Tests = TestDSL.IRFormatSnapshotTestRunner.tests irFormatSnapshotTestFiles }
+        { Name = "Memory Layout Fixture Tests"; Tests = TestDSL.MemoryLayoutTestRunner.tests stdlib memoryLayoutTestFiles }
         { Name = "LIR Execution DSL Tests"; Tests = LIRExecutionDSLTests.tests }
         { Name = "Reference Release DSL Tests"; Tests = RCReleaseDSLTests.tests target }
         { Name = "LIR Execution Fixture Tests"; Tests = TestDSL.LIRExecutionTestRunner.tests lirExecutionTestFiles }

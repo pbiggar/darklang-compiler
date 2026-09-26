@@ -129,8 +129,8 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
     | LIR.PrintList (listPtr, elemType) ->
         ARM64EmitPrinting.emitPrintList ctx listPtr elemType
 
-    | LIR.PrintSum (sumPtr, variants) ->
-        ARM64EmitPrinting.emitPrintSum ctx convertInstr sumPtr variants
+    | LIR.PrintSum (sumPtr, variants, transparentInt64) ->
+        ARM64EmitPrinting.emitPrintSum ctx convertInstr sumPtr variants transparentInt64
 
     | LIR.PrintRecord (recordPtr, typeName, fields) ->
         ARM64EmitPrinting.emitPrintRecord ctx recordPtr typeName fields

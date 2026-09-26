@@ -972,6 +972,12 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                             Error $"Constructor '{typeName}' inferred unexpected type '{inferredType}'")
 
                 match fields with
+                | [field] when isTransparentInt64Sum typeName variantLookup ->
+                    toANFBoundAtomCore sumTypeNames typeNames inertScopes field varGen env typeReg variantLookup funcReg functionNames moduleRegistry
+                    |> Result.map (fun (setup, payload, next) ->
+                        let resultVar, final = ANF.freshVar next
+                        let result = ANF.Let (resultVar, ANF.TypedAtom (payload, AST.TSum (typeName, [])), ANF.Return (ANF.Var resultVar))
+                        (bindReturns setup (fun _ -> result), final))
                 | [] when not typeHasPayloadVariants ->
                     // Pure enum type (no payloads anywhere): return tag as an integer
                     Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 (int64 tag))), varGen)

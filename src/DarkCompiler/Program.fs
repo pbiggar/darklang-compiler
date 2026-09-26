@@ -219,6 +219,7 @@ let buildCompilerOptions (cliOpts: CliOptions) : CompilerOptions.CompilerOptions
     DisableFunctionTreeShaking = cliOpts.DisableFunctionTreeShaking
     EnableCoverage = false
     EnableLeakCheck = cliOpts.LeakCheck
+    ProbeRootWord = false
     Warnings = CompilerOptions.defaultWarningSettings
     DumpANF = cliOpts.DumpANF
     DumpMIR = cliOpts.DumpMIR

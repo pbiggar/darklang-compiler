@@ -1,0 +1,24 @@
+---NAME---
+single-case Int64 wrapper has direct root word
+---INPUT---
+type ScalarWrap = ScalarWrap of Int64
+ScalarWrap 42L
+---EXPECTED---
+root = word(42)
+
+---NAME---
+single-case Int64 wrapper preserves a negative word
+---INPUT---
+type ScalarWrap = ScalarWrap of Int64
+ScalarWrap (-7L)
+---EXPECTED---
+root = word(-7)
+
+---NAME---
+single-case Int64 wrapper stays direct across a function return
+---INPUT---
+type ScalarWrap = ScalarWrap of Int64
+let makeScalar (value: Int64): ScalarWrap = ScalarWrap value
+makeScalar 0L
+---EXPECTED---
+root = word(0)

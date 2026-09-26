@@ -1279,7 +1279,12 @@ let selectInstr
                     | LIR.Reg (LIR.Physical LIR.X19) -> []
                     | LIR.Reg r -> [LIR.Mov (LIR.Physical LIR.X19, LIR.Reg r)]
                     | other -> [LIR.Mov (LIR.Physical LIR.X19, other)]
-                finishPrintFromReg (LIR.Physical LIR.X19) (moveToX19 @ [LIR.PrintSum (LIR.Physical LIR.X19, substitutedVariants)])
+                let transparentInt64 =
+                    List.isEmpty typeVariants.TypeParams
+                    && (match substitutedVariants with
+                        | [(_, _, Some AST.TInt64)] -> true
+                        | _ -> false)
+                finishPrintFromReg (LIR.Physical LIR.X19) (moveToX19 @ [LIR.PrintSum (LIR.Physical LIR.X19, substitutedVariants, transparentInt64)])
             | None ->
                 Crash.crash $"Missing sum variant metadata for printing sum type '{typeName}'"
 

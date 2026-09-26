@@ -231,7 +231,15 @@ let rcShapeOfTypeWithSums
                         sumInfo.Payloads
                         |> List.exists (fun (_, payload) -> Option.isSome payload)
 
-                    if hasPayloadVariant then
+                    let isTransparentInt64 =
+                        match sumInfo.Payloads with
+                        | [(_, Some payload)] when List.isEmpty sumInfo.TypeParams ->
+                            applyRcShapeTypeSubstitution subst payload = AST.TInt64
+                        | _ -> false
+
+                    if isTransparentInt64 then
+                        Immediate
+                    elif hasPayloadVariant then
                         let fieldShapes =
                             variantShapes
                             |> List.collect (fun variant -> variant.FieldShapes)

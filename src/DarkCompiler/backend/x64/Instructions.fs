@@ -337,7 +337,7 @@ let internal translateInstr
     | LIR.PrintList (listPtr, _elemType) ->
         X64EmitPrinting.emitPrintList ctx listPtr _elemType
 
-    | LIR.PrintSum (sumPtr, _variants) ->
+    | LIR.PrintSum (sumPtr, _variants, _) ->
         X64EmitPrinting.emitPrintSum ctx sumPtr _variants
 
     | LIR.PrintRecord (recordPtr, _typeName, _fields) ->

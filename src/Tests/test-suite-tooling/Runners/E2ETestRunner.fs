@@ -1031,6 +1031,7 @@ let private buildCompilerOptions (test: E2ETest)
         DisableFunctionTreeShaking = test.DisableFunctionTreeShaking
         EnableCoverage = false
         EnableLeakCheck = not test.DisableLeakCheck
+        ProbeRootWord = false
         Warnings = CompilerOptions.defaultWarningSettings
         DumpANF = false
         DumpMIR = false

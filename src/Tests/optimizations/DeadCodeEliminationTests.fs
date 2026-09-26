@@ -45,7 +45,8 @@ let testListDisplayHelperIsReachableByCanonicalIdentity () : TestResult =
         ["Darklang.Stdlib.List.__toDisplayString_i64"]
         [ LIR.PrintSum (
               LIR.Physical LIR.X0,
-              [("Values", 0, Some (AST.TList AST.TInt64))]
+              [("Values", 0, Some (AST.TList AST.TInt64))],
+              false
           ) ]
 
 let testFilteredFunctionsPreserveReachableSetAndInputOrder () : TestResult =

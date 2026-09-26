@@ -157,7 +157,7 @@ type Instr =
     | PrintChars of byte list
     | PrintBlob of Reg
     | PrintList of listPtr:Reg * elemType:AST.SemanticType
-    | PrintSum of sumPtr:Reg * variants:(string * int * AST.SemanticType option) list
+    | PrintSum of sumPtr:Reg * variants:(string * int * AST.SemanticType option) list * transparentInt64:bool
     | PrintRecord of recordPtr:Reg * typeName:string * fields:(string * AST.SemanticType) list
     | Exit
     | FPhi of dest:FReg * sources:(FReg * Label) list

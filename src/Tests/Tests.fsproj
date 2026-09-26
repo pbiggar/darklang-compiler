@@ -39,6 +39,7 @@
     <Compile Include="test-suite-tooling/Runners/LIRExecutionTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/RCReleaseTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/E2ETestRunner.fs" />
+    <Compile Include="test-suite-tooling/Runners/MemoryLayoutTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/TypeCheckingTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/OptimizationTestRunner.fs" />
     <Compile Include="test-suite-tooling/Runners/SyntaxTestRunner.fs" />
@@ -161,6 +162,7 @@
     <None Include="verification/**/*.e2e" />
     <None Include="typecheck/**/*.typecheck" />
     <None Include="optimization/**/*.opt" />
+    <None Include="runtime-layout/**/*.memlayout" />
     <None Include="optimization/**/*.liropt" />
     <None Include="optimization/**/*.arm64opt" />
     <None Include="optimization/**/*.lir2x64" />
