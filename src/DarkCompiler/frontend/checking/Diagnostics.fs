@@ -85,6 +85,26 @@ let rec typeToString (t: SemanticType) : string =
     | TInternalRawPtr -> "RawPtr"  // Internal raw pointer type
     | TDict (_, valueType) -> $"Dict<{typeToString valueType}>"
 
+// Generated helpers need the complete semantic type. Diagnostic spelling keeps
+// the historical one-argument Dict form, which omits its key type.
+let rec typeToHelperIdentityString (typ: SemanticType) : string =
+    let render = typeToHelperIdentityString
+    match typ with
+    | TDict (keyType, valueType) -> $"Dict<{render keyType}, {render valueType}>"
+    | TList elementType -> $"List<{render elementType}>"
+    | TStream elementType -> $"Stream<{render elementType}>"
+    | TTuple elementTypes ->
+        let elements = elementTypes |> List.map render |> String.concat ", "
+        $"({elements})"
+    | TFunction (parameterTypes, returnType) ->
+        let parameters = parameterTypes |> List.map render |> String.concat ", "
+        $"({parameters}) -> {render returnType}"
+    | TRecord (name, typeArgs)
+    | TSum (name, typeArgs) when not (List.isEmpty typeArgs) ->
+        let arguments = typeArgs |> List.map render |> String.concat ", "
+        $"{name}<{arguments}>"
+    | _ -> typeToString typ
+
 /// Pretty-print a type error
 let typeErrorToString (err: TypeError) : string =
     match err with

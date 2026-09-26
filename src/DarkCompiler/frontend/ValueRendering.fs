@@ -60,15 +60,15 @@ let private stableHash (value: string) : uint64 =
         14695981039346656037UL
 
 let private rendererName (typ: SemanticType) : string =
-    let text = CheckingDiagnostics.typeToString typ
+    let text = CheckingDiagnostics.typeToHelperIdentityString typ
     $"__dark_render_value_{stableHash text:x16}"
 
 let private listItemsRendererName (typ: SemanticType) : string =
-    let text = CheckingDiagnostics.typeToString typ
+    let text = CheckingDiagnostics.typeToHelperIdentityString typ
     $"__dark_render_list_items_{stableHash text:x16}"
 
 let private dictItemsRendererName (typ: SemanticType) : string =
-    let text = CheckingDiagnostics.typeToString typ
+    let text = CheckingDiagnostics.typeToHelperIdentityString typ
     $"__dark_render_dict_items_{stableHash text:x16}"
 
 let private runtimeFunctionNames =
