@@ -1,0 +1,8 @@
+// Single-case Char wrappers preserve grapheme behavior and ownership.
+type GlyphWrap = GlyphWrap of Char
+let unwrapGlyph (value: GlyphWrap): Char = match value with | GlyphWrap inner -> inner
+unwrapGlyph (GlyphWrap '😂') = '😂'
+match GlyphWrap '👩‍👩‍👧‍👦' with | GlyphWrap '👩‍👩‍👧‍👦' -> true | _ -> false = true
+let original = Stdlib.Option.withDefault (Stdlib.Char.fromCodepoint 128514) 'a' in let pair = (original, GlyphWrap original) in match pair with | (first, GlyphWrap second) -> first == second = true
+GlyphWrap '😂' == GlyphWrap '😂' = true
+GlyphWrap (Stdlib.Option.withDefault (Stdlib.Char.fromCodepoint 128514) 'a') == GlyphWrap '😂' = true

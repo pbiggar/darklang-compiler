@@ -72,7 +72,7 @@ let internal materializeComparisonPlan
 /// Variant lookup - maps variant names to (type name, type params, tag index, field types)
 type VariantLookup = Map<string, (string * string list * int * AST.SemanticType list)>
 
-/// Single-case concrete Int64, UInt64, Bool, and String sums carry their payload word without
+/// Single-case concrete Int64, UInt64, Bool, String, and Char sums carry their payload word without
 /// a wrapper root. Other layouts continue through their boxed representation.
 let internal transparentSumPayloadType (typeName: string) (variantLookup: VariantLookup) : AST.SemanticType option =
     let cases =
@@ -87,6 +87,7 @@ let internal transparentSumPayloadType (typeName: string) (variantLookup: Varian
     | [(_, [AST.TUInt64])] -> Some AST.TUInt64
     | [(_, [AST.TBool])] -> Some AST.TBool
     | [(_, [AST.TString])] -> Some AST.TString
+    | [(_, [AST.TChar])] -> Some AST.TChar
     | _ -> None
 
 /// A concrete two-case String sum can use zero for its empty case and the

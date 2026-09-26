@@ -1290,6 +1290,7 @@ let selectInstr
                         | [(_, _, Some AST.TUInt64)] -> Some AST.TUInt64
                         | [(_, _, Some AST.TBool)] -> Some AST.TBool
                         | [(_, _, Some AST.TString)] -> Some AST.TString
+                        | [(_, _, Some AST.TChar)] -> Some AST.TChar
                         | _ -> None
                     else None
                 finishPrintFromReg (LIR.Physical LIR.X19) (moveToX19 @ [LIR.PrintSum (LIR.Physical LIR.X19, substitutedVariants, Option.isSome transparentPayload)])

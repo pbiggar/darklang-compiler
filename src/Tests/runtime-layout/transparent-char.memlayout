@@ -1,0 +1,16 @@
+---NAME---
+single-case Char wrapper shares its grapheme pointer
+---INPUT---
+type GlyphWrap = GlyphWrap of Char
+let original = Stdlib.Option.withDefault (Stdlib.Char.fromCodepoint 128514) 'a' in (original, GlyphWrap original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+single-case Char wrapper stays direct across a function return
+---INPUT---
+type GlyphWrap = GlyphWrap of Char
+let wrapGlyph (value: Char): GlyphWrap = GlyphWrap value
+let original = Stdlib.Option.withDefault (Stdlib.Char.fromCodepoint 128515) 'a' in (original, wrapGlyph original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)

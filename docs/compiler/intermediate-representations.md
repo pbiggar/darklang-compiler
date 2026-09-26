@@ -289,11 +289,11 @@ MIR: v1 <- v0 + 5
      ret v1
 ```
 
-For a concrete, nongeneric sum with exactly one `Int64`, `UInt64`, `Bool`, or `String` payload
+For a concrete, nongeneric sum with exactly one `Int64`, `UInt64`, `Bool`, `String`, or `Char` payload
 case, ANF keeps the nominal type on a typed alias while its runtime word is
 the payload itself. Pattern projection and equality use that word directly;
 RC planning classifies the `Int64`, `UInt64`, and `Bool` wrappers as immediate and the `String`
-wrapper as a dynamic string, so retain/release follows the payload's ownership
+and `Char` wrappers as dynamic buffers, so retain/release follows the payload's ownership
 convention. Native printing supplies the implicit case name without reading a
 heap tag. Other payload sums retain their boxed layout. This is a
 representation choice within one compilation, not a stable external ABI.

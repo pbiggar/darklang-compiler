@@ -250,6 +250,7 @@ let rcShapeOfTypeWithSums
                             | AST.TUInt64 -> Some Immediate
                             | AST.TBool -> Some Immediate
                             | AST.TString -> Some DynamicString
+                            | AST.TChar -> Some DynamicString
                             | _ -> None
                         | _ -> None
 
