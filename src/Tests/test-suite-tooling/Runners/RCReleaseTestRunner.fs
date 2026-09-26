@@ -122,7 +122,13 @@ let rec private collectVariants (typed: TypedShape) : LIR.VariantRegistry =
             Map.add
                 name
                 { TypeParams = []
-                  Variants = [{ Name = $"{name}_payload"; Tag = 0; Payload = Some payload.Type }] }
+                  // The fixture constructs a boxed root. A second, unused case
+                  // makes that representation canonical despite transparent
+                  // single-case payload sums in source programs.
+                  Variants = [
+                      { Name = $"{name}_payload"; Tag = 0; Payload = Some payload.Type }
+                      { Name = $"{name}_empty"; Tag = 1; Payload = None }
+                  ] }
                 nested
         | _ -> Crash.crash "Described sum fixture did not have one payload"
     | _ -> nested

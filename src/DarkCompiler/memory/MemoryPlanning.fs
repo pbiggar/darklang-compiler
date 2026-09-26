@@ -231,22 +231,24 @@ let rcShapeOfTypeWithSums
                         sumInfo.Payloads
                         |> List.exists (fun (_, payload) -> Option.isSome payload)
 
-                    let isTransparentInt64 =
+                    let transparentPayloadShape =
                         match sumInfo.Payloads with
                         | [(_, Some payload)] when List.isEmpty sumInfo.TypeParams ->
-                            applyRcShapeTypeSubstitution subst payload = AST.TInt64
-                        | _ -> false
+                            match applyRcShapeTypeSubstitution subst payload with
+                            | AST.TInt64 -> Some Immediate
+                            | AST.TString -> Some DynamicString
+                            | _ -> None
+                        | _ -> None
 
-                    if isTransparentInt64 then
-                        Immediate
-                    elif hasPayloadVariant then
+                    match transparentPayloadShape with
+                    | Some shape -> shape
+                    | None when hasPayloadVariant ->
                         let fieldShapes =
                             variantShapes
                             |> List.collect (fun variant -> variant.FieldShapes)
 
                         BoxedSum (16, fieldShapes, variantShapes)
-                    else
-                        Immediate
+                    | None -> Immediate
                 | None when Map.containsKey name typeReg ->
                     classify expandingNominals (AST.TRecord (name, typeArgs))
                 | None ->

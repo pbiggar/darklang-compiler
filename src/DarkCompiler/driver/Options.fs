@@ -30,6 +30,11 @@ type CompileMode =
     | FullProgram
     | TestExpression
 
+type NativeLayoutProbe =
+    | NoNativeLayoutProbe
+    | RootWord
+    | TupleWords
+
 /// Shared compiler warning settings.
 let defaultWarningSettings : AST.WarningSettings = AST.defaultWarningSettings
 
@@ -84,8 +89,8 @@ type CompilerOptions = {
     EnableCoverage: bool
     /// Enable leak checking (debug only)
     EnableLeakCheck: bool
-    /// Test-only observation of the final machine word before semantic printing.
-    ProbeRootWord: bool
+    /// Test-only observation of the source value before semantic printing.
+    NativeLayoutProbe: NativeLayoutProbe
     /// Warning compatibility settings passed into type checking
     Warnings: AST.WarningSettings
     /// Dump ANF representations to stdout
@@ -123,7 +128,7 @@ let defaultOptions : CompilerOptions = {
     DisableFunctionTreeShaking = false
     EnableCoverage = false
     EnableLeakCheck = false
-    ProbeRootWord = false
+    NativeLayoutProbe = NoNativeLayoutProbe
     Warnings = AST.defaultWarningSettings
     DumpANF = false
     DumpMIR = false
