@@ -271,8 +271,16 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
         let substParams =
             parameters
             |> AST.NonEmptyList.map (fun parameter ->
-                { parameter with Type = applySubstToType subst parameter.Type })
-        CheckedAST.Lambda (substParams, returnAnnotation |> Option.map (applySubstToType subst), applySubstToExpr subst body)
+                { parameter with
+                    Type =
+                        parameter.Type
+                        |> CheckedAST.signatureSemanticType
+                        |> applySubstToType subst
+                        |> CheckedAST.checkedSignatureType })
+        let annotation =
+            returnAnnotation
+            |> Option.map (CheckedAST.signatureSemanticType >> applySubstToType subst >> CheckedAST.checkedSignatureType)
+        CheckedAST.Lambda (substParams, annotation, applySubstToExpr subst body)
     | CheckedAST.Apply (func, args) ->
         CheckedAST.Apply (applySubstToExpr subst func, AST.NonEmptyList.map (applySubstToExpr subst) args)
     | CheckedAST.IndirectApply (func, args) ->

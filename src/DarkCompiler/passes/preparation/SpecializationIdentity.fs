@@ -195,7 +195,7 @@ let internal paramsToList
     AST.NonEmptyList.toList parameters
 
 let internal lambdaParameterType (parameter: CheckedAST.LambdaParameter) : AST.SemanticType =
-    parameter.Type
+    CheckedAST.signatureSemanticType parameter.Type
 
 let rec internal letPatternBindingTypes
     (pattern: CheckedAST.LetPattern)

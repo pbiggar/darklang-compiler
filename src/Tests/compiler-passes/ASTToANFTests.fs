@@ -78,7 +78,7 @@ let testNeedsLambdaLoweringDetectsLambda () : TestResult =
     let expr =
         CheckedAST.Lambda (
             AST.NonEmptyList.singleton
-                ({ Pattern = CheckedAST.LPVariable xId; Type = AST.TInt64 }
+                ({ Pattern = CheckedAST.LPVariable xId; Type = CheckedAST.checkedSignatureType AST.TInt64 }
                     : CheckedAST.LambdaParameter),
             None,
             CheckedAST.Local xId

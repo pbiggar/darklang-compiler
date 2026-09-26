@@ -36,9 +36,9 @@ let tupleElementsOfList elements =
 let mapTupleElements f tuple =
     { First = f tuple.First; Second = f tuple.Second; Rest = List.map f tuple.Rest }
 
-/// A function signature that has crossed the checking boundary cannot retain
-/// a call-local inference identity. Nominal and internal signature types are
-/// preserved for specialization and privileged runtime helpers.
+/// A checked callable signature cannot retain a call-local inference identity.
+/// Nominal and internal signature types remain available for specialization
+/// and privileged runtime helpers.
 type CheckedSignatureType = private CheckedSignatureType of AST.SemanticType
 
 let signatureSemanticType (CheckedSignatureType typ) = typ
@@ -70,7 +70,7 @@ type Pattern =
 
 type LambdaParameter = {
     Pattern: LetPattern
-    Type: AST.SemanticType
+    Type: CheckedSignatureType
 }
 
 type RecordReference = {
@@ -185,7 +185,7 @@ and Expr =
     | Constructor of reference:ConstructorReference * fields:Expr list
     | Match of scrutinee:Expr * cases:AST.NonEmptyList<MatchCase>
     | ListLiteral of Expr list
-    | Lambda of parameters:AST.NonEmptyList<LambdaParameter> * returnAnnotation:AST.SemanticType option * body:Expr
+    | Lambda of parameters:AST.NonEmptyList<LambdaParameter> * returnAnnotation:CheckedSignatureType option * body:Expr
     | Apply of func:Expr * args:AST.NonEmptyList<Expr>
     | IndirectApply of func:Expr * args:AST.NonEmptyList<Expr>
     | FuncRef of AST.FunctionId
@@ -871,7 +871,7 @@ let rec private convertExpr recordFieldCounts location environment symbols expr 
                 | None -> conversionError location "lambda parameter has no inferred type"
                 | Some typ ->
                     let (pattern', patternBindings, next) = allocateLetPattern state parameter.Pattern
-                    Ok ({ Pattern = pattern'; Type = normalizeInferenceType typ } :: converted,
+                    Ok ({ Pattern = pattern'; Type = checkedSignatureType typ } :: converted,
                         bindings @ patternBindings,
                         next))) (Ok ([], [], symbols))
         |> Result.bind (fun (convertedParameters, bindings, afterParameters) ->
@@ -879,7 +879,7 @@ let rec private convertExpr recordFieldCounts location environment symbols expr 
             convertExpr recordFieldCounts location bodyEnvironment afterParameters body
             |> Result.map (fun (body', following) ->
                 (Lambda (AST.NonEmptyList.fromList (List.rev convertedParameters),
-                         Option.map normalizeInferenceType returnAnnotation, body'),
+                         Option.map checkedSignatureType returnAnnotation, body'),
                  following)))
     | AST.Apply (func, [], args) ->
         convert symbols func
