@@ -85,9 +85,9 @@ let rec parseArgs (config: Config) (args: string list) : Result<Config option, s
 let private supportedTypes = [TInt64; TBool; TString]
 let private observableTypes = [TInt64; TBool]
 
-let private sameType (left: Type) (right: Type) : bool = left = right
+let private sameType (left: SemanticType) (right: SemanticType) : bool = left = right
 
-let private variablesOfType (typ: Type) (environment: (string * Type) list) : string list =
+let private variablesOfType (typ: SemanticType) (environment: (string * SemanticType) list) : string list =
     environment
     |> List.choose (fun (name, variableType) ->
         if sameType typ variableType then Some name else None)
@@ -97,7 +97,7 @@ let private choose (random: Random) (items: 'a list) : 'a option =
     | [] -> None
     | _ -> List.tryItem (random.Next(List.length items)) items
 
-let private generateLiteral (random: Random) (typ: Type) : Expr =
+let private generateLiteral (random: Random) (typ: SemanticType) : Expr =
     match typ with
     | TInt64 -> Int64Literal (random.NextInt64(-100L, 101L))
     | TBool -> BoolLiteral (random.Next(2) = 0)
@@ -110,8 +110,8 @@ let private generateLiteral (random: Random) (typ: Type) : Expr =
 
 let private generateLeaf
     (random: Random)
-    (typ: Type)
-    (environment: (string * Type) list)
+    (typ: SemanticType)
+    (environment: (string * SemanticType) list)
     : Expr =
     match choose random (variablesOfType typ environment) with
     | Some name when random.Next(3) <> 0 -> Var name
@@ -121,8 +121,8 @@ let rec private generateExpr
     (random: Random)
     (depth: int)
     (nextVariable: int)
-    (environment: (string * Type) list)
-    (typ: Type)
+    (environment: (string * SemanticType) list)
+    (typ: SemanticType)
     : Expr * int =
     if depth <= 0 then
         generateLeaf random typ environment, nextVariable
@@ -317,9 +317,9 @@ let private checkCase
 /// The interpreter still decides whether every minimized candidate is valid;
 /// this only prevents a shrink from changing the top-level observation type.
 let rec private inferGeneratedType
-    (environment: (string * Type) list)
+    (environment: (string * SemanticType) list)
     (expr: Expr)
-    : Type option =
+    : SemanticType option =
     let variableType name =
         environment
         |> List.tryPick (fun (variableName, typ) ->
@@ -424,7 +424,7 @@ let private minimize
     (stdlib: StdlibResult)
     (source: string)
     : Result<string * CaseOutcome * int * int, string> =
-    match Parser.parseString false source with
+    match Parser.parseString false source |> Result.map semanticProgramOfParsed with
     | Error message -> Error $"Cannot parse minimizer input: {message}"
     | Ok (Program [Expression (_, originalExpr)]) ->
         match inferGeneratedType [] originalExpr with
