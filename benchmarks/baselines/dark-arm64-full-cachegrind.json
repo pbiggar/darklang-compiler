@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-20T10:56:11+00:00",
+  "generated_at": "2026-09-26T10:34:31+00:00",
   "compiler": {
-    "commit": "df6831dbd7bdb53e8a25023a3c63fae0ca34c945",
-    "subject": "Reuse straight-line boxed sum constructors"
+    "commit": "cc885d47c51082be1912827a2bca6c6b94ec19cd",
+    "subject": "Use direct Int64 words for single-case scalar sums"
   },
   "benchmarks": [
     {
@@ -54,7 +54,7 @@
     },
     {
       "name": "huffman",
-      "instructions": 411969307
+      "instructions": 411909115
     },
     {
       "name": "leibniz",
@@ -74,7 +74,7 @@
     },
     {
       "name": "myers_diff",
-      "instructions": 205030207
+      "instructions": 205029680
     },
     {
       "name": "nbody",
@@ -106,7 +106,7 @@
     },
     {
       "name": "regex_lite",
-      "instructions": 64887412
+      "instructions": 64887197
     },
     {
       "name": "spectral_norm",
@@ -126,11 +126,11 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 310044137
+      "instructions": 309994639
     },
     {
       "name": "warden",
-      "instructions": 44213054
+      "instructions": 44212784
     }
   ]
 }
