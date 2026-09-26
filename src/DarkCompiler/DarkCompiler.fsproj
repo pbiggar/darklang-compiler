@@ -26,6 +26,15 @@
     <Compile Include="Bitset.fs" />
 
     <!-- Parsing and type checking -->
+    <Compile Include="frontend/interpreter/ParserDependencies.fs" />
+    <Compile Include="frontend/interpreter/Prelude.fs" />
+    <Compile Include="frontend/interpreter/ProgramTypesShim.fs" />
+    <Compile Include="frontend/interpreter/Tokenizer.fs" />
+    <Compile Include="frontend/interpreter/WrittenTypes.fs" />
+    <Compile Include="frontend/interpreter/Validation.fs" />
+    <Compile Include="frontend/interpreter/Effects.fs" />
+    <Compile Include="frontend/interpreter/Lexer.fs" />
+    <Compile Include="frontend/interpreter/Parser.fs" />
     <Compile Include="frontend/Parser.fs" />
     <Compile Include="frontend/checking/Diagnostics.fs" />
     <Compile Include="frontend/checking/Types.fs" />

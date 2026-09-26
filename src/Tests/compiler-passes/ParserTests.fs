@@ -102,6 +102,19 @@ let private testFlattenParamGroupsRestoresSourceOrder () : TestResult =
     | [("first", AST.PTInt64); ("second", AST.PTBool); ("third", AST.PTString)] -> Ok ()
     | parameters -> Error $"Expected parameter groups in source order, got {parameters}"
 
+let private testCopiedInterpreterPowerAndXorGrammar () : TestResult =
+    let check source expected =
+        match LibParser.Parser.parseFor LibParser.Validation.Script source with
+        | Error diagnostics -> Error $"Interpreter parser rejected {source}: {diagnostics}"
+        | Ok validated ->
+            let sourceFile = LibParser.Validation.ValidatedSourceFile.toWrittenTypes validated
+            match sourceFile.exprsToEval with
+            | [LibParser.WrittenTypes.EInfix (_, (_, LibParser.WrittenTypes.InfixFnCall actual), _, _)]
+                when actual = expected -> Ok ()
+            | expressions -> Error $"Unexpected interpreter parse for {source}: {expressions}"
+    check "2 ** 3" LibParser.WrittenTypes.ArithmeticPower
+    |> Result.bind (fun () -> check "2 ^ 3" LibParser.WrittenTypes.BitwiseXor)
+
 let tests : (string * (unit -> TestResult)) list = [
     ("Long numeric token streams are stack safe", testLongNumericTokenStreamIsStackSafe)
     ("Tuple lets do not open nested function layout", testTupleLetDoesNotOpenNestedFunctionLayout)
@@ -113,4 +126,5 @@ let tests : (string * (unit -> TestResult)) list = [
     ("Module expressions retain their resolution scope", testModuleExpressionRetainsItsResolutionScope)
 
     ("Flattened parameter groups retain source order", testFlattenParamGroupsRestoresSourceOrder)
+    ("Copied interpreter distinguishes power and xor", testCopiedInterpreterPowerAndXorGrammar)
 ]
