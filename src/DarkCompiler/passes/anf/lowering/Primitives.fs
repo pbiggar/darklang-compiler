@@ -87,12 +87,23 @@ let internal transparentSumPayloadType (typeName: string) (variantLookup: Varian
     | [(_, [AST.TString])] -> Some AST.TString
     | _ -> None
 
-let internal isTransparentInt64Sum (typeName: string) (variantLookup: VariantLookup) : bool =
-    transparentSumPayloadType typeName variantLookup = Some AST.TInt64
+/// A concrete two-case String sum can use zero for its empty case and the
+/// non-null String buffer pointer for its payload case.
+let internal nullableStringSum (typeName: string) (variantLookup: VariantLookup) : bool =
+    let cases =
+        variantLookup
+        |> Map.toList
+        |> List.choose (fun (key, (owner, typeParams, _, fields)) ->
+            if owner = typeName && List.isEmpty typeParams && key.StartsWith($"{typeName}.") then
+                Some fields
+            else None)
+    match cases |> List.sort with
+    | [[]; [AST.TString]] -> true
+    | _ -> false
 
 let internal sumPayloadExpr (sourceType: AST.SemanticType) (sourceAtom: ANF.Atom) (variantLookup: VariantLookup) : ANF.CExpr =
     match sourceType with
-    | AST.TSum (typeName, _) when Option.isSome (transparentSumPayloadType typeName variantLookup) -> ANF.Atom sourceAtom
+    | AST.TSum (typeName, _) when Option.isSome (transparentSumPayloadType typeName variantLookup) || nullableStringSum typeName variantLookup -> ANF.Atom sourceAtom
     | _ -> ANF.TupleGet (sourceAtom, 1)
 
 let sumTypeNamesFromVariantLookup (variantLookup: VariantLookup) : Set<string> =

@@ -242,6 +242,7 @@ let testCanonicalBufferSelfEqualityFoldsForBothRepresentations () : TestResult =
         let parameterType =
             match kind with
             | Utf8String -> AST.TString
+            | NullableUtf8String -> AST.TSum ("NullableText", [])
             | GraphemeCluster -> AST.TChar
         let parameter = { Id = TempId 0; Type = parameterType }
         let func =
@@ -261,7 +262,7 @@ let testCanonicalBufferSelfEqualityFoldsForBothRepresentations () : TestResult =
         match functions with
         | [{ Body = Return (BoolLiteral true) }] -> Ok ()
         | _ -> Error $"Expected {kind} self-equality to fold to true"
-    [Utf8String; GraphemeCluster]
+    [Utf8String; NullableUtf8String; GraphemeCluster]
     |> List.fold (fun result kind -> Result.bind (fun () -> check kind) result) (Ok ())
 
 let tests = [

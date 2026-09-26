@@ -267,8 +267,8 @@ let rec convertInstr (ctx: CodeGenContext) (instr: LIR.Instr) : Result<ARM64Symb
     | LIR.RefCountDec (addr, payloadSize, kind, metadata) ->
         ARM64EmitReferenceCounts.emitRefCountDec ctx addr payloadSize kind metadata
 
-    | LIR.CanonicalBufferEq (dest, _, left, right) ->
-        ARM64EmitBuffers.emitCanonicalBufferEq ctx dest left right
+    | LIR.CanonicalBufferEq (dest, kind, left, right) ->
+        ARM64EmitBuffers.emitCanonicalBufferEq ctx kind dest left right
 
     | LIR.StringConcat (dest, first, second, remaining) ->
         ARM64EmitBuffers.emitStringConcat ctx dest first second remaining

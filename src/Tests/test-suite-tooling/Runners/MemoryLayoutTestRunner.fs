@@ -78,7 +78,8 @@ let private runCase (stdlib: CompilationContexts.StdlibResult) (path: string) (t
         if output.ExitCode <> 0 then
             Error $"Native process exited {output.ExitCode}: {output.Stderr}"
         elif test.Expected = "root = tuple(shared_word, shared_word)" then
-            let observed = Regex.Match(output.Stdout, "^([0-9]+)\\|([0-9]+)")
+            // The x64 integer printer emits a newline before the separator.
+            let observed = Regex.Match(output.Stdout, "^([0-9]+)\\r?\\n?\\|([0-9]+)")
             if not observed.Success then Error "Native process did not print two tuple words"
             elif observed.Groups.[1].Value = "0" then Error "Expected a nonzero managed pointer"
             elif observed.Groups.[1].Value = observed.Groups.[2].Value then Ok ()

@@ -1278,6 +1278,23 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let cmpExpr = ANF.Atom (ANF.BoolLiteral false)
                         Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                     elif (match testedType with
+                          | AST.TSum (typeName, _) -> nullableStringSum typeName variantLookup
+                          | _ -> false) then
+                        let (cmpVar, vg1) = ANF.freshVar vg
+                        let compareWithZero =
+                            if List.isEmpty fieldPatterns then ANF.Eq else ANF.Neq
+                        let cmpExpr = ANF.Prim (compareWithZero, scrutAtom, ANF.IntLiteral (ANF.Int64 0L))
+                        match fieldPatterns with
+                        | [] -> Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
+                        | [innerPattern] ->
+                            buildPatternComparison innerPattern scrutAtom payloadType vg1
+                            |> Result.map (function
+                                | None -> Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1)
+                                | Some (innerCond, innerBindings, vg2) ->
+                                    let andVar, vg3 = ANF.freshVar vg2
+                                    Some (ANF.Var andVar, (cmpVar, cmpExpr) :: innerBindings @ [(andVar, ANF.Prim (ANF.And, ANF.Var cmpVar, innerCond))], vg3))
+                        | _ -> Crash.crash "Nullable String sum must have one payload field"
+                    elif (match testedType with
                           | AST.TSum (typeName, _) -> Option.isSome (transparentSumPayloadType typeName variantLookup)
                           | _ -> false) then
                         match fieldPatterns with
@@ -2698,6 +2715,15 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 when not (List.isEmpty fieldPatterns)
                      && not (List.forall patternAlwaysMatches fieldPatterns) ->
                 match tryFindVariantForTypeById constructorId testedType typeNames variantLookup with
+                | Some (typeName, _, _, _) when nullableStringSum typeName variantLookup && not (List.isEmpty fieldPatterns) ->
+                    match fieldPatterns with
+                    | [innerPattern] ->
+                        let cmpVar, vg1 = ANF.freshVar vg
+                        let nonzeroStage =
+                            ([(cmpVar, ANF.Prim (ANF.Neq, scrutAtom, ANF.IntLiteral (ANF.Int64 0L)))], ANF.Var cmpVar)
+                        buildPatternStages innerPattern scrutAtom (Some AST.TString) vg1
+                        |> Result.map (fun (innerStages, vg2) -> (nonzeroStage :: innerStages, vg2))
+                    | _ -> Crash.crash "Nullable String sum must have one payload field"
                 | Some (typeName, _, _, _) when Option.isSome (transparentSumPayloadType typeName variantLookup) ->
                     match fieldPatterns with
                     | [innerPattern] -> buildPatternStages innerPattern scrutAtom (transparentSumPayloadType typeName variantLookup) vg

@@ -130,9 +130,9 @@ let private emitRefCountIncBuffer (ctx: FuncCtx) (skipTagged: bool) (str: LIR.Op
                X86_64.Jcc (X86_64.EQ, literalLabel)        // skip if literal
                X86_64.ADD_imm (refValueReg, 1)
                X86_64.MOV_store (refAddrReg, 0, refValueReg)
-               X86_64.Label literalLabel]
-            @ restoreRegs
-            @ [X86_64.Label skipLabel])
+               X86_64.Label literalLabel
+               X86_64.Label skipLabel]
+            @ restoreRegs)
     | _ -> Error "dynamic buffer RefCountInc requires StringSymbol or Reg operand"
 
 let private emitRefCountDecBuffer (ctx: FuncCtx) (skipTagged: bool) (str: LIR.Operand) : Result<X86_64.Instr list, string> =
@@ -180,9 +180,9 @@ let private emitRefCountDecBuffer (ctx: FuncCtx) (skipTagged: bool) (str: LIR.Op
             // String refcount hit zero - decrement leak counter
             @ leakDec
             @ [X86_64.Label noFreeLabel
-               X86_64.Label literalLabel]
-            @ restoreRegs
-            @ [X86_64.Label skipLabel])
+               X86_64.Label literalLabel
+               X86_64.Label skipLabel]
+            @ restoreRegs)
     | _ -> Error "dynamic buffer RefCountDec requires StringSymbol or Reg operand"
 
 let internal emitRefCountIncString (ctx: FuncCtx) (str: LIR.Operand) =

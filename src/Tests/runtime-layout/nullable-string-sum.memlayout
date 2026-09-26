@@ -1,0 +1,24 @@
+---NAME---
+None String sum is a zero word
+---INPUT---
+type NullableText = NullableTextNone | NullableTextValue of String
+let stringOption (value: NullableText): NullableText = value
+stringOption NullableTextNone
+---EXPECTED---
+root = word(0)
+
+---NAME---
+Some String sum shares its payload pointer
+---INPUT---
+type NullableText = NullableTextNone | NullableTextValue of String
+let original = Stdlib.String.trim (" " ++ "ab" ++ " ") in (NullableTextValue original, original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+String sum shares its payload pointer in the second tuple field
+---INPUT---
+type NullableText = NullableTextNone | NullableTextValue of String
+let original = Stdlib.String.trim (" " ++ "cd" ++ " ") in (original, NullableTextValue original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)

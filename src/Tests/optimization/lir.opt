@@ -56,8 +56,10 @@ _start:
     v10008 <- Call(wrapOwnedInner, [Imm 1])
     RestoreRegs([], [])
     v10008 <- Mov(Reg X0)
+    SaveRegs([], [])
     X19 <- Mov(Reg v10008)
     PrintRecord(X19, OwnedOuterRecord, [(inner, TRecord ("OwnedInnerRecord", []))])
+    RestoreRegs([], [])
     RefCountDec(X19, 8, generic)
     X0 <- Mov(Reg v10008)
     Ret

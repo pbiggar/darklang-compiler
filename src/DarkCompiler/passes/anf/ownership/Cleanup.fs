@@ -14,7 +14,7 @@ open RcReturnAnalysis
 open RcShapePlanning
 
 type internal ReturnDec =
-    TempId * AST.SemanticType * RcShape * RcKind option * RcMetadata option
+    TempId * AST.SemanticType * RcShape * RcKind option * RcMetadata option * bool
 
 type internal InternalOwnedParamKind =
     | ReturnedAccumulator
@@ -42,7 +42,7 @@ let internal createReturnDec
         | Some DynamicIntBuffer
         | None ->
             None
-    (tempId, typ, shape, kindOverride, metadata)
+    (tempId, typ, shape, kindOverride, metadata, isNullableStringSumType ctx.SumShapeReg typ)
 
 let internal retainExprForShape
     (ctx: TypeContext)
@@ -52,7 +52,9 @@ let internal retainExprForShape
     : CExpr =
     match rcShapeRetainOperation shape with
     | Some DynamicStringBuffer ->
-        RefCountIncString (Var tempId)
+        // The Int buffer operation shares String's header but skips zero.
+        if isNullableStringSumType ctx.SumShapeReg typ then RefCountIncInt (Var tempId)
+        else RefCountIncString (Var tempId)
     | Some DynamicIntBuffer ->
         RefCountIncInt (Var tempId)
     | Some DynamicBlobBuffer ->
@@ -72,10 +74,13 @@ let private releaseExprForShape
     (shape: RcShape)
     (kindOverride: RcKind option)
     (metadata: RcMetadata option)
+    (nullableString: bool)
     : CExpr =
     match rcShapeReleaseOperation shape with
     | Some DynamicStringBuffer ->
-        RefCountDecString (Var tempId)
+        // Nullable sums use the zero-safe dynamic-buffer operation.
+        if nullableString then RefCountDecInt (Var tempId)
+        else RefCountDecString (Var tempId)
     | Some DynamicIntBuffer ->
         RefCountDecInt (Var tempId)
     | Some DynamicBlobBuffer ->
@@ -297,9 +302,9 @@ let insertReturnDecs
     : AExpr * VarGen * Map<TempId, AST.SemanticType> =
     let decsInOrder = List.rev returnDecs
     List.fold
-        (fun (accExpr, accVarGen, accTypes) (tempId, typ, shape, kindOverride, metadata) ->
+        (fun (accExpr, accVarGen, accTypes) (tempId, typ, shape, kindOverride, metadata, nullableString) ->
             let (dummyId, varGen') = freshVar accVarGen
-            let decExpr = releaseExprForShape tempId typ shape kindOverride metadata
+            let decExpr = releaseExprForShape tempId typ shape kindOverride metadata nullableString
             let accExpr' = Let (dummyId, decExpr, accExpr)
             (accExpr', varGen', Map.add dummyId AST.TUnit accTypes))
         (expr, varGen, types)
@@ -352,10 +357,10 @@ let applyLetFrame
             |> List.fold (fun (bindingsRev, vg, currentTypes) (index, typ, shape) ->
                 let (fieldId, afterField) = freshVar vg
                 let (releaseId, afterRelease) = freshVar afterField
-                let (_, _, _, kindOverride, metadata) =
+                let (_, _, _, kindOverride, metadata, nullableString) =
                     createReturnDec ctx fieldId typ shape None
                 let release =
-                    releaseExprForShape fieldId typ shape kindOverride metadata
+                    releaseExprForShape fieldId typ shape kindOverride metadata nullableString
                 ( (releaseId, release)
                   :: (fieldId, RecordGet (cleanup.Descriptor, Var cleanup.Source, index))
                   :: bindingsRev,
@@ -536,7 +541,7 @@ let internal insertOwnedAccumulatorDecsBeforeSelfTailCalls
     let decsForSelfTailCall (args: Atom list) : ReturnDec list =
         ownedParamDecs
         |> List.choose (fun owned ->
-            let (tempId, _, _, _, _) = owned.Dec
+            let (tempId, _, _, _, _, _) = owned.Dec
             match List.tryItem owned.ParamIndex args with
             | Some (Var argumentId) when argumentId = tempId -> None
             | _ -> Some owned.Dec)
@@ -554,10 +559,10 @@ let internal insertOwnedAccumulatorDecsBeforeSelfTailCalls
         : AExpr * VarGen * Map<TempId, AST.SemanticType> =
         decs
         |> List.fold
-            (fun (accExpr, accVarGen, accTypes) (tempId, typ, shape, kindOverride, metadata) ->
+            (fun (accExpr, accVarGen, accTypes) (tempId, typ, shape, kindOverride, metadata, nullableString) ->
                 let (dummyId, varGen') = freshVar accVarGen
                 let decExpr =
-                    releaseExprForShape tempId typ shape kindOverride metadata
+                    releaseExprForShape tempId typ shape kindOverride metadata nullableString
                 (Let (dummyId, decExpr, accExpr), varGen', Map.add dummyId AST.TUnit accTypes))
             (tailExpr, varGen, types)
 

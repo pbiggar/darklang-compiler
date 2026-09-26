@@ -1,0 +1,16 @@
+// A nullable String sum must retain match and ownership behavior.
+type NullableText = NullableTextNone | NullableTextValue of String
+let stringOption (value: NullableText): NullableText = value
+match stringOption NullableTextNone with | NullableTextNone -> true | NullableTextValue _ -> false = true // leak_check
+match stringOption (NullableTextValue ("a" ++ "b")) with | NullableTextNone -> "missing" | NullableTextValue value -> value = "ab"
+match NullableTextNone with | NullableTextValue "x" -> false | NullableTextNone -> true = true
+match NullableTextValue ("a" ++ "b") with | NullableTextNone -> "missing" | NullableTextValue value -> value = "ab"
+let original = Stdlib.String.trim (" " ++ "ab" ++ " ") in match NullableTextValue original with | NullableTextNone -> "missing" | NullableTextValue value -> value = "ab"
+NullableTextNone == NullableTextNone = true
+NullableTextNone != NullableTextValue "" = true
+NullableTextValue ("a" ++ "b") == NullableTextValue ("a" ++ "b") = true
+NullableTextValue "a" != NullableTextValue "b" = true
+match (NullableTextNone, NullableTextValue "ab") with | (NullableTextValue _, _) -> false | (_, NullableTextValue "ab") -> true | _ -> false = true
+let values = [NullableTextNone, NullableTextValue ("a" ++ "b")] in match values with | [NullableTextNone, NullableTextValue value] -> value | _ -> "missing" = "ab" // leak_check
+type NullableTextBox = { item: NullableText }
+let boxed = NullableTextBox { item = NullableTextNone } in match boxed.item with | NullableTextNone -> true | NullableTextValue _ -> false = true

@@ -277,10 +277,14 @@ let rec generateStructuralEquality
             |> Map.exists (fun _ (tName, _, _, fields) ->
                 tName = typeName && not (List.isEmpty fields))
 
-        if transparentSumPayloadType typeName variantLookup = Some AST.TString then
+        if nullableStringSum typeName variantLookup then
+            let cmpVar, vg' = ANF.freshVar varGen
+            ([(cmpVar, ANF.CanonicalBufferEq (MemoryModel.NullableUtf8String, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
+        elif transparentSumPayloadType typeName variantLookup = Some AST.TString
+           || transparentSumPayloadType typeName variantLookup = Some AST.TChar then
             let (cmpVar, vg') = ANF.freshVar varGen
             ([(cmpVar, primitiveEquality AST.TString leftAtom rightAtom)], ANF.Var cmpVar, vg')
-        elif isTransparentInt64Sum typeName variantLookup || not hasAnyPayload then
+        elif Option.isSome (transparentSumPayloadType typeName variantLookup) || not hasAnyPayload then
             let (cmpVar, vg') = ANF.freshVar varGen
             ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
         else

@@ -7,7 +7,7 @@ open ARM64HeapAllocation
 open ARM64LeakAccounting
 open ARM64Operands
 
-let internal emitCanonicalBufferEq (ctx: CodeGenContext) (dest: LIR.Reg) (left: LIR.Operand) (right: LIR.Operand) : Result<ARM64Symbolic.Instr list, string> =
+let internal emitCanonicalBufferEq (ctx: CodeGenContext) (kind: MemoryModel.CanonicalBufferKind) (dest: LIR.Reg) (left: LIR.Operand) (right: LIR.Operand) : Result<ARM64Symbolic.Instr list, string> =
     // Canonical buffers share the [refcount:8][length:8][data:N] layout. Compare the
     // representation directly without allocating or calling stdlib code.
     lirRegToARM64Reg dest
@@ -39,8 +39,14 @@ let internal emitCanonicalBufferEq (ctx: CodeGenContext) (dest: LIR.Reg) (left: 
                 leftInstrs
                 @ rightInstrs
                 @ [ARM64Symbolic.CMP_reg (ARM64Symbolic.X8, ARM64Symbolic.X9)
-                   ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, equalLabel)
-                   ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X8, 8s)
+                   ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, equalLabel)]
+                @ (if kind = MemoryModel.NullableUtf8String then
+                       [ARM64Symbolic.CMP_imm (ARM64Symbolic.X8, 0us)
+                        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, unequalLabel)
+                        ARM64Symbolic.CMP_imm (ARM64Symbolic.X9, 0us)
+                        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, unequalLabel)]
+                   else [])
+                @ [ARM64Symbolic.LDR (ARM64Symbolic.X10, ARM64Symbolic.X8, 8s)
                    ARM64Symbolic.LDR (ARM64Symbolic.X12, ARM64Symbolic.X9, 8s)
                    ARM64Symbolic.CMP_reg (ARM64Symbolic.X10, ARM64Symbolic.X12)
                    ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, unequalLabel)

@@ -7,7 +7,7 @@ open X64CodeGenTypes
 open X64FieldReferenceCounts
 open X64InstructionContext
 
-let internal emitCanonicalBufferEq (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Operand) (right: LIR.Operand) : Result<X86_64.Instr list, string> =
+let internal emitCanonicalBufferEq (ctx: FuncCtx) (kind: MemoryModel.CanonicalBufferKind) (dest: LIR.Reg) (left: LIR.Operand) (right: LIR.Operand) : Result<X86_64.Instr list, string> =
     // Canonical buffers share [refcount:8][length:8][data:N]. Compare the
     // representation directly without allocating or calling stdlib code.
     resolveReg dest
@@ -63,8 +63,14 @@ let internal emitCanonicalBufferEq (ctx: FuncCtx) (dest: LIR.Reg) (left: LIR.Ope
             saveInstrs
             @ operandInstrs
             @ [X86_64.CMP_reg (leftReg, rightReg)
-               X86_64.Jcc (X86_64.EQ, equalLabel)
-               X86_64.MOV_load (remainingReg, leftReg, 8)
+               X86_64.Jcc (X86_64.EQ, equalLabel)]
+            @ (if kind = MemoryModel.NullableUtf8String then
+                   [X86_64.TEST_reg (leftReg, leftReg)
+                    X86_64.Jcc (X86_64.EQ, unequalLabel)
+                    X86_64.TEST_reg (rightReg, rightReg)
+                    X86_64.Jcc (X86_64.EQ, unequalLabel)]
+               else [])
+            @ [X86_64.MOV_load (remainingReg, leftReg, 8)
                X86_64.MOV_load (rightWordReg, rightReg, 8)
                X86_64.CMP_reg (remainingReg, rightWordReg)
                X86_64.Jcc (X86_64.NE, unequalLabel)

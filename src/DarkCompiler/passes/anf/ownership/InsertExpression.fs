@@ -29,10 +29,10 @@ let rec insertRCWithAnalysis
         Map.tryFind id ctx.FuncReg
         |> Option.map (fun (name, _) -> name = expected)
         |> Option.defaultValue false
-    let pendingIds = returnDecs |> List.map (fun (id, _, _, _, _) -> id) |> Set.ofList
+    let pendingIds = returnDecs |> List.map (fun (id, _, _, _, _, _) -> id) |> Set.ofList
     let branchDecs =
         inheritedBranchDecs
-        |> List.filter (fun (id, _, _, _, _) ->
+        |> List.filter (fun (id, _, _, _, _, _) ->
             not (Set.contains id (returnedSet expr)) && not (Set.contains id pendingIds))
     let returnDecs = branchDecs @ returnDecs
     let ctxWithTypes = withTempTypes ctx types
@@ -86,7 +86,7 @@ let rec insertRCWithAnalysis
                 match Map.tryFind target joinScopes with
                 | Some ids -> ids
                 | None -> Crash.crash $"RC insertion: join target {target} is not in scope"
-            let localDecs = returnDecs |> List.filter (fun (id, _, _, _, _) -> not (Set.contains id deferred))
+            let localDecs = returnDecs |> List.filter (fun (id, _, _, _, _, _) -> not (Set.contains id deferred))
             insertReturnDecs localDecs (Jump (target, atom)) varGen types
             |> applyLetFrames ctx frames
 
@@ -94,7 +94,7 @@ let rec insertRCWithAnalysis
             let conditional = (frames |> List.choose (fun frame -> frame.BranchDec)) @ inheritedBranchDecs
             let transferable = (frames |> List.choose (fun frame -> frame.TransferableOwnership)) @ inheritedTransferableOwnership
             let deferred =
-                conditional @ returnDecs |> List.map (fun (id, _, _, _, _) -> id) |> Set.ofList
+                conditional @ returnDecs |> List.map (fun (id, _, _, _, _, _) -> id) |> Set.ofList
             let continuationTypes = Map.add parameter.Id parameter.Type types
             let body, afterBody, bodyTypes =
                 insertRCWithAnalysis joinScopes conditional ctx currentFuncName continuation varGen returnDecs transferable paramIncs continuationTypes
@@ -119,14 +119,14 @@ let rec insertRCWithAnalysis
                 |> fun local -> local @ inheritedTransferableOwnership
             let returnDecTemps =
                 returnDecs
-                |> List.map (fun (tempId, _, _, _, _) -> tempId)
+                |> List.map (fun (tempId, _, _, _, _, _) -> tempId)
                 |> Set.ofList
             let branchLocalDecs (branchReturned: Set<TempId>) : ReturnDec list =
                 let frameDecs =
                     frames
                     |> List.choose (fun frame ->
                         match frame.BranchDec with
-                        | Some (tempId, _, _, _, _ as dec)
+                        | Some (tempId, _, _, _, _, _ as dec)
                             when not (Set.contains tempId branchReturned)
                                  && not (Set.contains tempId returnDecTemps) ->
                             Some dec
@@ -492,13 +492,13 @@ let rec insertRCWithAnalysis
                         frames
                         |> List.tryPick (fun candidate ->
                             match candidate.TransferableOwnership with
-                            | Some ((candidateOwnerId, _, _, _, _) as pendingDec) when candidateOwnerId = ownerId ->
+                            | Some ((candidateOwnerId, _, _, _, _, _) as pendingDec) when candidateOwnerId = ownerId ->
                                 Some pendingDec
                             | _ ->
                                 None)
                         |> Option.orElseWith (fun () ->
                             inheritedTransferableOwnership
-                            |> List.tryFind (fun (candidateOwnerId, _, _, _, _) -> candidateOwnerId = ownerId))
+                            |> List.tryFind (fun (candidateOwnerId, _, _, _, _, _) -> candidateOwnerId = ownerId))
                         |> Option.map (fun pendingDec ->
                             ((targetId, pendingDec) :: transfers, Set.add ownerId transferredOwners))
                         |> Option.defaultValue (transfers, transferredOwners)
@@ -519,7 +519,7 @@ let rec insertRCWithAnalysis
 
             let transferredOwnerIds =
                 transferredOwnership
-                |> List.map (fun (_, (ownerId, _, _, _, _)) -> ownerId)
+                |> List.map (fun (_, (ownerId, _, _, _, _, _)) -> ownerId)
                 |> Set.ofList
 
             let allocationIncTargetsAfterTransfers =
@@ -686,7 +686,7 @@ let rec insertRCWithAnalysis
                 varGen
                 returnDecsAfterTransfers
                 inheritedTransferableOwnershipAfterTransfers
-                (inheritedBranchDecs |> List.filter (fun (id, _, _, _, _) -> not (Set.contains id transferredOwnerIds)))
+                (inheritedBranchDecs |> List.filter (fun (id, _, _, _, _, _) -> not (Set.contains id transferredOwnerIds)))
                 (frame :: framesAfterTransfers)
                 typesWithBinding
 

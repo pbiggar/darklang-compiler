@@ -8,6 +8,7 @@ module MemoryModel
 /// strings after lowering.
 type CanonicalBufferKind =
     | Utf8String
+    | NullableUtf8String
     | GraphemeCluster
 
 /// Reference-count operation kind

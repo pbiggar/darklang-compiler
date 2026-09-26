@@ -168,7 +168,10 @@ let private releasePrintedValueFromReg
             typ
     match MemoryPlanning.rcShapeReleaseOperation shape with
     | Some MemoryModel.DynamicStringBuffer ->
-        [LIR.RefCountDecString (LIR.Reg reg)]
+        if MemoryPlanning.isNullableStringSumType rcContext.SumShapes typ then
+            [LIR.RefCountDecInt (LIR.Reg reg)]
+        else
+            [LIR.RefCountDecString (LIR.Reg reg)]
     | Some MemoryModel.DynamicIntBuffer ->
         [LIR.RefCountDecInt (LIR.Reg reg)]
     | Some MemoryModel.DynamicBlobBuffer ->
@@ -1138,11 +1141,12 @@ let selectInstr
         Ok ([LIR.RefCountDec (lirAddr, payloadSize, (match kind with | MIR.GenericHeap -> LIR.GenericHeap | MIR.StreamHeap -> LIR.StreamHeap | MIR.TaggedList -> LIR.TaggedList | MIR.DictHeap -> LIR.DictHeap | MIR.ClosureHeap -> LIR.ClosureHeap), sourceType)], state)
 
     | MIR.Print (src, valueType) ->
-        // Generated and source printing consume the printed ownership root.
+        // Printers clobber caller-saved registers; preserve other live values
+        // before consuming the printed ownership root.
         let finishPrint instrs =
-            Ok (instrs @ releasePrintedValue printRcContext src valueType, state)
+            Ok ([LIR.SaveRegs ([], [])] @ instrs @ [LIR.RestoreRegs ([], [])] @ releasePrintedValue printRcContext src valueType, state)
         let finishPrintFromReg reg instrs =
-            Ok (instrs @ releasePrintedValueFromReg printRcContext reg valueType, state)
+            Ok ([LIR.SaveRegs ([], [])] @ instrs @ [LIR.RestoreRegs ([], [])] @ releasePrintedValueFromReg printRcContext reg valueType, state)
         match valueType with
         | AST.TBool ->
             let lirSrc = convertOperand src

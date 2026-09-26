@@ -107,8 +107,14 @@ the general encoding, not an observable nominal-equality divergence: their
 declaring types remain distinct in type checking, rendering, and equality.
 
 - A type whose cases are all nullary uses its case tag as an immediate.
-- If any case has a payload, all values of that type use a two-word fixed block:
-  case tag at offset 0 and payload (or zero for a nullary case) at offset 8.
+- A concrete single-case sum over Int64, UInt64, Bool, String, or Char uses the
+  payload word directly, without a sum allocation.
+- A concrete two-case sum with one nullary case and one String payload case uses
+  zero for the nullary case and the nonzero String buffer pointer for the payload
+  case. Matching tests zero before inspecting the payload; ownership treats the
+  nonzero word as the String buffer.
+- Other payload sums use a two-word fixed block: case tag at offset 0 and
+  payload (or zero for a nullary case) at offset 8.
 - Multiple enum fields use one payload tuple block, preserving the public field
   count and order while retaining the existing backend and reference-counting
   layout.

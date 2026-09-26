@@ -250,8 +250,8 @@ let internal translateInstr
     | LIR.RefCountDecInt value ->
         X64EmitReferenceCounts.emitRefCountDecInt ctx value
 
-    | LIR.CanonicalBufferEq (dest, _, left, right) ->
-        X64EmitBuffers.emitCanonicalBufferEq ctx dest left right
+    | LIR.CanonicalBufferEq (dest, kind, left, right) ->
+        X64EmitBuffers.emitCanonicalBufferEq ctx kind dest left right
 
     | LIR.StringConcat (dest, first, second, remaining) ->
         X64EmitBuffers.emitStringConcat ctx dest first second remaining

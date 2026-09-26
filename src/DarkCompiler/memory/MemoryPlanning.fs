@@ -4,6 +4,17 @@ module MemoryPlanning
 
 open MemoryModel
 
+let isNullableStringSumType (sumReg: RcSumShapeRegistry) (typ: AST.SemanticType) : bool =
+    match typ with
+    | AST.TSum (name, []) ->
+        match Map.tryFind name sumReg with
+        | Some info when List.isEmpty info.TypeParams ->
+            match info.Payloads |> List.map snd |> List.sort with
+            | [None; Some AST.TString] -> true
+            | _ -> false
+        | _ -> false
+    | _ -> false
+
 /// Classify a source type into its current runtime RC representation shape.
 ///
 /// The classifier is intentionally pure and side-effect free. Ownership
@@ -240,7 +251,10 @@ let rcShapeOfTypeWithSums
                             | _ -> None
                         | _ -> None
 
-                    match transparentPayloadShape with
+                    let nullableStringShape =
+                        if isNullableStringSumType sumReg sourceType then Some DynamicString else None
+
+                    match transparentPayloadShape |> Option.orElse nullableStringShape with
                     | Some shape -> shape
                     | None when hasPayloadVariant ->
                         let fieldShapes =
