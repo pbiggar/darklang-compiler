@@ -119,7 +119,6 @@ let private constructWithSignatures
         |> AST.NonEmptyList.toList
         |> List.mapFold (fun nextId (binding, typ) ->
             let parameter = {
-                Name = string binding
                 Binding = binding
                 Value = { Id = HIR.ValueId nextId; Type = typ }
             }
@@ -390,7 +389,6 @@ let constructFunctionsWithOpaqueFallback functionNames infer dependencies calls 
             CheckedAST.functionParameterTypes definition
             |> AST.NonEmptyList.toList
             |> List.mapi (fun index (binding, typ) -> {
-                Name = string binding
                 Binding = binding
                 Value = { Id = HIR.ValueId index; Type = typ }
             })

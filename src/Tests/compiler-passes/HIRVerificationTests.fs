@@ -15,12 +15,12 @@ let private reference name input typ : HIR.Operand =
     let id = binding name
     { Expression = CheckedAST.Local id; Type = typ; Inputs = Map.ofList [id, input] }
 let private namedParameter name value : HIR.Parameter =
-    { Name = name; Binding = binding name; Value = value }
+    { Binding = binding name; Value = value }
 let private orderedBlock parameters operations result =
     TestBlock { Parameters = parameters; Operations = operations; Result = result }
 let private block parameters operations result =
     orderedBlock
-        (parameters |> Map.toList |> List.map (fun (id, value) -> namedParameter (string id) value))
+        (parameters |> Map.toList |> List.map (fun (id, value) -> ({ Binding = id; Value = value }: HIR.Parameter)))
         operations
         result
 let private leaf inputs operands outputs =
@@ -136,7 +136,7 @@ let tests = [
     "HIR rejects direct-call result type mismatches", check (Error (VerifyHIR.InvalidCallResultType (fid "callee")))
         (let invalidResult = value 9 AST.TInt64
          block (Map.ofList [binding "input", parameter]) [call "callee" [parameter] invalidResult] invalidResult)
-    "HIR rejects duplicate ordered parameter names", check (Error (VerifyHIR.DuplicateParameterName "input"))
+    "HIR rejects duplicate ordered parameter bindings", check (Error (VerifyHIR.DuplicateParameterBinding (binding "input")))
         (orderedBlock
             [namedParameter "input" parameter; namedParameter "input" (value 10 AST.TBool)]
             []

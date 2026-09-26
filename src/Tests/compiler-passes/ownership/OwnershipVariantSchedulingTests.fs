@@ -9,7 +9,6 @@ type private Leaf = Fresh of HIR.Value
 let private fid = TestIds.functionIdForName
 let private value id : HIR.Value = { Id = HIR.ValueId id; Type = AST.TList AST.TInt64 }
 let private parameter (value: HIR.Value) : HIR.Parameter = {
-    Name = sprintf "value%i" (match value.Id with HIR.ValueId id -> id)
     Binding = AST.bindingId (match value.Id with HIR.ValueId id -> id)
     Value = value
 }

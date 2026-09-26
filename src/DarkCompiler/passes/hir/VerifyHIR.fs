@@ -7,7 +7,7 @@ open HIR
 type VerificationError =
     | UnknownValue of ValueId
     | DuplicateDefinition of ValueId
-    | DuplicateParameterName of string
+    | DuplicateParameterBinding of AST.BindingId
     | DuplicateFunctionName of AST.FunctionId
     | InconsistentValueType of ValueId
     | BindingTypeMismatch of result: ValueId
@@ -49,8 +49,8 @@ let verify (dialect: Dialect<'leaf, 'block>) (root: 'block) =
         values
         |> List.fold (fun result value -> result |> Result.bind (fun (declared, visible) -> define declared visible value)) (Ok (declared, visible))
     let parameters (values: Parameter list) =
-        match values |> List.countBy (fun parameter -> parameter.Name) |> List.tryFind (fun (_, count) -> count > 1) with
-        | Some (name, _) -> Error (DuplicateParameterName name)
+        match values |> List.countBy (fun parameter -> parameter.Binding) |> List.tryFind (fun (_, count) -> count > 1) with
+        | Some (binding, _) -> Error (DuplicateParameterBinding binding)
         | None -> Ok (values |> List.map (fun parameter -> parameter.Value))
     let aliases (contract: PrimitiveContract) =
         let inputs : Map<ValueId, Value> =

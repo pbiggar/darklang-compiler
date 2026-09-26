@@ -15,7 +15,7 @@ let private signature parameters result : FunctionSignature<HIR.ValueId> = { Par
 let private block parameters operations result : Block<Leaf, HIR.ValueId> = {
     Body = { Parameters = parameters; Operations = operations; Result = result }
 }
-let private parameter value : HIR.Parameter = { Name = "input"; Binding = binding "input"; Value = value }
+let private parameter value : HIR.Parameter = { Binding = binding "input"; Value = value }
 let private definition name ownership body : Function<Leaf, HIR.ValueId> = {
     Definition = { Id = functionId name; Name = name; Body = body }
     Ownership = ownership

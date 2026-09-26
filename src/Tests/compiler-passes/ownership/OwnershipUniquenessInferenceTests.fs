@@ -58,7 +58,7 @@ let private semantics mappings : Semantics<TestLeaf, string> =
     }
 
 let private parameter name value : HIR.Parameter =
-    { Name = name; Binding = binding name; Value = value }
+    { Binding = binding name; Value = value }
 
 let private block parameters operations result : Block<TestLeaf, string> = {
     Body = {

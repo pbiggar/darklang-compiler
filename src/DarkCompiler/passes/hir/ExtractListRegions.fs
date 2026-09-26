@@ -309,7 +309,7 @@ let tryExtract
                 parameters
                 |> Map.toList
                 |> List.map (fun (binding, value) ->
-                    ({ Name = string binding; Binding = binding; Value = value }: HIR.Parameter))
+                    ({ Binding = binding; Value = value }: HIR.Parameter))
             let root = FunctionalBlock { block with Parameters = blockParameters }
             if not (containsListOperation root) then None
             else Some (FunctionalRegion root))

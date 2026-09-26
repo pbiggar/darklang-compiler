@@ -84,7 +84,7 @@ let private functionBlock parameters operations result : Block<TestLeaf, string>
     { Body =
         { Parameters =
               parameters
-              |> List.map (fun name -> ({ Name = name; Binding = binding name; Value = value name }: HIR.Parameter))
+              |> List.map (fun name -> ({ Binding = binding name; Value = value name }: HIR.Parameter))
           Operations = List.concat operations
           Result = result } }
 let private branch predicate yes no : Step<TestLeaf, string> list =

@@ -18,7 +18,7 @@ let private call target result =
 
 let private block operations result : Block<TestLeaf, string> = {
     Body = {
-        Parameters = [{ Name = "value"; Binding = AST.bindingId 0; Value = parameter }]
+        Parameters = [{ Binding = AST.bindingId 0; Value = parameter }]
         Operations = operations
         Result = result
     }
