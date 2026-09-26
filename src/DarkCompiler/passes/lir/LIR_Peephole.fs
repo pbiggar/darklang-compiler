@@ -1488,7 +1488,11 @@ let tryFuseCondBranch
 /// Eliminate a materialized Boolean negation used only by a branch.
 /// MIR lowers `not source` as `negated = 1 - source`; branching on that
 /// normalized Boolean is equivalent to branching on source with swapped edges.
-let tryFuseBooleanNotBranch (instrs: Instr list) (terminator: Terminator) : (Instr list * Terminator) option =
+let tryFuseBooleanNotBranch
+    (regUseCounts: Map<Reg, int>)
+    (instrs: Instr list)
+    (terminator: Terminator)
+    : (Instr list * Terminator) option =
     match terminator, List.rev instrs with
     | Branch (branchReg, trueLabel, falseLabel),
       Sub (subDest, oneReg, Reg sourceReg) :: Mov (oneDest, Imm 1L) :: remainingReversed
@@ -1496,7 +1500,13 @@ let tryFuseBooleanNotBranch (instrs: Instr list) (terminator: Terminator) : (Ins
              && sameReg subDest oneReg
              && sameReg oneReg oneDest
              && not (sameReg sourceReg branchReg) ->
-        Some (List.rev remainingReversed, Branch (sourceReg, falseLabel, trueLabel))
+        // The Sub reads the materialized one and the terminator reads its
+        // result. A later use of that result needs both instructions retained.
+        let useCount = Map.tryFind branchReg regUseCounts |> Option.defaultValue 2
+        if useCount = 2 then
+            Some (List.rev remainingReversed, Branch (sourceReg, falseLabel, trueLabel))
+        else
+            None
     | _ -> None
 
 /// Check if a value is a power of 2 (exactly one bit set)
@@ -1600,7 +1610,7 @@ let private optimizeBlockWithRegUseCounts
 
     // Drop a materialized Boolean negation when the branch can swap its edges.
     let (instrsBeforeCondBranch, terminatorBeforeCondBranch, booleanNotChanged) =
-        match tryFuseBooleanNotBranch instrs'' block.Terminator with
+        match tryFuseBooleanNotBranch regUseCounts instrs'' block.Terminator with
         | Some (fusedInstrs, fusedTerminator) ->
             (fusedInstrs, fusedTerminator, true)
         | None ->
