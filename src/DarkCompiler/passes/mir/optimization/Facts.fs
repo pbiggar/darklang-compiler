@@ -27,6 +27,7 @@ let defaultOptimizeOptions = {
 let hasSideEffects (instr: Instr) : bool =
     match instr with
     | Mov _ -> false
+    | BinOp (_, Div, _, _, typ) when typ <> AST.TFloat64 -> true
     | BinOp _ -> false
     | UnaryOp _ -> false
     | Phi _ -> false

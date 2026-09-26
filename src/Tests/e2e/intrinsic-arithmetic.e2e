@@ -1,0 +1,24 @@
+// Named fixed-width arithmetic and operators share observable behavior.
+Stdlib.Int64.add 2L 3L = 2L + 3L
+Stdlib.Int64.subtract 9L 4L = 9L - 4L
+Stdlib.Int64.multiply 6L 7L = 6L * 7L
+Stdlib.Int64.divide 21L 3L = 21L / 3L
+
+let operation = Stdlib.Int64.add in operation 2L 3L = 5L
+let operation = Stdlib.Int64.divide in operation 21L 3L = 7L
+let operation = Stdlib.Int64.divide in operation 1L 0L = error="Cannot divide by 0"
+Stdlib.List.map [1L, 2L, 3L] (Stdlib.Int64.add 4L) = [5L, 6L, 7L]
+let operation = Stdlib.Int8.add in operation 120y 10y = 120y + 10y
+let operation = Stdlib.Int16.subtract in operation 9s 4s = 9s - 4s
+let operation = Stdlib.Int32.multiply in operation 6l 7l = 6l * 7l
+let operation = Stdlib.UInt8.add in operation 250uy 10uy = 250uy + 10uy
+let operation = Stdlib.UInt16.subtract in operation 4us 9us = 4us - 9us
+let operation = Stdlib.UInt32.multiply in operation 6ul 7ul = 6ul * 7ul
+let operation = Stdlib.UInt64.divide in operation 21UL 3UL = 21UL / 3UL
+
+Stdlib.Int64.divide 1L 0L = error="Cannot divide by 0"
+1L / 0L = error="Cannot divide by 0"
+let ignored = Stdlib.Int64.divide 1L 0L in 42L = error="Cannot divide by 0"
+let ignored = 1L / 0L in 42L = error="Cannot divide by 0"
+Stdlib.Int64.divide (-9223372036854775808L) (-1L) = -9223372036854775808L
+(-9223372036854775808L) / (-1L) = -9223372036854775808L

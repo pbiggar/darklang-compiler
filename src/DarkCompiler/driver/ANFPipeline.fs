@@ -77,7 +77,9 @@ let internal buildAnf
                 ("strength_reduction", anfOptions.EnableStrengthReduction)
             ]
     if verbosity >= 1 then println $"  [anf.optimize] {anfPassLabel}..."
-    let anfProgram = ANF.Program (functions, ANF.Return ANF.UnitLiteral)
+    let anfProgram =
+        ANF.Program (functions, ANF.Return ANF.UnitLiteral)
+        |> ANF_Intrinsics.canonicalizeProgram registries.FunctionIds registries.FuncReg
     if shouldDumpIR verbosity options.DumpANF then
         printANFProgram options "=== ANF (before optimization) ===" anfProgram
     let anfOptStart = sw.Elapsed.TotalMilliseconds

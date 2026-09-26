@@ -163,6 +163,14 @@ paths. Join arguments support the immediate scalar types accepted by the ANF
 join-interface verifier; managed values retain their ownership-aware structured
 lowering.
 
+Fixed-width integer arithmetic has one ANF primitive per operation and type.
+The resolved fixed-width `Stdlib.Int*` and `Stdlib.UInt*` arithmetic direct
+calls canonicalize to the same primitive as operator syntax before ANF
+optimization. A first-class reference retains the public function identity;
+its compiled definition is a primitive-backed callable adapter. Division
+remains effectful through MIR optimization because it can raise the language's
+divide-by-zero error even when its result is unused.
+
 Inlining freshens block identities along with value identities. Liveness keeps
 continuation captures live; reference counting releases branch-local owners at
 a jump and defers enclosing cleanup to the continuation. The post-RC interface

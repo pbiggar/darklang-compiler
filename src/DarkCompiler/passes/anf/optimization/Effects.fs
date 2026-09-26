@@ -38,6 +38,7 @@ let internal mustPreserveEvaluation (context: OptimizeContext) (cexpr: CExpr) : 
         // insertion can orphan the allocation even though the cast itself is
         // computationally pure.
         typeNeedsTypedAtomDceProtection context typ
+    | Prim (Div, _, _) -> true
     | Prim _ -> false
     | UnaryPrim _ -> false
     | IfValue _ -> false

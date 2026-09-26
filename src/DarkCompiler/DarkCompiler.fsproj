@@ -112,6 +112,7 @@
     <Compile Include="passes/anf/optimization/Substitution.fs" />
     <Compile Include="passes/anf/optimization/Expressions.fs" />
     <Compile Include="passes/anf/optimization/Accumulators.fs" />
+    <Compile Include="passes/anf/ANF_Intrinsics.fs" />
     <Compile Include="passes/anf/ANF_Optimize.fs" />
     <Compile Include="passes/anf/ANF_HigherOrderSpecialization.fs" />
     <Compile Include="passes/anf/ANF_DirectCallSpecialization.fs" />

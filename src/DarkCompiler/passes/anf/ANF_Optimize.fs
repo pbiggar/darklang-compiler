@@ -102,13 +102,13 @@ let optimizeProgramWithOptionsAndExternalFunctionsWithTrace
         optimizedProgram
         |> fun current ->
             measure "ANF Optimize detail: Addition rewrite" (fun () ->
-                transformTailRecursionModuloAddition context.FunctionNames helpers current)
+                transformTailRecursionModuloAddition helpers current)
         |> fun current ->
             measure "ANF Optimize detail: Subtraction rewrite" (fun () ->
-                transformTailRecursionModuloSubtraction context.FunctionNames helpers current)
+                transformTailRecursionModuloSubtraction helpers current)
         |> fun current ->
             measure "ANF Optimize detail: Multiplication rewrite" (fun () ->
-                transformTailRecursionModuloMultiplication context.FunctionNames helpers current)
+                transformTailRecursionModuloMultiplication helpers current)
         |> fun current ->
             measure "ANF Optimize detail: Fixed constructor rewrite" (fun () ->
                 transformTailRecursionModuloFixedConstructors helpers current)
