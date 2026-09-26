@@ -15,3 +15,9 @@ let callRange (value: UInt8) : Bool = let result = smallResult value in if resul
 // Pruning an unreachable runtime-error result must keep its integer sentinel
 // behind the register used by a float-typed continuation.
 let floatAt (values: List<Float>) (index: Int) : Float = match Stdlib.List.getAt values index with | Some value -> value | None -> Builtin.testRuntimeError "missing float"; floatAt ([1.5]) (0) = 1.5
+let multipliedFloatAt (values: List<Float>) (index: Int) : Float = 2.0 * (match Stdlib.List.getAt values index with | Some value -> value | None -> Builtin.testRuntimeError "missing float"); multipliedFloatAt ([1.5]) (0) = 3.0
+let recRow (values: List<Float>) (index: Int) (acc: Float) : Float = if index >= 1 then acc else recRow values (index + 1) (acc + 2.0 * (match Stdlib.List.getAt values index with | Some value -> value | None -> Builtin.testRuntimeError "missing float")); recRow ([1.5]) (0) (0.0) = 3.0
+
+// Copies and a shared phi constant must retain only the executable result.
+let foldedCopies (condition: Bool) : Int64 = let value = if condition then let _ = Builtin.print "left" in 20L + 22L else let _ = Builtin.print "right" in 6L * 7L in let copy = value in if copy == 42L then copy else Builtin.testRuntimeError "unreachable"; foldedCopies (true) = stdout="left42\n" stderr="" exact_bytes=true
+let foldedCopies (condition: Bool) : Int64 = let value = if condition then let _ = Builtin.print "left" in 20L + 22L else let _ = Builtin.print "right" in 6L * 7L in let copy = value in if copy == 42L then copy else Builtin.testRuntimeError "unreachable"; foldedCopies (false) = stdout="right42\n" stderr="" exact_bytes=true

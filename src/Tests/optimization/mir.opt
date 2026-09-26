@@ -91,19 +91,19 @@ Function factorial:
 Function factorial$trmo:
   factorial$trmo_entry:
     jump factorial$trmo_body
+  factorial$trmo_L0:
+    ret v10010
   factorial$trmo_L1:
     v10015 <- v10013 - 1 : TInt64
     v10016 <- v10010 * v10013 : TInt64
     v10017 <- v10015 : TInt64
     v10018 <- v10016 : TInt64
     jump factorial$trmo_body
-  factorial$trmo_L2:
-    ret v10010
   factorial$trmo_body:
     v10010 <- Phi([(v6, factorial$trmo_entry), (v10018, factorial$trmo_L1)]) : TInt64
     v10013 <- Phi([(v0, factorial$trmo_entry), (v10017, factorial$trmo_L1)]) : TInt64
     v10014 <- v10013 <= 1 : TInt64
-    branch v10014 ? factorial$trmo_L2 : factorial$trmo_L1
+    branch v10014 ? factorial$trmo_L0 : factorial$trmo_L1
 
 Function _start:
   _start_body:
@@ -130,19 +130,19 @@ Function factorial:
 Function factorial$trmo:
   factorial$trmo_entry:
     jump factorial$trmo_body
+  factorial$trmo_L0:
+    ret v10015
   factorial$trmo_L1:
     v10020 <- v10018 - 1 : TInt64
     v10021 <- v10015 * v10018 : TInt64
     v10022 <- v10020 : TInt64
     v10023 <- v10021 : TInt64
     jump factorial$trmo_body
-  factorial$trmo_L2:
-    ret v10015
   factorial$trmo_body:
     v10015 <- Phi([(v11, factorial$trmo_entry), (v10023, factorial$trmo_L1)]) : TInt64
     v10018 <- Phi([(v0, factorial$trmo_entry), (v10022, factorial$trmo_L1)]) : TInt64
     v10019 <- v10018 <= 1 : TInt64
-    branch v10019 ? factorial$trmo_L2 : factorial$trmo_L1
+    branch v10019 ? factorial$trmo_L0 : factorial$trmo_L1
 
 Function repeat:
   repeat_entry:

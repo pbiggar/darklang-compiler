@@ -5,6 +5,7 @@ module MIRSparseConditionalConstants
 open MIR
 open MIROptimizationFacts
 open MIRConstants
+open MIRCopyPropagation
 
 type private LatticeValue =
     | Unknown
@@ -490,10 +491,22 @@ let private analyze (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : Ana
 
     analyzeWorklist initial
 
-let private applyToCFG (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : CFG * bool =
-    let analysis = analyze callResults cfg
+let private applyToCFG
+    (callResults: Map<AST.FunctionId, Operand>)
+    (copies: CopyMap)
+    (cfg: CFG)
+    : CFG * bool =
+    // A single unconditional block has no edge or phi facts to solve. Its
+    // copy-resolved instruction rewrite still folds local expressions below.
+    let isStraightLine =
+        match Map.tryFind cfg.Entry cfg.Blocks with
+        | Some { Terminator = Ret _ } when Map.count cfg.Blocks = 1 -> true
+        | _ -> false
+    let analysis =
+        if isStraightLine then None
+        else Some (analyze callResults cfg)
     let constantFor register =
-        match Map.tryFind register analysis.Values with
+        match analysis |> Option.bind (fun facts -> Map.tryFind register facts.Values) with
         | Some (Constant constant) -> Some constant
         | Some Unknown
         | Some (IntegerRange _)
@@ -502,24 +515,42 @@ let private applyToCFG (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : 
         | None -> None
 
     let rewriteInstruction blockLabel instr =
-        match instr with
+        // Copy substitution and constant materialization share this rewrite.
+        // Phi operands retain their incoming-edge identities.
+        let copied =
+            match instr with
+            | Phi _ -> instr
+            | _ -> propagateCopyInstr copies instr
+        match copied with
         | Mov (destination, _, valueType) ->
             match constantFor destination with
             | Some constant -> Mov (destination, constant, valueType)
-            | None -> instr
-        | BinOp (destination, _, _, _, operandType) ->
+            | None -> copied
+        | BinOp (destination, operation, left, right, operandType) ->
+            let resultType =
+                match operation with
+                | Eq | Neq | Lt | Gt | Lte | Gte | And | Or -> AST.TBool
+                | _ -> operandType
             match constantFor destination with
-            | Some constant ->
-                let resultType =
-                    match instr with
-                    | BinOp (_, (Eq | Neq | Lt | Gt | Lte | Gte | And | Or), _, _, _) -> AST.TBool
-                    | _ -> operandType
-                Mov (destination, constant, Some resultType)
-            | None -> instr
+            | Some constant -> Mov (destination, constant, Some resultType)
+            | None ->
+                // SCCP's lattice records exact values, while the local folder
+                // also recognizes identities that yield a nonconstant register.
+                // Fold copied operands before Float literal bits are converted
+                // for lowering, preserving the earlier pass order's identities.
+                match tryFoldBinOp operation left right operandType with
+                | Some result -> Mov (destination, result, None)
+                | None when operandType = AST.TFloat64 ->
+                    let floatOperand operand =
+                        match operand with
+                        | Int64Const bits -> FloatSymbol (System.BitConverter.Int64BitsToDouble bits)
+                        | other -> other
+                    BinOp (destination, operation, floatOperand left, floatOperand right, operandType)
+                | None -> copied
         | UnaryOp (destination, _, _) ->
             match constantFor destination with
             | Some constant -> Mov (destination, constant, None)
-            | None -> instr
+            | None -> copied
         | Phi (destination, sources, valueType) ->
             match constantFor destination with
             | Some constant -> Mov (destination, constant, valueType)
@@ -527,37 +558,40 @@ let private applyToCFG (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : 
                 let executableSources =
                     sources
                     |> List.filter (fun (_, predecessor) ->
-                        Set.contains (predecessor, blockLabel) analysis.ExecutableEdges)
+                        match analysis with
+                        | Some facts -> Set.contains (predecessor, blockLabel) facts.ExecutableEdges
+                        | None -> true)
                 Phi (destination, executableSources, valueType)
         | CanonicalBufferEq (destination, _, _, _) ->
             match constantFor destination with
             | Some (BoolConst _ as constant) -> Mov (destination, constant, Some AST.TBool)
-            | _ -> instr
+            | _ -> copied
         | FloatSqrt (destination, _)
         | FloatAbs (destination, _)
         | FloatNeg (destination, _)
         | Int64ToFloat (destination, _) ->
             match constantFor destination with
             | Some (FloatSymbol _ as constant) -> Mov (destination, constant, Some AST.TFloat64)
-            | _ -> instr
+            | _ -> copied
         | FloatToBits (destination, _) ->
             match constantFor destination with
             | Some (Int64Const _ as constant) -> Mov (destination, constant, Some AST.TUInt64)
-            | _ -> instr
+            | _ -> copied
         | FloatToInt64 (destination, _) ->
             match constantFor destination with
             | Some (Int64Const _ as constant) -> Mov (destination, constant, Some AST.TInt64)
-            | _ -> instr
+            | _ -> copied
         | HeapLoad (destination, _, _, valueType) ->
             match constantFor destination, valueType with
             | Some (FloatSymbol _ as constant), Some AST.TFloat64 ->
                 Mov (destination, constant, valueType)
             | Some ((Int64Const _ | BoolConst _) as constant), _ ->
                 Mov (destination, constant, valueType)
-            | _ -> instr
-        | _ -> instr
+            | _ -> copied
+        | _ -> copied
 
     let rewriteTerminator terminator =
+        let terminator = propagateCopyTerminator copies terminator
         match terminator with
         | Branch (_, trueTarget, falseTarget) when trueTarget = falseTarget ->
             Jump trueTarget
@@ -572,7 +606,10 @@ let private applyToCFG (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : 
 
     let blocks =
         cfg.Blocks
-        |> Map.filter (fun label _ -> Set.contains label analysis.ExecutableBlocks)
+        |> Map.filter (fun label _ ->
+            match analysis with
+            | Some facts -> Set.contains label facts.ExecutableBlocks
+            | None -> true)
         |> Map.map (fun label block ->
             {
                 block with
@@ -594,7 +631,13 @@ let applySparseConditionalConstantPropagationWithCallResults
             | Branch _ -> true
             | Ret _
             | Jump _ -> false)
-    if hasConditionalBranch then applyToCFG callResults cfg else (cfg, false)
+    if hasConditionalBranch then applyToCFG callResults Map.empty cfg else (cfg, false)
+
+/// Discover copy aliases once, then rewrite them with SCCP's constants and
+/// reachable edges. Straight-line returns use the local rewrite alone.
+let applySparseConditionalSimplification (cfg: CFG) : CFG * bool =
+    let copies = cfg |> buildCopyMap |> resolveCopyMap
+    applyToCFG Map.empty copies cfg
 
 let applySparseConditionalConstantPropagation (cfg: CFG) : CFG * bool =
     applySparseConditionalConstantPropagationWithCallResults Map.empty cfg

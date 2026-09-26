@@ -148,7 +148,10 @@ branch shapes plus the conservative call and observable-field boundaries.
   String, Char, DateTime, Unit, and function-symbol values; bounded native
   integer ranges; fixed aggregate fields and constructor tags; uniform direct-
   call results; and executable CFG edges, including phi constants and non-
-  executable predecessor removal;
+  executable predecessor removal. The default MIR pipeline also resolves copy
+  chains, folds constant expressions, and rewrites reachable blocks in SCCP's
+  output sweep instead of scheduling separate folding, copy, and unreachable-
+  block passes;
 - dominator-scoped scalar and effect-free-call common-subexpression reuse;
 - partial-redundancy elimination for non-trapping scalar arithmetic and unary
   expressions, inserting only on unconditional incoming edges and merging the

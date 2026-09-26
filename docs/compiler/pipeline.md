@@ -353,6 +353,10 @@ Output: block0:
 ### Sub-passes (grouped)
 - `sccp`, `const_folding`, `cse`, `copy_prop`, `dce`, `cfg_simplify`, `licm`
 
+The default path performs constant folding, copy substitution, constant branch
+simplification, and unreachable-block pruning inside SCCP's analysis and
+rewrite. The remaining passes follow it in the optimizer's fixed-point loop.
+
 ---
 
 ## Pass 4: MIR to LIR (`MIR_to_LIR.fs`)

@@ -71,15 +71,20 @@ let private optimizeCFGOnceWithEffectFreeCalls
             let result = operation ()
             record name (System.Diagnostics.Stopwatch.GetTimestamp() - started)
             result
+    let useCombinedSccp =
+        options.EnableConstFolding && options.EnableCopyProp && options.EnableCFGSimplify
     let (cfg0, changed0) =
-        if options.EnableConstFolding && options.EnableCFGSimplify then
+        if useCombinedSccp then
+            measure "MIR Sparse Conditional Simplification" (fun () ->
+                applySparseConditionalSimplification cfg)
+        elif options.EnableConstFolding && options.EnableCFGSimplify then
             measure "MIR Sparse Conditional Constant Propagation" (fun () ->
                 applySparseConditionalConstantPropagation cfg)
         else
             (cfg, false)
     let topologyForCse = if changed0 then None else existingTopology
     let (cfg1, changed1) =
-        if options.EnableConstFolding then
+        if options.EnableConstFolding && not useCombinedSccp then
             measure "MIR Constant Folding" (fun () -> applyConstantFolding cfg0)
         else
             (cfg0, false)
@@ -95,7 +100,7 @@ let private optimizeCFGOnceWithEffectFreeCalls
         else
             (cfg1, false, topologyForCse)
     let (cfg3, changed3) =
-        if options.EnableCopyProp then
+        if options.EnableCopyProp && not useCombinedSccp then
             measure "MIR Copy Propagation" (fun () ->
                 applyCopyPropagationWithTickTrace recordTicks cfg2)
         else
@@ -104,7 +109,7 @@ let private optimizeCFGOnceWithEffectFreeCalls
     // This catches cases like: v1 = -127; v2 = v1 - 2
     // After copy prop: v2 = Int64Const(-127) - Int64Const(2) -> can fold
     let (cfg4, changed4) =
-        if options.EnableConstFolding && changed3 then
+        if options.EnableConstFolding && changed3 && not useCombinedSccp then
             measure "MIR Constant Folding" (fun () -> applyConstantFolding cfg3)
         else
             (cfg3, false)
@@ -147,7 +152,7 @@ let private optimizeCFGOnceWithEffectFreeCalls
         else
             (cfg7, false)
     let (cfg9, changed9) =
-        if options.EnableCFGSimplify then
+        if options.EnableCFGSimplify && not useCombinedSccp then
             measure "MIR Simplify Constant Branches" (fun () -> simplifyConstantBranches cfg8)
         else
             (cfg8, false)
@@ -157,7 +162,7 @@ let private optimizeCFGOnceWithEffectFreeCalls
         else
             (cfg9, false)
     let (cfg11, changed11) =
-        if options.EnableCFGSimplify then
+        if options.EnableCFGSimplify && not useCombinedSccp then
             measure "MIR Eliminate Unreachable Blocks" (fun () -> eliminateUnreachableBlocks cfg10)
         else
             (cfg10, false)
