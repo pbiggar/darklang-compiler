@@ -298,7 +298,7 @@ let rec private formatPattern (pattern: Pattern) : string =
         let parts = patterns |> List.map formatPattern |> String.concat ", "
         $"({parts})"
     | PList patterns ->
-        let separator = "; "
+        let separator = ", "
         let items = patterns |> List.map formatPattern |> String.concat separator
         $"[{items}]"
     | PListCons (head, tail) ->
@@ -597,7 +597,7 @@ let rec private formatExpr (expr: Expr) : string =
             |> String.concat " "
         $"match {scrutineeText} with {caseText}"
     | ListLiteral elements ->
-        let separator = "; "
+        let separator = ", "
         let elementsText = elements |> List.map formatExpr |> String.concat separator
         $"[{elementsText}]"
     | Lambda (parameters, returnAnnotation, body) ->
@@ -732,7 +732,7 @@ let private tryRestoreModuleDeclaration (topLevel: TopLevel) : (NameSyntax.Quali
     | Expression _ -> None
 
 let formatProgram (Program items: Program) : string =
-    let separator = "\n;\n"
+    let separator = "\n"
     let restored = items |> List.map tryRestoreModuleDeclaration
     match restored with
     | Some (firstModule, _) :: _

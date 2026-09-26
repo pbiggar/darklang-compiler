@@ -5,6 +5,7 @@ module Fuzzer.Program
 open System
 open System.Diagnostics
 open System.IO
+open System.Numerics
 open AST
 open CompilationContexts
 open CompilerOptions
@@ -82,7 +83,18 @@ let rec parseArgs (config: Config) (args: string list) : Result<Config option, s
         | Replay _ | Minimize _ -> Error "Specify only one of --replay and --minimize"
     | flag :: _ -> Error $"Unknown or incomplete argument '{flag}'"
 
-let private supportedTypes = [TInt64; TBool; TString]
+// Values with source literals. Opaque and bottom types have no general literal.
+let private scalarTypes =
+    [ TInt8; TInt16; TInt32; TInt64; TInt128; TInt
+      TUInt8; TUInt16; TUInt32; TUInt64; TUInt128
+      TBool; TFloat64; TString; TChar; TUnit ]
+
+let private supportedTypes =
+    scalarTypes
+    @ (scalarTypes |> List.map TList)
+    @ (scalarTypes |> List.map (fun typ -> TDict (TString, typ)))
+    @ [TTuple [TInt64; TBool]; TRecord ("FuzzBox", []);
+       TBlob; TDateTime; TStream TInt64]
 let private observableTypes = [TInt64; TBool]
 
 let private sameType (left: SemanticType) (right: SemanticType) : bool = left = right
@@ -97,15 +109,49 @@ let private choose (random: Random) (items: 'a list) : 'a option =
     | [] -> None
     | _ -> List.tryItem (random.Next(List.length items)) items
 
-let private generateLiteral (random: Random) (typ: SemanticType) : Expr =
+let rec private generateLiteral (random: Random) (typ: SemanticType) : Expr =
     match typ with
+    | TInt8 -> Int8Literal (sbyte (random.Next(-100, 101)))
+    | TInt16 -> Int16Literal (int16 (random.Next(-100, 101)))
+    | TInt32 -> Int32Literal (random.Next(-100, 101))
     | TInt64 -> Int64Literal (random.NextInt64(-100L, 101L))
+    | TInt128 -> Int128Literal (Int128.op_Implicit (random.NextInt64(-100L, 101L)))
+    | TInt -> BigIntLiteral (bigint (random.Next(-100, 101)))
+    | TUInt8 -> UInt8Literal (byte (random.Next(0, 201)))
+    | TUInt16 -> UInt16Literal (uint16 (random.Next(0, 201)))
+    | TUInt32 -> UInt32Literal (uint32 (random.Next(0, 201)))
+    | TUInt64 -> UInt64Literal (uint64 (random.Next(0, 201)))
+    | TUInt128 -> UInt128Literal (UInt128.op_Implicit (uint64 (random.Next(0, 201))))
     | TBool -> BoolLiteral (random.Next(2) = 0)
+    | TFloat64 -> FloatLiteral (float (random.Next(-100, 101)) / 4.0)
+    | TChar -> CharLiteral (["a"; "é"; "🚀"] |> choose random |> Option.defaultValue "a")
+    | TUnit -> UnitLiteral
     | TString ->
         [""; "a"; "dark"; "line\nbreak"; "quote\"slash\\"; "héllo"]
         |> choose random
         |> Option.defaultValue ""
         |> StringLiteral
+    | TTuple [TInt64; TBool] ->
+        TupleLiteral [generateLiteral random TInt64; generateLiteral random TBool]
+    | TList elementType ->
+        ListLiteral (List.init (random.Next(1, 4)) (fun _ -> generateLiteral random elementType))
+    | TDict (TString, valueType) ->
+        DictLiteral (TString, valueType,
+            [StringLiteral "a", generateLiteral random valueType
+             StringLiteral "b", generateLiteral random valueType])
+    | TRecord ("FuzzBox", []) ->
+        RecordLiteral (unresolvedRecordReference "FuzzBox" [],
+            [unresolvedRecordFieldReference "value", generateLiteral random TInt64
+             unresolvedRecordFieldReference "flag", generateLiteral random TBool])
+    | TBlob ->
+        Apply (Var "Stdlib.Blob.fromString", [],
+            NonEmptyList.singleton (generateLiteral random TString))
+    | TDateTime ->
+        Apply (Var "Stdlib.DateTime.fromMilliseconds", [],
+            NonEmptyList.singleton (generateLiteral random TInt))
+    | TStream TInt64 ->
+        Apply (Var "Stdlib.Stream.fromList", [],
+            NonEmptyList.singleton (generateLiteral random (TList TInt64)))
     | _ -> Crash.crash $"Unsupported fuzzer literal type: {typ}"
 
 let private generateLeaf
@@ -161,14 +207,15 @@ let rec private generateExpr
                     |> Option.defaultValue Add
                 BinOp (op, left, right), afterRight
             | TBool ->
-                if random.Next(2) = 0 then
+                if random.Next(3) = 0 then
                     let left, afterLeft = generateChild TBool nextVariable
                     let right, afterRight = generateChild TBool afterLeft
                     let op = if random.Next(2) = 0 then And else Or
                     BinOp (op, left, right), afterRight
                 else
                     let operandType =
-                        choose random supportedTypes |> Option.defaultValue TInt64
+                        choose random (scalarTypes |> List.filter ((<>) TUnit))
+                        |> Option.defaultValue TInt64
                     let left, afterLeft = generateChild operandType nextVariable
                     let right, afterRight = generateChild operandType afterLeft
                     let op =
@@ -177,26 +224,185 @@ let rec private generateExpr
                             [Eq; Neq; Lt; Gt; Lte; Gte]
                             |> choose random
                             |> Option.defaultValue Eq
-                        | TBool | TString -> if random.Next(2) = 0 then Eq else Neq
-                        | _ -> Crash.crash $"Unsupported comparison operand type: {operandType}"
+                        | _ -> if random.Next(2) = 0 then Eq else Neq
                     BinOp (op, left, right), afterRight
             | TString ->
                 let left, afterLeft = generateChild TString nextVariable
                 let right, afterRight = generateChild TString afterLeft
                 BinOp (StringConcat, left, right), afterRight
-            | _ -> Crash.crash $"Unsupported fuzzer expression type: {typ}"
+            | TTuple [TInt64; TBool] ->
+                let left, afterLeft = generateChild TInt64 nextVariable
+                let right, afterRight = generateChild TBool afterLeft
+                TupleLiteral [left; right], afterRight
+            | TList elementType ->
+                let element, afterElement = generateChild elementType nextVariable
+                ListLiteral [element], afterElement
+            | TDict (TString, valueType) ->
+                let value, afterValue = generateChild valueType nextVariable
+                DictLiteral (TString, valueType, [StringLiteral "a", value]), afterValue
+            | TRecord ("FuzzBox", []) ->
+                let value, afterValue = generateChild TInt64 nextVariable
+                let flag, afterFlag = generateChild TBool afterValue
+                RecordLiteral (unresolvedRecordReference "FuzzBox" [],
+                    [unresolvedRecordFieldReference "value", value
+                     unresolvedRecordFieldReference "flag", flag]), afterFlag
+            | _ -> generateLeaf random typ environment, nextVariable
 
-        match random.Next(5) with
+        let generateFeature () =
+            match random.Next(16), typ with
+            | 0, TInt64 ->
+                let left, afterLeft = generateChild TInt64 nextVariable
+                let right, afterRight = generateChild TBool afterLeft
+                let name = $"fuzz{afterRight}"
+                Let (LPTuple (LPVariable name, LPWildcard, []),
+                     TupleLiteral [left; right], Var name), afterRight + 1
+            | 1, TBool ->
+                let left, afterLeft = generateChild TInt64 nextVariable
+                let right, afterRight = generateChild TBool afterLeft
+                let name = $"fuzz{afterRight}"
+                Let (LPTuple (LPWildcard, LPVariable name, []),
+                     TupleLiteral [left; right], Var name), afterRight + 1
+            | 2, TInt64 ->
+                let element, afterElement = generateChild TInt64 nextVariable
+                let body, afterBody = generateChild TInt64 afterElement
+                let matched = { Patterns = NonEmptyList.singleton (PList [PVar "item"])
+                                Guard = None; Body = BinOp (Add, Var "item", body) }
+                let fallback = { Patterns = NonEmptyList.singleton PWildcard
+                                 Guard = None; Body = Int64Literal 0L }
+                Match (ListLiteral [element], [matched; fallback]), afterBody
+            | 3, _ ->
+                let arg, afterArg = generateChild typ nextVariable
+                let parameter = typedLambdaVariable "input" typ
+                let lambda = Lambda (NonEmptyList.singleton parameter, Some typ, Var "input")
+                Apply (lambda, [], NonEmptyList.singleton arg), afterArg
+            | 4, TBool ->
+                let value, afterValue = generateChild TString nextVariable
+                let interpolated = InterpolatedString [StringText "prefix:"; StringExpr value]
+                BinOp (Eq, interpolated, interpolated), afterValue
+            | 5, TInt64 ->
+                let value, afterValue = generateChild TInt64 nextVariable
+                let body, afterBody = generateChild TInt64 afterValue
+                let someCase =
+                    { Patterns = NonEmptyList.singleton (PConstructor ("Some", [PVar "item"]))
+                      Guard = None; Body = BinOp (Add, Var "item", body) }
+                let noneCase =
+                    { Patterns = NonEmptyList.singleton (PConstructor ("None", []))
+                      Guard = None; Body = Int64Literal 0L }
+                Match (Constructor (UnresolvedConstructor None, "Some", [value]),
+                       [someCase; noneCase]), afterBody
+            | 6, TBool ->
+                let value, afterValue = generateChild TInt64 nextVariable
+                let guarded =
+                    { Patterns = NonEmptyList.singleton (PConstructor ("Some", [PVar "item"]))
+                      Guard = Some (BinOp (Gt, Var "item", Int64Literal 0L))
+                      Body = BoolLiteral true }
+                let fallback =
+                    { Patterns = NonEmptyList.singleton PWildcard
+                      Guard = None; Body = BoolLiteral false }
+                Match (Constructor (UnresolvedConstructor None, "Some", [value]),
+                       [guarded; fallback]), afterValue
+            | 7, TInt64 ->
+                let value, afterValue = generateChild TInt64 nextVariable
+                let flag, afterFlag = generateChild TBool afterValue
+                let box = RecordLiteral (unresolvedRecordReference "FuzzBox" [],
+                    [unresolvedRecordFieldReference "value", value
+                     unresolvedRecordFieldReference "flag", flag])
+                let name = $"fuzz{afterFlag}"
+                Let (LPVariable name, box,
+                     RecordAccess (Var name, unresolvedRecordFieldReference "value")), afterFlag + 1
+            | 8, TBool ->
+                let value, afterValue = generateChild TInt64 nextVariable
+                let flag, afterFlag = generateChild TBool afterValue
+                let box = RecordLiteral (unresolvedRecordReference "FuzzBox" [],
+                    [unresolvedRecordFieldReference "value", value
+                     unresolvedRecordFieldReference "flag", flag])
+                let name = $"fuzz{afterFlag}"
+                Let (LPVariable name, box,
+                     RecordAccess (Var name, unresolvedRecordFieldReference "flag")), afterFlag + 1
+            | 9, TInt64 ->
+                let value, afterValue = generateChild TInt64 nextVariable
+                Apply (Var "fuzzIdentity", [], NonEmptyList.singleton value), afterValue
+            | 10, TInt64 ->
+                let value, afterValue = generateChild TInt64 nextVariable
+                let okCase =
+                    { Patterns = NonEmptyList.singleton (PConstructor ("Ok", [PVar "result"] ))
+                      Guard = None; Body = Var "result" }
+                let errorCase =
+                    { Patterns = NonEmptyList.singleton (PConstructor ("Error", [PWildcard]))
+                      Guard = None; Body = Int64Literal 0L }
+                Match (Constructor (UnresolvedConstructor None, "Ok", [value]),
+                       [okCase; errorCase]), afterValue
+            | 11, TInt64 ->
+                let original, afterOriginal = generateChild TInt64 nextVariable
+                let replacement, afterReplacement = generateChild TInt64 afterOriginal
+                let box = RecordLiteral (unresolvedRecordReference "FuzzBox" [],
+                    [unresolvedRecordFieldReference "value", original
+                     unresolvedRecordFieldReference "flag", BoolLiteral true])
+                let name = $"fuzz{afterReplacement}"
+                Let (LPVariable name, box,
+                     RecordAccess (
+                         RecordUpdate (Var name,
+                             [unresolvedRecordFieldReference "value", replacement]),
+                         unresolvedRecordFieldReference "value")), afterReplacement + 1
+            | 12, TInt64 ->
+                let first, afterFirst = generateChild TInt64 nextVariable
+                let second, afterSecond = generateChild TInt64 afterFirst
+                let consCase =
+                    { Patterns = NonEmptyList.singleton (PListCons ([PVar "head"], PWildcard))
+                      Guard = None; Body = Var "head" }
+                let emptyCase =
+                    { Patterns = NonEmptyList.singleton (PList [])
+                      Guard = None; Body = Int64Literal 0L }
+                Match (ListLiteral [first; second], [consCase; emptyCase]), afterSecond
+            | 13, TBool ->
+                let blob, afterBlob = generateChild TBlob nextVariable
+                let blobLength =
+                    Apply (Var "Stdlib.Blob.length", [], NonEmptyList.singleton blob)
+                BinOp (Eq, blobLength, blobLength), afterBlob
+            | 14, TBool ->
+                let date, afterDate = generateChild TDateTime nextVariable
+                let milliseconds =
+                    Apply (Var "Stdlib.DateTime.toMilliseconds", [], NonEmptyList.singleton date)
+                BinOp (Eq, milliseconds, milliseconds), afterDate
+            | 15, TInt64 ->
+                let first, afterFirst = generateChild TInt64 nextVariable
+                let stream =
+                    Apply (Var "Stdlib.Stream.fromList", [],
+                        NonEmptyList.singleton (ListLiteral [first]))
+                let contents =
+                    Apply (Var "Stdlib.Stream.toList", [], NonEmptyList.singleton stream)
+                let one =
+                    { Patterns = NonEmptyList.singleton (PList [PVar "item"])
+                      Guard = None; Body = Var "item" }
+                let fallback =
+                    { Patterns = NonEmptyList.singleton PWildcard
+                      Guard = None; Body = Int64Literal 0L }
+                Match (contents, [one; fallback]), afterFirst
+            | _, _ -> generateTypedOperation ()
+
+        match random.Next(7) with
         | 0 -> generateLeaf random typ environment, nextVariable
         | 1 -> generateIf ()
         | 2 -> generateLet ()
-        | _ -> generateTypedOperation ()
+        | 3 | 4 -> generateTypedOperation ()
+        | _ -> generateFeature ()
 
 let generateProgram (random: Random) (maxDepth: int) : Program =
     let resultType =
         choose random observableTypes |> Option.defaultValue TInt64
     let expression, _ = generateExpr random maxDepth 0 [] resultType
-    Program [Expression ([], expression)]
+    let recordDefinition =
+        TypeDef (RecordDef ("FuzzBox", [], ["value", TInt64; "flag", TBool]))
+    let identity =
+        FunctionDef {
+            Name = "fuzzIdentity"
+            TypeParams = []
+            Params = NonEmptyList.singleton ("input", TInt64)
+            ReturnType = TInt64
+            Body = Var "input"
+            Recursion = None
+        }
+    Program [recordDefinition; identity; Expression ([], expression)]
 
 let private normalizeOutput (output: string) : string =
     output.TrimEnd('\r', '\n')
@@ -331,10 +537,146 @@ let rec private inferGeneratedType
         | _ -> None
 
     match expr with
+    | UnitLiteral -> Some TUnit
+    | Int8Literal _ -> Some TInt8
+    | Int16Literal _ -> Some TInt16
+    | Int32Literal _ -> Some TInt32
     | Int64Literal _ -> Some TInt64
+    | Int128Literal _ -> Some TInt128
+    | UInt8Literal _ -> Some TUInt8
+    | UInt16Literal _ -> Some TUInt16
+    | UInt32Literal _ -> Some TUInt32
+    | UInt64Literal _ -> Some TUInt64
+    | UInt128Literal _ -> Some TUInt128
+    | BigIntLiteral _ -> Some TInt
     | BoolLiteral _ -> Some TBool
+    | FloatLiteral _ -> Some TFloat64
     | StringLiteral _ -> Some TString
+    | CharLiteral _ -> Some TChar
+    | InterpolatedString _ -> Some TString
     | Var name -> variableType name
+    | TupleLiteral elements ->
+        elements
+        |> List.fold (fun result element ->
+            match result, inferGeneratedType environment element with
+            | Some types, Some typ -> Some (types @ [typ])
+            | _ -> None) (Some [])
+        |> Option.map TTuple
+    | TupleAccess (tuple, index) ->
+        match inferGeneratedType environment tuple with
+        | Some (TTuple elements) -> List.tryItem index elements
+        | _ -> None
+    | ListLiteral (first :: rest) ->
+        inferGeneratedType environment first
+        |> Option.bind (fun elementType ->
+            if rest |> List.forall (fun item -> inferGeneratedType environment item = Some elementType) then
+                Some (TList elementType)
+            else None)
+    | ListLiteral [] -> None
+    | DictLiteral (_, _, (firstKey, firstValue) :: rest) ->
+        match inferGeneratedType environment firstKey, inferGeneratedType environment firstValue with
+        | Some keyType, Some valueType when
+            rest |> List.forall (fun (key, value) ->
+                inferGeneratedType environment key = Some keyType &&
+                inferGeneratedType environment value = Some valueType) ->
+            Some (TDict (keyType, valueType))
+        | _ -> None
+    | DictLiteral _ -> None
+    | RecordLiteral (reference, fields) when reference.SourceTypeName = "FuzzBox" ->
+        let fieldType reference =
+            match reference.SourceFieldName with
+            | "value" -> Some TInt64
+            | "flag" -> Some TBool
+            | _ -> None
+        if List.length fields = 2 &&
+           (fields |> List.map (fun (field, _) -> field.SourceFieldName) |> Set.ofList) =
+               (Set.ofList ["value"; "flag"]) &&
+           (fields |> List.forall (fun (field, value) ->
+               match fieldType field, inferGeneratedType environment value with
+               | Some expected, Some actual -> expected = actual
+               | _ -> false)) then
+            Some (TRecord ("FuzzBox", []))
+        else None
+    | RecordAccess (record, field) ->
+        match inferGeneratedType environment record, field.SourceFieldName with
+        | Some (TRecord ("FuzzBox", [])), "value" -> Some TInt64
+        | Some (TRecord ("FuzzBox", [])), "flag" -> Some TBool
+        | _ -> None
+    | RecordUpdate (record, updates) ->
+        match inferGeneratedType environment record with
+        | Some (TRecord ("FuzzBox", []) as recordType) when
+            updates |> List.forall (fun (field, value) ->
+                match field.SourceFieldName, inferGeneratedType environment value with
+                | "value", Some TInt64 | "flag", Some TBool -> true
+                | _ -> false) -> Some recordType
+        | _ -> None
+    | Lambda (parameters, _, body) ->
+        let parameters = NonEmptyList.toList parameters
+        let typedParameters =
+            parameters |> List.choose (fun parameter ->
+                match parameter.Pattern, parameter.SourceAnnotation with
+                | LPVariable name, Some typ -> Some (name, typ)
+                | _ -> None)
+        if List.length typedParameters <> List.length parameters then None
+        else
+            inferGeneratedType (typedParameters @ environment) body
+            |> Option.map (fun resultType -> TFunction (List.map snd typedParameters, resultType))
+    | Apply (Var name, [], args) when
+        List.contains name
+            ["Stdlib.Blob.fromString"; "Stdlib.Blob.length"
+             "Stdlib.DateTime.fromMilliseconds"; "Stdlib.DateTime.toMilliseconds"
+             "Stdlib.Stream.fromList"; "Stdlib.Stream.toList"] ->
+        let argument = args.Head
+        match name, inferGeneratedType environment argument with
+        | "Stdlib.Blob.fromString", Some TString -> Some TBlob
+        | "Stdlib.Blob.length", Some TBlob -> Some TInt
+        | "Stdlib.DateTime.fromMilliseconds", Some TInt -> Some TDateTime
+        | "Stdlib.DateTime.toMilliseconds", Some TDateTime -> Some TInt
+        | "Stdlib.Stream.fromList", Some (TList TInt64) -> Some (TStream TInt64)
+        | "Stdlib.Stream.toList", Some (TStream TInt64) -> Some (TList TInt64)
+        | _ -> None
+    | Apply (Lambda (parameters, _, body), [], args) ->
+        let parameterList = NonEmptyList.toList parameters
+        let argumentList = NonEmptyList.toList args
+        if List.length parameterList <> List.length argumentList then None
+        else
+            let bindings =
+                List.zip parameterList argumentList
+                |> List.choose (fun (parameter, argument) ->
+                    match parameter.Pattern, inferGeneratedType environment argument with
+                    | LPVariable name, Some typ -> Some (name, typ)
+                    | _ -> None)
+            if List.length bindings <> List.length parameterList then None
+            else inferGeneratedType (bindings @ environment) body
+    | Apply (callee, [], args) ->
+        match inferGeneratedType environment callee with
+        | Some (TFunction (parameterTypes, resultType)) ->
+            let argumentTypes =
+                args |> NonEmptyList.toList |> List.map (inferGeneratedType environment)
+            if List.map Some parameterTypes = argumentTypes then Some resultType else None
+        | _ -> None
+    | Match (scrutinee, cases) ->
+        let scrutineeType = inferGeneratedType environment scrutinee
+        let caseType case =
+            let bindings =
+                match case.Patterns.Head, scrutineeType with
+                | PList [PVar name], Some (TList elementType) -> [(name, elementType)]
+                | PListCons ([PVar name], PWildcard), Some (TList elementType) ->
+                    [(name, elementType)]
+                | PConstructor ("Some", [PVar name]), Some (TSum ("Option", [elementType])) ->
+                    [(name, elementType)]
+                | PConstructor ("Ok", [PVar name]), Some (TSum ("Result", [okType; _])) ->
+                    [(name, okType)]
+                | _ -> []
+            inferGeneratedType (bindings @ environment) case.Body
+        match cases |> List.map caseType with
+        | Some typ :: rest when rest |> List.forall ((=) (Some typ)) -> Some typ
+        | _ -> None
+    | Constructor (UnresolvedConstructor None, "Some", [value]) ->
+        inferGeneratedType environment value |> Option.map (fun typ -> TSum ("Option", [typ]))
+    | Constructor (UnresolvedConstructor None, "Ok", [value]) ->
+        inferGeneratedType environment value
+        |> Option.map (fun typ -> TSum ("Result", [typ; TString]))
     | BinOp (op, left, right) ->
         match op with
         | Add | Sub | Mul ->
@@ -356,6 +698,16 @@ let rec private inferGeneratedType
         inferGeneratedType environment binding
         |> Option.bind (fun bindingType ->
             inferGeneratedType ((name, bindingType) :: environment) body)
+    | Let (LPTuple (first, second, []), binding, body) ->
+        let bind pattern typ =
+            match pattern with
+            | LPVariable name -> [(name, typ)]
+            | _ -> []
+        match inferGeneratedType environment binding with
+        | Some (TTuple [firstType; secondType]) ->
+            inferGeneratedType
+                (bind first firstType @ bind second secondType @ environment) body
+        | _ -> None
     | If (condition, thenBranch, elseBranch) ->
         match
             inferGeneratedType environment condition,
@@ -372,18 +724,54 @@ let rec private expressionSize (expr: Expr) : int =
     | Let (_, binding, body) -> 1 + expressionSize binding + expressionSize body
     | If (condition, thenBranch, elseBranch) ->
         1 + expressionSize condition + expressionSize thenBranch + expressionSize elseBranch
+    | TupleLiteral elements | ListLiteral elements ->
+        1 + (elements |> List.sumBy expressionSize)
+    | TupleAccess (tuple, _) -> 1 + expressionSize tuple
+    | Apply (callee, _, args) ->
+        1 + expressionSize callee + (args |> NonEmptyList.toList |> List.sumBy expressionSize)
+    | Lambda (_, _, body) -> 1 + expressionSize body
+    | Match (scrutinee, cases) ->
+        1 + expressionSize scrutinee + (cases |> List.sumBy (fun case -> expressionSize case.Body))
+    | RecordLiteral (_, fields) ->
+        1 + (fields |> List.sumBy (snd >> expressionSize))
+    | RecordAccess (record, _) -> 1 + expressionSize record
+    | RecordUpdate (record, updates) ->
+        1 + expressionSize record + (updates |> List.sumBy (snd >> expressionSize))
     | _ -> 1
 
 /// Enumerate deterministic local rewrites over the compiler AST. The oracle,
 /// not this function, decides whether a rewrite preserves the reported defect.
 let rec private oneStepSimplifications (expr: Expr) : Expr list =
+    let simplifyElements rebuild elements =
+        elements
+        |> List.mapi (fun index element ->
+            oneStepSimplifications element
+            |> List.map (fun candidate ->
+                elements
+                |> List.mapi (fun currentIndex current ->
+                    if currentIndex = index then candidate else current)
+                |> rebuild))
+        |> List.concat
+
     let literalSimplifications =
         match expr with
+        | Int8Literal value when value <> 0y -> [Int8Literal 0y]
+        | Int16Literal value when value <> 0s -> [Int16Literal 0s]
+        | Int32Literal value when value <> 0 -> [Int32Literal 0]
         | Int64Literal value when value <> 0L ->
             let towardSign = if value < 0L then -1L else 1L
             [Int64Literal 0L; Int64Literal towardSign]
+        | Int128Literal value when value <> Int128.Zero -> [Int128Literal Int128.Zero]
+        | BigIntLiteral value when value <> BigInteger.Zero -> [BigIntLiteral BigInteger.Zero]
+        | UInt8Literal value when value <> 0uy -> [UInt8Literal 0uy]
+        | UInt16Literal value when value <> 0us -> [UInt16Literal 0us]
+        | UInt32Literal value when value <> 0u -> [UInt32Literal 0u]
+        | UInt64Literal value when value <> 0UL -> [UInt64Literal 0UL]
+        | UInt128Literal value when value <> UInt128.Zero -> [UInt128Literal UInt128.Zero]
+        | FloatLiteral value when value <> 0.0 -> [FloatLiteral 0.0]
         | BoolLiteral false -> [BoolLiteral true]
         | StringLiteral value when value <> "" -> [StringLiteral ""]
+        | CharLiteral value when value <> "a" -> [CharLiteral "a"]
         | _ -> []
 
     let structuralSimplifications =
@@ -404,6 +792,96 @@ let rec private oneStepSimplifications (expr: Expr) : Expr list =
                |> List.map (fun candidate -> If (condition, candidate, elseBranch)))
             @ (oneStepSimplifications elseBranch
                |> List.map (fun candidate -> If (condition, thenBranch, candidate)))
+        | TupleLiteral elements -> simplifyElements TupleLiteral elements
+        | ListLiteral elements ->
+            (if List.length elements > 1 then
+                 elements
+                 |> List.mapi (fun index _ ->
+                     ListLiteral (elements |> List.mapi (fun i item -> i, item)
+                                           |> List.choose (fun (i, item) -> if i = index then None else Some item)))
+             else [])
+            @ simplifyElements ListLiteral elements
+        | DictLiteral (keyType, valueType, entries) ->
+            entries
+            |> List.mapi (fun index (key, value) ->
+                oneStepSimplifications key
+                |> List.map (fun candidate ->
+                    DictLiteral (keyType, valueType,
+                        entries |> List.mapi (fun i entry -> if i = index then candidate, value else entry)))
+                |> fun keyCandidates ->
+                    keyCandidates @
+                    (oneStepSimplifications value
+                     |> List.map (fun candidate ->
+                         DictLiteral (keyType, valueType,
+                             entries |> List.mapi (fun i entry -> if i = index then key, candidate else entry)))))
+            |> List.concat
+        | RecordLiteral (reference, fields) ->
+            fields
+            |> List.mapi (fun index (field, value) ->
+                oneStepSimplifications value
+                |> List.map (fun candidate ->
+                    RecordLiteral (reference,
+                        fields |> List.mapi (fun i entry -> if i = index then field, candidate else entry))))
+            |> List.concat
+        | Constructor (reference, name, fields) ->
+            simplifyElements (fun candidates -> Constructor (reference, name, candidates)) fields
+        | InterpolatedString parts ->
+            parts
+            |> List.mapi (fun index part ->
+                match part with
+                | StringExpr value ->
+                    oneStepSimplifications value
+                    |> List.map (fun candidate ->
+                        InterpolatedString (
+                            parts |> List.mapi (fun i current ->
+                                if i = index then StringExpr candidate else current)))
+                | StringText _ -> [])
+            |> List.concat
+        | Lambda (parameters, annotation, body) ->
+            oneStepSimplifications body
+            |> List.map (fun candidate -> Lambda (parameters, annotation, candidate))
+        | TupleAccess (tuple, index) ->
+            let selected =
+                match tuple with
+                | TupleLiteral elements -> List.tryItem index elements |> Option.toList
+                | _ -> []
+            selected @ (oneStepSimplifications tuple
+                        |> List.map (fun candidate -> TupleAccess (candidate, index)))
+        | Match (scrutinee, cases) ->
+            (cases |> List.map (fun case -> case.Body))
+            @ (oneStepSimplifications scrutinee
+               |> List.map (fun candidate -> Match (candidate, cases)))
+            @ (cases
+               |> List.mapi (fun index case ->
+                   oneStepSimplifications case.Body
+                   |> List.map (fun candidate ->
+                       Match (scrutinee,
+                           cases |> List.mapi (fun i current ->
+                               if i = index then { case with Body = candidate } else current))))
+               |> List.concat)
+        | Apply (callee, typeArgs, args) ->
+            match NonEmptyList.toList args with
+            | [arg] ->
+                [arg]
+                @ (oneStepSimplifications callee |> List.map (fun candidate ->
+                    Apply (candidate, typeArgs, args)))
+                @ (oneStepSimplifications arg |> List.map (fun candidate ->
+                    Apply (callee, typeArgs, NonEmptyList.singleton candidate)))
+            | _ -> []
+        | RecordAccess (record, field) ->
+            oneStepSimplifications record
+            |> List.map (fun candidate -> RecordAccess (candidate, field))
+        | RecordUpdate (record, updates) ->
+            (oneStepSimplifications record
+             |> List.map (fun candidate -> RecordUpdate (candidate, updates)))
+            @ (updates
+               |> List.mapi (fun index (field, value) ->
+                   oneStepSimplifications value
+                   |> List.map (fun candidate ->
+                       RecordUpdate (record,
+                           updates |> List.mapi (fun i entry ->
+                               if i = index then field, candidate else entry))))
+               |> List.concat)
         | _ -> []
 
     literalSimplifications @ structuralSimplifications
@@ -424,10 +902,22 @@ let private minimize
     (stdlib: StdlibResult)
     (source: string)
     : Result<string * CaseOutcome * int * int, string> =
-    match Parser.parseString false source |> Result.map semanticProgramOfParsed with
-    | Error message -> Error $"Cannot parse minimizer input: {message}"
-    | Ok (Program [Expression (_, originalExpr)]) ->
-        match inferGeneratedType [] originalExpr with
+    let parsed =
+        Parser.parseString false source
+        |> Result.map semanticProgramOfParsed
+        |> Result.bind (fun (Program topLevels) ->
+            match topLevels with
+            | [Expression (_, expression)] -> Ok ([], expression)
+            | [((TypeDef _) as typeDef); ((FunctionDef _) as functionDef); Expression (_, expression)] ->
+                Ok ([typeDef; functionDef], expression)
+            | _ -> Error "Minimizer input must contain one expression, optionally after the fuzzer declarations")
+    match parsed with
+    | Error message -> Error $"Cannot minimize source: {message}"
+    | Ok (declarations, originalExpr) ->
+        let initialEnvironment =
+            if List.isEmpty declarations then []
+            else ["fuzzIdentity", TFunction ([TInt64], TInt64)]
+        match inferGeneratedType initialEnvironment originalExpr with
         | None -> Error "Minimizer input is outside the generated expression subset"
         | Some originalType ->
             let originalOutcome = checkCase config stdlib -1L source
@@ -457,10 +947,10 @@ let private minimize
                     let candidates =
                         oneStepSimplifications currentExpr
                         |> List.choose (fun candidateExpr ->
-                            match inferGeneratedType [] candidateExpr with
+                            match inferGeneratedType initialEnvironment candidateExpr with
                             | Some candidateType when candidateType = originalType ->
                                 let candidateSource =
-                                    Program [Expression ([], candidateExpr)]
+                                    Program (declarations @ [Expression ([], candidateExpr)])
                                     |> ASTPrettyPrinter.formatProgram
                                 let candidateMetric = expressionSize candidateExpr, candidateSource.Length
                                 if candidateMetric < currentMetric then
@@ -478,7 +968,6 @@ let private minimize
                         Ok (currentSource, currentOutcome, nextAttempts, reductions)
 
                 reduce 0 0 originalExpr source originalOutcome
-    | Ok _ -> Error "Minimizer input must contain exactly one top-level expression"
 
 let private describeProcessOutcome (outcome: ProcessOutcome) : string =
     match outcome with

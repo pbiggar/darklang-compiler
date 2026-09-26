@@ -49,13 +49,24 @@ discrepancy appears first, its minimized source remains saved while the loop
 waits. Each new fix then starts from the updated integration ref, so it contains
 the earlier fix.
 
-The first generator deliberately covers a small, total subset: `Int64`,
-`Bool`, and `String` literals, variables, `let`, `if`, arithmetic, comparisons,
-boolean operations, and string concatenation. Top-level observations are
-`Int64` or `Bool`, whose interpreter and native renderings are directly
-comparable; strings still participate in nested expressions and comparisons.
-Add constructs directly to the existing AST generator rather than introducing
-a parallel language model.
+The generator constructs typed compiler ASTs using all scalar types with
+source literals: the signed and unsigned integer widths, arbitrary-precision
+`Int`, `Bool`, `Float`, `String`, `Char`, and `Unit`. It also combines tuples,
+lists and dictionaries over every literal scalar type, a generated record type
+and function, record updates, `Option` and `Result` constructors, pattern
+matches and guards, lambdas and calls, interpolation, and `Blob`, `DateTime`,
+and `Stream` values constructed through the standard library. It generates
+variables, `let`, `if`, arithmetic, comparisons, boolean operations, and string
+concatenation. Top-level observations remain `Int64` or `Bool`, whose
+interpreter and native renderings are directly comparable. Other values flow
+through bindings and comparisons. The reducer preserves generated declarations
+while shrinking the expression.
+
+The interpreter used as the oracle currently rejects some compiler language
+features, including user-defined sum constructors and tuple field access.
+Other source features need an oracle-compatible generation and observation path
+before they can join this differential campaign. Add constructs directly to
+the existing AST generator rather than introducing a parallel language model.
 
 Every accepted compiler fix starts with a focused failing E2E test before
 changing compiler behavior. The script runs until interrupted with Ctrl-C.
