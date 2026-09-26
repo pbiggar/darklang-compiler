@@ -1,4 +1,4 @@
-// ANFPipeline.fs - Orchestrate ANF optimization, reference counting, and tail-call detection.
+// ANFPipeline.fs - Orchestrate ANF optimization and reference counting.
 
 module ANFPipeline
 
@@ -217,30 +217,3 @@ let internal buildAnf
 
         let (ANF.Program (finalFunctions, _)) = anfAfterRC
         Ok (finalFunctions, typeMap)
-
-/// Run tail call detection on a function list (for post-print insertion TCO)
-let internal applyTco
-    (verbosity: int)
-    (options: CompilerOptions)
-    (sw: Stopwatch)
-    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
-    (functions: ANF.Function list)
-    (passTimingRecorder: PassTimingRecorder option)
-    : ANF.Function list =
-    if verbosity >= 1 then println "  [anf.tail-calls] Tail Call Detection..."
-    let tcoStart = sw.Elapsed.TotalMilliseconds
-    let anfProgram = ANF.Program (functions, ANF.Return ANF.UnitLiteral)
-    let anfAfterTCO =
-        if options.DisableTCO then
-            anfProgram
-        else
-            TailCallDetection.detectTailCallsInProgramWithRecursion recursiveMembers anfProgram
-    let tcoElapsed = sw.Elapsed.TotalMilliseconds - tcoStart
-    recordPassTiming passTimingRecorder "Tail Call Detection" tcoElapsed
-    if verbosity >= 2 then
-        let t = System.Math.Round(tcoElapsed, 1)
-        println $"        {t}ms"
-    if shouldDumpIR verbosity options.DumpANF then
-        printANFProgram options "=== ANF (after Tail Call Detection) ===" anfAfterTCO
-    let (ANF.Program (tcoFunctions, _)) = anfAfterTCO
-    tcoFunctions

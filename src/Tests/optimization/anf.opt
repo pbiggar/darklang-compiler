@@ -40,7 +40,7 @@ else
 let TempId 21335 = Darklang.Stdlib.String.__asciiWhitespace(t21331)
 if t21335 then
 let TempId 21336 = t21327 + 1
-let TempId 21337 = TailCall(Darklang.Stdlib.String.__asciiTrimStartBoundary, [t21326, t21336, t21328])
+let TempId 21337 = Darklang.Stdlib.String.__asciiTrimStartBoundary(t21326, t21336, t21328)
 return t21337
 else
 let TempId 21338 = RecordAlloc(Darklang.Stdlib.Option.Option, [0, t21327])
@@ -66,7 +66,7 @@ return t21347
 else
 let TempId 21348 = Darklang.Stdlib.String.__asciiWhitespace(t21344)
 if t21348 then
-let TempId 21350 = TailCall(Darklang.Stdlib.String.__asciiTrimEndBoundary, [t21339, t21343])
+let TempId 21350 = Darklang.Stdlib.String.__asciiTrimEndBoundary(t21339, t21343)
 return t21350
 else
 let TempId 21351 = RecordAlloc(Darklang.Stdlib.Option.Option, [0, t21340])

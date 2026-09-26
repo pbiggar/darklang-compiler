@@ -59,14 +59,14 @@ let convertToTailCall (cexpr: CExpr) : CExpr =
 let private wrapBindings (bindings: (TempId * CExpr) list) (body: AExpr) : AExpr =
     List.foldBack (fun (tempId, cexpr) acc -> Let (tempId, cexpr, acc)) bindings body
 
-let private canonicalTempId (aliasRoots: Map<TempId, TempId>) (tempId: TempId) : TempId =
+let canonicalTempId (aliasRoots: Map<TempId, TempId>) (tempId: TempId) : TempId =
     // extendAliasRoots canonicalizes the source before insertion, so every map
     // value is already a root rather than another link in an alias chain.
     match Map.tryFind tempId aliasRoots with
     | Some root -> root
     | None -> tempId
 
-let private extendAliasRoots
+let extendAliasRoots
     (aliasRoots: Map<TempId, TempId>)
     (tempId: TempId)
     (cexpr: CExpr)
@@ -103,7 +103,7 @@ let private borrowSources (cexpr: CExpr) : TempId list =
     | BorrowedCall (_, args) -> args |> List.collect ofAtom
     | _ -> []
 
-let private extendBorrowRoots
+let extendBorrowRoots
     (aliasRoots: Map<TempId, TempId>)
     (borrowRoots: Map<TempId, Set<TempId>>)
     (tempId: TempId)
@@ -193,7 +193,7 @@ let private isDirectReturnOf (tempId: TempId) (expr: AExpr) : bool =
     | Return (Var tid) when tid = tempId -> true
     | _ -> false
 
-let rec private leadingRetainedParams
+let rec leadingRetainedParams
     (paramIds: Set<TempId>)
     (expr: AExpr)
     : Set<TempId> =
@@ -384,32 +384,35 @@ let rec detectTailCalls
             detectTailCalls currentFuncName isCurrentMember typedParams ownedParams releasedTemps inTailPosition aliasRoots borrowRoots retainedBorrowRoots elseBranch
         If (cond, thenBranch', elseBranch')
 
-/// Detect tail calls in a function
-let private detectTailCallsInFunctionWithRegistry
-    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
-    (func: Function)
-    : Function =
+/// The process entrypoint has no caller return address. The listed JSON
+/// helpers forward projections whose parent is released around the call.
+let isEligibleFunctionName (name: string) : bool =
     // The process entrypoint has no caller return address. A sibling tail branch
     // from _start would make the callee's Ret jump through an invalid address.
     let isJsonOwnershipBoundary =
-        func.Name.StartsWith("Darklang.Stdlib.Json.__view")
-        || func.Name = "Darklang.Stdlib.Json.__stripLeadingZeroes"
-        || func.Name = "Darklang.Stdlib.Json.__shiftIntegerDigits"
-        || func.Name = "Darklang.Stdlib.Json.__applyIntegerExponent"
-        || func.Name = "Darklang.Stdlib.Json.__unsignedIntegerLexeme"
-        || func.Name = "Darklang.Stdlib.Json.__normalizeIntegerMagnitude"
-        || func.Name = "Darklang.Stdlib.Json.__integerLexeme"
+        name.StartsWith("Darklang.Stdlib.Json.__view")
+        || name = "Darklang.Stdlib.Json.__stripLeadingZeroes"
+        || name = "Darklang.Stdlib.Json.__shiftIntegerDigits"
+        || name = "Darklang.Stdlib.Json.__applyIntegerExponent"
+        || name = "Darklang.Stdlib.Json.__unsignedIntegerLexeme"
+        || name = "Darklang.Stdlib.Json.__normalizeIntegerMagnitude"
+        || name = "Darklang.Stdlib.Json.__integerLexeme"
     // These accessors and generated decoders project managed list/view payloads
     // before forwarding them. A sibling tail call would move the parent release
     // ahead of that call and invalidate the projected argument. Scanner loops
     // remain eligible so large JSON inputs retain bounded stack usage.
     let isGeneratedJsonRootDecoder =
-        func.Name.StartsWith("__dark_json_decode_")
-        && not (func.Name.StartsWith("__dark_json_decode_list_"))
-        && not (func.Name.StartsWith("__dark_json_decode_dict_"))
-    if func.Name = "_start"
-       || isJsonOwnershipBoundary
-       || isGeneratedJsonRootDecoder then
+        name.StartsWith("__dark_json_decode_")
+        && not (name.StartsWith("__dark_json_decode_list_"))
+        && not (name.StartsWith("__dark_json_decode_dict_"))
+    name <> "_start" && not isJsonOwnershipBoundary && not isGeneratedJsonRootDecoder
+
+/// Detect tail calls in a function
+let private detectTailCallsInFunctionWithRegistry
+    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
+    (func: Function)
+    : Function =
+    if not (isEligibleFunctionName func.Name) then
         func
     else
         // Function body is always in tail position

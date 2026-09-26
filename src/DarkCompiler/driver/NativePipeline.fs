@@ -241,6 +241,8 @@ let internal lowerToAllocatedLir
                 ANF_to_MIR.toMIRFunctionsOnlyWithTrace
                     mirPhaseRecorder
                     projectedMirRegistries
+                    registries.RecursiveMembers
+                    (not options.DisableTCO)
                     anfProgram
                     typeMap
                     registries.FuncParams

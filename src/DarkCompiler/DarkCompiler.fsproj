@@ -126,6 +126,7 @@
     <Compile Include="passes/anf/PrintInsertion.fs" />
     <Compile Include="passes/anf/TailCallDetection.fs" />
     <Compile Include="ir/anf/SSAANF.fs" />
+    <Compile Include="passes/anf/SSATailCallDetection.fs" />
 
     <!-- ANF -> MIR -->
     <Compile Include="ir/mir/MIR.fs" />

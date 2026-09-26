@@ -96,12 +96,10 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                         false
                         None)
                 |> Result.map (fun (userFunctions, _typeMap) ->
-                    let tcoFunctions =
-                        applyTco 0 coverageOptions sw userRegistries.RecursiveMembers userFunctions None
                     let reachableStdlibNames =
                         ANFDeadCodeElimination.getReachableStdlib
                             stdlib.StdlibANFCallGraph
-                            tcoFunctions
+                            userFunctions
                     let namesById =
                         stdlib.StdlibANFFunctions
                         |> Map.toList

@@ -254,14 +254,6 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 true
                                 plan.PassTimingRecorder
                             |> Result.bind (fun (anfDependencies, dependencyTypeMap) ->
-                                let tcoDependencies =
-                                    applyTco
-                                        plan.Verbosity
-                                        plan.Options
-                                        sw
-                                        userRegistries.RecursiveMembers
-                                        anfDependencies
-                                        plan.PassTimingRecorder
                                 lowerToAllocatedLir
                                     plan.BaseContext.Target
                                     plan.Verbosity
@@ -271,7 +263,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     dependencyFunctionCaches
                                     releasePlanSummaryCache
                                     plan.Labels.StageSuffix
-                                    tcoDependencies
+                                    anfDependencies
                                     dependencyTypeMap
                                     userRegistries
                                     (Some projectedMirRegistries)
@@ -380,14 +372,6 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                         | Ok allocatedDependencyFuncs, Ok (printedFunctions, programTypeMap) ->
                                 let reachableProgramFunctions =
                                     pruneProgramFunctions printedFunctions
-                                let tcoProgramFunctions =
-                                    applyTco
-                                        plan.Verbosity
-                                        plan.Options
-                                        sw
-                                        userRegistries.RecursiveMembers
-                                        reachableProgramFunctions
-                                        plan.PassTimingRecorder
                                 let programLirResult =
                                     lowerToAllocatedLir
                                         plan.BaseContext.Target
@@ -398,7 +382,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         None
                                         releasePlanSummaryCache
                                         plan.Labels.StageSuffix
-                                        tcoProgramFunctions
+                                        reachableProgramFunctions
                                         programTypeMap
                                         userRegistries
                                         (Some projectedMirRegistries)
@@ -440,14 +424,6 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         false
                                         plan.PassTimingRecorder
                                     |> Result.bind (fun (startAnf, startTypeMap) ->
-                                        let tcoStart =
-                                            applyTco
-                                                plan.Verbosity
-                                                plan.Options
-                                                sw
-                                                startRegistries.RecursiveMembers
-                                                startAnf
-                                                plan.PassTimingRecorder
                                         lowerToAllocatedLir
                                             plan.BaseContext.Target
                                             plan.Verbosity
@@ -457,7 +433,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             None
                                             releasePlanSummaryCache
                                             plan.Labels.StageSuffix
-                                            tcoStart
+                                            startAnf
                                             startTypeMap
                                             startRegistries
                                             (Some projectedMirRegistries)

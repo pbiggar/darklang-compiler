@@ -102,7 +102,6 @@ let buildPreambleContext
                                 $"Preamble {err}"
                         Error msg
                     | Ok (preambleFunctions, typeMap) ->
-                        let tcoFunctions = applyTco 0 preambleOptions sw preambleRegistries.RecursiveMembers preambleFunctions passTimingRecorder
                         let preambleExternalReturnTypes = preambleReturnTypes
                         match lowerToAllocatedLir
                             stdlib.Context.Target
@@ -113,7 +112,7 @@ let buildPreambleContext
                             None
                             None
                             "preamble"
-                            tcoFunctions
+                            preambleFunctions
                             typeMap
                             preambleRegistries
                             None
@@ -133,7 +132,7 @@ let buildPreambleContext
                                 |> List.filter (fun func -> not (isStdlibFunction func.Name))
                             let preambleSymbolicFuncs = preambleOnlyFuncs
                             let preambleLiftedFuncNames =
-                                tcoFunctions
+                                preambleFunctions
                                 |> List.map (fun func -> func.Name)
                                 |> Set.ofList
                             let baseFuncNames =
@@ -153,7 +152,7 @@ let buildPreambleContext
 
                             let context = {
                                 Context = pipelineContextWithLiftedNames
-                                ANFFunctions = tcoFunctions
+                                ANFFunctions = preambleFunctions
                                 TypeMap = mergedTypeMap
                                 SymbolicFunctions = preambleSymbolicFuncs
                                 SymbolicCallGraph = DeadCodeElimination.buildCallGraph preambleSymbolicFuncs
@@ -230,7 +229,6 @@ let buildPreambleContextFromAnalysis
                     $"Preamble {err}"
             Error msg
         | Ok (preambleFunctions, typeMap) ->
-            let tcoFunctions = applyTco 0 preambleOptions sw preambleRegistries.RecursiveMembers preambleFunctions passTimingRecorder
             let preambleExternalReturnTypes = preambleReturnTypes
             match lowerToAllocatedLir
                 stdlib.Context.Target
@@ -241,7 +239,7 @@ let buildPreambleContextFromAnalysis
                 None
                 None
                 "preamble"
-                tcoFunctions
+                preambleFunctions
                 typeMap
                 preambleRegistries
                 None
@@ -265,7 +263,7 @@ let buildPreambleContextFromAnalysis
 
                 Ok (stdlib, {
                     Context = pipelineContext
-                    ANFFunctions = tcoFunctions
+                    ANFFunctions = preambleFunctions
                     TypeMap = mergedTypeMap
                     SymbolicFunctions = preambleSymbolicFuncs
                     SymbolicCallGraph = DeadCodeElimination.buildCallGraph preambleSymbolicFuncs

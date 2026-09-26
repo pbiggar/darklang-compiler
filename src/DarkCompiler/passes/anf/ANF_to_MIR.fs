@@ -1912,6 +1912,23 @@ let convertSSAANFFunction
                 MIR.FloatRegs = finalFloatRegs
             }))
 
+let private convertANFFunctionWithTailCalls
+    (anfFunc: ANF.Function)
+    (typeMap: ANF.TypeMap)
+    (typeById: AST.SemanticType option array)
+    (typeReg: Map<string, (string * AST.SemanticType) list>)
+    (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
+    (enableCoverage: bool)
+    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
+    (enableTCO: bool)
+    : Result<MIR.Function, string> =
+    SSAANF.convertFunction (maxTempIdInFunction anfFunc) typeMap anfFunc
+    |> Result.bind (fun ssaFunc ->
+        let withTailCalls =
+            if enableTCO then SSATailCallDetection.detect recursiveMembers ssaFunc
+            else ssaFunc
+        convertSSAANFFunction withTailCalls typeById typeReg returnTypeReg enableCoverage)
+
 let convertANFFunction
     (anfFunc: ANF.Function)
     (typeMap: ANF.TypeMap)
@@ -1920,9 +1937,8 @@ let convertANFFunction
     (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
     (enableCoverage: bool)
     : Result<MIR.Function, string> =
-    SSAANF.convertFunction (maxTempIdInFunction anfFunc) typeMap anfFunc
-    |> Result.bind (fun ssaFunc ->
-        convertSSAANFFunction ssaFunc typeById typeReg returnTypeReg enableCoverage)
+    convertANFFunctionWithTailCalls
+        anfFunc typeMap typeById typeReg returnTypeReg enableCoverage Map.empty true
 
 /// Convert ANF program to MIR program
 /// mainExprType: the type of the main expression (used for _start's return type)
@@ -1984,6 +2000,7 @@ let toMIR
 let private toMIRFunctionsOnlyInternal
     (phaseRecorder: (string -> float -> unit) option)
     (projectedRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
+    (tailCallConfig: (Map<AST.FunctionId, AST.LoweredRecursiveMember> * bool) option)
     (program: ANF.Program)
     (typeMap: ANF.TypeMap)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
@@ -2007,26 +2024,39 @@ let private toMIRFunctionsOnlyInternal
     let typeById = buildTypeById (maxTempIdInProgram program) typeMap
     recordPhase "ANF -> MIR Type Lookup Preparation" typeLookupTimer
 
-    // Phase 2: Convert all functions to MIR (skip main/_start)
-    // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
-    let conversionTimer = startPhase ()
-    match
+    let members, enabled =
+        match tailCallConfig with
+        | Some config -> config
+        | None -> Map.empty, true
+    let ssaTimer = startPhase ()
+    let ssaResult =
         mapResults
-            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg enableCoverage)
+            (fun anfFunc -> SSAANF.convertFunction (maxTempIdInFunction anfFunc) typeMap anfFunc)
             functions
-    with
-    | Error err -> Error err
-    | Ok mirFuncs ->
-        recordPhase "ANF -> MIR Function Conversion" conversionTimer
-        let registryTimer = startPhase ()
-        let variantRegistry, recordRegistry =
-            match projectedRegistries with
-            | Some registries -> registries
-            | None ->
-                (buildVariantRegistry variantLookup,
-                 buildRecordRegistry typeRegForRecords)
-        recordPhase "ANF -> MIR Registry Projection" registryTimer
-        Ok (mirFuncs, variantRegistry, recordRegistry)
+    recordPhase "ANF -> SSA Function Conversion" ssaTimer
+    ssaResult |> Result.bind (fun ssaFunctions ->
+        let tailCallTimer = startPhase ()
+        let withTailCalls =
+            if enabled then
+                ssaFunctions |> List.map (SSATailCallDetection.detect members)
+            else
+                ssaFunctions
+        recordPhase "Tail Call Detection" tailCallTimer
+        let conversionTimer = startPhase ()
+        mapResults
+            (fun ssaFunc -> convertSSAANFFunction ssaFunc typeById typeReg returnTypeReg enableCoverage)
+            withTailCalls
+        |> Result.map (fun mirFuncs ->
+            recordPhase "SSA ANF -> MIR Function Conversion" conversionTimer
+            let registryTimer = startPhase ()
+            let variantRegistry, recordRegistry =
+                match projectedRegistries with
+                | Some registries -> registries
+                | None ->
+                    (buildVariantRegistry variantLookup,
+                     buildRecordRegistry typeRegForRecords)
+            recordPhase "ANF -> MIR Registry Projection" registryTimer
+            (mirFuncs, variantRegistry, recordRegistry)))
 
 let toMIRFunctionsOnly
     (program: ANF.Program)
@@ -2042,6 +2072,7 @@ let toMIRFunctionsOnly
     toMIRFunctionsOnlyInternal
         None
         None
+        None
         program
         typeMap
         typeReg
@@ -2053,6 +2084,8 @@ let toMIRFunctionsOnly
 let toMIRFunctionsOnlyWithTrace
     (phaseRecorder: (string -> float -> unit) option)
     (projectedRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
+    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
+    (enableTCO: bool)
     (program: ANF.Program)
     (typeMap: ANF.TypeMap)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
@@ -2064,6 +2097,7 @@ let toMIRFunctionsOnlyWithTrace
     toMIRFunctionsOnlyInternal
         phaseRecorder
         projectedRegistries
+        (Some (recursiveMembers, enableTCO))
         program
         typeMap
         typeReg

@@ -278,16 +278,15 @@ let buildStdlibWithTrace
                 | Error e ->
                     Error e
                 | Ok (anfFunctions, typeMap) ->
-                    let tcoFunctions = applyTco 0 stdlibOptions sw registries.RecursiveMembers anfFunctions passTimingRecorder
                     let stdlibFuncMap =
-                        tcoFunctions
+                        anfFunctions
                         |> List.map (fun f -> f.Name, f)
                         |> Map.ofList
                     let stdlibInlineCandidates =
                         stdlibFunctions
                         |> ANF_Inlining.buildExternalCandidateInfoMap ANF_Inlining.defaultConfig
                     let stdlibLiftedFuncNames =
-                        tcoFunctions
+                        anfFunctions
                         |> List.map (fun f -> f.Name)
                         |> Set.ofList
                     let baseFuncNames =
@@ -301,7 +300,7 @@ let buildStdlibWithTrace
                                     baseFuncNames
                                     context.ReturnTypes
                     }
-                    let stdlibANFCallGraph = ANFDeadCodeElimination.buildCallGraph tcoFunctions
+                    let stdlibANFCallGraph = ANFDeadCodeElimination.buildCallGraph anfFunctions
 
                     let externalReturnTypes = returnTypes
                     match lowerToAllocatedLir
@@ -313,7 +312,7 @@ let buildStdlibWithTrace
                         None
                         None
                         "stdlib"
-                        tcoFunctions
+                        anfFunctions
                         typeMap
                         registries
                         None
@@ -516,9 +515,8 @@ let buildStdlibSpecializations
                         let sw = Stopwatch.StartNew()
                         buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty anfFuncs Map.empty false passTimingRecorder
                         |> Result.bind (fun (anfFunctions, typeMap) ->
-                            let tcoFunctions = applyTco 0 stdlibOptions sw registries.RecursiveMembers anfFunctions passTimingRecorder
                             let newAnfFuncMap =
-                                tcoFunctions
+                                anfFunctions
                                 |> List.map (fun f -> f.Name, f)
                                 |> Map.ofList
                             let externalReturnTypes =
@@ -532,7 +530,7 @@ let buildStdlibSpecializations
                                 None
                                 None
                                 "stdlib_specializations"
-                                tcoFunctions
+                                anfFunctions
                                 typeMap
                                 registries
                                 None
@@ -560,7 +558,7 @@ let buildStdlibSpecializations
                                 let stdlibCallGraph = DeadCodeElimination.buildCallGraph allLirFuncs
                                 let stdlibAnfCallGraph = ANFDeadCodeElimination.buildCallGraph allAnfFunctions
                                 let baseFuncNames =
-                                    tcoFunctions
+                                    anfFunctions
                                     |> List.fold
                                         (fun names func -> Set.add func.Name names)
                                         stdlib.Context.BaseFuncNames
