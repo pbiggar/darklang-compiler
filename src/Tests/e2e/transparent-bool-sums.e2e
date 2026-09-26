@@ -1,0 +1,6 @@
+// Single-case Bool wrappers keep nominal construction and matching behavior.
+type FlagWrap = FlagWrap of Bool
+let unwrapFlag (value: FlagWrap): Bool = match value with | FlagWrap inner -> inner
+unwrapFlag (FlagWrap true) = true
+match FlagWrap false with | FlagWrap false -> true | FlagWrap true -> false = true
+FlagWrap true == FlagWrap true = true

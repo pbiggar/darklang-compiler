@@ -1,0 +1,16 @@
+---NAME---
+single-case Bool wrapper has direct true word
+---INPUT---
+type FlagWrap = FlagWrap of Bool
+FlagWrap true
+---EXPECTED---
+root = word(1)
+
+---NAME---
+single-case Bool wrapper has direct false word
+---INPUT---
+type FlagWrap = FlagWrap of Bool
+let makeFlag (value: Bool): FlagWrap = FlagWrap value
+makeFlag false
+---EXPECTED---
+root = word(0)
