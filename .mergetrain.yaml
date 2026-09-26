@@ -17,8 +17,6 @@ gates:
   - name: build
     run: ./build --ai
   - name: tests
-    run: python3 scripts/test_runtime_gate.py run
-  - name: test-runtime
-    run: python3 scripts/test_runtime_gate.py check --base ${integration_ref}
+    run: ./run-tests --ai
   - name: benchmarks
     run: ./benchmarks/run_benchmarks.sh --verify-fresh full

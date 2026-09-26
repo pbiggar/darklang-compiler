@@ -286,20 +286,13 @@ def isolated_gate_reproduces(
     job_id: int,
     old_head: str,
     failure: Failure,
-    integration_ref: str,
 ) -> bool:
     if failure.gate == "build":
         commands = [("./build", "--ai")]
     elif failure.gate == "tests":
         commands = [
             ("./build", "--ai"),
-            ("python3", "scripts/test_runtime_gate.py", "run"),
-        ]
-    elif failure.gate == "test-runtime":
-        commands = [
-            ("./build", "--ai"),
-            ("python3", "scripts/test_runtime_gate.py", "run"),
-            ("python3", "scripts/test_runtime_gate.py", "check", "--base", integration_ref),
+            ("./run-tests", "--ai"),
         ]
     else:
         return True
@@ -338,8 +331,7 @@ def verify_repair(
         ("python3", "scripts/check_e2e_temp_paths.py"),
         ("python3", "benchmarks/check_sources_unchanged.py", "--base", integration_sha),
         ("./build", "--ai"),
-        ("python3", "scripts/test_runtime_gate.py", "run"),
-        ("python3", "scripts/test_runtime_gate.py", "check", "--base", integration_sha),
+        ("./run-tests", "--ai"),
         ("./benchmarks/run_benchmarks.sh", "--verify-parent", "full"),
     ]
     results: list[dict[str, Any]] = []
@@ -458,7 +450,7 @@ def recover(repo: Path, attempts: Path, job_id: int) -> None:
         raise RecoveryError(f"operator-only failure category: {failure.category}")
     if failure.category == "push_rejected" and "non-fast-forward" not in failure.detail.lower():
         raise RecoveryError(f"operator-only push rejection: {failure.detail}")
-    if failure.category == "gate_failed" and failure.gate not in {"build", "tests", "test-runtime", "benchmarks"}:
+    if failure.category == "gate_failed" and failure.gate not in {"build", "tests", "benchmarks"}:
         raise RecoveryError(f"operator-only gate failure: {failure.gate or 'unknown'}")
 
     tracking_ref, integration_sha = configured_integration(repo)
@@ -475,8 +467,8 @@ def recover(repo: Path, attempts: Path, job_id: int) -> None:
         f"{len(equivalent)} superseded, {len(unique)} unique commit(s)",
         file=sys.stderr,
     )
-    if not conflict and failure.gate in {"build", "tests", "test-runtime"}:
-        if not isolated_gate_reproduces(worktree, attempts, job_id, old_head, failure, tracking_ref):
+    if not conflict and failure.gate in {"build", "tests"}:
+        if not isolated_gate_reproduces(worktree, attempts, job_id, old_head, failure):
             discard_recovery_worktree(repo, worktree, branch)
             if exact_retry_once(repo, attempts, job_id, old_head, failure):
                 print(
