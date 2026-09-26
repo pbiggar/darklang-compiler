@@ -96,6 +96,15 @@ class RecoveryFixture:
             self.repo / "run-tests",
             f"#!/bin/sh\n{test_condition}echo 'success: 1/1 passed'\n",
         )
+        self.executable(
+            self.repo / "scripts" / "test_runtime_gate.py",
+            """#!/usr/bin/env python3
+import subprocess, sys
+if sys.argv[1] == "run":
+    raise SystemExit(subprocess.run(["./run-tests", "--ai"], check=False).returncode)
+raise SystemExit(0)
+""",
+        )
 
     def write_fake_commands(self) -> None:
         self.executable(
@@ -300,7 +309,11 @@ class MergetrainRecoveryTests(unittest.TestCase):
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
             commands = [item["command"] for item in receipt["commands"]]
             self.assertIn(["./build", "--ai"], commands)
-            self.assertIn(["./run-tests", "--ai"], commands)
+            self.assertIn(["python3", "scripts/test_runtime_gate.py", "run"], commands)
+            self.assertIn(
+                ["python3", "scripts/test_runtime_gate.py", "check", "--base", receipt["integration_sha"]],
+                commands,
+            )
             self.assertIn(
                 ["./benchmarks/run_benchmarks.sh", "--verify-parent", "full"],
                 commands,
