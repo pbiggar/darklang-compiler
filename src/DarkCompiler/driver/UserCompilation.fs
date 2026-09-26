@@ -335,11 +335,13 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     boundaryProgramType
                                     functions
                                 |> Result.bind (fun printedFunctions ->
-                                    if plan.Options.ProbeRootWord then
+                                    match plan.Options.NativeLayoutProbe with
+                                    | NoNativeLayoutProbe -> Ok printedFunctions
+                                    | (RootWord | TupleWords) as probe ->
                                         PrintInsertion.insertRootWordProbeInEntry
                                             programEntryName
-                                            printedFunctions
-                                    else Ok printedFunctions)
+                                            (probe = TupleWords)
+                                            printedFunctions)
                                 |> Result.mapError (fun err -> $"Print insertion error: {err}")
                                 |> Result.map (fun printedFunctions ->
                                     let printElapsed = sw.Elapsed.TotalMilliseconds - printStart

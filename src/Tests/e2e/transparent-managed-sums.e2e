@@ -1,0 +1,11 @@
+// Managed single-case wrappers preserve nominal behavior and ownership.
+type TextWrap = TextWrap of String
+let unwrapText (value: TextWrap): String = match value with | TextWrap inner -> inner
+unwrapText (TextWrap ("a" ++ "b")) = "ab"
+match TextWrap ("a" ++ "b") with | TextWrap "ab" -> true | _ -> false = true
+let value = TextWrap ("a" ++ "b") in match value with | TextWrap inner -> inner = "ab"
+let original = Stdlib.String.trim (" " ++ "ab" ++ " ") in let pair = (original, TextWrap original) in match pair with | (first, TextWrap second) -> first == second = true
+type GenericText<'t> = GenericText of t
+let unwrapGenericText (value: GenericText<String>): String = match value with | GenericText inner -> inner
+unwrapGenericText (GenericText ("a" ++ "b")) = "ab"
+TextWrap (Stdlib.String.trim (" " ++ "ab" ++ " ")) == TextWrap ("a" ++ "b") = true

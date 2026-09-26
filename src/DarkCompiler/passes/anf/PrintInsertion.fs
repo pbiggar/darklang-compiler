@@ -145,6 +145,7 @@ let insertPrintInEntry
 /// consumes it. The ordinary result printer sees only the rendered string.
 let insertRootWordProbeInEntry
     (entryName: string)
+    (tupleWords: bool)
     (functions: ANF.Function list)
     : Result<ANF.Function list, string> =
     let rec probeReturns (varGen: VarGen) (expr: AExpr) : AExpr * VarGen =
@@ -152,9 +153,23 @@ let insertRootWordProbeInEntry
         | Return _ -> (expr, varGen)
         | Let (id, Call (callee, [value]), body)
             when (AST.functionIdValue callee).StartsWith("__dark_render_value_") ->
-            let probeId, next = freshVar varGen
-            let body', final = probeReturns next body
-            (Let (probeId, Print (value, AST.TInt64), Let (id, Call (callee, [value]), body')), final)
+            if tupleWords then
+                let field0, vg1 = freshVar varGen
+                let print0, vg2 = freshVar vg1
+                let separator, vg3 = freshVar vg2
+                let field1, vg4 = freshVar vg3
+                let print1, vg5 = freshVar vg4
+                let body', final = probeReturns vg5 body
+                (Let (field0, TupleGet (value, 0),
+                  Let (print0, Print (Var field0, AST.TInt64),
+                  Let (separator, StdoutWrite (StringLiteral "|", false),
+                  Let (field1, TupleGet (value, 1),
+                  Let (print1, Print (Var field1, AST.TInt64),
+                  Let (id, Call (callee, [value]), body')))))), final)
+            else
+                let probeId, next = freshVar varGen
+                let body', final = probeReturns next body
+                (Let (probeId, Print (value, AST.TInt64), Let (id, Call (callee, [value]), body')), final)
         | Let (id, value, body) ->
             let body', next = probeReturns varGen body
             (Let (id, value, body'), next)

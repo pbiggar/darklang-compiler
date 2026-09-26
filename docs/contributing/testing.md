@@ -50,6 +50,11 @@ before its normal value renderer runs. For example, `root = word(42)` verifies
 that a result occupies that machine word at the native boundary. Pair layout
 fixtures with `.e2e` cases for language behavior.
 
+`root = tuple(shared_word, shared_word)` observes the two words stored in a
+returned tuple and requires the same nonzero pointer in both positions. Use it
+for direct managed-payload wrappers: a separate wrapper allocation would give
+the second field a different pointer.
+
 These are snapshots of the current physical representation, not an ABI promise.
 When a later optimization (such as escape analysis or scalar replacement)
 intentionally changes the observed word, update the fixture and explain the
@@ -289,6 +294,10 @@ preserved register values are the semantics of every case.
 `blob`, plus `list(shape)`, `dict(key, value)`, `tuple(...)`, `record(...)`,
 `sum(payload)`, and `closure(...)`. Shapes can be nested. The root itself must
 be managed; scalar shapes are useful only as fields or payloads.
+
+The release fixture's `sum(payload)` constructs a boxed payload case of a
+synthetic multi-case sum. It tests release of that box and its payload, rather
+than the single-case source representation selected by compiler lowering.
 
 By default the runner chooses the root register. Use `ROOT-REGISTER` when
 register placement is observable behavior, and pair it with `PRESERVE` lines

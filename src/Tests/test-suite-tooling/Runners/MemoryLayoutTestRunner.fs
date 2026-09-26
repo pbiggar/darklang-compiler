@@ -30,7 +30,10 @@ let private parseCase (body: string) : Result<Case, string> =
         when name <> "" && source <> "" && expected.StartsWith("root = word(", StringComparison.Ordinal)
              && expected.EndsWith(")", StringComparison.Ordinal) ->
         Ok { Name = name; Source = source; Expected = expected }
-    | _ -> Error "Memory layout fixture needs NAME, INPUT, and EXPECTED root = word(...)"
+    | Some name, Some source, Some "root = tuple(shared_word, shared_word)"
+        when name <> "" && source <> "" ->
+        Ok { Name = name; Source = source; Expected = "root = tuple(shared_word, shared_word)" }
+    | _ -> Error "Memory layout fixture needs NAME, INPUT, and EXPECTED root = word(...) or root = tuple(shared_word, shared_word)"
 
 let private parseFile (path: string) : Result<Case list, string> =
     let chunks =
@@ -58,7 +61,9 @@ let private runCase (stdlib: CompilationContexts.StdlibResult) (path: string) (t
         Verbosity = 0
         Options = {
             CompilerOptions.defaultOptions with
-                ProbeRootWord = true
+                NativeLayoutProbe =
+                    if test.Expected = "root = tuple(shared_word, shared_word)" then CompilerOptions.TupleWords
+                    else CompilerOptions.RootWord
                 EnableLeakCheck = false
         }
         PackageValues = CompilationContexts.emptyPackageValueCatalog
@@ -72,6 +77,12 @@ let private runCase (stdlib: CompilationContexts.StdlibResult) (path: string) (t
     |> Result.bind (fun output ->
         if output.ExitCode <> 0 then
             Error $"Native process exited {output.ExitCode}: {output.Stderr}"
+        elif test.Expected = "root = tuple(shared_word, shared_word)" then
+            let observed = Regex.Match(output.Stdout, "^([0-9]+)\\|([0-9]+)")
+            if not observed.Success then Error "Native process did not print two tuple words"
+            elif observed.Groups.[1].Value = "0" then Error "Expected a nonzero managed pointer"
+            elif observed.Groups.[1].Value = observed.Groups.[2].Value then Ok ()
+            else Error $"Expected shared pointer words, got {observed.Groups.[1].Value} and {observed.Groups.[2].Value}"
         else
             let observed = Regex.Match(output.Stdout, "^-?[0-9]+")
             match observed.Success with

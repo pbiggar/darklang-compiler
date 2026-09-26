@@ -1278,11 +1278,11 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                         let cmpExpr = ANF.Atom (ANF.BoolLiteral false)
                         Ok (Some (ANF.Var cmpVar, [(cmpVar, cmpExpr)], vg1))
                     elif (match testedType with
-                          | AST.TSum (typeName, _) -> isTransparentInt64Sum typeName variantLookup
+                          | AST.TSum (typeName, _) -> Option.isSome (transparentSumPayloadType typeName variantLookup)
                           | _ -> false) then
                         match fieldPatterns with
-                        | [innerPattern] -> buildPatternComparison innerPattern scrutAtom (Some AST.TInt64) vg
-                        | _ -> Crash.crash "Transparent Int64 sum must have one field"
+                        | [innerPattern] -> buildPatternComparison innerPattern scrutAtom payloadType vg
+                        | _ -> Crash.crash "Transparent sum must have one field"
                     elif typeHasAnyPayloadHere constructorId then
                         // Mixed or payload-carrying sum type: tag is stored in heap at index 0.
                         let (tagVar, vg1) = ANF.freshVar vg
@@ -2698,10 +2698,10 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                 when not (List.isEmpty fieldPatterns)
                      && not (List.forall patternAlwaysMatches fieldPatterns) ->
                 match tryFindVariantForTypeById constructorId testedType typeNames variantLookup with
-                | Some (typeName, _, _, _) when isTransparentInt64Sum typeName variantLookup ->
+                | Some (typeName, _, _, _) when Option.isSome (transparentSumPayloadType typeName variantLookup) ->
                     match fieldPatterns with
-                    | [innerPattern] -> buildPatternStages innerPattern scrutAtom (Some AST.TInt64) vg
-                    | _ -> Crash.crash "Transparent Int64 sum must have one field"
+                    | [innerPattern] -> buildPatternStages innerPattern scrutAtom (transparentSumPayloadType typeName variantLookup) vg
+                    | _ -> Crash.crash "Transparent sum must have one field"
                 | Some (typeName, typeParams, tag, fieldTypeTemplates)
                     when variantLookup
                          |> Map.exists (fun _ (tName, _, _, fields) ->

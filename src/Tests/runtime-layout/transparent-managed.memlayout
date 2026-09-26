@@ -1,0 +1,16 @@
+---NAME---
+single-case String wrapper shares its payload pointer
+---INPUT---
+type TextWrap = TextWrap of String
+let original = Stdlib.String.trim (" " ++ "ab" ++ " ") in (original, TextWrap original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+single-case String wrapper stays direct across a function return
+---INPUT---
+type TextWrap = TextWrap of String
+let wrapText (value: String): TextWrap = TextWrap value
+let original = Stdlib.String.trim (" " ++ "cd" ++ " ") in (original, wrapText original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)

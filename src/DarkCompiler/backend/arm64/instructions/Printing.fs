@@ -87,7 +87,7 @@ let internal emitPrintList (ctx: CodeGenContext) (listPtr: LIR.Reg) (elemType: A
     lirRegToARM64Reg listPtr
     |> Result.map (fun listReg -> generatePrintListInstrs ctx listReg elemType true)
 
-let internal emitPrintSum (ctx: CodeGenContext) (convertInstr: CodeGenContext -> LIR.Instr -> Result<ARM64Symbolic.Instr list, string>) (sumPtr: LIR.Reg) (variants: (string * int * AST.SemanticType option) list) (transparentInt64: bool) : Result<ARM64Symbolic.Instr list, string> =
+let internal emitPrintSum (ctx: CodeGenContext) (convertInstr: CodeGenContext -> LIR.Instr -> Result<ARM64Symbolic.Instr list, string>) (sumPtr: LIR.Reg) (variants: (string * int * AST.SemanticType option) list) (transparentPayload: bool) : Result<ARM64Symbolic.Instr list, string> =
     // Print sum type: variant name + optional payload + newline
     // Sum layout depends on whether ANY variant has a payload:
     // - If any payload: [tag, payload] on heap
@@ -118,7 +118,7 @@ let internal emitPrintSum (ctx: CodeGenContext) (convertInstr: CodeGenContext ->
 
         // Setup depends on representation
         let setup =
-            if transparentInt64 then
+            if transparentPayload then
                 [ARM64Symbolic.MOV_reg (ARM64Symbolic.X19, sumReg)]
             elif hasAnyPayload then
                 // Heap-allocated: X19 = sum pointer, load tag from [X19, 0] into X20
@@ -149,7 +149,7 @@ let internal emitPrintSum (ctx: CodeGenContext) (convertInstr: CodeGenContext ->
                     | Some pType ->
                         let printOpen = printLiteral "("
                         let loadPayload =
-                            if transparentInt64 then [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X19)]
+                            if transparentPayload then [ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X19)]
                             else [ARM64Symbolic.LDR (ARM64Symbolic.X0, ARM64Symbolic.X19, 8s)]
                         let printPayloadValue =
                             match pType with
@@ -217,10 +217,10 @@ let internal emitPrintSum (ctx: CodeGenContext) (convertInstr: CodeGenContext ->
             |> fst
             |> List.concat
 
-        if transparentInt64 then
+        if transparentPayload then
             match variantBlocks with
             | [(printName, printPayload)] -> setup @ printName @ printPayload @ printNewline
-            | _ -> Crash.crash "Transparent Int64 sum must have exactly one case"
+            | _ -> Crash.crash "Transparent sum must have exactly one case"
         else
             setup @ variantCode @ printNewline)
 
