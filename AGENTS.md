@@ -16,11 +16,12 @@ this repository and takes precedence where it is stricter.
   `git rev-parse --show-toplevel`. If it is the primary coordination checkout,
   create a dedicated task branch and worktree from the current local integration
   ref, then change into that worktree before the first mutating command. If it
-  is an existing task worktree, apply the Git workflow's task-start refresh
-  rule before making changes. A task started from the primary checkout, an
-  interactive coding-agent session, and repository utility work are not
-  exceptions. If a separate worktree cannot be
-  created, stop and ask for direction instead of working in the primary checkout.
+  is an existing task worktree, apply the Git workflow's task-start rule before
+  making changes: refresh an eligible branch or create a new worktree when its
+  completed task is awaiting merge-train handoff or integration. A task started
+  from the primary checkout, an interactive coding-agent session, and repository
+  utility work are not exceptions. If a separate worktree cannot be created,
+  stop and ask for direction instead of working in the primary checkout.
 
 ## F# conventions
 
@@ -115,10 +116,13 @@ this repository and takes precedence where it is stricter.
   Perform all task work in the task worktree, never in the primary checkout.
   Reuse that worktree across turns of the same task. An agent turn or an
   integration-ref advance alone does not start a new task or trigger a refresh.
-  Once enqueued, keep the exact commit and worktree unchanged; follow-up work
-  starts on a new task branch and worktree based on the current local integration
-  ref. Authorized merge-conflict recovery under `AGENTS.mergetrain.md` is the
-  exception. Task agents never push.
+  Once a completed task's commit has been handed to `./land`, keep that commit
+  and worktree unchanged, whether the handoff is queued or pending. A new user
+  task starts immediately on a new branch and worktree based on the current
+  local integration ref, even if the previous commit has not landed. Do not
+  wait for it to land, inspect its train status, or refresh or reuse its
+  worktree. Authorized merge-conflict recovery under
+  `AGENTS.mergetrain.md` is the exception. Task agents never push.
 - When work is complete, commit the intended changes automatically.
 - Run `./land --task "<brief task description>"` only when the committed branch
   is ready: the requested scope is complete, the final diff has been
@@ -126,8 +130,9 @@ this repository and takes precedence where it is stricter.
   all relevant tests pass, relevant benchmarks show no regression, and no known
   issue or unresolved uncertainty remains. The script enqueues the exact commit
   with bounded unattended approval and prints `queued`. Once it prints
-  `queued`, stop: do not inspect the job, poll status, wait for deployment, or
-  report any later train outcome.
+  `queued`, stop work on that task and report its handoff: do not inspect the
+  job, poll status, wait for deployment, or report any later train outcome.
+  A later user request starts a new task under the task-start rule above.
 - Judge branch readiness only from that branch's scope, review, tests,
   benchmarks, and known uncertainties. Existing queue health—including an
   unrelated job that needs attention—does not make a ready branch "not ready."
