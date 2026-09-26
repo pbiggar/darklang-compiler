@@ -154,7 +154,7 @@ let private importInheritedValues
         passTimingRecorder
         "AST -> ANF Value Import: Definition Construction"
         (milliseconds definitionTicks)
-    CheckedAST.Program (symbols, inheritedDefinitions @ topLevels)
+    CheckedAST.programFromCheckedParts (symbols, inheritedDefinitions @ topLevels)
 
 /// Materialize checked module values as one lexical binding per execution
 /// scope. This gives every reference ordinary value semantics through the
@@ -329,7 +329,7 @@ let private materializeProgramValues
             if Set.contains id usedValues && not (Set.contains id cheapValueIds) then
                 CheckedAST.internFunction (helperName name) symbols |> snd
             else symbols) symbols
-    CheckedAST.Program (symbols, List.rev materialized @ helpers)
+    CheckedAST.programFromCheckedParts (symbols, List.rev materialized @ helpers)
 
 let internal prepareProgramForAnf
     (monomorphization: MonomorphizationMode)
@@ -372,7 +372,7 @@ let internal prepareProgramForAnf
                     let symbols, specializedFunctions =
                         SpecializationIdentity.importSpecializedFunctions symbols specialization.SpecializedFuncs
                     let specializedTopLevels = specializedFunctions |> List.map CheckedAST.FunctionDef
-                    let programWithSpecializations = CheckedAST.Program (symbols, specializedTopLevels @ items)
+                    let programWithSpecializations = CheckedAST.programFromCheckedParts (symbols, specializedTopLevels @ items)
                     Monomorphization.replaceTypeAppsInProgramWithRegistry combinedSpecRegistry programWithSpecializations)
     match monomorphizedResult with
     | Error err -> Error err
@@ -462,7 +462,7 @@ let internal splitDeclarations
         Error $"Declaration-only program must not contain entry expressions; found {expressions.Length}"
     else
         Ok (
-            topLevels |> List.choose (function CheckedAST.TypeDef (_, definition) -> Some definition | _ -> None),
+            topLevels |> List.choose (function CheckedAST.TypeDef (_, definition) -> Some (CheckedAST.semanticTypeDef definition) | _ -> None),
             topLevels |> List.choose (function CheckedAST.FunctionDef definition -> Some definition | _ -> None)
         )
 
@@ -482,7 +482,7 @@ let internal convertTypedDeclarationsWithTrace
                     sourceSymbols
                     context.Symbols
                     (CheckedAST.programTopLevels typedProgram)
-            CheckedAST.Program (symbols, topLevels)
+            CheckedAST.programFromCheckedParts (symbols, topLevels)
     let moduleRegistry =
         baseContext
         |> Option.map (fun context -> context.Registries.ModuleRegistry)
@@ -613,7 +613,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                 sourceSymbols
                 baseContext.Symbols
                 (CheckedAST.programTopLevels typedProgram))
-    let typedProgram = CheckedAST.Program (symbols, topLevels)
+    let typedProgram = CheckedAST.programFromCheckedParts (symbols, topLevels)
 
     // Late AOT plans (notably Json) may introduce concrete calls to generic
     // stdlib functions after the suite preamble registry was built. Materialize
@@ -692,7 +692,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                             newFunctions
                             |> List.fold (fun names fn -> Set.add fn.Name names) localFunctionNames
                         let nextSpecs =
-                            CheckedAST.Program (symbols, materializedTopLevels)
+                            CheckedAST.programFromCheckedParts (symbols, materializedTopLevels)
                             |> collectLocalSpecs baseContext.GenericFuncDefs
                         materialize
                             symbols
@@ -704,7 +704,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                 let (combinedRegistry, newFunctions, symbols) =
                     materialize initialSymbols baseRegistry localFunctionNames requested []
                 let programWithSpecializations =
-                    CheckedAST.Program (symbols, (newFunctions |> List.map CheckedAST.FunctionDef) @ items)
+                    CheckedAST.programFromCheckedParts (symbols, (newFunctions |> List.map CheckedAST.FunctionDef) @ items)
                 let specializedFunctionNames =
                     newFunctions |> List.map (fun fn -> fn.Id) |> Set.ofList
                 (programWithSpecializations, rebuildMode combinedRegistry, specializedFunctionNames)

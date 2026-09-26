@@ -6,6 +6,7 @@ module TestDSL.E2ETestRunner
 
 open System
 open AST
+open AST.Parsed
 open LoweringPrimitives
 open TypeRegistries
 open SpecializationIdentity
@@ -26,9 +27,9 @@ let private isInternalTestFile (sourceFile: string) : bool =
 // For `lhs = rhs` value tests, run a synthesized equality assertion.
 
 let private asSingleExpression (program: ParsedProgram) : ParsedExpr option =
-    let (Program topLevels) = program
+    let (ParsedProgram topLevels) = program
     match topLevels with
-    | [Expression (_, expr)] -> Some expr
+    | [ParsedExpression (_, expr)] -> Some expr
     | _ -> None
 
 let private valueFloatEpsilon : float = 0.00000000001
@@ -46,7 +47,7 @@ let private buildValueComparisonExpr
     if isFloatExpectedExpr rhsExpr then
         // For float value tests, compare with epsilon tolerance.
         let absDiff =
-            applyNamed "Darklang.Stdlib.Float.absoluteValue" (NonEmptyList.singleton (BinOp (Sub, lhsExpr, rhsExpr)))
+            Apply (Var "Darklang.Stdlib.Float.absoluteValue", [], NonEmptyList.singleton (BinOp (Sub, lhsExpr, rhsExpr)))
         BinOp (Lt, absDiff, FloatLiteral valueFloatEpsilon)
     else
         BinOp (Eq, lhsExpr, rhsExpr)
@@ -69,7 +70,7 @@ let private pickValueCheckFuncName (topLevels: ParsedTopLevel list) : string =
     let existingNames =
         topLevels
         |> List.choose (function
-            | FunctionDef fn -> Some fn.Name
+            | ParsedFunctionDef fn -> Some fn.Name
             | _ -> None)
         |> Set.ofList
     let rec loop idx =
@@ -93,12 +94,12 @@ let private trySynthesizeValueEqualitySource
     let rhsProgramResult = PackageCatalog.parseProgram allowInternal rhsExpr
 
     match sourceProgramResult, rhsProgramResult with
-    | Ok (Program sourceTopLevels), Ok rhsProgram ->
+    | Ok (ParsedProgram sourceTopLevels), Ok rhsProgram ->
         match List.rev sourceTopLevels, asSingleExpression rhsProgram with
-        | Expression (_, lhsExpr) :: sourceRestRev, Some rhsAst ->
+        | ParsedExpression (_, lhsExpr) :: sourceRestRev, Some rhsAst ->
             let comparisonExpr = buildValueComparisonExpr lhsExpr rhsAst
             let directEqProgram =
-                Program (List.rev (Expression ([], comparisonExpr) :: sourceRestRev))
+                ParsedProgram (List.rev (ParsedExpression ([], comparisonExpr) :: sourceRestRev))
 
             tryFormatProgramIfStable allowInternal directEqProgram
         | _ ->
@@ -211,7 +212,7 @@ let tryPrepareBatchTest (test: E2ETest) : PreparedE2EBatchTest option =
         | Ok equalitySource when requiresStandaloneLifetimeExecution equalitySource -> None
         | Ok equalitySource ->
             match PackageCatalog.parseProgram allowInternal equalitySource with
-            | Ok (Program [Expression _]) when canEmbedBatchEqualitySource allowInternal equalitySource ->
+            | Ok (ParsedProgram [ParsedExpression _]) when canEmbedBatchEqualitySource allowInternal equalitySource ->
                 Some { Test = test; EqualitySource = equalitySource }
             | Ok _
             | Error _ -> None
@@ -346,8 +347,6 @@ let rec private collectExprReferencedPreambleFuncsWithBound
         Set.union fromFuncName fromArgs
 
     match expr with
-    | BoundaryRender (_, value) ->
-        collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars value
     | UnitLiteral
     | Int64Literal _
     | Int128Literal _
@@ -363,8 +362,7 @@ let rec private collectExprReferencedPreambleFuncsWithBound
     | BoolLiteral _
     | StringLiteral _
     | CharLiteral _
-    | FloatLiteral _
-    | RuntimeError _ ->
+    | FloatLiteral _ ->
         Set.empty
     | InterpolatedString parts ->
         parts
@@ -493,27 +491,6 @@ let rec private collectExprReferencedPreambleFuncsWithBound
             |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
             |> combineMany
         Set.union funcRefs argRefs
-    | IndirectApply (funcExpr, args) ->
-        let funcRefs =
-            collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars funcExpr
-        let argRefs =
-            args
-            |> NonEmptyList.toList
-            |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
-            |> combineMany
-        Set.union funcRefs argRefs
-    | Closure (funcName, captures) ->
-        let fromFunc =
-            if Set.contains funcName knownPreambleFunctions
-               && not (Set.contains funcName boundVars) then
-                Set.singleton funcName
-            else
-                Set.empty
-        let fromCaptures =
-            captures
-            |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
-            |> combineMany
-        Set.union fromFunc fromCaptures
 
 let private collectExprReferencedPreambleFuncs
     (knownPreambleFunctions: Set<string>)
@@ -525,21 +502,21 @@ let private collectProgramReferencedPreambleFuncs
     (knownPreambleFunctions: Set<string>)
     (program: ParsedProgram)
     : Set<string> =
-    let (Program topLevels) = program
+    let (ParsedProgram topLevels) = program
     topLevels
     |> List.map (function
-        | FunctionDef funcDef ->
+        | ParsedFunctionDef funcDef ->
             let paramBoundVars =
                 funcDef.Params
                 |> NonEmptyList.toList
                 |> List.map fst
                 |> Set.ofList
             collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions paramBoundVars funcDef.Body
-        | Expression (_, expr) ->
+        | ParsedExpression (_, expr) ->
             collectExprReferencedPreambleFuncs knownPreambleFunctions expr
-        | ValueDef valueDef ->
-            collectExprReferencedPreambleFuncs knownPreambleFunctions (valueDefBody valueDef)
-        | TypeDef _ ->
+        | ParsedValueDef (ParsedUncheckedValueDef (_, body)) ->
+            collectExprReferencedPreambleFuncs knownPreambleFunctions body
+        | ParsedTypeDef _ ->
             Set.empty)
     |> List.fold Set.union Set.empty
 
@@ -589,10 +566,10 @@ let private reducePreambleTopLevelsToRequiredFunctions
     : ParsedTopLevel list =
     preambleTopLevels
     |> List.filter (function
-        | TypeDef _ -> true
-        | ValueDef _ -> true
-        | FunctionDef funcDef -> Set.contains funcDef.Name requiredFunctions
-        | Expression _ -> false)
+        | ParsedTypeDef _ -> true
+        | ParsedValueDef _ -> true
+        | ParsedFunctionDef funcDef -> Set.contains funcDef.Name requiredFunctions
+        | ParsedExpression _ -> false)
 
 let private parsePreambleAsProgram
     (allowInternal: bool)
@@ -660,11 +637,11 @@ let private analyzePreambleWithReducedFunctionSet
 
     parseResult
     |> Result.bind (fun preambleProgram ->
-        let (Program preambleTopLevels) = preambleProgram
+        let (ParsedProgram preambleTopLevels) = preambleProgram
         let preambleFunctionDefs =
             preambleTopLevels
             |> List.choose (function
-                | FunctionDef funcDef -> Some funcDef
+                | ParsedFunctionDef funcDef -> Some funcDef
                 | _ -> None)
         let preambleFunctionNames =
             preambleFunctionDefs
@@ -704,7 +681,7 @@ let private analyzePreambleWithReducedFunctionSet
         let reducedTopLevels =
             reducePreambleTopLevelsToRequiredFunctions requiredFunctions preambleTopLevels
 
-        let reducedProgram = Program reducedTopLevels
+        let reducedProgram = ParsedProgram reducedTopLevels
 
         TypeChecking.checkParsedSyntheticPreambleWithBaseEnvAndSettings
             stdlib.Context.TypeCheckEnv
@@ -1460,11 +1437,11 @@ let private tryBuildReducedPreambleForTest
     let parseTestResult = PackageCatalog.parseProgram allowInternal testSource
 
     match parsePreambleResult, parseTestResult with
-    | Ok (Program preambleTopLevels), Ok testProgram ->
+    | Ok (ParsedProgram preambleTopLevels), Ok testProgram ->
         let preambleFunctionDefs =
             preambleTopLevels
             |> List.choose (function
-                | FunctionDef funcDef -> Some funcDef
+                | ParsedFunctionDef funcDef -> Some funcDef
                 | _ -> None)
 
         let preambleFunctionNames =
@@ -1486,7 +1463,7 @@ let private tryBuildReducedPreambleForTest
         let reducedTopLevels =
             reducePreambleTopLevelsToRequiredFunctions requiredFunctions preambleTopLevels
 
-        let reducedPreambleSource = ASTPrettyPrinter.formatParsedProgram (Program reducedTopLevels)
+        let reducedPreambleSource = ASTPrettyPrinter.formatParsedProgram (ParsedProgram reducedTopLevels)
         Some reducedPreambleSource
     | _ ->
         None

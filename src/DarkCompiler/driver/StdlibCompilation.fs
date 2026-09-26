@@ -209,11 +209,11 @@ let private loadStdlib () : Result<AST.ParsedProgram, string> =
         : Result<AST.ParsedTopLevel list, string> =
         match loadDarkFileAllowInternal filename with
         | Error err -> Error err
-        | Ok (AST.Program items) ->
+        | Ok (AST.ParsedProgram items) ->
             Ok (acc @ items)
     stdlibFiles
     |> List.fold (fun acc filename -> Result.bind (fun items -> mergeFile items filename) acc) (Ok [])
-    |> Result.bind (fun items -> Ok (AST.Program items))
+    |> Result.bind (fun items -> Ok (AST.ParsedProgram items))
 
 /// Build stdlib in isolation, returning reusable result
 /// This can be called once and the result reused for multiple user program compilations
@@ -443,9 +443,9 @@ let buildStdlibSpecializations
                             | AST.SumTypeDef (name, _, _)
                             | AST.TypeAlias (name, _, _) -> name
                         let (id, symbols) = CheckedAST.internType name symbols
-                        (CheckedAST.TypeDef (id, typeDef), symbols)) symbols
+                        (CheckedAST.TypeDef (id, CheckedAST.checkedTypeDef typeDef), symbols)) symbols
                 let specializationProgram =
-                    CheckedAST.Program (
+                    CheckedAST.programFromCheckedParts (
                         symbols,
                         checkedTypeDefs
                         @ (materializedFunctions |> List.map CheckedAST.FunctionDef)

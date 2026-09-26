@@ -62,19 +62,19 @@ let private typeCheckWithStdlib (stdlib: CompilationContexts.StdlibResult) (ast:
     | Error e -> Error $"Type error: {CheckingDiagnostics.typeErrorToString e}"
     | Ok (programType, typedAst, _env) -> Ok (programType, typedAst)
 
-let private hasTopLevelExpression (AST.Program topLevels: AST.ParsedProgram) : bool =
+let private hasTopLevelExpression (AST.ParsedProgram topLevels: AST.ParsedProgram) : bool =
     topLevels
     |> List.exists (function
-        | AST.Expression _ -> true
-        | AST.FunctionDef _ | AST.TypeDef _ | AST.ValueDef _ -> false)
+        | AST.ParsedExpression _ -> true
+        | AST.ParsedFunctionDef _ | AST.ParsedTypeDef _ | AST.ParsedValueDef _ -> false)
 
 let private addSyntheticMainExpressionIfNeeded
-    (AST.Program topLevels: AST.ParsedProgram)
+    (AST.ParsedProgram topLevels: AST.ParsedProgram)
     : AST.ParsedProgram * bool =
-    if hasTopLevelExpression (AST.Program topLevels) then
-        (AST.Program topLevels, false)
+    if hasTopLevelExpression (AST.ParsedProgram topLevels) then
+        (AST.ParsedProgram topLevels, false)
     else
-        (AST.Program (topLevels @ [ AST.Expression ([], AST.Int64Literal 0L) ]), true)
+        (AST.ParsedProgram (topLevels @ [ AST.ParsedExpression ([], AST.Parsed.Int64Literal 0L) ]), true)
 
 let private parseOptimizationSource (source: string) : Result<AST.ParsedProgram * bool, string> =
     match Parser.parseString true source with

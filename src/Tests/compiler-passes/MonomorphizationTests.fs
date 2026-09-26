@@ -29,27 +29,26 @@ let testPreservesTypeVarsInSpecialization () : TestResult =
           ReturnType = CheckedAST.checkedType (TVar "t")
           Body = CheckedAST.Local xId
           Recursion = None }
-
-    let program =
-        CheckedAST.Program (
-            symbols,
-            [ CheckedAST.FunctionDef funcDef
-              CheckedAST.Expression (
-                  CheckedAST.TypeApp (id, [CheckedAST.checkedType (TVar "t")], NonEmptyList.singleton (CheckedAST.Int64Literal 1L))
-              ) ]
-        )
-
-    let (CheckedAST.Program (_, topLevels)) = monomorphize program
-    let funcNames =
-        topLevels
-        |> List.choose (function
-            | CheckedAST.FunctionDef f -> Some f.Name
-            | _ -> None)
-
-    if List.contains "id_t" funcNames && not (List.contains "id_i64" funcNames) then
-        Ok ()
-    else
-        Error "Expected monomorphized function id_t without defaulting to id_i64"
+    let artifact =
+        { Symbols = symbols
+          Function = funcDef
+          DirectDependencies = Set.empty }
+    let specialized =
+        specializeFromSpecs (Map.ofList ["id", artifact]) (Set.ofList [("id", [TVar "t"])])
+    match specialized.SpecializedFuncs with
+    | [specializedArtifact] ->
+        let definition = specializedArtifact.Function
+        let parameterTypes =
+            CheckedAST.functionParameterTypes definition
+            |> NonEmptyList.toList
+            |> List.map snd
+        if definition.Name = "id_t"
+           && parameterTypes = [TVar "t"]
+           && CheckedAST.functionReturnType definition = TVar "t" then
+            Ok ()
+        else
+            Error "Type-variable specialization changed the parameter or return type"
+    | _ -> Error "Expected one type-variable specialization"
 
 let testReplaceTypeAppsWithRegistry () : TestResult =
     let id, symbols = CheckedAST.internFunction "id" (CheckedAST.emptySymbols ())

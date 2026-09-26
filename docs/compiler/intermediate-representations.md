@@ -15,11 +15,14 @@ ANF → MIR → LIR → target ISA → Binary
 - **LIR**: Shared low-level instructions with virtual registers and abstract
   physical register names that each backend maps to its target ISA
 
-Before ANF, parsing produces `AST.ParsedProgram` parameterized by
-`AST.ParsedType`. Source-driven checking crosses once to `AST.SemanticType`;
-semantic-only `TNever` and the privileged `TInternalRawPtr` signature type
-cannot occur in public parsed trees. `CheckedAST.fs` then supplies the
-phase-safe expression tree consumed by preparation and lowering.
+Before ANF, parsing produces the source-only `AST.ParsedProgram`, whose
+expressions cannot contain compiler-generated operations or resolved patterns
+and references. The explicit conversion into the internal semantic checker
+tree introduces `AST.SemanticType`; semantic-only `TNever` and the privileged
+`TInternalRawPtr` signature type cannot occur in public parsed trees.
+Successful checking creates the private `CheckedAST.Program` consumed by
+preparation and lowering. Compiler-internal transformations rebuild that
+program without reopening the public parsed boundary.
 Checked function and lambda signatures, value definition types, dictionary
 literal key/value types, explicit call type arguments, record-reference type
 arguments, and recursive member types use a private `CheckedType` constructor.
@@ -28,9 +31,11 @@ checked boundary and after specialization. Preparation, HIR, and ANF recover
 the full semantic type where they need nominal arguments or privileged raw
 pointer signatures. Checked recursive members retain their resolved group and
 binding identities while certifying the monomorphic type; ANF converts these
-members back to semantic types for its recursion registry. Type definitions
-and checker constructor lookup metadata still carry `SemanticType`, as do
-ANF/MIR; representation and ABI classification remain separate work.
+members back to semantic types for its recursion registry. Checked type
+definitions also certify their field, variant, and alias types; consumers
+recover semantic declarations for layout and alias registries. Checker
+constructor lookup metadata and ANF/MIR still carry `SemanticType`;
+representation and ABI classification remain separate work.
 
 Before ANF, `ir/hir/HIR.fs` supplies typed value identities and structured
 control flow shared by semantic leaf dialects. Primitive contracts expose

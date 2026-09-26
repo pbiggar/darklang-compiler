@@ -748,7 +748,7 @@ let private materializeFunctionComparisons (program: CheckedAST.Program) : Check
                 let expression, symbols = rewrite symbols expression
                 (CheckedAST.Expression expression, symbols)
             | CheckedAST.TypeDef _ -> (topLevel, symbols)) symbols
-    CheckedAST.Program (symbols, topLevels)
+    CheckedAST.programFromCheckedParts (symbols, topLevels)
 
 /// Replace TypeApp with Call across a program using a registry (drops generic defs)
 let replaceTypeAppsInProgramWithRegistry (specRegistry: SpecRegistry) (program: CheckedAST.Program) : Result<CheckedAST.Program, string> =
@@ -787,7 +787,7 @@ let replaceTypeAppsInProgramWithRegistry (specRegistry: SpecRegistry) (program: 
         |> Set.fold (fun symbols name -> CheckedAST.internFunction name symbols |> snd) initialSymbols
     let rec loop (remaining: CheckedAST.TopLevel list) (acc: CheckedAST.TopLevel list) : Result<CheckedAST.Program, string> =
         match remaining with
-        | [] -> Ok (CheckedAST.Program (symbols, List.rev acc))
+        | [] -> Ok (CheckedAST.programFromCheckedParts (symbols, List.rev acc))
         | tl :: rest ->
             match tl with
             | CheckedAST.FunctionDef f when not (List.isEmpty f.TypeParams) ->
@@ -834,7 +834,7 @@ let internal monomorphizeWithGenericFuncDefs (genericFuncDefs: GenericFuncDefs) 
     let symbols, specializedFunctions =
         importSpecializedFunctions symbols specialization.SpecializedFuncs
     let specializedTopLevels = specializedFunctions |> List.map CheckedAST.FunctionDef
-    let programWithSpecializations = CheckedAST.Program (symbols, specializedTopLevels @ topLevels)
+    let programWithSpecializations = CheckedAST.programFromCheckedParts (symbols, specializedTopLevels @ topLevels)
     match replaceTypeAppsInProgramWithRegistry (registryWithExternalSpecs specialization) programWithSpecializations with
     | Ok monomorphized -> monomorphized
     | Error err -> Crash.crash $"monomorphizeWithGenericFuncDefs: {err}"

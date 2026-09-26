@@ -1562,7 +1562,7 @@ let rewriteProgramWithSession
                 result |> Result.bind (planCached "parse" ensureDecoder typ)) serializersPlanned
 
     if not hasJsonCalls then
-        Program (symbols, topLevels)
+        CheckedAST.programFromCheckedParts (symbols, topLevels)
     else
         match planned with
         | Error error ->
@@ -1583,7 +1583,7 @@ let rewriteProgramWithSession
                         let (expr', next) = mapExpr rewrite currentSymbols expr
                         (Expression expr', next)
                     | other -> (other, currentSymbols)) symbols
-            Program (symbols', rewritten)
+            CheckedAST.programFromCheckedParts (symbols', rewritten)
         | Ok state ->
             let finalPlanningEnv = { planningEnv with Symbols = state.Symbols }
             let rewrite currentSymbols expr =
@@ -1638,7 +1638,7 @@ let rewriteProgramWithSession
                         (Expression expr', next)
                     | other -> (other, currentSymbols)) state.Symbols
             let generated = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
-            Program (finalSymbols, generated @ rewritten)
+            CheckedAST.programFromCheckedParts (finalSymbols, generated @ rewritten)
 
 let rewriteProgram (env: CheckingTypes.TypeCheckEnv) (program: Program) : Program =
     rewriteProgramWithSession None env program
