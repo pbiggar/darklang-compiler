@@ -800,11 +800,19 @@ let rec private expressionSize (expr: Expr) : int =
     | TupleLiteral elements | ListLiteral elements ->
         1 + (elements |> List.sumBy expressionSize)
     | TupleAccess (tuple, _) -> 1 + expressionSize tuple
+    | Constructor (_, _, fields) -> 1 + (fields |> List.sumBy expressionSize)
+    | DictLiteral (_, _, entries) ->
+        1 + (entries |> List.sumBy (fun (key, value) -> expressionSize key + expressionSize value))
+    | InterpolatedString parts ->
+        1 + (parts |> List.sumBy (function StringExpr value -> expressionSize value | StringText _ -> 1))
     | Apply (callee, _, args) ->
         1 + expressionSize callee + (args |> NonEmptyList.toList |> List.sumBy expressionSize)
     | Lambda (_, _, body) -> 1 + expressionSize body
     | Match (scrutinee, cases) ->
-        1 + expressionSize scrutinee + (cases |> List.sumBy (fun case -> expressionSize case.Body))
+        1 + expressionSize scrutinee +
+        (cases |> List.sumBy (fun case ->
+            1 + expressionSize case.Body +
+            (case.Guard |> Option.map expressionSize |> Option.defaultValue 0)))
     | RecordLiteral (_, fields) ->
         1 + (fields |> List.sumBy (snd >> expressionSize))
     | RecordAccess (record, _) -> 1 + expressionSize record
@@ -815,6 +823,12 @@ let rec private expressionSize (expr: Expr) : int =
 /// Enumerate deterministic local rewrites over the compiler AST. The oracle,
 /// not this function, decides whether a rewrite preserves the reported defect.
 let rec private oneStepSimplifications (expr: Expr) : Expr list =
+    let removeAt index elements =
+        elements
+        |> List.mapi (fun currentIndex element -> currentIndex, element)
+        |> List.choose (fun (currentIndex, element) ->
+            if currentIndex = index then None else Some element)
+
     let simplifyElements rebuild elements =
         elements
         |> List.mapi (fun index element ->
@@ -865,54 +879,70 @@ let rec private oneStepSimplifications (expr: Expr) : Expr list =
                |> List.map (fun candidate -> If (condition, candidate, elseBranch)))
             @ (oneStepSimplifications elseBranch
                |> List.map (fun candidate -> If (condition, thenBranch, candidate)))
-        | TupleLiteral elements -> simplifyElements TupleLiteral elements
+        | TupleLiteral elements ->
+            elements @ simplifyElements TupleLiteral elements
         | ListLiteral elements ->
             (if List.length elements > 1 then
                  elements
-                 |> List.mapi (fun index _ ->
-                     ListLiteral (elements |> List.mapi (fun i item -> i, item)
-                                           |> List.choose (fun (i, item) -> if i = index then None else Some item)))
+                 |> List.mapi (fun index _ -> ListLiteral (removeAt index elements))
              else [])
+            @ elements
             @ simplifyElements ListLiteral elements
         | DictLiteral (keyType, valueType, entries) ->
-            entries
-            |> List.mapi (fun index (key, value) ->
-                oneStepSimplifications key
-                |> List.map (fun candidate ->
-                    DictLiteral (keyType, valueType,
-                        entries |> List.mapi (fun i entry -> if i = index then candidate, value else entry)))
-                |> fun keyCandidates ->
-                    keyCandidates @
-                    (oneStepSimplifications value
-                     |> List.map (fun candidate ->
-                         DictLiteral (keyType, valueType,
-                             entries |> List.mapi (fun i entry -> if i = index then key, candidate else entry)))))
-            |> List.concat
-        | RecordLiteral (reference, fields) ->
-            fields
-            |> List.mapi (fun index (field, value) ->
-                oneStepSimplifications value
-                |> List.map (fun candidate ->
-                    RecordLiteral (reference,
-                        fields |> List.mapi (fun i entry -> if i = index then field, candidate else entry))))
-            |> List.concat
-        | Constructor (reference, name, fields) ->
-            simplifyElements (fun candidates -> Constructor (reference, name, candidates)) fields
-        | InterpolatedString parts ->
-            parts
-            |> List.mapi (fun index part ->
-                match part with
-                | StringExpr value ->
-                    oneStepSimplifications value
+            (if List.length entries > 1 then
+                 entries
+                 |> List.mapi (fun index _ ->
+                     DictLiteral (keyType, valueType, removeAt index entries))
+             else [])
+            @ (entries |> List.collect (fun (key, value) -> [key; value]))
+            @ (entries
+               |> List.mapi (fun index (key, value) ->
+                   (oneStepSimplifications key
                     |> List.map (fun candidate ->
-                        InterpolatedString (
-                            parts |> List.mapi (fun i current ->
-                                if i = index then StringExpr candidate else current)))
-                | StringText _ -> [])
-            |> List.concat
+                        DictLiteral (keyType, valueType,
+                            entries |> List.mapi (fun i entry ->
+                                if i = index then candidate, value else entry))))
+                   @ (oneStepSimplifications value
+                      |> List.map (fun candidate ->
+                          DictLiteral (keyType, valueType,
+                              entries |> List.mapi (fun i entry ->
+                                  if i = index then key, candidate else entry)))))
+               |> List.concat)
+        | RecordLiteral (reference, fields) ->
+            (fields |> List.map snd)
+            @ (fields
+               |> List.mapi (fun index (field, value) ->
+                   oneStepSimplifications value
+                   |> List.map (fun candidate ->
+                       RecordLiteral (reference,
+                           fields |> List.mapi (fun i entry ->
+                               if i = index then field, candidate else entry))))
+               |> List.concat)
+        | Constructor (reference, name, fields) ->
+            fields
+            @ simplifyElements (fun candidates -> Constructor (reference, name, candidates)) fields
+        | InterpolatedString parts ->
+            (parts |> List.choose (function StringExpr value -> Some value | _ -> None))
+            @ (parts
+               |> List.mapi (fun index part ->
+                   let removed =
+                       if List.length parts > 1 then
+                           [InterpolatedString (removeAt index parts)]
+                       else []
+                   match part with
+                   | StringExpr value ->
+                       removed @
+                       (oneStepSimplifications value
+                        |> List.map (fun candidate ->
+                            InterpolatedString (
+                                parts |> List.mapi (fun i current ->
+                                    if i = index then StringExpr candidate else current))))
+                   | StringText _ -> removed)
+               |> List.concat)
         | Lambda (parameters, annotation, body) ->
-            oneStepSimplifications body
-            |> List.map (fun candidate -> Lambda (parameters, annotation, candidate))
+            [body]
+            @ (oneStepSimplifications body
+               |> List.map (fun candidate -> Lambda (parameters, annotation, candidate)))
         | TupleAccess (tuple, index) ->
             let selected =
                 match tuple with
@@ -921,29 +951,57 @@ let rec private oneStepSimplifications (expr: Expr) : Expr list =
             selected @ (oneStepSimplifications tuple
                         |> List.map (fun candidate -> TupleAccess (candidate, index)))
         | Match (scrutinee, cases) ->
-            (cases |> List.map (fun case -> case.Body))
+            [scrutinee]
+            @ (cases |> List.map (fun case -> case.Body))
+            @ (if List.length cases > 1 then
+                   cases |> List.mapi (fun index _ -> Match (scrutinee, removeAt index cases))
+               else [])
             @ (oneStepSimplifications scrutinee
                |> List.map (fun candidate -> Match (candidate, cases)))
             @ (cases
                |> List.mapi (fun index case ->
-                   oneStepSimplifications case.Body
-                   |> List.map (fun candidate ->
-                       Match (scrutinee,
-                           cases |> List.mapi (fun i current ->
-                               if i = index then { case with Body = candidate } else current))))
+                   (match case.Guard with
+                    | Some _ ->
+                        [Match (scrutinee,
+                            cases |> List.mapi (fun i current ->
+                                if i = index then { case with Guard = None } else current))]
+                    | None -> [])
+                   @ (case.Guard |> Option.toList |> List.collect (fun guard ->
+                       oneStepSimplifications guard
+                       |> List.map (fun candidate ->
+                           Match (scrutinee,
+                               cases |> List.mapi (fun i current ->
+                                   if i = index then { case with Guard = Some candidate } else current)))))
+                   @ (oneStepSimplifications case.Body
+                      |> List.map (fun candidate ->
+                          Match (scrutinee,
+                              cases |> List.mapi (fun i current ->
+                                  if i = index then { case with Body = candidate } else current)))))
                |> List.concat)
         | Apply (callee, typeArgs, args) ->
             let argumentList = NonEmptyList.toList args
-            (match argumentList with [arg] -> [arg] | _ -> [])
+            (callee :: argumentList)
             @ (oneStepSimplifications callee |> List.map (fun candidate ->
                 Apply (candidate, typeArgs, args)))
             @ simplifyElements (fun candidates ->
                 Apply (callee, typeArgs, NonEmptyList.fromList candidates)) argumentList
         | RecordAccess (record, field) ->
-            oneStepSimplifications record
-            |> List.map (fun candidate -> RecordAccess (candidate, field))
+            let selected =
+                match record with
+                | RecordLiteral (_, fields) ->
+                    fields
+                    |> List.tryPick (fun (candidateField, value) ->
+                        if candidateField.SourceFieldName = field.SourceFieldName then
+                            Some value
+                        else None)
+                    |> Option.toList
+                | _ -> []
+            record :: selected
+            @ (oneStepSimplifications record
+               |> List.map (fun candidate -> RecordAccess (candidate, field)))
         | RecordUpdate (record, updates) ->
-            (oneStepSimplifications record
+            record :: (updates |> List.map snd)
+            @ (oneStepSimplifications record
              |> List.map (fun candidate -> RecordUpdate (candidate, updates)))
             @ (updates
                |> List.mapi (fun index (field, value) ->
@@ -986,7 +1044,7 @@ let private minimize
     match parsed with
     | Error message -> Error $"Cannot minimize source: {message}"
     | Ok (declarations, originalExpr) ->
-        let initialEnvironment =
+        let declarationEnvironment declarations =
             declarations
             |> List.choose (function
                 | FunctionDef definition when List.isEmpty definition.TypeParams ->
@@ -994,7 +1052,7 @@ let private minimize
                         definition.Params |> NonEmptyList.toList |> List.map snd
                     Some (definition.Name, TFunction (parameterTypes, definition.ReturnType))
                 | _ -> None)
-        match inferGeneratedType initialEnvironment originalExpr with
+        match inferGeneratedType (declarationEnvironment declarations) originalExpr with
         | None -> Error "Minimizer input is outside the generated expression subset"
         | Some originalType ->
             let originalOutcome = checkCase config stdlib -1L source
@@ -1005,46 +1063,72 @@ let private minimize
                 let rec tryCandidates attempts candidates =
                     match candidates with
                     | [] -> None, attempts
-                    | (candidateExpr, candidateSource) :: rest ->
+                    | (candidateDeclarations, candidateExpr, candidateSource) :: rest ->
                         let outcome = checkCase config stdlib -1L candidateSource
                         let nextAttempts = attempts + 1
                         if sameFailure originalOutcome outcome then
-                            Some (candidateExpr, candidateSource, outcome), nextAttempts
+                            Some (candidateDeclarations, candidateExpr, candidateSource, outcome), nextAttempts
                         else
                             tryCandidates nextAttempts rest
 
                 let rec reduce
                     (attempts: int)
                     (reductions: int)
+                    (currentDeclarations: TopLevel list)
                     (currentExpr: Expr)
                     (currentSource: string)
                     (currentOutcome: CaseOutcome)
                     =
                     let currentMetric = expressionSize currentExpr, currentSource.Length
                     let candidates =
-                        oneStepSimplifications currentExpr
-                        |> List.choose (fun candidateExpr ->
-                            match inferGeneratedType initialEnvironment candidateExpr with
+                        let expressionCandidates =
+                            oneStepSimplifications currentExpr
+                            |> List.map (fun candidate -> currentDeclarations, candidate)
+                        let declarationCandidates =
+                            let count = List.length currentDeclarations
+                            let rec blockSizes size =
+                                if size > count then []
+                                else size :: blockSizes (size * 2)
+                            blockSizes 1
+                            |> List.rev
+                            |> List.collect (fun size ->
+                                [0 .. count - size]
+                                |> List.map (fun start ->
+                                    let reduced =
+                                        currentDeclarations
+                                        |> List.mapi (fun index declaration -> index, declaration)
+                                        |> List.choose (fun (index, declaration) ->
+                                            if index >= start && index < start + size then None
+                                            else Some declaration)
+                                    reduced, currentExpr))
+                        expressionCandidates @ declarationCandidates
+                        |> List.choose (fun (candidateDeclarations, candidateExpr) ->
+                            match
+                                inferGeneratedType
+                                    (declarationEnvironment candidateDeclarations)
+                                    candidateExpr
+                            with
                             | Some candidateType when candidateType = originalType ->
                                 let candidateSource =
-                                    Program (declarations @ [Expression ([], candidateExpr)])
+                                    Program (candidateDeclarations @ [Expression ([], candidateExpr)])
                                     |> ASTPrettyPrinter.formatProgram
                                 let candidateMetric = expressionSize candidateExpr, candidateSource.Length
                                 if candidateMetric < currentMetric then
-                                    Some (candidateExpr, candidateSource)
+                                    Some (candidateDeclarations, candidateExpr, candidateSource)
                                 else
                                     None
                             | _ -> None)
-                        |> List.distinctBy snd
+                        |> List.distinctBy (fun (_, _, candidateSource) -> candidateSource)
 
                     match tryCandidates attempts candidates with
-                    | Some (smallerExpr, smallerSource, smallerOutcome), nextAttempts ->
+                    | Some (smallerDeclarations, smallerExpr, smallerSource, smallerOutcome), nextAttempts ->
                         printfn $"reduced: {currentSource.Length} -> {smallerSource.Length} bytes"
-                        reduce nextAttempts (reductions + 1) smallerExpr smallerSource smallerOutcome
+                        reduce nextAttempts (reductions + 1)
+                            smallerDeclarations smallerExpr smallerSource smallerOutcome
                     | None, nextAttempts ->
                         Ok (currentSource, currentOutcome, nextAttempts, reductions)
 
-                reduce 0 0 originalExpr source originalOutcome
+                reduce 0 0 declarations originalExpr source originalOutcome
 
 let private describeProcessOutcome (outcome: ProcessOutcome) : string =
     match outcome with
