@@ -1,16 +1,17 @@
 #!/bin/bash
-# fuzz - Continuously find, minimize, and promote compiler discrepancies to E2E tests.
+# fuzz - Find compiler discrepancies and coordinate approved, landed fixes.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
+ORIGINAL_ARGS=("$@")
 
 usage() {
     echo "Usage: ./fuzz [--seed N] [--timeout-ms N] [--depth N]"
     echo ""
-    echo "Continuously fuzzes the compiler, minimizes every finding, and adds"
-    echo "it to src/Tests/e2e/fuzzer-found.e2e. Stop with Ctrl-C."
+    echo "Continuously fuzzes the compiler and minimizes every finding."
+    echo "Each compiler fix and its landing require separate approval. Stop with Ctrl-C."
     echo ""
     echo "Options:"
     echo "  --seed N        Start with this signed 32-bit seed."
@@ -124,58 +125,92 @@ fi
 
 trap 'echo; echo "Fuzzer stopped."; exit 130' INT
 
-E2E_FILE="src/Tests/e2e/fuzzer-found.e2e"
 FUZZER_PROJECT="src/Fuzzer/Fuzzer.fsproj"
+PENDING_FIX_SHA=""
+PENDING_FIX_BASE=""
 
-e2e_expected() {
-    local interpreted="$1"
-    case "$interpreted" in
-        true|false)
-            printf '%s\n' "$interpreted"
-            ;;
-        -[0-9]*|[0-9]*)
-            if [[ ! "$interpreted" =~ ^-?[0-9]+$ ]]; then
-                echo "Error: unsupported interpreter result: $interpreted" >&2
-                return 1
-            fi
-            printf '%sL\n' "$interpreted"
-            ;;
-        *)
-            echo "Error: unsupported interpreter result: $interpreted" >&2
-            return 1
-            ;;
-    esac
+INTEGRATION_REF="$(python3 - <<'PY'
+from pathlib import Path
+import re
+
+lines = Path('.mergetrain.yaml').read_text(encoding='utf-8').splitlines()
+git_lines = []
+inside_git = False
+for raw in lines:
+    line = raw.split('#', 1)[0].rstrip()
+    if line == 'git:':
+        inside_git = True
+    elif inside_git and line and not line.startswith(' '):
+        inside_git = False
+    elif inside_git:
+        git_lines.append(line)
+
+fields = {}
+for line in git_lines:
+    match = re.fullmatch(r'\s+(remote|integration_branch):\s*(\S+)\s*', line)
+    if match:
+        fields[match.group(1)] = match.group(2)
+if 'remote' not in fields or 'integration_branch' not in fields:
+    raise SystemExit('Missing configured integration ref in .mergetrain.yaml')
+print(f"{fields['remote']}/{fields['integration_branch']}")
+PY
+)"
+git rev-parse --verify --quiet "$INTEGRATION_REF^{commit}" >/dev/null || {
+    echo "Error: local integration ref is unavailable: $INTEGRATION_REF" >&2
+    exit 1
 }
 
-promote() {
-    local source_path="$1"
-    local interpreted="$2"
-    if [[ ! -f "$source_path" ]]; then
-        echo "Error: minimized source does not exist: $source_path" >&2
-        return 1
+if [[ "$SCRIPT_DIR" == /Users/paulbiggar/projects/c4d-for-dcb ]]; then
+    # This checkout coordinates integration and must stay read-only.
+    campaign="/tmp/dark-fuzzer-campaign-$(date -u +%Y%m%dT%H%M%S)-$$"
+    branch="fuzz/campaign-$(date -u +%Y%m%dT%H%M%S)-$$"
+    git worktree add -b "$branch" "$campaign" "$INTEGRATION_REF"
+    git -C "$campaign" branch --set-upstream-to="$INTEGRATION_REF" "$branch"
+    echo "Fuzz campaign worktree: $campaign"
+    exec "$campaign/fuzz" "${ORIGINAL_ARGS[@]}"
+fi
+
+approve() {
+    local answer
+    printf '%s [y/N] ' "$1"
+    if ! IFS= read -r answer; then
+        echo "Error: no interactive approval response was available." >&2
+        exit 1
     fi
+    [[ "${answer,,}" == y || "${answer,,}" == yes ]]
+}
 
-    local source
-    source="$(<"$source_path")"
-    if [[ "$source" == *$'\n'* ]]; then
-        echo "Error: E2E promotion currently requires a single-line expression." >&2
-        return 1
+wait_for_previous_fix() {
+    if [[ -z "$PENDING_FIX_SHA" ]]; then
+        return 0
     fi
+    echo "Waiting for the previous fix to reach $INTEGRATION_REF before creating another fix branch."
+    while true; do
+        if git merge-base --is-ancestor "$PENDING_FIX_SHA" "$INTEGRATION_REF"; then
+            break
+        fi
+        # The train may replay a commit onto a newer parent, changing its SHA.
+        local cherry
+        cherry="$(git cherry "$INTEGRATION_REF" "$PENDING_FIX_SHA" "$PENDING_FIX_BASE")"
+        if [[ -n "$cherry" && "$cherry" != *'+ '* ]]; then
+            break
+        fi
+        sleep 10
+    done
+    echo "Previous fix is present on $INTEGRATION_REF."
+    PENDING_FIX_SHA=""
+    PENDING_FIX_BASE=""
+}
 
-    local expected
-    expected="$(e2e_expected "$interpreted")"
-
-    local test_case="$source = $expected"
-    if [[ ! -f "$E2E_FILE" ]]; then
-        echo "Error: E2E destination does not exist: $E2E_FILE" >&2
+run_gate() {
+    local worktree="$1"
+    local log="$2"
+    shift 2
+    echo "Validating: $*"
+    if ! (cd "$worktree" && "$@") >"$log" 2>&1; then
+        tail -n 18 "$log" >&2
+        echo "Error: validation failed; full output: $log" >&2
         return 1
-    fi
-
-    if rg --fixed-strings --line-regexp --quiet -- "$test_case" "$E2E_FILE"; then
-        echo "E2E case already present: $E2E_FILE"
-    else
-        printf '%s\n' "$test_case" >> "$E2E_FILE"
-        echo "Added failing E2E case: $E2E_FILE"
     fi
 }
 
@@ -183,13 +218,23 @@ ask_codex_to_fix() {
     local source="$1"
     local expected="$2"
     local actual="$3"
+    local minimized="$4"
+    local run_dir="$5"
 
     if ! command -v codex >/dev/null 2>&1; then
         echo "Error: codex is not on PATH." >&2
         return 1
     fi
 
-    local runtime_dir
+    wait_for_previous_fix
+
+    local base branch worktree runtime_dir
+    base="$(git rev-parse "$INTEGRATION_REF^{commit}")"
+    branch="fuzz/fix-$(date -u +%Y%m%dT%H%M%S)-$$-$CAMPAIGN"
+    mkdir -p "$SCRIPT_DIR/fuzz-results/worktrees"
+    worktree="$SCRIPT_DIR/fuzz-results/worktrees/fix-$(date -u +%Y%m%dT%H%M%S)-$$-$CAMPAIGN"
+    git worktree add -b "$branch" "$worktree" "$base"
+    git -C "$worktree" branch --set-upstream-to="$INTEGRATION_REF" "$branch"
     runtime_dir="$(mktemp -d "$SCRIPT_DIR/fuzz-results/codex-runtime.XXXXXX")"
 
     local prompt
@@ -199,10 +244,9 @@ ask_codex_to_fix() {
         'Follow AGENTS.md, including creating the focused failing E2E test before the fix.' \
         'Use the compiler AST and darklang-interpreter as the semantic oracle.' \
         'Run all required tests and the parent-relative benchmark gate.' \
-        'When the fix is ready, commit it and run ./land with an accurate task description.' \
-        "Before ./land, publish the fixed Fuzzer project to this exact directory: $runtime_dir" \
-        "Use: dotnet publish src/Fuzzer/Fuzzer.fsproj --output '$runtime_dir'" \
-        'Your final response must use the repository completion-report format.' \
+        'When the fix is ready, review and commit it. Do not run ./land.' \
+        'The fuzzer controller will verify the commit and request human approval before landing.' \
+        'Report the exact tests, benchmark result, commit, and any unresolved risk.' \
         '' \
         'Reduced Dark case:' \
         "$source" \
@@ -213,36 +257,73 @@ ask_codex_to_fix() {
         'Actual compiler result:' \
         "$actual")"
 
-    local codex_result
-    local codex_status
-    set +e
-    codex_result="$(
-        printf '%s\n' "$prompt" \
-        | codex exec \
-            --approve-for-me \
-            --worktree \
-            --add-dir "$SCRIPT_DIR/fuzz-results" \
-            -
-    )"
-    codex_status=$?
-    set -e
+    if ! printf '%s\n' "$prompt" | codex exec \
+        --approve-for-me -C "$worktree" \
+        --output-last-message "$run_dir/codex-final.txt" - \
+        >"$run_dir/codex.log" 2>&1; then
+        tail -n 18 "$run_dir/codex.log" >&2
+        echo "Error: Codex failed; worktree: $worktree; log: $run_dir/codex.log" >&2
+        return 1
+    fi
+    cat "$run_dir/codex-final.txt"
 
-    printf '%s\n' "$codex_result"
-    if [[ $codex_status -ne 0 ]]; then
-        echo "Error: Codex failed while fixing the compiler." >&2
+    local head
+    head="$(git -C "$worktree" rev-parse HEAD)"
+    if [[ "$head" == "$base" || "$(git -C "$worktree" branch --show-current)" != "$branch" || \
+          -n "$(git -C "$worktree" status --porcelain)" ]]; then
+        echo "Error: Codex did not leave a new clean commit on $branch; worktree: $worktree" >&2
         return 1
     fi
-    if [[ "$codex_result" != *"Merge train: ✅ queued"* ]]; then
-        echo "Error: Codex did not report a queued compiler fix; stopping." >&2
+    if ! git -C "$worktree" merge-base --is-ancestor "$base" "$head"; then
+        echo "Error: the fix no longer descends from its integration base; worktree: $worktree" >&2
         return 1
     fi
+
+    run_gate "$worktree" "$run_dir/build.log" ./build --ai
+    run_gate "$worktree" "$run_dir/tests.log" ./run-tests --ai
+    run_gate "$worktree" "$run_dir/benchmarks.log" ./benchmarks/run_benchmarks.sh --verify-parent full
+    run_gate "$worktree" "$run_dir/fuzzer-build.log" ./build --ai -- "$FUZZER_PROJECT"
+    run_gate "$worktree" "$run_dir/publish.log" dotnet publish --no-build --configuration Debug "$FUZZER_PROJECT" --output "$runtime_dir"
     if [[ ! -f "$runtime_dir/Fuzzer.dll" ]]; then
-        echo "Error: Codex did not publish the fixed fuzzer to $runtime_dir." >&2
+        echo "Error: fixed fuzzer runtime was not published: $runtime_dir" >&2
+        return 1
+    fi
+    run_gate "$worktree" "$run_dir/replay.log" ./scripts/dotnet-host "$runtime_dir/Fuzzer.dll" --timeout-ms "$TIMEOUT_MS" --replay "$minimized"
+    if [[ -n "$(git -C "$worktree" status --porcelain)" || "$(git -C "$worktree" rev-parse HEAD)" != "$head" ]]; then
+        echo "Error: verification changed the committed fix; worktree: $worktree" >&2
         return 1
     fi
 
-    FUZZER_COMMAND=(dotnet "$runtime_dir/Fuzzer.dll")
-    echo "Codex fix queued; continuing with the published fixed compiler."
+    echo "Fix worktree: $worktree"
+    echo "Commit: $head"
+    git -C "$worktree" log -1 --format='%s'
+    git -C "$worktree" diff --stat "$base..$head"
+    rg -m 1 'success: .* passed' "$run_dir/tests.log" || true
+    rg -m 1 'current/parent geometric ratio' "$run_dir/benchmarks.log" || true
+    printf 'Review full patch: git -C %q diff %q\n' "$worktree" "$base..$head"
+    echo "Validation logs: $run_dir"
+    if ! approve "Land this exact fix commit and continue fuzzing?"; then
+        echo "Fix retained without landing: $worktree ($head)" >&2
+        return 1
+    fi
+    if ! (cd "$worktree" && ./land --task "Fix compiler discrepancy from fuzzer campaign $CAMPAIGN") >"$run_dir/land.log" 2>&1; then
+        if rg --fixed-strings --quiet 'Landing handoff is pending' "$run_dir/land.log"; then
+            echo 'Merge train: ⏳ handoff pending' >&2
+        else
+            cat "$run_dir/land.log" >&2
+            echo "Error: landing handoff did not queue; worktree: $worktree" >&2
+        fi
+        return 1
+    fi
+    if [[ "$(<"$run_dir/land.log")" != queued ]]; then
+        echo "Error: landing handoff returned an unexpected result; log: $run_dir/land.log" >&2
+        return 1
+    fi
+
+    FUZZER_COMMAND=("$worktree/scripts/dotnet-host" "$runtime_dir/Fuzzer.dll")
+    PENDING_FIX_SHA="$head"
+    PENDING_FIX_BASE="$base"
+    echo "Fix queued at $head; continuing with its published compiler."
 }
 
 ./build --ai -- "$FUZZER_PROJECT"
@@ -302,22 +383,11 @@ while true; do
     printf '%s\n' "$ACTUAL"
     echo ""
 
-    printf 'Should Codex fix, land, and continue? [y/N] '
-    if ! IFS= read -r ANSWER; then
-        echo ""
-        echo "Error: no interactive response was available." >&2
-        exit 1
+    if approve "Should Codex start a compiler fix for this finding?"; then
+        ask_codex_to_fix "$SOURCE" "$EXPECTED" "$ACTUAL" "$MINIMIZED" "$RUN_DIR"
+    else
+        echo "Finding preserved without a compiler fix; continuing."
     fi
-
-    case "${ANSWER,,}" in
-        y|yes)
-            ask_codex_to_fix "$SOURCE" "$EXPECTED" "$ACTUAL"
-            ;;
-        *)
-            promote "$MINIMIZED" "$EXPECTED"
-            echo "Finding preserved without a compiler fix; continuing."
-            ;;
-    esac
 
     echo "Finding: $FINDING"
     echo "Minimized: $MINIMIZED"
