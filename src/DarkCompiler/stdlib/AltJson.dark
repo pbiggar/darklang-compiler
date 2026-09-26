@@ -430,10 +430,26 @@ let parse (source: String) : Stdlib.Result.Result<Stdlib.AltJson.Json, Stdlib.Al
 
 let __hexDigit (value: Int64) : String =
     match value with
-    | 0L -> "0" | 1L -> "1" | 2L -> "2" | 3L -> "3"
-    | 4L -> "4" | 5L -> "5" | 6L -> "6" | 7L -> "7"
-    | 8L -> "8" | 9L -> "9" | 10L -> "A" | 11L -> "B"
-    | 12L -> "C" | 13L -> "D" | 14L -> "E" | 15L -> "F"
+
+    | 0L -> "0"
+    | 1L -> "1"
+    | 2L -> "2"
+    | 3L -> "3"
+
+    | 4L -> "4"
+    | 5L -> "5"
+    | 6L -> "6"
+    | 7L -> "7"
+
+    | 8L -> "8"
+    | 9L -> "9"
+    | 10L -> "A"
+    | 11L -> "B"
+
+    | 12L -> "C"
+    | 13L -> "D"
+    | 14L -> "E"
+    | 15L -> "F"
     | _ -> Builtin.testRuntimeError "JSON hex digit out of range"
 
 let __escapeControl (byte: Int64) : String =

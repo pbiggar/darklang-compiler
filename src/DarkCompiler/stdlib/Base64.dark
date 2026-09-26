@@ -12,17 +12,81 @@ module Darklang.Stdlib.Base64
 // Encoding lookup table (6-bit value -> character)
 let __encodeChar (n: Int64) : String =
     match n with
-    | 0L -> "A" | 1L -> "B" | 2L -> "C" | 3L -> "D" | 4L -> "E" | 5L -> "F"
-    | 6L -> "G" | 7L -> "H" | 8L -> "I" | 9L -> "J" | 10L -> "K" | 11L -> "L"
-    | 12L -> "M" | 13L -> "N" | 14L -> "O" | 15L -> "P" | 16L -> "Q" | 17L -> "R"
-    | 18L -> "S" | 19L -> "T" | 20L -> "U" | 21L -> "V" | 22L -> "W" | 23L -> "X"
-    | 24L -> "Y" | 25L -> "Z" | 26L -> "a" | 27L -> "b" | 28L -> "c" | 29L -> "d"
-    | 30L -> "e" | 31L -> "f" | 32L -> "g" | 33L -> "h" | 34L -> "i" | 35L -> "j"
-    | 36L -> "k" | 37L -> "l" | 38L -> "m" | 39L -> "n" | 40L -> "o" | 41L -> "p"
-    | 42L -> "q" | 43L -> "r" | 44L -> "s" | 45L -> "t" | 46L -> "u" | 47L -> "v"
-    | 48L -> "w" | 49L -> "x" | 50L -> "y" | 51L -> "z" | 52L -> "0" | 53L -> "1"
-    | 54L -> "2" | 55L -> "3" | 56L -> "4" | 57L -> "5" | 58L -> "6" | 59L -> "7"
-    | 60L -> "8" | 61L -> "9" | 62L -> "+" | 63L -> "/"
+
+    | 0L -> "A"
+    | 1L -> "B"
+    | 2L -> "C"
+    | 3L -> "D"
+    | 4L -> "E"
+    | 5L -> "F"
+
+    | 6L -> "G"
+    | 7L -> "H"
+    | 8L -> "I"
+    | 9L -> "J"
+    | 10L -> "K"
+    | 11L -> "L"
+
+    | 12L -> "M"
+    | 13L -> "N"
+    | 14L -> "O"
+    | 15L -> "P"
+    | 16L -> "Q"
+    | 17L -> "R"
+
+    | 18L -> "S"
+    | 19L -> "T"
+    | 20L -> "U"
+    | 21L -> "V"
+    | 22L -> "W"
+    | 23L -> "X"
+
+    | 24L -> "Y"
+    | 25L -> "Z"
+    | 26L -> "a"
+    | 27L -> "b"
+    | 28L -> "c"
+    | 29L -> "d"
+
+    | 30L -> "e"
+    | 31L -> "f"
+    | 32L -> "g"
+    | 33L -> "h"
+    | 34L -> "i"
+    | 35L -> "j"
+
+    | 36L -> "k"
+    | 37L -> "l"
+    | 38L -> "m"
+    | 39L -> "n"
+    | 40L -> "o"
+    | 41L -> "p"
+
+    | 42L -> "q"
+    | 43L -> "r"
+    | 44L -> "s"
+    | 45L -> "t"
+    | 46L -> "u"
+    | 47L -> "v"
+
+    | 48L -> "w"
+    | 49L -> "x"
+    | 50L -> "y"
+    | 51L -> "z"
+    | 52L -> "0"
+    | 53L -> "1"
+
+    | 54L -> "2"
+    | 55L -> "3"
+    | 56L -> "4"
+    | 57L -> "5"
+    | 58L -> "6"
+    | 59L -> "7"
+
+    | 60L -> "8"
+    | 61L -> "9"
+    | 62L -> "+"
+    | 63L -> "/"
     | _ -> ""
 
 // URL-safe encoding (uses - and _ instead of + and /)
@@ -156,7 +220,7 @@ let __decodeHelper (s: String) (index: Int64) (len: Int64) (acc: List<Int64>) : 
           let result = Stdlib.Base64.__decode4Chars c0 c1 c2 c3 in
           match result with
           | (bytes, true) -> Error "Not a valid base64 string"
-        | (bytes, false) ->
+          | (bytes, false) ->
             // Prepend bytes to accumulator (in reverse order since we'll reverse at end)
             let newAcc = Stdlib.Base64.__prependReversed bytes acc in
             Stdlib.Base64.__decodeHelper s (index + 4L) len newAcc

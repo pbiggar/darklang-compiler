@@ -77,7 +77,9 @@ let __insertEntry<'k, 'v> (entry: (k * v)) (sorted: List<(k * v)>) : List<(k * v
     match sorted with
     | [] -> [entry]
     | head :: tail ->
-        if __compare<k> (entry.0) (head.0) < 0L then Stdlib.List.push sorted entry
+        let (entryKey, _) = entry in
+        let (headKey, _) = head in
+        if __compare<k> entryKey headKey < 0L then Stdlib.List.push sorted entry
         else Stdlib.List.push (Stdlib.Dict.__insertEntry<k, v> entry tail) head
 
 let __sortEntries<'k, 'v> (entries: List<(k * v)>) (sorted: List<(k * v)>) : List<(k * v)> =
@@ -91,7 +93,7 @@ let toList<'k, 'v> (dict: Dict<k, v>) : List<(k * v)> =
 let __keysFromEntries<'k, 'v> (entries: List<(k * v)>) : List<k> =
     match entries with
     | [] -> []
-    | head :: tail -> Stdlib.List.push (Stdlib.Dict.__keysFromEntries<k, v> tail) (head.0)
+    | (key, _) :: tail -> Stdlib.List.push (Stdlib.Dict.__keysFromEntries<k, v> tail) key
 
 let keys<'k, 'v> (dict: Dict<k, v>) : List<k> =
     Stdlib.Dict.__keysFromEntries<k, v> (Stdlib.Dict.toList<k, v> dict)
@@ -99,7 +101,7 @@ let keys<'k, 'v> (dict: Dict<k, v>) : List<k> =
 let __valuesFromEntries<'k, 'v> (entries: List<(k * v)>) : List<v> =
     match entries with
     | [] -> []
-    | head :: tail -> Stdlib.List.push (Stdlib.Dict.__valuesFromEntries<k, v> tail) (head.1)
+    | (_, value) :: tail -> Stdlib.List.push (Stdlib.Dict.__valuesFromEntries<k, v> tail) value
 
 let values<'k, 'v> (dict: Dict<k, v>) : List<v> =
     Stdlib.Dict.__valuesFromEntries<k, v> (Stdlib.Dict.toList<k, v> dict)
@@ -107,8 +109,8 @@ let values<'k, 'v> (dict: Dict<k, v>) : List<v> =
 let __fromListOverwritingPublic<'k, 'v> (entries: List<(k * v)>) (dict: Dict<k, v>) : Dict<k, v> =
     match entries with
     | [] -> dict
-    | head :: tail ->
-        Stdlib.Dict.__fromListOverwritingPublic<k, v> tail (Stdlib.Dict.__setOverwriting dict (head.0) (head.1))
+    | (key, value) :: tail ->
+        Stdlib.Dict.__fromListOverwritingPublic<k, v> tail (Stdlib.Dict.__setOverwriting dict key value)
 
 let fromListOverwritingDuplicates<'k, 'v> (entries: List<(k * v)>) : Dict<k, v> =
     Stdlib.Dict.__fromListOverwritingPublic<k, v> entries (Stdlib.Dict.__empty<k, v> ())
@@ -116,10 +118,10 @@ let fromListOverwritingDuplicates<'k, 'v> (entries: List<(k * v)>) : Dict<k, v> 
 let __fromListRejecting<'k, 'v> (entries: List<(k * v)>) (dict: Dict<k, v>) : Stdlib.Option.Option<Dict<k, v>> =
     match entries with
     | [] -> Some dict
-    | head :: tail ->
-        if Stdlib.Dict.__contains dict (head.0) then None
+    | (key, value) :: tail ->
+        if Stdlib.Dict.__contains dict key then None
         else
-            Stdlib.Dict.__fromListRejecting<k, v> tail (Stdlib.Dict.__setOverwriting dict (head.0) (head.1))
+            Stdlib.Dict.__fromListRejecting<k, v> tail (Stdlib.Dict.__setOverwriting dict key value)
 
 let fromList<'k, 'v> (entries: List<(k * v)>) : Stdlib.Option.Option<Dict<k, v>> =
     Stdlib.Dict.__fromListRejecting<k, v> entries (Stdlib.Dict.__empty<k, v> ())
@@ -130,8 +132,8 @@ let member<'k, 'v> (dict: Dict<k, v>) (key: k) : Bool =
 let __mergeEntries<'k, 'v> (entries: List<(k * v)>) (result: Dict<k, v>) : Dict<k, v> =
     match entries with
     | [] -> result
-    | head :: tail ->
-        Stdlib.Dict.__mergeEntries<k, v> tail (Stdlib.Dict.__setOverwriting result (head.0) (head.1))
+    | (key, value) :: tail ->
+        Stdlib.Dict.__mergeEntries<k, v> tail (Stdlib.Dict.__setOverwriting result key value)
 
 let merge<'k, 'v> (left: Dict<k, v>) (right: Dict<k, v>) : Dict<k, v> =
     Stdlib.Dict.__mergeEntries<k, v> (Stdlib.Dict.toList<k, v> right) left
@@ -139,8 +141,8 @@ let merge<'k, 'v> (left: Dict<k, v>) (right: Dict<k, v>) : Dict<k, v> =
 let __mapEntries<'k, 'a, 'b> (entries: List<(k * a)>) (fn: k -> a -> b) (result: Dict<k, b>) : Dict<k, b> =
     match entries with
     | [] -> result
-    | head :: tail ->
-        Stdlib.Dict.__mapEntries<k, a, b> tail fn (Stdlib.Dict.__setOverwriting result (head.0) (fn (head.0)(head.1)))
+    | (key, value) :: tail ->
+        Stdlib.Dict.__mapEntries<k, a, b> tail fn (Stdlib.Dict.__setOverwriting result key (fn key value))
 
 let map<'k, 'a, 'b> (dict: Dict<k, a>) (fn: k -> a -> b) : Dict<k, b> =
     Stdlib.Dict.__mapEntries<k, a, b> (Stdlib.Dict.toList<k, a> dict) fn (Stdlib.Dict.__empty<k, b> ())
@@ -148,8 +150,8 @@ let map<'k, 'a, 'b> (dict: Dict<k, a>) (fn: k -> a -> b) : Dict<k, b> =
 let __iterEntries<'k, 'a> (entries: List<(k * a)>) (fn: k -> a -> Unit) : Unit =
     match entries with
     | [] -> ()
-    | head :: tail ->
-        let _ = fn (head.0)(head.1) in
+    | (key, value) :: tail ->
+        let _ = fn key value in
         Stdlib.Dict.__iterEntries<k, a> tail fn
 
 let iter<'k, 'a> (dict: Dict<k, a>) (fn: k -> a -> Unit) : Unit =
@@ -158,9 +160,9 @@ let iter<'k, 'a> (dict: Dict<k, a>) (fn: k -> a -> Unit) : Unit =
 let __filterEntries<'k, 'a> (entries: List<(k * a)>) (fn: k -> a -> Bool) (result: Dict<k, a>) : Dict<k, a> =
     match entries with
     | [] -> result
-    | head :: tail ->
+    | (key, value) :: tail ->
         let next =
-            if fn (head.0)(head.1) then Stdlib.Dict.__setOverwriting result (head.0) (head.1)
+            if fn key value then Stdlib.Dict.__setOverwriting result key value
             else result in
         Stdlib.Dict.__filterEntries<k, a> tail fn next
 
@@ -170,11 +172,11 @@ let filter<'k, 'a> (dict: Dict<k, a>) (fn: k -> a -> Bool) : Dict<k, a> =
 let __filterMapEntries<'k, 'a, 'b> (entries: List<(k * a)>) (fn: k -> a -> Stdlib.Option.Option<b>) (result: Dict<k, b>) : Dict<k, b> =
     match entries with
     | [] -> result
-    | head :: tail ->
+    | (key, originalValue) :: tail ->
         let next =
-            match fn (head.0)(head.1) with
+            match fn key originalValue with
             | None -> result
-            | Some value -> Stdlib.Dict.__setOverwriting result (head.0) value in
+            | Some value -> Stdlib.Dict.__setOverwriting result key value in
         Stdlib.Dict.__filterMapEntries<k, a, b> tail fn next
 
 let filterMap<'k, 'a, 'b> (dict: Dict<k, a>) (fn: k -> a -> Stdlib.Option.Option<b>) : Dict<k, b> =

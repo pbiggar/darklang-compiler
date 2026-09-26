@@ -477,13 +477,13 @@ let __utf16LengthToByte (value: String) (index: Int64) (end_: Int64) (total: Int
         if Stdlib.Int64.bitwiseAnd word (-9187201950435737472L) == 0L then
             Stdlib.String.__utf16LengthToByte value (index + 8L) end_ (total + 8L)
         else
-            let decoded = Stdlib.String.__decodeUtf8At value index in
-            let width = if decoded.0 <= 65535L then 1L else 2L in
-            Stdlib.String.__utf16LengthToByte value (index + decoded.1) end_ (total + width)
+            let (codepoint, byteWidth) = Stdlib.String.__decodeUtf8At value index in
+            let width = if codepoint <= 65535L then 1L else 2L in
+            Stdlib.String.__utf16LengthToByte value (index + byteWidth) end_ (total + width)
     else
-        let decoded = Stdlib.String.__decodeUtf8At value index in
-        let width = if decoded.0 <= 65535L then 1L else 2L in
-        Stdlib.String.__utf16LengthToByte value (index + decoded.1) end_ (total + width)
+        let (codepoint, byteWidth) = Stdlib.String.__decodeUtf8At value index in
+        let width = if codepoint <= 65535L then 1L else 2L in
+        Stdlib.String.__utf16LengthToByte value (index + byteWidth) end_ (total + width)
 
 let __utf16IndexAtByte (value: String) (byteIndex: Int64) : Int =
     Stdlib.Int.fromInt64 (Stdlib.String.__utf16LengthToByte value 0L byteIndex 0L)
