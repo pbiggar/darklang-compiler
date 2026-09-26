@@ -27,7 +27,6 @@ let private binding name =
     name |> Seq.fold (fun hash ch -> (hash * 31) + int ch) 17 |> AST.bindingId
 
 let private parameter name value : HIR.Parameter = {
-    Name = name
     Binding = binding name
     Value = value
 }

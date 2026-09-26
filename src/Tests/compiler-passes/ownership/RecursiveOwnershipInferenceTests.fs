@@ -56,7 +56,7 @@ let private block parameters operations result : Block<TestLeaf, string> = {
 }
 
 let private parameter name value : HIR.Parameter =
-    { Name = name; Binding = binding name; Value = value }
+    { Binding = binding name; Value = value }
 
 let private functionDefinition name ownership body : Function<TestLeaf, string> = {
     Definition = { Id = TestIds.functionIdForName name; Name = name; Body = body }

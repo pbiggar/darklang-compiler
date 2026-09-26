@@ -40,11 +40,9 @@ type Operation<'leaf, 'block> =
     | Call of FunctionCall
     | Branch of result: Value * condition: Operand * ifTrue: 'block * ifFalse: 'block
 
-/// Parameters retain source names for operand resolution and declaration order
-/// for function-call signature alignment. Value identities remain the semantic
-/// authority after construction.
+/// Parameter bindings identify operands; declaration order aligns function-call
+/// arguments with the signature. Values carry the normalized identity.
 type Parameter = {
-    Name: string
     Binding: AST.BindingId
     Value: Value
 }

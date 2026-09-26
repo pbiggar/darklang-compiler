@@ -13,7 +13,7 @@ let private scalar id : HIR.Value = { Id = HIR.ValueId id; Type = AST.TUnit }
 let private unitValue = scalar 99
 let private parameter (value: HIR.Value) : HIR.Parameter =
     let (HIR.ValueId id) = value.Id
-    { Name = $"v{id}"; Binding = AST.bindingId id; Value = value }
+    { Binding = AST.bindingId id; Value = value }
 let private block parameters operations result : Block<Leaf, HIR.ValueId> = {
     Body = { Parameters = parameters; Operations = operations; Result = result }
 }
