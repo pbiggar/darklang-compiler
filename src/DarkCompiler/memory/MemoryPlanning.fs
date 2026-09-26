@@ -247,6 +247,7 @@ let rcShapeOfTypeWithSums
                         | [(_, Some payload)] when List.isEmpty sumInfo.TypeParams ->
                             match applyRcShapeTypeSubstitution subst payload with
                             | AST.TInt64 -> Some Immediate
+                            | AST.TUInt64 -> Some Immediate
                             | AST.TBool -> Some Immediate
                             | AST.TString -> Some DynamicString
                             | _ -> None

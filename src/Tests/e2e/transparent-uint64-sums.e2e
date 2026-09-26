@@ -1,0 +1,6 @@
+// Single-case UInt64 wrappers retain nominal construction and matching.
+type CountWrap = CountWrap of UInt64
+let unwrapCount (value: CountWrap): UInt64 = match value with | CountWrap inner -> inner
+unwrapCount (CountWrap 42UL) = 42UL
+match CountWrap 18446744073709551615UL with | CountWrap 18446744073709551615UL -> true | _ -> false = true
+CountWrap 42UL == CountWrap 42UL = true

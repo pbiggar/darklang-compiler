@@ -1,0 +1,16 @@
+---NAME---
+single-case UInt64 wrapper has direct small word
+---INPUT---
+type CountWrap = CountWrap of UInt64
+CountWrap 42UL
+---EXPECTED---
+root = word(42)
+
+---NAME---
+single-case UInt64 wrapper preserves all bits across a call
+---INPUT---
+type CountWrap = CountWrap of UInt64
+let makeCount (value: UInt64): CountWrap = CountWrap value
+makeCount 18446744073709551615UL
+---EXPECTED---
+root = word(-1)

@@ -1287,6 +1287,7 @@ let selectInstr
                     if List.isEmpty typeVariants.TypeParams then
                         match substitutedVariants with
                         | [(_, _, Some AST.TInt64)] -> Some AST.TInt64
+                        | [(_, _, Some AST.TUInt64)] -> Some AST.TUInt64
                         | [(_, _, Some AST.TBool)] -> Some AST.TBool
                         | [(_, _, Some AST.TString)] -> Some AST.TString
                         | _ -> None
