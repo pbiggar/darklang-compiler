@@ -44,7 +44,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
         | Some typ -> Ok typ
         | None -> Error "Cannot infer type: undefined local binding identity"
     | CheckedAST.DictLiteral (keyType, valueType, _) ->
-        Ok (AST.TDict (keyType, valueType))
+        Ok (AST.TDict (CheckedAST.semanticType keyType, CheckedAST.semanticType valueType))
     | CheckedAST.RecordLiteral (reference, fields) ->
         match tryFindRecordTypeNameById reference.TypeId typeNames with
         | None -> Error "Unknown semantic record type"
@@ -176,7 +176,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                 |> List.fold (fun current (name, bindingType) -> Map.add name bindingType current) typeEnv
             inferTypeCore sumTypeNames typeNames body typeEnv' typeReg variantLookup funcReg functionNames moduleRegistry)
     | CheckedAST.RecursiveLet (recursion, value, body) ->
-        let valueTypeResult = Ok recursion.MonomorphicType
+        let valueTypeResult = Ok (CheckedAST.recursiveMemberType recursion)
         valueTypeResult
         |> Result.bind (fun valueType ->
             inferTypeCore sumTypeNames

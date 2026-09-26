@@ -45,6 +45,16 @@ let semanticType (CheckedType typ) = typ
 
 let semanticTypeArgs args = List.map semanticType args
 
+type RecursiveMember = {
+    Resolved: AST.ResolvedRecursiveMember
+    MonomorphicType: CheckedType
+}
+
+let recursiveMemberType memberInfo = semanticType memberInfo.MonomorphicType
+
+let semanticRecursiveMember memberInfo : AST.TypedRecursiveMember =
+    { Resolved = memberInfo.Resolved; MonomorphicType = recursiveMemberType memberInfo }
+
 type Pattern =
     | PUnit
     | PWildcard
@@ -172,7 +182,7 @@ and Expr =
     | BinOp of AST.BinOp * Expr * Expr
     | UnaryOp of AST.UnaryOp * Expr
     | Let of pattern:LetPattern * value:Expr * body:Expr
-    | RecursiveLet of recursion:AST.TypedRecursiveMember * value:Expr * body:Expr
+    | RecursiveLet of recursion:RecursiveMember * value:Expr * body:Expr
     | Local of AST.BindingId
     | If of cond:Expr * thenBranch:Expr * elseBranch:Expr
     | Sequence of first:Expr * next:Expr
@@ -180,7 +190,7 @@ and Expr =
     | TypeApp of functionId:AST.FunctionId * typeArgs:CheckedType list * args:AST.NonEmptyList<Expr>
     | TupleLiteral of TupleElements<Expr>
     | TupleAccess of tuple:Expr * index:int
-    | DictLiteral of keyType:AST.SemanticType * valueType:AST.SemanticType * entries:(Expr * Expr) list
+    | DictLiteral of keyType:CheckedType * valueType:CheckedType * entries:(Expr * Expr) list
     | RecordLiteral of reference:RecordReference * fields:RecordFields<Expr>
     | RecordUpdate of record:Expr * updates:(AST.FieldId * Expr) list
     | RecordAccess of record:Expr * field:AST.FieldId
@@ -208,7 +218,7 @@ type FunctionDef = {
     Params: AST.NonEmptyList<AST.BindingId * CheckedType>
     ReturnType: CheckedType
     Body: Expr
-    Recursion: AST.TypedRecursiveMember option
+    Recursion: RecursiveMember option
 }
 
 let functionParameterTypes (definition: FunctionDef) =
@@ -221,7 +231,7 @@ let functionReturnType (definition: FunctionDef) =
 type ValueDef = {
     Id: AST.BindingId
     Name: string
-    Type: AST.SemanticType
+    Type: CheckedType
     Body: Expr
 }
 
@@ -476,7 +486,7 @@ let valueDefBody (valueDef: ValueDef) : Expr = valueDef.Body
 let programValues (Program (_, topLevels)) : Map<string, AST.SemanticType * Expr> =
     topLevels
     |> List.choose (function
-        | ValueDef valueDef -> Some (valueDef.Name, (valueDef.Type, valueDef.Body))
+        | ValueDef valueDef -> Some (valueDef.Name, (semanticType valueDef.Type, valueDef.Body))
         | _ -> None)
     |> Map.ofList
 
@@ -499,14 +509,14 @@ let rec patternBindings pattern : AST.BindingId list =
     | PUInt32Literal _ | PUInt64Literal _ | PUInt128Literal _ | PBool _
     | PString _ | PChar _ | PFloat _ -> []
 
-let recursiveBindingName (memberInfo: AST.TypedRecursiveMember) : string =
+let recursiveBindingName (memberInfo: RecursiveMember) : string =
     memberInfo.Resolved.Parsed.SourceName
 
-let recursiveBindingId (memberInfo: AST.TypedRecursiveMember) : AST.BindingId =
+let recursiveBindingId (memberInfo: RecursiveMember) : AST.BindingId =
     memberInfo.Resolved.Parsed.Binding
 
 let recursiveBindingAvailability
-    (memberInfo: AST.TypedRecursiveMember)
+    (memberInfo: RecursiveMember)
     : AST.RecursiveAvailability =
     memberInfo.Resolved.Availability
 
@@ -539,6 +549,9 @@ let rec normalizeInferenceType (typ: AST.SemanticType) : AST.SemanticType =
     | AST.TUnit | AST.TNever | AST.TInternalRawPtr -> typ
 
 let checkedType typ = CheckedType (normalizeInferenceType typ)
+
+let checkedRecursiveMember (memberInfo: AST.TypedRecursiveMember) : RecursiveMember =
+    { Resolved = memberInfo.Resolved; MonomorphicType = checkedType memberInfo.MonomorphicType }
 
 let checkedTypeArgs args = List.map checkedType args
 
@@ -742,7 +755,7 @@ let rec private convertExpr recordFieldCounts location environment symbols expr 
             |> Result.bind (fun (value', afterValue) ->
                 convertExpr recordFieldCounts location bodyEnvironment afterValue body
                 |> Result.map (fun (body', following) ->
-                    let typed = { typed with MonomorphicType = normalizeInferenceType typed.MonomorphicType }
+                    let typed = checkedRecursiveMember typed
                     (RecursiveLet (typed, value', body'), following)))
         | _ -> conversionError location "recursive let has no typed recursion evidence"
     | AST.Var name ->
@@ -801,7 +814,7 @@ let rec private convertExpr recordFieldCounts location environment symbols expr 
                 convertPair key value state
                 |> Result.map (fun (key', value', next) -> ((key', value') :: converted, next)))) (Ok ([], symbols))
         |> Result.map (fun (converted, state) ->
-            (DictLiteral (normalizeInferenceType keyType, normalizeInferenceType valueType, List.rev converted), state))
+            (DictLiteral (checkedType keyType, checkedType valueType, List.rev converted), state))
     | AST.RecordLiteral (reference, fields) ->
         convertFields fields symbols
         |> Result.bind (fun (converted, state) ->
@@ -919,7 +932,7 @@ let private convertFunctionWithEnvironment
         match funcDef.Recursion with
         | None -> Ok None
         | Some (AST.TypedRecursiveBinding typed) ->
-            Ok (Some { typed with MonomorphicType = normalizeInferenceType typed.MonomorphicType })
+            Ok (Some (checkedRecursiveMember typed))
         | Some _ -> conversionError $"function '{funcDef.Name}'" "function has no typed recursion evidence"
     recursion
     |> Result.bind (fun recursion' ->
@@ -1020,7 +1033,7 @@ let ofTypedProgram
                     match Map.tryFind name valueEnvironment with
                     | Some id -> id
                     | None -> Crash.crash "Checked value identity allocation was lost"
-                (ValueDef { Id = id; Name = name; Type = normalizeInferenceType typ; Body = checkedBody }, state))
+                (ValueDef { Id = id; Name = name; Type = checkedType typ; Body = checkedBody }, state))
         | AST.ValueDef (AST.UncheckedValueDef (name, _)) ->
             conversionError $"value '{name}'" "value definition was not checked"
         | AST.Expression (_, expr) ->

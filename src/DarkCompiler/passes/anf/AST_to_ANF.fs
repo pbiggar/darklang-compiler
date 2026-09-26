@@ -255,7 +255,7 @@ let loweredRecursiveMemberRegistry
         | Some typed ->
             Some (
                 func.Id,
-                ({ Typed = typed; EnvironmentIndex = typed.Resolved.GroupIndex }
+                ({ Typed = CheckedAST.semanticRecursiveMember typed; EnvironmentIndex = typed.Resolved.GroupIndex }
                     : AST.LoweredRecursiveMember)
             )
         | _ -> None)

@@ -75,7 +75,7 @@ let collectTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : Set<
             if List.isEmpty entries then entrySpecs
             else
                 Set.add
-                    ("Darklang.Stdlib.Dict.__setOverwriting", [keyType; valueType])
+                    ("Darklang.Stdlib.Dict.__setOverwriting", CheckedAST.semanticTypeArgs [keyType; valueType])
                     entrySpecs
         | CheckedAST.RecordLiteral (_, fields) ->
             fields |> CheckedAST.recordFieldsInSourceOrder |> List.fold (fun acc (_, value) -> visit acc value) specs
@@ -316,7 +316,7 @@ let rec replaceTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : 
             |> List.fold (fun dictExpr (key, value) ->
                 CheckedAST.TypeApp (
                     resolvedFunctionId symbols "Darklang.Stdlib.Dict.__setOverwriting",
-                    CheckedAST.checkedTypeArgs [keyType; valueType],
+                    [keyType; valueType],
                     AST.NonEmptyList.fromList [dictExpr; key; value]
                 )) empty
             |> replace
@@ -535,7 +535,7 @@ let replaceTypeAppsWithRegistry
                     |> List.fold (fun dictExpr (key, value) ->
                         CheckedAST.TypeApp (
                             resolvedFunctionId symbols "Darklang.Stdlib.Dict.__setOverwriting",
-                            CheckedAST.checkedTypeArgs [keyType; valueType],
+                            [keyType; valueType],
                             AST.NonEmptyList.fromList [dictExpr; key; value]
                         )) (CheckedAST.DictLiteral (keyType, valueType, []))
                 replace lowered

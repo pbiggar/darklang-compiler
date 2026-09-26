@@ -21,7 +21,7 @@ type LiftState = {
     GenericFuncDefs: Map<AST.FunctionId, string list * AST.SemanticType>
     TypeReg: TypeRegistry
     VariantLookup: VariantLookup
-    RecursiveSelf: (AST.BindingId * AST.BindingId * AST.SemanticType * AST.TypedRecursiveMember) option
+    RecursiveSelf: (AST.BindingId * AST.BindingId * AST.SemanticType * CheckedAST.RecursiveMember) option
 }
 
 let private liftedNameExists (state: LiftState) (name: string) : bool =
@@ -355,7 +355,7 @@ let rec simpleInferType
             | None -> typeEnv
         simpleInferType body typeEnv' funcParams funcReturnTypes genericFuncDefs typeReg variantLookup typeNames
     | CheckedAST.RecursiveLet (recursion, value, body) ->
-        let valueType = Some recursion.MonomorphicType
+        let valueType = Some (CheckedAST.recursiveMemberType recursion)
         let typeEnv' =
             valueType
             |> Option.map (fun typ -> Map.add (CheckedAST.recursiveBindingId recursion) typ typeEnv)
@@ -385,7 +385,7 @@ let rec simpleInferType
         simpleInferType first typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup typeNames
         |> Option.map AST.TList
     | CheckedAST.DictLiteral (keyType, valueType, _) ->
-        Some (AST.TDict (keyType, valueType))
+        Some (AST.TDict (CheckedAST.semanticType keyType, CheckedAST.semanticType valueType))
     | CheckedAST.RecordLiteral (reference, fields) ->
         match tryFindRecordTypeNameById reference.TypeId typeNames with
         | None -> None

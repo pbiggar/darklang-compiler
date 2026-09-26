@@ -247,8 +247,8 @@ let rec applySubstToExpr (subst: Substitution) (expr: CheckedAST.Expr) : Checked
         CheckedAST.TupleAccess (applySubstToExpr subst tuple, index)
     | CheckedAST.DictLiteral (keyType, valueType, entries) ->
         CheckedAST.DictLiteral (
-            applySubstToType subst keyType,
-            applySubstToType subst valueType,
+            (keyType |> CheckedAST.semanticType |> applySubstToType subst |> CheckedAST.checkedType),
+            (valueType |> CheckedAST.semanticType |> applySubstToType subst |> CheckedAST.checkedType),
             entries
             |> List.map (fun (key, value) ->
                 (applySubstToExpr subst key, applySubstToExpr subst value))

@@ -134,7 +134,7 @@ let private importInheritedValues
                 CheckedAST.ValueDef {
                     Id = id
                     Name = name
-                    Type = artifact.Type
+                    Type = CheckedAST.checkedType artifact.Type
                     Body = artifact.Body
                 }
             let definitionTicks =
@@ -306,7 +306,7 @@ let private materializeProgramValues
                         let typ =
                             Map.tryFind dependencyId valueTypes
                             |> Option.defaultWith (fun () -> Crash.crash "Missing checked value type")
-                        (dependencyId, typ))
+                        (dependencyId, CheckedAST.semanticType typ))
                 let parameters =
                     match parameters with
                     | [] ->
@@ -319,7 +319,7 @@ let private materializeProgramValues
                     Name = helperName name
                     TypeParams = []
                     Params = CheckedAST.checkedParams parameters
-                    ReturnType = CheckedAST.checkedType typ
+                    ReturnType = typ
                     Body = body
                     Recursion = None
                 }))

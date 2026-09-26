@@ -61,7 +61,7 @@ let rec liftLambdasInExpr (expr: CheckedAST.Expr) (state: LiftState) : Result<Ch
         | AST.OrdinaryBinding ->
             liftLambdasInExpr (CheckedAST.Let (CheckedAST.LPVariable selfId, value, body)) state
         | AST.SelfRecursiveMember ->
-            let valueType = recursion.MonomorphicType
+            let valueType = CheckedAST.recursiveMemberType recursion
             let (closureId, symbols) = CheckedAST.allocateBinding "__closure" state.Symbols
             let rewrittenValue =
                 match value with

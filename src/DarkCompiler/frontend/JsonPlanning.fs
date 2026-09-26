@@ -1175,7 +1175,7 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
         |> Result.map (fun (dictDecoder, nextState) ->
             let (objectFieldsId, nextState) = freshBinding "__object_fields" nextState
             let currentEnv = { env with Symbols = nextState.Symbols }
-            let empty = DictLiteral (TString, valueType, [])
+            let empty = DictLiteral (CheckedAST.checkedType TString, CheckedAST.checkedType valueType, [])
             (matchExpr (
                 call currentEnv "Darklang.Stdlib.Json.__objectFields" [source; view],
                 [ makeCase
