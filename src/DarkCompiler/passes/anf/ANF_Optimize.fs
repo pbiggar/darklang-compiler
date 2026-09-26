@@ -99,22 +99,27 @@ let optimizeProgramWithOptionsAndExternalFunctionsWithTrace
                 planTailRecursionModuloHelpers
                     context.FunctionNames
                     activeEligible)
-        optimizedProgram
-        |> fun current ->
-            measure "ANF Optimize detail: Addition rewrite" (fun () ->
-                transformTailRecursionModuloAddition helpers current)
-        |> fun current ->
-            measure "ANF Optimize detail: Subtraction rewrite" (fun () ->
-                transformTailRecursionModuloSubtraction helpers current)
-        |> fun current ->
-            measure "ANF Optimize detail: Multiplication rewrite" (fun () ->
-                transformTailRecursionModuloMultiplication helpers current)
-        |> fun current ->
-            measure "ANF Optimize detail: Fixed constructor rewrite" (fun () ->
-                transformTailRecursionModuloFixedConstructors helpers current)
-        |> fun current ->
-            measure "ANF Optimize detail: List constructor rewrite" (fun () ->
-                transformTailRecursionModuloListConstructors context.FunctionNames helpers externalFunctions current)
+        if Map.isEmpty helpers then optimizedProgram
+        else
+            // Each rewrite can add helpers, so carry the fresh ID cursor through
+            // the ordered passes instead of rescanning every intermediate program.
+            (optimizedProgram, freshVarGenForProgram optimizedProgram)
+            |> fun (current, varGen) ->
+                measure "ANF Optimize detail: Addition rewrite" (fun () ->
+                    transformTailRecursionModuloAddition helpers varGen current)
+            |> fun (current, varGen) ->
+                measure "ANF Optimize detail: Subtraction rewrite" (fun () ->
+                    transformTailRecursionModuloSubtraction helpers varGen current)
+            |> fun (current, varGen) ->
+                measure "ANF Optimize detail: Multiplication rewrite" (fun () ->
+                    transformTailRecursionModuloMultiplication helpers varGen current)
+            |> fun (current, varGen) ->
+                measure "ANF Optimize detail: Fixed constructor rewrite" (fun () ->
+                    transformTailRecursionModuloFixedConstructors helpers varGen current)
+            |> fun (current, varGen) ->
+                measure "ANF Optimize detail: List constructor rewrite" (fun () ->
+                    transformTailRecursionModuloListConstructors helpers externalFunctions varGen current)
+            |> fst
     else
         optimizedProgram
 
