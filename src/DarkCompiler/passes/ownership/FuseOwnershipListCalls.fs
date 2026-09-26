@@ -195,11 +195,11 @@ let private eligible
         | (_, AST.TList AST.TInt64) :: _, (ConsumedCallParameter | UniqueCallParameter) :: _ -> true
         | _ :: parameters, _ :: modes -> hasConsumedListParameter parameters modes
         | _, _ -> false
-    callee.ReturnType = AST.TList AST.TInt64
+    CheckedAST.functionReturnType callee = AST.TList AST.TInt64
     && isTransformBody functionNames callee.Body
     && ownership.Result = UniqueProducedCallResult
     && hasConsumedListParameter
-        (callee.Params |> AST.NonEmptyList.toList)
+        (CheckedAST.functionParameterTypes callee |> AST.NonEmptyList.toList)
         ownership.Parameters
 
 let private ownershipBoundary boundaryId argument =
@@ -282,7 +282,7 @@ let fuse
                         match
                             substitutions
                                 boundaryId
-                                (callee.Params |> AST.NonEmptyList.toList)
+                                (CheckedAST.functionParameterTypes callee |> AST.NonEmptyList.toList)
                                 ownership.Parameters
                                 (AST.NonEmptyList.toList arguments)
                         with

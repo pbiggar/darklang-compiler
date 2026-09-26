@@ -332,8 +332,10 @@ let resolveAliasesInTypeRegistry (aliasReg: AliasRegistry) (typeReg: TypeRegistr
 let resolveAliasesInFunction (aliasReg: AliasRegistry) (funcDef: CheckedAST.FunctionDef) : CheckedAST.FunctionDef =
     let resolvedParams =
         funcDef.Params
-        |> AST.NonEmptyList.map (fun (name, typ) -> (name, resolveAliasType aliasReg typ))
-    let resolvedReturnType = resolveAliasType aliasReg funcDef.ReturnType
+        |> AST.NonEmptyList.map (fun (name, typ) ->
+            (name, CheckedAST.checkedSignatureType (resolveAliasType aliasReg (CheckedAST.signatureSemanticType typ))))
+    let resolvedReturnType =
+        CheckedAST.checkedSignatureType (resolveAliasType aliasReg (CheckedAST.functionReturnType funcDef))
     { funcDef with Params = resolvedParams; ReturnType = resolvedReturnType }
 
 /// Specialize a generic function definition with specific type arguments
@@ -354,8 +356,10 @@ let specializeFunction
     // Apply substitution to parameters, return type, and body
     let specializedParams =
         funcDef.Params
-        |> AST.NonEmptyList.map (fun (name, ty) -> (name, applySubstToType subst ty))
-    let specializedReturnType = applySubstToType subst funcDef.ReturnType
+        |> AST.NonEmptyList.map (fun (name, ty) ->
+            name, CheckedAST.checkedSignatureType (applySubstToType subst (CheckedAST.signatureSemanticType ty)))
+    let specializedReturnType =
+        CheckedAST.checkedSignatureType (applySubstToType subst (CheckedAST.functionReturnType funcDef))
     let specializedBody = applySubstToExpr subst funcDef.Body
     { Id = specializedId
       Name = specializedName

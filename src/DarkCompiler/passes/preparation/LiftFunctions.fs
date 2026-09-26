@@ -14,7 +14,7 @@ open LiftExpressions
 
 let liftLambdasInFunc (funcDef: CheckedAST.FunctionDef) (state: LiftState) : Result<CheckedAST.FunctionDef * LiftState, string> =
     // Add function parameters to the type environment
-    let paramTypes = funcDef.Params |> paramsToList |> Map.ofList
+    let paramTypes = CheckedAST.functionParameterTypes funcDef |> paramsToList |> Map.ofList
     let stateWithParams = { state with TypeEnv = Map.fold (fun acc k v -> Map.add k v acc) state.TypeEnv paramTypes }
     liftLambdasInExpr funcDef.Body stateWithParams
     |> Result.map (fun (body', state') ->
@@ -68,7 +68,8 @@ let generateFuncWrapper
             Name = wrapperName
             TypeParams = []
             Params = paramsFromList "generateFuncWrapper" (closureParam :: parameters)
-            ReturnType = returnType
+                     |> CheckedAST.checkedSignatureParams
+            ReturnType = CheckedAST.checkedSignatureType returnType
             Body = wrapperBody
             Recursion = None
         }
@@ -336,7 +337,7 @@ let rec liftLambdasInProgram
         topLevels
         |> List.choose (function
             | CheckedAST.FunctionDef f ->
-                Some (f.Id, f.Params |> paramsToList |> List.map snd)
+                Some (f.Id, CheckedAST.functionParameterTypes f |> paramsToList |> List.map snd)
             | _ -> None)
         |> Map.ofList
 
@@ -344,7 +345,7 @@ let rec liftLambdasInProgram
     let userFuncReturnTypes : Map<AST.FunctionId, AST.SemanticType> =
         topLevels
         |> List.choose (function
-            | CheckedAST.FunctionDef f -> Some (f.Id, f.ReturnType)
+            | CheckedAST.FunctionDef f -> Some (f.Id, CheckedAST.functionReturnType f)
             | _ -> None)
         |> Map.ofList
 
@@ -353,7 +354,7 @@ let rec liftLambdasInProgram
         topLevels
         |> List.choose (function
             | CheckedAST.FunctionDef f when not (List.isEmpty f.TypeParams) ->
-                Some (f.Id, (f.TypeParams, f.ReturnType))
+                Some (f.Id, (f.TypeParams, CheckedAST.functionReturnType f))
             | _ -> None)
         |> Map.ofList
 
@@ -367,7 +368,7 @@ let rec liftLambdasInProgram
         topLevels
         |> List.choose (function
             | CheckedAST.FunctionDef funcDef when containsIndirectApply funcDef.Body ->
-                funcDef.Params
+                CheckedAST.functionParameterTypes funcDef
                 |> paramsToList
                 |> List.tryPick (fun (_, typ) ->
                     match typ with
@@ -379,7 +380,7 @@ let rec liftLambdasInProgram
     let escapingFunctionParams =
         topLevels
         |> List.choose (function
-            | CheckedAST.FunctionDef funcDef -> Some funcDef.ReturnType
+            | CheckedAST.FunctionDef funcDef -> Some (CheckedAST.functionReturnType funcDef)
             | _ -> None)
         |> List.map (collectEscapingFunctionParams canonicalMergedTypeReg mergedVariantLookup)
         |> List.fold Set.union Set.empty

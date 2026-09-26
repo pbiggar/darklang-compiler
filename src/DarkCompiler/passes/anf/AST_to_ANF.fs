@@ -98,7 +98,7 @@ let private convertFunctionWithSumTypeNames
             "AST -> ANF detail: Function parameter setup"
             (fun () ->
                 let loweredParams =
-                    paramsToList funcDef.Params
+                    paramsToList (CheckedAST.functionParameterTypes funcDef)
                     |> normalizeSyntheticNullaryParams symbols
 
                 // Allocate TempIds for parameters, bundled with their types
@@ -153,7 +153,7 @@ let private convertFunctionWithSumTypeNames
         ({ Id = funcDef.Id
            Name = funcDef.Name
            TypedParams = typedParams
-           ReturnType = funcDef.ReturnType
+           ReturnType = CheckedAST.functionReturnType funcDef
            ReturnOwnership = ANF.OwnedReturn
            Body = body }, varGen2))
 
@@ -378,8 +378,8 @@ let private buildRegistriesInternal
     let funcReg : FunctionRegistry =
         functions
         |> List.map (fun f ->
-            let paramTypes = f.Params |> paramsToList |> normalizeSyntheticNullaryParams symbols |> List.map snd
-            let funcType = AST.TFunction (paramTypes, f.ReturnType)
+            let paramTypes = CheckedAST.functionParameterTypes f |> paramsToList |> normalizeSyntheticNullaryParams symbols |> List.map snd
+            let funcType = AST.TFunction (paramTypes, CheckedAST.functionReturnType f)
             (f.Id, (f.Name, funcType)))
         |> Map.ofList
 
@@ -415,7 +415,7 @@ let private buildRegistriesInternal
         functions
         |> List.map (fun f ->
             let parameters =
-                paramsToList f.Params
+                paramsToList (CheckedAST.functionParameterTypes f)
                 |> List.mapi (fun index (id, typ) ->
                     match CheckedAST.bindingName id symbols with
                     | Some name -> (name, typ)

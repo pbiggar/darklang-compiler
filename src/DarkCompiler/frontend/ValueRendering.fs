@@ -166,8 +166,8 @@ let rec private ensureRenderer
             Id = functionId
             Name = name
             TypeParams = []
-            Params = NonEmptyList.singleton (valueId, typ)
-            ReturnType = TString
+            Params = NonEmptyList.singleton (valueId, checkedSignatureType typ)
+            ReturnType = checkedSignatureType TString
             Body = StringLiteral ""
             Recursion = None
         }
@@ -217,8 +217,8 @@ and private ensureListItemsRenderer
             Id = functionId
             Name = name
             TypeParams = []
-            Params = NonEmptyList.singleton (itemsId, listType)
-            ReturnType = TString
+            Params = NonEmptyList.singleton (itemsId, checkedSignatureType listType)
+            ReturnType = checkedSignatureType TString
             Body = StringLiteral ""
             Recursion = None
         }
@@ -262,8 +262,8 @@ and private ensureDictItemsRenderer
             Id = functionId
             Name = name
             TypeParams = []
-            Params = NonEmptyList.singleton (entriesId, listType)
-            ReturnType = TString
+            Params = NonEmptyList.singleton (entriesId, checkedSignatureType listType)
+            ReturnType = checkedSignatureType TString
             Body = StringLiteral ""
             Recursion = None
         }

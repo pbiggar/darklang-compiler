@@ -903,7 +903,7 @@ let programNeedsLambdaLowering (knownFuncNames: Set<string>) (program: CheckedAS
         | tl :: rest ->
             match tl with
             | CheckedAST.FunctionDef f ->
-                let paramNames = f.Params |> paramsToList |> List.map fst |> Set.ofList
+                let paramNames = CheckedAST.functionParameterTypes f |> paramsToList |> List.map fst |> Set.ofList
                 if exprNeedsLambdaLowering paramNames f.Body then true else loop rest
             | CheckedAST.Expression e ->
                 if exprNeedsLambdaLowering Set.empty e then true else loop rest

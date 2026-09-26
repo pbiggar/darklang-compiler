@@ -431,8 +431,8 @@ let rec private ensureSerializer (env: Env) typ state : Result<string * State, s
             Id = functionId
             Name = name
             TypeParams = []
-            Params = args [(writerId, writerType); (valueId, typ)]
-            ReturnType = writerType
+            Params = checkedSignatureParams (args [(writerId, writerType); (valueId, typ)])
+            ReturnType = checkedSignatureType writerType
             Body = Local writerId
             Recursion = None
         }
@@ -477,11 +477,11 @@ and private ensureListSerializer env elemType state =
             Name = name
             TypeParams = []
             Params =
-                args
+                checkedSignatureParams (args
                     [(binding "__items", typ)
                      (binding "__writer", writerType)
-                     (binding "__first", TBool)]
-            ReturnType = writerType
+                     (binding "__first", TBool)])
+            ReturnType = checkedSignatureType writerType
             Body = local "__writer" bindings
             Recursion = None
         }
@@ -522,11 +522,11 @@ and private ensureDictSerializer env valueType state =
             Name = name
             TypeParams = []
             Params =
-                args
+                checkedSignatureParams (args
                     [(binding "__entries", listType)
                      (binding "__writer", writerType)
-                     (binding "__first", TBool)]
-            ReturnType = writerType
+                     (binding "__first", TBool)])
+            ReturnType = checkedSignatureType writerType
             Body = local "__writer" bindings
             Recursion = None
         }
@@ -713,11 +713,11 @@ let rec private ensureDecoder (env: Env) typ state : Result<string * State, stri
             Name = name
             TypeParams = []
             Params =
-                NonEmptyList.fromList
+                checkedSignatureParams (NonEmptyList.fromList
                     [binding "__source", TString
                      binding "__view", valueViewType
-                     binding "__path", pathType]
-            ReturnType = resultType typ
+                     binding "__path", pathType])
+            ReturnType = checkedSignatureType (resultType typ)
             Body = RuntimeError "unfinished JSON decoder"
             Recursion = None
         }
@@ -776,13 +776,13 @@ and private ensureListDecoder env elemType state =
             Name = name
             TypeParams = []
             Params =
-                NonEmptyList.fromList
+                checkedSignatureParams (NonEmptyList.fromList
                     [binding "__source", TString
                      binding "__array_view", valueViewType
                      binding "__next_index", TInt64
                      binding "__path", pathType
-                     binding "__index", TInt64]
-            ReturnType = resultType listType
+                     binding "__index", TInt64])
+            ReturnType = checkedSignatureType (resultType listType)
             Body = RuntimeError "unfinished JSON list decoder"
             Recursion = None
         }
@@ -868,12 +868,12 @@ and private ensureDictDecoder env valueType state =
             Name = name
             TypeParams = []
             Params =
-                NonEmptyList.fromList
+                checkedSignatureParams (NonEmptyList.fromList
                     [binding "__source", TString
                      binding "__fields", viewFieldsType
                      binding "__path", pathType
-                     binding "__dict", dictType]
-            ReturnType = resultType dictType
+                     binding "__dict", dictType])
+            ReturnType = checkedSignatureType (resultType dictType)
             Body = RuntimeError "unfinished JSON dictionary decoder"
             Recursion = None
         }

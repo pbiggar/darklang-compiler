@@ -208,7 +208,8 @@ let internal makeClosureComparator
                     (leftId, runtimeClosureType)
                     (rightId, runtimeClosureType)
                 ]
-        ReturnType = AST.TBool
+            |> CheckedAST.checkedSignatureParams
+        ReturnType = CheckedAST.checkedSignatureType AST.TBool
         Body = body
         Recursion = None
      }, symbols)

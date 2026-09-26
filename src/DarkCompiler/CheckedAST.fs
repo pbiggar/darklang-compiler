@@ -36,6 +36,13 @@ let tupleElementsOfList elements =
 let mapTupleElements f tuple =
     { First = f tuple.First; Second = f tuple.Second; Rest = List.map f tuple.Rest }
 
+/// A function signature that has crossed the checking boundary cannot retain
+/// a call-local inference identity. Nominal and internal signature types are
+/// preserved for specialization and privileged runtime helpers.
+type CheckedSignatureType = private CheckedSignatureType of AST.SemanticType
+
+let signatureSemanticType (CheckedSignatureType typ) = typ
+
 type Pattern =
     | PUnit
     | PWildcard
@@ -196,11 +203,18 @@ type FunctionDef = {
     Id: AST.FunctionId
     Name: string
     TypeParams: string list
-    Params: AST.NonEmptyList<AST.BindingId * AST.SemanticType>
-    ReturnType: AST.SemanticType
+    Params: AST.NonEmptyList<AST.BindingId * CheckedSignatureType>
+    ReturnType: CheckedSignatureType
     Body: Expr
     Recursion: AST.TypedRecursiveMember option
 }
+
+let functionParameterTypes (definition: FunctionDef) =
+    definition.Params
+    |> AST.NonEmptyList.map (fun (id, typ) -> id, signatureSemanticType typ)
+
+let functionReturnType (definition: FunctionDef) =
+    signatureSemanticType definition.ReturnType
 
 type ValueDef = {
     Id: AST.BindingId
@@ -521,6 +535,11 @@ let rec normalizeInferenceType (typ: AST.SemanticType) : AST.SemanticType =
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
     | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob | AST.TChar | AST.TDateTime
     | AST.TUnit | AST.TNever | AST.TInternalRawPtr -> typ
+
+let checkedSignatureType typ = CheckedSignatureType (normalizeInferenceType typ)
+
+let checkedSignatureParams parameters =
+    AST.NonEmptyList.map (fun (id, typ) -> id, checkedSignatureType typ) parameters
 
 let private convertRecordReference
     (reference: AST.RecordReference)
@@ -909,7 +928,7 @@ let private convertFunctionWithEnvironment
         |> AST.NonEmptyList.toList
         |> List.mapFold (fun currentSymbols (name, typ) ->
             let (id, next) = allocateBinding name currentSymbols
-            ((id, normalizeInferenceType typ), next)) symbols
+            ((id, checkedSignatureType typ), next)) symbols
         |> fun (parameters, afterParameters) ->
             let environment =
                 List.zip (funcDef.Params |> AST.NonEmptyList.toList |> List.map fst) (parameters |> List.map fst)
@@ -920,7 +939,7 @@ let private convertFunctionWithEnvironment
                    Name = funcDef.Name
                    TypeParams = funcDef.TypeParams
                    Params = AST.NonEmptyList.fromList parameters
-                   ReturnType = normalizeInferenceType funcDef.ReturnType
+                   ReturnType = checkedSignatureType funcDef.ReturnType
                    Body = body
                    Recursion = recursion' },
                  following)))

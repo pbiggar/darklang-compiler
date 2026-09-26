@@ -100,10 +100,10 @@ let verificationDialect (calls: CallContracts) : VerifyHIR.Dialect<Primitive, Bl
 
 let private signatureOfCheckedFunction (definition: CheckedAST.FunctionDef) : HIR.FunctionSignature = {
     Parameters =
-        definition.Params
+        CheckedAST.functionParameterTypes definition
         |> AST.NonEmptyList.toList
         |> List.map snd
-    Result = definition.ReturnType
+    Result = CheckedAST.functionReturnType definition
 }
 
 let private constructWithSignatures
@@ -115,7 +115,7 @@ let private constructWithSignatures
     (definition: CheckedAST.FunctionDef)
     : Result<HIR.Function<Block>, ConstructionError> =
     let parameterValues, nextId =
-        definition.Params
+        CheckedAST.functionParameterTypes definition
         |> AST.NonEmptyList.toList
         |> List.mapFold (fun nextId (binding, typ) ->
             let parameter = {
@@ -336,7 +336,7 @@ let private constructWithSignatures
         Operations = []
         NextId = nextId
     }
-    normalize initial definition.ReturnType definition.Body
+    normalize initial (CheckedAST.functionReturnType definition) definition.Body
     |> Result.map (fun (result, finalState) ->
         {
             Id = definition.Id
@@ -387,7 +387,7 @@ let constructFunctionsWithOpaqueFallback functionNames infer dependencies calls 
         | None -> calls.ExternalSignature target
     let opaque (definition: CheckedAST.FunctionDef) =
         let parameters =
-            definition.Params
+            CheckedAST.functionParameterTypes definition
             |> AST.NonEmptyList.toList
             |> List.mapi (fun index (binding, typ) -> {
                 Name = string binding
@@ -403,7 +403,7 @@ let constructFunctionsWithOpaqueFallback functionNames infer dependencies calls 
             |> Map.ofList
         let result = {
             Id = HIR.ValueId (List.length parameters)
-            Type = definition.ReturnType
+            Type = CheckedAST.functionReturnType definition
         }
         {
             Id = definition.Id
@@ -412,7 +412,7 @@ let constructFunctionsWithOpaqueFallback functionNames infer dependencies calls 
                 Parameters = parameters
                 Operations = [HIR.ScalarBinding (result, {
                     Expression = definition.Body
-                    Type = definition.ReturnType
+                    Type = CheckedAST.functionReturnType definition
                     Inputs = inputs
                 })]
                 Result = result

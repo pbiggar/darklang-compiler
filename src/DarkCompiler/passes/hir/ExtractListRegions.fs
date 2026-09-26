@@ -81,10 +81,10 @@ let scopeContracts infer (functions: CheckedAST.FunctionDef list) =
         | CheckedAST.UnaryOp (_, value) | CheckedAST.TupleAccess (value, _) -> calls value
         | _ -> Set.empty
     functions |> List.map (fun func ->
-        let parameters = AST.NonEmptyList.toList func.Params
+        let parameters = AST.NonEmptyList.toList (CheckedAST.functionParameterTypes func)
         let types = Map.ofList parameters
         let localInert =
-            DestructionAnalysis.hasInertDestruction func.ReturnType
+            DestructionAnalysis.hasInertDestruction (CheckedAST.functionReturnType func)
             && List.forall (snd >> DestructionAnalysis.hasInertDestruction) parameters
             && inertExpression infer (fun _ -> true) types func.Body
         func.Id,

@@ -25,8 +25,8 @@ let testPreservesTypeVarsInSpecialization () : TestResult =
         { Id = id
           Name = "id"
           TypeParams = ["t"]
-          Params = NonEmptyList.singleton (xId, TVar "t")
-          ReturnType = TVar "t"
+          Params = NonEmptyList.singleton (xId, TVar "t") |> CheckedAST.checkedSignatureParams
+          ReturnType = CheckedAST.checkedSignatureType (TVar "t")
           Body = CheckedAST.Local xId
           Recursion = None }
 
@@ -78,8 +78,8 @@ let testSpecializeFromSpecs () : TestResult =
         { Id = id
           Name = "id"
           TypeParams = ["t"]
-          Params = NonEmptyList.singleton (xId, TVar "t")
-          ReturnType = TVar "t"
+          Params = NonEmptyList.singleton (xId, TVar "t") |> CheckedAST.checkedSignatureParams
+          ReturnType = CheckedAST.checkedSignatureType (TVar "t")
           Body = CheckedAST.Local xId
           Recursion = None }
 

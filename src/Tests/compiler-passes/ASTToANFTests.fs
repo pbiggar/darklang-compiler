@@ -239,8 +239,8 @@ let testSyntheticUnitParamLowersFunctionToZeroParams () : TestResult =
         Id = TestIds.functionIdForName "syntheticNullary"
         Name = "syntheticNullary"
         TypeParams = []
-        Params = AST.NonEmptyList.singleton (unitId, AST.TUnit)
-        ReturnType = AST.TInt64
+        Params = AST.NonEmptyList.singleton (unitId, CheckedAST.checkedSignatureType AST.TUnit)
+        ReturnType = CheckedAST.checkedSignatureType AST.TInt64
         Body = CheckedAST.Int64Literal 1L
         Recursion = None
     }
@@ -283,8 +283,8 @@ let testOverlayFunctionIdsContainOnlyLocalDefinitions () : TestResult =
         Id = baseId
         Name = "Test.baseFunction"
         TypeParams = []
-        Params = AST.NonEmptyList.singleton (baseParam, AST.TInt64)
-        ReturnType = AST.TInt64
+        Params = AST.NonEmptyList.singleton (baseParam, CheckedAST.checkedSignatureType AST.TInt64)
+        ReturnType = CheckedAST.checkedSignatureType AST.TInt64
         Body = CheckedAST.Local baseParam
         Recursion = None
     }
@@ -295,8 +295,8 @@ let testOverlayFunctionIdsContainOnlyLocalDefinitions () : TestResult =
         Id = localId
         Name = "Test.localFunction"
         TypeParams = []
-        Params = AST.NonEmptyList.singleton (localParam, AST.TInt64)
-        ReturnType = AST.TInt64
+        Params = AST.NonEmptyList.singleton (localParam, CheckedAST.checkedSignatureType AST.TInt64)
+        ReturnType = CheckedAST.checkedSignatureType AST.TInt64
         Body = CheckedAST.Local localParam
         Recursion = None
     }

@@ -63,11 +63,11 @@ let private functionDefinition body : CheckedAST.FunctionDef = {
     Id = TestIds.functionIdForName "choose"
     Name = "choose"
     TypeParams = []
-    Params = {
+    Params = CheckedAST.checkedSignatureParams {
         Head = parameter "flag" AST.TBool
         Tail = [parameter "first" AST.TInt64; parameter "second" AST.TInt64]
     }
-    ReturnType = AST.TInt64
+    ReturnType = CheckedAST.checkedSignatureType AST.TInt64
     Body = body
     Recursion = None
 }
@@ -147,11 +147,11 @@ let private callFunction name firstParameter remainingParameters body : CheckedA
     Id = TestIds.functionIdForName name
     Name = name
     TypeParams = []
-    Params = {
+    Params = CheckedAST.checkedSignatureParams {
         Head = firstParameter
         Tail = remainingParameters
     }
-    ReturnType = AST.TInt64
+    ReturnType = CheckedAST.checkedSignatureType AST.TInt64
     Body = body
     Recursion = None
 }
@@ -261,8 +261,8 @@ let private scalarFunction
         Id = TestIds.functionIdForName name
         Name = name
         TypeParams = []
-        Params = AST.NonEmptyList.singleton parameter
-        ReturnType = returnType
+        Params = AST.NonEmptyList.singleton parameter |> CheckedAST.checkedSignatureParams
+        ReturnType = CheckedAST.checkedSignatureType returnType
         Body = body
         Recursion = None
     }
