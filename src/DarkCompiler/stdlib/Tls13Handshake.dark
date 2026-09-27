@@ -1,4 +1,4 @@
-// Tls13Handshake.dark - TLS 1.3 SHA-256 handshake secrets and server Finished.
+// Tls13Handshake.dark - bounded TLS 1.3 handshake processing and reassembly.
 
 module Darklang.Stdlib.Tls13Handshake
 
@@ -239,3 +239,66 @@ let consumeServerRecord (state: Stdlib.Tls13Handshake.ServerFlight)
             (Stdlib.Tls13Handshake.__withKeys
               (Stdlib.Tls13Handshake.__withPending state Stdlib.Blob.empty)
               opened.nextKeys) buffered
+
+// Reassemble plaintext or authenticated handshake fragments across records.
+type Message = { kind: Int64, bytes: Blob, body: Blob }
+type Decoder = { pending: Blob }
+type Feed = { messages: List<Stdlib.Tls13Handshake.Message>, next: Stdlib.Tls13Handshake.Decoder }
+
+val empty =
+  Stdlib.Tls13Handshake.Decoder { pending = Stdlib.Blob.empty }
+
+let __read24 (data: Blob) (offset: Int64) : Int64 =
+  Stdlib.Blob.__getByte data offset * 65536L
+  + Stdlib.Blob.__getByte data (offset + 1L) * 256L
+  + Stdlib.Blob.__getByte data (offset + 2L)
+
+let __scan (data: Blob) (position: Int64) (count: Int64)
+           (acc: List<Stdlib.Tls13Handshake.Message>)
+           : Stdlib.Result.Result<Stdlib.Tls13Handshake.Feed, String> =
+  let remaining = Stdlib.Blob.__byteLength data - position in
+  if remaining == 0L then
+    Ok (Stdlib.Tls13Handshake.Feed {
+      messages = Stdlib.List.reverse acc, next = Stdlib.Tls13Handshake.empty })
+  else if count == 64L then Error "Too many TLS handshake messages in one record"
+  else if remaining < 4L then
+    Ok (Stdlib.Tls13Handshake.Feed {
+      messages = Stdlib.List.reverse acc,
+      next = Stdlib.Tls13Handshake.Decoder {
+        pending = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 position)
+                    (Stdlib.Int.fromInt64 remaining) } })
+  else
+    let bodyLength = Stdlib.Tls13Handshake.__read24 data (position + 1L) in
+    if bodyLength > 524288L then Error "TLS handshake message exceeds size limit"
+    else if remaining < bodyLength + 4L then
+      Ok (Stdlib.Tls13Handshake.Feed {
+        messages = Stdlib.List.reverse acc,
+        next = Stdlib.Tls13Handshake.Decoder {
+          pending = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 position)
+                      (Stdlib.Int.fromInt64 remaining) } })
+    else
+      let message = Stdlib.Tls13Handshake.Message {
+        kind = Stdlib.Blob.__getByte data position,
+        bytes = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 position)
+                  (Stdlib.Int.fromInt64 (bodyLength + 4L)),
+        body = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 (position + 4L))
+                 (Stdlib.Int.fromInt64 bodyLength) } in
+      Stdlib.Tls13Handshake.__scan data (position + bodyLength + 4L)
+        (count + 1L) (Stdlib.List.push acc message)
+
+// Feed only the handshake payload of a plaintext or authenticated TLS record.
+// The caller validates record content type and decides when to add raw message
+// bytes to the transcript; unverified messages must not advance authentication.
+let feed (decoder: Stdlib.Tls13Handshake.Decoder) (fragment: Blob)
+         : Stdlib.Result.Result<Stdlib.Tls13Handshake.Feed, String> =
+  let fragmentLength = Stdlib.Blob.__byteLength fragment in
+  let pendingLength = Stdlib.Blob.__byteLength decoder.pending in
+  if fragmentLength > 16384L || pendingLength > 524291L then
+    Error "TLS handshake fragment exceeds size limit"
+  else
+    Stdlib.Tls13Handshake.__scan
+      (Stdlib.Blob.concat [decoder.pending, fragment]) 0L 0L []
+
+let finish (decoder: Stdlib.Tls13Handshake.Decoder) : Stdlib.Result.Result<Unit, String> =
+  if Stdlib.Blob.__byteLength decoder.pending == 0L then Ok ()
+  else Error "TLS handshake truncated"
