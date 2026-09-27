@@ -166,6 +166,22 @@ this repository and takes precedence where it is stricter.
   not use a low-value mechanical check as a substitute for relevant
   validation.
 
+## Explaining technical work
+
+- Pair abstract claims with a small, concrete example from the task when
+  explaining behavior, design, or tradeoffs. Show the relevant input and
+  outcome so the reader can see what the claim means in practice.
+- For correctness, include a representative case and an important boundary
+  case when useful. For example, name the missing match case and show that the
+  program fails at compilation, rather than only saying match validation is
+  ahead of time.
+- For optimization, show a representative workload and what changes for it,
+  such as fewer allocations or traversals. Include measured before/after
+  numbers when available; label hypothetical examples clearly and do not
+  present estimates as measurements.
+- Use examples in progress updates and completion reports when they clarify
+  the point, while keeping them short and relevant to the user's question.
+
 ## Completion report
 
 Use this standard format when reporting completed work. Explain what changed
