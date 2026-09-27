@@ -78,31 +78,43 @@ keyboard_help() {
   cat <<'EOF'
 Keyboard shortcuts
 
+The status page shows train health, active jobs, recent merges, and
+benchmark results. Keys act on the view you are currently reading.
+
 Navigation
-  j / Down       Scroll down
-  k / Up         Scroll up
-  PgDn / PgUp    Scroll one page
-  g / Home       Go to top
-  G / End        Go to bottom
-  ?              Show or close this help
-  q / Esc        Back, or quit from status
+  j / Down       Move down a few lines; k / Up moves back up.
+  PgDn / PgUp    Move down or up by one screen.
+  g / Home       Jump to the start of the current view.
+  G / End        Jump to the end of the current view.
+  ?              Open or close this help, keeping your place.
+  q / Esc        Return to the previous view. On status, quit.
 
 Status
-  a              Open attention jobs
-  v              Open queued manual approvals
-  w              Review a requested gate waiver
-  m              Show more or fewer recent merges
-  c              Show or hide full conflict details
-  1-9            Open benchmark result
-  0 / b          Next / previous benchmark page
+  a              Open the first job needing attention. Its review
+                 page shows the recorded failure and log path, if any.
+  v              Open the first queued manual approval, including
+                 the policy evidence needed for review.
+  w              Start the separate review of a requested gate
+                 waiver. Approval requires typed confirmation.
+  m              Switch between 5 and 20 recent merges.
+  c              Show or hide complete merge conflict reasons.
+  1-9            Open the numbered benchmark result for its
+                 workload changes and measured comparison.
+  0 / b          Go to the next / previous benchmark page.
+                 The next page wraps around to the first.
 
 Job review
-  n / p          Next / previous job
-  r              Retry an attention job (asks first)
-  A              Review and approve a policy change
+  n / p          Review the next / previous attention or approval
+                 job without returning to status.
+  r              Ask before retrying the selected attention job.
+                 A changed execution policy may require manual approval.
+  A              Start policy-change approval. Review the policy diff,
+                 confirm the job identity, then review the exact deploy
+                 plan separately before anything is deployed.
 
 Benchmark result
-  d              Toggle report and source diff
+  d              Switch between the measured result report and the
+                 source change diff for that benchmark commit.
 EOF
 }
 
