@@ -2,12 +2,12 @@
 
 Best-known compatible full-profile Dark performance vs audited Rust references, with diagnostic reference runtimes (instruction counts).
 
-**Snapshot timestamp:** 2026-09-27T08:12:17+00:00
+**Snapshot timestamp:** 2026-09-27T09:33:12+00:00
 **Architecture:** `arm64`
 **Profile:** `full` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs`
 **Workload contract:** `6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe`
-**Compiler commit:** `bfb1b8098f1794f023d6a91ea1fccbcb26829920` - Update SCCP MIR expectations for SSA lowering
+**Compiler commit:** `16d1726113aa99b2e4a814816529ee50d9719d30` - Unbox nullable list sums with spare tag
 **Diagnostic references:** informational only; multipliers are instructions divided by Rust for the same workload.
 Every displayed diagnostic row matched the profile's expected stdout.
 
@@ -19,7 +19,7 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | edigits | 49,974,762 (72.6x) | 688,749 | - | - | - | - |
 | factorial | 59,296 (0.06x) | 970,290 | - | - | - | - |
 | fannkuch | 220,640,790 (125x) | 1,760,885 | - | - | - | - |
-| fasta | 18,804,733 (27.4x) | 686,768 | - | - | - | - |
+| fasta | 18,803,096 (27.4x) | 686,768 | - | - | - | - |
 | fft | 1,793,111 (3.95x) | 454,262 | - | - | - | - |
 | fib | 8,265,915 (1.37x) | 6,054,417 | - | - | - | - |
 | huffman | 410,638,818 (143x) | 2,868,263 | - | - | - | - |
