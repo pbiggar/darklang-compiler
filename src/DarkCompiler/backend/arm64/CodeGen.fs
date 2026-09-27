@@ -892,7 +892,7 @@ let private generatePreparedARM64WithOptionsAndCache
             let recursiveNominalRcHelpers =
                 programMetadata.Facts.RecursiveReleaseTypes
                 |> Set.toList
-                |> List.collect (generateRecursiveNominalRefCountDecHelper ctx)
+                |> List.collect (generateRecursiveNominalRefCountDecHelper dictDecHelperForReleasePlan ctx)
             recordPhase "ARM64 Helper Recursive Nominal Generation" recursiveHelperTimer
             let cliHelperTimer = startPhase ()
             let cliArgvHelpers =

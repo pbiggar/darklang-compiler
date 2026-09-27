@@ -430,9 +430,6 @@ let internal generatePlannedDictRefCountDecHelper
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
     : X86_64.Instr list =
-    let unsupported context release =
-        Crash.crash $"x64 planned dict RefCountDec does not support {context} release plan {release}"
-
     match releasePlan with
     | MemoryModel.RootRelease (_, MemoryModel.DictHeap, MemoryModel.DictPayloadRelease (keyRelease, valueRelease)) ->
         let releaseLeafDynamicValue, releaseLeafListValue, releaseLeafDictValueHelper, releaseLeafClosureValue, releaseLeafStreamValue, leafFixedBlockValueRelease =
@@ -445,14 +442,14 @@ let internal generatePlannedDictRefCountDecHelper
                 None, true, None, false, false, None
             | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) ->
                 None, false, Some (dictDecHelperForReleasePlan valueRelease), false, false, None
+            | MemoryModel.RecursiveRelease sourceType ->
+                None, false, Some (recursiveNominalRefCountDecHelperLabel sourceType), false, false, None
             | MemoryModel.RootRelease (_, MemoryModel.ClosureHeap, _) ->
                 None, false, None, true, false, None
             | MemoryModel.RootRelease (_, MemoryModel.StreamHeap, _) ->
                 None, false, None, false, true, None
             | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, _) ->
                 None, false, None, false, false, Some (payloadSize, valueRelease)
-            | other ->
-                unsupported "value" other
 
         generateDictRefCountDecHelper
             helperLabel

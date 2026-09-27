@@ -1,0 +1,3 @@
+// A single-case internal raw-pointer wrapper shares its unmanaged root.
+type RawEnvelope = RawEnvelope of RawPtr
+let ptr = __raw_alloc 8L in let value = RawEnvelope ptr in let raw = match value with | RawEnvelope inner -> inner in let _ = __raw_write_word raw 0L 7L in let result = __raw_get<Int64> ptr 0L in let _ = __raw_free ptr in result = 7L

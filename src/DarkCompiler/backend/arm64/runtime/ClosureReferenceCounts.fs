@@ -71,6 +71,7 @@ let internal requiredRcMetadataReleasePlan (context: string) (metadata: MemoryMo
     | None -> Crash.crash $"{context}: missing RC release plan metadata"
 
 let internal generateRecursiveNominalRefCountDecHelper
+    (dictHelperForReleasePlan: MemoryModel.RcReleasePlan -> string)
     (ctx: CodeGenContext)
     (sourceType: AST.SemanticType)
     : ARM64Symbolic.Instr list =
@@ -152,6 +153,12 @@ let internal generateRecursiveNominalRefCountDecHelper
                 | MemoryModel.RootRelease (_, MemoryModel.StreamHeap, _) -> plannedListDecHelperLabelForReleasePlan elementRelease
                 | MemoryModel.RootRelease (_, MemoryModel.GenericHeap, _) -> plannedListDecHelperLabelForReleasePlan elementRelease
             [ARM64Symbolic.BL helper]
+        | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) ->
+            [ARM64Symbolic.BL (dictHelperForReleasePlan plan)]
+        | MemoryModel.RootRelease (_, MemoryModel.ClosureHeap, _) ->
+            [ARM64Symbolic.BL closureRefCountDecHelperLabel]
+        | MemoryModel.RootRelease (_, MemoryModel.StreamHeap, _) ->
+            [ARM64Symbolic.BL streamRefCountDecHelperLabel]
         | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, payloadPlan) ->
             let doneLabel = label $"{path}_done"
             let payloadReleases = releasePayload path payloadPlan
@@ -240,8 +247,14 @@ let internal generateRecursiveNominalRefCountDecHelper
         [ARM64Symbolic.Label helperLabel]
         @ releaseFromX0 "root" releasePlan
         @ [ARM64Symbolic.RET]
+    | MemoryModel.RootRelease _ ->
+        [ARM64Symbolic.Label helperLabel
+         ARM64Symbolic.STP_pre (ARM64Symbolic.X0, ARM64Symbolic.X30, ARM64Symbolic.SP, -16s)]
+        @ releaseFromX0 "root" releasePlan
+        @ [ARM64Symbolic.LDP_post (ARM64Symbolic.X0, ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)
+           ARM64Symbolic.RET]
     | _ ->
-        Crash.crash $"ARM64 recursive nominal RC helper requires a generic root release plan, got {releasePlan}"
+        Crash.crash $"ARM64 recursive nominal RC helper requires a managed root release plan, got {releasePlan}"
 
 let internal generateClosureRefCountDecHelper
     (dictHelperForReleasePlan: MemoryModel.RcReleasePlan -> string)

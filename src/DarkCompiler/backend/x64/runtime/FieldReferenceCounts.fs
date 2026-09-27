@@ -270,8 +270,32 @@ let internal generateRecursiveNominalRefCountDecHelper
            X86_64.Label (workerLabel sourceType)]
         @ genRefCountDecGenericWithPlanUsing workerLabel false helperCtx X86_64.RAX payloadSize (Some releasePlan)
         @ [X86_64.RET]
+    | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
+        [X86_64.Label helperLabel]
+        @ saves
+        @ [X86_64.CALL (listDecHelperForReleasePlan releasePlan)]
+        @ restores
+        @ [X86_64.RET]
+    | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) ->
+        [X86_64.Label helperLabel]
+        @ saves
+        @ [X86_64.CALL (dictDecHelperForReleasePlan releasePlan)]
+        @ restores
+        @ [X86_64.RET]
+    | MemoryModel.RootRelease (_, MemoryModel.ClosureHeap, _) ->
+        [X86_64.Label helperLabel]
+        @ saves
+        @ [X86_64.CALL closureRefCountDecHelperLabel]
+        @ restores
+        @ [X86_64.RET]
+    | MemoryModel.RootRelease (_, MemoryModel.StreamHeap, _) ->
+        [X86_64.Label helperLabel]
+        @ saves
+        @ [X86_64.CALL streamRefCountDecHelperLabel]
+        @ restores
+        @ [X86_64.RET]
     | _ ->
-        Crash.crash $"x64 recursive nominal RC helper requires a generic root release plan, got {releasePlan}"
+        Crash.crash $"x64 recursive nominal RC helper requires a managed root release plan, got {releasePlan}"
 
 let internal recursiveReleaseTypesInFunctions (functions: LIR.Function list) : Set<AST.SemanticType> =
     functions

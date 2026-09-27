@@ -72,14 +72,25 @@ let internal materializeComparisonPlan
 /// Variant lookup - maps variant names to (type name, type params, tag index, field types)
 type VariantLookup = Map<string, (string * string list * int * AST.SemanticType list)>
 
-/// A unary single-case sum can share its payload word when the payload has a
-/// one-word native representation. Tuple payloads require unary source arity.
-let internal canUseTransparentPayload = function
-    | AST.TInt64 | AST.TUInt64 | AST.TBool
-    | AST.TString | AST.TChar | AST.TBlob
-    | AST.TInt128 | AST.TUInt128
-    | AST.TTuple _ | AST.TRecord _ -> true
-    | _ -> false
+/// Every constructible source value has a one-word native root. A unary
+/// single-case sum can share that root without reserving a tag or sentinel.
+let internal canUseTransparentPayload = MemoryPlanning.canUseTransparentSumPayload
+
+let rec private substituteTransparentPayloadType (subst: Map<string, AST.SemanticType>) (typ: AST.SemanticType) : AST.SemanticType =
+    let recurse = substituteTransparentPayloadType subst
+    match typ with
+    | AST.TVar name ->
+        Map.tryFind name subst
+        |> Option.defaultWith (fun () -> Crash.crash $"Transparent sum payload variable '{name}' is not declared")
+    | AST.TInferenceVar _ -> typ
+    | AST.TTuple fields -> AST.TTuple (List.map recurse fields)
+    | AST.TRecord (name, args) -> AST.TRecord (name, List.map recurse args)
+    | AST.TSum (name, args) -> AST.TSum (name, List.map recurse args)
+    | AST.TList elem -> AST.TList (recurse elem)
+    | AST.TStream elem -> AST.TStream (recurse elem)
+    | AST.TDict (key, value) -> AST.TDict (recurse key, recurse value)
+    | AST.TFunction (args, result) -> AST.TFunction (List.map recurse args, recurse result)
+    | _ -> typ
 
 let internal transparentSumPayloadType (typeName: string) (typeArgs: AST.SemanticType list) (variantLookup: VariantLookup) : AST.SemanticType option =
     let cases =
@@ -88,13 +99,7 @@ let internal transparentSumPayloadType (typeName: string) (typeArgs: AST.Semanti
         |> List.choose (fun (key, (owner, typeParams, _, fields)) ->
             if owner = typeName && List.length typeParams = List.length typeArgs && key.StartsWith($"{typeName}.") then
                 let subst = List.zip typeParams typeArgs |> Map.ofList
-                let concreteFields =
-                    fields
-                    |> List.map (function
-                        | AST.TVar name ->
-                            Map.tryFind name subst
-                            |> Option.defaultWith (fun () -> Crash.crash $"Transparent sum payload variable '{name}' is not declared")
-                        | fieldType -> fieldType)
+                let concreteFields = fields |> List.map (substituteTransparentPayloadType subst)
                 Some concreteFields
             else None)
     match cases with

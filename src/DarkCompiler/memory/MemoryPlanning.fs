@@ -4,6 +4,19 @@ module MemoryPlanning
 
 open MemoryModel
 
+/// Source types with a constructible, one-word native root. Keep this list
+/// explicit so a future multiword representation cannot become transparent by
+/// default when its source type is added.
+let canUseTransparentSumPayload = function
+    | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128 | AST.TInt
+    | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
+    | AST.TBool | AST.TFloat64 | AST.TDateTime | AST.TUnit
+    | AST.TString | AST.TChar | AST.TBlob
+    | AST.TTuple _ | AST.TRecord _ | AST.TSum _
+    | AST.TList _ | AST.TDict _ | AST.TStream _ | AST.TFunction _
+    | AST.TInternalRawPtr -> true
+    | AST.TNever | AST.TVar _ | AST.TInferenceVar _ -> false
+
 let nullablePointerSumPayloadType (sumReg: RcSumShapeRegistry) (typ: AST.SemanticType) : AST.SemanticType option =
     match typ with
     | AST.TSum (name, typeArgs) ->
@@ -282,19 +295,10 @@ let rcShapeOfTypeWithSums
                     let transparentPayloadShape =
                         match sumInfo.Payloads with
                         | [(tag, Some payload)] when Set.contains tag sumInfo.UnaryPayloadTags ->
-                            match applyRcShapeTypeSubstitution subst payload with
-                            | AST.TInt64 -> Some Immediate
-                            | AST.TUInt64 -> Some Immediate
-                            | AST.TBool -> Some Immediate
-                            | AST.TString -> Some DynamicString
-                            | AST.TChar -> Some DynamicString
-                            | AST.TBlob -> Some DynamicBlob
-                            | AST.TInt128 | AST.TUInt128
-                            | AST.TRecord _ as payloadType ->
+                            let payloadType = applyRcShapeTypeSubstitution subst payload
+                            if canUseTransparentSumPayload payloadType then
                                 Some (classify expandingNominals payloadType)
-                            | AST.TTuple _ as payloadType ->
-                                Some (classify expandingNominals payloadType)
-                            | _ -> None
+                            else None
                         | _ -> None
 
                     let nullablePointerShape =
