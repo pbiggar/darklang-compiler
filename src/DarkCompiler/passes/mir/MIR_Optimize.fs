@@ -157,31 +157,26 @@ let private optimizeCFGOnceWithEffectFreeCalls
         else
             (cfg8, false)
     let (cfg10, changed10) =
-        if options.EnableCFGSimplify && not useSccp then
-            measure "MIR Simplify Known Branches" (fun () -> simplifyBranchesKnownFromPredecessor cfg9)
+        if options.EnableCFGSimplify && not useCombinedSccp then
+            measure "MIR Eliminate Unreachable Blocks" (fun () -> eliminateUnreachableBlocks cfg9)
         else
             (cfg9, false)
     let (cfg11, changed11) =
-        if options.EnableCFGSimplify && not useCombinedSccp then
-            measure "MIR Eliminate Unreachable Blocks" (fun () -> eliminateUnreachableBlocks cfg10)
+        if options.EnableCFGSimplify then
+            measure "MIR Simplify Return Phi Joins" (fun () -> simplifyRetPhiJoins cfg10)
         else
             (cfg10, false)
     let (cfg12, changed12) =
         if options.EnableCFGSimplify then
-            measure "MIR Simplify Return Phi Joins" (fun () -> simplifyRetPhiJoins cfg11)
+            measure "MIR Simplify Empty Blocks" (fun () -> simplifyEmptyBlocks cfg11)
         else
             (cfg11, false)
     let (cfg13, changed13) =
         if options.EnableCFGSimplify then
-            measure "MIR Simplify Empty Blocks" (fun () -> simplifyEmptyBlocks cfg12)
+            measure "MIR Merge Linear Blocks" (fun () -> mergeLinearBlocks cfg12)
         else
             (cfg12, false)
-    let (cfg14, changed14) =
-        if options.EnableCFGSimplify then
-            measure "MIR Merge Linear Blocks" (fun () -> mergeLinearBlocks cfg13)
-        else
-            (cfg13, false)
-    let changed = changed0 || changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10 || changed11 || changed12 || changed13 || changed14
+    let changed = changed0 || changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10 || changed11 || changed12 || changed13
     let topologyChanged =
         changed0
         || changed6
@@ -191,10 +186,9 @@ let private optimizeCFGOnceWithEffectFreeCalls
         || changed11
         || changed12
         || changed13
-        || changed14
     let reusableTopology =
         if topologyChanged then None else cseTopology
-    (cfg14, changed, reusableTopology)
+    (cfg13, changed, reusableTopology)
 
 let optimizeCFGOnce (options: OptimizeOptions) (cfg: CFG) : CFG * bool =
     let (optimized, changed, _) =
