@@ -59,8 +59,8 @@
     <Compile Include="frontend/checking/Declarations.fs" />
     <Compile Include="frontend/checking/ResolvedProgram.fs" />
     <Compile Include="frontend/TypeChecking.fs" />
-    <Compile Include="frontend/JsonPlanning.fs" />
     <Compile Include="frontend/ValueRendering.fs" />
+    <Compile Include="frontend/JsonPlanning.fs" />
 
     <!-- AST -> ANF -->
     <Compile Include="memory/MemoryModel.fs" />

@@ -32,9 +32,14 @@ let size<'k, 'v> (dict: Dict<k, v>) : Int =
 let get<'k, 'v> (dict: Dict<k, v>) (key: k) : Stdlib.Option.Option<v> =
     Stdlib.Dict.__get<k, v> dict key
 
+// Concrete specializations receive the shared value renderer before ANF.
+let __renderGenericKey<'k> (key: k) : String =
+    Builtin.testRuntimeError "Dictionary key renderer was not specialized"
+
 let set<'k, 'v> (dict: Dict<k, v>) (key: k) (value: v) : Dict<k, v> =
     if Stdlib.Dict.__contains<k, v> dict key then
-        Builtin.testRuntimeError "Cannot add two dictionary entries with the same key"
+        Builtin.testRuntimeError
+            ("Cannot add two dictionary entries with the same key " ++ Stdlib.Dict.__renderGenericKey key)
     else
         Stdlib.Dict.__setOverwriting<k, v> dict key value
 

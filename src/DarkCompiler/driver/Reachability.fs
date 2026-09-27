@@ -39,11 +39,6 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     stdlib.Context.TypeCheckEnv
                     (WrittenChecking.typeCheckEnvironment typedUserAst)
             let plannedUserAst = JsonPlanning.rewriteProgram userEnv typedUserAst
-            let plannedUserAst =
-                ValueRendering.rewriteDictionarySetCalls
-                    userEnv.IndexedTypeReg
-                    userEnv.IndexedSumTypeReg
-                    plannedUserAst
             let plannedProgramType = CheckingTypes.resolveType userEnv.AliasReg programType
             let renderedUserAst, boundaryProgramType =
                 if plannedProgramType = AST.TUnit then

@@ -476,6 +476,9 @@ let buildStdlibSpecializations
                         checkedTypeDefs
                         @ (materializedFunctions |> List.map CheckedAST.FunctionDef)
                     )
+                    |> ValueRendering.rewriteDictionaryKeyRenderers
+                        stdlib.Context.TypeCheckEnv.IndexedTypeReg
+                        stdlib.Context.TypeCheckEnv.IndexedSumTypeReg
                 prepareProgramForAnf
                     (ReplaceTypeApps combinedSpecRegistry)
                     stdlib.Context.LambdaLiftTypeReg

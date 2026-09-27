@@ -721,6 +721,11 @@ let internal convertTypedProgramToUserOnlyWithMode
             | SpecializeLocalAndReplace registry -> addMissing registry SpecializeLocalAndReplace
             | Monomorphize _ -> (typedProgram, monomorphization, Set.empty))
     let baseFuncNames = baseContext.BaseFuncNames
+    let typedProgram =
+        ValueRendering.rewriteDictionaryKeyRenderers
+            typeCheckEnv.IndexedTypeReg
+            typeCheckEnv.IndexedSumTypeReg
+            typedProgram
     measure "AST -> ANF Program Preparation" (fun () ->
         prepareProgramForAnf
             monomorphization

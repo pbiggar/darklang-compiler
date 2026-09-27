@@ -613,74 +613,44 @@ let rewriteProgram
     let generatedTopLevels = generatedFunctions @ rewrittenTopLevels
     CheckedAST.programFromCheckedParts (finalState.Symbols, generatedTopLevels)
 
-/// Render duplicate keys at a concrete call site. The generic Dict.set body
-/// cannot select a renderer until its caller fixes the key type.
-let rewriteDictionarySetCalls
+/// Replace the concrete specialization of Dict's generic key renderer with
+/// the same monomorphic renderer used for eval results.
+let rewriteDictionaryKeyRenderers
     (recordMetadata: CheckingTypes.IndexedTypeRegistry)
     (sumMetadata: CheckingTypes.IndexedSumTypeRegistry)
     (Program (symbols, topLevels))
     : Program =
     let symbols =
         runtimeFunctionNames
-        @ [ "Darklang.Stdlib.Dict.set"
-            "Darklang.Stdlib.Dict.member"
-            "Darklang.Stdlib.Dict.setOverridingDuplicates"
-            "Builtin.testRuntimeError" ]
         |> List.fold (fun current name -> internFunction name current |> snd) symbols
     let env =
         { Records = lazy recordMetadata
           Sums = lazy sumMetadata }
-    let initial = { Functions = Map.empty; Symbols = symbols }
-    let setId = resolveFunction symbols "Darklang.Stdlib.Dict.set"
-    let memberId = resolveFunction symbols "Darklang.Stdlib.Dict.member"
-    let overwriteId = resolveFunction symbols "Darklang.Stdlib.Dict.setOverridingDuplicates"
-    let errorId = resolveFunction symbols "Builtin.testRuntimeError"
-    let rewrite state expr =
-        match expr with
-        | TypeApp (id, [keyType; valueType], values)
-            when id = setId
-                 && not (TypeUnification.containsTVar (semanticType keyType)) ->
-            match NonEmptyList.toList values with
-            | [dict; key; value] ->
-                let keySemanticType = semanticType keyType
-                let renderer, withRenderer = ensureRenderer env keySemanticType state
-                let dictId, withDict = freshBinding "__set_dict" withRenderer
-                let keyId, withKey = freshBinding "__set_key" withDict
-                let valueId, withValue = freshBinding "__set_value" withKey
-                let typeArgs = [keyType; valueType]
-                let arguments = NonEmptyList.fromList [Local dictId; Local keyId]
-                let contains = TypeApp (memberId, typeArgs, arguments)
-                let renderedKey = call withValue.Symbols renderer [Local keyId]
-                let message =
-                    BinOp (
-                        AST.StringConcat,
-                        StringLiteral "Cannot add two dictionary entries with the same key ",
-                        renderedKey)
-                let duplicate = Call (errorId, NonEmptyList.singleton message)
-                let insert =
-                    TypeApp (
-                        overwriteId,
-                        typeArgs,
-                        NonEmptyList.fromList [Local dictId; Local keyId; Local valueId])
-                let result =
-                    Let (LPVariable dictId, dict,
-                        Let (LPVariable keyId, key,
-                            Let (LPVariable valueId, value,
-                                If (contains, duplicate, insert))))
-                result, withValue
-            | _ -> expr, state
-        | _ -> expr, state
+    let existingRenderers =
+        topLevels
+        |> List.choose (function
+            | FunctionDef definition when definition.Name.StartsWith("__dark_render_") ->
+                Some (definition.Name, definition)
+            | _ -> None)
+        |> Map.ofList
+    let initial = { Functions = existingRenderers; Symbols = symbols }
     let rewritten, finalState =
         topLevels
         |> List.mapFold (fun state topLevel ->
             match topLevel with
-            | Expression expr ->
-                let value, next = JsonPlanning.mapExpr rewrite state expr
-                Expression value, next
-            | FunctionDef definition ->
-                let body, next = JsonPlanning.mapExpr rewrite state definition.Body
-                FunctionDef { definition with Body = body }, next
+            | FunctionDef definition
+                when definition.Name.StartsWith("Darklang.Stdlib.Dict.__renderGenericKey_") ->
+                match AST.NonEmptyList.toList definition.Params with
+                | [(parameter, keyType)] ->
+                    let renderer, next = ensureRenderer env (semanticType keyType) state
+                    let body = call next.Symbols renderer [Local parameter]
+                    FunctionDef { definition with Body = body }, next
+                | _ -> Crash.crash "Dictionary key renderer has an invalid parameter list"
             | other -> other, state)
             initial
-    let generated = finalState.Functions |> Map.toList |> List.map (snd >> FunctionDef)
+    let generated =
+        finalState.Functions
+        |> Map.filter (fun name _ -> not (Map.containsKey name existingRenderers))
+        |> Map.toList
+        |> List.map (snd >> FunctionDef)
     CheckedAST.programFromCheckedParts (finalState.Symbols, generated @ rewritten)

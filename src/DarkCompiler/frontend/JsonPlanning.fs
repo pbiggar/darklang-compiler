@@ -1255,7 +1255,7 @@ and private decodeBody env typ source view path state : Result<Expr * State, str
     | TFunction _ | TBlob | TInternalRawPtr | TNever | TStream _ | TVar _ | TInferenceVar _ | TDict _ ->
         Error $"Unsupported type in JSON: {CheckingDiagnostics.typeToString typ}. Some types are not supported in Json serialization"
 
-let rec internal mapExpr rewrite symbols expr =
+let rec private mapExpr rewrite symbols expr =
     let mapList values state =
         values
         |> List.mapFold (fun current value -> mapExpr rewrite current value) state

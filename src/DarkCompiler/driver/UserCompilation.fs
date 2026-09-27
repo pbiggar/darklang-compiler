@@ -97,11 +97,6 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                     let jsonPlanningElapsed = sw.Elapsed.TotalMilliseconds - jsonPlanningStart
                     recordPassTiming plan.PassTimingRecorder "JSON Planning" jsonPlanningElapsed
                     let valueRenderingStart = Stopwatch.StartNew()
-                    let plannedUserAst =
-                        ValueRendering.rewriteDictionarySetCalls
-                            userEnv.IndexedTypeReg
-                            userEnv.IndexedSumTypeReg
-                            plannedUserAst
                     let plannedProgramType = CheckingTypes.resolveType userEnv.AliasReg programType
                     let renderedUserAst, boundaryProgramType =
                         if plan.Mode = FullProgram then
