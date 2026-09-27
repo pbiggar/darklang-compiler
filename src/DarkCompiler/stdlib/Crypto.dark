@@ -801,3 +801,28 @@ let sha256hmac (key: Blob) (data: Blob) : Blob =
 // HMAC-SHA1
 let sha1hmac (key: Blob) (data: Blob) : Blob =
     Stdlib.Crypto.__hmac key data 64L Stdlib.Crypto.__sha1
+
+// Native lowering fills at most 256 bytes through getrandom/getentropy.
+let __secureRandomFill (buffer: RawPtr) (length: Int64) : Int64 = -38L
+
+let __secureRandomRead (buffer: RawPtr) (index: Int64) (length: Int64)
+    (acc: List<Int64>) : Blob =
+    if index == length then Stdlib.Blob.__fromInt64List (Stdlib.List.reverse acc)
+    else Stdlib.Crypto.__secureRandomRead buffer (index + 1L) length
+           (Stdlib.List.push acc (__raw_get_byte buffer index))
+
+let secureRandomBytes (length: Int64) : Stdlib.Result.Result<Blob, String> =
+    if length < 0L || length > 256L then
+        Error "Secure random length must be between 0 and 256"
+    else if length == 0L then Ok Stdlib.Blob.empty
+    else
+        let buffer = __raw_alloc length in
+        let received = Stdlib.Crypto.__secureRandomFill buffer length in
+        let result =
+            if received < 0L then
+                Error ("OS entropy errno " ++ Stdlib.Int64.toString (0L - received))
+            else if received != length then
+                Error "OS entropy returned fewer bytes than requested"
+            else Ok (Stdlib.Crypto.__secureRandomRead buffer 0L length []) in
+        let _ = __raw_free buffer in
+        result

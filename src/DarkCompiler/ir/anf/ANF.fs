@@ -156,6 +156,7 @@ type CliOperation =
     | SocketReceiveTimeout
     | SocketSendTimeout
     | SocketClose
+    | SecureRandomFill
 
 /// Immutable nominal metadata carried through fixed-block lowering for field
 /// layout, ownership, diagnostics, and rendering. It is compile-time metadata,

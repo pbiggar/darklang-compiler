@@ -47,6 +47,7 @@ let convertCliOperation (operation: MIR.CliOperation) : LIR.CliOperation =
     | MIR.SocketReceiveTimeout -> LIR.SocketReceiveTimeout
     | MIR.SocketSendTimeout -> LIR.SocketSendTimeout
     | MIR.SocketClose -> LIR.SocketClose
+    | MIR.SecureRandomFill -> LIR.SecureRandomFill
 
 open ResultList
 

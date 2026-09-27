@@ -158,6 +158,7 @@ let convertCliOperation (operation: ANF.CliOperation) : MIR.CliOperation =
     | ANF.SocketReceiveTimeout -> MIR.SocketReceiveTimeout
     | ANF.SocketSendTimeout -> MIR.SocketSendTimeout
     | ANF.SocketClose -> MIR.SocketClose
+    | ANF.SecureRandomFill -> MIR.SecureRandomFill
 
 /// Precomputed descriptions for primitive ops (avoids formatting on hot path)
 let private binOpDescription (op: ANF.BinOp) : string =

@@ -683,6 +683,34 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
             Ok [ARM64Symbolic.MOVZ (syscalls.SyscallRegister, number, 0)
                 ARM64Symbolic.SVC syscalls.SvcImmediate
                 ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]
+        | LIR.SecureRandomFill ->
+            match args with
+            | [buffer; length] ->
+                loadCliOperand ARM64Symbolic.X0 buffer
+                |> Result.bind (fun bufferLoads ->
+                    loadCliOperand ARM64Symbolic.X1 length
+                    |> Result.map (fun lengthLoads ->
+                        let syscalls = ARM64.targetSyscalls ctx.Target
+                        let result =
+                            match ARM64.targetOS ctx.Target with
+                            | Platform.Linux -> []
+                            | Platform.MacOS ->
+                                let success = $"__entropy_{ctx.FunctionName}_{ctx.InstructionSite}_success"
+                                let done_ = $"__entropy_{ctx.FunctionName}_{ctx.InstructionSite}_done"
+                                [ ARM64Symbolic.B_cond_label (ARM64Symbolic.LO, success)
+                                  ARM64Symbolic.NEG (ARM64Symbolic.X0, ARM64Symbolic.X0)
+                                  ARM64Symbolic.B_label done_
+                                  ARM64Symbolic.Label success
+                                  ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X4)
+                                  ARM64Symbolic.Label done_ ]
+                        bufferLoads @ lengthLoads @
+                        [ ARM64Symbolic.MOV_reg (ARM64Symbolic.X4, ARM64Symbolic.X1)
+                          ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 0us, 0)
+                          ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Getrandom, 0)
+                          ARM64Symbolic.SVC syscalls.SvcImmediate ]
+                        @ result
+                        @ [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]))
+            | _ -> Error "SecureRandomFill expects buffer and length"
         | LIR.SocketTcp4 | LIR.SocketTcp6 | LIR.SocketUdp4 | LIR.SocketUdp6 ->
             let syscalls = ARM64.targetSyscalls ctx.Target
             let constants = Platform.socketConstantsFor (ARM64.targetOS ctx.Target)
