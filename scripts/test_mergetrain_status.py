@@ -18,6 +18,7 @@ from scripts.render_mergetrain_status import (
     benchmark_detail,
     benchmark_diff,
     human_age,
+    integrator_activity,
     merge_test_runtime,
     percentage,
     render,
@@ -27,6 +28,29 @@ from scripts.render_mergetrain_status import (
 
 
 class MergetrainStatusTests(unittest.TestCase):
+    def test_integrator_activity_is_scoped_to_live_process_and_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo = root / "repo"
+            other = root / "other"
+            activity = root / f"integrator-activity-{os.getpid()}.txt"
+            activity.write_text(f"{other}\nJob #7 RUN: gating\n", encoding="utf-8")
+            self.assertIsNone(integrator_activity(repo, root))
+            activity.write_text(f"{repo}\nJob #7 RUN: gating\n", encoding="utf-8")
+            self.assertEqual(integrator_activity(repo, root), "Job #7 RUN: gating")
+            payload = {
+                "contract_version": 4, "health": "healthy", "state": "running",
+                "summary": "1 job running",
+                "next_action": {"code": "wait_for_runner", "requires_approval": "none"},
+            }
+            with patch("scripts.render_mergetrain_status.history_items", return_value=[]), \
+                 patch("scripts.render_mergetrain_status.recent_merges", return_value=[]), \
+                 patch("scripts.render_mergetrain_status.benchmark_changes", return_value=[]):
+                output = render(payload, repo, color=True, attempt_dir=root)
+            self.assertIn("integrator: \x1b[36mJob #7 RUN: gating\x1b[0m", output)
+            activity.unlink()
+            self.assertIsNone(integrator_activity(repo, root))
+
     def test_attention_view_shows_policy_diff_and_confirms_retry(self) -> None:
         source_root = Path(__file__).resolve().parent.parent
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -134,8 +158,8 @@ class MergetrainStatusTests(unittest.TestCase):
                 self.assertIn(b"[A] approve & deploy", approval_page)
                 os.write(master, b"j")
                 self.assertIn(
-                    b"APPROVAL 2/2  #308 Review gate waivers",
-                    read_until(b"APPROVAL 2/2  #308 Review gate waivers"),
+                    b"commit:",
+                    read_until(b"commit:"),
                 )
                 os.write(master, b"A")
                 read_until(f"Type 'approve 308 {base[:12]}'".encode())
@@ -149,8 +173,8 @@ class MergetrainStatusTests(unittest.TestCase):
                 self.assertIn(b"ATTENTION 1/2  #299 Review gate waivers", attention_page)
                 os.write(master, b"j")
                 self.assertIn(
-                    b"ATTENTION 1/2  #299 Review gate waivers",
-                    read_until(b"ATTENTION 1/2  #299 Review gate waivers"),
+                    b"failure:",
+                    read_until(b"failure:"),
                 )
                 os.write(master, b"A")
                 read_until(f"Type 'approve 299 {base[:12]}'".encode())
@@ -344,10 +368,10 @@ class MergetrainStatusTests(unittest.TestCase):
                 read_until(b"refreshing")
                 started = time.monotonic()
                 os.write(master, b"m")
-                changed = read_until(b"\x1b[8;1H\x1b[2Krefreshing")
+                changed = read_until(b"[m] fewer")
                 self.assertIn(b"[m] fewer", changed)
-                self.assertIn(b"\x1b[6;1H\x1b[2K", changed)
                 self.assertIn(b"\x1b[7;1H\x1b[2K", changed)
+                self.assertNotIn(b"\x1b[2J", changed)
                 self.assertNotIn(b"refreshing\xe2\x80\xa6\r\n", changed)
                 self.assertLess(time.monotonic() - started, 1.0)
                 read_until(b"health: healthy", timeout=12.0)
@@ -505,27 +529,28 @@ class MergetrainStatusTests(unittest.TestCase):
                 read_until(b"health: healthy")
                 self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"j")
-                read_until(b"\x1b[H\x1b[Jin train:")
+                read_until(b"\x1b[1;1H\x1b[2Kin train:")
                 os.write(master, b"\x1b[A")
-                read_until(b"\x1b[H\x1b[Jhealth: healthy")
+                read_until(b"\x1b[1;1H\x1b[2Khealth: healthy")
                 self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"m")
                 read_until(b"[m] fewer")
                 os.write(master, b"0")
                 read_until(b"benchmarks p2")
                 os.write(master, b"G")
-                bottom = read_until(b"benchmarks p2")
-                self.assertNotIn(b"\x1b[H\x1b[Jhealth: healthy", bottom)
+                bottom = read_until(b"health: healthy")
+                self.assertNotIn(b"\x1b[2J", bottom)
                 os.write(master, b"b")
                 read_until(b"benchmarks p1")
                 os.write(master, b"g")
-                read_until(b"[m] fewer")
+                read_until(b"health: healthy")
                 os.write(master, b"1")
                 detail_output = read_until(b"benchmark result:")
                 self.assertIn(b"benchmark result:", detail_output)
                 self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"d")
-                diff_output = read_until(b"benchmark commit diff:")
+                diff_output = read_until(b"benchmarks/RESULTS.md excluded")
+                self.assertIn(b"benchmark commit diff:", diff_output)
                 self.assertIn(b"benchmarks/RESULTS.md excluded", diff_output)
                 os.write(master, b"d")
                 read_until(b"benchmark result:")
@@ -797,11 +822,12 @@ else:
             self.assertNotIn("benchmark ratio:", completed.stdout)
             self.assertRegex(
                 completed.stdout,
-                r"recent merges:\n[0-9a-f]{7,12} \d+s feature-6 \[tests 42\.5s\] — Add feature 6",
+                r"recent merges:\n[0-9a-f]{7,12} \d+s — Add feature 6\n"
+                r"  tests 42\.5s  feature-6",
             )
-            self.assertIn("feature-5 [tests n/a] — Add feature 5", completed.stdout)
+            self.assertIn("— Add feature 5\n  tests n/a  feature-5", completed.stdout)
             self.assertEqual(completed.stdout.count(" — Add feature "), 5)
-            self.assertNotIn("feature-1 [tests n/a] — Add feature 1", completed.stdout)
+            self.assertNotIn("— Add feature 1", completed.stdout)
             self.assertRegex(
                 completed.stdout,
                 r"1\. [0-9a-f]{7,12} +\d+s +2.8x \(n/a\) +"

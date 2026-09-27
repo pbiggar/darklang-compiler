@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -56,22 +57,6 @@ def human_age(timestamp: str | datetime, *, now: datetime | None = None) -> str:
         if seconds >= duration:
             return f"{seconds // duration}{suffix}"
     return f"{seconds}s"
-
-
-def history_line(
-    line: str,
-    color: bool,
-    *,
-    now: datetime,
-) -> str:
-    parts = line.split(" ", 2)
-    if len(parts) < 3:
-        return line
-    commit, timestamp, description = parts
-    return (
-        f"{styled(commit, CYAN, color)} "
-        f"{styled(human_age(timestamp, now=now), DIM, color)} {description}"
-    )
 
 
 def git(repo: Path, *args: str) -> str:
@@ -765,9 +750,23 @@ def merged_branch(repo: Path, commit: str) -> str:
     return remote[0] if remote else commit[:10]
 
 
+def integrator_activity(repo: Path, attempt_dir: Path) -> str | None:
+    """Read the live integrator's latest published phase for this repository."""
+    for path in sorted(attempt_dir.glob("integrator-activity-*.txt"), reverse=True):
+        try:
+            pid = int(path.stem.rsplit("-", 1)[1])
+            os.kill(pid, 0)
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, ValueError, IndexError):
+            continue
+        if len(lines) >= 2 and lines[0] == str(repo):
+            return lines[1]
+    return None
+
+
 def recent_merges(
     repo: Path, limit: int = 5, *, history: list[dict[str, Any]] | None = None
-) -> list[str]:
+) -> list[tuple[str, str, str, str, str]]:
     merge_log = git(
         repo,
         "log",
@@ -782,16 +781,16 @@ def recent_merges(
 
     recorded_history = history if history is not None else history_items(repo)
 
-    def render(line: str) -> str:
+    def merge_details(line: str) -> tuple[str, str, str, str, str]:
         merge, timestamp, parents_text = line.split("\t", 2)
         parents = parents_text.split()
         merged_commit = parents[1]
         branch = merged_branch(repo, merged_commit)
         subject = git(repo, "show", "-s", "--format=%s", merged_commit)
         runtime = merge_test_runtime(branch, timestamp, recorded_history)
-        return f"{merge} {timestamp} {branch} [{runtime}] — {subject}"
+        return merge, timestamp, branch, runtime, subject
 
-    return [render(line) for line in merge_log.splitlines()]
+    return [merge_details(line) for line in merge_log.splitlines()]
 
 
 def render(
@@ -806,6 +805,7 @@ def render(
     benchmark_diff_index: int | None = None,
     benchmark_page: int = 0,
     columns: int = 80,
+    attempt_dir: Path | None = None,
 ) -> str:
     if payload.get("contract_version") != 4:
         raise ValueError(
@@ -836,6 +836,9 @@ def render(
         f"{styled(state.upper(), state_style(state), color)}: {payload['summary']}",
         f"next: {styled(next_action, CYAN, color)}",
     ]
+    activity = integrator_activity(repo, attempt_dir) if attempt_dir else None
+    if activity:
+        lines.append(f"integrator: {styled(activity, CYAN, color)}")
     recorded_history = history_items(repo)
     if action.get("requires_approval") != "none":
         lines.append(f"approval: {action['requires_approval']}")
@@ -876,9 +879,17 @@ def render(
     merges = recent_merges(repo, limit=merge_limit, history=recorded_history)
     lines.append("")
     lines.append(styled("recent merges:", BOLD, color))
-    lines.extend(
-        [history_line(merge, color, now=now) for merge in merges] or ["(none)"]
-    )
+    for commit, timestamp, branch, runtime, subject in merges:
+        lines.append(
+            f"{styled(commit, CYAN, color)} "
+            f"{styled(human_age(timestamp, now=now), DIM, color)} — {subject}"
+        )
+        lines.append(
+            f"  {styled(runtime, BOLD + CYAN, color)}"
+            f"  {styled(branch, DIM, color)}"
+        )
+    if not merges:
+        lines.append("(none)")
 
     changes = benchmark_changes(repo, limit=9, skip=benchmark_page * 9)
     lines.append("")
@@ -953,6 +964,7 @@ def main() -> int:
                 benchmark_diff_index=args.benchmark_diff_index,
                 benchmark_page=args.benchmark_page,
                 columns=args.columns,
+                attempt_dir=args.attempt_dir,
             )
         )
         print(wrap_display(rendered, args.columns) if args.wrap else rendered)

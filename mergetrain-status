@@ -35,6 +35,7 @@ redraw=true
 next_refresh=0
 status_output="Loading merge-train status…"
 status_json=""
+screen_lines=()
 attention_ids=()
 approval_ids=()
 review_ids=()
@@ -386,10 +387,20 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
       progress="refreshing…"
     fi
     footer_width=$((terminal_columns - 1))
-    printf '\033[H\033[J%s' "${visible_output:-Loading merge-train status…}"
-    printf '\033[%d;1H\033[2K%s' "$((terminal_lines - 2))" "${controls:0:footer_width}"
-    printf '\033[%d;1H\033[2K%s' "$((terminal_lines - 1))" "${other_controls:0:footer_width}"
-    printf '\033[%d;1H\033[2K%s' "$terminal_lines" "${progress:0:footer_width}"
+    mapfile -t visible_lines < <(printf '%s\n' "${visible_output:-Loading merge-train status…}")
+    visible_lines[viewport_lines]="${controls:0:footer_width}"
+    visible_lines[viewport_lines + 1]="${other_controls:0:footer_width}"
+    visible_lines[viewport_lines + 2]="${progress:0:footer_width}"
+    if ((${#screen_lines[@]} == 0)); then
+      printf '\033[H\033[2J'
+    fi
+    for ((row = 0; row < terminal_lines; row++)); do
+      current_line="${visible_lines[row]:-}"
+      if [[ "${screen_lines[row]:-}" != "$current_line" ]]; then
+        printf '\033[%d;1H\033[2K%s' "$((row + 1))" "$current_line"
+      fi
+      screen_lines[row]="$current_line"
+    done
     redraw=false
   elif [[ "$interactive_redraw" == false && "$refresh_running" == false ]]; then
     printf '%s\n' "$status_output"

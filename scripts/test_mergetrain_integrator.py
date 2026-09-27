@@ -271,11 +271,43 @@ raise SystemExit(1)
             for job_id in (7, 8):
                 self.assertRegex(
                     completed.stderr,
-                    rf"\[\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}} [^]]+\] "
+                    rf"\[\d{{2}}:\d{{2}}:\d{{2}}\] "
                     rf"Job #{job_id} OK: deployed",
                 )
                 self.assertEqual(completed.stderr.count(f"Job #{job_id}"), 1)
             self.assertNotIn("Assembling train with 2 job(s)", completed.stderr)
+
+    def test_publishes_current_job_for_status_while_daemon_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo, environment = self.make_fixture(root)
+            environment["INTEGRATOR_TEST_PROGRESS"] = "1"
+            attempts = root / "attempts"
+            process = subprocess.Popen(
+                [environment["INTEGRATOR_SCRIPT"], "--repo", str(repo),
+                 "--attempt-dir", str(attempts), "--once"],
+                env=environment, text=True, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            activity = attempts / f"integrator-activity-{process.pid}.txt"
+            observed = ""
+            try:
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline and process.poll() is None:
+                    if activity.exists():
+                        observed = activity.read_text(encoding="utf-8")
+                        if "Job #" in observed:
+                            break
+                    time.sleep(0.05)
+                self.assertIn(str(repo), observed)
+                self.assertIn("Job #", observed)
+                _stdout, stderr = process.communicate(timeout=10)
+                self.assertEqual(process.returncode, 0, stderr)
+                self.assertFalse(activity.exists())
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    process.wait(timeout=10)
 
     def test_terminal_updates_each_job_line_in_place(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -533,6 +565,7 @@ raise SystemExit(1)
             root = Path(temp_dir)
             repo, environment = self.make_fixture(root)
             environment["INTEGRATOR_TEST_NEXT_ACTION"] = "enqueue_clean_branch"
+            environment["INTEGRATOR_TEST_PROGRESS"] = "fast"
 
             colored = subprocess.run(
                 [
@@ -568,7 +601,8 @@ raise SystemExit(1)
             )
 
             self.assertEqual(colored.returncode, 0, colored.stderr)
-            self.assertIn("\x1b[", colored.stderr)
+            self.assertRegex(colored.stderr, r"\x1b\[2m\[\d{2}:\d{2}:\d{2}\]\x1b\[0m")
+            self.assertIn("\x1b[32mOK\x1b[0m", colored.stderr)
             self.assertEqual(plain.returncode, 0, plain.stderr)
             self.assertNotIn("\x1b[", plain.stderr)
 

@@ -96,6 +96,14 @@ done
 repo_root="$(cd "$repo_root" && pwd -P)"
 mkdir -p "$attempt_dir"
 attempt_dir="$(cd "$attempt_dir" && pwd -P)"
+activity_file="$attempt_dir/integrator-activity-$$.txt"
+trap 'rm -f -- "$activity_file"' EXIT
+
+set_activity() {
+  local temporary="$activity_file.tmp"
+  printf '%s\n%s\n' "$repo_root" "$1" > "$temporary"
+  mv -f -- "$temporary" "$activity_file"
+}
 
 color_enabled=false
 if [[ "$color_mode" == always ]] ||
@@ -155,7 +163,7 @@ PY
 
 display_job() {
   local job_id="$1" state="$2" final="$3" message="$4"
-  local index=-1 position line step
+  local index=-1 position line step state_color
   if [[ -n "${final_job_ids[$job_id]:-}" ]]; then
     return
   fi
@@ -166,10 +174,19 @@ display_job() {
     fi
   done
   message="${message//$'\n'/ }"
-  line="[$(date '+%Y-%m-%d %H:%M:%S %Z')] Job #$job_id $state: $message"
+  set_activity "Job #$job_id $state: $message"
+  line="[$(date '+%H:%M:%S')] Job #$job_id $state: $message"
   if [[ "$job_display_tty" == true ]]; then
     line="$(fit_job_line "$line")"
   fi
+  case "$state" in
+    OK|READY) state_color="$color_green" ;;
+    ERROR) state_color="$color_red" ;;
+    WARN|WAIT) state_color="$color_yellow" ;;
+    *) state_color="$color_blue" ;;
+  esac
+  line="${color_dim}${line:0:10}${color_reset}${line:10}"
+  line="${line/ $state:/ ${state_color}$state${color_reset}:}"
   jobs_seen=true
   if [[ "$final" == true ]]; then
     final_job_ids[$job_id]=true
@@ -549,6 +566,7 @@ PY
   return 0
 }
 
+set_activity "Starting integrator"
 log_info "Integrator started • repo $repo_root • interval ${interval_seconds}s • color $color_mode"
 
 while true; do
@@ -562,6 +580,7 @@ while true; do
   rm -f "$pre_status_log"
   # The native one-shot daemon owns queue locking, validation, and deployment.
   daemon_output="$(mktemp "$attempt_dir/.daemon.XXXXXX.log")"
+  set_activity "Running merge-train daemon"
   mergetrain --repo "$repo_root" daemon --once >"$daemon_output" 2>&1 &
   daemon_pid=$!
   while kill -0 "$daemon_pid" 2>/dev/null; do
@@ -591,6 +610,7 @@ while true; do
     sleep "$interval_seconds"
     continue
   fi
+  set_activity "Checking queue outcome"
   status_log="$(mktemp "$attempt_dir/.status.XXXXXX.log")"
   if ! snapshot="$(mergetrain --repo "$repo_root" status --json 2>"$status_log")"; then
     failed_status_log="$attempt_dir/status-failed-$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
@@ -648,5 +668,6 @@ while true; do
   if [[ "$run_once" == true ]]; then
     exit 0
   fi
+  set_activity "Waiting for next queue pass"
   sleep "$interval_seconds"
 done
