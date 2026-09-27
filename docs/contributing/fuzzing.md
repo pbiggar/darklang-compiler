@@ -30,6 +30,10 @@ AST reducer. It displays the reduced case, the result expected by the
 interpreter, and the compiler's actual result, then asks whether Codex should
 start a fix. The reducer itself is local and deterministic; it does
 not use an AI service or implement a second evaluator.
+It tries replacing expressions with branches, operands, arguments, or match
+bodies, and dropping match arms, guards, dictionary entries, and blocks of
+declarations. Each candidate must preserve the observed result type and
+reproduce the same failure through the interpreter and compiler.
 
 If accepted, the controller creates a branch and worktree from the configured
 local integration ref. Non-interactive Codex adds the focused failing E2E test,
