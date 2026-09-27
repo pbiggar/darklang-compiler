@@ -46,6 +46,7 @@ grouped by purpose; each subject has one canonical source.
 - [AST correctness follow-up](project/ast-correctness-next.md)
 - [SSA boundary migration plan](project/ssa-boundary-migration.md)
 - [In-place mutation optimization checklist](project/perceus-checklist.md)
+- [Host test and compiler runtime profile (2026-09-27)](project/test-runtime-profile-2026-09-27.md)
 
 ## Benchmarks
 
