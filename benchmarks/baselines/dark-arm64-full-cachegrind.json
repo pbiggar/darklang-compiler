@@ -10,127 +10,127 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-27T09:33:12+00:00",
+  "generated_at": "2026-09-27T10:55:43+00:00",
   "compiler": {
-    "commit": "16d1726113aa99b2e4a814816529ee50d9719d30",
-    "subject": "Unbox nullable list sums with spare tag"
+    "commit": "52fed093eac460ef27074b6fb87c94ca202bc6c6",
+    "subject": "Merge commit '1e62586363a6bb4f138f6455746e4567531bf4e2' into HEAD"
   },
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 145107511
+      "instructions": 122786845
     },
     {
       "name": "binary_trees",
-      "instructions": 11046953
+      "instructions": 10522533
     },
     {
       "name": "collatz",
-      "instructions": 70193689
+      "instructions": 70193407
     },
     {
       "name": "edigits",
-      "instructions": 49974762
+      "instructions": 49068939
     },
     {
       "name": "factorial",
-      "instructions": 59296
+      "instructions": 58967
     },
     {
       "name": "fannkuch",
-      "instructions": 220640790
+      "instructions": 220304099
     },
     {
       "name": "fasta",
-      "instructions": 18803096
+      "instructions": 17380111
     },
     {
       "name": "fft",
-      "instructions": 1793111
+      "instructions": 1766990
     },
     {
       "name": "fib",
-      "instructions": 8265915
+      "instructions": 7630200
     },
     {
       "name": "huffman",
-      "instructions": 410638818
+      "instructions": 404719446
     },
     {
       "name": "leibniz",
-      "instructions": 17006612
+      "instructions": 17006281
     },
     {
       "name": "mandelbrot",
-      "instructions": 15142312
+      "instructions": 15141681
     },
     {
       "name": "matmul",
-      "instructions": 42706145
+      "instructions": 41669561
     },
     {
       "name": "merkletrees",
-      "instructions": 3871295
+      "instructions": 3871153
     },
     {
       "name": "myers_diff",
-      "instructions": 204989596
+      "instructions": 204613245
     },
     {
       "name": "nbody",
-      "instructions": 14536066
+      "instructions": 14595831
     },
     {
       "name": "nqueen",
-      "instructions": 7417756
+      "instructions": 6924926
     },
     {
       "name": "nsieve",
-      "instructions": 130974242
+      "instructions": 130435278
     },
     {
       "name": "pisum",
-      "instructions": 808309
+      "instructions": 808025
     },
     {
       "name": "primes",
-      "instructions": 1652239
+      "instructions": 1632009
     },
     {
       "name": "quicksort",
-      "instructions": 176466730
+      "instructions": 173108397
     },
     {
       "name": "raytracer",
-      "instructions": 45983570
+      "instructions": 45196456
     },
     {
       "name": "regex_lite",
-      "instructions": 64886726
+      "instructions": 64754916
     },
     {
       "name": "spectral_norm",
-      "instructions": 267341322
+      "instructions": 263137694
     },
     {
       "name": "string_equality",
-      "instructions": 1178543
+      "instructions": 1177997
     },
     {
       "name": "sum_to_n",
-      "instructions": 58340
+      "instructions": 57964
     },
     {
       "name": "tak",
-      "instructions": 48005008
+      "instructions": 48004666
     },
     {
       "name": "tinytemplate",
-      "instructions": 309411161
+      "instructions": 306444918
     },
     {
       "name": "warden",
-      "instructions": 44209521
+      "instructions": 44147260
     }
   ]
 }

@@ -21,6 +21,7 @@ let private context : ARM64CodeGenTypes.CodeGenContext = {
     InstructionSite = "fixture_0"
     StackSize = 0
     UsedCalleeSaved = []
+    UsedCalleeSavedF = []
     HeapOverflowLabel = "__heap_oom_parallel_move_fixture"
     RecordLirOpExpansion = None
 }

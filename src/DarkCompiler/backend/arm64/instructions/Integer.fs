@@ -384,82 +384,9 @@ let internal emitClosureAlloc (ctx: CodeGenContext) (dest: LIR.Reg) (funcId: AST
 
         Ok (allocInstrs @ generateLeakCounterInc ctx @ storeFuncAddr @ storeCaptures))
 
-let internal emitArgMoves (ctx: CodeGenContext) (moves: (LIR.PhysReg * LIR.Operand) list) : Result<ARM64Symbolic.Instr list, string> =
-    // Parallel move resolution for function arguments
-    // After SaveRegs, X1-X10 are saved at [SP+0..SP+72]
-    // If source is in X1-X7 and could be clobbered, load from stack instead
-    //
-    // Stack layout after SaveRegs: X1@[SP+0], X2@[SP+8], ..., X10@[SP+72]
-    let saveRegsOffset (reg: LIR.PhysReg) : int option =
-        match reg with
-        | LIR.X1 -> Some 0
-        | LIR.X2 -> Some 8
-        | LIR.X3 -> Some 16
-        | LIR.X4 -> Some 24
-        | LIR.X5 -> Some 32
-        | LIR.X6 -> Some 40
-        | LIR.X7 -> Some 48
-        | LIR.X8 -> Some 56
-        | LIR.X9 -> Some 64
-        | LIR.X10 -> Some 72
-        | _ -> None
-
-    // Find which destination registers (X0-X7) will be written
-    let destRegs = moves |> List.map fst |> Set.ofList
-
-    // For each move, determine how to execute it safely
-    let generateMove (destReg: LIR.PhysReg, srcOp: LIR.Operand) : Result<ARM64Symbolic.Instr list, string> =
-        let destARM64 = lirPhysRegToARM64Reg destReg
-        match srcOp with
-        | LIR.Imm value ->
-            Ok (loadImmediate destARM64 value)
-        | LIR.Reg (LIR.Physical srcPhysReg) ->
-            // If source equals destination, it's a no-op
-            if srcPhysReg = destReg then
-                Ok []
-            else
-                // Check if source register will be clobbered by an earlier move
-                // A register is clobbered if it's a destination of a move to a LOWER index
-                // (since we process X0, X1, X2, ... in order)
-                let srcWillBeClobbered =
-                    match srcPhysReg with
-                    | LIR.X1 | LIR.X2 | LIR.X3 | LIR.X4 | LIR.X5 | LIR.X6 | LIR.X7 ->
-                        Set.contains srcPhysReg destRegs
-                    | _ -> false
-                if srcWillBeClobbered then
-                    // Load from SaveRegs stack instead of live register
-                    match saveRegsOffset srcPhysReg with
-                    | Some offset ->
-                        Ok [ARM64Symbolic.LDR (destARM64, ARM64Symbolic.SP, int16 offset)]
-                    | None ->
-                        Error $"ArgMoves: Source register {srcPhysReg} will be clobbered but has no SaveRegs offset"
-                else
-                    let srcARM64 = lirPhysRegToARM64Reg srcPhysReg
-                    Ok [ARM64Symbolic.MOV_reg (destARM64, srcARM64)]
-        | LIR.Reg (LIR.Virtual _) ->
-            Error "Virtual register in ArgMoves - should have been allocated"
-        | LIR.StackSlot offset ->
-            loadStackSlot destARM64 offset
-        | LIR.StringSymbol value ->
-            Ok (loadStringLiteralPointer destARM64 value)
-        | LIR.FuncAddr funcName ->
-            Ok [ARM64Symbolic.ADR (destARM64, codeLabel (functionName ctx funcName))]
-        | LIR.FloatImm _ | LIR.FloatSymbol _ ->
-            Error "Float in ArgMoves not yet supported"
-
-    // MIR lowering stores moves in ABI destination order (X0, X1, ...),
-    // and register allocation changes only their source operands.
-    let moveInstrs =
-        moves
-        |> ResultList.mapResults generateMove
-        |> Result.map List.concat
-
-    moveInstrs
-
 let internal emitTailArgMoves (ctx: CodeGenContext) (moves: (LIR.PhysReg * LIR.Operand) list) : Result<ARM64Symbolic.Instr list, string> =
-    // Parallel move resolution for TAIL CALL arguments
-    // Unlike ArgMoves, there is NO SaveRegs, so we can't load from stack.
-    // We use the shared ParallelMoves module with X16 as the temp register.
+    // Resolve call arguments without relying on caller-save stack offsets.
+    // X16 is reserved from allocation and breaks register cycles.
 
     // Helper to get source register if operand is a physical register
     let getSrcPhysReg (srcOp: LIR.Operand) : LIR.PhysReg option =
@@ -502,6 +429,9 @@ let internal emitTailArgMoves (ctx: CodeGenContext) (moves: (LIR.PhysReg * LIR.O
             // Move from X16 (temp) to destination
             Ok [ARM64Symbolic.MOV_reg (lirPhysRegToARM64Reg dest, ARM64Symbolic.X16)])
     |> Result.map List.concat
+
+let internal emitArgMoves (ctx: CodeGenContext) (moves: (LIR.PhysReg * LIR.Operand) list) : Result<ARM64Symbolic.Instr list, string> =
+    emitTailArgMoves ctx moves
 
 let internal emitExit (ctx: CodeGenContext) : Result<ARM64Symbolic.Instr list, string> =
     // Exit program with code 0

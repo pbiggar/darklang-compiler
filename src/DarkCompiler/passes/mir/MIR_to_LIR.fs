@@ -815,19 +815,16 @@ let selectInstr
         let restoreInstrs = [LIR.RestoreRegs ([], [])]
 
         // Move return value from X0 or D0 to destination based on return type
-        // For float returns, we use D8 (callee-saved) as intermediate to avoid conflicts:
-        // - Save D0 to D8 BEFORE RestoreRegs (which clobbers D0)
-        // - After RestoreRegs, copy from D8 to destination
+        // D16 is reserved from allocation and survives this call's RestoreRegs.
+        // Keep the return there while restoring a live D0.
         // This handles the case where destFReg maps to D0 (which would be clobbered by RestoreRegs).
         let moveResult =
             if returnType = AST.TFloat64 then
-                // Float return: value is in D0, use D8 as safe intermediate
+                // Float return: value is in D0, use reserved D16 as intermediate
                 let destFReg = vregToLIRFReg dest
-                // First save D0 to D8 (callee-saved, not touched by RestoreRegs)
-                let saveToD8 = [LIR.FMov (LIR.FPhysical LIR.D8, LIR.FPhysical LIR.D0)]
-                // After RestoreRegs, copy from D8 to actual destination
-                let copyToFinal = [LIR.FMov (destFReg, LIR.FPhysical LIR.D8)]
-                (saveToD8, copyToFinal)
+                let saveToD16 = [LIR.FMov (LIR.FVirtual -1, LIR.FPhysical LIR.D0)]
+                let copyToFinal = [LIR.FMov (destFReg, LIR.FVirtual -1)]
+                (saveToD16, copyToFinal)
             else
                 // Integer return: value is in X0
                 let intMove =
@@ -1029,13 +1026,13 @@ let selectInstr
         let restoreInstrs = [LIR.RestoreRegs ([], [])]
 
         // Move return value from X0 or D0 to destination based on return type
-        // For float returns, save D0 to D8 before RestoreRegs, then copy to dest after.
+        // D16 is reserved from allocation and survives RestoreRegs.
         let (moveBeforeRestore, moveAfterRestore) =
             if returnType = AST.TFloat64 then
                 let destFReg = vregToLIRFReg dest
-                let saveToD8 = [LIR.FMov (LIR.FPhysical LIR.D8, LIR.FPhysical LIR.D0)]
-                let copyToFinal = [LIR.FMov (destFReg, LIR.FPhysical LIR.D8)]
-                (saveToD8, copyToFinal)
+                let saveToD16 = [LIR.FMov (LIR.FVirtual -1, LIR.FPhysical LIR.D0)]
+                let copyToFinal = [LIR.FMov (destFReg, LIR.FVirtual -1)]
+                (saveToD16, copyToFinal)
             else
                 let moveResult =
                     match lirDest with

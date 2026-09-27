@@ -29,6 +29,10 @@ let convertFunction
                 | _ -> false))
 
     // Create function-specific context with stack info for tail call epilogue generation
+    let usedCalleeSavedF =
+        func.CodegenFacts
+        |> Option.map (fun facts -> facts.Arm64UsedCalleeSavedF)
+        |> Option.defaultValue []
     let funcCtx = {
         ctx with
             FunctionName = func.Name
@@ -37,6 +41,7 @@ let convertFunction
                 |> Option.bind (fun facts -> facts.Arm64RawSlotInitRetainTargets)
             StackSize = func.StackSize
             UsedCalleeSaved = func.UsedCalleeSaved
+            UsedCalleeSavedF = usedCalleeSavedF
             HeapOverflowLabel = overflowLabel
     }
 
@@ -45,7 +50,7 @@ let convertFunction
     | Error err -> Error err
     | Ok cfgInstrs ->
         // Generate prologue (save FP/LR, allocate stack)
-        let prologue = generatePrologue func.UsedCalleeSaved func.StackSize
+        let prologue = generatePrologue func.UsedCalleeSaved usedCalleeSavedF func.StackSize
 
         // Generate heap initialization for _start only
         let heapInit =
@@ -72,11 +77,11 @@ let convertFunction
                         runtimeInstrs (ARM64Coverage.generateCoverageFlush ctx.Target ctx.Options.CoverageExprCount)
                     else []
                 let leakCheckReport = generateLeakCheckReport ctx
-                generateEpilogue func.UsedCalleeSaved func.StackSize
+                generateEpilogue func.UsedCalleeSaved usedCalleeSavedF func.StackSize
                 |> List.filter (function ARM64Symbolic.RET -> false | _ -> true)  // Remove RET
                 |> fun instrs -> instrs @ coverageFlush @ leakCheckReport @ runtimeInstrs (ARM64PrintAndExit.generateExit ctx.Target)
             else
-                generateEpilogue func.UsedCalleeSaved func.StackSize
+                generateEpilogue func.UsedCalleeSaved usedCalleeSavedF func.StackSize
 
         // Add function entry label (for BL to branch to)
         let functionEntryLabel = [ARM64Symbolic.Label func.Name]

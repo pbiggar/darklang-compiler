@@ -78,6 +78,7 @@ let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64Symbolic.FReg, string> =
     | LIR.FVirtual 1001 -> Ok ARM64Symbolic.D17  // Right temp for binary ops
     | LIR.FVirtual 1002 -> Ok ARM64Symbolic.D27  // Third temp for fused operations
     | LIR.FVirtual 2000 -> Ok ARM64Symbolic.D16  // Reserved scratch for FPhi cycles and runtime helpers
+    | LIR.FVirtual -1 -> Ok ARM64Symbolic.D16  // Float return across RestoreRegs
     | LIR.FVirtual n when n >= 3000 && n < 4000 ->
         // Temps for float call arguments - use D19-D26 (8 registers)
         // These must not collide with each other since up to 8 floats

@@ -44,6 +44,68 @@ let private timePhase
         let elapsedMs = sw.Elapsed.TotalMilliseconds - start
         (result, appendTiming phase elapsedMs timings)
 
+/// Assign the colors that actually span calls to preserved registers. Coloring
+/// still determines interference; this permutation only chooses which physical
+/// register represents each color, so it cannot create a new conflict.
+let private chooseArm64RegistersForCalls
+    (blocks: LIR.BasicBlock array)
+    (classifiedBlocks: ClassifiedBlock array)
+    (domain: VRegDomain)
+    (floatDomain: VRegDomain)
+    (liveness: BlockLiveness array)
+    (floatLiveness: BlockLiveness array)
+    (allocation: AllocationResult)
+    : AllocationResult =
+    let callLiveRegs =
+        blocks
+        |> Array.mapi (fun idx block ->
+            let snapshots =
+                computeSaveRegsPreparation
+                    domain floatDomain block
+                    classifiedBlocks.[idx].InstrFacts
+                    liveness.[idx].LiveOut
+                    floatLiveness.[idx].LiveOut
+            snapshots
+            |> List.collect (fun (liveInts, _) ->
+                liveInts
+                |> Bitset.indicesToList
+                |> List.choose (fun vregIdx ->
+                    match allocation.Allocations.[vregIdx] with
+                    | Some (PhysReg reg) -> Some reg
+                    | _ -> None)))
+        |> Array.toList
+        |> List.concat
+    let callCounts =
+        callLiveRegs
+        |> List.countBy id
+        |> Map.ofList
+    let usedRegs =
+        allocation.Allocations
+        |> Array.choose (function Some (PhysReg reg) -> Some reg | _ -> None)
+        |> Array.distinct
+        |> Array.toList
+    let callCount reg = Map.tryFind reg callCounts |> Option.defaultValue 0
+    let ordered = usedRegs |> List.sortBy (fun reg -> (-callCount reg, reg))
+    let calleeRegs = calleeSavedRegsFor Platform.ARM64
+    let mustUseCallee = max 0 (List.length ordered - List.length callerSavedRegs)
+    let crossingCount = ordered |> List.filter (fun reg -> callCount reg > 0) |> List.length
+    let calleeCount = min (List.length calleeRegs) (max mustUseCallee crossingCount)
+    let targetRegs =
+        (calleeRegs |> List.take calleeCount)
+        @ (callerSavedRegs |> List.take (List.length ordered - calleeCount))
+    let remap = List.zip ordered targetRegs |> Map.ofList
+    let remappedAllocations =
+        allocation.Allocations
+        |> Array.map (function
+            | Some (PhysReg reg) ->
+                match Map.tryFind reg remap with
+                | Some mapped -> Some (PhysReg mapped)
+                | None -> Crash.crash $"Missing ARM64 register remapping for {reg}"
+            | other -> other)
+    { allocation with
+        Allocations = remappedAllocations
+        UsedCalleeSaved = targetRegs |> List.filter (fun reg -> List.contains reg calleeRegs) |> List.sort }
+
 let private allocateRegistersInternal
     (arch: Platform.Arch)
     (swOpt: System.Diagnostics.Stopwatch option)
@@ -126,7 +188,7 @@ let private allocateRegistersInternal
     // Use optimal register order based on calling pattern:
     // - Functions with non-tail calls: callee-saved first (save once in prologue/epilogue)
     // - Leaf functions / tail-call-only: caller-saved first (no prologue overhead)
-    let (result, timings) =
+    let (colorResult, timings) =
         match swOpt with
         | None ->
             timePhase swOpt "RegAlloc: Coloring" timings (fun () ->
@@ -148,6 +210,13 @@ let private allocateRegistersInternal
                 |> appendTiming "RegAlloc: Coloring - Greedy" colorTiming.GreedyMs
                 |> appendTiming "RegAlloc: Coloring - Expand" colorTiming.ExpandMs
             (result, timings)
+
+    let result =
+        match arch with
+        | Platform.ARM64 ->
+            chooseArm64RegistersForCalls
+                blocks classifiedBlocks domain floatDomain livenessBits floatLiveness colorResult
+        | Platform.X86_64 -> colorResult
 
     // Step 3b: Parameter info already computed (needed for float allocation and param moves)
 
@@ -293,7 +362,6 @@ let private allocateRegistersInternal
     let (blockPreparations, timings) =
         timePhase swOpt "RegAlloc: Apply Preparation" timings (fun () ->
             prepareCFGAllocation
-                arch
                 blocksWithPhiResolved
                 result
                 floatAllocation
@@ -360,7 +428,10 @@ let private allocateRegistersInternal
         CFG = cfgWithParamCopies
         StackSize = floatAllocation.StackSize
         UsedCalleeSaved = result.UsedCalleeSaved
-        CodegenFacts = func.CodegenFacts
+        CodegenFacts =
+            func.CodegenFacts
+            |> Option.map (fun facts ->
+                { facts with Arm64UsedCalleeSavedF = floatAllocation.UsedCalleeSavedF })
     }
 
     (allocatedFunc

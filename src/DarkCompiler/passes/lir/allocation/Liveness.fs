@@ -306,105 +306,40 @@ let computeFloatLivenessBits (cfg: LIR.CFG) : VRegDomain * BlockIndex * BlockLiv
     let (domain, liveness) = computeFloatLivenessBitsRaw blockIndex blocks []
     (domain, blockIndex, liveness)
 
-/// Compute the data needed to populate empty SaveRegs/RestoreRegs placeholders.
-/// A single backward walk captures continuation liveness and, on ARM64, the
-/// caller-saved sources needed to preserve parallel argument moves.
+/// Capture continuation liveness for each SaveRegs/RestoreRegs pair.
 let internal computeSaveRegsPreparation
-    (trackArgMoveBacking: bool)
     (intDomain: VRegDomain)
     (floatDomain: VRegDomain)
-    (mapping: AllocationResult)
     (block: LIR.BasicBlock)
     (instrFacts: InstrRegisterFacts array)
     (intLiveOut: BitSet)
     (floatLiveOut: BitSet)
-    : (BitSet * BitSet) list * LIR.PhysReg list list =
+    : (BitSet * BitSet) list =
     let intLive = Bitset.clone intLiveOut
     let floatLive = Bitset.clone floatLiveOut
 
     getTerminatorUsedVRegs block.Terminator
     |> List.iter (fun id -> vregBitsAddInPlace intDomain id intLive)
 
-    let sourcePhysReg (operand: LIR.Operand) : LIR.PhysReg option =
-        match operand with
-        | LIR.Reg (LIR.Physical reg) -> Some reg
-        | LIR.Reg (LIR.Virtual id) ->
-            match tryIndexOf mapping.Domain id with
-            | Some idx ->
-                match mapping.Allocations.[idx] with
-                | Some (PhysReg reg) -> Some reg
-                | Some (StackSlot _)
-                | None -> None
-            | None -> None
-        | _ -> None
-
-    let callerSavedArgIndex (reg: LIR.PhysReg) : int option =
-        match reg with
-        | LIR.X1 -> Some 0
-        | LIR.X2 -> Some 1
-        | LIR.X3 -> Some 2
-        | LIR.X4 -> Some 3
-        | LIR.X5 -> Some 4
-        | LIR.X6 -> Some 5
-        | LIR.X7 -> Some 6
-        | _ -> None
-
-    let mergeBackingForMoves
-        (backing: bool array)
-        (moves: (LIR.PhysReg * LIR.Operand) list)
-        : unit =
-        let destinations = Array.create 7 false
-        for (dest, _) in moves do
-            match callerSavedArgIndex dest with
-            | Some idx -> destinations.[idx] <- true
-            | None -> ()
-        for (dest, source) in moves do
-            match sourcePhysReg source with
-            | Some sourceReg when sourceReg <> dest ->
-                match callerSavedArgIndex sourceReg with
-                | Some idx when destinations.[idx] -> backing.[idx] <- true
-                | _ -> ()
-            | _ -> ()
-
-    let finishBacking (backing: bool array) : LIR.PhysReg list =
-        [ LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7 ]
-        |> List.mapi (fun idx reg -> (idx, reg))
-        |> List.choose (fun (idx, reg) -> if backing.[idx] then Some reg else None)
-
     let rec walkBackwards
         (instrIdx: int)
-        (pendingRestores: ((BitSet * BitSet) * bool array) list)
+        (pendingRestores: (BitSet * BitSet) list)
         (snapshots: (BitSet * BitSet) list)
-        (backingRegs: LIR.PhysReg list list)
-        : (BitSet * BitSet) list * LIR.PhysReg list list =
+        : (BitSet * BitSet) list =
         if instrIdx < 0 then
-            if List.isEmpty pendingRestores then
-                (snapshots, backingRegs)
-            else
-                Crash.crash "Unmatched RestoreRegs while computing caller-save liveness"
+            if List.isEmpty pendingRestores then snapshots
+            else Crash.crash "Unmatched RestoreRegs while computing caller-save liveness"
         else
             let facts = instrFacts.[instrIdx]
-            let instr = facts.Instr
-            let (pendingRestores, snapshots, backingRegs) =
-                match instr with
+            let (pendingRestores, snapshots) =
+                match facts.Instr with
                 | LIR.RestoreRegs ([], []) ->
-                    if trackArgMoveBacking && not (List.isEmpty pendingRestores) then
-                        Crash.crash "Nested SaveRegs while computing argument-move backing"
-                    let snapshot = (Bitset.clone intLive, Bitset.clone floatLive)
-                    ((snapshot, Array.create 7 false) :: pendingRestores, snapshots, backingRegs)
-                | LIR.ArgMoves moves when trackArgMoveBacking ->
-                    match pendingRestores with
-                    | (snapshot, backing) :: rest ->
-                        mergeBackingForMoves backing moves
-                        ((snapshot, backing) :: rest, snapshots, backingRegs)
-                    | [] -> (pendingRestores, snapshots, backingRegs)
+                    ((Bitset.clone intLive, Bitset.clone floatLive) :: pendingRestores, snapshots)
                 | LIR.SaveRegs ([], []) ->
                     match pendingRestores with
-                    | (snapshot, backing) :: pendingRestores ->
-                        (pendingRestores, snapshot :: snapshots, finishBacking backing :: backingRegs)
-                    | [] ->
-                        Crash.crash "Unmatched SaveRegs while computing caller-save liveness"
-                | _ -> (pendingRestores, snapshots, backingRegs)
+                    | snapshot :: rest -> (rest, snapshot :: snapshots)
+                    | [] -> Crash.crash "Unmatched SaveRegs while computing caller-save liveness"
+                | _ -> (pendingRestores, snapshots)
 
             match facts.IntDef with
             | Some id -> vregBitsRemoveInPlace intDomain id intLive
@@ -418,9 +353,9 @@ let internal computeSaveRegsPreparation
             facts.FloatUses
             |> List.iter (fun id -> vregBitsAddInPlace floatDomain id floatLive)
 
-            walkBackwards (instrIdx - 1) pendingRestores snapshots backingRegs
+            walkBackwards (instrIdx - 1) pendingRestores snapshots
 
-    walkBackwards (instrFacts.Length - 1) [] [] []
+    walkBackwards (instrFacts.Length - 1) [] []
 
 let internal isEmptySaveRegs (instr: LIR.Instr) : bool =
     match instr with

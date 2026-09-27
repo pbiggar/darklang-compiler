@@ -509,6 +509,7 @@ let private generatePreparedARM64WithOptionsAndCache
         InstructionSite = ""
         StackSize = 0
         UsedCalleeSaved = []
+        UsedCalleeSavedF = []
         HeapOverflowLabel = ""
         RecordLirOpExpansion = lirOpExpansionRecorder
     }

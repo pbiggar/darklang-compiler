@@ -33,6 +33,7 @@ let testLirOpExpansionRecorderAttributesGeneratedInstructions () : TestResult =
         InstructionSite = ""
         StackSize = 0
         UsedCalleeSaved = []
+        UsedCalleeSavedF = []
         HeapOverflowLabel = "__heap_oom_lir_op_profile"
         RecordLirOpExpansion =
             Some (fun functionName opcode detail instructionCount elapsedTicks ->

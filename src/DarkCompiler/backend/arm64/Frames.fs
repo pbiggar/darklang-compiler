@@ -45,9 +45,43 @@ let calleeSavedStackSpace (regs: LIR.PhysReg list) : int =
     if count = 0 then 0
     else ((count * 8 + 15) / 16) * 16  // 16-byte aligned
 
+let floatCalleeSavedStackSpace (regs: LIR.PhysFPReg list) : int =
+    let count = List.length regs
+    if count = 0 then 0 else ((count * 8 + 15) / 16) * 16
+
+let generateFloatCalleeSavedSaves (regs: LIR.PhysFPReg list) (baseOffset: int) : ARM64Symbolic.Instr list =
+    let rec emit remaining offset =
+        match remaining with
+        | [] -> []
+        | [reg] ->
+            [ARM64Symbolic.STR_fp (lirPhysFPRegToARM64FReg reg, ARM64Symbolic.SP, int16 offset)]
+        | first :: second :: rest ->
+            ARM64Symbolic.STP_fp
+                (lirPhysFPRegToARM64FReg first,
+                 lirPhysFPRegToARM64FReg second,
+                 ARM64Symbolic.SP,
+                 int16 offset)
+            :: emit rest (offset + 16)
+    emit regs baseOffset
+
+let generateFloatCalleeSavedRestores (regs: LIR.PhysFPReg list) (baseOffset: int) : ARM64Symbolic.Instr list =
+    let rec emit remaining offset =
+        match remaining with
+        | [] -> []
+        | [reg] ->
+            [ARM64Symbolic.LDR_fp (lirPhysFPRegToARM64FReg reg, ARM64Symbolic.SP, int16 offset)]
+        | first :: second :: rest ->
+            ARM64Symbolic.LDP_fp
+                (lirPhysFPRegToARM64FReg first,
+                 lirPhysFPRegToARM64FReg second,
+                 ARM64Symbolic.SP,
+                 int16 offset)
+            :: emit rest (offset + 16)
+    emit regs baseOffset
+
 /// Generate function prologue
 /// Saves FP, LR, callee-saved registers, and allocates stack space
-let generatePrologue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM64Symbolic.Instr list =
+let generatePrologue (usedCalleeSaved: LIR.PhysReg list) (usedCalleeSavedF: LIR.PhysFPReg list) (stackSize: int) : ARM64Symbolic.Instr list =
     // Prologue sequence:
     // 1. Save FP (X29) and LR (X30) with pre-indexed addressing (combines SUB and STP)
     // 2. Set FP = SP: MOV X29, SP
@@ -60,7 +94,7 @@ let generatePrologue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
 
     // Calculate total additional stack space needed
     let calleeSavedSpace = calleeSavedStackSpace usedCalleeSaved
-    let totalExtraStack = stackSize + calleeSavedSpace
+    let totalExtraStack = stackSize + calleeSavedSpace + floatCalleeSavedStackSpace usedCalleeSavedF
 
     // Allocate all stack space at once (for spills + callee-saved)
     let allocStack =
@@ -72,12 +106,13 @@ let generatePrologue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
     // Save callee-saved registers at [SP]
     // (callee-saved are at the bottom of the frame, spill space is above them)
     let (saveCalleeSavedInstrs, _) = generateCalleeSavedSaves usedCalleeSaved
+    let saveFloatInstrs = generateFloatCalleeSavedSaves usedCalleeSavedF calleeSavedSpace
 
-    saveFpLr @ setFp @ allocStack @ saveCalleeSavedInstrs
+    saveFpLr @ setFp @ allocStack @ saveCalleeSavedInstrs @ saveFloatInstrs
 
 /// Generate function epilogue
 /// Restores callee-saved registers, FP, LR, and returns
-let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM64Symbolic.Instr list =
+let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (usedCalleeSavedF: LIR.PhysFPReg list) (stackSize: int) : ARM64Symbolic.Instr list =
     // Epilogue sequence (reverse of prologue):
     // 1. Restore callee-saved registers from [SP + stackSize]
     // 2. Deallocate stack space (spills + callee-saved) at once
@@ -88,9 +123,10 @@ let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
     // (callee-saved are at the bottom of the frame, spill space is above them)
     let calleeSavedSpace = calleeSavedStackSpace usedCalleeSaved
     let restoreCalleeSavedInstrs = generateCalleeSavedRestores usedCalleeSaved
+    let restoreFloatInstrs = generateFloatCalleeSavedRestores usedCalleeSavedF calleeSavedSpace
 
     // Deallocate all stack space at once
-    let totalExtraStack = stackSize + calleeSavedSpace
+    let totalExtraStack = stackSize + calleeSavedSpace + floatCalleeSavedStackSpace usedCalleeSavedF
     let deallocStack =
         if totalExtraStack > 0 then
             [ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, uint16 totalExtraStack)]
@@ -101,4 +137,4 @@ let generateEpilogue (usedCalleeSaved: LIR.PhysReg list) (stackSize: int) : ARM6
     let restoreFpLr = [ARM64Symbolic.LDP_post (ARM64Symbolic.X29, ARM64Symbolic.X30, ARM64Symbolic.SP, 16s)]
     let ret = [ARM64Symbolic.RET]
 
-    restoreCalleeSavedInstrs @ deallocStack @ restoreFpLr @ ret
+    restoreFloatInstrs @ restoreCalleeSavedInstrs @ deallocStack @ restoreFpLr @ ret

@@ -224,7 +224,8 @@ let chordalFloatAllocation (cfg: LIR.CFG) (additionalVRegs: int list) : FAllocat
         (vregBitsFromList domain additionalVRegs) [] domain livenessBits
 
 let private isFixedFReg = function
-    | LIR.FVirtual 1000 | LIR.FVirtual 1001 | LIR.FVirtual 1002 | LIR.FVirtual 2000 -> true
+    | LIR.FVirtual 1000 | LIR.FVirtual 1001 | LIR.FVirtual 1002
+    | LIR.FVirtual 2000 | LIR.FVirtual -1 -> true
     | LIR.FVirtual n when n >= 3000 && n < 4000 -> true
     | _ -> false
 

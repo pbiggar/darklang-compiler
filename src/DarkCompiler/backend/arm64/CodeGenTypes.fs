@@ -52,6 +52,7 @@ type CodeGenContext = {
     // Function context for tail call epilogue generation
     StackSize: int
     UsedCalleeSaved: LIR.PhysReg list
+    UsedCalleeSavedF: LIR.PhysFPReg list
     HeapOverflowLabel: string
     RecordLirOpExpansion: LirOpExpansionRecorder option
 }

@@ -22,6 +22,7 @@ let private convertRawAlloc
         InstructionSite = "test_0"
         StackSize = 0
         UsedCalleeSaved = []
+        UsedCalleeSavedF = []
         HeapOverflowLabel = "__heap_oom_test"
         RecordLirOpExpansion = None
     }

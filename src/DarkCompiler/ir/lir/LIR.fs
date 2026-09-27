@@ -28,7 +28,8 @@ type Reg =
     | Physical of PhysReg
     | Virtual of int
 
-/// Floating-point register or virtual FP register (before allocation)
+/// Floating-point register or virtual FP register (before allocation).
+/// FVirtual -1 is reserved for a Float return crossing RestoreRegs.
 type FReg =
     | FPhysical of PhysFPReg
     | FVirtual of int
@@ -392,6 +393,8 @@ type Arm64SlotInitRootRetainTarget =
 /// only combine facts from the functions that survived reachability instead of
 /// rescanning every instruction in every executable.
 type FunctionCodegenFacts = {
+    /// ARM64 float registers assigned by the allocator that the function must preserve.
+    Arm64UsedCalleeSavedF: PhysFPReg list
     ClosurePayloadSizeFromParams: int option
     ClosureCaptureTypes: AST.SemanticType list option
     ClosurePayloadSizesFromAllocs: (AST.FunctionId * int) list
@@ -494,6 +497,7 @@ let analyzeFunctionCodegenFacts (func: Function) : FunctionCodegenFacts =
                 ()
 
     {
+        Arm64UsedCalleeSavedF = []
         ClosurePayloadSizeFromParams = closurePayloadSizeFromParams
         ClosureCaptureTypes = closureCaptureTypes
         ClosurePayloadSizesFromAllocs = List.rev closurePayloadSizesFromAllocsRev

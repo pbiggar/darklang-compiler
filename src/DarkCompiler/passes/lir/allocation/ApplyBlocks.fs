@@ -75,11 +75,9 @@ let applyToTerminator (mapping: AllocationResult) (term: LIR.Terminator)
 
 type internal BlockAllocationPreparation = {
     SaveRegsLiveness: (BitSet * BitSet) list
-    ArgMoveBackingRegs: LIR.PhysReg list list
 }
 
 let private prepareBlockAllocation
-    (arch: Platform.Arch)
     (mapping: AllocationResult)
     (floatAllocation: FAllocationResult)
     (liveOut: BitSet)
@@ -88,22 +86,19 @@ let private prepareBlockAllocation
     (instrFacts: InstrRegisterFacts array)
     : BlockAllocationPreparation =
     let hasEmptySaveRegs = List.exists isEmptySaveRegs block.Instrs
-    let (saveRegsLiveness, argMoveBackingRegs) =
+    let saveRegsLiveness =
         if hasEmptySaveRegs then
             computeSaveRegsPreparation
-                (arch = Platform.ARM64)
                 mapping.Domain
                 floatAllocation.Domain
-                mapping
                 block
                 instrFacts
                 liveOut
                 floatLiveOut
         else
-            ([], [])
+            []
 
-    { SaveRegsLiveness = saveRegsLiveness
-      ArgMoveBackingRegs = argMoveBackingRegs }
+    { SaveRegsLiveness = saveRegsLiveness }
 
 /// Apply allocation to a basic block with precomputed SaveRegs/RestoreRegs data.
 let private applyToPreparedBlock
@@ -121,7 +116,6 @@ let private applyToPreparedBlock
     let allocatedInstrs = ResizeArray<LIR.Instr>()
     let mutable savedRegsStack : (LIR.PhysReg list * LIR.PhysFPReg list) list = []
     let mutable remainingLiveness = preparation.SaveRegsLiveness
-    let mutable remainingArgMoveBacking = preparation.ArgMoveBackingRegs
 
     let appendOneAllocated (instr: LIR.Instr) : unit =
         for allocated in applyFloatAllocationToInstrs floatAllocation instr do
@@ -134,25 +128,17 @@ let private applyToPreparedBlock
     for instr in block.Instrs do
         match instr with
         | LIR.SaveRegs ([], []) ->
-            match remainingLiveness, remainingArgMoveBacking with
-            | (liveAfter, floatLiveAfter) :: restLiveness,
-              argMoveBacking :: restArgMoveBacking ->
+            match remainingLiveness with
+            | (liveAfter, floatLiveAfter) :: restLiveness ->
                 let liveCallerSaved = getLiveCallerSavedRegs mapping liveAfter
-                let intRegs =
-                    liveCallerSaved @ argMoveBacking
-                    |> List.distinct
-                    |> List.sort
                 let liveCallerSavedFloat =
                     getLiveCallerSavedFloatRegs arch floatLiveAfter floatAllocation
-                let regs = (intRegs, liveCallerSavedFloat)
+                let regs = (liveCallerSaved, liveCallerSavedFloat)
                 appendOneAllocated (LIR.SaveRegs regs)
                 savedRegsStack <- regs :: savedRegsStack
                 remainingLiveness <- restLiveness
-                remainingArgMoveBacking <- restArgMoveBacking
-            | [], _ ->
+            | [] ->
                 Crash.crash "Missing liveness snapshot for SaveRegs"
-            | _, [] ->
-                Crash.crash "Missing argument-move backing for SaveRegs"
         | LIR.RestoreRegs ([], []) ->
             match savedRegsStack with
             | regs :: restSavedRegs ->
@@ -165,9 +151,6 @@ let private applyToPreparedBlock
 
     if not (List.isEmpty remainingLiveness) then
         Crash.crash "Unused liveness snapshot for SaveRegs"
-
-    if not (List.isEmpty remainingArgMoveBacking) then
-        Crash.crash "Unused argument-move backing for SaveRegs"
 
     let (termLoads, allocatedTerm) = applyToTerminator mapping block.Terminator
     appendAllocated termLoads
@@ -187,11 +170,10 @@ let applyToBlockWithLiveness
     let instrFacts =
         (classifyBlocks [| block |]).[0].InstrFacts
     let preparation =
-        prepareBlockAllocation arch mapping floatAllocation liveOut floatLiveOut block instrFacts
+        prepareBlockAllocation mapping floatAllocation liveOut floatLiveOut block instrFacts
     applyToPreparedBlock arch mapping floatAllocation preparation block
 
 let internal prepareCFGAllocation
-    (arch: Platform.Arch)
     (blocks: LIR.BasicBlock array)
     (mapping: AllocationResult)
     (floatAllocation: FAllocationResult)
@@ -206,7 +188,6 @@ let internal prepareCFGAllocation
             if idx < floatLiveness.Length then floatLiveness.[idx]
             else { LiveIn = emptyFloat; LiveOut = emptyFloat }
         prepareBlockAllocation
-            arch
             mapping
             floatAllocation
             blockLiveness.LiveOut
@@ -236,7 +217,6 @@ let applyToCFGWithLiveness
     let classifiedBlocks = classifyBlocks blocks
     let preparations =
         prepareCFGAllocation
-            arch
             blocks
             mapping
             floatAllocation
