@@ -112,7 +112,7 @@ let index = 1L in Stdlib.Option.withDefault (Stdlib.List.getAt ([10L, 20L, 30L])
 let index = -1L in Stdlib.Option.isNone (Stdlib.List.getAt ([10L, 20L, 30L]) (Stdlib.Int.fromInt64 index)) = true
 let index = 3L in Stdlib.Option.isNone (Stdlib.List.getAt ([10L, 20L, 30L]) (Stdlib.Int.fromInt64 index)) = true
 let index = 1L in match Stdlib.List.getAt (["a" ++ "b", "c" ++ "d"]) (Stdlib.Int.fromInt64 index) with | Some value -> value | None -> "missing" = "cd"
-let index = 1L in match Stdlib.List.getAt ([(1L, 1.5), (2L, 2.5)]) (Stdlib.Int.fromInt64 index) with | Some pair -> pair.0 | None -> 0L = 2L
+let index = 1L in match Stdlib.List.getAt ([(1L, 1.5), (2L, 2.5)]) (Stdlib.Int.fromInt64 index) with | Some ((first, _)) -> first | None -> 0L = 2L
 Stdlib.Option.withDefault (Stdlib.List.getAt ([10L, 20L, 30L]) 3) 99L = 99L
 let selected = Stdlib.Option.withDefault (Stdlib.List.getAt ([-0.0]) 0) 1.0 in Stdlib.Float.toBits selected = 9223372036854775808
 let fallback = Stdlib.Option.withDefault (Stdlib.List.getAt ([1.0]) 1) (-0.0) in Stdlib.Float.toBits fallback = 9223372036854775808

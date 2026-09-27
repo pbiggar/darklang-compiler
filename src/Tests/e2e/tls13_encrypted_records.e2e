@@ -51,7 +51,7 @@
  | Ok s -> Stdlib.Tls13.trafficKeys s
            |> Stdlib.Result.map (fun keys ->
                 (Stdlib.Blob.toHex keys.key, Stdlib.Blob.toHex keys.iv, keys.sequence)))
-  = Ok ("CBEE7571C611039CA327A2E879DFCD45", "3F22FBB61C1412E692986D64", 0L)
+  = Ok (("CBEE7571C611039CA327A2E879DFCD45", "3F22FBB61C1412E692986D64", 0L))
 
 (let secret = Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000"
  match secret with
@@ -70,7 +70,7 @@
                  |> Stdlib.Result.map (fun opened ->
                       (opened.contentType, Stdlib.Blob.toHex opened.content,
                        opened.nextKeys.sequence, sealed.nextKeys.sequence)))
-  = Ok (23L, "68656C6C6F", 1L, 1L)
+  = Ok ((23L, "68656C6C6F", 1L, 1L))
 
 (let secret = Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000"
  match secret with

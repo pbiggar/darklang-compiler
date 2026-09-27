@@ -23,7 +23,7 @@
       |> Stdlib.Result.map (fun record ->
            (record.contentType, Stdlib.Blob.toHex record.payload,
             Stdlib.Blob.toHex record.remaining))))
-  = Ok (Ok (22L, "616263", "4E455854"))
+  = Ok (Ok ((22L, "616263", "4E455854")))
 
 (Stdlib.Blob.fromHex "16030300036162"
  |> Stdlib.Result.map Stdlib.Tls13.parseRecord)
