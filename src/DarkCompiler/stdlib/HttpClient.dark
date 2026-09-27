@@ -58,3 +58,182 @@ let basicAuth
 /// Returns an authorization header carrying `token`.
 let bearerToken (token: String) : (String * String) =
   ("authorization", ("bearer " ++ token))
+
+// A single HTTP/1.1 exchange owns one connection. Closing after each response
+// keeps EOF framing unambiguous and avoids sharing a socket across callers.
+let __transportError (code: Int64) : Stdlib.HttpClient.RequestError =
+  if code == 11L || code == 35L || code == 36L || code == 60L ||
+     code == 110L || code == 115L then Stdlib.HttpClient.RequestError.Timeout
+  else Stdlib.HttpClient.RequestError.NetworkError
+
+let __dnsError (error: Stdlib.DnsWire.ResolveError) : Stdlib.HttpClient.RequestError =
+  match error with
+  | NetworkError code -> Stdlib.HttpClient.__transportError code
+  | _ -> Stdlib.HttpClient.RequestError.NetworkError
+
+let __connect4 (addresses: List<List<Int64>>) (port: Int64) (trusted: Bool)
+  (lastError: Stdlib.HttpClient.RequestError)
+  : Stdlib.Result.Result<Stdlib.Network.TcpConnection, Stdlib.HttpClient.RequestError> =
+  match addresses with
+  | [] -> Error lastError
+  | address :: rest ->
+      let result =
+        if trusted then Stdlib.HttpConnect.connectTrusted4 address port 1000L
+        else Stdlib.HttpConnect.connectGuest4 address port 1000L in
+      match result with
+      | Ok connection -> Ok connection
+      | Error error ->
+          match error with
+          | Policy _ -> Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidHost)
+          | Transport code ->
+              Stdlib.HttpClient.__connect4 rest port trusted (Stdlib.HttpClient.__transportError code)
+
+let __connect6 (addresses: List<List<Int64>>) (port: Int64) (trusted: Bool)
+  (lastError: Stdlib.HttpClient.RequestError)
+  : Stdlib.Result.Result<Stdlib.Network.TcpConnection, Stdlib.HttpClient.RequestError> =
+  match addresses with
+  | [] -> Error lastError
+  | address :: rest ->
+      let result =
+        if trusted then Stdlib.HttpConnect.connectTrusted6 address port 1000L
+        else Stdlib.HttpConnect.connectGuest6 address port 1000L in
+      match result with
+      | Ok connection -> Ok connection
+      | Error error ->
+          match error with
+          | Policy _ -> Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidHost)
+          | Transport code ->
+              Stdlib.HttpClient.__connect6 rest port trusted (Stdlib.HttpClient.__transportError code)
+
+let __connectDns6 (host: String) (port: Int64) (trusted: Bool)
+  (previous: Stdlib.HttpClient.RequestError)
+  : Stdlib.Result.Result<Stdlib.Network.TcpConnection, Stdlib.HttpClient.RequestError> =
+  match Stdlib.DnsWire.resolve host 28L with
+  | Ok addresses -> Stdlib.HttpClient.__connect6 addresses port trusted previous
+  | Error error ->
+      match previous with
+      | Timeout -> Error previous
+      | _ -> Error (Stdlib.HttpClient.__dnsError error)
+
+let __connectHost (host: String) (port: Int64) (trusted: Bool)
+  : Stdlib.Result.Result<Stdlib.Network.TcpConnection, Stdlib.HttpClient.RequestError> =
+  let failure = Stdlib.HttpClient.RequestError.NetworkError in
+  if Stdlib.Bool.not trusted &&
+     (host == "localhost" || host == "metadata" ||
+      host == "metadata.google.internal" ||
+      (Stdlib.Bool.not (Stdlib.String.contains host ".") &&
+       Stdlib.Option.isNone (Stdlib.DnsWire.ipv6 host))) then
+    Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidHost)
+  else
+    match Stdlib.DnsWire.ipv4 host with
+    | Some address -> Stdlib.HttpClient.__connect4 [address] port trusted failure
+    | None ->
+        match Stdlib.DnsWire.ipv6 host with
+        | Some address -> Stdlib.HttpClient.__connect6 [address] port trusted failure
+        | None ->
+            match Stdlib.DnsWire.resolve host 1L with
+            | Ok addresses ->
+                match Stdlib.HttpClient.__connect4 addresses port trusted failure with
+                | Ok connection -> Ok connection
+                | Error error ->
+                    match error with
+                    | BadUrl _ -> Error error
+                    | _ -> Stdlib.HttpClient.__connectDns6 host port trusted error
+            | Error error ->
+                Stdlib.HttpClient.__connectDns6 host port trusted (Stdlib.HttpClient.__dnsError error)
+
+let __emptyHeader (headers: List<(String * String)>) : Bool =
+  match headers with
+  | [] -> false
+  | (name, _) :: rest -> name == "" || Stdlib.HttpClient.__emptyHeader rest
+
+let __connectionHeader (headers: List<(String * String)>) : Bool =
+  match headers with
+  | [] -> false
+  | (name, _) :: rest ->
+      Stdlib.String.toLowercase name == "connection" ||
+      Stdlib.HttpClient.__connectionHeader rest
+
+let __readResponse (connection: Stdlib.Network.TcpConnection) (method: String)
+  (buffer: Blob) (informational: Int64)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  if Stdlib.Blob.__byteLength buffer > 104923136L then Error Stdlib.HttpClient.RequestError.NetworkError
+  else
+    match Stdlib.HttpWire.parseResponse method false buffer with
+    | Ok parsed ->
+        if parsed.statusCode == 101L || informational > 8L then Error Stdlib.HttpClient.RequestError.NetworkError
+        else if parsed.statusCode < 200L then
+          Stdlib.HttpClient.__readResponse connection method parsed.remaining (informational + 1L)
+        else
+          Ok (Stdlib.HttpClient.Response {
+            statusCode = Stdlib.Int.fromInt64 parsed.statusCode,
+            headers = parsed.headers,
+            body = parsed.body })
+    | Error error ->
+        match error with
+        | Invalid _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+        | Incomplete ->
+            match Stdlib.Network.readTcp connection 4096L with
+            | Error code -> Error (Stdlib.HttpClient.__transportError code)
+            | Ok chunk ->
+                if Stdlib.Blob.__byteLength chunk == 0L then
+                  match Stdlib.HttpWire.parseResponse method true buffer with
+                  | Ok parsed ->
+                      if parsed.statusCode < 200L then Error Stdlib.HttpClient.RequestError.NetworkError
+                      else Ok (Stdlib.HttpClient.Response {
+                        statusCode = Stdlib.Int.fromInt64 parsed.statusCode,
+                        headers = parsed.headers,
+                        body = parsed.body })
+                  | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+                else
+                  Stdlib.HttpClient.__readResponse connection method
+                    (Stdlib.Blob.concat [buffer, chunk]) informational
+
+let __request (trusted: Bool) (method: String) (urlText: String)
+  (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  let normalizedMethod = Stdlib.String.toUppercase method in
+  if method == "" || Stdlib.Bool.not (Stdlib.HttpWire.__tokenValid method 0L (Stdlib.String.__byteLength method)) then
+    Error Stdlib.HttpClient.RequestError.BadMethod
+  else
+    if Stdlib.HttpClient.__emptyHeader headers then
+      Error (Stdlib.HttpClient.RequestError.BadHeader Stdlib.HttpClient.BadHeader.EmptyKey)
+    else if Stdlib.HttpClient.__connectionHeader headers then
+      Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
+    else
+      match Stdlib.HttpWire.parseUrl urlText with
+      | Error message ->
+          if message == "Unsupported URL scheme" ||
+             Stdlib.Bool.not (Stdlib.String.contains urlText "://") && urlText != "" &&
+             Stdlib.Bool.not (Stdlib.String.contains urlText " ") then
+            Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol)
+          else Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidUri)
+      | Ok url ->
+          if url.scheme != "http" then
+            Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol)
+          else
+            match Stdlib.HttpWire.serializeRequest normalizedMethod url
+                    (headers @ [("Connection", "close")]) body with
+            | Error _ -> Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
+            | Ok requestBytes ->
+                match Stdlib.HttpClient.__connectHost url.host url.port trusted with
+                | Error error -> Error error
+                | Ok connection ->
+                    let result =
+                      match Stdlib.Network.writeTcp connection requestBytes with
+                      | Error code -> Error (Stdlib.HttpClient.__transportError code)
+                      | Ok () -> Stdlib.HttpClient.__readResponse connection normalizedMethod Stdlib.Blob.empty 0L in
+                    let _ = Stdlib.Network.closeTcp connection in
+                    result
+
+let request (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__request false method url headers body
+
+let requestTrusted (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__request true method url headers body
+
+let get (url: String) (headers: List<(String * String)>)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.request "GET" url headers Stdlib.Blob.empty

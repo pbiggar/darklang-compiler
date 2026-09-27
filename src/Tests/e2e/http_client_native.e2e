@@ -1,0 +1,8 @@
+// http_client_native.e2e - Validate the native Dark HTTP client boundary.
+
+Stdlib.HttpClient.request "" "http://example.com/" [] Stdlib.Blob.empty = Error Stdlib.HttpClient.RequestError.BadMethod
+Stdlib.HttpClient.request "GET" "ftp://example.com/" [] Stdlib.Blob.empty = Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol)
+Stdlib.HttpClient.request "GET" "http://127.0.0.1/" [] Stdlib.Blob.empty = Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidHost)
+Stdlib.HttpClient.request "GET" "http://localhost/" [] Stdlib.Blob.empty = Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidHost)
+Stdlib.HttpClient.request "GET" "http://example.com/" [("X-A", "one"), ("", "two")] Stdlib.Blob.empty = Error (Stdlib.HttpClient.RequestError.BadHeader Stdlib.HttpClient.BadHeader.EmptyKey)
+Stdlib.HttpClient.request "GET" "http://example.com/" [("Connection", "keep-alive")] Stdlib.Blob.empty = Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
