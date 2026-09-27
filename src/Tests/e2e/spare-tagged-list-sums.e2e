@@ -1,0 +1,21 @@
+// Spare list-root tags keep nullary and empty-list cases distinct without a sum allocation.
+type MaybeItems<'a> = NoItems | HasItems of List<'a>
+let identity (value: Stdlib.Option.Option<List<Int64>>): Stdlib.Option.Option<List<Int64>> = value
+let genericIdentity<'a> (value: MaybeItems<'a>): MaybeItems<'a> = value
+let noItems (): MaybeItems<Int64> = NoItems
+match identity None with | None -> true | Some _ -> false = true // leak_check
+match identity (Some []) with | None -> false | Some values -> Stdlib.List.isEmpty values = true // leak_check
+match identity (Some [1L, 2L]) with | None -> 0 | Some values -> Stdlib.List.length values = 2 // leak_check
+let value = Some ["a" ++ "b"] in match value with | None -> "missing" | Some [head] -> head | Some _ -> "wrong" = "ab" // leak_check
+match genericIdentity (noItems ()) with | NoItems -> true | HasItems _ -> false = true // leak_check
+match genericIdentity (HasItems []) with | NoItems -> false | HasItems values -> Stdlib.List.isEmpty values = true // leak_check
+match genericIdentity (HasItems [1L, 2L]) with | NoItems -> 0 | HasItems values -> Stdlib.List.length values = 2 // leak_check
+identity None != identity (Some []) = true // leak_check
+identity (Some []) == identity (Some []) = true // leak_check
+Stdlib.Option.withDefault (identity None) [1L] = [1L] // leak_check
+Stdlib.Option.withDefault (identity (Some [])) [1L] = [] // leak_check
+let values = [identity None, identity (Some []), identity (Some [1L, 2L])] in match values with | [None, Some [], Some [first, second]] -> first + second | _ -> 0L = 3L // leak_check
+Builtin.unwrap (Some [1L, 2L]) = [1L, 2L] // leak_check
+identity None = stdout="Darklang.Stdlib.Option.Option<List<Int64>>.None\n" stderr="" // leak_check
+identity (Some []) = stdout="Darklang.Stdlib.Option.Option<List<Int64>>.Some(List<Int64> [])\n" stderr="" // leak_check
+identity (Some [1L]) = stdout="Darklang.Stdlib.Option.Option<List<Int64>>.Some([1])\n" stderr="" // leak_check

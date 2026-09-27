@@ -122,13 +122,7 @@ let private unaryPayloadOfTwoCaseSum (typeName: string) (typeArgs: AST.SemanticT
         |> List.choose (fun (key, (owner, typeParams, _, fields)) ->
             if owner = typeName && List.length typeParams = List.length typeArgs && key.StartsWith($"{typeName}.") then
                 let subst = List.zip typeParams typeArgs |> Map.ofList
-                let concreteFields =
-                    fields
-                    |> List.map (function
-                        | AST.TVar name ->
-                            Map.tryFind name subst
-                            |> Option.defaultWith (fun () -> Crash.crash $"Nullable sum payload variable '{name}' is not declared")
-                        | fieldType -> fieldType)
+                let concreteFields = fields |> List.map (substituteTransparentPayloadType subst)
                 Some concreteFields
             else None)
     match cases |> List.sort with
@@ -146,6 +140,9 @@ let internal spareImmediateSumSentinel typeName typeArgs variantLookup =
     | Some (AST.TInt8 | AST.TUInt8) -> Some 256L
     | Some (AST.TInt16 | AST.TUInt16) -> Some 65536L
     | Some (AST.TInt32 | AST.TUInt32) -> Some 4294967296L
+    // List nodes use tags 1-3 over an eight-byte-aligned root. Zero remains
+    // the valid empty list; the otherwise unused bare tag 4 denotes absence.
+    | Some (AST.TList _) -> Some 4L
     | _ -> None
 
 let internal sumPayloadExpr (sourceType: AST.SemanticType) (sourceAtom: ANF.Atom) (variantLookup: VariantLookup) : ANF.CExpr =

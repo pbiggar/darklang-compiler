@@ -311,7 +311,16 @@ let rcShapeOfTypeWithSums
                             Some (payloadType |> applyRcShapeTypeSubstitution subst |> classify expandingNominals)
                         | None -> None
 
-                    match transparentPayloadShape |> Option.orElse nullablePointerShape with
+                    let spareTaggedListShape =
+                        match sumInfo.Payloads |> List.sortBy snd with
+                        | [(_, None); (payloadTag, Some payload)] when Set.contains payloadTag sumInfo.UnaryPayloadTags ->
+                            let payloadType = applyRcShapeTypeSubstitution subst payload
+                            match payloadType with
+                            | AST.TList _ -> Some (classify expandingNominals payloadType)
+                            | _ -> None
+                        | _ -> None
+
+                    match transparentPayloadShape |> Option.orElse nullablePointerShape |> Option.orElse spareTaggedListShape with
                     | Some shape -> shape
                     | None when isSpareImmediateSumType sumReg sourceType -> Immediate
                     | None when hasPayloadVariant ->

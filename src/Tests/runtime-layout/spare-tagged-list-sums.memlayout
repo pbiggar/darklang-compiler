@@ -1,0 +1,31 @@
+---NAME---
+Option list None uses the spare tagged word
+---INPUT---
+let identity (value: Stdlib.Option.Option<List<Int64>>): Stdlib.Option.Option<List<Int64>> = value
+identity None
+---EXPECTED---
+root = word(4)
+
+---NAME---
+Option empty list keeps the zero root
+---INPUT---
+let identity (value: Stdlib.Option.Option<List<Int64>>): Stdlib.Option.Option<List<Int64>> = value
+identity (Some [])
+---EXPECTED---
+root = word(0)
+
+---NAME---
+Option nonempty list shares its tagged root
+---INPUT---
+let original = [1L, 2L] in (original, Some original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Generic nullable list sum keeps the spare word
+---INPUT---
+type MaybeItems<'a> = NoItems | HasItems of List<'a>
+let identity (value: MaybeItems<Int64>): MaybeItems<Int64> = value
+identity NoItems
+---EXPECTED---
+root = word(4)

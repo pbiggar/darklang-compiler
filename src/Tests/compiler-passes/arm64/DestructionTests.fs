@@ -394,6 +394,7 @@ let testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch () :
                     [
                         { Name = "Arm64NestedFixedBlockNoPayload"; Tag = 0; Payload = None; FieldCount = 0 }
                         { Name = "Arm64NestedFixedBlockSumListPayload"; Tag = 1; Payload = Some (AST.TList AST.TBlob); FieldCount = 1 }
+                        { Name = "Arm64NestedFixedBlockSumBlobPayload"; Tag = 2; Payload = Some AST.TBlob; FieldCount = 1 }
                     ] })
         ]
     let sumShapes =
