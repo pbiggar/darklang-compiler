@@ -239,7 +239,7 @@ def running_train_step(repo: Path, jobs: list[dict[str, Any]]) -> str | None:
     return str(phase).replace("_", " ") if phase else None
 
 
-def last_test_runtime(repo: Path) -> tuple[float, str] | None:
+def history_items(repo: Path) -> list[dict[str, Any]]:
     completed = subprocess.run(
         ["mergetrain", "--repo", str(repo), "history", "--json", "--limit", "50"],
         check=False,
@@ -248,16 +248,23 @@ def last_test_runtime(repo: Path) -> tuple[float, str] | None:
         text=True,
     )
     if completed.returncode != 0:
-        return None
+        return []
     try:
         history = json.loads(completed.stdout)
     except json.JSONDecodeError:
-        return None
+        return []
     if not isinstance(history, dict) or not isinstance(history.get("items"), list):
-        return None
+        return []
+    return [item for item in history["items"] if isinstance(item, dict)]
+
+
+def last_test_runtime(
+    repo: Path, *, history: list[dict[str, Any]] | None = None
+) -> tuple[float, str] | None:
+    items = history if history is not None else history_items(repo)
     gates = [
         gate
-        for item in history["items"]
+        for item in items
         if isinstance(item, dict) and isinstance(item.get("gates"), list)
         for gate in item["gates"]
         if isinstance(gate, dict)
@@ -278,6 +285,46 @@ def last_test_runtime(repo: Path) -> tuple[float, str] | None:
         if finished.tzinfo is not None:
             return float(latest["duration_seconds"]), latest["finished_at"]
     return None
+
+
+def merge_test_runtime(
+    branch: str, merged_at: str, history: list[dict[str, Any]]
+) -> str:
+    # History has branch and completion time, but no Git merge SHA.
+    try:
+        merge_time = datetime.fromisoformat(merged_at)
+    except ValueError:
+        return "tests n/a"
+    matches: list[tuple[datetime, dict[str, Any]]] = []
+    for item in history:
+        if item.get("status") != "deployed" or not any(
+            isinstance(job, dict) and job.get("branch") == branch
+            for job in item.get("jobs") or []
+        ):
+            continue
+        finished_at = item.get("finished_at")
+        if not isinstance(finished_at, str):
+            continue
+        try:
+            finished = datetime.fromisoformat(finished_at)
+        except ValueError:
+            continue
+        if finished.tzinfo is not None and merge_time.tzinfo is not None and finished >= merge_time:
+            matches.append((finished, item))
+    if not matches:
+        return "tests n/a"
+    _, selected = min(matches, key=lambda match: match[0])
+    gates = [
+        gate for gate in selected.get("gates") or []
+        if isinstance(gate, dict) and gate.get("name") == "tests"
+        and gate.get("state") == "success"
+        and isinstance(gate.get("duration_seconds"), (int, float))
+        and math.isfinite(gate["duration_seconds"])
+        and gate["duration_seconds"] > 0
+    ]
+    if not gates:
+        return "tests n/a"
+    return f"tests {gates[-1]['duration_seconds']:.1f}s"
 
 
 ANSI_SGR = re.compile(r"\x1b\[[0-9;]*m")
@@ -747,8 +794,10 @@ def merged_branch(repo: Path, commit: str) -> str:
     return remote[0] if remote else commit[:10]
 
 
-def recent_merges(repo: Path, limit: int = 5) -> list[str]:
-    history = git(
+def recent_merges(
+    repo: Path, limit: int = 5, *, history: list[dict[str, Any]] | None = None
+) -> list[str]:
+    merge_log = git(
         repo,
         "log",
         f"-{limit}",
@@ -757,8 +806,10 @@ def recent_merges(repo: Path, limit: int = 5) -> list[str]:
         "--format=%h%x09%cI%x09%P",
         "--",
     )
-    if not history:
+    if not merge_log:
         return []
+
+    recorded_history = history if history is not None else history_items(repo)
 
     def render(line: str) -> str:
         merge, timestamp, parents_text = line.split("\t", 2)
@@ -766,9 +817,10 @@ def recent_merges(repo: Path, limit: int = 5) -> list[str]:
         merged_commit = parents[1]
         branch = merged_branch(repo, merged_commit)
         subject = git(repo, "show", "-s", "--format=%s", merged_commit)
-        return f"{merge} {timestamp} {branch} — {subject}"
+        runtime = merge_test_runtime(branch, timestamp, recorded_history)
+        return f"{merge} {timestamp} {branch} [{runtime}] — {subject}"
 
-    return [render(line) for line in history.splitlines()]
+    return [render(line) for line in merge_log.splitlines()]
 
 
 def render(
@@ -813,7 +865,8 @@ def render(
         f"{styled(state.upper(), state_style(state), color)}: {payload['summary']}",
         f"next: {styled(next_action, CYAN, color)}",
     ]
-    runtime = last_test_runtime(repo)
+    recorded_history = history_items(repo)
+    runtime = last_test_runtime(repo, history=recorded_history)
     if runtime:
         seconds, finished_at = runtime
         lines.append(
@@ -858,7 +911,7 @@ def render(
         lines.append(styled(f"  [c] {action} conflict details", DIM, color))
 
     now = datetime.now(timezone.utc)
-    merges = recent_merges(repo, limit=merge_limit)
+    merges = recent_merges(repo, limit=merge_limit, history=recorded_history)
     lines.append("")
     lines.append(styled("recent merges:", BOLD, color))
     lines.extend(
