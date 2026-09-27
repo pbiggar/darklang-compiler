@@ -1,0 +1,23 @@
+// http_wire.e2e - Observable URL and HTTP/1.1 byte-framing behavior.
+
+Stdlib.HttpWire.parseUrl "http://example.com/a?b=1" |> Stdlib.Result.map (fun url -> (url.host, url.port, url.target)) = Ok (("example.com", 80L, "/a?b=1"))
+Stdlib.HttpWire.parseUrl "https://[::1]:8443?x=1#drop" |> Stdlib.Result.map (fun url -> (url.host, url.port, url.target)) = Ok (("::1", 8443L, "/?x=1"))
+Stdlib.HttpWire.parseUrl "http://example.com:99999/" = Error "Invalid URL port"
+Stdlib.HttpWire.parseUrl "http://example.com/a%GG" = Error "Invalid URL"
+
+Stdlib.HttpWire.parseResponse "GET" false (Stdlib.String.toBlob "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nX-A: one\r\nX-A: two\r\n\r\nhelloNEXT") |> Stdlib.Result.map (fun response -> (response.statusCode, response.headers, Stdlib.Blob.toHex response.body, Stdlib.Blob.toHex response.remaining)) = Ok ((200L, [("Content-Length", "5"), ("X-A", "one"), ("X-A", "two")], "68656C6C6F", "4E455854"))
+Stdlib.HttpWire.parseResponse "GET" false (Stdlib.String.toBlob "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n") |> Stdlib.Result.map (fun response -> Stdlib.Blob.toHex response.body) = Ok "68656C6C6F"
+Stdlib.HttpWire.parseResponse "GET" false (Stdlib.String.toBlob "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n") = Error (Stdlib.HttpWire.ParseError.Invalid "Ambiguous body framing")
+Stdlib.HttpWire.parseResponse "GET" false (Stdlib.String.toBlob "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhel") = Error Stdlib.HttpWire.ParseError.Incomplete
+Stdlib.HttpWire.parseResponse "GET" false (Stdlib.String.toBlob "HTTP/1.1 204 No Content\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n") = Error (Stdlib.HttpWire.ParseError.Invalid "Ambiguous body framing")
+Stdlib.HttpWire.parseRequest (Stdlib.String.toBlob "POST /upload?x=1 HTTP/1.1\r\nHost: example.com\r\nContent-Length: 3\r\n\r\nabcNEXT") |> Stdlib.Result.map (fun request -> (request.method, request.target, Stdlib.Blob.toHex request.body, Stdlib.Blob.toHex request.remaining)) = Ok (("POST", "/upload?x=1", "616263", "4E455854"))
+Stdlib.HttpWire.parseRequest (Stdlib.String.toBlob "GET / HTTP/1.1\r\n\r\n") = Error (Stdlib.HttpWire.ParseError.Invalid "Missing Host header")
+Stdlib.HttpWire.parseRequest (Stdlib.String.toBlob "POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 3\r\nTransfer-Encoding: chunked\r\n\r\n") = Error (Stdlib.HttpWire.ParseError.Invalid "Ambiguous body framing")
+Stdlib.HttpWire.parseUrl "http://example.com/upload" |> Stdlib.Result.andThen (fun url -> Stdlib.HttpWire.serializeRequest "POST" url [("X-A", "one")] (Stdlib.String.toBlob "abc")) |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "504F5354202F75706C6F616420485454502F312E310D0A486F73743A206578616D706C652E636F6D0D0A582D413A206F6E650D0A436F6E74656E742D4C656E6774683A20330D0A0D0A616263"
+Stdlib.HttpWire.serializeResponse 201L [("X-A", "one")] (Stdlib.String.toBlob "ok") |> Stdlib.Result.map (Stdlib.HttpWire.parseResponse "GET" false) |> Stdlib.Result.map (fun result -> Stdlib.Result.map result (fun response -> (response.statusCode, Stdlib.Blob.toHex response.body))) = Ok (Ok ((201L, "6F6B")))
+Stdlib.HttpWire.serializeResponse 200L [("X-A", "hi\r\nInjected: yes")] Stdlib.Blob.empty = Error "Invalid HTTP header value"
+Stdlib.HttpWire.parseRequest (Stdlib.String.toBlob "GET / HTTP/1.1\r\nHost: a\r\nHost: b\r\n\r\n") = Error (Stdlib.HttpWire.ParseError.Invalid "Duplicate Host header")
+Stdlib.HttpWire.parseRequest (Stdlib.String.toBlob "GET / HTTP/1.1\r\nHost: \r\n\r\n") = Error (Stdlib.HttpWire.ParseError.Invalid "Empty Host header")
+Stdlib.HttpWire.serializeResponse 204L [] Stdlib.Blob.empty |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "485454502F312E3120323034204E6F20436F6E74656E740D0A0D0A"
+Stdlib.HttpWire.parseUrl "http://[::garbage]/" = Error "Invalid URL host"
+Stdlib.HttpWire.parseUrl "http://bad..host/" = Error "Invalid URL host"

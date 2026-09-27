@@ -160,6 +160,8 @@ let private loadStdlib () : Result<AST.ParsedProgram, string> =
         "stdlib/HttpServer.dark"
         "stdlib/HttpServerValues.dark"
         "stdlib/Network.dark"
+        "stdlib/HttpWire.dark"
+        "stdlib/DnsWire.dark"
         "stdlib/Pretty.dark"
         "stdlib/Char.dark"
         "stdlib/Regex.dark"

@@ -1,0 +1,541 @@
+// HttpWire.dark - Byte-bounded HTTP/1.1 and URL primitives written in Dark.
+
+module Darklang.Stdlib.HttpWire
+
+type Url = {
+    scheme: String,
+    host: String,
+    port: Int64,
+    authority: String,
+    target: String
+}
+
+let __asciiDigit (byte: Int64) : Bool = byte >= 48L && byte <= 57L
+
+let __asciiHex (byte: Int64) : Bool =
+    Stdlib.HttpWire.__asciiDigit byte ||
+    (byte >= 65L && byte <= 70L) ||
+    (byte >= 97L && byte <= 102L)
+
+let __urlBytesValid (value: String) (index: Int64) (length: Int64) : Bool =
+    if index >= length then true
+    else
+        let byte = Stdlib.String.__byteAtUnchecked value index in
+        if byte <= 32L || byte >= 127L then false
+        else if byte == 37L then
+            index + 2L < length &&
+            Stdlib.HttpWire.__asciiHex (Stdlib.String.__byteAtUnchecked value (index + 1L)) &&
+            Stdlib.HttpWire.__asciiHex (Stdlib.String.__byteAtUnchecked value (index + 2L)) &&
+            Stdlib.HttpWire.__urlBytesValid value (index + 3L) length
+        else Stdlib.HttpWire.__urlBytesValid value (index + 1L) length
+
+let __authorityEnd (value: String) (index: Int64) (length: Int64) : Int64 =
+    if index >= length then length
+    else
+        let byte = Stdlib.String.__byteAtUnchecked value index in
+        if byte == 47L || byte == 63L || byte == 35L then index
+        else Stdlib.HttpWire.__authorityEnd value (index + 1L) length
+
+let __hostByte (byte: Int64) : Bool =
+    Stdlib.HttpWire.__asciiDigit byte ||
+    (byte >= 65L && byte <= 90L) ||
+    (byte >= 97L && byte <= 122L) ||
+    byte == 45L || byte == 46L
+
+let __hostValid (host: String) (index: Int64) (length: Int64) : Bool =
+    if index >= length then true
+    else
+        Stdlib.HttpWire.__hostByte (Stdlib.String.__byteAtUnchecked host index) &&
+        Stdlib.HttpWire.__hostValid host (index + 1L) length
+
+let __hostLabelsValid (labels: List<String>) : Bool =
+    match labels with
+    | [] -> true
+    | label :: rest ->
+        let length = Stdlib.String.__byteLength label in
+        length > 0L && length <= 63L &&
+        Stdlib.String.__byteAtUnchecked label 0L != 45L &&
+        Stdlib.String.__byteAtUnchecked label (length - 1L) != 45L &&
+        Stdlib.HttpWire.__hostLabelsValid rest
+
+let __ipv6GroupBytesValid (group: String) (index: Int64) (length: Int64) : Bool =
+    if index >= length then true
+    else Stdlib.HttpWire.__asciiHex (Stdlib.String.__byteAtUnchecked group index) &&
+        Stdlib.HttpWire.__ipv6GroupBytesValid group (index + 1L) length
+
+let __ipv6GroupValid (group: String) : Bool =
+    let length = Stdlib.String.__byteLength group in
+    length > 0L && length <= 4L &&
+    Stdlib.HttpWire.__ipv6GroupBytesValid group 0L length
+
+let __ipv6GroupsValid (groups: List<String>) : Bool =
+    match groups with
+    | [] -> true
+    | group :: rest ->
+        Stdlib.HttpWire.__ipv6GroupValid group &&
+        Stdlib.HttpWire.__ipv6GroupsValid rest
+
+let __ipv6SideValid (side: String) : Bool =
+    side == "" || Stdlib.HttpWire.__ipv6GroupsValid (Stdlib.String.split side ":")
+
+let __ipv6Valid (host: String) : Bool =
+    match Stdlib.String.splitFirst host "::" with
+    | None ->
+        let groups = Stdlib.String.split host ":" in
+        Stdlib.List.length groups == 8 && Stdlib.HttpWire.__ipv6GroupsValid groups
+    | Some ((left, right)) ->
+        if Stdlib.String.contains right "::" then false
+        else
+            let leftCount = if left == "" then 0 else Stdlib.List.length (Stdlib.String.split left ":") in
+            let rightCount = if right == "" then 0 else Stdlib.List.length (Stdlib.String.split right ":") in
+            leftCount + rightCount < 8 &&
+            Stdlib.HttpWire.__ipv6SideValid left && Stdlib.HttpWire.__ipv6SideValid right
+
+let __portDigits (value: String) (index: Int64) (length: Int64) : Bool =
+    if index >= length then true
+    else
+        Stdlib.HttpWire.__asciiDigit (Stdlib.String.__byteAtUnchecked value index) &&
+        Stdlib.HttpWire.__portDigits value (index + 1L) length
+
+let __parsePort (value: String) (defaultPort: Int64) : Stdlib.Result.Result<Int64, String> =
+    if value == "" then Ok defaultPort
+    else if Stdlib.Bool.not (Stdlib.HttpWire.__portDigits value 0L (Stdlib.String.__byteLength value)) then
+        Error "Invalid URL port"
+    else
+        match Stdlib.Int64.parse value with
+        | Error _ -> Error "Invalid URL port"
+        | Ok port ->
+            if port <= 0L || port > 65535L then Error "Invalid URL port" else Ok port
+
+let __parseAuthority (authority: String) (defaultPort: Int64) : Stdlib.Result.Result<(String * Int64), String> =
+    let length = Stdlib.String.__byteLength authority in
+    if length == 0L || Stdlib.String.contains authority "@" then Error "Invalid URL authority"
+    else if Stdlib.String.__byteAtUnchecked authority 0L == 91L then
+        match Stdlib.String.splitFirst authority "]" with
+        | None -> Error "Invalid URL authority"
+        | Some ((bracketed, suffix)) ->
+            let host = Stdlib.String.__byteSlice bracketed 1L (Stdlib.String.__byteLength bracketed) in
+            if Stdlib.Bool.not (Stdlib.HttpWire.__ipv6Valid host) then Error "Invalid URL host"
+            else if suffix == "" then Ok ((Stdlib.String.toLowercase host, defaultPort))
+            else if Stdlib.String.startsWith suffix ":" then
+                match Stdlib.HttpWire.__parsePort (Stdlib.String.__byteSlice suffix 1L (Stdlib.String.__byteLength suffix)) defaultPort with
+                | Error message -> Error message
+                | Ok port -> Ok ((Stdlib.String.toLowercase host, port))
+            else Error "Invalid URL authority"
+    else
+        let parts = Stdlib.String.split authority ":" in
+        match parts with
+        | [host] ->
+            if host == "" || Stdlib.Bool.not (Stdlib.HttpWire.__hostValid host 0L (Stdlib.String.__byteLength host)) ||
+                Stdlib.Bool.not (Stdlib.HttpWire.__hostLabelsValid (Stdlib.String.split host ".")) then
+                Error "Invalid URL host"
+            else Ok ((Stdlib.String.toLowercase host, defaultPort))
+        | [host, portText] ->
+            if host == "" || Stdlib.Bool.not (Stdlib.HttpWire.__hostValid host 0L (Stdlib.String.__byteLength host)) ||
+                Stdlib.Bool.not (Stdlib.HttpWire.__hostLabelsValid (Stdlib.String.split host ".")) then
+                Error "Invalid URL host"
+            else if portText == "" then Error "Invalid URL port"
+            else
+                match Stdlib.HttpWire.__parsePort portText defaultPort with
+                | Error message -> Error message
+                | Ok port -> Ok ((Stdlib.String.toLowercase host, port))
+        | _ -> Error "Invalid URL authority"
+
+let __target (suffix: String) : String =
+    let withoutFragment =
+        match Stdlib.String.splitFirst suffix "#" with
+        | None -> suffix
+        | Some ((before, _)) -> before in
+    if withoutFragment == "" then "/"
+    else if Stdlib.String.startsWith withoutFragment "?" then "/" ++ withoutFragment
+    else withoutFragment
+
+let parseUrl (value: String) : Stdlib.Result.Result<Stdlib.HttpWire.Url, String> =
+    let length = Stdlib.String.__byteLength value in
+    if length == 0L || Stdlib.Bool.not (Stdlib.HttpWire.__urlBytesValid value 0L length) then Error "Invalid URL"
+    else
+        match Stdlib.String.splitFirst value "://" with
+        | None -> Error "Invalid URL"
+        | Some ((rawScheme, rest)) ->
+            let scheme = Stdlib.String.toLowercase rawScheme in
+            if scheme != "http" && scheme != "https" then Error "Unsupported URL scheme"
+            else
+                let restLength = Stdlib.String.__byteLength rest in
+                let end_ = Stdlib.HttpWire.__authorityEnd rest 0L restLength in
+                let authority = Stdlib.String.__byteSlice rest 0L end_ in
+                let suffix = Stdlib.String.__byteSlice rest end_ restLength in
+                let defaultPort = if scheme == "https" then 443L else 80L in
+                match Stdlib.HttpWire.__parseAuthority authority defaultPort with
+                | Error message -> Error message
+                | Ok ((host, port)) ->
+                    let target = Stdlib.HttpWire.__target suffix in
+                    if Stdlib.String.startsWith target "/" then
+                        Ok (Stdlib.HttpWire.Url {
+                            scheme = scheme, host = host, port = port,
+                            authority = authority, target = target })
+                    else Error "Invalid URL target"
+
+type ParseError = Incomplete | Invalid of String
+
+type ParsedResponse = {
+    statusCode: Int64,
+    headers: List<(String * String)>,
+    body: Blob,
+    remaining: Blob
+}
+
+let __lineEnd (blob: Blob) (index: Int64) (start: Int64) (length: Int64) : Stdlib.Result.Result<Int64, Stdlib.HttpWire.ParseError> =
+    if index - start > 8192L then Error (Stdlib.HttpWire.ParseError.Invalid "HTTP line too long")
+    else if index >= length then Error Stdlib.HttpWire.ParseError.Incomplete
+    else
+        let byte = Stdlib.Blob.__getByte blob index in
+        if byte == 13L then
+            if index + 1L >= length then Error Stdlib.HttpWire.ParseError.Incomplete
+            else if Stdlib.Blob.__getByte blob (index + 1L) == 10L then Ok index
+            else Error (Stdlib.HttpWire.ParseError.Invalid "Malformed HTTP line ending")
+        else if byte == 10L || (byte < 32L && byte != 9L) || byte > 126L then
+            Error (Stdlib.HttpWire.ParseError.Invalid "Invalid HTTP header byte")
+        else Stdlib.HttpWire.__lineEnd blob (index + 1L) start length
+
+let __line (blob: Blob) (offset: Int64) : Stdlib.Result.Result<(String * Int64), Stdlib.HttpWire.ParseError> =
+    let length = Stdlib.Blob.__byteLength blob in
+    match Stdlib.HttpWire.__lineEnd blob offset offset length with
+    | Error error -> Error error
+    | Ok end_ ->
+        let bytes = Stdlib.Blob.slice blob (Stdlib.Int.fromInt64 offset) (Stdlib.Int.fromInt64 (end_ - offset)) in
+        match Stdlib.Blob.toString bytes with
+        | Error _ -> Error (Stdlib.HttpWire.ParseError.Invalid "Invalid HTTP header byte")
+        | Ok line -> Ok ((line, end_ + 2L))
+
+let __tokenByte (byte: Int64) : Bool =
+    Stdlib.HttpWire.__asciiDigit byte ||
+    (byte >= 65L && byte <= 90L) ||
+    (byte >= 97L && byte <= 122L) ||
+    byte == 33L || byte == 35L || byte == 36L || byte == 37L ||
+    byte == 38L || byte == 39L || byte == 42L || byte == 43L ||
+    byte == 45L || byte == 46L || byte == 94L || byte == 95L ||
+    byte == 96L || byte == 124L || byte == 126L
+
+let __tokenValid (value: String) (index: Int64) (length: Int64) : Bool =
+    if index >= length then true
+    else
+        Stdlib.HttpWire.__tokenByte (Stdlib.String.__byteAtUnchecked value index) &&
+        Stdlib.HttpWire.__tokenValid value (index + 1L) length
+
+let __headers (blob: Blob) (offset: Int64) (count: Int64) (start: Int64) (acc: List<(String * String)>) : Stdlib.Result.Result<(List<(String * String)> * Int64), Stdlib.HttpWire.ParseError> =
+    if count > 100L || offset - start > 65536L then
+        Error (Stdlib.HttpWire.ParseError.Invalid "HTTP headers too large")
+    else
+        match Stdlib.HttpWire.__line blob offset with
+        | Error error -> Error error
+        | Ok ((line, next)) ->
+            if line == "" then Ok ((Stdlib.List.reverse acc, next))
+            else if Stdlib.String.startsWith line " " || Stdlib.String.startsWith line "\t" then
+                Error (Stdlib.HttpWire.ParseError.Invalid "Folded HTTP header")
+            else
+                match Stdlib.String.splitFirst line ":" with
+                | None -> Error (Stdlib.HttpWire.ParseError.Invalid "Malformed HTTP header")
+                | Some ((name, value)) ->
+                    if name == "" || Stdlib.Bool.not (Stdlib.HttpWire.__tokenValid name 0L (Stdlib.String.__byteLength name)) then
+                        Error (Stdlib.HttpWire.ParseError.Invalid "Malformed HTTP header")
+                    else
+                        Stdlib.HttpWire.__headers blob next (count + 1L) start
+                            (Stdlib.List.push acc ((name, Stdlib.String.trim value)))
+
+let __status (line: String) : Stdlib.Result.Result<Int64, Stdlib.HttpWire.ParseError> =
+    match Stdlib.String.splitFirst line " " with
+    | None -> Error (Stdlib.HttpWire.ParseError.Invalid "Malformed HTTP status line")
+    | Some ((version, rest)) ->
+        if version != "HTTP/1.1" && version != "HTTP/1.0" then
+            Error (Stdlib.HttpWire.ParseError.Invalid "Unsupported HTTP version")
+        else if Stdlib.String.__byteLength rest < 3L then
+            Error (Stdlib.HttpWire.ParseError.Invalid "Malformed HTTP status line")
+        else
+            let code = Stdlib.String.__byteSlice rest 0L 3L in
+            let validSeparator =
+                Stdlib.String.__byteLength rest == 3L ||
+                Stdlib.String.__byteAtUnchecked rest 3L == 32L in
+            if Stdlib.Bool.not validSeparator || Stdlib.Bool.not (Stdlib.HttpWire.__portDigits code 0L 3L) then
+                Error (Stdlib.HttpWire.ParseError.Invalid "Malformed HTTP status line")
+            else
+                match Stdlib.Int64.parse code with
+                | Error _ -> Error (Stdlib.HttpWire.ParseError.Invalid "Malformed HTTP status line")
+                | Ok status ->
+                    if status < 100L || status > 599L then
+                        Error (Stdlib.HttpWire.ParseError.Invalid "Invalid HTTP status")
+                    else Ok status
+
+let __contentLength (headers: List<(String * String)>) (found: Stdlib.Option.Option<Int64>) : Stdlib.Result.Result<Stdlib.Option.Option<Int64>, Stdlib.HttpWire.ParseError> =
+    match headers with
+    | [] -> Ok found
+    | (name, value) :: rest ->
+        if Stdlib.String.toLowercase name != "content-length" then
+            Stdlib.HttpWire.__contentLength rest found
+        else if value == "" || Stdlib.Bool.not (Stdlib.HttpWire.__portDigits value 0L (Stdlib.String.__byteLength value)) then
+            Error (Stdlib.HttpWire.ParseError.Invalid "Invalid Content-Length")
+        else
+            match Stdlib.Int64.parse value with
+            | Error _ -> Error (Stdlib.HttpWire.ParseError.Invalid "Invalid Content-Length")
+            | Ok length ->
+                if length > 104857600L then Error (Stdlib.HttpWire.ParseError.Invalid "HTTP body too large")
+                else
+                    match found with
+                    | Some previous ->
+                        if previous == length then Stdlib.HttpWire.__contentLength rest found
+                        else Error (Stdlib.HttpWire.ParseError.Invalid "Conflicting Content-Length")
+                    | None -> Stdlib.HttpWire.__contentLength rest (Some length)
+
+let __transferEncoding (headers: List<(String * String)>) (seen: Bool) : Stdlib.Result.Result<Bool, Stdlib.HttpWire.ParseError> =
+    match headers with
+    | [] -> Ok seen
+    | (name, value) :: rest ->
+        if Stdlib.String.toLowercase name != "transfer-encoding" then
+            Stdlib.HttpWire.__transferEncoding rest seen
+        else if seen || Stdlib.String.toLowercase (Stdlib.String.trim value) != "chunked" then
+            Error (Stdlib.HttpWire.ParseError.Invalid "Unsupported Transfer-Encoding")
+        else Stdlib.HttpWire.__transferEncoding rest true
+
+let __hexValue (byte: Int64) : Int64 =
+    if byte >= 48L && byte <= 57L then byte - 48L
+    else if byte >= 65L && byte <= 70L then byte - 55L
+    else if byte >= 97L && byte <= 102L then byte - 87L
+    else -1L
+
+let __chunkSizeDigits (value: String) (index: Int64) (length: Int64) (acc: Int64) : Stdlib.Result.Result<Int64, Stdlib.HttpWire.ParseError> =
+    if index >= length then Ok acc
+    else
+        let digit = Stdlib.HttpWire.__hexValue (Stdlib.String.__byteAtUnchecked value index) in
+        if digit < 0L then Error (Stdlib.HttpWire.ParseError.Invalid "Invalid chunk size")
+        else if acc > 6553600L then Error (Stdlib.HttpWire.ParseError.Invalid "HTTP body too large")
+        else Stdlib.HttpWire.__chunkSizeDigits value (index + 1L) length (acc * 16L + digit)
+
+let __chunkSize (line: String) : Stdlib.Result.Result<Int64, Stdlib.HttpWire.ParseError> =
+    let digits =
+        match Stdlib.String.splitFirst line ";" with
+        | None -> line
+        | Some ((before, _)) -> before in
+    if digits == "" then Error (Stdlib.HttpWire.ParseError.Invalid "Invalid chunk size")
+    else Stdlib.HttpWire.__chunkSizeDigits digits 0L (Stdlib.String.__byteLength digits) 0L
+
+let __chunks (blob: Blob) (offset: Int64) (total: Int64) (count: Int64) (acc: List<Blob>) : Stdlib.Result.Result<(Blob * Int64), Stdlib.HttpWire.ParseError> =
+    if count > 100000L then Error (Stdlib.HttpWire.ParseError.Invalid "Too many HTTP chunks")
+    else
+        match Stdlib.HttpWire.__line blob offset with
+        | Error error -> Error error
+        | Ok ((line, dataStart)) ->
+            match Stdlib.HttpWire.__chunkSize line with
+            | Error error -> Error error
+            | Ok size ->
+                if size == 0L then
+                    match Stdlib.HttpWire.__headers blob dataStart 0L dataStart [] with
+                    | Error error -> Error error
+                    | Ok ((_, next)) -> Ok ((Stdlib.Blob.concat (Stdlib.List.reverse acc), next))
+                else if total + size > 104857600L then
+                    Error (Stdlib.HttpWire.ParseError.Invalid "HTTP body too large")
+                else
+                    let length = Stdlib.Blob.__byteLength blob in
+                    if dataStart + size + 2L > length then Error Stdlib.HttpWire.ParseError.Incomplete
+                    else if Stdlib.Blob.__getByte blob (dataStart + size) != 13L ||
+                            Stdlib.Blob.__getByte blob (dataStart + size + 1L) != 10L then
+                        Error (Stdlib.HttpWire.ParseError.Invalid "Malformed HTTP chunk")
+                    else
+                        let chunk = Stdlib.Blob.slice blob (Stdlib.Int.fromInt64 dataStart) (Stdlib.Int.fromInt64 size) in
+                        Stdlib.HttpWire.__chunks blob (dataStart + size + 2L) (total + size) (count + 1L)
+                            (Stdlib.List.push acc chunk)
+
+let __responseAt (status: Int64) (headers: List<(String * String)>) (body: Blob) (blob: Blob) (next: Int64) : Stdlib.HttpWire.ParsedResponse =
+    let length = Stdlib.Blob.__byteLength blob in
+    Stdlib.HttpWire.ParsedResponse {
+        statusCode = status, headers = headers, body = body,
+        remaining = Stdlib.Blob.slice blob (Stdlib.Int.fromInt64 next) (Stdlib.Int.fromInt64 (length - next))
+    }
+
+let parseResponse (method: String) (endOfStream: Bool) (blob: Blob) : Stdlib.Result.Result<Stdlib.HttpWire.ParsedResponse, Stdlib.HttpWire.ParseError> =
+    match Stdlib.HttpWire.__line blob 0L with
+    | Error error -> Error error
+    | Ok ((statusLine, afterStatus)) ->
+        match Stdlib.HttpWire.__status statusLine with
+        | Error error -> Error error
+        | Ok status ->
+            match Stdlib.HttpWire.__headers blob afterStatus 0L afterStatus [] with
+            | Error error -> Error error
+            | Ok ((headers, bodyStart)) ->
+                let noBody = method == "HEAD" || status < 200L || status == 204L || status == 304L in
+                match Stdlib.HttpWire.__contentLength headers None with
+                | Error error -> Error error
+                | Ok maybeLength ->
+                    match Stdlib.HttpWire.__transferEncoding headers false with
+                    | Error error -> Error error
+                    | Ok chunked ->
+                        if chunked && Stdlib.Option.isSome maybeLength then
+                            Error (Stdlib.HttpWire.ParseError.Invalid "Ambiguous body framing")
+                        else if noBody then
+                            Ok (Stdlib.HttpWire.__responseAt status headers Stdlib.Blob.empty blob bodyStart)
+                        else if chunked then
+                            match Stdlib.HttpWire.__chunks blob bodyStart 0L 0L [] with
+                            | Error error -> Error error
+                            | Ok ((body, next)) -> Ok (Stdlib.HttpWire.__responseAt status headers body blob next)
+                        else
+                            match maybeLength with
+                            | Some size ->
+                                let available = Stdlib.Blob.__byteLength blob - bodyStart in
+                                if available < size then Error Stdlib.HttpWire.ParseError.Incomplete
+                                else
+                                    let body = Stdlib.Blob.slice blob (Stdlib.Int.fromInt64 bodyStart) (Stdlib.Int.fromInt64 size) in
+                                    Ok (Stdlib.HttpWire.__responseAt status headers body blob (bodyStart + size))
+                            | None ->
+                                if Stdlib.Bool.not endOfStream then Error Stdlib.HttpWire.ParseError.Incomplete
+                                else
+                                    let size = Stdlib.Blob.__byteLength blob - bodyStart in
+                                    if size > 104857600L then Error (Stdlib.HttpWire.ParseError.Invalid "HTTP body too large")
+                                    else
+                                        let body = Stdlib.Blob.slice blob (Stdlib.Int.fromInt64 bodyStart) (Stdlib.Int.fromInt64 size) in
+                                        Ok (Stdlib.HttpWire.__responseAt status headers body blob (bodyStart + size))
+
+type ParsedRequest = {
+    method: String,
+    target: String,
+    version: String,
+    headers: List<(String * String)>,
+    body: Blob,
+    remaining: Blob
+}
+
+let __requestLine (line: String) : Stdlib.Result.Result<(String * String * String), Stdlib.HttpWire.ParseError> =
+    match Stdlib.String.split line " " with
+    | [method, target, version] ->
+        if method == "" || Stdlib.Bool.not (Stdlib.HttpWire.__tokenValid method 0L (Stdlib.String.__byteLength method)) then
+            Error (Stdlib.HttpWire.ParseError.Invalid "Invalid HTTP method")
+        else if target == "" ||
+            (Stdlib.Bool.not (Stdlib.String.startsWith target "/") && target != "*") ||
+            Stdlib.String.contains target "#" then
+            Error (Stdlib.HttpWire.ParseError.Invalid "Invalid request target")
+        else if version != "HTTP/1.1" && version != "HTTP/1.0" then
+            Error (Stdlib.HttpWire.ParseError.Invalid "Unsupported HTTP version")
+        else Ok ((method, target, version))
+    | _ -> Error (Stdlib.HttpWire.ParseError.Invalid "Malformed HTTP request line")
+
+let __hostCount (headers: List<(String * String)>) (count: Int64) (empty: Bool) : (Int64 * Bool) =
+    match headers with
+    | [] -> (count, empty)
+    | (name, value) :: rest ->
+        if Stdlib.String.toLowercase name == "host" then
+            Stdlib.HttpWire.__hostCount rest (count + 1L) (empty || value == "")
+        else Stdlib.HttpWire.__hostCount rest count empty
+
+let __parsedRequest (method: String) (target: String) (version: String) (headers: List<(String * String)>) (body: Blob) (wire: Blob) (next: Int64) : Stdlib.HttpWire.ParsedRequest =
+    let length = Stdlib.Blob.__byteLength wire in
+    Stdlib.HttpWire.ParsedRequest {
+        method = method, target = target, version = version,
+        headers = headers, body = body,
+        remaining = Stdlib.Blob.slice wire (Stdlib.Int.fromInt64 next) (Stdlib.Int.fromInt64 (length - next))
+    }
+
+let parseRequest (blob: Blob) : Stdlib.Result.Result<Stdlib.HttpWire.ParsedRequest, Stdlib.HttpWire.ParseError> =
+    match Stdlib.HttpWire.__line blob 0L with
+    | Error error -> Error error
+    | Ok ((requestLine, afterLine)) ->
+        match Stdlib.HttpWire.__requestLine requestLine with
+        | Error error -> Error error
+        | Ok ((method, target, version)) ->
+            match Stdlib.HttpWire.__headers blob afterLine 0L afterLine [] with
+            | Error error -> Error error
+            | Ok ((headers, bodyStart)) ->
+                let (hostCount, emptyHost) = Stdlib.HttpWire.__hostCount headers 0L false in
+                if hostCount > 1L then
+                    Error (Stdlib.HttpWire.ParseError.Invalid "Duplicate Host header")
+                else if emptyHost then
+                    Error (Stdlib.HttpWire.ParseError.Invalid "Empty Host header")
+                else if version == "HTTP/1.1" && hostCount == 0L then
+                    Error (Stdlib.HttpWire.ParseError.Invalid "Missing Host header")
+                else
+                    match Stdlib.HttpWire.__contentLength headers None with
+                    | Error error -> Error error
+                    | Ok maybeLength ->
+                        match Stdlib.HttpWire.__transferEncoding headers false with
+                        | Error error -> Error error
+                        | Ok chunked ->
+                            if chunked then
+                                match maybeLength with
+                                | Some _ -> Error (Stdlib.HttpWire.ParseError.Invalid "Ambiguous body framing")
+                                | None ->
+                                    match Stdlib.HttpWire.__chunks blob bodyStart 0L 0L [] with
+                                    | Error error -> Error error
+                                    | Ok ((body, next)) ->
+                                        Ok (Stdlib.HttpWire.__parsedRequest method target version headers body blob next)
+                            else
+                                match maybeLength with
+                                | None ->
+                                    Ok (Stdlib.HttpWire.__parsedRequest method target version headers Stdlib.Blob.empty blob bodyStart)
+                                | Some size ->
+                                    if Stdlib.Blob.__byteLength blob - bodyStart < size then
+                                        Error Stdlib.HttpWire.ParseError.Incomplete
+                                    else
+                                        let body = Stdlib.Blob.slice blob (Stdlib.Int.fromInt64 bodyStart) (Stdlib.Int.fromInt64 size) in
+                                        Ok (Stdlib.HttpWire.__parsedRequest method target version headers body blob (bodyStart + size))
+
+let __headerValueValid (value: String) (index: Int64) (length: Int64) : Bool =
+    if index >= length then true
+    else
+        let byte = Stdlib.String.__byteAtUnchecked value index in
+        (byte == 9L || (byte >= 32L && byte <= 126L)) &&
+        Stdlib.HttpWire.__headerValueValid value (index + 1L) length
+
+let __writeHeaders (headers: List<(String * String)>) (acc: String) : Stdlib.Result.Result<String, String> =
+    match headers with
+    | [] -> Ok acc
+    | (name, value) :: rest ->
+        let lower = Stdlib.String.toLowercase name in
+        if name == "" || Stdlib.Bool.not (Stdlib.HttpWire.__tokenValid name 0L (Stdlib.String.__byteLength name)) then
+            Error "Invalid HTTP header name"
+        else if Stdlib.Bool.not (Stdlib.HttpWire.__headerValueValid value 0L (Stdlib.String.__byteLength value)) then
+            Error "Invalid HTTP header value"
+        else if lower == "host" || lower == "content-length" || lower == "transfer-encoding" then
+            Error "Managed HTTP header cannot be overridden"
+        else Stdlib.HttpWire.__writeHeaders rest (acc ++ name ++ ": " ++ value ++ "\r\n")
+
+let serializeRequest (method: String) (url: Stdlib.HttpWire.Url) (headers: List<(String * String)>) (body: Blob) : Stdlib.Result.Result<Blob, String> =
+    if method == "" || Stdlib.Bool.not (Stdlib.HttpWire.__tokenValid method 0L (Stdlib.String.__byteLength method)) then
+        Error "Invalid HTTP method"
+    else if Stdlib.Blob.__byteLength body > 104857600L then Error "HTTP body too large"
+    else
+        match Stdlib.HttpWire.__writeHeaders headers "" with
+        | Error message -> Error message
+        | Ok extra ->
+            let head =
+                method ++ " " ++ url.target ++ " HTTP/1.1\r\n" ++
+                "Host: " ++ url.authority ++ "\r\n" ++ extra ++
+                "Content-Length: " ++ Stdlib.Int64.toString (Stdlib.Blob.__byteLength body) ++ "\r\n\r\n" in
+            Ok (Stdlib.Blob.concat [Stdlib.String.toBlob head, body])
+
+let __reason (status: Int64) : String =
+    if status == 200L then "OK"
+    else if status == 201L then "Created"
+    else if status == 204L then "No Content"
+    else if status == 301L then "Moved Permanently"
+    else if status == 302L then "Found"
+    else if status == 304L then "Not Modified"
+    else if status == 400L then "Bad Request"
+    else if status == 401L then "Unauthorized"
+    else if status == 403L then "Forbidden"
+    else if status == 404L then "Not Found"
+    else if status == 413L then "Payload Too Large"
+    else if status == 500L then "Internal Server Error"
+    else ""
+
+let serializeResponse (status: Int64) (headers: List<(String * String)>) (body: Blob) : Stdlib.Result.Result<Blob, String> =
+    if status < 100L || status > 599L then Error "Invalid HTTP status"
+    else if Stdlib.Blob.__byteLength body > 104857600L then Error "HTTP body too large"
+    else if (status < 200L || status == 204L || status == 304L) && Stdlib.Blob.__byteLength body > 0L then
+        Error "HTTP status cannot have a body"
+    else
+        match Stdlib.HttpWire.__writeHeaders headers "" with
+        | Error message -> Error message
+        | Ok extra ->
+            let contentLength =
+                if status < 200L || status == 204L then ""
+                else "Content-Length: " ++ Stdlib.Int64.toString (Stdlib.Blob.__byteLength body) ++ "\r\n" in
+            let head =
+                "HTTP/1.1 " ++ Stdlib.Int64.toString status ++ " " ++ Stdlib.HttpWire.__reason status ++ "\r\n" ++
+                extra ++ contentLength ++ "\r\n" in
+            Ok (Stdlib.Blob.concat [Stdlib.String.toBlob head, body])
