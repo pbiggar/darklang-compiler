@@ -1688,6 +1688,54 @@ let testTrueEdgeEliminatesRedundantSuccessorBranch () : TestResult =
 let testFalseEdgeEliminatesRedundantSuccessorBranch () : TestResult =
     expectRedundantSuccessorBranchEliminated FalseEdge
 
+let testRepeatedBranchEliminatedAcrossOptionModes () : TestResult =
+    let entry = Label "entry"
+    let successor = Label "successor"
+    let sibling = Label "sibling"
+    let trueResult = Label "true_result"
+    let falseResult = Label "false_result"
+    let cfg: CFG = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry, basicBlock entry [] (Branch (Register (VReg 0), successor, sibling)))
+                (successor, basicBlock successor [] (Branch (Register (VReg 0), trueResult, falseResult)))
+                (sibling, basicBlock sibling [] (Ret (Int64Const 3L)))
+                (trueResult, basicBlock trueResult [] (Ret (Int64Const 1L)))
+                (falseResult, basicBlock falseResult [] (Ret (Int64Const 2L)))
+            ]
+    }
+    let cfgOnly = {
+        defaultOptimizeOptions with
+            EnableConstFolding = false
+            EnableCSE = false
+            EnableCopyProp = false
+            EnableDCE = false
+            EnableLICM = false
+    }
+    let sccpWithoutCopies = {
+        cfgOnly with
+            EnableConstFolding = true
+    }
+    [
+        ("default", defaultOptimizeOptions)
+        ("SCCP without copy propagation", sccpWithoutCopies)
+        ("CFG simplification only", cfgOnly)
+    ]
+    |> List.fold (fun result (mode, options) ->
+        Result.bind (fun () ->
+            let optimized, changed = optimizeCFGOnce options cfg
+            let returns =
+                optimized.Blocks
+                |> Map.toList
+                |> List.choose (fun (_, block) ->
+                    match block.Terminator with
+                    | Ret (Int64Const value) -> Some value
+                    | _ -> None)
+                |> Set.ofList
+            if changed && returns = Set.ofList [1L; 3L] then Ok ()
+            else Error $"Expected {mode} to remove only the contradictory return; got {returns}") result) (Ok ())
+
 let testMultiplePredecessorsKeepRepeatedSuccessorBranch () : TestResult =
     let entry = Label "entry"
     let alternate = Label "alternate"
@@ -2018,6 +2066,7 @@ let tests = [
     ("MIR SCCP does not apply integer folds to float operations", testSccpDoesNotApplyIntegerFoldsToFloatOperations)
     ("MIR true edge eliminates redundant successor branch", testTrueEdgeEliminatesRedundantSuccessorBranch)
     ("MIR false edge eliminates redundant successor branch", testFalseEdgeEliminatesRedundantSuccessorBranch)
+    ("MIR optimizer removes repeated branches across option modes", testRepeatedBranchEliminatedAcrossOptionModes)
     ("MIR multiple predecessors keep repeated successor branch", testMultiplePredecessorsKeepRepeatedSuccessorBranch)
     ("MIR redundant successor branch trims removed phi edge", testRedundantSuccessorBranchTrimsRemovedPhiEdge)
     ("MIR self-comparison folding requires concrete safe type", testSelfComparisonFoldingRequiresConcreteSafeType)

@@ -336,6 +336,20 @@ Function choose:
     ret 1
 
 ---NAME---
+sccp_repeated_condition_on_false_edge
+---INPUT---
+let repeatFalse (condition: Bool) : Int64 =
+    if condition then 3L else if condition then 99L else 2L
+---EXPECTED---
+Function repeatFalse:
+  repeatFalse_entry:
+    branch v0 ? repeatFalse_L0 : repeatFalse_L5
+  repeatFalse_L0:
+    ret 3
+  repeatFalse_L5:
+    ret 2
+
+---NAME---
 sccp_repeated_predicate_after_join
 ---INPUT---
 let knownAfterJoin (condition: Bool) (choose: Bool) : Int64 =

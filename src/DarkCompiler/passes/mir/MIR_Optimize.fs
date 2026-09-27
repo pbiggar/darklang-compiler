@@ -71,13 +71,13 @@ let private optimizeCFGOnceWithEffectFreeCalls
             let result = operation ()
             record name (System.Diagnostics.Stopwatch.GetTimestamp() - started)
             result
-    let useCombinedSccp =
-        options.EnableConstFolding && options.EnableCopyProp && options.EnableCFGSimplify
+    let useSccp = options.EnableConstFolding && options.EnableCFGSimplify
+    let useCombinedSccp = useSccp && options.EnableCopyProp
     let (cfg0, changed0) =
         if useCombinedSccp then
             measure "MIR Sparse Conditional Simplification" (fun () ->
                 applySparseConditionalSimplification cfg)
-        elif options.EnableConstFolding && options.EnableCFGSimplify then
+        elif useSccp then
             measure "MIR Sparse Conditional Constant Propagation" (fun () ->
                 applySparseConditionalConstantPropagation cfg)
         else
@@ -157,7 +157,7 @@ let private optimizeCFGOnceWithEffectFreeCalls
         else
             (cfg8, false)
     let (cfg10, changed10) =
-        if options.EnableCFGSimplify then
+        if options.EnableCFGSimplify && not useSccp then
             measure "MIR Simplify Known Branches" (fun () -> simplifyBranchesKnownFromPredecessor cfg9)
         else
             (cfg9, false)

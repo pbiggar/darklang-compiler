@@ -155,7 +155,8 @@ branch shapes plus the conservative call and observable-field boundaries.
   comparison ranges on executable edges. It joins these facts at block entries
   to prove repeated predicates after CFG joins, defers unresolved branches
   until the value worklist settles, and then admits both edges when a condition
-  remains unknown;
+  remains unknown. The predecessor-only known-branch walk runs only for
+  CFG-simplification configurations that do not enable SCCP;
 - dominator-scoped scalar and effect-free-call common-subexpression reuse;
 - partial-redundancy elimination for non-trapping scalar arithmetic and unary
   expressions, inserting only on unconditional incoming edges and merging the

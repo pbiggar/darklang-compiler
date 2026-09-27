@@ -46,3 +46,7 @@ let preserveBoolean (condition: Bool) : Int64 = let selected = if condition then
 let preserveBoolean (condition: Bool) : Int64 = let selected = if condition then 20L else 22L in if condition then selected else selected + 1L; preserveBoolean (false) = 23L
 let preserveRange (value: Int64) : Int64 = let selected = if value < 10L then 20L else 22L in if value < 10L then selected else selected + 1L; preserveRange (9L) = 20L
 let preserveRange (value: Int64) : Int64 = let selected = if value < 10L then 20L else 22L in if value < 10L then selected else selected + 1L; preserveRange (10L) = 23L
+
+// The false edge carries the same Boolean fact into a repeated condition.
+let repeatFalse (condition: Bool) : Int64 = if condition then 3L else if condition then Builtin.testRuntimeError "contradictory false edge" else 2L; repeatFalse (true) = 3L
+let repeatFalse (condition: Bool) : Int64 = if condition then 3L else if condition then Builtin.testRuntimeError "contradictory false edge" else 2L; repeatFalse (false) = 2L
