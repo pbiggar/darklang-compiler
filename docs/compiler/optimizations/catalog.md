@@ -115,9 +115,9 @@ left on the generic closure path.
 
 ## Escape analysis and scalar replacement
 
-`passes/anf/ANF_EscapeAnalysis.fs` removes fixed-layout tuple, record, and boxed
+`passes/anf/SSAEscapeAnalysis.fs` removes fixed-layout tuple, record, and boxed
 sum allocations whose fields are immediate scalar values, including Float64,
-and whose complete lexical use set consists only of projections, local aliases,
+and whose complete SSA use set consists only of projections, local aliases,
 and representation-only constructor sources. Escaping constructors retain
 their own allocation even when an eligible source allocation is removed.
 

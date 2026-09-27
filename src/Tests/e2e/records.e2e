@@ -206,6 +206,12 @@ let nonRecord = 1L in nonRecord.value = error="Attempting to access field 'value
 type ScalarEscapePoint = { x: Int64; y: Int64 }
 let start = ScalarEscapePoint { x = 10L; y = 20L } in let moved = { start with x = start.x + 5L } in moved.x + moved.y = 35L
 
+// Branch-local projections of one scalar record retain their values after
+// escape analysis crosses the SSA boundary.
+let scalarEscapeBranch (chooseX: Bool) : Int64 = let point = ScalarEscapePoint { x = 10L; y = 20L } in let alias = point in if chooseX then alias.x else point.y
+scalarEscapeBranch (true) = 10L
+scalarEscapeBranch (false) = 20L
+
 // A unique record update may reuse its fixed block while retaining the new
 // managed child and releasing the displaced child exactly once.
 type ManagedReuseRecord = { label: String; count: Int64 }

@@ -33,8 +33,9 @@ non-retaining `RawWriteWord` and removes the producer's pending release.
 
 ## Ownership Insertion
 
-`src/DarkCompiler/passes/anf/RefCountInsertion.fs` orchestrates insertion of retains
-and releases after ANF lowering.
+`src/DarkCompiler/passes/anf/RefCountInsertion.fs` verifies ownership contracts;
+`src/DarkCompiler/passes/anf/ownership/SSARefCountInsertion.fs` inserts retains
+and releases after SSA construction and escape analysis.
 
 The `passes/anf/ownership/` modules separate type facts, return/alias analysis,
 shape planning, cleanup placement, and expression insertion. Shared shapes and

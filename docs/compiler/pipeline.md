@@ -27,10 +27,10 @@ The Dark compiler transforms source code through a series of passes, each with a
 | 2.4  | ANF inlining            | `passes/anf/ANF_Inlining.fs`                                | ANF → ANF                                     |
 | 2.4.4 | Known closure specialization | `passes/anf/ANF_HigherOrderSpecialization.fs`       | ANF → ANF                                     |
 | 2.4.5 | Direct-call specialization | `passes/anf/ANF_DirectCallSpecialization.fs`          | ANF → ANF                                     |
-| 2.4.6 | Escape analysis        | `passes/anf/ANF_EscapeAnalysis.fs`                        | ANF → scalar-replaced ANF                     |
-| 2.5  | Ref count insertion     | `passes/anf/RefCountInsertion.fs`                           | ANF + memory ops                              |
-| 2.7  | Tail call detection     | `passes/anf/TailCallDetection.fs`                           | ANF → ANF                                     |
-| 3    | ANF → high-level SSA    | `ir/anf/SSAANF.fs`                                           | Optimized ANF → typed blocks                  |
+| 2.4.6 | ANF → high-level SSA    | `ir/anf/SSAANF.fs`                                           | Specialized ANF → typed blocks                |
+| 2.5  | Escape analysis        | `passes/anf/SSAEscapeAnalysis.fs`                           | SSA → scalar-replaced SSA                     |
+| 2.6  | Ref count insertion     | `passes/anf/ownership/SSARefCountInsertion.fs`              | SSA + memory ops                              |
+| 2.7  | Tail call detection     | `passes/anf/SSATailCallDetection.fs`                        | SSA → SSA                                     |
 | 3.1  | SSA → MIR               | `passes/anf/ANF_to_MIR.fs`                                   | Typed blocks → SSA-form MIR                   |
 | 3.5  | MIR optimizations       | `passes/mir/MIR_Optimize.fs`                                | MIR → MIR                                     |
 | 4    | MIR → LIR               | `passes/mir/MIR_to_LIR.fs`                                    | MIR → LIR (virtual regs)                      |
@@ -220,15 +220,25 @@ prebuilt functions and for selecting reachable standard-library functions.
 
 ---
 
-## Pass 2.4.6: Escape Analysis (`ANF_EscapeAnalysis.fs`)
+## Pass 2.4.6: ANF to high-level SSA (`SSAANF.fs`)
 
-**Input**: Specialized ANF
-**Output**: ANF with eligible local aggregates scalar-replaced or uniquely reused
+**Input**: ANF after direct-call specialization
+**Output**: High-level SSA blocks with explicit edges and block parameters
+
+### Responsibilities
+- **Build CFG**: Convert structured ANF joins and branches to basic blocks
+- **Freshen values**: Give reused ANF temporaries distinct SSA definitions
+- **Carry joins**: Pass typed values on edges to block parameters
+
+## Pass 2.5: Escape Analysis (`SSAEscapeAnalysis.fs`)
+
+**Input**: High-level SSA
+**Output**: SSA with eligible local aggregates scalar-replaced or uniquely reused
 
 The first escape-analysis scope scalar-replaces fixed-layout tuple, record, and
 boxed-sum allocations whose fields are all immediate scalar values, including
 Float64.
-An allocation is removed only when its complete lexical use set consists of
+An allocation is removed only when its complete SSA use set consists of
 field projections, local aliases, and representation-only constructor sources.
 A remaining uniquely owned record can transfer its allocation to a
 sole compatible clone when every field has structurally non-observable
@@ -258,16 +268,16 @@ cross branches or joins also remain unchanged.
 Escaping constructors retain their own allocation while eligible immediate
 source and intermediate aggregates are scalar-replaced.
 
-Running before reference-count insertion ensures eliminated aggregates never
+Running on SSA before reference-count insertion ensures eliminated aggregates never
 acquire root retain or release operations and allows reused fixed blocks to be
 treated as one ownership family. Stack allocation, scalar replacement of
 managed fields, observable-destruction reuse, and interprocedural
 representation changes are outside the current scope.
 
-## Pass 2.5: Reference Count Insertion (`RefCountInsertion.fs`)
+## Pass 2.6: Reference Count Insertion (`SSARefCountInsertion.fs`)
 
-**Input**: ANF
-**Output**: ANF with RefCountInc/RefCountDec operations
+**Input**: High-level SSA
+**Output**: SSA with RefCountInc/RefCountDec operations
 
 ### Responsibilities
 - **Memory management**: Insert reference counting operations
@@ -279,26 +289,16 @@ representation changes are outside the current scope.
 
 ---
 
-## Pass 2.7: Tail Call Optimization (`TailCallDetection.fs`)
+## Pass 2.7: Tail Call Optimization (`SSATailCallDetection.fs`)
 
-**Input**: ANF with refcounting
-**Output**: ANF annotated for tail calls / self-recursion loops
+**Input**: SSA with refcounting
+**Output**: SSA annotated for tail calls / self-recursion loops
 
 ### Responsibilities
 - **Detect tail positions**: Identify safe tail calls
 - **Self-recursion loop conversion**: Turn tail-recursive calls into jumps
 
 ---
-
-## Pass 3: ANF to high-level SSA (`SSAANF.fs`)
-
-**Input**: ANF after tail-call detection
-**Output**: High-level SSA blocks with explicit edges and block parameters
-
-### Responsibilities
-- **Build CFG**: Convert structured ANF joins and branches to basic blocks
-- **Freshen values**: Give reused ANF temporaries distinct SSA definitions
-- **Carry joins**: Pass typed values on edges to block parameters
 
 ## Pass 3.1: High-level SSA to MIR (`ANF_to_MIR.fs`)
 

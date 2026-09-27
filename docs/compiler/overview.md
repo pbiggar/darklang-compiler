@@ -80,7 +80,7 @@ boundary, storage contract, and remaining general HIR migration.
 
 Uses reference counting (not tracing GC):
 
-1. `RefCountInsertion.fs` inserts inc/dec operations in ANF
+1. `SSARefCountInsertion.fs` inserts inc/dec operations in high-level SSA
 2. Runtime functions handle actual ref counting
 3. Borrowed calling convention: callers retain ownership
 
