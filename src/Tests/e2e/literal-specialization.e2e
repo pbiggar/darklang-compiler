@@ -49,8 +49,11 @@ tupleSpecializedLoop 2L (42L, true) = (42L, true)
 let pairScore (pair: (Int64 * Bool)) : Int64 =
     let (score, positive) = pair in
     if positive then score else 0L - score
+let pairScoreMatch (pair: (Int64 * Bool)) : Int64 =
+    match pair with | (value, keep) -> if keep then value else 0L - value
 let dynamicPairScore (pair: (Int64 * Bool)) : Int64 = pairScore pair
 pairScore (3L, true) + pairScore (5L, false) + dynamicPairScore (8L, true) = 6L
+pairScoreMatch (3L, true) + pairScoreMatch (5L, false) = -2L
 
 // Float literal identities include the sign bit of zero.
 let specializedZeroBits (value: Float) : Int = Stdlib.Float.toBits value
