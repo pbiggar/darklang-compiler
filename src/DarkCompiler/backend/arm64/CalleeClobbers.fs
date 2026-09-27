@@ -2,13 +2,13 @@
 
 module ARM64CalleeClobbers
 
-type private Writes = {
+type Writes = {
     Ints: Set<LIR.PhysReg>
     Floats: Set<LIR.PhysFPReg>
 }
 
 let private empty = { Ints = Set.empty; Floats = Set.empty }
-let private all = {
+let all = {
     Ints = Set.ofList [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7;
                        LIR.X8; LIR.X9; LIR.X10; LIR.X11; LIR.X12; LIR.X13; LIR.X14; LIR.X15]
     Floats = Set.ofList [LIR.D0; LIR.D1; LIR.D2; LIR.D3; LIR.D4; LIR.D5; LIR.D6; LIR.D7]
@@ -34,7 +34,17 @@ let private writeFloat = function
 let private instructionWrites (callees: Map<AST.FunctionId, Writes>) instr =
     match instr with
     | LIR.Mov (dest, LIR.Imm _)
-    | LIR.Mov (dest, LIR.Reg _) -> writeInt dest
+    | LIR.Mov (dest, LIR.Reg _)
+    | LIR.Mov (dest, LIR.StringSymbol _)
+    | LIR.Mov (dest, LIR.FuncAddr _)
+    | LIR.LoadFuncAddr (dest, _) -> writeInt dest
+    | LIR.Mov (dest, LIR.StackSlot offset) ->
+        let baseWrites = writeInt dest
+        if offset >= -256 && offset <= 255 then baseWrites
+        else union baseWrites { empty with Ints = Set.singleton LIR.X10 }
+    | LIR.Store (offset, _) ->
+        if offset >= -256 && offset <= 255 then empty
+        else { empty with Ints = Set.singleton LIR.X10 }
     | LIR.Add (dest, _, LIR.Reg _)
     | LIR.Sub (dest, _, LIR.Reg _)
     | LIR.Add (dest, _, LIR.Imm _)
@@ -69,6 +79,15 @@ let private instructionWrites (callees: Map<AST.FunctionId, Writes>) instr =
     | LIR.Uxtw (dest, _) -> writeInt dest
     | LIR.Cmp (_, LIR.Reg _)
     | LIR.FCmp _ -> empty
+    | LIR.Cmp (_, LIR.Imm value) ->
+        if value >= 0L && value < 4096L then empty
+        else { empty with Ints = Set.singleton LIR.X9 }
+    | LIR.FLoad (dest, _) ->
+        // A literal outside FMOV's immediate range is addressed via X9.
+        union (writeFloat dest) { empty with Ints = Set.singleton LIR.X9 }
+    | LIR.FSpillLoad (dest, _) ->
+        union (writeFloat dest) { empty with Ints = Set.singleton LIR.X10 }
+    | LIR.FSpillStore _ -> { empty with Ints = Set.singleton LIR.X10 }
     | LIR.FMov (dest, _)
     | LIR.FAdd (dest, _, _)
     | LIR.FSub (dest, _, _)
@@ -82,7 +101,8 @@ let private instructionWrites (callees: Map<AST.FunctionId, Writes>) instr =
     | LIR.GpToFp (dest, _) -> writeFloat dest
     | LIR.FloatToInt64 (dest, _)
     | LIR.FloatToBits (dest, _)
-    | LIR.FpToGp (dest, _) -> writeInt dest
+    | LIR.FpToGp (dest, _)
+    | LIR.HeapLoad (dest, _, _) -> writeInt dest
     | LIR.Call (_, callee, _) | LIR.TailCall (callee, _) ->
         Map.tryFind callee callees |> Option.defaultValue all
     | LIR.ArgMoves moves | LIR.TailArgMoves moves ->
@@ -106,7 +126,7 @@ let private summarizeFunction callees (func: LIR.Function) =
         block.Instrs
         |> List.fold (fun writes instr -> union writes (instructionWrites callees instr)) writes) empty
 
-let private summaries (functions: LIR.Function list) =
+let summaries (functions: LIR.Function list) =
     let rec converge previous =
         let next =
             functions
@@ -121,6 +141,44 @@ let private summaries (functions: LIR.Function list) =
         |> Map.ofList
     converge initial
 
+let private envelopeWrites callees beforeRestore =
+    let calls =
+        beforeRestore
+        |> List.choose (function LIR.Call (_, id, _) -> Some id | _ -> None)
+    let safeEnvelope =
+        beforeRestore
+        |> List.forall (function
+            | LIR.Call _ | LIR.ArgMoves _ | LIR.FArgMoves _
+            | LIR.FMov (LIR.FVirtual -1, LIR.FPhysical LIR.D0) -> true
+            | _ -> false)
+    match calls with
+    | [_] when safeEnvelope ->
+        // Saves precede argument setup, so its writes matter too.
+        beforeRestore
+        |> List.fold (fun writes instr ->
+            union writes (instructionWrites callees instr)) empty
+        |> Some
+    | _ -> None
+
+/// Match the liveness snapshots produced for empty call-save placeholders.
+/// Unknown envelopes carry the full ABI set through allocation.
+let callWritesForSaves callees (block: LIR.BasicBlock) : Writes list =
+    let rec collect instrs =
+        match instrs with
+        | LIR.SaveRegs ([], []) :: rest ->
+            let beforeRestore =
+                rest
+                |> List.takeWhile (function LIR.RestoreRegs _ -> false | _ -> true)
+            let writes =
+                match List.tryItem (List.length beforeRestore) rest with
+                | Some (LIR.RestoreRegs ([], [])) ->
+                    envelopeWrites callees beforeRestore |> Option.defaultValue all
+                | _ -> all
+            writes :: collect rest
+        | _ :: rest -> collect rest
+        | [] -> []
+    collect block.Instrs
+
 let private pruneBlock (callees: Map<AST.FunctionId, Writes>) (block: LIR.BasicBlock) =
     let rec rewrite instrs =
         match instrs with
@@ -133,22 +191,8 @@ let private pruneBlock (callees: Map<AST.FunctionId, Writes>) (block: LIR.BasicB
             match afterRestore with
             | LIR.RestoreRegs (restoreInts, restoreFloats) :: tail
                 when ints = restoreInts && floats = restoreFloats ->
-                let calls =
-                    beforeRestore
-                    |> List.choose (function LIR.Call (_, id, _) -> Some id | _ -> None)
-                let safeEnvelope =
-                    beforeRestore
-                    |> List.forall (function
-                        | LIR.Call _ | LIR.ArgMoves _ | LIR.FArgMoves _
-                        | LIR.FMov (LIR.FVirtual -1, LIR.FPhysical LIR.D0) -> true
-                        | _ -> false)
-                match calls with
-                | [_] when safeEnvelope ->
-                    // Saves precede argument setup, so its writes matter too.
-                    let writes =
-                        beforeRestore
-                        |> List.fold (fun writes instr ->
-                            union writes (instructionWrites callees instr)) empty
+                match envelopeWrites callees beforeRestore with
+                | Some writes ->
                     let keptInts = ints |> List.filter (fun reg -> Set.contains reg writes.Ints)
                     let keptFloats = floats |> List.filter (fun reg -> Set.contains reg writes.Floats)
                     LIR.SaveRegs (keptInts, keptFloats) :: beforeRestore
@@ -163,7 +207,10 @@ let private pruneBlock (callees: Map<AST.FunctionId, Writes>) (block: LIR.BasicB
     if rewritten = block.Instrs then block
     else { block with Instrs = rewritten }
 
-let refine (functions: LIR.Function list) : LIR.Function list =
+let refineWithCache
+    (cache: (LIR.Function -> Map<AST.FunctionId, Writes> -> (unit -> LIR.Function) -> LIR.Function) option)
+    (functions: LIR.Function list)
+    : LIR.Function list =
     let callees = summaries functions
     functions
     |> List.map (fun func ->
@@ -174,6 +221,22 @@ let refine (functions: LIR.Function list) : LIR.Function list =
                 |> List.exists (function LIR.SaveRegs _ -> true | _ -> false))
         if not hasSaves then func
         else
-            let blocks = func.CFG.Blocks |> Map.map (fun _ block -> pruneBlock callees block)
-            if blocks = func.CFG.Blocks then func
-            else { func with CFG = { func.CFG with Blocks = blocks } })
+            let directIds =
+                func.CFG.Blocks
+                |> Map.toList
+                |> List.collect (fun (_, block) ->
+                    block.Instrs
+                    |> List.choose (function LIR.Call (_, id, _) -> Some id | _ -> None))
+                |> Set.ofList
+            let relevant =
+                callees |> Map.filter (fun id _ -> Set.contains id directIds)
+            let generate () =
+                let blocks = func.CFG.Blocks |> Map.map (fun _ block -> pruneBlock relevant block)
+                if blocks = func.CFG.Blocks then func
+                else { func with CFG = { func.CFG with Blocks = blocks } }
+            match cache with
+            | Some reuse -> reuse func relevant generate
+            | None -> generate ())
+
+let refine (functions: LIR.Function list) : LIR.Function list =
+    refineWithCache None functions

@@ -91,9 +91,32 @@ type internal MirOptimizationCache =
 type internal AllocatedLirFunctionCache =
     Platform.Arch -> LIR.Function -> (unit -> LIR.Function) -> LIR.Function
 
+type internal CallAwareLirFunctionCache =
+    LIR.Function
+        -> Map<AST.FunctionId, ARM64CalleeClobbers.Writes>
+        -> (unit -> LIR.Function)
+        -> LIR.Function
+
+[<NoComparison>]
+type internal CallAwareLirFunctionKey = {
+    Base: LIR.Function
+    Callees: Map<AST.FunctionId, ARM64CalleeClobbers.Writes>
+}
+
+type internal CallAwareLirFunctionKeyComparer() =
+    interface IEqualityComparer<CallAwareLirFunctionKey> with
+        member _.Equals(left, right) =
+            Object.ReferenceEquals(left.Base, right.Base)
+            && left.Callees = right.Callees
+        member _.GetHashCode(key) =
+            System.HashCode.Combine(
+                System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(key.Base),
+                hash key.Callees)
+
 type internal FunctionCompilationCaches = {
     OptimizeMir: MirOptimizationCache
     AllocateLir: AllocatedLirFunctionCache
+    AllocateCallAwareLir: CallAwareLirFunctionCache
 }
 
 type internal Arm64InstructionChunkReferenceComparer() =

@@ -10,127 +10,127 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-27T13:42:44+00:00",
+  "generated_at": "2026-09-27T14:22:35+00:00",
   "compiler": {
-    "commit": "b407d006473f4b63b65beae22ccecaa7a8e37a52",
-    "subject": "Preserve ARM64 Float callee registers and compact call saves"
+    "commit": "3ea97900597e7f6946a75042d90af7813805b5d1",
+    "subject": "Summarize ARM64 callee register clobbers for direct calls"
   },
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 122786845
+      "instructions": 122786833
     },
     {
       "name": "binary_trees",
-      "instructions": 10522533
+      "instructions": 10522508
     },
     {
       "name": "collatz",
-      "instructions": 70193407
+      "instructions": 70193330
     },
     {
       "name": "edigits",
-      "instructions": 49068939
+      "instructions": 49067653
     },
     {
       "name": "factorial",
-      "instructions": 58967
+      "instructions": 58886
     },
     {
       "name": "fannkuch",
-      "instructions": 220304099
+      "instructions": 220304061
     },
     {
       "name": "fasta",
-      "instructions": 17171193
+      "instructions": 16275164
     },
     {
       "name": "fft",
-      "instructions": 1764434
+      "instructions": 1762569
     },
     {
       "name": "fib",
-      "instructions": 7630200
+      "instructions": 7630181
     },
     {
       "name": "huffman",
-      "instructions": 404719446
+      "instructions": 404438467
     },
     {
       "name": "leibniz",
-      "instructions": 17006277
+      "instructions": 17006193
     },
     {
       "name": "mandelbrot",
-      "instructions": 15141681
+      "instructions": 15142822
     },
     {
       "name": "matmul",
-      "instructions": 41669561
+      "instructions": 41669542
     },
     {
       "name": "merkletrees",
-      "instructions": 3871153
+      "instructions": 3871128
     },
     {
       "name": "myers_diff",
-      "instructions": 204613245
+      "instructions": 204609021
     },
     {
       "name": "nbody",
-      "instructions": 14595827
+      "instructions": 14595767
     },
     {
       "name": "nqueen",
-      "instructions": 6924926
+      "instructions": 6924907
     },
     {
       "name": "nsieve",
-      "instructions": 130435278
+      "instructions": 130435227
     },
     {
       "name": "pisum",
-      "instructions": 808021
+      "instructions": 807990
     },
     {
       "name": "primes",
-      "instructions": 1612013
+      "instructions": 1611955
     },
     {
       "name": "quicksort",
-      "instructions": 173108397
+      "instructions": 173108333
     },
     {
       "name": "raytracer",
-      "instructions": 45005944
+      "instructions": 44752766
     },
     {
       "name": "regex_lite",
-      "instructions": 64754916
+      "instructions": 64753188
     },
     {
       "name": "spectral_norm",
-      "instructions": 263137690
+      "instructions": 263133151
     },
     {
       "name": "string_equality",
-      "instructions": 1177997
+      "instructions": 1177881
     },
     {
       "name": "sum_to_n",
-      "instructions": 57964
+      "instructions": 57870
     },
     {
       "name": "tak",
-      "instructions": 48004666
+      "instructions": 48004591
     },
     {
       "name": "tinytemplate",
-      "instructions": 306444918
+      "instructions": 306212700
     },
     {
       "name": "warden",
-      "instructions": 44147260
+      "instructions": 44145346
     }
   ]
 }

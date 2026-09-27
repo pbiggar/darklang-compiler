@@ -1,0 +1,23 @@
+// Diagnostic benchmark for values live across frequent known direct calls.
+// The loop retains two independent Int64 values while calling a small leaf.
+
+let leaf (value: Int64) : Int64 =
+    if value < 0L then leaf (value + 1L) else value + 3L
+
+let throughWrapper (value: Int64) : Int64 = leaf value
+
+let accumulate (remaining: Int64) (left: Int64) (right: Int64) : Int64 =
+    if remaining == 0L then left + right
+    else
+        let nextLeft = left + 7L in
+        let nextRight = right + 11L in
+        let called = throughWrapper remaining in
+        accumulate (remaining - 1L) (nextLeft + called) (nextRight + called)
+
+let repeat (remaining: Int64) (total: Int64) : Int64 =
+    if remaining == 0L then total
+    else
+        let value = accumulate 1L remaining 2L in
+        repeat (remaining - 1L) (total + value)
+
+Builtin.printLine (Stdlib.Int64.toString (repeat 100000L 0L))

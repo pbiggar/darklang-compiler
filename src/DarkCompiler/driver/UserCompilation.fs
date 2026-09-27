@@ -218,6 +218,10 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     AllocateLir =
                                         fun arch func allocate ->
                                             current.AllocateLirFunction arch func allocate
+                                    AllocateCallAwareLir =
+                                        fun baseFunction callees allocate ->
+                                            current.AllocateCallAwareLirFunction
+                                                baseFunction callees allocate
                                 })
                         let mirRegistryTimer = Stopwatch.StartNew()
                         let projectedMirRegistries =

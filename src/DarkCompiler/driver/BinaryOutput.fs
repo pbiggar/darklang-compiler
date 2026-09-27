@@ -146,6 +146,12 @@ let internal generateBinary
                         codegenOptions
                         functions
                         generate)
+        let refinementCache =
+            session
+            |> Option.filter (fun _ -> not options.EnableCoverage)
+            |> Option.map (fun current ->
+                fun func callees refine ->
+                    current.RefineArm64LirFunction func callees refine)
         let helperCache =
             session
             |> Option.filter (fun _ -> not options.EnableCoverage)
@@ -174,6 +180,7 @@ let internal generateBinary
                 codegenOptions
                 (Some arm64SumShapeRegistry)
                 functionCache
+                refinementCache
                 functionGroupCache
                 functionGroups
                 metadataGroupCache

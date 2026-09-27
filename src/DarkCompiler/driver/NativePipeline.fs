@@ -306,6 +306,80 @@ let internal lowerToAllocatedLir
                         | None -> allocate ()
                     let allocatedFuncs =
                         funcsPreparedForAllocation |> List.map allocateFunction
+                    let allocatedFuncs =
+                        match arch with
+                        | Platform.X86_64 -> allocatedFuncs
+                        | Platform.ARM64 ->
+                            let callees = ARM64CalleeClobbers.summaries allocatedFuncs
+                            let callEdges =
+                                funcsPreparedForAllocation
+                                |> List.fold (fun edges (func: LIR.Function) ->
+                                    let calls =
+                                        func.CFG.Blocks
+                                        |> Map.toList
+                                        |> List.collect (fun (_, block) ->
+                                            block.Instrs
+                                            |> List.choose (function
+                                                | LIR.Call (_, id, _)
+                                                | LIR.TailCall (id, _) -> Some id
+                                                | _ -> None))
+                                        |> Set.ofList
+                                    let existing =
+                                        Map.tryFind func.Id edges |> Option.defaultValue Set.empty
+                                    Map.add func.Id (Set.union existing calls) edges) Map.empty
+                            let rec canReach target seen current =
+                                if current = target then true
+                                elif Set.contains current seen then false
+                                else
+                                    let next =
+                                        Map.tryFind current callEdges |> Option.defaultValue Set.empty
+                                    next
+                                    |> Set.exists (canReach target (Set.add current seen))
+                            List.map2
+                                (fun (prepared: LIR.Function) (allocated: LIR.Function) ->
+                                    let directCallees =
+                                        prepared.CFG.Blocks
+                                        |> Map.toList
+                                        |> List.collect (fun (_, block) ->
+                                            block.Instrs
+                                            |> List.choose (function
+                                                | LIR.Call (_, id, _) -> Some id
+                                                | _ -> None))
+                                        |> Set.ofList
+                                    let relevantCallees =
+                                        directCallees
+                                        |> Seq.map (fun id ->
+                                            id,
+                                            (if canReach prepared.Id Set.empty id then
+                                                 ARM64CalleeClobbers.all
+                                             else
+                                                 Map.tryFind id callees
+                                                 |> Option.defaultValue ARM64CalleeClobbers.all))
+                                        |> Map.ofSeq
+                                    let hasPreservedCallerReg =
+                                        prepared.CFG.Blocks
+                                        |> Map.exists (fun _ block ->
+                                            ARM64CalleeClobbers.callWritesForSaves relevantCallees block
+                                            |> List.exists (fun writes ->
+                                                (RegisterPolicy.callerSavedRegs
+                                                 |> List.exists (fun reg ->
+                                                     not (Set.contains reg writes.Ints)))
+                                                || (FloatAllocation.floatCallerSavedRegs
+                                                    |> List.exists (fun reg ->
+                                                        not (Set.contains reg writes.Floats)))))
+                                    if hasPreservedCallerReg then
+                                        let allocate () =
+                                            RegisterAllocation.allocateRegistersWithCallSummaries
+                                                arch relevantCallees prepared
+                                            |> LIR_Peephole.removeSelfMovesFromFunction
+                                        match functionCaches with
+                                        | Some caches ->
+                                            caches.AllocateCallAwareLir
+                                                allocated relevantCallees allocate
+                                        | None -> allocate ()
+                                    else allocated)
+                                funcsPreparedForAllocation
+                                allocatedFuncs
                     let allocElapsed = sw.Elapsed.TotalMilliseconds - allocStart
                     recordPassTiming passTimingRecorder "Register Allocation" allocElapsed
                     if verbosity >= 2 then

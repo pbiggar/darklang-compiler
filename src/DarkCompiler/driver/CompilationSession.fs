@@ -32,6 +32,10 @@ type CompilationSession(collectCodegenMetrics: bool) =
         Dictionary<MirOptimizationKey, MIR.Function>(MirOptimizationKeyNameHashComparer())
     let allocatedLirFunctions =
         Dictionary<AllocatedLirFunctionKey, LIR.Function>(AllocatedLirFunctionKeyNameHashComparer())
+    let callAwareLirFunctions =
+        Dictionary<CallAwareLirFunctionKey, LIR.Function>(CallAwareLirFunctionKeyComparer())
+    let refinedLirFunctions =
+        Dictionary<CallAwareLirFunctionKey, LIR.Function>(CallAwareLirFunctionKeyComparer())
     let reachableStdlibFunctionsByContext =
         Dictionary<
             obj,
@@ -263,6 +267,36 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 allocatedLirFunctions.[key] <- allocated
                 allocatedLirFunctionMissCount <- allocatedLirFunctionMissCount + 1
                 allocated
+
+    member _.AllocateCallAwareLirFunction
+        (baseFunction: LIR.Function)
+        (callees: Map<AST.FunctionId, ARM64CalleeClobbers.Writes>)
+        (allocate: unit -> LIR.Function)
+        : LIR.Function =
+        let key = { Base = baseFunction; Callees = callees }
+        if disposed then allocate ()
+        else
+            match callAwareLirFunctions.TryGetValue key with
+            | true, allocated -> allocated
+            | false, _ ->
+                let allocated = allocate ()
+                callAwareLirFunctions.[key] <- allocated
+                allocated
+
+    member _.RefineArm64LirFunction
+        (baseFunction: LIR.Function)
+        (callees: Map<AST.FunctionId, ARM64CalleeClobbers.Writes>)
+        (refine: unit -> LIR.Function)
+        : LIR.Function =
+        let key = { Base = baseFunction; Callees = callees }
+        if disposed then refine ()
+        else
+            match refinedLirFunctions.TryGetValue key with
+            | true, refined -> refined
+            | false, _ ->
+                let refined = refine ()
+                refinedLirFunctions.[key] <- refined
+                refined
 
     member internal _.ReachableStdlibFunctions
         (contextIdentity: obj)
@@ -706,6 +740,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
             compiledStartFunctions.Clear()
             optimizedMirFunctions.Clear()
             allocatedLirFunctions.Clear()
+            callAwareLirFunctions.Clear()
+            refinedLirFunctions.Clear()
             reachableStdlibFunctionsByContext.Clear()
             stdlibFunctionInventoryByContext.Clear()
             reachableStdlibNamesByRootAndContext.Clear()

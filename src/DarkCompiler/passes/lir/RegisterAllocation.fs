@@ -29,6 +29,11 @@ let private appendTiming
     : RegisterAllocationTiming list =
     timings @ [{ Phase = phase; ElapsedMs = elapsedMs }]
 
+let private bestCostGap costs =
+    match List.sort costs with
+    | best :: second :: _ -> second - best
+    | _ -> Crash.crash "Call-aware allocation requires at least two caller registers"
+
 /// Allocate registers for a function
 let private timePhase
     (swOpt: System.Diagnostics.Stopwatch option)
@@ -48,6 +53,7 @@ let private timePhase
 /// still determines interference; this permutation only chooses which physical
 /// register represents each color, so it cannot create a new conflict.
 let private chooseArm64RegistersForCalls
+    (calleeWrites: Map<AST.FunctionId, ARM64CalleeClobbers.Writes> option)
     (blocks: LIR.BasicBlock array)
     (classifiedBlocks: ClassifiedBlock array)
     (domain: VRegDomain)
@@ -89,11 +95,87 @@ let private chooseArm64RegistersForCalls
     let calleeRegs = calleeSavedRegsFor Platform.ARM64
     let mustUseCallee = max 0 (List.length ordered - List.length callerSavedRegs)
     let crossingCount = ordered |> List.filter (fun reg -> callCount reg > 0) |> List.length
-    let calleeCount = min (List.length calleeRegs) (max mustUseCallee crossingCount)
-    let targetRegs =
-        (calleeRegs |> List.take calleeCount)
-        @ (callerSavedRegs |> List.take (List.length ordered - calleeCount))
-    let remap = List.zip ordered targetRegs |> Map.ofList
+    let targetRegs, sourceRegs =
+        match calleeWrites with
+        | None ->
+            let calleeCount = min (List.length calleeRegs) (max mustUseCallee crossingCount)
+            ((calleeRegs |> List.take calleeCount)
+             @ (callerSavedRegs |> List.take (List.length ordered - calleeCount)), ordered)
+        | Some callees ->
+            let callSites =
+                blocks
+                |> Array.mapi (fun idx block ->
+                    let snapshots =
+                        computeSaveRegsPreparation
+                            domain floatDomain block
+                            classifiedBlocks.[idx].InstrFacts
+                            liveness.[idx].LiveOut
+                            floatLiveness.[idx].LiveOut
+                    let writes = ARM64CalleeClobbers.callWritesForSaves callees block
+                    if List.length snapshots <> List.length writes then
+                        Crash.crash "ARM64 call liveness and clobber envelopes disagree"
+                    List.zip snapshots writes
+                    |> List.map (fun ((liveInts, _), writes) ->
+                        let liveColors =
+                            liveInts
+                            |> Bitset.indicesToList
+                            |> List.choose (fun vregIdx ->
+                                match allocation.Allocations.[vregIdx] with
+                                | Some (PhysReg reg) -> Some reg
+                                | _ -> None)
+                            |> Set.ofList
+                        (liveColors, writes)))
+                |> Array.toList
+                |> List.concat
+            let callerCost color reg =
+                callSites
+                |> List.sumBy (fun (liveColors, writes) ->
+                    if Set.contains color liveColors && Set.contains reg writes.Ints then 1 else 0)
+            let bestCallerCost color =
+                callerSavedRegs |> List.map (callerCost color) |> List.min
+            let crossesFullClobber color =
+                callSites
+                |> List.exists (fun (liveColors, writes) ->
+                    Set.contains color liveColors
+                    && (callerSavedRegs
+                        |> List.forall (fun reg -> Set.contains reg writes.Ints)))
+            let calleeCount =
+                ordered
+                |> List.filter (fun color ->
+                    crossesFullClobber color || bestCallerCost color > 1)
+                |> List.length
+                |> max mustUseCallee
+                |> min (List.length calleeRegs)
+            let byNeed =
+                ordered
+                |> List.sortBy (fun color ->
+                    (not (crossesFullClobber color), -bestCallerCost color,
+                     -callCount color, color))
+            let calleeColors = byNeed |> List.take calleeCount
+            let callerColors = byNeed |> List.skip calleeCount
+            let callerAssignments =
+                callerColors
+                |> List.sortBy (fun color ->
+                    let gap = callerSavedRegs |> List.map (callerCost color) |> bestCostGap
+                    (-gap, -callCount color, color))
+                |> List.fold (fun (available, assignments) color ->
+                    let chosen =
+                        available |> List.minBy (fun reg -> (callerCost color reg, reg))
+                    (available |> List.filter ((<>) chosen), (color, chosen) :: assignments))
+                    (callerSavedRegs, [])
+                |> snd
+            let calleeAssignments =
+                List.zip calleeColors (calleeRegs |> List.take calleeCount)
+            let remap = Map.ofList (calleeAssignments @ callerAssignments)
+            let sourceRegs = ordered
+            let targetRegs =
+                sourceRegs
+                |> List.map (fun color ->
+                    Map.tryFind color remap
+                    |> Option.defaultWith (fun () ->
+                        Crash.crash $"Missing call-aware ARM64 color for {color}"))
+            (targetRegs, sourceRegs)
+    let remap = List.zip sourceRegs targetRegs |> Map.ofList
     let remappedAllocations =
         allocation.Allocations
         |> Array.map (function
@@ -106,8 +188,113 @@ let private chooseArm64RegistersForCalls
         Allocations = remappedAllocations
         UsedCalleeSaved = targetRegs |> List.filter (fun reg -> List.contains reg calleeRegs) |> List.sort }
 
+let private chooseArm64FloatRegistersForCalls
+    (callees: Map<AST.FunctionId, ARM64CalleeClobbers.Writes>)
+    (blocks: LIR.BasicBlock array)
+    (classifiedBlocks: ClassifiedBlock array)
+    (intDomain: VRegDomain)
+    (floatDomain: VRegDomain)
+    (intLiveness: BlockLiveness array)
+    (floatLiveness: BlockLiveness array)
+    (allocation: FAllocationResult)
+    : FAllocationResult =
+    let callSites =
+        blocks
+        |> Array.mapi (fun idx block ->
+            let snapshots =
+                computeSaveRegsPreparation
+                    intDomain floatDomain block
+                    classifiedBlocks.[idx].InstrFacts
+                    intLiveness.[idx].LiveOut
+                    floatLiveness.[idx].LiveOut
+            let writes = ARM64CalleeClobbers.callWritesForSaves callees block
+            if List.length snapshots <> List.length writes then
+                Crash.crash "ARM64 Float call liveness and clobber envelopes disagree"
+            List.zip snapshots writes
+            |> List.map (fun ((_, liveFloats), writes) ->
+                let liveColors =
+                    liveFloats
+                    |> Bitset.indicesToList
+                    |> List.choose (fun fvregIdx ->
+                        match allocation.Allocations.[fvregIdx] with
+                        | Some (FPhysReg reg) -> Some reg
+                        | _ -> None)
+                    |> Set.ofList
+                (liveColors, writes)))
+        |> Array.toList
+        |> List.concat
+    let usedRegs =
+        allocation.Allocations
+        |> Array.choose (function Some (FPhysReg reg) -> Some reg | _ -> None)
+        |> Array.distinct
+        |> Array.toList
+    let callCount color =
+        callSites
+        |> List.sumBy (fun (liveColors, _) -> if Set.contains color liveColors then 1 else 0)
+    let callerCost color reg =
+        callSites
+        |> List.sumBy (fun (liveColors, writes) ->
+            if Set.contains color liveColors && Set.contains reg writes.Floats then 1 else 0)
+    let bestCallerCost color =
+        floatCallerSavedRegs |> List.map (callerCost color) |> List.min
+    let crossesFullClobber color =
+        callSites
+        |> List.exists (fun (liveColors, writes) ->
+            Set.contains color liveColors
+            && (floatCallerSavedRegs
+                |> List.forall (fun reg -> Set.contains reg writes.Floats)))
+    let mustUseCallee = max 0 (List.length usedRegs - List.length floatCallerSavedRegs)
+    let calleeCount =
+        usedRegs
+        |> List.filter (fun color ->
+            crossesFullClobber color || bestCallerCost color > 1)
+        |> List.length
+        |> max mustUseCallee
+        |> min (List.length floatCalleeSavedRegs)
+    let byNeed =
+        usedRegs
+        |> List.sortBy (fun color ->
+            (not (crossesFullClobber color), -bestCallerCost color,
+             -callCount color, color))
+    let calleeColors = byNeed |> List.take calleeCount
+    let callerColors = byNeed |> List.skip calleeCount
+    let callerAssignments =
+        callerColors
+        |> List.sortBy (fun color ->
+            let gap = floatCallerSavedRegs |> List.map (callerCost color) |> bestCostGap
+            (-gap, -callCount color, color))
+        |> List.fold (fun (available, assignments) color ->
+            let chosen = available |> List.minBy (fun reg -> (callerCost color reg, reg))
+            (available |> List.filter ((<>) chosen), (color, chosen) :: assignments))
+            (floatCallerSavedRegs, [])
+        |> snd
+    let calleeAssignments =
+        List.zip calleeColors (floatCalleeSavedRegs |> List.take calleeCount)
+    let remap = Map.ofList (calleeAssignments @ callerAssignments)
+    let remapped =
+        allocation.Allocations
+        |> Array.map (function
+            | Some (FPhysReg reg) ->
+                Map.tryFind reg remap
+                |> Option.map FPhysReg
+                |> Option.defaultWith (fun () ->
+                    Crash.crash $"Missing call-aware ARM64 Float color for {reg}")
+                |> Some
+            | other -> other)
+    { allocation with
+        Allocations = remapped
+        UsedCalleeSavedF =
+            remapped
+            |> Array.choose (function
+                | Some (FPhysReg reg) when List.contains reg floatCalleeSavedRegs -> Some reg
+                | _ -> None)
+            |> Array.distinct
+            |> Array.sort
+            |> Array.toList }
+
 let private allocateRegistersInternal
     (arch: Platform.Arch)
+    (calleeWrites: Map<AST.FunctionId, ARM64CalleeClobbers.Writes> option)
     (swOpt: System.Diagnostics.Stopwatch option)
     (func: LIR.Function)
     : LIR.Function * RegisterAllocationTiming list =
@@ -215,7 +402,7 @@ let private allocateRegistersInternal
         match arch with
         | Platform.ARM64 ->
             chooseArm64RegistersForCalls
-                blocks classifiedBlocks domain floatDomain livenessBits floatLiveness colorResult
+                calleeWrites blocks classifiedBlocks domain floatDomain livenessBits floatLiveness colorResult
         | Platform.X86_64 -> colorResult
 
     // Step 3b: Parameter info already computed (needed for float allocation and param moves)
@@ -235,6 +422,13 @@ let private allocateRegistersInternal
                 floatParamPrecolors
                 floatDomain
                 floatLiveness)
+    let floatAllocation =
+        match arch, calleeWrites with
+        | Platform.ARM64, Some callees ->
+            chooseArm64FloatRegistersForCalls
+                callees blocks classifiedBlocks domain floatDomain
+                livenessBits floatLiveness floatAllocation
+        | _ -> floatAllocation
 
     let ((intParamCopyInstrs, floatParamCopyInstrs, entryEdgePhiInstrs), timings) =
         timePhase swOpt "RegAlloc: Param Moves" timings (fun () ->
@@ -440,7 +634,14 @@ let private allocateRegistersInternal
 
 /// Allocate registers for a function
 let allocateRegisters (arch: Platform.Arch) (func: LIR.Function) : LIR.Function =
-    allocateRegistersInternal arch None func |> fst
+    allocateRegistersInternal arch None None func |> fst
+
+let allocateRegistersWithCallSummaries
+    (arch: Platform.Arch)
+    (callees: Map<AST.FunctionId, ARM64CalleeClobbers.Writes>)
+    (func: LIR.Function)
+    : LIR.Function =
+    allocateRegistersInternal arch (Some callees) None func |> fst
 
 /// Allocate registers for a function and collect phase timings
 let allocateRegistersWithTiming
@@ -448,4 +649,4 @@ let allocateRegistersWithTiming
     (func: LIR.Function)
     : LIR.Function * RegisterAllocationTiming list =
     let sw = System.Diagnostics.Stopwatch.StartNew()
-    allocateRegistersInternal arch (Some sw) func
+    allocateRegistersInternal arch None (Some sw) func
