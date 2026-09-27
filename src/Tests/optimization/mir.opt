@@ -318,12 +318,11 @@ let repeatFalse (condition: Bool) : Int64 =
 ---EXPECTED---
 Function repeatFalse:
   repeatFalse_entry:
-    branch v0 ? repeatFalse_L0 : repeatFalse_L5
-  repeatFalse_L0:
+    branch v0 ? repeatFalse_ssa_1 : repeatFalse_ssa_4
+  repeatFalse_ssa_1:
     ret 3
-  repeatFalse_L5:
+  repeatFalse_ssa_4:
     ret 2
-
 ---NAME---
 sccp_repeated_predicate_after_join
 ---INPUT---
@@ -335,16 +334,15 @@ let knownAfterJoin (condition: Bool) (choose: Bool) : Int64 =
 ---EXPECTED---
 Function knownAfterJoin:
   knownAfterJoin_entry:
-    branch v0 ? knownAfterJoin_L0 : knownAfterJoin_L1
+    branch v0 ? knownAfterJoin_ssa_1 : knownAfterJoin_ssa_2
   knownAfterJoin_L0:
-    branch v1 ? knownAfterJoin_L3 : knownAfterJoin_L4
-  knownAfterJoin_L1:
-    ret 0
-  knownAfterJoin_L3:
     ret 20
-  knownAfterJoin_L4:
+  knownAfterJoin_L1:
     ret 22
-
+  knownAfterJoin_ssa_1:
+    branch v1 ? knownAfterJoin_L0 : knownAfterJoin_L1
+  knownAfterJoin_ssa_2:
+    ret 0
 ---NAME---
 sccp_range_after_join
 ---INPUT---
@@ -356,17 +354,16 @@ let boundedAfterJoin (value: Int64) (choose: Bool) : Int64 =
 ---EXPECTED---
 Function boundedAfterJoin:
   boundedAfterJoin_entry:
-    v10007 <- v0 < 10 : TInt64
-    branch v10007 ? boundedAfterJoin_L0 : boundedAfterJoin_L1
+    v10005 <- v0 < 10 : TInt64
+    branch v10005 ? boundedAfterJoin_ssa_1 : boundedAfterJoin_ssa_2
   boundedAfterJoin_L0:
-    branch v1 ? boundedAfterJoin_L3 : boundedAfterJoin_L4
-  boundedAfterJoin_L1:
-    ret 3
-  boundedAfterJoin_L3:
     ret 1
-  boundedAfterJoin_L4:
+  boundedAfterJoin_L1:
     ret 2
-
+  boundedAfterJoin_ssa_1:
+    branch v1 ? boundedAfterJoin_L0 : boundedAfterJoin_L1
+  boundedAfterJoin_ssa_2:
+    ret 3
 ---NAME---
 sccp_range_false_edge
 ---INPUT---
@@ -376,13 +373,12 @@ let rangeFalseEdge (value: Int64) : Int64 =
 ---EXPECTED---
 Function rangeFalseEdge:
   rangeFalseEdge_entry:
-    v10003 <- v0 < 10 : TInt64
-    branch v10003 ? rangeFalseEdge_L0 : rangeFalseEdge_L5
-  rangeFalseEdge_L0:
+    v10001 <- v0 < 10 : TInt64
+    branch v10001 ? rangeFalseEdge_ssa_1 : rangeFalseEdge_ssa_4
+  rangeFalseEdge_ssa_1:
     ret 1
-  rangeFalseEdge_L5:
+  rangeFalseEdge_ssa_4:
     ret 2
-
 ---NAME---
 sccp_unsigned_range_edge
 ---INPUT---
@@ -393,13 +389,12 @@ let unsignedBound (value: UInt8) : Int64 =
 ---EXPECTED---
 Function unsignedBound:
   unsignedBound_entry:
-    v10004 <- v0 < 10 : TUInt8
-    branch v10004 ? unsignedBound_L5 : unsignedBound_L1
-  unsignedBound_L1:
+    v10002 <- v0 < 10 : TUInt8
+    branch v10002 ? unsignedBound_ssa_4 : unsignedBound_ssa_2
+  unsignedBound_ssa_2:
     ret 2
-  unsignedBound_L5:
+  unsignedBound_ssa_4:
     ret 1
-
 ---NAME---
 sccp_join_weakens_boolean_fact
 ---INPUT---
@@ -411,20 +406,17 @@ Function preserveBoolean:
   preserveBoolean_entry:
     branch v0 ? preserveBoolean_L0 : preserveBoolean_L1
   preserveBoolean_L0:
-    v10010 <- 20 : TInt64
     jump preserveBoolean_L2
   preserveBoolean_L1:
-    v10009 <- 22 : TInt64
     jump preserveBoolean_L2
   preserveBoolean_L2:
-    v10004 <- Phi([(v10009, preserveBoolean_L1), (v10010, preserveBoolean_L0)]) : TInt64
-    branch v0 ? preserveBoolean_L3 : preserveBoolean_L4
-  preserveBoolean_L3:
+    v10003 <- Phi([(20, preserveBoolean_L0), (22, preserveBoolean_L1)]) : TInt64
+    branch v0 ? preserveBoolean_ssa_1 : preserveBoolean_ssa_2
+  preserveBoolean_ssa_1:
+    ret v10003
+  preserveBoolean_ssa_2:
+    v10004 <- v10003 + 1 : TInt64
     ret v10004
-  preserveBoolean_L4:
-    v10006 <- v10004 + 1 : TInt64
-    ret v10006
-
 ---NAME---
 sccp_join_weakens_range_fact
 ---INPUT---
@@ -434,23 +426,20 @@ let preserveRange (value: Int64) : Int64 =
 ---EXPECTED---
 Function preserveRange:
   preserveRange_entry:
-    v10006 <- v0 < 10 : TInt64
-    branch v10006 ? preserveRange_L0 : preserveRange_L1
+    v10005 <- v0 < 10 : TInt64
+    branch v10005 ? preserveRange_L0 : preserveRange_L1
   preserveRange_L0:
-    v10013 <- 20 : TInt64
     jump preserveRange_L2
   preserveRange_L1:
-    v10012 <- 22 : TInt64
     jump preserveRange_L2
   preserveRange_L2:
-    v10007 <- Phi([(v10012, preserveRange_L1), (v10013, preserveRange_L0)]) : TInt64
-    branch v10006 ? preserveRange_L3 : preserveRange_L4
-  preserveRange_L3:
+    v10006 <- Phi([(20, preserveRange_L0), (22, preserveRange_L1)]) : TInt64
+    branch v10005 ? preserveRange_ssa_1 : preserveRange_ssa_2
+  preserveRange_ssa_1:
+    ret v10006
+  preserveRange_ssa_2:
+    v10007 <- v10006 + 1 : TInt64
     ret v10007
-  preserveRange_L4:
-    v10009 <- v10007 + 1 : TInt64
-    ret v10009
-
 ---NAME---
 const_branch_elimination_self_eq
 ---INPUT---
