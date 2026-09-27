@@ -47,6 +47,7 @@ grouped by purpose; each subject has one canonical source.
 - [AST correctness follow-up](project/ast-correctness-next.md)
 - [Native HTTP stack plan](project/http-stack-plan.md)
 - [SSA boundary migration plan](project/ssa-boundary-migration.md)
+- [Call-graph-directed pipeline plan](project/callgraph-pipeline-plan.md)
 - [In-place mutation optimization checklist](project/perceus-checklist.md)
 - [Host test and compiler runtime profile (2026-09-27)](project/test-runtime-profile-2026-09-27.md)
 
