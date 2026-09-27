@@ -233,6 +233,48 @@ class MergetrainStatusTests(unittest.TestCase):
             self.assertIn("[w] review", label)
             self.assertLessEqual(len("    " + label), 80)
 
+    @patch("scripts.render_mergetrain_status.history_items", return_value=[])
+    @patch("scripts.render_mergetrain_status.benchmark_changes", return_value=[])
+    @patch("scripts.render_mergetrain_status.recent_merges", return_value=[])
+    def test_approval_error_is_collapsed_in_overview(
+        self,
+        _recent_merges: object,
+        _benchmark_changes: object,
+        _history_items: object,
+    ) -> None:
+        error = "approval_execution_policy_changed: " + "policy diff\n" * 100
+        payload = {
+            "contract_version": 4,
+            "health": "unhealthy",
+            "state": "attention",
+            "summary": "1 job needs attention",
+            "next_action": {"code": "fix_blocked_job", "requires_approval": "none"},
+            "attention_jobs": [{
+                "id": 7, "task": "Policy review", "branch": "task/policy",
+                "state": "attention", "reason": error,
+            }],
+            "recent_jobs": [],
+        }
+
+        overview = render(payload, Path("."), color=False)
+        row = next(line for line in overview.splitlines() if line.startswith("  #7 "))
+        self.assertIn("approval required", row)
+        self.assertIn("[a] details", row)
+        self.assertNotIn("policy diff", overview)
+        self.assertEqual(len(row.splitlines()), 1)
+
+        payload["attention_jobs"] = []
+        payload["recent_jobs"] = [{
+            "id": 8, "task": "Policy review", "branch": "task/policy",
+            "state": "waiting", "reason": error,
+        }]
+        waiting_overview = render(payload, Path("."), color=False)
+        waiting_row = next(
+            line for line in waiting_overview.splitlines() if line.startswith("  #8 ")
+        )
+        self.assertIn("approval required; [v] details", waiting_row)
+        self.assertNotIn("policy diff", waiting_overview)
+
     def test_human_age_uses_compact_units(self) -> None:
         now = datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc)
 
