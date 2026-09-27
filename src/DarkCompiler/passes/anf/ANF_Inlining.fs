@@ -669,6 +669,32 @@ let rec private substituteProjectedTupleReturn
         |> Option.map (fun body' -> Let (id, cexpr, body'))
     | Jump _ | Join _ | Return _ | If _ -> None
 
+/// Fresh records with scalar fields have no managed child edges, and this
+/// projection-only rewrite cannot expose their root refcounts to source code.
+let private hasFreshScalarRecordTupleResult (func: Function) : bool =
+    let isScalar = function
+        | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+        | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
+        | AST.TBool | AST.TFloat64 | AST.TDateTime | AST.TUnit
+        | AST.TNever | AST.TInternalRawPtr -> true
+        | _ -> false
+    let rec inspect bindings = function
+        | Let (tupleId, TupleAlloc elements, Return (Var returnedId)) when tupleId = returnedId ->
+            let elementIds =
+                elements |> List.choose (function Var elementId -> Some elementId | _ -> None)
+            List.length elementIds = List.length elements
+            && Set.count (Set.ofList elementIds) = List.length elementIds
+            && (elementIds
+                |> List.forall (fun elementId ->
+                    match Map.tryFind elementId bindings with
+                    | Some (RecordAlloc (descriptor, _))
+                    | Some (RecordClone (descriptor, _, _)) ->
+                        descriptor.Fields |> List.forall (snd >> isScalar)
+                    | _ -> false))
+        | Let (id, value, body) -> inspect (Map.add id value bindings) body
+        | Jump _ | Join _ | Return _ | If _ -> false
+    inspect Map.empty func.Body
+
 let private isProjectedTupleInlineCandidate (info: FunctionInfo) (config: InliningConfig) : bool =
     let hasManagedElement =
         match info.Func.ReturnType with
@@ -682,7 +708,7 @@ let private isProjectedTupleInlineCandidate (info: FunctionInfo) (config: Inlini
                 | _ -> true)
         | _ -> true
     info.Size <= config.MaxProjectedTupleInlineSize
-    && not hasManagedElement
+    && (not hasManagedElement || hasFreshScalarRecordTupleResult info.Func)
     && not info.IsRecursive
     && not info.HasClosures
     && not info.HasTailCalls
