@@ -13,6 +13,70 @@ open RcReturnAnalysis
 open RcShapePlanning
 open RcCleanup
 
+/// Recover a binding's type without relying on ownership rewrites. Some raw
+/// projections carry their concrete type only at the next use site.
+let internal inferBindingType
+    (ctx: TypeContext)
+    (tempId: TempId)
+    (cexpr: CExpr)
+    (bodyInfo: ReturnAnnotatedExpr)
+    : AST.SemanticType =
+    let (TempId tempIdInt) = tempId
+    let maybeType = inferCExprType ctx cexpr
+    let rec inferAliasedVarTypeFromUse (aliasedTemp: TempId) (nextBody: ReturnAnnotatedExpr) : AST.SemanticType option =
+        let inferFromCall (funcName: AST.FunctionId) (args: Atom list) : AST.SemanticType option =
+            match Map.tryFind funcName ctx.FuncReg with
+            | Some (_, AST.TFunction (paramTypes, _)) ->
+                args
+                |> List.mapi (fun idx atom -> idx, atom)
+                |> List.tryPick (fun (idx, atom) ->
+                    match atom, List.tryItem idx paramTypes with
+                    | Var tid, Some typ when tid = aliasedTemp -> Some typ
+                    | _ -> None)
+            | _ -> None
+        match nextBody with
+        | RLet (_, RawSlotInit (_, _, Var valueTemp, valueType), _, _) when valueTemp = aliasedTemp ->
+            Some valueType
+        | RLet (_, Call (funcName, args), _, _)
+        | RLet (_, BorrowedCall (funcName, args), _, _)
+        | RLet (_, TailCall (funcName, args), _, _) ->
+            inferFromCall funcName args
+        | RLet (nextAliasTemp, Atom (Var sourceId), nextNextBody, _) when sourceId = aliasedTemp ->
+            inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
+        | RLet (nextAliasTemp, TypedAtom (Var sourceId, aliasType), nextNextBody, _) when sourceId = aliasedTemp ->
+            if shapeNeedsManagedAliasRootPreservation ctx aliasType then
+                Some aliasType
+            else
+                inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
+        | RIf (Var tid, _, _, _) when tid = aliasedTemp -> Some AST.TBool
+        | _ -> None
+    match maybeType with
+    | Some typ ->
+        let aliasTypeFromBody =
+            match bodyInfo with
+            | RLet (_, TypedAtom (Var sourceId, aliasType), _, _) when sourceId = tempId ->
+                Some aliasType
+            | RLet (aliasTemp, Atom (Var sourceId), nextBody, _) when sourceId = tempId ->
+                inferAliasedVarTypeFromUse aliasTemp nextBody
+            | _ -> None
+        match aliasTypeFromBody with
+        | Some aliasType
+            when shapeNeedsManagedAliasRootPreservation ctx aliasType
+                 && not (shapeNeedsManagedAliasRootPreservation ctx typ) -> aliasType
+        | _ -> typ
+    | None ->
+        match cexpr, bodyInfo with
+        | TupleGet _, RLet (_, TypedAtom (Var sourceId, aliasType), _, _)
+            when sourceId = tempId -> aliasType
+        | RawGet (_, _, None), RLet (_, TypedAtom (Var sourceId, aliasType), _, _)
+            when sourceId = tempId -> aliasType
+        | RawGet (_, _, None), RLet (aliasTemp, Atom (Var sourceId), nextBody, _)
+            when sourceId = tempId ->
+            inferAliasedVarTypeFromUse aliasTemp nextBody
+            |> Option.defaultValue (AST.TVar $"raw_get_{tempIdInt}")
+        | RawGet (_, _, None), _ -> AST.TVar $"raw_get_{tempIdInt}"
+        | _ -> AST.TVar $"inferred_{tempIdInt}"
+
 let rec insertRCWithAnalysis
     (joinScopes: Map<TempId, Set<TempId>>)
     (inheritedBranchDecs: ReturnDec list)
@@ -175,91 +239,9 @@ let rec insertRCWithAnalysis
             applyLetFrames ctx frames (withDecs, varGen2, types2)
 
         | RLet (tempId, cexpr, bodyInfo, _) ->
-            let (TempId tempIdInt) = tempId
-
-            // This walk visits each binding once. Do not memoize by CExpr:
-            // sibling branches may reuse TempIds, making structurally equal
-            // expressions resolve to different types in their local contexts.
-            let maybeType = inferCExprType ctx cexpr
-
-            // When a temp is aliased through one or more let-bound vars, infer its type
-            // from the first concrete use-site (typically a call argument position).
-            let rec inferAliasedVarTypeFromUse (aliasedTemp: TempId) (nextBody: ReturnAnnotatedExpr) : AST.SemanticType option =
-                let inferFromCall (funcName: AST.FunctionId) (args: Atom list) : AST.SemanticType option =
-                    match Map.tryFind funcName ctx.FuncReg with
-                    | Some (_, AST.TFunction (paramTypes, _)) ->
-                        args
-                        |> List.mapi (fun idx atom -> (idx, atom))
-                        |> List.tryPick (fun (idx, atom) ->
-                            match atom with
-                            | Var tid when tid = aliasedTemp && idx < List.length paramTypes ->
-                                Some (List.item idx paramTypes)
-                            | _ ->
-                                None)
-                    | _ ->
-                        None
-
-                match nextBody with
-                | RLet (_, RawSlotInit (_, _, Var valueTemp, valueType), _, _) when valueTemp = aliasedTemp ->
-                    Some valueType
-                | RLet (_, Call (funcName, args), _, _) ->
-                    inferFromCall funcName args
-                | RLet (_, BorrowedCall (funcName, args), _, _) ->
-                    inferFromCall funcName args
-                | RLet (_, TailCall (funcName, args), _, _) ->
-                    inferFromCall funcName args
-                | RLet (nextAliasTemp, Atom (Var sourceId), nextNextBody, _) when sourceId = aliasedTemp ->
-                    inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
-                | RLet (nextAliasTemp, TypedAtom (Var sourceId, aliasType), nextNextBody, _) when sourceId = aliasedTemp ->
-                    if shapeNeedsManagedAliasRootPreservation ctx aliasType then
-                        Some aliasType
-                    else
-                        inferAliasedVarTypeFromUse nextAliasTemp nextNextBody
-                | RIf (Var tid, _, _, _) when tid = aliasedTemp ->
-                    Some AST.TBool
-                | _ ->
-                    None
-
-            // Use a TypedAtom alias in the body to preserve the intended payload type
-            // when TupleGet cannot infer it from a multi-parameter sum.
-            let inferredType =
-                match maybeType with
-                | Some t ->
-                    let aliasTypeFromBody =
-                        match bodyInfo with
-                        | RLet (_, TypedAtom (Var sourceId, aliasType), _, _) when sourceId = tempId ->
-                            Some aliasType
-                        | RLet (aliasTemp, Atom (Var sourceId), nextBody, _) when sourceId = tempId ->
-                            inferAliasedVarTypeFromUse aliasTemp nextBody
-                        | _ ->
-                            None
-
-                    match aliasTypeFromBody with
-                    | Some inferredAliasType when shapeNeedsManagedAliasRootPreservation ctx inferredAliasType && not (shapeNeedsManagedAliasRootPreservation ctx t) ->
-                        inferredAliasType
-                    | _ ->
-                        t
-                | None ->
-                    match cexpr, bodyInfo with
-                    | TupleGet _, RLet (_, TypedAtom (Var sourceId, aliasType), _, _) when sourceId = tempId ->
-                        aliasType
-                    | RawGet (_, _, None), RLet (_, TypedAtom (Var sourceId, aliasType), _, _) when sourceId = tempId ->
-                        // RawGet without an explicit type is often immediately re-typed via TypedAtom.
-                        // Preserve that alias type instead of guessing Int64.
-                        aliasType
-                    | RawGet (_, _, None), RLet (aliasTemp, Atom (Var sourceId), nextBody, _) when sourceId = tempId ->
-                        match inferAliasedVarTypeFromUse aliasTemp nextBody with
-                        | Some inferredAliasType ->
-                            inferredAliasType
-                        | None ->
-                            // Keep unresolved rather than guessing Int64.
-                            AST.TVar $"raw_get_{tempIdInt}"
-                    | RawGet (_, _, None), _ ->
-                        // Unknown RawGet payload type: preserve as unresolved type variable.
-                        AST.TVar $"raw_get_{tempIdInt}"
-                    | _ ->
-                        // Preserve unresolved type information instead of defaulting to Int64.
-                        AST.TVar $"inferred_{tempIdInt}"
+            // This walk visits each binding once. Branch-local type state must
+            // remain separate when sibling branches reuse a TempId.
+            let inferredType = inferBindingType ctx tempId cexpr bodyInfo
 
             let typesWithBinding =
                 match cexpr with

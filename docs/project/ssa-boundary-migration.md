@@ -68,6 +68,35 @@ when all applicable compiler entry points use its new boundary, its old
 production path is removed, and behavior, ownership, and performance gates
 pass. Do not keep a second production pipeline as a migration fallback.
 
+### Reference counting boundary prerequisites
+
+The current ANF reference-count pass also recovers the `TempId` type map used
+by SSA construction. Move type recovery into its own pre-SSA analysis before
+moving the boundary. Preserve the existing use-site inference for `TupleGet`
+and untyped `RawGet`, closure-call return types, and branch-local identities.
+The SSA builder must recover a type at each definition site before it
+freshens duplicate ANF identities. Preserve an explicit unresolved type
+variable where existing inference cannot yet determine the concrete type;
+reject it before MIR lowering if later use-site information does not resolve
+it.
+
+The current ANF join verifier rejects managed join arguments. Before allowing
+them, define each SSA edge argument as an owned transfer or a verified borrow.
+An owned transfer consumes one path-local ownership unit. A borrow requires
+the source owner to remain live through the successor's last use. At merges,
+check every incoming edge independently; an edge may not inherit another
+predecessor's ownership proof. Releases must run on every exit from a live
+range, including branch returns and loop backedges, without crossing a use.
+
+Port return/alias analysis and RC insertion over SSA definitions and edge uses
+together. Preserve the existing special handling for returned accumulators,
+unique record reuse, closure captures, raw slots, and terminal output before
+removing the structured ANF RC path. Do not use an SSA-to-ANF round trip as a
+production pass: it would retain both ownership algorithms and add conversion
+cost at the boundary. Once RC produces typed, ownership-verified SSA, move
+escape analysis. Its scalar replacement can use SSA use sets; its unique block
+reuse still needs the destruction and last-use proofs supplied by RC.
+
 ## HIR and ownership
 
 Current HIR consumes checked AST before ANF. Moving the downstream SSA
