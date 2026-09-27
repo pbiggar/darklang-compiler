@@ -74,6 +74,13 @@ the result and canonical snapshot.
 
 ## Artifacts
 
+In an interactive terminal, the integrator gives each job one line with its
+number, local timestamp, and latest phase. It rewrites that line as gates and
+deployment progress, then leaves the final state in place. Captured output
+writes a job line when it reaches a final state because a log file cannot
+rewrite earlier lines. Detailed daemon and recovery output remains in the
+attempt directory.
+
 Recovery worktrees, Codex logs, bounded final messages, verification command
 logs, and receipts live under the configured attempt directory. Their names
 include the original job and commit identities. A failed recovery is preserved
