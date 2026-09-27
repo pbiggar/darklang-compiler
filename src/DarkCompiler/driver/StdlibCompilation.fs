@@ -169,6 +169,7 @@ let private loadStdlib () : Result<AST.ParsedProgram, string> =
         "stdlib/Base64.dark"
         "stdlib/X509.dark"
         "stdlib/Crypto.dark"
+        "stdlib/AesGcm.dark"
         "stdlib/Tls13.dark"
         "stdlib/Math.dark"
         "stdlib/X25519.dark"

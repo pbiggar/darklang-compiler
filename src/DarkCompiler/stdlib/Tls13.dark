@@ -6,6 +6,10 @@ type Record = { contentType: Int64, payload: Blob, remaining: Blob }
 
 type ServerHello = { random: Blob, keyShare: Blob, remaining: Blob }
 
+type TrafficKeys = { key: Blob, iv: Blob, sequence: Int64 }
+type OpenedRecord = { contentType: Int64, content: Blob, nextKeys: Stdlib.Tls13.TrafficKeys }
+type SealedRecord = { bytes: Blob, nextKeys: Stdlib.Tls13.TrafficKeys }
+
 type RecordError =
   | Incomplete
   | Invalid of String
@@ -228,3 +232,89 @@ let parseRecord (data: Blob) : Stdlib.Result.Result<Stdlib.Tls13.Record, Stdlib.
                     (Stdlib.Int.fromInt64 payloadLength),
         remaining = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 (5L + payloadLength))
                       (Stdlib.Int.fromInt64 (dataLength - 5L - payloadLength)) })
+
+// Each traffic secret supplies a fresh AEAD key and static IV. Sequence numbers
+// belong to one traffic direction and reset when the traffic secret changes.
+let trafficKeys (secret: Blob) : Stdlib.Result.Result<Stdlib.Tls13.TrafficKeys, String> =
+  if Stdlib.Blob.__byteLength secret != 32L then Error "TLS traffic secret must be 32 bytes"
+  else
+    match Stdlib.Tls13.hkdfExpandLabel secret "key" Stdlib.Blob.empty 16L with
+    | Error message -> Error message
+    | Ok key ->
+        match Stdlib.Tls13.hkdfExpandLabel secret "iv" Stdlib.Blob.empty 12L with
+        | Error message -> Error message
+        | Ok iv -> Ok (Stdlib.Tls13.TrafficKeys { key = key, iv = iv, sequence = 0L })
+
+let __nonceBytes (iv: Blob) (sequence: Int64) (index: Int64)
+  (acc: List<Int64>) : Blob =
+  if index == 12L then Stdlib.Blob.__fromInt64List (Stdlib.List.reverse acc)
+  else
+    let shift = (11L - index) * 8L in
+    let sequenceByte =
+      if index < 4L then 0L
+      else Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight sequence shift) 255L in
+    Stdlib.Tls13.__nonceBytes iv sequence (index + 1L)
+      (Stdlib.List.push acc
+        (Stdlib.Int64.bitwiseXor (Stdlib.Blob.__getByte iv index) sequenceByte))
+
+let __nextKeys (keys: Stdlib.Tls13.TrafficKeys) : Stdlib.Tls13.TrafficKeys =
+  Stdlib.Tls13.TrafficKeys {
+    key = keys.key, iv = keys.iv, sequence = keys.sequence + 1L }
+
+let sealRecord (keys: Stdlib.Tls13.TrafficKeys) (contentType: Int64) (content: Blob)
+  : Stdlib.Result.Result<Stdlib.Tls13.SealedRecord, String> =
+  let length = Stdlib.Blob.__byteLength content in
+  if contentType != 21L && contentType != 22L && contentType != 23L then
+    Error "Invalid TLS inner content type"
+  else if length > 16384L then Error "TLS inner plaintext exceeds size limit"
+  else if Stdlib.Blob.__byteLength keys.key != 16L ||
+          Stdlib.Blob.__byteLength keys.iv != 12L ||
+          keys.sequence < 0L || keys.sequence == 9223372036854775807L then
+    Error "Invalid TLS traffic keys or sequence"
+  else
+    let payloadLength = length + 17L in
+    let header = Stdlib.Blob.__fromInt64List
+                   [23L, 3L, 3L, payloadLength / 256L, payloadLength % 256L] in
+    let inner = Stdlib.Blob.concat
+                  [content, Stdlib.Blob.__fromInt64List [contentType]] in
+    let nonce = Stdlib.Tls13.__nonceBytes keys.iv keys.sequence 0L [] in
+    match Stdlib.AesGcm.encrypt keys.key nonce header inner with
+    | Error message -> Error message
+    | Ok payload ->
+        Ok (Stdlib.Tls13.SealedRecord {
+          bytes = Stdlib.Blob.concat [header, payload],
+          nextKeys = Stdlib.Tls13.__nextKeys keys })
+
+let __innerType (inner: Blob) (index: Int64) : Int64 =
+  if index < 0L then -1L
+  else if Stdlib.Blob.__getByte inner index == 0L then
+    Stdlib.Tls13.__innerType inner (index - 1L)
+  else index
+
+let openRecord (keys: Stdlib.Tls13.TrafficKeys) (record: Stdlib.Tls13.Record)
+  : Stdlib.Result.Result<Stdlib.Tls13.OpenedRecord, String> =
+  let length = Stdlib.Blob.__byteLength record.payload in
+  if record.contentType != 23L || length < 17L || length > 16640L then
+    Error "Invalid TLS encrypted record"
+  else if Stdlib.Blob.__byteLength keys.key != 16L ||
+          Stdlib.Blob.__byteLength keys.iv != 12L ||
+          keys.sequence < 0L || keys.sequence == 9223372036854775807L then
+    Error "Invalid TLS traffic keys or sequence"
+  else
+    let header = Stdlib.Blob.__fromInt64List
+                   [23L, 3L, 3L, length / 256L, length % 256L] in
+    let nonce = Stdlib.Tls13.__nonceBytes keys.iv keys.sequence 0L [] in
+    match Stdlib.AesGcm.decrypt keys.key nonce header record.payload with
+    | Error message -> Error message
+    | Ok inner ->
+        let index = Stdlib.Tls13.__innerType inner (Stdlib.Blob.__byteLength inner - 1L) in
+        if index < 0L then Error "TLS inner content type missing"
+        else
+          let contentType = Stdlib.Blob.__getByte inner index in
+          if index > 16384L then Error "TLS inner plaintext exceeds size limit"
+          else if contentType != 21L && contentType != 22L && contentType != 23L then
+            Error "Invalid TLS inner content type"
+          else Ok (Stdlib.Tls13.OpenedRecord {
+            contentType = contentType,
+            content = Stdlib.Blob.slice inner 0 (Stdlib.Int.fromInt64 index),
+            nextKeys = Stdlib.Tls13.__nextKeys keys })
