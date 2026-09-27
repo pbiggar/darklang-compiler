@@ -249,7 +249,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.SemanticType option =
         | Hostname -> Some (AST.TSum ("Darklang.Stdlib.Result.Result", [AST.TString; AST.TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]))
         | GetEnvironmentPacked | DirectoryCurrent | DirectoryListPacked -> Some AST.TString
         | FileIsDirectory -> Some AST.TBool
-        | HostOS | HostArchitecture | GetPid | GetUid | CpuCount | SpawnProcess | SocketTcp4 | SocketClose -> Some AST.TInt64
+        | HostOS | HostArchitecture | GetPid | GetUid | CpuCount | SpawnProcess | SocketTcp4 | SocketUdp4 | SocketConnect | SocketSend | SocketReceive | SocketReceiveTimeout | SocketClose -> Some AST.TInt64
     | IfValue (_, thenAtom, _) -> inferAtomType ctx thenAtom
     | Call (funcName, args)
     | BorrowedCall (funcName, args) ->

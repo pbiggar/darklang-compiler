@@ -146,6 +146,11 @@ type CliOperation =
     | ProcessIO
     | TerminateProcess
     | SocketTcp4
+    | SocketUdp4
+    | SocketConnect
+    | SocketSend
+    | SocketReceive
+    | SocketReceiveTimeout
     | SocketClose
 
 /// Immutable nominal metadata carried through fixed-block lowering for field

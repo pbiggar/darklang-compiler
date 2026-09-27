@@ -99,7 +99,7 @@ let generateFileReadBlob (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (path
             // Check if open failed (fd < 0 means X0 has sign bit set)
             // X21 = fd
             ARM64.MOV_reg (ARM64.X21, ARM64.X0)
-            ARM64.TBNZ (ARM64.X0, 63, 29)  // If negative, branch to error path
+            ARM64.TBNZ (ARM64.X0, 63, 32)  // If negative, branch to error path
 
             // fstat(fd, statbuf) - X0 = fd, X1 = statbuf
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)
@@ -110,10 +110,11 @@ let generateFileReadBlob (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (path
             // Get file size from stat buffer (st_size is at offset 48 on Linux ARM64)
             ARM64.LDR (ARM64.X22, ARM64.SP, 48s)  // X22 = file size
 
-            // Allocate heap space for string: [refcount:8][len:8][data:N]
-            // Size = 8 + size + 8 = size + 16, round up to next 8 bytes
-            // Simpler: just add 24 (16 + 8 for alignment padding)
-            ARM64.ADD_imm (ARM64.X23, ARM64.X22, 24us)  // X23 = size + 24 (with padding)
+            // Keep the next heap object word-aligned after the Blob payload.
+            ARM64.ADD_imm (ARM64.X23, ARM64.X22, 7us)
+            ARM64.LSR_imm (ARM64.X23, ARM64.X23, 3)
+            ARM64.LSL_imm (ARM64.X23, ARM64.X23, 3)
+            ARM64.ADD_imm (ARM64.X23, ARM64.X23, 16us)
 
             // Allocate from heap (bump allocator)
             ARM64.MOV_reg (ARM64.X24, ARM64.X28)  // X24 = string pointer
@@ -279,7 +280,7 @@ let generateFileReadBlob (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (path
             ARM64.SVC syscalls.SvcImmediate
 
             ARM64.MOV_reg (ARM64.X21, ARM64.X0)
-            ARM64.TBNZ (ARM64.X0, 63, 29)  // If negative, branch to error path
+            ARM64.TBNZ (ARM64.X0, 63, 32)  // If negative, branch to error path
 
             // fstat(fd, statbuf)
             ARM64.MOV_reg (ARM64.X0, ARM64.X21)
@@ -290,8 +291,11 @@ let generateFileReadBlob (target: ARM64.TargetConfig) (destReg: ARM64.Reg) (path
             // st_size at offset 96 on macOS
             ARM64.LDR (ARM64.X22, ARM64.SP, 96s)
 
-            // Allocate string: size + 24 (with padding for alignment)
-            ARM64.ADD_imm (ARM64.X23, ARM64.X22, 24us)
+            // Keep the next heap object word-aligned after the Blob payload.
+            ARM64.ADD_imm (ARM64.X23, ARM64.X22, 7us)
+            ARM64.LSR_imm (ARM64.X23, ARM64.X23, 3)
+            ARM64.LSL_imm (ARM64.X23, ARM64.X23, 3)
+            ARM64.ADD_imm (ARM64.X23, ARM64.X23, 16us)
 
             ARM64.MOV_reg (ARM64.X24, ARM64.X28)
             ARM64.ADD_reg (ARM64.X28, ARM64.X28, ARM64.X23)

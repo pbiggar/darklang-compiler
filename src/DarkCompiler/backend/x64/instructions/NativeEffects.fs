@@ -207,14 +207,57 @@ let internal emitCliNative (ctx: FuncCtx) (dest: LIR.Reg) (operation: LIR.CliOpe
             Ok (loadImm64 X86_64.RAX 39L
             @ [X86_64.SYSCALL]
             @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
-        | LIR.SocketTcp4 ->
-            // AF_INET, SOCK_STREAM|SOCK_CLOEXEC, IPPROTO_TCP.
+        | LIR.SocketTcp4 | LIR.SocketUdp4 ->
+            // AF_INET with close-on-exec and the requested transport protocol.
+            let constants = Platform.socketConstantsFor Platform.Linux
+            let kind, protocol =
+                if operation = LIR.SocketUdp4 then constants.DatagramCloexec, 17L
+                else constants.StreamCloexec, 6L
             Ok (loadImm64 X86_64.RDI 2L
-            @ loadImm64 X86_64.RSI 524289L
-            @ loadImm64 X86_64.RDX 6L
+            @ loadImm64 X86_64.RSI kind
+            @ loadImm64 X86_64.RDX protocol
             @ loadImm64 X86_64.RAX (int64 syscalls.Socket)
             @ [X86_64.SYSCALL]
             @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
+        | LIR.SocketConnect | LIR.SocketSend | LIR.SocketReceive | LIR.SocketReceiveTimeout ->
+            let finish = if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)] in
+            match operation, args with
+            | LIR.SocketConnect, [descriptor; address] ->
+                loadCliOperand X86_64.RDI descriptor
+                |> Result.bind (fun fdLoads ->
+                    loadCliOperand X86_64.RSI address
+                    |> Result.map (fun addressLoads ->
+                        fdLoads @ addressLoads @ loadImm64 X86_64.RDX 16L @
+                        loadImm64 X86_64.RAX (int64 syscalls.Connect) @ [X86_64.SYSCALL] @ finish))
+            | LIR.SocketSend, [descriptor; blob] ->
+                loadCliOperand X86_64.RDI descriptor
+                |> Result.bind (fun fdLoads ->
+                    loadCliOperand X86_64.RSI blob
+                    |> Result.map (fun blobLoads ->
+                        fdLoads @ blobLoads @
+                        [X86_64.MOV_load (X86_64.RDX, X86_64.RSI, 8)
+                         X86_64.ADD_imm (X86_64.RSI, 16)] @
+                        loadImm64 X86_64.RAX (int64 syscalls.Write) @ [X86_64.SYSCALL] @ finish))
+            | LIR.SocketReceive, [descriptor; buffer; length] ->
+                loadCliOperand X86_64.RDI descriptor
+                |> Result.bind (fun fdLoads ->
+                    loadCliOperand X86_64.RSI buffer
+                    |> Result.bind (fun bufferLoads ->
+                        loadCliOperand X86_64.RDX length
+                        |> Result.map (fun lengthLoads ->
+                            fdLoads @ bufferLoads @ lengthLoads @
+                            loadImm64 X86_64.RAX (int64 syscalls.Read) @ [X86_64.SYSCALL] @ finish)))
+            | LIR.SocketReceiveTimeout, [descriptor; timeval] ->
+                loadCliOperand X86_64.RDI descriptor
+                |> Result.bind (fun fdLoads ->
+                    loadCliOperand X86_64.R10 timeval
+                    |> Result.map (fun timevalLoads ->
+                        let constants = Platform.socketConstantsFor Platform.Linux in
+                        fdLoads @ timevalLoads @ loadImm64 X86_64.RSI (int64 constants.SocketLevel) @
+                        loadImm64 X86_64.RDX (int64 constants.ReceiveTimeout) @ loadImm64 X86_64.R8 16L @
+                        loadImm64 X86_64.RAX (int64 syscalls.SetSockOpt) @
+                        [X86_64.SYSCALL] @ finish))
+            | _ -> Error "Invalid socket operation arguments"
         | LIR.SocketClose ->
             match args with
             | [descriptor] ->

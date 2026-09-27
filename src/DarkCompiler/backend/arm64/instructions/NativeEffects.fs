@@ -683,12 +683,13 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
             Ok [ARM64Symbolic.MOVZ (syscalls.SyscallRegister, number, 0)
                 ARM64Symbolic.SVC syscalls.SvcImmediate
                 ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]
-        | LIR.SocketTcp4 ->
+        | LIR.SocketTcp4 | LIR.SocketUdp4 ->
             let syscalls = ARM64.targetSyscalls ctx.Target
+            let constants = Platform.socketConstantsFor (ARM64.targetOS ctx.Target)
             let socketType =
-                match ARM64.targetOS ctx.Target with
-                | Platform.Linux -> 524289L // SOCK_STREAM | SOCK_CLOEXEC
-                | Platform.MacOS -> 268435457L // SOCK_STREAM | SOCK_CLOEXEC
+                if operation = LIR.SocketUdp4 then constants.DatagramCloexec
+                else constants.StreamCloexec
+            let protocol = if operation = LIR.SocketUdp4 then 17us else 6us
             let normalize =
                 match ARM64.targetOS ctx.Target with
                 | Platform.Linux -> []
@@ -699,11 +700,68 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
                      ARM64Symbolic.Label doneLabel]
             Ok ([ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 2us, 0)]
                 @ loadImmediate ARM64Symbolic.X1 socketType
-                @ [ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 6us, 0)
+                @ [ARM64Symbolic.MOVZ (ARM64Symbolic.X2, protocol, 0)
                    ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Socket, 0)
                    ARM64Symbolic.SVC syscalls.SvcImmediate]
                 @ normalize
                 @ [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)])
+        | LIR.SocketConnect | LIR.SocketSend | LIR.SocketReceive | LIR.SocketReceiveTimeout ->
+            let syscall = ARM64.targetSyscalls ctx.Target in
+            let os = ARM64.targetOS ctx.Target in
+            let normalize =
+                if os = Platform.Linux then []
+                else
+                    let doneLabel = $"__socket_io_{ctx.FunctionName}_{ctx.InstructionSite}_done" in
+                    [ARM64Symbolic.B_cond_label (ARM64Symbolic.LO, doneLabel)
+                     ARM64Symbolic.NEG (ARM64Symbolic.X0, ARM64Symbolic.X0)
+                     ARM64Symbolic.Label doneLabel] in
+            match operation, args with
+            | LIR.SocketConnect, [descriptor; address] ->
+                loadCliOperand ARM64Symbolic.X0 descriptor
+                |> Result.bind (fun fdLoads ->
+                    loadCliOperand ARM64Symbolic.X1 address
+                    |> Result.map (fun addressLoads ->
+                        fdLoads @ addressLoads @
+                        [ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 16us, 0)
+                         ARM64Symbolic.MOVZ (syscall.SyscallRegister, syscall.Numbers.Connect, 0)
+                         ARM64Symbolic.SVC syscall.SvcImmediate] @ normalize @
+                        [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]))
+            | LIR.SocketSend, [descriptor; blob] ->
+                loadCliOperand ARM64Symbolic.X0 descriptor
+                |> Result.bind (fun fdLoads ->
+                    loadCliOperand ARM64Symbolic.X1 blob
+                    |> Result.map (fun blobLoads ->
+                        fdLoads @ blobLoads @
+                        [ARM64Symbolic.LDR (ARM64Symbolic.X2, ARM64Symbolic.X1, 8s)
+                         ARM64Symbolic.ADD_imm (ARM64Symbolic.X1, ARM64Symbolic.X1, 16us)
+                         ARM64Symbolic.MOVZ (syscall.SyscallRegister, syscall.Numbers.Write, 0)
+                         ARM64Symbolic.SVC syscall.SvcImmediate] @ normalize @
+                        [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]))
+            | LIR.SocketReceive, [descriptor; buffer; length] ->
+                loadCliOperand ARM64Symbolic.X0 descriptor
+                |> Result.bind (fun fdLoads ->
+                    loadCliOperand ARM64Symbolic.X1 buffer
+                    |> Result.bind (fun bufferLoads ->
+                        loadCliOperand ARM64Symbolic.X2 length
+                        |> Result.map (fun lengthLoads ->
+                            fdLoads @ bufferLoads @ lengthLoads @
+                            [ARM64Symbolic.MOVZ (syscall.SyscallRegister, syscall.Numbers.Read, 0)
+                             ARM64Symbolic.SVC syscall.SvcImmediate] @ normalize @
+                            [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)])))
+            | LIR.SocketReceiveTimeout, [descriptor; timeval] ->
+                loadCliOperand ARM64Symbolic.X0 descriptor
+                |> Result.bind (fun fdLoads ->
+                    loadCliOperand ARM64Symbolic.X3 timeval
+                    |> Result.map (fun timevalLoads ->
+                        let constants = Platform.socketConstantsFor os in
+                        fdLoads @ timevalLoads @
+                        [ARM64Symbolic.MOVZ (ARM64Symbolic.X1, constants.SocketLevel, 0)
+                         ARM64Symbolic.MOVZ (ARM64Symbolic.X2, constants.ReceiveTimeout, 0)
+                         ARM64Symbolic.MOVZ (ARM64Symbolic.X4, 16us, 0)
+                         ARM64Symbolic.MOVZ (syscall.SyscallRegister, syscall.Numbers.SetSockOpt, 0)
+                         ARM64Symbolic.SVC syscall.SvcImmediate] @ normalize @
+                        [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]))
+            | _ -> Error "Invalid socket operation arguments"
         | LIR.SocketClose ->
             match args with
             | [descriptor] ->

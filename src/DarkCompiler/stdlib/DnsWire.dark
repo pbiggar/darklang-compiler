@@ -299,3 +299,84 @@ let systemHosts (host: String) (kind: Int64) : Stdlib.Result.Result<List<List<In
 let systemNameservers () : Stdlib.Result.Result<List<String>, Stdlib.Cli.FileSystem.FileError> =
     Stdlib.Cli.FileSystem.readFileAsString "/etc/resolv.conf"
     |> Stdlib.Result.map Stdlib.DnsWire.nameservers
+
+type ResolveError =
+    | InvalidQuery of String
+    | NetworkError of Int64
+    | InvalidResponse of String
+    | ResolverConfig of String
+
+let __queryUdp4Once (nameserver: List<Int64>) (port: Int64) (host: String) (kind: Int64)
+    (timeoutMs: Int64) : Stdlib.Result.Result<List<List<Int64>>, Stdlib.DnsWire.ResolveError> =
+    let identifier = Stdlib.Int64.random 0L 65535L in
+    match Stdlib.DnsWire.query identifier host kind with
+    | Error message -> Error (Stdlib.DnsWire.ResolveError.InvalidQuery message)
+    | Ok packet ->
+        match Stdlib.Network.openUdp4 () with
+        | Error code -> Error (Stdlib.DnsWire.ResolveError.NetworkError code)
+        | Ok socket ->
+            let result = Stdlib.Network.exchangeUdp4 socket nameserver port packet timeoutMs in
+            let _ = Stdlib.Network.closeUdp socket in
+            match result with
+            | Error code -> Error (Stdlib.DnsWire.ResolveError.NetworkError code)
+            | Ok response ->
+                match Stdlib.DnsWire.answers response identifier host kind with
+                | Error message -> Error (Stdlib.DnsWire.ResolveError.InvalidResponse message)
+                | Ok addresses -> Ok addresses
+
+let __queryUdp4Attempts (nameserver: List<Int64>) (port: Int64) (host: String) (kind: Int64)
+    (timeoutMs: Int64) (remaining: Int64)
+    : Stdlib.Result.Result<List<List<Int64>>, Stdlib.DnsWire.ResolveError> =
+    match Stdlib.DnsWire.__queryUdp4Once nameserver port host kind timeoutMs with
+    | Error error ->
+        match error with
+        | NetworkError code ->
+            if remaining > 1L && (code == 4L || code == 11L || code == 110L || code == 111L) then
+                Stdlib.DnsWire.__queryUdp4Attempts nameserver port host kind timeoutMs (remaining - 1L)
+            else Error error
+        | _ -> Error error
+    | result -> result
+
+let queryUdp4 (nameserver: List<Int64>) (port: Int64) (host: String) (kind: Int64)
+    (timeoutMs: Int64) (attempts: Int64)
+    : Stdlib.Result.Result<List<List<Int64>>, Stdlib.DnsWire.ResolveError> =
+    if Stdlib.Bool.not (Stdlib.Network.__validAddress4 nameserver) ||
+        port <= 0L || port > 65535L || timeoutMs <= 0L || timeoutMs > 10000L ||
+        attempts <= 0L || attempts > 3L then
+        Error (Stdlib.DnsWire.ResolveError.InvalidQuery "Invalid DNS transport parameters")
+    else if kind != 1L && kind != 28L then
+        Error (Stdlib.DnsWire.ResolveError.InvalidQuery "Invalid DNS query")
+    else Stdlib.DnsWire.__queryUdp4Attempts nameserver port host kind timeoutMs attempts
+
+let __queryNameservers (servers: List<String>) (host: String) (kind: Int64)
+    (previous: Stdlib.DnsWire.ResolveError)
+    : Stdlib.Result.Result<List<List<Int64>>, Stdlib.DnsWire.ResolveError> =
+    match servers with
+    | [] -> Error previous
+    | server :: rest ->
+        match Stdlib.DnsWire.ipv4 server with
+        | None -> Stdlib.DnsWire.__queryNameservers rest host kind previous
+        | Some address ->
+            match Stdlib.DnsWire.queryUdp4 address 53L host kind 1000L 2L with
+            | Ok answers -> Ok answers
+            | Error error -> Stdlib.DnsWire.__queryNameservers rest host kind error
+
+let resolve (host: String) (kind: Int64)
+    : Stdlib.Result.Result<List<List<Int64>>, Stdlib.DnsWire.ResolveError> =
+    if kind != 1L && kind != 28L then
+        Error (Stdlib.DnsWire.ResolveError.InvalidQuery "Invalid DNS query")
+    else
+        match Stdlib.DnsWire.__address host kind with
+        | Some address -> Ok [address]
+        | None ->
+            match Stdlib.DnsWire.systemHosts host kind with
+            | Error _ -> Error (Stdlib.DnsWire.ResolveError.ResolverConfig "Cannot read hosts file")
+            | Ok entries ->
+                match entries with
+                | _ :: _ -> Ok entries
+                | [] ->
+                    match Stdlib.DnsWire.systemNameservers () with
+                    | Error _ -> Error (Stdlib.DnsWire.ResolveError.ResolverConfig "Cannot read resolver configuration")
+                    | Ok servers ->
+                        Stdlib.DnsWire.__queryNameservers servers host kind
+                            (Stdlib.DnsWire.ResolveError.ResolverConfig "No usable DNS nameserver")

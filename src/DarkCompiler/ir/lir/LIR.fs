@@ -90,6 +90,11 @@ type CliOperation =
     | ProcessIO
     | TerminateProcess
     | SocketTcp4
+    | SocketUdp4
+    | SocketConnect
+    | SocketSend
+    | SocketReceive
+    | SocketReceiveTimeout
     | SocketClose
 
 /// Basic block label (wrapper type for type safety)

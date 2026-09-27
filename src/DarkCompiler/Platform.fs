@@ -90,6 +90,8 @@ type SyscallNumbers = {
     Gettimeofday: uint16 // Get current time (gettimeofday on macOS, clock_gettime on Linux)
     Nanosleep: uint16 // Blocking sleep with a normalized timespec
     Socket: uint16 // Create a socket
+    Connect: uint16 // Connect a socket to a peer
+    SetSockOpt: uint16 // Set socket receive timeout
 }
 
 let macOSARM64SyscallNumbers : SyscallNumbers = {
@@ -108,6 +110,8 @@ let macOSARM64SyscallNumbers : SyscallNumbers = {
     Gettimeofday = 116us
     Nanosleep = 240us
     Socket = 97us
+    Connect = 98us
+    SetSockOpt = 105us
 }
 
 let linuxARM64SyscallNumbers : SyscallNumbers = {
@@ -126,6 +130,8 @@ let linuxARM64SyscallNumbers : SyscallNumbers = {
     Gettimeofday = 113us
     Nanosleep = 101us
     Socket = 198us
+    Connect = 203us
+    SetSockOpt = 208us
 }
 
 let linuxX86_64SyscallNumbers : SyscallNumbers = {
@@ -144,6 +150,8 @@ let linuxX86_64SyscallNumbers : SyscallNumbers = {
     Gettimeofday = 228us  // clock_gettime
     Nanosleep = 35us
     Socket = 41us
+    Connect = 42us
+    SetSockOpt = 54us
 }
 
 /// Get syscall numbers for the given (OS, Arch) pair.
@@ -152,6 +160,26 @@ let syscallNumbersFor (target: Target) : SyscallNumbers =
     | ARM64Backend MacOSARM64 -> macOSARM64SyscallNumbers
     | ARM64Backend LinuxARM64 -> linuxARM64SyscallNumbers
     | LinuxX86_64 -> linuxX86_64SyscallNumbers
+
+type SocketConstants = {
+    StreamCloexec: int64
+    DatagramCloexec: int64
+    SocketLevel: uint16
+    ReceiveTimeout: uint16
+}
+
+let socketConstantsFor (os: OS) : SocketConstants =
+    match os with
+    | MacOS ->
+        { StreamCloexec = 268435457L
+          DatagramCloexec = 268435458L
+          SocketLevel = 65535us
+          ReceiveTimeout = 4102us }
+    | Linux ->
+        { StreamCloexec = 524289L
+          DatagramCloexec = 524290L
+          SocketLevel = 1us
+          ReceiveTimeout = 20us }
 
 /// Check if code signing is required for this platform
 let requiresCodeSigning (os: OS) : bool =

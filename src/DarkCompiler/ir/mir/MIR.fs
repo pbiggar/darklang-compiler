@@ -91,6 +91,11 @@ type CliOperation =
     | ProcessIO
     | TerminateProcess
     | SocketTcp4
+    | SocketUdp4
+    | SocketConnect
+    | SocketSend
+    | SocketReceive
+    | SocketReceiveTimeout
     | SocketClose
 
 /// Basic block label (defined early for use in Phi nodes)
