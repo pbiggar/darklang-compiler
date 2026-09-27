@@ -5,6 +5,7 @@ set -euo pipefail
 
 script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$script_root"
+attempt_dir="/tmp/dark-compiler-mergetrain-codex-attempts"
 interval_seconds=2
 clear_screen=true
 run_once=false
@@ -15,6 +16,9 @@ interactive_input=false
 show_more_merges=false
 benchmark_detail_index=""
 show_benchmark_diff=false
+attention_job_id=""
+retry_pending=false
+action_message=""
 scroll_offset=0
 refresh_status=true
 
@@ -29,6 +33,8 @@ scrolling and keyboard shortcuts and are redrawn in place as complete frames.
 Options:
   --repo PATH          Repository whose merge-train status is displayed.
                        Default: $repo_root
+  --attempt-dir PATH   Integrator evidence directory.
+                       Default: $attempt_dir
   --interval SECONDS   Delay between status refreshes.
                        Default: $interval_seconds
   --color WHEN         Colorize output: auto, always, or never.
@@ -36,6 +42,7 @@ Options:
   --no-color           Equivalent to --color never.
   --no-clear           Append each refresh instead of redrawing in place.
   --show-conflicts     Show complete conflict reasons instead of summaries.
+  --attention-job ID   Open one attention job's evidence immediately.
   --once               Display one status snapshot, then exit.
   -h, --help           Show this help and exit.
 
@@ -48,6 +55,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --repo)
       repo_root="$2"
+      shift 2
+      ;;
+    --attempt-dir)
+      attempt_dir="$2"
       shift 2
       ;;
     --interval)
@@ -74,6 +85,10 @@ while [[ $# -gt 0 ]]; do
       show_conflicts=true
       shift
       ;;
+    --attention-job)
+      attention_job_id="$2"
+      shift 2
+      ;;
     --once)
       run_once=true
       shift
@@ -96,6 +111,10 @@ if [[ ! "$interval_seconds" =~ ^[1-9][0-9]*$ ]]; then
 fi
 if [[ "$color_mode" != auto && "$color_mode" != always && "$color_mode" != never ]]; then
   echo "--color must be auto, always, or never" >&2
+  exit 2
+fi
+if [[ -n "$attention_job_id" && ! "$attention_job_id" =~ ^[1-9][0-9]*$ ]]; then
+  echo "--attention-job must be a positive job ID" >&2
   exit 2
 fi
 for required_command in git mergetrain python3; do
@@ -125,6 +144,7 @@ fi
 while true; do
   if [[ "$refresh_status" == true ]]; then
     status_output=""
+    status_json=""
     terminal_columns="${COLUMNS:-}"
     if [[ ! "$terminal_columns" =~ ^[1-9][0-9]*$ ]]; then
       terminal_columns="$(tput cols 2>/dev/null || true)"
@@ -132,7 +152,7 @@ while true; do
     if [[ ! "$terminal_columns" =~ ^[1-9][0-9]*$ ]]; then
       terminal_columns=80
     fi
-    renderer_args=(--repo "$repo_root" --columns "$terminal_columns")
+    renderer_args=(--repo "$repo_root" --attempt-dir "$attempt_dir" --columns "$terminal_columns")
     if [[ "$show_more_merges" == true ]]; then
       renderer_args+=(--merge-limit 20)
     fi
@@ -149,11 +169,26 @@ while true; do
     if [[ "$show_conflicts" == true ]]; then
       renderer_args+=(--show-conflicts)
     fi
-    if ! status_output="$(
-      mergetrain --repo "$repo_root" status --json --limit 1000 \
-        | python3 "$script_root/scripts/render_mergetrain_status.py" "${renderer_args[@]}"
-    )"; then
+    if [[ -n "$attention_job_id" ]]; then
+      renderer_args+=(--attention-job-id "$attention_job_id")
+    fi
+    if ! status_json="$(mergetrain --repo "$repo_root" status --json --limit 1000)" ||
+       ! status_output="$(
+         python3 "$script_root/scripts/render_mergetrain_status.py" "${renderer_args[@]}" <<<"$status_json"
+       )"; then
       status_output="Status refresh failed; retrying in $interval_seconds second(s)"
+      attention_ids=()
+    else
+      mapfile -t attention_ids < <(python3 -c '
+import json, sys
+for job in json.load(sys.stdin).get("attention_jobs", []):
+    if isinstance(job.get("id"), int):
+        print(job["id"])
+' <<<"$status_json")
+    fi
+    if [[ -n "$action_message" ]]; then
+      status_output="$action_message"$'\n\n'"$status_output"
+      action_message=""
     fi
     refresh_status=false
   fi
@@ -184,16 +219,20 @@ while true; do
     first_line=$((scroll_offset + 1))
     last_line=$((scroll_offset + viewport_lines))
     visible_output="$(printf '%s\n' "$status_output" | sed -n "${first_line},${last_line}p")"
-    if [[ -n "$benchmark_detail_index" ]]; then
+    if [[ "$retry_pending" == true ]]; then
+      controls="Retry #$attention_job_id? Approval may become manual. [y] confirm  [n/Esc] cancel"
+    elif [[ -n "$attention_job_id" ]]; then
+      controls="[↑/↓ or j/k] scroll  [n/p] next/previous  [r] retry  [q/Esc] back"
+    elif [[ -n "$benchmark_detail_index" ]]; then
       if [[ "$show_benchmark_diff" == true ]]; then
         controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [d] change report  [q/Esc] back"
       else
         controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [d] commit diff  [q/Esc] back"
       fi
     elif [[ "$show_more_merges" == true ]]; then
-      controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [m] fewer merges  [1-9,0] details  [c] conflicts  [q] quit"
+      controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [a] attention  [m] fewer merges  [1-9,0] details  [c] conflicts  [q] quit"
     else
-      controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [m] more merges  [1-9,0] details  [c] conflicts  [q] quit"
+      controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [a] attention  [m] more merges  [1-9,0] details  [c] conflicts  [q] quit"
     fi
     printf '\033[H\033[J%s\n\n%s\n' "$visible_output" "$controls"
   else
@@ -216,7 +255,64 @@ while true; do
         fi
         pressed_key+="$escape_suffix"
       fi
+      if [[ "$retry_pending" == true && "$pressed_key" != y &&
+            "$pressed_key" != n && "$pressed_key" != $'\033' ]]; then
+        continue
+      fi
       case "$pressed_key" in
+        y)
+          if [[ "$retry_pending" == true ]]; then
+            retry_pending=false
+            if retry_result="$(mergetrain --repo "$repo_root" retry "$attention_job_id" 2>&1)"; then
+              action_message="$retry_result"
+              attention_job_id=""
+            else
+              action_message="Retry failed: $retry_result"
+            fi
+            scroll_offset=0
+            refresh_status=true
+          fi
+          ;;
+        n)
+          if [[ "$retry_pending" == true ]]; then
+            retry_pending=false
+          elif [[ -n "$attention_job_id" && ${#attention_ids[@]} -gt 0 ]]; then
+            for index in "${!attention_ids[@]}"; do
+              if [[ "${attention_ids[$index]}" == "$attention_job_id" ]]; then
+                attention_job_id="${attention_ids[$(((index + 1) % ${#attention_ids[@]}))]}"
+                break
+              fi
+            done
+            scroll_offset=0
+            refresh_status=true
+          fi
+          ;;
+        p)
+          if [[ -n "$attention_job_id" && ${#attention_ids[@]} -gt 0 ]]; then
+            for index in "${!attention_ids[@]}"; do
+              if [[ "${attention_ids[$index]}" == "$attention_job_id" ]]; then
+                attention_job_id="${attention_ids[$(((index - 1 + ${#attention_ids[@]}) % ${#attention_ids[@]}))]}"
+                break
+              fi
+            done
+            scroll_offset=0
+            refresh_status=true
+          fi
+          ;;
+        a)
+          if [[ -n "$attention_job_id" ]]; then
+            attention_job_id=""
+          elif [[ ${#attention_ids[@]} -gt 0 ]]; then
+            attention_job_id="${attention_ids[0]}"
+          fi
+          scroll_offset=0
+          refresh_status=true
+          ;;
+        r)
+          if [[ -n "$attention_job_id" ]]; then
+            retry_pending=true
+          fi
+          ;;
         $'\033[A'|k)
           if ((scroll_offset > scroll_step)); then
             scroll_offset=$((scroll_offset - scroll_step))
@@ -292,7 +388,13 @@ while true; do
           fi
           ;;
         q|$'\033')
-          if [[ -n "$benchmark_detail_index" ]]; then
+          if [[ "$retry_pending" == true ]]; then
+            retry_pending=false
+          elif [[ -n "$attention_job_id" ]]; then
+            attention_job_id=""
+            scroll_offset=0
+            refresh_status=true
+          elif [[ -n "$benchmark_detail_index" ]]; then
             benchmark_detail_index=""
             show_benchmark_diff=false
             scroll_offset=0

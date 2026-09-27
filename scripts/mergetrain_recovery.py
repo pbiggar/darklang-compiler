@@ -365,6 +365,166 @@ def verify_repair(
     return head, receipt
 
 
+def validate_current_policy(
+    repo: Path,
+    attempts: Path,
+    job_id: int,
+    head: str,
+    integration_sha: str,
+    tracking_ref: str,
+    evidence: Path | None = None,
+) -> Path:
+    """Use an isolated queue to run mergetrain's configured gates without pushing."""
+    isolated = attempts / f"policy-validation-{job_id}-{head[:10]}"
+    if isolated.exists():
+        raise RecoveryError(f"policy validation checkout already exists: {isolated}")
+    run(("git", "clone", "--shared", "--no-checkout", str(repo), str(isolated)), cwd=repo)
+    remote = tracking_ref.removeprefix("refs/remotes/").split("/", 1)[0]
+    remote_url = run(("git", "remote", "get-url", remote), cwd=repo).stdout.strip()
+    run(("git", "remote", "add", remote, remote_url), cwd=isolated)
+    run(("git", "update-ref", tracking_ref, integration_sha), cwd=isolated)
+    for key in ("user.name", "user.email"):
+        value = run(("git", "config", key), cwd=repo).stdout.strip()
+        run(("git", "config", key, value), cwd=isolated)
+    branch = f"policy-validation-{job_id}"
+    run(("git", "switch", "-c", branch, head), cwd=isolated)
+    run(
+        ("mergetrain", "--repo", str(isolated), "enqueue", "--task", f"validate job {job_id}",
+         "--branch", branch, "--worktree", str(isolated), "--json"),
+        cwd=isolated,
+    )
+    log = attempts / f"{job_id}-{head}.policy-validation.log"
+    completed = run(
+        ("mergetrain", "--repo", str(isolated), "validate", "--json"),
+        cwd=isolated,
+        check=False,
+        log=log,
+    )
+    payload = load_json(completed, "policy validation")
+    jobs = payload.get("jobs") or []
+    if evidence is not None:
+        recorded = json.loads(evidence.read_text(encoding="utf-8"))
+        recorded["policy_validation_log"] = str(log)
+        recorded["policy_validation_result"] = payload.get("result")
+        recorded["policy_validation_failure"] = (
+            str(jobs[0].get("note") or "") if jobs and jobs[0].get("status") != "validated" else ""
+        )
+        evidence.write_text(json.dumps(recorded, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if completed.returncode != 0:
+        raise RecoveryError(f"current policy validation failed; full log: {log}")
+    if payload.get("result") != "success" or len(jobs) != 1 or jobs[0].get("status") != "validated":
+        raise RecoveryError(f"current policy did not validate the exact job; full log: {log}")
+    return log
+
+
+def policy_sections(source: str) -> dict[str, str]:
+    sections: dict[str, list[str]] = {"(preamble)": []}
+    current = "(preamble)"
+    for line in source.splitlines(keepends=True):
+        heading = re.match(r"^([A-Za-z][A-Za-z0-9_-]*):", line)
+        if heading:
+            current = heading.group(1)
+            sections[current] = []
+        sections[current].append(line)
+    return {name: "".join(lines) for name, lines in sections.items()}
+
+
+def recover_external_policy_change(
+    repo: Path,
+    attempts: Path,
+    details: dict[str, Any],
+    job_id: int,
+    old_head: str,
+) -> None:
+    job = details["job"]
+    base_sha = str(job.get("base_sha") or "")
+    outcome = details.get("outcome") or {}
+    if "approval_execution_policy_changed" not in str(outcome.get("message") or ""):
+        raise RecoveryError("authorization failure is not a changed execution policy")
+    if not base_sha:
+        raise RecoveryError("job has no recorded base for checking its policy changes")
+    if run(("git", "merge-base", "--is-ancestor", base_sha, old_head), cwd=repo, check=False).returncode != 0:
+        raise RecoveryError("job base is not an ancestor of its enqueued commit")
+    tracking_ref, integration_sha = configured_integration(repo)
+    policy_change = run(
+        ("git", "diff", "--no-ext-diff", "--unified=3", f"{base_sha}..{integration_sha}",
+         "--", ".mergetrain.yaml"),
+        cwd=repo,
+    ).stdout
+    job_policy_change = run(
+        ("git", "diff", "--no-ext-diff", "--unified=3", f"{base_sha}..{old_head}",
+         "--", ".mergetrain.yaml"),
+        cwd=repo,
+    ).stdout
+    evidence = attempts / f"{job_id}-{old_head}.policy.json"
+    evidence.write_text(json.dumps({
+        "job_id": job_id,
+        "enqueued_base_sha": base_sha,
+        "enqueued_head_sha": old_head,
+        "current_integration_sha": integration_sha,
+        "failure": str(outcome.get("message") or ""),
+        "integration_policy_diff": policy_change,
+        "job_policy_diff": job_policy_change,
+    }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if job_policy_change:
+        raise RecoveryError(f"job changes .mergetrain.yaml; policy approval needs an operator; evidence: {evidence}")
+
+    current_config = run(
+        ("git", "diff", "--name-only", integration_sha, "--", ".mergetrain.yaml"),
+        cwd=repo,
+    ).stdout.strip()
+    if current_config:
+        raise RecoveryError(f"control checkout policy differs from the integration commit; evidence: {evidence}")
+    if not policy_change:
+        raise RecoveryError(f"policy approval changed without an integration policy file change; evidence: {evidence}")
+    original_config = run(
+        ("git", "show", f"{base_sha}:.mergetrain.yaml"), cwd=repo
+    ).stdout
+    integrated_config = run(
+        ("git", "show", f"{integration_sha}:.mergetrain.yaml"), cwd=repo
+    ).stdout
+    before = policy_sections(original_config)
+    after = policy_sections(integrated_config)
+    changed_sections = {
+        section for section in before.keys() | after.keys()
+        if before.get(section) != after.get(section)
+    }
+    if not changed_sections <= {"gates", "gate_parallelism"}:
+        changed = ", ".join(sorted(changed_sections))
+        raise RecoveryError(
+            f"execution policy changed outside validated gate settings ({changed}); "
+            f"operator review required; evidence: {evidence}"
+        )
+
+    unique, equivalent = unique_commits(repo, integration_sha, old_head)
+    if not unique:
+        dismiss_superseded(repo, job_id, integration_sha, equivalent)
+        return
+    worktree, branch, conflict = create_recovery_worktree(
+        repo, attempts, job_id, old_head, integration_sha, tracking_ref, unique
+    )
+    if conflict:
+        raise RecoveryError("policy revalidation found a merge conflict; operator review required")
+    head, receipt = verify_repair(worktree, attempts, job_id, integration_sha)
+    validate_current_policy(repo, attempts, job_id, head, integration_sha, tracking_ref, evidence)
+    owning = Path(str(job.get("worktree_path") or ""))
+    if not owning.is_dir() or (
+        run(("git", "rev-parse", "HEAD"), cwd=owning).stdout.strip() != old_head
+        or run(("git", "status", "--porcelain"), cwd=owning).stdout.strip()
+    ):
+        raise RecoveryError("owning worktree changed during policy validation")
+    if run(("git", "rev-parse", tracking_ref), cwd=repo).stdout.strip() != integration_sha:
+        raise RecoveryError("integration ref changed during policy validation")
+    replacement_id = replace_job(
+        repo, details, job_id, branch, worktree, head, integration_sha, receipt,
+        renew_auto_approval=True,
+    )
+    print(
+        f"Job #{job_id}: verified current policy on {head[:10]} and requeued as #{replacement_id}",
+        file=sys.stderr,
+    )
+
+
 def supports_atomic_replace(repo: Path) -> bool:
     return mergetrain(repo, "replace", "--help", check=False).returncode == 0
 
@@ -378,11 +538,13 @@ def replace_job(
     head: str,
     integration_sha: str,
     receipt: Path,
+    *,
+    renew_auto_approval: bool = False,
 ) -> int:
     job = details.get("job") or {}
     task = str(job.get("task") or f"repair job {job_id}")
     note = f"verified replacement {head[:12]} for job #{job_id}; receipt={receipt}"
-    if supports_atomic_replace(repo):
+    if not renew_auto_approval and supports_atomic_replace(repo):
         payload = load_json(
             mergetrain(
                 repo, "replace", str(job_id), "--task", task, "--branch", branch,
@@ -440,6 +602,10 @@ def recover(repo: Path, attempts: Path, job_id: int) -> None:
             raise RecoveryError("owning worktree is not clean at the enqueued commit")
     failure = failure_from(details)
     preserve_failure_evidence(details, attempts, job_id, old_head)
+
+    if failure.category == "deploy_authorization_changed":
+        recover_external_policy_change(repo, attempts, details, job_id, old_head)
+        return
 
     if failure.category == "gate_failed" and failure.transient:
         if exact_retry_once(repo, attempts, job_id, old_head, failure):
