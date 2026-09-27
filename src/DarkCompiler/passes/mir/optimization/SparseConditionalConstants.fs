@@ -25,6 +25,22 @@ let private emptyPathFacts = {
     IntegerRanges = Map.empty
 }
 
+type private BlockWorklist = {
+    Front: Label list
+    Back: Label list
+}
+
+let private enqueueWorklist label worklist =
+    { worklist with Back = label :: worklist.Back }
+
+let private tryDequeueWorklist worklist =
+    match worklist.Front with
+    | label :: remaining -> Some (label, { worklist with Front = remaining })
+    | [] ->
+        match List.rev worklist.Back with
+        | [] -> None
+        | label :: remaining -> Some (label, { Front = remaining; Back = [] })
+
 type private AnalysisState = {
     Values: Map<VReg, LatticeValue>
     ExecutableBlocks: Set<Label>
@@ -36,7 +52,7 @@ type private AnalysisState = {
     HeapValues: Map<VReg, Map<int, LatticeValue>>
     TrackHeapValues: bool
     CallResults: Map<AST.FunctionId, Operand>
-    Worklist: Label list
+    Worklist: BlockWorklist
     Pending: Set<Label>
 }
 
@@ -538,7 +554,7 @@ let private enqueueBlock label state =
     if Set.contains label state.ExecutableBlocks && not (Set.contains label state.Pending) then
         {
             state with
-                Worklist = label :: state.Worklist
+                Worklist = enqueueWorklist label state.Worklist
                 Pending = Set.add label state.Pending
         }
     else
@@ -681,13 +697,13 @@ let private analyze (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : Ana
         HeapValues = Map.empty
         TrackHeapValues = trackHeapValues
         CallResults = callResults
-        Worklist = [cfg.Entry]
+        Worklist = { Front = [cfg.Entry]; Back = [] }
         Pending = Set.singleton cfg.Entry
     }
 
     let rec analyzeWorklist state =
-        match state.Worklist with
-        | [] ->
+        match tryDequeueWorklist state.Worklist with
+        | None ->
             let unresolved =
                 state.ExecutableBlocks
                 |> Set.toList
@@ -706,7 +722,7 @@ let private analyze (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : Ana
                 |> activateEdge cfg label trueTarget
                 |> activateEdge cfg label falseTarget
                 |> analyzeWorklist
-        | label :: remaining ->
+        | Some (label, remaining) ->
             let withoutCurrent = {
                 state with
                     Worklist = remaining
