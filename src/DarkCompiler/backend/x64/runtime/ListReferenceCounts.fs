@@ -16,6 +16,7 @@ type internal ListLeafPayloadRelease =
     | FixedBlockPlannedLeafPayload of payloadSize: int * releasePlan: MemoryModel.RcReleasePlan
     | RecursivePlannedLeafPayload of sourceType: AST.SemanticType
     | ListLeafPayload
+    | PlannedListLeafPayload of releasePlan: MemoryModel.RcReleasePlan
     | ClosureLeafPayload
     | DictLeafPayload
     | DictListLeafPayload
@@ -129,6 +130,16 @@ let private generateListRefCountDecHelperWith
         | ListLeafPayload ->
             [X86_64.MOV_load (X86_64.R8, X86_64.RDI, 0)]
             @ addChild "leaf_payload_list"
+        | PlannedListLeafPayload releasePlan ->
+            [ X86_64.PUSH X86_64.RDI
+              X86_64.PUSH X86_64.RSI
+              X86_64.PUSH X86_64.RCX
+              X86_64.MOV_load (X86_64.RAX, X86_64.RDI, 0)
+              X86_64.CALL (listDecHelperForReleasePlan releasePlan)
+              X86_64.POP X86_64.RCX
+              X86_64.POP X86_64.RSI
+              X86_64.POP X86_64.RDI
+              X86_64.XOR_reg (X86_64.RAX, X86_64.RAX) ]
         | ClosureLeafPayload ->
             [X86_64.PUSH X86_64.RDI
              X86_64.PUSH X86_64.RSI
@@ -427,6 +438,7 @@ let private listLeafPayloadNeedsDictDecHelper (leafPayloadRelease: ListLeafPaylo
         false
     | NoLeafPayloadRelease
     | ListLeafPayload
+    | PlannedListLeafPayload _
     | ClosureLeafPayload
     | DynamicBufferLeafPayload
     | DynamicIntLeafPayload ->
@@ -444,6 +456,7 @@ let private listLeafPayloadNeedsDictListValueDecHelper (leafPayloadRelease: List
         false
     | NoLeafPayloadRelease
     | ListLeafPayload
+    | PlannedListLeafPayload _
     | ClosureLeafPayload
     | DictLeafPayload
     | DynamicBufferLeafPayload
@@ -460,6 +473,7 @@ let private listLeafPayloadNeedsClosureDecHelper (leafPayloadRelease: ListLeafPa
         false
     | NoLeafPayloadRelease
     | ListLeafPayload
+    | PlannedListLeafPayload _
     | DictLeafPayload
     | DictListLeafPayload
     | PlannedDictLeafPayload _
@@ -490,6 +504,7 @@ let internal generateNeededListRefCountDecHelpers
                 let leafPayloadRelease =
                     match releasePlan with
                     | MemoryModel.RecursiveRelease sourceType -> RecursivePlannedLeafPayload sourceType
+                    | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) -> PlannedListLeafPayload releasePlan
                     | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) -> PlannedDictLeafPayload releasePlan
                     | _ -> FixedBlockPlannedLeafPayload (payloadSize, releasePlan)
                 generateListRefCountDecHelperWith

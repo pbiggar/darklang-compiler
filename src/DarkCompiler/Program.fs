@@ -56,6 +56,7 @@ type BatchInput =
 type BatchCliOptions = {
     Target: TargetSelection
     Verbosity: VerbosityLevel
+    LeakCheck: bool
     AllowInternal: bool
     PackageServer: Uri option
     Input: BatchInput
@@ -504,6 +505,13 @@ let validateOptions (opts: CliOptions) : Result<CliOptions, string> =
             Ok opts
 
 let parseBatchArgs (argv: string array) : Result<BatchCliOptions, string> =
+    let rec extractLeakCheck seen reversed remaining =
+        match remaining with
+        | [] -> seen, List.rev reversed
+        | "--" :: _ -> seen, List.rev reversed @ remaining
+        | "--leak-check" :: rest -> extractLeakCheck true reversed rest
+        | arg :: rest -> extractLeakCheck seen (arg :: reversed) rest
+    let leakCheck, args = extractLeakCheck false [] (Array.toList argv)
     let parseItems (args: string list) : Result<BatchCompileItem * BatchCompileItem list, string> =
         let rec loop (reversed: BatchCompileItem list) (remaining: string list) =
             match remaining with
@@ -538,6 +546,7 @@ let parseBatchArgs (argv: string array) : Result<BatchCliOptions, string> =
                 |> Result.map (fun items -> {
                     Target = target
                     Verbosity = verbosity
+                    LeakCheck = leakCheck
                     AllowInternal = allowInternal
                     PackageServer = packageServer
                     Input = CommandLineItems items
@@ -608,6 +617,7 @@ let parseBatchArgs (argv: string array) : Result<BatchCliOptions, string> =
                 Ok {
                     Target = target
                     Verbosity = verbosity
+                    LeakCheck = leakCheck
                     AllowInternal = allowInternal
                     PackageServer = packageServer
                     Input = ManifestFile path
@@ -616,7 +626,7 @@ let parseBatchArgs (argv: string array) : Result<BatchCliOptions, string> =
                 }
         | flag :: _ -> Error $"Unknown batch flag: {flag}"
 
-    parseOptions HostTarget Normal false None None false None (Array.toList argv)
+    parseOptions HostTarget Normal false None None false None args
 
 let parseCommand (argv: string array) : Result<CliCommand, string> =
     match Array.toList argv with
@@ -825,6 +835,7 @@ let compileBatch (options: BatchCliOptions) : int =
                             Argument = Some item.SourceFile
                             OutputFile = Some item.OutputFile
                             Verbosity = options.Verbosity
+                            LeakCheck = options.LeakCheck
                             Target = options.Target
                             AllowInternal = options.AllowInternal
                             PackageServer = options.PackageServer
@@ -980,7 +991,7 @@ let printUsage () =
     println "  --dump-function TEXT Restrict IR dumps to matching function names"
     println "  --dump-ir-summary    Emit function/block/instruction counts instead of full IR"
     println "  --dump-ir-output FILE  Write compiler IR output to FILE instead of stdout"
-    println "  --leak-check         Enable leak checking (debug builds only)"
+    println "  --leak-check         Enable leak checking, including in batch mode (debug builds only)"
     println "  -h, --help           Show this help message"
     println "  --version            Show version information"
     println ""

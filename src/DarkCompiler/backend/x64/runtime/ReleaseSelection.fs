@@ -273,7 +273,7 @@ let rec internal listDecHelperForReleasePlan (releasePlan: MemoryModel.RcRelease
         | MemoryModel.RecursiveRelease sourceType ->
             plannedListDecHelperLabelForReleasePlan (MemoryModel.RecursiveRelease sourceType)
         | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
-            listRefCountDecListHelperLabel
+            plannedListDecHelperLabelForReleasePlan elementRelease
         | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) ->
             plannedListDecHelperLabelForReleasePlan elementRelease
         | MemoryModel.RootRelease (_, MemoryModel.ClosureHeap, _) ->

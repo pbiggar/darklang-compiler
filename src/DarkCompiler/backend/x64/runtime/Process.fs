@@ -8,7 +8,7 @@ open X64Operands
 /// positional index. Native argv entries are zero-terminated, so present
 /// values are copied into managed Dark strings. Following the frame-pointer
 /// chain reaches _start's root frame without reserving process-state registers.
-let internal generateCliArgvHelper (enableLeakCheck: bool) : X86_64.Instr list =
+let internal generateCliArgvHelper () : X86_64.Instr list =
     let label = "__dark_cli_argv"
     let missingLabel = $"{label}_missing"
     let rootLabel = $"{label}_find_root"
@@ -29,14 +29,6 @@ let internal generateCliArgvHelper (enableLeakCheck: bool) : X86_64.Instr list =
           X86_64.R11 ]
     let saves = savedRegs |> List.map X86_64.PUSH
     let restores = savedRegs |> List.rev |> List.map X86_64.POP
-    let leakInc =
-        if enableLeakCheck then
-            [ X86_64.LEA_rip (X86_64.R11, "_leak_count")
-              X86_64.MOV_load (X86_64.RDX, X86_64.R11, 0)
-              X86_64.ADD_imm (X86_64.RDX, 1)
-              X86_64.MOV_store (X86_64.R11, 0, X86_64.RDX) ]
-        else
-            []
     let checkHeapBounds okLabel =
         [ X86_64.MOV_reg (X86_64.R11, heapPtr)
           X86_64.SUB_reg (X86_64.R11, freeListBase)
@@ -87,8 +79,8 @@ let internal generateCliArgvHelper (enableLeakCheck: bool) : X86_64.Instr list =
         X86_64.ADD_imm (X86_64.R11, 16)
         X86_64.ADD_reg (heapPtr, X86_64.R11) ]
     @ checkHeapBounds stringHeapOkLabel
-    @ [ X86_64.MOV_imm32 (X86_64.RDX, 1)
-        X86_64.MOV_store (X86_64.R10, 0, X86_64.RDX)
+    @ loadImm64 X86_64.RDX 0x7FFFFFFFFFFFFFFFL
+    @ [ X86_64.MOV_store (X86_64.R10, 0, X86_64.RDX)
         X86_64.MOV_store (X86_64.R10, 8, X86_64.RCX)
         X86_64.LEA (X86_64.R9, X86_64.R10, 16)
         X86_64.MOV_reg (X86_64.RAX, X86_64.RCX)
@@ -101,9 +93,8 @@ let internal generateCliArgvHelper (enableLeakCheck: bool) : X86_64.Instr list =
         X86_64.ADD_imm (X86_64.R9, 1)
         X86_64.SUB_imm (X86_64.RAX, 1)
         X86_64.JMP copyLabel
-        X86_64.Label copyDoneLabel ]
-    @ leakInc
-    @ [ X86_64.MOV_reg (X86_64.RAX, X86_64.R10)
+        X86_64.Label copyDoneLabel
+        X86_64.MOV_reg (X86_64.RAX, X86_64.R10)
         X86_64.JMP $"{label}_done"
         X86_64.Label missingLabel
         X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)

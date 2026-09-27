@@ -166,6 +166,12 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                     (plannedListDecHelperLabelForReleasePlan elementRelease)
                     (payloadSize, elementRelease)
                 |> mergePlannedListDecHelperMaps nestedHelpers
+            | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
+                Map.empty
+                |> Map.add
+                    (plannedListDecHelperLabelForReleasePlan elementRelease)
+                    (8, elementRelease)
+                |> mergePlannedListDecHelperMaps nestedHelpers
             | MemoryModel.RecursiveRelease _ ->
                 Map.empty
                 |> Map.add
@@ -766,4 +772,4 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                 }
             else
                 []
-        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureIncHelper @ closureDecHelper @ streamDecHelper @ recursiveNominalRcDecHelpers @ generateCliArgvHelper enableLeakCheck @ generateCliEnvironmentPackedHelper enableLeakCheck @ generateCliDirectoryCurrentHelper enableLeakCheck @ generateCliSetEnvHelper enableLeakCheck @ generateCliUnsetEnvHelper enableLeakCheck @ generateCliDirectoryListHelper enableLeakCheck @ (if needsCliGetEnvHelper then generateCliGetEnvHelper enableLeakCheck else []) @ (if needsCliProcessLifecycleHelpers then generateLinuxCliSpawnProcessHelper () @ generateLinuxCliProcessLifecycleHelpers enableLeakCheck else []) @ (if needsCliRunProcessHelper then generateLinuxCliRunProcessHelper enableLeakCheck else []) @ (if needsCliExecuteHelper then generateLinuxCliExecuteHelper enableLeakCheck else []) @ genOomHandler () @ genRuntimeErrorHandler ())
+        allInstrs @ listIncHelper @ listDecHelpers @ dictIncHelper @ plannedDictDecHelpers @ dictDecHelper @ dictDecDynamicKeyHelper @ dictDecDynamicValueHelper @ dictDecDynamicKeyValueHelper @ dictDecDynamicKeyDictValueHelper @ dictDecDynamicKeyDictListValueHelper @ dictDecListValueHelper @ dictDecDictValueHelper @ dictDecDictListValueHelper @ dictDecTupleStringListValueHelper @ dictDecTupleStringListDictValueHelper @ dictDecDynamicKeyTupleStringListDictValueHelper @ dictDecSumStringValueHelper @ closureIncHelper @ closureDecHelper @ streamDecHelper @ recursiveNominalRcDecHelpers @ generateCliArgvHelper () @ generateCliEnvironmentPackedHelper enableLeakCheck @ generateCliDirectoryCurrentHelper enableLeakCheck @ generateCliSetEnvHelper enableLeakCheck @ generateCliUnsetEnvHelper enableLeakCheck @ generateCliDirectoryListHelper enableLeakCheck @ (if needsCliGetEnvHelper then generateCliGetEnvHelper enableLeakCheck else []) @ (if needsCliProcessLifecycleHelpers then generateLinuxCliSpawnProcessHelper () @ generateLinuxCliProcessLifecycleHelpers enableLeakCheck else []) @ (if needsCliRunProcessHelper then generateLinuxCliRunProcessHelper enableLeakCheck else []) @ (if needsCliExecuteHelper then generateLinuxCliExecuteHelper enableLeakCheck else []) @ genOomHandler () @ genRuntimeErrorHandler ())

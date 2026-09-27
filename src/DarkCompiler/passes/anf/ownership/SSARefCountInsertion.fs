@@ -324,7 +324,7 @@ let insertBlockLocal
                         | (_, RawSlotInit (_, _, Var source, _)), RawWriteWord _ ->
                             ownerOf definitions source |> Option.toList |> Set.ofList
                         | _ -> Set.empty
-                    let recursiveFrontierTransfer =
+                    let recursiveFrontierCandidates =
                         match operation with
                         | Call (target, args) when target = func.Id ->
                             List.zip func.TypedParams args
@@ -336,11 +336,22 @@ let insertBlockLocal
                                 else None)
                             |> Set.ofList
                         | _ -> Set.empty
-                    let transferredOwners =
-                        Set.unionMany [transferredOwners; rawTransfer; recursiveFrontierTransfer]
                     let usedOwners =
                         ANFEffects.cexprTempUses operation
                         |> liveOwners definitions
+                    // A live cleanup after a recursive call prevents tail-call
+                    // conversion. In that case the callee retains its arguments,
+                    // so the caller must release its own frontier values.
+                    let recursiveFrontierTransfer =
+                        let otherDeadOwners =
+                            Set.difference usedOwners neededOwners
+                            |> fun owners -> Set.difference owners recursiveFrontierCandidates
+                            |> fun owners -> Set.difference owners transferredOwners
+                            |> fun owners -> Set.difference owners rawTransfer
+                        if Set.isEmpty otherDeadOwners then recursiveFrontierCandidates
+                        else Set.empty
+                    let transferredOwners =
+                        Set.unionMany [transferredOwners; rawTransfer; recursiveFrontierTransfer]
                     let deadOwners =
                         Set.difference usedOwners neededOwners
                         |> fun owners -> Set.difference owners transferredOwners

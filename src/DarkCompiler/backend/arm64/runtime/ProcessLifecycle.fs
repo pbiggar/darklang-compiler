@@ -118,13 +118,12 @@ let internal generateCliArgvHelper (ctx: CodeGenContext) (label: string) : ARM64
       ARM64Symbolic.ADD_imm (ARM64Symbolic.X10, ARM64Symbolic.X10, 1us)
       ARM64Symbolic.SUB_imm (ARM64Symbolic.X2, ARM64Symbolic.X2, 1us)
       ARM64Symbolic.B_label copyLabel
-      ARM64Symbolic.Label copyDoneLabel ]
-    @ generateLeakCounterInc ctx
-    @ [ ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X7)
-        ARM64Symbolic.RET
-        ARM64Symbolic.Label missingLabel
-        ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
-        ARM64Symbolic.RET ]
+      ARM64Symbolic.Label copyDoneLabel
+      ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.X7)
+      ARM64Symbolic.RET
+      ARM64Symbolic.Label missingLabel
+      ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
+      ARM64Symbolic.RET ]
 
 /// Start a shell-language command and retain its pid and descriptors in the
 /// fixed process table rooted at X25.

@@ -20,6 +20,7 @@ commands are:
 ```bash
 ./build --ai
 ./run-tests --ai
+python3 scripts/check_compiled_leaks.py
 ./benchmarks/run_benchmarks.sh --verify-parent full
 ```
 
@@ -27,6 +28,12 @@ Full verification keeps terminal output concise so automated callers do not
 consume context on repeated per-workload details. Full build and measurement
 logs, the markdown report, and decision JSON remain in the reported results
 directory. Use `--verbose` when interactive diagnosis needs streamed details.
+
+The compiled leak check builds the canonical Dark benchmarks with leak
+instrumentation and runs their quick and full workloads. It requires the
+expected stdout, a zero exit code, and empty stderr for each run. The merge
+train blocks a failing `leaks` gate unless a human approves an exception for
+the exact candidate.
 
 The merge train runs `./run-tests --ai` to check the complete already-built
 host suite. Full-suite timing remains useful for diagnosis, but it is not a

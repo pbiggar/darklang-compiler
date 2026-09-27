@@ -56,9 +56,12 @@ task branches in arrival order.
 - The train's `tests` gate runs the complete already-built host test suite with
   `./run-tests --ai`. Full-suite timing measurements are optional diagnostics;
   contention does not block integration.
+- The `leaks` gate compiles canonical Dark benchmarks with leak accounting and
+  rejects any quick or full workload that leaks or changes its output. A human
+  operator may approve an exact exception for this gate.
 - A task agent may request an exception with `./land --exception-gate GATE
-  --exception-reason TEXT` for `benchmark-sources` or `benchmarks`. Requesting
-  does not approve it. The integrator stages the
+  --exception-reason TEXT` for `benchmark-sources`, `benchmarks`, or `leaks`.
+  Requesting does not approve it. The integrator stages the
   failed candidate for human review. In interactive `./mergetrain-status`,
   press `a` to review and confirm it; this retries the job. When one candidate
   fails multiple eligible gates, each gate needs its own request and review.

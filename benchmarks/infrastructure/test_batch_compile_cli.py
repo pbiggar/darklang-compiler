@@ -29,6 +29,7 @@ class BatchCompileCliTests(unittest.TestCase):
                 [
                     project_root / "dark",
                     "--batch",
+                    "--leak-check",
                     "--quiet",
                     "--",
                     first_source,
@@ -50,8 +51,10 @@ class BatchCompileCliTests(unittest.TestCase):
             )
             self.assertEqual(first.returncode, 0, first.stderr)
             self.assertEqual(first.stdout, "first\n")
+            self.assertEqual(first.stderr, "")
             self.assertEqual(second.returncode, 0, second.stderr)
             self.assertEqual(second.stdout, "second\n")
+            self.assertEqual(second.stderr, "")
 
 
 if __name__ == "__main__":

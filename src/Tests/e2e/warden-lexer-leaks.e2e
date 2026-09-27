@@ -1,0 +1,95 @@
+// Leak accounting for the compiled Warden token lexer.
+
+// Small language benchmark with a hand-written lexer and Pratt parser that
+// directly evaluates recursive expressions over an in-memory program.
+
+let byteAt (value: String) (index: Int64) : Int64 =
+    match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
+    | Some byte -> Stdlib.Int64.fromUInt8 byte
+    | None -> Builtin.testRuntimeError "Warden byte index is out of range"
+
+let stringLengthFrom (value: String) (index: Int64) : Int64 =
+    match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
+    | Some _ -> stringLengthFrom value (index + 1L)
+    | None -> index
+
+let stringLength (value: String) : Int64 = stringLengthFrom value 0L
+
+let sliceFrom (value: String) (index: Int64) (end_: Int64) (reversed: List<Char>) : String =
+    if index >= end_ then Stdlib.String.fromList (Stdlib.List.reverse reversed)
+    else
+        match Stdlib.Char.fromCodepoint (Stdlib.Int.fromInt64 (byteAt value index)) with
+        | Some char -> sliceFrom value (index + 1L) end_ (Stdlib.List.push reversed char)
+        | None -> Builtin.testRuntimeError "Warden source is not ASCII"
+
+let slice (value: String) (start_: Int64) (end_: Int64) : String =
+    sliceFrom value start_ end_ []
+
+// Tokens use compact integer tags so the token arena can provide average O(1)
+// indexed access. Number tokens are encoded as 1000 + value.
+type Lexed = { tokens: Dict<Int64>, count: Int64 }
+
+let tokenKey (index: Int64) : String = Stdlib.Int64.toString index
+
+let tokenAt (tokens: Dict<Int64>) (index: Int64) : Int64 =
+    match Stdlib.Dict.get tokens (tokenKey index) with
+    | Some token -> token
+    | None -> Builtin.testRuntimeError "missing token in Warden token arena"
+
+let scanNumber (source: String) (index: Int64) (length: Int64) (value: Int64) : (Int64 * Int64) =
+    if index < length then
+        let byte = byteAt source index in
+        if byte >= 48L && byte <= 57L then scanNumber source (index + 1L) length (value * 10L + byte - 48L)
+        else (value, index)
+    else (value, index)
+
+let scanWord (source: String) (index: Int64) (length: Int64) : Int64 =
+    if index < length then
+        let byte = byteAt source index in
+        if (byte >= 97L && byte <= 122L) || (byte >= 65L && byte <= 90L) then scanWord source (index + 1L) length
+        else index
+    else index
+
+let wordToken (word: String) : Int64 =
+    match word with
+    | "x" -> 10L
+    | "y" -> 11L
+    | _ -> Builtin.testRuntimeError "unknown identifier in Warden program"
+
+let lex (source: String) (index: Int64) (length: Int64) (tokenIndex: Int64) (tokens: Dict<Int64>) : Lexed =
+    if index >= length then Lexed { tokens = tokens, count = tokenIndex }
+    else
+        let byte = byteAt source index in
+        if byte == 32L || byte == 10L || byte == 13L || byte == 9L then lex source (index + 1L) length tokenIndex tokens
+        else if byte >= 48L && byte <= 57L then
+            let number = scanNumber source index length 0L in
+            let next = Stdlib.Dict.setOverridingDuplicates tokens (tokenKey tokenIndex) (1000L + number.0) in
+            lex source (number.1) length (tokenIndex + 1L) next
+        else if (byte >= 97L && byte <= 122L) || (byte >= 65L && byte <= 90L) then
+            let afterWord = scanWord source index length in
+            let token = wordToken (slice source index afterWord) in
+            let next = Stdlib.Dict.setOverridingDuplicates tokens (tokenKey tokenIndex) token in
+            lex source afterWord length (tokenIndex + 1L) next
+        else
+            let token =
+                match byte with
+                | 43L -> 2L
+                | 45L -> 3L
+                | 42L -> 4L
+                | 47L -> 5L
+                | 60L -> 6L
+                | 40L -> 7L
+                | 41L -> 8L
+                | 59L -> 9L
+                | _ -> Builtin.testRuntimeError "unknown character in Warden program" in
+            let next = Stdlib.Dict.setOverridingDuplicates tokens (tokenKey tokenIndex) token in
+            lex source (index + 1L) length (tokenIndex + 1L) next
+
+
+let number = scanNumber "1" 0L 1L 0L in number.0 + number.1 = stdout="2\n" stderr=""
+let number = scanNumber "1" 0L 1L 0L in number.0 + number.1 = stdout="2\n" stderr="" disable_opt_inline=true
+let source = "x" in let lexed = lex source 0L (stringLength source) 0L Stdlib.Dict.empty in lexed.count = stdout="1\n" stderr=""
+let source = "1" in let lexed = lex source 0L (stringLength source) 0L Stdlib.Dict.empty in lexed.count = stdout="1\n" stderr=""
+let source = "1" in let lexed = lex source 0L (stringLength source) 0L Stdlib.Dict.empty in lexed.count = stdout="1\n" stderr="" disable_opt_inline=true
+let source = "+" in let lexed = lex source 0L (stringLength source) 0L Stdlib.Dict.empty in lexed.count = stdout="1\n" stderr=""
+let source = "x * x + y * 3 + (x + y) * (x - y) + x / 2;\n" in let lexed = lex source 0L (stringLength source) 0L Stdlib.Dict.empty in lexed.count = stdout="24\n" stderr=""

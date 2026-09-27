@@ -73,10 +73,14 @@ A lander may attach a request to its exact committed branch:
   --exception-reason "Why the measured regression is acceptable"
 ```
 
-Eligible gates are `benchmark-sources` and `benchmarks`.
+Eligible gates are `benchmark-sources`, `benchmarks`, and `leaks`.
 Each request names one gate and the exact committed head. A candidate that
 fails more than one eligible gate needs a separate request and human review for
 each failed gate. Requests for the same head are stored separately by gate.
+The `leaks` gate compiles every canonical Dark benchmark with leak accounting,
+checks its quick and full output, and rejects any nonempty stderr. An exact
+candidate can request human review of this gate with `./land --exception-gate
+leaks --exception-reason TEXT`.
 A request does not waive a gate. The candidate first
 fails normally, and the integrator stages its failed gate, exact candidate
 tree, integration base, destination, and gate config digest for review. It does

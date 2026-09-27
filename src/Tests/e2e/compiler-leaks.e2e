@@ -1,0 +1,35 @@
+// Compiled ownership regressions for values built by parsers and dictionaries.
+
+type LeakPiece = { value: Int64 }
+
+let leakParsePiece (pattern: String) (index: Int64) : (LeakPiece * Int64) =
+    let value = match Stdlib.String.getByteAt pattern (Stdlib.Int.fromInt64 index) with | Some byte -> Stdlib.Int64.fromUInt8 byte | None -> 0L in
+    (LeakPiece { value = value }, index + 1L)
+
+let leakParsePieces (pattern: String) (index: Int64) (reversed: List<LeakPiece>) : List<LeakPiece> =
+    if Stdlib.Int.fromInt64 index >= Stdlib.String.length pattern then Stdlib.List.reverse reversed
+    else
+        let parsed = leakParsePiece pattern index in
+        leakParsePieces pattern (parsed.1) (Stdlib.List.push reversed (parsed.0))
+
+Stdlib.List.length (leakParsePieces "a" 0L []) = stdout="1\n" stderr=""
+Stdlib.List.length ([LeakPiece { value = 1L }]) = stdout="1\n" stderr=""
+Stdlib.List.length ([[LeakPiece { value = 1L }]]) = stdout="1\n" stderr=""
+
+let d = Stdlib.Dict.setOverridingDuplicates Stdlib.Dict.empty (Stdlib.Int64.toString 0L) 1L in match Stdlib.Dict.get d "0" with | Some value -> value | None -> 0L = stdout="1\n" stderr=""
+
+let leakPair (value: Int64) : (Int64 * Int64) = (value, value + 1L)
+let leakPairLoop (remaining: Int64) (sum: Int64) : Int64 =
+    if remaining <= 0L then sum
+    else let pair = leakPair remaining in leakPairLoop (remaining - 1L) (sum + pair.0 + pair.1)
+
+leakPairLoop 2L 0L = stdout="8\n" stderr=""
+
+let leakHeldTuple (remaining: Int64) : Int64 =
+    if remaining <= 0L then 0L
+    else
+        let pair = (remaining, remaining + 1L) in
+        let child = leakHeldTuple (pair.0 - 1L) in
+        child + pair.1
+
+leakHeldTuple 2L = stdout="5\n" stderr=""

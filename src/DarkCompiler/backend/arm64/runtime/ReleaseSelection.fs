@@ -148,7 +148,7 @@ let internal listDecHelperForElementRelease
         | MemoryModel.RecursiveRelease _ ->
             plannedListDecHelperLabelForFingerprint elementFingerprint
         | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
-            listRefCountDecListHelperLabel
+            plannedListDecHelperLabelForFingerprint elementFingerprint
         | MemoryModel.RootRelease (
               _,
               MemoryModel.DictHeap,

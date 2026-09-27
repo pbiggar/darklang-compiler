@@ -219,7 +219,7 @@ let private generateListRefCountDecHelperWith
             | MemoryModel.RecursiveRelease sourceType ->
                 plannedListDecHelperLabelForReleasePlan (MemoryModel.RecursiveRelease sourceType)
             | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
-                listRefCountDecListHelperLabel
+                plannedListDecHelperLabelForReleasePlan elementRelease
             | MemoryModel.RootRelease (
                   _,
                   MemoryModel.DictHeap,
@@ -520,6 +520,12 @@ let private generateListRefCountDecHelperWith
         | None, false, false, false, false ->
             match leafGenericReleasePlan with
             | Some (MemoryModel.RecursiveRelease sourceType) -> releaseRecursivePayload sourceType
+            | Some (MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) as listReleasePlan) ->
+                releasePlanManagedRootFieldFrom
+                    ARM64Symbolic.X3
+                    0
+                    "nested_list"
+                    (leafListHelperLabelForReleasePlan listReleasePlan)
             | Some (MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) as dictReleasePlan) ->
                 releaseLeafDictPayloadWithHelper
                     (leafDictHelperLabelForReleasePlan dictReleasePlan)
@@ -873,7 +879,8 @@ let internal generateNeededListRefCountDecHelpers
             if Set.contains helperLabel neededHelperLabels then
                 let plannedPayloadSize =
                     match releasePlan with
-                    | MemoryModel.RecursiveRelease _ -> None
+                    | MemoryModel.RecursiveRelease _
+                    | MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) -> None
                     | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) -> None
                     | _ -> Some payloadSize
                 generateListRefCountDecHelperWith

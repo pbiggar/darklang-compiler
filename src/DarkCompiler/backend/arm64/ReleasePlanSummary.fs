@@ -218,6 +218,12 @@ let rec private collectPrecomputedReleasePlanSummary
             else summary
         let summary =
             match collectPlannedListHelpers, elementRelease with
+            | true, MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) ->
+                addPrecomputedPlannedListHelper
+                    8
+                    elementFingerprintString
+                    elementRelease
+                    summary
             | true, MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, _)
             | true, MemoryModel.RootRelease (payloadSize, MemoryModel.StreamHeap, _) ->
                 addPrecomputedPlannedListHelper

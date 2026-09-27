@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 
-ELIGIBLE_GATES = frozenset({"benchmark-sources", "benchmarks"})
+ELIGIBLE_GATES = frozenset({"benchmark-sources", "benchmarks", "leaks"})
 SCHEMA = 1
 
 
