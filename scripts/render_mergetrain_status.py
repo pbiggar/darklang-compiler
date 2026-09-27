@@ -258,35 +258,6 @@ def history_items(repo: Path) -> list[dict[str, Any]]:
     return [item for item in history["items"] if isinstance(item, dict)]
 
 
-def last_test_runtime(
-    repo: Path, *, history: list[dict[str, Any]] | None = None
-) -> tuple[float, str] | None:
-    items = history if history is not None else history_items(repo)
-    gates = [
-        gate
-        for item in items
-        if isinstance(item, dict) and isinstance(item.get("gates"), list)
-        for gate in item["gates"]
-        if isinstance(gate, dict)
-        and gate.get("name") == "tests"
-        and gate.get("state") == "success"
-        and isinstance(gate.get("duration_seconds"), (int, float))
-        and math.isfinite(gate["duration_seconds"])
-        and gate["duration_seconds"] > 0
-        and isinstance(gate.get("finished_at"), str)
-    ]
-    if not gates:
-        return None
-    for latest in sorted(gates, key=lambda gate: gate["finished_at"], reverse=True):
-        try:
-            finished = datetime.fromisoformat(latest["finished_at"])
-        except ValueError:
-            continue
-        if finished.tzinfo is not None:
-            return float(latest["duration_seconds"]), latest["finished_at"]
-    return None
-
-
 def merge_test_runtime(
     branch: str, merged_at: str, history: list[dict[str, Any]]
 ) -> str:
@@ -866,15 +837,6 @@ def render(
         f"next: {styled(next_action, CYAN, color)}",
     ]
     recorded_history = history_items(repo)
-    runtime = last_test_runtime(repo, history=recorded_history)
-    if runtime:
-        seconds, finished_at = runtime
-        lines.append(
-            f"test runtime: {seconds:.1f}s "
-            f"({human_age(finished_at)} ago, last passed train gate)"
-        )
-    else:
-        lines.append("test runtime: unavailable")
     if action.get("requires_approval") != "none":
         lines.append(f"approval: {action['requires_approval']}")
     lines.extend(

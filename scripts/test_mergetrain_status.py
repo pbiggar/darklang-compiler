@@ -18,7 +18,6 @@ from scripts.render_mergetrain_status import (
     benchmark_detail,
     benchmark_diff,
     human_age,
-    last_test_runtime,
     merge_test_runtime,
     percentage,
     render,
@@ -130,13 +129,13 @@ class MergetrainStatusTests(unittest.TestCase):
             try:
                 self.assertIn(b"[a] attention", read_until(b"health: healthy"))
                 os.write(master, b"v")
-                approval_page = read_until(b"[A] approve & deploy")
+                approval_page = read_until(b"APPROVAL 2/2  #308 Review gate waivers")
                 self.assertIn(b"APPROVAL 2/2  #308 Review gate waivers", approval_page)
-                self.assertIn(b"APPROVAL", approval_page)
+                self.assertIn(b"[A] approve & deploy", approval_page)
                 os.write(master, b"j")
                 self.assertIn(
                     b"APPROVAL 2/2  #308 Review gate waivers",
-                    read_until(b"[A] approve & deploy"),
+                    read_until(b"APPROVAL 2/2  #308 Review gate waivers"),
                 )
                 os.write(master, b"A")
                 read_until(f"Type 'approve 308 {base[:12]}'".encode())
@@ -146,12 +145,12 @@ class MergetrainStatusTests(unittest.TestCase):
                 os.write(master, b"x")
                 read_until(b"[a] attention")
                 os.write(master, b"a")
-                attention_page = read_until(b"[A] approve & deploy")
+                attention_page = read_until(b"ATTENTION 1/2  #299 Review gate waivers")
                 self.assertIn(b"ATTENTION 1/2  #299 Review gate waivers", attention_page)
                 os.write(master, b"j")
                 self.assertIn(
                     b"ATTENTION 1/2  #299 Review gate waivers",
-                    read_until(b"[A] approve & deploy"),
+                    read_until(b"ATTENTION 1/2  #299 Review gate waivers"),
                 )
                 os.write(master, b"A")
                 read_until(f"Type 'approve 299 {base[:12]}'".encode())
@@ -271,30 +270,6 @@ class MergetrainStatusTests(unittest.TestCase):
         wrapped = wrap_display("\x1b[32mabcdef\x1b[0m 中文", 4)
         self.assertEqual(wrapped, "\x1b[32mabcd\nef\x1b[0m \n中文")
 
-    @patch("scripts.render_mergetrain_status.subprocess.run")
-    def test_runtime_uses_latest_successful_tests_gate(
-        self, mock_run: MagicMock
-    ) -> None:
-        mock_run.return_value.returncode = 0
-        mock_run.return_value.stdout = json.dumps(
-            {"items": [
-                {"gates": [
-                    {"name": "tests", "state": "success", "duration_seconds": 42.5,
-                     "finished_at": "2026-09-27T10:00:00+00:00"},
-                    {"name": "tests", "state": "reused", "duration_seconds": 0,
-                     "finished_at": "2026-09-27T11:00:00+00:00"},
-                ]},
-                {"gates": [
-                    {"name": "tests", "state": "success", "duration_seconds": 41.2,
-                     "finished_at": "2026-09-27T09:00:00+00:00"},
-                ]},
-            ]}
-        )
-        self.assertEqual(
-            last_test_runtime(Path(".")),
-            (42.5, "2026-09-27T10:00:00+00:00"),
-        )
-
     def test_merge_runtime_matches_its_deployed_branch_and_time(self) -> None:
         history = [
             {"status": "deployed", "finished_at": "2026-09-27T11:00:00+00:00",
@@ -338,6 +313,7 @@ class MergetrainStatusTests(unittest.TestCase):
             fake.chmod(0o755)
             environment = dict(os.environ)
             environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["LINES"] = "8"
             master, slave = pty.openpty()
             process = subprocess.Popen(
                 [str(source_root / "mergetrain-status"), "--repo", str(source_root),
@@ -361,8 +337,11 @@ class MergetrainStatusTests(unittest.TestCase):
                 read_until(b"refreshing")
                 started = time.monotonic()
                 os.write(master, b"m")
-                changed = read_until(b"[m] fewer merges")
-                self.assertIn(b"refreshing", changed)
+                changed = read_until(b"\x1b[8;1H\x1b[2Krefreshing")
+                self.assertIn(b"[m] fewer", changed)
+                self.assertIn(b"\x1b[6;1H\x1b[2K", changed)
+                self.assertIn(b"\x1b[7;1H\x1b[2K", changed)
+                self.assertNotIn(b"refreshing\xe2\x80\xa6\r\n", changed)
                 self.assertLess(time.monotonic() - started, 1.0)
                 read_until(b"health: healthy", timeout=12.0)
                 os.write(master, b"q")
@@ -519,12 +498,12 @@ class MergetrainStatusTests(unittest.TestCase):
                 read_until(b"health: healthy")
                 self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"j")
-                read_until(b"\x1b[H\x1b[Jtest runtime:")
+                read_until(b"\x1b[H\x1b[Jin train:")
                 os.write(master, b"\x1b[A")
                 read_until(b"\x1b[H\x1b[Jhealth: healthy")
                 self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"m")
-                read_until(b"[m] fewer merges")
+                read_until(b"[m] fewer")
                 os.write(master, b"0")
                 read_until(b"benchmarks p2")
                 os.write(master, b"G")
@@ -533,7 +512,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 os.write(master, b"b")
                 read_until(b"benchmarks p1")
                 os.write(master, b"g")
-                read_until(b"[m] fewer merges")
+                read_until(b"[m] fewer")
                 os.write(master, b"1")
                 detail_output = read_until(b"benchmark result:")
                 self.assertIn(b"benchmark result:", detail_output)
@@ -544,7 +523,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 os.write(master, b"d")
                 read_until(b"benchmark result:")
                 os.write(master, b"q")
-                status_output = read_until(b"[m] fewer merges")
+                status_output = read_until(b"[m] fewer")
                 self.assertNotIn(b"benchmark result:", status_output)
                 os.write(master, b"q")
                 self.assertEqual(process.wait(timeout=10), 0)
@@ -554,15 +533,14 @@ class MergetrainStatusTests(unittest.TestCase):
                     process.wait(timeout=10)
                 os.close(master)
 
-    @patch("scripts.render_mergetrain_status.last_test_runtime",
-           return_value=(42.5, "2026-09-27T10:00:00+00:00"))
+    @patch("scripts.render_mergetrain_status.history_items", return_value=[])
     @patch("scripts.render_mergetrain_status.benchmark_changes", return_value=[])
     @patch("scripts.render_mergetrain_status.recent_merges", return_value=[])
     def test_conflict_details_are_collapsed_and_can_be_toggled(
         self,
         _recent_merges: object,
         _benchmark_changes: object,
-        _last_test_runtime: object,
+        _history_items: object,
     ) -> None:
         reason = "merge conflict in src/Compiler.fs\nfull conflicting hunk"
         payload = {
@@ -597,7 +575,7 @@ class MergetrainStatusTests(unittest.TestCase):
         expanded = render(payload, Path("."), color=False, show_conflicts=True)
 
         self.assertIn("— conflict", collapsed)
-        self.assertIn("test runtime: 42.5s", collapsed)
+        self.assertNotIn("test runtime:", collapsed)
         self.assertNotIn("full conflicting hunk", collapsed)
         self.assertIn("[c] show full conflict details", collapsed)
         self.assertIn(reason, expanded)
@@ -792,6 +770,7 @@ else:
             self.assertEqual(completed.stderr, "")
             self.assertNotIn("\x1b", completed.stdout)
             self.assertIn("health: healthy", completed.stdout)
+            self.assertNotIn("\ntest runtime:", completed.stdout)
             self.assertIn("RUNNING: 1 job(s) are running", completed.stdout)
             self.assertIn("in train: Running gate 2/4: tests\n", completed.stdout)
             self.assertIn("\n\nrecent merges:\n", completed.stdout)

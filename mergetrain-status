@@ -324,6 +324,9 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
     if [[ ! "$terminal_lines" =~ ^[1-9][0-9]*$ ]]; then
       terminal_lines=24
     fi
+    if ((terminal_lines < 4)); then
+      terminal_lines=4
+    fi
     viewport_lines=$((terminal_lines - 3))
     if ((viewport_lines < 1)); then
       viewport_lines=1
@@ -350,11 +353,11 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
       if [[ "$refresh_running" == true || "$refresh_status" == true ]]; then
         controls="Loading review…  [q/Esc] back"
       elif [[ "$review_kind" == approval ]]; then
-        controls="[j/k] scroll  [n/p] next/previous  [A] approve & deploy  [q/Esc] back"
+        controls="[j/k] scroll [n/p] next/prev [A] approve & deploy [q/Esc] back"
       elif [[ "$attention_policy_changed" == true ]]; then
-        controls="[j/k] scroll  [n/p] next/previous  [A] approve & deploy  [r] retry  [q/Esc] back"
+        controls="[j/k] scroll [n/p] next/prev [A] approve & deploy [r] retry [q/Esc] back"
       else
-        controls="[j/k] scroll  [n/p] next/previous  [r] retry  [q/Esc] back"
+        controls="[j/k] scroll [n/p] next/prev [r] retry [q/Esc] back"
       fi
     elif [[ -n "$benchmark_detail_index" ]]; then
       if [[ "$show_benchmark_diff" == true ]]; then
@@ -365,9 +368,9 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
     else
       controls="[j/k] scroll [PgUp/Dn] page [1-9] detail [0] next [b] prev"
       if [[ "$show_more_merges" == true ]]; then
-        other_controls="[a] attention [v] approvals [m] fewer merges [c] conflicts [q] quit benchmarks p$((benchmark_page + 1))"
+        other_controls="[a] attention [v] approvals [m] fewer [c] conflicts [q] quit | benchmarks p$((benchmark_page + 1))"
       else
-        other_controls="[a] attention [v] approvals [m] more merges [c] conflicts [q] quit benchmarks p$((benchmark_page + 1))"
+        other_controls="[a] attention [v] approvals [m] more [c] conflicts [q] quit | benchmarks p$((benchmark_page + 1))"
       fi
     fi
     if [[ -n "$attention_job_id" ]]; then
@@ -378,10 +381,15 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
       fi
       other_controls="$identity"
     fi
+    progress=""
     if [[ "$refresh_running" == true || "$refresh_status" == true ]]; then
-      other_controls="refreshing…${other_controls:+  $other_controls}"
+      progress="refreshing…"
     fi
-    printf '\033[H\033[J%s\n%s\n%s\n' "${visible_output:-Loading merge-train status…}" "$controls" "$other_controls"
+    footer_width=$((terminal_columns - 1))
+    printf '\033[H\033[J%s' "${visible_output:-Loading merge-train status…}"
+    printf '\033[%d;1H\033[2K%s' "$((terminal_lines - 2))" "${controls:0:footer_width}"
+    printf '\033[%d;1H\033[2K%s' "$((terminal_lines - 1))" "${other_controls:0:footer_width}"
+    printf '\033[%d;1H\033[2K%s' "$terminal_lines" "${progress:0:footer_width}"
     redraw=false
   elif [[ "$interactive_redraw" == false && "$refresh_running" == false ]]; then
     printf '%s\n' "$status_output"
