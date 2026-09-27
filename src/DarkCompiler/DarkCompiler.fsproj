@@ -116,7 +116,7 @@
     <Compile Include="passes/anf/ANF_Optimize.fs" />
     <Compile Include="passes/anf/ANF_HigherOrderSpecialization.fs" />
     <Compile Include="passes/anf/ANF_DirectCallSpecialization.fs" />
-    <Compile Include="passes/anf/ANF_EscapeAnalysis.fs" />
+    <Compile Include="passes/anf/EscapeAnalysisFacts.fs" />
     <Compile Include="passes/anf/ownership/TypeFacts.fs" />
     <Compile Include="passes/anf/ownership/ReturnAnalysis.fs" />
     <Compile Include="passes/anf/ownership/ShapePlanning.fs" />
@@ -126,6 +126,7 @@
     <Compile Include="passes/anf/PrintInsertion.fs" />
     <Compile Include="passes/anf/TailCallDetection.fs" />
     <Compile Include="ir/anf/SSAANF.fs" />
+    <Compile Include="passes/anf/SSAEscapeAnalysis.fs" />
     <Compile Include="passes/anf/ownership/SSAReturnAnalysis.fs" />
     <Compile Include="passes/anf/ownership/SSAValueLiveness.fs" />
     <Compile Include="passes/anf/ownership/SSARefCountInsertion.fs" />

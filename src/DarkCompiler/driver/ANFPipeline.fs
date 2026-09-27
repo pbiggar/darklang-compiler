@@ -172,32 +172,12 @@ let internal buildAnf
         let t = System.Math.Round(inlineElapsed, 1)
         println $"        {t}ms"
 
-    if verbosity >= 1 && not options.DisableANFOpt then
-        println "  [anf.escape-analysis] ANF Escape Analysis..."
-    let escapeAnalysisStart = sw.Elapsed.TotalMilliseconds
-    let anfAfterEscapeAnalysis =
-        if options.DisableANFOpt then
-            anfSpecialized
-        else
-            ANF_EscapeAnalysis.scalarReplaceProgram
-                registries.TypeReg
-                registries.RcSumShapeReg
-                anfSpecialized
-    let escapeAnalysisElapsed = sw.Elapsed.TotalMilliseconds - escapeAnalysisStart
-    if not options.DisableANFOpt then
-        recordPassTiming passTimingRecorder "ANF Escape Analysis" escapeAnalysisElapsed
-    if verbosity >= 2 && not options.DisableANFOpt then
-        let t = System.Math.Round(escapeAnalysisElapsed, 1)
-        println $"        {t}ms"
+    let convResult = buildConversionResult anfSpecialized registries ownershipContracts
 
-    let convResult = buildConversionResult anfAfterEscapeAnalysis registries ownershipContracts
-
-    if verbosity >= 1 then println "  [anf.reference-counts] Reference Count Insertion..."
-    let rcStart = sw.Elapsed.TotalMilliseconds
     let ctx = RcTypeFacts.createContext convResult
-    let (ANF.Program (preRCFunctions, _)) = anfAfterEscapeAnalysis
-    let rcResult =
-        RefCountInsertion.verifyOwnershipContracts ctx ownershipContracts anfAfterEscapeAnalysis
+    let (ANF.Program (preRCFunctions, _)) = anfSpecialized
+    let ssaBeforeEscapeResult =
+        RefCountInsertion.verifyOwnershipContracts ctx ownershipContracts anfSpecialized
         |> Result.bind (fun () ->
             preRCFunctions
             |> List.fold (fun result func ->
@@ -208,15 +188,40 @@ let internal buildAnf
                         ctx
                         func
                     |> Result.map (fun ssa ->
-                        let frontierParams =
-                            RefCountInsertion.ownedDictionaryFrontierParams func
-                        RcSSARefCountInsertion.insertBlockLocal ctx frontierParams ssa
-                        :: accumulated)))
+                        (func, ssa) :: accumulated)))
                 (Ok [])
             |> Result.map List.rev)
-    match rcResult with
+    match ssaBeforeEscapeResult with
     | Error err -> Error $"Reference count insertion error: {err}"
-    | Ok ssaAfterRC ->
+    | Ok ssaBeforeEscape ->
+        if verbosity >= 1 && not options.DisableANFOpt then
+            println "  [ssa.escape-analysis] SSA Escape Analysis..."
+        let escapeStart = sw.Elapsed.TotalMilliseconds
+        let ssaAfterEscape =
+            ssaBeforeEscape
+            |> List.map (fun (func, ssa) ->
+                func,
+                if options.DisableANFOpt then ssa
+                else
+                    SSAEscapeAnalysis.optimizeFunction
+                        registries.TypeReg
+                        registries.RcSumShapeReg
+                        ssa)
+        let escapeElapsed = sw.Elapsed.TotalMilliseconds - escapeStart
+        if not options.DisableANFOpt then
+            recordPassTiming passTimingRecorder "SSA Escape Analysis" escapeElapsed
+        if verbosity >= 2 && not options.DisableANFOpt then
+            let t = System.Math.Round(escapeElapsed, 1)
+            println $"        {t}ms"
+
+        if verbosity >= 1 then println "  [anf.reference-counts] Reference Count Insertion..."
+        let rcStart = sw.Elapsed.TotalMilliseconds
+        let ssaAfterRC =
+            ssaAfterEscape
+            |> List.map (fun (func, ssa) ->
+                let frontierParams =
+                    RefCountInsertion.ownedDictionaryFrontierParams func
+                RcSSARefCountInsertion.insertBlockLocal ctx frontierParams ssa)
         let typeMap =
             ssaAfterRC
             |> List.fold (fun types func ->
