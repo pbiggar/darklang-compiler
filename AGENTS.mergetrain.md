@@ -24,11 +24,14 @@ Purpose: Serialize committed local task branches through one merge/test/push/ver
    edit, build, test, or other mutating command. Reuse that task worktree across
    turns of the same task. At a new task boundary, refresh an eligible existing
    task branch from the local integration ref as described in `AGENTS.md`.
-   Never change an enqueued commit or its worktree; start follow-up work in a
-   new task branch and worktree.
+   Never change a completed task's commit or worktree after `./land`, whether
+   its handoff is queued or pending. Start a newly requested task immediately
+   in a new branch and worktree from the current local integration ref, even
+   while the earlier commit has not landed. Do not inspect the earlier job or
+   wait for it to land.
 2. Commit a clean HEAD before handing work off.
 3. Task agents use `./land`, not raw status inspection, for handoff. A runner/operator may use `mergetrain status --json`; its queue-level `next_action` is not a judgment about any task branch's readiness.
-4. Land every named finished branch in the requested order with `./land --task "TASK"`; the script resolves the branch and worktree and enqueues the exact commit with bounded unattended approval. Success is the single line `queued`. After that line, do not inspect the job, poll status, wait for deployment, or report a later outcome. If it exits with `Landing handoff is pending`, report only `Merge train: ⏳ handoff pending`; do not use `❌ not ready`, explain the train state, or volunteer to recover another job.
+4. Land every named finished branch in the requested order with `./land --task "TASK"`; the script resolves the branch and worktree and enqueues the exact commit with bounded unattended approval. Success is the single line `queued`. After that line, stop work on that task; do not inspect the job, poll status, wait for deployment, or report a later outcome. A later user request starts a new task under rule 1. If it exits with `Landing handoff is pending`, report only `Merge train: ⏳ handoff pending`; do not use `❌ not ready`, explain the train state, or volunteer to recover another job.
 5. Never push configured integration refs directly. One authorized runner owns validation and deployment; recovery and destructive actions require their stated approval.
 
 ## Safety boundary
