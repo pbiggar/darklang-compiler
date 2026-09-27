@@ -1092,6 +1092,7 @@ let internal generateLinuxCliProcessLifecycleHelpers (enableLeakCheck: bool) : X
         @ [ X86_64.JMP "__dark_process_io_read_stdout"
             X86_64.Label "__dark_process_io_finished"
             X86_64.MOV_load (X86_64.R10, X86_64.RSP, 32)
+            X86_64.MOV_reg32 (X86_64.R10, X86_64.R10)
             X86_64.MOV_reg (X86_64.R11, X86_64.R10)
             X86_64.AND_imm (X86_64.R11, 0x7f)
             X86_64.CMP_imm (X86_64.R11, 0)
@@ -1165,6 +1166,7 @@ let internal generateLinuxCliProcessLifecycleHelpers (enableLeakCheck: bool) : X
             X86_64.XOR_reg (X86_64.R10, X86_64.R10) ]
         @ syscall 61L
         @ [ X86_64.MOV_load (X86_64.R10, X86_64.RSP, 32)
+            X86_64.MOV_reg32 (X86_64.R10, X86_64.R10)
             X86_64.MOV_reg (X86_64.R11, X86_64.R10)
             X86_64.AND_imm (X86_64.R11, 0x7f)
             X86_64.CMP_imm (X86_64.R11, 0)

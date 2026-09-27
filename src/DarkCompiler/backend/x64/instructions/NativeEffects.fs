@@ -505,16 +505,11 @@ let internal emitCliNative (ctx: FuncCtx) (dest: LIR.Reg) (operation: LIR.CliOpe
         | LIR.SetEnv ->
             match args with
             | [name; value] ->
-                loadCliOperand X86_64.RDI name
-                |> Result.bind (fun nameLoads ->
-                    loadCliOperand X86_64.RSI value
-                    |> Result.map (fun valueLoads ->
-                        nameLoads
-                        @ [X86_64.PUSH X86_64.RDI]
-                        @ valueLoads
-                        @ [X86_64.POP X86_64.RDI]
-                        @ [X86_64.CALL "__dark_cli_setenv"]
-                        @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)])))
+                loadSocketArgs [name; value] [X86_64.RDI; X86_64.RSI]
+                |> Result.map (fun loads ->
+                    loads
+                    @ [X86_64.CALL "__dark_cli_setenv"]
+                    @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
             | _ -> Error "setenv expects exactly a name and value"
         | LIR.UnsetEnv ->
             match args with
@@ -599,14 +594,12 @@ let internal emitCliNative (ctx: FuncCtx) (dest: LIR.Reg) (operation: LIR.CliOpe
         | LIR.ProcessIO ->
             match args with
             | [handle; input] ->
-                loadCliOperand X86_64.RDI handle
-                |> Result.bind (fun handleLoads ->
-                    loadCliOperand X86_64.RSI input
-                    |> Result.map (fun inputLoads ->
-                        handleLoads @ inputLoads
-                        @ [ X86_64.XOR_reg (X86_64.RDX, X86_64.RDX)
-                            X86_64.CALL "__dark_cli_process_io" ]
-                        @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)])))
+                loadSocketArgs [handle; input] [X86_64.RDI; X86_64.RSI]
+                |> Result.map (fun loads ->
+                    loads
+                    @ [ X86_64.XOR_reg (X86_64.RDX, X86_64.RDX)
+                        X86_64.CALL "__dark_cli_process_io" ]
+                    @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
             | _ -> Error "CLI process IO expects a handle and input"
         | LIR.TerminateProcess ->
             match args with

@@ -136,6 +136,12 @@ let internal emitFileReadBlob (ctx: FuncCtx) (dest: LIR.Reg) (path: LIR.Operand)
             // === Cleanup ===
             @ [X86_64.Label cleanupLabel
                X86_64.ADD_imm (X86_64.RSP, 4240)]
+            @ (if ctx.EnableLeakCheck then
+                   [ X86_64.LEA_rip (X86_64.R11, "_leak_count")
+                     X86_64.MOV_load (X86_64.RDX, X86_64.R11, 0)
+                     X86_64.ADD_imm (X86_64.RDX, 2)
+                     X86_64.MOV_store (X86_64.R11, 0, X86_64.RDX) ]
+               else [])
             @ restores
             @ [X86_64.MOV_reg (destReg, X86_64.RAX)]))
 
