@@ -15,8 +15,10 @@ from typing import Any, Sequence
 
 if __package__:
     from .mergetrain_exception import ExceptionFlowError, stage_if_requested
+    from .mergetrain_fifo import note_replacement, note_resolved
 else:
     from mergetrain_exception import ExceptionFlowError, stage_if_requested
+    from mergetrain_fifo import note_replacement, note_resolved
 
 
 class RecoveryError(RuntimeError):
@@ -159,7 +161,11 @@ def exact_retry_once(repo: Path, attempts: Path, job_id: int, head_sha: str, fai
     if marker.exists():
         return False
     marker.write_text(f"job={job_id}\ndetail={failure.detail}\n", encoding="utf-8")
-    mergetrain(repo, "retry", str(job_id), "--json")
+    replacement = load_json(mergetrain(repo, "retry", str(job_id), "--json"), "retry")
+    replacement_id = int((replacement.get("replacement") or replacement.get("job") or {}).get("id") or 0)
+    if replacement_id <= 0:
+        raise RecoveryError("retry returned no replacement job ID")
+    note_replacement(repo, job_id, replacement_id)
     print(f"Job #{job_id}: transient {failure.gate or 'gate'} failure retried at unchanged {head_sha[:10]}", file=sys.stderr)
     return True
 
@@ -170,6 +176,7 @@ def dismiss_superseded(repo: Path, job_id: int, integration_sha: str, equivalent
         f"{len(equivalent)} commit(s) are patch-equivalent"
     )
     mergetrain(repo, "dismiss", str(job_id), "--note", note, "--json")
+    note_resolved(repo, job_id, "patch-equivalent to integration")
     print(f"Job #{job_id}: dismissed as fully patch-equivalent to {integration_sha[:10]}", file=sys.stderr)
 
 
@@ -559,7 +566,9 @@ def replace_job(
             "replace",
         )
         replacement = payload.get("replacement") or payload.get("job") or {}
-        return int(replacement.get("id") or 0)
+        replacement_id = int(replacement.get("id") or 0)
+        note_replacement(repo, job_id, replacement_id)
+        return replacement_id
 
     # Compatibility path for mergetrain v3. The integrator is the only active
     # runner here. Enqueue first so a crash cannot lose the repaired work, then
@@ -584,6 +593,7 @@ def replace_job(
             f"replacement #{replacement_id} was safely enqueued but old job #{job_id} "
             f"could not be dismissed: {error}"
         ) from error
+    note_replacement(repo, job_id, replacement_id)
     return replacement_id
 
 

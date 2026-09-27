@@ -119,6 +119,8 @@ elif command == "replace":
     print(json.dumps({"replacement": {"id": 99}}))
 elif command == "enqueue":
     print(json.dumps({"job": {"id": 99}}))
+elif command == "retry":
+    print(json.dumps({"replacement": {"id": 99}}))
 elif command == "validate":
     if pathlib.Path(__file__).with_name("policy-gate-fail").exists():
         print(json.dumps({"result": "failed", "jobs": [{"status": "failed"}]}))

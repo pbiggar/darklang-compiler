@@ -1,6 +1,7 @@
 """test_land.py - Focused tests for the branch-facing ./land command."""
 
 import json
+import fcntl
 import os
 import shutil
 import subprocess
@@ -10,6 +11,41 @@ from pathlib import Path
 
 
 class LandScriptTests(unittest.TestCase):
+    def test_tooling_lands_while_ordinary_dispatch_lock_is_held(self) -> None:
+        source_root = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            repo.mkdir()
+            (repo / "scripts").mkdir()
+            fake_bin = Path(directory) / "bin"
+            fake_bin.mkdir()
+            subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.email", "land-test@example.invalid"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Land Test"], cwd=repo, check=True)
+            shutil.copy2(source_root / "land", repo / "land")
+            control = repo / "scripts" / "mergetrain_control.py"
+            control.write_text(
+                "import sys\nprint('control' if 'classify' in sys.argv else 'merged')\n",
+                encoding="utf-8",
+            )
+            (fake_bin / "mergetrain").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            (fake_bin / "mergetrain").chmod(0o755)
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo, check=True)
+            subprocess.run(["git", "switch", "-q", "-c", "task/tooling"], cwd=repo, check=True)
+            (repo / "land").write_text((repo / "land").read_text() + "\n# tooling update\n")
+            subprocess.run(["git", "add", "land"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "tooling"], cwd=repo, check=True)
+            environment = {**os.environ, "PATH": f"{fake_bin}:{os.environ['PATH']}"}
+            with (repo / ".git" / "mergetrain-dispatch.lock").open("a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                completed = subprocess.run(
+                    [str(repo / "land")], cwd=repo, env=environment,
+                    capture_output=True, text=True, timeout=5, check=False,
+                )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertEqual(completed.stdout, "landed\n")
+
     def test_queues_without_inspection_and_keeps_queue_deferral_opaque(self) -> None:
         source_root = Path(__file__).resolve().parent.parent
 
@@ -35,8 +71,13 @@ class LandScriptTests(unittest.TestCase):
                 source_root / "scripts" / "mergetrain_exception.py",
                 repo / "scripts" / "mergetrain_exception.py",
             )
+            shutil.copy2(
+                source_root / "scripts" / "mergetrain_control.py",
+                repo / "scripts" / "mergetrain_control.py",
+            )
             subprocess.run(
-                ["git", "add", "land", "scripts/mergetrain_exception.py"],
+                ["git", "add", "land", "scripts/mergetrain_exception.py",
+                 "scripts/mergetrain_control.py"],
                 cwd=repo, check=True,
             )
             subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo, check=True)

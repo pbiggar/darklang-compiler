@@ -4,11 +4,17 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+if __package__:
+    from .mergetrain_fifo import DispatchError, ledger_path, load as load_fifo, note_replacement
+else:
+    from mergetrain_fifo import DispatchError, ledger_path, load as load_fifo, note_replacement
 
 
 class ApprovalError(Exception):
@@ -50,6 +56,12 @@ def git_diff(repo: Path, base: str, head: str) -> str:
 def approve(repo: Path, job_id: int) -> None:
     if not sys.stdin.isatty() or not sys.stdout.isatty():
         raise ApprovalError("approval requires an interactive terminal")
+    fifo = load_fifo(repo)
+    head = fifo.get("head")
+    if head is not None and int(head["native_id"]) != job_id:
+        raise ApprovalError(f"job #{job_id} is behind FIFO head #{head['order']}")
+    if head is None and fifo.get("pending"):
+        raise ApprovalError("a deferred FIFO job must be admitted first")
     status = mergetrain(repo, "status")
     attention_ids = {job.get("id") for job in status.get("attention_jobs") or []}
     waiting_ids = {
@@ -90,28 +102,37 @@ def approve(repo: Path, job_id: int) -> None:
         print("Approval canceled; no train action was taken.")
         return
 
-    if blocked:
-        retry = mergetrain(repo, "retry", str(job_id))
-        replacement = retry.get("job") or {}
-        replacement_id = replacement.get("id")
-        if not isinstance(replacement_id, int) or replacement.get("head_sha") != head:
-            raise ApprovalError("retry returned a different commit or no replacement job")
-        if replacement.get("auto_deploy") is not False:
-            raise ApprovalError("replacement retained unattended approval; review its state before proceeding")
-    else:
-        replacement_id = job_id
+    with (ledger_path(repo).parent / "mergetrain-dispatch.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        current_fifo = load_fifo(repo)
+        current_head = current_fifo.get("head")
+        if current_head is not None and int(current_head["native_id"]) != job_id:
+            raise ApprovalError("FIFO head changed during review; inspect status again")
+        if current_head is None and current_fifo.get("pending"):
+            raise ApprovalError("FIFO head changed during review; inspect status again")
+        if blocked:
+            retry = mergetrain(repo, "retry", str(job_id))
+            replacement = retry.get("job") or {}
+            replacement_id = replacement.get("id")
+            if not isinstance(replacement_id, int) or replacement.get("head_sha") != head:
+                raise ApprovalError("retry returned a different commit or no replacement job")
+            if replacement.get("auto_deploy") is not False:
+                raise ApprovalError("replacement retained unattended approval; review its state before proceeding")
+            note_replacement(repo, job_id, replacement_id)
+        else:
+            replacement_id = job_id
 
-    print(f"Validating replacement #{replacement_id} under the current train policy...", flush=True)
-    preview = mergetrain(repo, "deploy")
-    planned_ids = {item.get("id") for item in preview.get("jobs") or []}
-    if preview.get("result") != "confirmation_required" or replacement_id not in planned_ids:
-        raise ApprovalError(
-            f"replacement #{replacement_id} is not in a ready deploy plan; inspect the train before continuing"
-        )
-    print(f"\nReplacement #{replacement_id} validated. Review the exact plan below.")
-    deployed = subprocess.run(["mergetrain", "--repo", str(repo), "deploy"], cwd=repo, check=False)
-    if deployed.returncode != 0:
-        raise ApprovalError("deploy did not complete; inspect the train for its current state")
+        print(f"Validating replacement #{replacement_id} under the current train policy...", flush=True)
+        preview = mergetrain(repo, "deploy")
+        planned_ids = {item.get("id") for item in preview.get("jobs") or []}
+        if preview.get("result") != "confirmation_required" or replacement_id not in planned_ids:
+            raise ApprovalError(
+                f"replacement #{replacement_id} is not in a ready deploy plan; inspect the train before continuing"
+            )
+        print(f"\nReplacement #{replacement_id} validated. Review the exact plan below.")
+        deployed = subprocess.run(["mergetrain", "--repo", str(repo), "deploy"], cwd=repo, check=False)
+        if deployed.returncode != 0:
+            raise ApprovalError("deploy did not complete; inspect the train for its current state")
 
 
 def main() -> int:
@@ -121,7 +142,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         approve(args.repo.resolve(), args.job_id)
-    except ApprovalError as error:
+    except (ApprovalError, DispatchError, OSError) as error:
         print(f"Approval stopped: {error}", file=sys.stderr)
         return 1
     return 0

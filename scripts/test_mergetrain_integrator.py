@@ -80,7 +80,17 @@ import subprocess
 import sys
 import time
 
-command = next(arg for arg in sys.argv if arg in {"daemon", "status", "inspect", "retry"})
+command = next(arg for arg in sys.argv if arg in {"daemon", "status", "inspect", "retry", "cancel", "dismiss", "enqueue"})
+cancel_file = pathlib.Path(os.environ["INTEGRATOR_TEST_CANCELED_FILE"])
+cancelled = set(cancel_file.read_text().splitlines()) if cancel_file.exists() else set()
+if command in {"cancel", "dismiss"}:
+    job_id = sys.argv[sys.argv.index(command) + 1]
+    cancel_file.write_text("\\n".join(sorted(cancelled | {job_id})))
+    print(json.dumps({"job": {"id": int(job_id), "status": "canceled"}}))
+    raise SystemExit(0)
+if command == "enqueue":
+    print(json.dumps({"job": {"id": 9, "head_sha": os.environ["INTEGRATOR_TEST_HEAD"]}}))
+    raise SystemExit(0)
 if command == "daemon":
     pass_file = os.environ.get("INTEGRATOR_TEST_DAEMON_PASS_FILE")
     if pass_file:
@@ -117,30 +127,30 @@ if command == "status":
                        "waiting": 2 if stage == "waiting" else 0},
             "health": "healthy",
             "next_action": {"code": "wait_for_runner" if running else "enqueue_clean_branch", "target_job_id": None},
-            "recent_jobs": [
+            "recent_jobs": [job for job in [
                 {"id": 7, "state": job_state, "task": task},
                 {"id": 8, "state": job_state, "task": task},
-            ],
+            ] if str(job["id"]) not in cancelled],
             "state": "running" if running else "idle",
             "summary": "2 job(s) are running" if running else "Queue is idle",
         }))
         raise SystemExit(0)
     next_action = os.environ.get("INTEGRATOR_TEST_NEXT_ACTION", "fix_blocked_job")
-    attention_ids = [4, 5] if os.environ.get("INTEGRATOR_TEST_MULTI_ATTENTION") == "1" else [4]
+    attention_ids = ([4, 5] if os.environ.get("INTEGRATOR_TEST_MULTI_ATTENTION") == "1" else [4]) if next_action == "fix_blocked_job" else []
     print(json.dumps({
         "contract_version": 4,
-        "attention_jobs": [{"id": job_id} for job_id in attention_ids],
-        "counts": {"attention": len(attention_ids), "ready": 0, "running": 0, "waiting": 2},
+        "attention_jobs": [{"id": job_id} for job_id in attention_ids if str(job_id) not in cancelled],
+        "counts": {"attention": len(attention_ids), "ready": 0, "running": 0, "waiting": 0},
         "health": "healthy",
         "next_action": {"code": next_action, "target_job_id": 4},
-        "state": "attention",
-        "summary": "1 job(s) need attention",
+        "state": "attention" if attention_ids else "idle",
+        "summary": "1 job(s) need attention" if attention_ids else "Queue is idle",
     }))
 elif command == "inspect":
     if os.environ.get("INTEGRATOR_TEST_PROGRESS") in {"1", "fast"}:
         progress_file = pathlib.Path(os.environ["INTEGRATOR_TEST_PROGRESS_FILE"])
-        stage = progress_file.read_text(encoding="utf-8")
-        stage_index = ("assembling", "gating", "deploying", "done").index(stage)
+        stage = progress_file.read_text(encoding="utf-8") if progress_file.exists() else "waiting"
+        stage_index = 0 if stage == "waiting" else ("assembling", "gating", "deploying", "done").index(stage)
         job_id = int(sys.argv[sys.argv.index("inspect") + 1])
         shared_events = [
             {"id": 201, "message": "Assembling train with 2 job(s)", "detail": "", "state": "active"},
@@ -158,7 +168,13 @@ elif command == "inspect":
         }
         limits = (1, 3, 4, 5)
         events = [shared_events[0], merge_event, *shared_events[1:limits[stage_index]]]
-        print(json.dumps({"events": events, "job": {"id": job_id}}, indent=2))
+        repo = os.environ["INTEGRATOR_TEST_REPO"]
+        head = subprocess.check_output(["git", "-C", repo, "rev-parse", "HEAD"], text=True).strip()
+        branch = subprocess.check_output(["git", "-C", repo, "branch", "--show-current"], text=True).strip()
+        status = "canceled" if str(job_id) in cancelled else "queued" if stage == "waiting" else "deployed" if stage == "done" else "in_progress"
+        print(json.dumps({"events": events, "job": {"id": job_id, "status": status,
+            "worktree_path": repo, "branch": branch, "head_sha": head, "task": "test job",
+            "auto_deploy": True}}, indent=2))
         raise SystemExit(0)
     job_id = int(sys.argv[sys.argv.index("inspect") + 1])
     inspect_marker = os.environ.get("INTEGRATOR_TEST_INSPECT_MARKER")
@@ -182,7 +198,8 @@ elif command == "inspect":
             "detail": "exit_code=1",
         })
     print(json.dumps({
-        "job": {"worktree_path": repo, "branch": branch, "head_sha": head},
+        "job": {"id": job_id, "status": "canceled" if str(job_id) in cancelled else "blocked", "worktree_path": repo,
+                "branch": branch, "head_sha": head, "auto_deploy": True},
         "outcome": {"failure_category": category, "message": "failed train gate"},
         "events": events,
     }))
@@ -239,6 +256,10 @@ raise SystemExit(1)
         environment["INTEGRATOR_TEST_REPO"] = str(repo)
         environment["INTEGRATOR_TEST_CODEX_ARGS"] = str(root / "codex-args.txt")
         environment["INTEGRATOR_TEST_PROGRESS_FILE"] = str(root / "progress.txt")
+        environment["INTEGRATOR_TEST_CANCELED_FILE"] = str(root / "canceled.txt")
+        environment["INTEGRATOR_TEST_HEAD"] = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=repo, text=True
+        ).strip()
         environment["INTEGRATOR_TEST_RETRY_MARKER"] = str(root / "retry-called.txt")
         environment["INTEGRATOR_TEST_INSPECT_MARKER"] = str(root / "inspected.txt")
         environment["INTEGRATOR_SCRIPT"] = str(
@@ -268,13 +289,11 @@ raise SystemExit(1)
             )
 
             self.assertEqual(completed.returncode, 0, completed.stderr)
-            for job_id in (7, 8):
-                self.assertRegex(
-                    completed.stderr,
-                    rf"\[\d{{2}}:\d{{2}}:\d{{2}}\] "
-                    rf"Job #{job_id} OK: deployed",
-                )
-                self.assertEqual(completed.stderr.count(f"Job #{job_id}"), 1)
+            self.assertRegex(
+                completed.stderr,
+                r"\[\d{2}:\d{2}:\d{2}\] Job #7 OK: deployed",
+            )
+            self.assertNotIn("Job #8 OK: deployed", completed.stderr)
             self.assertNotIn("Assembling train with 2 job(s)", completed.stderr)
 
     def test_publishes_current_job_for_status_while_daemon_runs(self) -> None:
@@ -358,10 +377,11 @@ raise SystemExit(1)
             )
             self.assertLess(cells, 80)
             visible = visible_terminal_lines(output)
-            for job_id in (7, 8):
+            for job_id in (7,):
                 matches = [line for line in visible if f"Job #{job_id}" in line]
                 self.assertEqual(len(matches), 1, visible)
                 self.assertIn(f"Job #{job_id} OK: deployed", matches[0])
+            self.assertNotIn("Job #8 OK: deployed", "\n".join(visible))
 
     def test_fast_jobs_still_get_one_final_line_each(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -374,9 +394,8 @@ raise SystemExit(1)
                 env=environment, text=True, capture_output=True, check=False,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
-            for job_id in (7, 8):
-                self.assertEqual(completed.stderr.count(f"Job #{job_id}"), 1)
-                self.assertIn(f"Job #{job_id} OK: deployed", completed.stderr)
+            self.assertIn("Job #7 OK: deployed", completed.stderr)
+            self.assertNotIn("Job #8 OK: deployed", completed.stderr)
 
     def test_daemon_failure_prints_only_a_bounded_excerpt(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -384,6 +403,7 @@ raise SystemExit(1)
             repo, environment = self.make_fixture(root)
             attempts = root / "attempts"
             environment["INTEGRATOR_TEST_DAEMON_EXIT"] = "1"
+            environment["INTEGRATOR_TEST_NEXT_ACTION"] = "enqueue_clean_branch"
 
             completed = subprocess.run(
                 [
@@ -410,7 +430,7 @@ raise SystemExit(1)
             self.assertEqual(len(daemon_logs), 1)
             self.assertIn("daemon noise 0", daemon_logs[0].read_text(encoding="utf-8"))
 
-    def test_every_attention_job_is_inspected_even_when_recovery_fails(self) -> None:
+    def test_only_oldest_attention_job_is_recovered(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             repo, environment = self.make_fixture(root)
@@ -433,10 +453,9 @@ raise SystemExit(1)
             inspected = Path(environment["INTEGRATOR_TEST_INSPECT_MARKER"]).read_text(
                 encoding="utf-8"
             )
-            self.assertEqual(inspected.splitlines(), ["4", "5"])
-            for job_id in (4, 5):
-                self.assertEqual(completed.stderr.count(f"Job #{job_id}"), 1)
-                self.assertIn(f"Job #{job_id} ERROR: recovery needs attention", completed.stderr)
+            self.assertIn("4", inspected.splitlines())
+            self.assertIn("Job #4 ERROR: recovery needs attention", completed.stderr)
+            self.assertNotIn("Job #5 ERROR: recovery needs attention", completed.stderr)
 
     def test_merge_train_requires_recorded_benchmark_results(self) -> None:
         source_root = Path(__file__).resolve().parent.parent
@@ -519,8 +538,8 @@ raise SystemExit(1)
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(completed.stdout, "")
             self.assertIn("Integrator started", completed.stderr)
-            self.assertIn("Queue: 1 attention, 0 running, 2 waiting", completed.stderr)
-            self.assertIn("1 job(s) need attention", completed.stderr)
+            self.assertIn("Queue: 0 attention, 0 running, 0 waiting", completed.stderr)
+            self.assertIn("Queue is idle", completed.stderr)
             self.assertNotIn("daemon noise", completed.stderr)
             self.assertEqual(list(attempts.iterdir()), [])
 

@@ -16,6 +16,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+if __package__:
+    from .mergetrain_fifo import DispatchError, load as load_fifo
+else:
+    from mergetrain_fifo import DispatchError, load as load_fifo
+
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -874,7 +879,15 @@ def render(
     )
 
     jobs = active_jobs(payload)
-    waivers = exception_labels(repo)
+    fifo = None
+    if attempt_dir is not None:
+        try:
+            fifo = load_fifo(repo)
+            deferred_ids = {int(item["native_id"]) for item in fifo.get("pending", [])}
+            jobs = [job for job in jobs if int(job["id"]) not in deferred_ids]
+        except (DispatchError, OSError, subprocess.CalledProcessError, KeyError, TypeError, ValueError):
+            pass
+    waivers = exception_labels(repo) if jobs else {}
     step = running_train_step(repo, jobs)
     train_header = styled("in train:", BOLD, color)
     if step:
@@ -900,6 +913,24 @@ def render(
                 lines.append(f"    {styled(waivers[int(job['id'])], YELLOW, color)}")
     else:
         lines.append("  (empty)")
+    if attempt_dir is not None:
+        try:
+            fifo = fifo if fifo is not None else load_fifo(repo)
+            head = fifo.get("head") or {}
+            if head.get("recovery_failed"):
+                lines.append(styled(
+                    f"  head #{head['order']} needs attention: {head['recovery_failed']}",
+                    YELLOW, color,
+                ))
+            for deferred in fifo.get("pending", []):
+                lines.append(styled(
+                    f"  #{deferred['order']} waiting behind #{head.get('order', '?')} "
+                    f"{deferred['task']} [{deferred['branch']}]", DIM, color,
+                ))
+                if deferred.get("prior_failure"):
+                    lines.append(styled(f"    prior failure: {deferred['prior_failure']}", YELLOW, color))
+        except (DispatchError, OSError, subprocess.CalledProcessError, KeyError, TypeError) as error:
+            lines.append(styled(f"  FIFO status unavailable: {error}", YELLOW, color))
     if conflict_toggle_hint and has_conflict:
         action = "hide" if show_conflicts else "show full"
         lines.append(styled(f"  [c] {action} conflict details", DIM, color))
