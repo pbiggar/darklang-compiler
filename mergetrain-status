@@ -378,9 +378,9 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
     else
       controls="[j/k] scroll [PgUp/Dn] page [1-9] detail [0] next [b] prev"
       if [[ "$show_more_merges" == true ]]; then
-        other_controls="[a] jobs [v] plans [w] waiver [m] fewer [c] conflicts [q] quit | benchmarks p$((benchmark_page + 1))"
+        other_controls="[a] jobs [v] review [w] waiver [m] fewer [c] conflicts [q] quit | benchmarks p$((benchmark_page + 1))"
       else
-        other_controls="[a] jobs [v] plans [w] waiver [m] more [c] conflicts [q] quit | benchmarks p$((benchmark_page + 1))"
+        other_controls="[a] jobs [v] review [w] waiver [m] more [c] conflicts [q] quit | benchmarks p$((benchmark_page + 1))"
       fi
     fi
     if [[ -n "$attention_job_id" ]]; then

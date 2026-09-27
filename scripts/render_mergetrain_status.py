@@ -903,10 +903,14 @@ def render(
             )
             reason = job.get("reason")
             if reason:
-                conflict_reason = is_conflict_reason(reason)
-                has_conflict = has_conflict or conflict_reason
-                if conflict_reason and not show_conflicts:
-                    reason = "conflict"
+                if str(reason).startswith("approval_"):
+                    review_key = "a" if job_state == "attention" else "v"
+                    reason = f"approval required; [{review_key}] details"
+                else:
+                    conflict_reason = is_conflict_reason(reason)
+                    has_conflict = has_conflict or conflict_reason
+                    if conflict_reason and not show_conflicts:
+                        reason = "conflict"
                 line += f" — {reason}"
             lines.append(line)
             if int(job["id"]) in waivers:
