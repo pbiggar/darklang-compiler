@@ -1,0 +1,230 @@
+// Tls13.dark - TLS 1.3 SHA-256 key derivation and bounded record framing.
+
+module Darklang.Stdlib.Tls13
+
+type Record = { contentType: Int64, payload: Blob, remaining: Blob }
+
+type ServerHello = { random: Blob, keyShare: Blob, remaining: Blob }
+
+type RecordError =
+  | Incomplete
+  | Invalid of String
+
+let hkdfExtract (salt: Blob) (inputKeyMaterial: Blob) : Blob =
+  Stdlib.Crypto.sha256hmac salt inputKeyMaterial
+
+let __expandNext (key: Blob) (info: Blob) (blocksRemaining: Int64)
+  (previous: Blob) (blocks: List<Blob>) (counter: Int64) : Blob =
+  if blocksRemaining == 0L then Stdlib.Blob.concat (Stdlib.List.reverse blocks)
+  else
+    let input = Stdlib.Blob.concat
+                  [previous, info, Stdlib.Blob.__fromInt64List [counter]] in
+    let block = Stdlib.Crypto.sha256hmac key input in
+    Stdlib.Tls13.__expandNext key info (blocksRemaining - 1L) block
+      (Stdlib.List.push blocks block) (counter + 1L)
+
+// SHA-256 produces 32 bytes per block; RFC 5869 limits expansion to 255 blocks.
+let hkdfExpand (pseudoRandomKey: Blob) (info: Blob) (length: Int64)
+  : Stdlib.Result.Result<Blob, String> =
+  if length < 0L || length > 8160L then Error "Invalid HKDF output length"
+  else if length == 0L then Ok Stdlib.Blob.empty
+  else
+    let blocks = (length + 31L) / 32L in
+    let expanded = Stdlib.Tls13.__expandNext pseudoRandomKey info blocks
+                     Stdlib.Blob.empty [] 1L in
+    Ok (Stdlib.Blob.slice expanded 0 (Stdlib.Int.fromInt64 length))
+
+let hkdfExpandLabel (secret: Blob) (label: String) (context: Blob) (length: Int64)
+  : Stdlib.Result.Result<Blob, String> =
+  let fullLabel = "tls13 " ++ label in
+  let labelLength = Stdlib.String.__byteLength fullLabel in
+  let contextLength = Stdlib.Blob.__byteLength context in
+  if labelLength > 255L || contextLength > 255L then
+    Error "TLS HKDF label or context is too long"
+  else if length < 0L || length > 8160L then
+    Error "Invalid HKDF output length"
+  else
+    let info = Stdlib.Blob.concat [
+      Stdlib.Blob.__fromInt64List [length / 256L, length % 256L, labelLength],
+      Stdlib.String.toBlob fullLabel,
+      Stdlib.Blob.__fromInt64List [contextLength], context ] in
+    Stdlib.Tls13.hkdfExpand secret info length
+
+let __read16 (data: Blob) (offset: Int64) : Int64 =
+  Stdlib.Blob.__getByte data offset * 256L +
+  Stdlib.Blob.__getByte data (offset + 1L)
+
+let __read24 (data: Blob) (offset: Int64) : Int64 =
+  Stdlib.Tls13.__read16 data offset * 256L +
+  Stdlib.Blob.__getByte data (offset + 2L)
+
+let __u16 (value: Int64) : Blob =
+  Stdlib.Blob.__fromInt64List [value / 256L, value % 256L]
+
+let __extension (kind: Int64) (payload: Blob) : Blob =
+  Stdlib.Blob.concat [Stdlib.Tls13.__u16 kind,
+                      Stdlib.Tls13.__u16 (Stdlib.Blob.__byteLength payload), payload]
+
+let __hostValid (host: String) (index: Int64) : Bool =
+  if index >= Stdlib.String.__byteLength host then true
+  else
+    let byte = Stdlib.String.__byteAtUnchecked host index in
+    if (byte >= 65L && byte <= 90L) || (byte >= 97L && byte <= 122L) ||
+       (byte >= 48L && byte <= 57L) || byte == 45L || byte == 46L then
+      Stdlib.Tls13.__hostValid host (index + 1L)
+    else false
+
+let __allZero (bytes: Blob) (index: Int64) : Bool =
+  if index >= Stdlib.Blob.__byteLength bytes then true
+  else if Stdlib.Blob.__getByte bytes index != 0L then false
+  else Stdlib.Tls13.__allZero bytes (index + 1L)
+
+// The caller supplies fresh cryptographic random bytes and an X25519 public key.
+let clientHello (host: String) (random: Blob) (keyShare: Blob)
+  : Stdlib.Result.Result<Blob, String> =
+  let hostLength = Stdlib.String.__byteLength host in
+  if Stdlib.Blob.__byteLength random != 32L || Stdlib.Blob.__byteLength keyShare != 32L then
+    Error "TLS ClientHello requires 32-byte random and key share"
+  else if Stdlib.Tls13.__allZero keyShare 0L then
+    Error "TLS ClientHello key share is zero"
+  else if hostLength == 0L || hostLength > 253L ||
+          Stdlib.Bool.not (Stdlib.Tls13.__hostValid host 0L) then
+    Error "TLS ClientHello requires a DNS hostname"
+  else
+    let sniEntry = Stdlib.Blob.concat [
+      Stdlib.Blob.__fromInt64List [0L], Stdlib.Tls13.__u16 hostLength,
+      Stdlib.String.toBlob host ] in
+    let sni = Stdlib.Tls13.__extension 0L
+                (Stdlib.Blob.concat [Stdlib.Tls13.__u16 (hostLength + 3L), sniEntry]) in
+    let versions = Stdlib.Tls13.__extension 43L
+                     (Stdlib.Blob.__fromInt64List [2L, 3L, 4L]) in
+    let groups = Stdlib.Tls13.__extension 10L
+                   (Stdlib.Blob.__fromInt64List [0L, 2L, 0L, 29L]) in
+    let signatures = Stdlib.Tls13.__extension 13L
+                       (Stdlib.Blob.__fromInt64List [0L, 6L, 8L, 4L, 4L, 3L, 8L, 9L]) in
+    let shareEntry = Stdlib.Blob.concat [Stdlib.Tls13.__u16 29L,
+                                        Stdlib.Tls13.__u16 32L, keyShare] in
+    let shares = Stdlib.Tls13.__extension 51L
+                   (Stdlib.Blob.concat [Stdlib.Tls13.__u16 36L, shareEntry]) in
+    let extensions = Stdlib.Blob.concat [sni, versions, groups, signatures, shares] in
+    let body = Stdlib.Blob.concat [
+      Stdlib.Blob.__fromInt64List [3L, 3L], random,
+      Stdlib.Blob.__fromInt64List [0L, 0L, 2L, 19L, 3L, 1L, 0L],
+      Stdlib.Tls13.__u16 (Stdlib.Blob.__byteLength extensions), extensions ] in
+    let bodyLength = Stdlib.Blob.__byteLength body in
+    let handshake = Stdlib.Blob.concat [
+      Stdlib.Blob.__fromInt64List [1L, bodyLength / 65536L,
+                                     (bodyLength / 256L) % 256L, bodyLength % 256L],
+      body ] in
+    Stdlib.Tls13.serializePlaintext 22L handshake
+
+let __parseServerExtensions (data: Blob) (position: Int64) (end_: Int64)
+  (versionSeen: Bool) (keyShare: Stdlib.Option.Option<Blob>)
+  : Stdlib.Result.Result<Blob, String> =
+  if position == end_ then
+    if Stdlib.Bool.not versionSeen then Error "TLS 1.3 version missing"
+    else
+      match keyShare with
+      | None -> Error "X25519 key share missing"
+      | Some share -> Ok share
+  else if position + 4L > end_ then Error "Truncated ServerHello extension"
+  else
+    let kind = Stdlib.Tls13.__read16 data position in
+    let length = Stdlib.Tls13.__read16 data (position + 2L) in
+    let content = position + 4L in
+    let next = content + length in
+    if next > end_ then Error "ServerHello extension exceeds message"
+    else if kind == 43L then
+      if versionSeen then Error "Duplicate supported_versions extension"
+      else if length != 2L || Stdlib.Tls13.__read16 data content != 772L then
+        Error "Server did not select TLS 1.3"
+      else Stdlib.Tls13.__parseServerExtensions data next end_ true keyShare
+    else if kind == 51L then
+      match keyShare with
+      | Some _ -> Error "Duplicate key_share extension"
+      | None ->
+          if length != 36L || Stdlib.Tls13.__read16 data content != 29L ||
+             Stdlib.Tls13.__read16 data (content + 2L) != 32L then
+            Error "Server did not select X25519"
+          else
+            let share = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 (content + 4L))
+                          (Stdlib.Int.fromInt64 32L) in
+            if Stdlib.Tls13.__allZero share 0L then Error "X25519 key share is zero"
+            else Stdlib.Tls13.__parseServerExtensions data next end_ versionSeen (Some share)
+    else Error "Unexpected ServerHello extension"
+
+let parseServerHello (data: Blob)
+  : Stdlib.Result.Result<Stdlib.Tls13.ServerHello, Stdlib.Tls13.RecordError> =
+  let length = Stdlib.Blob.__byteLength data in
+  if length < 4L then Error Stdlib.Tls13.RecordError.Incomplete
+  else if Stdlib.Blob.__getByte data 0L != 2L then
+    Error (Stdlib.Tls13.RecordError.Invalid "Expected ServerHello")
+  else
+    let bodyLength = Stdlib.Tls13.__read24 data 1L in
+    let bodyEnd = 4L + bodyLength in
+    if bodyLength > 65535L then
+      Error (Stdlib.Tls13.RecordError.Invalid "ServerHello exceeds size limit")
+    else if length < bodyEnd then Error Stdlib.Tls13.RecordError.Incomplete
+    else if bodyLength < 40L || Stdlib.Tls13.__read16 data 4L != 771L then
+      Error (Stdlib.Tls13.RecordError.Invalid "Invalid ServerHello legacy version")
+    else
+      let random = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 6L)
+                     (Stdlib.Int.fromInt64 32L) in
+      let sessionLength = Stdlib.Blob.__getByte data 38L in
+      let cipherOffset = 39L + sessionLength in
+      if Stdlib.Blob.toHex random ==
+         "CF21AD74E59A6111BE1D8C021E65B891C2A211167ABB8C5E079E09E2C8A8339C" then
+        Error (Stdlib.Tls13.RecordError.Invalid "HelloRetryRequest is not supported")
+      else if sessionLength != 0L || cipherOffset + 5L > bodyEnd then
+        Error (Stdlib.Tls13.RecordError.Invalid "Invalid ServerHello session ID")
+      else if Stdlib.Tls13.__read16 data cipherOffset != 4867L ||
+              Stdlib.Blob.__getByte data (cipherOffset + 2L) != 0L then
+        Error (Stdlib.Tls13.RecordError.Invalid "Unsupported ServerHello cipher or compression")
+      else
+        let extensionLength = Stdlib.Tls13.__read16 data (cipherOffset + 3L) in
+        let extensionStart = cipherOffset + 5L in
+        if extensionStart + extensionLength != bodyEnd then
+          Error (Stdlib.Tls13.RecordError.Invalid "Invalid ServerHello extension length")
+        else
+          match Stdlib.Tls13.__parseServerExtensions data extensionStart bodyEnd false None with
+          | Error message -> Error (Stdlib.Tls13.RecordError.Invalid message)
+          | Ok share ->
+              Ok (Stdlib.Tls13.ServerHello {
+                random = random, keyShare = share,
+                remaining = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 bodyEnd)
+                              (Stdlib.Int.fromInt64 (length - bodyEnd)) })
+
+let serializePlaintext (contentType: Int64) (payload: Blob)
+  : Stdlib.Result.Result<Blob, String> =
+  let payloadLength = Stdlib.Blob.__byteLength payload in
+  if contentType != 21L && contentType != 22L && contentType != 23L then
+    Error "Invalid TLS record content type"
+  else if payloadLength > 16384L then Error "TLS plaintext exceeds size limit"
+  else
+    Ok (Stdlib.Blob.concat [
+      Stdlib.Blob.__fromInt64List [contentType, 3L, 3L,
+                                     payloadLength / 256L, payloadLength % 256L],
+      payload ])
+
+let parseRecord (data: Blob) : Stdlib.Result.Result<Stdlib.Tls13.Record, Stdlib.Tls13.RecordError> =
+  let dataLength = Stdlib.Blob.__byteLength data in
+  if dataLength < 5L then Error Stdlib.Tls13.RecordError.Incomplete
+  else
+    let contentType = Stdlib.Blob.__getByte data 0L in
+    let version = Stdlib.Tls13.__read16 data 1L in
+    let payloadLength = Stdlib.Tls13.__read16 data 3L in
+    if version != 771L then Error (Stdlib.Tls13.RecordError.Invalid "Unsupported TLS record version")
+    else if contentType != 20L && contentType != 21L &&
+            contentType != 22L && contentType != 23L then
+      Error (Stdlib.Tls13.RecordError.Invalid "Invalid TLS record content type")
+    else if payloadLength > 16640L then
+      Error (Stdlib.Tls13.RecordError.Invalid "TLS record exceeds size limit")
+    else if dataLength < 5L + payloadLength then
+      Error Stdlib.Tls13.RecordError.Incomplete
+    else
+      Ok (Stdlib.Tls13.Record {
+        contentType = contentType,
+        payload = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 5L)
+                    (Stdlib.Int.fromInt64 payloadLength),
+        remaining = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 (5L + payloadLength))
+                      (Stdlib.Int.fromInt64 (dataLength - 5L - payloadLength)) })

@@ -1,0 +1,88 @@
+// tls13.e2e - TLS 1.3 key schedule and record framing vectors.
+
+(Stdlib.Blob.fromHex "000102030405060708090A0B0C"
+ |> Stdlib.Result.map (fun salt ->
+      Stdlib.Blob.fromHex "0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B"
+      |> Stdlib.Result.map (fun ikm ->
+           Stdlib.Tls13.hkdfExtract salt ikm |> Stdlib.Blob.toHex)))
+  = Ok (Ok "077709362C2E32DF0DDC3F0DC47BBA6390B6C73BB50F9C3122EC844AD7C2B3E5")
+
+(let salt = Stdlib.Blob.fromHex "000102030405060708090A0B0C"
+ let ikm = Stdlib.Blob.fromHex "0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B"
+ let info = Stdlib.Blob.fromHex "F0F1F2F3F4F5F6F7F8F9"
+ match (salt, ikm, info) with
+ | (Ok s, Ok k, Ok i) ->
+     Stdlib.Tls13.hkdfExpand (Stdlib.Tls13.hkdfExtract s k) i 42L
+     |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "Invalid vector")
+  = Ok "3CB25F25FAACD57A90434F64D0362F2A2D2D0A90CF1A5A4C5DB02D56ECC4C5BF34007208D5B887185865"
+
+(Stdlib.Blob.fromHex "16030300036162634E455854"
+ |> Stdlib.Result.map (fun data ->
+      Stdlib.Tls13.parseRecord data
+      |> Stdlib.Result.map (fun record ->
+           (record.contentType, Stdlib.Blob.toHex record.payload,
+            Stdlib.Blob.toHex record.remaining))))
+  = Ok (Ok (22L, "616263", "4E455854"))
+
+(Stdlib.Blob.fromHex "16030300036162"
+ |> Stdlib.Result.map Stdlib.Tls13.parseRecord)
+  = Ok (Error Stdlib.Tls13.RecordError.Incomplete)
+
+(Stdlib.Blob.fromHex "1603010000"
+ |> Stdlib.Result.map Stdlib.Tls13.parseRecord)
+  = Ok (Error (Stdlib.Tls13.RecordError.Invalid "Unsupported TLS record version"))
+
+(match Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000" with
+ | Error _ -> "invalid fixture"
+ | Ok secret ->
+     match Stdlib.Tls13.hkdfExpandLabel secret "key" Stdlib.Blob.empty 16L with
+     | Error message -> message
+     | Ok value -> Stdlib.Blob.toHex value)
+  = "CBEE7571C611039CA327A2E879DFCD45"
+
+(Stdlib.Tls13.serializePlaintext 22L (Stdlib.String.toBlob "abc")
+ |> Stdlib.Result.map Stdlib.Blob.toHex)
+  = Ok "1603030003616263"
+
+(let random = Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F"
+ let keyShare = Stdlib.Blob.fromHex "202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F"
+ match (random, keyShare) with
+ | (Ok r, Ok k) -> Stdlib.Tls13.clientHello "example.com" r k |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "Invalid vector")
+  = Ok "1603030088010000840303000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F00000213030100005900000010000E00000B6578616D706C652E636F6D002B0003020304000A00040002001D000D00080006080404030809003300260024001D0020202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F"
+
+(Stdlib.Tls13.clientHello "example.com" Stdlib.Blob.empty Stdlib.Blob.empty)
+  = Error "TLS ClientHello requires 32-byte random and key share"
+
+(let random = Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F"
+ let zeroShare = Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000"
+ match (random, zeroShare) with
+ | (Ok r, Ok k) -> Stdlib.Tls13.clientHello "example.com" r k
+ | _ -> Error "Invalid vector")
+  = Error "TLS ClientHello key share is zero"
+
+(match Stdlib.Blob.fromHex "020000560303000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F00130300002E002B0002030400330024001D0020202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F" with
+ | Error _ -> "invalid fixture"
+ | Ok data ->
+     match Stdlib.Tls13.parseServerHello data with
+     | Error _ -> "parse failed"
+     | Ok hello -> Stdlib.Blob.toHex hello.keyShare)
+  = "202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F"
+
+(Stdlib.Blob.fromHex "020000560303000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F00130300002E002B0002030400330024001D0020202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F"
+ |> Stdlib.Result.map (fun data ->
+      Stdlib.Tls13.parseServerHello (Stdlib.Blob.slice data 0 (Stdlib.Int.fromInt64 40L))))
+  = Ok (Error Stdlib.Tls13.RecordError.Incomplete)
+
+(Stdlib.Blob.fromHex "020000560303CF21AD74E59A6111BE1D8C021E65B891C2A211167ABB8C5E079E09E2C8A8339C00130300002E002B0002030400330024001D0020202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F"
+ |> Stdlib.Result.map Stdlib.Tls13.parseServerHello)
+  = Ok (Error (Stdlib.Tls13.RecordError.Invalid "HelloRetryRequest is not supported"))
+
+(Stdlib.Blob.fromHex "020000560303000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F00130300002E002B000203040033002400170020202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F"
+ |> Stdlib.Result.map Stdlib.Tls13.parseServerHello)
+  = Ok (Error (Stdlib.Tls13.RecordError.Invalid "Server did not select X25519"))
+
+(Stdlib.Blob.fromHex "020000560303000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F00130300002E00000002030400330024001D0020202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F"
+ |> Stdlib.Result.map Stdlib.Tls13.parseServerHello)
+  = Ok (Error (Stdlib.Tls13.RecordError.Invalid "Unexpected ServerHello extension"))
