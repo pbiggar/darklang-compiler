@@ -1,5 +1,13 @@
 // Transparent wrappers retain nominal behavior while sharing managed roots.
+type ListEnvelope = ListEnvelope of List<Int64>
+type DictEnvelope = DictEnvelope of Dict<Int64>
 type BlobEnvelope = BlobEnvelope of Blob
+let value = ListEnvelope [1L, 2L] in match value with | ListEnvelope items -> Stdlib.List.length items == 2 = true // leak_check
+let value = ListEnvelope [] in match value with | ListEnvelope items -> Stdlib.List.isEmpty items = true // leak_check
+let value = DictEnvelope (Stdlib.Dict.singleton "key" 7L) in match value with | DictEnvelope dict -> Stdlib.Dict.get dict "key" == Some 7L = true // leak_check
+let value = DictEnvelope Stdlib.Dict.empty in match value with | DictEnvelope dict -> Stdlib.Dict.isEmpty dict = true // leak_check
+ListEnvelope [1L, 2L] = stdout="ListEnvelope.ListEnvelope([1, 2])\n" stderr="" // leak_check
+DictEnvelope (Stdlib.Dict.singleton "key" 7L) = stdout="DictEnvelope.DictEnvelope(Dict { key = 7 })\n" stderr="" // leak_check
 let value = BlobEnvelope (Stdlib.Blob.fromString "value") in match value with | BlobEnvelope blob -> Stdlib.Blob.toString blob = Ok "value" // leak_check
 type Int128Envelope = Int128Envelope of Int128
 let value = Int128Envelope 123Q in match value with | Int128Envelope number -> number == 123Q = true // leak_check

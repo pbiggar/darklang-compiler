@@ -1,0 +1,37 @@
+// Single-case constructors preserve behavior while sharing every constructible one-word root.
+type UnitEnvelope = UnitEnvelope of Unit
+type BoolEnvelope = BoolEnvelope of Bool
+type Int8Envelope = Int8Envelope of Int8
+type UInt8Envelope = UInt8Envelope of UInt8
+type Int16Envelope = Int16Envelope of Int16
+type UInt16Envelope = UInt16Envelope of UInt16
+type Int32Envelope = Int32Envelope of Int32
+type UInt32Envelope = UInt32Envelope of UInt32
+type IntEnvelope = IntEnvelope of Int
+type FloatEnvelope = FloatEnvelope of Float
+type DateEnvelope = DateEnvelope of DateTime
+type FunctionEnvelope = FunctionEnvelope of (Int64 -> Int64)
+type StreamEnvelope = StreamEnvelope of Stream<Int64>
+type InnerEnvelope = InnerEnvelope of Int64
+type OuterEnvelope = OuterEnvelope of InnerEnvelope
+type GenericListEnvelope<'a> = GenericListEnvelope of List<'a>
+type GenericDictEnvelope<'a> = GenericDictEnvelope of Dict<'a>
+type RecursiveDictEnvelope = RecursiveDictEnvelope of Dict<RecursiveDictEnvelope>
+match UnitEnvelope () with | UnitEnvelope value -> value = ()
+match BoolEnvelope false with | BoolEnvelope value -> value = false
+match Int8Envelope 7y with | Int8Envelope value -> value = 7y
+match UInt8Envelope 7uy with | UInt8Envelope value -> value = 7uy
+match Int16Envelope 7s with | Int16Envelope value -> value = 7s
+match UInt16Envelope 7us with | UInt16Envelope value -> value = 7us
+match Int32Envelope 7l with | Int32Envelope value -> value = 7l
+match UInt32Envelope 7ul with | UInt32Envelope value -> value = 7ul
+match IntEnvelope 7 with | IntEnvelope value -> value = 7
+match FloatEnvelope 1.5 with | FloatEnvelope value -> value = 1.5
+FloatEnvelope 1.5 = stdout="FloatEnvelope.FloatEnvelope(1.5)\n" stderr=""
+match DateEnvelope (Stdlib.DateTime.fromMilliseconds 7) with | DateEnvelope value -> Stdlib.DateTime.toMilliseconds value = 7
+let offset = 2L in match FunctionEnvelope (fun x -> x + offset) with | FunctionEnvelope fn -> fn 5L = 7L // leak_check
+match StreamEnvelope (Stdlib.Stream.fromList [1L, 2L]) with | StreamEnvelope stream -> Stdlib.Stream.toList stream = [1L, 2L] // leak_check
+match OuterEnvelope (InnerEnvelope 7L) with | OuterEnvelope (InnerEnvelope value) -> value = 7L
+match GenericListEnvelope [1L, 2L] with | GenericListEnvelope values -> Stdlib.List.length values = 2 // leak_check
+match GenericDictEnvelope (Stdlib.Dict.singleton "key" 7L) with | GenericDictEnvelope values -> Stdlib.Dict.get values "key" = Some 7L // leak_check
+let value = RecursiveDictEnvelope (Stdlib.Dict.singleton "leaf" (RecursiveDictEnvelope Stdlib.Dict.empty)) in match value with | RecursiveDictEnvelope values -> match Stdlib.Dict.get values "leaf" with | Some (RecursiveDictEnvelope child) -> Stdlib.Dict.isEmpty child | None -> false = true // leak_check

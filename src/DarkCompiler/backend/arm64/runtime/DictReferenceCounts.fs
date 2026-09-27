@@ -920,9 +920,6 @@ let internal generatePlannedDictRefCountDecHelper
     (releasePlan: MemoryModel.RcReleasePlan)
     (ctx: CodeGenContext)
     : ARM64Symbolic.Instr list =
-    let unsupported context release =
-        Crash.crash $"ARM64 planned dict RefCountDec does not support {context} release plan {release}"
-
     match releasePlan with
     | MemoryModel.RootRelease (_, MemoryModel.DictHeap, MemoryModel.DictPayloadRelease (keyRelease, valueRelease)) ->
         let (
@@ -945,6 +942,8 @@ let internal generatePlannedDictRefCountDecHelper
                 false, true, None, false, false, None, false, false, false
             | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) ->
                 false, false, Some (dictDecHelperForReleasePlan valueRelease), false, false, None, false, false, false
+            | MemoryModel.RecursiveRelease sourceType ->
+                false, false, Some (recursiveNominalRefCountDecHelperLabel sourceType), false, false, None, false, false, false
             | MemoryModel.RootRelease (_, MemoryModel.ClosureHeap, _) ->
                 false, false, None, true, false, None, false, false, false
             | MemoryModel.RootRelease (_, MemoryModel.StreamHeap, _) ->
@@ -963,8 +962,6 @@ let internal generatePlannedDictRefCountDecHelper
                 false, false, None, false, false, Some (16, valueRelease), false, false, false
             | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, _) ->
                 false, false, None, false, false, Some (payloadSize, valueRelease), false, false, false
-            | other ->
-                unsupported "value" other
 
         generateDictRefCountDecHelper
             helperLabel

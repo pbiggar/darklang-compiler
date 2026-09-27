@@ -7,6 +7,127 @@ let original = Stdlib.Blob.fromString "value" in (original, BlobEnvelope origina
 root = tuple(shared_word, shared_word)
 
 ---NAME---
+Single-case list wrapper shares its tagged root
+---INPUT---
+type ListEnvelope = ListEnvelope of List<Int64>
+let original = [1L, 2L] in (original, ListEnvelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Single-case empty list wrapper keeps the zero root
+---INPUT---
+type ListEnvelope = ListEnvelope of List<Int64>
+ListEnvelope []
+---EXPECTED---
+root = word(0)
+
+---NAME---
+Generic list wrapper shares its tagged root
+---INPUT---
+type ListEnvelope<'a> = ListEnvelope of List<'a>
+let original = [1L, 2L] in (original, ListEnvelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Generic dict wrapper shares its tagged root
+---INPUT---
+type DictEnvelope<'a> = DictEnvelope of Dict<'a>
+let original = Stdlib.Dict.singleton "key" 7L in (original, DictEnvelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Single-case arbitrary Int wrapper shares its heap root
+---INPUT---
+type IntEnvelope = IntEnvelope of Int
+let original = 123456789012345678901234567890 in (original, IntEnvelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Single-case Float zero wrapper keeps its payload bits
+---INPUT---
+type FloatEnvelope = FloatEnvelope of Float
+FloatEnvelope 0.0
+---EXPECTED---
+root = word(0)
+
+---NAME---
+Single-case Bool wrapper keeps its payload word
+---INPUT---
+type BoolEnvelope = BoolEnvelope of Bool
+BoolEnvelope true
+---EXPECTED---
+root = word(1)
+
+---NAME---
+Single-case Unit wrapper keeps the zero word
+---INPUT---
+type UnitEnvelope = UnitEnvelope of Unit
+UnitEnvelope ()
+---EXPECTED---
+root = word(0)
+
+---NAME---
+Single-case arbitrary Int wrapper keeps its tagged immediate
+---INPUT---
+type IntEnvelope = IntEnvelope of Int
+IntEnvelope 7
+---EXPECTED---
+root = word(15)
+
+---NAME---
+Single-case closure wrapper shares its root
+---INPUT---
+type FunctionEnvelope = FunctionEnvelope of (Int64 -> Int64)
+let offset = 2L in let original = fun x -> x + offset in (original, FunctionEnvelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Single-case stream wrapper shares its root
+---INPUT---
+type StreamEnvelope = StreamEnvelope of Stream<Int64>
+let original = Stdlib.Stream.fromList [1L] in (original, StreamEnvelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Single-case DateTime wrapper keeps its payload word
+---INPUT---
+type DateEnvelope = DateEnvelope of DateTime
+DateEnvelope (Stdlib.DateTime.fromMilliseconds 0)
+---EXPECTED---
+root = word(0)
+
+---NAME---
+Nested single-case sum wrapper shares its root
+---INPUT---
+type InnerEnvelope = InnerEnvelope of String
+type OuterEnvelope = OuterEnvelope of InnerEnvelope
+let original = "a" ++ "b" in (InnerEnvelope original, OuterEnvelope (InnerEnvelope original))
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Single-case dict wrapper shares its tagged root
+---INPUT---
+type DictEnvelope = DictEnvelope of Dict<Int64>
+let original = Stdlib.Dict.singleton "key" 7L in (original, DictEnvelope original)
+---EXPECTED---
+root = tuple(shared_word, shared_word)
+
+---NAME---
+Single-case empty dict wrapper keeps the zero root
+---INPUT---
+type DictEnvelope = DictEnvelope of Dict<Int64>
+DictEnvelope Stdlib.Dict.empty
+---EXPECTED---
+root = word(0)
+
+---NAME---
 Generic nested tuple wrapper shares its payload pointer
 ---INPUT---
 type GenericPairEnvelope<'a> = GenericPairEnvelope of ('a * String)

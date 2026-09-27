@@ -108,10 +108,15 @@ out-of-range word for `None`. Other `Option` instantiations and `Result` retain
 their boxed layout when they carry a payload.
 
 - A type whose cases are all nullary uses its case tag as an immediate.
-- A concrete unary single-case sum over Int64, UInt64, Bool, String, Char,
-  Blob, Int128, UInt128, a tuple, or a record uses its payload word directly,
-  without a sum allocation. A constructor with multiple fields is not a unary
-  tuple constructor, even though its boxed ownership descriptor uses a tuple.
+- A concrete unary single-case sum over any constructible one-word payload uses
+  its payload word directly, without a sum allocation. This includes scalar
+  values, tagged lists and dictionaries (including their zero-valued empty
+  roots), arbitrary Int, managed buffers, tuples, records, closures, streams,
+  nested sums, and internal raw pointers. The payload's own ownership and
+  tagging rules remain in force. Unresolved type variables and uninhabited
+  `Never` have no concrete payload word to select here. A constructor with
+  multiple fields is not a unary tuple constructor, even though its boxed
+  ownership descriptor uses a tuple.
 - A two-case sum with one nullary case and one unary payload case uses zero for
   the nullary case and the nonzero payload root for String, Char, Blob, Int128,
   UInt128, tuple, or record payloads. Matching tests zero before inspecting the
