@@ -159,6 +159,51 @@ let testPhiEdgesPreserveDistinctPredecessors () : TestResult =
     | Error message -> Error $"Expected invalid phi edge error, got {message}"
     | Ok () -> Error "Expected duplicate phi predecessor to be rejected"
 
+/// Branch-local ANF identities can be reused with different value types.
+/// The pre-RC SSA builder must type each definition before MIR lowering.
+let testPreRcSsaTypesBranchLocalDefinitions () : TestResult =
+    let name = "branchLocalTypes"
+    let functionId = TestIds.functionIdForName name
+    let condition = ANF.TempId 0
+    let reused = ANF.TempId 2
+    let func : ANF.Function = {
+        Id = functionId
+        Name = name
+        TypedParams = [{ Id = condition; Type = AST.TBool }]
+        ReturnType = AST.TInt64
+        ReturnOwnership = ANF.OwnedReturn
+        Body =
+            ANF.If (
+                ANF.Var condition,
+                ANF.Let (
+                    reused,
+                    ANF.TypedAtom (ANF.FloatLiteral 1.0, AST.TFloat64),
+                    ANF.Return (ANF.IntLiteral (ANF.Int64 0L))),
+                ANF.Let (
+                    reused,
+                    ANF.TypedAtom (ANF.BoolLiteral true, AST.TBool),
+                    ANF.Return (ANF.IntLiteral (ANF.Int64 0L))))
+    }
+    let ctx : RcTypeFacts.TypeContext = {
+        TypeReg = Map.empty
+        VariantLookup = Map.empty
+        SumShapeReg = Map.empty
+        FuncReg = Map.ofList [functionId, (name, AST.TFunction ([AST.TBool], AST.TInt64))]
+        FuncParams = Map.empty
+        TempTypes = Map.empty
+        ClosureFuncs = Map.empty
+        TypePlanning = RcTypeFacts.createRcTypePlanningContext ()
+    }
+    SSAANF.convertFunctionBeforeRC 2 ctx func
+    |> Result.bind (fun ssaFunc ->
+        ANF_to_MIR.convertSSAANFFunction
+            ssaFunc
+            [|Some AST.TBool|]
+            Map.empty
+            (Map.ofList [functionId, AST.TInt64])
+            false)
+    |> Result.bind MIR_SSA_Verify.verifyFunction
+
 let tests : (string * (unit -> TestResult)) list =
     [
         ("raw_get intrinsic fallback crashes instead of defaulting to Int64", testRawGetIntrinsicReturnTypeDoesNotDefaultToInt64)
@@ -166,4 +211,5 @@ let tests : (string * (unit -> TestResult)) list =
         ("record allocation starts fields at offset zero", testRecordAllocationStartsFieldsAtOffsetZero)
         ("nested terminal branches have no invented return", testNestedTerminalBranchesHaveNoInventedReturn)
         ("phi edges preserve distinct predecessors", testPhiEdgesPreserveDistinctPredecessors)
+        ("pre-RC SSA types branch-local definitions", testPreRcSsaTypesBranchLocalDefinitions)
     ]
