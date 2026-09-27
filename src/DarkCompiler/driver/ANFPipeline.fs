@@ -48,7 +48,7 @@ let internal stdlibInliningConfig : ANF_Inlining.InliningConfig = {
     MaxProjectedTupleInlineSites = 0
 }
 
-/// Run ANF optimization + RC insertion, returning a final ANF function list and type map
+/// Run ANF optimization, construct SSA, and elaborate function ownership on SSA.
 let internal buildAnf
     (verbosity: int)
     (options: CompilerOptions)
@@ -62,7 +62,7 @@ let internal buildAnf
     (ownershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>)
     (specializeInternalSignatures: bool)
     (passTimingRecorder: PassTimingRecorder option)
-    : Result<ANF.Function list * ANF.TypeMap, string> =
+    : Result<ANF.Function list * SSAANF.Function list * ANF.TypeMap, string> =
 
     let anfOptions = buildANFOptimizeOptions options
     let anfPassLabel =
@@ -194,26 +194,38 @@ let internal buildAnf
 
     if verbosity >= 1 then println "  [anf.reference-counts] Reference Count Insertion..."
     let rcStart = sw.Elapsed.TotalMilliseconds
-    let rcPhaseRecorder =
-        passTimingRecorder
-        |> Option.map (fun recorder ->
-            fun name (elapsedMs: float) ->
-                recorder {
-                    Pass = name
-                    Elapsed = TimeSpan.FromMilliseconds elapsedMs
-                })
+    let ctx = RcTypeFacts.createContext convResult
+    let (ANF.Program (preRCFunctions, _)) = anfAfterEscapeAnalysis
     let rcResult =
-        RefCountInsertion.insertRCInProgramWithTrace rcPhaseRecorder convResult
+        RefCountInsertion.verifyOwnershipContracts ctx ownershipContracts anfAfterEscapeAnalysis
+        |> Result.bind (fun () ->
+            preRCFunctions
+            |> List.fold (fun result func ->
+                result
+                |> Result.bind (fun accumulated ->
+                    SSAANF.convertFunctionBeforeRC
+                        (ANF_to_MIR.maxTempIdInFunction func)
+                        ctx
+                        func
+                    |> Result.map (fun ssa ->
+                        let frontierParams =
+                            RefCountInsertion.ownedDictionaryFrontierParams func
+                        RcSSARefCountInsertion.insertBlockLocal ctx frontierParams ssa
+                        :: accumulated)))
+                (Ok [])
+            |> Result.map List.rev)
     match rcResult with
     | Error err -> Error $"Reference count insertion error: {err}"
-    | Ok (anfAfterRC, typeMap) ->
+    | Ok ssaAfterRC ->
+        let typeMap =
+            ssaAfterRC
+            |> List.fold (fun types func ->
+                func.FreshValueTypes
+                |> Map.fold (fun current id typ -> Map.add id typ current) types)
+                Map.empty
         let rcElapsed = sw.Elapsed.TotalMilliseconds - rcStart
         recordPassTiming passTimingRecorder "Reference Count Insertion" rcElapsed
         if verbosity >= 2 then
             let t = System.Math.Round(rcElapsed, 1)
             println $"        {t}ms"
-        if shouldDumpIR verbosity options.DumpANF then
-            printANFProgram options "=== ANF (after RC insertion) ===" anfAfterRC
-
-        let (ANF.Program (finalFunctions, _)) = anfAfterRC
-        Ok (finalFunctions, typeMap)
+        Ok (preRCFunctions, ssaAfterRC, typeMap)

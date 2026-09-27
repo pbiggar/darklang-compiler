@@ -2069,6 +2069,42 @@ let private toMIRFunctionsOnlyInternal
             recordPhase "ANF -> MIR Registry Projection" registryTimer
             (mirFuncs, variantRegistry, recordRegistry)))
 
+/// Lower functions whose ownership operations have already been inserted on
+/// SSA ANF blocks. No ANF or MIR SSA reconstruction is performed here.
+let toMIRSSAFunctionsOnlyWithTrace
+    (phaseRecorder: (string -> float -> unit) option)
+    (projectedRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
+    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
+    (enableTCO: bool)
+    (functions: SSAANF.Function list)
+    (typeMap: ANF.TypeMap)
+    (typeReg: Map<string, (string * AST.SemanticType) list>)
+    (variantLookup: LoweringPrimitives.VariantLookup)
+    (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
+    (enableCoverage: bool)
+    (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
+    : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
+    let maxId =
+        typeMap
+        |> Map.fold (fun largest (ANF.TempId id) _ -> max largest id) -1
+    let typeById = buildTypeById maxId typeMap
+    let withTailCalls =
+        if enableTCO then
+            functions |> List.map (SSATailCallDetection.detect recursiveMembers)
+        else functions
+    withTailCalls
+    |> mapResults (fun func ->
+        convertSSAANFFunction func typeById typeReg returnTypeReg enableCoverage)
+    |> Result.map (fun mirFuncs ->
+        phaseRecorder |> Option.iter (fun record -> record "SSA ANF -> MIR Function Conversion" 0.0)
+        let variantRegistry, recordRegistry =
+            match projectedRegistries with
+            | Some registries -> registries
+            | None ->
+                buildVariantRegistry variantLookup,
+                buildRecordRegistry typeRegForRecords
+        mirFuncs, variantRegistry, recordRegistry)
+
 let toMIRFunctionsOnly
     (program: ANF.Program)
     (typeMap: ANF.TypeMap)

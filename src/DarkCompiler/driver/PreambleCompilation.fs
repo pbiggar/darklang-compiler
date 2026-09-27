@@ -101,7 +101,7 @@ let buildPreambleContext
                             else
                                 $"Preamble {err}"
                         Error msg
-                    | Ok (preambleFunctions, typeMap) ->
+                    | Ok (preambleFunctions, ssaFunctions, typeMap) ->
                         let preambleExternalReturnTypes = preambleReturnTypes
                         match lowerToAllocatedLir
                             stdlib.Context.Target
@@ -112,7 +112,7 @@ let buildPreambleContext
                             None
                             None
                             "preamble"
-                            preambleFunctions
+                            ssaFunctions
                             typeMap
                             preambleRegistries
                             None
@@ -228,7 +228,7 @@ let buildPreambleContextFromAnalysis
                 else
                     $"Preamble {err}"
             Error msg
-        | Ok (preambleFunctions, typeMap) ->
+        | Ok (preambleFunctions, ssaFunctions, typeMap) ->
             let preambleExternalReturnTypes = preambleReturnTypes
             match lowerToAllocatedLir
                 stdlib.Context.Target
@@ -239,7 +239,7 @@ let buildPreambleContextFromAnalysis
                 None
                 None
                 "preamble"
-                preambleFunctions
+                ssaFunctions
                 typeMap
                 preambleRegistries
                 None

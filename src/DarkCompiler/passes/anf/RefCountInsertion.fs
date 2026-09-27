@@ -47,7 +47,7 @@ let private addFunctionPhaseTimings
         CleanupRewriteMs = left.CleanupRewriteMs + right.CleanupRewriteMs
     }
 
-let private verifyOwnershipContracts
+let internal verifyOwnershipContracts
     (ctx: TypeContext)
     (contracts: Map<AST.FunctionId, OwnedIR.CallSignature>)
     (Program (functions, main): Program)
@@ -122,6 +122,38 @@ let private measureFunctionPhase
         (result, elapsed.TotalMilliseconds)
     else
         (work (), 0.0)
+
+/// Reuse the pre-SSA proof for dictionary frontier loop state.
+let internal ownedDictionaryFrontierParams (func: Function) : Set<TempId> =
+    let candidates =
+        func.TypedParams
+        |> List.mapi (fun index parameter ->
+            index, parameter, internalOwnedTailParamKind func index parameter)
+        |> List.choose (fun (index, parameter, kind) ->
+            match parameter.Type, kind with
+            | (AST.TDict _ | AST.TTuple _), Some NonEscapingLoopState ->
+                Some (index, parameter)
+            | _ -> None)
+    let hasDictionary =
+        candidates
+        |> List.exists (fun (_, parameter) ->
+            match parameter.Type with AST.TDict _ -> true | _ -> false)
+    if not hasDictionary then Set.empty
+    else
+        let rec validate ids =
+            let next =
+                candidates
+                |> List.choose (fun (index, parameter) ->
+                    if internalOwnedTailParamHasSafeReplacements func index ids then
+                        Some parameter.Id
+                    else None)
+                |> Set.ofList
+            if next = ids then ids else validate next
+        candidates
+        |> List.map (fun (_, parameter) -> parameter.Id)
+        |> Set.ofList
+        |> validate
+
 
 /// Insert RC operations into a function
 /// Returns (transformed function, varGen, accumulated TempTypes)

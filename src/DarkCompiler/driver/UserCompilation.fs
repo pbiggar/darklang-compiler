@@ -257,7 +257,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 userOnly.OwnershipContracts
                                 true
                                 plan.PassTimingRecorder
-                            |> Result.bind (fun (anfDependencies, dependencyTypeMap) ->
+                            |> Result.bind (fun (_anfDependencies, ssaDependencies, dependencyTypeMap) ->
                                 lowerToAllocatedLir
                                     plan.BaseContext.Target
                                     plan.Verbosity
@@ -267,7 +267,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     dependencyFunctionCaches
                                     releasePlanSummaryCache
                                     plan.Labels.StageSuffix
-                                    anfDependencies
+                                    ssaDependencies
                                     dependencyTypeMap
                                     userRegistries
                                     (Some projectedMirRegistries)
@@ -373,9 +373,16 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                         match dependencyLirResult, programAnfResult with
                         | Error err, _
                         | _, Error err -> Error err
-                        | Ok allocatedDependencyFuncs, Ok (printedFunctions, programTypeMap) ->
+                        | Ok allocatedDependencyFuncs, Ok (printedFunctions, ssaFunctions, programTypeMap) ->
                                 let reachableProgramFunctions =
                                     pruneProgramFunctions printedFunctions
+                                let reachableIds =
+                                    reachableProgramFunctions
+                                    |> List.map (fun func -> func.Id)
+                                    |> Set.ofList
+                                let reachableSSAFunctions =
+                                    ssaFunctions
+                                    |> List.filter (fun func -> Set.contains func.Id reachableIds)
                                 let programLirResult =
                                     lowerToAllocatedLir
                                         plan.BaseContext.Target
@@ -386,7 +393,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         None
                                         releasePlanSummaryCache
                                         plan.Labels.StageSuffix
-                                        reachableProgramFunctions
+                                        reachableSSAFunctions
                                         programTypeMap
                                         userRegistries
                                         (Some projectedMirRegistries)
@@ -427,7 +434,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         Map.empty
                                         false
                                         plan.PassTimingRecorder
-                                    |> Result.bind (fun (startAnf, startTypeMap) ->
+                                    |> Result.bind (fun (_startAnf, startSSA, startTypeMap) ->
                                         lowerToAllocatedLir
                                             plan.BaseContext.Target
                                             plan.Verbosity
@@ -437,7 +444,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             None
                                             releasePlanSummaryCache
                                             plan.Labels.StageSuffix
-                                            startAnf
+                                            startSSA
                                             startTypeMap
                                             startRegistries
                                             (Some projectedMirRegistries)
