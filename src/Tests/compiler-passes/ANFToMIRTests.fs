@@ -204,6 +204,95 @@ let testPreRcSsaTypesBranchLocalDefinitions () : TestResult =
             false)
     |> Result.bind MIR_SSA_Verify.verifyFunction
 
+/// A returned join value refers to each predecessor's edge argument. The
+/// backedge also requires a fixed point through the loop parameter.
+let testSsaReturnFlowAcrossJoinAndLoop () : TestResult =
+    let id n = ANF.TempId n
+    let label n = SSAANF.Label n
+    let block n parameters operations terminator : SSAANF.Block = {
+        Label = label n
+        Parameters = parameters
+        Operations = operations
+        Terminator = terminator
+    }
+    let func : SSAANF.Function = {
+        Id = TestIds.functionIdForName "returnFlow"
+        Name = "returnFlow"
+        TypedParams = [ { Id = id 0; Type = AST.TBool }; { Id = id 1; Type = AST.TString } ]
+        ReturnType = AST.TString
+        ReturnOwnership = ANF.OwnedReturn
+        Entry = label 0
+        FreshValueTypes = Map.empty
+        Blocks = Map.ofList [
+            label 0, block 0 [] [] (SSAANF.Branch (ANF.Var (id 0), label 1, label 2))
+            label 1, block 1 [] [] (SSAANF.Jump (label 3, [ANF.Var (id 1)]))
+            label 2, block 2 [] [] (SSAANF.Jump (label 3, [ANF.StringLiteral "other"]))
+            label 3, block 3 [ { Id = id 3; Type = AST.TString } ]
+                [id 4, ANF.Atom (ANF.Var (id 3))]
+                (SSAANF.Branch (ANF.Var (id 0), label 4, label 5))
+            label 4, block 4 [] [] (SSAANF.Jump (label 3, [ANF.Var (id 4)]))
+            label 5, block 5 [] [] (SSAANF.Return (ANF.Var (id 4)))
+        ]
+    }
+    let facts = RcSSAReturnAnalysis.analyze func
+    let live = RcSSAValueLiveness.analyze func
+    let expected = Map.ofList [
+        label 0, Set.singleton (id 1)
+        label 1, Set.singleton (id 1)
+        label 2, Set.empty
+        label 3, Set.singleton (id 3)
+        label 4, Set.singleton (id 4)
+        label 5, Set.singleton (id 4)
+    ]
+    if facts.AtEntry <> expected then
+        Error $"Unexpected SSA return flow: {facts.AtEntry}"
+    elif Map.tryFind (label 3) live.AtEntry <> Some (Set.ofList [id 0; id 3]) then
+        Error $"Unexpected liveness at loop header: {live.AtEntry}"
+    elif Map.tryFind (id 4) live.AfterDefinition <> Some (Set.ofList [id 0; id 4]) then
+        Error $"Unexpected liveness after loop alias: {live.AfterDefinition}"
+    else Ok ()
+
+/// Edge arguments are substituted in parallel. Sequential substitution loses
+/// one value when a backedge swaps two block parameters.
+let testSsaReturnFlowThroughSwappedParameters () : TestResult =
+    let id n = ANF.TempId n
+    let label n = SSAANF.Label n
+    let param n : ANF.TypedParam = { Id = id n; Type = AST.TString }
+    let block n parameters terminator : SSAANF.Block = {
+        Label = label n
+        Parameters = parameters
+        Operations = []
+        Terminator = terminator
+    }
+    let func : SSAANF.Function = {
+        Id = TestIds.functionIdForName "swappedReturnFlow"
+        Name = "swappedReturnFlow"
+        TypedParams = [
+            { Id = id 0; Type = AST.TBool }
+            { Id = id 1; Type = AST.TString }
+            { Id = id 2; Type = AST.TString }
+        ]
+        ReturnType = AST.TString
+        ReturnOwnership = ANF.OwnedReturn
+        Entry = label 0
+        FreshValueTypes = Map.empty
+        Blocks = Map.ofList [
+            label 0, block 0 [] (SSAANF.Jump (label 1, [ANF.Var (id 1); ANF.Var (id 2)]))
+            label 1, block 1 [param 3; param 4]
+                (SSAANF.Branch (ANF.Var (id 0), label 2, label 3))
+            label 2, block 2 [] (SSAANF.Jump (label 1, [ANF.Var (id 4); ANF.Var (id 3)]))
+            label 3, block 3 [] (SSAANF.Return (ANF.Var (id 3)))
+        ]
+    }
+    let returned = RcSSAReturnAnalysis.analyze func
+    let live = RcSSAValueLiveness.analyze func
+    let both = Set.ofList [id 3; id 4]
+    if Map.tryFind (label 1) returned.AtEntry <> Some both then
+        Error $"Swapped return parameters were lost: {returned.AtEntry}"
+    elif Map.tryFind (label 2) live.AtEntry <> Some (Set.add (id 0) both) then
+        Error $"Swapped live parameters were lost: {live.AtEntry}"
+    else Ok ()
+
 let tests : (string * (unit -> TestResult)) list =
     [
         ("raw_get intrinsic fallback crashes instead of defaulting to Int64", testRawGetIntrinsicReturnTypeDoesNotDefaultToInt64)
@@ -212,4 +301,6 @@ let tests : (string * (unit -> TestResult)) list =
         ("nested terminal branches have no invented return", testNestedTerminalBranchesHaveNoInventedReturn)
         ("phi edges preserve distinct predecessors", testPhiEdgesPreserveDistinctPredecessors)
         ("pre-RC SSA types branch-local definitions", testPreRcSsaTypesBranchLocalDefinitions)
+        ("SSA return flow across joins and loops", testSsaReturnFlowAcrossJoinAndLoop)
+        ("SSA return flow through swapped parameters", testSsaReturnFlowThroughSwappedParameters)
     ]
