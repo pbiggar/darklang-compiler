@@ -123,11 +123,9 @@ type CliOptions = {
     DisableInlining: bool
     DisableTCO: bool
     DisableMIROpt: bool
-    DisableMIRConstFolding: bool
+    DisableMIRSCCP: bool
     DisableMIRCSE: bool
-    DisableMIRCopyProp: bool
     DisableMIRDCE: bool
-    DisableMIRCFGSimplify: bool
     DisableMIRLICM: bool
     DisableLIROpt: bool
     DisableLIRPeephole: bool
@@ -169,11 +167,9 @@ let defaultOptions = {
     DisableInlining = false
     DisableTCO = false
     DisableMIROpt = false
-    DisableMIRConstFolding = false
+    DisableMIRSCCP = false
     DisableMIRCSE = false
-    DisableMIRCopyProp = false
     DisableMIRDCE = false
-    DisableMIRCFGSimplify = false
     DisableMIRLICM = false
     DisableLIROpt = false
     DisableLIRPeephole = false
@@ -208,11 +204,9 @@ let buildCompilerOptions (cliOpts: CliOptions) : CompilerOptions.CompilerOptions
     DisableInlining = cliOpts.DisableInlining
     DisableTCO = cliOpts.DisableTCO
     DisableMIROpt = cliOpts.DisableMIROpt
-    DisableMIRConstFolding = cliOpts.DisableMIRConstFolding
+    DisableMIRSCCP = cliOpts.DisableMIRSCCP
     DisableMIRCSE = cliOpts.DisableMIRCSE
-    DisableMIRCopyProp = cliOpts.DisableMIRCopyProp
     DisableMIRDCE = cliOpts.DisableMIRDCE
-    DisableMIRCFGSimplify = cliOpts.DisableMIRCFGSimplify
     DisableMIRLICM = cliOpts.DisableMIRLICM
     DisableLIROpt = cliOpts.DisableLIROpt
     DisableLIRPeephole = cliOpts.DisableLIRPeephole
@@ -422,20 +416,14 @@ let parseArgs (argv: string array) : Result<CliOptions, string> =
         | "--disable-opt-mir" :: rest ->
             parseFlags rest { opts with DisableMIROpt = true } lastVerbosity
 
-        | "--disable-opt-mir-const-folding" :: rest ->
-            parseFlags rest { opts with DisableMIRConstFolding = true } lastVerbosity
+        | "--disable-opt-mir-sccp" :: rest ->
+            parseFlags rest { opts with DisableMIRSCCP = true } lastVerbosity
 
         | "--disable-opt-mir-cse" :: rest ->
             parseFlags rest { opts with DisableMIRCSE = true } lastVerbosity
 
-        | "--disable-opt-mir-copy-prop" :: rest ->
-            parseFlags rest { opts with DisableMIRCopyProp = true } lastVerbosity
-
         | "--disable-opt-mir-dce" :: rest ->
             parseFlags rest { opts with DisableMIRDCE = true } lastVerbosity
-
-        | "--disable-opt-mir-cfg-simplify" :: rest ->
-            parseFlags rest { opts with DisableMIRCFGSimplify = true } lastVerbosity
 
         | "--disable-opt-mir-licm" :: rest ->
             parseFlags rest { opts with DisableMIRLICM = true } lastVerbosity

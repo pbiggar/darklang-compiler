@@ -52,20 +52,16 @@ let internal shouldRunANFOptimize (anfOptions: ANFConstants.OptimizeOptions) : b
 let internal buildMIROptimizeOptions (options: CompilerOptions) : MIROptimizationFacts.OptimizeOptions =
     let enabled = not options.DisableMIROpt
     {
-        EnableConstFolding = enabled && not options.DisableMIRConstFolding
+        EnableSCCP = enabled && not options.DisableMIRSCCP
         EnableCSE = enabled && not options.DisableMIRCSE
-        EnableCopyProp = enabled && not options.DisableMIRCopyProp
         EnableDCE = enabled && not options.DisableMIRDCE
-        EnableCFGSimplify = enabled && not options.DisableMIRCFGSimplify
         EnableLICM = enabled && not options.DisableMIRLICM
     }
 
 let internal shouldRunMIROptimize (mirOptions: MIROptimizationFacts.OptimizeOptions) : bool =
-    mirOptions.EnableConstFolding
+    mirOptions.EnableSCCP
     || mirOptions.EnableCSE
-    || mirOptions.EnableCopyProp
     || mirOptions.EnableDCE
-    || mirOptions.EnableCFGSimplify
     || mirOptions.EnableLICM
 
 let internal formatPassGroup (label: string) (passes: (string * bool) list) : string =

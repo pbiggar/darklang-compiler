@@ -67,16 +67,12 @@ type CompilerOptions = {
     DisableTCO: bool
     /// Disable MIR-level optimizations (DCE, copy/constant propagation on SSA)
     DisableMIROpt: bool
-    /// Disable MIR constant folding
-    DisableMIRConstFolding: bool
+    /// Disable MIR sparse conditional simplification
+    DisableMIRSCCP: bool
     /// Disable MIR common subexpression elimination
     DisableMIRCSE: bool
-    /// Disable MIR copy propagation
-    DisableMIRCopyProp: bool
     /// Disable MIR dead code elimination
     DisableMIRDCE: bool
-    /// Disable MIR CFG simplification
-    DisableMIRCFGSimplify: bool
     /// Disable MIR loop-invariant code motion
     DisableMIRLICM: bool
     /// Disable LIR-level optimizations (peephole optimizations)
@@ -117,11 +113,9 @@ let defaultOptions : CompilerOptions = {
     DisableInlining = false
     DisableTCO = false
     DisableMIROpt = false
-    DisableMIRConstFolding = false
+    DisableMIRSCCP = false
     DisableMIRCSE = false
-    DisableMIRCopyProp = false
     DisableMIRDCE = false
-    DisableMIRCFGSimplify = false
     DisableMIRLICM = false
     DisableLIROpt = false
     DisableLIRPeephole = false

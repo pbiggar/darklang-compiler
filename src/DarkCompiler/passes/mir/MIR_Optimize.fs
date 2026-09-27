@@ -10,50 +10,9 @@ open MIRInduction
 open MIRUnrolling
 open MIRLoopInvariantMotion
 open MIRDeadCode
-open MIRCopyPropagation
 open MIRControlFlow
-open MIRConstants
 open MIRSparseConditionalConstants
 open MIRCommonExpressions
-
-/// Try to fold a unary operation on a constant
-let tryFoldUnaryOp (op: UnaryOp) (src: Operand) : Operand option =
-    match op, src with
-    | Neg, Int64Const n -> Some (Int64Const (-n))
-    | Not, BoolConst b -> Some (BoolConst (not b))
-    | _ -> None
-
-/// Apply constant folding to a CFG
-let applyConstantFolding (cfg: CFG) : CFG * bool =
-    let (blocks', changed) =
-        cfg.Blocks
-        |> Map.fold (fun (acc, ch) label block ->
-            let (instrs', instrChanged) =
-                block.Instrs
-                |> List.fold (fun (acc', ch') instr ->
-                    match instr with
-                    | BinOp (dest, op, left, right, opType) ->
-                        match tryFoldBinOp op left right opType with
-                        | Some result ->
-                            (Mov (dest, result, None) :: acc', true)
-                        | None ->
-                            (instr :: acc', ch')
-                    | UnaryOp (dest, op, src) ->
-                        match tryFoldUnaryOp op src with
-                        | Some result ->
-                            (Mov (dest, result, None) :: acc', true)
-                        | None ->
-                            (instr :: acc', ch')
-                    | _ ->
-                        (instr :: acc', ch')
-                ) ([], false)
-            let instrs' = List.rev instrs'
-
-            let block' = { block with Instrs = instrs' }
-            (Map.add label block' acc, ch || instrChanged)
-        ) (Map.empty, false)
-
-    ({ cfg with Blocks = blocks' }, changed)
 
 /// Run all optimizations in a single pass (returns whether anything changed).
 let private optimizeCFGOnceWithEffectFreeCalls
@@ -71,124 +30,85 @@ let private optimizeCFGOnceWithEffectFreeCalls
             let result = operation ()
             record name (System.Diagnostics.Stopwatch.GetTimestamp() - started)
             result
-    let useSccp = options.EnableConstFolding && options.EnableCFGSimplify
-    let useCombinedSccp = useSccp && options.EnableCopyProp
     let (cfg0, changed0) =
-        if useCombinedSccp then
+        if options.EnableSCCP then
             measure "MIR Sparse Conditional Simplification" (fun () ->
                 applySparseConditionalSimplification cfg)
-        elif useSccp then
-            measure "MIR Sparse Conditional Constant Propagation" (fun () ->
-                applySparseConditionalConstantPropagation cfg)
         else
             (cfg, false)
     let topologyForCse = if changed0 then None else existingTopology
-    let (cfg1, changed1) =
-        if options.EnableConstFolding && not useCombinedSccp then
-            measure "MIR Constant Folding" (fun () -> applyConstantFolding cfg0)
-        else
-            (cfg0, false)
-    let (cfg2, changed2, cseTopology) =
+    let (cfg1, changed1, cseTopology) =
         if options.EnableCSE then
             measure "MIR Common Subexpression Elimination" (fun () ->
                 let (optimized, changed, topology) =
                     applyCSEWithEffectFreeCallsAndTopology
                         topologyForCse
                         effectFreeFunctions
-                        cfg1
+                        cfg0
                 (optimized, changed, Some topology))
         else
-            (cfg1, false, topologyForCse)
-    let (cfg3, changed3) =
-        if options.EnableCopyProp && not useCombinedSccp then
-            measure "MIR Copy Propagation" (fun () ->
-                applyCopyPropagationWithTickTrace recordTicks cfg2)
-        else
-            (cfg2, false)
-    // Run constant folding again only when copy propagation changed the CFG.
-    // This catches cases like: v1 = -127; v2 = v1 - 2
-    // After copy prop: v2 = Int64Const(-127) - Int64Const(2) -> can fold
-    let (cfg4, changed4) =
-        if options.EnableConstFolding && changed3 && not useCombinedSccp then
-            measure "MIR Constant Folding" (fun () -> applyConstantFolding cfg3)
-        else
-            (cfg3, false)
-    let (cfg5, changed5, cfg6, changed6, loopTopology) =
+            (cfg0, false, topologyForCse)
+    let (cfg2, changed2, cfg3, changed3, loopTopology) =
         if options.EnableLICM then
             match
                 measure "MIR Loop Topology" (fun () ->
                     match cseTopology with
                     | Some topology ->
-                        tryBuildLoopTopologyWithDominators cfg4 topology
+                        tryBuildLoopTopologyWithDominators cfg1 topology
                     | None ->
-                        tryBuildLoopTopology cfg4)
+                        tryBuildLoopTopology cfg1)
             with
-            | None -> (cfg4, false, cfg4, false, None)
+            | None -> (cfg1, false, cfg1, false, None)
             | Some topology ->
-                let (cfg5, changed5) =
+                let (cfg2, changed2) =
                     measure "MIR Affine Strength Reduction" (fun () ->
                         applyAffineInductionStrengthReductionWithTopology
                             topology
-                            cfg4)
-                let (cfg6, changed6, topologyAfterLicm) =
+                            cfg1)
+                let (cfg3, changed3, topologyAfterLicm) =
                     measure "MIR Loop Invariant Code Motion" (fun () ->
                         applyLoopInvariantCodeMotionWithEffectFreeCalls
                             effectFreeFunctions
                             topology
-                            cfg5)
-                (cfg5, changed5, cfg6, changed6, Some topologyAfterLicm)
+                            cfg2)
+                (cfg2, changed2, cfg3, changed3, Some topologyAfterLicm)
         else
-            (cfg4, false, cfg4, false, None)
-    let (cfg7, changed7) =
+            (cfg1, false, cfg1, false, None)
+    let (cfg4, changed4) =
         match loopTopology with
         | Some topology ->
             measure "MIR Counted Loop Unrolling" (fun () ->
-                applyCountedLoopUnrollingWithTopology topology cfg6)
-        | None -> (cfg6, false)
-    let (cfg8, changed8) =
+                applyCountedLoopUnrollingWithTopology topology cfg3)
+        | None -> (cfg3, false)
+    let (cfg5, changed5) =
         if options.EnableDCE then
             measure "MIR Dead Code Elimination" (fun () ->
-                eliminateDeadCodeWithTickTrace recordTicks cfg7)
+                eliminateDeadCodeWithTickTrace recordTicks cfg4)
+        else
+            (cfg4, false)
+    let (cfg6, changed6) =
+        if options.EnableSCCP then
+            measure "MIR Simplify Return Phi Joins" (fun () -> simplifyRetPhiJoins cfg5)
+        else
+            (cfg5, false)
+    let (cfg7, changed7) =
+        if options.EnableSCCP then
+            measure "MIR Simplify Empty Blocks" (fun () -> simplifyEmptyBlocks cfg6)
+        else
+            (cfg6, false)
+    let (cfg8, changed8) =
+        if options.EnableSCCP then
+            measure "MIR Merge Linear Blocks" (fun () -> mergeLinearBlocks cfg7)
         else
             (cfg7, false)
-    let (cfg9, changed9) =
-        if options.EnableCFGSimplify && not useCombinedSccp then
-            measure "MIR Simplify Constant Branches" (fun () -> simplifyConstantBranches cfg8)
-        else
-            (cfg8, false)
-    let (cfg10, changed10) =
-        if options.EnableCFGSimplify && not useCombinedSccp then
-            measure "MIR Eliminate Unreachable Blocks" (fun () -> eliminateUnreachableBlocks cfg9)
-        else
-            (cfg9, false)
-    let (cfg11, changed11) =
-        if options.EnableCFGSimplify then
-            measure "MIR Simplify Return Phi Joins" (fun () -> simplifyRetPhiJoins cfg10)
-        else
-            (cfg10, false)
-    let (cfg12, changed12) =
-        if options.EnableCFGSimplify then
-            measure "MIR Simplify Empty Blocks" (fun () -> simplifyEmptyBlocks cfg11)
-        else
-            (cfg11, false)
-    let (cfg13, changed13) =
-        if options.EnableCFGSimplify then
-            measure "MIR Merge Linear Blocks" (fun () -> mergeLinearBlocks cfg12)
-        else
-            (cfg12, false)
-    let changed = changed0 || changed1 || changed2 || changed3 || changed4 || changed5 || changed6 || changed7 || changed8 || changed9 || changed10 || changed11 || changed12 || changed13
+    let changed =
+        changed0 || changed1 || changed2 || changed3 || changed4
+        || changed5 || changed6 || changed7 || changed8
     let topologyChanged =
-        changed0
-        || changed6
-        || changed7
-        || changed9
-        || changed10
-        || changed11
-        || changed12
-        || changed13
+        changed0 || changed3 || changed4 || changed6 || changed7 || changed8
     let reusableTopology =
         if topologyChanged then None else cseTopology
-    (cfg13, changed, reusableTopology)
+    (cfg8, changed, reusableTopology)
 
 let optimizeCFGOnce (options: OptimizeOptions) (cfg: CFG) : CFG * bool =
     let (optimized, changed, _) =
@@ -341,7 +261,7 @@ let private propagateConstantCallResults
     (options: OptimizeOptions)
     (functions: Function list)
     : Function list =
-    if not (options.EnableConstFolding && options.EnableCFGSimplify) then
+    if not options.EnableSCCP then
         functions
     else
         let callResults = constantCallResults functions
@@ -427,36 +347,3 @@ let optimizeProgramWithOptionsAndTrace
 
 let optimizeProgram (program: Program) : Program =
     optimizeProgramWithOptions defaultOptimizeOptions program
-
-let optimizeConstFolding (program: Program) : Program =
-    optimizeProgramWithOptions
-        { defaultOptimizeOptions with
-            EnableConstFolding = true
-            EnableCSE = false
-            EnableCopyProp = false
-            EnableDCE = false
-            EnableCFGSimplify = false
-            EnableLICM = false }
-        program
-
-let optimizeCopyProp (program: Program) : Program =
-    optimizeProgramWithOptions
-        { defaultOptimizeOptions with
-            EnableConstFolding = false
-            EnableCSE = false
-            EnableCopyProp = true
-            EnableDCE = false
-            EnableCFGSimplify = false
-            EnableLICM = false }
-        program
-
-let optimizeDCE (program: Program) : Program =
-    optimizeProgramWithOptions
-        { defaultOptimizeOptions with
-            EnableConstFolding = false
-            EnableCSE = false
-            EnableCopyProp = false
-            EnableDCE = true
-            EnableCFGSimplify = false
-            EnableLICM = false }
-        program

@@ -69,11 +69,9 @@ type E2ETest = {
     DisableInlining: bool
     DisableTCO: bool
     DisableMIROpt: bool
-    DisableMIRConstFolding: bool
+    DisableMIRSCCP: bool
     DisableMIRCSE: bool
-    DisableMIRCopyProp: bool
     DisableMIRDCE: bool
-    DisableMIRCFGSimplify: bool
     DisableMIRLICM: bool
     DisableLIROpt: bool
     DisableLIRPeephole: bool
@@ -98,11 +96,9 @@ type private OptFlags = {
     DisableInlining: bool
     DisableTCO: bool
     DisableMIROpt: bool
-    DisableMIRConstFolding: bool
+    DisableMIRSCCP: bool
     DisableMIRCSE: bool
-    DisableMIRCopyProp: bool
     DisableMIRDCE: bool
-    DisableMIRCFGSimplify: bool
     DisableMIRLICM: bool
     DisableLIROpt: bool
     DisableLIRPeephole: bool
@@ -126,11 +122,9 @@ let private defaultOptFlags = {
     DisableInlining = false
     DisableTCO = false
     DisableMIROpt = false
-    DisableMIRConstFolding = false
+    DisableMIRSCCP = false
     DisableMIRCSE = false
-    DisableMIRCopyProp = false
     DisableMIRDCE = false
-    DisableMIRCFGSimplify = false
     DisableMIRLICM = false
     DisableLIROpt = false
     DisableLIRPeephole = false
@@ -384,11 +378,9 @@ let private isAttributeKey (key: string) : bool =
     | "disable_opt_inline"
     | "disable_opt_tco"
     | "disable_opt_mir"
-    | "disable_opt_mir_const_folding"
+    | "disable_opt_mir_sccp"
     | "disable_opt_mir_cse"
-    | "disable_opt_mir_copy_prop"
     | "disable_opt_mir_dce"
-    | "disable_opt_mir_cfg_simplify"
     | "disable_opt_mir_licm"
     | "disable_opt_lir"
     | "disable_opt_lir_peephole"
@@ -847,25 +839,17 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                                             match parseBool value "disable_opt_mir" with
                                             | Some b -> optFlags <- { optFlags with DisableMIROpt = b }
                                             | None -> ()
-                                        | "disable_opt_mir_const_folding" ->
-                                            match parseBool value "disable_opt_mir_const_folding" with
-                                            | Some b -> optFlags <- { optFlags with DisableMIRConstFolding = b }
+                                        | "disable_opt_mir_sccp" ->
+                                            match parseBool value "disable_opt_mir_sccp" with
+                                            | Some b -> optFlags <- { optFlags with DisableMIRSCCP = b }
                                             | None -> ()
                                         | "disable_opt_mir_cse" ->
                                             match parseBool value "disable_opt_mir_cse" with
                                             | Some b -> optFlags <- { optFlags with DisableMIRCSE = b }
                                             | None -> ()
-                                        | "disable_opt_mir_copy_prop" ->
-                                            match parseBool value "disable_opt_mir_copy_prop" with
-                                            | Some b -> optFlags <- { optFlags with DisableMIRCopyProp = b }
-                                            | None -> ()
                                         | "disable_opt_mir_dce" ->
                                             match parseBool value "disable_opt_mir_dce" with
                                             | Some b -> optFlags <- { optFlags with DisableMIRDCE = b }
-                                            | None -> ()
-                                        | "disable_opt_mir_cfg_simplify" ->
-                                            match parseBool value "disable_opt_mir_cfg_simplify" with
-                                            | Some b -> optFlags <- { optFlags with DisableMIRCFGSimplify = b }
                                             | None -> ()
                                         | "disable_opt_mir_licm" ->
                                             match parseBool value "disable_opt_mir_licm" with
@@ -975,11 +959,9 @@ let private parseTestLineWithPreamble (line: string) (lineNumber: int) (filePath
                 DisableInlining = optFlags.DisableInlining
                 DisableTCO = optFlags.DisableTCO
                 DisableMIROpt = optFlags.DisableMIROpt
-                DisableMIRConstFolding = optFlags.DisableMIRConstFolding
+                DisableMIRSCCP = optFlags.DisableMIRSCCP
                 DisableMIRCSE = optFlags.DisableMIRCSE
-                DisableMIRCopyProp = optFlags.DisableMIRCopyProp
                 DisableMIRDCE = optFlags.DisableMIRDCE
-                DisableMIRCFGSimplify = optFlags.DisableMIRCFGSimplify
                 DisableMIRLICM = optFlags.DisableMIRLICM
                 DisableLIROpt = optFlags.DisableLIROpt
                 DisableLIRPeephole = optFlags.DisableLIRPeephole
