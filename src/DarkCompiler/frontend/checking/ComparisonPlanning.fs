@@ -85,7 +85,7 @@ let internal validateJsonTargetType
         )
     let rec validate visited typ =
         let typ = resolveType aliasReg typ |> canonicalEqualityType variantLookup
-        let identity = typeToString typ
+        let identity = typeToHelperIdentityString typ
         if Set.contains identity visited then Ok ()
         else
             let visited = Set.add identity visited
@@ -147,14 +147,14 @@ let private stableHelperNameHash (input: string) : uint64 =
 
 /// Name for a concrete structural equality helper.
 let eqHelperName (typ: SemanticType) : string =
-    let typeText = typeToString typ
+    let typeText = typeToHelperIdentityString typ
     let prefix = sanitizeHelperNamePrefix typeText
     let hash = stableHelperNameHash typeText
     $"__dark_eq_{prefix}_{hash:x16}"
 
 /// Name for a concrete canonical three-way comparison helper.
 let compareHelperName (typ: SemanticType) : string =
-    let typeText = typeToString typ
+    let typeText = typeToHelperIdentityString typ
     let prefix = sanitizeHelperNamePrefix typeText
     let hash = stableHelperNameHash typeText
     $"__dark_compare_{prefix}_{hash:x16}"
