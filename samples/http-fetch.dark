@@ -1,0 +1,154 @@
+// http-fetch.dark - Fetch a plain HTTP page and indent its HTML for inspection.
+
+let byteLength (value: String) : Int64 = Stdlib.String.byteLength value
+let byteAt (value: String) (index: Int64) : Int64 =
+    match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
+    | Some byte -> Stdlib.Int64.fromUInt8 byte
+    | None -> -1L
+let slice (value: String) (start: Int64) (end_: Int64) : String =
+    let bytes = Stdlib.Blob.slice (Stdlib.String.toBlob value)
+                    (Stdlib.Int.fromInt64 start) (Stdlib.Int.fromInt64 (end_ - start)) in
+    match Stdlib.Blob.toString bytes with
+    | Ok text -> text
+    | Error _ -> "[invalid UTF-8 boundary]"
+
+let nextTag (html: String) (index: Int64) : Int64 =
+    if index >= byteLength html || byteAt html index == 60L then index
+    else nextTag html (index + 1L)
+
+// Attribute values may contain '>', so only an unquoted '>' ends a tag.
+let tagEnd (html: String) (index: Int64) (quote: Int64) : Int64 =
+    if index >= byteLength html then byteLength html
+    else
+        let current = byteAt html index in
+        if quote != 0L then
+            tagEnd html (index + 1L) (if current == quote then 0L else quote)
+        else if current == 34L || current == 39L then tagEnd html (index + 1L) current
+        else if current == 62L then index + 1L
+        else tagEnd html (index + 1L) 0L
+
+let commentEnd (html: String) (index: Int64) : Int64 =
+    let length = byteLength html in
+    if index + 2L >= length then length
+    else if byteAt html index == 45L && byteAt html (index + 1L) == 45L &&
+            byteAt html (index + 2L) == 62L then index + 3L
+    else commentEnd html (index + 1L)
+
+let nameEnd (tag: String) (index: Int64) : Int64 =
+    if index >= byteLength tag then index
+    else
+        let current = byteAt tag index in
+        if current <= 32L || current == 47L || current == 62L then index
+        else nameEnd tag (index + 1L)
+
+let tagName (tag: String) : String =
+    let start = if Stdlib.String.startsWith tag "</" then 2L else 1L in
+    Stdlib.String.toLowercase (slice tag start (nameEnd tag start))
+
+let voidTag (name: String) : Bool =
+    name == "area" || name == "base" || name == "br" || name == "col" ||
+    name == "embed" || name == "hr" || name == "img" || name == "input" ||
+    name == "link" || name == "meta" || name == "param" || name == "source" ||
+    name == "track" || name == "wbr"
+
+let rawTag (name: String) : Bool =
+    name == "script" || name == "style" || name == "pre" || name == "textarea"
+
+let indent (depth: Int64) : String =
+    Stdlib.String.repeat "  " (Stdlib.Int.fromInt64 depth)
+
+let emitTextLines (parts: List<String>) (depth: Int64) (lines: List<String>) : List<String> =
+    match parts with
+    | [] -> lines
+    | part :: rest ->
+        let trimmed = Stdlib.String.trim part in
+        let next =
+            if trimmed == "" then lines
+            else Stdlib.List.push lines (indent depth ++ trimmed) in
+        emitTextLines rest depth next
+
+let emitRawLines (parts: List<String>) (depth: Int64) (lines: List<String>) : List<String> =
+    match parts with
+    | [] -> lines
+    | part :: rest ->
+        let next =
+            if part == "" then lines
+            else Stdlib.List.push lines (indent depth ++ part) in
+        emitRawLines rest depth next
+
+let rawClose (html: String) (position: Int64) (name: String) : Int64 =
+    let found = nextTag html position in
+    let length = byteLength html in
+    let afterName = found + 2L + byteLength name in
+    if found >= length || afterName > length then length
+    else if Stdlib.String.toLowercase (slice html found afterName) == "</" ++ name &&
+            (afterName == length || byteAt html afterName <= 32L ||
+             byteAt html afterName == 47L || byteAt html afterName == 62L) then found
+    else rawClose html (found + 1L) name
+
+let formatFrom (html: String) (position: Int64) (depth: Int64)
+    (insideRaw: String) (lines: List<String>) : List<String> =
+    let length = byteLength html in
+    if position >= length then lines
+    else if insideRaw != "" then
+        let closeAt = rawClose html position insideRaw in
+        let content = slice html position closeAt in
+        let next = emitRawLines (Stdlib.String.splitOnNewline content) depth lines in
+        if closeAt >= length then next
+        else formatFrom html closeAt depth "" next
+    else if byteAt html position != 60L then
+        let end_ = nextTag html position in
+        let next = emitTextLines (Stdlib.String.splitOnNewline (slice html position end_)) depth lines in
+        formatFrom html end_ depth "" next
+    else
+        let isComment = Stdlib.String.startsWith (slice html position length) "<!--" in
+        let end_ =
+            if isComment then commentEnd html (position + 4L)
+            else tagEnd html (position + 1L) 0L in
+        let tag = slice html position end_ in
+        if end_ == length && byteAt html (length - 1L) != 62L then
+            emitTextLines (Stdlib.String.splitOnNewline tag) depth lines
+        else
+            let name = tagName tag in
+            let closing = Stdlib.String.startsWith tag "</" in
+            let declaration = Stdlib.String.startsWith tag "<!" ||
+                              Stdlib.String.startsWith tag "<?" || name == "" in
+            let selfClosing = Stdlib.String.endsWith tag "/>" || voidTag name in
+            let lineDepth = if closing && depth > 0L then depth - 1L else depth in
+            let next = Stdlib.List.push lines (indent lineDepth ++ tag) in
+            let nextDepth =
+                if closing then lineDepth
+                else if declaration || selfClosing || depth >= 64L then depth
+                else depth + 1L in
+            let nextRaw =
+                if closing || declaration || selfClosing || Stdlib.Bool.not (rawTag name) then ""
+                else name in
+            formatFrom html end_ nextDepth nextRaw next
+
+let formatHtml (html: String) : String =
+    Stdlib.String.join (Stdlib.List.reverse (formatFrom html 0L 0L "" [])) "\n"
+
+let requestError (error: Stdlib.HttpClient.RequestError) : String =
+    match error with
+    | BadUrl details ->
+        match details with
+        | UnsupportedProtocol -> "Only plain http:// URLs are supported"
+        | InvalidHost -> "The URL resolves to a disallowed address"
+        | InvalidUri -> "Invalid URL"
+        | InvalidRequest -> "Invalid request headers"
+    | Timeout -> "The request timed out"
+    | BadHeader _ -> "Invalid request header"
+    | BadMethod -> "Invalid request method"
+    | _ -> "Network or HTTP response error"
+
+match Stdlib.Cli.Args.get 0 with
+| Error _ -> Stdlib.printLine "Usage: http-fetch <http://url>"
+| Ok url ->
+    match Stdlib.HttpClient.requestTrusted "GET" url [("Accept", "text/html")] Stdlib.Blob.empty with
+    | Error error -> Stdlib.printLine (requestError error)
+    | Ok response ->
+        match Stdlib.Blob.toString response.body with
+        | Error _ -> Stdlib.printLine "The response body is not UTF-8 text"
+        | Ok html ->
+            let _ = Stdlib.printLine ("HTTP " ++ Stdlib.Int.toString response.statusCode) in
+            Stdlib.printLine (formatHtml html)

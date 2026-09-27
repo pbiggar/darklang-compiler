@@ -7,6 +7,7 @@ grouped by purpose; each subject has one canonical source.
 
 - [Project overview](../README.md)
 - [CLI quick start](getting-started.md)
+- [Sample programs](../samples/README.md)
 
 ## Contributing
 
