@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-27T10:55:43+00:00",
+  "generated_at": "2026-09-27T13:42:44+00:00",
   "compiler": {
-    "commit": "52fed093eac460ef27074b6fb87c94ca202bc6c6",
-    "subject": "Merge commit '1e62586363a6bb4f138f6455746e4567531bf4e2' into HEAD"
+    "commit": "b407d006473f4b63b65beae22ccecaa7a8e37a52",
+    "subject": "Preserve ARM64 Float callee registers and compact call saves"
   },
   "benchmarks": [
     {
@@ -42,11 +42,11 @@
     },
     {
       "name": "fasta",
-      "instructions": 17380111
+      "instructions": 17171193
     },
     {
       "name": "fft",
-      "instructions": 1766990
+      "instructions": 1764434
     },
     {
       "name": "fib",
@@ -58,7 +58,7 @@
     },
     {
       "name": "leibniz",
-      "instructions": 17006281
+      "instructions": 17006277
     },
     {
       "name": "mandelbrot",
@@ -78,7 +78,7 @@
     },
     {
       "name": "nbody",
-      "instructions": 14595831
+      "instructions": 14595827
     },
     {
       "name": "nqueen",
@@ -90,11 +90,11 @@
     },
     {
       "name": "pisum",
-      "instructions": 808025
+      "instructions": 808021
     },
     {
       "name": "primes",
-      "instructions": 1632009
+      "instructions": 1612013
     },
     {
       "name": "quicksort",
@@ -102,7 +102,7 @@
     },
     {
       "name": "raytracer",
-      "instructions": 45196456
+      "instructions": 45005944
     },
     {
       "name": "regex_lite",
@@ -110,7 +110,7 @@
     },
     {
       "name": "spectral_norm",
-      "instructions": 263137694
+      "instructions": 263137690
     },
     {
       "name": "string_equality",

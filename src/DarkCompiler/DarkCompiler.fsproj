@@ -215,6 +215,7 @@
     <Compile Include="backend/arm64/Peephole.fs" />
     <Compile Include="backend/arm64/ReleasePlanSummary.fs" />
     <Compile Include="backend/arm64/PrepareFunctions.fs" />
+    <Compile Include="backend/arm64/CalleeClobbers.fs" />
     <Compile Include="backend/arm64/CodeGen.fs" />
     <Compile Include="backend/arm64/Resolve.fs" />
     <Compile Include="backend/arm64/Encoding.fs" />

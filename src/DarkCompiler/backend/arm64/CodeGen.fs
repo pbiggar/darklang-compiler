@@ -987,7 +987,29 @@ let generateARM64WithOptionsAndCaches
     (phaseRecorder: (string -> float -> unit) option)
     (program: LIR.Program)
     : Result<GeneratedProgram, string> =
-    let (LIR.Program (functions, _, _)) = program
+    let (LIR.Program (functions, variants, records)) = program
+    let refinedFunctions = ARM64CalleeClobbers.refine functions
+    let refinedProgram = LIR.Program (refinedFunctions, variants, records)
+    // Group order may differ from program order because _start is emitted first.
+    // IDs can also recur across separately compiled units, so match the exact
+    // original node within each ID bucket when retaining cache boundaries.
+    let refinedGroups =
+        let byId =
+            List.zip functions refinedFunctions
+            |> List.groupBy (fun (original, _) -> original.Id)
+            |> Map.ofList
+        functionGroups
+        |> List.map (fun group ->
+            let groupFunctions =
+                group.Functions
+                |> List.map (fun func ->
+                    Map.tryFind func.Id byId
+                    |> Option.bind (List.tryPick (fun (original, refined) ->
+                        if obj.ReferenceEquals(original, func) then Some refined
+                        else None))
+                    |> Option.defaultWith (fun () ->
+                        Crash.crash $"ARM64 callee summaries: missing function {func.Name}"))
+            { group with Functions = groupFunctions })
     let missingFacts =
         functions
         |> List.tryPick (fun func ->
@@ -1007,13 +1029,13 @@ let generateARM64WithOptionsAndCaches
             preparedSumShapeRegistry
             functionCache
             functionGroupCache
-            functionGroups
+            refinedGroups
             metadataGroupCache
             helperCache
             metadataGroups
             lirOpExpansionRecorder
             phaseRecorder
-            program
+            refinedProgram
 
 let generateARM64WithOptionsAndCache
     (target: ARM64.TargetConfig)

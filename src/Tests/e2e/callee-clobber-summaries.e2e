@@ -1,0 +1,38 @@
+// Values live across direct, transitive, recursive, and indirect calls.
+
+let incrementClobber (x: Int64) : Int64 = x + 1L
+let twiceClobber (x: Int64) : Int64 = incrementClobber (incrementClobber x)
+let recursiveClobber (n: Int64) : Int64 =
+    if n == 0L then 0L else incrementClobber (recursiveClobber (n - 1L))
+
+let directAcrossClobber (x: Int64) : Int64 =
+    let first = x + 17L in
+    let second = x + 29L in
+    let called = incrementClobber x in
+    first + second + called
+
+let transitiveAcrossClobber (x: Int64) : Int64 =
+    let first = x + 17L in
+    let second = x + 29L in
+    let called = twiceClobber x in
+    first + second + called
+
+let indirectAcrossClobber (x: Int64) : Int64 =
+    let first = x + 17L in
+    let second = x + 29L in
+    let f = incrementClobber in
+    first + second + f x
+
+directAcrossClobber 10L = 77L
+transitiveAcrossClobber 10L = 78L
+indirectAcrossClobber 10L = 77L
+recursiveClobber 6L = 6L
+
+let floatLeafClobber (x: Float) : Float = x + 1.0
+let floatAcrossClobber (x: Float) : Float =
+    let first = x + 17.0 in
+    let second = x + 29.0 in
+    let called = floatLeafClobber x in
+    first + second + called
+
+floatAcrossClobber 10.0 = 77.0
