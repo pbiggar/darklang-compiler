@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-27T01:46:27+00:00",
+  "generated_at": "2026-09-27T03:20:35+00:00",
   "compiler": {
-    "commit": "aac12ccd02162a7b1cb9e936d90e77b24ac7bccb",
-    "subject": "Combine MIR constant, copy, and CFG simplification in SCCP"
+    "commit": "26d93e5779feb0e7672675ca49eb6b4b442bba8c",
+    "subject": "Propagate executable-edge facts in MIR SCCP"
   },
   "benchmarks": [
     {
@@ -42,7 +42,7 @@
     },
     {
       "name": "fasta",
-      "instructions": 21292782
+      "instructions": 21058210
     },
     {
       "name": "fft",
@@ -94,7 +94,7 @@
     },
     {
       "name": "primes",
-      "instructions": 1672239
+      "instructions": 1652241
     },
     {
       "name": "quicksort",
@@ -126,7 +126,7 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 309994585
+      "instructions": 309994340
     },
     {
       "name": "warden",
