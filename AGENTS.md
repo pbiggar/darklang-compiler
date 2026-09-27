@@ -106,6 +106,16 @@ this repository and takes precedence where it is stricter.
 
 ## Git workflow
 
+- Distinguish investigation output from a lasting repository change. For an
+  investigation, profiling run, or exploratory experiment, report findings to
+  the user and keep raw measurements and temporary patches in ignored artifacts.
+  Do not add a report to tracked documentation, add an index link, commit, or
+  run `./land` solely to preserve the investigation. A user request to
+  investigate does not by itself request a durable document. Commit and hand
+  off an investigation document only when the user explicitly requests that
+  document as a repository artifact. If the investigation produces an accepted
+  code, test, benchmark, or durable documentation change, apply the ordinary
+  readiness rules to that change.
 - At the start of each new task, bring its branch up to the current local value
   of the configured integration ref (`origin/main` by default) before making
   changes. Create a dedicated branch and worktree from that ref when starting
@@ -126,7 +136,10 @@ this repository and takes precedence where it is stricter.
   wait for it to land, inspect its train status, or refresh or reuse its
   worktree. Authorized merge-conflict recovery under
   `AGENTS.mergetrain.md` is the exception. Task agents never push.
-- When work is complete, commit the intended changes automatically.
+- When work includes an intended lasting repository change and is complete,
+  commit that change automatically. An investigation whose result is only
+  findings for the user is complete after the findings are reported; it does
+  not need a commit or merge-train handoff.
 - Run `./land --task "<brief task description>"` only when the committed branch
   is ready: the requested scope is complete, the final diff has been
   substantively reviewed,
