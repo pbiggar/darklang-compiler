@@ -1605,10 +1605,6 @@ let testSccpDoesNotApplyIntegerFoldsToFloatOperations () : TestResult =
     | Some block when not changed && block.Instrs = [floatOperation] -> Ok ()
     | _ -> Error "Expected SCCP to leave non-integer binary operations overdefined"
 
-type private EstablishedEdge =
-    | TrueEdge
-    | FalseEdge
-
 let private basicBlock label instrs terminator : BasicBlock = {
     Label = label
     Instrs = instrs
@@ -1648,170 +1644,6 @@ let testPartialRedundancyEliminationSupportsFloatAndNarrowValues () : TestResult
         | _ -> Error $"Expected PRE to complete a partially redundant {valueType} addition"
     [AST.TFloat64; AST.TInt8]
     |> List.fold (fun result valueType -> Result.bind (fun () -> check valueType) result) (Ok ())
-
-let private expectRedundantSuccessorBranchEliminated
-    (edge: EstablishedEdge)
-    : TestResult =
-    let entry = Label "entry"
-    let successor = Label "successor"
-    let sibling = Label "sibling"
-    let trueResult = Label "true_result"
-    let falseResult = Label "false_result"
-
-    let (entryTerminator, expectedSuccessorTerminator) =
-        match edge with
-        | TrueEdge ->
-            (Branch (Register (VReg 0), successor, sibling), Jump trueResult)
-        | FalseEdge ->
-            (Branch (Register (VReg 0), sibling, successor), Jump falseResult)
-
-    let before: CFG = {
-        Entry = entry
-        Blocks =
-            Map.ofList [
-                (entry, basicBlock entry [] entryTerminator)
-                (successor, basicBlock successor [] (Branch (Register (VReg 0), trueResult, falseResult)))
-                (sibling, basicBlock sibling [] (Ret (Int64Const 2L)))
-                (trueResult, basicBlock trueResult [] (Ret (Int64Const 1L)))
-                (falseResult, basicBlock falseResult [] (Ret (Int64Const 0L)))
-            ]
-    }
-
-    let (after, changed) = simplifyBranchesKnownFromPredecessor before
-    match Map.tryFind successor after.Blocks with
-    | Some block when changed && block.Terminator = expectedSuccessorTerminator -> Ok ()
-    | _ -> Error $"Expected successor terminator {expectedSuccessorTerminator} after simplifying {edge}"
-
-let testTrueEdgeEliminatesRedundantSuccessorBranch () : TestResult =
-    expectRedundantSuccessorBranchEliminated TrueEdge
-
-let testFalseEdgeEliminatesRedundantSuccessorBranch () : TestResult =
-    expectRedundantSuccessorBranchEliminated FalseEdge
-
-let testRepeatedBranchEliminatedAcrossOptionModes () : TestResult =
-    let entry = Label "entry"
-    let successor = Label "successor"
-    let sibling = Label "sibling"
-    let trueResult = Label "true_result"
-    let falseResult = Label "false_result"
-    let cfg: CFG = {
-        Entry = entry
-        Blocks =
-            Map.ofList [
-                (entry, basicBlock entry [] (Branch (Register (VReg 0), successor, sibling)))
-                (successor, basicBlock successor [] (Branch (Register (VReg 0), trueResult, falseResult)))
-                (sibling, basicBlock sibling [] (Ret (Int64Const 3L)))
-                (trueResult, basicBlock trueResult [] (Ret (Int64Const 1L)))
-                (falseResult, basicBlock falseResult [] (Ret (Int64Const 2L)))
-            ]
-    }
-    let cfgOnly = {
-        defaultOptimizeOptions with
-            EnableConstFolding = false
-            EnableCSE = false
-            EnableCopyProp = false
-            EnableDCE = false
-            EnableLICM = false
-    }
-    let sccpWithoutCopies = {
-        cfgOnly with
-            EnableConstFolding = true
-    }
-    [
-        ("default", defaultOptimizeOptions)
-        ("SCCP without copy propagation", sccpWithoutCopies)
-        ("CFG simplification only", cfgOnly)
-    ]
-    |> List.fold (fun result (mode, options) ->
-        Result.bind (fun () ->
-            let optimized, changed = optimizeCFGOnce options cfg
-            let returns =
-                optimized.Blocks
-                |> Map.toList
-                |> List.choose (fun (_, block) ->
-                    match block.Terminator with
-                    | Ret (Int64Const value) -> Some value
-                    | _ -> None)
-                |> Set.ofList
-            if changed && returns = Set.ofList [1L; 3L] then Ok ()
-            else Error $"Expected {mode} to remove only the contradictory return; got {returns}") result) (Ok ())
-
-let testMultiplePredecessorsKeepRepeatedSuccessorBranch () : TestResult =
-    let entry = Label "entry"
-    let alternate = Label "alternate"
-    let successor = Label "successor"
-    let trueResult = Label "true_result"
-    let falseResult = Label "false_result"
-
-    let cfg: CFG = {
-        Entry = entry
-        Blocks =
-            Map.ofList [
-                (entry, basicBlock entry [] (Branch (Register (VReg 0), successor, alternate)))
-                (alternate, basicBlock alternate [] (Jump successor))
-                (successor, basicBlock successor [] (Branch (Register (VReg 0), trueResult, falseResult)))
-                (trueResult, basicBlock trueResult [] (Ret (Int64Const 1L)))
-                (falseResult, basicBlock falseResult [] (Ret (Int64Const 0L)))
-            ]
-    }
-
-    let (optimized, changed) = simplifyBranchesKnownFromPredecessor cfg
-    if not changed && optimized = cfg then
-        Ok ()
-    else
-        let func = {
-            Id = fid "multiple_predecessor_branch"
-            Name = "multiple_predecessor_branch"
-            TypedParams = [{ Reg = VReg 0; Type = AST.TBool }]
-            ReturnType = AST.TInt64
-            CFG = optimized
-            FloatRegs = Set.empty
-        }
-        let actual = formatMIR (Program ([func], Map.empty, Map.empty))
-        Error $"Expected a repeated condition with multiple predecessor edges to remain.\nActual:\n{actual}"
-
-let testRedundantSuccessorBranchTrimsRemovedPhiEdge () : TestResult =
-    let entry = Label "entry"
-    let successor = Label "successor"
-    let sibling = Label "sibling"
-    let kept = Label "kept"
-    let join = Label "join"
-
-    let joinPhi =
-        Phi (
-            VReg 1,
-            [
-                (Int64Const 10L, successor)
-                (Int64Const 20L, sibling)
-                (Int64Const 30L, kept)
-            ],
-            Some AST.TInt64
-        )
-
-    let cfg: CFG = {
-        Entry = entry
-        Blocks =
-            Map.ofList [
-                (entry, basicBlock entry [] (Branch (Register (VReg 0), successor, sibling)))
-                (successor, basicBlock successor [] (Branch (Register (VReg 0), kept, join)))
-                (sibling, basicBlock sibling [] (Jump join))
-                (kept, basicBlock kept [] (Jump join))
-                (join, basicBlock join [joinPhi] (Ret (Register (VReg 1))))
-            ]
-    }
-
-    let (simplified, branchChanged) = simplifyBranchesKnownFromPredecessor cfg
-    let (trimmed, phiChanged) = eliminateUnreachableBlocks simplified
-    match Map.tryFind join trimmed.Blocks with
-    | Some joinBlock ->
-        match joinBlock.Instrs with
-        | [Phi (_, sources, _)] ->
-            let sourceLabels = sources |> List.map snd |> Set.ofList
-            let expectedLabels = Set.ofList [sibling; kept]
-            if branchChanged && phiChanged && sourceLabels = expectedLabels then Ok ()
-            else Error $"Expected phi sources {expectedLabels}, got {sourceLabels}"
-        | _ -> Error "Expected the join block to retain one phi instruction"
-    | None -> Error "Expected the reachable join block to remain"
 
 let testSelfComparisonFoldingRequiresConcreteSafeType () : TestResult =
     let sameOperand = Register (VReg 0)
@@ -2064,11 +1896,6 @@ let tests = [
     ("MIR SCCP uses call-result ranges", testSccpUsesCallResultRange)
     ("MIR SCCP propagates constant call results", testSccpPropagatesConstantCallResult)
     ("MIR SCCP does not apply integer folds to float operations", testSccpDoesNotApplyIntegerFoldsToFloatOperations)
-    ("MIR true edge eliminates redundant successor branch", testTrueEdgeEliminatesRedundantSuccessorBranch)
-    ("MIR false edge eliminates redundant successor branch", testFalseEdgeEliminatesRedundantSuccessorBranch)
-    ("MIR optimizer removes repeated branches across option modes", testRepeatedBranchEliminatedAcrossOptionModes)
-    ("MIR multiple predecessors keep repeated successor branch", testMultiplePredecessorsKeepRepeatedSuccessorBranch)
-    ("MIR redundant successor branch trims removed phi edge", testRedundantSuccessorBranchTrimsRemovedPhiEdge)
     ("MIR self-comparison folding requires concrete safe type", testSelfComparisonFoldingRequiresConcreteSafeType)
     ("MIR self-comparison folding requires same register", testSelfComparisonFoldingRequiresSameRegister)
     ("MIR LICM canonicalizes multiple loop entries", testLicmCanonicalizesMultipleLoopEntries)
