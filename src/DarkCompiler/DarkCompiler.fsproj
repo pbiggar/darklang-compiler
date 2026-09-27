@@ -126,7 +126,6 @@
     <Compile Include="passes/anf/optimization/Accumulators.fs" />
     <Compile Include="passes/anf/ANF_Intrinsics.fs" />
     <Compile Include="passes/anf/ANF_Optimize.fs" />
-    <Compile Include="passes/anf/ANF_HigherOrderSpecialization.fs" />
     <Compile Include="passes/anf/DirectCallFacts.fs" />
     <Compile Include="passes/anf/EscapeAnalysisFacts.fs" />
     <Compile Include="passes/anf/ownership/TypeFacts.fs" />
@@ -139,6 +138,7 @@
     <Compile Include="passes/anf/TailCallDetection.fs" />
     <Compile Include="ir/anf/SSAANF.fs" />
     <Compile Include="passes/anf/SSADirectCallSpecialization.fs" />
+    <Compile Include="passes/anf/SSAHigherOrderSpecialization.fs" />
     <Compile Include="passes/anf/SSAEscapeAnalysis.fs" />
     <Compile Include="passes/anf/ownership/SSAReturnAnalysis.fs" />
     <Compile Include="passes/anf/ownership/SSAValueLiveness.fs" />

@@ -239,9 +239,15 @@ let private terminatorUses used = function
     | SSAANF.Jump (_, arguments) -> List.fold atomUse used arguments
     | SSAANF.Branch (condition, _, _) -> atomUse used condition
 
-let private removeUnusedRematerializedValues (func: SSAANF.Function) =
+let internal removeUnusedRematerializedValues (func: SSAANF.Function) =
     let definitions = operations func |> Map.ofList
-    let removable = definitions |> Map.filter (fun _ operation -> Facts.isRematerializedValue operation)
+    let removable =
+        definitions
+        |> Map.filter (fun _ operation ->
+            Facts.isRematerializedValue operation
+            || match operation with
+               | ClosureAlloc _ | Atom _ | TypedAtom _ | IfValue _ -> true
+               | _ -> false)
     let addUse counts id =
         let count = Map.tryFind id counts |> Option.defaultValue 0
         Map.add id (count + 1) counts

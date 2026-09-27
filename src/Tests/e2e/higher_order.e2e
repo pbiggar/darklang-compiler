@@ -137,3 +137,7 @@ let combineKnown (f: Int64 -> Int64) (g: Int64 -> Int64) (x: Int64): Int64 = f x
 // A partial application is a captured closure and remains valid when passed
 // through another alias before reaching a higher-order helper.
 let addTen = addPartial 10L in let aliasedAddTen = addTen in applyPartial aliasedAddTen 32L = 42L
+
+// A captured callable reaches the helper through a join; both incoming paths
+// must agree on its target and captures before the call can be specialized.
+let joinAdd = addPartial 7L in let joinedAdd = if true then joinAdd else joinAdd in applyPartial joinedAdd 35L = 42L

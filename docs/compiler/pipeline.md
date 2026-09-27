@@ -25,8 +25,8 @@ The Dark compiler transforms source code through a series of passes, each with a
 | 2.25 | Function reachability   | `passes/anf/ANFDeadCodeElimination.fs`           | ANF → reachable ANF                           |
 | 2.3  | ANF optimizations       | `passes/anf/ANF_Optimize.fs`                                | ANF → ANF                                     |
 | 2.4  | ANF inlining            | `passes/anf/ANF_Inlining.fs`                                | ANF → ANF                                     |
-| 2.4.4 | Known closure specialization | `passes/anf/ANF_HigherOrderSpecialization.fs`       | ANF → ANF                                     |
-| 2.4.5 | ANF → high-level SSA    | `ir/anf/SSAANF.fs`                                           | Higher-order specialized ANF → typed blocks   |
+| 2.4.5 | ANF → high-level SSA    | `ir/anf/SSAANF.fs`                                           | Inlined ANF → typed blocks                     |
+| 2.4.6 | Known closure specialization | `passes/anf/SSAHigherOrderSpecialization.fs`   | SSA → specialized SSA                         |
 | 2.5  | Direct-call specialization | `passes/anf/SSADirectCallSpecialization.fs`             | SSA → specialized SSA                         |
 | 2.6  | Escape analysis        | `passes/anf/SSAEscapeAnalysis.fs`                           | SSA → scalar-replaced SSA                     |
 | 2.7  | Ref count insertion     | `passes/anf/ownership/SSARefCountInsertion.fs`              | SSA + memory ops                              |
@@ -204,30 +204,30 @@ prebuilt functions and for selecting reachable standard-library functions.
 
 ---
 
-## Pass 2.4.4: Known Closure Specialization (`ANF_HigherOrderSpecialization.fs`)
-
-**Input**: Inlined ANF
-**Output**: ANF with selected higher-order helpers specialized
-
-### Responsibilities
-
-- **Propagate callable facts**: Track known closures and static function references through aliases, branch values and joins, and function returns
-- **Specialize complete call shapes**: Clone a helper once for all eligible known functional arguments while retaining the generic closure path for unknown values
-- **Pass captures directly**: Replace closure arguments with ordinary capture parameters and lower `ClosureCall` to direct calls; static references need no target clone or heap closure
-- **Cross compilation units**: Use pre-reference-count external ANF templates to create local helper and target clones without changing prebuilt functions
-- **Bound transformation size**: Skip large helpers/targets and charge every specialized functional argument against the sixteen-pair program budget
-
----
-
 ## Pass 2.4.5: ANF to high-level SSA (`SSAANF.fs`)
 
-**Input**: ANF after higher-order specialization
+**Input**: Inlined ANF
 **Output**: High-level SSA blocks with explicit edges and block parameters
 
 ### Responsibilities
 - **Build CFG**: Convert structured ANF joins and branches to basic blocks
 - **Freshen values**: Give reused ANF temporaries distinct SSA definitions
 - **Carry joins**: Pass typed values on edges to block parameters
+
+## Pass 2.4.6: Known Closure Specialization (`SSAHigherOrderSpecialization.fs`)
+
+**Input**: Typed SSA blocks
+**Output**: SSA with selected higher-order helpers specialized
+
+### Responsibilities
+
+- **Propagate callable facts**: Track known closures and static function references through aliases, branch values and joins, and function returns
+- **Specialize complete call shapes**: Clone a helper once for all eligible known functional arguments while retaining the generic closure path for unknown values
+- **Pass captures directly**: Replace closure arguments with ordinary capture parameters and lower `ClosureCall` to direct calls; static references need no target clone or heap closure
+- **Cross compilation units**: Use pre-reference-count external templates converted to SSA to create local helper and target clones without changing prebuilt functions
+- **Bound transformation size**: Skip large helpers/targets and charge every specialized functional argument against the sixteen-pair program budget
+
+---
 
 ## Pass 2.5: Direct-Call Specialization (`SSADirectCallSpecialization.fs`)
 

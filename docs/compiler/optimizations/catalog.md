@@ -98,14 +98,14 @@ cover recursive signatures, managed literals, and aggregate arguments.
 
 ## Higher-order specialization
 
-`passes/anf/ANF_HigherOrderSpecialization.fs` propagates statically known
+`passes/anf/SSAHigherOrderSpecialization.fs` propagates statically known
 callable identities through local aliases, equal branch values and joins, and
 function returns. At a direct helper call, one clone specializes every eligible
 known functional argument together. Captured fields become ordinary parameters;
 static function references call their target directly without allocating a
 closure. The original helper remains available for dynamic call sites.
 
-Pre-reference-count external ANF candidates provide the same proof boundary
+Pre-reference-count external templates converted to SSA provide the same proof boundary
 across compilation units: any required helper and closure-target clones are
 emitted into the current unit while the prebuilt originals remain unchanged.
 Helpers larger than 256 nodes, targets larger than 32 nodes, unsupported uses
