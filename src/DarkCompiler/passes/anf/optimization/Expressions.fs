@@ -296,6 +296,32 @@ let private trySimplifyAdjacentLet
 
     match cexpr, body with
     | Call (fromInt64Id, [nativeIndex]),
+      Let (resultTid, Call (getAtId, [listValue; Var indexTid]), resultBody)
+        when hasName fromInt64Id "Darklang.Stdlib.Int.fromInt64"
+             && (Map.tryFind getAtId context.FunctionNames
+                 |> Option.exists (fun name ->
+                     name = "Darklang.Stdlib.List.getAt"
+                     || name.StartsWith("Darklang.Stdlib.List.getAt_")))
+             && indexTid = tid
+             && not (aExprUsesTemp tid resultBody) ->
+        // The converted index always fits in Int64. Call the list primitive
+        // with that index directly, preserving getAt's bounds check.
+        let internalGetAt =
+            Map.tryFind getAtId context.FunctionNames
+            |> Option.bind (fun name ->
+                let publicPrefix = "Darklang.Stdlib.List.getAt"
+                if name = publicPrefix || name.StartsWith(publicPrefix + "_") then
+                    let internalName =
+                        "Darklang.Stdlib.List.__getAt" + name.Substring(publicPrefix.Length)
+                    context.FunctionNames
+                    |> Map.toSeq
+                    |> Seq.tryPick (fun (id, displayName) ->
+                        if displayName = internalName then Some id else None)
+                else None)
+        internalGetAt
+        |> Option.map (fun target ->
+            Let (resultTid, Call (target, [listValue; nativeIndex]), resultBody))
+    | Call (fromInt64Id, [nativeIndex]),
       Let (
           resultTid,
           Call (getByteAtId, [value; Var indexTid]),

@@ -282,7 +282,7 @@ let buildStdlibWithTrace
                 match buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty stdlibFunctions Map.empty false passTimingRecorder with
                 | Error e ->
                     Error e
-                | Ok (anfFunctions, typeMap) ->
+                | Ok (anfFunctions, ssaFunctions, typeMap) ->
                     let stdlibFuncMap =
                         anfFunctions
                         |> List.map (fun f -> f.Name, f)
@@ -317,7 +317,7 @@ let buildStdlibWithTrace
                         None
                         None
                         "stdlib"
-                        anfFunctions
+                        ssaFunctions
                         typeMap
                         registries
                         None
@@ -519,7 +519,7 @@ let buildStdlibSpecializations
                         let stdlibOptions = defaultOptions
                         let sw = Stopwatch.StartNew()
                         buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty anfFuncs Map.empty false passTimingRecorder
-                        |> Result.bind (fun (anfFunctions, typeMap) ->
+                        |> Result.bind (fun (anfFunctions, ssaFunctions, typeMap) ->
                             let newAnfFuncMap =
                                 anfFunctions
                                 |> List.map (fun f -> f.Name, f)
@@ -535,7 +535,7 @@ let buildStdlibSpecializations
                                 None
                                 None
                                 "stdlib_specializations"
-                                anfFunctions
+                                ssaFunctions
                                 typeMap
                                 registries
                                 None

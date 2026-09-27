@@ -95,7 +95,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                         userOnly.OwnershipContracts
                         false
                         None)
-                |> Result.map (fun (userFunctions, _typeMap) ->
+                |> Result.map (fun (userFunctions, _ssaFunctions, _typeMap) ->
                     let reachableStdlibNames =
                         ANFDeadCodeElimination.getReachableStdlib
                             stdlib.StdlibANFCallGraph

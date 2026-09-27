@@ -197,7 +197,7 @@ let private allocateRegistersForFunction
             allocated
     allocatedFunc |> LIR_Peephole.removeSelfMovesFromFunction
 
-/// Run MIR+LIR passes (including register allocation) from ANF functions
+/// Run MIR+LIR passes (including register allocation) from SSA ANF functions.
 let internal lowerToAllocatedLir
     (target: Platform.Target)
     (verbosity: int)
@@ -207,7 +207,7 @@ let internal lowerToAllocatedLir
     (functionCaches: FunctionCompilationCaches option)
     (releasePlanSummaryCache: ARM64CodeGenTypes.ReleasePlanSummaryCache option)
     (stageSuffix: string)
-    (functions: ANF.Function list)
+    (functions: SSAANF.Function list)
     (typeMap: ANF.TypeMap)
     (registries: AST_to_ANF.Registries)
     (projectedMirRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
@@ -219,14 +219,18 @@ let internal lowerToAllocatedLir
     let functionOrder = functions |> List.map (fun f -> f.Name)
     // Function-affinity batches still call helpers compiled in sibling batches.
     // Keep the complete AOT return-type plan available while lowering each one.
-    let returnTypeReg = ANF_to_MIR.buildReturnTypeReg functions externalReturnTypes
-    let compileFunctions (functionsToCompile: ANF.Function list) : Result<LIR.Function list, string> =
+    let returnTypeReg =
+        externalReturnTypes
+        |> Map.map (fun _ (_, typ) -> typ)
+        |> fun external ->
+            functions
+            |> List.fold (fun types func -> Map.add func.Id func.ReturnType types) external
+    let compileFunctions (functionsToCompile: SSAANF.Function list) : Result<LIR.Function list, string> =
         if List.isEmpty functionsToCompile then
             Ok []
         else
             if verbosity >= 1 then println $"  [mir.lower] ANF → MIR{suffix}..."
             let mirStart = sw.Elapsed.TotalMilliseconds
-            let anfProgram = ANF.Program (functionsToCompile, ANF.Return ANF.UnitLiteral)
             let mirPhaseRecorder =
                 passTimingRecorder
                 |> Option.map (fun recorder ->
@@ -236,12 +240,12 @@ let internal lowerToAllocatedLir
                             Elapsed = TimeSpan.FromMilliseconds elapsedMs
                         })
             let mirResult =
-                ANF_to_MIR.toMIRFunctionsOnlyWithTrace
+                ANF_to_MIR.toMIRSSAFunctionsOnlyWithTrace
                     mirPhaseRecorder
                     projectedMirRegistries
                     registries.RecursiveMembers
                     (not options.DisableTCO)
-                    anfProgram
+                    functionsToCompile
                     typeMap
                     registries.FuncParams
                     registries.VariantLookup
@@ -389,7 +393,7 @@ let internal lowerToAllocatedLir
 
     let compileFunctionsWithTiming
         (label: string)
-        (functionsToCompile: ANF.Function list)
+        (functionsToCompile: SSAANF.Function list)
         : Result<LIR.Function list, string> =
         if List.isEmpty functionsToCompile then
             Ok []

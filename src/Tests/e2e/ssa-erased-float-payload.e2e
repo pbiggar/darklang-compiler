@@ -1,0 +1,4 @@
+// Probe erased float results through E2E value comparison.
+type ProbeResult<'t, 'e> = ProbeOk of t | ProbeErr of e
+let probeDouble (r: ProbeResult<Float, Int64>) : Float = match r with | ProbeOk v -> v + v | ProbeErr _ -> 0.0
+probeDouble (ProbeOk 2.5) = 5.0

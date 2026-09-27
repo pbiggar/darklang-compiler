@@ -136,6 +136,17 @@ let rec private freshenTypedDefinitions
                 afterDefinition with
                     FreshValueTypes = Map.add defined typ afterDefinition.FreshValueTypes
             }
+            let state' =
+                match operation with
+                | ANF.TypedAtom (ANF.Var source, aliasType) ->
+                    let freshSource = Map.tryFind source mapping |> Option.defaultValue source
+                    match Map.tryFind freshSource state'.FreshValueTypes with
+                    | Some (AST.TVar _ | AST.TInferenceVar _) ->
+                        { state' with
+                            FreshValueTypes =
+                                Map.add freshSource aliasType state'.FreshValueTypes }
+                    | _ -> state'
+                | _ -> state'
             freshenTypedDefinitions (Map.add id defined mapping) state' ctx' types' rest
             |> Result.map (fun (body, final, finalTypes) ->
                 ANF.Let (defined, operation', body), final, finalTypes))

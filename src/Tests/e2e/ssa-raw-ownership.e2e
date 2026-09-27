@@ -1,0 +1,4 @@
+// Managed values adopted from raw allocations must keep their initial ownership unit.
+Stdlib.Int.shiftRight (Stdlib.Int.fromInt64 4503599627370496L) (Stdlib.Int.fromInt64 1L) = stdout="2251799813685248\n" stderr=""
+match [42L] with | [value] -> value | _ -> 0L = 42L
+match [(1L, 2L), (3L, 4L)] with | [first, second] -> first.0 + second.1 | _ -> 0L = 5L

@@ -68,7 +68,7 @@ let internal retainExprForShape
     | None ->
         Crash.crash $"retainExprForShape: type '{typ}' does not have an RC retain operation"
 
-let private releaseExprForShape
+let internal releaseExprForShape
     (tempId: TempId)
     (typ: AST.SemanticType)
     (shape: RcShape)
