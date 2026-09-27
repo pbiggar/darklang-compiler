@@ -1,7 +1,7 @@
 """test_mergetrain_status.py - E2E tests for the repository status summary."""
 
-import os
 import json
+import os
 import pty
 import select
 import subprocess
@@ -18,9 +18,11 @@ from scripts.render_mergetrain_status import (
     benchmark_detail,
     benchmark_diff,
     human_age,
+    last_test_runtime,
     percentage,
     render,
     render_attention_job,
+    wrap_display,
 )
 
 
@@ -229,6 +231,34 @@ class MergetrainStatusTests(unittest.TestCase):
         self.assertEqual(benchmark_changes(Path(".")), [])
         self.assertIn("-10", mock_git.call_args.args)
 
+    def test_wrap_display_counts_colored_and_wide_terminal_cells(self) -> None:
+        wrapped = wrap_display("\x1b[32mabcdef\x1b[0m 中文", 4)
+        self.assertEqual(wrapped, "\x1b[32mabcd\nef\x1b[0m \n中文")
+
+    @patch("scripts.render_mergetrain_status.subprocess.run")
+    def test_runtime_uses_latest_successful_tests_gate(
+        self, mock_run: MagicMock
+    ) -> None:
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = json.dumps(
+            {"items": [
+                {"gates": [
+                    {"name": "tests", "state": "success", "duration_seconds": 42.5,
+                     "finished_at": "2026-09-27T10:00:00+00:00"},
+                    {"name": "tests", "state": "reused", "duration_seconds": 0,
+                     "finished_at": "2026-09-27T11:00:00+00:00"},
+                ]},
+                {"gates": [
+                    {"name": "tests", "state": "success", "duration_seconds": 41.2,
+                     "finished_at": "2026-09-27T09:00:00+00:00"},
+                ]},
+            ]}
+        )
+        self.assertEqual(
+            last_test_runtime(Path(".")),
+            (42.5, "2026-09-27T10:00:00+00:00"),
+        )
+
     def test_generated_result_uses_preceding_source_title_within_80_columns(
         self,
     ) -> None:
@@ -315,6 +345,10 @@ class MergetrainStatusTests(unittest.TestCase):
             fake_mergetrain.write_text(
                 "#!/usr/bin/env python3\n"
                 "import json\n"
+                "import sys\n"
+                "if 'history' in sys.argv:\n"
+                "    print(json.dumps({'items': []}))\n"
+                "    raise SystemExit(0)\n"
                 f"with open({str(calls_path)!r}, 'a', encoding='utf-8') as calls:\n"
                 "    calls.write('status\\n')\n"
                 "print(json.dumps({\n"
@@ -371,11 +405,20 @@ class MergetrainStatusTests(unittest.TestCase):
                 read_until(b"[m] more merges")
                 self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"j")
-                read_until(b"\x1b[H\x1b[Jin train:")
+                read_until(b"\x1b[H\x1b[Jtest runtime:")
                 os.write(master, b"\x1b[A")
                 read_until(b"\x1b[H\x1b[Jhealth: healthy")
                 self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"m")
+                read_until(b"[m] fewer merges")
+                os.write(master, b"0")
+                read_until(b"benchmarks p2")
+                os.write(master, b"G")
+                bottom = read_until(b"benchmarks p2")
+                self.assertNotIn(b"\x1b[H\x1b[Jhealth: healthy", bottom)
+                os.write(master, b"b")
+                read_until(b"benchmarks p1")
+                os.write(master, b"g")
                 read_until(b"[m] fewer merges")
                 os.write(master, b"1")
                 detail_output = read_until(b"[q/Esc] back")
@@ -396,12 +439,15 @@ class MergetrainStatusTests(unittest.TestCase):
                     process.wait(timeout=10)
                 os.close(master)
 
+    @patch("scripts.render_mergetrain_status.last_test_runtime",
+           return_value=(42.5, "2026-09-27T10:00:00+00:00"))
     @patch("scripts.render_mergetrain_status.benchmark_changes", return_value=[])
     @patch("scripts.render_mergetrain_status.recent_merges", return_value=[])
     def test_conflict_details_are_collapsed_and_can_be_toggled(
         self,
         _recent_merges: object,
         _benchmark_changes: object,
+        _last_test_runtime: object,
     ) -> None:
         reason = "merge conflict in src/Compiler.fs\nfull conflicting hunk"
         payload = {
@@ -436,6 +482,7 @@ class MergetrainStatusTests(unittest.TestCase):
         expanded = render(payload, Path("."), color=False, show_conflicts=True)
 
         self.assertIn("— conflict", collapsed)
+        self.assertIn("test runtime: 42.5s", collapsed)
         self.assertNotIn("full conflicting hunk", collapsed)
         self.assertIn("[c] show full conflict details", collapsed)
         self.assertIn(reason, expanded)

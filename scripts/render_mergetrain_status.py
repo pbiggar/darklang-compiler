@@ -6,8 +6,10 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import subprocess
 import sys
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -224,6 +226,86 @@ def running_train_step(repo: Path, jobs: list[dict[str, Any]]) -> str | None:
     return str(phase).replace("_", " ") if phase else None
 
 
+def last_test_runtime(repo: Path) -> tuple[float, str] | None:
+    completed = subprocess.run(
+        ["mergetrain", "--repo", str(repo), "history", "--json", "--limit", "50"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return None
+    try:
+        history = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(history, dict) or not isinstance(history.get("items"), list):
+        return None
+    gates = [
+        gate
+        for item in history["items"]
+        if isinstance(item, dict) and isinstance(item.get("gates"), list)
+        for gate in item["gates"]
+        if isinstance(gate, dict)
+        and gate.get("name") == "tests"
+        and gate.get("state") == "success"
+        and isinstance(gate.get("duration_seconds"), (int, float))
+        and math.isfinite(gate["duration_seconds"])
+        and gate["duration_seconds"] > 0
+        and isinstance(gate.get("finished_at"), str)
+    ]
+    if not gates:
+        return None
+    for latest in sorted(gates, key=lambda gate: gate["finished_at"], reverse=True):
+        try:
+            finished = datetime.fromisoformat(latest["finished_at"])
+        except ValueError:
+            continue
+        if finished.tzinfo is not None:
+            return float(latest["duration_seconds"]), latest["finished_at"]
+    return None
+
+
+ANSI_SGR = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def wrap_display(text: str, columns: int) -> str:
+    """Hard-wrap visible terminal cells so viewport scrolling counts real rows."""
+    if columns < 1:
+        return text
+    rows: list[str] = []
+    for logical_line in text.splitlines():
+        parts: list[str] = []
+        width = 0
+        position = 0
+        for match in ANSI_SGR.finditer(logical_line):
+            for char in logical_line[position : match.start()]:
+                char_width = 0 if unicodedata.combining(char) else (
+                    2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
+                )
+                if width and width + char_width > columns:
+                    rows.append("".join(parts))
+                    parts = []
+                    width = 0
+                parts.append(char)
+                width += char_width
+            parts.append(match.group())
+            position = match.end()
+        for char in logical_line[position:]:
+            char_width = 0 if unicodedata.combining(char) else (
+                2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
+            )
+            if width and width + char_width > columns:
+                rows.append("".join(parts))
+                parts = []
+                width = 0
+            parts.append(char)
+            width += char_width
+        rows.append("".join(parts))
+    return "\n".join(rows)
+
+
 def is_conflict_reason(reason: object) -> bool:
     return isinstance(reason, str) and "conflict" in reason.casefold()
 
@@ -412,11 +494,14 @@ def benchmark_source(repo: Path, commit: str, subject: str) -> tuple[str, str] |
     return parent, git(repo, "show", "-s", "--format=%s", parent)
 
 
-def benchmark_changes(repo: Path, limit: int = 10) -> list[BenchmarkChange]:
+def benchmark_changes(
+    repo: Path, limit: int = 10, *, skip: int = 0
+) -> list[BenchmarkChange]:
     history = git(
         repo,
         "log",
         f"-{limit}",
+        f"--skip={skip}",
         "--format=%H%x09%h%x09%cI%x09%s",
         "--",
         "benchmarks/RESULTS.md",
@@ -683,16 +768,19 @@ def render(
     merge_limit: int = 5,
     benchmark_detail_index: int | None = None,
     benchmark_diff_index: int | None = None,
+    benchmark_page: int = 0,
     columns: int = 80,
 ) -> str:
     if payload.get("contract_version") != 4:
         raise ValueError(
             f"unsupported mergetrain contract version: {payload.get('contract_version')}"
         )
+    if benchmark_page < 0:
+        raise ValueError("benchmark page must be nonnegative")
 
     benchmark_index = benchmark_detail_index or benchmark_diff_index
     if benchmark_index is not None:
-        changes = benchmark_changes(repo)
+        changes = benchmark_changes(repo, limit=9, skip=benchmark_page * 9)
         if benchmark_index < 1 or benchmark_index > len(changes):
             return "benchmark result unavailable"
         commit = changes[benchmark_index - 1].commit
@@ -712,6 +800,15 @@ def render(
         f"{styled(state.upper(), state_style(state), color)}: {payload['summary']}",
         f"next: {styled(next_action, CYAN, color)}",
     ]
+    runtime = last_test_runtime(repo)
+    if runtime:
+        seconds, finished_at = runtime
+        lines.append(
+            f"test runtime: {seconds:.1f}s "
+            f"({human_age(finished_at)} ago, last passed train gate)"
+        )
+    else:
+        lines.append("test runtime: unavailable")
     if action.get("requires_approval") != "none":
         lines.append(f"approval: {action['requires_approval']}")
     lines.extend(
@@ -755,9 +852,13 @@ def render(
         [history_line(merge, color, now=now) for merge in merges] or ["(none)"]
     )
 
-    changes = benchmark_changes(repo)
+    changes = benchmark_changes(repo, limit=9, skip=benchmark_page * 9)
     lines.append("")
-    lines.append(styled("recent benchmark results:", BOLD, color))
+    heading = "recent benchmark results:"
+    if benchmark_page:
+        first = benchmark_page * 9 + 1
+        heading = f"recent benchmark results ({first}–{first + len(changes) - 1}):"
+    lines.append(styled(heading, BOLD, color))
     ratio_width = max((len(change.ratio) for change in changes), default=0)
     changes_text = [percentage(change.change) for change in changes]
     change_width = max((len(value) + 2 for value in changes_text), default=0)
@@ -797,16 +898,18 @@ def main() -> int:
     parser.add_argument("--merge-limit", type=int, default=5)
     parser.add_argument("--benchmark-detail-index", type=int)
     parser.add_argument("--benchmark-diff-index", type=int)
+    parser.add_argument("--benchmark-page", type=int, default=0)
     parser.add_argument("--columns", type=int, default=80)
     parser.add_argument("--attention-job-id", type=int)
     parser.add_argument(
         "--attempt-dir", type=Path,
         default=Path("/tmp/dark-compiler-mergetrain-codex-attempts"),
     )
+    parser.add_argument("--wrap", action="store_true")
     args = parser.parse_args()
     try:
         payload = json.load(sys.stdin)
-        print(
+        rendered = (
             render_attention_job(
                 args.repo.resolve(), args.attention_job_id,
                 color=args.color, attempt_dir=args.attempt_dir,
@@ -820,9 +923,11 @@ def main() -> int:
                 merge_limit=args.merge_limit,
                 benchmark_detail_index=args.benchmark_detail_index,
                 benchmark_diff_index=args.benchmark_diff_index,
+                benchmark_page=args.benchmark_page,
                 columns=args.columns,
             )
         )
+        print(wrap_display(rendered, args.columns) if args.wrap else rendered)
     except (
         json.JSONDecodeError,
         KeyError,

@@ -14,6 +14,7 @@ color_mode=auto
 show_conflicts=false
 interactive_input=false
 show_more_merges=false
+benchmark_page=0
 benchmark_detail_index=""
 show_benchmark_diff=false
 attention_job_id=""
@@ -27,8 +28,9 @@ usage() {
 Usage: ./mergetrain-status [OPTIONS]
 
 Continuously display merge-train health, active jobs, recent integration
-merges, and the ten latest benchmark results. Interactive terminals support
+merges, and benchmark results in pages of nine. Interactive terminals support
 scrolling and keyboard shortcuts and are redrawn in place as complete frames.
+Use 1-9 for details, 0 for the next benchmark page, and b for the previous page.
 
 Options:
   --repo PATH          Repository whose merge-train status is displayed.
@@ -37,6 +39,7 @@ Options:
                        Default: $attempt_dir
   --interval SECONDS   Delay between status refreshes.
                        Default: $interval_seconds
+  --benchmark-page N   Start at benchmark page N (zero-based).
   --color WHEN         Colorize output: auto, always, or never.
                        Default: $color_mode
   --no-color           Equivalent to --color never.
@@ -63,6 +66,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --interval)
       interval_seconds="$2"
+      shift 2
+      ;;
+    --benchmark-page)
+      benchmark_page="$2"
       shift 2
       ;;
     --color)
@@ -109,6 +116,10 @@ if [[ ! "$interval_seconds" =~ ^[1-9][0-9]*$ ]]; then
   echo "--interval must be a positive integer" >&2
   exit 2
 fi
+if [[ ! "$benchmark_page" =~ ^(0|[1-9][0-9]*)$ ]]; then
+  echo "--benchmark-page must be a nonnegative integer" >&2
+  exit 2
+fi
 if [[ "$color_mode" != auto && "$color_mode" != always && "$color_mode" != never ]]; then
   echo "--color must be auto, always, or never" >&2
   exit 2
@@ -152,7 +163,11 @@ while true; do
     if [[ ! "$terminal_columns" =~ ^[1-9][0-9]*$ ]]; then
       terminal_columns=80
     fi
-    renderer_args=(--repo "$repo_root" --attempt-dir "$attempt_dir" --columns "$terminal_columns")
+    renderer_args=(--repo "$repo_root" --attempt-dir "$attempt_dir" \
+      --columns "$terminal_columns" --benchmark-page "$benchmark_page")
+    if [[ "$interactive_redraw" == true ]]; then
+      renderer_args+=(--wrap)
+    fi
     if [[ "$show_more_merges" == true ]]; then
       renderer_args+=(--merge-limit 20)
     fi
@@ -200,7 +215,7 @@ for job in json.load(sys.stdin).get("attention_jobs", []):
     if [[ ! "$terminal_lines" =~ ^[1-9][0-9]*$ ]]; then
       terminal_lines=24
     fi
-    viewport_lines=$((terminal_lines - 2))
+    viewport_lines=$((terminal_lines - 3))
     if ((viewport_lines < 1)); then
       viewport_lines=1
     fi
@@ -219,22 +234,26 @@ for job in json.load(sys.stdin).get("attention_jobs", []):
     first_line=$((scroll_offset + 1))
     last_line=$((scroll_offset + viewport_lines))
     visible_output="$(printf '%s\n' "$status_output" | sed -n "${first_line},${last_line}p")"
+    other_controls=""
     if [[ "$retry_pending" == true ]]; then
       controls="Retry #$attention_job_id? Approval may become manual. [y] confirm  [n/Esc] cancel"
     elif [[ -n "$attention_job_id" ]]; then
       controls="[↑/↓ or j/k] scroll  [n/p] next/previous  [r] retry  [q/Esc] back"
     elif [[ -n "$benchmark_detail_index" ]]; then
       if [[ "$show_benchmark_diff" == true ]]; then
-        controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [d] change report  [q/Esc] back"
+        controls="[j/k] scroll [PgUp/Dn] page [d] report [q/Esc] back"
       else
-        controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [d] commit diff  [q/Esc] back"
+        controls="[j/k] scroll [PgUp/Dn] page [d] diff [q/Esc] back"
       fi
-    elif [[ "$show_more_merges" == true ]]; then
-      controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [a] attention  [m] fewer merges  [1-9,0] details  [c] conflicts  [q] quit"
     else
-      controls="[↑/↓ or j/k] scroll  [PgUp/PgDn] page  [a] attention  [m] more merges  [1-9,0] details  [c] conflicts  [q] quit"
+      controls="[j/k] scroll [PgUp/Dn] page [1-9] detail [0] next [b] prev"
+      if [[ "$show_more_merges" == true ]]; then
+        other_controls="[a] attention [m] fewer merges [c] conflicts [q] quit  benchmarks p$((benchmark_page + 1))"
+      else
+        other_controls="[a] attention [m] more merges [c] conflicts [q] quit  benchmarks p$((benchmark_page + 1))"
+      fi
     fi
-    printf '\033[H\033[J%s\n\n%s\n' "$visible_output" "$controls"
+    printf '\033[H\033[J%s\n%s\n%s\n' "$visible_output" "$controls" "$other_controls"
   else
     printf '%s\n' "$status_output"
   fi
@@ -381,8 +400,19 @@ for job in json.load(sys.stdin).get("attention_jobs", []):
           ;;
         0)
           if [[ -z "$benchmark_detail_index" ]]; then
-            benchmark_detail_index=10
-            show_benchmark_diff=false
+            benchmark_count="$(git -C "$repo_root" rev-list --count HEAD -- benchmarks/RESULTS.md)"
+            if (((benchmark_page + 1) * 9 < benchmark_count)); then
+              benchmark_page=$((benchmark_page + 1))
+            else
+              benchmark_page=0
+            fi
+            scroll_offset=0
+            refresh_status=true
+          fi
+          ;;
+        b)
+          if [[ -z "$benchmark_detail_index" && "$benchmark_page" -gt 0 ]]; then
+            benchmark_page=$((benchmark_page - 1))
             scroll_offset=0
             refresh_status=true
           fi
