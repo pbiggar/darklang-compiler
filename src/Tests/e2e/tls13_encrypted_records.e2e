@@ -1,0 +1,90 @@
+// tls13_encrypted_records.e2e - AES-GCM vectors and TLS record authentication.
+
+(let key = Stdlib.Blob.fromHex "00000000000000000000000000000000"
+ let nonce = Stdlib.Blob.fromHex "000000000000000000000000"
+ match (key, nonce) with
+ | (Ok k, Ok n) -> Stdlib.AesGcm.encrypt k n Stdlib.Blob.empty Stdlib.Blob.empty
+                  |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "Invalid test vector")
+  = Ok "58E2FCCEFA7E3061367F1D57A4E7455A"
+
+(let key = Stdlib.Blob.fromHex "00000000000000000000000000000000"
+ let nonce = Stdlib.Blob.fromHex "000000000000000000000000"
+ let plain = Stdlib.Blob.fromHex "00000000000000000000000000000000"
+ match (key, nonce, plain) with
+ | (Ok k, Ok n, Ok p) -> Stdlib.AesGcm.encrypt k n Stdlib.Blob.empty p
+                         |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "Invalid test vector")
+  = Ok "0388DACE60B6A392F328C2B971B2FE78AB6E47D42CEC13BDF53A67B21257BDDF"
+
+(let key = Stdlib.Blob.fromHex "00000000000000000000000000000000"
+ let nonce = Stdlib.Blob.fromHex "000000000000000000000000"
+ let sealed = Stdlib.Blob.fromHex "0388DACE60B6A392F328C2B971B2FE78AB6E47D42CEC13BDF53A67B21257BDDF"
+ match (key, nonce, sealed) with
+ | (Ok k, Ok n, Ok s) -> Stdlib.AesGcm.decrypt k n Stdlib.Blob.empty s
+                          |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "Invalid test vector")
+  = Ok "00000000000000000000000000000000"
+
+(let key = Stdlib.Blob.fromHex "00000000000000000000000000000000"
+ let nonce = Stdlib.Blob.fromHex "000000000000000000000000"
+ let corrupt = Stdlib.Blob.fromHex "0388DACE60B6A392F328C2B971B2FE78AB6E47D42CEC13BDF53A67B21257BDDE"
+ match (key, nonce, corrupt) with
+ | (Ok k, Ok n, Ok s) -> Stdlib.AesGcm.decrypt k n Stdlib.Blob.empty s
+                          |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "Invalid test vector")
+  = Error "AES-GCM authentication failed"
+
+(let key = Stdlib.Blob.fromHex "FEFFE9928665731C6D6A8F9467308308"
+ let nonce = Stdlib.Blob.fromHex "CAFEBABEFACEDBADDECAF888"
+ let aad = Stdlib.Blob.fromHex "FEEDFACEDEADBEEFFEEDFACEDEADBEEFABADDAD2"
+ let plain = Stdlib.Blob.fromHex "D9313225F88406E5A55909C5AFF5269A86A7A9531534F7DA2E4C303D8A318A721C3C0C95956809532FCF0E2449A6B525B16AEDF5AA0DE657BA637B391AAFD255"
+ match (key, nonce, aad, plain) with
+ | (Ok k, Ok n, Ok a, Ok p) -> Stdlib.AesGcm.encrypt k n a p
+                                 |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "Invalid test vector")
+  = Ok "42831EC2217774244B7221B784D0D49CE3AA212F2C02A4E035C17E2329ACA12E21D514B25466931C7D8F6A5AAC84AA051BA30B396A0AAC973D58E091473F5985DA80CE830CFDA02DA2A218A1744F4C76"
+
+(let secret = Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000"
+ match secret with
+ | Error _ -> Error "Invalid test vector"
+ | Ok s -> Stdlib.Tls13.trafficKeys s
+           |> Stdlib.Result.map (fun keys ->
+                (Stdlib.Blob.toHex keys.key, Stdlib.Blob.toHex keys.iv, keys.sequence)))
+  = Ok ("CBEE7571C611039CA327A2E879DFCD45", "3F22FBB61C1412E692986D64", 0L)
+
+(let secret = Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000"
+ match secret with
+ | Error _ -> Error "Invalid test vector"
+ | Ok s ->
+     match Stdlib.Tls13.trafficKeys s with
+     | Error message -> Error message
+     | Ok keys ->
+         match Stdlib.Tls13.sealRecord keys 23L (Stdlib.String.toBlob "hello") with
+         | Error message -> Error message
+         | Ok sealed ->
+             match Stdlib.Tls13.parseRecord sealed.bytes with
+             | Error _ -> Error "Record parsing failed"
+             | Ok record ->
+                 Stdlib.Tls13.openRecord keys record
+                 |> Stdlib.Result.map (fun opened ->
+                      (opened.contentType, Stdlib.Blob.toHex opened.content,
+                       opened.nextKeys.sequence, sealed.nextKeys.sequence)))
+  = Ok (23L, "68656C6C6F", 1L, 1L)
+
+(let secret = Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000"
+ match secret with
+ | Error _ -> Error "Invalid test vector"
+ | Ok s ->
+     match Stdlib.Tls13.trafficKeys s with
+     | Error message -> Error message
+     | Ok keys ->
+         match Stdlib.Tls13.sealRecord keys 22L (Stdlib.String.toBlob "hello") with
+         | Error message -> Error message
+         | Ok sealed ->
+             match Stdlib.Tls13.parseRecord sealed.bytes with
+             | Error _ -> Error "Record parsing failed"
+             | Ok record ->
+                 Stdlib.Tls13.openRecord sealed.nextKeys record
+                 |> Stdlib.Result.map (fun opened -> Stdlib.Blob.toHex opened.content))
+  = Error "AES-GCM authentication failed"
