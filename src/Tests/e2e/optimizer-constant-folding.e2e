@@ -1085,29 +1085,8 @@ nestedPhiDestCopy false true 1L 2L 3L = 8L
 nestedPhiDestCopy false false 1L 2L 3L = 10L
 
 // ===================================================================
-// Constant Branch Simplification Change Flag (mutation #160)
-// ===================================================================
-// This test exercises the || operator in simplifyConstantBranches at line 793:
-//   let changed' = ch || term' <> block.Terminator
-//
-// The change flag aggregates across multiple basic blocks in the CFG.
-// With ||: if ANY block has a constant branch simplified, changed=true
-// With &&: ALL blocks must have changes for changed=true (WRONG!)
-//
-// The simplifyConstantBranches function converts:
-//   Branch(BoolConst true, trueLabel, falseLabel) -> Jump trueLabel
-//   Branch(BoolConst false, trueLabel, falseLabel) -> Jump falseLabel
-//
-// If || becomes &&, the accumulator starts with ch=false and:
-// - After first block with change: ch = false && true = false
-// - After block without change: ch = false && false = false
-// - Result: always false, even when changes occurred!
-//
-// This causes the optimizer to stop iterating early. The test creates:
-// 1. A function with multiple blocks (via conditionals)
-// 2. One block has a constant condition (if true then ...) that gets simplified
-// 3. Other blocks have runtime conditions (no simplification)
-// 4. Multi-pass optimization depends on the change flag
+// SCCP simplifies a constant branch even when neighboring branches remain dynamic.
+// The resulting CFG must continue through the optimizer's fixed-point loop.
 
 // Test: constant branch in one block, runtime condition in another
 // The inner 'if true then 10 else 20' should simplify to just 10
@@ -1181,30 +1160,8 @@ nestedConstantBranches true = 200L
 nestedConstantBranches false = 400L
 
 // ===================================================================
-// Phi Source Trimming Change Flag Propagation (mutation #161)
-// ===================================================================
-// This test exercises the || operator in eliminateUnreachableBlocks at line 831:
-//   (acc' @ [instr'], ch' || sources' <> sources)
-//
-// The change flag accumulates across multiple phi instructions in a block.
-// With ||: if ANY phi has sources trimmed, instrChanged=true
-// With &&: ALL phis must have sources trimmed for instrChanged=true (WRONG!)
-//
-// If || becomes &&, then:
-// - First phi has sources trimmed: ch' = false || true = true
-// - Second phi has no sources trimmed: with mutation ch' = true && false = false
-// - The change flag gets reset when a phi doesn't change!
-//
-// However, this is combined with removedBlocks on line 839:
-//   ({ cfg with Blocks = blocks' }, removedBlocks || phiChanged)
-//
-// If blocks are removed (which happens whenever phi sources are trimmed from
-// unreachable predecessors), the function still returns changed=true.
-//
-// The test creates a scenario with:
-// 1. A constant condition that makes one branch unreachable
-// 2. Multiple variables assigned in both branches (creates multiple phis at merge)
-// 3. Verification that the optimizer correctly handles this pattern
+// When SCCP removes a branch, every phi at the affected join must discard
+// inputs from the unreachable predecessor.
 
 // Test: multiple phi nodes in merge block after constant branch simplification
 // The constant 'if true' creates an unreachable else-branch

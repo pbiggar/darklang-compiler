@@ -6,20 +6,16 @@ open MIR
 open SSA_Construction
 
 type OptimizeOptions = {
-    EnableConstFolding: bool
+    EnableSCCP: bool
     EnableCSE: bool
-    EnableCopyProp: bool
     EnableDCE: bool
-    EnableCFGSimplify: bool
     EnableLICM: bool
 }
 
 let defaultOptimizeOptions = {
-    EnableConstFolding = true
+    EnableSCCP = true
     EnableCSE = true
-    EnableCopyProp = true
     EnableDCE = true
-    EnableCFGSimplify = true
     EnableLICM = true
 }
 

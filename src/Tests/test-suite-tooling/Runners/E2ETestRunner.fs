@@ -1013,11 +1013,9 @@ let private buildCompilerOptions (test: E2ETest)
         DisableInlining = test.DisableInlining
         DisableTCO = test.DisableTCO
         DisableMIROpt = test.DisableMIROpt
-        DisableMIRConstFolding = test.DisableMIRConstFolding
+        DisableMIRSCCP = test.DisableMIRSCCP
         DisableMIRCSE = test.DisableMIRCSE
-        DisableMIRCopyProp = test.DisableMIRCopyProp
         DisableMIRDCE = test.DisableMIRDCE
-        DisableMIRCFGSimplify = test.DisableMIRCFGSimplify
         DisableMIRLICM = test.DisableMIRLICM
         DisableLIROpt = test.DisableLIROpt
         DisableLIRPeephole = test.DisableLIRPeephole

@@ -38,11 +38,9 @@ let private compileMirToLir
         formatPassGroup
             "MIR Optimizations"
             [
-                ("const_folding", mirOptions.EnableConstFolding)
+                ("sccp", mirOptions.EnableSCCP)
                 ("cse", mirOptions.EnableCSE)
-                ("copy_prop", mirOptions.EnableCopyProp)
                 ("dce", mirOptions.EnableDCE)
-                ("cfg_simplify", mirOptions.EnableCFGSimplify)
                 ("licm", mirOptions.EnableLICM)
             ]
     if verbosity >= 1 then println $"  [mir.optimize] {mirPassLabel}{suffix}..."

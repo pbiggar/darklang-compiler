@@ -327,13 +327,13 @@ validation. The production pipeline does not run MIR SSA reconstruction.
   integer and Boolean SSA values with executable CFG edges, then prune
   unreachable blocks and phi inputs
 - **CSE**: Eliminate duplicate pure expressions
-- **Copy propagation**: Simplify moves and trivial phis
+- **Copy propagation inside SCCP**: Simplify moves and trivial phis
 - **DCE**: Remove unused instructions
 - **CFG simplification**: Remove empty blocks / redirect edges
 - **LICM**: Hoist loop-invariant expressions
 
 ### Sub-passes (grouped)
-- `sccp`, `const_folding`, `cse`, `copy_prop`, `dce`, `cfg_simplify`, `licm`
+- `sccp`, `cse`, `dce`, `cfg_simplify`, `licm`
 
 The default path performs constant folding, copy substitution, constant branch
 simplification, and unreachable-block pruning inside SCCP's analysis and

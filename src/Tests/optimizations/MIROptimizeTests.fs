@@ -1320,6 +1320,63 @@ let testSccpPhiIgnoresNonExecutableIncomingEdge () : TestResult =
              && not (Map.containsKey dead optimized.Blocks) -> Ok ()
     | _ -> Error "Expected SCCP phi evaluation to ignore the non-executable incoming edge"
 
+let testSccpCombinesCopyFoldingAndDeadEdgePruning () : TestResult =
+    let block label instrs terminator : BasicBlock = {
+        Label = label
+        Instrs = instrs
+        Terminator = terminator
+    }
+    let entry = Label "entry"
+    let live = Label "live"
+    let dead = Label "dead"
+    let join = Label "join"
+    let input = VReg 0
+    let constant = VReg 1
+    let copy = VReg 2
+    let folded = VReg 3
+    let condition = VReg 4
+    let result = VReg 5
+    let copiedUse = VReg 6
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry,
+                    block entry [
+                        Mov (constant, Int64Const 20L, Some AST.TInt64)
+                        Mov (copy, Register constant, Some AST.TInt64)
+                        BinOp (folded, Add, Register copy, Int64Const 22L, AST.TInt64)
+                        BinOp (condition, Eq, Register folded, Int64Const 42L, AST.TInt64)
+                        BinOp (copiedUse, Add, Register copy, Register input, AST.TInt64)
+                    ] (Branch (Register condition, live, dead)))
+                (live, block live [] (Jump join))
+                (dead, block dead [] (Jump join))
+                (join,
+                    block join [
+                        Phi (
+                            result,
+                            [(Register copiedUse, live); (Int64Const 99L, dead)],
+                            Some AST.TInt64
+                        )
+                    ] (Ret (Register result)))
+            ]
+    }
+
+    let optimized, changed = applySparseConditionalSimplification cfg
+    match Map.tryFind entry optimized.Blocks, Map.tryFind join optimized.Blocks with
+    | Some entryBlock, Some joinBlock
+        when changed
+             && entryBlock.Terminator = Jump live
+             && not (Map.containsKey dead optimized.Blocks)
+             && List.contains (Mov (folded, Int64Const 42L, Some AST.TInt64)) entryBlock.Instrs
+             && List.contains (Mov (condition, BoolConst true, Some AST.TBool)) entryBlock.Instrs
+             && List.contains
+                 (BinOp (copiedUse, Add, Int64Const 20L, Register input, AST.TInt64))
+                 entryBlock.Instrs
+             && joinBlock.Instrs = [Phi (result, [(Register copiedUse, live)], Some AST.TInt64)] ->
+        Ok ()
+    | _ -> Error $"Expected SCCP to fold through a copy, remove a dead branch, and trim its phi input: {optimized}"
+
 let testSccpLoopBackedgeWidensInductionValue () : TestResult =
     let block label instrs terminator : BasicBlock = {
         Label = label
@@ -1889,6 +1946,7 @@ let tests = [
     ("MIR same-target branch becomes jump and drops condition", testSameTargetBranchBecomesJumpAndDropsCondition)
     ("MIR SCCP propagates phi constants and removes unreachable edges", testSccpPropagatesPhiConstantAndRemovesUnreachableEdge)
     ("MIR SCCP ignores non-executable phi inputs", testSccpPhiIgnoresNonExecutableIncomingEdge)
+    ("MIR SCCP combines copy folding and dead-edge pruning", testSccpCombinesCopyFoldingAndDeadEdgePruning)
     ("MIR SCCP widens loop values after executable backedges", testSccpLoopBackedgeWidensInductionValue)
     ("MIR SCCP tracks Float and String constants without bypass", testSccpTracksFloatAndStringConstantsWithoutBypass)
     ("MIR SCCP stabilizes NaN constants", testSccpStabilizesNanConstants)
