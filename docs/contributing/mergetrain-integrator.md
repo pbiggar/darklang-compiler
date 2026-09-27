@@ -30,17 +30,35 @@ For every attention job, the integrator:
    the verified replacement before dismissing the old blocked row, so a crash
    cannot lose the repair.
 
+For `approval_execution_policy_changed`, the integrator records the original
+job's policy failure and the exact `.mergetrain.yaml` diff between its enqueue
+base and current integration in an attempt artifact. It automatically recovers
+only when the job did not change that file, the current control checkout matches
+integration, and the integrated policy change is limited to `gates` or
+`gate_parallelism`. It replays the job on current integration, runs the ordinary
+independent readiness checks, then runs `mergetrain validate` in an isolated
+queue against the current gate policy. Only a successful validation is enqueued
+with a fresh bounded `--auto` approval. The daemon repeats its gates before any
+deployment. Changes to reuse, verify hooks, or other execution policy settings
+remain operator decisions because pre-push gate validation cannot prove them.
+
 Every attention job in a status snapshot is considered. An unrecoverable job
 does not prevent later blockers from being inspected or the daemon from
 deploying an independently validated subset.
 
 ## Operator boundaries
 
-Automatic recovery is limited to merge and semantic conflicts,
-non-fast-forward push races, and attributable build, test, or benchmark gate
-failures. Unknown categories, policy failures, non-fast-forward-independent
-push rejection, repeated transient failures, dirty owning worktrees, and
-failed independent verification remain operator decisions.
+Automatic recovery is limited to the cases above, non-fast-forward push races,
+and attributable build, test, or benchmark gate failures. Unknown categories,
+policy failures outside the gate-change case, non-fast-forward-independent push
+rejection, repeated transient failures, dirty owning worktrees, and failed
+independent verification remain operator decisions.
+
+`./mergetrain-status` opens attention jobs with `a`. The detail view shows the
+recorded failure and policy diff, and `n`/`p` move between attention jobs. `r`
+offers a confirmed `mergetrain retry` for the selected job. Retry does not renew
+an expired unattended policy approval: mergetrain creates a manual replacement
+when the policy no longer matches. The status UI never deploys a job.
 
 Generated `benchmarks/RESULTS.md` is never hand-merged. Source conflicts are
 resolved first, then a successful improving full recording run must regenerate

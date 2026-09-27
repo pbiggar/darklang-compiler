@@ -92,6 +92,102 @@ def active_jobs(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return [by_id[job_id] for job_id in sorted(by_id)]
 
 
+def render_attention_job(
+    repo: Path, job_id: int, *, color: bool, attempt_dir: Path
+) -> str:
+    completed = subprocess.run(
+        ["mergetrain", "--repo", str(repo), "inspect", str(job_id), "--json"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return f"attention job #{job_id}: inspection failed\n{completed.stderr.strip()}"
+    details = json.loads(completed.stdout)
+    job = details.get("job") or {}
+    outcome = details.get("outcome") or {}
+    progress = details.get("progress") or {}
+    lines = [
+        styled(f"attention job #{job_id}", BOLD, color),
+        f"task: {job.get('task') or '(unknown)'}",
+        f"branch: {job.get('branch') or '(unknown)'}",
+        f"commit: {job.get('head_sha') or '(unknown)'}",
+        f"state: {job.get('status') or '(unknown)'}",
+        f"failure: {outcome.get('failure_category') or '(unknown)'}",
+        f"reason: {outcome.get('message') or job.get('note') or '(none recorded)'}",
+    ]
+    gate = progress.get("gate")
+    if gate:
+        lines.append(f"gate: {gate}")
+    for event in details.get("events") or []:
+        if event.get("state") in {"failure", "failed", "error"}:
+            lines.append(f"event: {event.get('message') or '(unnamed)'}")
+            if event.get("detail"):
+                lines.append(f"detail: {event['detail']}")
+    if job.get("log_path"):
+        lines.append(f"full log: {job['log_path']}")
+
+    if outcome.get("failure_category") == "deploy_authorization_changed":
+        base = str(job.get("base_sha") or "")
+        head = str(job.get("head_sha") or "")
+        lines.append("")
+        lines.append("execution policy evidence:")
+        lines.append("Retry after a policy change creates a manual job; it does not renew --auto approval.")
+        evidence = attempt_dir / f"{job_id}-{head}.policy.json"
+        if evidence.is_file():
+            recorded = json.loads(evidence.read_text(encoding="utf-8"))
+            lines.append(f"recorded evidence: {evidence}")
+            lines.append(
+                "job changes .mergetrain.yaml: "
+                + ("yes" if recorded.get("job_policy_diff") else "no")
+            )
+            lines.append("integrated policy change since enqueue:")
+            lines.append(recorded.get("integration_policy_diff") or "(none recorded)")
+            if recorded.get("job_policy_diff"):
+                lines.append("policy changes in this job:")
+                lines.append(recorded["job_policy_diff"])
+            if recorded.get("policy_validation_result"):
+                lines.append(f"current policy validation: {recorded['policy_validation_result']}")
+            if recorded.get("policy_validation_failure"):
+                lines.append(f"failed policy gate: {recorded['policy_validation_failure']}")
+            if recorded.get("policy_validation_log"):
+                lines.append(f"policy validation log: {recorded['policy_validation_log']}")
+        elif base and head:
+            changed_in_job = subprocess.run(
+                ["git", "-C", str(repo), "diff", "--no-ext-diff", "--name-only",
+                 f"{base}..{head}", "--", ".mergetrain.yaml"],
+                check=False, capture_output=True, text=True,
+            )
+            job_policy_change = (
+                "unavailable" if changed_in_job.returncode != 0
+                else "yes" if changed_in_job.stdout.strip() else "no"
+            )
+            lines.append(f"job changes .mergetrain.yaml: {job_policy_change}")
+            if job_policy_change == "yes":
+                job_difference = subprocess.run(
+                    ["git", "-C", str(repo), "diff", "--no-ext-diff", "--unified=3",
+                     f"{base}..{head}", "--", ".mergetrain.yaml"],
+                    check=False, capture_output=True, text=True,
+                )
+                if job_difference.returncode == 0:
+                    lines.extend(("policy changes in this job:", job_difference.stdout.rstrip()))
+            lines.append("control checkout policy change since enqueue:")
+            difference = subprocess.run(
+                ["git", "-C", str(repo), "diff", "--no-ext-diff", "--unified=3",
+                 base, "--", ".mergetrain.yaml"],
+                check=False, capture_output=True, text=True,
+            )
+            lines.append(
+                difference.stdout.rstrip()
+                if difference.returncode == 0 and difference.stdout.strip()
+                else "(no configuration diff available)"
+            )
+        else:
+            lines.append("(job base or commit identity unavailable)")
+    lines.extend(("", "[r] retry this job  [n/p] next/previous attention job  [q/Esc] back"))
+    return "\n".join(lines)
+
+
 def running_train_step(repo: Path, jobs: list[dict[str, Any]]) -> str | None:
     running = next((job for job in jobs if job.get("state") == "running"), None)
     if running is None:
@@ -702,11 +798,20 @@ def main() -> int:
     parser.add_argument("--benchmark-detail-index", type=int)
     parser.add_argument("--benchmark-diff-index", type=int)
     parser.add_argument("--columns", type=int, default=80)
+    parser.add_argument("--attention-job-id", type=int)
+    parser.add_argument(
+        "--attempt-dir", type=Path,
+        default=Path("/tmp/dark-compiler-mergetrain-codex-attempts"),
+    )
     args = parser.parse_args()
     try:
         payload = json.load(sys.stdin)
         print(
-            render(
+            render_attention_job(
+                args.repo.resolve(), args.attention_job_id,
+                color=args.color, attempt_dir=args.attempt_dir,
+            )
+            if args.attention_job_id is not None else render(
                 payload,
                 args.repo.resolve(),
                 color=args.color,

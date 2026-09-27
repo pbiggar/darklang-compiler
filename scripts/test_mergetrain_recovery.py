@@ -41,6 +41,7 @@ class RecoveryFixture:
         subprocess.run(["git", "init", "-q", "--bare", str(self.remote)], check=True)
         self.git("remote", "add", "mergetrain-local", str(self.remote))
         self.git("push", "-q", "-u", "mergetrain-local", "main")
+        self.base_sha = self.git_output("rev-parse", "HEAD")
         self.git("switch", "-q", "-c", "task/job")
         (self.repo / "feature.txt").write_text("job\n", encoding="utf-8")
         self.git("add", "feature.txt")
@@ -111,7 +112,7 @@ raise SystemExit(0)
             self.bin / "mergetrain",
             """#!/usr/bin/env python3
 import json, os, pathlib, sys
-commands = {"inspect", "retry", "dismiss", "enqueue", "replace"}
+commands = {"inspect", "retry", "dismiss", "enqueue", "replace", "validate"}
 command = next(arg for arg in sys.argv if arg in commands)
 calls = pathlib.Path(os.environ["RECOVERY_TEST_CALLS"])
 with calls.open("a", encoding="utf-8") as stream:
@@ -126,6 +127,11 @@ elif command == "replace":
     print(json.dumps({"replacement": {"id": 99}}))
 elif command == "enqueue":
     print(json.dumps({"job": {"id": 99}}))
+elif command == "validate":
+    if pathlib.Path(__file__).with_name("policy-gate-fail").exists():
+        print(json.dumps({"result": "failed", "jobs": [{"status": "failed"}]}))
+        raise SystemExit(1)
+    print(json.dumps({"result": "success", "jobs": [{"status": "validated"}]}))
 else:
     print(json.dumps({"ok": True}))
 """,
@@ -180,6 +186,7 @@ output.write_text("Recovery committed.\\n", encoding="utf-8")
                         "branch": "task/job",
                         "worktree_path": str(self.repo),
                         "head_sha": self.old_head,
+                        "base_sha": self.base_sha,
                         "auto_deploy": True,
                     },
                     "outcome": {
@@ -216,6 +223,117 @@ output.write_text("Recovery committed.\\n", encoding="utf-8")
 
 
 class MergetrainRecoveryTests(unittest.TestCase):
+    def test_policy_change_on_integration_is_verified_and_requeued(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = RecoveryFixture(Path(temp_dir), tests_fail=False)
+            fixture.git("switch", "-q", "main")
+            with (fixture.repo / ".mergetrain.yaml").open("a", encoding="utf-8") as config:
+                config.write("gates:\n  - name: tests\n    run: ./run-tests --ai\n")
+            fixture.git("add", ".mergetrain.yaml")
+            fixture.git("commit", "-q", "-m", "change train policy")
+            fixture.git("push", "-q", "mergetrain-local", "main")
+            owning_worktree = Path(temp_dir) / "task-worktree"
+            fixture.git("worktree", "add", "-q", str(owning_worktree), "task/job")
+            fixture.set_failure(
+                "deploy_authorization_changed", detail="approval_execution_policy_changed"
+            )
+            details = json.loads(fixture.details.read_text(encoding="utf-8"))
+            details["job"]["worktree_path"] = str(owning_worktree)
+            fixture.details.write_text(json.dumps(details), encoding="utf-8")
+
+            completed = fixture.execute()
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertFalse(fixture.codex_marker.exists())
+            calls = fixture.recorded_calls()
+            commands = [call["command"] for call in calls]
+            self.assertNotIn("replace", commands)
+            enqueue = next(
+                call for call in calls
+                if call["command"] == "enqueue" and "--auto" in call["args"]
+            )
+            self.assertIn("--auto", enqueue["args"])
+            self.assertLess(calls.index(enqueue), commands.index("dismiss"))
+            self.assertEqual(len(list(fixture.attempts.glob("*.verification.json"))), 1)
+            self.assertLess(commands.index("validate"), calls.index(enqueue))
+            policy_evidence = json.loads(
+                next(fixture.attempts.glob("*.policy.json")).read_text(encoding="utf-8")
+            )
+            self.assertIn("+gates:", policy_evidence["integration_policy_diff"])
+            self.assertEqual(policy_evidence["job_policy_diff"], "")
+
+    def test_failed_current_policy_validation_keeps_original_job(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = RecoveryFixture(Path(temp_dir), tests_fail=False)
+            fixture.git("switch", "-q", "main")
+            with (fixture.repo / ".mergetrain.yaml").open("a", encoding="utf-8") as config:
+                config.write("gates:\n  - name: tests\n    run: ./run-tests --ai\n")
+            fixture.git("add", ".mergetrain.yaml")
+            fixture.git("commit", "-q", "-m", "change train policy")
+            fixture.git("push", "-q", "mergetrain-local", "main")
+            owning_worktree = Path(temp_dir) / "task-worktree"
+            fixture.git("worktree", "add", "-q", str(owning_worktree), "task/job")
+            fixture.set_failure(
+                "deploy_authorization_changed", detail="approval_execution_policy_changed"
+            )
+            details = json.loads(fixture.details.read_text(encoding="utf-8"))
+            details["job"]["worktree_path"] = str(owning_worktree)
+            fixture.details.write_text(json.dumps(details), encoding="utf-8")
+            (fixture.bin / "policy-gate-fail").write_text("fail", encoding="utf-8")
+
+            completed = fixture.execute()
+
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("current policy validation failed", completed.stderr)
+            self.assertNotIn("dismiss", [call["command"] for call in fixture.recorded_calls()])
+            policy_evidence = json.loads(
+                next(fixture.attempts.glob("*.policy.json")).read_text(encoding="utf-8")
+            )
+            self.assertEqual(policy_evidence["policy_validation_result"], "failed")
+            self.assertTrue(Path(policy_evidence["policy_validation_log"]).exists())
+
+    def test_policy_change_in_job_requires_operator(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = RecoveryFixture(Path(temp_dir), tests_fail=False)
+            with (fixture.repo / ".mergetrain.yaml").open("a", encoding="utf-8") as config:
+                config.write("gates:\n  - name: tests\n    run: ./run-tests --ai\n")
+            fixture.git("add", ".mergetrain.yaml")
+            fixture.git("commit", "-q", "-m", "change train policy in job")
+            fixture.old_head = fixture.git_output("rev-parse", "HEAD")
+            fixture.set_failure(
+                "deploy_authorization_changed", detail="approval_execution_policy_changed"
+            )
+
+            completed = fixture.execute()
+
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("operator attention required", completed.stderr)
+            self.assertNotIn("enqueue", [call["command"] for call in fixture.recorded_calls()])
+
+    def test_verify_hook_change_is_not_approved_by_gate_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = RecoveryFixture(Path(temp_dir), tests_fail=False)
+            fixture.git("switch", "-q", "main")
+            with (fixture.repo / ".mergetrain.yaml").open("a", encoding="utf-8") as config:
+                config.write("deploy:\n  verify:\n    - name: check\n      run: true\n")
+            fixture.git("add", ".mergetrain.yaml")
+            fixture.git("commit", "-q", "-m", "change verify policy")
+            fixture.git("push", "-q", "mergetrain-local", "main")
+            owning_worktree = Path(temp_dir) / "task-worktree"
+            fixture.git("worktree", "add", "-q", str(owning_worktree), "task/job")
+            fixture.set_failure(
+                "deploy_authorization_changed", detail="approval_execution_policy_changed"
+            )
+            details = json.loads(fixture.details.read_text(encoding="utf-8"))
+            details["job"]["worktree_path"] = str(owning_worktree)
+            fixture.details.write_text(json.dumps(details), encoding="utf-8")
+
+            completed = fixture.execute()
+
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("outside validated gate settings", completed.stderr)
+            self.assertNotIn("enqueue", [call["command"] for call in fixture.recorded_calls()])
+
     def test_failure_log_is_copied_into_recovery_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -1,6 +1,7 @@
 """test_mergetrain_status.py - E2E tests for the repository status summary."""
 
 import os
+import json
 import pty
 import select
 import subprocess
@@ -19,10 +20,138 @@ from scripts.render_mergetrain_status import (
     human_age,
     percentage,
     render,
+    render_attention_job,
 )
 
 
 class MergetrainStatusTests(unittest.TestCase):
+    def test_attention_view_shows_policy_diff_and_confirms_retry(self) -> None:
+        source_root = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo = root / "repo"
+            fake_bin = root / "bin"
+            repo.mkdir()
+            fake_bin.mkdir()
+            subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.email", "status-test@example.invalid"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Status Test"], cwd=repo, check=True)
+            config = repo / ".mergetrain.yaml"
+            config.write_text("version: 2\ngates:\n  - name: build\n    run: ./build --ai\n", encoding="utf-8")
+            subprocess.run(["git", "add", ".mergetrain.yaml"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "old policy"], cwd=repo, check=True)
+            base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+            with config.open("a", encoding="utf-8") as stream:
+                stream.write("  - name: tests\n    run: ./run-tests --ai\n")
+            subprocess.run(["git", "add", ".mergetrain.yaml"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "new policy"], cwd=repo, check=True)
+
+            details = {
+                "contract_version": 4,
+                "job": {"id": 299, "task": "Review gate waivers", "branch": "task/review",
+                        "base_sha": base, "head_sha": base, "status": "blocked"},
+                "outcome": {"failure_category": "deploy_authorization_changed",
+                            "message": "approval_execution_policy_changed"},
+                "events": [],
+            }
+            details_path = root / "details.json"
+            details_path.write_text(json.dumps(details), encoding="utf-8")
+            calls_path = root / "calls"
+            fake = fake_bin / "mergetrain"
+            fake.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, os, pathlib, sys\n"
+                "command = next(arg for arg in sys.argv if arg in {'status', 'inspect', 'retry'})\n"
+                "with pathlib.Path(os.environ['STATUS_TEST_CALLS']).open('a') as calls:\n"
+                "    calls.write(command + '\\n')\n"
+                "if command == 'inspect':\n"
+                "    print(pathlib.Path(os.environ['STATUS_TEST_DETAILS']).read_text())\n"
+                "elif command == 'retry':\n"
+                "    print('retried job 299 as 300')\n"
+                "else:\n"
+                "    print(json.dumps({'contract_version': 4, 'health': 'healthy',\n"
+                "        'state': 'attention', 'summary': '1 job needs attention',\n"
+                "        'next_action': {'code': 'fix_blocked_job', 'command': 'mergetrain inspect 299',\n"
+                "                        'requires_approval': 'none'}, 'warnings': [],\n"
+                "        'attention_jobs': [{'id': 299, 'state': 'attention', 'task': 'Review gate waivers',\n"
+                "                            'branch': 'task/review', 'reason': 'policy changed'}],\n"
+                "        'recent_jobs': []}))\n",
+                encoding="utf-8",
+            )
+            fake.chmod(0o755)
+            environment = dict(os.environ)
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            environment["STATUS_TEST_CALLS"] = str(calls_path)
+            environment["STATUS_TEST_DETAILS"] = str(details_path)
+            with patch.dict(os.environ, environment):
+                detail = render_attention_job(repo, 299, color=False, attempt_dir=root)
+            self.assertIn("+  - name: tests", detail)
+            self.assertIn("job changes .mergetrain.yaml: no", detail)
+            (root / f"299-{base}.policy.json").write_text(
+                json.dumps({
+                    "job_policy_diff": "",
+                    "integration_policy_diff": "+  - name: tests\n",
+                    "policy_validation_result": "failed",
+                    "policy_validation_failure": "gate tests failed",
+                    "policy_validation_log": str(root / "gate.log"),
+                }), encoding="utf-8",
+            )
+            with patch.dict(os.environ, environment):
+                recorded_detail = render_attention_job(repo, 299, color=False, attempt_dir=root)
+            self.assertIn("failed policy gate: gate tests failed", recorded_detail)
+            self.assertIn("policy validation log:", recorded_detail)
+
+            master, slave = pty.openpty()
+            process = subprocess.Popen(
+                [str(source_root / "mergetrain-status"), "--repo", str(repo),
+                 "--interval", "30", "--color", "never"],
+                cwd=repo, env=environment, stdin=slave, stdout=slave, stderr=slave,
+                close_fds=True,
+            )
+            os.close(slave)
+
+            def read_until(expected: bytes) -> bytes:
+                deadline = time.monotonic() + 10
+                output = b""
+                while expected not in output and time.monotonic() < deadline:
+                    readable, _, _ = select.select([master], [], [], 0.2)
+                    if readable:
+                        output += os.read(master, 65536)
+                self.assertIn(expected, output)
+                return output
+
+            try:
+                read_until(b"[a] attention")
+                os.write(master, b"a")
+                read_until(b"[r] retry")
+                os.write(master, b"r")
+                read_until(b"Retry #299? Approval may become manual.")
+                self.assertNotIn("retry\n", calls_path.read_text(encoding="utf-8"))
+                os.write(master, b"y")
+                read_until(b"retried job 299 as 300")
+                self.assertIn("retry\n", calls_path.read_text(encoding="utf-8"))
+                os.write(master, b"q")
+                self.assertEqual(process.wait(timeout=10), 0)
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    process.wait(timeout=10)
+                os.close(master)
+
+            subprocess.run(["git", "switch", "-q", "-c", "task/policy", base], cwd=repo, check=True)
+            with config.open("a", encoding="utf-8") as stream:
+                stream.write("  - name: runtime\n    run: ./runtime-check\n")
+            subprocess.run(["git", "add", ".mergetrain.yaml"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "job policy"], cwd=repo, check=True)
+            details["job"]["head_sha"] = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repo, text=True
+            ).strip()
+            details_path.write_text(json.dumps(details), encoding="utf-8")
+            with patch.dict(os.environ, environment):
+                job_detail = render_attention_job(repo, 299, color=False, attempt_dir=root)
+            self.assertIn("policy changes in this job:", job_detail)
+            self.assertIn("+  - name: runtime", job_detail)
+
     def test_human_age_uses_compact_units(self) -> None:
         now = datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc)
 
