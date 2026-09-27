@@ -153,9 +153,11 @@ branch shapes plus the conservative call and observable-field boundaries.
   output sweep instead of scheduling separate folding, copy, and unreachable-
   block passes. SCCP carries Boolean branch outcomes and bounded integer
   comparison ranges on executable edges. It joins these facts at block entries
-  to prove repeated predicates after CFG joins, defers unresolved branches
-  until the value worklist settles, and then admits both edges when a condition
-  remains unknown;
+  to prove repeated predicates after CFG joins. Boolean facts also flow through
+  copies, negation, and the determinate outcomes of conjunction and disjunction;
+  a known operand can determine the other from a composite outcome. SCCP defers
+  unresolved branches until the value worklist settles, and then admits both
+  edges when a condition remains unknown;
 - dominator-scoped scalar and effect-free-call common-subexpression reuse;
 - partial-redundancy elimination for non-trapping scalar arithmetic and unary
   expressions, inserting only on unconditional incoming edges and merging the

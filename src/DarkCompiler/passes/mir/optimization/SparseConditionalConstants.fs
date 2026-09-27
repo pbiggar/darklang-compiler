@@ -221,26 +221,54 @@ let private isPathRangeType valueType =
     | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 -> true
     | _ -> false
 
+let private knownBooleanValue state facts operand =
+    let rec resolve visited operand =
+        match operand with
+        | BoolConst value -> Some value
+        | Register register ->
+            match Map.tryFind register facts.Booleans with
+            | Some value -> Some value
+            | None when Set.contains register visited -> None
+            | None ->
+                let visited = Set.add register visited
+                let derived =
+                    match Map.tryFind register state.Definitions with
+                    | Some (Mov (_, source, _)) -> resolve visited source
+                    | Some (UnaryOp (_, Not, source)) ->
+                        resolve visited source |> Option.map not
+                    | Some (BinOp (_, And, left, right, AST.TBool)) ->
+                        match resolve visited left, resolve visited right with
+                        | Some false, _ | _, Some false -> Some false
+                        | Some true, Some true -> Some true
+                        | _ -> None
+                    | Some (BinOp (_, Or, left, right, AST.TBool)) ->
+                        match resolve visited left, resolve visited right with
+                        | Some true, _ | _, Some true -> Some true
+                        | Some false, Some false -> Some false
+                        | _ -> None
+                    | Some (BinOp (_, operation, left, right, valueType))
+                        when isPathRangeType valueType ->
+                        match
+                            tryRangeComparison
+                                operation
+                                (pathOperandValue state facts left)
+                                (pathOperandValue state facts right)
+                        with
+                        | Some (BoolConst value) -> Some value
+                        | _ -> None
+                    | _ -> None
+                match derived, operandValue state.Values operand with
+                | Some value, _ -> Some value
+                | None, Constant (BoolConst value) -> Some value
+                | _ -> None
+        | _ -> None
+    resolve Set.empty operand
+
 let private conditionValue state label condition =
     let facts = Map.tryFind label state.BlockFacts |> Option.defaultValue emptyPathFacts
-    match condition with
-    | Register register ->
-        match Map.tryFind register facts.Booleans with
-        | Some value -> Constant (BoolConst value)
-        | None ->
-            let globalValue = operandValue state.Values condition
-            match Map.tryFind register state.Definitions with
-            | Some (BinOp (_, operation, left, right, valueType)) when isPathRangeType valueType ->
-                match
-                    tryRangeComparison
-                        operation
-                        (pathOperandValue state facts left)
-                        (pathOperandValue state facts right)
-                with
-                | Some (BoolConst value) -> Constant (BoolConst value)
-                | _ -> globalValue
-            | _ -> globalValue
-    | _ -> operandValue state.Values condition
+    match knownBooleanValue state facts condition with
+    | Some value -> Constant (BoolConst value)
+    | None -> operandValue state.Values condition
 
 let private reversedComparison operation =
     match operation with
@@ -294,6 +322,52 @@ let private withComparisonRange definitions condition takeTrue facts =
             | None -> facts
         | None -> facts
     | _ -> facts
+
+let private withDerivedBooleanFacts state condition takeTrue facts =
+    let rec refineOperand visited operand value facts =
+        match operand with
+        | Register register -> refineRegister visited register value facts
+        | BoolConst established when established <> value -> None
+        | _ -> Some facts
+
+    and refineRegister visited register value facts =
+        match Map.tryFind register facts.Booleans with
+        | Some established when established <> value -> None
+        | _ when Set.contains register visited -> Some facts
+        | _ ->
+            let visited = Set.add register visited
+            let facts = {
+                facts with
+                    Booleans = Map.add register value facts.Booleans
+            }
+            match Map.tryFind register state.Definitions with
+            | Some (Mov (_, source, _)) ->
+                refineOperand visited source value facts
+            | Some (UnaryOp (_, Not, source)) ->
+                refineOperand visited source (not value) facts
+            | Some (BinOp (_, And, left, right, AST.TBool)) when value ->
+                refineOperand visited left true facts
+                |> Option.bind (refineOperand visited right true)
+            | Some (BinOp (_, And, left, right, AST.TBool)) ->
+                match knownBooleanValue state facts left,
+                      knownBooleanValue state facts right with
+                | Some true, _ -> refineOperand visited right false facts
+                | _, Some true -> refineOperand visited left false facts
+                | _ -> Some facts
+            | Some (BinOp (_, Or, left, right, AST.TBool)) when not value ->
+                refineOperand visited left false facts
+                |> Option.bind (refineOperand visited right false)
+            | Some (BinOp (_, Or, left, right, AST.TBool)) ->
+                match knownBooleanValue state facts left,
+                      knownBooleanValue state facts right with
+                | Some false, _ -> refineOperand visited right true facts
+                | _, Some false -> refineOperand visited left true facts
+                | _ -> Some facts
+            | Some (BinOp (_, _, _, _, valueType)) when isPathRangeType valueType ->
+                Some (withComparisonRange state.Definitions register value facts)
+            | _ -> Some facts
+
+    refineRegister Set.empty condition takeTrue facts
 
 let private operationValue values operands folded =
     match folded with
@@ -488,13 +562,11 @@ let private factsOnEdge cfg source target state =
     | Some { Terminator = Branch (Register condition, trueTarget, falseTarget) }
         when trueTarget <> falseTarget ->
         let takeTrue = target = trueTarget
-        match Map.tryFind condition sourceFacts.Booleans with
+        match knownBooleanValue state sourceFacts (Register condition) with
         | Some established when established <> takeTrue -> emptyPathFacts
         | _ ->
-            let withBoolean =
-                { sourceFacts with
-                    Booleans = Map.add condition takeTrue sourceFacts.Booleans }
-            withComparisonRange state.Definitions condition takeTrue withBoolean
+            withDerivedBooleanFacts state condition takeTrue sourceFacts
+            |> Option.defaultValue emptyPathFacts
     | _ -> sourceFacts
 
 let private refreshBlockFacts cfg target state =
