@@ -113,7 +113,8 @@ Path(args[args.index('--output-last-message') + 1]).write_text('Fix committed.\\
         environment = dict(os.environ)
         environment["PATH"] = f"{self.bin}:{environment['PATH']}"
         return subprocess.run(
-            ["./fuzz", "--seed", "1"], cwd=self.repo, env=environment,
+            ["./fuzz", "--seed", "1", "--worktree-dir", self.temporary.name],
+            cwd=self.repo, env=environment,
             input=answers, text=True, capture_output=True, timeout=30,
         )
 

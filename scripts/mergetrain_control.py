@@ -31,6 +31,7 @@ FOCUSED_TESTS = (
     "scripts.test_mergetrain_exception", "scripts.test_mergetrain_status",
     "scripts.test_approve_attention_job",
 )
+WORKTREE_PARENT = Path("/Users/paulbiggar/projects")
 
 
 class ControlError(RuntimeError):
@@ -107,8 +108,9 @@ def land_control(repo: Path, head: str, task: str) -> str:
     remote = git(repo, "ls-remote", "mergetrain-local", "refs/heads/main").split()
     if len(remote) != 2 or remote[0] != integration:
         raise ControlError("local main and integration destination differ; retry after refresh")
-    with tempfile.TemporaryDirectory(prefix="mergetrain-control-") as directory:
-        worktree = Path(directory) / "integration"
+    with tempfile.TemporaryDirectory(prefix="c4d-mergetrain-control-",
+                                     dir=WORKTREE_PARENT) as directory:
+        worktree = Path(directory)
         run(repo, "git", "worktree", "add", "--detach", str(worktree), integration)
         try:
             run(worktree, "git", "merge", "--no-ff", "--no-edit", head)

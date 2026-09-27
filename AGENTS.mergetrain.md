@@ -23,9 +23,10 @@ task branches in arrival order.
    checkout, including for repository utility work and interactive sessions.
    The trusted tooling-only `./land` control path is the sole integration
    exception; task agents do not make that Git update manually.
-   When started there, create and enter a separate task worktree before any
-   edit, build, test, or other mutating command. Reuse that task worktree across
-   turns of the same task. At a new task boundary, refresh an eligible existing
+   When started there, create and enter a separate task worktree directly under
+   `/Users/paulbiggar/projects/` before any edit, build, test, or other mutating
+   command. Reuse that task worktree across turns of the same task. At a new
+   task boundary, refresh an eligible existing
    task branch from the local integration ref as described in `AGENTS.md`.
    Never change a completed task's commit or worktree after `./land`, whether
    its handoff is queued or pending. Start a newly requested task immediately

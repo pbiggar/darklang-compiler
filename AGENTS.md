@@ -17,10 +17,15 @@ this repository and takes precedence where it is stricter.
 - At the start of every task, check the current worktree root with
   `git rev-parse --show-toplevel`. If it is the primary coordination checkout,
   create a dedicated task branch and worktree from the current local integration
-  ref, then change into that worktree before the first mutating command. If it
-  is an existing task worktree, apply the Git workflow's task-start rule before
-  making changes: refresh an eligible branch or create a new worktree when its
-  completed task is awaiting merge-train handoff or integration. A task started
+  ref under `/Users/paulbiggar/projects/`, then change into that worktree before
+  the first mutating command. Put every new task or recovery worktree directly
+  under that directory, never under `.codex`, `/tmp`, or the repository itself.
+  If it is an existing task worktree outside that directory, create a new task
+  branch and worktree under `/Users/paulbiggar/projects/` before making changes;
+  ask for direction if uncommitted changes prevent a safe move.
+  Otherwise apply the Git workflow's task-start rule: refresh an eligible branch
+  or create a new worktree when its completed task is awaiting merge-train
+  handoff or integration. A task started
   from the primary checkout, an interactive coding-agent session, and repository
   utility work are not exceptions. If a separate worktree cannot be created,
   stop and ask for direction instead of working in the primary checkout.
@@ -124,9 +129,11 @@ this repository and takes precedence where it is stricter.
   readiness rules to that change.
 - At the start of each new task, bring its branch up to the current local value
   of the configured integration ref (`origin/main` by default) before making
-  changes. Create a dedicated branch and worktree from that ref when starting
-  from the primary checkout. In an existing task worktree whose branch has not
-  been enqueued, fast-forward the branch when possible; otherwise rebase its
+  changes. Create a dedicated branch and worktree directly under
+  `/Users/paulbiggar/projects/` from that ref when starting from the primary
+  checkout or a worktree elsewhere. In an existing task worktree under that
+  directory whose branch has not been enqueued, fast-forward the branch when
+  possible; otherwise rebase its
   unpublished commits onto the ref. Preserve uncommitted changes: if they
   prevent a safe refresh, stop and ask for direction rather than discard work.
   If a rebase conflicts, abort it and ask for direction. Do not fetch or

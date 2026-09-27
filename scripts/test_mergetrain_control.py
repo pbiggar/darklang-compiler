@@ -43,7 +43,8 @@ class ControlLandingTests(unittest.TestCase):
                     return subprocess.CompletedProcess(command, 0, "", "")
                 return control_run(repo, *command, check=check)
 
-            with patch("scripts.mergetrain_control.run", side_effect=without_fixture_tests):
+            with patch("scripts.mergetrain_control.WORKTREE_PARENT", root), \
+                 patch("scripts.mergetrain_control.run", side_effect=without_fixture_tests):
                 landed = land_control(task, head, "update tooling")
                 self.assertEqual(land_control(task, head, "update tooling"), landed)
             self.assertEqual(self.git(main, "rev-parse", "HEAD"), landed)
