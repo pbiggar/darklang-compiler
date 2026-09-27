@@ -53,7 +53,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 "job": {"id": 299, "task": "Review gate waivers", "branch": "task/review",
                         "base_sha": base, "head_sha": base, "status": "blocked"},
                 "outcome": {"failure_category": "deploy_authorization_changed",
-                            "message": "approval_execution_policy_changed"},
+                            "message": "approval_execution_policy_changed: policy changed"},
                 "events": [],
             }
             details_path = root / "details.json"
@@ -67,7 +67,10 @@ class MergetrainStatusTests(unittest.TestCase):
                 "with pathlib.Path(os.environ['STATUS_TEST_CALLS']).open('a') as calls:\n"
                 "    calls.write(command + '\\n')\n"
                 "if command == 'inspect':\n"
-                "    print(pathlib.Path(os.environ['STATUS_TEST_DETAILS']).read_text())\n"
+                "    details = json.loads(pathlib.Path(os.environ['STATUS_TEST_DETAILS']).read_text())\n"
+                "    if '308' in sys.argv:\n"
+                "        details['job'].update(id=308, status='queued', auto_deploy=False)\n"
+                "    print(json.dumps(details))\n"
                 "elif command == 'retry':\n"
                 "    print('retried job 299 as 300')\n"
                 "else:\n"
@@ -76,8 +79,9 @@ class MergetrainStatusTests(unittest.TestCase):
                 "        'next_action': {'code': 'fix_blocked_job', 'command': 'mergetrain inspect 299',\n"
                 "                        'requires_approval': 'none'}, 'warnings': [],\n"
                 "        'attention_jobs': [{'id': 299, 'state': 'attention', 'task': 'Review gate waivers',\n"
-                "                            'branch': 'task/review', 'reason': 'policy changed'}],\n"
-                "        'recent_jobs': []}))\n",
+                "                            'branch': 'task/review', 'reason': 'approval_execution_policy_changed: policy changed'}],\n"
+                "        'recent_jobs': [{'id': 308, 'state': 'waiting', 'task': 'Review gate waivers',\n"
+                "                         'branch': 'task/review'}]}))\n",
                 encoding="utf-8",
             )
             fake.chmod(0o755)
@@ -123,6 +127,37 @@ class MergetrainStatusTests(unittest.TestCase):
                 return output
 
             try:
+                read_until(b"[a] attention")
+                os.write(master, b"v")
+                approval_page = read_until(b"[A] approve & deploy")
+                self.assertIn(b"APPROVAL 2/2  #308 Review gate waivers", approval_page)
+                self.assertIn(b"APPROVAL", approval_page)
+                os.write(master, b"j")
+                self.assertIn(
+                    b"APPROVAL 2/2  #308 Review gate waivers",
+                    read_until(b"[A] approve & deploy"),
+                )
+                os.write(master, b"A")
+                read_until(f"Type 'approve 308 {base[:12]}'".encode())
+                self.assertNotIn("retry\n", calls_path.read_text(encoding="utf-8"))
+                os.write(master, b"no\n")
+                read_until(b"Press any key to return to merge-train status")
+                os.write(master, b"x")
+                read_until(b"[a] attention")
+                os.write(master, b"a")
+                attention_page = read_until(b"[A] approve & deploy")
+                self.assertIn(b"ATTENTION 1/2  #299 Review gate waivers", attention_page)
+                os.write(master, b"j")
+                self.assertIn(
+                    b"ATTENTION 1/2  #299 Review gate waivers",
+                    read_until(b"[A] approve & deploy"),
+                )
+                os.write(master, b"A")
+                read_until(f"Type 'approve 299 {base[:12]}'".encode())
+                self.assertNotIn("retry\n", calls_path.read_text(encoding="utf-8"))
+                os.write(master, b"no\n")
+                read_until(b"Press any key to return to merge-train status")
+                os.write(master, b"x")
                 read_until(b"[a] attention")
                 os.write(master, b"a")
                 read_until(b"[r] retry")

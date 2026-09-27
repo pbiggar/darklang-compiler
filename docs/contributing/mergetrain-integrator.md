@@ -54,11 +54,19 @@ policy failures outside the gate-change case, non-fast-forward-independent push
 rejection, repeated transient failures, dirty owning worktrees, and failed
 independent verification remain operator decisions.
 
-`./mergetrain-status` opens attention jobs with `a`. The detail view shows the
-recorded failure and policy diff, and `n`/`p` move between attention jobs. `r`
-offers a confirmed `mergetrain retry` for the selected job. Retry does not renew
+`./mergetrain-status` opens attention jobs with `a` and queued manual policy
+replacements with `v`. The detail view shows the recorded failure and policy
+diff, and `n`/`p` move between review pages. The selected job ID and task stay
+visible at the bottom while the page scrolls. `r` offers a confirmed
+`mergetrain retry` for the selected job. Retry does not renew
 an expired unattended policy approval: mergetrain creates a manual replacement
-when the policy no longer matches. The status UI never deploys a job.
+when the policy no longer matches. On a blocked policy job or its queued manual
+replacement, `A` starts a human review: it displays the job's policy diff,
+requires the operator to type its job ID and commit prefix, retries a blocked
+job as manual when needed, validates a train containing the manual job, then
+opens mergetrain's exact deploy plan for a separate interactive confirmation.
+The plan can include other jobs, and declining it leaves the validated train
+ready without pushing.
 
 Generated `benchmarks/RESULTS.md` is never hand-merged. Source conflicts are
 resolved first, then a successful improving full recording run must regenerate

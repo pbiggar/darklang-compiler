@@ -18,6 +18,10 @@ benchmark_page=0
 benchmark_detail_index=""
 show_benchmark_diff=false
 attention_job_id=""
+attention_task=""
+attention_position=""
+attention_policy_changed=false
+review_kind=""
 retry_pending=false
 action_message=""
 scroll_offset=0
@@ -193,6 +197,11 @@ while true; do
        )"; then
       status_output="Status refresh failed; retrying in $interval_seconds second(s)"
       attention_ids=()
+      approval_ids=()
+      review_ids=()
+      review_kind="attention"
+      attention_position="?"
+      attention_task="(status unavailable)"
     else
       mapfile -t attention_ids < <(python3 -c '
 import json, sys
@@ -200,6 +209,53 @@ for job in json.load(sys.stdin).get("attention_jobs", []):
     if isinstance(job.get("id"), int):
         print(job["id"])
 ' <<<"$status_json")
+      mapfile -t approval_ids < <(python3 -c '
+import json, subprocess, sys
+repo = sys.argv[1]
+for summary in json.load(sys.stdin).get("recent_jobs", []):
+    if summary.get("state") not in {"waiting", "ready"} or not isinstance(summary.get("id"), int):
+        continue
+    completed = subprocess.run(
+        ["mergetrain", "--repo", repo, "inspect", str(summary["id"]), "--json"],
+        capture_output=True, text=True, check=False,
+    )
+    if completed.returncode != 0:
+        continue
+    try:
+        details = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        continue
+    job = details.get("job") or {}
+    outcome = details.get("outcome") or {}
+    if job.get("auto_deploy") is False and str(outcome.get("message") or "").startswith("approval_execution_policy_changed:"):
+        print(summary["id"])
+' "$repo_root" <<<"$status_json")
+      review_ids=("${attention_ids[@]}" "${approval_ids[@]}")
+      attention_task=""
+      attention_position=""
+      attention_policy_changed=false
+      review_kind=""
+      if [[ -n "$attention_job_id" ]]; then
+        mapfile -t selected_attention < <(python3 -c '
+import json, sys
+payload = json.load(sys.stdin)
+approvals = {int(value) for value in sys.argv[2].split()}
+jobs = payload.get("attention_jobs", []) + [
+    job for job in payload.get("recent_jobs", []) if job.get("id") in approvals
+]
+for position, job in enumerate(jobs, start=1):
+    if job.get("id") == int(sys.argv[1]):
+        print(position)
+        print(str(job.get("task") or "(unknown task)").replace("\n", " "))
+        print("true" if job.get("id") in approvals or str(job.get("reason") or "").startswith("approval_execution_policy_changed:") else "false")
+        print("approval" if job.get("id") in approvals else "attention")
+        break
+' "$attention_job_id" "${approval_ids[*]}" <<<"$status_json")
+        attention_position="${selected_attention[0]:-?}"
+        attention_task="${selected_attention[1]:-(unknown task)}"
+        attention_policy_changed="${selected_attention[2]:-false}"
+        review_kind="${selected_attention[3]:-attention}"
+      fi
     fi
     if [[ -n "$action_message" ]]; then
       status_output="$action_message"$'\n\n'"$status_output"
@@ -238,7 +294,13 @@ for job in json.load(sys.stdin).get("attention_jobs", []):
     if [[ "$retry_pending" == true ]]; then
       controls="Retry #$attention_job_id? Approval may become manual. [y] confirm  [n/Esc] cancel"
     elif [[ -n "$attention_job_id" ]]; then
-      controls="[↑/↓ or j/k] scroll  [n/p] next/previous  [r] retry  [q/Esc] back"
+      if [[ "$review_kind" == approval ]]; then
+        controls="[j/k] scroll  [n/p] next/previous  [A] approve & deploy  [q/Esc] back"
+      elif [[ "$attention_policy_changed" == true ]]; then
+        controls="[j/k] scroll  [n/p] next/previous  [A] approve & deploy  [r] retry  [q/Esc] back"
+      else
+        controls="[j/k] scroll  [n/p] next/previous  [r] retry  [q/Esc] back"
+      fi
     elif [[ -n "$benchmark_detail_index" ]]; then
       if [[ "$show_benchmark_diff" == true ]]; then
         controls="[j/k] scroll [PgUp/Dn] page [d] report [q/Esc] back"
@@ -248,12 +310,17 @@ for job in json.load(sys.stdin).get("attention_jobs", []):
     else
       controls="[j/k] scroll [PgUp/Dn] page [1-9] detail [0] next [b] prev"
       if [[ "$show_more_merges" == true ]]; then
-        other_controls="[a] attention [m] fewer merges [c] conflicts [q] quit  benchmarks p$((benchmark_page + 1))"
+        other_controls="[a] attention [v] approvals [m] fewer merges [c] conflicts [q] quit benchmarks p$((benchmark_page + 1))"
       else
-        other_controls="[a] attention [m] more merges [c] conflicts [q] quit  benchmarks p$((benchmark_page + 1))"
+        other_controls="[a] attention [v] approvals [m] more merges [c] conflicts [q] quit benchmarks p$((benchmark_page + 1))"
       fi
     fi
-    printf '\033[H\033[J%s\n%s\n%s\n' "$visible_output" "$controls" "$other_controls"
+    if [[ -n "$attention_job_id" ]]; then
+      identity="${review_kind^^} ${attention_position:-?}/${#review_ids[@]}  #$attention_job_id ${attention_task:0:36}"
+      printf '\033[H\033[J%s\n%s\n%s\n' "$visible_output" "$identity" "$controls"
+    else
+      printf '\033[H\033[J%s\n%s\n%s\n' "$visible_output" "$controls" "$other_controls"
+    fi
   else
     printf '%s\n' "$status_output"
   fi
@@ -295,10 +362,10 @@ for job in json.load(sys.stdin).get("attention_jobs", []):
         n)
           if [[ "$retry_pending" == true ]]; then
             retry_pending=false
-          elif [[ -n "$attention_job_id" && ${#attention_ids[@]} -gt 0 ]]; then
-            for index in "${!attention_ids[@]}"; do
-              if [[ "${attention_ids[$index]}" == "$attention_job_id" ]]; then
-                attention_job_id="${attention_ids[$(((index + 1) % ${#attention_ids[@]}))]}"
+          elif [[ -n "$attention_job_id" && ${#review_ids[@]} -gt 0 ]]; then
+            for index in "${!review_ids[@]}"; do
+              if [[ "${review_ids[$index]}" == "$attention_job_id" ]]; then
+                attention_job_id="${review_ids[$(((index + 1) % ${#review_ids[@]}))]}"
                 break
               fi
             done
@@ -307,10 +374,10 @@ for job in json.load(sys.stdin).get("attention_jobs", []):
           fi
           ;;
         p)
-          if [[ -n "$attention_job_id" && ${#attention_ids[@]} -gt 0 ]]; then
-            for index in "${!attention_ids[@]}"; do
-              if [[ "${attention_ids[$index]}" == "$attention_job_id" ]]; then
-                attention_job_id="${attention_ids[$(((index - 1 + ${#attention_ids[@]}) % ${#attention_ids[@]}))]}"
+          if [[ -n "$attention_job_id" && ${#review_ids[@]} -gt 0 ]]; then
+            for index in "${!review_ids[@]}"; do
+              if [[ "${review_ids[$index]}" == "$attention_job_id" ]]; then
+                attention_job_id="${review_ids[$(((index - 1 + ${#review_ids[@]}) % ${#review_ids[@]}))]}"
                 break
               fi
             done
@@ -327,9 +394,32 @@ for job in json.load(sys.stdin).get("attention_jobs", []):
           scroll_offset=0
           refresh_status=true
           ;;
+        v)
+          if [[ ${#approval_ids[@]} -gt 0 ]]; then
+            attention_job_id="${approval_ids[0]}"
+            scroll_offset=0
+            refresh_status=true
+          fi
+          ;;
         r)
-          if [[ -n "$attention_job_id" ]]; then
+          if [[ -n "$attention_job_id" && "$review_kind" == attention ]]; then
             retry_pending=true
+          fi
+          ;;
+        A)
+          if [[ -n "$attention_job_id" && "$attention_policy_changed" == true ]]; then
+            printf '\033[H\033[J'
+            if python3 "$script_root/scripts/approve_attention_job.py" \
+              --repo "$repo_root" --job-id "$attention_job_id"; then
+              action_message="Approval flow finished; inspect the current train state."
+            else
+              action_message="Approval stopped; inspect the current train state."
+            fi
+            printf '\nPress any key to return to merge-train status...'
+            read -rsn1 || true
+            attention_job_id=""
+            scroll_offset=0
+            refresh_status=true
           fi
           ;;
         $'\033[A'|k)

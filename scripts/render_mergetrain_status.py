@@ -109,8 +109,15 @@ def render_attention_job(
     job = details.get("job") or {}
     outcome = details.get("outcome") or {}
     progress = details.get("progress") or {}
+    policy_change = "approval_execution_policy_changed" in str(outcome.get("message") or "")
+    manual_policy_job = (
+        job.get("status") in {"queued", "validated"}
+        and job.get("auto_deploy") is False
+        and policy_change
+    )
+    page_kind = "APPROVAL" if manual_policy_job else "ATTENTION"
     lines = [
-        styled(f"attention job #{job_id}", BOLD, color),
+        styled(f"{page_kind} — job #{job_id}: {job.get('task') or '(unknown task)'}", BOLD, color),
         f"task: {job.get('task') or '(unknown)'}",
         f"branch: {job.get('branch') or '(unknown)'}",
         f"commit: {job.get('head_sha') or '(unknown)'}",
@@ -129,12 +136,15 @@ def render_attention_job(
     if job.get("log_path"):
         lines.append(f"full log: {job['log_path']}")
 
-    if outcome.get("failure_category") == "deploy_authorization_changed":
+    if policy_change:
         base = str(job.get("base_sha") or "")
         head = str(job.get("head_sha") or "")
         lines.append("")
         lines.append("execution policy evidence:")
-        lines.append("Retry after a policy change creates a manual job; it does not renew --auto approval.")
+        if manual_policy_job:
+            lines.append("This manual job awaits validation and exact-plan confirmation.")
+        else:
+            lines.append("Retry after a policy change creates a manual job; it does not renew --auto approval.")
         evidence = attempt_dir / f"{job_id}-{head}.policy.json"
         if evidence.is_file():
             recorded = json.loads(evidence.read_text(encoding="utf-8"))
@@ -186,7 +196,10 @@ def render_attention_job(
             )
         else:
             lines.append("(job base or commit identity unavailable)")
-    lines.extend(("", "[r] retry this job  [n/p] next/previous attention job  [q/Esc] back"))
+    actions = "" if manual_policy_job else "[r] retry this job"
+    if policy_change and (manual_policy_job or outcome.get("failure_category") == "deploy_authorization_changed"):
+        actions = "[A] approve and deploy  " + actions
+    lines.extend(("", f"{actions}  [n/p] next/previous review page  [q/Esc] back"))
     return "\n".join(lines)
 
 
