@@ -1377,6 +1377,52 @@ let testSccpCombinesCopyFoldingAndDeadEdgePruning () : TestResult =
         Ok ()
     | _ -> Error $"Expected SCCP to fold through a copy, remove a dead branch, and trim its phi input: {optimized}"
 
+let testSccpPropagatesNegatedBooleanThroughCopy () : TestResult =
+    let block label instrs terminator : BasicBlock = {
+        Label = label
+        Instrs = instrs
+        Terminator = terminator
+    }
+    let entry = Label "entry"
+    let inverted = Label "inverted"
+    let normal = Label "normal"
+    let invertedLive = Label "inverted_live"
+    let invertedDead = Label "inverted_dead"
+    let normalLive = Label "normal_live"
+    let normalDead = Label "normal_dead"
+    let condition = VReg 0
+    let negated = VReg 1
+    let copied = VReg 2
+    let cfg = {
+        Entry = entry
+        Blocks =
+            Map.ofList [
+                (entry,
+                    block entry [
+                        UnaryOp (negated, Not, Register condition)
+                        Mov (copied, Register negated, Some AST.TBool)
+                    ] (Branch (Register copied, inverted, normal)))
+                (inverted,
+                    block inverted [] (Branch (Register condition, invertedDead, invertedLive)))
+                (normal,
+                    block normal [] (Branch (Register condition, normalLive, normalDead)))
+                (invertedLive, block invertedLive [] (Ret (Int64Const 1L)))
+                (invertedDead, block invertedDead [] (Ret (Int64Const 99L)))
+                (normalLive, block normalLive [] (Ret (Int64Const 2L)))
+                (normalDead, block normalDead [] (Ret (Int64Const 98L)))
+            ]
+    }
+
+    let optimized, changed = applySparseConditionalSimplification cfg
+    match Map.tryFind inverted optimized.Blocks, Map.tryFind normal optimized.Blocks with
+    | Some invertedBlock, Some normalBlock
+        when changed
+             && invertedBlock.Terminator = Jump invertedLive
+             && normalBlock.Terminator = Jump normalLive
+             && not (Map.containsKey invertedDead optimized.Blocks)
+             && not (Map.containsKey normalDead optimized.Blocks) -> Ok ()
+    | _ -> Error $"Expected both outcomes of a copied negation to remove contradictory branches: {optimized}"
+
 let testSccpLoopBackedgeWidensInductionValue () : TestResult =
     let block label instrs terminator : BasicBlock = {
         Label = label
@@ -1947,6 +1993,7 @@ let tests = [
     ("MIR SCCP propagates phi constants and removes unreachable edges", testSccpPropagatesPhiConstantAndRemovesUnreachableEdge)
     ("MIR SCCP ignores non-executable phi inputs", testSccpPhiIgnoresNonExecutableIncomingEdge)
     ("MIR SCCP combines copy folding and dead-edge pruning", testSccpCombinesCopyFoldingAndDeadEdgePruning)
+    ("MIR SCCP propagates copied negation facts", testSccpPropagatesNegatedBooleanThroughCopy)
     ("MIR SCCP widens loop values after executable backedges", testSccpLoopBackedgeWidensInductionValue)
     ("MIR SCCP tracks Float and String constants without bypass", testSccpTracksFloatAndStringConstantsWithoutBypass)
     ("MIR SCCP stabilizes NaN constants", testSccpStabilizesNanConstants)

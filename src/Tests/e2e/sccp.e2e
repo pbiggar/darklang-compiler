@@ -53,3 +53,26 @@ let repeatFalse (condition: Bool) : Int64 = if condition then 3L else if conditi
 
 // Disabling the combined SCCP pass still preserves language behavior.
 let sccpDisabled (value: Int64) : Int64 = if value < 10L then 1L else 2L; sccpDisabled (10L) = 2L disable_opt_mir_sccp=true
+
+// A true conjunction proves both operands; a false disjunction proves both
+// operands false, even after another branch joins inside the selected arm.
+let andFacts (first: Bool) (second: Bool) (choose: Bool) : Int64 = if first && second then let selected = if choose then 1L else 2L in if first then if second then selected else Builtin.testRuntimeError "second false" else Builtin.testRuntimeError "first false" else 3L; andFacts (true) (true) (true) = 1L
+let andFacts (first: Bool) (second: Bool) (choose: Bool) : Int64 = if first && second then let selected = if choose then 1L else 2L in if first then if second then selected else Builtin.testRuntimeError "second false" else Builtin.testRuntimeError "first false" else 3L; andFacts (true) (true) (false) = 2L
+let andFacts (first: Bool) (second: Bool) (choose: Bool) : Int64 = if first && second then let selected = if choose then 1L else 2L in if first then if second then selected else Builtin.testRuntimeError "second false" else Builtin.testRuntimeError "first false" else 3L; andFacts (true) (false) (true) = 3L
+let orFacts (first: Bool) (second: Bool) (choose: Bool) : Int64 = if first || second then 3L else let selected = if choose then 1L else 2L in if first then Builtin.testRuntimeError "first true" else if second then Builtin.testRuntimeError "second true" else selected; orFacts (false) (false) (true) = 1L
+let orFacts (first: Bool) (second: Bool) (choose: Bool) : Int64 = if first || second then 3L else let selected = if choose then 1L else 2L in if first then Builtin.testRuntimeError "first true" else if second then Builtin.testRuntimeError "second true" else selected; orFacts (false) (false) (false) = 2L
+let orFacts (first: Bool) (second: Bool) (choose: Bool) : Int64 = if first || second then 3L else let selected = if choose then 1L else 2L in if first then Builtin.testRuntimeError "first true" else if second then Builtin.testRuntimeError "second true" else selected; orFacts (true) (false) (true) = 3L
+
+// One known operand makes the other operand follow from the composite outcome.
+let andKnown (first: Bool) (second: Bool) : Int64 = if first then if first && second then 3L else if second then Builtin.testRuntimeError "second true" else 1L else 2L; andKnown (true) (false) = 1L
+let andKnown (first: Bool) (second: Bool) : Int64 = if first then if first && second then 3L else if second then Builtin.testRuntimeError "second true" else 1L else 2L; andKnown (true) (true) = 3L
+let orKnown (first: Bool) (second: Bool) : Int64 = if first then 2L else if first || second then if second then 1L else Builtin.testRuntimeError "second false" else 3L; orKnown (false) (true) = 1L
+let orKnown (first: Bool) (second: Bool) : Int64 = if first then 2L else if first || second then if second then 1L else Builtin.testRuntimeError "second false" else 3L; orKnown (false) (false) = 3L
+
+// The false outcome of a conjunction does not establish either operand alone.
+let derivedJoin (first: Bool) (second: Bool) : Int64 = let selected = if first && second then 10L else 20L in if first then selected else selected + 1L; derivedJoin (true) (true) = 10L
+let derivedJoin (first: Bool) (second: Bool) : Int64 = let selected = if first && second then 10L else 20L in if first then selected else selected + 1L; derivedJoin (true) (false) = 20L
+let derivedJoin (first: Bool) (second: Bool) : Int64 = let selected = if first && second then 10L else 20L in if first then selected else selected + 1L; derivedJoin (false) (true) = 21L
+let orAmbiguous (first: Bool) (second: Bool) : Int64 = if first || second then if first then 1L else 2L else 3L; orAmbiguous (true) (false) = 1L
+let orAmbiguous (first: Bool) (second: Bool) : Int64 = if first || second then if first then 1L else 2L else 3L; orAmbiguous (false) (true) = 2L
+let orAmbiguous (first: Bool) (second: Bool) : Int64 = if first || second then if first then 1L else 2L else 3L; orAmbiguous (false) (false) = 3L

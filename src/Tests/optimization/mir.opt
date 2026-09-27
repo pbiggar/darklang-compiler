@@ -441,6 +441,135 @@ Function preserveRange:
     v10007 <- v10006 + 1 : TInt64
     ret v10007
 ---NAME---
+sccp_and_true_edge_facts
+---INPUT---
+let andTrueFacts (first: Bool) (second: Bool) (choose: Bool) : Int64 =
+    if first && second then
+        let selected = if choose then 1L else 2L in
+        if first then if second then selected else 99L else 98L
+    else 3L
+---EXPECTED---
+Function andTrueFacts:
+  andTrueFacts_entry:
+    v10004 <- v0 && v1 : TBool
+    branch v10004 ? andTrueFacts_ssa_1 : andTrueFacts_ssa_2
+  andTrueFacts_L0:
+    ret 1
+  andTrueFacts_L1:
+    ret 2
+  andTrueFacts_ssa_1:
+    branch v2 ? andTrueFacts_L0 : andTrueFacts_L1
+  andTrueFacts_ssa_2:
+    ret 3
+
+---NAME---
+sccp_or_false_edge_facts
+---INPUT---
+let orFalseFacts (first: Bool) (second: Bool) (choose: Bool) : Int64 =
+    if first || second then 3L
+    else
+        let selected = if choose then 1L else 2L in
+        if first then 99L else if second then 98L else selected
+---EXPECTED---
+Function orFalseFacts:
+  orFalseFacts_entry:
+    v10004 <- v0 || v1 : TBool
+    branch v10004 ? orFalseFacts_ssa_1 : orFalseFacts_ssa_2
+  orFalseFacts_L0:
+    ret 1
+  orFalseFacts_L1:
+    ret 2
+  orFalseFacts_ssa_1:
+    ret 3
+  orFalseFacts_ssa_2:
+    branch v2 ? orFalseFacts_L0 : orFalseFacts_L1
+
+---NAME---
+sccp_and_false_edge_known_operand
+---INPUT---
+let andFalseKnown (first: Bool) (second: Bool) : Int64 =
+    if first then
+        if first && second then 3L
+        else if second then 99L else 1L
+    else 2L
+---EXPECTED---
+Function andFalseKnown:
+  andFalseKnown_entry:
+    branch v0 ? andFalseKnown_ssa_1 : andFalseKnown_ssa_2
+  andFalseKnown_ssa_1:
+    v10002 <- v0 && v1 : TBool
+    branch v10002 ? andFalseKnown_ssa_3 : andFalseKnown_ssa_6
+  andFalseKnown_ssa_2:
+    ret 2
+  andFalseKnown_ssa_3:
+    ret 3
+  andFalseKnown_ssa_6:
+    ret 1
+
+---NAME---
+sccp_or_true_edge_known_operand
+---INPUT---
+let orTrueKnown (first: Bool) (second: Bool) : Int64 =
+    if first then 2L
+    else if first || second then if second then 1L else 99L else 3L
+---EXPECTED---
+Function orTrueKnown:
+  orTrueKnown_entry:
+    branch v0 ? orTrueKnown_ssa_1 : orTrueKnown_ssa_2
+  orTrueKnown_ssa_1:
+    ret 2
+  orTrueKnown_ssa_2:
+    v10002 <- v0 || v1 : TBool
+    branch v10002 ? orTrueKnown_ssa_5 : orTrueKnown_ssa_4
+  orTrueKnown_ssa_4:
+    ret 3
+  orTrueKnown_ssa_5:
+    ret 1
+
+---NAME---
+sccp_derived_boolean_join_weakens_fact
+---INPUT---
+let derivedJoin (first: Bool) (second: Bool) : Int64 =
+    let selected = if first && second then 10L else 20L in
+    if first then selected else selected + 1L
+---EXPECTED---
+Function derivedJoin:
+  derivedJoin_entry:
+    v10005 <- v0 && v1 : TBool
+    branch v10005 ? derivedJoin_L0 : derivedJoin_L1
+  derivedJoin_L0:
+    jump derivedJoin_L2
+  derivedJoin_L1:
+    jump derivedJoin_L2
+  derivedJoin_L2:
+    v10006 <- Phi([(10, derivedJoin_L0), (20, derivedJoin_L1)]) : TInt64
+    branch v0 ? derivedJoin_ssa_1 : derivedJoin_ssa_2
+  derivedJoin_ssa_1:
+    ret v10006
+  derivedJoin_ssa_2:
+    v10007 <- v10006 + 1 : TInt64
+    ret v10007
+
+---NAME---
+sccp_or_true_keeps_ambiguous_operand
+---INPUT---
+let orAmbiguous (first: Bool) (second: Bool) : Int64 =
+    if first || second then if first then 1L else 2L else 3L
+---EXPECTED---
+Function orAmbiguous:
+  orAmbiguous_entry:
+    v10002 <- v0 || v1 : TBool
+    branch v10002 ? orAmbiguous_ssa_1 : orAmbiguous_ssa_2
+  orAmbiguous_ssa_1:
+    branch v0 ? orAmbiguous_ssa_3 : orAmbiguous_ssa_4
+  orAmbiguous_ssa_2:
+    ret 3
+  orAmbiguous_ssa_3:
+    ret 1
+  orAmbiguous_ssa_4:
+    ret 2
+
+---NAME---
 const_branch_elimination_self_eq
 ---INPUT---
 let pick (n: Int64) : Int64 =
