@@ -10,7 +10,9 @@ Build and run the standalone Dark program:
 /tmp/http-fetch http://example.com/
 ```
 
-Pass any plain `http://` URL, including a local server URL. The program prints
-the response status and indents the HTML for inspection. It uses the explicit
-trusted client API because the URL comes from the command line; HTTPS is not yet
-supported by the Dark HTTP client.
+Pass any plain `http://` URL, including a local server URL. This is a diagnostic
+tool: it prints URL parsing, DNS and connection attempts, request and response
+details, then indents the HTML for inspection. It uses `HTTP_PROXY` (or
+`http_proxy`) when set, except for hosts matched by `NO_PROXY` (or `no_proxy`).
+Both paths use Dark DNS, TCP, and HTTP framing directly to show connection and
+response errors. HTTPS is not yet supported by the Dark HTTP stack.
