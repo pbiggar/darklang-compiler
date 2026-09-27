@@ -644,6 +644,10 @@ while true; do
   report_new_jobs "$snapshot"
   report_train_progress "$snapshot"
   report_terminal_jobs "$snapshot"
+  if ! python3 "$integrator_source_root/scripts/mergetrain_exception.py" \
+    --repo "$repo_root" finalize; then
+    log_warn "Could not archive a completed exception approval"
+  fi
 
   case "$next_action" in
     fix_blocked_job)

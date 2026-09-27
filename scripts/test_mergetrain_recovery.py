@@ -15,6 +15,7 @@ from scripts.mergetrain_recovery import (
     codex_instructions,
     preserve_failure_evidence,
 )
+from scripts.mergetrain_exception import create_request, review_path
 
 
 class RecoveryFixture:
@@ -333,6 +334,25 @@ class MergetrainRecoveryTests(unittest.TestCase):
             self.assertNotEqual(completed.returncode, 0)
             self.assertIn("outside validated gate settings", completed.stderr)
             self.assertNotIn("enqueue", [call["command"] for call in fixture.recorded_calls()])
+
+    def test_requested_failed_gate_waits_for_human_instead_of_repair(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = RecoveryFixture(Path(temp_dir))
+            create_request(
+                fixture.repo, head=fixture.old_head, branch="task/job",
+                gate="benchmarks", reason="Expected regression for this change",
+            )
+            fixture.set_failure("gate_failed", "benchmarks", "exit_code=1")
+            details = json.loads(fixture.details.read_text(encoding="utf-8"))
+            details["job"]["deploy_sha"] = fixture.old_head
+            fixture.details.write_text(json.dumps(details), encoding="utf-8")
+            completed = fixture.execute()
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertTrue(review_path(fixture.repo, 4).is_file())
+            self.assertFalse(fixture.codex_marker.exists())
+            self.assertEqual(
+                [call["command"] for call in fixture.recorded_calls()], ["inspect"]
+            )
 
     def test_failure_log_is_copied_into_recovery_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

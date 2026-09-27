@@ -2,6 +2,7 @@
 
 import json
 import os
+import json
 import pty
 import select
 import subprocess
@@ -12,11 +13,18 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from scripts.mergetrain_exception import (
+    approval_path,
+    create_request,
+    review_path,
+    stage_if_requested,
+)
 from scripts.render_mergetrain_status import (
     benchmark_changes,
     benchmark_changes_for_commit,
     benchmark_detail,
     benchmark_diff,
+    exception_labels,
     human_age,
     integrator_activity,
     merge_test_runtime,
@@ -151,7 +159,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 return output
 
             try:
-                self.assertIn(b"[a] attention", read_until(b"health: healthy"))
+                self.assertIn(b"[a] jobs", read_until(b"health: healthy"))
                 os.write(master, b"v")
                 approval_page = read_until(b"APPROVAL 2/2  #308 Review gate waivers")
                 self.assertIn(b"APPROVAL 2/2  #308 Review gate waivers", approval_page)
@@ -167,7 +175,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 os.write(master, b"no\n")
                 read_until(b"Press any key to return to merge-train status")
                 os.write(master, b"x")
-                read_until(b"[a] attention")
+                read_until(b"[a] jobs")
                 os.write(master, b"a")
                 attention_page = read_until(b"ATTENTION 1/2  #299 Review gate waivers")
                 self.assertIn(b"ATTENTION 1/2  #299 Review gate waivers", attention_page)
@@ -182,7 +190,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 os.write(master, b"no\n")
                 read_until(b"Press any key to return to merge-train status")
                 os.write(master, b"x")
-                read_until(b"[a] attention")
+                read_until(b"[a] jobs")
                 os.write(master, b"a")
                 read_until(b"[r] retry")
                 os.write(master, b"r")
@@ -212,6 +220,18 @@ class MergetrainStatusTests(unittest.TestCase):
                 job_detail = render_attention_job(repo, 299, color=False, attempt_dir=root)
             self.assertIn("policy changes in this job:", job_detail)
             self.assertIn("+  - name: runtime", job_detail)
+    def test_requested_gate_has_compact_approval_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir)
+            subprocess.run(["git", "init", "-q", repo], check=True)
+            reviews = repo / ".git/mergetrain-exceptions/reviews"
+            reviews.mkdir(parents=True)
+            (reviews / "7.json").write_text(json.dumps({
+                "schema": 1, "job_id": 7, "gate": "benchmark-sources",
+            }), encoding="utf-8")
+            label = exception_labels(repo)[7]
+            self.assertIn("[w] review", label)
+            self.assertLessEqual(len("    " + label), 80)
 
     def test_human_age_uses_compact_units(self) -> None:
         now = datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc)
@@ -557,6 +577,112 @@ class MergetrainStatusTests(unittest.TestCase):
                 os.write(master, b"q")
                 status_output = read_until(b"[m] fewer")
                 self.assertNotIn(b"benchmark result:", status_output)
+                os.write(master, b"q")
+                self.assertEqual(process.wait(timeout=10), 0)
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    process.wait(timeout=10)
+                os.close(master)
+
+    def test_status_approval_key_confirms_a_staged_candidate(self) -> None:
+        source_root = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo = root / "repo"
+            repo.mkdir()
+            subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Status Test"],
+                           cwd=repo, check=True)
+            subprocess.run(["git", "config", "user.email",
+                            "status@example.invalid"], cwd=repo, check=True)
+            (repo / ".mergetrain.yaml").write_text("version: 2\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo,
+                           check=True)
+            remote = root / "remote.git"
+            subprocess.run(["git", "init", "-q", "--bare", str(remote)],
+                           check=True)
+            subprocess.run(["git", "remote", "add", "mergetrain-local",
+                            str(remote)], cwd=repo, check=True)
+            subprocess.run(["git", "push", "-q", "-u", "mergetrain-local",
+                            "main"], cwd=repo, check=True)
+            subprocess.run(["git", "switch", "-q", "-c", "task/waiver"],
+                           cwd=repo, check=True)
+            (repo / "change.txt").write_text("candidate\n", encoding="utf-8")
+            subprocess.run(["git", "add", "change.txt"], cwd=repo, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "candidate"],
+                           cwd=repo, check=True)
+            head = subprocess.check_output(["git", "rev-parse", "HEAD"],
+                                           cwd=repo, text=True).strip()
+            tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"],
+                                           cwd=repo, text=True).strip()
+            create_request(repo, head=head, branch="task/waiver",
+                           gate="benchmarks", reason="Accepted regression")
+            details = {"job": {
+                "id": 7, "status": "blocked", "branch": "task/waiver",
+                "head_sha": head, "deploy_sha": head, "auto_deploy": True,
+                "note": "benchmark aggregate regressed",
+            }, "events": [{"state": "failure",
+                           "message": "Failed gate 5/6: benchmarks",
+                           "detail": "benchmark command"}]}
+            self.assertTrue(stage_if_requested(repo, details))
+            details_file = root / "details.json"
+            details_file.write_text(json.dumps(details), encoding="utf-8")
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            fake_mergetrain = fake_bin / "mergetrain"
+            fake_mergetrain.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, pathlib, sys\n"
+                "if 'inspect' in sys.argv:\n"
+                f"    print(pathlib.Path({str(details_file)!r}).read_text())\n"
+                "elif 'retry' in sys.argv:\n"
+                "    print(json.dumps({'job': {'id': 8, 'auto_deploy': True}}))\n"
+                "else:\n"
+                "    print(json.dumps({'contract_version': 4, 'health': "
+                "'unhealthy', 'state': 'attention', 'summary': "
+                "'1 job needs attention', 'next_action': "
+                "{'code': 'fix_blocked_job', 'requires_approval': 'none'}, "
+                "'warnings': [], 'attention_jobs': [{'id': 7, "
+                "'state': 'attention', 'task': 'Candidate', "
+                "'branch': 'task/waiver', 'reason': 'benchmarks'}], "
+                "'recent_jobs': []}))\n",
+                encoding="utf-8",
+            )
+            fake_mergetrain.chmod(0o755)
+            environment = dict(os.environ)
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            master, slave = pty.openpty()
+            process = subprocess.Popen(
+                [str(source_root / "mergetrain-status"), "--repo", str(repo),
+                 "--interval", "30", "--color", "never"],
+                cwd=source_root, env=environment, stdin=slave, stdout=slave,
+                stderr=slave, close_fds=True,
+            )
+            os.close(slave)
+
+            def read_until(expected: bytes) -> bytes:
+                deadline = time.monotonic() + 10
+                output = b""
+                while expected not in output and time.monotonic() < deadline:
+                    readable, _, _ = select.select([master], [], [], 0.2)
+                    if readable:
+                        output += os.read(master, 65536)
+                self.assertIn(expected, output)
+                return output
+
+            try:
+                read_until(b"[w] review")
+                os.write(master, b"w")
+                read_until(b"Type 'approve 7")
+                os.write(master, f"approve 7 {head[:12]} benchmarks\n".encode())
+                output = read_until(b"Press Enter to return to status")
+                self.assertIn(b"Approved benchmarks for job #7", output)
+                self.assertFalse(review_path(repo, 7).exists())
+                self.assertTrue(approval_path(repo, tree, "benchmarks").exists())
+                os.write(master, b"\n")
+                read_until(b"[w] waiver")
                 os.write(master, b"q")
                 self.assertEqual(process.wait(timeout=10), 0)
             finally:

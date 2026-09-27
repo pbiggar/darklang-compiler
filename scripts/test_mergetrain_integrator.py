@@ -443,7 +443,13 @@ raise SystemExit(1)
         config = (source_root / ".mergetrain.yaml").read_text(encoding="utf-8")
 
         self.assertIn(
-            "run: ./benchmarks/run_benchmarks.sh --verify-fresh full", config
+            "gate benchmarks -- ./benchmarks/run_benchmarks.sh --verify-fresh full", config
+        )
+        self.assertIn(
+            "gate benchmark-sources -- python3 benchmarks/check_sources_unchanged.py", config
+        )
+        self.assertIn(
+            "gate test-runtime -- python3 scripts/test_runtime_gate.py gate --base", config
         )
         self.assertIn("run: python3 scripts/check_e2e_temp_paths.py", config)
         self.assertNotIn(

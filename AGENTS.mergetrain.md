@@ -41,11 +41,24 @@ Purpose: Serialize committed local task branches through one merge/test/push/ver
 - A task agent runs `./land` and stops when it prints `queued`. The script's internal `--auto` enqueue authorizes only the configured runner's bounded unattended validation and deployment; it does not authorize the task agent to monitor, validate, deploy, or report the eventual outcome.
 - Only a separately authorized runner uses `deploy` or a daemon.
 - A recovery conflict in generated `benchmarks/RESULTS.md` is resolved only by a successful improving `./benchmarks/run_benchmarks.sh full` recording from the rebased source. Never hand-merge or choose one side of that file; if recording does not regenerate it from an improved canonical snapshot, recovery stops.
-- The `benchmark-sources` gate rejects any candidate that changes `benchmarks/problems/`; benchmark source changes require a separately controlled integration-policy update and are never repaired or bypassed by the integrator.
-- Every assembled queue candidate reruns `./benchmarks/run_benchmarks.sh --verify-fresh full`. An aggregate regression or any individual benchmark regression of 0.1% or more fails. A smaller individual loss is eligible only when unavoidable and explained by the task agent. An unrecorded improvement is repaired only by rebasing the owning branch, successfully recording the full suite, committing the regenerated benchmark files, and retrying that new exact commit; the retry must reproduce the recording before deployment.
+- The `benchmark-sources` gate rejects candidates that change
+  `benchmarks/problems/`. A lander may request a one-time exception, but only
+  a human operator may approve the exact failed candidate and gate.
+- Every assembled queue candidate reruns `./benchmarks/run_benchmarks.sh
+  --verify-fresh full`. A regression fails unless a human approves an exact
+  `benchmarks` exception. An unrecorded improvement is ordinarily repaired by
+  rebasing the owning branch, recording the full suite, committing the
+  regenerated benchmark files, and retrying; that retry must reproduce the
+  recording. An exact human exception may waive this gate instead.
 - The train's `tests` gate runs the complete already-built host test suite with
-  `./run-tests --ai`. Full-suite timing measurements are optional diagnostics;
-  contention does not block integration.
+  `./run-tests --ai`. Its separate `test-runtime` gate compares uncontended
+  full-suite timing with the integration parent and blocks significant increases
+  or invalid measurements. A human operator may approve an exact exception.
+- A task agent may request an exception with `./land --exception-gate GATE
+  --exception-reason TEXT` for `benchmark-sources`, `benchmarks`, or
+  `test-runtime`. Requesting does not approve it. The integrator stages the
+  failed candidate for human review. In interactive `./mergetrain-status`,
+  press `a` to review and confirm it; this retries the job. All other gates run.
 - Deployment requires either confirmation of the human-readable exact plan or prior bounded unattended approval. Agents never select train IDs or supply plan hashes; structured evidence may include identifiers for inspection.
 - Unattended approval is bound to the exact destination and execution policy. Any change blocks before push.
 - Recovery and destructive cleanup require their stated approval. Follow `status.next_action`; never rewrite permanent deploy audit refs.
