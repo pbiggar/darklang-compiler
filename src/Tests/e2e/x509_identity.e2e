@@ -1,0 +1,51 @@
+// x509_identity.e2e - DER leaf SAN and validity checks using an Ed25519 fixture.
+
+(let cert = Stdlib.Base64.decode "MIIBbTCCAR+gAwIBAgIUI+HKUqEmf1dWkRYuHnpkmlI7pLswBQYDK2VwMBoxGDAWBgNVBAMMD2lnbm9yZWQuZXhhbXBsZTAeFw0yNjA5MjcyMjE0MDJaFw0zNjA5MjQyMjE0MDJaMBoxGDAWBgNVBAMMD2lnbm9yZWQuZXhhbXBsZTAqMAUGAytlcAMhAD5OljcyAaAmbz/163oERJJdiuk4/eyhEXd/RS4yl/Jso3cwdTAdBgNVHQ4EFgQUwRkAvTmZaoiQI5YFc+spMR4gEWwwHwYDVR0jBBgwFoAUwRkAvTmZaoiQI5YFc+spMR4gEWwwJQYDVR0RBB4wHIILZXhhbXBsZS5jb22CDSouZXhhbXBsZS5vcmcwDAYDVR0TAQH/BAIwADAFBgMrZXADQQDkhtSbGgio83jEOB4vR1ximW0kJz6awXTEZVXHksuGp8jLOUbiXlMDV/NDK+5AjMoll4ECuF41CLjj0WU5vyMC"
+ match cert with
+ | Error message -> Error message
+ | Ok bytes -> Stdlib.X509Identity.parseUnverifiedLeaf bytes
+               |> Stdlib.Result.map (fun leaf ->
+                    (leaf.notBefore, leaf.notAfter, leaf.dnsNames)))
+  = Ok ((20260927221402L, 20360924221402L, ["example.com", "*.example.org"]))
+
+(let cert = Stdlib.Base64.decode "MIIBbTCCAR+gAwIBAgIUI+HKUqEmf1dWkRYuHnpkmlI7pLswBQYDK2VwMBoxGDAWBgNVBAMMD2lnbm9yZWQuZXhhbXBsZTAeFw0yNjA5MjcyMjE0MDJaFw0zNjA5MjQyMjE0MDJaMBoxGDAWBgNVBAMMD2lnbm9yZWQuZXhhbXBsZTAqMAUGAytlcAMhAD5OljcyAaAmbz/163oERJJdiuk4/eyhEXd/RS4yl/Jso3cwdTAdBgNVHQ4EFgQUwRkAvTmZaoiQI5YFc+spMR4gEWwwHwYDVR0jBBgwFoAUwRkAvTmZaoiQI5YFc+spMR4gEWwwJQYDVR0RBB4wHIILZXhhbXBsZS5jb22CDSouZXhhbXBsZS5vcmcwDAYDVR0TAQH/BAIwADAFBgMrZXADQQDkhtSbGgio83jEOB4vR1ximW0kJz6awXTEZVXHksuGp8jLOUbiXlMDV/NDK+5AjMoll4ECuF41CLjj0WU5vyMC"
+ let date = Stdlib.DateTime.parse "2026-10-01T00:00:00Z"
+ match (cert, date) with
+ | (Ok bytes, Ok at) ->
+     match Stdlib.X509Identity.parseUnverifiedLeaf bytes with
+     | Error message -> Error message
+     | Ok leaf ->
+         let exact = Stdlib.X509Identity.checkUnverifiedHostnameAt leaf "EXAMPLE.COM" at in
+         let wildcard = Stdlib.X509Identity.checkUnverifiedHostnameAt leaf "www.example.org" at in
+         let apex = Stdlib.X509Identity.checkUnverifiedHostnameAt leaf "example.org" at in
+         let nested = Stdlib.X509Identity.checkUnverifiedHostnameAt leaf "a.b.example.org" at in
+         let cn = Stdlib.X509Identity.checkUnverifiedHostnameAt leaf "ignored.example" at in
+         Ok ((exact, wildcard, apex, nested, cn))
+ | _ -> Error "Invalid fixture")
+  = Ok ((Ok (), Ok (), Error "X.509 certificate does not match hostname",
+        Error "X.509 certificate does not match hostname",
+        Error "X.509 certificate does not match hostname"))
+
+(let cert = Stdlib.Base64.decode "MIIBbTCCAR+gAwIBAgIUI+HKUqEmf1dWkRYuHnpkmlI7pLswBQYDK2VwMBoxGDAWBgNVBAMMD2lnbm9yZWQuZXhhbXBsZTAeFw0yNjA5MjcyMjE0MDJaFw0zNjA5MjQyMjE0MDJaMBoxGDAWBgNVBAMMD2lnbm9yZWQuZXhhbXBsZTAqMAUGAytlcAMhAD5OljcyAaAmbz/163oERJJdiuk4/eyhEXd/RS4yl/Jso3cwdTAdBgNVHQ4EFgQUwRkAvTmZaoiQI5YFc+spMR4gEWwwHwYDVR0jBBgwFoAUwRkAvTmZaoiQI5YFc+spMR4gEWwwJQYDVR0RBB4wHIILZXhhbXBsZS5jb22CDSouZXhhbXBsZS5vcmcwDAYDVR0TAQH/BAIwADAFBgMrZXADQQDkhtSbGgio83jEOB4vR1ximW0kJz6awXTEZVXHksuGp8jLOUbiXlMDV/NDK+5AjMoll4ECuF41CLjj0WU5vyMC"
+ let expired = Stdlib.DateTime.parse "2040-01-01T00:00:00Z"
+ match (cert, expired) with
+ | (Ok bytes, Ok at) ->
+     match Stdlib.X509Identity.parseUnverifiedLeaf bytes with
+     | Error message -> Error message
+     | Ok leaf -> Stdlib.X509Identity.checkUnverifiedHostnameAt leaf "example.com" at
+ | _ -> Error "Invalid fixture")
+  = Error "X.509 certificate is outside its validity interval"
+
+(Stdlib.Blob.fromHex "3000" |> Stdlib.Result.map Stdlib.X509Identity.parseUnverifiedLeaf)
+  = Ok (Error "Invalid X.509 certificate size")
+
+(let cert = Stdlib.Base64.decode "MIIBQDCB86ADAgECAhQb6nmSKhgawVGB5+bcNyXYLfowxzAFBgMrZXAwFjEUMBIGA1UEAwwLZXhhbXBsZS5jb20wHhcNMjYwOTI3MjIxODIwWhcNMzYwOTI0MjIxODIwWjAWMRQwEgYDVQQDDAtleGFtcGxlLmNvbTAqMAUGAytlcAMhAEVXXyGM21hjWEu32mKsf93MdLls37sJxPZzR/NAAxiro1MwUTAdBgNVHQ4EFgQUQVxuxkImqJrrv07CT24WjZewCQwwHwYDVR0jBBgwFoAUQVxuxkImqJrrv07CT24WjZewCQwwDwYDVR0TAQH/BAUwAwEB/zAFBgMrZXADQQCh0lXjHMPRhytb5SeAtovreU7J0Y+i+yUZM96qlU9+RMRjteyorOcaixeVL6VwN5KU0Bg5737h9UmpP9pcjo8M"
+ match cert with
+ | Error message -> Error message
+ | Ok bytes -> Stdlib.X509Identity.parseUnverifiedLeaf bytes
+               |> Stdlib.Result.map (fun leaf -> leaf.dnsNames))
+  = Error "X.509 subjectAltName missing"
+
+(Stdlib.Blob.fromHex "308300016D0000000000000000000000"
+ |> Stdlib.Result.map Stdlib.X509Identity.parseUnverifiedLeaf)
+  = Ok (Error "Non-canonical DER length")
