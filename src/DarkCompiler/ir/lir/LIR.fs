@@ -91,7 +91,9 @@ type CliOperation =
     | TerminateProcess
     | SocketTcp4
     | SocketUdp4
+    | SocketUdp6
     | SocketConnect
+    | SocketConnect6
     | SocketSend
     | SocketReceive
     | SocketReceiveTimeout

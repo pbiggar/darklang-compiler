@@ -683,13 +683,14 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
             Ok [ARM64Symbolic.MOVZ (syscalls.SyscallRegister, number, 0)
                 ARM64Symbolic.SVC syscalls.SvcImmediate
                 ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]
-        | LIR.SocketTcp4 | LIR.SocketUdp4 ->
+        | LIR.SocketTcp4 | LIR.SocketUdp4 | LIR.SocketUdp6 ->
             let syscalls = ARM64.targetSyscalls ctx.Target
             let constants = Platform.socketConstantsFor (ARM64.targetOS ctx.Target)
             let socketType =
-                if operation = LIR.SocketUdp4 then constants.DatagramCloexec
+                if operation = LIR.SocketUdp4 || operation = LIR.SocketUdp6 then constants.DatagramCloexec
                 else constants.StreamCloexec
-            let protocol = if operation = LIR.SocketUdp4 then 17us else 6us
+            let protocol = if operation = LIR.SocketTcp4 then 6us else 17us
+            let family = if operation = LIR.SocketUdp6 then constants.AddressFamily6 else constants.AddressFamily4
             let normalize =
                 match ARM64.targetOS ctx.Target with
                 | Platform.Linux -> []
@@ -698,14 +699,14 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
                     [ARM64Symbolic.B_cond_label (ARM64Symbolic.LO, doneLabel)
                      ARM64Symbolic.NEG (ARM64Symbolic.X0, ARM64Symbolic.X0)
                      ARM64Symbolic.Label doneLabel]
-            Ok ([ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 2us, 0)]
+            Ok ([ARM64Symbolic.MOVZ (ARM64Symbolic.X0, family, 0)]
                 @ loadImmediate ARM64Symbolic.X1 socketType
                 @ [ARM64Symbolic.MOVZ (ARM64Symbolic.X2, protocol, 0)
                    ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Socket, 0)
                    ARM64Symbolic.SVC syscalls.SvcImmediate]
                 @ normalize
                 @ [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)])
-        | LIR.SocketConnect | LIR.SocketSend | LIR.SocketReceive | LIR.SocketReceiveTimeout ->
+        | LIR.SocketConnect | LIR.SocketConnect6 | LIR.SocketSend | LIR.SocketReceive | LIR.SocketReceiveTimeout ->
             let syscall = ARM64.targetSyscalls ctx.Target in
             let os = ARM64.targetOS ctx.Target in
             let normalize =
@@ -716,13 +717,13 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
                      ARM64Symbolic.NEG (ARM64Symbolic.X0, ARM64Symbolic.X0)
                      ARM64Symbolic.Label doneLabel] in
             match operation, args with
-            | LIR.SocketConnect, [descriptor; address] ->
+            | (LIR.SocketConnect | LIR.SocketConnect6), [descriptor; address] ->
                 loadCliOperand ARM64Symbolic.X0 descriptor
                 |> Result.bind (fun fdLoads ->
                     loadCliOperand ARM64Symbolic.X1 address
                     |> Result.map (fun addressLoads ->
                         fdLoads @ addressLoads @
-                        [ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 16us, 0)
+                        [ARM64Symbolic.MOVZ (ARM64Symbolic.X2, (if operation = LIR.SocketConnect6 then 28us else 16us), 0)
                          ARM64Symbolic.MOVZ (syscall.SyscallRegister, syscall.Numbers.Connect, 0)
                          ARM64Symbolic.SVC syscall.SvcImmediate] @ normalize @
                         [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]))

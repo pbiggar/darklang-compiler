@@ -11,3 +11,4 @@ Stdlib.Blob.fromHex "123481800001000100000000076578616D706C6503636F6D00001C0001C
 Stdlib.Blob.fromHex "123481800001000100000000076578616D706C6503636F6D0000010001C029000100010000003C000401020304" |> Stdlib.Result.andThen (fun wire -> Stdlib.DnsWire.answers wire 4660L "example.com" 1L) = Error "Invalid DNS name compression"
 Stdlib.Blob.fromHex "123481800001000100000000076578616D706C6503636F6D0000010001C00C000100010000003C00040102" |> Stdlib.Result.andThen (fun wire -> Stdlib.DnsWire.answers wire 4660L "example.com" 1L) = Error "Truncated DNS record"
 Stdlib.DnsWire.queryUdp4 [127L, 0L, 0L, 1L] 53L "example.com" 15L 100L 1L = Error (Stdlib.DnsWire.ResolveError.InvalidQuery "Invalid DNS query")
+Stdlib.DnsWire.queryUdp6 [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 1L] 53L "example.com" 15L 100L 1L = Error (Stdlib.DnsWire.ResolveError.InvalidQuery "Invalid DNS query")

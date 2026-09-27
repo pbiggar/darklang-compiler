@@ -162,6 +162,8 @@ let syscallNumbersFor (target: Target) : SyscallNumbers =
     | LinuxX86_64 -> linuxX86_64SyscallNumbers
 
 type SocketConstants = {
+    AddressFamily4: uint16
+    AddressFamily6: uint16
     StreamCloexec: int64
     DatagramCloexec: int64
     SocketLevel: uint16
@@ -171,12 +173,16 @@ type SocketConstants = {
 let socketConstantsFor (os: OS) : SocketConstants =
     match os with
     | MacOS ->
-        { StreamCloexec = 268435457L
+        { AddressFamily4 = 2us
+          AddressFamily6 = 30us
+          StreamCloexec = 268435457L
           DatagramCloexec = 268435458L
           SocketLevel = 65535us
           ReceiveTimeout = 4102us }
     | Linux ->
-        { StreamCloexec = 524289L
+        { AddressFamily4 = 2us
+          AddressFamily6 = 10us
+          StreamCloexec = 524289L
           DatagramCloexec = 524290L
           SocketLevel = 1us
           ReceiveTimeout = 20us }

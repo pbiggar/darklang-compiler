@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-27T14:22:35+00:00",
+  "generated_at": "2026-09-27T14:36:31+00:00",
   "compiler": {
-    "commit": "3ea97900597e7f6946a75042d90af7813805b5d1",
-    "subject": "Summarize ARM64 callee register clobbers for direct calls"
+    "commit": "401951ed9e7c7e91ef476b56a0788f268e20d174",
+    "subject": "Resolve DNS over bounded UDP sockets"
   },
   "benchmarks": [
     {
@@ -126,7 +126,7 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 306212700
+      "instructions": 306212280
     },
     {
       "name": "warden",

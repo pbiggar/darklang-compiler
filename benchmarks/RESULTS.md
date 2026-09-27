@@ -2,12 +2,12 @@
 
 Best-known compatible full-profile Dark performance vs audited Rust references, with diagnostic reference runtimes (instruction counts).
 
-**Snapshot timestamp:** 2026-09-27T14:22:35+00:00
+**Snapshot timestamp:** 2026-09-27T14:36:31+00:00
 **Architecture:** `arm64`
 **Profile:** `full` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs`
 **Workload contract:** `6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe`
-**Compiler commit:** `3ea97900597e7f6946a75042d90af7813805b5d1` - Summarize ARM64 callee register clobbers for direct calls
+**Compiler commit:** `401951ed9e7c7e91ef476b56a0788f268e20d174` - Resolve DNS over bounded UDP sockets
 **Diagnostic references:** informational only; multipliers are instructions divided by Rust for the same workload.
 Every displayed diagnostic row matched the profile's expected stdout.
 
@@ -40,5 +40,5 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | string_equality | 1,177,881 (0.80x) | 1,479,564 | - | - | - | - |
 | sum_to_n | 57,870 (0.22x) | 260,246 | - | - | - | - |
 | tak | 48,004,591 (0.12x) | 391,110,808 | - | - | - | - |
-| tinytemplate | 306,212,700 (728x) | 420,354 | - | - | - | - |
+| tinytemplate | 306,212,280 (728x) | 420,354 | - | - | - | - |
 | warden | 44,145,346 (163x) | 270,345 | - | - | - | - |

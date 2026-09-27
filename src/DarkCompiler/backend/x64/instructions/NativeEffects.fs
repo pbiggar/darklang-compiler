@@ -207,27 +207,29 @@ let internal emitCliNative (ctx: FuncCtx) (dest: LIR.Reg) (operation: LIR.CliOpe
             Ok (loadImm64 X86_64.RAX 39L
             @ [X86_64.SYSCALL]
             @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
-        | LIR.SocketTcp4 | LIR.SocketUdp4 ->
-            // AF_INET with close-on-exec and the requested transport protocol.
+        | LIR.SocketTcp4 | LIR.SocketUdp4 | LIR.SocketUdp6 ->
+            // Create the requested IP socket with close-on-exec.
             let constants = Platform.socketConstantsFor Platform.Linux
             let kind, protocol =
-                if operation = LIR.SocketUdp4 then constants.DatagramCloexec, 17L
-                else constants.StreamCloexec, 6L
-            Ok (loadImm64 X86_64.RDI 2L
+                if operation = LIR.SocketTcp4 then constants.StreamCloexec, 6L
+                else constants.DatagramCloexec, 17L
+            let family = if operation = LIR.SocketUdp6 then constants.AddressFamily6 else constants.AddressFamily4
+            Ok (loadImm64 X86_64.RDI (int64 family)
             @ loadImm64 X86_64.RSI kind
             @ loadImm64 X86_64.RDX protocol
             @ loadImm64 X86_64.RAX (int64 syscalls.Socket)
             @ [X86_64.SYSCALL]
             @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
-        | LIR.SocketConnect | LIR.SocketSend | LIR.SocketReceive | LIR.SocketReceiveTimeout ->
+        | LIR.SocketConnect | LIR.SocketConnect6 | LIR.SocketSend | LIR.SocketReceive | LIR.SocketReceiveTimeout ->
             let finish = if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)] in
             match operation, args with
-            | LIR.SocketConnect, [descriptor; address] ->
+            | (LIR.SocketConnect | LIR.SocketConnect6), [descriptor; address] ->
                 loadCliOperand X86_64.RDI descriptor
                 |> Result.bind (fun fdLoads ->
                     loadCliOperand X86_64.RSI address
                     |> Result.map (fun addressLoads ->
-                        fdLoads @ addressLoads @ loadImm64 X86_64.RDX 16L @
+                        fdLoads @ addressLoads @
+                        loadImm64 X86_64.RDX (if operation = LIR.SocketConnect6 then 28L else 16L) @
                         loadImm64 X86_64.RAX (int64 syscalls.Connect) @ [X86_64.SYSCALL] @ finish))
             | LIR.SocketSend, [descriptor; blob] ->
                 loadCliOperand X86_64.RDI descriptor

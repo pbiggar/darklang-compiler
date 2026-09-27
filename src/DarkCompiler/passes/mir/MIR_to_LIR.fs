@@ -38,7 +38,9 @@ let convertCliOperation (operation: MIR.CliOperation) : LIR.CliOperation =
     | MIR.TerminateProcess -> LIR.TerminateProcess
     | MIR.SocketTcp4 -> LIR.SocketTcp4
     | MIR.SocketUdp4 -> LIR.SocketUdp4
+    | MIR.SocketUdp6 -> LIR.SocketUdp6
     | MIR.SocketConnect -> LIR.SocketConnect
+    | MIR.SocketConnect6 -> LIR.SocketConnect6
     | MIR.SocketSend -> LIR.SocketSend
     | MIR.SocketReceive -> LIR.SocketReceive
     | MIR.SocketReceiveTimeout -> LIR.SocketReceiveTimeout

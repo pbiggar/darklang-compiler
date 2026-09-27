@@ -375,7 +375,9 @@ let tryCliIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option 
             | "Darklang.Stdlib.Cli.__terminateProcess" -> Some ANF.TerminateProcess
             | "Darklang.Stdlib.Network.__tcp4Socket" -> Some ANF.SocketTcp4
             | "Darklang.Stdlib.Network.__udp4Socket" -> Some ANF.SocketUdp4
+            | "Darklang.Stdlib.Network.__udp6Socket" -> Some ANF.SocketUdp6
             | "Darklang.Stdlib.Network.__connect" -> Some ANF.SocketConnect
+            | "Darklang.Stdlib.Network.__connect6" -> Some ANF.SocketConnect6
             | "Darklang.Stdlib.Network.__send" -> Some ANF.SocketSend
             | "Darklang.Stdlib.Network.__receive" -> Some ANF.SocketReceive
             | "Darklang.Stdlib.Network.__receiveTimeout" -> Some ANF.SocketReceiveTimeout

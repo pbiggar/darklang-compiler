@@ -348,6 +348,48 @@ let queryUdp4 (nameserver: List<Int64>) (port: Int64) (host: String) (kind: Int6
         Error (Stdlib.DnsWire.ResolveError.InvalidQuery "Invalid DNS query")
     else Stdlib.DnsWire.__queryUdp4Attempts nameserver port host kind timeoutMs attempts
 
+let __queryUdp6Once (nameserver: List<Int64>) (port: Int64) (host: String) (kind: Int64)
+    (timeoutMs: Int64) : Stdlib.Result.Result<List<List<Int64>>, Stdlib.DnsWire.ResolveError> =
+    let identifier = Stdlib.Int64.random 0L 65535L in
+    match Stdlib.DnsWire.query identifier host kind with
+    | Error message -> Error (Stdlib.DnsWire.ResolveError.InvalidQuery message)
+    | Ok packet ->
+        match Stdlib.Network.openUdp6 () with
+        | Error code -> Error (Stdlib.DnsWire.ResolveError.NetworkError code)
+        | Ok socket ->
+            let result = Stdlib.Network.exchangeUdp6 socket nameserver port packet timeoutMs in
+            let _ = Stdlib.Network.closeUdp6 socket in
+            match result with
+            | Error code -> Error (Stdlib.DnsWire.ResolveError.NetworkError code)
+            | Ok response ->
+                match Stdlib.DnsWire.answers response identifier host kind with
+                | Error message -> Error (Stdlib.DnsWire.ResolveError.InvalidResponse message)
+                | Ok addresses -> Ok addresses
+
+let __queryUdp6Attempts (nameserver: List<Int64>) (port: Int64) (host: String) (kind: Int64)
+    (timeoutMs: Int64) (remaining: Int64)
+    : Stdlib.Result.Result<List<List<Int64>>, Stdlib.DnsWire.ResolveError> =
+    match Stdlib.DnsWire.__queryUdp6Once nameserver port host kind timeoutMs with
+    | Error error ->
+        match error with
+        | NetworkError code ->
+            if remaining > 1L && (code == 4L || code == 11L || code == 110L || code == 111L) then
+                Stdlib.DnsWire.__queryUdp6Attempts nameserver port host kind timeoutMs (remaining - 1L)
+            else Error error
+        | _ -> Error error
+    | result -> result
+
+let queryUdp6 (nameserver: List<Int64>) (port: Int64) (host: String) (kind: Int64)
+    (timeoutMs: Int64) (attempts: Int64)
+    : Stdlib.Result.Result<List<List<Int64>>, Stdlib.DnsWire.ResolveError> =
+    if Stdlib.Bool.not (Stdlib.Network.__validAddress6 nameserver) ||
+        port <= 0L || port > 65535L || timeoutMs <= 0L || timeoutMs > 10000L ||
+        attempts <= 0L || attempts > 3L then
+        Error (Stdlib.DnsWire.ResolveError.InvalidQuery "Invalid DNS transport parameters")
+    else if kind != 1L && kind != 28L then
+        Error (Stdlib.DnsWire.ResolveError.InvalidQuery "Invalid DNS query")
+    else Stdlib.DnsWire.__queryUdp6Attempts nameserver port host kind timeoutMs attempts
+
 let __queryNameservers (servers: List<String>) (host: String) (kind: Int64)
     (previous: Stdlib.DnsWire.ResolveError)
     : Stdlib.Result.Result<List<List<Int64>>, Stdlib.DnsWire.ResolveError> =
@@ -355,7 +397,13 @@ let __queryNameservers (servers: List<String>) (host: String) (kind: Int64)
     | [] -> Error previous
     | server :: rest ->
         match Stdlib.DnsWire.ipv4 server with
-        | None -> Stdlib.DnsWire.__queryNameservers rest host kind previous
+        | None ->
+            match Stdlib.DnsWire.ipv6 server with
+            | None -> Stdlib.DnsWire.__queryNameservers rest host kind previous
+            | Some address ->
+                match Stdlib.DnsWire.queryUdp6 address 53L host kind 1000L 2L with
+                | Ok answers -> Ok answers
+                | Error error -> Stdlib.DnsWire.__queryNameservers rest host kind error
         | Some address ->
             match Stdlib.DnsWire.queryUdp4 address 53L host kind 1000L 2L with
             | Ok answers -> Ok answers
