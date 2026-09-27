@@ -125,7 +125,14 @@ fi
 while true; do
   if [[ "$refresh_status" == true ]]; then
     status_output=""
-    renderer_args=(--repo "$repo_root")
+    terminal_columns="${COLUMNS:-}"
+    if [[ ! "$terminal_columns" =~ ^[1-9][0-9]*$ ]]; then
+      terminal_columns="$(tput cols 2>/dev/null || true)"
+    fi
+    if [[ ! "$terminal_columns" =~ ^[1-9][0-9]*$ ]]; then
+      terminal_columns=80
+    fi
+    renderer_args=(--repo "$repo_root" --columns "$terminal_columns")
     if [[ "$show_more_merges" == true ]]; then
       renderer_args+=(--merge-limit 20)
     fi

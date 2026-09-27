@@ -100,6 +100,83 @@ class MergetrainStatusTests(unittest.TestCase):
         self.assertEqual(benchmark_changes(Path(".")), [])
         self.assertIn("-10", mock_git.call_args.args)
 
+    def test_generated_result_uses_preceding_source_title_within_80_columns(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir)
+            (repo / "benchmarks").mkdir()
+            subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "status-test@example.invalid"],
+                cwd=repo,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Status Test"], cwd=repo, check=True
+            )
+            results = repo / "benchmarks" / "RESULTS.md"
+            results.write_text(
+                "| Benchmark | Dark (3.0x) | Rust |\n"
+                "|---|---:|---:|\n"
+                "| sample | 300 (3.0x) | 100 |\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "Initial results"],
+                cwd=repo,
+                check=True,
+            )
+            source_title = (
+                "Propagate executable-edge facts in MIR SCCP across every branch"
+            )
+            (repo / "optimization.txt").write_text("optimized\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(
+                ["git", "commit", "-q", "-m", source_title],
+                cwd=repo,
+                check=True,
+            )
+            results.write_text(
+                results.read_text(encoding="utf-8").replace("300", "280").replace(
+                    "3.0x", "2.8x"
+                ),
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "add", "."], cwd=repo, check=True)
+            subprocess.run(
+                [
+                    "git", "commit", "-q", "-m",
+                    "Record MIR SCCP aggregate benchmark improvement",
+                ],
+                cwd=repo,
+                check=True,
+            )
+
+            changes = benchmark_changes(repo)
+            self.assertEqual(changes[0].source_subject, source_title)
+            payload = {
+                "contract_version": 4,
+                "health": "healthy",
+                "state": "idle",
+                "summary": "No active jobs",
+                "next_action": {"code": "queue_empty", "requires_approval": "none"},
+            }
+            output = render(payload, repo, color=False, columns=80)
+            row = next(line for line in output.splitlines() if line.startswith("1. "))
+            self.assertLessEqual(len(row), 80)
+            self.assertIn("Propagate executable-edge facts", row)
+            self.assertNotIn("Record MIR SCCP", row)
+            self.assertTrue(row.endswith("…"))
+            detail = benchmark_detail(repo, changes[0].commit, color=False)
+            self.assertIn(source_title, detail)
+            self.assertIn("Record MIR SCCP aggregate benchmark improvement", detail)
+            diff = benchmark_diff(repo, changes[0].commit, color=False)
+            self.assertIn("source change diff:", diff)
+            self.assertIn("diff --git a/optimization.txt", diff)
+            self.assertIn(source_title, diff)
+
     def test_interactive_keys_scroll_expand_and_open_benchmark_details(self) -> None:
         source_root = Path(__file__).resolve().parent.parent
         with tempfile.TemporaryDirectory() as temp_dir:
