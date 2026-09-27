@@ -115,6 +115,16 @@ let internal emitCliNative (ctx: FuncCtx) (dest: LIR.Reg) (operation: LIR.CliOpe
                 Ok [X86_64.MOV_load (dest, X86_64.RBP, int32 (adjustStackOffset ctx offset))]
             | LIR.StringSymbol value -> Ok (emitStringLiteral dest value)
             | _ -> Error "CLI native operation received a non-integer operand"
+        // Capture every source before populating syscall registers: later
+        // operands may currently live in an earlier destination register.
+        let loadSocketArgs operands targets =
+            operands
+            |> List.fold (fun loaded operand ->
+                loaded
+                |> Result.bind (fun code ->
+                    loadCliOperand X86_64.R11 operand
+                    |> Result.map (fun next -> code @ next @ [X86_64.PUSH X86_64.R11]))) (Ok [])
+            |> Result.map (fun code -> code @ (targets |> List.rev |> List.map X86_64.POP))
         match operation with
         | LIR.HostOS -> Ok (loadImm64 destReg 1L)
         | LIR.HostArchitecture -> Ok (loadImm64 destReg 1L)
@@ -207,58 +217,50 @@ let internal emitCliNative (ctx: FuncCtx) (dest: LIR.Reg) (operation: LIR.CliOpe
             Ok (loadImm64 X86_64.RAX 39L
             @ [X86_64.SYSCALL]
             @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
-        | LIR.SocketTcp4 | LIR.SocketUdp4 | LIR.SocketUdp6 ->
-            // Create the requested IP socket with close-on-exec.
+        | LIR.SocketTcp4 | LIR.SocketTcp6 | LIR.SocketUdp4 | LIR.SocketUdp6 ->
             let constants = Platform.socketConstantsFor Platform.Linux
-            let kind, protocol =
-                if operation = LIR.SocketTcp4 then constants.StreamCloexec, 6L
-                else constants.DatagramCloexec, 17L
-            let family = if operation = LIR.SocketUdp6 then constants.AddressFamily6 else constants.AddressFamily4
+            let family = if operation = LIR.SocketTcp6 || operation = LIR.SocketUdp6 then constants.AddressFamily6 else constants.AddressFamily4
+            let isUdp = operation = LIR.SocketUdp4 || operation = LIR.SocketUdp6
+            let kind = if isUdp then constants.DatagramCloexec else constants.StreamCloexec
+            let protocol = if isUdp then 17L else 6L
             Ok (loadImm64 X86_64.RDI (int64 family)
             @ loadImm64 X86_64.RSI kind
             @ loadImm64 X86_64.RDX protocol
             @ loadImm64 X86_64.RAX (int64 syscalls.Socket)
             @ [X86_64.SYSCALL]
             @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
-        | LIR.SocketConnect | LIR.SocketConnect6 | LIR.SocketSend | LIR.SocketReceive | LIR.SocketReceiveTimeout ->
+        | LIR.SocketConnect4 | LIR.SocketConnect6 | LIR.SocketSend | LIR.SocketReceive | LIR.SocketReceiveTimeout | LIR.SocketSendTimeout ->
             let finish = if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)] in
             match operation, args with
-            | (LIR.SocketConnect | LIR.SocketConnect6), [descriptor; address] ->
-                loadCliOperand X86_64.RDI descriptor
-                |> Result.bind (fun fdLoads ->
-                    loadCliOperand X86_64.RSI address
-                    |> Result.map (fun addressLoads ->
-                        fdLoads @ addressLoads @
+            | (LIR.SocketConnect4 | LIR.SocketConnect6), [descriptor; address] ->
+                loadSocketArgs [descriptor; address] [X86_64.RDI; X86_64.RSI]
+                |> Result.map (fun loads ->
+                        loads @
                         loadImm64 X86_64.RDX (if operation = LIR.SocketConnect6 then 28L else 16L) @
-                        loadImm64 X86_64.RAX (int64 syscalls.Connect) @ [X86_64.SYSCALL] @ finish))
+                        loadImm64 X86_64.RAX (int64 syscalls.Connect) @ [X86_64.SYSCALL] @ finish)
             | LIR.SocketSend, [descriptor; blob] ->
-                loadCliOperand X86_64.RDI descriptor
-                |> Result.bind (fun fdLoads ->
-                    loadCliOperand X86_64.RSI blob
-                    |> Result.map (fun blobLoads ->
-                        fdLoads @ blobLoads @
+                loadSocketArgs [descriptor; blob] [X86_64.RDI; X86_64.RSI]
+                |> Result.map (fun loads ->
+                        loads @
                         [X86_64.MOV_load (X86_64.RDX, X86_64.RSI, 8)
                          X86_64.ADD_imm (X86_64.RSI, 16)] @
-                        loadImm64 X86_64.RAX (int64 syscalls.Write) @ [X86_64.SYSCALL] @ finish))
+                        loadImm64 X86_64.RAX (int64 syscalls.Write) @ [X86_64.SYSCALL] @ finish)
             | LIR.SocketReceive, [descriptor; buffer; length] ->
-                loadCliOperand X86_64.RDI descriptor
-                |> Result.bind (fun fdLoads ->
-                    loadCliOperand X86_64.RSI buffer
-                    |> Result.bind (fun bufferLoads ->
-                        loadCliOperand X86_64.RDX length
-                        |> Result.map (fun lengthLoads ->
-                            fdLoads @ bufferLoads @ lengthLoads @
-                            loadImm64 X86_64.RAX (int64 syscalls.Read) @ [X86_64.SYSCALL] @ finish)))
-            | LIR.SocketReceiveTimeout, [descriptor; timeval] ->
-                loadCliOperand X86_64.RDI descriptor
-                |> Result.bind (fun fdLoads ->
-                    loadCliOperand X86_64.R10 timeval
-                    |> Result.map (fun timevalLoads ->
+                loadSocketArgs [descriptor; buffer; length] [X86_64.RDI; X86_64.RSI; X86_64.RDX]
+                |> Result.map (fun loads ->
+                        loads @
+                        loadImm64 X86_64.RAX (int64 syscalls.Read) @ [X86_64.SYSCALL] @ finish)
+            | (LIR.SocketReceiveTimeout | LIR.SocketSendTimeout), [descriptor; timeval] ->
+                loadSocketArgs [descriptor; timeval] [X86_64.RDI; X86_64.R10]
+                |> Result.map (fun loads ->
                         let constants = Platform.socketConstantsFor Platform.Linux in
-                        fdLoads @ timevalLoads @ loadImm64 X86_64.RSI (int64 constants.SocketLevel) @
-                        loadImm64 X86_64.RDX (int64 constants.ReceiveTimeout) @ loadImm64 X86_64.R8 16L @
+                        let option_ =
+                            if operation = LIR.SocketSendTimeout then constants.SendTimeout
+                            else constants.ReceiveTimeout in
+                        loads @ loadImm64 X86_64.RSI (int64 constants.SocketLevel) @
+                        loadImm64 X86_64.RDX (int64 option_) @ loadImm64 X86_64.R8 16L @
                         loadImm64 X86_64.RAX (int64 syscalls.SetSockOpt) @
-                        [X86_64.SYSCALL] @ finish))
+                        [X86_64.SYSCALL] @ finish)
             | _ -> Error "Invalid socket operation arguments"
         | LIR.SocketClose ->
             match args with

@@ -340,7 +340,7 @@ let __queryUdp4Attempts (nameserver: List<Int64>) (port: Int64) (host: String) (
 let queryUdp4 (nameserver: List<Int64>) (port: Int64) (host: String) (kind: Int64)
     (timeoutMs: Int64) (attempts: Int64)
     : Stdlib.Result.Result<List<List<Int64>>, Stdlib.DnsWire.ResolveError> =
-    if Stdlib.Bool.not (Stdlib.Network.__validAddress4 nameserver) ||
+    if Stdlib.Bool.not (Stdlib.Network.__validAddress false nameserver) ||
         port <= 0L || port > 65535L || timeoutMs <= 0L || timeoutMs > 10000L ||
         attempts <= 0L || attempts > 3L then
         Error (Stdlib.DnsWire.ResolveError.InvalidQuery "Invalid DNS transport parameters")
@@ -382,7 +382,7 @@ let __queryUdp6Attempts (nameserver: List<Int64>) (port: Int64) (host: String) (
 let queryUdp6 (nameserver: List<Int64>) (port: Int64) (host: String) (kind: Int64)
     (timeoutMs: Int64) (attempts: Int64)
     : Stdlib.Result.Result<List<List<Int64>>, Stdlib.DnsWire.ResolveError> =
-    if Stdlib.Bool.not (Stdlib.Network.__validAddress6 nameserver) ||
+    if Stdlib.Bool.not (Stdlib.Network.__validAddress true nameserver) ||
         port <= 0L || port > 65535L || timeoutMs <= 0L || timeoutMs > 10000L ||
         attempts <= 0L || attempts > 3L then
         Error (Stdlib.DnsWire.ResolveError.InvalidQuery "Invalid DNS transport parameters")

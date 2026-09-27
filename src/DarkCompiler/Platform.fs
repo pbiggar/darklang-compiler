@@ -90,8 +90,8 @@ type SyscallNumbers = {
     Gettimeofday: uint16 // Get current time (gettimeofday on macOS, clock_gettime on Linux)
     Nanosleep: uint16 // Blocking sleep with a normalized timespec
     Socket: uint16 // Create a socket
-    Connect: uint16 // Connect a socket to a peer
-    SetSockOpt: uint16 // Set socket receive timeout
+    Connect: uint16 // Connect to a checked address
+    SetSockOpt: uint16 // Set socket I/O timeouts
 }
 
 let macOSARM64SyscallNumbers : SyscallNumbers = {
@@ -168,6 +168,7 @@ type SocketConstants = {
     DatagramCloexec: int64
     SocketLevel: uint16
     ReceiveTimeout: uint16
+    SendTimeout: uint16
 }
 
 let socketConstantsFor (os: OS) : SocketConstants =
@@ -178,14 +179,16 @@ let socketConstantsFor (os: OS) : SocketConstants =
           StreamCloexec = 268435457L
           DatagramCloexec = 268435458L
           SocketLevel = 65535us
-          ReceiveTimeout = 4102us }
+          ReceiveTimeout = 4102us
+          SendTimeout = 4101us }
     | Linux ->
         { AddressFamily4 = 2us
           AddressFamily6 = 10us
           StreamCloexec = 524289L
           DatagramCloexec = 524290L
           SocketLevel = 1us
-          ReceiveTimeout = 20us }
+          ReceiveTimeout = 20us
+          SendTimeout = 21us }
 
 /// Check if code signing is required for this platform
 let requiresCodeSigning (os: OS) : bool =

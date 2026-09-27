@@ -5,6 +5,7 @@ module Darklang.Stdlib.Network
 // The Stream handle supplies shared, idempotent close and closes on last-owner
 // release. The descriptor stays captured by its disposer, outside user values.
 type Socket = { lifecycle: Stream<Unit> }
+
 type UdpSocket = {
     lifecycle: Stream<Unit>,
     exchange4: List<Int64> -> Int64 -> Blob -> Int64 -> Stdlib.Result.Result<Blob, Int64>
@@ -14,16 +15,24 @@ type Udp6Socket = {
     exchange6: List<Int64> -> Int64 -> Blob -> Int64 -> Stdlib.Result.Result<Blob, Int64>
 }
 
+type TcpConnection = {
+    lifecycle: Stream<Unit>,
+    read: Int64 -> Stdlib.Result.Result<Blob, Int64>,
+    write: Blob -> Stdlib.Result.Result<Unit, Int64>
+}
+
 // Replaced by target-specific syscalls during native lowering. The fallback
 // lets stdlib preparation typecheck without opening a socket.
 let __tcp4Socket () : Int64 = -38L
 let __udp4Socket () : Int64 = -38L
 let __udp6Socket () : Int64 = -38L
-let __connect (descriptor: Int64) (address: RawPtr) : Int64 = -38L
+let __tcp6Socket () : Int64 = -38L
+let __connect4 (descriptor: Int64) (address: RawPtr) : Int64 = -38L
 let __connect6 (descriptor: Int64) (address: RawPtr) : Int64 = -38L
 let __send (descriptor: Int64) (payload: Blob) : Int64 = -38L
 let __receive (descriptor: Int64) (buffer: RawPtr) (length: Int64) : Int64 = -38L
 let __receiveTimeout (descriptor: Int64) (timeval: RawPtr) : Int64 = -38L
+let __sendTimeout (descriptor: Int64) (timeval: RawPtr) : Int64 = -38L
 let __close (descriptor: Int64) : Int64 = -38L
 
 let openTcp4 () : Stdlib.Result.Result<Stdlib.Network.Socket, Int64> =
@@ -39,28 +48,22 @@ let openTcp4 () : Stdlib.Result.Result<Stdlib.Network.Socket, Int64> =
 let close (socket: Stdlib.Network.Socket) : Unit =
     Stdlib.Stream.close socket.lifecycle
 
-let __validAddress4 (bytes: List<Int64>) : Bool =
-    match bytes with
-    | [a, b, c, d] ->
-        a >= 0L && a <= 255L && b >= 0L && b <= 255L &&
-        c >= 0L && c <= 255L && d >= 0L && d <= 255L
-    | _ -> false
-
 let __validBytes (bytes: List<Int64>) : Bool =
     match bytes with
     | [] -> true
     | byte :: rest ->
         byte >= 0L && byte <= 255L && Stdlib.Network.__validBytes rest
 
-let __validAddress6 (bytes: List<Int64>) : Bool =
-    Stdlib.List.length bytes == 16 && Stdlib.Network.__validBytes bytes
+let __validAddress (ipv6: Bool) (bytes: List<Int64>) : Bool =
+    Stdlib.List.length bytes == (if ipv6 then 16 else 4) &&
+    Stdlib.Network.__validBytes bytes
 
-let __writeAddress4 (ptr: RawPtr) (bytes: List<Int64>) (offset: Int64) : Unit =
+let __writeAddress (ptr: RawPtr) (bytes: List<Int64>) (offset: Int64) : Unit =
     match bytes with
     | [] -> ()
     | byte :: rest ->
         let _ = __raw_write_byte ptr offset byte in
-        Stdlib.Network.__writeAddress4 ptr rest (offset + 1L)
+        Stdlib.Network.__writeAddress ptr rest (offset + 1L)
 
 let __copyReceived (ptr: RawPtr) (index: Int64) (length: Int64) (acc: List<Int64>) : Blob =
     if index >= length then Stdlib.Blob.__fromInt64List (Stdlib.List.reverse acc)
@@ -68,33 +71,122 @@ let __copyReceived (ptr: RawPtr) (index: Int64) (length: Int64) (acc: List<Int64
         Stdlib.Network.__copyReceived ptr (index + 1L) length
             (Stdlib.List.push acc (__raw_get_byte ptr index))
 
+let __socketAddress (ipv6: Bool) (address: List<Int64>) (port: Int64) : RawPtr =
+    let ptr = __raw_alloc (if ipv6 then 32L else 16L) in
+    let _ = __raw_write_word ptr 0L 0L in
+    let _ = __raw_write_word ptr 8L 0L in
+    let _ = if ipv6 then __raw_write_word ptr 16L 0L else () in
+    let _ = if ipv6 then __raw_write_word ptr 24L 0L else () in
+    let _ =
+        if Stdlib.Cli.__hostOSCode () == 2L then
+            let _ = __raw_write_byte ptr 0L (if ipv6 then 28L else 16L) in
+            __raw_write_byte ptr 1L (if ipv6 then 30L else 2L)
+        else __raw_write_byte ptr 0L (if ipv6 then 10L else 2L) in
+    let _ = __raw_write_byte ptr 2L (port / 256L) in
+    let _ = __raw_write_byte ptr 3L (port % 256L) in
+    let _ = Stdlib.Network.__writeAddress ptr address (if ipv6 then 8L else 4L) in
+    ptr
+
+let __setTimeout (descriptor: Int64) (timeoutMs: Int64) : Stdlib.Result.Result<Unit, Int64> =
+    let timeval = __raw_alloc 16L in
+    let _ = __raw_write_word timeval 0L (timeoutMs / 1000L) in
+    let _ = __raw_write_word timeval 8L ((timeoutMs % 1000L) * 1000L) in
+    let receiveResult = Stdlib.Network.__receiveTimeout descriptor timeval in
+    let sendResult =
+        if receiveResult < 0L then receiveResult
+        else Stdlib.Network.__sendTimeout descriptor timeval in
+    let _ = __raw_free timeval in
+    if sendResult < 0L then Error (0L - sendResult) else Ok ()
+
+let __writeAll (descriptor: Int64) (lifecycle: Stream<Unit>) (payload: Blob) : Stdlib.Result.Result<Unit, Int64> =
+    match Stdlib.Stream.next lifecycle with
+    | None -> Error 9L
+    | Some _ ->
+        let length = Stdlib.Blob.__byteLength payload in
+        if length == 0L then Ok ()
+        else
+            let sent = Stdlib.Network.__send descriptor payload in
+            if sent < 0L then Error (0L - sent)
+            else if sent == 0L then Error 32L
+            else if sent >= length then Ok ()
+            else
+                let remaining = Stdlib.Blob.slice payload (Stdlib.Int.fromInt64 sent)
+                    (Stdlib.Int.fromInt64 (length - sent)) in
+                Stdlib.Network.__writeAll descriptor lifecycle remaining
+
+let __readChunk (descriptor: Int64) (lifecycle: Stream<Unit>) (length: Int64) : Stdlib.Result.Result<Blob, Int64> =
+    if length <= 0L || length > 4096L then Error 22L
+    else
+        match Stdlib.Stream.next lifecycle with
+        | None -> Error 9L
+        | Some _ ->
+            let buffer = __raw_alloc length in
+            let received = Stdlib.Network.__receive descriptor buffer length in
+            let result =
+                if received < 0L then Error (0L - received)
+                else Ok (Stdlib.Network.__copyReceived buffer 0L received []) in
+            let _ = __raw_free buffer in
+            result
+
+let __connectTcp (ipv6: Bool) (address: List<Int64>) (port: Int64) (timeoutMs: Int64)
+    : Stdlib.Result.Result<Stdlib.Network.TcpConnection, Int64> =
+    if Stdlib.Bool.not (Stdlib.Network.__validAddress ipv6 address) ||
+        port <= 0L || port > 65535L || timeoutMs <= 0L || timeoutMs > 10000L then Error 22L
+    else
+        let descriptor = if ipv6 then Stdlib.Network.__tcp6Socket () else Stdlib.Network.__tcp4Socket () in
+        if descriptor < 0L then Error (0L - descriptor)
+        else
+            let lifecycle =
+                Stdlib.Stream.__new
+                    (fun _unit -> Some ())
+                    (fun _unit -> let _ = Stdlib.Network.__close descriptor in ()) in
+            match Stdlib.Network.__setTimeout descriptor timeoutMs with
+            | Error code ->
+                let _ = Stdlib.Stream.close lifecycle in
+                Error code
+            | Ok () ->
+                let sockaddr = Stdlib.Network.__socketAddress ipv6 address port in
+                let connected =
+                    if ipv6 then Stdlib.Network.__connect6 descriptor sockaddr
+                    else Stdlib.Network.__connect4 descriptor sockaddr in
+                let _ = __raw_free sockaddr in
+                if connected < 0L then
+                    let _ = Stdlib.Stream.close lifecycle in
+                    Error (0L - connected)
+                else
+                    let read = Stdlib.Network.__readChunk descriptor lifecycle in
+                    let write = Stdlib.Network.__writeAll descriptor lifecycle in
+                    Ok (Stdlib.Network.TcpConnection { lifecycle = lifecycle, read = read, write = write })
+
+let connectTcp4 (address: List<Int64>) (port: Int64) (timeoutMs: Int64) : Stdlib.Result.Result<Stdlib.Network.TcpConnection, Int64> =
+    Stdlib.Network.__connectTcp false address port timeoutMs
+
+let connectTcp6 (address: List<Int64>) (port: Int64) (timeoutMs: Int64) : Stdlib.Result.Result<Stdlib.Network.TcpConnection, Int64> =
+    Stdlib.Network.__connectTcp true address port timeoutMs
+
+let closeTcp (connection: Stdlib.Network.TcpConnection) : Unit =
+    Stdlib.Stream.close connection.lifecycle
+
+let writeTcp (connection: Stdlib.Network.TcpConnection) (payload: Blob) : Stdlib.Result.Result<Unit, Int64> =
+    connection.write payload
+
+let readTcp (connection: Stdlib.Network.TcpConnection) (length: Int64) : Stdlib.Result.Result<Blob, Int64> =
+    connection.read length
+
 let __udpExchange (descriptor: Int64) (lifecycle: Stream<Unit>) (ipv6: Bool)
     (address: List<Int64>) (port: Int64) (payload: Blob) (timeoutMs: Int64)
     : Stdlib.Result.Result<Blob, Int64> =
-    if (if ipv6 then Stdlib.Bool.not (Stdlib.Network.__validAddress6 address)
-        else Stdlib.Bool.not (Stdlib.Network.__validAddress4 address)) ||
+    if Stdlib.Bool.not (Stdlib.Network.__validAddress ipv6 address) ||
         port <= 0L || port > 65535L || timeoutMs <= 0L || timeoutMs > 10000L then Error 22L
     else if Stdlib.Blob.__byteLength payload == 0L || Stdlib.Blob.__byteLength payload > 4096L then Error 90L
     else
         match Stdlib.Stream.next lifecycle with
         | None -> Error 9L
         | Some _ ->
-            let sockaddr = __raw_alloc (if ipv6 then 32L else 16L) in
-            let _ = __raw_write_word sockaddr 0L 0L in
-            let _ = __raw_write_word sockaddr 8L 0L in
-            let _ = if ipv6 then __raw_write_word sockaddr 16L 0L else () in
-            let _ = if ipv6 then __raw_write_word sockaddr 24L 0L else () in
-            let _ =
-                if Stdlib.Cli.__hostOSCode () == 2L then
-                    let _ = __raw_write_byte sockaddr 0L (if ipv6 then 28L else 16L) in
-                    __raw_write_byte sockaddr 1L (if ipv6 then 30L else 2L)
-                else __raw_write_byte sockaddr 0L (if ipv6 then 10L else 2L) in
-            let _ = __raw_write_byte sockaddr 2L (port / 256L) in
-            let _ = __raw_write_byte sockaddr 3L (port % 256L) in
-            let _ = Stdlib.Network.__writeAddress4 sockaddr address (if ipv6 then 8L else 4L) in
+            let sockaddr = Stdlib.Network.__socketAddress ipv6 address port in
             let connected =
                 if ipv6 then Stdlib.Network.__connect6 descriptor sockaddr
-                else Stdlib.Network.__connect descriptor sockaddr in
+                else Stdlib.Network.__connect4 descriptor sockaddr in
             let _ = __raw_free sockaddr in
             if connected < 0L then Error (0L - connected)
             else

@@ -148,13 +148,15 @@ let convertCliOperation (operation: ANF.CliOperation) : MIR.CliOperation =
     | ANF.ProcessIO -> MIR.ProcessIO
     | ANF.TerminateProcess -> MIR.TerminateProcess
     | ANF.SocketTcp4 -> MIR.SocketTcp4
+    | ANF.SocketTcp6 -> MIR.SocketTcp6
     | ANF.SocketUdp4 -> MIR.SocketUdp4
     | ANF.SocketUdp6 -> MIR.SocketUdp6
-    | ANF.SocketConnect -> MIR.SocketConnect
+    | ANF.SocketConnect4 -> MIR.SocketConnect4
     | ANF.SocketConnect6 -> MIR.SocketConnect6
     | ANF.SocketSend -> MIR.SocketSend
     | ANF.SocketReceive -> MIR.SocketReceive
     | ANF.SocketReceiveTimeout -> MIR.SocketReceiveTimeout
+    | ANF.SocketSendTimeout -> MIR.SocketSendTimeout
     | ANF.SocketClose -> MIR.SocketClose
 
 /// Precomputed descriptions for primitive ops (avoids formatting on hot path)

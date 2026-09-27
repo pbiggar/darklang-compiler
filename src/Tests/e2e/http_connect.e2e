@@ -1,0 +1,16 @@
+// http_connect.e2e - HTTP destination policy checks address bytes before transport.
+
+Stdlib.HttpConnect.checkGuest4 [127L, 0L, 0L, 1L] = Error Stdlib.HttpConnect.PolicyError.PrivateAddress
+Stdlib.HttpConnect.checkGuest4 [93L, 184L, 216L, 34L] |> Stdlib.Result.map (fun address -> address.bytes) = Ok [93L, 184L, 216L, 34L]
+Stdlib.HttpConnect.checkGuest4 [10L, 1L, 2L, 3L] = Error Stdlib.HttpConnect.PolicyError.PrivateAddress
+Stdlib.HttpConnect.checkGuest4 [169L, 254L, 1L, 2L] = Error Stdlib.HttpConnect.PolicyError.PrivateAddress
+Stdlib.HttpConnect.checkGuest4 [300L, 1L, 2L, 3L] = Error Stdlib.HttpConnect.PolicyError.InvalidAddress
+Stdlib.HttpConnect.checkGuest6 [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 1L] = Error Stdlib.HttpConnect.PolicyError.PrivateAddress
+Stdlib.HttpConnect.checkGuest6 [252L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 1L] = Error Stdlib.HttpConnect.PolicyError.PrivateAddress
+Stdlib.HttpConnect.checkGuest6 [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 255L, 255L, 127L, 0L, 0L, 1L] = Error Stdlib.HttpConnect.PolicyError.PrivateAddress
+Stdlib.HttpConnect.checkGuest6 [32L, 1L, 72L, 96L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 136L, 136L] |> Stdlib.Result.map (fun address -> address.family) = Ok 6L
+Stdlib.HttpConnect.connectGuest4 [127L, 0L, 0L, 1L] 80L 100L = Error (Stdlib.HttpConnect.ConnectError.Policy Stdlib.HttpConnect.PolicyError.PrivateAddress)
+Stdlib.HttpConnect.connectGuest6 [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 1L] 80L 100L = Error (Stdlib.HttpConnect.ConnectError.Policy Stdlib.HttpConnect.PolicyError.PrivateAddress)
+Stdlib.HttpConnect.connectGuest4 [127L, 0L, 0L] 80L 100L = Error (Stdlib.HttpConnect.ConnectError.Policy Stdlib.HttpConnect.PolicyError.InvalidAddress)
+Stdlib.HttpConnect.connectTrusted4 [127L, 0L, 0L, 1L] 0L 100L = Error (Stdlib.HttpConnect.ConnectError.Transport 22L)
+Stdlib.HttpConnect.connectTrusted6 [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 1L] 0L 100L = Error (Stdlib.HttpConnect.ConnectError.Transport 22L)

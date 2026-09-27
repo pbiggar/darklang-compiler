@@ -683,14 +683,13 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
             Ok [ARM64Symbolic.MOVZ (syscalls.SyscallRegister, number, 0)
                 ARM64Symbolic.SVC syscalls.SvcImmediate
                 ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]
-        | LIR.SocketTcp4 | LIR.SocketUdp4 | LIR.SocketUdp6 ->
+        | LIR.SocketTcp4 | LIR.SocketTcp6 | LIR.SocketUdp4 | LIR.SocketUdp6 ->
             let syscalls = ARM64.targetSyscalls ctx.Target
             let constants = Platform.socketConstantsFor (ARM64.targetOS ctx.Target)
-            let socketType =
-                if operation = LIR.SocketUdp4 || operation = LIR.SocketUdp6 then constants.DatagramCloexec
-                else constants.StreamCloexec
-            let protocol = if operation = LIR.SocketTcp4 then 6us else 17us
-            let family = if operation = LIR.SocketUdp6 then constants.AddressFamily6 else constants.AddressFamily4
+            let isUdp = operation = LIR.SocketUdp4 || operation = LIR.SocketUdp6
+            let socketType = if isUdp then constants.DatagramCloexec else constants.StreamCloexec
+            let protocol = if isUdp then 17us else 6us
+            let family = if operation = LIR.SocketTcp6 || operation = LIR.SocketUdp6 then constants.AddressFamily6 else constants.AddressFamily4
             let normalize =
                 match ARM64.targetOS ctx.Target with
                 | Platform.Linux -> []
@@ -706,7 +705,7 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
                    ARM64Symbolic.SVC syscalls.SvcImmediate]
                 @ normalize
                 @ [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)])
-        | LIR.SocketConnect | LIR.SocketConnect6 | LIR.SocketSend | LIR.SocketReceive | LIR.SocketReceiveTimeout ->
+        | LIR.SocketConnect4 | LIR.SocketConnect6 | LIR.SocketSend | LIR.SocketReceive | LIR.SocketReceiveTimeout | LIR.SocketSendTimeout ->
             let syscall = ARM64.targetSyscalls ctx.Target in
             let os = ARM64.targetOS ctx.Target in
             let normalize =
@@ -717,7 +716,7 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
                      ARM64Symbolic.NEG (ARM64Symbolic.X0, ARM64Symbolic.X0)
                      ARM64Symbolic.Label doneLabel] in
             match operation, args with
-            | (LIR.SocketConnect | LIR.SocketConnect6), [descriptor; address] ->
+            | (LIR.SocketConnect4 | LIR.SocketConnect6), [descriptor; address] ->
                 loadCliOperand ARM64Symbolic.X0 descriptor
                 |> Result.bind (fun fdLoads ->
                     loadCliOperand ARM64Symbolic.X1 address
@@ -749,15 +748,18 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
                             [ARM64Symbolic.MOVZ (syscall.SyscallRegister, syscall.Numbers.Read, 0)
                              ARM64Symbolic.SVC syscall.SvcImmediate] @ normalize @
                             [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)])))
-            | LIR.SocketReceiveTimeout, [descriptor; timeval] ->
+            | (LIR.SocketReceiveTimeout | LIR.SocketSendTimeout), [descriptor; timeval] ->
                 loadCliOperand ARM64Symbolic.X0 descriptor
                 |> Result.bind (fun fdLoads ->
                     loadCliOperand ARM64Symbolic.X3 timeval
                     |> Result.map (fun timevalLoads ->
                         let constants = Platform.socketConstantsFor os in
+                        let option_ =
+                            if operation = LIR.SocketSendTimeout then constants.SendTimeout
+                            else constants.ReceiveTimeout in
                         fdLoads @ timevalLoads @
                         [ARM64Symbolic.MOVZ (ARM64Symbolic.X1, constants.SocketLevel, 0)
-                         ARM64Symbolic.MOVZ (ARM64Symbolic.X2, constants.ReceiveTimeout, 0)
+                         ARM64Symbolic.MOVZ (ARM64Symbolic.X2, option_, 0)
                          ARM64Symbolic.MOVZ (ARM64Symbolic.X4, 16us, 0)
                          ARM64Symbolic.MOVZ (syscall.SyscallRegister, syscall.Numbers.SetSockOpt, 0)
                          ARM64Symbolic.SVC syscall.SvcImmediate] @ normalize @
