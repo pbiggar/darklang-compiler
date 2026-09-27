@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Request and approve one gate exception for an exact merge-train candidate."""
+"""Request and approve gate exceptions for exact merge-train candidates."""
 
 from __future__ import annotations
 
@@ -64,6 +64,10 @@ def request_path(repo: Path, head: str) -> Path:
     return state_dir(repo) / "requests" / f"{head}.json"
 
 
+def gate_request_path(repo: Path, head: str, gate: str) -> Path:
+    return state_dir(repo) / "requests" / f"{head}-{gate}.json"
+
+
 def review_path(repo: Path, job_id: int) -> Path:
     return state_dir(repo) / "reviews" / f"{job_id}.json"
 
@@ -90,7 +94,7 @@ def create_request(
         raise ExceptionFlowError("request head differs from the committed worktree")
     if git(repo, "branch", "--show-current") != branch:
         raise ExceptionFlowError("request branch differs from the current branch")
-    path = request_path(repo, head)
+    path = gate_request_path(repo, head, gate)
     existing = read_json(path)
     payload = {
         "schema": SCHEMA,
@@ -118,10 +122,13 @@ def failed_gate(details: dict[str, Any]) -> tuple[str, str]:
 def stage_if_requested(repo: Path, details: dict[str, Any]) -> bool:
     job = details.get("job") or {}
     head = str(job.get("head_sha") or "")
-    request = read_json(request_path(repo, head)) if head else None
+    gate, gate_command = failed_gate(details)
+    request = read_json(gate_request_path(repo, head, gate)) if head and gate else None
+    if request is None and head:
+        # Requests made before multiple gate reviews used one file per commit.
+        request = read_json(request_path(repo, head))
     if request is None or request.get("branch") != job.get("branch"):
         return False
-    gate, gate_command = failed_gate(details)
     if gate not in ELIGIBLE_GATES or gate != request.get("gate"):
         return False
     job_id = int(job.get("id") or 0)
@@ -232,6 +239,19 @@ def approve(repo: Path, job_id: int) -> None:
     path = approval_path(repo, review["candidate_tree"], review["gate"])
     if read_json(path) is not None:
         raise ExceptionFlowError("an approval already exists for this candidate and gate")
+    prior_approvals: list[tuple[Path, dict[str, Any]]] = []
+    for prior_path in (state_dir(repo) / "approvals").glob(
+        f"{review['candidate_tree']}-*.json"
+    ):
+        prior = read_json(prior_path)
+        if prior is None or prior.get("replacement_job_id") != job_id:
+            continue
+        for key in (
+            "head_sha", "branch", "candidate_tree", "base_sha", "policy_sha", "destination"
+        ):
+            if prior.get(key) != review[key]:
+                raise ExceptionFlowError("earlier approval does not match this exact candidate")
+        prior_approvals.append((prior_path, prior))
     try:
         write_json(path, approval)
         replacement = run(
@@ -246,6 +266,8 @@ def approve(repo: Path, job_id: int) -> None:
                 f"replacement job #{replacement_id} lost unattended approval; "
                 "gate exception was not retained"
             )
+        for prior_path, prior in prior_approvals:
+            write_json(prior_path, {**prior, "replacement_job_id": replacement_id})
         approval["replacement_job_id"] = replacement_id
         write_json(path, approval)
     except ExceptionFlowError:

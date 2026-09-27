@@ -56,6 +56,10 @@ class MergetrainExceptionTests(unittest.TestCase):
                 repo, head=head, branch="task/exception", gate="benchmarks",
                 reason="Known aggregate regression accepted for this change",
             )
+            create_request(
+                repo, head=head, branch="task/exception", gate="benchmark-sources",
+                reason="Known benchmark source change accepted for this change",
+            )
             details = {
                 "job": {
                     "id": 7, "status": "blocked", "branch": "task/exception",
@@ -77,6 +81,7 @@ class MergetrainExceptionTests(unittest.TestCase):
 
             details_path = root / "details.json"
             details_path.write_text(json.dumps(details), encoding="utf-8")
+            retry_count = root / "retry-count"
             fake_mergetrain = fake_bin / "mergetrain"
             fake_mergetrain.write_text(
                 "#!/usr/bin/env python3\n"
@@ -84,10 +89,13 @@ class MergetrainExceptionTests(unittest.TestCase):
                 f"details = json.loads(pathlib.Path({str(details_path)!r}).read_text())\n"
                 "if 'inspect' in sys.argv:\n"
                 "    job_id = sys.argv[sys.argv.index('inspect') + 1]\n"
-                "    print(json.dumps(details if job_id == '7' else "
-                "{'job': {'id': 8, 'status': 'deployed'}}))\n"
+                "    print(json.dumps(details if job_id == str(details['job']['id']) else "
+                "{'job': {'id': 9, 'status': 'deployed'}}))\n"
                 "else:\n"
-                "    print(json.dumps({'job': {'id': 8, 'auto_deploy': True}}))\n",
+                f"    counter = pathlib.Path({str(retry_count)!r})\n"
+                "    count = int(counter.read_text()) + 1 if counter.exists() else 1\n"
+                "    counter.write_text(str(count))\n"
+                "    print(json.dumps({'job': {'id': 7 + count, 'auto_deploy': True}}))\n",
                 encoding="utf-8",
             )
             fake_mergetrain.chmod(0o755)
@@ -109,6 +117,26 @@ class MergetrainExceptionTests(unittest.TestCase):
                     approval_file = approval_path(repo, tree, "benchmarks")
                     approved = read_json(approval_file)
                     self.assertIsNotNone(approved)
+                    source_details = {
+                        **details,
+                        "job": {**details["job"], "id": 8},
+                        "events": [{
+                            "state": "failure", "message": "Failed gate 6/6: benchmark-sources",
+                            "detail": "exit_code=1",
+                        }],
+                    }
+                    details_path.write_text(json.dumps(source_details), encoding="utf-8")
+                    self.assertTrue(stage_if_requested(repo, source_details))
+                    with patch("sys.stdin") as stdin, patch(
+                        "builtins.input", return_value=f"approve 8 {head[:12]} benchmark-sources"
+                    ):
+                        stdin.isatty.return_value = True
+                        review_pending(repo)
+                    self.assertEqual(read_json(approval_file)["replacement_job_id"], 9)
+                    self.assertEqual(
+                        read_json(approval_path(repo, tree, "benchmark-sources"))["replacement_job_id"],
+                        9,
+                    )
                     approval_file.write_text(json.dumps({
                         **approved, "replacement_job_id": 9,
                     }), encoding="utf-8")

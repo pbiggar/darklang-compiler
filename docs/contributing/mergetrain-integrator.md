@@ -74,6 +74,9 @@ A lander may attach a request to its exact committed branch:
 ```
 
 Eligible gates are `benchmark-sources` and `benchmarks`.
+Each request names one gate and the exact committed head. A candidate that
+fails more than one eligible gate needs a separate request and human review for
+each failed gate. Requests for the same head are stored separately by gate.
 A request does not waive a gate. The candidate first
 fails normally, and the integrator stages its failed gate, exact candidate
 tree, integration base, destination, and gate config digest for review. It does
@@ -87,6 +90,10 @@ The gate reruns on retry; only the approved gate's failure is waived if the
 replacement job ID, candidate tree, original commit ancestry, integration
 base, destination, and gate config still match. Mergetrain separately checks
 that its own unattended approval remains valid. Other gates still block.
+If a retry then fails another requested gate, its separate review uses the same
+exact-candidate checks. The earlier approval follows the new retry only when
+the head, branch, candidate tree, integration base, destination, and policy
+still match; any changed identity requires a fresh review.
 The integrator archives the approval when the replacement finishes.
 
 The approval registry lives in the shared Git directory. The human approval
