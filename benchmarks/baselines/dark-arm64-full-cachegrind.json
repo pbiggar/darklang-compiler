@@ -10,127 +10,127 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-27T14:36:31+00:00",
+  "generated_at": "2026-09-27T18:38:27+00:00",
   "compiler": {
-    "commit": "401951ed9e7c7e91ef476b56a0788f268e20d174",
-    "subject": "Resolve DNS over bounded UDP sockets"
+    "commit": "40724da0e67655c9559d764852a237595bd42f5a",
+    "subject": "Optimize Int64 list indexing before SSA ownership"
   },
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 122786833
+      "instructions": 122786823
     },
     {
       "name": "binary_trees",
-      "instructions": 10522508
+      "instructions": 10522516
     },
     {
       "name": "collatz",
-      "instructions": 70193330
+      "instructions": 70193414
     },
     {
       "name": "edigits",
-      "instructions": 49067653
+      "instructions": 48977755
     },
     {
       "name": "factorial",
-      "instructions": 58886
+      "instructions": 58966
     },
     {
       "name": "fannkuch",
-      "instructions": 220304061
+      "instructions": 221172600
     },
     {
       "name": "fasta",
-      "instructions": 16275164
+      "instructions": 11494373
     },
     {
       "name": "fft",
-      "instructions": 1762569
+      "instructions": 1800265
     },
     {
       "name": "fib",
-      "instructions": 7630181
+      "instructions": 7630193
     },
     {
       "name": "huffman",
-      "instructions": 404438467
+      "instructions": 403079661
     },
     {
       "name": "leibniz",
-      "instructions": 17006193
+      "instructions": 17006295
     },
     {
       "name": "mandelbrot",
-      "instructions": 15142822
+      "instructions": 15142866
     },
     {
       "name": "matmul",
-      "instructions": 41669542
+      "instructions": 41611234
     },
     {
       "name": "merkletrees",
-      "instructions": 3871128
+      "instructions": 3871136
     },
     {
       "name": "myers_diff",
-      "instructions": 204609021
+      "instructions": 204545196
     },
     {
       "name": "nbody",
-      "instructions": 14595767
+      "instructions": 14595833
     },
     {
       "name": "nqueen",
-      "instructions": 6924907
+      "instructions": 6924919
     },
     {
       "name": "nsieve",
-      "instructions": 130435227
+      "instructions": 130435271
     },
     {
       "name": "pisum",
-      "instructions": 807990
+      "instructions": 808068
     },
     {
       "name": "primes",
-      "instructions": 1611955
+      "instructions": 1612021
     },
     {
       "name": "quicksort",
-      "instructions": 173108333
+      "instructions": 172486153
     },
     {
       "name": "raytracer",
-      "instructions": 44752766
+      "instructions": 44284039
     },
     {
       "name": "regex_lite",
-      "instructions": 64753188
+      "instructions": 64744887
     },
     {
       "name": "spectral_norm",
-      "instructions": 263133151
+      "instructions": 215930782
     },
     {
       "name": "string_equality",
-      "instructions": 1177881
+      "instructions": 1178012
     },
     {
       "name": "sum_to_n",
-      "instructions": 57870
+      "instructions": 57968
     },
     {
       "name": "tak",
-      "instructions": 48004591
+      "instructions": 48004620
     },
     {
       "name": "tinytemplate",
-      "instructions": 306212280
+      "instructions": 305729478
     },
     {
       "name": "warden",
-      "instructions": 44145346
+      "instructions": 44111493
     }
   ]
 }
