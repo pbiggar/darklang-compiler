@@ -1,10 +1,11 @@
 # mergetrain agent contract
 
-Purpose: Serialize committed local task branches through one merge/test/push/verify runner.
+Purpose: Integrate tooling changes promptly and serialize ordinary committed
+task branches in arrival order.
 
 ## Existing queues and explanations
 
-- Task agents use `./land` → `queued` → stop, even for one branch. Runner/operator queue inspection uses status; queue counts alone do not establish health, runner ownership, or recovery needs, so read `health`, `state`, and `next_action` together.
+- Task agents use `./land` and stop after `queued` or `landed`, even for one branch. Runner/operator queue inspection uses status; queue counts alone do not establish health, runner ownership, or recovery needs, so read `health`, `state`, and `next_action` together.
 - Branch readiness and queue availability are separate. An unrelated attention job can defer enqueueing, but it does not invalidate a branch whose own review and gates passed. Never report such a branch as `not ready`.
 - Unrelated train state belongs to the runner/operator, not the task agent. Task agents do not inspect or report unrelated job IDs, conflicts, attention reasons, or recovery steps.
 - For explanation-only requests, read the skill documentation when permitted and explain the procedure without Git or product commands. Distinguish hypothetical steps from observed state.
@@ -20,6 +21,8 @@ Purpose: Serialize committed local task branches through one merge/test/push/ver
 1. Work on a task-specific branch and worktree. Coding and task agents must
    treat `/Users/paulbiggar/projects/c4d-for-dcb` as a read-only coordination
    checkout, including for repository utility work and interactive sessions.
+   The trusted tooling-only `./land` control path is the sole integration
+   exception; task agents do not make that Git update manually.
    When started there, create and enter a separate task worktree before any
    edit, build, test, or other mutating command. Reuse that task worktree across
    turns of the same task. At a new task boundary, refresh an eligible existing
@@ -33,12 +36,12 @@ Purpose: Serialize committed local task branches through one merge/test/push/ver
    from an investigation alone do not require a commit or handoff; follow the
    investigation rule in `AGENTS.md`.
 3. Task agents use `./land`, not raw status inspection, for handoff. A runner/operator may use `mergetrain status --json`; its queue-level `next_action` is not a judgment about any task branch's readiness.
-4. Land every named finished branch containing an intended lasting repository change in the requested order with `./land --task "TASK"`; the script resolves the branch and worktree and enqueues the exact commit with bounded unattended approval. Success is the single line `queued`. After that line, stop work on that task; do not inspect the job, poll status, wait for deployment, or report a later outcome. A later user request starts a new task under rule 1. If it exits with `Landing handoff is pending`, report only `Merge train: ⏳ handoff pending`; do not use `❌ not ready`, explain the train state, or volunteer to recover another job.
-5. Never push configured integration refs directly. One authorized runner owns validation and deployment; recovery and destructive actions require their stated approval.
+4. Land every named finished branch containing an intended lasting repository change with `./land --task "TASK"`. An eligible tooling-only commit is merged and validated by the script immediately; success prints `landed`. Other commits are enqueued with bounded unattended approval; success prints `queued`. After either result, stop work on that task. Do not inspect the job, poll status, or report a later outcome. A later user request starts a new task under rule 1. If an ordinary handoff exits with `Landing handoff is pending`, report only `Merge train: ⏳ handoff pending`.
+5. Task agents never push configured integration refs directly. The trusted `./land` tooling path owns its atomic local integration update. The ordinary runner owns ordinary validation and deployment; recovery and destructive actions require their stated approval.
 
 ## Safety boundary
 
-- A task agent runs `./land` and stops when it prints `queued`. The script's internal `--auto` enqueue authorizes only the configured runner's bounded unattended validation and deployment; it does not authorize the task agent to monitor, validate, deploy, or report the eventual outcome.
+- A task agent runs `./land` and stops when it prints `queued` or `landed`. The script's internal `--auto` enqueue authorizes only the configured ordinary runner's bounded unattended validation and deployment; it does not authorize the task agent to monitor or deploy an ordinary job.
 - Only a separately authorized runner uses `deploy` or a daemon.
 - A recovery conflict in generated `benchmarks/RESULTS.md` is resolved only by a successful improving `./benchmarks/run_benchmarks.sh full` recording from the rebased source. Never hand-merge or choose one side of that file; if recording does not regenerate it from an improved canonical snapshot, recovery stops.
 - The `benchmark-sources` gate rejects candidates that change
@@ -66,6 +69,10 @@ Purpose: Serialize committed local task branches through one merge/test/push/ver
   the current integration commit, asks Codex to perform any semantic merge
   there, independently reruns the repository readiness gates, and only then
   replaces the blocked queue row. Codex never pushes or changes queue state.
+- The repository integrator admits only the oldest unfinished ordinary job.
+  Its shared Git directory ledger retains arrival order through native retry
+  and repair rows. An attention head blocks later ordinary jobs. Tooling-only
+  commits use the separate `./land` control path even while the head is blocked.
 
 ## Stable machine contract
 

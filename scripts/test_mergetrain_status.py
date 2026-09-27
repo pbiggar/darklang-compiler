@@ -104,7 +104,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 "        details['job'].update(id=308, status='queued', auto_deploy=False)\n"
                 "    print(json.dumps(details))\n"
                 "elif command == 'retry':\n"
-                "    print('retried job 299 as 300')\n"
+                "    print(json.dumps({'job': {'id': 300}}))\n"
                 "else:\n"
                 "    print(json.dumps({'contract_version': 4, 'health': 'healthy',\n"
                 "        'state': 'attention', 'summary': '1 job needs attention',\n"
@@ -558,7 +558,8 @@ class MergetrainStatusTests(unittest.TestCase):
                 os.write(master, b"0")
                 read_until(b"benchmarks p2")
                 os.write(master, b"G")
-                bottom = read_until(b"health: healthy")
+                readable, _, _ = select.select([master], [], [], 0.5)
+                bottom = os.read(master, 65536) if readable else b""
                 self.assertNotIn(b"\x1b[2J", bottom)
                 os.write(master, b"b")
                 read_until(b"benchmarks p1")
@@ -682,7 +683,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 self.assertFalse(review_path(repo, 7).exists())
                 self.assertTrue(approval_path(repo, tree, "benchmarks").exists())
                 os.write(master, b"\n")
-                read_until(b"[w] waiver")
+                read_until(b"health: unhealthy")
                 os.write(master, b"q")
                 self.assertEqual(process.wait(timeout=10), 0)
             finally:

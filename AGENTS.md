@@ -10,8 +10,10 @@ this repository and takes precedence where it is stricter.
 - `/Users/paulbiggar/projects/c4d-for-dcb` is the primary coordination checkout.
   Coding and task agents must treat it as read-only: do not edit or generate
   files, build, test, format, commit, switch branches, or run any other command
-  that mutates its working tree. Read-only discovery and creating a separate
-  task worktree from it are allowed.
+  that mutates its working tree. The trusted tooling-only `./land` control path
+  is the sole integration exception; task agents do not make its Git update
+  manually. Read-only discovery and creating a separate task worktree from it
+  are allowed.
 - At the start of every task, check the current worktree root with
   `git rev-parse --show-toplevel`. If it is the primary coordination checkout,
   create a dedicated task branch and worktree from the current local integration
@@ -148,9 +150,10 @@ this repository and takes precedence where it is stricter.
   is ready: the requested scope is complete, the final diff has been
   substantively reviewed,
   all relevant tests pass, relevant benchmarks show no regression, and no known
-  issue or unresolved uncertainty remains. The script enqueues the exact commit
-  with bounded unattended approval and prints `queued`. Once it prints
-  `queued`, stop work on that task and report its handoff: do not inspect the
+  issue or unresolved uncertainty remains. The script enqueues ordinary commits
+  with bounded unattended approval and prints `queued`, or integrates an
+  eligible tooling-only commit directly and prints `landed`. Once it prints
+  either result, stop work on that task and report its handoff: do not inspect the
   job, poll status, wait for deployment, or report any later train outcome.
   A later user request starts a new task under the task-start rule above.
 - For an intentional violation of `benchmark-sources` or `benchmarks`, report
@@ -167,9 +170,11 @@ this repository and takes precedence where it is stricter.
   unchanged and report only `Merge train: ⏳ handoff pending`. Do not include
   queue health, unrelated job IDs, conflicts, or recovery instructions. Treat
   other pre-enqueue errors according to their own message.
-- `./land` grants the configured merge-train runner bounded unattended approval
-  for that exact destination and execution policy. It does not authorize the
-  task agent itself to validate, deploy, push, or integrate `main` directly.
+- For ordinary jobs, `./land` grants the configured merge-train runner bounded
+  unattended approval for that exact destination and execution policy. For an
+  eligible tooling-only commit, the trusted script validates and atomically
+  updates local integration itself. Task agents do not push or integrate `main`
+  directly.
 - If readiness cannot be established, leave the commit on its worktree branch
   without enqueueing it and report `Merge train: ❌ not ready — <reason>`. Do
   not use a low-value mechanical check as a substitute for relevant
@@ -231,6 +236,8 @@ For multiple commits or verification commands, put bullet points beneath the
 corresponding label. If a separately authorized runner deployed the train,
 replace the merge-train line with
 `Merge train: ✅ deployed <jobs/branches> to <destination> at <short hash>`.
+For an eligible tooling-only commit that made `./land` print `landed`, report
+`Merge train: ✅ tooling landed via ./land` instead.
 A skipped gate must say why, for example:
 `Tests: ⏭️ skipped — documentation-only change`.
 

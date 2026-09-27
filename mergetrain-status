@@ -154,6 +154,7 @@ for required_command in git mergetrain python3; do
 done
 
 repo_root="$(cd "$repo_root" && pwd -P)"
+fifo_ledger="$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)/mergetrain-fifo.json"
 refresh_dir="$(mktemp -d "${TMPDIR:-/tmp}/mergetrain-status.XXXXXXXX")"
 cleanup() {
   if [[ -n "$refresh_pid" ]]; then
@@ -195,11 +196,16 @@ while true; do
       if [[ -e "$refresh_dir/$refresh_serial.ok" ]]; then
         status_output="$(cat "$refresh_dir/$refresh_serial.output")"
         mapfile -t attention_ids < <(python3 -c '
-import json, sys
+import json, pathlib, sys
+ledger = pathlib.Path(sys.argv[1])
+try:
+    deferred = {int(job["native_id"]) for job in json.loads(ledger.read_text()).get("pending", [])}
+except (OSError, ValueError, KeyError, TypeError):
+    deferred = set()
 for job in json.load(sys.stdin).get("attention_jobs", []):
-    if isinstance(job.get("id"), int):
+    if isinstance(job.get("id"), int) and job["id"] not in deferred:
         print(job["id"])
-' <<<"$status_json")
+' "$fifo_ledger" <<<"$status_json")
         mapfile -t approval_ids < "$refresh_dir/$refresh_serial.approvals"
         review_ids=("${attention_ids[@]}" "${approval_ids[@]}")
         attention_task=""
@@ -211,9 +217,11 @@ for job in json.load(sys.stdin).get("attention_jobs", []):
 import json, sys
 payload = json.load(sys.stdin)
 approvals = {int(value) for value in sys.argv[2].split()}
+review = {int(value) for value in sys.argv[3].split()}
 jobs = payload.get("attention_jobs", []) + [
     job for job in payload.get("recent_jobs", []) if job.get("id") in approvals
 ]
+jobs = [job for job in jobs if job.get("id") in review]
 for position, job in enumerate(jobs, start=1):
     if job.get("id") == int(sys.argv[1]):
         print(position)
@@ -221,7 +229,7 @@ for position, job in enumerate(jobs, start=1):
         print("true" if job.get("id") in approvals or str(job.get("reason") or "").startswith("approval_execution_policy_changed:") else "false")
         print("approval" if job.get("id") in approvals else "attention")
         break
-' "$attention_job_id" "${approval_ids[*]}" <<<"$status_json")
+' "$attention_job_id" "${approval_ids[*]}" "${review_ids[*]}" <<<"$status_json")
           attention_position="${selected_attention[0]:-?}"
           attention_task="${selected_attention[1]:-(unknown task)}"
           attention_policy_changed="${selected_attention[2]:-false}"
@@ -432,7 +440,8 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
         y)
           if [[ "$retry_pending" == true ]]; then
             retry_pending=false
-            if retry_result="$(mergetrain --repo "$repo_root" retry "$attention_job_id" 2>&1)"; then
+            if retry_result="$(python3 "$script_root/scripts/mergetrain_fifo.py" \
+                --repo "$repo_root" retry "$attention_job_id" 2>&1)"; then
               action_message="$retry_result"
               attention_job_id=""
             else

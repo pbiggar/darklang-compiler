@@ -86,7 +86,7 @@ if [[ "$color_mode" != auto && "$color_mode" != always && "$color_mode" != never
   exit 2
 fi
 
-for required_command in codex git mergetrain python3; do
+for required_command in codex flock git mergetrain python3; do
   if ! command -v "$required_command" >/dev/null 2>&1; then
     echo "Required command not found: $required_command" >&2
     exit 1
@@ -96,6 +96,8 @@ done
 repo_root="$(cd "$repo_root" && pwd -P)"
 mkdir -p "$attempt_dir"
 attempt_dir="$(cd "$attempt_dir" && pwd -P)"
+common_dir="$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)"
+exec {dispatch_lock_fd}>"$common_dir/mergetrain-dispatch.lock"
 activity_file="$attempt_dir/integrator-activity-$$.txt"
 trap 'rm -f -- "$activity_file"' EXIT
 
@@ -288,16 +290,12 @@ import json
 import sys
 
 payload = json.load(sys.stdin)
-seen = set()
+target = int(sys.argv[1]) if sys.argv[1] else None
 for job in payload.get("attention_jobs", []):
     job_id = job.get("id")
-    if isinstance(job_id, int) and job_id not in seen:
-        seen.add(job_id)
+    if job_id == target:
         print(job_id)
-target = payload.get("next_action", {}).get("target_job_id")
-if isinstance(target, int) and target not in seen:
-    print(target)
-'
+' "$fifo_head_id"
 }
 
 repair_attention_jobs() {
@@ -321,8 +319,16 @@ repair_attention_jobs() {
       failed=true
       failed_recovery_job_ids="$failed_recovery_job_ids $job_id"
       display_job "$job_id" ERROR true "recovery needs attention; log: $recovery_log"
+      python3 "$integrator_source_root/scripts/mergetrain_fifo.py" \
+        --repo "$repo_root" failure "$job_id" "recovery failed; log: $recovery_log" >/dev/null
     else
       display_job "$job_id" OK true "recovery completed; log: $recovery_log"
+      current_fifo="$(python3 "$integrator_source_root/scripts/mergetrain_fifo.py" \
+        --repo "$repo_root" show)"
+      if [[ "$(json_value head.native_id <<<"$current_fifo")" == "$job_id" ]]; then
+        python3 "$integrator_source_root/scripts/mergetrain_fifo.py" \
+          --repo "$repo_root" failure "$job_id" "awaiting operator action; log: $recovery_log" >/dev/null
+      fi
     fi
   done < <(attention_job_ids <<<"$snapshot")
   if [[ "$processed" == false ]]; then
@@ -331,7 +337,7 @@ repair_attention_jobs() {
     return 1
   fi
   if [[ "$failed" == true ]]; then
-    log_warn "One or more merge-train problems remain; other jobs will continue"
+    log_warn "FIFO head needs attention; later jobs remain deferred"
     log_info "Daemon log: $daemon_log"
     return 1
   fi
@@ -570,6 +576,7 @@ set_activity "Starting integrator"
 log_info "Integrator started • repo $repo_root • interval ${interval_seconds}s • color $color_mode"
 
 while true; do
+  flock -x "$dispatch_lock_fd"
   pre_status_log="$(mktemp "$attempt_dir/.status-before.XXXXXX.log")"
   if pre_snapshot="$(mergetrain --repo "$repo_root" status --json 2>"$pre_status_log")"; then
     if [[ "$(json_value contract_version <<<"$pre_snapshot")" == "4" ]]; then
@@ -578,6 +585,34 @@ while true; do
     fi
   fi
   rm -f "$pre_status_log"
+  if ! fifo_snapshot="$(python3 "$integrator_source_root/scripts/mergetrain_fifo.py" \
+    --repo "$repo_root" prepare)"; then
+    log_error "Could not preserve ordinary job arrival order; daemon paused"
+    flock -u "$dispatch_lock_fd"
+    if [[ "$run_once" == true ]]; then exit 0; fi
+    sleep "$interval_seconds"
+    continue
+  fi
+  fifo_head_id="$(json_value head.native_id <<<"$fifo_snapshot")"
+  fifo_failure="$(json_value head.recovery_failed <<<"$fifo_snapshot")"
+  if [[ -n "$fifo_head_id" ]]; then
+    head_details="$(mergetrain --repo "$repo_root" inspect "$fifo_head_id" --json)"
+    head_state="$(json_value job.status <<<"$head_details")"
+    head_verify="$(json_value job.verify_status <<<"$head_details")"
+    if [[ "$head_state" == blocked || "$head_state" == failed ||
+          ( "$head_state" == deployed && ( "$head_verify" == failed || "$head_verify" == unknown ) ) ]]; then
+      if [[ -z "$fifo_failure" ]]; then
+        empty_daemon_log="$(mktemp "$attempt_dir/.fifo-attention.XXXXXX.log")"
+        repair_attention_jobs "$pre_snapshot" "$empty_daemon_log" || true
+      else
+        display_job "$fifo_head_id" WARN false "$fifo_failure"
+      fi
+      flock -u "$dispatch_lock_fd"
+      if [[ "$run_once" == true ]]; then exit 0; fi
+      sleep "$interval_seconds"
+      continue
+    fi
+  fi
   # The native one-shot daemon owns queue locking, validation, and deployment.
   daemon_output="$(mktemp "$attempt_dir/.daemon.XXXXXX.log")"
   set_activity "Running merge-train daemon"
@@ -607,6 +642,7 @@ while true; do
     if [[ "$run_once" == true ]]; then
       exit 0
     fi
+    flock -u "$dispatch_lock_fd"
     sleep "$interval_seconds"
     continue
   fi
@@ -624,6 +660,7 @@ while true; do
     if [[ "$run_once" == true ]]; then
       exit 0
     fi
+    flock -u "$dispatch_lock_fd"
     sleep "$interval_seconds"
     continue
   fi
@@ -637,6 +674,7 @@ while true; do
     if [[ "$run_once" == true ]]; then
       exit 0
     fi
+    flock -u "$dispatch_lock_fd"
     sleep "$interval_seconds"
     continue
   fi
@@ -651,7 +689,11 @@ while true; do
 
   case "$next_action" in
     fix_blocked_job)
-      repair_attention_jobs "$snapshot" "$daemon_output" || true
+      if [[ -n "$fifo_head_id" ]]; then
+        repair_attention_jobs "$snapshot" "$daemon_output" || true
+      else
+        rm -f "$daemon_output"
+      fi
       ;;
     enqueue_clean_branch|gc_available|run_daemon_when_approved|validate_queued_jobs)
       rm -f "$daemon_output"
@@ -672,6 +714,7 @@ while true; do
   if [[ "$run_once" == true ]]; then
     exit 0
   fi
+  flock -u "$dispatch_lock_fd"
   set_activity "Waiting for next queue pass"
   sleep "$interval_seconds"
 done

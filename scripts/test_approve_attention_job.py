@@ -33,10 +33,12 @@ class ApprovalTests(unittest.TestCase):
             return {"result": "confirmation_required", "jobs": [{"id": 308}]}
 
         with patch("scripts.approve_attention_job.mergetrain", side_effect=fake_mergetrain), \
+             patch("scripts.approve_attention_job.load_fifo", return_value={"head": None, "pending": []}), \
              patch("scripts.approve_attention_job.git_diff", return_value="policy diff"), \
              patch("scripts.approve_attention_job.sys.stdin.isatty", return_value=True), \
              patch("scripts.approve_attention_job.sys.stdout.isatty", return_value=True), \
              patch("builtins.input", return_value="approve 308 b"), \
+             patch("scripts.approve_attention_job.ledger_path", return_value=Path("/tmp/mergetrain-approval-test.json")), \
              patch("scripts.approve_attention_job.subprocess.run") as deploy:
             deploy.return_value.returncode = 0
             approve(Path("."), 308)
@@ -58,6 +60,7 @@ class ApprovalTests(unittest.TestCase):
             }
 
         with patch("scripts.approve_attention_job.mergetrain", side_effect=fake_mergetrain), \
+             patch("scripts.approve_attention_job.load_fifo", return_value={"head": None, "pending": []}), \
              patch("scripts.approve_attention_job.git_diff", return_value="policy diff"), \
              patch("scripts.approve_attention_job.sys.stdin.isatty", return_value=True), \
              patch("scripts.approve_attention_job.sys.stdout.isatty", return_value=True), \
@@ -84,10 +87,13 @@ class ApprovalTests(unittest.TestCase):
             return {"result": "confirmation_required", "jobs": [{"id": 400}]}
 
         with patch("scripts.approve_attention_job.mergetrain", side_effect=fake_mergetrain), \
+             patch("scripts.approve_attention_job.load_fifo", return_value={"head": None, "pending": []}), \
              patch("scripts.approve_attention_job.git_diff", return_value="policy diff"), \
              patch("scripts.approve_attention_job.sys.stdin.isatty", return_value=True), \
              patch("scripts.approve_attention_job.sys.stdout.isatty", return_value=True), \
              patch("builtins.input", return_value="approve 299 b"), \
+             patch("scripts.approve_attention_job.note_replacement"), \
+             patch("scripts.approve_attention_job.ledger_path", return_value=Path("/tmp/mergetrain-approval-test.json")), \
              patch("scripts.approve_attention_job.subprocess.run") as deploy:
             with self.assertRaisesRegex(ApprovalError, "not in a ready deploy plan"):
                 approve(Path("."), 299)

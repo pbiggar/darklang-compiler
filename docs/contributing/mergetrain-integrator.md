@@ -1,13 +1,26 @@
 # Merge-train integrator recovery
 
-The repository integrator continuously runs the native merge-train daemon and
-recovers auto-approved jobs when doing so is safe. The daemon exclusively owns
-assembly, gate execution, and deployment. The recovery layer never pushes an
-integration ref.
+The repository integrator runs the native merge-train daemon for ordinary jobs
+in arrival order. Only the oldest unfinished ordinary job is admitted to a
+daemon pass. Later jobs are recorded in the shared Git directory and deferred;
+their original arrival number survives native retries and repair replacements.
+Blocked later rows are dismissed after their failure is recorded, because the
+native queue treats them as active and would reject re-enqueueing their branch.
+An attention job blocks all later ordinary jobs until it is repaired or
+resolved. The daemon owns ordinary job gates and deployment.
+
+`./land` sends a commit whose entire change is in the explicit merge-train
+tooling allowlist through a separate control path. It merges that commit onto
+current local `main` in an isolated worktree, checks the merged tree and runs
+focused tooling tests, then atomically updates `mergetrain-local/main` under a
+lease. This can complete while an ordinary attention job is blocking the
+queue. The dispatch lock serializes ordinary handoffs with daemon passes;
+tooling updates use an atomic push lease and can race safely with either.
+Mixed tooling and product changes use the ordinary queue.
 
 ## Recovery order
 
-For every attention job, the integrator:
+For the oldest attention job, the integrator:
 
 1. Inspects the structured job and gate evidence.
 2. Retries an unchanged revision once when a gate was interrupted, timed out,
@@ -41,10 +54,15 @@ queue against the current gate policy. Only a successful validation is enqueued
 with a fresh bounded `--auto` approval. The daemon repeats its gates before any
 deployment. Changes to reuse, verify hooks, or other execution policy settings
 remain operator decisions because pre-push gate validation cannot prove them.
+If such a change pauses a deferred FIFO head, status shows its original
+number and reason. An operator can stage that exact commit as a manual job with
+`python3 scripts/mergetrain_fifo.py --repo . manual ORDER HEAD_SHA`, then use
+interactive `mergetrain --repo . deploy` to validate and confirm the exact
+plan. The job remains the FIFO head until deployment succeeds.
 
-Every attention job in a status snapshot is considered. An unrecoverable job
-does not prevent later blockers from being inspected or the daemon from
-deploying an independently validated subset.
+An unrecoverable head remains at the front. The integrator records its failure
+and pauses later ordinary jobs. `./mergetrain-status` displays the FIFO head
+and deferred jobs. A tooling-only `./land` still runs independently.
 
 ## One-time gate exceptions
 
@@ -88,7 +106,9 @@ independent verification remain operator decisions.
 replacements with `v`. The detail view shows the recorded failure and policy
 diff, and `n`/`p` move between review pages. The selected job ID and task stay
 visible at the bottom while the page scrolls. `r` offers a confirmed
-`mergetrain retry` for the selected job. Retry does not renew
+`mergetrain retry` for the selected FIFO head and records its replacement under
+the original arrival number. Deferred jobs are listed in status but cannot be
+retried ahead of the head. Retry does not renew
 an expired unattended policy approval: mergetrain creates a manual replacement
 when the policy no longer matches. On a blocked policy job or its queued manual
 replacement, `A` starts a human review: it displays the job's policy diff,

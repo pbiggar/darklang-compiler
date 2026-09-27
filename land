@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# land - Enqueue the current committed branch for local deployment.
+# land - Dispatch a committed task branch for local integration.
 
 set -euo pipefail
 
@@ -11,12 +11,13 @@ usage() {
   cat <<EOF
 Usage: ./land [OPTIONS]
 
-Enqueue the current clean, committed task branch with bounded --auto approval
-for deployment to local main. Prints "queued" after the exact commit is
-accepted, then exits without monitoring the job.
+Dispatch the current clean, committed task branch. Tooling-only changes are
+merged directly into local main after focused validation and print "landed".
+Other changes enter the FIFO merge train with bounded --auto approval and
+print "queued" after the exact commit is accepted.
 
 Options:
-  --task TEXT           Queue description.
+  --task TEXT           Task description.
                         Default: current commit subject
   --exception-gate NAME Request a one-time exception for one eligible gate.
   --exception-reason TEXT
@@ -54,7 +55,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-for required_command in git mergetrain python3; do
+for required_command in flock git mergetrain python3; do
   if ! command -v "$required_command" >/dev/null 2>&1; then
     echo "Required command not found: $required_command" >&2
     exit 1
@@ -76,6 +77,21 @@ fi
 if [[ -z "$task" ]]; then
   task="$(git -C "$repo_root" log -1 --format=%s)"
 fi
+common_dir="$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)"
+kind="$(python3 "$repo_root/scripts/mergetrain_control.py" \
+  --repo "$repo_root" classify "$head_sha")"
+if [[ "$kind" == control ]]; then
+  if [[ -n "$exception_gate" || -n "$exception_reason" ]]; then
+    echo "Tooling changes do not use merge-train gate exceptions" >&2
+    exit 2
+  fi
+  python3 "$repo_root/scripts/mergetrain_control.py" \
+    --repo "$repo_root" land "$head_sha" --task "$task" >/dev/null
+  echo "landed"
+  exit 0
+fi
+exec {dispatch_lock_fd}>"$common_dir/mergetrain-dispatch.lock"
+flock -x "$dispatch_lock_fd"
 if [[ -n "$exception_gate" || -n "$exception_reason" ]]; then
   if [[ -z "$exception_gate" || -z "$exception_reason" ]]; then
     echo "Use --exception-gate and --exception-reason together" >&2
