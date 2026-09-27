@@ -2,12 +2,12 @@
 
 Best-known compatible full-profile Dark performance vs audited Rust references, with diagnostic reference runtimes (instruction counts).
 
-**Snapshot timestamp:** 2026-09-26T23:15:07+00:00
+**Snapshot timestamp:** 2026-09-27T01:46:27+00:00
 **Architecture:** `arm64`
 **Profile:** `full` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs`
 **Workload contract:** `6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe`
-**Compiler commit:** `11b2d7297c0748f5082c509470a2f4d8e2ab356d` - Merge commit 'f95dc7ab45f5469703c37e272b2f5e6f25af3d85' into HEAD
+**Compiler commit:** `aac12ccd02162a7b1cb9e936d90e77b24ac7bccb` - Combine MIR constant, copy, and CFG simplification in SCCP
 **Diagnostic references:** informational only; multipliers are instructions divided by Rust for the same workload.
 Every displayed diagnostic row matched the profile's expected stdout.
 
@@ -16,7 +16,7 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | ackermann | 145,107,511 (1.62x) | 89,558,784 | - | - | - | - |
 | binary_trees | 11,046,954 (0.17x) | 63,993,594 | - | - | - | - |
 | collatz | 70,193,695 (0.91x) | 76,735,737 | - | - | - | - |
-| edigits | 49,935,730 (72.5x) | 688,749 | - | - | - | - |
+| edigits | 49,904,630 (72.5x) | 688,749 | - | - | - | - |
 | factorial | 59,313 (0.06x) | 970,290 | - | - | - | - |
 | fannkuch | 220,630,016 (125x) | 1,760,885 | - | - | - | - |
 | fasta | 21,292,782 (31.0x) | 686,768 | - | - | - | - |
@@ -28,7 +28,7 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | matmul | 42,560,518 (65.5x) | 649,416 | - | - | - | - |
 | merkletrees | 3,871,302 (1.53x) | 2,523,420 | - | - | - | - |
 | myers_diff | 205,029,599 (298x) | 687,142 | - | - | - | - |
-| nbody | 14,536,134 (3.42x) | 4,249,498 | - | - | - | - |
+| nbody | 14,536,070 (3.42x) | 4,249,498 | - | - | - | - |
 | nqueen | 7,417,758 (1.25x) | 5,914,962 | - | - | - | - |
 | nsieve | 131,108,540 (345x) | 380,354 | - | - | - | - |
 | pisum | 808,322 (0.70x) | 1,160,413 | - | - | - | - |

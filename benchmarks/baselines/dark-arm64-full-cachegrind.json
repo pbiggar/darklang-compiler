@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-26T23:15:07+00:00",
+  "generated_at": "2026-09-27T01:46:27+00:00",
   "compiler": {
-    "commit": "11b2d7297c0748f5082c509470a2f4d8e2ab356d",
-    "subject": "Merge commit 'f95dc7ab45f5469703c37e272b2f5e6f25af3d85' into HEAD"
+    "commit": "aac12ccd02162a7b1cb9e936d90e77b24ac7bccb",
+    "subject": "Combine MIR constant, copy, and CFG simplification in SCCP"
   },
   "benchmarks": [
     {
@@ -30,7 +30,7 @@
     },
     {
       "name": "edigits",
-      "instructions": 49935730
+      "instructions": 49904630
     },
     {
       "name": "factorial",
@@ -78,7 +78,7 @@
     },
     {
       "name": "nbody",
-      "instructions": 14536134
+      "instructions": 14536070
     },
     {
       "name": "nqueen",
