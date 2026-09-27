@@ -26,14 +26,26 @@ retry_pending=false
 action_message=""
 scroll_offset=0
 refresh_status=true
+fetch_status=true
+refresh_running=false
+refresh_pid=""
+refresh_serial=0
+refresh_dir=""
+redraw=true
+next_refresh=0
+status_output="Loading merge-train status…"
+status_json=""
+attention_ids=()
+approval_ids=()
+review_ids=()
 
 usage() {
   cat <<EOF
 Usage: ./mergetrain-status [OPTIONS]
 
 Continuously display merge-train health, active jobs, recent integration
-merges, and benchmark results in pages of nine. Interactive terminals support
-scrolling and keyboard shortcuts and are redrawn in place as complete frames.
+merges with recorded test runtimes, and benchmark results in pages of nine.
+Interactive terminals keep accepting keys while pages refresh.
 Use 1-9 for details, 0 for the next benchmark page, and b for the previous page.
 
 Options:
@@ -140,6 +152,17 @@ for required_command in git mergetrain python3; do
 done
 
 repo_root="$(cd "$repo_root" && pwd -P)"
+refresh_dir="$(mktemp -d "${TMPDIR:-/tmp}/mergetrain-status.XXXXXXXX")"
+cleanup() {
+  if [[ -n "$refresh_pid" ]]; then
+    kill "$refresh_pid" 2>/dev/null || true
+  fi
+  rm -rf -- "$refresh_dir"
+  if [[ "$interactive_redraw" == true ]]; then
+    printf '\033[?25h\n'
+  fi
+}
+trap cleanup EXIT
 if [[ "$color_mode" == auto ]]; then
   if [[ -t 1 ]]; then
     color_mode=always
@@ -150,16 +173,75 @@ fi
 if [[ "$clear_screen" == true && -t 1 ]]; then
   interactive_redraw=true
   printf '\033[?25l'
-  trap 'printf "\033[?25h\n"' EXIT
 fi
 if [[ "$interactive_redraw" == true && -t 0 ]]; then
   interactive_input=true
 fi
 
 while true; do
-  if [[ "$refresh_status" == true ]]; then
-    status_output=""
-    status_json=""
+  if [[ "$refresh_running" == true && -e "$refresh_dir/$refresh_serial.done" ]]; then
+    wait "$refresh_pid" || true
+    refresh_pid=""
+    refresh_running=false
+    next_refresh=$((SECONDS + interval_seconds))
+    if [[ -e "$refresh_dir/$refresh_serial.ok" ]]; then
+      status_json="$(cat "$refresh_dir/$refresh_serial.json")"
+    else
+      status_json=""
+    fi
+    if [[ "$refresh_status" == false ]]; then
+      if [[ -e "$refresh_dir/$refresh_serial.ok" ]]; then
+        status_output="$(cat "$refresh_dir/$refresh_serial.output")"
+        mapfile -t attention_ids < <(python3 -c '
+import json, sys
+for job in json.load(sys.stdin).get("attention_jobs", []):
+    if isinstance(job.get("id"), int):
+        print(job["id"])
+' <<<"$status_json")
+        mapfile -t approval_ids < "$refresh_dir/$refresh_serial.approvals"
+        review_ids=("${attention_ids[@]}" "${approval_ids[@]}")
+        attention_task=""
+        attention_position=""
+        attention_policy_changed=false
+        review_kind=""
+        if [[ -n "$attention_job_id" ]]; then
+          mapfile -t selected_attention < <(python3 -c '
+import json, sys
+payload = json.load(sys.stdin)
+approvals = {int(value) for value in sys.argv[2].split()}
+jobs = payload.get("attention_jobs", []) + [
+    job for job in payload.get("recent_jobs", []) if job.get("id") in approvals
+]
+for position, job in enumerate(jobs, start=1):
+    if job.get("id") == int(sys.argv[1]):
+        print(position)
+        print(str(job.get("task") or "(unknown task)").replace("\n", " "))
+        print("true" if job.get("id") in approvals or str(job.get("reason") or "").startswith("approval_execution_policy_changed:") else "false")
+        print("approval" if job.get("id") in approvals else "attention")
+        break
+' "$attention_job_id" "${approval_ids[*]}" <<<"$status_json")
+          attention_position="${selected_attention[0]:-?}"
+          attention_task="${selected_attention[1]:-(unknown task)}"
+          attention_policy_changed="${selected_attention[2]:-false}"
+          review_kind="${selected_attention[3]:-attention}"
+        fi
+      else
+        status_output="Status refresh failed; retrying in $interval_seconds second(s)"
+        attention_ids=()
+        approval_ids=()
+        review_ids=()
+        review_kind="attention"
+        attention_position="?"
+        attention_task="(status unavailable)"
+      fi
+      if [[ -n "$action_message" ]]; then
+        status_output="$action_message"$'\n\n'"$status_output"
+        action_message=""
+      fi
+      redraw=true
+    fi
+  fi
+  if [[ "$refresh_status" == true && "$refresh_running" == false ]]; then
     terminal_columns="${COLUMNS:-}"
     if [[ ! "$terminal_columns" =~ ^[1-9][0-9]*$ ]]; then
       terminal_columns="$(tput cols 2>/dev/null || true)"
@@ -191,25 +273,18 @@ while true; do
     if [[ -n "$attention_job_id" ]]; then
       renderer_args+=(--attention-job-id "$attention_job_id")
     fi
-    if ! status_json="$(mergetrain --repo "$repo_root" status --json --limit 1000)" ||
-       ! status_output="$(
-         python3 "$script_root/scripts/render_mergetrain_status.py" "${renderer_args[@]}" <<<"$status_json"
-       )"; then
-      status_output="Status refresh failed; retrying in $interval_seconds second(s)"
-      attention_ids=()
-      approval_ids=()
-      review_ids=()
-      review_kind="attention"
-      attention_position="?"
-      attention_task="(status unavailable)"
-    else
-      mapfile -t attention_ids < <(python3 -c '
-import json, sys
-for job in json.load(sys.stdin).get("attention_jobs", []):
-    if isinstance(job.get("id"), int):
-        print(job["id"])
-' <<<"$status_json")
-      mapfile -t approval_ids < <(python3 -c '
+    refresh_serial=$((refresh_serial + 1))
+    cached_status_json="$status_json"
+    should_fetch_status="$fetch_status"
+    (
+      if { if [[ "$should_fetch_status" == true || -z "$cached_status_json" ]]; then
+             mergetrain --repo "$repo_root" status --json --limit 1000
+           else
+             printf '%s\n' "$cached_status_json"
+           fi; } > "$refresh_dir/$refresh_serial.json" &&
+         python3 "$script_root/scripts/render_mergetrain_status.py" "${renderer_args[@]}" \
+           < "$refresh_dir/$refresh_serial.json" > "$refresh_dir/$refresh_serial.output" &&
+         python3 -c '
 import json, subprocess, sys
 repo = sys.argv[1]
 for summary in json.load(sys.stdin).get("recent_jobs", []):
@@ -229,41 +304,19 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
     outcome = details.get("outcome") or {}
     if job.get("auto_deploy") is False and str(outcome.get("message") or "").startswith("approval_execution_policy_changed:"):
         print(summary["id"])
-' "$repo_root" <<<"$status_json")
-      review_ids=("${attention_ids[@]}" "${approval_ids[@]}")
-      attention_task=""
-      attention_position=""
-      attention_policy_changed=false
-      review_kind=""
-      if [[ -n "$attention_job_id" ]]; then
-        mapfile -t selected_attention < <(python3 -c '
-import json, sys
-payload = json.load(sys.stdin)
-approvals = {int(value) for value in sys.argv[2].split()}
-jobs = payload.get("attention_jobs", []) + [
-    job for job in payload.get("recent_jobs", []) if job.get("id") in approvals
-]
-for position, job in enumerate(jobs, start=1):
-    if job.get("id") == int(sys.argv[1]):
-        print(position)
-        print(str(job.get("task") or "(unknown task)").replace("\n", " "))
-        print("true" if job.get("id") in approvals or str(job.get("reason") or "").startswith("approval_execution_policy_changed:") else "false")
-        print("approval" if job.get("id") in approvals else "attention")
-        break
-' "$attention_job_id" "${approval_ids[*]}" <<<"$status_json")
-        attention_position="${selected_attention[0]:-?}"
-        attention_task="${selected_attention[1]:-(unknown task)}"
-        attention_policy_changed="${selected_attention[2]:-false}"
-        review_kind="${selected_attention[3]:-attention}"
+' "$repo_root" < "$refresh_dir/$refresh_serial.json" > "$refresh_dir/$refresh_serial.approvals"; then
+        : > "$refresh_dir/$refresh_serial.ok"
       fi
-    fi
-    if [[ -n "$action_message" ]]; then
-      status_output="$action_message"$'\n\n'"$status_output"
-      action_message=""
-    fi
+      : > "$refresh_dir/$refresh_serial.done"
+    ) &
+    refresh_pid=$!
+    refresh_running=true
     refresh_status=false
+    fetch_status=false
+    next_refresh=$((SECONDS + interval_seconds))
+    redraw=true
   fi
-  if [[ "$interactive_redraw" == true ]]; then
+  if [[ "$interactive_redraw" == true && "$redraw" == true ]]; then
     terminal_lines="${LINES:-}"
     if [[ ! "$terminal_lines" =~ ^[1-9][0-9]*$ ]]; then
       terminal_lines="$(tput lines 2>/dev/null || true)"
@@ -294,7 +347,9 @@ for position, job in enumerate(jobs, start=1):
     if [[ "$retry_pending" == true ]]; then
       controls="Retry #$attention_job_id? Approval may become manual. [y] confirm  [n/Esc] cancel"
     elif [[ -n "$attention_job_id" ]]; then
-      if [[ "$review_kind" == approval ]]; then
+      if [[ "$refresh_running" == true || "$refresh_status" == true ]]; then
+        controls="Loading review…  [q/Esc] back"
+      elif [[ "$review_kind" == approval ]]; then
         controls="[j/k] scroll  [n/p] next/previous  [A] approve & deploy  [q/Esc] back"
       elif [[ "$attention_policy_changed" == true ]]; then
         controls="[j/k] scroll  [n/p] next/previous  [A] approve & deploy  [r] retry  [q/Esc] back"
@@ -316,21 +371,29 @@ for position, job in enumerate(jobs, start=1):
       fi
     fi
     if [[ -n "$attention_job_id" ]]; then
-      identity="${review_kind^^} ${attention_position:-?}/${#review_ids[@]}  #$attention_job_id ${attention_task:0:36}"
-      printf '\033[H\033[J%s\n%s\n%s\n' "$visible_output" "$identity" "$controls"
-    else
-      printf '\033[H\033[J%s\n%s\n%s\n' "$visible_output" "$controls" "$other_controls"
+      if [[ "$refresh_running" == true || "$refresh_status" == true ]]; then
+        identity="Review #$attention_job_id loading…"
+      else
+        identity="${review_kind^^} ${attention_position:-?}/${#review_ids[@]}  #$attention_job_id ${attention_task:0:36}"
+      fi
+      other_controls="$identity"
     fi
-  else
+    if [[ "$refresh_running" == true || "$refresh_status" == true ]]; then
+      other_controls="refreshing…${other_controls:+  $other_controls}"
+    fi
+    printf '\033[H\033[J%s\n%s\n%s\n' "${visible_output:-Loading merge-train status…}" "$controls" "$other_controls"
+    redraw=false
+  elif [[ "$interactive_redraw" == false && "$refresh_running" == false ]]; then
     printf '%s\n' "$status_output"
   fi
 
-  if [[ "$run_once" == true ]]; then
+  if [[ "$run_once" == true && "$refresh_running" == false ]]; then
     exit 0
   fi
   if [[ "$interactive_input" == true ]]; then
     pressed_key=""
-    if read -rsn1 -t "$interval_seconds" pressed_key; then
+    if read -rsn1 -t 0.1 pressed_key; then
+      redraw=true
       if [[ "$pressed_key" == $'\033' ]]; then
         escape_suffix=""
         read -rsn2 -t 0.02 escape_suffix || true
@@ -357,6 +420,7 @@ for position, job in enumerate(jobs, start=1):
             fi
             scroll_offset=0
             refresh_status=true
+            fetch_status=true
           fi
           ;;
         n)
@@ -402,12 +466,14 @@ for position, job in enumerate(jobs, start=1):
           fi
           ;;
         r)
-          if [[ -n "$attention_job_id" && "$review_kind" == attention ]]; then
+          if [[ -n "$attention_job_id" && "$review_kind" == attention &&
+                "$refresh_running" == false && "$refresh_status" == false ]]; then
             retry_pending=true
           fi
           ;;
         A)
-          if [[ -n "$attention_job_id" && "$attention_policy_changed" == true ]]; then
+          if [[ -n "$attention_job_id" && "$attention_policy_changed" == true &&
+                "$refresh_running" == false && "$refresh_status" == false ]]; then
             printf '\033[H\033[J'
             if python3 "$script_root/scripts/approve_attention_job.py" \
               --repo "$repo_root" --job-id "$attention_job_id"; then
@@ -524,11 +590,24 @@ for position, job in enumerate(jobs, start=1):
           fi
           ;;
       esac
+      if [[ "$refresh_status" == true ]]; then
+        status_output="Loading view…"
+        scroll_offset=0
+      fi
     else
-      refresh_status=true
+      if [[ "$refresh_running" == false ]] && ((SECONDS >= next_refresh)); then
+        refresh_status=true
+        fetch_status=true
+        next_refresh=$((SECONDS + interval_seconds))
+      fi
     fi
   else
-    sleep "$interval_seconds"
-    refresh_status=true
+    if [[ "$refresh_running" == true ]]; then
+      sleep 0.1
+    else
+      sleep "$interval_seconds"
+      refresh_status=true
+      fetch_status=true
+    fi
   fi
 done

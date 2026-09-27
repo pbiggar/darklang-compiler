@@ -19,6 +19,7 @@ from scripts.render_mergetrain_status import (
     benchmark_diff,
     human_age,
     last_test_runtime,
+    merge_test_runtime,
     percentage,
     render,
     render_attention_job,
@@ -127,7 +128,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 return output
 
             try:
-                read_until(b"[a] attention")
+                self.assertIn(b"[a] attention", read_until(b"health: healthy"))
                 os.write(master, b"v")
                 approval_page = read_until(b"[A] approve & deploy")
                 self.assertIn(b"APPROVAL 2/2  #308 Review gate waivers", approval_page)
@@ -294,6 +295,84 @@ class MergetrainStatusTests(unittest.TestCase):
             (42.5, "2026-09-27T10:00:00+00:00"),
         )
 
+    def test_merge_runtime_matches_its_deployed_branch_and_time(self) -> None:
+        history = [
+            {"status": "deployed", "finished_at": "2026-09-27T11:00:00+00:00",
+             "jobs": [{"branch": "task/one"}],
+             "gates": [{"name": "tests", "state": "success", "duration_seconds": 42.5}]},
+            {"status": "deployed", "finished_at": "2026-09-27T13:00:00+00:00",
+             "jobs": [{"branch": "task/two"}],
+             "gates": [{"name": "tests", "state": "success", "duration_seconds": 51.2}]},
+        ]
+        self.assertEqual(
+            merge_test_runtime("task/one", "2026-09-27T10:00:00+00:00", history),
+            "tests 42.5s",
+        )
+        self.assertEqual(
+            merge_test_runtime("task/two", "2026-09-27T12:00:00+00:00", history),
+            "tests 51.2s",
+        )
+        self.assertEqual(
+            merge_test_runtime("task/three", "2026-09-27T12:00:00+00:00", history),
+            "tests n/a",
+        )
+
+    def test_interactive_keys_respond_while_status_refresh_is_slow(self) -> None:
+        source_root = Path(__file__).resolve().parent.parent
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fake_bin = Path(temp_dir)
+            fake = fake_bin / "mergetrain"
+            fake.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, sys, time\n"
+                "if 'status' in sys.argv:\n"
+                "    time.sleep(2)\n"
+                "    print(json.dumps({'contract_version': 4, 'health': 'healthy',\n"
+                "        'state': 'idle', 'summary': 'No active jobs',\n"
+                "        'next_action': {'code': 'queue_empty', 'requires_approval': 'none'},\n"
+                "        'warnings': [], 'attention_jobs': [], 'recent_jobs': []}))\n"
+                "else:\n"
+                "    print(json.dumps({'items': []}))\n",
+                encoding="utf-8",
+            )
+            fake.chmod(0o755)
+            environment = dict(os.environ)
+            environment["PATH"] = f"{fake_bin}:{environment['PATH']}"
+            master, slave = pty.openpty()
+            process = subprocess.Popen(
+                [str(source_root / "mergetrain-status"), "--repo", str(source_root),
+                 "--interval", "30", "--color", "never"],
+                cwd=source_root, env=environment, stdin=slave, stdout=slave,
+                stderr=slave, close_fds=True,
+            )
+            os.close(slave)
+
+            def read_until(expected: bytes, timeout: float = 1.0) -> bytes:
+                deadline = time.monotonic() + timeout
+                output = b""
+                while expected not in output and time.monotonic() < deadline:
+                    readable, _, _ = select.select([master], [], [], 0.05)
+                    if readable:
+                        output += os.read(master, 65536)
+                self.assertIn(expected, output)
+                return output
+
+            try:
+                read_until(b"refreshing")
+                started = time.monotonic()
+                os.write(master, b"m")
+                changed = read_until(b"[m] fewer merges")
+                self.assertIn(b"refreshing", changed)
+                self.assertLess(time.monotonic() - started, 1.0)
+                read_until(b"health: healthy", timeout=12.0)
+                os.write(master, b"q")
+                self.assertEqual(process.wait(timeout=10), 0)
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    process.wait(timeout=10)
+                os.close(master)
+
     def test_generated_result_uses_preceding_source_title_within_80_columns(
         self,
     ) -> None:
@@ -437,7 +516,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 return output
 
             try:
-                read_until(b"[m] more merges")
+                read_until(b"health: healthy")
                 self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"j")
                 read_until(b"\x1b[H\x1b[Jtest runtime:")
@@ -456,8 +535,9 @@ class MergetrainStatusTests(unittest.TestCase):
                 os.write(master, b"g")
                 read_until(b"[m] fewer merges")
                 os.write(master, b"1")
-                detail_output = read_until(b"[q/Esc] back")
+                detail_output = read_until(b"benchmark result:")
                 self.assertIn(b"benchmark result:", detail_output)
+                self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"d")
                 diff_output = read_until(b"benchmark commit diff:")
                 self.assertIn(b"benchmarks/RESULTS.md excluded", diff_output)
@@ -636,6 +716,14 @@ if "inspect" in sys.argv:
             "message": "Running gate 2/4: tests"
         }
     }))
+elif "history" in sys.argv:
+    print(json.dumps({"items": [{
+        "status": "deployed", "finished_at": "9999-01-01T00:00:00+00:00",
+        "jobs": [{"branch": "feature-6"}],
+        "gates": [{"name": "tests", "state": "success",
+                   "duration_seconds": 42.5,
+                   "finished_at": "2026-09-27T10:00:00+00:00"}],
+    }]}))
 else:
     assert "status" in sys.argv
     assert sys.argv[sys.argv.index("--limit") + 1] == "1000"
@@ -723,10 +811,11 @@ else:
             self.assertNotIn("benchmark ratio:", completed.stdout)
             self.assertRegex(
                 completed.stdout,
-                r"recent merges:\n[0-9a-f]{7,12} \d+s feature-6 — Add feature 6",
+                r"recent merges:\n[0-9a-f]{7,12} \d+s feature-6 \[tests 42\.5s\] — Add feature 6",
             )
+            self.assertIn("feature-5 [tests n/a] — Add feature 5", completed.stdout)
             self.assertEqual(completed.stdout.count(" — Add feature "), 5)
-            self.assertNotIn("feature-1 — Add feature 1", completed.stdout)
+            self.assertNotIn("feature-1 [tests n/a] — Add feature 1", completed.stdout)
             self.assertRegex(
                 completed.stdout,
                 r"1\. [0-9a-f]{7,12} +\d+s +2.8x \(n/a\) +"
