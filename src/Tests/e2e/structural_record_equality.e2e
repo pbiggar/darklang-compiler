@@ -1,0 +1,14 @@
+// Records with the same fields compare and look up dictionary keys by value.
+type Point = { x: Int64; y: Int64 }
+type SameShape = { x: Int64; y: Int64 }
+type Reordered = { y: Int64; x: Int64 }
+type WrappedPoint = { value: Point }
+type WrappedSameShape = { value: SameShape }
+(Point { x = 1L; y = 2L }) == (SameShape { x = 1L; y = 2L }) = true
+(Point { x = 1L; y = 2L }) == (SameShape { x = 1L; y = 9L }) = false
+Stdlib.equals (Point { x = 1L; y = 2L }) (SameShape { x = 1L; y = 2L }) = true
+(WrappedPoint { value = Point { x = 1L; y = 2L } }) == (WrappedSameShape { value = SameShape { x = 1L; y = 2L } }) = true
+(Point { x = 1L; y = 2L }) == (Reordered { y = 2L; x = 1L }) = true
+Stdlib.Dict.``member`` (Dict { Point { x = 1L; y = 2L }: "p" }) (SameShape { x = 1L; y = 2L }) = true
+Stdlib.Dict.get (Dict { Point { x = 1L; y = 2L }: "p" }) (SameShape { x = 1L; y = 2L }) = Stdlib.Option.Option.Some "p"
+Stdlib.Dict.``member`` (Dict { Point { x = 1L; y = 2L }: "p" }) (Reordered { y = 2L; x = 1L }) = true

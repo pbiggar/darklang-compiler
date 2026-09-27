@@ -1,0 +1,3 @@
+// Equality of separately allocated lists compares their contents.
+[1L, 2L, 3L] == [1L, 2L, 3L] = true
+[1L, 2L, 3L] == [1L, 2L, 4L] = false

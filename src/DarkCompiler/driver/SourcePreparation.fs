@@ -613,6 +613,14 @@ let internal convertTypedProgramToUserOnlyWithMode
                 sourceSymbols
                 baseContext.Symbols
                 (CheckedAST.programTopLevels typedProgram))
+    let symbols, topLevels =
+        CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
+            symbols
+            typeCheckEnv.AliasReg
+            typeCheckEnv.IndexedTypeReg
+            typeCheckEnv.VariantLookup
+            typeCheckEnv.IndexedSumTypeReg
+            topLevels
     let typedProgram = CheckedAST.programFromCheckedParts (symbols, topLevels)
 
     // Late AOT plans (notably Json) may introduce concrete calls to generic
@@ -713,6 +721,11 @@ let internal convertTypedProgramToUserOnlyWithMode
             | SpecializeLocalAndReplace registry -> addMissing registry SpecializeLocalAndReplace
             | Monomorphize _ -> (typedProgram, monomorphization, Set.empty))
     let baseFuncNames = baseContext.BaseFuncNames
+    let typedProgram =
+        ValueRendering.rewriteDictionaryKeyRenderers
+            typeCheckEnv.IndexedTypeReg
+            typeCheckEnv.IndexedSumTypeReg
+            typedProgram
     measure "AST -> ANF Program Preparation" (fun () ->
         prepareProgramForAnf
             monomorphization

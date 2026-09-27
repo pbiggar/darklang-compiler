@@ -1,0 +1,2 @@
+// Generic dictionary calls infer concrete key and value types from a literal.
+Stdlib.Dict.size (Dict { "a": 1L; "b": 2L }) = 2

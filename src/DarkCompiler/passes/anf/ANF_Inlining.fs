@@ -624,28 +624,35 @@ let rec private returnedTupleElements (expr: AExpr) : Atom list option =
     | Jump _ | Join _ | Return _ | If _ -> None
 
 /// Replace immediate, exhaustive projections of an inlined tuple result with
-/// direct bindings to its elements. The explicit bindings preserve ANF order.
+/// direct bindings to its elements. Tuple-pattern lowering inserts typed
+/// bindings between projections; preserve those bindings and their ANF order.
 let private bindProjectedTupleResult
     (resultId: TempId)
     (elements: Atom list)
     (continuation: AExpr)
     : AExpr option =
     let expectedIndexes = [0 .. List.length elements - 1]
-    let rec collect projections remaining =
+    let rec collect projectedIds projections bindings remaining =
         match remaining with
         | Let (projectionId, TupleGet (Var tupleId, index), body) when tupleId = resultId ->
-            collect ((projectionId, index) :: projections) body
-        | _ -> (List.rev projections, remaining)
-    let (projections, rest) = collect [] continuation
+            collect (Set.add projectionId projectedIds) ((projectionId, index) :: projections) ((projectionId, Some index, TupleGet (Var tupleId, index)) :: bindings) body
+        | Let (typedId, TypedAtom (Var projectionId, typ), body)
+            when Set.contains projectionId projectedIds ->
+            collect (Set.add typedId projectedIds) projections ((typedId, None, TypedAtom (Var projectionId, typ)) :: bindings) body
+        | _ -> (List.rev projections, List.rev bindings, remaining)
+    let (projections, bindings, rest) = collect Set.empty [] [] continuation
     let indexes = projections |> List.map snd
     if List.sort indexes <> expectedIndexes || List.length projections <> List.length elements then
         None
     else
         let elementByIndex = List.zip expectedIndexes elements |> Map.ofList
-        List.foldBack (fun (projectionId, index) body ->
-            match Map.tryFind index elementByIndex with
-            | Some element -> Let (projectionId, Atom element, body)
-            | None -> Crash.crash "ANF_Inlining: exhaustive tuple projection index disappeared") projections rest
+        List.foldBack (fun (bindingId, projectionIndex, original) body ->
+            match projectionIndex with
+            | Some index ->
+                match Map.tryFind index elementByIndex with
+                | Some element -> Let (bindingId, Atom element, body)
+                | None -> Crash.crash "ANF_Inlining: exhaustive tuple projection index disappeared"
+            | None -> Let (bindingId, original, body)) bindings rest
         |> Some
 
 /// Substitute a returned tuple allocation with its projection continuation.
@@ -662,8 +669,46 @@ let rec private substituteProjectedTupleReturn
         |> Option.map (fun body' -> Let (id, cexpr, body'))
     | Jump _ | Join _ | Return _ | If _ -> None
 
+/// Fresh records with scalar fields have no managed child edges, and this
+/// projection-only rewrite cannot expose their root refcounts to source code.
+let private hasFreshScalarRecordTupleResult (func: Function) : bool =
+    let isScalar = function
+        | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+        | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
+        | AST.TBool | AST.TFloat64 | AST.TDateTime | AST.TUnit
+        | AST.TNever | AST.TInternalRawPtr -> true
+        | _ -> false
+    let rec inspect bindings = function
+        | Let (tupleId, TupleAlloc elements, Return (Var returnedId)) when tupleId = returnedId ->
+            let elementIds =
+                elements |> List.choose (function Var elementId -> Some elementId | _ -> None)
+            List.length elementIds = List.length elements
+            && Set.count (Set.ofList elementIds) = List.length elementIds
+            && (elementIds
+                |> List.forall (fun elementId ->
+                    match Map.tryFind elementId bindings with
+                    | Some (RecordAlloc (descriptor, _))
+                    | Some (RecordClone (descriptor, _, _)) ->
+                        descriptor.Fields |> List.forall (snd >> isScalar)
+                    | _ -> false))
+        | Let (id, value, body) -> inspect (Map.add id value bindings) body
+        | Jump _ | Join _ | Return _ | If _ -> false
+    inspect Map.empty func.Body
+
 let private isProjectedTupleInlineCandidate (info: FunctionInfo) (config: InliningConfig) : bool =
+    let hasManagedElement =
+        match info.Func.ReturnType with
+        | AST.TTuple elements ->
+            elements
+            |> List.exists (function
+                | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+                | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
+                | AST.TBool | AST.TFloat64 | AST.TDateTime | AST.TUnit
+                | AST.TNever | AST.TInternalRawPtr -> false
+                | _ -> true)
+        | _ -> true
     info.Size <= config.MaxProjectedTupleInlineSize
+    && (not hasManagedElement || hasFreshScalarRecordTupleResult info.Func)
     && not info.IsRecursive
     && not info.HasClosures
     && not info.HasTailCalls

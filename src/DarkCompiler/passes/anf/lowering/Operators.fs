@@ -152,8 +152,10 @@ let rec generateStructuralEquality
             ANF.Call (resolveFunction "Darklang.Stdlib.UInt128.__equals", [left; right])
         | AST.TInt ->
             ANF.Call (resolveFunction "Darklang.Stdlib.Int.__equals", [left; right])
-        | AST.TString | AST.TChar ->
-            ANF.Call (resolveFunction "__string_eq", [left; right])
+        | AST.TString ->
+            ANF.CanonicalBufferEq (MemoryModel.Utf8String, left, right)
+        | AST.TChar ->
+            ANF.CanonicalBufferEq (MemoryModel.GraphemeCluster, left, right)
         | _ -> ANF.Prim (ANF.Eq, left, right)
 
     match typ with

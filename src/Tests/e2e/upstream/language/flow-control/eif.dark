@@ -5,16 +5,22 @@
 (if false then Builtin.testRuntimeError "a" else 0L) = 0L
 (if true then 0L else Builtin.testRuntimeError "a") = 0L
 (if false then "" else "correct") = "correct"
+#compileerror="Expected TBool, got TUnit"
 (if () then "" else "") = error="Encountered a condition that must be a Bool, but got an Unit (())"
 (if Builtin.testRuntimeError "msg" then "" else "") = error="Uncaught exception: msg"
+#compileerror="Expected TBool, got TInt64"
 (if 5L then "" else "") = error="Encountered a condition that must be a Bool, but got an Int64 (5)"
 (if true then ()) = ()
 (if 1L > 3L then 4L) = ()
+#compileerror="Expected TInt64, got TUnit"
 (if 1L < 3L then 4L) = 4L
+#compileerror="Expected TString, got TUnit"
 (if 1L < 3L then "msg") = "msg"
 
+#compileerror="Expected TBool, got TUnit"
 (if () then "msg") = error="Encountered a condition that must be a Bool, but got an Unit (())"
 
 (if true then Builtin.testRuntimeError "a") = error="Uncaught exception: a"
 
+#compileerror="Expected TString, got TUnit"
 (if Builtin.testRuntimeError "msg" then "") = error="Uncaught exception: msg"

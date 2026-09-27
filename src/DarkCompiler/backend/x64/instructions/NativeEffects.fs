@@ -437,6 +437,71 @@ let internal emitCliNative (ctx: FuncCtx) (dest: LIR.Reg) (operation: LIR.CliOpe
                         X86_64.POP X86_64.RDI
                         X86_64.MOV_reg (destReg, X86_64.RAX) ])
             | _ -> Error "fileIsDirectory expects exactly one path"
+        | LIR.FileCreateExclusive ->
+            match args with
+            | [path] ->
+                loadCliOperand X86_64.R10 path
+                |> Result.map (fun pathLoads ->
+                    let copyLoop = freshLabel "create_exclusive_copy"
+                    let copyDone = freshLabel "create_exclusive_copy_done"
+                    let tooLong = freshLabel "create_exclusive_too_long"
+                    let failure = freshLabel "create_exclusive_failure"
+                    let complete = freshLabel "create_exclusive_complete"
+                    pathLoads
+                    @ [ X86_64.PUSH X86_64.RDI
+                        X86_64.PUSH X86_64.RSI
+                        X86_64.PUSH X86_64.RDX
+                        X86_64.PUSH X86_64.RCX
+                        X86_64.PUSH X86_64.R10
+                        X86_64.SUB_imm (X86_64.RSP, 4096)
+                        X86_64.MOV_load (X86_64.RCX, X86_64.R10, 8)
+                        X86_64.CMP_imm (X86_64.RCX, 4096)
+                        X86_64.Jcc (X86_64.GE, tooLong)
+                        X86_64.LEA (X86_64.RSI, X86_64.R10, 16)
+                        X86_64.MOV_reg (X86_64.RDI, X86_64.RSP)
+                        X86_64.XOR_reg (X86_64.R10, X86_64.R10)
+                        X86_64.Label copyLoop
+                        X86_64.CMP_reg (X86_64.R10, X86_64.RCX)
+                        X86_64.Jcc (X86_64.GE, copyDone)
+                        X86_64.MOV_reg (scratch, X86_64.RSI)
+                        X86_64.ADD_reg (scratch, X86_64.R10)
+                        X86_64.MOV_load_byte (scratch, scratch, 0)
+                        X86_64.MOV_reg (X86_64.RDX, X86_64.RDI)
+                        X86_64.ADD_reg (X86_64.RDX, X86_64.R10)
+                        X86_64.MOV_store_byte (X86_64.RDX, 0, scratch)
+                        X86_64.ADD_imm (X86_64.R10, 1)
+                        X86_64.JMP copyLoop
+                        X86_64.Label copyDone
+                        X86_64.MOV_reg (scratch, X86_64.RDI)
+                        X86_64.ADD_reg (scratch, X86_64.RCX)
+                        X86_64.XOR_reg (X86_64.R10, X86_64.R10)
+                        X86_64.MOV_store_byte (scratch, 0, X86_64.R10)
+                        X86_64.MOV_reg (X86_64.RDI, X86_64.RSP) ]
+                    @ loadImm64 X86_64.RSI 194L // O_RDWR | O_CREAT | O_EXCL
+                    @ loadImm64 X86_64.RDX 0o600L
+                    @ loadImm64 X86_64.RAX (int64 syscalls.Open)
+                    @ [ X86_64.SYSCALL
+                        X86_64.CMP_imm (X86_64.RAX, 0)
+                        X86_64.Jcc (X86_64.LT, failure)
+                        X86_64.MOV_reg (X86_64.RDI, X86_64.RAX) ]
+                    @ loadImm64 X86_64.RAX (int64 syscalls.Close)
+                    @ [ X86_64.SYSCALL ]
+                    @ loadImm64 X86_64.RAX 0L
+                    @ [ X86_64.JMP complete
+                        X86_64.Label failure
+                        X86_64.NEG X86_64.RAX
+                        X86_64.JMP complete
+                        X86_64.Label tooLong ]
+                    @ loadImm64 X86_64.RAX 36L
+                    @ [ X86_64.Label complete
+                        X86_64.ADD_imm (X86_64.RSP, 4096)
+                        X86_64.POP X86_64.R10
+                        X86_64.POP X86_64.RCX
+                        X86_64.POP X86_64.RDX
+                        X86_64.POP X86_64.RSI
+                        X86_64.POP X86_64.RDI
+                        X86_64.MOV_reg (destReg, X86_64.RAX) ])
+            | _ -> Error "fileCreateExclusive expects exactly one path"
         | LIR.SetEnv ->
             match args with
             | [name; value] ->

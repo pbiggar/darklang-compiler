@@ -9,11 +9,11 @@
     "backend": "cachegrind",
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
-  "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-27T18:38:27+00:00",
+  "contract_sha256": "2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861",
+  "generated_at": "2026-09-27T20:22:11+00:00",
   "compiler": {
-    "commit": "40724da0e67655c9559d764852a237595bd42f5a",
-    "subject": "Optimize Int64 list indexing before SSA ownership"
+    "commit": "55a5823b08785900ceb4dfc122dcdbc6b3809d40",
+    "subject": "Migrate AES-GCM and tuple E2E cases to interpreter syntax"
   },
   "benchmarks": [
     {
@@ -26,11 +26,11 @@
     },
     {
       "name": "collatz",
-      "instructions": 70193414
+      "instructions": 70193412
     },
     {
       "name": "edigits",
-      "instructions": 48977755
+      "instructions": 48977757
     },
     {
       "name": "factorial",
@@ -38,27 +38,27 @@
     },
     {
       "name": "fannkuch",
-      "instructions": 221172600
+      "instructions": 221209614
     },
     {
       "name": "fasta",
-      "instructions": 11494373
+      "instructions": 11579821
     },
     {
       "name": "fft",
-      "instructions": 1800265
+      "instructions": 1789018
     },
     {
       "name": "fib",
-      "instructions": 7630193
+      "instructions": 7630191
     },
     {
       "name": "huffman",
-      "instructions": 403079661
+      "instructions": 402939116
     },
     {
       "name": "leibniz",
-      "instructions": 17006295
+      "instructions": 17006286
     },
     {
       "name": "mandelbrot",
@@ -66,7 +66,7 @@
     },
     {
       "name": "matmul",
-      "instructions": 41611234
+      "instructions": 41573390
     },
     {
       "name": "merkletrees",
@@ -74,43 +74,43 @@
     },
     {
       "name": "myers_diff",
-      "instructions": 204545196
+      "instructions": 204586778
     },
     {
       "name": "nbody",
-      "instructions": 14595833
+      "instructions": 14595822
     },
     {
       "name": "nqueen",
-      "instructions": 6924919
+      "instructions": 6924917
     },
     {
       "name": "nsieve",
-      "instructions": 130435271
+      "instructions": 130270283
     },
     {
       "name": "pisum",
-      "instructions": 808068
+      "instructions": 808059
     },
     {
       "name": "primes",
-      "instructions": 1612021
+      "instructions": 1567028
     },
     {
       "name": "quicksort",
-      "instructions": 172486153
+      "instructions": 172460563
     },
     {
       "name": "raytracer",
-      "instructions": 44284039
+      "instructions": 43855386
     },
     {
       "name": "regex_lite",
-      "instructions": 64744887
+      "instructions": 64745802
     },
     {
       "name": "spectral_norm",
-      "instructions": 215930782
+      "instructions": 215931303
     },
     {
       "name": "string_equality",
@@ -122,15 +122,15 @@
     },
     {
       "name": "tak",
-      "instructions": 48004620
+      "instructions": 48004629
     },
     {
       "name": "tinytemplate",
-      "instructions": 305729478
+      "instructions": 305728677
     },
     {
       "name": "warden",
-      "instructions": 44111493
+      "instructions": 44111729
     }
   ]
 }

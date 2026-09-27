@@ -1,5 +1,8 @@
 // Canonical name-resolution boundary and interpreter-derived precedence.
 
+let duplicatedFirst (x: Int64): Int64 = x + 1L
+let duplicatedSecond (x: Int64): Int64 = x + 2L
+
 // Qualified package/module spellings resolve exactly.
 Stdlib.Float.sqrt 4.0 = 2.0
 
@@ -17,19 +20,19 @@ let canonicalOption (value: Int64): Darklang.Stdlib.Option.Option<Int64> = Darkl
 let shortcutResult (value: Int64): Stdlib.Result.Result<Int64, String> = Stdlib.Result.Result.Ok value in shortcutResult 7L = Ok 7L
 
 // The compiler no longer inserts an implicit Stdlib qualifier.
-Float.sqrt 4.0 = error="There is no variable named: Float.sqrt"
-Stdlib.Bytes.create 0L = error="There is no variable named: Stdlib.Bytes.create"
+Float.sqrt 4.0 = compileerror="Unknown function or value 'Float.sqrt'"
+Stdlib.Bytes.create 0L = compileerror="Unknown function or value 'Stdlib.Bytes.create'"
 
 // Lexical callable values shadow a same-spelled top-level function.
-let shadowed (x: Int64): Int64 = x + 10L let shadowed = fun x -> x + 20L in shadowed 1L = 21L
+let shadowed (x: Int64): Int64 = x + 10L; let shadowed = fun x -> x + 20L in shadowed 1L = 21L
 
-// Interpreter overlays are deterministic: the last same-category declaration wins.
-let duplicated (x: Int64): Int64 = x + 1L let duplicated (x: Int64): Int64 = x + 2L duplicated 1L = 3L
+// Distinct top-level functions retain their own identities.
+duplicatedSecond 1L = 3L
 
 // Constructors from distinct user types do not acquire an order-dependent winner.
 type FirstChoice = SharedChoice | FirstOnly
 type SecondChoice = SharedChoice | SecondOnly
-SharedChoice = error="Ambiguous constructor reference 'SharedChoice': constructor FirstChoice.SharedChoice, constructor SecondChoice.SharedChoice"
+SharedChoice = compileerror="Constructor 'SharedChoice' requires an expected enum type"
 
 // Explicit qualification selects the constructor identity uniquely.
 type QualifiedFirst = QualifiedShared | QualifiedFirstOnly
@@ -37,7 +40,7 @@ type QualifiedSecond = QualifiedShared | QualifiedSecondOnly
 QualifiedFirst.QualifiedShared == QualifiedFirst.QualifiedShared = true
 
 // Missing names retain their reference category in the diagnostic.
-doesNotExist 1L = error="There is no variable named: doesNotExist"
+doesNotExist 1L = compileerror="Unknown function or value 'doesNotExist'"
 
 // A function identity in value position is never coerced into a call.
-let nullaryIdentity (): Int64 = 1L let needsInt64 (): Int64 = nullaryIdentity; needsInt64 () = error="needsInt64's return value expects Int64, but got (Unit) -> Int64"
+let nullaryIdentity (): Int64 = 1L let needsInt64 (): Int64 = nullaryIdentity; needsInt64 () = compileerror="Expected TInt64, got TFunction ([TUnit], TInt64)"

@@ -2,12 +2,12 @@
 // Counts primes up to n using Dict as sparse composite set
 
 // Mark all multiples of prime as composite
-let markMultiples (j: Int64) (step: Int64) (n: Int64) (composites: Dict<Bool>) : Dict<Bool> =
+let markMultiples (j: Int64) (step: Int64) (n: Int64) (composites: Dict<String, Bool>) : Dict<String, Bool> =
     if j > n then composites
     else markMultiples (j + step) step n (Stdlib.Dict.setOverridingDuplicates composites (Stdlib.Int64.toString j) true)
 
 // Run sieve for numbers from i to n
-let sieveLoop (i: Int64) (n: Int64) (composites: Dict<Bool>) : Dict<Bool> =
+let sieveLoop (i: Int64) (n: Int64) (composites: Dict<String, Bool>) : Dict<String, Bool> =
     if i > n then composites
     else
         let newComposites =
@@ -17,7 +17,7 @@ let sieveLoop (i: Int64) (n: Int64) (composites: Dict<Bool>) : Dict<Bool> =
         sieveLoop (i + 1L) n newComposites
 
 // Count primes (numbers not in composites set)
-let countPrimes (i: Int64) (n: Int64) (composites: Dict<Bool>) (count: Int64) : Int64 =
+let countPrimes (i: Int64) (n: Int64) (composites: Dict<String, Bool>) (count: Int64) : Int64 =
     if i > n then count
     else
         let newCount = if Stdlib.Dict.member composites (Stdlib.Int64.toString i) then count else count + 1L in

@@ -60,6 +60,7 @@ let cliIntrinsicModule : ModuleDef = {
         { Name = "__hostArchitectureCode"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
         { Name = "__hostname"; TypeParams = []; ParamTypes = []; ReturnType = TSum ("Darklang.Stdlib.Result.Result", [TString; TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]) }
         { Name = "__getenv"; TypeParams = []; ParamTypes = [TString]; ReturnType = TSum ("Darklang.Stdlib.Option.Option", [TString]) }
+        { Name = "__createExclusive"; TypeParams = []; ParamTypes = [TString]; ReturnType = TInt64 }
         { Name = "__environmentPacked"; TypeParams = []; ParamTypes = []; ReturnType = TString }
         { Name = "__setenv"; TypeParams = []; ParamTypes = [TString; TString]; ReturnType = TSum ("Darklang.Stdlib.Result.Result", [TUnit; TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]) }
         { Name = "__unsetenv"; TypeParams = []; ParamTypes = [TString]; ReturnType = TSum ("Darklang.Stdlib.Result.Result", [TUnit; TRecord ("Darklang.Stdlib.Cli.NativePosixError", [])]) }

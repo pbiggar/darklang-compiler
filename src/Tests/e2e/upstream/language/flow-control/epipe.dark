@@ -28,7 +28,7 @@ let userFn () : Int64 = 6L
  (partial 999L)) = 8L
 
 // only lambda might be placed into the variable used in the middle of the pipe
-#compileerror="x is not a function (has type Int64)"
+#compileerror="Expression is not callable"
 (let x = 1L in (5L |> x |> (+) 3L)) = error="Expected something we could apply to, such as a lambda or function, but got an Int64 (1)"
 
 // dict

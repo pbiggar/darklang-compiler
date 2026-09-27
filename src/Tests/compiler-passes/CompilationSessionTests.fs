@@ -444,41 +444,6 @@ let testArm64ReleasePlanSummaryCacheConfirmsPlanShape (_: CompilationContexts.St
     else
         Error $"Expected release-plan cache to confirm complete shapes and segregate static dependencies, got generated={generated.Count}, cached={session.CachedArm64ReleasePlanSummaryCount}, hits={session.Arm64ReleasePlanSummaryHitCount}, misses={session.Arm64ReleasePlanSummaryMissCount}"
 
-let testExpressionTypeCheckingReusesBaseRegistries
-    (stdlib: CompilationContexts.StdlibResult)
-    ()
-    : TestResult =
-    let baseEnv = stdlib.Context.TypeCheckEnv
-    let source =
-        "Stdlib.List.map<Int64, Int64> [1L, 2L] (fun x -> x + 1L) == [2L, 3L]"
-    PackageCatalog.parseProgram false source
-    |> Result.bind (fun program ->
-        TypeChecking.checkParsedProgramWithBaseEnvAndSettings
-            baseEnv
-            true
-            CompilerOptions.defaultWarningSettings
-            program
-        |> Result.mapError CheckingDiagnostics.typeErrorToString)
-    |> Result.bind (fun (programType, CheckedAST.Program (_, topLevels), checkedEnv) ->
-        let hasEqualityHelper =
-            topLevels
-            |> List.exists (function
-                | CheckedAST.FunctionDef fn -> fn.Name.StartsWith("__dark_eq_")
-                | _ -> false)
-        let reusesBaseRegistries =
-            obj.ReferenceEquals(checkedEnv.TypeReg, baseEnv.TypeReg)
-            && obj.ReferenceEquals(checkedEnv.IndexedTypeReg, baseEnv.IndexedTypeReg)
-            && obj.ReferenceEquals(checkedEnv.VariantLookup, baseEnv.VariantLookup)
-            && obj.ReferenceEquals(checkedEnv.IndexedSumTypeReg, baseEnv.IndexedSumTypeReg)
-            && obj.ReferenceEquals(checkedEnv.FuncEnv, baseEnv.FuncEnv)
-            && obj.ReferenceEquals(checkedEnv.FuncParamNames, baseEnv.FuncParamNames)
-            && obj.ReferenceEquals(checkedEnv.GenericFuncDefs, baseEnv.GenericFuncDefs)
-            && obj.ReferenceEquals(checkedEnv.AliasReg, baseEnv.AliasReg)
-        if programType = TBool && hasEqualityHelper && reusesBaseRegistries then
-            Ok ()
-        else
-            Error $"Expected expression-only checking to preserve generic/equality processing while reusing base registries, got type={CheckingDiagnostics.typeToString programType}, equalityHelper={hasEqualityHelper}, reused={reusesBaseRegistries}")
-
 let testSessionIsolationAndDisposal (stdlib: CompilationContexts.StdlibResult) () : TestResult =
     let first = new CompilationSession.CompilationSession()
     let second = new CompilationSession.CompilationSession()
@@ -629,7 +594,6 @@ let tests (target: Platform.Target) (stdlib: CompilationContexts.StdlibResult) =
         ("compilation session reuses prepared ARM64 chunks by identity", testArm64EmissionChunkCacheUsesChunkIdentity stdlib)
         ("compilation session reuses prepared ARM64 chunk groups by identity", testArm64EmissionChunkGroupCacheUsesGroupIdentity stdlib)
         ("compilation session confirms ARM64 release-plan cache shapes", testArm64ReleasePlanSummaryCacheConfirmsPlanShape stdlib)
-        ("expression-only type checking reuses base registries", testExpressionTypeCheckingReusesBaseRegistries stdlib)
         ("compilation session isolates and disposes registries", testSessionIsolationAndDisposal stdlib)
         ("compilation session segregates canonical JSON declaration shapes", testJsonPlanCacheSegregatesNominalShapes stdlib)
         ("compilation session reuses JSON dependencies before lowering", testJsonDependenciesAreReusedBeforeLowering stdlib)

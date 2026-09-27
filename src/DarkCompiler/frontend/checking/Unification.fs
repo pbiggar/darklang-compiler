@@ -269,7 +269,7 @@ let unifyTypes (pattern: SemanticType) (actual: SemanticType) : Result<Substitut
 /// returns the concrete type. If both are concrete and equal, returns the type.
 /// If both are concrete and different, returns None.
 /// The optional aliasReg parameter allows type alias resolution before comparison.
-let reconcileTypes (aliasReg: AliasRegistry option) (t1: SemanticType) (t2: SemanticType) : SemanticType option =
+let rec reconcileTypes (aliasReg: AliasRegistry option) (t1: SemanticType) (t2: SemanticType) : SemanticType option =
     // Resolve type aliases if registry is provided
     let t1' = aliasReg |> Option.map (fun reg -> resolveType reg t1) |> Option.defaultValue t1
     let t2' = aliasReg |> Option.map (fun reg -> resolveType reg t2) |> Option.defaultValue t2
@@ -295,44 +295,69 @@ let reconcileTypes (aliasReg: AliasRegistry option) (t1: SemanticType) (t2: Sema
             TDict (nominalComparisonType keyType, nominalComparisonType valueType)
         | other -> other
 
-    if nominalComparisonType t1' = nominalComparisonType t2' then
-        Some t1'
-    elif t1' = TNever then
-        Some t2'
-    elif t2' = TNever then
-        Some t1'
-    elif t1' = TString && t2' = TChar then
-        Some TString
-    elif t1' = TChar && t2' = TString then
-        Some TChar
-    elif containsTVar t1' && not (containsTVar t2') then
+    let reconcileMany left right =
+        if List.length left <> List.length right then None
+        else
+            List.zip left right
+            |> List.fold (fun result (leftType, rightType) ->
+                match result, reconcileTypes aliasReg leftType rightType with
+                | Some types, Some typ -> Some (typ :: types)
+                | _ -> None) (Some [])
+            |> Option.map List.rev
+
+    match t1', t2' with
+    | left, right when nominalComparisonType left = nominalComparisonType right -> Some left
+    | TNever, right -> Some right
+    | left, TNever -> Some left
+    | TString, TChar -> Some TString
+    | TChar, TString -> Some TChar
+    | TList left, TList right -> reconcileTypes aliasReg left right |> Option.map TList
+    | TTuple left, TTuple right -> reconcileMany left right |> Option.map TTuple
+    | TDict (leftKey, leftValue), TDict (rightKey, rightValue) ->
+        match reconcileTypes aliasReg leftKey rightKey,
+              reconcileTypes aliasReg leftValue rightValue with
+        | Some keyType, Some valueType -> Some (TDict (keyType, valueType))
+        | _ -> None
+    | TFunction (leftArgs, leftReturn), TFunction (rightArgs, rightReturn) ->
+        match reconcileMany leftArgs rightArgs,
+              reconcileTypes aliasReg leftReturn rightReturn with
+        | Some args, Some returnType -> Some (TFunction (args, returnType))
+        | _ -> None
+    | TRecord (leftName, leftArgs), TRecord (rightName, rightArgs)
+        when leftName = rightName ->
+        reconcileMany leftArgs rightArgs
+        |> Option.map (fun args -> TRecord (leftName, args))
+    | TSum (leftName, leftArgs), TSum (rightName, rightArgs)
+        when leftName = rightName ->
+        reconcileMany leftArgs rightArgs
+        |> Option.map (fun args -> TSum (leftName, args))
+    | left, right when containsTVar left && not (containsTVar right) ->
         // t2 is concrete, check if t1 can unify with it
-        match unifyTypes t1' t2' with
-        | Ok _ -> Some t2'  // Return the concrete type
+        match unifyTypes left right with
+        | Ok _ -> Some right  // Return the concrete type
         | Error _ -> None
-    elif not (containsTVar t1') && containsTVar t2' then
+    | left, right when not (containsTVar left) && containsTVar right ->
         // t1 is concrete, check if t2 can unify with it
-        match unifyTypes t2' t1' with
-        | Ok _ -> Some t1'  // Return the concrete type
+        match unifyTypes right left with
+        | Ok _ -> Some left  // Return the concrete type
         | Error _ -> None
-    elif containsTVar t1' && containsTVar t2' then
+    | left, right when containsTVar left && containsTVar right ->
         // Both have type variables. Bind the side whose variables inference
         // may bind and keep the other: `(List<t>, Int)` from a `([], 0)` seed
         // meets `(List<a>, Int)` from the other arm, and the answer is the
         // arm's, not the seed's, whichever came first.
         let bindsInferenceVarsOnly (subst: Substitution) =
             subst |> Map.forall (fun name _ -> isInferenceVar name)
-        match unifyTypes t1' t2' with
-        | Ok subst when bindsInferenceVarsOnly subst -> Some (applySubst subst t1')
+        match unifyTypes left right with
+        | Ok subst when bindsInferenceVarsOnly subst -> Some (applySubst subst left)
         | firstDirection ->
-            match unifyTypes t2' t1' with
-            | Ok subst when bindsInferenceVarsOnly subst -> Some (applySubst subst t2')
+            match unifyTypes right left with
+            | Ok subst when bindsInferenceVarsOnly subst -> Some (applySubst subst right)
             | _ ->
                 match firstDirection with
-                | Ok subst -> Some (applySubst subst t1')
+                | Ok subst -> Some (applySubst subst left)
                 | Error _ -> None
-    else
-        None
+    | _ -> None
 
 /// Infer type arguments for a generic function call.
 /// Given type parameters, parameter types (with type variables), and actual argument types,

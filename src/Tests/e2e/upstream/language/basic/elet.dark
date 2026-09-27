@@ -44,7 +44,8 @@ module Shadowing =
 
   (let x = 35L
    match Stdlib.Result.Result.Ok 6L with
-   | Ok x -> x) = 6L
+   | Ok x -> x
+   | _ -> Builtin.testRuntimeError "unexpected Result.Error") = 6L
 
   (let x = 35L
   Stdlib.List.map [ 1L, 2L, 3L, 4L ] (fun x -> x + 2L)) =
@@ -52,21 +53,25 @@ module Shadowing =
 
   (let x = 35L
    match Stdlib.Result.Result.Ok 6L with
-   | Ok x -> (Stdlib.List.map [ 1L, 2L, 3L, 4L ] (fun x -> x + 2L))) =
+   | Ok x -> (Stdlib.List.map [ 1L, 2L, 3L, 4L ] (fun x -> x + 2L))
+   | _ -> Builtin.testRuntimeError "unexpected Result.Error") =
      [ 3L, 4L, 5L, 6L ]
 
   (Stdlib.List.map [ 1L, 2L, 3L, 4L ] (fun x ->
     (let x = 35L
      match Stdlib.Result.Result.Ok 6L with
-     | Ok x -> x + 2L))) = [ 8L, 8L, 8L, 8L ]
+     | Ok x -> x + 2L
+     | _ -> Builtin.testRuntimeError "unexpected Result.Error"))) = [ 8L, 8L, 8L, 8L ]
 
   (Stdlib.List.map [ 1L, 2L, 3L, 4L ] (fun x ->
     match Stdlib.Result.Result.Ok 6L with
-    | Ok x -> let x = 9L in x + 2L)) = [ 11L, 11L, 11L, 11L ]
+    | Ok x -> let x = 9L in x + 2L
+    | _ -> Builtin.testRuntimeError "unexpected Result.Error")) = [ 11L, 11L, 11L, 11L ]
 
   (Stdlib.List.map [ 1L, 2L, 3L, 4L ] (fun x ->
     (match Stdlib.Result.Result.Ok(Stdlib.Result.Result.Ok 6L) with
-     | Ok(Ok x) -> let x = 9L in x + 2L))) = [ 11L, 11L, 11L, 11L ]
+     | Ok(Ok x) -> let x = 9L in x + 2L
+     | _ -> Builtin.testRuntimeError "unexpected Result.Error"))) = [ 11L, 11L, 11L, 11L ]
 
 
 module Wildcard =
@@ -100,5 +105,7 @@ module Wildcard =
 
 
 module Errors =
+#compileerror="Tuple pattern does not match the value type"
   (let (a, _) = 1 in a) = error="Could not deconstruct value 1 into pattern ([variable], _)"
+#compileerror="Tuple pattern does not match the value type"
   (let (a, _) = (1, 2, 3) in a) = error="Could not deconstruct value (1, 2, 3) into pattern ([variable], _)"

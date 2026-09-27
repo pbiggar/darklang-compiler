@@ -43,74 +43,21 @@ type internal UserCompilePlan = {
     Sources: AST.NonEmptyList<SourceUnit>
 }
 
-/// Parse canonical Dark source text into the compiler AST.
-let parseProgram
+/// Parse each source unit with the copied interpreter parser and enforce entry ownership.
+let parseWrittenSourceProgram
     (allowInternal: bool)
-    (source: string)
-    : Result<AST.ParsedProgram, string> =
-    Parser.parseString allowInternal source
-
-let private parseSourceTree
-    (allowInternal: bool)
-    (source: string)
-    : Result<NameSyntax.ParsedSource, string> =
-    Parser.parseSourceString allowInternal source
-
-let private applyDeclarationOverlays
-    (topLevels: AST.ParsedTopLevel list)
-    : AST.ParsedTopLevel list =
-    let declarationKey topLevel =
-        match topLevel with
-        | AST.ParsedFunctionDef definition -> Some ("function", definition.Name)
-        | AST.ParsedValueDef (AST.ParsedUncheckedValueDef (name, _)) -> Some ("value", name)
-        | AST.ParsedTypeDef (AST.RecordDef (name, _, _))
-        | AST.ParsedTypeDef (AST.SumTypeDef (name, _, _))
-        | AST.ParsedTypeDef (AST.TypeAlias (name, _, _)) -> Some ("type", name)
-        | AST.ParsedExpression _ -> None
-    let winningIndices =
-        topLevels
-        |> List.indexed
-        |> List.choose (fun (index, topLevel) ->
-            declarationKey topLevel |> Option.map (fun key -> (key, index)))
-        |> Map.ofList
-    topLevels
-    |> List.indexed
-    |> List.choose (fun (index, topLevel) ->
-        declarationKey topLevel
-        |> Option.map (fun key -> if Map.tryFind key winningIndices = Some index then Some topLevel else None)
-        |> Option.defaultValue (Some topLevel))
-
-/// Parse every source unit independently and validate entry ownership before
-/// crossing into the expression-oriented lowering AST.
-let parseSourceProgram
-    (allowInternal: bool)
+    (requireEntry: bool)
     (sources: AST.NonEmptyList<SourceUnit>)
-    : Result<NameSyntax.ValidatedExecutableProgram * AST.ParsedProgram, string> =
-    let rec parseUnits remaining parsedUnits loweredTopLevels =
-        match remaining with
-        | [] ->
-            let sourceProgram =
-                parsedUnits
-                |> List.rev
-                |> AST.NonEmptyList.fromList
-                |> NameSyntax.createSourceProgram
-            NameSyntax.validateExecutableProgram sourceProgram
-            |> Result.map (fun validated ->
-                let composedTopLevels = List.rev loweredTopLevels |> List.collect id
-                (validated, AST.ParsedProgram (applyDeclarationOverlays composedTopLevels)))
-        | sourceUnit :: rest ->
-            NameSyntax.sourceUnitName sourceUnit.Name
-            |> Result.bind (fun name ->
-                parseSourceTree allowInternal sourceUnit.Source
-                |> Result.bind (fun parsed ->
-                    Parser.lowerParsedSource allowInternal parsed
-                    |> Result.bind (fun (AST.ParsedProgram topLevels) ->
-                        let parsedUnit : NameSyntax.ParsedSourceUnit =
-                            { Name = name
-                              Purpose = sourceUnit.Purpose
-                              Source = parsed }
-                        parseUnits rest (parsedUnit :: parsedUnits) (topLevels :: loweredTopLevels))))
-    parseUnits (AST.NonEmptyList.toList sources) [] []
+    : Result<LibParser.Validation.ValidatedSourceFile list, string> =
+    sources
+    |> AST.NonEmptyList.toList
+    |> ResultList.traverse (fun sourceUnit ->
+        NameSyntax.sourceUnitName sourceUnit.Name
+        |> Result.bind (fun name ->
+            WrittenParsing.parse LibParser.Validation.Script sourceUnit.Source
+            |> Result.map (fun parsed ->
+                NameSyntax.sourceUnitNameText name, sourceUnit.Purpose, parsed)))
+    |> Result.bind (WrittenSource.validateSourceUnits requireEntry)
 
 let private packageHashType =
     AST.TSum ("Darklang.LanguageTools.ProgramTypes.Hash", [])

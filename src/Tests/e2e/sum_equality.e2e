@@ -1,0 +1,7 @@
+// Sum equality compares constructor payloads by value, including nested sums.
+
+Some(7L) == Some(7L) = true
+Some(7L) != Some(8L) = true
+Some((1L, 2L)) == Some((1L, 2L)) = true
+Some(Some(7L)) == Some(Some(7L)) = true
+Error("missing") == Error("missing") = true

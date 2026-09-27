@@ -28,31 +28,31 @@ let __generalCategoryLookup (codepoint: Int64) : Stdlib.Option.Option<Int64> =
                                 None
 
 let __uppercaseLookupGroup1 (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn Unicode.Data.Table58.__uppercaseChunk4 () 0L key 6L 25L valueIndex with
+    match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table58.__uppercaseChunk4 ()) 0L key 6L 25L valueIndex with
     | Some value -> Some value
     | None ->
-        match Unicode.Data.__lookupMappingValueIn Unicode.Data.Table59.__uppercaseChunk5 () 0L key 6L 25L valueIndex with
+        match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table59.__uppercaseChunk5 ()) 0L key 6L 25L valueIndex with
         | Some value -> Some value
         | None ->
-            match Unicode.Data.__lookupMappingValueIn Unicode.Data.Table60.__uppercaseChunk6 () 0L key 6L 25L valueIndex with
+            match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table60.__uppercaseChunk6 ()) 0L key 6L 25L valueIndex with
             | Some value -> Some value
             | None ->
-                match Unicode.Data.__lookupMappingValueIn Unicode.Data.Table61.__uppercaseChunk7 () 0L key 6L 25L valueIndex with
+                match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table61.__uppercaseChunk7 ()) 0L key 6L 25L valueIndex with
                 | Some value -> Some value
                 | None ->
                     None
 
 let __generalCategoryLookupGroup2 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn Unicode.Data.Table23.__generalCategoryChunk8 () 0L codepoint 14L with
+    match Unicode.Data.__lookupRangeIn (Unicode.Data.Table23.__generalCategoryChunk8 ()) 0L codepoint 14L with
     | Some value -> Some value
     | None ->
-        match Unicode.Data.__lookupRangeIn Unicode.Data.Table24.__generalCategoryChunk9 () 0L codepoint 14L with
+        match Unicode.Data.__lookupRangeIn (Unicode.Data.Table24.__generalCategoryChunk9 ()) 0L codepoint 14L with
         | Some value -> Some value
         | None ->
-            match Unicode.Data.__lookupRangeIn Unicode.Data.Table25.__generalCategoryChunk10 () 0L codepoint 14L with
+            match Unicode.Data.__lookupRangeIn (Unicode.Data.Table25.__generalCategoryChunk10 ()) 0L codepoint 14L with
             | Some value -> Some value
             | None ->
-                match Unicode.Data.__lookupRangeIn Unicode.Data.Table26.__generalCategoryChunk11 () 0L codepoint 14L with
+                match Unicode.Data.__lookupRangeIn (Unicode.Data.Table26.__generalCategoryChunk11 ()) 0L codepoint 14L with
                 | Some value -> Some value
                 | None ->
                     None
@@ -68,10 +68,10 @@ let __lookupMappingValueIn (data: String) (index: Int64) (key: Int64) (keyWidth:
         else Unicode.Data.__lookupMappingValueIn data (index + recordWidth) key keyWidth recordWidth valueIndex
 
 let __casedLookupGroup0 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn Unicode.Data.Table48.__casedChunk0 () 0L codepoint 14L with
+    match Unicode.Data.__lookupRangeIn (Unicode.Data.Table48.__casedChunk0 ()) 0L codepoint 14L with
     | Some value -> Some value
     | None ->
-        match Unicode.Data.__lookupRangeIn Unicode.Data.Table49.__casedChunk1 () 0L codepoint 14L with
+        match Unicode.Data.__lookupRangeIn (Unicode.Data.Table49.__casedChunk1 ()) 0L codepoint 14L with
         | Some value -> Some value
         | None ->
             None

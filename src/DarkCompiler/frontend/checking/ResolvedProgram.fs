@@ -185,12 +185,12 @@ let internal checkResolvedProgramInternal
                         None
                     |> Result.map (fun (typ, checkedBody) ->
                         (Map.add name typ valueFuncEnv,
-                         Map.add name (typ, checkedBody) values,
+                         Map.add name typ values,
                          Map.add name (CheckedValueDef (name, typ, checkedBody)) checkedDefs))
                 | ValueDef (CheckedValueDef (name, typ, body)) ->
                     Ok (
                         Map.add name typ valueFuncEnv,
-                        Map.add name (typ, body) values,
+                        Map.add name typ values,
                         Map.add name (CheckedValueDef (name, typ, body)) checkedDefs)
                 | _ -> Ok (valueFuncEnv, values, checkedDefs)))
             (Ok (initialValueFuncEnv, initialValues, Map.empty))

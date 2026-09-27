@@ -625,7 +625,7 @@ let parseCommand (argv: string array) : Result<CliCommand, string> =
 
 let private sourceFileForDiagnostics (cliOpts: CliOptions) : string =
     match cliOpts.IsExpression, cliOpts.Argument with
-    | true, _ -> ""
+    | true, _ -> "<expression>"
     | false, Some sourceFile -> sourceFile
     | false, None ->
         Crash.crash "sourceFileForDiagnostics: compile/run called without a validated input source"

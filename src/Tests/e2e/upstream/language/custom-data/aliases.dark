@@ -6,6 +6,7 @@ type Something = { ID: Id; Data: String }
 Something { ID = "2"; Data = "test" } = Something { ID = "2"; Data = "test" }
 
 // CELANUP: would be better if this noted that `Id` is an alias for `String`
+#compileerror="Expected TString, got TInt64"
 Something { ID = 2L; Data = "test" } = error="Failed to create record. Expected String for field `ID`, but got 2 (an Int64)"
 module SimpleRecordAlias =
   type Person = { name: String }
@@ -36,6 +37,7 @@ module NestedAlias =
 
   getUserID (("Alice", "EMP123")) = "EMP123"
 
+  #compileerror="Expected TString, got TInt64"
   getUserID (("Alice", 123L)) = error="NestedAlias.getUserID's 1st parameter `credential` expects (String * String), but got (String * Int64) ((\"Alice\", 123))"
 
   type UserProfile =
@@ -88,8 +90,10 @@ module RecordWithTypeArgs =
   // OK that's probably fine, but something to circle back to (CLEANUP) once we're over to the new parser.
   // Inner<String, Int64> { a = "test"; b = 5L } = Inner { a = "test"; b = 5L }
   // Inner<String, Int64> { a = "test"; b = "five" } = error="TODO: error message"
+  #compileerror="Expected String, got Int64"
   Outer2 { a = 5L; b = 6L } = error="Failed to create record. Expected String for field `a`, but got 5 (an Int64)"
 
+  #compileerror="Expected Int64, got String"
   Outer1 { a = "a"; b = "b" } = error="Failed to create record. Expected Int64 for field `b`, but got \"b\" (a String)"
 
 
@@ -103,8 +107,10 @@ module RecordWithTypeArgsDifferentName =
   MostOutest { a = 5L; b = "string" } =
     Inner { a = 5L; b = "string" }
 
+  #compileerror="Expected TInt64, got TString"
   MostOutest { a = "not allowed"; b = "string" } = error="Failed to create record. Expected Int64 for field `a`, but got \"not allow... (a String)"
 
+  #compileerror="Expected TString, got TInt64"
   MostOutest { a = 5L; b = 6L } = error="Failed to create record. Expected String for field `b`, but got 6 (an Int64)"
 
 
@@ -154,8 +160,10 @@ module EnumWithTypeArgs =
   Outer2.A "str" = Outer1.A "str"
   Outer2.B 5L = Outer1.B 5L
 
+  #compileerror="Expected String, got Int64"
   Outer2.A 5L = error="Failed to create enum. Expected String for field 0 in `A`, but got Int64 (5)"
 
+  #compileerror="Expected Int64, got String"
   Outer1.B "b" = error="Failed to create enum. Expected Int64 for field 0 in `B`, but got String (\"b\")"
 
 
@@ -172,8 +180,10 @@ module EnumWithTypeArgsDifferentName =
   MostOutest.A 5L = Inner.A 5L
   MostOutest.B "test" = Inner.B "test"
 
+  #compileerror="Expected TInt64, got TString"
   MostOutest.A "not allowed" = error="Failed to create enum. Expected Int64 for field 0 in `A`, but got String (\"not allowed\")"
 
+  #compileerror="Expected TString, got TInt64"
   MostOutest.B 6L = error="Failed to create enum. Expected String for field 0 in `B`, but got Int64 (6)"
 
 

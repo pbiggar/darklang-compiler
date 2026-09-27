@@ -1,6 +1,6 @@
 // Transparent wrappers retain nominal behavior while sharing managed roots.
 type ListEnvelope = ListEnvelope of List<Int64>
-type DictEnvelope = DictEnvelope of Dict<Int64>
+type DictEnvelope = DictEnvelope of Dict<String, Int64>
 type BlobEnvelope = BlobEnvelope of Blob
 let value = ListEnvelope [1L, 2L] in match value with | ListEnvelope items -> Stdlib.List.length items == 2 = true // leak_check
 let value = ListEnvelope [] in match value with | ListEnvelope items -> Stdlib.List.isEmpty items = true // leak_check
@@ -14,12 +14,12 @@ let value = Int128Envelope 123Q in match value with | Int128Envelope number -> n
 type UInt128Envelope = UInt128Envelope of UInt128
 let value = UInt128Envelope 123Z in match value with | UInt128Envelope number -> number == 123Z = true // leak_check
 type PairEnvelope = PairEnvelope of (Int64 * String)
-let value = PairEnvelope (7L, "value") in match value with | PairEnvelope pair -> let (number, text) = pair in number == 7L && text == "value" = true // leak_check
-PairEnvelope (7L, "value") = stdout="PairEnvelope.PairEnvelope((7, \"value\"))\n" stderr="" // leak_check
+let value = PairEnvelope ((7L, "value")) in match value with | PairEnvelope pair -> let (number, text) = pair in number == 7L && text == "value" = true // leak_check
+PairEnvelope ((7L, "value")) = stdout="PairEnvelope.PairEnvelope((7, \"value\"))\n" stderr="" // leak_check
 type Payload = { number: Int64, text: String }
 type PayloadEnvelope = PayloadEnvelope of Payload
 let value = PayloadEnvelope (Payload { number = 7L, text = "value" }) in match value with | PayloadEnvelope payload -> payload.number == 7L && payload.text == "value" = true // leak_check
 type Envelope<'t> = Envelope of t
-let value = Envelope (7L, "value") in match value with | Envelope pair -> let (number, text) = pair in number == 7L && text == "value" = true // leak_check
+let value = Envelope ((7L, "value")) in match value with | Envelope pair -> let (number, text) = pair in number == 7L && text == "value" = true // leak_check
 type GenericPairEnvelope<'a> = GenericPairEnvelope of ('a * String)
-let value = GenericPairEnvelope (7L, "value") in match value with | GenericPairEnvelope pair -> let (number, text) = pair in number == 7L && text == "value" = true // leak_check
+let value = GenericPairEnvelope ((7L, "value")) in match value with | GenericPairEnvelope pair -> let (number, text) = pair in number == 7L && text == "value" = true // leak_check

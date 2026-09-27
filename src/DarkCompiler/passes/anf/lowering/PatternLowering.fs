@@ -402,7 +402,7 @@ let lowerMatch (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBo
                             let expr = ANF.Let (payloadVar, payloadExpr, ANF.Let (typedPayloadVar, typedPayloadExpr, innerExpr))
                             (expr, vg3))
                     | None ->
-                        Error $"Constructor tag '{constructorTag constructorId}' not found in variant lookup"
+                        Error $"Constructor tag '{constructorTag constructorId}' not found in variant lookup for scrutinee type '{scrutType}' and constructor '{constructorId}'"
             | CheckedAST.PTuple patterns ->
                 // Recursively collect all variable bindings from a pattern
                 // Returns: updated env, list of bindings, updated vargen

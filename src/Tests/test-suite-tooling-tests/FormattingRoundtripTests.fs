@@ -6,30 +6,31 @@
 module FormattingRoundtripTests
 
 open System.IO
-open AST
-open ASTPrettyPrinter
 open TestDSL.FormattingRoundtripFormat
 
 type TestResult = Result<unit, string>
 
 let private roundtripSyntax (testCase: FormattingRoundtripCase) : TestResult =
-    match Parser.parseString false testCase.Source with
+    let parse source =
+        WrittenParsing.parse LibParser.Validation.Script source
+        |> Result.map LibParser.Validation.ValidatedSourceFile.toWrittenTypes
+    match parse testCase.Source with
     | Error err ->
         Error (
             $"Initial parse failed.\nFile: {testCase.SourceFile}\nTest: {testCase.Name}\n"
             + $"Source: {testCase.Source}\nError: {err}"
         )
     | Ok ast0 ->
-        let printed0 = ASTPrettyPrinter.formatParsedProgram ast0
-        match Parser.parseString false printed0 with
+        let printed0 = WrittenFormatter.format testCase.Source ast0
+        match parse printed0 with
         | Error err ->
             Error (
                 $"Re-parse failed.\nFile: {testCase.SourceFile}\nTest: {testCase.Name}\n"
                 + $"Source: {testCase.Source}\nPretty: {printed0}\nError: {err}"
             )
         | Ok ast1 ->
-            let printed1 = ASTPrettyPrinter.formatParsedProgram ast1
-            if ast0 <> ast1 then
+            let printed1 = WrittenFormatter.format printed0 ast1
+            if WrittenFormatter.syntaxKey ast0 <> WrittenFormatter.syntaxKey ast1 then
                 Error (
                     "AST changed after roundtrip.\n"
                     + $"File: {testCase.SourceFile}\n"

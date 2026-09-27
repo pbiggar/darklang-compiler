@@ -127,9 +127,9 @@ let private floatColoringToAllocation
         |> Array.toList
     let (spillScratchLeft, spillScratchRight, spillScratchThird) =
         if List.contains LIR.D15 registers then
-            (LIR.FVirtual 1000, LIR.FVirtual 1001, LIR.FVirtual 1002)
+            (LIR.FVirtual -1000, LIR.FVirtual -1001, LIR.FVirtual -1002)
         else
-            (LIR.FPhysical LIR.D14, LIR.FPhysical LIR.D15, LIR.FVirtual 1002)
+            (LIR.FPhysical LIR.D14, LIR.FPhysical LIR.D15, LIR.FVirtual -1002)
     { Domain = colorResult.Domain
       Allocations = allocations
       StackSize = alignTo16 (initialStackSize + spillSlotCount * 8)
@@ -197,9 +197,9 @@ let internal chordalFloatAllocationWithLiveness
           Allocations = Array.create domain.Ids.Length None
           StackSize = initialStackSize
           UsedCalleeSavedF = []
-          SpillScratchLeft = LIR.FVirtual 1000
-          SpillScratchRight = LIR.FVirtual 1001
-          SpillScratchThird = LIR.FVirtual 1002 }
+          SpillScratchLeft = LIR.FVirtual -1000
+          SpillScratchRight = LIR.FVirtual -1001
+          SpillScratchThird = LIR.FVirtual -1002 }
     else
         let phiPairs = collectFPhiPairs blocks
         let movePairs = dedupePairs ((collectFPhiSourceMovePairs blocks) @ phiPairs)
@@ -224,9 +224,8 @@ let chordalFloatAllocation (cfg: LIR.CFG) (additionalVRegs: int list) : FAllocat
         (vregBitsFromList domain additionalVRegs) [] domain livenessBits
 
 let private isFixedFReg = function
-    | LIR.FVirtual 1000 | LIR.FVirtual 1001 | LIR.FVirtual 1002
-    | LIR.FVirtual 2000 | LIR.FVirtual -1 -> true
-    | LIR.FVirtual n when n >= 3000 && n < 4000 -> true
+    | LIR.FVirtual -1 | LIR.FVirtual -1000 | LIR.FVirtual -1001
+    | LIR.FVirtual -1002 | LIR.FVirtual -2000 -> true
     | _ -> false
 
 let applyFloatAllocationToFReg (allocation: FAllocationResult) (freg: LIR.FReg) : LIR.FReg =

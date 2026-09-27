@@ -746,6 +746,3 @@ let formatProgram (Program items: Program) : string =
             |> String.concat separator
         $"module {NameSyntax.formatQualifiedName firstModule}\n{declarations}"
     | _ -> items |> List.map formatTopLevel |> String.concat separator
-
-let formatParsedProgram (program: ParsedProgram) : string =
-    program |> semanticProgramOfParsed |> formatProgram

@@ -514,6 +514,30 @@ let private generatePreparedARM64WithOptionsAndCache
         RecordLirOpExpansion = lirOpExpansionRecorder
     }
 
+    // Recursive nominal dec helpers can call nested list and dict dec helpers.
+    // Their source plans are not present among the direct LIR instruction plans.
+    let recursiveReleaseSummaries =
+        programMetadata.Facts.RecursiveReleaseTypes
+        |> Set.toList
+        |> List.map (fun sourceType ->
+            MemoryPlanning.rcReleasePlanOfTypeWithSums
+                recordRegistry
+                sumShapeRegistry
+                sourceType
+            |> summarizePrecomputedReleasePlan true)
+    let plannedListDecHelpers =
+        recursiveReleaseSummaries
+        |> List.fold
+            (fun helpers summary ->
+                Map.fold (fun helpers label plan -> Map.add label plan helpers) helpers summary.PlannedListDecHelpers)
+            plannedListDecHelpers
+    let plannedDictDecHelpers =
+        recursiveReleaseSummaries
+        |> List.fold
+            (fun helpers summary ->
+                Map.fold (fun helpers label plan -> Map.add label plan helpers) helpers summary.PlannedDictDecHelpers)
+            plannedDictDecHelpers
+
     recordPhase "ARM64 Codegen Metadata" metadataTimer
 
     let convertCached (func: LIR.Function) =

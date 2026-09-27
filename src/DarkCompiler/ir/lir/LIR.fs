@@ -81,6 +81,7 @@ type CliOperation =
     | DirectoryCurrent
     | DirectoryListPacked
     | FileIsDirectory
+    | FileCreateExclusive
     | GetArgv
     | Kill
     | GetPid

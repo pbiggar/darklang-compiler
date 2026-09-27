@@ -14,8 +14,8 @@ type HtmlTag = {
 type Node = String of String | HtmlTag of Stdlib.Html.HtmlTag
 
 val voidElements =
-    [ "area"; "base"; "br"; "col"; "command"; "embed"; "hr"; "img"
-      "input"; "keygen"; "link"; "meta"; "param"; "source"; "track"; "wbr" ]
+    [ "area", "base", "br", "col", "command", "embed", "hr", "img",
+      "input", "keygen", "link", "meta", "param", "source", "track", "wbr" ]
 
 let escapeHtml (str: String) : String =
     Stdlib.String.replaceAll (Stdlib.String.replaceAll (Stdlib.String.replaceAll (Stdlib.String.replaceAll (Stdlib.String.replaceAll str "&" "&amp;") "<" "&lt;") ">" "&gt;") "\"" "&quot;") "'" "&#x27;"

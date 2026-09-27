@@ -25,11 +25,11 @@ let slice (value: String) (start_: Int64) (end_: Int64) : String =
 
 // Tokens use compact integer tags so the token arena can provide average O(1)
 // indexed access. Number tokens are encoded as 1000 + value.
-type Lexed = { tokens: Dict<Int64>, count: Int64 }
+type Lexed = { tokens: Dict<String, Int64>, count: Int64 }
 
 let tokenKey (index: Int64) : String = Stdlib.Int64.toString index
 
-let tokenAt (tokens: Dict<Int64>) (index: Int64) : Int64 =
+let tokenAt (tokens: Dict<String, Int64>) (index: Int64) : Int64 =
     match Stdlib.Dict.get tokens (tokenKey index) with
     | Some token -> token
     | None -> Builtin.testRuntimeError "missing token in Warden token arena"
@@ -54,15 +54,15 @@ let wordToken (word: String) : Int64 =
     | "y" -> 11L
     | _ -> Builtin.testRuntimeError "unknown identifier in Warden program"
 
-let lex (source: String) (index: Int64) (length: Int64) (tokenIndex: Int64) (tokens: Dict<Int64>) : Lexed =
+let lex (source: String) (index: Int64) (length: Int64) (tokenIndex: Int64) (tokens: Dict<String, Int64>) : Lexed =
     if index >= length then Lexed { tokens = tokens, count = tokenIndex }
     else
         let byte = byteAt source index in
         if byte == 32L || byte == 10L || byte == 13L || byte == 9L then lex source (index + 1L) length tokenIndex tokens
         else if byte >= 48L && byte <= 57L then
-            let number = scanNumber source index length 0L in
-            let next = Stdlib.Dict.setOverridingDuplicates tokens (tokenKey tokenIndex) (1000L + number.0) in
-            lex source (number.1) length (tokenIndex + 1L) next
+            let (number, nextIndex) = scanNumber source index length 0L in
+            let next = Stdlib.Dict.setOverridingDuplicates tokens (tokenKey tokenIndex) (1000L + number) in
+            lex source nextIndex length (tokenIndex + 1L) next
         else if (byte >= 97L && byte <= 122L) || (byte >= 65L && byte <= 90L) then
             let afterWord = scanWord source index length in
             let token = wordToken (slice source index afterWord) in
@@ -92,7 +92,7 @@ let infix (token: Int64) : Stdlib.Option.Option<(Int64 * Int64)> =
     | 5L -> Some ((3L, 3L))
     | _ -> None
 
-let parsePrimary (tokens: Dict<Int64>) (count: Int64) (index: Int64) (x: Int64) (y: Int64) : (Int64 * Int64) =
+let parsePrimary (tokens: Dict<String, Int64>) (count: Int64) (index: Int64) (x: Int64) (y: Int64) : (Int64 * Int64) =
     if index >= count then Builtin.testRuntimeError "expected expression in Warden program"
     else
         let token = tokenAt tokens index in
@@ -100,23 +100,23 @@ let parsePrimary (tokens: Dict<Int64>) (count: Int64) (index: Int64) (x: Int64) 
         else if token == 10L then (x, index + 1L)
         else if token == 11L then (y, index + 1L)
         else if token == 7L then
-            let parsed = parseExpression tokens count (index + 1L) 0L x y in
-            if parsed.1 < count && tokenAt tokens (parsed.1) == 8L then (parsed.0, parsed.1 + 1L)
+            let (value, nextIndex) = parseExpression tokens count (index + 1L) 0L x y in
+            if nextIndex < count && tokenAt tokens nextIndex == 8L then (value, nextIndex + 1L)
             else Builtin.testRuntimeError "expected ')' in Warden program"
         else Builtin.testRuntimeError "expected expression in Warden program"
 
-let parseInfix (tokens: Dict<Int64>) (count: Int64) (left: Int64) (index: Int64) (minimumPrecedence: Int64) (x: Int64) (y: Int64) : (Int64 * Int64) =
+let parseInfix (tokens: Dict<String, Int64>) (count: Int64) (left: Int64) (index: Int64) (minimumPrecedence: Int64) (x: Int64) (y: Int64) : (Int64 * Int64) =
     if index >= count then (left, index)
     else
         match infix (tokenAt tokens index) with
         | Some ((operator, precedence)) when precedence >= minimumPrecedence ->
-            let right = parseExpression tokens count (index + 1L) (precedence + 1L) x y in
-            parseInfix tokens count (applyOperator operator left (right.0)) (right.1) minimumPrecedence x y
+            let (right, nextIndex) = parseExpression tokens count (index + 1L) (precedence + 1L) x y in
+            parseInfix tokens count (applyOperator operator left right) nextIndex minimumPrecedence x y
         | _ -> (left, index)
 
-let parseExpression (tokens: Dict<Int64>) (count: Int64) (index: Int64) (minimumPrecedence: Int64) (x: Int64) (y: Int64) : (Int64 * Int64) =
-    let primary = parsePrimary tokens count index x y in
-    parseInfix tokens count (primary.0) (primary.1) minimumPrecedence x y
+let parseExpression (tokens: Dict<String, Int64>) (count: Int64) (index: Int64) (minimumPrecedence: Int64) (x: Int64) (y: Int64) : (Int64 * Int64) =
+    let (primary, nextIndex) = parsePrimary tokens count index x y in
+    parseInfix tokens count primary nextIndex minimumPrecedence x y
 
 let applyOperator (operator: Int64) (leftValue: Int64) (rightValue: Int64) : Int64 =
     match operator with
@@ -127,16 +127,16 @@ let applyOperator (operator: Int64) (leftValue: Int64) (rightValue: Int64) : Int
     | 4L -> if leftValue < rightValue then 1L else 0L
     | _ -> Builtin.testRuntimeError "unknown Warden operator"
 
-let parseAndEvaluate (tokens: Dict<Int64>) (count: Int64) (index: Int64) (iteration: Int64) (expressionIndex: Int64) (result: Int64) : Int64 =
+let parseAndEvaluate (tokens: Dict<String, Int64>) (count: Int64) (index: Int64) (iteration: Int64) (expressionIndex: Int64) (result: Int64) : Int64 =
     if index >= count then result
     else
         let x = (iteration * 17L + expressionIndex * 13L) % 97L + 3L in
         let y = (iteration * 29L + expressionIndex * 7L) % 89L + 5L in
-        let parsed = parseExpression tokens count index 0L x y in
-        if parsed.1 >= count || tokenAt tokens (parsed.1) != 9L then Builtin.testRuntimeError "expected ';' after Warden expression"
-        else parseAndEvaluate tokens count (parsed.1 + 1L) iteration (expressionIndex + 1L) ((result + parsed.0 * (expressionIndex + 1L)) % 1000000007L)
+        let (value, nextIndex) = parseExpression tokens count index 0L x y in
+        if nextIndex >= count || tokenAt tokens nextIndex != 9L then Builtin.testRuntimeError "expected ';' after Warden expression"
+        else parseAndEvaluate tokens count (nextIndex + 1L) iteration (expressionIndex + 1L) ((result + value * (expressionIndex + 1L)) % 1000000007L)
 
-let run (remaining: Int64) (iteration: Int64) (tokens: Dict<Int64>) (count: Int64) (result: Int64) : Int64 =
+let run (remaining: Int64) (iteration: Int64) (tokens: Dict<String, Int64>) (count: Int64) (result: Int64) : Int64 =
     if remaining <= 0L then result
     else run (remaining - 1L) (iteration + 1L) tokens count ((result + parseAndEvaluate tokens count 0L iteration 0L 0L) % 1000000007L)
 

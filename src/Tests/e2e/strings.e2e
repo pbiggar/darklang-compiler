@@ -2,6 +2,11 @@
 //
 // Tests for string literal parsing, type checking, and printing
 
+let joinFusionChunk (n: Int64) (value: String): String =
+  if n == 0L then value else joinFusionChunk (n - 1L) (value ++ value)
+let repeatChunk (n: Int64) (chunk: String) (chunks: List<String>): List<String> =
+  if n == 0L then chunks else repeatChunk (n - 1L) chunk (Stdlib.List.push chunks chunk)
+
 // Basic string literal printing
 "hello" = "hello"
 "world" = "world"
@@ -73,7 +78,7 @@ let concatFusionChunk (n: Int64) (value: String): String = if n == 0L then value
 
 // Joining dynamic chunks must allocate the final string once. Repeatedly
 // concatenating the growing prefix exhausts the fixed heap for this workload.
-let joinFusionChunk (n: Int64) (value: String): String = if n == 0L then value else joinFusionChunk (n - 1L) (value ++ value); let repeatChunk (n: Int64) (chunk: String) (chunks: List<String>): List<String> = if n == 0L then chunks else repeatChunk (n - 1L) chunk (Stdlib.List.push chunks chunk); let chunk = joinFusionChunk 17L "x" in Stdlib.String.getByteAt (Stdlib.String.join (repeatChunk 100L chunk []) "") 13107199 = stdout="Darklang.Stdlib.Option.Option<UInt8>.Some(120)\n" stderr="" isolated=true
+let chunk = joinFusionChunk 17L "x" in Stdlib.String.getByteAt (Stdlib.String.join (repeatChunk 100L chunk []) "") 13107199 = stdout="Darklang.Stdlib.Option.Option<UInt8>.Some(120)\n" stderr="" isolated=true
 Stdlib.String.join (["e", "\u0301"]) "" = "é"
 
 // Character-list construction uses the same one-allocation builder path.

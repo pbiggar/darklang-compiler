@@ -12,7 +12,8 @@ let bufferStringProbe (s: String): Bool =
 
 let bufferPair (b: Blob): (Blob * Blob) = (b, b)
 let bufferBlobCount (b: Blob): Int64 = __raw_get<Int64> (__blob_to_rawptr (b)) (0L)
-let bufferBlobProbe (b: Blob): Int64 = let kept = bufferPair (b) in bufferBlobCount (kept.0)
+let bufferBlobProbe (b: Blob): Int64 = let kept = bufferPair (b) in let (first, _) = kept in bufferBlobCount first
+let bufferBlobProbeBoth (b: Blob): Int64 = let (first, second) = bufferPair (b) in bufferBlobCount first + bufferBlobCount second
 
 bufferStringProbe ("literal") = stdout="true\n" stderr="" disable_opt_inline=true
 bufferStringProbe ("literal") = stdout="true\n" stderr="" disable_opt_inline=true disable_leak_check=true
@@ -20,3 +21,4 @@ bufferStringProbe (Stdlib.String.append ("dy") ("namic")) = stdout="true\n" stde
 bufferStringProbe (Stdlib.String.append ("dy") ("namic")) = stdout="true\n" stderr="" disable_opt_inline=true disable_leak_check=true
 let b = Stdlib.Blob.__createZeroed (3L) in let retained = bufferBlobProbe (b) in retained * 10L + bufferBlobCount (b) = stdout="31\n" stderr="" disable_opt_inline=true
 let b = Stdlib.Blob.__createZeroed (3L) in let retained = bufferBlobProbe (b) in retained * 10L + bufferBlobCount (b) = stdout="31\n" stderr="" disable_opt_inline=true disable_leak_check=true
+let b = Stdlib.Blob.__createZeroed (3L) in let retained = bufferBlobProbeBoth (b) in retained * 10L + bufferBlobCount (b) = stdout="61\n" stderr="" disable_opt_inline=true

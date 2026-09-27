@@ -7,11 +7,11 @@ Stdlib.DateTime.year (Builtin.unwrap (Stdlib.DateTime.parse "2000-02-29T23:59:59
 Stdlib.DateTime.month (Builtin.unwrap (Stdlib.DateTime.parse "2000-02-29T23:59:59.999Z")) = 2
 Stdlib.DateTime.day (Builtin.unwrap (Stdlib.DateTime.parse "2000-02-29T23:59:59.999Z")) = 29
 Stdlib.DateTime.fromMilliseconds 0 == Stdlib.DateTime.fromMilliseconds 0 = true
-Stdlib.DateTime.fromMilliseconds 0 == 0 = error="Cannot perform equality check on DateTime and Int"
-let temporalNeedsInt64 (value: Int64): Int64 = value; temporalNeedsInt64 (Stdlib.DateTime.fromMilliseconds 0) = error="temporalNeedsInt64's 1st parameter `value` expects Int64, but got DateTime (DateTime)"
-let temporalNeedsInt (value: Int): Int = value; temporalNeedsInt (Stdlib.DateTime.fromMilliseconds 0) = error="temporalNeedsInt's 1st parameter `value` expects Int, but got DateTime (DateTime)"
-let temporalNeedsDateTime (value: DateTime): DateTime = value; temporalNeedsDateTime 0L = error="temporalNeedsDateTime's 1st parameter `value` expects DateTime, but got Int64 (0)"
-let temporalNeedsDateTimeInt (value: DateTime): DateTime = value; temporalNeedsDateTimeInt 0 = error="temporalNeedsDateTimeInt's 1st parameter `value` expects DateTime, but got Int (0)"
+Stdlib.DateTime.fromMilliseconds 0 == 0 = compileerror="Operator is unavailable for this type"
+let temporalNeedsInt64 (value: Int64): Int64 = value; temporalNeedsInt64 (Stdlib.DateTime.fromMilliseconds 0) = compileerror="Expected TInt64, got TDateTime"
+let temporalNeedsInt (value: Int): Int = value; temporalNeedsInt (Stdlib.DateTime.fromMilliseconds 0) = compileerror="Expected TInt, got TDateTime"
+let temporalNeedsDateTime (value: DateTime): DateTime = value; temporalNeedsDateTime 0L = compileerror="Expected TDateTime, got TInt64"
+let temporalNeedsDateTimeInt (value: DateTime): DateTime = value; temporalNeedsDateTimeInt 0 = compileerror="Expected TDateTime, got TInt"
 
 Stdlib.Duration.parse "+5m" = Ok 300
 Stdlib.Duration.parse " -5m" = Ok (-300)

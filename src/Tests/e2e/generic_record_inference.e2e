@@ -1,0 +1,5 @@
+// Record construction infers declared type arguments from field values.
+
+type InferredBox<'a> = { value: a }
+
+InferredBox { value = "hello" } = stdout="InferredBox<String> { value: \"hello\" }\n" stderr=""

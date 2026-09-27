@@ -12,4 +12,4 @@ let left = Stdlib.Stream.fromList<Int64> ([]) in let right = Stdlib.Stream.fromL
 let stream = Stdlib.Stream.fromList ([1L]) in stream = stdout="<stream>\n" stderr="" // rendering is opaque and does not force the stream
 let stream = Stdlib.Stream.map (Stdlib.Stream.fromList ([1L])) streamFail in 0L = 0L // map construction does not invoke its callback
 let stream = Stdlib.Stream.map (Stdlib.Stream.fromList ([1L])) streamFail in Stdlib.Stream.next stream = error="Uncaught exception: stream callback failed" // callback error payload is preserved
-let stream = Stdlib.Stream.fromList<Int64> ([]) in stream < stream = error="Cannot perform numeric operation on Stream<Int64> and Stream<Int64>" // ordering is rejected during AOT type checking
+let stream = Stdlib.Stream.fromList<Int64> ([]) in stream < stream = compileerror="Operator is unavailable for this type" // ordering is rejected during AOT type checking

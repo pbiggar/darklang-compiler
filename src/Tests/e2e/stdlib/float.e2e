@@ -104,12 +104,15 @@ Stdlib.Float.toString 1.0000000000000002 = "1.0000000000000002"
 Stdlib.Float.toString 0.0001 = "0.0001"
 Stdlib.Float.toString 0.00001 = "1e-5"
 Stdlib.Float.toString 100000000000.0 = "100000000000.0"
-Stdlib.Float.toString 1000000000000.0 = "1e+12"
+Stdlib.Float.toString 1000000000000.0 = "1000000000000.0"
 Stdlib.Float.toString (5e-324) = "5e-324"
 Stdlib.Float.toString (1.0 / 0.0) = "Infinity"
 Stdlib.Float.toString (-1.0 / 0.0) = "-Infinity"
 Stdlib.Float.toString Builtin.testNan = "NaN"
 Stdlib.Float.toBits (Stdlib.Result.withDefault (Stdlib.Float.parse (Stdlib.Float.toString (1.7976931348623157e308))) 0.0) = Stdlib.Float.toBits (1.7976931348623157e308)
+Stdlib.Float.toString (1.7976931348623155e308) = "1.7976931348623155e+308"
+Stdlib.Float.toString (-1.7976931348623157e308) = "-1.7976931348623157e+308"
+Stdlib.Float.toBits (Stdlib.Result.withDefault (Stdlib.Float.parse (Stdlib.Float.toString (1.2676506002282294e30))) 0.0) = Stdlib.Float.toBits (1.2676506002282294e30)
 Stdlib.Float.toBits (Stdlib.Result.withDefault (Stdlib.Float.parse (Stdlib.Float.toString (5e-324))) 0.0) = Stdlib.Float.toBits (5e-324)
 [1.0000000000000002] = stdout="[1.0000000000000002]\n"
 (0.1, 1.0000000000000002) = stdout="(0.1, 1.0000000000000002)\n"

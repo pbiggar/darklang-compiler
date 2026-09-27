@@ -31,4 +31,4 @@ ordinary value annotation is not a recursive declaration
 ---SOURCE---
 let value : Int64 = 1L in value
 ---EXPECT-ERROR---
-Expected '=' after let binding pattern
+Value annotations are not supported

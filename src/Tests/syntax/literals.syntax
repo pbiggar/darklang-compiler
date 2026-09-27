@@ -5,28 +5,28 @@ surrogate scalar escape is rejected
 ---SOURCE---
 "\uD800"
 ---EXPECT-ERROR---
-Invalid Unicode scalar escape: \uD800
+Invalid escape sequence or codepoint in string literal
 
 ---NAME---
 uppercase surrogate scalar escape is rejected
 ---SOURCE---
 "\XDFFF"
 ---EXPECT-ERROR---
-Invalid Unicode scalar escape: \XDFFF
+Invalid escape sequence or codepoint in string literal
 
 ---NAME---
 out of range scalar escape is rejected
 ---SOURCE---
 "\U00110000"
 ---EXPECT-ERROR---
-Invalid Unicode scalar escape: \U00110000
+Invalid escape sequence or codepoint in string literal
 
 ---NAME---
 raw strings normalize to NFC
 ---SOURCE---
 """é"""
 ---EXPECTED---
-"é"
+"""é"""
 ---ROUNDTRIP---
 
 ---NAME---

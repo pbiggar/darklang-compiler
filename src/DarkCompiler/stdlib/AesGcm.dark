@@ -182,25 +182,27 @@ let __ghash (hashKey: Stdlib.AesGcm.Bits128) (aad: Blob) (ciphertext: Blob)
   : Stdlib.AesGcm.Bits128 =
   let first = Stdlib.AesGcm.__ghashData hashKey aad 0L (Stdlib.AesGcm.__zeroBits ()) in
   let second = Stdlib.AesGcm.__ghashData hashKey ciphertext 0L first in
-  let lengths = Stdlib.Blob.__fromInt64List
+  let lengths = (Stdlib.Blob.__fromInt64List
     (Stdlib.List.append (Stdlib.Crypto.__int64ToBE (Stdlib.Blob.__byteLength aad * 8L))
-      (Stdlib.Crypto.__int64ToBE (Stdlib.Blob.__byteLength ciphertext * 8L))) in
+      (Stdlib.Crypto.__int64ToBE (Stdlib.Blob.__byteLength ciphertext * 8L)))) in
   Stdlib.AesGcm.__ghashBlock hashKey second lengths
 
 let __counterBlock (nonce: Blob) (counter: Int64) : Blob =
-  let tail = Stdlib.Blob.__fromInt64List
+  let tail = (Stdlib.Blob.__fromInt64List
     [Stdlib.AesGcm.__and (Stdlib.Int64.shiftRight counter 24L) 255L,
      Stdlib.AesGcm.__and (Stdlib.Int64.shiftRight counter 16L) 255L,
      Stdlib.AesGcm.__and (Stdlib.Int64.shiftRight counter 8L) 255L,
-     Stdlib.AesGcm.__and counter 255L] in
+     Stdlib.AesGcm.__and counter 255L]) in
   Stdlib.Blob.concat [nonce, tail]
 
 let __xorStreamBytes (data: Blob) (stream: Blob) (offset: Int64)
   (index: Int64) (count: Int64) (acc: List<Int64>) : List<Int64> =
   if index == count then Stdlib.List.reverse acc
-  else Stdlib.AesGcm.__xorStreamBytes data stream offset (index + 1L) count
-    (Stdlib.List.push acc (Stdlib.AesGcm.__xor
-      (Stdlib.Blob.__getByte data (offset + index)) (Stdlib.Blob.__getByte stream index)))
+  else
+    let inputByte = Stdlib.Blob.__getByte data (offset + index) in
+    let streamByte = Stdlib.Blob.__getByte stream index in
+    let next = Stdlib.List.push acc (Stdlib.AesGcm.__xor inputByte streamByte) in
+    Stdlib.AesGcm.__xorStreamBytes data stream offset (index + 1L) count next
 
 let __crypt (key: List<Int64>) (nonce: Blob) (data: Blob)
   (offset: Int64) (counter: Int64) (chunks: List<Blob>) : Blob =

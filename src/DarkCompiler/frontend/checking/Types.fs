@@ -88,7 +88,7 @@ type TypeCheckEnv = {
     IndexedSumTypeReg: IndexedSumTypeRegistry
     SumTypeNames: Set<string>
     FuncEnv: TypeEnv
-    Values: Map<string, SemanticType * Expr>
+    Values: Map<string, SemanticType>
     FuncParamNames: FuncParamNameRegistry
     GenericFuncReg: GenericFuncRegistry
     GenericFuncDefs: Map<string, FunctionDef>

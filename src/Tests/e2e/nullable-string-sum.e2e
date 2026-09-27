@@ -3,7 +3,7 @@ type NullableText = NullableTextNone | NullableTextValue of String
 let stringOption (value: NullableText): NullableText = value
 match stringOption NullableTextNone with | NullableTextNone -> true | NullableTextValue _ -> false = true // leak_check
 match stringOption (NullableTextValue ("a" ++ "b")) with | NullableTextNone -> "missing" | NullableTextValue value -> value = "ab"
-match NullableTextNone with | NullableTextValue "x" -> false | NullableTextNone -> true = true
+match NullableTextNone with | NullableTextValue "x" -> false | NullableTextValue _ -> false | NullableTextNone -> true = true
 match NullableTextValue ("a" ++ "b") with | NullableTextNone -> "missing" | NullableTextValue value -> value = "ab"
 let original = Stdlib.String.trim (" " ++ "ab" ++ " ") in match NullableTextValue original with | NullableTextNone -> "missing" | NullableTextValue value -> value = "ab"
 NullableTextNone == NullableTextNone = true

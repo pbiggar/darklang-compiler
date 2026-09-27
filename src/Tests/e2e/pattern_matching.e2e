@@ -266,7 +266,7 @@ match Full 99L with | Full n -> n * 2L | Empty -> 0L = 198L
 // Note: Uses MyOption and Point defined above
 
 // Tuple inside match case body
-match MySome 5L with | MySome x -> let t = (x, x * 2L) in match t with | (a, b) -> a + b | MyNone -> 0L = 15L
+match MySome 5L with | MySome x -> let t = (x, x * 2L) in (match t with | (a, b) -> a + b) | MyNone -> 0L = 15L
 
 // Record access in match body
 match MySome 1L with | MySome _ -> let p = Point { x = 10L, y = 20L } in p.x + p.y | MyNone -> 0L = 30L
@@ -275,7 +275,7 @@ match MySome 1L with | MySome _ -> let p = Point { x = 10L, y = 20L } in p.x + p
 match (1L, 2L) with | (a, _) -> match a with | 1L -> 100L | _ -> 0L = 100L
 
 // Chained matches (uses Color from above)
-match Red with | Red -> match true with | true -> 42L | false -> 0L | _ -> 0L = 42L
+match Red with | Red -> (match true with | true -> 42L | false -> 0L) | _ -> 0L = 42L
 
 // Match with arithmetic in result (avoid match-in-atom-position)
 match 5L with | 5L -> 100L + 1L | _ -> 0L = 101L
@@ -311,7 +311,7 @@ match 99L with | 1L -> 100L | 2L -> 200L | n -> n = 99L
 // Multiple wildcards in different positions
 type Triple = T of Int64
 
-match T 5L with | T x -> x + 1L = 6L
+match (Triple.T 5L) with | T x -> x + 1L = 6L
 
 // Combine enum and payload extraction
 type MaybeInt = Nothing | Just of Int64
@@ -346,7 +346,7 @@ match Point { x = 3L, y = 4L } with | p -> if p.x > p.y then p.x else p.y = 4L
 // Tuple in ADT payload then extracted
 type BoxPair = EmptyPair | Pair of Int64
 
-match Pair 42L with | Pair n -> let t = (n, n + 1L) in match t with | (a, b) -> a + b | EmptyPair -> 0L = 85L
+match BoxPair.Pair 42L with | Pair n -> let t = (n, n + 1L) in (match t with | (a, b) -> a + b) | EmptyPair -> 0L = 85L
 
 // ADT in tuple (via let)
 type Maybe = No | Yes of Int64
@@ -376,31 +376,27 @@ match [1L, 2L, 3L] with | [a, b] -> a + b = compileerror="Non-exhaustive match e
 match (1L, 2L) with | (x, x) -> x | _ -> 0L = compileerror="Duplicate binding 'x' in the same pattern"
 
 // Pattern groups must bind the same names in every alternative.
-match (1L, 2L) with | (x, _) | (_, _) -> x | _ -> 0L = compileerror="Pattern matches require all branches to provide the same variables - expected [x], got []"
+match (1L, 2L) with | (x, _) | (_, _) -> x | _ -> 0L = compileerror="Every branch of an or-pattern must bind the same names"
 
-// Underscore-prefixed names bind locally but do not participate in the
-// alternative binding-set check, matching interpreter validation.
-match 1 with | _left | _right -> 1 = 1
+// Underscore-prefixed names bind locally and must agree across alternatives.
+match 1 with | _left | _right -> 1 = compileerror="Or-pattern binding '_right' is missing in another branch"
 
-// Grouped list-pattern alternatives on non-list scrutinees must compile as non-matches.
-// Regression: lowering previously hit a TInt64 fallback and crashed during MIR conversion.
-match 42L with | 0L | [_] -> 1L | _ -> 99L = 99L
+// Grouped alternatives must reject a list pattern on an Int64 scrutinee.
+match 42L with | 0L | [_] -> 1L | _ -> 99L = compileerror="List pattern requires a list scrutinee"
 
-// Nested list pattern inside a grouped tuple alternative must not execute list extraction on non-list tuple fields.
-// Regression: default TInt64 element typing let an impossible branch segfault at runtime.
-match (1L, 2L) with | (x, 0L) | ([x], _) -> x | _ -> 99L = 99L
+// Nested list patterns on non-list tuple fields fail during checking.
+match (1L, 2L) with | (x, 0L) | ([x], _) -> x | _ -> 99L = compileerror="List pattern requires a list scrutinee"
 
-// Tuple arity-mismatch alternatives in a grouped pattern must not default bindings to Stdlib.Int64.
-// The impossible `(x, _, _)` alternative should contribute no type bindings, so `x` stays Stdlib.String.
-(match ("a" ++ "b", 1L) with | (x, _) | (x, _, _) -> x | _ -> "") == "ab" = true
+// Tuple alternatives with different arity are rejected before lowering.
+(match ("a" ++ "b", 1L) with | (x, _) | (x, _, _) -> x | _ -> "") == "ab" = compileerror="Tuple pattern does not match the scrutinee type"
 
 // Integer literal pattern on non-int scrutinee should be rejected
-match true with | 1L -> 42L | _ -> 0L = compileerror="Cannot match Bool value true with an Int64 pattern"
+match true with | 1L -> 42L | _ -> 0L = compileerror="Expected TInt64, got TBool"
 
 // List cons pattern on non-list type should be rejected (prevents TInt64 fallback in AST_to_ANF)
 // The type checker prevents this - without this check, the compiler would silently assume
 // TInt64 element type which would produce incorrect code
-match 42L with | h :: t -> h | _ -> 0L = compileerror="Cannot match Int64 value 42 with a List pattern"
+match 42L with | h :: t -> h | _ -> 0L = compileerror="List cons pattern requires a list scrutinee"
 
 // === Nested pattern tests ===
 
@@ -447,12 +443,12 @@ match (if false then None |> Builtin.unwrap else ["a", "b"]) with | h :: t when 
 // Literal pattern in list cons - no match
 match [2L, 2L, 3L] with | 1L :: rest -> 42L | _ -> 0L = 0L
 
-// Tuple arity mismatch in list-cons head must fall through (regression for TInt64 fallback in tuple element typing)
-match [(1L, 2L)] with | (a, b, c) :: rest -> 1L | _ -> 2L = 2L
+// Tuple arity mismatch in a list-cons head fails during checking.
+match [(1L, 2L)] with | (a, b, c) :: rest -> 1L | _ -> 2L = compileerror="Tuple pattern does not match the scrutinee type"
 
 // List-cons tuple head patterns must preserve unresolved tuple element bindings instead of dropping to TInt64/defaults.
 // Regression: when the list element type arrived as TVar from ANF inferType, this failed with `Undefined variable: a`.
-let x = match false with | true -> [] | false -> [(("a" ++ ""), ("b" ++ ""))] in match x with | (a, b) :: rest -> match a with | _ -> 1L | _ -> 2L = 1L
+let x = (match false with | true -> [] | false -> [(("a" ++ ""), ("b" ++ ""))]) in match x with | (a, b) :: rest -> (match a with | _ -> 1L) | _ -> 2L = 1L
 
 // Nested list-cons heads must not default unresolved inner element types to TInt64.
 // Regression: this produced 3.0 instead of 4.0 by lowering `a`/`b` as Int64 in ANF.
@@ -460,11 +456,10 @@ let x = match false with | true -> [] | false -> [[1.5, 2.5], [3.0]] in match x 
 
 // Tuple arity mismatch inside constructor payload list pattern must not default missing tuple slots to Stdlib.Int64.
 // Regression: this previously matched and evaluated the branch body instead of surfacing the tuple arity issue.
-type TupleListBox = TupleListBox of List<(Int64 * Int64)> match TupleListBox ([(1L, 2L)]) with | TupleListBox ([(a, b, c)]) -> 1L | _ -> 2L = compileerror="Tuple pattern expects 3 elements but got 2"
+type TupleListBox = TupleListBox of List<(Int64 * Int64)> match TupleListBox ([(1L, 2L)]) with | TupleListBox ([(a, b, c)]) -> 1L | _ -> 2L = compileerror="Tuple pattern does not match the scrutinee type"
 
-// Constructor payload tuple pattern on non-tuple payload type must not match in list patterns.
-// Regression: this previously matched due nested tuple bindings defaulting to TInt64.
-match [Some 5L, Some 6L] with | [None, _] -> 1L | [Some ((x, _)), _] -> 2L | _ -> 3L = 3L
+// Constructor payload patterns must match the payload type.
+match [Some 5L, Some 6L] with | [None, _] -> 1L | [Some ((x, _)), _] -> 2L | _ -> 3L = compileerror="Tuple pattern does not match the scrutinee type"
 
 // Generic constructor payload tuple destructuring must preserve unresolved tuple element bindings.
 // Regression: lowering dropped tuple bindings for `TVar` payloads and failed with `Undefined variable: x`.
@@ -499,7 +494,7 @@ match Some false with | Some false -> 0L | Some true -> 100L | None -> -1L = 0L
 match Some false with | Some true -> 100L | _ -> 0L = 0L
 
 // Variable binding in Some still works
-match Some true with | Some x -> match x with | true -> 42L | false -> 0L | None -> -1L = 42L
+match Some true with | Some x -> (match x with | true -> 42L | false -> 0L) | None -> -1L = 42L
 
 // === Nested tuple literal patterns in constructor payloads (kills mutation #85) ===
 // Tests that buildPatternComparison correctly handles tuple patterns with literals

@@ -48,7 +48,7 @@ parser rejects fat-arrow lambda syntax
 ---SOURCE---
 let inc = (x: Int64) => x + 1 in inc 4L
 ---EXPECT-ERROR---
-does not use '=>'
+expected an expression
 
 ---NAME---
 public Dict type accepts key and value type arguments

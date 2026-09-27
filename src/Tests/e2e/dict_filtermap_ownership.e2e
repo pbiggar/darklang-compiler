@@ -1,0 +1,10 @@
+// A conditional Option payload returned by a callback must be owned by the collection.
+Stdlib.Dict.filterMap (Dict { "a": "x"; "b": "y" }) (fun key value ->
+  if value == "y" then None else Some (key ++ value)) = Dict { "a": "ax" }
+
+Stdlib.List.filterMap [ "x" ] (fun value ->
+  if value == "y" then None else Some ("a" ++ value)) = [ "ax" ]
+
+// The None branch must release its unused entry without leaking a payload.
+Stdlib.Dict.filterMap (Dict { "b": "y" }) (fun key value ->
+  if value == "y" then None else Some (key ++ value)) = Dict { }

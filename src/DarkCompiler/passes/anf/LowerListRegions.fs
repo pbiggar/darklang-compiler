@@ -18,6 +18,7 @@ let rec private bindReturns expression continuation =
     | ANF.Jump _ -> expression
     | ANF.Join (parameter, body, entry) ->
         ANF.Join (parameter, bindReturns body continuation, bindReturns entry continuation)
+    | ANF.Let (_, ANF.RuntimeError _, _) -> expression
     | ANF.Let (id, value, body) -> ANF.Let (id, value, bindReturns body continuation)
     | ANF.If (condition, yes, no) -> ANF.If (condition, bindReturns yes continuation, bindReturns no continuation)
 

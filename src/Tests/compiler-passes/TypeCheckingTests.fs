@@ -336,14 +336,14 @@ let testConstructorIdentityCollisionRejected () : TestResult =
 
 let testRecursiveGroupsReceiveStableTypedIdentities () : TestResult =
     let source =
-        "let groupEven (n: Int64) : Int64 = if n == 0L then 1L else groupOdd (n - 1L) "
-        + "let groupOdd (n: Int64) : Int64 = if n == 0L then 0L else groupEven (n - 1L) "
-        + "let completed (n: Int64) : Int64 = n + 1L completed 1L"
-    Parser.parseString false source
+        "let groupEven (n: Int64) : Int64 = if n == 0L then 1L else groupOdd (n - 1L)\n"
+        + "let groupOdd (n: Int64) : Int64 = if n == 0L then 0L else groupEven (n - 1L)\n"
+        + "let completed (n: Int64) : Int64 = n + 1L\n\ncompleted 1L"
+    WrittenParsing.parse LibParser.Validation.Script source
     |> Result.mapError (fun error -> $"Recursive group parse failed: {error}")
     |> Result.bind (fun program ->
-        checkParsedProgram program
-        |> Result.mapError (fun error -> $"Recursive group type check failed: {typeErrorToString error}"))
+        WrittenChecking.checkSourceUnits false true [program]
+        |> Result.mapError (fun error -> $"Recursive group type check failed: {error}"))
     |> Result.bind (fun (_, CheckedAST.Program (_, topLevels)) ->
         let recursionByName =
             topLevels
@@ -365,6 +365,16 @@ let testRecursiveGroupsReceiveStableTypedIdentities () : TestResult =
                  && completedMember.Availability = CompletedGroupMember
                  && [evenMember.GroupIndex; oddMember.GroupIndex] = [0; 1] -> Ok ()
         | actual -> Error $"Unexpected recursive group identities: {actual}")
+
+let testWrittenRecordRejectsRepeatedField () : TestResult =
+    let source = "type DuplicateDeclarationField = { value: Int64; value: String }\n1L"
+    match WrittenParsing.parse LibParser.Validation.Script source with
+    | Error error -> Error $"Expected valid syntax, got: {error}"
+    | Ok program ->
+        match WrittenChecking.checkSourceUnits false true [program] with
+        | Error error when error.Contains("Duplicate field 'value' in record type DuplicateDeclarationField") -> Ok ()
+        | Error error -> Error $"Expected duplicate record field error, got: {error}"
+        | Ok _ -> Error "Expected duplicate record field to fail type checking"
 
 /// Regression for the largest compatible E2E batch: the type checker must not
 /// multiply top-level traversal depth by the depth of its final let chain.
@@ -416,6 +426,7 @@ let tests = [
     ("Invalid declaration type references rejected", testInvalidDeclarationTypeReferencesRejected)
     ("Constructor identity collision rejected", testConstructorIdentityCollisionRejected)
     ("Recursive groups receive stable typed identities", testRecursiveGroupsReceiveStableTypedIdentities)
+    ("Written record rejects repeated field", testWrittenRecordRejectsRepeatedField)
     ("Many top-level functions and lets are stack-safe", testManyTopLevelFunctionsAndLetsAreStackSafe)
 ]
 

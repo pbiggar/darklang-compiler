@@ -60,10 +60,7 @@ let lirPhysFPRegToARM64FReg (physReg: LIR.PhysFPReg) : ARM64Symbolic.FReg =
 
 /// Convert LIR.FReg to ARM64Symbolic.FReg
 /// For FVirtual, we use a two-tier allocation scheme to avoid collisions:
-/// - FVirtual 1000 -> D18 (left operand temp for binary ops)
-/// - FVirtual 1001 -> D17 (right operand temp for binary ops)
-/// - FVirtual 1002 -> D27 (third operand temp for fused operations)
-/// - FVirtual 3000-3007 -> D14-D15 (temps for float call args)
+/// - Negative FVirtual IDs are reserved for spill and cycle scratch registers.
 /// - FVirtual 0-7 -> D2-D9 (dedicated 1:1 mapping for parameters)
 /// - FVirtual 8+ -> D10-D13 (4 temps with modulo, for SSA temps and locals)
 ///
@@ -74,27 +71,11 @@ let lirFRegToARM64FReg (freg: LIR.FReg) : Result<ARM64Symbolic.FReg, string> =
     match freg with
     | LIR.FPhysical physReg -> Ok (lirPhysFPRegToARM64FReg physReg)
     // Special temp registers for specific purposes
-    | LIR.FVirtual 1000 -> Ok ARM64Symbolic.D18  // Left temp for binary ops
-    | LIR.FVirtual 1001 -> Ok ARM64Symbolic.D17  // Right temp for binary ops
-    | LIR.FVirtual 1002 -> Ok ARM64Symbolic.D27  // Third temp for fused operations
-    | LIR.FVirtual 2000 -> Ok ARM64Symbolic.D16  // Reserved scratch for FPhi cycles and runtime helpers
     | LIR.FVirtual -1 -> Ok ARM64Symbolic.D16  // Float return across RestoreRegs
-    | LIR.FVirtual n when n >= 3000 && n < 4000 ->
-        // Temps for float call arguments - use D19-D26 (8 registers)
-        // These must not collide with each other since up to 8 floats
-        // can be loaded before FArgMoves. Using D19-D26 avoids collision
-        // with argument regs D0-D7, parameter VRegs D2-D9, SSA temps D10-D13,
-        // and binary op temps D17-D18.
-        let tempIdx = (n - 3000) % 8
-        match tempIdx with
-        | 0 -> Ok ARM64Symbolic.D19
-        | 1 -> Ok ARM64Symbolic.D20
-        | 2 -> Ok ARM64Symbolic.D21
-        | 3 -> Ok ARM64Symbolic.D22
-        | 4 -> Ok ARM64Symbolic.D23
-        | 5 -> Ok ARM64Symbolic.D24
-        | 6 -> Ok ARM64Symbolic.D25
-        | _ -> Ok ARM64Symbolic.D26
+    | LIR.FVirtual -1000 -> Ok ARM64Symbolic.D18  // Left spill scratch
+    | LIR.FVirtual -1001 -> Ok ARM64Symbolic.D17  // Right spill scratch
+    | LIR.FVirtual -1002 -> Ok ARM64Symbolic.D27  // Third spill scratch
+    | LIR.FVirtual -2000 -> Ok ARM64Symbolic.D16  // Parallel-move cycle scratch
     | LIR.FVirtual n when n >= 0 && n <= 7 ->
         // Parameters (VRegs 0-7) get dedicated D2-D9 mapping
         // This prevents collisions with SSA-generated temps

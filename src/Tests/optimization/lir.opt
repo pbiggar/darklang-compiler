@@ -601,10 +601,10 @@ makeIncrement:
   StackSize: 0
   UsedCalleeSaved: []
   Label "makeIncrement_entry":
-    v10005 <- HeapAlloc(16)
-    HeapStore(v10005, 0, &__closure_20)
-    HeapStore(v10005, 8, &__closure_comparison_21)
-    X0 <- Mov(Reg v10005)
+    v10006 <- HeapAlloc(16)
+    HeapStore(v10006, 0, &__closure_20)
+    HeapStore(v10006, 8, &__closure_comparison_21)
+    X0 <- Mov(Reg v10006)
     Ret
 
 ---NAME---

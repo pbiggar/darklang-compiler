@@ -679,25 +679,25 @@ licm_hoist_tuple_load
 let loop (n: Int64) (acc: Int64) (t: (Int64 * Int64)) : Int64 =
     if n < 1L then acc
     else
-        let v = t.0 in
+        let (v, _) = t in
         loop (n - 1L) (acc + v) (t)
 ---EXPECTED---
 Function loop:
   loop_entry:
-    v14017 <- HeapLoad(v4002, 0)
+    v14019 <- HeapLoad(v4002, 0)
     jump loop_body
   loop_body:
-    v14013 <- Phi([(v4000, loop_entry), (v14020, loop_ssa_2)]) : TInt64
-    v14014 <- Phi([(v4001, loop_entry), (v14021, loop_ssa_2)]) : TInt64
-    v14016 <- v14013 < 1 : TInt64
-    branch v14016 ? loop_ssa_1 : loop_ssa_2
+    v14015 <- Phi([(v4000, loop_entry), (v14024, loop_ssa_2)]) : TInt64
+    v14016 <- Phi([(v4001, loop_entry), (v14025, loop_ssa_2)]) : TInt64
+    v14018 <- v14015 < 1 : TInt64
+    branch v14018 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v14014
+    ret v14016
   loop_ssa_2:
-    v14018 <- v14013 - 1 : TInt64
-    v14019 <- v14014 + v14017 : TInt64
-    v14020 <- v14018 : TInt64
-    v14021 <- v14019 : TInt64
+    v14022 <- v14015 - 1 : TInt64
+    v14023 <- v14016 + v14019 : TInt64
+    v14024 <- v14022 : TInt64
+    v14025 <- v14023 : TInt64
     jump loop_body
 
 ---NAME---
@@ -1074,10 +1074,10 @@ Function __closure_comparison_21:
 
 Function makeIncrement:
   makeIncrement_entry:
-    v10005 <- HeapAlloc(16)
-    HeapStore(v10005, 0, &__closure_20)
-    HeapStore(v10005, 8, &__closure_comparison_21)
-    ret v10005
+    v10006 <- HeapAlloc(16)
+    HeapStore(v10006, 0, &__closure_20)
+    HeapStore(v10006, 8, &__closure_comparison_21)
+    ret v10006
 
 ---NAME---
 closure_devirtualization_reuses_local_closure

@@ -111,10 +111,32 @@ let __xDigits (s: String) : Stdlib.Option.Option<String> =
 
 let __hexDigitUInt64 (byte: Int64) : UInt64 =
     match byte with
-    | 48L -> 0UL | 49L -> 1UL | 50L -> 2UL | 51L -> 3UL | 52L -> 4UL
-    | 53L -> 5UL | 54L -> 6UL | 55L -> 7UL | 56L -> 8UL | 57L -> 9UL
-    | 65L -> 10UL | 66L -> 11UL | 67L -> 12UL | 68L -> 13UL | 69L -> 14UL | 70L -> 15UL
-    | 97L -> 10UL | 98L -> 11UL | 99L -> 12UL | 100L -> 13UL | 101L -> 14UL | 102L -> 15UL
+
+    | 48L -> 0UL
+    | 49L -> 1UL
+    | 50L -> 2UL
+    | 51L -> 3UL
+    | 52L -> 4UL
+
+    | 53L -> 5UL
+    | 54L -> 6UL
+    | 55L -> 7UL
+    | 56L -> 8UL
+    | 57L -> 9UL
+
+    | 65L -> 10UL
+    | 66L -> 11UL
+    | 67L -> 12UL
+    | 68L -> 13UL
+    | 69L -> 14UL
+    | 70L -> 15UL
+
+    | 97L -> 10UL
+    | 98L -> 11UL
+    | 99L -> 12UL
+    | 100L -> 13UL
+    | 101L -> 14UL
+    | 102L -> 15UL
     | _ -> Builtin.crash "Internal UUID hexadecimal digit invariant failed"
 
 let __hexWordAt (digits: String) (index: Int64) (endIndex: Int64) (value: UInt64) : UInt64 =
@@ -142,18 +164,50 @@ let parse (value: String) : Stdlib.Result.Result<Uuid, Stdlib.Uuid.ParseError> =
 // Helper: convert nibble (0-15) to hex char
 let __nibbleToHex (n: Int64) : String =
     match n with
-    | 0L -> "0" | 1L -> "1" | 2L -> "2" | 3L -> "3"
-    | 4L -> "4" | 5L -> "5" | 6L -> "6" | 7L -> "7"
-    | 8L -> "8" | 9L -> "9" | 10L -> "a" | 11L -> "b"
-    | 12L -> "c" | 13L -> "d" | 14L -> "e" | 15L -> "f"
+
+    | 0L -> "0"
+    | 1L -> "1"
+    | 2L -> "2"
+    | 3L -> "3"
+
+    | 4L -> "4"
+    | 5L -> "5"
+    | 6L -> "6"
+    | 7L -> "7"
+
+    | 8L -> "8"
+    | 9L -> "9"
+    | 10L -> "a"
+    | 11L -> "b"
+
+    | 12L -> "c"
+    | 13L -> "d"
+    | 14L -> "e"
+    | 15L -> "f"
     | _ -> Builtin.testRuntimeError "Invalid UUID hex nibble"
 
 let __nibbleToHexUInt64 (n: UInt64) : String =
     match n with
-    | 0UL -> "0" | 1UL -> "1" | 2UL -> "2" | 3UL -> "3"
-    | 4UL -> "4" | 5UL -> "5" | 6UL -> "6" | 7UL -> "7"
-    | 8UL -> "8" | 9UL -> "9" | 10UL -> "a" | 11UL -> "b"
-    | 12UL -> "c" | 13UL -> "d" | 14UL -> "e" | 15UL -> "f"
+
+    | 0UL -> "0"
+    | 1UL -> "1"
+    | 2UL -> "2"
+    | 3UL -> "3"
+
+    | 4UL -> "4"
+    | 5UL -> "5"
+    | 6UL -> "6"
+    | 7UL -> "7"
+
+    | 8UL -> "8"
+    | 9UL -> "9"
+    | 10UL -> "a"
+    | 11UL -> "b"
+
+    | 12UL -> "c"
+    | 13UL -> "d"
+    | 14UL -> "e"
+    | 15UL -> "f"
     | _ -> Builtin.crash "Internal UUID hexadecimal nibble invariant failed"
 
 // Helper: convert byte (from int64 at shift position) to 2 hex chars

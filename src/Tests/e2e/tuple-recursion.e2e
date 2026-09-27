@@ -8,17 +8,19 @@
 
 // Simple tuple recursion with let binding
 let tupleRecurseLet (t: (Int64 * Int64)) (n: Int64) : Int64 =
-    if n <= 0L then t.0 + t.1
+    let (first, second) = t in
+    if n <= 0L then first + second
     else
-        let next = (t.0 + 1L, t.1 + 1L) in
+        let next = (first + 1L, second + 1L) in
         tupleRecurseLet next (n - 1L)
 
 tupleRecurseLet ((0L, 0L)) 10L = 20L
 
 // Tuple recursion with inline construction
 let tupleRecurseInline (t: (Int64 * Int64)) (n: Int64) : Int64 =
-    if n <= 0L then t.0 + t.1
-    else tupleRecurseInline ((t.0 + 1L, t.1 + 1L)) (n - 1L)
+    let (first, second) = t in
+    if n <= 0L then first + second
+    else tupleRecurseInline ((first + 1L, second + 1L)) (n - 1L)
 
 tupleRecurseInline ((0L, 0L)) 10L = 20L
 
@@ -29,9 +31,10 @@ tupleRecurseInline ((0L, 0L)) 10L = 20L
 let stepPairHelper (x: Int64) (y: Int64) : (Int64 * Int64) = (x + 1L, y + 2L)
 
 let recurseWithHelper (t: (Int64 * Int64)) (n: Int64) : Int64 =
-    if n <= 0L then t.0 + t.1
+    let (first, second) = t in
+    if n <= 0L then first + second
     else
-        let next = stepPairHelper t.0 t.1 in
+        let next = stepPairHelper first second in
         recurseWithHelper next (n - 1L)
 
 recurseWithHelper ((0L, 0L)) 10L = 30L
@@ -41,9 +44,10 @@ recurseWithHelper ((0L, 0L)) 10L = 30L
 // =====================================================
 
 let tuple3Recurse (t: (Int64 * Int64 * Int64)) (n: Int64) : Int64 =
-    if n <= 0L then t.0 + t.1 + t.2
+    let (first, second, third) = t in
+    if n <= 0L then first + second + third
     else
-        let next = (t.0 + 1L, t.1 + 1L, t.2 + 1L) in
+        let next = (first + 1L, second + 1L, third + 1L) in
         tuple3Recurse next (n - 1L)
 
 tuple3Recurse ((0L, 0L, 0L)) 10L = 30L
@@ -56,9 +60,9 @@ tuple3Recurse ((0L, 0L, 0L)) 10L = 30L
 // as they involve a different bug with tuple element propagation through recursion
 
 // Non-recursive tuple return works correctly
-let makeTupleFromTuple (t: (Int64 * Int64)) : (Int64 * Int64) = (t.0 + 1L, t.1 + 2L)
+let makeTupleFromTuple (t: (Int64 * Int64)) : (Int64 * Int64) = let (first, second) = t in (first + 1L, second + 2L)
 
-let orig = (5L, 10L) in let result = makeTupleFromTuple orig in result.0 + result.1 = 18L
+let orig = (5L, 10L) in let result = makeTupleFromTuple orig in let (first, second) = result in first + second = 18L
 
 // =====================================================
 // Moderate depth recursion (should not stack overflow)

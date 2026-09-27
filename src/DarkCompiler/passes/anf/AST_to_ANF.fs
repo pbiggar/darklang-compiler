@@ -327,7 +327,6 @@ let private buildRegistriesInternal
         |> Map.ofList
 
     let rawVariantLookup : VariantLookup =
-        let collidingCaseNames = AST.collidingConstructorCaseNames typeDefs
         typeDefs
         |> List.choose (function
             | AST.SumTypeDef (typeName, typeParams, variants) ->
@@ -335,13 +334,12 @@ let private buildRegistriesInternal
             | _ -> None)
         |> List.fold (fun lookup (typeName, typeParams, variants) ->
             variants
-            |> List.indexed
-            |> List.fold (fun typeLookup (ordinal, variant) ->
+            |> List.fold (fun typeLookup variant ->
                 let tag =
-                    if Set.contains variant.Name collidingCaseNames then
-                        AST.constructorRuntimeIdentity typeName variant.Name
-                    else
-                        ordinal
+                    match CheckedAST.tryFindConstructorId typeName variant.Name symbols with
+                    | Some id -> AST.constructorRuntimeTag id
+                    | None ->
+                        Crash.crash $"Missing constructor identity for '{typeName}.{variant.Name}'"
                 let info = (typeName, typeParams, tag, variant.Fields)
                 let withBare =
                     if Map.containsKey variant.Name typeLookup then typeLookup
@@ -609,6 +607,7 @@ let convertFunctionsWithOwnershipWithTrace
                 registries.FunctionIds
                 registries.FunctionNames
                 registries.ModuleRegistry
+            |> Result.mapError (fun error -> $"Function '{func.Name}': {error}")
             |> Result.bind (fun (anfFunc, vg') ->
                 loop rest vg' (anfFunc :: acc))
     let ownershipContext : AnalyzeFunctionOwnership.Context = {

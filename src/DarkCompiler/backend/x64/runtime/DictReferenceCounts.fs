@@ -102,6 +102,7 @@ let internal generateDictRefCountDecHelper
     let collectInternal = label "collect_internal"
     let collectLoop = label "collect_loop"
     let freeNode = label "free_node"
+    let nextNode = label "next_node"
     let skipFreeList = label "skip_freelist"
     let skipLeafPayloadRelease = label "skip_leaf_payload_release"
     let skipCollisionPayloadRelease = label "skip_collision_payload_release"
@@ -249,7 +250,12 @@ let internal generateDictRefCountDecHelper
                 releaseManagedRootValueInstrs baseReg 0 streamRefCountDecHelperLabel skipKeyRelease
             | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, _) ->
                 releaseFixedBlockValueInstrs baseReg 0 payloadSize keyReleasePlan skipKeyRelease
-            | _ -> []
+            | MemoryModel.RecursiveRelease sourceType ->
+                releaseManagedRootValueInstrs
+                    baseReg
+                    0
+                    (recursiveNominalRefCountDecHelperLabel sourceType)
+                    skipKeyRelease
         let listValueInstrs =
             if releaseLeafListValue then
                 releaseManagedRootValueInstrs baseReg 8 listRefCountDecHelperLabel skipLeafListValueRelease
@@ -273,6 +279,12 @@ let internal generateDictRefCountDecHelper
                 []
         let fixedBlockValueInstrs =
             match leafFixedBlockValueRelease with
+            | Some (_, MemoryModel.RecursiveRelease sourceType) ->
+                releaseManagedRootValueInstrs
+                    baseReg
+                    8
+                    (recursiveNominalRefCountDecHelperLabel sourceType)
+                    skipLeafFixedBlockValueRelease
             | Some (payloadSize, releasePlan) ->
                 releaseFixedBlockValueInstrs baseReg 8 payloadSize releasePlan skipLeafFixedBlockValueRelease
             | None ->
@@ -410,6 +422,12 @@ let internal generateDictRefCountDecHelper
        X86_64.MOV_store (X86_64.RDI, 0, X86_64.R10)
        X86_64.MOV_store (X86_64.R9, 0, X86_64.RDI)
        X86_64.Label skipFreeList]
+    @ [// Internal nodes selected their first child before reaching freeNode.
+       // A released leaf or collision must be cleared before the next loop.
+       X86_64.CMP_imm (X86_64.RDX, 1)
+       X86_64.Jcc (X86_64.EQ, nextNode)
+       X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
+       X86_64.Label nextNode]
     @ leakDec
     @ [X86_64.JMP loopCheck
 

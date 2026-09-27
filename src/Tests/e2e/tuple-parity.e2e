@@ -4,13 +4,13 @@
 // 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
 
 () = ()
-(1L,) = error="Parse error: Expected expression"
+(1L,) = error="expected an expression"
 (1L, true, "three") = stdout="(1, true, \"three\")\n" stderr=""
 ((1L, "two"), (true, (3.0, 4L))) = stdout="((1, \"two\"), (true, (3.0, 4)))\n" stderr=""
-let tupleParityIdentity (value: (Int64 * String * (Bool * Float))) : (Int64 * String * (Bool * Float)) = value tupleParityIdentity ((1L, "two", (true, 3.0))) = (1L, "two", (true, 3.0))
+let tupleParityIdentity (value: (Int64 * String * (Bool * Float))) : (Int64 * String * (Bool * Float)) = value; tupleParityIdentity ((1L, "two", (true, 3.0))) = (1L, "two", (true, 3.0))
 let ((a, (b, c)), d) = ((1L, (2L, 3L)), 4L) in a + b + c + d = 10L
 match ((1L, 2L), Some ((3L, 4L))) with | ((1L, x), Some ((y, 4L))) -> x + y | _ -> 0L = 5L
-match (1L, 2L) with | (_, _, _) -> 99L | _ -> 0L = 0L
+match (1L, 2L) with | (_, _, _) -> 99L | _ -> 0L = compileerror="Tuple pattern does not match the scrutinee type"
 match (1L, 2L) with | (a, b) -> a + b | _ -> 0L = 3L
 ((1L, "two"), [3L, 4L]) == ((1L, "two"), [3L, 4L]) = true
 let tupleParityTrace (label: String) (value: Int64) : Int64 = let _ = Builtin.print label in value let (a, b, c) = (tupleParityTrace "a" 1L, tupleParityTrace "b" 2L, tupleParityTrace "c" 3L) in a + b + c = stdout="abc6\n" stderr="" exact_bytes=true

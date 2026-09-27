@@ -23,11 +23,10 @@ let private emptyFuncReg : FunctionRegistry = Map.empty
 let private emptyModuleRegistry : AST.ModuleRegistry = Map.empty
 
 let private checkedProgram source : Result<CheckedAST.Program, string> =
-    Parser.parseString false source
+    WrittenParsing.parse LibParser.Validation.Script source
     |> Result.bind (fun parsed ->
-        TypeChecking.checkParsedProgram parsed
-        |> Result.map (fun (_, program) -> program)
-        |> Result.mapError CheckingDiagnostics.typeErrorToString)
+        WrittenChecking.checkSourceUnits false false [parsed]
+        |> Result.map (fun (_, program) -> program))
 
 let testMissingVariantPayloadTypeErrors () : TestResult =
     let xId = AST.bindingId 1

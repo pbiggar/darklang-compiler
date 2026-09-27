@@ -2,12 +2,15 @@ $"""test {"1"}""" = "test 1"
 
 (let one = "1" in $"test {one}") = "test 1"
 
+#compileerror="Expected String in string interpolation, got TFloat64"
 (let one = 1.0 in $"test {one}") = error="Expected String in string interpolation, got a Float (1.0) instead. Try wrapping it with `Stdlib.Float.toString`."
+#compileerror="Expected String in string interpolation, got TInt64"
 (let one = 1L in $"test {one}") = error="Expected String in string interpolation, got an Int64 (1) instead. Try wrapping it with `Stdlib.Int64.toString`."
 (let name = "John"
  let age = "30"
  $"Name: {name}, Age: {age} years old.") = "Name: John, Age: 30 years old."
 
+#compileerror="Unbound local variable 'one'"
 (let two = 2L in "test 1" == $"test {one}") = error="There is no variable named: one"
 (let one = 1L in $"test {Stdlib.Int64.toString one}") = "test 1"
 

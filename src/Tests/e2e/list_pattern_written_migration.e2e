@@ -1,0 +1,7 @@
+// List patterns parsed through WrittenTypes must inspect each head value.
+let writtenListHead (xs: List<String>) : Int64 =
+  match xs with
+  | "Stdlib" :: _ -> 1L
+  | _ -> 2L
+writtenListHead ["other"] = 2L
+writtenListHead ["Stdlib"] = 1L

@@ -189,7 +189,7 @@ let __ratioToFloat (numerator: Int) (denominator: Int) : Float =
     // thousand successively shifted big integers for extreme/subnormal input.
     let decimalLengthDifference =
         Stdlib.String.__byteLength (Stdlib.Int.toString numerator)
-        - Stdlib.String.__byteLength (Stdlib.Int.toString denominator) in
+            - Stdlib.String.__byteLength (Stdlib.Int.toString denominator) in
     let estimate = decimalLengthDifference * 3322L / 1000L in
     let exponent = Stdlib.Float.__binaryExponent numerator denominator estimate in
     if exponent > 1023L then Stdlib.Float.__infinity ()
@@ -252,7 +252,7 @@ let __signedExponent (exponent: Int64) : String =
 
 let __renderDecimalCandidate (digits: String) (decimalExponent: Int64) (negative: Bool) : String =
     let sign = if negative then "-" else "" in
-    if decimalExponent < -4L || decimalExponent >= 12L then
+    if decimalExponent < -4L || decimalExponent >= 16L then
         let first = Stdlib.String.__byteTake digits 1L in
         let rest = Stdlib.String.__byteDrop digits 1L in
         sign ++ first ++ (if rest == "" then "" else "." ++ rest) ++ "e" ++ Stdlib.Float.__signedExponent decimalExponent
@@ -285,19 +285,49 @@ let __roundedSignificand (exactText: String) (precision: Int64) : String =
             Stdlib.Int.toString (Stdlib.Int.add (Stdlib.Int.__value prefix) (Stdlib.Int.fromInt64 1L))
         else prefix
 
-let __shortestCandidate (originalBits: UInt64) (exactText: String) (scale: Int64) (negative: Bool) (precision: Int64) : String =
+let __shortestCandidate (originalBits: UInt64) (exactText: String) (scale: Int64) (halfUlp: Stdlib.Option.Option<Int>) (negative: Bool) (precision: Int64) : String =
     let exactLength = Stdlib.String.__byteLength exactText in
     let originalExponent = exactLength - scale - 1L in
     let roundedText = Stdlib.Float.__roundedSignificand exactText precision in
     let carried = Stdlib.String.__byteLength roundedText > precision in
     let exponent = if carried then originalExponent + 1L else originalExponent in
     let digits = Stdlib.Float.__stripDecimalTrailingZeros roundedText in
-    let parsed =
-        Stdlib.Float.__decimalToFloat digits (exponent - Stdlib.String.__byteLength digits + 1L) negative in
-    if Stdlib.Float.__toBits parsed == originalBits then
+    let decimalExponent = exponent - Stdlib.String.__byteLength digits + 1L in
+    let roundTrips =
+        match halfUlp with
+        | Some upperHalfUlp when decimalExponent >= 0L ->
+            // For integral binary values, compare the decimal candidate with
+            // the exact value before invoking the general decimal parser.
+            // A distance strictly inside half an ULP has the same bits;
+            // a distance outside cannot. Ties still use the parser.
+            let candidateText =
+                digits ++ Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 decimalExponent) in
+            let candidate = Stdlib.Int.__value candidateText in
+            let exact = Stdlib.Int.__value exactText in
+            let distance =
+                Stdlib.Int.absoluteValue
+                    (Stdlib.Int.subtract candidate exact) in
+            // The predecessor of an exact power of two is half as far away
+            // as its successor, so its lower rounding boundary is closer.
+            let lowerPowerOfTwoBoundary =
+                Stdlib.Int.lessThan candidate exact
+                && Stdlib.UInt64.bitwiseAnd originalBits 4503599627370495UL == 0UL in
+            let roundingBoundary =
+                if lowerPowerOfTwoBoundary then
+                    Stdlib.Int.shiftRight upperHalfUlp (Stdlib.Int.fromInt64 1L)
+                else upperHalfUlp in
+            if Stdlib.Int.lessThan distance roundingBoundary then true
+            else if Stdlib.Int.greaterThan distance roundingBoundary then false
+            else
+                let parsed = Stdlib.Float.__decimalToFloat digits decimalExponent negative in
+                Stdlib.Float.__toBits parsed == originalBits
+        | _ ->
+            let parsed = Stdlib.Float.__decimalToFloat digits decimalExponent negative in
+            Stdlib.Float.__toBits parsed == originalBits in
+    if roundTrips then
         Stdlib.Float.__renderDecimalCandidate digits exponent negative
     else if precision >= 17L then Builtin.testRuntimeError "Float.toString failed to find a round-trip decimal"
-    else Stdlib.Float.__shortestCandidate originalBits exactText scale negative (precision + 1L)
+    else Stdlib.Float.__shortestCandidate originalBits exactText scale halfUlp negative (precision + 1L)
 
 let __decimalProductCarry (value: String) (index: Int64) (digit: Int64) (carry: Int64) : Int64 =
     if index < 0L then carry
@@ -351,7 +381,10 @@ let toString (value: Float) : String =
             if binaryExponent >= 0L then Stdlib.Float.__multiplyTextByDigit significand 2L binaryExponent
             else Stdlib.Float.__multiplyTextByDigit significand 5L (0L - binaryExponent) in
         let scale = if binaryExponent >= 0L then 0L else 0L - binaryExponent in
-        Stdlib.Float.__shortestCandidate bits exactText scale negative 1L
+        let halfUlp =
+            if binaryExponent > 1L then Some (Stdlib.Float.__powerOfTwo (binaryExponent - 1L))
+            else None in
+        Stdlib.Float.__shortestCandidate bits exactText scale halfUlp negative 1L
 
 let __powInteger (base: Float) (exponent: Int64) (result: Float) : Float =
     if exponent == 0L then result
@@ -405,7 +438,7 @@ let __exp (value: Float) : Float =
         let squared = reduced * reduced in
         let correction =
             reduced
-            - squared
+                - squared
                 * (0.16666666666666602
                     + squared
                         * (-0.0027777777777015593

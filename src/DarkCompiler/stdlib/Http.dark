@@ -13,7 +13,7 @@ let __parseQueryParam (param: String) : Stdlib.Option.Option<(String * String)> 
         | key :: valueParts -> Some ((key, Stdlib.String.join valueParts "="))
         | [] -> None
 
-let __queryParamsToDict (params: List<String>) (result: Dict<String>) : Dict<String> =
+let __queryParamsToDict (params: List<String>) (result: Dict<String, String>) : Dict<String, String> =
     match params with
     | [] -> result
     | param :: rest ->
@@ -24,7 +24,7 @@ let __queryParamsToDict (params: List<String>) (result: Dict<String>) : Dict<Str
                 Stdlib.Dict.setOverridingDuplicates result key value in
         Stdlib.Http.__queryParamsToDict rest next
 
-let parseQueryString (url: String) : Dict<String> =
+let parseQueryString (url: String) : Dict<String, String> =
     match Stdlib.String.split url "?" with
     | [] -> Stdlib.Dict.empty
     | [_] -> Stdlib.Dict.empty
@@ -43,7 +43,7 @@ let __parseHeaderLine (line: String) : Stdlib.Option.Option<(String * String)> =
                 Stdlib.String.trim name,
                 Stdlib.String.trim (Stdlib.String.join valueParts ":")))
 
-let __headerLinesToDict (lines: List<String>) (result: Dict<String>) : Dict<String> =
+let __headerLinesToDict (lines: List<String>) (result: Dict<String, String>) : Dict<String, String> =
     match lines with
     | [] -> result
     | line :: rest ->
@@ -54,7 +54,7 @@ let __headerLinesToDict (lines: List<String>) (result: Dict<String>) : Dict<Stri
                 Stdlib.Dict.setOverridingDuplicates result name value in
         Stdlib.Http.__headerLinesToDict rest next
 
-let parseHeaders (value: String) : Dict<String> =
+let parseHeaders (value: String) : Dict<String, String> =
     let lines = Stdlib.String.split (Stdlib.String.replaceAll value "\r\n" "\n") "\n" in
     Stdlib.Http.__headerLinesToDict lines Stdlib.Dict.empty
 

@@ -84,9 +84,7 @@ Stdlib.Html.escapeHtml "\"quoted\"" = "&quot;quoted&quot;"
 |> nodeToString = "<div data-note=\"a &quot;quoted&quot; one\"></div>"
 
 // Using text() with div to prevent XSS
-(Stdlib.Html.div
-  []
-  [ Stdlib.Html.text "User said: <script>alert('xss')</script>" ])
+(Stdlib.Html.div [] [ Stdlib.Html.text "User said: <script>alert('xss')</script>" ])
 |> nodeToString = "<div>User said: &lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;</div>"
 
 // -- testing attribute helpers
@@ -100,16 +98,11 @@ Stdlib.Html.dataAttr "user-id" "123" =
   ("data-user-id", Stdlib.Option.Option.Some "123")
 
 // Using attribute helpers with tags
-(Stdlib.Html.div
-  [ Stdlib.Html.classes [ "container", "mx-auto" ]
-    Stdlib.Html.dataAttr "testid" "main-container" ]
-  [ stringNode "content" ])
+(Stdlib.Html.div [ Stdlib.Html.classes [ "container", "mx-auto" ], Stdlib.Html.dataAttr "testid" "main-container" ] [ stringNode "content" ])
 |> nodeToString =
   "<div class=\"container mx-auto\" data-testid=\"main-container\">content</div>"
 
-(Stdlib.Html.span
-  [ Stdlib.Html.style [ ("color", "blue"), ("font-weight", "bold") ] ]
-  [ stringNode "styled text" ])
+(Stdlib.Html.span [ Stdlib.Html.style [ ("color", "blue"), ("font-weight", "bold") ] ] [ stringNode "styled text" ])
 |> nodeToString = "<span style=\"color: blue; font-weight: bold\">styled text</span>"
 
 (Stdlib.Html.br ()) |> nodeToString = "<br>"
@@ -154,28 +147,19 @@ Stdlib.Html.dataAttr "user-id" "123" =
 (Stdlib.Html.meta [ ("charset", Stdlib.Option.Option.Some "UTF-8") ])
 |> nodeToString = "<meta charset=\"UTF-8\">"
 
-(Stdlib.Html.link
-  [ ("rel", Stdlib.Option.Option.Some "stylesheet")
-    ("href", Stdlib.Option.Option.Some "./style.css") ])
+(Stdlib.Html.link [ ("rel", Stdlib.Option.Option.Some "stylesheet"), ("href", Stdlib.Option.Option.Some "./style.css") ])
 |> nodeToString = "<link rel=\"stylesheet\" href=\"./style.css\">"
 
-(Stdlib.Html.script
-  [ ("src", Stdlib.Option.Option.Some "https://cdn.tailwindcss.com") ]
-  [])
+(Stdlib.Html.script [ ("src", Stdlib.Option.Option.Some "https://cdn.tailwindcss.com") ] [])
 |> nodeToString = "<script src=\"https://cdn.tailwindcss.com\"></script>"
 
 (Stdlib.Html.form [ ("id", Stdlib.Option.Option.Some "my-form") ] [])
 |> nodeToString = "<form id=\"my-form\"></form>"
 
-(Stdlib.Html.input
-  [ ("type", Stdlib.Option.Option.Some "text")
-    ("name", Stdlib.Option.Option.Some "name")
-    ("id", Stdlib.Option.Option.Some "name") ])
+(Stdlib.Html.input [ ("type", Stdlib.Option.Option.Some "text"), ("name", Stdlib.Option.Option.Some "name"), ("id", Stdlib.Option.Option.Some "name") ])
 |> nodeToString = "<input type=\"text\" name=\"name\" id=\"name\">"
 
-(Stdlib.Html.label
-  [ ("for", Stdlib.Option.Option.Some "name") ]
-  [ stringNode "Name" ])
+(Stdlib.Html.label [ ("for", Stdlib.Option.Option.Some "name") ] [ stringNode "Name" ])
 |> nodeToString = "<label for=\"name\">Name</label>"
 
 (Stdlib.Html.section [] []) |> nodeToString = "<section></section>"
@@ -231,67 +215,45 @@ Stdlib.Html.dataAttr "user-id" "123" =
 
 // This demonstrates the whitespace issue: when you want spaces between inline elements
 // You need to explicitly add whitespace nodes
-(Stdlib.Html.div
-  []
-  [ Stdlib.Html.span [] [ stringNode "foo" ]
-    stringNode " "
-    Stdlib.Html.span [] [ stringNode "bar" ] ])
+(Stdlib.Html.div [] [ Stdlib.Html.span [] [ stringNode "foo" ], stringNode " ", Stdlib.Html.span [] [ stringNode "bar" ] ])
 |> nodeToString = "<div><span>foo</span> <span>bar</span></div>"
 
 // Without the explicit whitespace node, elements run together
-(Stdlib.Html.div
-  []
-  [ Stdlib.Html.span [] [ stringNode "foo" ]
-    Stdlib.Html.span [] [ stringNode "bar" ] ])
+(Stdlib.Html.div [] [ Stdlib.Html.span [] [ stringNode "foo" ], Stdlib.Html.span [] [ stringNode "bar" ] ])
 |> nodeToString = "<div><span>foo</span><span>bar</span></div>"
 
 
 // Form with new elements
-(Stdlib.Html.form
-  []
-  [ Stdlib.Html.fieldset
-      []
-      [ Stdlib.Html.legend [] [ stringNode "User Info" ]
-        Stdlib.Html.label [] [ stringNode "Name:" ]
-        Stdlib.Html.input [ ("type", Stdlib.Option.Option.Some "text") ]
-        Stdlib.Html.label [] [ stringNode "Bio:" ]
+(Stdlib.Html.form [] [ Stdlib.Html.fieldset [] [ Stdlib.Html.legend [] [ stringNode "User Info" ],
+        Stdlib.Html.label [] [ stringNode "Name:" ],
+        Stdlib.Html.input [ ("type", Stdlib.Option.Option.Some "text") ],
+        Stdlib.Html.label [] [ stringNode "Bio:" ],
         Stdlib.Html.textarea [] [] ] ])
 |> nodeToString = ("<form><fieldset><legend>User Info</legend>"
                    ++ "<label>Name:</label><input type=\"text\">"
                    ++ "<label>Bio:</label><textarea></textarea></fieldset></form>")
 
 // Definition list
-(Stdlib.Html.dl
-  []
-  [ Stdlib.Html.dt [] [ stringNode "Term" ]
-    Stdlib.Html.dd [] [ stringNode "Definition" ] ])
+(Stdlib.Html.dl [] [ Stdlib.Html.dt [] [ stringNode "Term" ], Stdlib.Html.dd [] [ stringNode "Definition" ] ])
 |> nodeToString = "<dl><dt>Term</dt><dd>Definition</dd></dl>"
 
 // Text formatting
-(Stdlib.Html.p
-  []
-  [ stringNode "This is "
-    Stdlib.Html.strong [] [ stringNode "bold" ]
-    stringNode " and this is "
-    Stdlib.Html.em [] [ stringNode "italic" ]
+(Stdlib.Html.p [] [ stringNode "This is ", Stdlib.Html.strong [] [ stringNode "bold" ],
+    stringNode " and this is ", Stdlib.Html.em [] [ stringNode "italic" ],
     stringNode "." ])
 |> nodeToString = "<p>This is <strong>bold</strong> and this is <em>italic</em>.</p>"
 
 // Semantic article structure
-(Stdlib.Html.article
-  []
-  [ Stdlib.Html.header [] [ Stdlib.Html.h1 [] [ stringNode "Article Title" ] ]
-    Stdlib.Html.p [] [ stringNode "Article content" ]
+(Stdlib.Html.article [] [ Stdlib.Html.header [] [ Stdlib.Html.h1 [] [ stringNode "Article Title" ] ],
+    Stdlib.Html.p [] [ stringNode "Article content" ],
     Stdlib.Html.footer [] [ stringNode "By Author" ] ])
 |> nodeToString = ("<article><header><h1>Article Title</h1></header>"
                    ++ "<p>Article content</p><footer>By Author</footer></article>")
 
 // -- test writing out a full document
 
-([ Stdlib.Html.html
-     []
-     [ Stdlib.Html.head [] [ Stdlib.Html.title [] [ stringNode "Darklang.com" ] ]
-
+([ Stdlib.Html.html []
+     [ Stdlib.Html.head [] [ Stdlib.Html.title [] [ stringNode "Darklang.com" ] ],
        Stdlib.Html.body [] [ Stdlib.Html.p [] [ stringNode "welcome to darklang" ] ] ] ]
  |> Stdlib.Html.document) = ("<!DOCTYPE html>
     <html>

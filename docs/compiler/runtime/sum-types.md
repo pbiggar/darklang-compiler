@@ -169,7 +169,7 @@ operands once, and produces `false` for `==` (`true` for `!=`).
 
 | File | Responsibility |
 |---|---|
-| `src/DarkCompiler/frontend/Parser.fs` | Canonical Dark declaration grammar, field shape, constructor reference syntax |
+| `src/DarkCompiler/frontend/interpreter/Parser.fs` | Canonical Dark declaration grammar, field shape, constructor reference syntax |
 | `src/DarkCompiler/AST.fs` | Enum field shape, unresolved/resolved references, canonical runtime identity |
 | `src/DarkCompiler/frontend/TypeChecking.fs` | Pure declaration validation, nominal resolution, generic/recursive typing, arity, equality |
 | `src/DarkCompiler/frontend/ValueRendering.fs` | Public enum rendering |

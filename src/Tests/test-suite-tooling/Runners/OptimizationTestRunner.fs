@@ -57,29 +57,27 @@ let private returnTypesFor (stdlib: CompilationContexts.StdlibResult) =
     externalReturnTypes
     |> Map.fold (fun returnTypes id value -> Map.add id value returnTypes) stdlib.Context.ReturnTypes
 
-let private typeCheckWithStdlib (stdlib: CompilationContexts.StdlibResult) (ast: AST.ParsedProgram) : Result<AST.SemanticType * CheckedAST.Program, string> =
-    match TypeChecking.checkParsedProgramWithBaseEnv stdlib.Context.TypeCheckEnv ast with
-    | Error e -> Error $"Type error: {CheckingDiagnostics.typeErrorToString e}"
-    | Ok (programType, typedAst, _env) -> Ok (programType, typedAst)
+let private typeCheckWithStdlib
+    (stdlib: CompilationContexts.StdlibResult)
+    (source: LibParser.Validation.ValidatedSourceFile)
+    : Result<AST.SemanticType * CheckedAST.Program, string> =
+    WrittenChecking.checkSourceUnitsWithBase
+        stdlib.Context.WrittenEnvironment true false [source]
+    |> Result.mapError (fun error -> $"Type error: {error}")
+    |> Result.map (fun (programType, typedAst, _) -> programType, typedAst)
 
-let private hasTopLevelExpression (AST.ParsedProgram topLevels: AST.ParsedProgram) : bool =
-    topLevels
-    |> List.exists (function
-        | AST.ParsedExpression _ -> true
-        | AST.ParsedFunctionDef _ | AST.ParsedTypeDef _ | AST.ParsedValueDef _ -> false)
-
-let private addSyntheticMainExpressionIfNeeded
-    (AST.ParsedProgram topLevels: AST.ParsedProgram)
-    : AST.ParsedProgram * bool =
-    if hasTopLevelExpression (AST.ParsedProgram topLevels) then
-        (AST.ParsedProgram topLevels, false)
-    else
-        (AST.ParsedProgram (topLevels @ [ AST.ParsedExpression ([], AST.Parsed.Int64Literal 0L) ]), true)
-
-let private parseOptimizationSource (source: string) : Result<AST.ParsedProgram * bool, string> =
-    match Parser.parseString true source with
-    | Error e -> Error $"Parse error: {e}"
-    | Ok ast -> Ok (addSyntheticMainExpressionIfNeeded ast)
+let private parseOptimizationSource
+    (source: string)
+    : Result<LibParser.Validation.ValidatedSourceFile * bool, string> =
+    WrittenParsing.parse LibParser.Validation.Script source
+    |> Result.mapError (fun error -> $"Parse error: {error}")
+    |> Result.bind (fun parsed ->
+        let written = LibParser.Validation.ValidatedSourceFile.toWrittenTypes parsed
+        if not (List.isEmpty written.exprsToEval) then Ok (parsed, false)
+        else
+            WrittenParsing.parse LibParser.Validation.Script (source + "\n\n0L")
+            |> Result.mapError (fun error -> $"Parse error: {error}")
+            |> Result.map (fun withEntry -> withEntry, true))
 
 let private convertTypedProgram
     (stdlib: CompilationContexts.StdlibResult)

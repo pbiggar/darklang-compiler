@@ -82,7 +82,7 @@
  Stdlib.List.map triplets transformer) =
   [ "1:one:TRUE", "2:two:FALSE" ]
 
-#compileerror="Type mismatch in lambda parameter type: expected (Int64, String, Bool)"
+#compileerror="Tuple pattern does not match the value type"
 (let triplets = [ (1L, "one", true), (2L, "two", false) ]
  let transformer = fun (num, str) -> $"{Stdlib.Int64.toString num}:{str}"
  Stdlib.List.map triplets transformer) = error="Could not deconstruct value (1, \"one\", true) into pattern ([variable], [variable])"

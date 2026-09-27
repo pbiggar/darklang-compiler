@@ -139,6 +139,7 @@ let convertCliOperation (operation: ANF.CliOperation) : MIR.CliOperation =
     | ANF.DirectoryCurrent -> MIR.DirectoryCurrent
     | ANF.DirectoryListPacked -> MIR.DirectoryListPacked
     | ANF.FileIsDirectory -> MIR.FileIsDirectory
+    | ANF.FileCreateExclusive -> MIR.FileCreateExclusive
     | ANF.GetArgv -> MIR.GetArgv
     | ANF.Kill -> MIR.Kill
     | ANF.GetPid -> MIR.GetPid

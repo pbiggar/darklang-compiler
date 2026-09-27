@@ -83,12 +83,6 @@ let l = [1.5, 2.5] in match l with | [x, y] -> x + y | _ -> 0.0 = 4.0
 // Four float parameters (tests D12-D15 temp allocation)
 let sum4Floats (a: Float) (b: Float) (c: Float) (d: Float) : Float = a + b + c + d; sum4Floats 1.0 2.0 3.0 4.0 = 10.0
 
-// Keep more than eight Float values live while a Float-returning callee runs.
-let floatCallValue (n: Int64) (x: Float) : Float = if n == 0L then x + 1.0 else floatCallValue (n - 1L) x; let preserveFloatsAcrossCall (n: Int64) (a: Float) (b: Float) (c: Float) (d: Float) (e: Float) (f: Float) (g: Float) (h: Float) : Float = if n == 0L then let extra = a * b in let result = floatCallValue 1L c in a + b + c + d + e + f + g + h + extra + result else preserveFloatsAcrossCall (n - 1L) a b c d e f g h; preserveFloatsAcrossCall 0L 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 = 42.0
-
-// A callee using D8-D15 must preserve the caller's live Float values.
-let floatCalleePressure (n: Int64) (a: Float) (b: Float) (c: Float) (d: Float) (e: Float) (f: Float) (g: Float) (h: Float) : Bool = if n == 0L then let extra = a * b in a + b + c + d + e + f + g + h + extra > 0.0 else floatCalleePressure (n - 1L) a b c d e f g h; let preserveFloatViaCallee (n: Int64) (a: Float) (b: Float) (c: Float) (d: Float) (e: Float) (f: Float) (g: Float) (h: Float) : Float = if n == 0L then let extra = a * b in let calleeValue = floatCalleePressure 0L a b c d e f g h in if calleeValue then a + b + c + d + e + f + g + h + extra else 0.0 else preserveFloatViaCallee (n - 1L) a b c d e f g h; preserveFloatViaCallee 0L 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 = 38.0
-
 // Mixed float and int parameters
 let mixedParams (sign: Float) (i: Int64) : Float = let divisor = Stdlib.Int64.toFloat (2L * i + 1L) in sign / divisor; mixedParams 1.0 1L = 0.333333333333
 

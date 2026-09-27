@@ -1,12 +1,12 @@
 // Focused interpreter-parity regressions for higher-order calls, pipelines, and generic aliases.
 
-let incrementWithLambda (values: List<Int64>): List<Int64> = let increment = fun x -> x + 1L in Stdlib.List.map_v0 values increment
+let incrementWithLambda (values: List<Int64>): List<Int64> = let increment = fun x -> x + 1L in Stdlib.List.map values increment
 incrementWithLambda [1L, 2L, 3L] = [2L, 3L, 4L]
 
-let multiplyWithLambda (values: List<Int64>): Int64 = let multiply = fun acc value -> acc * value in Stdlib.List.fold_v0 values 1L multiply
+let multiplyWithLambda (values: List<Int64>): Int64 = let multiply = fun acc value -> acc * value in Stdlib.List.fold values 1L multiply
 multiplyWithLambda [1L, 2L, 3L, 4L] = 24L
 
-let renderPairs (pairs: List<(Int64 * String)>): List<String> = let render = fun (number, text) -> $"{Stdlib.Int64.toString number}:{text}" in Stdlib.List.map_v0 pairs render
+let renderPairs (pairs: List<(Int64 * String)>): List<String> = let render = fun (number, text) -> $"{Stdlib.Int64.toString number}:{text}" in Stdlib.List.map pairs render
 renderPairs [(1L, "one"), (2L, "two")] = ["1:one", "2:two"]
 
 (3L |> Some) = Some 3L

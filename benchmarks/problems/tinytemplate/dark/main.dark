@@ -55,7 +55,7 @@ type Template = { source: String, instructions: List<Instruction> }
 
 type TinyTemplate = {
     templates: List<(String * Template)>,
-    formatters: Dict<Formatter>,
+    formatters: Dict<String, Formatter>,
     defaultFormatter: Formatter
 }
 
@@ -67,7 +67,7 @@ type ContextElement =
 type RenderEnvironment = {
     source: String,
     templates: List<(String * Template)>,
-    formatters: Dict<Formatter>,
+    formatters: Dict<String, Formatter>,
     defaultFormatter: Formatter,
     collections: List<(Int64 * Collection)>
 }
@@ -113,10 +113,10 @@ let offsetLoop (source: String) (position: Int64) (index: Int64) (line: Int64) (
 let offset (source: String) (position: Int64) : (Int64 * Int64) = offsetLoop source position 0L 1L 0L
 
 let parseError (source: String) (position: Int64) (message: String) : TemplateError =
-    let location = offset source position in ParseError ((message, location.0, location.1))
+    let (line, column) = offset source position in ParseError ((message, line, column))
 
 let renderError (source: String) (position: Int64) (message: String) : TemplateError =
-    let location = offset source position in RenderError ((message, location.0, location.1))
+    let (line, column) = offset source position in RenderError ((message, line, column))
 
 let errorMessage (error: TemplateError) : String =
     match error with
@@ -144,7 +144,7 @@ let splitAt (text: String) (separator: String) : Stdlib.Option.Option<(String * 
 let firstWord (text: String) : (String * String) =
     match splitAt text " " with
     | None -> (text, "")
-    | Some parts -> (Stdlib.String.trim (parts.0), Stdlib.String.trim (parts.1))
+    | Some parts -> let (firstPart, secondPart) = parts in (Stdlib.String.trim (firstPart), Stdlib.String.trim (secondPart))
 
 let trimLastLiteral (instructions: List<Instruction>) : List<Instruction> =
     match instructions with
@@ -256,8 +256,9 @@ let compileElse (state: CompilerState) (next: Int64) (text: String) : Stdlib.Res
         match closeBranch state (count + 1L) with
         | Error error -> Error error
         | Ok closed ->
-            let blocks = Stdlib.List.push<Block> (closed.1) (BranchBlock count) in
-            let nextState = moveCompiler (closed.0) next (closed.0.reversed) blocks state.trimNext in
+            let (closedState, closedBlocks) = closed in
+            let blocks = Stdlib.List.push<Block> closedBlocks (BranchBlock count) in
+            let nextState = moveCompiler closedState next closedState.reversed blocks state.trimNext in
             compileLoop (emit nextState (Goto (-1L)))
 
 let compileEndIf (state: CompilerState) (next: Int64) (text: String) : Stdlib.Result.Result<CompilerState, TemplateError> =
@@ -265,13 +266,15 @@ let compileEndIf (state: CompilerState) (next: Int64) (text: String) : Stdlib.Re
     else
         match closeBranch state (instructionCount state.reversed) with
         | Error error -> Error error
-        | Ok closed -> compileLoop (moveCompiler (closed.0) next (closed.0.reversed) (closed.1) state.trimNext)
+        | Ok closed ->
+            let (closedState, closedBlocks) = closed in
+            compileLoop (moveCompiler closedState next closedState.reversed closedBlocks state.trimNext)
 
 let compileWith (state: CompilerState) (next: Int64) (text: String) : Stdlib.Result.Result<CompilerState, TemplateError> =
     match splitAt text " as " with
     | None -> Error (parseError state.source state.position "Expected 'as <name>' in with block")
-    | Some parts ->
-        let path = Stdlib.String.trim (parts.0) in
+    | Some parts -> let (firstPart, secondPart) = parts in
+        let path = Stdlib.String.trim (firstPart) in
         if Stdlib.Bool.not (validPath path) then Error (parseError state.source state.position ("Invalid keyword name '" ++ path ++ "'"))
         else
             let blocks = Stdlib.List.push state.blocks WithBlock in
@@ -294,8 +297,8 @@ let compileEndWith (state: CompilerState) (next: Int64) (text: String) : Stdlib.
 let compileFor (state: CompilerState) (next: Int64) (text: String) : Stdlib.Result.Result<CompilerState, TemplateError> =
     match splitAt text " in " with
     | None -> Error (parseError state.source state.position "Unable to parse for block")
-    | Some parts ->
-        let path = Stdlib.String.trim (parts.1) in
+    | Some parts -> let (firstPart, secondPart) = parts in
+        let path = Stdlib.String.trim (secondPart) in
         if Stdlib.Bool.not (validPath path) then Error (parseError state.source state.position ("Invalid keyword name '" ++ path ++ "'"))
         else
             let reference = (state.position + 2L, next - 2L) in
@@ -311,15 +314,16 @@ let compileEndFor (state: CompilerState) (next: Int64) (text: String) : Stdlib.R
         match closeFor state (instructionCount state.reversed + 1L) with
         | Error error -> Error error
         | Ok closed ->
-            let nextState = moveCompiler (closed.0) next (closed.0.reversed) (closed.1) state.trimNext in
-            let withGoto = emit nextState (Goto (closed.2)) in
+            let (closedState, closedBlocks, restartIndex) = closed in
+            let nextState = moveCompiler closedState next closedState.reversed closedBlocks state.trimNext in
+            let withGoto = emit nextState (Goto restartIndex) in
             compileLoop (emit withGoto PopContext)
 
 let compileCall (state: CompilerState) (next: Int64) (text: String) : Stdlib.Result.Result<CompilerState, TemplateError> =
     match splitAt text " with " with
     | None -> Error (parseError state.source state.position "Unable to parse call block")
-    | Some parts ->
-        let path = Stdlib.String.trim (parts.1) in
+    | Some parts -> let (firstPart, secondPart) = parts in
+        let path = Stdlib.String.trim (secondPart) in
         if Stdlib.Bool.not (validPath path) then Error (parseError state.source state.position ("Invalid keyword name '" ++ path ++ "'"))
         else
             let nextState = moveCompiler state next state.reversed state.blocks state.trimNext in
@@ -327,19 +331,19 @@ let compileCall (state: CompilerState) (next: Int64) (text: String) : Stdlib.Res
             compileLoop (emit nextState (Call reference))
 
 let compileBlock (state: CompilerState) (close: Int64) : Stdlib.Result.Result<CompilerState, TemplateError> =
-    let normalized = normalizeTag (slice state.source (state.position + 2L) close) state.reversed in
-    let normalizedState = moveCompiler state state.position (normalized.1) state.blocks (normalized.2) in
-    let words = firstWord (normalized.0) in
+    let (normalizedText, normalizedInstructions, normalizedTrimNext) = normalizeTag (slice state.source (state.position + 2L) close) state.reversed in
+    let normalizedState = moveCompiler state state.position (normalizedInstructions) state.blocks (normalizedTrimNext) in
+    let (word, rest) = firstWord (normalizedText) in
     let next = close + 2L in
-    match words.0 with
-    | "if" -> compileIf normalizedState next (words.1)
-    | "else" -> compileElse normalizedState next (words.1)
-    | "endif" -> compileEndIf normalizedState next (words.1)
-    | "with" -> compileWith normalizedState next (words.1)
-    | "endwith" -> compileEndWith normalizedState next (words.1)
-    | "for" -> compileFor normalizedState next (words.1)
-    | "endfor" -> compileEndFor normalizedState next (words.1)
-    | "call" -> compileCall normalizedState next (words.1)
+    match word with
+    | "if" -> compileIf normalizedState next (rest)
+    | "else" -> compileElse normalizedState next (rest)
+    | "endif" -> compileEndIf normalizedState next (rest)
+    | "with" -> compileWith normalizedState next (rest)
+    | "endwith" -> compileEndWith normalizedState next (rest)
+    | "for" -> compileFor normalizedState next (rest)
+    | "endfor" -> compileEndFor normalizedState next (rest)
+    | "call" -> compileCall normalizedState next (rest)
     | unknown -> Error (parseError state.source state.position ("Unknown block type '" ++ unknown ++ "'"))
 
 let compileLoop (state: CompilerState) : Stdlib.Result.Result<CompilerState, TemplateError> =
@@ -350,8 +354,8 @@ let compileLoop (state: CompilerState) : Stdlib.Result.Result<CompilerState, Tem
         match closePosition state.source (state.position + 2L) "#}" with
         | Error error -> Error error
         | Ok close ->
-            let normalized = normalizeTag (slice state.source (state.position + 2L) close) state.reversed in
-            compileLoop (moveCompiler state (close + 2L) (normalized.1) state.blocks (normalized.2))
+            let (normalizedText, normalizedInstructions, normalizedTrimNext) = normalizeTag (slice state.source (state.position + 2L) close) state.reversed in
+            compileLoop (moveCompiler state (close + 2L) (normalizedInstructions) state.blocks (normalizedTrimNext))
     else if startsAt state.source state.position "{{" then
         match closePosition state.source (state.position + 2L) "}}" with
         | Error error -> Error error
@@ -360,14 +364,14 @@ let compileLoop (state: CompilerState) : Stdlib.Result.Result<CompilerState, Tem
         match closePosition state.source (state.position + 1L) "}" with
         | Error error -> Error error
         | Ok close ->
-            let normalized = normalizeTag (slice state.source (state.position + 1L) close) state.reversed in
-            let nextState = moveCompiler state (close + 1L) (normalized.1) state.blocks (normalized.2) in
+            let (normalizedText, normalizedInstructions, normalizedTrimNext) = normalizeTag (slice state.source (state.position + 1L) close) state.reversed in
+            let nextState = moveCompiler state (close + 1L) (normalizedInstructions) state.blocks (normalizedTrimNext) in
             let reference = (state.position + 1L, close) in
             compileLoop (emit nextState (ValueInstruction reference))
     else
-        let scanned = scanText state.source state.position "" in
-        let text = if state.trimNext then Stdlib.String.trimStart (scanned.0) else scanned.0 in
-        let moved = moveCompiler state (scanned.1) state.reversed state.blocks false in
+        let (scannedText, scannedNext) = scanText state.source state.position "" in
+        let text = if state.trimNext then Stdlib.String.trimStart (scannedText) else scannedText in
+        let moved = moveCompiler state (scannedNext) state.reversed state.blocks false in
         compileLoop (emit moved (Literal text))
 
 let compile (source: String) : Stdlib.Result.Result<Template, TemplateError> =
@@ -420,7 +424,7 @@ let runFormatter (formatter: Formatter) (value: Value) : Stdlib.Result.Result<St
 let newTinyTemplate () : TinyTemplate =
     TinyTemplate {
         templates = [],
-        formatters = Stdlib.Dict.singleton<Formatter> "unescaped" UnescapedFormatter,
+        formatters = Stdlib.Dict.singleton "unescaped" UnescapedFormatter,
         defaultFormatter = DefaultFormatter
     }
 
@@ -433,7 +437,7 @@ let setDefaultFormatter (engine: TinyTemplate) (formatter: Formatter) : TinyTemp
 let templateGet (templates: List<(String * Template)>) (name: String) : Stdlib.Option.Option<Template> =
     match templates with
     | [] -> None
-    | entry :: rest -> if entry.0 == name then Some (entry.1) else templateGet rest name
+    | (entryName, template) :: rest -> if entryName == name then Some template else templateGet rest name
 
 let addTemplate (engine: TinyTemplate) (name: String) (source: String) : Stdlib.Result.Result<TinyTemplate, TemplateError> =
     match compile source with
@@ -448,12 +452,12 @@ let listGet (values: List<Value>) (index: Int64) : Stdlib.Option.Option<Value> =
 let objectGet (fields: List<(String * Value)>) (name: String) : Stdlib.Option.Option<Value> =
     match fields with
     | [] -> None
-    | field :: rest -> if field.0 == name then Some (field.1) else objectGet rest name
+    | (fieldName, fieldValue) :: rest -> if fieldName == name then Some fieldValue else objectGet rest name
 
 let collectionGet (collections: List<(Int64 * Collection)>) (id: Int64) : Stdlib.Option.Option<Collection> =
     match collections with
     | [] -> None
-    | entry :: rest -> if entry.0 == id then Some (entry.1) else collectionGet rest id
+    | (entryId, collection) :: rest -> if entryId == id then Some collection else collectionGet rest id
 
 let pathHead (path: String) (index: Int64) : PathHead =
     match findFrom path "." index with
@@ -505,6 +509,7 @@ let lookupPath (collections: List<(Int64 * Collection)>) (scopes: List<ContextEl
             | (FinalPathHead first, Some value) -> if first == name then Ok value else lookupPath collections rest source path
             | (NestedPathHead ((first, nextIndex)), Some value) -> if first == name then lookupInAt collections source path path nextIndex value else lookupPath collections rest source path
             | (_, None) -> Error (GenericError "Malformed TinyTemplate iteration context.")
+            | _ -> Error (GenericError "Malformed TinyTemplate iteration context.")
         | _ -> Error (GenericError "Malformed TinyTemplate context.")
 
 let lookupRoot (scopes: List<ContextElement>) : Stdlib.Result.Result<Value, TemplateError> =
@@ -530,9 +535,9 @@ let lookupIteration (scopes: List<ContextElement>) : Stdlib.Result.Result<(Int64
 let specialPath (collections: List<(Int64 * Collection)>) (scopes: List<ContextElement>) (source: String) (path: String) : Stdlib.Result.Result<Value, TemplateError> =
     match path with
     | "@root" -> lookupRoot scopes
-    | "@index" -> (match lookupIteration scopes with | Ok state -> Ok (IntValue (state.0)) | Error error -> Error error)
-    | "@first" -> (match lookupIteration scopes with | Ok state -> Ok (BoolValue (state.0 == 0L)) | Error error -> Error error)
-    | "@last" -> (match lookupIteration scopes with | Ok state -> Ok (BoolValue (state.0 == state.1 - 1L)) | Error error -> Error error)
+    | "@index" -> (match lookupIteration scopes with | Ok state -> let (index, _) = state in Ok (IntValue index) | Error error -> Error error)
+    | "@first" -> (match lookupIteration scopes with | Ok state -> let (index, _) = state in Ok (BoolValue (index == 0L)) | Error error -> Error error)
+    | "@last" -> (match lookupIteration scopes with | Ok state -> let (index, length) = state in Ok (BoolValue (index == length - 1L)) | Error error -> Error error)
     | _ -> lookupPath collections scopes source path
 
 let truthy (collections: List<(Int64 * Collection)>) (value: Value) : Bool =
@@ -557,12 +562,13 @@ let instructionGet (instructions: List<Instruction>) (index: Int64) : Stdlib.Opt
     | instruction :: rest -> if index == 0L then Some instruction else instructionGet rest (index - 1L)
 
 let referenceContent (source: String) (reference: SourceRef) : String =
-    let initial = Stdlib.String.trim (slice source (reference.0) (reference.1)) in
+    let (startIndex, endIndex) = reference in
+    let initial = Stdlib.String.trim (slice source startIndex endIndex) in
     let withoutStart = if Stdlib.String.startsWith initial "-" then Stdlib.String.trim (slice initial 1L (byteLength initial)) else initial in
     if Stdlib.String.endsWith withoutStart "-" then Stdlib.String.trim (slice withoutStart 0L (byteLength withoutStart - (1L))) else withoutStart
 
 let blockRest (source: String) (reference: SourceRef) : String =
-    let words = firstWord (referenceContent source reference) in words.1
+    let (_, rest) = firstWord (referenceContent source reference) in rest
 
 let renderIterationValue (instructions: List<Instruction>) (counter: Int64) (scopes: List<ContextElement>) (environment: RenderEnvironment) (output: String) (keyword: String) : Stdlib.Result.Result<String, TemplateError> =
     match scopes with
@@ -596,9 +602,9 @@ let renderValueInstruction (instructions: List<Instruction>) (counter: Int64) (s
 let renderFormattedInstruction (instructions: List<Instruction>) (counter: Int64) (scopes: List<ContextElement>) (environment: RenderEnvironment) (output: String) (reference: SourceRef) : Stdlib.Result.Result<String, TemplateError> =
     match splitAt (referenceContent environment.source reference) "|" with
     | None -> Error (GenericError "Malformed formatted-value instruction.")
-    | Some parts ->
-        let path = Stdlib.String.trim (parts.0) in
-        let name = Stdlib.String.trim (parts.1) in
+    | Some parts -> let (firstPart, secondPart) = parts in
+        let path = Stdlib.String.trim (firstPart) in
+        let name = Stdlib.String.trim (secondPart) in
         match lookupPath environment.collections scopes environment.source path with
         | Error error -> Error error
         | Ok value ->
@@ -621,9 +627,9 @@ let renderBranchInstruction (instructions: List<Instruction>) (counter: Int64) (
 let renderNamedInstruction (instructions: List<Instruction>) (counter: Int64) (scopes: List<ContextElement>) (environment: RenderEnvironment) (output: String) (reference: SourceRef) : Stdlib.Result.Result<String, TemplateError> =
     match splitAt (blockRest environment.source reference) " as " with
     | None -> Error (GenericError "Malformed with instruction.")
-    | Some parts ->
-        let path = Stdlib.String.trim (parts.0) in
-        let name = Stdlib.String.trim (parts.1) in
+    | Some parts -> let (firstPart, secondPart) = parts in
+        let path = Stdlib.String.trim (firstPart) in
+        let name = Stdlib.String.trim (secondPart) in
         match lookupPath environment.collections scopes environment.source path with
         | Error error -> Error error
         | Ok value ->
@@ -633,9 +639,9 @@ let renderNamedInstruction (instructions: List<Instruction>) (counter: Int64) (s
 let renderIterationInstruction (instructions: List<Instruction>) (counter: Int64) (scopes: List<ContextElement>) (environment: RenderEnvironment) (output: String) (reference: SourceRef) : Stdlib.Result.Result<String, TemplateError> =
     match splitAt (blockRest environment.source reference) " in " with
     | None -> Error (GenericError "Malformed for instruction.")
-    | Some parts ->
-        let name = Stdlib.String.trim (parts.0) in
-        let path = Stdlib.String.trim (parts.1) in
+    | Some parts -> let (firstPart, secondPart) = parts in
+        let name = Stdlib.String.trim (firstPart) in
+        let path = Stdlib.String.trim (secondPart) in
         match specialPath environment.collections scopes environment.source path with
         | Error error -> Error error
         | Ok (ArrayValue id) ->
@@ -649,9 +655,9 @@ let renderIterationInstruction (instructions: List<Instruction>) (counter: Int64
 let renderCallInstruction (instructions: List<Instruction>) (counter: Int64) (scopes: List<ContextElement>) (environment: RenderEnvironment) (output: String) (reference: SourceRef) : Stdlib.Result.Result<String, TemplateError> =
     match splitAt (blockRest environment.source reference) " with " with
     | None -> Error (GenericError "Malformed call instruction.")
-    | Some parts ->
-        let name = Stdlib.String.trim (parts.0) in
-        let path = Stdlib.String.trim (parts.1) in
+    | Some parts -> let (firstPart, secondPart) = parts in
+        let name = Stdlib.String.trim (firstPart) in
+        let path = Stdlib.String.trim (secondPart) in
         match lookupPath environment.collections scopes environment.source path with
         | Error error -> Error error
         | Ok value ->

@@ -128,6 +128,8 @@ let internal generateRecursiveNominalRefCountDecHelper
             @ [ARM64Symbolic.Label doneLabel]
         | MemoryModel.RecursiveRelease recursiveType ->
             [ARM64Symbolic.BL (recursiveNominalRefCountDecHelperLabel recursiveType)]
+        | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) ->
+            [ARM64Symbolic.BL (plannedDictDecHelperLabelForReleasePlan plan)]
         | MemoryModel.RootRelease (_, MemoryModel.TaggedList, MemoryModel.TaggedListPayloadRelease elementRelease) ->
             let helper =
                 match elementRelease with
@@ -153,8 +155,6 @@ let internal generateRecursiveNominalRefCountDecHelper
                 | MemoryModel.RootRelease (_, MemoryModel.StreamHeap, _) -> plannedListDecHelperLabelForReleasePlan elementRelease
                 | MemoryModel.RootRelease (_, MemoryModel.GenericHeap, _) -> plannedListDecHelperLabelForReleasePlan elementRelease
             [ARM64Symbolic.BL helper]
-        | MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) ->
-            [ARM64Symbolic.BL (dictHelperForReleasePlan plan)]
         | MemoryModel.RootRelease (_, MemoryModel.ClosureHeap, _) ->
             [ARM64Symbolic.BL closureRefCountDecHelperLabel]
         | MemoryModel.RootRelease (_, MemoryModel.StreamHeap, _) ->

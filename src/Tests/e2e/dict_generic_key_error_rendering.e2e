@@ -1,0 +1,3 @@
+// Duplicate-key errors render keys even through a polymorphic forwarding call.
+let addChecked<'k, 'v> (dict: Dict<k, v>) (key: k) (value: v) : Dict<k, v> = Stdlib.Dict.set dict key value
+addChecked (Dict { "a": 1L }) "a" 2L = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key \"a\"\n"

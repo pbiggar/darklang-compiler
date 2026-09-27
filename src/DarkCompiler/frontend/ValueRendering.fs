@@ -518,16 +518,27 @@ let rewriteProgram
     let sums = lazy sumMetadata
 
     let env = { Records = records; Sums = sums }
+    let existingRendererNames =
+        topLevels
+        |> List.choose (function
+            | FunctionDef definition when definition.Name.StartsWith("__dark_render_") ->
+                Some (definition.Name, definition)
+            | _ -> None)
+        |> Map.ofList
     let (renderName, state) =
         match programType with
-        | TDateTime -> (None, { Functions = Map.empty; Symbols = symbols })
+        | TDateTime -> (None, { Functions = existingRendererNames; Symbols = symbols })
         | _ ->
             let (name, generatedState) =
-                ensureRenderer env programType { Functions = Map.empty; Symbols = symbols }
+                ensureRenderer env programType { Functions = existingRendererNames; Symbols = symbols }
             (Some name, generatedState)
 
-    let tryNamedPartialName expr =
+    let rec tryNamedPartialName expr =
         match expr with
+        | Let (LPVariable capture, _, body) when
+            bindingName capture symbols
+            |> Option.exists (fun name -> name.StartsWith "__partial_capture_") ->
+            tryNamedPartialName body
         | Lambda (parameters, returnAnnotation, body) ->
             let parameterIds =
                 parameters
@@ -594,6 +605,52 @@ let rewriteProgram
             match topLevel with
             | Expression expr -> rewriteExpression currentState expr
             | other -> (other, currentState)) state
-    let generatedFunctions = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
+    let generatedFunctions =
+        state.Functions
+        |> Map.filter (fun name _ -> not (Map.containsKey name existingRendererNames))
+        |> Map.toList
+        |> List.map (snd >> FunctionDef)
     let generatedTopLevels = generatedFunctions @ rewrittenTopLevels
     CheckedAST.programFromCheckedParts (finalState.Symbols, generatedTopLevels)
+
+/// Replace the concrete specialization of Dict's generic key renderer with
+/// the same monomorphic renderer used for eval results.
+let rewriteDictionaryKeyRenderers
+    (recordMetadata: CheckingTypes.IndexedTypeRegistry)
+    (sumMetadata: CheckingTypes.IndexedSumTypeRegistry)
+    (Program (symbols, topLevels))
+    : Program =
+    let symbols =
+        runtimeFunctionNames
+        |> List.fold (fun current name -> internFunction name current |> snd) symbols
+    let env =
+        { Records = lazy recordMetadata
+          Sums = lazy sumMetadata }
+    let existingRenderers =
+        topLevels
+        |> List.choose (function
+            | FunctionDef definition when definition.Name.StartsWith("__dark_render_") ->
+                Some (definition.Name, definition)
+            | _ -> None)
+        |> Map.ofList
+    let initial = { Functions = existingRenderers; Symbols = symbols }
+    let rewritten, finalState =
+        topLevels
+        |> List.mapFold (fun state topLevel ->
+            match topLevel with
+            | FunctionDef definition
+                when definition.Name.StartsWith("Darklang.Stdlib.Dict.__renderGenericKey_") ->
+                match AST.NonEmptyList.toList definition.Params with
+                | [(parameter, keyType)] ->
+                    let renderer, next = ensureRenderer env (semanticType keyType) state
+                    let body = call next.Symbols renderer [Local parameter]
+                    FunctionDef { definition with Body = body }, next
+                | _ -> Crash.crash "Dictionary key renderer has an invalid parameter list"
+            | other -> other, state)
+            initial
+    let generated =
+        finalState.Functions
+        |> Map.filter (fun name _ -> not (Map.containsKey name existingRenderers))
+        |> Map.toList
+        |> List.map (snd >> FunctionDef)
+    CheckedAST.programFromCheckedParts (finalState.Symbols, generated @ rewritten)

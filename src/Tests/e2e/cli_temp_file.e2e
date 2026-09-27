@@ -1,0 +1,3 @@
+// cli_temp_file.e2e - Native temporary-file creation is exclusive and returns an existing file.
+
+let first = Stdlib.Cli.File.createTemp () |> Builtin.unwrap in let second = Stdlib.Cli.File.createTemp () |> Builtin.unwrap in let valid = first != second && Stdlib.Cli.FileSystem.pathExists first && Stdlib.Cli.FileSystem.pathExists second in let _ = Stdlib.Cli.FileSystem.deleteFile first |> Builtin.unwrap in let _ = Stdlib.Cli.FileSystem.deleteFile second |> Builtin.unwrap in valid = true

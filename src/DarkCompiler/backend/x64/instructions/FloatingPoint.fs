@@ -36,18 +36,18 @@ let internal emitFPhi (ctx: FuncCtx) : Result<X86_64.Instr list, string> =
     Ok []
 
 let internal emitFMov (ctx: FuncCtx) (dest: LIR.FReg) (src: LIR.FReg) : Result<X86_64.Instr list, string> =
-    // Register allocation represents a parallel-move cycle temp as f2000.
+    // Register allocation represents a parallel-move cycle temp as f-2000.
     // Keep that value on the stack so every XMM register remains allocatable.
     match dest, src with
     | LIR.FVirtual -1, LIR.FPhysical srcPhys ->
         Ok [X86_64.MOVSD_reg (X86_64.XMM14, lirFRegToX86 srcPhys)]
     | LIR.FPhysical destPhys, LIR.FVirtual -1 ->
         Ok [X86_64.MOVSD_reg (lirFRegToX86 destPhys, X86_64.XMM14)]
-    | LIR.FVirtual 2000, LIR.FPhysical srcPhys ->
+    | LIR.FVirtual -2000, LIR.FPhysical srcPhys ->
         let s = lirFRegToX86 srcPhys
         Ok [ X86_64.SUB_imm (X86_64.RSP, 16)
              X86_64.MOVSD_store (X86_64.RSP, 0, s) ]
-    | LIR.FPhysical destPhys, LIR.FVirtual 2000 ->
+    | LIR.FPhysical destPhys, LIR.FVirtual -2000 ->
         let d = lirFRegToX86 destPhys
         Ok [ X86_64.MOVSD_load (d, X86_64.RSP, 0)
              X86_64.ADD_imm (X86_64.RSP, 16) ]

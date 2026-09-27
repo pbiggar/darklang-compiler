@@ -1,14 +1,14 @@
 // SyntaxTestRunner.fs - Runs canonical Dark syntax fixtures.
 module TestDSL.SyntaxTestRunner
 open System.IO
-open AST
 open TestDSL.Common
 open TestDSL.PassTestRunner
 open TestDSL.SyntaxFormat
 
-let private parse source = Parser.parseString false source
-let private format program = ASTPrettyPrinter.formatParsedProgram program
-let private normalized (program: ParsedProgram) = sprintf "%A" program
+let private parse source =
+    WrittenParsing.parse LibParser.Validation.Script source
+    |> Result.map LibParser.Validation.ValidatedSourceFile.toWrittenTypes
+let private normalized = WrittenFormatter.syntaxKey
 let private result success message expected actual : PassTestResult = { Success = success; Message = message; Expected = expected; Actual = actual }
 
 let runSyntaxTest test =
@@ -18,7 +18,7 @@ let runSyntaxTest test =
     | Ok _, Some expected -> result false "Expected syntax parsing to fail" (Some expected) (Some "Parsing succeeded")
     | Error error, None -> result false $"Syntax parsing failed: {error}" None None
     | Ok ast, None ->
-        let formatted = format ast
+        let formatted = WrittenFormatter.format test.Source ast
         match test.ExpectedFormat with
         | Some expected when normalizeLineEndings (formatted.Trim()) <> normalizeLineEndings (expected.Trim()) -> result false "Formatted syntax did not match" (Some expected) (Some formatted)
         | _ when not test.Roundtrip -> result true "Test passed" None None

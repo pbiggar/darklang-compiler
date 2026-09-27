@@ -118,6 +118,7 @@ type PipelineContext = {
     Symbols: CheckedAST.Symbols
     Target: Platform.Target
     TypeCheckEnv: CheckingTypes.TypeCheckEnv
+    WrittenEnvironment: WrittenChecking.Environment option
     CheckedValues: Map<string, CheckedValueArtifact>
     GenericFuncDefs: SpecializationIdentity.GenericFuncDefs
     SpecRegistry: SpecializationIdentity.SpecRegistry
@@ -150,6 +151,7 @@ let internal buildContext
         Symbols = symbols
         Target = target
         TypeCheckEnv = typeCheckEnv
+        WrittenEnvironment = None
         CheckedValues = checkedValues
         GenericFuncDefs = genericFuncDefs
         SpecRegistry = specRegistry
@@ -186,13 +188,12 @@ type PreambleContext = {
 type PreambleAnalysis = {
     TypedAST: CheckedAST.Program
     TypeCheckEnv: CheckingTypes.TypeCheckEnv
+    WrittenEnvironment: WrittenChecking.Environment option
     GenericFuncDefs: SpecializationIdentity.GenericFuncDefs
 }
 
 /// Result of compiling stdlib - can be reused across compilations
 type StdlibResult = {
-    /// Parsed stdlib AST (for merging with user AST)
-    AST: AST.ParsedProgram
     /// Type-checked stdlib with inferred types
     TypedAST: CheckedAST.Program
     /// Shared compilation context (typecheck env + registries)

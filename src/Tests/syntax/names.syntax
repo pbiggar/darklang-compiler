@@ -94,7 +94,7 @@ spaced declaration generic is not adjacent
 ---SOURCE---
 let identity <'a> (value: a) : a = value
 ---EXPECT-ERROR---
-Expected '=' after let binding pattern
+Generic type parameters must be adjacent to the declaration name
 
 ---NAME---
 comment-separated declaration generic is not adjacent
@@ -102,7 +102,7 @@ comment-separated declaration generic is not adjacent
 let identity// comment breaks adjacency
 <'a> (value: a) : a = value
 ---EXPECT-ERROR---
-Expected '=' after let binding pattern
+Generic type parameters must be adjacent to the declaration name
 
 ---NAME---
 module header normalizes public declarations

@@ -33,8 +33,8 @@ Stdlib.Int.bitwiseXor (-1) 0 = -1
 Stdlib.Int.shiftRight (-3) 1 = -2
 
 // Aggregate and closure ownership must handle both tagged and buffered values.
-Stdlib.Int.sum [1; 4611686018427387904; (-2)] = 4611686018427387903
-(4611686018427387904, -1).0 = 4611686018427387904
+Stdlib.Int.sum [1, 4611686018427387904, (-2)] = 4611686018427387903
+match (4611686018427387904, -1) with | (first, _) -> first = 4611686018427387904
 let captured = 4611686018427387904 in (fun offset -> captured + offset) (-1) = 4611686018427387903
 
 // Large binary shifts and decimal formatting scale with limb count.

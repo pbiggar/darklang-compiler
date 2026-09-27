@@ -23,17 +23,21 @@ let getAllStdlibFunctionNamesFromStdlib (stdlib: StdlibResult) : Set<string> =
 /// Used for coverage analysis without re-compiling stdlib
 let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string) : Result<Set<string>, string> =
     // Parse user code
-    match Parser.parseString false source with
+    match WrittenParsing.parse LibParser.Validation.Script source with
     | Error err -> Error $"Parse error: {err}"
     | Ok userAst ->
         // Type check with stdlib environment
-        match TypeChecking.checkParsedPublicProgramWithBaseEnvAndSettings
-            stdlib.Context.TypeCheckEnv
+        match WrittenChecking.checkSourceUnitsWithBase
+            stdlib.Context.WrittenEnvironment
             false
-            defaultWarningSettings
-            userAst with
-        | Error typeErr -> Error (CheckingDiagnostics.typeErrorToString typeErr)
-        | Ok (programType, typedUserAst, userEnv) ->
+            true
+            [userAst] with
+        | Error typeErr -> Error typeErr
+        | Ok (programType, typedUserAst, _) ->
+            let userEnv =
+                CheckingTypes.mergeTypeCheckEnv
+                    stdlib.Context.TypeCheckEnv
+                    (WrittenChecking.typeCheckEnvironment typedUserAst)
             let plannedUserAst = JsonPlanning.rewriteProgram userEnv typedUserAst
             let plannedProgramType = CheckingTypes.resolveType userEnv.AliasReg programType
             let renderedUserAst, boundaryProgramType =

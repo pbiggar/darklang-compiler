@@ -6,4 +6,4 @@ None |> Builtin.unwrap = exit=1 stderr="Cannot unwrap None" stdout=""
 Error 5L |> Builtin.unwrap = exit=1 stderr="Cannot unwrap Error: 5" stdout=""
 if true then 5L else None |> Builtin.unwrap = 5L
 true |> Builtin.unwrap = error="Can only unwrap Options and Results"
-Builtin.unwrap 1L 2L = error="Function Builtin.unwrap expects 1 arguments, got 2"
+Builtin.unwrap 1L 2L = compileerror="Builtin.unwrap expects 1 argument, got 2"

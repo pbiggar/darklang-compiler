@@ -22,7 +22,8 @@ module Int64 =
 
   (match 999999999999999L with
    | 0L -> "fail"
-   | 999999999999999L -> "pass") = "pass"
+   | 999999999999999L -> "pass"
+   | _ -> "unmatched") = "pass"
 
 
 module UInt64 =
@@ -43,7 +44,8 @@ module UInt64 =
 
   (match 18446744073709551615UL with
    | 0UL -> "fail"
-   | 18446744073709551615UL -> "pass") = "pass"
+   | 18446744073709551615UL -> "pass"
+   | _ -> "unmatched") = "pass"
 
 
 module Int8 =
@@ -65,7 +67,8 @@ module Int8 =
 
   (match 127y with
    | 0y -> "fail"
-   | 127y -> "pass") = "pass"
+   | 127y -> "pass"
+   | _ -> "unmatched") = "pass"
 
 
 module UInt8 =
@@ -86,7 +89,8 @@ module UInt8 =
 
   (match 255uy with
    | 0uy -> "fail"
-   | 255uy -> "pass") = "pass"
+   | 255uy -> "pass"
+   | _ -> "unmatched") = "pass"
 
 
 module Int16 =
@@ -108,7 +112,8 @@ module Int16 =
 
   (match 32767s with
    | 0s -> "fail"
-   | 32767s -> "pass") = "pass"
+   | 32767s -> "pass"
+   | _ -> "unmatched") = "pass"
 
 
 module UInt16 =
@@ -129,7 +134,8 @@ module UInt16 =
 
   (match 65535us with
    | 0us -> "fail"
-   | 65535us -> "pass") = "pass"
+   | 65535us -> "pass"
+   | _ -> "unmatched") = "pass"
 
 
 module Int32 =
@@ -151,7 +157,8 @@ module Int32 =
 
   (match 2147483647l with
    | 0l -> "fail"
-   | 2147483647l -> "pass") = "pass"
+   | 2147483647l -> "pass"
+   | _ -> "unmatched") = "pass"
 
 
 module UInt32 =
@@ -172,7 +179,8 @@ module UInt32 =
 
   (match 4294967295ul with
    | 0ul -> "fail"
-   | 4294967295ul -> "pass") = "pass"
+   | 4294967295ul -> "pass"
+   | _ -> "unmatched") = "pass"
 
 
 module Int128 =
@@ -194,7 +202,8 @@ module Int128 =
 
   (match 170141183460469231731687303715884105727Q with
    | 0Q -> "fail"
-   | 170141183460469231731687303715884105727Q -> "pass") = "pass"
+   | 170141183460469231731687303715884105727Q -> "pass"
+   | _ -> "unmatched") = "pass"
 
 
 module UInt128 =
@@ -215,7 +224,8 @@ module UInt128 =
 
   (match 340282366920938463463374607431768211455Z with
    | 0Z -> "fail"
-   | 340282366920938463463374607431768211455Z -> "pass") = "pass"
+   | 340282366920938463463374607431768211455Z -> "pass"
+   | _ -> "unmatched") = "pass"
 
 
 module String =
@@ -406,7 +416,8 @@ module List =
 
   module ListCons =
     (match [ 1L, 2L, 3L ] with
-     | 1L :: 2L :: [ 3L ] -> 42L) = 42L
+     | 1L :: 2L :: [ 3L ] -> 42L
+     | _ -> 0L) = 42L
 
     (match [ 1L, 2L, 3L ] with
      | 1L :: 2L :: [ 3L ] -> 42L
@@ -424,7 +435,8 @@ module List =
      | [] -> 4L) = 2L
 
     (match [ 1L, 2L, 3L ] with
-     | head :: rest -> head + (rest |> Stdlib.List.head |> Builtin.unwrap)) = 3L
+     | head :: rest -> head + (rest |> Stdlib.List.head |> Builtin.unwrap)
+     | [] -> 0L) = 3L
 
 
     // head tail
@@ -439,7 +451,8 @@ module List =
     (headTail [ 1L, 2L, 3L ]) = (1L, [ 2L, 3L ])
 
     (match [ "dd", "aa", "fff", "gg" ] with
-     | head :: tail -> (head, tail)) = ("dd", [ "aa", "fff", "gg" ])
+     | head :: tail -> (head, tail)
+     | [] -> ("", [])) = ("dd", [ "aa", "fff", "gg" ])
 
     // heads tail
     let sequence (list: List<Int64>) : Int64 =
@@ -471,18 +484,21 @@ module List =
     (match [ 1L, 2L, 3L, 4L ] with
      | 1L :: a :: [ 4L, 3L ] -> a + 1L
      | _ :: a :: _ -> a + 2L
-     | 1L :: a :: rest -> a + 3L) = 4L
+     | 1L :: a :: rest -> a + 3L
+     | _ -> 0L) = 4L
 
     // misc
     (match [ 1L, 2L, 3L, 4L ] with
      | 2L :: a :: [ 3L, 4L ] -> a + 1L
      | 1L :: a :: [ 4L, 3L ] -> a + 2L
      | 1L :: a :: [ 3L, 4L ] -> a + 3L
-     | 1L :: a :: rest -> a + 4L) = 5L
+     | 1L :: a :: rest -> a + 4L
+     | _ -> 0L) = 5L
 
     (match [ 1L, 2L, 3L, 4L ] with
      | 2L :: a :: rest -> a - 1L
-     | 1L :: a :: rest -> a * 2L) = 4L
+     | 1L :: a :: rest -> a * 2L
+     | _ -> 0L) = 4L
 
 
 module Tuple =
@@ -505,6 +521,7 @@ module Tuple =
    | (1L, _, true) -> "pass"
    | _ -> "fail") = "pass"
 
+  #compileerror="Tuple pattern does not match the scrutinee type"
   (match (1L, 'a') with
    | (1L, 'a', true) -> "fail"
    | (1L, 'a') -> "pass") = "pass"
@@ -565,7 +582,8 @@ module Result =
   (match Stdlib.Result.Result.Error "failure" with
    | Ok _ -> "fail"
    | Error "success" -> "fail"
-   | Error "failure" -> "pass") = "pass"
+   | Error "failure" -> "pass"
+   | _ -> "unmatched") = "pass"
 
   (match Stdlib.Result.Result.Error "failure" with
    | Ok var -> $"unexpected: {var}"
@@ -632,7 +650,7 @@ module Option =
 
 
 module Errors =
-  #compileerror="Non-exhaustive match expression for String"
+  #compileerror="Non-exhaustive match expression"
   (match "nothing matches" with
    | "not this" -> "fail") = error="No matching case found for value \"nothing matches\" in match expression"
   (match Builtin.testRuntimeError "cond is error" with
@@ -673,11 +691,11 @@ module TypeErrors =
     | TwoArgs of Int64 * Int64
 
   // enum with more pattern params than actual args
-  #compileerror="Expected 0 fields in TestType.`NoArgs` pattern, but got 1"
+  #compileerror="Constructor pattern 'TestType.NoArgs' has wrong field count"
   (match TestType.NoArgs with
    | NoArgs _ -> "wrong number") = error="No matching case found for value TypeErrors.TestType.NoArgs in match expression"
   // enum with fewer pattern params than actual args
-  #compileerror="Expected 1 fields in TestType.`OneArg` pattern, but got 0"
+  #compileerror="Constructor pattern 'TestType.OneArg' has wrong field count"
   (match TestType.OneArg 1L with
    | OneArg -> "wrong number") = error="No matching case found for value TypeErrors.TestType.OneArg(1) in match expression"
   // TODO implement MPIgnored
@@ -701,7 +719,7 @@ module GuardClause =
    | 6L -> "pass"
    | var -> "fail") = "pass"
 
-  #compileerror="Type mismatch in match body: expected String, got Bool"
+  #compileerror="Expected TString, got TBool"
   (match 5L with
    | x when x > 0L -> "positive"
    | x when x < 0L -> "negative"
@@ -724,11 +742,11 @@ module GuardClause =
    | (x, y) when x > 0L && Stdlib.String.length y == 5 -> "pass"
    | _ -> "fail") = "pass"
 
-  #compileerror="Unresolved value name: y"
+  #compileerror="Unbound local variable 'y'"
   (match -5L with
    | x when y > 0L -> true
    | _ -> false) = error="There is no variable named: y"
-  #compileerror="Unresolved value name: y"
+  #compileerror="Unbound local variable 'y'"
   (match 5L with
    | 5L -> false
    | x when y > 0L -> true) = false
@@ -738,20 +756,23 @@ module GuardClause =
    | 5L -> false) =
     true
 
-  #compileerror="There is no variable named: x"
+  #compileerror="Tuple pattern does not match the scrutinee type"
   (match 5L with
    | (x, y) when x > 0L -> true
    | _ -> false) =
      false
 
-  #compileerror="Unresolved value name: x"
+  #compileerror="Unbound local variable 'x'"
   (match 5L with
    | 2L when x > 2L -> false
    | 3L -> true) = error="No matching case found for value 5 in match expression"
 
-  (match Stdlib.Result.Result.Error 5L with
-   | Ok x when x > 2L -> false
-   | Error _ -> true) = true
+  let guardedError (value: Stdlib.Result.Result<Int64, Int64>): Bool =
+    match value with
+    | Ok x when x > 2L -> false
+    | Error _ -> true
+    | _ -> false
+  guardedError (Stdlib.Result.Result.Error 5L) = true
 
 
 module PatternGrouping =
@@ -805,19 +826,22 @@ module PatternGrouping =
    | ([x], y) | (x :: _, y) when x > 0L -> "pass"
    | _ -> "fail") = "pass"
 
+  #compileerror="Or-pattern binding 'y' has inconsistent types"
   (match [1L,2L] with
    | [x,y] | x::y -> "fail"
    | _ -> "pass") = "fail"
 
-  #compileerror="Type mismatch in string literal: expected Int64, got String"
+  #compileerror="Expected TString, got TInt64"
   (match (1L, "test") with
    | (x, "test") | ("test", x) -> x
    | _ -> "fail") = 1L
 
   (match (Stdlib.Result.Result.Ok 1L, Stdlib.Result.Result.Error "error") with
    | (Ok _ , Ok _) -> "pass"
-   | (Error err, Ok _) | (Ok _, Error err)  -> err) = "error"
+   | (Error err, Ok _) | (Ok _, Error err)  -> err
+   | _ -> "unmatched") = "error"
 
   (match (Stdlib.Result.Result.Error "error", Stdlib.Result.Result.Ok 1L) with
    | (Ok _ , Ok _) -> "pass"
-   | (Error err, Ok _) | (Ok _, Error err)  -> err) = "error"
+   | (Error err, Ok _) | (Ok _, Error err)  -> err
+   | _ -> "unmatched") = "error"

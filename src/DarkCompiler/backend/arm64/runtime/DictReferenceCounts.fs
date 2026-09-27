@@ -129,6 +129,7 @@ let internal generateDictRefCountDecHelper
     let collectInternal = label "collect_internal"
     let collectLoop = label "collect_loop"
     let freeNode = label "free_node"
+    let nextNode = label "next_node"
     let skipFreeList = label "skip_freelist"
     let skipLeafListValueRelease = label "skip_leaf_list_value_release"
     let skipLeafDictValueRelease = label "skip_leaf_dict_value_release"
@@ -326,6 +327,12 @@ let internal generateDictRefCountDecHelper
                 (int16 fieldOffset)
                 closureRefCountDecHelperLabel
                 (label $"generic_closure_{path}_{fieldOffset}_done")
+        | MemoryModel.RecursiveRelease sourceType ->
+            releaseManagedRootValueAtBaseInstrs
+                baseReg
+                (int16 fieldOffset)
+                (recursiveNominalRefCountDecHelperLabel sourceType)
+                (label $"generic_recursive_{path}_{fieldOffset}_done")
         | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, MemoryModel.FixedBlockPayloadRelease _)
         | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, MemoryModel.BoxedSumPayloadRelease _) ->
             releaseGenericValueAtBaseInstrs
@@ -580,6 +587,17 @@ let internal generateDictRefCountDecHelper
 
     let releaseLeafGenericValueInstrs =
         match leafFixedBlockValueRelease with
+        | Some (_, MemoryModel.RecursiveRelease sourceType) ->
+            [
+                ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 2us)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, skipLeafFixedBlockValueRelease)
+            ]
+            @ releaseManagedRootValueAtBaseInstrs
+                ARM64Symbolic.X3
+                8s
+                (recursiveNominalRefCountDecHelperLabel sourceType)
+                (label "leaf_recursive_value_done")
+            @ [ARM64Symbolic.Label skipLeafFixedBlockValueRelease]
         | Some (payloadSize, releasePlan) ->
             [
                 ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 2us)
@@ -599,6 +617,30 @@ let internal generateDictRefCountDecHelper
 
     let releaseCollisionGenericValueInstrs =
         match leafFixedBlockValueRelease with
+        | Some (_, MemoryModel.RecursiveRelease sourceType) ->
+            [
+                ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 3us)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.NE, skipCollisionGenericPayloadRelease)
+                ARM64Symbolic.LDR (ARM64Symbolic.X5, ARM64Symbolic.X3, 0s)
+                ARM64Symbolic.MOVZ (ARM64Symbolic.X6, 0us, 0)
+                ARM64Symbolic.Label collisionGenericPayloadLoop
+                ARM64Symbolic.CMP_reg (ARM64Symbolic.X6, ARM64Symbolic.X5)
+                ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, collisionGenericPayloadDone)
+                ARM64Symbolic.LSL_imm (ARM64Symbolic.X11, ARM64Symbolic.X6, 4)
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X11, ARM64Symbolic.X11, 8us)
+                ARM64Symbolic.ADD_reg (ARM64Symbolic.X11, ARM64Symbolic.X3, ARM64Symbolic.X11)
+            ]
+            @ releaseManagedRootValueAtBaseInstrs
+                ARM64Symbolic.X11
+                8s
+                (recursiveNominalRefCountDecHelperLabel sourceType)
+                (label "collision_recursive_value_done")
+            @ [
+                ARM64Symbolic.ADD_imm (ARM64Symbolic.X6, ARM64Symbolic.X6, 1us)
+                ARM64Symbolic.B_label collisionGenericPayloadLoop
+                ARM64Symbolic.Label collisionGenericPayloadDone
+                ARM64Symbolic.Label skipCollisionGenericPayloadRelease
+            ]
         | Some (payloadSize, releasePlan) ->
             [
                 ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 3us)
@@ -899,6 +941,12 @@ let internal generateDictRefCountDecHelper
         ARM64Symbolic.STR (ARM64Symbolic.X7, ARM64Symbolic.X3, 0s)
         ARM64Symbolic.STR (ARM64Symbolic.X3, ARM64Symbolic.X6, 0s)
         ARM64Symbolic.Label skipFreeList
+        // Internal nodes select their first child before reaching freeNode.
+        // Leaves and collisions have no child, so clear the released root.
+        ARM64Symbolic.CMP_imm (ARM64Symbolic.X2, 1us)
+        ARM64Symbolic.B_cond_label (ARM64Symbolic.EQ, nextNode)
+        ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 0us, 0)
+        ARM64Symbolic.Label nextNode
     ]
     @ leakDec
     @ [

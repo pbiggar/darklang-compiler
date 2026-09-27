@@ -488,7 +488,7 @@ let testBuildsParseableUniversalBatchSource () : TestResult =
                 Error "Expected adjacent tests with the same context and options to batch together"
             else
                 let source = buildBatchSource prepared
-                match PackageCatalog.parseProgram false source with
+                match WrittenParsing.parse LibParser.Validation.Script source with
                 | Error msg -> Error $"Generated batch source did not parse: {msg}\n{source}"
                 | Ok _ when not (source.Contains("_Check0 (seed: Int64) : Bool =")) ->
                     Error $"Generated batch did not isolate each check in a function:\n{source}"
@@ -510,10 +510,23 @@ let testBuildsParseableMultiChunkBatchSource () : TestResult =
             match tests |> List.choose tryPrepareBatchTest with
             | [ prepared ] ->
                 let source = buildBatchSource (List.replicate 33 prepared)
-                match PackageCatalog.parseProgram false source with
+                match WrittenParsing.parse LibParser.Validation.Script source with
                 | Error msg -> Error $"Generated multi-chunk batch source did not parse: {msg}\n{source}"
                 | Ok _ when not (source.EndsWith("then 1L else 0L)))")) ->
                     Error $"Generated batch did not encode its second result chunk:\n{source}"
+                | Ok _ -> Ok ()
+            | prepared -> Error $"Expected 1 universally batchable test, got {prepared.Length}")
+
+let testBuildsParseableLargeBatchSource () : TestResult =
+    withTempFileNamed "ordinary.e2e" "1L + 1L = 2L\n" (fun path ->
+        match parseE2ETestFile path with
+        | Error msg -> Error $"Expected batch fixture to parse, but got error: {msg}"
+        | Ok tests ->
+            match tests |> List.choose tryPrepareBatchTest with
+            | [ prepared ] ->
+                let source = buildBatchSource (List.replicate 220 prepared)
+                match WrittenParsing.parse LibParser.Validation.Script source with
+                | Error msg -> Error $"Generated large batch source did not parse: {msg}"
                 | Ok _ -> Ok ()
             | prepared -> Error $"Expected 1 universally batchable test, got {prepared.Length}")
 
@@ -567,7 +580,7 @@ let testDoesNotBatchIsolatedTests () : TestResult =
 
 let testBatchesEqualityInsideExplicitResultBinding () : TestResult =
     let testSource =
-        "let identityInt (value: Int) : Int = value identityInt 9223372036854775808 = 9223372036854775808\n"
+        "let identityInt (value: Int) : Int = value\nidentityInt 9223372036854775808 = 9223372036854775808\n"
     withTempFileNamed "ordinary.e2e" testSource (fun path ->
         match parseE2ETestFile path with
         | Ok [test] when Option.isSome (tryPrepareBatchTest test) -> Ok ()
@@ -639,6 +652,7 @@ let tests = [
     ("parses repeated process arguments in order", testParsesRepeatedProcessArgumentsInOrder)
     ("builds parseable universal batch source", testBuildsParseableUniversalBatchSource)
     ("builds parseable multi-chunk batch source", testBuildsParseableMultiChunkBatchSource)
+    ("builds parseable large batch source", testBuildsParseableLargeBatchSource)
     ("parses batch bitmask results", testParsesBatchBitmaskResults)
     ("parses multi-chunk batch bitmask results", testParsesMultiChunkBatchBitmaskResults)
     ("rejects invalid batch bitmask results", testRejectsInvalidBatchBitmaskResults)

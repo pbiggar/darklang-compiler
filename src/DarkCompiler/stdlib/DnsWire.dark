@@ -106,13 +106,13 @@ let __records (blob: Blob) (offset: Int64) (remaining: Int64) (acc: List<Stdlib.
                     | Ok ((canonical, afterCanonical)) ->
                         if afterCanonical != next then Error "Malformed DNS alias"
                         else Stdlib.DnsWire.__records blob next (remaining - 1L)
-                            (Stdlib.List.push acc (Stdlib.DnsWire.Record.Alias(name, canonical)))
+                                (Stdlib.List.push acc (Stdlib.DnsWire.Record.Alias(name, canonical)))
                 else Stdlib.DnsWire.__records blob next (remaining - 1L) acc
 
 let __addressBytes (blob: Blob) (offset: Int64) (remaining: Int64) (acc: List<Int64>) : List<Int64> =
     if remaining <= 0L then Stdlib.List.reverse acc
     else Stdlib.DnsWire.__addressBytes blob (offset + 1L) (remaining - 1L)
-        (Stdlib.List.push acc (Stdlib.Blob.__getByte blob offset))
+            (Stdlib.List.push acc (Stdlib.Blob.__getByte blob offset))
 
 let __addresses (blob: Blob) (records: List<Stdlib.DnsWire.Record>) (name: String) (kind: Int64) (acc: List<List<Int64>>) : List<List<Int64>> =
     match records with

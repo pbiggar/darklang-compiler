@@ -330,7 +330,7 @@ let __objectFields (source: String) (view: Stdlib.Json.InternalValueView) : Stdl
     if Stdlib.Json.__viewByte source view != 123L then Stdlib.Option.Option.None
     else Stdlib.Json.__collectObjectFields source (Stdlib.Json.__viewStart view + 1L) (Stdlib.Json.__viewEnd view)
 
-let __collectObjectFieldMap (source: String) (index: Int64) (limit: Int64) (acc: Dict<Stdlib.Json.InternalValueView>) : Stdlib.Option.Option<Dict<Stdlib.Json.InternalValueView>> =
+let __collectObjectFieldMap (source: String) (index: Int64) (limit: Int64) (acc: Dict<String, Stdlib.Json.InternalValueView>) : Stdlib.Option.Option<Dict<String, Stdlib.Json.InternalValueView>> =
     let current = Stdlib.AltJson.__skipTrivia source index limit in
     if current < 0L || current >= limit then Stdlib.Option.Option.None
     else if Stdlib.String.__byteAtUnchecked source current == 125L then
@@ -369,7 +369,7 @@ let __collectObjectFieldMap (source: String) (index: Int64) (limit: Int64) (acc:
                             Stdlib.Json.__collectObjectFieldMap source (afterTrivia + 1L) limit nextAcc
                         else Stdlib.Option.Option.None
 
-let __objectFieldMap (source: String) (view: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Dict<Stdlib.Json.InternalValueView>> =
+let __objectFieldMap (source: String) (view: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Dict<String, Stdlib.Json.InternalValueView>> =
     if Stdlib.Json.__viewByte source view != 123L then Stdlib.Option.Option.None
     else
         Stdlib.Json.__collectObjectFieldMap source (Stdlib.Json.__viewStart view + 1L) (Stdlib.Json.__viewEnd view) (Dict { })
@@ -571,12 +571,12 @@ let __serializeFloat (value: Float) : String =
         let absolute = Stdlib.Float.absoluteValue value in
         if absolute == 0.0 then if Stdlib.UInt64.shiftRight bits 63UL == 1UL then "-0.0" else "0.0"
         else
-            let ratio = Stdlib.Json.__floatRatio absolute in
+            let (numerator, denominator) = Stdlib.Json.__floatRatio absolute in
             let rendered =
                 if absolute >= 10000000000000000.0 || absolute < 0.0001 then
-                    Stdlib.Json.__shortestScientificFloat (ratio.0) (ratio.1) (Stdlib.Float.__toBits absolute) 1L
+                    Stdlib.Json.__shortestScientificFloat numerator denominator (Stdlib.Float.__toBits absolute) 1L
                 else
-                    Stdlib.Json.__shortestFloat (ratio.0) (ratio.1) (Stdlib.Float.__toBits absolute) 1L in
+                    Stdlib.Json.__shortestFloat numerator denominator (Stdlib.Float.__toBits absolute) 1L in
             if Stdlib.UInt64.shiftRight bits 63UL == 1UL then "-" ++ rendered else rendered
 
 let __numberHasDecimalSyntax (text: String) : Bool =

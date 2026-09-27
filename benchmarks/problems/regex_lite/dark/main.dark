@@ -44,8 +44,8 @@ let parseAlternatives (pattern: String) (index: Int64) (reversedPieces: List<Pie
     else if byteAt pattern index == 124L then
         parseAlternatives pattern (index + 1L) [] (Stdlib.List.push reversedAlternatives (Stdlib.List.reverse reversedPieces))
     else
-        let parsed = parsePiece pattern index in
-        parseAlternatives pattern (parsed.1) (Stdlib.List.push reversedPieces (parsed.0)) reversedAlternatives
+        let (piece, nextIndex) = parsePiece pattern index in
+        parseAlternatives pattern nextIndex (Stdlib.List.push reversedPieces piece) reversedAlternatives
 
 let atomMatches (atom: Atom) (byte: Int64) : Bool =
     match atom with
@@ -110,8 +110,8 @@ let scan (alternatives: List<List<Piece>>) (text: String) (length: Int64) (posit
 let run (remaining: Int64) (alternatives: List<List<Piece>>) (text: String) (result: Int64) : Int64 =
     if remaining <= 0L then result
     else
-        let found = scan alternatives text (stringLength text) 0L 0L 0L in
-        run (remaining - 1L) alternatives text ((result + found.0 * 1000003L + found.1) % 1000000007L)
+        let (matches, checksum) = scan alternatives text (stringLength text) 0L 0L 0L in
+        run (remaining - 1L) alternatives text ((result + matches * 1000003L + checksum) % 1000000007L)
 
 let benchmarkArg (index: Int) : Int64 =
     match Stdlib.Cli.Args.int64 index with

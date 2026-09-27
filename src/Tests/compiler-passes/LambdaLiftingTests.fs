@@ -13,9 +13,7 @@ open LiftFunctions
 open PrepareFunctions
 open LoweringExpressions
 open AST_to_ANF
-open Parser
 open CheckingDiagnostics
-open TypeChecking
 type TestResult = Result<unit, string>
 
 let private convertProgramToAnf (typedAst: CheckedAST.Program) : Result<ANF.Program, string> =
@@ -46,11 +44,11 @@ let testLetBoundTupleReturnType () : TestResult =
     let source =
         "let apply (f: Int64 -> (Int64 * Int64)) (x: Int64) : (Int64 * Int64) = f x\n" +
         "apply (fun x -> let t = (x, x + 1L) in t) 1L"
-    match parseString false source with
+    match WrittenParsing.parse LibParser.Validation.Script source with
     | Error err -> Error $"Parse error: {err}"
     | Ok ast ->
-        match checkParsedProgram ast with
-        | Error err -> Error $"Type error: {typeErrorToString err}"
+        match WrittenChecking.checkSourceUnits false true [ast] with
+        | Error err -> Error $"Type error: {err}"
         | Ok (_, typedAst) ->
             match convertProgramToAnf typedAst with
             | Error err -> Error $"ANF conversion error: {err}"

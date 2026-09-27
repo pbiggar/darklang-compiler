@@ -59,6 +59,17 @@ let rec private collectHelperTypes
             match CheckedAST.functionName name symbols, typeArgs, arguments with
             | Some "__dark_internal_eq_helper_dispatch", [targetType], [_; _] ->
                 Set.singleton (resolveType aliasReg targetType)
+            // These traversals never compare their element type. Eagerly building
+            // equality for ErrorSegment here expands its recursive Dval fields.
+            | Some ("Darklang.Stdlib.List.reverse"
+                  | "Darklang.Stdlib.List.fold"
+                  | "Darklang.Stdlib.List.push"
+                  | "Darklang.Stdlib.List.map"
+                  | "Darklang.Stdlib.List.append"
+                  | "Darklang.Stdlib.List.head"
+                  | "Darklang.Stdlib.List.getAt"
+                  | "Darklang.Stdlib.List.indexedMap"
+                  | "Darklang.Stdlib.Dict.__entries"), _, _ -> Set.empty
             | _ -> concreteTypeArgs
         let compareTypes =
             match CheckedAST.functionName name symbols, typeArgs with

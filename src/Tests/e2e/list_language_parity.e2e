@@ -1,17 +1,17 @@
 // list_language_parity.e2e - Canonical interpreter-compatible list syntax and behavior.
 
 // Literal separators and trailing layout normalize to ordinary list literals.
-[1L, 2L, 3L] = [1L; 2L; 3L]
-[1L, ...[2L]] = error="Parse error: Expected expression"
-match [1L] with | [head, ...tail] -> head | _ -> 0L = error="Parse error: Expected pattern"
+[1L, 2L, 3L] = [1L, 2L, 3L]
+[1L, ...[2L]] = compileerror="PARSE-UNEXPECTED"
+match [1L] with | [head, ...tail] -> head | _ -> 0L = compileerror="PARSE-UNEXPECTED"
 
 // Append is right-associative and retains homogeneous list typing.
 [1L] @ [2L] @ [3L] = [1L, 2L, 3L]
-[1L, "two"] = error="Type mismatch"
+[1L, "two"] = compileerror="Expected TInt64, got TString"
 
 // Canonical cons patterns preserve binding order and support nesting.
-match [1L, 2L, 3L] with | head :: second :: tail -> (head, second, tail) | [] -> (0L, 0L, []) = (1L, 2L, [3L])
-match [[1L, 2L], [3L]] with | [first :: firstTail, [only]] -> (first, firstTail, only) | _ -> (0L, [], 0L) = (1L, [2L], 3L)
+match [1L, 2L, 3L] with | head :: second :: tail -> (head, second, tail) | [] -> (0L, 0L, []) | _ -> (0L, 0L, []) = (1L, 2L, [3L])
+match [[1L, 2L], [3L]] with | [(first :: firstTail), [only]] -> (first, firstTail, only) | _ -> (0L, [], 0L) = (1L, [2L], 3L)
 match [1L] with | head :: [] -> head | _ -> 0L = 1L
 match [1L, 2L] with | head :: [last] -> head + last | _ -> 0L = 3L
 match [[1L, 2L]] with | (head :: innerTail) :: [] -> (head, innerTail) | _ -> (0L, []) = (1L, [2L])

@@ -1,0 +1,3 @@
+// Generic equality retains its type plan through specialization.
+let writtenGenericEquals<'a> (left: a) (right: a): Bool = left == right
+writtenGenericEquals<List<Int64>> [1L, 2L] [1L, 2L] = true

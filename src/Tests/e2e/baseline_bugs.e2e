@@ -91,21 +91,21 @@ selfCycle 42L 10L = 42L
 // ===================================================================
 
 // Simple tuple access
-let t = (10L, 20L, 30L) in t.0 + t.1 + t.2 = 60L
+let (a, b, c) = (10L, 20L, 30L) in a + b + c = 60L
 
-// Nested tuple - use parentheses for chained tuple access (outer.0.0 not supported)
-let outer = ((1L, 2L), (3L, 4L)) in (outer.0).0 + (outer.0).1 + (outer.1).0 + (outer.1).1 = 10L
+// Nested tuple pattern
+let ((a, b), (c, d)) = ((1L, 2L), (3L, 4L)) in a + b + c + d = 10L
 
 // Alias chain (transitive)
-let a = (1L, 2L) in let b = a in let c = b in let d = c in d.0 + d.1 = 3L
+let a = (1L, 2L) in let b = a in let c = b in let (first, second) = c in first + second = 3L
 
 // Heap value returned from function
 let makePair (x: Int64) : (Int64 * Int64) = (x, x + 1L)
 
-let p = makePair 10L in p.0 + p.1 = 21L
+let (first, second) = makePair 10L in first + second = 21L
 
 // Heap value not returned (should be freed)
-let heapNoReturn (n: Int64) : Int64 = let t = (n, n + 1L) in t.0 + t.1
+let heapNoReturn (n: Int64) : Int64 = let (first, second) = (n, n + 1L) in first + second
 
 heapNoReturn 5L = 11L
 

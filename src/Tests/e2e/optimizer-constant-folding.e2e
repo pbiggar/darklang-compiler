@@ -543,13 +543,7 @@ multiConstProp (-10L) = 20L
 // Tests that Int64Const propagation works correctly through branches
 let constPropThroughBranch (flag: Bool) (x: Int64) : Int64 =
   let base = 100L in
-  let result = if flag then
-    let adjusted = base + x in  // 100 + x
-    adjusted
-  else
-    let adjusted = base - x in  // 100 - x
-    adjusted
-  in
+  let result = (if flag then (let adjusted = base + x in adjusted) else (let adjusted = base - x in adjusted)) in
   result + base  // result + 100
 
 constPropThroughBranch true 5L = 205L
@@ -875,14 +869,8 @@ licmHoistableChain 10L 3L 0L = 81L
 let licmBlockChangeProp (x: Int64) (flag: Bool) (n: Int64) (acc: Int64) : Int64 =
   if n <= 0L then acc
   else
-    let result = if flag then
-      // This block has hoistable code: x * x is loop-invariant
-      let sq = x * x in
-      sq
-    else
-      // This block has no hoistable code: n is loop-variant
-      n * 2L
-    in
+    // The true branch computes a loop-invariant square; the false branch depends on n.
+    let result = (if flag then (let sq = x * x in sq) else n * 2L) in
     licmBlockChangeProp x flag (n - 1L) (acc + result)
 
 // flag=true: uses sq = x*x = 9, each of 4 iterations adds 9 = 36
@@ -896,14 +884,8 @@ let licmBlockChainHoist (a: Int64) (b: Int64) (flag: Bool) (n: Int64) : Int64 =
   else
     // First block: hoistable computation
     let pre = a + b in
-    let result = if flag then
-      // This branch uses 'pre' and computes further hoistable value
-      let doubled = pre * 2L in
-      doubled
-    else
-      // This branch doesn't have additional hoisting
-      pre
-    in
+    // The true branch computes from the loop-invariant pre value.
+    let result = (if flag then (let doubled = pre * 2L in doubled) else pre) in
     result + licmBlockChainHoist a b flag (n - 1L)
 
 // flag=true: pre=3+4=7, doubled=14, 3 iterations = 42

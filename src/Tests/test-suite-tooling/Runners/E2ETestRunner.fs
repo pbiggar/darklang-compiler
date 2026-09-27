@@ -6,7 +6,6 @@ module TestDSL.E2ETestRunner
 
 open System
 open AST
-open AST.Parsed
 open LoweringPrimitives
 open TypeRegistries
 open SpecializationIdentity
@@ -26,86 +25,131 @@ let private isInternalTestFile (sourceFile: string) : bool =
 // Build the source expression to execute for a test.
 // For `lhs = rhs` value tests, run a synthesized equality assertion.
 
-let private asSingleExpression (program: ParsedProgram) : ParsedExpr option =
-    let (ParsedProgram topLevels) = program
-    match topLevels with
-    | [ParsedExpression (_, expr)] -> Some expr
+module WT = LibParser.WrittenTypes
+
+let private sourceOffset (source: string) (position: LibParser.Tokenizer.Pos) : int =
+    let lines = source.Split('\n')
+    (lines |> Array.take position.row |> Array.sumBy (fun line -> line.Length + 1))
+    + position.column
+
+/// Older E2E lines place an entry after a function declaration's semicolon.
+/// The interpreter parser treats that semicolon as part of the function body.
+let private normalizeInlineEntry (source: string) : string =
+    let normalized = source.Replace("\r\n", "\n")
+    let alreadyHasEntry =
+        match WrittenParsing.parse LibParser.Validation.Script normalized with
+        | Ok parsed ->
+            let written = LibParser.Validation.ValidatedSourceFile.toWrittenTypes parsed
+            not (List.isEmpty written.exprsToEval)
+        | Error _ -> false
+    if alreadyHasEntry then normalized
+    else
+        let lastSeparator = normalized.LastIndexOf(';')
+        let separated =
+            if lastSeparator < 0 then None
+            else
+                let candidate =
+                    normalized.Substring(0, lastSeparator)
+                    + "\n\n"
+                    + normalized.Substring(lastSeparator + 1)
+                match WrittenParsing.parse LibParser.Validation.Script candidate with
+                | Ok parsedCandidate ->
+                    let candidateSource =
+                        LibParser.Validation.ValidatedSourceFile.toWrittenTypes parsedCandidate
+                    if candidateSource.exprsToEval.Length = 1 then Some candidate
+                    else None
+                | Error _ -> None
+        match separated with
+        | Some candidate -> candidate
+        | None -> normalized
+
+let private parseWritten (source: string) =
+    WrittenParsing.parse LibParser.Validation.Script source
+    |> Result.map LibParser.Validation.ValidatedSourceFile.toWrittenTypes
+
+let private asSingleWrittenExpression (source: WT.SourceFile) =
+    match source.declarations, source.exprsToEval with
+    | [], [expression] -> Some expression
     | _ -> None
 
-let private valueFloatEpsilon : float = 0.00000000001
-
-let private isFloatExpectedExpr (expr: ParsedExpr) : bool =
+let private isFloatExpectedExpr (expr: WT.Expr) : bool =
     match expr with
-    | FloatLiteral _ -> true
-    | UnaryOp (Neg, FloatLiteral _) -> true
+    | WT.EFloat _ -> true
+    | WT.EApply (_, WT.EFnName (_, name), _, _) when name.fn.name = "negate" -> true
     | _ -> false
 
-let private buildValueComparisonExpr
-    (lhsExpr: ParsedExpr)
-    (rhsExpr: ParsedExpr)
-    : ParsedExpr =
-    if isFloatExpectedExpr rhsExpr then
-        // For float value tests, compare with epsilon tolerance.
-        let absDiff =
-            Apply (Var "Darklang.Stdlib.Float.absoluteValue", [], NonEmptyList.singleton (BinOp (Sub, lhsExpr, rhsExpr)))
-        BinOp (Lt, absDiff, FloatLiteral valueFloatEpsilon)
-    else
-        BinOp (Eq, lhsExpr, rhsExpr)
-
-let private tryFormatProgramIfStable
-    (allowInternal: bool)
-    (program: ParsedProgram)
-    : string option =
-    let formatted = ASTPrettyPrinter.formatParsedProgram program
-    match PackageCatalog.parseProgram allowInternal formatted with
-    | Ok _ ->
-        // Stable recursive identities include structural declaration paths.
-        // Test synthesis inserts a checker declaration, so a valid reparse can
-        // deliberately receive different identities while retaining the same
-        // source semantics. The dedicated syntax corpus owns exact roundtrips.
-        Some formatted
-    | Error _ -> None
-
-let private pickValueCheckFuncName (topLevels: ParsedTopLevel list) : string =
-    let existingNames =
-        topLevels
-        |> List.choose (function
-            | ParsedFunctionDef fn -> Some fn.Name
-            | _ -> None)
-        |> Set.ofList
-    let rec loop idx =
-        let candidate =
-            if idx = 0 then
-                "e2eValueCheck"
-            else
-                $"e2eValueCheck{idx}"
-        if Set.contains candidate existingNames then
-            loop (idx + 1)
+/// Preserve evaluation order for legacy parenthesized `;` sequences that the
+/// copied parser cannot read directly, before synthesizing a value assertion.
+let private rewriteParenthesizedStatements (source: string) : string =
+    let rec quoted index escaped reversed =
+        if index >= source.Length then String.concat "" (List.rev reversed), index
         else
-            candidate
-    loop 0
+            let character = source.[index]
+            let next = string character :: reversed
+            if escaped then quoted (index + 1) false next
+            elif character = '\\' then quoted (index + 1) true next
+            elif character = '"' then String.concat "" (List.rev next), index + 1
+            else quoted (index + 1) false next
+
+    let rec group closing index =
+        let rec collect position reversedCurrent reversedStatements =
+            if position >= source.Length || Some source.[position] = closing then
+                let current = String.concat "" (List.rev reversedCurrent)
+                let statements = List.rev reversedStatements
+                let rewritten =
+                    List.foldBack
+                        (fun statement rest -> $"let _ = {statement} in {rest}")
+                        statements
+                        current
+                rewritten, (if position < source.Length then position + 1 else position)
+            else
+                match source.[position] with
+                | '"' ->
+                    let text, next = quoted (position + 1) false ["\""]
+                    collect next (text :: reversedCurrent) reversedStatements
+                | '(' | '[' | '{' as opener ->
+                    let closer = if opener = '(' then ')' elif opener = '[' then ']' else '}'
+                    let inner, next = group (Some closer) (position + 1)
+                    collect next ($"{opener}{inner}{closer}" :: reversedCurrent) reversedStatements
+                | ';' when closing = Some ')' ->
+                    let statement = String.concat "" (List.rev reversedCurrent)
+                    collect (position + 1) [] (statement :: reversedStatements)
+                | character ->
+                    collect (position + 1) (string character :: reversedCurrent) reversedStatements
+        collect index [] []
+
+    group None 0 |> fst
 
 let private trySynthesizeValueEqualitySource
-    (allowInternal: bool)
+    (_allowInternal: bool)
     (source: string)
     (rhsExpr: string)
     : string option =
-    let sourceProgramResult = PackageCatalog.parseProgram allowInternal source
-    let rhsProgramResult = PackageCatalog.parseProgram allowInternal rhsExpr
-
-    match sourceProgramResult, rhsProgramResult with
-    | Ok (ParsedProgram sourceTopLevels), Ok rhsProgram ->
-        match List.rev sourceTopLevels, asSingleExpression rhsProgram with
-        | ParsedExpression (_, lhsExpr) :: sourceRestRev, Some rhsAst ->
-            let comparisonExpr = buildValueComparisonExpr lhsExpr rhsAst
-            let directEqProgram =
-                ParsedProgram (List.rev (ParsedExpression ([], comparisonExpr) :: sourceRestRev))
-
-            tryFormatProgramIfStable allowInternal directEqProgram
-        | _ ->
-            None
-    | _ ->
-        None
+    let normalized = normalizeInlineEntry source
+    let normalized =
+        match parseWritten normalized with
+        | Ok _ -> normalized
+        | Error _ ->
+            rewriteParenthesizedStatements source
+            |> normalizeInlineEntry
+    match parseWritten normalized, parseWritten rhsExpr with
+    | Ok leftProgram, Ok rightProgram ->
+        match List.tryLast leftProgram.exprsToEval, asSingleWrittenExpression rightProgram with
+        | Some left, Some right ->
+            let leftRange = WT.exprRange left
+            let prefix = normalized.Substring(0, sourceOffset normalized leftRange.start)
+            let lhs = normalized.Substring(sourceOffset normalized leftRange.start).Trim()
+            let rhs = rhsExpr.Trim()
+            let comparison =
+                if isFloatExpectedExpr right then
+                    $"Stdlib.Float.absoluteValue (({lhs}) - ({rhs})) < 0.00000000001"
+                else $"({lhs}) == ({rhs})"
+            let candidate = prefix + comparison
+            match parseWritten candidate with
+            | Ok _ -> Some candidate
+            | Error _ -> None
+        | _ -> None
+    | _ -> None
 
 let private sourceToExecute
     (allowInternal: bool)
@@ -116,11 +160,8 @@ let private sourceToExecute
         match trySynthesizeValueEqualitySource allowInternal test.Source rhsExpr with
         | Some rewritten -> Ok rewritten
         | None ->
-            // Some interpreter-specific forms (for example operator sections) can fail
-            // AST pretty-print roundtrips even though the direct source is valid.
-            // Fall back to textual wrapping and parse-validate before execution.
             let fallbackSource = $"({test.Source}) == ({rhsExpr})"
-            match PackageCatalog.parseProgram allowInternal fallbackSource with
+            match parseWritten fallbackSource with
             | Ok _ -> Ok fallbackSource
             | Error _ ->
                 Error (
@@ -128,7 +169,7 @@ let private sourceToExecute
                     + "Expected-value tests must parse as a program whose last top-level is an expression,\n"
                     + "and RHS must parse as a single expression."
                 )
-    | None -> Ok test.Source
+    | None -> Ok (normalizeInlineEntry test.Source)
 
 /// Result of running an E2E test
 type E2ERun =
@@ -179,7 +220,7 @@ let private canEmbedBatchEqualitySource
         + "  let e2eBatchEligibilityFence = fun value -> if seed == 0L then value else false in\n"
         + "  e2eBatchEligibilityFence (e2eBatchEligibilityResult)\n\n"
         + "e2eBatchEligibilityCheck (0L)"
-    PackageCatalog.parseProgram allowInternal probe |> Result.isOk
+    WrittenParsing.parse LibParser.Validation.Script probe |> Result.isOk
 
 /// Only value-equality tests with no process contract can share a process. The
 /// compiler path and options remain production-identical; only the synthesized
@@ -204,8 +245,10 @@ let tryPrepareBatchTest (test: E2ETest) : PreparedE2EBatchTest option =
         match sourceToExecute allowInternal test with
         | Error _ -> None
         | Ok equalitySource ->
-            match PackageCatalog.parseProgram allowInternal equalitySource with
-            | Ok (ParsedProgram [ParsedExpression _]) when canEmbedBatchEqualitySource allowInternal equalitySource ->
+            match parseWritten equalitySource with
+            | Ok program when List.isEmpty program.declarations
+                              && program.exprsToEval.Length = 1
+                              && canEmbedBatchEqualitySource allowInternal equalitySource ->
                 Some { Test = test; EqualitySource = equalitySource }
             | Ok _
             | Error _ -> None
@@ -282,256 +325,45 @@ let private isUpstreamDarkTestFile (sourceFile: string) : bool =
     normalized.Contains("/e2e/upstream/")
     && normalized.EndsWith(".dark", StringComparison.OrdinalIgnoreCase)
 
-let rec private collectPatternBoundNames (pattern: Pattern) : Set<string> =
-    match pattern with
-    | PVar name ->
-        Set.singleton name
-    | PConstructor (_, fields) ->
-        fields |> List.map collectPatternBoundNames |> List.fold Set.union Set.empty
-    | PTuple patterns ->
-        patterns
-        |> List.map collectPatternBoundNames
-        |> List.fold Set.union Set.empty
-    | PList patterns ->
-        patterns
-        |> List.map collectPatternBoundNames
-        |> List.fold Set.union Set.empty
-    | PListCons (headPatterns, tailPattern) ->
-        let headBound =
-            headPatterns
-            |> List.map collectPatternBoundNames
-            |> List.fold Set.union Set.empty
-        Set.union headBound (collectPatternBoundNames tailPattern)
-    | _ ->
-        Set.empty
+let private parsePreambleAsProgram
+    (_allowInternal: bool)
+    (preamble: string)
+    : Result<WT.SourceFile, string> =
+    parseWritten preamble
 
-let rec private collectLetPatternBoundNames (pattern: LetPattern) : Set<string> =
-    match pattern with
-    | LPVariable name -> Set.singleton name
-    | LPTuple (first, second, rest) ->
-        first :: second :: rest
-        |> List.map collectLetPatternBoundNames
-        |> List.fold Set.union Set.empty
-    | LPUnit | LPWildcard -> Set.empty
+let private preambleFunctionDefs (program: WT.SourceFile) : WT.FnDecl list =
+    program.declarations
+    |> List.choose (function WT.DFunction definition -> Some definition | _ -> None)
 
-let rec private collectExprReferencedPreambleFuncsWithBound
-    (knownPreambleFunctions: Set<string>)
-    (boundVars: Set<string>)
-    (expr: ParsedExpr)
+let private referencedPreambleFunctions
+    (known: Set<string>)
+    (expression: WT.Expr)
     : Set<string> =
-    let combineMany (sets: Set<string> list) : Set<string> =
-        sets |> List.fold Set.union Set.empty
-
-    let collectCallLike
-        (funcName: string)
-        (args: NonEmptyList<ParsedExpr>)
-        : Set<string> =
-        let fromFuncName =
-            if Set.contains funcName knownPreambleFunctions
-               && not (Set.contains funcName boundVars) then
-                Set.singleton funcName
-            else
-                Set.empty
-        let fromArgs =
-            args
-            |> NonEmptyList.toList
-            |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
-            |> combineMany
-        Set.union fromFuncName fromArgs
-
-    match expr with
-    | UnitLiteral
-    | Int64Literal _
-    | Int128Literal _
-    | BigIntLiteral _
-    | Int8Literal _
-    | Int16Literal _
-    | Int32Literal _
-    | UInt8Literal _
-    | UInt16Literal _
-    | UInt32Literal _
-    | UInt64Literal _
-    | UInt128Literal _
-    | BoolLiteral _
-    | StringLiteral _
-    | CharLiteral _
-    | FloatLiteral _ ->
-        Set.empty
-    | InterpolatedString parts ->
-        parts
-        |> List.map (function
-            | StringText _ -> Set.empty
-            | StringExpr partExpr ->
-                collectExprReferencedPreambleFuncsWithBound
-                    knownPreambleFunctions
-                    boundVars
-                    partExpr)
-        |> combineMany
-    | BinOp (_, left, right) ->
-        Set.union
-            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars left)
-            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars right)
-    | UnaryOp (_, inner) ->
-        collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars inner
-    | Let (pattern, valueExpr, bodyExpr) ->
-        let valueRefs =
-            collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars valueExpr
-        let bodyRefs =
-            collectExprReferencedPreambleFuncsWithBound
-                knownPreambleFunctions
-                (Set.union boundVars (collectLetPatternBoundNames pattern))
-                bodyExpr
-        Set.union valueRefs bodyRefs
-    | RecursiveLet (recursion, valueExpr, bodyExpr) ->
-        let recursiveBound = Set.add (recursiveBindingName recursion) boundVars
-        Set.union
-            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions recursiveBound valueExpr)
-            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions recursiveBound bodyExpr)
-    | Var name ->
-        if Set.contains name knownPreambleFunctions
-           && not (Set.contains name boundVars) then
-            Set.singleton name
-        else
-            Set.empty
-    | If (condExpr, thenExpr, elseExpr) ->
-        combineMany [
-            collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars condExpr
-            collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars thenExpr
-            collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars elseExpr
-        ]
-    | Sequence (firstExpr, nextExpr) ->
-        Set.union
-            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars firstExpr)
-            (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars nextExpr)
-    | Apply (Var funcName, _, args) ->
-        collectCallLike funcName args
-    | TupleLiteral elements ->
-        elements
-        |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
-        |> combineMany
-    | TupleAccess (tupleExpr, _index) ->
-        collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars tupleExpr
-    | DictLiteral (_, _, entries) ->
-        entries
-        |> List.collect (fun (key, value) -> [key; value])
-        |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
-        |> combineMany
-    | RecordLiteral (_typeName, fields) ->
-        fields
-        |> List.map snd
-        |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
-        |> combineMany
-    | RecordUpdate (recordExpr, updates) ->
-        let recordRefs =
-            collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars recordExpr
-        let updateRefs =
-            updates
-            |> List.map snd
-            |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
-            |> combineMany
-        Set.union recordRefs updateRefs
-    | RecordAccess (recordExpr, _fieldName) ->
-        collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars recordExpr
-    | Constructor (_typeName, _variantName, fields) ->
-        fields
-        |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
-        |> List.fold Set.union Set.empty
-    | Match (scrutineeExpr, cases) ->
-        let scrutineeRefs =
-            collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars scrutineeExpr
-        let caseRefs =
-            cases
-            |> List.map (fun case ->
-                let caseBoundNames =
-                    case.Patterns
-                    |> NonEmptyList.toList
-                    |> List.map collectPatternBoundNames
-                    |> List.fold Set.union Set.empty
-                let guardRefs =
-                    case.Guard
-                    |> Option.map (
-                        collectExprReferencedPreambleFuncsWithBound
-                            knownPreambleFunctions
-                            boundVars
-                    )
-                    |> Option.defaultValue Set.empty
-                let bodyRefs =
-                    collectExprReferencedPreambleFuncsWithBound
-                        knownPreambleFunctions
-                        (Set.union boundVars caseBoundNames)
-                        case.Body
-                Set.union guardRefs bodyRefs)
-            |> combineMany
-        Set.union scrutineeRefs caseRefs
-    | ListLiteral elements ->
-        elements
-        |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
-        |> combineMany
-    | Lambda (parameters, _, bodyExpr) ->
-        let lambdaBoundVars =
-            parameters
-            |> NonEmptyList.toList
-            |> List.map (fun parameter -> collectLetPatternBoundNames parameter.Pattern)
-            |> List.fold Set.union Set.empty
-            |> Set.union boundVars
-        collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions lambdaBoundVars bodyExpr
-    | Apply (funcExpr, _, args) ->
-        let funcRefs =
-            collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars funcExpr
-        let argRefs =
-            args
-            |> NonEmptyList.toList
-            |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
-            |> combineMany
-        Set.union funcRefs argRefs
-
-let private collectExprReferencedPreambleFuncs
-    (knownPreambleFunctions: Set<string>)
-    (expr: ParsedExpr)
-    : Set<string> =
-    collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions Set.empty expr
+    WrittenSource.expressionNames expression
+    |> Set.ofList
+    |> Set.intersect known
 
 let private collectProgramReferencedPreambleFuncs
-    (knownPreambleFunctions: Set<string>)
-    (program: ParsedProgram)
+    (known: Set<string>)
+    (program: WT.SourceFile)
     : Set<string> =
-    let (ParsedProgram topLevels) = program
-    topLevels
-    |> List.map (function
-        | ParsedFunctionDef funcDef ->
-            let paramBoundVars =
-                funcDef.Params
-                |> NonEmptyList.toList
-                |> List.map fst
-                |> Set.ofList
-            collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions paramBoundVars funcDef.Body
-        | ParsedExpression (_, expr) ->
-            collectExprReferencedPreambleFuncs knownPreambleFunctions expr
-        | ParsedValueDef (ParsedUncheckedValueDef (_, body)) ->
-            collectExprReferencedPreambleFuncs knownPreambleFunctions body
-        | ParsedTypeDef _ ->
-            Set.empty)
+    let declarations =
+        program.declarations
+        |> List.choose (function
+            | WT.DFunction definition -> Some definition.body
+            | WT.DValue definition -> Some definition.body
+            | _ -> None)
+    declarations @ program.exprsToEval
+    |> List.map (referencedPreambleFunctions known)
     |> List.fold Set.union Set.empty
 
-let private collectFunctionReferencedPreambleFuncs
-    (knownPreambleFunctions: Set<string>)
-    (funcDef: ParsedFunctionDef)
-    : Set<string> =
-    let paramBoundVars =
-        funcDef.Params
-        |> NonEmptyList.toList
-        |> List.map fst
-        |> Set.ofList
-    collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions paramBoundVars funcDef.Body
-
 let private buildPreambleFunctionDependencyMap
-    (preambleFunctionNames: Set<string>)
-    (preambleFunctionDefs: ParsedFunctionDef list)
+    (known: Set<string>)
+    (definitions: WT.FnDecl list)
     : Map<string, Set<string>> =
-    preambleFunctionDefs
-    |> List.map (fun funcDef ->
-        let deps = collectFunctionReferencedPreambleFuncs preambleFunctionNames funcDef
-        (funcDef.Name, deps))
+    definitions
+    |> List.map (fun definition ->
+        definition.name.name, referencedPreambleFunctions known definition.body)
     |> Map.ofList
 
 let private expandRequiredPreambleFunctions
@@ -539,36 +371,53 @@ let private expandRequiredPreambleFunctions
     (initial: Set<string>)
     : Set<string> =
     let rec loop (pending: Set<string>) (required: Set<string>) : Set<string> =
-        if Set.isEmpty pending then
-            required
+        if Set.isEmpty pending then required
         else
             let discovered =
                 pending
-                |> Set.fold
-                    (fun acc funcName ->
-                        let deps = Map.tryFind funcName dependencyMap |> Option.defaultValue Set.empty
-                        Set.union acc deps)
-                    Set.empty
+                |> Set.fold (fun acc name ->
+                    Map.tryFind name dependencyMap
+                    |> Option.defaultValue Set.empty
+                    |> Set.union acc) Set.empty
                 |> Set.filter (fun name -> not (Set.contains name required))
             loop discovered (Set.union required discovered)
     loop initial initial
 
-let private reducePreambleTopLevelsToRequiredFunctions
-    (requiredFunctions: Set<string>)
-    (preambleTopLevels: ParsedTopLevel list)
-    : ParsedTopLevel list =
-    preambleTopLevels
-    |> List.filter (function
-        | ParsedTypeDef _ -> true
-        | ParsedValueDef _ -> true
-        | ParsedFunctionDef funcDef -> Set.contains funcDef.Name requiredFunctions
-        | ParsedExpression _ -> false)
+let private declarationRange declaration =
+    match declaration with
+    | WT.DFunction value -> value.range
+    | WT.DValue value -> value.range
+    | WT.DType value
+    | WT.DTypeDB value -> value.range
+    | WT.DModule value -> value.range
+    | WT.DExpr value -> WT.exprRange value
+    | WT.DTest value -> value.range
 
-let private parsePreambleAsProgram
-    (allowInternal: bool)
-    (preamble: string)
-    : Result<ParsedProgram, string> =
-    PackageCatalog.parseProgram allowInternal preamble
+let private reducePreambleSource
+    (required: Set<string>)
+    (source: string)
+    (program: WT.SourceFile)
+    : string =
+    let normalized = source.Replace("\r\n", "\n")
+    let lines = normalized.Split('\n')
+    program.declarations
+    |> List.choose (fun declaration ->
+        match declaration with
+        | WT.DFunction definition when not (Set.contains definition.name.name required) -> None
+        | WT.DExpr _ | WT.DTest _ -> None
+        | _ ->
+            let range = declarationRange declaration
+            let start = sourceOffset normalized range.start
+            let endLine = min range.end_.row (lines.Length - 1)
+            let finish =
+                lines
+                |> Array.take (endLine + 1)
+                |> Array.sumBy (fun line -> line.Length + 1)
+                |> min normalized.Length
+            if finish > start then
+                Some (normalized.Substring(start, finish - start).TrimEnd())
+            else None)
+    |> String.concat "\n\n"
 
 let private countLeadingSpaces (lineText: string) : int =
     lineText
@@ -630,28 +479,25 @@ let private analyzePreambleWithReducedFunctionSet
 
     parseResult
     |> Result.bind (fun preambleProgram ->
-        let (ParsedProgram preambleTopLevels) = preambleProgram
-        let preambleFunctionDefs =
-            preambleTopLevels
-            |> List.choose (function
-                | ParsedFunctionDef funcDef -> Some funcDef
-                | _ -> None)
+        let functionDefs = preambleFunctionDefs preambleProgram
         let preambleFunctionNames =
-            preambleFunctionDefs
-            |> List.map (fun funcDef -> funcDef.Name)
+            functionDefs
+            |> List.map (fun funcDef -> funcDef.name.name)
             |> Set.ofList
         let dependencyMap =
-            buildPreambleFunctionDependencyMap preambleFunctionNames preambleFunctionDefs
+            buildPreambleFunctionDependencyMap preambleFunctionNames functionDefs
 
         let runnableTests =
             tests
-            |> List.filter (fun test -> Option.isNone test.ErrorExpectation && Option.isNone test.SkipReason)
+            |> List.filter (fun test ->
+                test.ErrorExpectation <> Some CompileError
+                && Option.isNone test.SkipReason)
 
         let hasUnparsableTestSource =
             runnableTests
             |> List.exists (fun test ->
                 sourceToExecute spec.AllowInternal test
-                |> Result.bind (PackageCatalog.parseProgram spec.AllowInternal)
+                |> Result.bind parseWritten
                 |> Result.isError)
 
         let seedFunctions =
@@ -661,7 +507,7 @@ let private analyzePreambleWithReducedFunctionSet
                 runnableTests
                 |> List.map (fun test ->
                     sourceToExecute spec.AllowInternal test
-                    |> Result.bind (PackageCatalog.parseProgram spec.AllowInternal)
+                    |> Result.bind parseWritten
                     |> Result.map (collectProgramReferencedPreambleFuncs preambleFunctionNames))
                 |> List.choose Result.toOption
                 |> List.fold Set.union Set.empty
@@ -671,24 +517,9 @@ let private analyzePreambleWithReducedFunctionSet
             |> Set.filter (fun name -> Set.contains name preambleFunctionNames)
             |> expandRequiredPreambleFunctions dependencyMap
 
-        let reducedTopLevels =
-            reducePreambleTopLevelsToRequiredFunctions requiredFunctions preambleTopLevels
-
-        let reducedProgram = ParsedProgram reducedTopLevels
-
-        TypeChecking.checkParsedSyntheticPreambleWithBaseEnvAndSettings
-            stdlib.Context.TypeCheckEnv
-            true
-            CompilerOptions.defaultWarningSettings
-            reducedProgram
-        |> Result.mapError CheckingDiagnostics.typeErrorToString
-        |> Result.map (fun (_programType, typedPreambleAst, preambleTypeCheckEnv) ->
-            let preambleGenericDefs = SpecializationIdentity.extractGenericFuncDefs typedPreambleAst
-            {
-                TypedAST = typedPreambleAst
-                TypeCheckEnv = preambleTypeCheckEnv
-                GenericFuncDefs = preambleGenericDefs
-            }))
+        let reducedSource =
+            reducePreambleSource requiredFunctions spec.Preamble preambleProgram
+        PreambleAnalysis.analyzePreamble spec.AllowInternal stdlib reducedSource)
 
 let private analyzePreambleForPlan
     (stdlib: CompilationContexts.StdlibResult)
@@ -1367,6 +1198,7 @@ let runE2ETestBatchWithPreambleContext
         { AggregateRun = run; Results = [] }
     | first :: _ ->
         let count = tests.Length
+        let source = buildBatchSource tests
         let request : CompilationContexts.CompileRequest = {
             Context = CompilationContexts.StdlibWithPreamble (stdlib, preambleCtx)
             Mode = CompilerOptions.CompileMode.TestExpression
@@ -1374,7 +1206,7 @@ let runE2ETestBatchWithPreambleContext
                 NonEmptyList.singleton
                     { CompilationContexts.SourceUnit.Name = first.Test.SourceFile
                       Purpose = NameSyntax.SourceUnitPurpose.Executable
-                      Source = buildBatchSource tests }
+                      Source = source }
             AllowInternal = isInternalTestFile first.Test.SourceFile
             Verbosity = 0
             Options = buildCompilerOptions first.Test
@@ -1426,23 +1258,19 @@ let private tryBuildReducedPreambleForTest
     (testSource: string)
     : string option =
     let parsePreambleResult = parsePreambleAsProgram allowInternal preamble
-    let parseTestResult = PackageCatalog.parseProgram allowInternal testSource
+    let parseTestResult = parseWritten testSource
 
     match parsePreambleResult, parseTestResult with
-    | Ok (ParsedProgram preambleTopLevels), Ok testProgram ->
-        let preambleFunctionDefs =
-            preambleTopLevels
-            |> List.choose (function
-                | ParsedFunctionDef funcDef -> Some funcDef
-                | _ -> None)
+    | Ok preambleProgram, Ok testProgram ->
+        let functionDefs = preambleFunctionDefs preambleProgram
 
         let preambleFunctionNames =
-            preambleFunctionDefs
-            |> List.map (fun funcDef -> funcDef.Name)
+            functionDefs
+            |> List.map (fun funcDef -> funcDef.name.name)
             |> Set.ofList
 
         let dependencyMap =
-            buildPreambleFunctionDependencyMap preambleFunctionNames preambleFunctionDefs
+            buildPreambleFunctionDependencyMap preambleFunctionNames functionDefs
 
         let seedFunctions =
             collectProgramReferencedPreambleFuncs preambleFunctionNames testProgram
@@ -1452,10 +1280,8 @@ let private tryBuildReducedPreambleForTest
             |> Set.filter (fun name -> Set.contains name preambleFunctionNames)
             |> expandRequiredPreambleFunctions dependencyMap
 
-        let reducedTopLevels =
-            reducePreambleTopLevelsToRequiredFunctions requiredFunctions preambleTopLevels
-
-        let reducedPreambleSource = ASTPrettyPrinter.formatParsedProgram (ParsedProgram reducedTopLevels)
+        let reducedPreambleSource =
+            reducePreambleSource requiredFunctions preamble preambleProgram
         Some reducedPreambleSource
     | _ ->
         None

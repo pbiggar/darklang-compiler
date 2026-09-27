@@ -362,6 +362,7 @@ let tryCliIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option 
             | "Darklang.Stdlib.Cli.__hostArchitectureCode" -> Some ANF.HostArchitecture
             | "Darklang.Stdlib.Cli.__hostname" -> Some ANF.Hostname
             | "Darklang.Stdlib.Cli.__getenv" -> Some ANF.GetEnv
+            | "Darklang.Stdlib.Cli.__createExclusive" -> Some ANF.FileCreateExclusive
             | "Darklang.Stdlib.Cli.__environmentPacked" -> Some ANF.GetEnvironmentPacked
             | "Darklang.Stdlib.Cli.__setenv" -> Some ANF.SetEnv
             | "Darklang.Stdlib.Cli.__unsetenv" -> Some ANF.UnsetEnv
@@ -441,6 +442,8 @@ let internal tryParseMangledTypeWithSumTypeNames
     let rec parseType (toks: string list) : (AST.SemanticType * string list) list =
         match toks with
         | [] -> []
+        // `TNever` is mangled as two underscore-separated tokens.
+        | "runtime" :: "error" :: rest -> [ (AST.TNever, rest) ]
         | tok :: rest ->
             match tok with
             | "list" ->
