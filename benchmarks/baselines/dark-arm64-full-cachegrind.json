@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-27T03:20:35+00:00",
+  "generated_at": "2026-09-27T04:10:03+00:00",
   "compiler": {
-    "commit": "26d93e5779feb0e7672675ca49eb6b4b442bba8c",
-    "subject": "Propagate executable-edge facts in MIR SCCP"
+    "commit": "8cb9ff32600b1d0510cb01bba36df721926a0878",
+    "subject": "Unbox eligible Options and transparent aggregate wrappers"
   },
   "benchmarks": [
     {
@@ -42,7 +42,7 @@
     },
     {
       "name": "fasta",
-      "instructions": 21058210
+      "instructions": 18703388
     },
     {
       "name": "fft",
@@ -54,7 +54,7 @@
     },
     {
       "name": "huffman",
-      "instructions": 411909034
+      "instructions": 410744587
     },
     {
       "name": "leibniz",
@@ -102,7 +102,7 @@
     },
     {
       "name": "raytracer",
-      "instructions": 47302423
+      "instructions": 45935217
     },
     {
       "name": "regex_lite",
@@ -126,11 +126,11 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 309994340
+      "instructions": 309438946
     },
     {
       "name": "warden",
-      "instructions": 44212730
+      "instructions": 44209570
     }
   ]
 }
