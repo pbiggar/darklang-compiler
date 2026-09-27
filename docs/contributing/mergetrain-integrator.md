@@ -46,6 +46,37 @@ Every attention job in a status snapshot is considered. An unrecoverable job
 does not prevent later blockers from being inspected or the daemon from
 deploying an independently validated subset.
 
+## One-time gate exceptions
+
+A lander may attach a request to its exact committed branch:
+
+```bash
+./land --task "change description" --exception-gate benchmarks \
+  --exception-reason "Why the measured regression is acceptable"
+```
+
+Eligible gates are `benchmark-sources`, `benchmarks`, and `test-runtime`.
+The latter is a blocking comparison of uncontended full-suite runtime against
+the integration parent. A request does not waive a gate. The candidate first
+fails normally, and the integrator stages its failed gate, exact candidate
+tree, integration base, destination, and gate config digest for review. It does
+not automatically repair that requested failure.
+
+Status shows the blocked job and the review command. A human operator reads
+the reason, failed gate log, candidate identity, and other gate outcomes, then
+uses `./mergetrain-exception approve JOB_ID` from the integrator checkout.
+The command asks for an interactive typed confirmation and retries the job.
+The gate reruns on retry; only the approved gate's failure is waived if the
+replacement job ID, candidate tree, original commit ancestry, integration
+base, destination, and gate config still match. Mergetrain separately checks
+that its own unattended approval remains valid. Other gates still block.
+The integrator archives the approval when the replacement finishes.
+
+The approval registry lives in the shared Git directory. The human approval
+boundary is the interactive operator command and its review procedure; it is
+not an OS privilege or cryptographic boundary against a process that can edit
+that directory.
+
 ## Operator boundaries
 
 Automatic recovery is limited to the cases above, non-fast-forward push races,

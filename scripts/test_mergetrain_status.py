@@ -2,6 +2,7 @@
 
 import json
 import os
+import json
 import pty
 import select
 import subprocess
@@ -17,6 +18,7 @@ from scripts.render_mergetrain_status import (
     benchmark_changes_for_commit,
     benchmark_detail,
     benchmark_diff,
+    exception_labels,
     human_age,
     merge_test_runtime,
     percentage,
@@ -188,6 +190,18 @@ class MergetrainStatusTests(unittest.TestCase):
                 job_detail = render_attention_job(repo, 299, color=False, attempt_dir=root)
             self.assertIn("policy changes in this job:", job_detail)
             self.assertIn("+  - name: runtime", job_detail)
+    def test_requested_gate_has_compact_approval_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir)
+            subprocess.run(["git", "init", "-q", repo], check=True)
+            reviews = repo / ".git/mergetrain-exceptions/reviews"
+            reviews.mkdir(parents=True)
+            (reviews / "7.json").write_text(json.dumps({
+                "schema": 1, "job_id": 7, "gate": "benchmark-sources",
+            }), encoding="utf-8")
+            label = exception_labels(repo)[7]
+            self.assertIn("./mergetrain-exception approve 7", label)
+            self.assertLessEqual(len("    " + label), 80)
 
     def test_human_age_uses_compact_units(self) -> None:
         now = datetime(2026, 9, 15, 12, 0, tzinfo=timezone.utc)

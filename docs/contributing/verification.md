@@ -7,11 +7,11 @@ Verification means both, for the active development target:
 - All tests pass.
 - The full benchmark suite passes its aggregate and individual regression gates.
 
-The merge train also rejects every candidate that changes anything under
-`benchmarks/problems/`. Benchmark problem implementations and their vendored
-build inputs are integration-controlled; ordinary task branches may change
-benchmark infrastructure, profiles, and generated results, but not the source
-tree that the performance gate measures.
+The merge train rejects candidates that change anything under
+`benchmarks/problems/` unless a human approves an exact `benchmark-sources`
+gate exception. Benchmark problem implementations and their vendored build
+inputs are integration-controlled; ordinary task branches may change benchmark
+infrastructure, profiles, and generated results.
 
 The active target is the host unless the work explicitly declares another
 target. For ordinary host-target compiler changes, the default verification
@@ -28,7 +28,7 @@ consume context on repeated per-workload details. Full build and measurement
 logs, the markdown report, and decision JSON remain in the reported results
 directory. Use `--verbose` when interactive diagnosis needs streamed details.
 
-The optional test runtime measurement requires a clean committed worktree, then runs the
+The test runtime measurement requires a clean committed worktree, then runs the
 already-built full suite with affinity to two CPUs on Linux, preserving the
 host CPU-count E2E test, and records its wall time in
 `TestResults/ai/test-runtime.json`. It rejects a sample if competing work
@@ -39,8 +39,10 @@ The first comparison for a parent builds and measures that parent in a temporary
 worktree; later comparisons reuse the measurement cached in the common Git
 directory. A candidate fails if it takes over 10% or over 60 seconds longer,
 whichever limit is stricter. Missing, mismatched, and contended measurements
-invalidate the timing comparison. The merge train runs `./run-tests --ai`
-directly, so timing contention does not block integration.
+invalidate the timing comparison. The merge train runs both `./run-tests --ai`
+and the separate blocking `test-runtime` gate. A candidate with a significant
+increase or no valid uncontended sample remains blocked until fixed or an
+operator approves an exact gate exception.
 
 The benchmark command compares the retained measurements with the snapshot
 stored by the task branch's upstream merge-base and reports the aggregate
@@ -109,7 +111,8 @@ Dark snapshot and generated `benchmarks/RESULTS.md`; commit
 only on aggregate improvement without a blocking individual regression and
 leaves the stronger snapshot/results on regression.
 Integration reruns every queued candidate with `--verify-fresh`. A regression
-fails the gate. When a candidate improves on the integration parent's snapshot,
+fails the gate unless the exact candidate has a human-approved exception. When
+a candidate improves on the integration parent's snapshot,
 the read-only gate deliberately fails and the integrator rebases the owning
 branch, runs the full suite in recording mode, commits the regenerated snapshot
 and `RESULTS.md`, and retries that new exact commit. The retry must reproduce

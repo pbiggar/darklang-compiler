@@ -201,6 +201,33 @@ def render_attention_job(
         actions = "[A] approve and deploy  " + actions
     lines.extend(("", f"{actions}  [n/p] next/previous review page  [q/Esc] back"))
     return "\n".join(lines)
+def exception_labels(repo: Path) -> dict[int, str]:
+    common = Path(git(repo, "rev-parse", "--git-common-dir"))
+    if not common.is_absolute():
+        common = repo / common
+    state = common / "mergetrain-exceptions"
+    labels: dict[int, str] = {}
+    for path in (state / "reviews").glob("*.json"):
+        try:
+            review = json.loads(path.read_text(encoding="utf-8"))
+            if review.get("schema") == 1:
+                job_id = int(review["job_id"])
+                labels[job_id] = (
+                    f"waiver: {review['gate']} pending; "
+                    f"./mergetrain-exception approve {job_id}"
+                )
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    for path in (state / "approvals").glob("*.json"):
+        try:
+            approval = json.loads(path.read_text(encoding="utf-8"))
+            if approval.get("schema") == 1 and approval.get("approved") is True:
+                replacement = approval.get("replacement_job_id")
+                if isinstance(replacement, int):
+                    labels[replacement] = f"waiver: {approval['gate']} approved"
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    return labels
 
 
 def running_train_step(repo: Path, jobs: list[dict[str, Any]]) -> str | None:
@@ -845,6 +872,7 @@ def render(
     )
 
     jobs = active_jobs(payload)
+    waivers = exception_labels(repo)
     step = running_train_step(repo, jobs)
     train_header = styled("in train:", BOLD, color)
     if step:
@@ -866,6 +894,8 @@ def render(
                     reason = "conflict"
                 line += f" — {reason}"
             lines.append(line)
+            if int(job["id"]) in waivers:
+                lines.append(f"    {styled(waivers[int(job['id'])], YELLOW, color)}")
     else:
         lines.append("  (empty)")
     if conflict_toggle_hint and has_conflict:

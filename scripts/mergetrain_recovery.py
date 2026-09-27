@@ -13,6 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
+if __package__:
+    from .mergetrain_exception import ExceptionFlowError, stage_if_requested
+else:
+    from mergetrain_exception import ExceptionFlowError, stage_if_requested
+
 
 class RecoveryError(RuntimeError):
     pass
@@ -602,6 +607,11 @@ def recover(repo: Path, attempts: Path, job_id: int) -> None:
             raise RecoveryError("owning worktree is not clean at the enqueued commit")
     failure = failure_from(details)
     preserve_failure_evidence(details, attempts, job_id, old_head)
+    try:
+        if stage_if_requested(repo, details):
+            return
+    except ExceptionFlowError as error:
+        raise RecoveryError(str(error)) from error
 
     if failure.category == "deploy_authorization_changed":
         recover_external_policy_change(repo, attempts, details, job_id, old_head)

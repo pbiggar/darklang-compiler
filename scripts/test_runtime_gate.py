@@ -256,7 +256,7 @@ def check(repo: Path, base_ref: str, output: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("run", "check"))
+    parser.add_argument("mode", choices=("run", "check", "gate"))
     parser.add_argument("--base", help="integration ref or task parent for check mode")
     parser.add_argument("--output", type=Path,
                         default=Path("TestResults/ai/test-runtime.json"))
@@ -264,12 +264,15 @@ def main() -> int:
                         default=Path(__file__).resolve().parent.parent)
     args = parser.parse_args()
     try:
-        if args.mode == "run":
-            run_tests(args.repo.resolve(), args.repo.resolve() / args.output)
-        else:
+        repo = args.repo.resolve()
+        output = repo / args.output
+        if args.mode in {"check", "gate"}:
             if not args.base:
-                raise GateError("check mode requires --base")
-            check(args.repo.resolve(), args.base, args.repo.resolve() / args.output)
+                raise GateError(f"{args.mode} mode requires --base")
+        if args.mode in {"run", "gate"}:
+            run_tests(repo, output)
+        if args.mode in {"check", "gate"}:
+            check(repo, args.base, output)
     except (GateError, OSError, ValueError, KeyError, json.JSONDecodeError) as error:
         print(f"Test runtime gate failed: {error}", file=sys.stderr)
         return 1

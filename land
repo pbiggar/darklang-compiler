@@ -4,6 +4,8 @@
 set -euo pipefail
 
 task=""
+exception_gate=""
+exception_reason=""
 
 usage() {
   cat <<EOF
@@ -16,6 +18,9 @@ accepted, then exits without monitoring the job.
 Options:
   --task TEXT           Queue description.
                         Default: current commit subject
+  --exception-gate NAME Request a one-time exception for one eligible gate.
+  --exception-reason TEXT
+                        Explain why that gate may fail for this commit.
   -h, --help            Show this help and exit.
 
 Example:
@@ -27,6 +32,14 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --task)
       task="$2"
+      shift 2
+      ;;
+    --exception-gate)
+      exception_gate="$2"
+      shift 2
+      ;;
+    --exception-reason)
+      exception_reason="$2"
       shift 2
       ;;
     -h|--help)
@@ -62,6 +75,15 @@ if [[ -n "$(git -C "$repo_root" status --porcelain)" ]]; then
 fi
 if [[ -z "$task" ]]; then
   task="$(git -C "$repo_root" log -1 --format=%s)"
+fi
+if [[ -n "$exception_gate" || -n "$exception_reason" ]]; then
+  if [[ -z "$exception_gate" || -z "$exception_reason" ]]; then
+    echo "Use --exception-gate and --exception-reason together" >&2
+    exit 2
+  fi
+  python3 "$repo_root/scripts/mergetrain_exception.py" --repo "$repo_root" \
+    request --head "$head_sha" --branch "$branch" \
+    --gate "$exception_gate" --reason "$exception_reason"
 fi
 
 json_value() {

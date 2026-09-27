@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import unittest
 from unittest import mock
+from pathlib import Path
 
 from scripts import test_runtime_gate as gate
 
@@ -36,6 +37,22 @@ class RuntimeGateTests(unittest.TestCase):
         with mock.patch.object(gate, "git", side_effect=["candidate", " M source.fs"]):
             with self.assertRaisesRegex(gate.GateError, "clean committed worktree"):
                 gate.require_clean_commit(__import__("pathlib").Path("/unused"))
+
+    def test_gate_mode_runs_then_checks_the_same_measurement(self) -> None:
+        output = Path("/repo/TestResults/ai/test-runtime.json")
+        with mock.patch("sys.argv", ["gate", "gate", "--repo", "/repo",
+                                     "--base", "main"]), mock.patch.object(
+            gate, "run_tests"
+        ) as run_tests, mock.patch.object(gate, "check") as check:
+            self.assertEqual(gate.main(), 0)
+        run_tests.assert_called_once_with(Path("/repo"), output)
+        check.assert_called_once_with(Path("/repo"), "main", output)
+
+    def test_gate_mode_requires_a_base(self) -> None:
+        with mock.patch("sys.argv", ["gate", "gate", "--repo", "/repo"]), \
+             mock.patch.object(gate, "run_tests") as run_tests:
+            self.assertEqual(gate.main(), 1)
+            run_tests.assert_not_called()
 
 
 if __name__ == "__main__":

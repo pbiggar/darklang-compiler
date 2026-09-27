@@ -1,5 +1,6 @@
 """test_land.py - Focused tests for the branch-facing ./land command."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -18,6 +19,7 @@ class LandScriptTests(unittest.TestCase):
             fake_bin = root / "bin"
             repo.mkdir()
             fake_bin.mkdir()
+            (repo / "scripts").mkdir()
 
             subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
             subprocess.run(
@@ -29,7 +31,14 @@ class LandScriptTests(unittest.TestCase):
                 ["git", "config", "user.name", "Land Test"], cwd=repo, check=True
             )
             shutil.copy2(source_root / "land", repo / "land")
-            subprocess.run(["git", "add", "land"], cwd=repo, check=True)
+            shutil.copy2(
+                source_root / "scripts" / "mergetrain_exception.py",
+                repo / "scripts" / "mergetrain_exception.py",
+            )
+            subprocess.run(
+                ["git", "add", "land", "scripts/mergetrain_exception.py"],
+                cwd=repo, check=True,
+            )
             subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo, check=True)
             subprocess.run(["git", "switch", "-q", "-c", "task/test"], cwd=repo, check=True)
 
@@ -81,6 +90,28 @@ else:
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertEqual(completed.stdout, "queued\n")
             self.assertEqual(completed.stderr, "")
+
+            requested = subprocess.run(
+                [
+                    str(repo / "land"), "--exception-gate", "benchmarks",
+                    "--exception-reason", "Intentional aggregate regression",
+                ],
+                cwd=repo,
+                env=process_environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(requested.returncode, 0, requested.stderr)
+            self.assertEqual(requested.stdout, "queued\n")
+            head = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repo, text=True
+            ).strip()
+            request_file = repo / ".git" / "mergetrain-exceptions" / "requests" / f"{head}.json"
+            self.assertEqual(
+                json.loads(request_file.read_text(encoding="utf-8"))["gate"],
+                "benchmarks",
+            )
 
             process_environment["LAND_TEST_ATTENTION"] = "1"
             queued_behind_attention = subprocess.run(
