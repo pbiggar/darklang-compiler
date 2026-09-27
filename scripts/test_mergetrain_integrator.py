@@ -1,11 +1,52 @@
 """Focused output tests for the local merge-train integrator."""
 
 import os
+import pty
+import re
+import select
 import subprocess
 import tempfile
 import time
+import unicodedata
 import unittest
 from pathlib import Path
+
+
+def visible_terminal_lines(output: bytes) -> list[str]:
+    """Apply the cursor and clear controls used by the integrator."""
+    rows: list[list[str]] = [[]]
+    row = 0
+    column = 0
+    tokens = re.finditer(r"\x1b\[(\d*)([ABJK])|\r|\n|.", output.decode(), re.DOTALL)
+    for token in tokens:
+        value = token.group()
+        if token.group(2) == "A":
+            row = max(0, row - int(token.group(1) or "1"))
+        elif token.group(2) == "B":
+            row += int(token.group(1) or "1")
+        elif token.group(2) == "J":
+            rows = rows[: row + 1]
+            rows[row] = rows[row][:column]
+        elif token.group(2) == "K":
+            rows[row] = []
+        elif value == "\r":
+            column = 0
+        elif value == "\n":
+            row += 1
+            column = 0
+        else:
+            while len(rows) <= row:
+                rows.append([])
+            while len(rows[row]) < column:
+                rows[row].append(" ")
+            if len(rows[row]) == column:
+                rows[row].append(value)
+            else:
+                rows[row][column] = value
+            column += 1
+        while len(rows) <= row:
+            rows.append([])
+    return ["".join(chars).rstrip() for chars in rows]
 
 
 class MergetrainIntegratorOutputTests(unittest.TestCase):
@@ -54,27 +95,31 @@ if command == "daemon":
     recovered_file = os.environ.get("INTEGRATOR_TEST_RECOVERED_FILE")
     if recovered_file:
         pathlib.Path(recovered_file).write_text("recovered", encoding="utf-8")
-    if os.environ.get("INTEGRATOR_TEST_PROGRESS") == "1":
+    if os.environ.get("INTEGRATOR_TEST_PROGRESS") in {"1", "fast"}:
         progress_file = pathlib.Path(os.environ["INTEGRATOR_TEST_PROGRESS_FILE"])
-        for stage in ("assembling", "gating", "deploying", "done"):
+        stages = ("assembling", "gating", "deploying", "done") if os.environ.get("INTEGRATOR_TEST_PROGRESS") == "1" else ("done",)
+        for stage in stages:
             progress_file.write_text(stage, encoding="utf-8")
             time.sleep(0.35)
     for index in range(40):
         print(f"daemon noise {index}")
     raise SystemExit(int(os.environ.get("INTEGRATOR_TEST_DAEMON_EXIT", "0")))
 if command == "status":
-    if os.environ.get("INTEGRATOR_TEST_PROGRESS") == "1":
+    if os.environ.get("INTEGRATOR_TEST_PROGRESS") in {"1", "fast"}:
         progress_file = pathlib.Path(os.environ["INTEGRATOR_TEST_PROGRESS_FILE"])
         stage = progress_file.read_text(encoding="utf-8") if progress_file.exists() else "waiting"
         running = stage not in {"waiting", "done"}
+        job_state = "waiting" if stage == "waiting" else "running" if running else "done"
+        task = "界" * 40 if os.environ.get("INTEGRATOR_TEST_WIDE_TASK") == "1" else "test job"
         print(json.dumps({
             "contract_version": 4,
-            "counts": {"attention": 0, "ready": 0, "running": 2 if running else 0, "waiting": 0},
+            "counts": {"attention": 0, "ready": 0, "running": 2 if running else 0,
+                       "waiting": 2 if stage == "waiting" else 0},
             "health": "healthy",
             "next_action": {"code": "wait_for_runner" if running else "enqueue_clean_branch", "target_job_id": None},
             "recent_jobs": [
-                {"id": 7, "state": "running" if running else "done"},
-                {"id": 8, "state": "running" if running else "done"},
+                {"id": 7, "state": job_state, "task": task},
+                {"id": 8, "state": job_state, "task": task},
             ],
             "state": "running" if running else "idle",
             "summary": "2 job(s) are running" if running else "Queue is idle",
@@ -92,7 +137,7 @@ if command == "status":
         "summary": "1 job(s) need attention",
     }))
 elif command == "inspect":
-    if os.environ.get("INTEGRATOR_TEST_PROGRESS") == "1":
+    if os.environ.get("INTEGRATOR_TEST_PROGRESS") in {"1", "fast"}:
         progress_file = pathlib.Path(os.environ["INTEGRATOR_TEST_PROGRESS_FILE"])
         stage = progress_file.read_text(encoding="utf-8")
         stage_index = ("assembling", "gating", "deploying", "done").index(stage)
@@ -223,15 +268,83 @@ raise SystemExit(1)
             )
 
             self.assertEqual(completed.returncode, 0, completed.stderr)
-            self.assertIn("Assembling train with 2 job(s)", completed.stderr)
-            self.assertEqual(completed.stderr.count("Assembling train with 2 job(s)"), 1)
-            self.assertIn("Job #7: Merged task/progress-7", completed.stderr)
-            self.assertIn("Job #8: Merged task/progress-8", completed.stderr)
-            self.assertNotIn("Job #7: Assembling train", completed.stderr)
-            self.assertIn("Running gate 1/1: tests — ./run-tests --ai", completed.stderr)
-            self.assertIn("Passed gate 1/1: tests — ./run-tests --ai", completed.stderr)
-            self.assertIn("Deploying train", completed.stderr)
-            self.assertIn("Deployed train", completed.stderr)
+            for job_id in (7, 8):
+                self.assertRegex(
+                    completed.stderr,
+                    rf"\[\d{{4}}-\d{{2}}-\d{{2}} \d{{2}}:\d{{2}}:\d{{2}} [^]]+\] "
+                    rf"Job #{job_id} OK: deployed",
+                )
+                self.assertEqual(completed.stderr.count(f"Job #{job_id}"), 1)
+            self.assertNotIn("Assembling train with 2 job(s)", completed.stderr)
+
+    def test_terminal_updates_each_job_line_in_place(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo, environment = self.make_fixture(root)
+            environment["INTEGRATOR_TEST_PROGRESS"] = "1"
+            environment["TERM"] = "xterm"
+            environment["INTEGRATOR_TEST_WIDE_TASK"] = "1"
+            master, slave = pty.openpty()
+            process = subprocess.Popen(
+                [environment["INTEGRATOR_SCRIPT"], "--repo", str(repo),
+                 "--attempt-dir", str(root / "attempts"), "--color", "never", "--once"],
+                env=environment, stdin=slave, stdout=slave, stderr=slave,
+                close_fds=True,
+            )
+            os.close(slave)
+            output = b""
+            try:
+                deadline = time.monotonic() + 10
+                while process.poll() is None and time.monotonic() < deadline:
+                    readable, _, _ = select.select([master], [], [], 0.1)
+                    if readable:
+                        try:
+                            output += os.read(master, 65536)
+                        except OSError:
+                            break
+                self.assertEqual(process.wait(timeout=5), 0)
+                while select.select([master], [], [], 0)[0]:
+                    try:
+                        output += os.read(master, 65536)
+                    except OSError:
+                        break
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    process.wait(timeout=5)
+                os.close(master)
+            self.assertIn(b"Job #7", output)
+            self.assertIn(b"Job #8", output)
+            self.assertIn(b"\x1b[2A\r\x1b[2K", output)
+            first_row = re.search(r"\[[^\r\n]+Job #7 WAIT:[^\r\n]*", output.decode())
+            self.assertIsNotNone(first_row)
+            assert first_row is not None
+            cells = sum(
+                0 if unicodedata.combining(char) else
+                2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
+                for char in first_row.group()
+            )
+            self.assertLess(cells, 80)
+            visible = visible_terminal_lines(output)
+            for job_id in (7, 8):
+                matches = [line for line in visible if f"Job #{job_id}" in line]
+                self.assertEqual(len(matches), 1, visible)
+                self.assertIn(f"Job #{job_id} OK: deployed", matches[0])
+
+    def test_fast_jobs_still_get_one_final_line_each(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            repo, environment = self.make_fixture(root)
+            environment["INTEGRATOR_TEST_PROGRESS"] = "fast"
+            completed = subprocess.run(
+                [environment["INTEGRATOR_SCRIPT"], "--repo", str(repo),
+                 "--attempt-dir", str(root / "attempts"), "--once"],
+                env=environment, text=True, capture_output=True, check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            for job_id in (7, 8):
+                self.assertEqual(completed.stderr.count(f"Job #{job_id}"), 1)
+                self.assertIn(f"Job #{job_id} OK: deployed", completed.stderr)
 
     def test_daemon_failure_prints_only_a_bounded_excerpt(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -289,6 +402,9 @@ raise SystemExit(1)
                 encoding="utf-8"
             )
             self.assertEqual(inspected.splitlines(), ["4", "5"])
+            for job_id in (4, 5):
+                self.assertEqual(completed.stderr.count(f"Job #{job_id}"), 1)
+                self.assertIn(f"Job #{job_id} ERROR: recovery needs attention", completed.stderr)
 
     def test_merge_train_requires_recorded_benchmark_results(self) -> None:
         source_root = Path(__file__).resolve().parent.parent
