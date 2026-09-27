@@ -288,7 +288,7 @@ Stdlib.List.sortByComparator
 //   "Expected 1 arguments, got 2"
 
 Stdlib.List.tail [ 10L, 20L, 30L, 40L ] = Stdlib.Option.Option.Some[ 20L, 30L, 40L ]
-Stdlib.List.tail [] = Stdlib.Option.Option.None
+Stdlib.List.tail<Int64> [] = Stdlib.Option.Option.None
 
 Stdlib.List.take [ "a", "b", "c", "d" ] -1 = []
 Stdlib.List.take [ "a", "b", "c", "d" ] 2147483648 = [ "a", "b", "c", "d" ]
@@ -381,7 +381,7 @@ Stdlib.List.chunkBySize [] 4 = Stdlib.Result.Result.Ok []
 Stdlib.List.chunkBySize [ 1L, 2L, 3L, 4L ] 0 = Stdlib.Result.Result.Error Stdlib.List.ChunkBySizeError.SizeMustBeGreaterThanZero
 Stdlib.List.chunkBySize [ 1L, 2L, 3L, 4L ] -1 = Stdlib.Result.Result.Error Stdlib.List.ChunkBySizeError.SizeMustBeGreaterThanZero
 
-Stdlib.List.splitLast [] = Stdlib.Option.Option.None
+Stdlib.List.splitLast<Int64> [] = Stdlib.Option.Option.None
 Stdlib.List.splitLast [ 1L ] = Stdlib.Option.Option.Some(([], 1L))
 Stdlib.List.splitLast [ 1L, 2L ] = Stdlib.Option.Option.Some(([ 1L ], 2L))
 Stdlib.List.splitLast [ 1L, 2L, 3L ] = Stdlib.Option.Option.Some(([ 1L, 2L ], 3L))

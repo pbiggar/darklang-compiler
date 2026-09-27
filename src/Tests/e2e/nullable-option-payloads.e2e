@@ -16,10 +16,10 @@ let identityUInt128 (value: Stdlib.Option.Option<UInt128>): Stdlib.Option.Option
 match identityUInt128 (Some 123Z) with | Some value -> value == 123Z | None -> false = true // leak_check
 Stdlib.Option.isSome (Stdlib.String.head "😂") = true // leak_check
 let identityTuple (value: Stdlib.Option.Option<(Int64 * String)>): Stdlib.Option.Option<(Int64 * String)> = value
-let value = identityTuple (Some (7L, "value")) in match value with | Some pair -> let (number, text) = pair in number == 7L && text == "value" | None -> false = true // leak_check
-Some (7L, "value") == Some (7L, "value") = true // leak_check
+let value = identityTuple (Some ((7L, "value"))) in match value with | Some pair -> let (number, text) = pair in number == 7L && text == "value" | None -> false = true // leak_check
+Some ((7L, "value")) == Some ((7L, "value")) = true // leak_check
 let equalTuples (left: Stdlib.Option.Option<(Int64 * String)>) (right: Stdlib.Option.Option<(Int64 * String)>): Bool = left == right
-equalTuples (Some (7L, "value")) (Some (7L, "value")) = true // leak_check
+equalTuples (Some ((7L, "value"))) (Some ((7L, "value"))) = true // leak_check
 type OptionPayloadRecord = { number: Int64, text: String }
 let identityRecord (value: Stdlib.Option.Option<OptionPayloadRecord>): Stdlib.Option.Option<OptionPayloadRecord> = value
 let value = identityRecord (Some (OptionPayloadRecord { number = 7L, text = "value" })) in match value with | Some payload -> payload.number == 7L && payload.text == "value" | None -> false = true // leak_check
@@ -27,5 +27,5 @@ Some (OptionPayloadRecord { number = 7L, text = "value" }) == Some (OptionPayloa
 let equalRecords (left: Stdlib.Option.Option<OptionPayloadRecord>) (right: Stdlib.Option.Option<OptionPayloadRecord>): Bool = left == right
 equalRecords (Some (OptionPayloadRecord { number = 7L, text = "value" })) (Some (OptionPayloadRecord { number = 7L, text = "value" })) = true // leak_check
 type MaybePair<'a> = AbsentPair | PresentPair of ('a * String)
-let value = PresentPair (7L, "value") in match value with | PresentPair pair -> let (number, text) = pair in number == 7L && text == "value" | AbsentPair -> false = true // leak_check
+let value = PresentPair ((7L, "value")) in match value with | PresentPair pair -> let (number, text) = pair in number == 7L && text == "value" | AbsentPair -> false = true // leak_check
 let value = AbsentPair in match value with | PresentPair _ -> false | AbsentPair -> true = true // leak_check

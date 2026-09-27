@@ -1,3 +1,3 @@
 // Mixed Dict key types need distinct comparison and rendering helpers.
-let first = Stdlib.Dict.fromListOverwritingDuplicates ([(1L, 2L)]) in let second = Stdlib.Dict.fromList ([("a", 1L), ("b", 2L), ("c", 3L)]) in first == Dict { 1L: 2L } && second == Some (Dict { a = 1L; b = 2L; c = 3L }) = true
+let first = Stdlib.Dict.fromListOverwritingDuplicates ([(1L, 2L)]) in let second = Stdlib.Dict.fromList ([("a", 1L), ("b", 2L), ("c", 3L)]) in first == Dict { 1L: 2L } && second == Some (Dict { "a": 1L; "b": 2L; "c": 3L }) = true
 let first = Stdlib.Dict.fromListOverwritingDuplicates ([(1L, 2L)]) in let second = Stdlib.Dict.fromListOverwritingDuplicates ([("a", 1L)]) in (first, second) = stdout="(Dict { 1: 2 }, Dict { a = 1 })\n" stderr=""

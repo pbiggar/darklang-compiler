@@ -1010,8 +1010,6 @@ let internal generatePlannedDictRefCountDecHelper
                 false, false, None, false, false, Some (16, valueRelease), false, false, false
             | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, _) ->
                 false, false, None, false, false, Some (payloadSize, valueRelease), false, false, false
-            | MemoryModel.RecursiveRelease _ ->
-                false, false, None, false, false, Some (0, valueRelease), false, false, false
 
         generateDictRefCountDecHelper
             helperLabel

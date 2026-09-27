@@ -111,7 +111,7 @@ let __writeAll (descriptor: Int64) (lifecycle: Stream<Unit>) (payload: Blob) : S
             else if sent >= length then Ok ()
             else
                 let remaining = Stdlib.Blob.slice payload (Stdlib.Int.fromInt64 sent)
-                    (Stdlib.Int.fromInt64 (length - sent)) in
+                                    (Stdlib.Int.fromInt64 (length - sent)) in
                 Stdlib.Network.__writeAll descriptor lifecycle remaining
 
 let __readChunk (descriptor: Int64) (lifecycle: Stream<Unit>) (length: Int64) : Stdlib.Result.Result<Blob, Int64> =

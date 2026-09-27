@@ -1033,8 +1033,9 @@ let rec private checkExpression
                 | Some checkedParameters ->
                     let bodyLocals = Map.fold (fun acc name binding -> Map.add name binding acc) locals parameters
                     let bodyExpected =
-                        match returnType with
-                        | AST.TVar _ | AST.TInferenceVar _ -> None
+                        match body with
+                        | WT.EIf (_, _, _, Some _, _, _, _)
+                            when TypeUnification.containsTVar returnType -> None
                         | _ -> Some returnType
                     checkExpression globals bodyLocals afterParameters bodyExpected body
                     |> Result.map (fun (bodyType, checkedBody, finalSymbols) ->
@@ -1689,7 +1690,9 @@ let rec private checkExpression
                                     CheckedAST.internConstructor canonical caseName tag afterFields
                                 let typeId, afterType = CheckedAST.internType canonical afterConstructor
                                 let reference : CheckedAST.ConstructorReference =
-                                    { TypeId = typeId; ConstructorId = constructorId }
+                                    { TypeId = typeId
+                                      ConstructorId = constructorId
+                                      TypeArgs = resolvedArgs |> List.map CheckedAST.checkedType }
                                 checkedLiteral expected afterType (AST.TSum (canonical, resolvedArgs))
                                     (CheckedAST.Constructor (reference, checkedFields |> List.map snd)))))
             | _ -> Error $"Type '{canonical}' is not an enum")

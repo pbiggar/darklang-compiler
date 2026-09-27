@@ -2626,12 +2626,12 @@ let applyOnce (value: Int64) : Int64 =
   let increment = fun x -> x + 1L in
   increment (value)
 ---EXPECTED---
-Function __closure_63:
+Function __closure_20:
 let TempId 2 = t1 + 1
 return t2
 
 Function applyOnce:
-let TempId 6 = __closure_63((), t3)
+let TempId 6 = __closure_20((), t3)
 return t6
 
 ---NAME---
@@ -2641,13 +2641,13 @@ let addOffset (value: Int64) (offset: Int64) : Int64 =
   let add = fun x -> x + offset in
   add (value)
 ---EXPECTED---
-Function __closure_63:
+Function __closure_20:
 let TempId 2 = t0.1
 let TempId 4 = t1 + t2
 return t4
 
 Function addOffset:
-let TempId 7 = ClosureAlloc(__closure_63, [t6])
+let TempId 7 = ClosureAlloc(__closure_20, [t6])
 let TempId 9 = ClosureCall(t7, [t5])
 return t9
 
@@ -2658,15 +2658,15 @@ let makeIncrement () : (Int64) -> Int64 =
   let increment = fun x -> x + 1L in
   increment
 ---EXPECTED---
-Function __closure_63:
+Function __closure_20:
 let TempId 2 = t1 + 1
 return t2
 
-Function __closure_comparison_64:
+Function __closure_comparison_21:
 return true
 
 Function makeIncrement:
-let TempId 5 = ClosureAlloc(__closure_63, [&__closure_comparison_64])
+let TempId 5 = ClosureAlloc(__closure_20, [&__closure_comparison_21])
 return t5
 
 ---NAME---
@@ -2677,13 +2677,13 @@ let applyTwice (value: Int64) : Int64 =
   let once = increment (value) in
   increment (once)
 ---EXPECTED---
-Function __closure_63:
+Function __closure_20:
 let TempId 2 = t1 + 1
 return t2
 
 Function applyTwice:
-let TempId 6 = __closure_63((), t3)
-let TempId 8 = __closure_63((), t6)
+let TempId 6 = __closure_20((), t3)
+let TempId 8 = __closure_20((), t6)
 return t8
 
 ---NAME---

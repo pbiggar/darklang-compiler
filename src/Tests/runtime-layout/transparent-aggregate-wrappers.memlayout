@@ -33,7 +33,7 @@ root = tuple(shared_word, shared_word)
 ---NAME---
 Generic dict wrapper shares its tagged root
 ---INPUT---
-type DictEnvelope<'a> = DictEnvelope of Dict<'a>
+type DictEnvelope<'a> = DictEnvelope of Dict<String, 'a>
 let original = Stdlib.Dict.singleton "key" 7L in (original, DictEnvelope original)
 ---EXPECTED---
 root = tuple(shared_word, shared_word)
@@ -114,7 +114,7 @@ root = tuple(shared_word, shared_word)
 ---NAME---
 Single-case dict wrapper shares its tagged root
 ---INPUT---
-type DictEnvelope = DictEnvelope of Dict<Int64>
+type DictEnvelope = DictEnvelope of Dict<String, Int64>
 let original = Stdlib.Dict.singleton "key" 7L in (original, DictEnvelope original)
 ---EXPECTED---
 root = tuple(shared_word, shared_word)
@@ -122,7 +122,7 @@ root = tuple(shared_word, shared_word)
 ---NAME---
 Single-case empty dict wrapper keeps the zero root
 ---INPUT---
-type DictEnvelope = DictEnvelope of Dict<Int64>
+type DictEnvelope = DictEnvelope of Dict<String, Int64>
 DictEnvelope Stdlib.Dict.empty
 ---EXPECTED---
 root = word(0)
