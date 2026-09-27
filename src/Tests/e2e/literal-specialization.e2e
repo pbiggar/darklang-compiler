@@ -46,7 +46,9 @@ tupleSpecializedLoop 2L (42L, true) = (42L, true)
 
 // Different constructed arguments and a dynamic caller keep the original
 // signature available alongside any literal clones.
-let pairScore (pair: (Int64 * Bool)) : Int64 = if pair.1 then pair.0 else 0L - pair.0
+let pairScore (pair: (Int64 * Bool)) : Int64 =
+    let (score, positive) = pair in
+    if positive then score else 0L - score
 let dynamicPairScore (pair: (Int64 * Bool)) : Int64 = pairScore pair
 pairScore (3L, true) + pairScore (5L, false) + dynamicPairScore (8L, true) = 6L
 
