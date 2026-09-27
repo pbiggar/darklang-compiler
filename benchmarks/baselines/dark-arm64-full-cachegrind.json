@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "6751ca8977c639512cdd772867f7d2bd0c73833716cddfcb79aa6f15a08f8cfe",
-  "generated_at": "2026-09-27T04:10:03+00:00",
+  "generated_at": "2026-09-27T08:12:17+00:00",
   "compiler": {
-    "commit": "8cb9ff32600b1d0510cb01bba36df721926a0878",
-    "subject": "Unbox eligible Options and transparent aggregate wrappers"
+    "commit": "bfb1b8098f1794f023d6a91ea1fccbcb26829920",
+    "subject": "Update SCCP MIR expectations for SSA lowering"
   },
   "benchmarks": [
     {
@@ -22,115 +22,115 @@
     },
     {
       "name": "binary_trees",
-      "instructions": 11046954
+      "instructions": 11046953
     },
     {
       "name": "collatz",
-      "instructions": 70193695
+      "instructions": 70193689
     },
     {
       "name": "edigits",
-      "instructions": 49904630
+      "instructions": 49974762
     },
     {
       "name": "factorial",
-      "instructions": 59313
+      "instructions": 59296
     },
     {
       "name": "fannkuch",
-      "instructions": 220630016
+      "instructions": 220640790
     },
     {
       "name": "fasta",
-      "instructions": 18703388
+      "instructions": 18804733
     },
     {
       "name": "fft",
-      "instructions": 1802792
+      "instructions": 1793111
     },
     {
       "name": "fib",
-      "instructions": 8265920
+      "instructions": 8265915
     },
     {
       "name": "huffman",
-      "instructions": 410744587
+      "instructions": 410638818
     },
     {
       "name": "leibniz",
-      "instructions": 17006619
+      "instructions": 17006612
     },
     {
       "name": "mandelbrot",
-      "instructions": 15222313
+      "instructions": 15142312
     },
     {
       "name": "matmul",
-      "instructions": 42560518
+      "instructions": 42706145
     },
     {
       "name": "merkletrees",
-      "instructions": 3871302
+      "instructions": 3871295
     },
     {
       "name": "myers_diff",
-      "instructions": 205029599
+      "instructions": 204989596
     },
     {
       "name": "nbody",
-      "instructions": 14536070
+      "instructions": 14536066
     },
     {
       "name": "nqueen",
-      "instructions": 7417758
+      "instructions": 7417756
     },
     {
       "name": "nsieve",
-      "instructions": 131108540
+      "instructions": 130974242
     },
     {
       "name": "pisum",
-      "instructions": 808322
+      "instructions": 808309
     },
     {
       "name": "primes",
-      "instructions": 1652241
+      "instructions": 1652239
     },
     {
       "name": "quicksort",
-      "instructions": 176619881
+      "instructions": 176466730
     },
     {
       "name": "raytracer",
-      "instructions": 45935217
+      "instructions": 45983570
     },
     {
       "name": "regex_lite",
-      "instructions": 64887143
+      "instructions": 64886726
     },
     {
       "name": "spectral_norm",
-      "instructions": 264941352
+      "instructions": 267341322
     },
     {
       "name": "string_equality",
-      "instructions": 1178578
+      "instructions": 1178543
     },
     {
       "name": "sum_to_n",
-      "instructions": 58345
+      "instructions": 58340
     },
     {
       "name": "tak",
-      "instructions": 48005000
+      "instructions": 48005008
     },
     {
       "name": "tinytemplate",
-      "instructions": 309438946
+      "instructions": 309411161
     },
     {
       "name": "warden",
-      "instructions": 44209570
+      "instructions": 44209521
     }
   ]
 }
