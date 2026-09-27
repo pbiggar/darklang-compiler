@@ -509,6 +509,7 @@ let lookupPath (collections: List<(Int64 * Collection)>) (scopes: List<ContextEl
             | (FinalPathHead first, Some value) -> if first == name then Ok value else lookupPath collections rest source path
             | (NestedPathHead ((first, nextIndex)), Some value) -> if first == name then lookupInAt collections source path path nextIndex value else lookupPath collections rest source path
             | (_, None) -> Error (GenericError "Malformed TinyTemplate iteration context.")
+            | _ -> Error (GenericError "Malformed TinyTemplate iteration context.")
         | _ -> Error (GenericError "Malformed TinyTemplate context.")
 
 let lookupRoot (scopes: List<ContextElement>) : Stdlib.Result.Result<Value, TemplateError> =
