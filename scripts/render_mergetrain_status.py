@@ -281,8 +281,39 @@ class BenchmarkChange:
     short_commit: str
     date: str
     subject: str
+    source_subject: str | None
     change: float | None
     ratio: str
+
+
+def benchmark_source(repo: Path, commit: str, subject: str) -> tuple[str, str] | None:
+    """Find the adjacent source commit for a generated-only recording."""
+    if not subject.startswith("Record ") or (
+        "benchmark improvement" not in subject.lower()
+    ):
+        return None
+    changed = set(
+        git(repo, "diff-tree", "--no-commit-id", "--name-only", "-r", commit)
+        .splitlines()
+    )
+    def generated(path: str) -> bool:
+        return path == "benchmarks/RESULTS.md" or path.startswith(
+            "benchmarks/baselines/"
+        )
+
+    if not changed or not all(map(generated, changed)):
+        return None
+    parents = git(repo, "show", "-s", "--format=%P", commit).split()
+    if len(parents) != 1:
+        return None
+    parent = parents[0]
+    parent_changes = set(
+        git(repo, "diff-tree", "--no-commit-id", "--name-only", "-r", parent)
+        .splitlines()
+    )
+    if not any(not generated(path) for path in parent_changes):
+        return None
+    return parent, git(repo, "show", "-s", "--format=%s", parent)
 
 
 def benchmark_changes(repo: Path, limit: int = 10) -> list[BenchmarkChange]:
@@ -308,11 +339,13 @@ def benchmark_changes(repo: Path, limit: int = 10) -> list[BenchmarkChange]:
             if current_contents is not None
             else None
         )
+        source = benchmark_source(repo, commit, subject)
         return BenchmarkChange(
             commit=commit,
             short_commit=short_commit,
             date=date,
             subject=subject,
+            source_subject=source[1] if source else None,
             change=(
                 comparison.aggregate_change
                 if isinstance(comparison, BenchmarkComparison)
@@ -333,6 +366,13 @@ def benchmark_detail(repo: Path, commit: str, *, color: bool) -> str:
         styled("benchmark result:", BOLD, color),
         f"{styled(short_commit, CYAN, color)} {subject}",
     ]
+    source = benchmark_source(repo, commit, subject)
+    if source:
+        source_commit, source_subject = source
+        lines.append(
+            f"recorded after: {styled(source_commit[:10], CYAN, color)} "
+            f"{source_subject}"
+        )
     if current_contents is not None:
         metadata = [
             line.replace("**", "").replace("`", "")
@@ -442,6 +482,8 @@ def benchmark_changes_for_commit(
 def benchmark_diff(repo: Path, commit: str, *, color: bool) -> str:
     short_commit = git(repo, "show", "-s", "--format=%h", commit)
     subject = git(repo, "show", "-s", "--format=%s", commit)
+    source = benchmark_source(repo, commit, subject)
+    diff_commit = source[0] if source else commit
     patch = git(
         repo,
         "show",
@@ -449,7 +491,7 @@ def benchmark_diff(repo: Path, commit: str, *, color: bool) -> str:
         "--first-parent",
         "--no-ext-diff",
         "--no-renames",
-        commit,
+        diff_commit,
         "--",
         ".",
         ":(exclude)benchmarks/RESULTS.md",
@@ -466,12 +508,18 @@ def benchmark_diff(repo: Path, commit: str, *, color: bool) -> str:
             return styled(line, RED, color)
         return line
 
+    heading = "source change diff:" if source else "benchmark commit diff:"
     lines = [
-        styled("benchmark commit diff:", BOLD, color),
+        styled(heading, BOLD, color),
         f"{styled(short_commit, CYAN, color)} {subject}",
-        styled("benchmarks/RESULTS.md excluded (generated)", DIM, color),
-        "",
     ]
+    if source:
+        source_commit, source_subject = source
+        lines.append(
+            f"preceding source change: {styled(source_commit[:10], CYAN, color)} "
+            f"{source_subject}"
+        )
+    lines.extend([styled("benchmarks/RESULTS.md excluded (generated)", DIM, color), ""])
     lines.extend(map(diff_line, patch.splitlines()))
     if not patch:
         lines.append("(no non-generated changes in this commit)")
@@ -539,6 +587,7 @@ def render(
     merge_limit: int = 5,
     benchmark_detail_index: int | None = None,
     benchmark_diff_index: int | None = None,
+    columns: int = 80,
 ) -> str:
     if payload.get("contract_version") != 4:
         raise ValueError(
@@ -618,32 +667,28 @@ def render(
     change_width = max((len(value) + 2 for value in changes_text), default=0)
     ages = [human_age(change.date, now=now) for change in changes]
     age_width = max(map(len, ages), default=0)
-    lines.extend(
-        [
+    for index, (change, age) in enumerate(zip(changes, ages, strict=True), start=1):
+        age_text = f"{age:<{age_width}}"
+        ratio_text = f"{change.ratio:>{ratio_width}}"
+        change_text = f"({percentage(change.change)})".ljust(change_width)
+        prefix_width = (
+            len(f"{index}. ") + len(change.short_commit) + len(age_text)
+            + len(ratio_text) + len(change_text) + 4
+        )
+        subject = change.source_subject or change.subject
+        available = max(0, columns - prefix_width)
+        if len(subject) > available:
+            subject = subject[: max(0, available - 1)] + ("…" if available else "")
+        lines.append(
             f"{index}. "
             + styled(change.short_commit, CYAN, color)
-            + " "
-            + styled(
-                f"{age:<{age_width}}",
-                DIM,
-                color,
-            )
-            + " "
-            + styled(f"{change.ratio:>{ratio_width}}", CYAN, color)
-            + " "
-            + styled(
-                f"({percentage(change.change)})".ljust(change_width),
-                change_style(change.change),
-                color,
-            )
-            + " "
-            + change.subject
-            for index, (change, age) in enumerate(
-                zip(changes, ages, strict=True), start=1
-            )
-        ]
-        or ["(none)"]
-    )
+            + " " + styled(age_text, DIM, color)
+            + " " + styled(ratio_text, CYAN, color)
+            + " " + styled(change_text, change_style(change.change), color)
+            + " " + subject
+        )
+    if not changes:
+        lines.append("(none)")
     return "\n".join(lines)
 
 
@@ -656,6 +701,7 @@ def main() -> int:
     parser.add_argument("--merge-limit", type=int, default=5)
     parser.add_argument("--benchmark-detail-index", type=int)
     parser.add_argument("--benchmark-diff-index", type=int)
+    parser.add_argument("--columns", type=int, default=80)
     args = parser.parse_args()
     try:
         payload = json.load(sys.stdin)
@@ -669,6 +715,7 @@ def main() -> int:
                 merge_limit=args.merge_limit,
                 benchmark_detail_index=args.benchmark_detail_index,
                 benchmark_diff_index=args.benchmark_diff_index,
+                columns=args.columns,
             )
         )
     except (
