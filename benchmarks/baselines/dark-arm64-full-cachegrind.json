@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861",
-  "generated_at": "2026-09-27T20:22:11+00:00",
+  "generated_at": "2026-09-27T21:42:34+00:00",
   "compiler": {
-    "commit": "55a5823b08785900ceb4dfc122dcdbc6b3809d40",
-    "subject": "Migrate AES-GCM and tuple E2E cases to interpreter syntax"
+    "commit": "6b794638888647e67f482147ce8de6c84f438eac",
+    "subject": "Merge commit 'cda1f3d3b4' into mergetrain-repair/330-335-combined-20260927"
   },
   "benchmarks": [
     {
@@ -46,7 +46,7 @@
     },
     {
       "name": "fft",
-      "instructions": 1789018
+      "instructions": 1784410
     },
     {
       "name": "fib",
@@ -78,7 +78,7 @@
     },
     {
       "name": "nbody",
-      "instructions": 14595822
+      "instructions": 10805795
     },
     {
       "name": "nqueen",
@@ -102,7 +102,7 @@
     },
     {
       "name": "raytracer",
-      "instructions": 43855386
+      "instructions": 43359816
     },
     {
       "name": "regex_lite",
@@ -126,7 +126,7 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 305728677
+      "instructions": 305728773
     },
     {
       "name": "warden",
