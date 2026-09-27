@@ -1,0 +1,37 @@
+// x25519.e2e - RFC 7748 X25519 public keys and shared secret.
+
+(match Stdlib.Blob.fromHex "77076D0A7318A57D3C16C17251B26645DF4C2F87EBc0992AB177FBA51DB92C2A" with
+ | Error _ -> Error "Invalid test scalar"
+ | Ok scalar -> Stdlib.X25519.publicKey scalar |> Stdlib.Result.map Stdlib.Blob.toHex)
+  = Ok "8520F0098930A754748B7DDCB43EF75A0DBF3A0D26381AF4EBA4A98EAA9B4E6A"
+
+(match Stdlib.Blob.fromHex "5DAB087E624A8A4B79E17F8B83800EE66F3BB1292618B6FD1C2F8B27FF88E0EB" with
+ | Error _ -> Error "Invalid test scalar"
+ | Ok scalar -> Stdlib.X25519.publicKey scalar |> Stdlib.Result.map Stdlib.Blob.toHex)
+  = Ok "DE9EDB7D7B7DC1B4D35B61C2ECE435373F8343C85B78674DADFC7E146F882B4F"
+
+(let alice = Stdlib.Blob.fromHex "77076D0A7318A57D3C16C17251B26645DF4C2F87EBC0992AB177FBA51DB92C2A"
+ let bobPublic = Stdlib.Blob.fromHex "DE9EDB7D7B7DC1B4D35B61C2ECE435373F8343C85B78674DADFC7E146F882B4F"
+ match (alice, bobPublic) with
+ | (Ok scalar, Ok publicKey) ->
+     Stdlib.X25519.sharedSecret scalar publicKey |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "Invalid test vector")
+  = Ok "4A5D9D5BA4CE2DE1728E3BF480350F25E07E21C947D19E3376F09B3C1E161742"
+
+Stdlib.X25519.publicKey Stdlib.Blob.empty = Error "X25519 scalar must be 32 bytes"
+
+(match Stdlib.X25519.generateKeyPair () with
+ | Error _ -> false
+ | Ok pair ->
+     Stdlib.Blob.length pair.privateKey == 32 &&
+     Stdlib.Blob.length pair.publicKey == 32 &&
+     (Stdlib.X25519.publicKey pair.privateKey
+      |> Stdlib.Result.map Stdlib.Blob.toHex) == Ok (Stdlib.Blob.toHex pair.publicKey))
+  = true
+
+(let alice = Stdlib.Blob.fromHex "77076D0A7318A57D3C16C17251B26645DF4C2F87EBC0992AB177FBA51DB92C2A"
+ let zero = Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000"
+ match (alice, zero) with
+ | (Ok privateKey, Ok publicKey) -> Stdlib.X25519.sharedSecret privateKey publicKey
+ | _ -> Error "Invalid test vector")
+  = Error "X25519 shared secret is zero"

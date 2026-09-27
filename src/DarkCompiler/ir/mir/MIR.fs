@@ -101,6 +101,7 @@ type CliOperation =
     | SocketReceiveTimeout
     | SocketSendTimeout
     | SocketClose
+    | SecureRandomFill
 
 /// Basic block label (defined early for use in Phi nodes)
 type Label = Label of string

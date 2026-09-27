@@ -217,6 +217,18 @@ let internal emitCliNative (ctx: FuncCtx) (dest: LIR.Reg) (operation: LIR.CliOpe
             Ok (loadImm64 X86_64.RAX 39L
             @ [X86_64.SYSCALL]
             @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
+        | LIR.SecureRandomFill ->
+            match args with
+            | [buffer; length] ->
+                loadSocketArgs [buffer; length] [X86_64.RDI; X86_64.RSI]
+                |> Result.map (fun loads ->
+                    loads
+                    @ loadImm64 X86_64.RDX 0L
+                    @ loadImm64 X86_64.RAX (int64 syscalls.Getrandom)
+                    @ [X86_64.SYSCALL]
+                    @ (if destReg = X86_64.RAX then []
+                       else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
+            | _ -> Error "SecureRandomFill expects buffer and length"
         | LIR.SocketTcp4 | LIR.SocketTcp6 | LIR.SocketUdp4 | LIR.SocketUdp6 ->
             let constants = Platform.socketConstantsFor Platform.Linux
             let family = if operation = LIR.SocketTcp6 || operation = LIR.SocketUdp6 then constants.AddressFamily6 else constants.AddressFamily4
