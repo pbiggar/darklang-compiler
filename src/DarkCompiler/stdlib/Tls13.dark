@@ -113,7 +113,7 @@ let clientHello (host: String) (random: Blob) (keyShare: Blob)
     let extensions = Stdlib.Blob.concat [sni, versions, groups, signatures, shares] in
     let body = Stdlib.Blob.concat [
       Stdlib.Blob.__fromInt64List [3L, 3L], random,
-      Stdlib.Blob.__fromInt64List [0L, 0L, 2L, 19L, 3L, 1L, 0L],
+      Stdlib.Blob.__fromInt64List [0L, 0L, 2L, 19L, 1L, 1L, 0L],
       Stdlib.Tls13.__u16 (Stdlib.Blob.__byteLength extensions), extensions ] in
     let bodyLength = Stdlib.Blob.__byteLength body in
     let handshake = Stdlib.Blob.concat [
@@ -181,7 +181,7 @@ let parseServerHello (data: Blob)
         Error (Stdlib.Tls13.RecordError.Invalid "HelloRetryRequest is not supported")
       else if sessionLength != 0L || cipherOffset + 5L > bodyEnd then
         Error (Stdlib.Tls13.RecordError.Invalid "Invalid ServerHello session ID")
-      else if Stdlib.Tls13.__read16 data cipherOffset != 4867L ||
+      else if Stdlib.Tls13.__read16 data cipherOffset != 4865L ||
               Stdlib.Blob.__getByte data (cipherOffset + 2L) != 0L then
         Error (Stdlib.Tls13.RecordError.Invalid "Unsupported ServerHello cipher or compression")
       else

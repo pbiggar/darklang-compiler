@@ -175,6 +175,7 @@ let private loadStdlib () : Result<LibParser.Validation.ValidatedSourceFile list
         "stdlib/Crypto.dark"
         "stdlib/AesGcm.dark"
         "stdlib/Tls13.dark"
+        "stdlib/Tls13Handshake.dark"
         "stdlib/Math.dark"
         "stdlib/X25519.dark"
         "stdlib/__SkewList.dark"

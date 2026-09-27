@@ -1,0 +1,241 @@
+// Tls13Handshake.dark - TLS 1.3 SHA-256 handshake secrets and server Finished.
+
+module Darklang.Stdlib.Tls13Handshake
+
+type HandshakeSecrets = {
+  client: Blob,
+  server: Blob,
+  transcript: Blob
+}
+
+type HandshakeFrame = { kind: Int64, body: Blob, raw: Blob, remaining: Blob }
+
+type FlightPhase =
+  | AwaitExtensions
+  | AwaitCertificate
+  | AwaitCertificateVerify
+  | AwaitFinished
+  | ServerFinished
+
+// Certificate and CertificateVerify are retained as untrusted handshake bytes.
+// ServerFinished proves transcript integrity, not the server's identity.
+type ServerFlight = {
+  serverKeys: Stdlib.Tls13.TrafficKeys,
+  clientHandshakeSecret: Blob,
+  serverHandshakeSecret: Blob,
+  transcript: Blob,
+  pending: Blob,
+  phase: Stdlib.Tls13Handshake.FlightPhase,
+  unverifiedCertificate: Stdlib.Option.Option<Blob>,
+  unverifiedCertificateVerify: Stdlib.Option.Option<Blob>
+}
+
+let __wholeHandshake (message: Blob) (kind: Int64) : Bool =
+  let length = Stdlib.Blob.__byteLength message in
+  length >= 4L && Stdlib.Blob.__getByte message 0L == kind &&
+  Stdlib.Tls13.__read24 message 1L == length - 4L
+
+let __or32 (bytes: Blob) (index: Int64) (acc: Int64) : Int64 =
+  if index == 32L then acc
+  else Stdlib.Tls13Handshake.__or32 bytes (index + 1L)
+         (Stdlib.Int64.bitwiseOr acc (Stdlib.Blob.__getByte bytes index))
+
+// RFC 8446, §7.1: early_secret -> derived -> handshake_secret.
+let deriveHandshakeSecrets (sharedSecret: Blob) (clientHello: Blob) (serverHello: Blob)
+  : Stdlib.Result.Result<Stdlib.Tls13Handshake.HandshakeSecrets, String> =
+  if Stdlib.Blob.__byteLength sharedSecret != 32L then
+    Error "TLS X25519 shared secret must be 32 bytes"
+  else if Stdlib.Tls13Handshake.__or32 sharedSecret 0L 0L == 0L then
+    Error "TLS X25519 shared secret is zero"
+  else if Stdlib.Bool.not (Stdlib.Tls13Handshake.__wholeHandshake clientHello 1L) ||
+          Stdlib.Bool.not (Stdlib.Tls13Handshake.__wholeHandshake serverHello 2L) then
+    Error "TLS handshake transcript requires complete ClientHello and ServerHello"
+  else
+    let zero = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 32 0L) in
+    let emptyHash = Stdlib.Crypto.sha256 Stdlib.Blob.empty in
+    let early = Stdlib.Tls13.hkdfExtract zero zero in
+    match Stdlib.Tls13.hkdfExpandLabel early "derived" emptyHash 32L with
+    | Error message -> Error message
+    | Ok derived ->
+        let handshake = Stdlib.Tls13.hkdfExtract derived sharedSecret in
+        let transcript = Stdlib.Blob.concat [clientHello, serverHello] in
+        let transcriptHash = Stdlib.Crypto.sha256 transcript in
+        match Stdlib.Tls13.hkdfExpandLabel handshake "c hs traffic" transcriptHash 32L with
+        | Error message -> Error message
+        | Ok client ->
+            match Stdlib.Tls13.hkdfExpandLabel handshake "s hs traffic" transcriptHash 32L with
+            | Error message -> Error message
+            | Ok server ->
+                Ok (Stdlib.Tls13Handshake.HandshakeSecrets {
+                  client = client, server = server, transcript = transcript })
+
+let finishedVerifyData (trafficSecret: Blob) (transcript: Blob)
+  : Stdlib.Result.Result<Blob, String> =
+  if Stdlib.Blob.__byteLength trafficSecret != 32L then
+    Error "TLS handshake traffic secret must be 32 bytes"
+  else
+    match Stdlib.Tls13.hkdfExpandLabel trafficSecret "finished" Stdlib.Blob.empty 32L with
+    | Error message -> Error message
+    | Ok key ->
+        Ok (Stdlib.Crypto.sha256hmac key (Stdlib.Crypto.sha256 transcript))
+
+let __same32 (a: Blob) (b: Blob) (index: Int64) (difference: Int64) : Bool =
+  if index == 32L then difference == 0L
+  else Stdlib.Tls13Handshake.__same32 a b (index + 1L)
+         (Stdlib.Int64.bitwiseOr difference
+           (Stdlib.Int64.bitwiseXor (Stdlib.Blob.__getByte a index)
+             (Stdlib.Blob.__getByte b index)))
+
+let parseHandshakeFrame (data: Blob)
+  : Stdlib.Result.Result<Stdlib.Tls13Handshake.HandshakeFrame, Stdlib.Tls13.RecordError> =
+  let length = Stdlib.Blob.__byteLength data in
+  if length < 4L then Error Stdlib.Tls13.RecordError.Incomplete
+  else
+    let bodyLength = Stdlib.Tls13.__read24 data 1L in
+    if bodyLength > 1048576L then
+      Error (Stdlib.Tls13.RecordError.Invalid "TLS handshake message exceeds size limit")
+    else if length < bodyLength + 4L then Error Stdlib.Tls13.RecordError.Incomplete
+    else
+      Ok (Stdlib.Tls13Handshake.HandshakeFrame {
+        kind = Stdlib.Blob.__getByte data 0L,
+        body = Stdlib.Blob.slice data 4 (Stdlib.Int.fromInt64 bodyLength),
+        raw = Stdlib.Blob.slice data 0 (Stdlib.Int.fromInt64 (bodyLength + 4L)),
+        remaining = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 (bodyLength + 4L))
+                      (Stdlib.Int.fromInt64 (length - bodyLength - 4L)) })
+
+let startServerFlight (sharedSecret: Blob) (clientHello: Blob) (serverHello: Blob)
+  : Stdlib.Result.Result<Stdlib.Tls13Handshake.ServerFlight, String> =
+  match Stdlib.Tls13Handshake.deriveHandshakeSecrets sharedSecret clientHello serverHello with
+  | Error message -> Error message
+  | Ok secrets ->
+      match Stdlib.Tls13.trafficKeys secrets.server with
+      | Error message -> Error message
+      | Ok keys ->
+          Ok (Stdlib.Tls13Handshake.ServerFlight {
+            serverKeys = keys,
+            clientHandshakeSecret = secrets.client,
+            serverHandshakeSecret = secrets.server,
+            transcript = secrets.transcript,
+            pending = Stdlib.Blob.empty,
+            phase = Stdlib.Tls13Handshake.FlightPhase.AwaitExtensions,
+            unverifiedCertificate = None,
+            unverifiedCertificateVerify = None })
+
+let __advance (state: Stdlib.Tls13Handshake.ServerFlight)
+  (phase: Stdlib.Tls13Handshake.FlightPhase) (message: Stdlib.Tls13Handshake.HandshakeFrame)
+  (certificate: Stdlib.Option.Option<Blob>)
+  (certificateVerify: Stdlib.Option.Option<Blob>) : Stdlib.Tls13Handshake.ServerFlight =
+  Stdlib.Tls13Handshake.ServerFlight {
+    serverKeys = state.serverKeys,
+    clientHandshakeSecret = state.clientHandshakeSecret,
+    serverHandshakeSecret = state.serverHandshakeSecret,
+    transcript = Stdlib.Blob.concat [state.transcript, message.raw],
+    pending = Stdlib.Blob.empty,
+    phase = phase,
+    unverifiedCertificate = certificate,
+    unverifiedCertificateVerify = certificateVerify }
+
+let __processFrame (state: Stdlib.Tls13Handshake.ServerFlight)
+  (frame: Stdlib.Tls13Handshake.HandshakeFrame)
+  : Stdlib.Result.Result<Stdlib.Tls13Handshake.ServerFlight, String> =
+  match state.phase with
+  | AwaitExtensions ->
+      let length = Stdlib.Blob.__byteLength frame.body in
+      if frame.kind != 8L || length < 2L ||
+         Stdlib.Tls13.__read16 frame.body 0L != length - 2L then
+        Error "Invalid TLS EncryptedExtensions"
+      else Ok (Stdlib.Tls13Handshake.__advance state
+                 Stdlib.Tls13Handshake.FlightPhase.AwaitCertificate frame
+                 state.unverifiedCertificate state.unverifiedCertificateVerify)
+  | AwaitCertificate ->
+      let length = Stdlib.Blob.__byteLength frame.body in
+      if frame.kind != 11L || length < 5L ||
+         Stdlib.Blob.__getByte frame.body 0L != 0L ||
+         Stdlib.Tls13.__read24 frame.body 1L != length - 4L then
+        Error "Invalid TLS Certificate message"
+      else Ok (Stdlib.Tls13Handshake.__advance state
+                 Stdlib.Tls13Handshake.FlightPhase.AwaitCertificateVerify frame
+                 (Some frame.raw) state.unverifiedCertificateVerify)
+  | AwaitCertificateVerify ->
+      let length = Stdlib.Blob.__byteLength frame.body in
+      if frame.kind != 15L || length < 5L ||
+         Stdlib.Tls13.__read16 frame.body 2L != length - 4L then
+        Error "Invalid TLS CertificateVerify message"
+      else Ok (Stdlib.Tls13Handshake.__advance state
+                 Stdlib.Tls13Handshake.FlightPhase.AwaitFinished frame
+                 state.unverifiedCertificate (Some frame.raw))
+  | AwaitFinished ->
+      if frame.kind != 20L || Stdlib.Blob.__byteLength frame.body != 32L then
+        Error "Invalid TLS Finished message"
+      else
+        match Stdlib.Tls13Handshake.finishedVerifyData state.serverHandshakeSecret
+                state.transcript with
+        | Error message -> Error message
+        | Ok expected ->
+            if Stdlib.Bool.not (Stdlib.Tls13Handshake.__same32 expected frame.body 0L 0L) then
+              Error "TLS Finished verification failed"
+            else Ok (Stdlib.Tls13Handshake.__advance state
+                       Stdlib.Tls13Handshake.FlightPhase.ServerFinished frame
+                       state.unverifiedCertificate state.unverifiedCertificateVerify)
+  | ServerFinished ->
+      Error "Unexpected TLS handshake message after Finished"
+
+let __withPending (state: Stdlib.Tls13Handshake.ServerFlight) (pending: Blob)
+  : Stdlib.Tls13Handshake.ServerFlight =
+  Stdlib.Tls13Handshake.ServerFlight {
+    serverKeys = state.serverKeys,
+    clientHandshakeSecret = state.clientHandshakeSecret,
+    serverHandshakeSecret = state.serverHandshakeSecret,
+    transcript = state.transcript,
+    pending = pending,
+    phase = state.phase,
+    unverifiedCertificate = state.unverifiedCertificate,
+    unverifiedCertificateVerify = state.unverifiedCertificateVerify }
+
+let __withKeys (state: Stdlib.Tls13Handshake.ServerFlight)
+  (keys: Stdlib.Tls13.TrafficKeys) : Stdlib.Tls13Handshake.ServerFlight =
+  Stdlib.Tls13Handshake.ServerFlight {
+    serverKeys = keys,
+    clientHandshakeSecret = state.clientHandshakeSecret,
+    serverHandshakeSecret = state.serverHandshakeSecret,
+    transcript = state.transcript,
+    pending = state.pending,
+    phase = state.phase,
+    unverifiedCertificate = state.unverifiedCertificate,
+    unverifiedCertificateVerify = state.unverifiedCertificateVerify }
+
+let __consumeFrames (state: Stdlib.Tls13Handshake.ServerFlight) (buffer: Blob)
+  : Stdlib.Result.Result<Stdlib.Tls13Handshake.ServerFlight, String> =
+  if Stdlib.Blob.__byteLength buffer > 1048580L then
+    Error "TLS handshake buffer exceeds size limit"
+  else if Stdlib.Blob.__byteLength buffer == 0L then Ok state
+  else
+    match Stdlib.Tls13Handshake.parseHandshakeFrame buffer with
+    | Error Incomplete ->
+        Ok (Stdlib.Tls13Handshake.__withPending state buffer)
+    | Error (Invalid message) -> Error message
+    | Ok frame ->
+        match Stdlib.Tls13Handshake.__processFrame state frame with
+        | Error message -> Error message
+        | Ok next ->
+            if next.phase == Stdlib.Tls13Handshake.FlightPhase.ServerFinished &&
+               Stdlib.Blob.__byteLength frame.remaining != 0L then
+              Error "Unexpected TLS handshake bytes after Finished"
+            else Stdlib.Tls13Handshake.__consumeFrames next frame.remaining
+
+let consumeServerRecord (state: Stdlib.Tls13Handshake.ServerFlight)
+  (record: Stdlib.Tls13.Record)
+  : Stdlib.Result.Result<Stdlib.Tls13Handshake.ServerFlight, String> =
+  if state.phase == Stdlib.Tls13Handshake.FlightPhase.ServerFinished then
+    Error "TLS server handshake already finished"
+  else
+    match Stdlib.Tls13.openRecord state.serverKeys record with
+    | Error message -> Error message
+    | Ok opened ->
+        if opened.contentType != 22L then Error "Expected encrypted TLS handshake record"
+        else
+          let buffered = Stdlib.Blob.concat [state.pending, opened.content] in
+          Stdlib.Tls13Handshake.__consumeFrames
+            (Stdlib.Tls13Handshake.__withKeys
+              (Stdlib.Tls13Handshake.__withPending state Stdlib.Blob.empty)
+              opened.nextKeys) buffered
