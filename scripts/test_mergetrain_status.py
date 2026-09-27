@@ -278,6 +278,9 @@ class MergetrainStatusTests(unittest.TestCase):
             {"status": "deployed", "finished_at": "2026-09-27T13:00:00+00:00",
              "jobs": [{"branch": "task/two"}],
              "gates": [{"name": "tests", "state": "success", "duration_seconds": 51.2}]},
+            {"status": "deployed", "finished_at": "2026-09-27T15:00:00+00:00",
+             "jobs": [{"branch": "task/one"}],
+             "gates": [{"name": "tests", "state": "success", "duration_seconds": 63.7}]},
         ]
         self.assertEqual(
             merge_test_runtime("task/one", "2026-09-27T10:00:00+00:00", history),
@@ -290,6 +293,10 @@ class MergetrainStatusTests(unittest.TestCase):
         self.assertEqual(
             merge_test_runtime("task/three", "2026-09-27T12:00:00+00:00", history),
             "tests n/a",
+        )
+        self.assertEqual(
+            merge_test_runtime("task/one", "2026-09-27T14:00:00+00:00", history),
+            "tests 63.7s",
         )
 
     def test_interactive_keys_respond_while_status_refresh_is_slow(self) -> None:
