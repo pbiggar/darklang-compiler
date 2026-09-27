@@ -379,16 +379,11 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                         match dependencyLirResult, programAnfResult with
                         | Error err, _
                         | _, Error err -> Error err
-                        | Ok allocatedDependencyFuncs, Ok (printedFunctions, ssaFunctions, programTypeMap) ->
-                                let reachableProgramFunctions =
-                                    pruneProgramFunctions printedFunctions
-                                let reachableIds =
-                                    reachableProgramFunctions
-                                    |> List.map (fun func -> func.Id)
-                                    |> Set.ofList
+                        | Ok allocatedDependencyFuncs, Ok (_printedFunctions, ssaFunctions, programTypeMap) ->
                                 let reachableSSAFunctions =
-                                    ssaFunctions
-                                    |> List.filter (fun func -> Set.contains func.Id reachableIds)
+                                    SSADirectCallSpecialization.reachableFrom
+                                        (Set.singleton programEntryId)
+                                        ssaFunctions
                                 let programLirResult =
                                     lowerToAllocatedLir
                                         plan.BaseContext.Target

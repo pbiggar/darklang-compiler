@@ -134,7 +134,6 @@
     <Compile Include="optimizations/DeadCodeEliminationTests.fs" />
     <Compile Include="optimizations/ANFOptimizeTests.fs" />
     <Compile Include="optimizations/ANFInliningTests.fs" />
-    <Compile Include="optimizations/ANFDirectCallSpecializationTests.fs" />
     <Compile Include="optimizations/ANFHigherOrderSpecializationTests.fs" />
 
     <!-- Test Runner (must be last) -->

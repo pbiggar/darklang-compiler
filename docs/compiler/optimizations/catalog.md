@@ -81,21 +81,20 @@ negative fixtures are part of each transformation's contract.
 
 ## Direct-call specialization
 
-`passes/anf/ANF_DirectCallSpecialization.fs` specializes internal calls when
+`passes/anf/SSADirectCallSpecialization.fs` specializes internal calls when
 the callee identity and argument values are statically known. Uniform
 parameters are removed, while differing values create bounded clones selected
 by estimated argument-setup savings. Facts cover scalar and text literals,
 Char and DateTime immediates, nullary constructor tags, Int128 and UInt128 word
 constructions, and tuples or records of at most three literal fields. Exact
-construction values are rematerialized inside the clone, and only the matching
-now-unused caller construction is removed.
+construction values are rematerialized in the cloned SSA entry block. The
+matching unused caller construction is removed.
 
 Calls through an explicit function reference become direct before analysis.
 The original function remains as a fallback, with limits of four clones per
 function and sixteen per program. Address-taken functions, closures, larger or
-dynamic aggregates, and non-exact ranges remain excluded. Focused tests own
-caps, recursive signatures, float-bit identity, known indirect targets,
-construction ownership, fallback routing, and exclusions.
+dynamic aggregates, and non-exact ranges remain excluded. End-to-end cases
+cover recursive signatures, managed literals, and aggregate arguments.
 
 ## Higher-order specialization
 

@@ -152,32 +152,19 @@ let internal buildAnf
         let t = System.Math.Round(higherOrderElapsed, 1)
         println $"        {t}ms"
 
-    if verbosity >= 1 && specializeInternalSignatures then
-        println "  [anf.specialize-calls] ANF Direct-Call Specialization..."
-    let specializationStart = sw.Elapsed.TotalMilliseconds
-    let anfSpecialized =
-        if options.DisableInlining || not specializeInternalSignatures then
-            anfKnownHigherOrder
-        else
-            ANF_DirectCallSpecialization.specializeProgramWithFunctionNames registries.FunctionNames anfKnownHigherOrder
-    let specializationElapsed = sw.Elapsed.TotalMilliseconds - specializationStart
-    if specializeInternalSignatures then
-        recordPassTiming passTimingRecorder "ANF Direct-Call Specialization" specializationElapsed
-    if verbosity >= 2 && specializeInternalSignatures then
-        let t = System.Math.Round(specializationElapsed, 1)
-        println $"        {t}ms"
     let inlineElapsed = sw.Elapsed.TotalMilliseconds - inlineStart
     recordPassTiming passTimingRecorder "ANF Inlining" inlineElapsed
     if verbosity >= 2 then
         let t = System.Math.Round(inlineElapsed, 1)
         println $"        {t}ms"
 
-    let convResult = buildConversionResult anfSpecialized registries ownershipContracts
+    let convResult = buildConversionResult anfKnownHigherOrder registries ownershipContracts
 
-    let ctx = RcTypeFacts.createContext convResult
-    let (ANF.Program (preRCFunctions, _)) = anfSpecialized
-    let ssaBeforeEscapeResult =
-        RefCountInsertion.verifyOwnershipContracts ctx ownershipContracts anfSpecialized
+    let preSpecializationContext = RcTypeFacts.createContext convResult
+    let (ANF.Program (preRCFunctions, _)) = anfKnownHigherOrder
+    let ssaBeforeSpecializationResult =
+        RefCountInsertion.verifyOwnershipContracts
+            preSpecializationContext ownershipContracts anfKnownHigherOrder
         |> Result.bind (fun () ->
             preRCFunctions
             |> List.fold (fun result func ->
@@ -185,22 +172,39 @@ let internal buildAnf
                 |> Result.bind (fun accumulated ->
                     SSAANF.convertFunctionBeforeRC
                         (ANF_to_MIR.maxTempIdInFunction func)
-                        ctx
+                        preSpecializationContext
                         func
                     |> Result.map (fun ssa ->
-                        (func, ssa) :: accumulated)))
+                        ssa :: accumulated)))
                 (Ok [])
             |> Result.map List.rev)
-    match ssaBeforeEscapeResult with
+    match ssaBeforeSpecializationResult with
     | Error err -> Error $"Reference count insertion error: {err}"
-    | Ok ssaBeforeEscape ->
+    | Ok ssaBeforeSpecialization ->
+        if verbosity >= 1 && specializeInternalSignatures then
+            println "  [ssa.specialize-calls] SSA Direct-Call Specialization..."
+        let specializationStart = sw.Elapsed.TotalMilliseconds
+        let specialization: SSADirectCallSpecialization.Specialization =
+            if options.DisableInlining || not specializeInternalSignatures then
+                { Functions = ssaBeforeSpecialization
+                  CloneOrigins = Map.empty }
+            else
+                SSADirectCallSpecialization.specializeProgramWithFunctionNames
+                    registries.FunctionNames ssaBeforeSpecialization
+        let specializationElapsed = sw.Elapsed.TotalMilliseconds - specializationStart
+        if specializeInternalSignatures then
+            recordPassTiming
+                passTimingRecorder "SSA Direct-Call Specialization" specializationElapsed
+        if verbosity >= 2 && specializeInternalSignatures then
+            let t = System.Math.Round(specializationElapsed, 1)
+            println $"        {t}ms"
+
         if verbosity >= 1 && not options.DisableANFOpt then
             println "  [ssa.escape-analysis] SSA Escape Analysis..."
         let escapeStart = sw.Elapsed.TotalMilliseconds
         let ssaAfterEscape =
-            ssaBeforeEscape
-            |> List.map (fun (func, ssa) ->
-                func,
+            specialization.Functions
+            |> List.map (fun ssa ->
                 if options.DisableANFOpt then ssa
                 else
                     SSAEscapeAnalysis.optimizeFunction
@@ -214,13 +218,38 @@ let internal buildAnf
             let t = System.Math.Round(escapeElapsed, 1)
             println $"        {t}ms"
 
+        let specializedRegistry =
+            ssaAfterEscape
+            |> List.fold (fun registry func ->
+                Map.add
+                    func.Id
+                    (func.Name,
+                     AST.TFunction (
+                         func.TypedParams |> List.map (fun parameter -> parameter.Type),
+                         func.ReturnType))
+                    registry) convResult.FuncReg
+        let ctx =
+            RcTypeFacts.createContext
+                { convResult with FuncReg = specializedRegistry }
+        let originalFrontiers =
+            preRCFunctions
+            |> List.map (fun func ->
+                func.Id, RefCountInsertion.ownedDictionaryFrontierParams func)
+            |> Map.ofList
         if verbosity >= 1 then println "  [anf.reference-counts] Reference Count Insertion..."
         let rcStart = sw.Elapsed.TotalMilliseconds
         let ssaAfterRC =
             ssaAfterEscape
-            |> List.map (fun (func, ssa) ->
+            |> List.map (fun ssa ->
+                let sourceId =
+                    Map.tryFind ssa.Id specialization.CloneOrigins
+                    |> Option.defaultValue ssa.Id
+                let retainedParams =
+                    ssa.TypedParams |> List.map (fun parameter -> parameter.Id) |> Set.ofList
                 let frontierParams =
-                    RefCountInsertion.ownedDictionaryFrontierParams func
+                    Map.tryFind sourceId originalFrontiers
+                    |> Option.defaultValue Set.empty
+                    |> Set.intersect retainedParams
                 RcSSARefCountInsertion.insertBlockLocal ctx frontierParams ssa)
         let typeMap =
             ssaAfterRC

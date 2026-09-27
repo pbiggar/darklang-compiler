@@ -1,42 +1,37 @@
-// ANF_DirectCallSpecialization.fs - Specialize internal direct-call signatures.
-//
-// Rewrites parameters only when every call site is present in the current ANF
-// program. Functions used as raw addresses or closure targets retain their
-// original calling convention.
+// DirectCallFacts.fs - Value, call, and rewrite facts for SSA direct-call specialization.
 
-module ANF_DirectCallSpecialization
+module DirectCallFacts
 
 open MemoryModel
-
 open ANF
 open ANFEffects
 
-type private ParameterRewrite =
+type internal ParameterRewrite =
     | KeepParameter
     | ReplaceParameterWith of Atom
 
-type private ProgramAnalysis = {
+type internal ProgramAnalysis = {
     DirectCalls: Map<AST.FunctionId, Atom list list>
     IndirectTargets: Set<AST.FunctionId>
 }
 
-type private ScalarLiteral =
+type internal ScalarLiteral =
     | UnitScalar
     | IntScalar of SizedInt
     | BoolScalar of bool
     | FloatScalar of int64
     | StringScalar of string
 
-type private KnownValue =
+type internal KnownValue =
     | LiteralValue of ScalarLiteral
     | Int128Value of constructor:AST.FunctionId * low:uint64 * high:uint64
     | UInt128Value of constructor:AST.FunctionId * low:uint64 * high:uint64
     | TupleValue of ScalarLiteral list
     | RecordValue of RecordDescriptor * ScalarLiteral list
 
-type private LiteralPattern = (int * KnownValue) list
+type internal LiteralPattern = (int * KnownValue) list
 
-type private LiteralClone = {
+type internal LiteralClone = {
     OriginalId: AST.FunctionId
     CloneId: AST.FunctionId
     CloneName: string
@@ -45,10 +40,10 @@ type private LiteralClone = {
 
 // Cloning is deliberately a small whole-program transform: without profile
 // data, larger clone families are not justified by the saved scalar setup.
-let private maxLiteralClonesPerFunction = 4
-let private maxLiteralClonesPerProgram = 16
+let internal maxLiteralClonesPerFunction = 4
+let internal maxLiteralClonesPerProgram = 16
 
-let private emptyAnalysis = {
+let internal emptyAnalysis = {
     DirectCalls = Map.empty
     IndirectTargets = Set.empty
 }
@@ -57,38 +52,13 @@ let private emptyAnalysis = {
 // indirect call would hide a direct-call specialization opportunity without
 // preserving any dynamic dispatch. Closure calls remain indirect because their
 // hidden capture argument uses a different calling convention.
-let private exposeKnownIndirectCExpr (cexpr: CExpr) : CExpr =
+let internal exposeKnownIndirectCExpr (cexpr: CExpr) : CExpr =
     match cexpr with
     | IndirectCall (FuncRef name, args) -> Call (name, args)
     | IndirectTailCall (FuncRef name, args) -> TailCall (name, args)
     | _ -> cexpr
 
-let rec private exposeKnownIndirectExpr (expr: AExpr) : AExpr =
-    match expr with
-    | Let (id, cexpr, body) ->
-        Let (id, exposeKnownIndirectCExpr cexpr, exposeKnownIndirectExpr body)
-    | Return _
-    | Jump _ -> expr
-    | Join (parameter, continuation, entry) ->
-        Join (
-            parameter,
-            exposeKnownIndirectExpr continuation,
-            exposeKnownIndirectExpr entry
-        )
-    | If (condition, thenBranch, elseBranch) ->
-        If (
-            condition,
-            exposeKnownIndirectExpr thenBranch,
-            exposeKnownIndirectExpr elseBranch
-        )
-
-let private exposeKnownIndirectTargets (Program (functions, main)) : Program =
-    let functions' =
-        functions
-        |> List.map (fun func -> { func with Body = exposeKnownIndirectExpr func.Body })
-    Program (functions', exposeKnownIndirectExpr main)
-
-let private addDirectCall
+let internal addDirectCall
     (name: AST.FunctionId)
     (args: Atom list)
     (analysis: ProgramAnalysis)
@@ -96,15 +66,15 @@ let private addDirectCall
     let existing = Map.tryFind name analysis.DirectCalls |> Option.defaultValue []
     { analysis with DirectCalls = Map.add name (args :: existing) analysis.DirectCalls }
 
-let private analyzeAtom (atom: Atom) (analysis: ProgramAnalysis) : ProgramAnalysis =
+let internal analyzeAtom (atom: Atom) (analysis: ProgramAnalysis) : ProgramAnalysis =
     match atom with
     | FuncRef name -> { analysis with IndirectTargets = Set.add name analysis.IndirectTargets }
     | _ -> analysis
 
-let private analyzeAtoms (atoms: Atom list) (analysis: ProgramAnalysis) : ProgramAnalysis =
+let internal analyzeAtoms (atoms: Atom list) (analysis: ProgramAnalysis) : ProgramAnalysis =
     atoms |> List.fold (fun state atom -> analyzeAtom atom state) analysis
 
-let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAnalysis =
+let internal analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAnalysis =
     let analyze = analyzeAtom
     let analyzeMany = analyzeAtoms
     match cexpr with
@@ -187,25 +157,7 @@ let private analyzeCExpr (cexpr: CExpr) (analysis: ProgramAnalysis) : ProgramAna
     | DateTimeNow
     | StdinReadLine
     | RuntimeError _ -> analysis
-
-let rec private analyzeExpr (expr: AExpr) (analysis: ProgramAnalysis) : ProgramAnalysis =
-    match expr with
-    | Let (_, cexpr, body) -> analysis |> analyzeCExpr cexpr |> analyzeExpr body
-    | Return atom -> analyzeAtom atom analysis
-    | Jump (_, atom) -> analyzeAtom atom analysis
-    | Join (_, continuation, entry) -> analysis |> analyzeExpr continuation |> analyzeExpr entry
-    | If (condition, thenBranch, elseBranch) ->
-        analysis
-        |> analyzeAtom condition
-        |> analyzeExpr thenBranch
-        |> analyzeExpr elseBranch
-
-let private analyzeProgram (functions: Function list) (main: AExpr) : ProgramAnalysis =
-    functions
-    |> List.fold (fun analysis func -> analyzeExpr func.Body analysis) emptyAnalysis
-    |> analyzeExpr main
-
-let private scalarLiteralAtom (atom: Atom) : ScalarLiteral option =
+let internal scalarLiteralAtom (atom: Atom) : ScalarLiteral option =
     match atom with
     | UnitLiteral -> Some UnitScalar
     | IntLiteral value -> Some (IntScalar value)
@@ -215,7 +167,7 @@ let private scalarLiteralAtom (atom: Atom) : ScalarLiteral option =
     | Var _
     | FuncRef _ -> None
 
-let private atomForScalarLiteral (literal: ScalarLiteral) : Atom =
+let internal atomForScalarLiteral (literal: ScalarLiteral) : Atom =
     match literal with
     | UnitScalar -> UnitLiteral
     | IntScalar value -> IntLiteral value
@@ -223,7 +175,7 @@ let private atomForScalarLiteral (literal: ScalarLiteral) : Atom =
     | FloatScalar bits -> FloatLiteral (System.BitConverter.Int64BitsToDouble bits)
     | StringScalar value -> StringLiteral value
 
-let private isScalarLiteralType (typ: AST.SemanticType) : bool =
+let internal isScalarLiteralType (typ: AST.SemanticType) : bool =
     match typ with
     | AST.TInt8
     | AST.TInt16
@@ -242,7 +194,7 @@ let private isScalarLiteralType (typ: AST.SemanticType) : bool =
     | AST.TSum _ -> true
     | _ -> false
 
-let private isConstructionValueType (typ: AST.SemanticType) : bool =
+let internal isConstructionValueType (typ: AST.SemanticType) : bool =
     match typ with
     | AST.TInt128
     | AST.TUInt128 -> true
@@ -250,10 +202,10 @@ let private isConstructionValueType (typ: AST.SemanticType) : bool =
     | AST.TRecord _ -> true
     | _ -> false
 
-let private isSpecializableValueType (typ: AST.SemanticType) : bool =
+let internal isSpecializableValueType (typ: AST.SemanticType) : bool =
     isScalarLiteralType typ || isConstructionValueType typ
 
-let rec private scalarLiteralMatchesType (typ: AST.SemanticType) (literal: ScalarLiteral) : bool =
+let rec internal scalarLiteralMatchesType (typ: AST.SemanticType) (literal: ScalarLiteral) : bool =
     match typ, literal with
     | AST.TUnit, UnitScalar
     | AST.TInt8, IntScalar (Int8 _)
@@ -272,7 +224,7 @@ let rec private scalarLiteralMatchesType (typ: AST.SemanticType) (literal: Scala
     | AST.TSum _, IntScalar (Int64 _) -> true
     | _ -> false
 
-let private knownValueMatchesType (typ: AST.SemanticType) (value: KnownValue) : bool =
+let internal knownValueMatchesType (typ: AST.SemanticType) (value: KnownValue) : bool =
     match typ, value with
     | _, LiteralValue literal -> scalarLiteralMatchesType typ literal
     | AST.TInt128, Int128Value _
@@ -289,54 +241,12 @@ let private knownValueMatchesType (typ: AST.SemanticType) (value: KnownValue) : 
             fields
     | AST.TSum _, TupleValue [_; _] -> true
     | _ -> false
-
-let private uniformLiteralAt (index: int) (calls: Atom list list) : Atom option =
-    let literals =
-        calls
-        |> List.map (fun args -> List.tryItem index args |> Option.bind scalarLiteralAtom)
-    match literals with
-    | Some first :: rest when rest |> List.forall (fun literal -> literal = Some first) ->
-        Some (atomForScalarLiteral first)
-    | _ -> None
-
-let private rewritesForFunction
-    (analysis: ProgramAnalysis)
-    (func: Function)
-    : ParameterRewrite list option =
-    match Map.tryFind func.Id analysis.DirectCalls with
-    | None -> None
-    | Some _ when Set.contains func.Id analysis.IndirectTargets -> None
-    | Some calls ->
-        func.TypedParams
-        |> List.mapi (fun index parameter ->
-            match isScalarLiteralType parameter.Type, uniformLiteralAt index calls with
-            | false, _ -> KeepParameter
-            | true, Some literal ->
-                match scalarLiteralAtom literal with
-                | Some value when scalarLiteralMatchesType parameter.Type value ->
-                    ReplaceParameterWith literal
-                | _ -> KeepParameter
-            | true, None -> KeepParameter)
-        |> Some
-
-let private buildRewriteMap
-    (analysis: ProgramAnalysis)
-    (functions: Function list)
-    : Map<AST.FunctionId, ParameterRewrite list> =
-    functions
-    |> List.choose (fun func ->
-        rewritesForFunction analysis func
-        |> Option.bind (fun rewrites ->
-            if rewrites |> List.forall (fun rewrite -> rewrite = KeepParameter) then None
-            else Some (func.Id, rewrites)))
-    |> Map.ofList
-
-let private rewriteAtom (substitutions: Map<TempId, Atom>) (atom: Atom) : Atom =
+let internal rewriteAtom (substitutions: Map<TempId, Atom>) (atom: Atom) : Atom =
     match atom with
     | Var id -> Map.tryFind id substitutions |> Option.defaultValue atom
     | _ -> atom
 
-let private rewriteCallArgs
+let internal rewriteCallArgs
     (rewriteMap: Map<AST.FunctionId, ParameterRewrite list>)
     (name: AST.FunctionId)
     (args: Atom list)
@@ -354,7 +264,7 @@ let private rewriteCallArgs
             | _ -> Crash.crash $"Direct-call argument count mismatch for '{name}'"
         loop rewrites args []
 
-let private rewriteCExpr
+let internal rewriteCExpr
     (rewriteMap: Map<AST.FunctionId, ParameterRewrite list>)
     (substitutions: Map<TempId, Atom>)
     (cexpr: CExpr)
@@ -444,60 +354,9 @@ let private rewriteCExpr
     | FloatToString atom -> FloatToString (rewrite atom)
     | RuntimeError message -> RuntimeError message
     | RuntimeErrorString atom -> RuntimeErrorString (rewrite atom)
+type internal ValueEnv = Map<TempId, KnownValue>
 
-let rec private rewriteExpr
-    (rewriteMap: Map<AST.FunctionId, ParameterRewrite list>)
-    (substitutions: Map<TempId, Atom>)
-    (expr: AExpr)
-    : AExpr =
-    match expr with
-    | Let (id, cexpr, body) ->
-        Let (id, rewriteCExpr rewriteMap substitutions cexpr, rewriteExpr rewriteMap substitutions body)
-    | Return atom -> Return (rewriteAtom substitutions atom)
-    | Jump (target, atom) -> Jump (target, rewriteAtom substitutions atom)
-    | Join (parameter, continuation, entry) ->
-        Join (parameter, rewriteExpr rewriteMap (Map.remove parameter.Id substitutions) continuation, rewriteExpr rewriteMap substitutions entry)
-    | If (condition, thenBranch, elseBranch) ->
-        If (
-            rewriteAtom substitutions condition,
-            rewriteExpr rewriteMap substitutions thenBranch,
-            rewriteExpr rewriteMap substitutions elseBranch
-        )
-
-let private rewriteFunction
-    (rewriteMap: Map<AST.FunctionId, ParameterRewrite list>)
-    (func: Function)
-    : Function =
-    match Map.tryFind func.Id rewriteMap with
-    | None -> { func with Body = rewriteExpr rewriteMap Map.empty func.Body }
-    | Some rewrites ->
-        let rec pairParameters parameters rewrites pairs =
-            match parameters, rewrites with
-            | [], [] -> List.rev pairs
-            | parameter :: restParameters, rewrite :: restRewrites ->
-                pairParameters restParameters restRewrites ((parameter, rewrite) :: pairs)
-            | _ -> Crash.crash $"Direct-call parameter rewrite count mismatch for '{func.Name}'"
-        let parameterRewrites = pairParameters func.TypedParams rewrites []
-        let parameters =
-            parameterRewrites
-            |> List.choose (fun (parameter, rewrite) ->
-                match rewrite with
-                | KeepParameter -> Some parameter
-                | ReplaceParameterWith _ -> None)
-        let substitutions =
-            parameterRewrites
-            |> List.choose (fun (parameter, rewrite) ->
-                match rewrite with
-                | ReplaceParameterWith literal -> Some (parameter.Id, literal)
-                | KeepParameter -> None)
-            |> Map.ofList
-        { func with
-            TypedParams = parameters
-            Body = rewriteExpr rewriteMap substitutions func.Body }
-
-type private ValueEnv = Map<TempId, KnownValue>
-
-let private knownValueForAtom (env: ValueEnv) (atom: Atom) : KnownValue option =
+let internal knownValueForAtom (env: ValueEnv) (atom: Atom) : KnownValue option =
     match scalarLiteralAtom atom with
     | Some literal -> Some (LiteralValue literal)
     | None ->
@@ -505,7 +364,7 @@ let private knownValueForAtom (env: ValueEnv) (atom: Atom) : KnownValue option =
         | Var id -> Map.tryFind id env
         | _ -> None
 
-let private knownLiteralsForAtoms (env: ValueEnv) (atoms: Atom list) : ScalarLiteral list option =
+let internal knownLiteralsForAtoms (env: ValueEnv) (atoms: Atom list) : ScalarLiteral list option =
     let rec loop remaining literals =
         match remaining with
         | [] -> Some (List.rev literals)
@@ -515,7 +374,7 @@ let private knownLiteralsForAtoms (env: ValueEnv) (atoms: Atom list) : ScalarLit
             | _ -> None
     loop atoms []
 
-let private knownValueForCExpr
+let internal knownValueForCExpr
     (env: ValueEnv)
     (cexpr: CExpr)
     : KnownValue option =
@@ -538,12 +397,12 @@ let private knownValueForCExpr
         |> Option.map (fun literals -> RecordValue (descriptor, literals))
     | _ -> None
 
-let private addKnownBinding (id: TempId) (cexpr: CExpr) (env: ValueEnv) : ValueEnv =
+let internal addKnownBinding (id: TempId) (cexpr: CExpr) (env: ValueEnv) : ValueEnv =
     match knownValueForCExpr env cexpr with
     | Some value -> Map.add id value env
     | None -> Map.remove id env
 
-let private addKnownCall
+let internal addKnownCall
     (name: AST.FunctionId)
     (args: Atom list)
     (env: ValueEnv)
@@ -552,36 +411,7 @@ let private addKnownCall
     let values = args |> List.map (knownValueForAtom env)
     let existing = Map.tryFind name calls |> Option.defaultValue []
     Map.add name (values :: existing) calls
-
-let rec private collectKnownCalls
-    (env: ValueEnv)
-    (expr: AExpr)
-    (calls: Map<AST.FunctionId, KnownValue option list list>)
-    : Map<AST.FunctionId, KnownValue option list list> =
-    match expr with
-    | Return _
-    | Jump _ -> calls
-    | Let (id, cexpr, body) ->
-        let calls' =
-            match cexpr with
-            | Call (name, args)
-            | BorrowedCall (name, args)
-            | TailCall (name, args) -> addKnownCall name args env calls
-            | _ -> calls
-        collectKnownCalls (addKnownBinding id cexpr env) body calls'
-    | Join (parameter, continuation, entry) ->
-        let calls' = collectKnownCalls (Map.remove parameter.Id env) continuation calls
-        collectKnownCalls env entry calls'
-    | If (_, thenBranch, elseBranch) ->
-        let calls' = collectKnownCalls env thenBranch calls
-        collectKnownCalls env elseBranch calls'
-
-let private knownCallsInProgram (functions: Function list) (main: AExpr) =
-    functions
-    |> List.fold (fun calls func -> collectKnownCalls Map.empty func.Body calls) Map.empty
-    |> collectKnownCalls Map.empty main
-
-let private literalPatternAt
+let internal literalPatternAt
     (eligibleIndices: Set<int>)
     (values: KnownValue option list)
     : LiteralPattern =
@@ -592,102 +422,7 @@ let private literalPatternAt
         else
             None)
     |> List.choose id
-
-let rec private directCallsTo (target: AST.FunctionId) (expr: AExpr) : Atom list list =
-    match expr with
-    | Jump _ | Return _ -> []
-    | Join (_, continuation, entry) -> directCallsTo target continuation @ directCallsTo target entry
-    | Let (_, cexpr, body) ->
-        let current =
-            match cexpr with
-            | Call (name, args)
-            | BorrowedCall (name, args)
-            | TailCall (name, args) when name = target -> [args]
-            | _ -> []
-        current @ directCallsTo target body
-    | If (_, thenBranch, elseBranch) ->
-        directCallsTo target thenBranch @ directCallsTo target elseBranch
-
-let private cloneableParameterIndices (func: Function) : Set<int> =
-    let allIndices =
-        func.TypedParams
-        |> List.mapi (fun index parameter ->
-            if isSpecializableValueType parameter.Type then Some index else None)
-        |> List.choose id
-        |> Set.ofList
-    match directCallsTo func.Id func.Body with
-    | [] -> allIndices
-    | selfCalls ->
-        func.TypedParams
-        |> List.mapi (fun index parameter ->
-            let isPassedThrough =
-                isSpecializableValueType parameter.Type
-                && (selfCalls
-                    |> List.forall (fun args ->
-                        List.tryItem index args = Some (Var parameter.Id)))
-            if isPassedThrough then Some index else None)
-        |> List.choose id
-        |> Set.ofList
-
-let private cloneGroups
-    (analysis: ProgramAnalysis)
-    (knownCalls: Map<AST.FunctionId, KnownValue option list list>)
-    (functions: Function list)
-    : (AST.FunctionId * string * LiteralPattern list) list =
-    functions
-    |> List.choose (fun func ->
-        match Map.tryFind func.Id knownCalls with
-        | None -> None
-        | Some _ when Set.contains func.Id analysis.IndirectTargets -> None
-        | Some calls ->
-            let eligibleIndices = cloneableParameterIndices func
-            let isRecursive = not (List.isEmpty (directCallsTo func.Id func.Body))
-            let valueBenefit value =
-                match value with
-                | LiteralValue _ -> 1
-                | Int128Value _
-                | UInt128Value _ -> 2
-                | TupleValue fields
-                | RecordValue (_, fields) -> 1 + List.length fields
-            let patterns =
-                calls
-                |> List.map (literalPatternAt eligibleIndices)
-                |> List.map (fun pattern ->
-                    pattern
-                    |> List.filter (fun (index, value) ->
-                        match List.tryItem index func.TypedParams with
-                        | Some parameter -> knownValueMatchesType parameter.Type value
-                        | None -> false))
-                // Rematerializing an allocated value at the top of a recursive
-                // clone would allocate once per iteration instead of once per
-                // entry call. Recursive cloning therefore remains immediate-
-                // value only; construction facts still specialize leaf calls.
-                |> List.map (fun pattern ->
-                    if isRecursive then
-                        pattern
-                        |> List.filter (fun (_, value) ->
-                            match value with
-                            | LiteralValue _ -> true
-                            | _ -> false)
-                    else
-                        pattern)
-                |> List.filter (not << List.isEmpty)
-                |> List.countBy id
-                // Spend the bounded clone budget on call-site savings first;
-                // the pattern tie-break keeps names and output deterministic.
-                |> List.sortBy (fun (pattern, occurrences) ->
-                    let savedWork =
-                        pattern
-                        |> List.sumBy (fun (_, value) -> valueBenefit value)
-                        |> (*) occurrences
-                    (-savedWork, pattern))
-                |> List.map fst
-                |> List.truncate maxLiteralClonesPerFunction
-            if List.length patterns < 2 then None
-            else Some (func.Id, func.Name, patterns))
-    |> List.sortBy (fun (id, _, _) -> id)
-
-let private boundedCloneGroups
+let internal boundedCloneGroups
     (groups: (AST.FunctionId * string * LiteralPattern list) list)
     : (AST.FunctionId * string * LiteralPattern list) list =
     groups
@@ -701,7 +436,7 @@ let private boundedCloneGroups
     |> fst
     |> List.rev
 
-let private buildLiteralClones
+let internal buildLiteralClones
     (idExists: AST.FunctionId -> bool)
     (groups: (AST.FunctionId * string * LiteralPattern list) list)
     : LiteralClone list =
@@ -725,7 +460,7 @@ let private buildLiteralClones
     else
         []
 
-let private removePatternArguments
+let internal removePatternArguments
     (pattern: LiteralPattern)
     (args: Atom list)
     : Atom list =
@@ -735,7 +470,7 @@ let private removePatternArguments
         if Set.contains index removedIndices then None else Some arg)
     |> List.choose id
 
-let private routeDirectCall
+let internal routeDirectCall
     (clonesByName: Map<AST.FunctionId, LiteralClone list>)
     (env: ValueEnv)
     (name: AST.FunctionId)
@@ -752,7 +487,7 @@ let private routeDirectCall
     | Some clone -> (clone.CloneId, removePatternArguments clone.Pattern args)
     | None -> (name, args)
 
-let private routeCExpr
+let internal routeCExpr
     (clonesByName: Map<AST.FunctionId, LiteralClone list>)
     (env: ValueEnv)
     (cexpr: CExpr)
@@ -768,32 +503,7 @@ let private routeCExpr
         let (target, routedArgs) = routeDirectCall clonesByName env name args
         TailCall (target, routedArgs)
     | _ -> cexpr
-
-let rec private routeExpr
-    (clonesByName: Map<AST.FunctionId, LiteralClone list>)
-    (env: ValueEnv)
-    (expr: AExpr)
-    : AExpr =
-    match expr with
-    | Jump _ -> expr
-    | Join (parameter, continuation, entry) ->
-        Join (
-            parameter,
-            routeExpr clonesByName (Map.remove parameter.Id env) continuation,
-            routeExpr clonesByName env entry
-        )
-    | Let (id, cexpr, body) ->
-        let cexpr' = routeCExpr clonesByName env cexpr
-        Let (id, cexpr', routeExpr clonesByName (addKnownBinding id cexpr env) body)
-    | Return atom -> Return atom
-    | If (condition, thenBranch, elseBranch) ->
-        If (
-            condition,
-            routeExpr clonesByName env thenBranch,
-            routeExpr clonesByName env elseBranch
-        )
-
-let private cexprForKnownValue (value: KnownValue) : CExpr =
+let internal cexprForKnownValue (value: KnownValue) : CExpr =
     let atoms literals = literals |> List.map atomForScalarLiteral
     match value with
     | LiteralValue literal -> Atom (atomForScalarLiteral literal)
@@ -809,131 +519,7 @@ let private cexprForKnownValue (value: KnownValue) : CExpr =
         )
     | TupleValue fields -> TupleAlloc (atoms fields)
     | RecordValue (descriptor, fields) -> RecordAlloc (descriptor, atoms fields)
-
-let private cloneFunction
-    (clonesByName: Map<AST.FunctionId, LiteralClone list>)
-    (functionsByName: Map<AST.FunctionId, Function>)
-    (clone: LiteralClone)
-    : Function =
-    let original =
-        match Map.tryFind clone.OriginalId functionsByName with
-        | Some func -> func
-        | None ->
-            Crash.crash
-                $"Missing direct-call clone source '{AST.functionIdValue clone.OriginalId}'"
-    let literalsByIndex = clone.Pattern |> Map.ofList
-    let parameters =
-        original.TypedParams
-        |> List.mapi (fun index parameter ->
-            if Map.containsKey index literalsByIndex then None else Some parameter)
-        |> List.choose id
-    let substitutions =
-        original.TypedParams
-        |> List.mapi (fun index parameter ->
-            Map.tryFind index literalsByIndex
-            |> Option.bind (fun value ->
-                match value with
-                | LiteralValue literal -> Some (parameter.Id, atomForScalarLiteral literal)
-                | _ -> None))
-        |> List.choose id
-        |> Map.ofList
-    let materializations =
-        original.TypedParams
-        |> List.mapi (fun index parameter ->
-            Map.tryFind index literalsByIndex
-            |> Option.bind (fun value ->
-                match value with
-                | LiteralValue _ -> None
-                | _ -> Some (parameter.Id, cexprForKnownValue value)))
-        |> List.choose id
-    let substitutedBody =
-        let body = rewriteExpr Map.empty substitutions original.Body
-        List.foldBack (fun (id, cexpr) nested -> Let (id, cexpr, nested)) materializations body
-    { original with
-        Id = clone.CloneId
-        Name = clone.CloneName
-        TypedParams = parameters
-        Body = routeExpr clonesByName Map.empty substitutedBody }
-
-let rec private exprUsesTemp (id: TempId) (expr: AExpr) : bool =
-    match expr with
-    | Return atom
-    | Jump (_, atom) -> atomUsesTemp id atom
-    | Let (boundId, cexpr, body) ->
-        cexprUsesTemp id cexpr || (boundId <> id && exprUsesTemp id body)
-    | Join (parameter, continuation, entry) ->
-        (parameter.Id <> id && exprUsesTemp id continuation)
-        || exprUsesTemp id entry
-    | If (condition, thenBranch, elseBranch) ->
-        atomUsesTemp id condition
-        || exprUsesTemp id thenBranch
-        || exprUsesTemp id elseBranch
-
-let private isRematerializedValue (cexpr: CExpr) : bool =
+let internal isRematerializedValue (cexpr: CExpr) : bool =
     match knownValueForCExpr Map.empty cexpr with
     | Some _ -> true
     | None -> false
-
-// Routing a construction-valued argument removes its sole use. Eliminate only
-// the exact, side-effect-free recipes that this pass knows how to recreate;
-// arbitrary calls and allocations retain their original evaluation boundary.
-let rec private removeUnusedRematerializedValues (expr: AExpr) : AExpr =
-    match expr with
-    | Return _
-    | Jump _ -> expr
-    | Let (id, cexpr, body) ->
-        let body' = removeUnusedRematerializedValues body
-        if isRematerializedValue cexpr && not (exprUsesTemp id body') then body'
-        else Let (id, cexpr, body')
-    | Join (parameter, continuation, entry) ->
-        Join (
-            parameter,
-            removeUnusedRematerializedValues continuation,
-            removeUnusedRematerializedValues entry
-        )
-    | If (condition, thenBranch, elseBranch) ->
-        If (
-            condition,
-            removeUnusedRematerializedValues thenBranch,
-            removeUnusedRematerializedValues elseBranch
-        )
-
-let private specializeFiniteLiterals functionNames (Program (functions, main)) : Program =
-    let analysis = analyzeProgram functions main
-    let knownCalls = knownCallsInProgram functions main
-    let localFunctionIds = functions |> List.map (fun func -> func.Id) |> Set.ofList
-    let idExists id =
-        Set.contains id localFunctionIds || Map.containsKey id functionNames
-    let clones =
-        cloneGroups analysis knownCalls functions
-        |> boundedCloneGroups
-        |> buildLiteralClones idExists
-    let clonesByName =
-        clones
-        |> List.groupBy (fun clone -> clone.OriginalId)
-        |> Map.ofList
-    let functionsByName = functions |> List.map (fun func -> (func.Id, func)) |> Map.ofList
-    let clonedFunctions = clones |> List.map (cloneFunction clonesByName functionsByName)
-    let routedFunctions =
-        functions
-        |> List.map (fun func ->
-            { func with
-                Body =
-                    routeExpr clonesByName Map.empty func.Body
-                    |> removeUnusedRematerializedValues })
-    let main' =
-        routeExpr clonesByName Map.empty main
-        |> removeUnusedRematerializedValues
-    Program (clonedFunctions @ routedFunctions, main')
-
-let specializeProgramWithFunctionNames (functionNames: Map<AST.FunctionId, string>) (program: Program) : Program =
-    let (Program (functions, main)) = exposeKnownIndirectTargets program
-    let analysis = analyzeProgram functions main
-    let rewriteMap = buildRewriteMap analysis functions
-    let functions' = functions |> List.map (rewriteFunction rewriteMap)
-    let main' = rewriteExpr rewriteMap Map.empty main
-    specializeFiniteLiterals functionNames (Program (functions', main'))
-
-let specializeProgram ((Program (functions, _)) as program) : Program =
-    let functionNames = functions |> List.map (fun func -> func.Id, func.Name) |> Map.ofList
-    specializeProgramWithFunctionNames functionNames program

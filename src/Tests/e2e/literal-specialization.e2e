@@ -43,3 +43,13 @@ dateTimeSpecializedLoop 2L (Stdlib.DateTime.fromMilliseconds 1234) = Stdlib.Date
 constructorSpecializedLoop 2L First = First
 wideSpecializedLoop 2L 170141183460469231731687303715884105727Q = 170141183460469231731687303715884105727Q
 tupleSpecializedLoop 2L (42L, true) = (42L, true)
+
+// Different constructed arguments and a dynamic caller keep the original
+// signature available alongside any literal clones.
+let pairScore (pair: (Int64 * Bool)) : Int64 = if pair.1 then pair.0 else 0L - pair.0
+let dynamicPairScore (pair: (Int64 * Bool)) : Int64 = pairScore pair
+pairScore (3L, true) + pairScore (5L, false) + dynamicPairScore (8L, true) = 6L
+
+// Float literal identities include the sign bit of zero.
+let specializedZeroBits (value: Float) : Int = Stdlib.Float.toBits value
+specializedZeroBits (0.0) != specializedZeroBits (-0.0) = true

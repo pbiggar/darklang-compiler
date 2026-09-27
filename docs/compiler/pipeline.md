@@ -26,11 +26,11 @@ The Dark compiler transforms source code through a series of passes, each with a
 | 2.3  | ANF optimizations       | `passes/anf/ANF_Optimize.fs`                                | ANF → ANF                                     |
 | 2.4  | ANF inlining            | `passes/anf/ANF_Inlining.fs`                                | ANF → ANF                                     |
 | 2.4.4 | Known closure specialization | `passes/anf/ANF_HigherOrderSpecialization.fs`       | ANF → ANF                                     |
-| 2.4.5 | Direct-call specialization | `passes/anf/ANF_DirectCallSpecialization.fs`          | ANF → ANF                                     |
-| 2.4.6 | ANF → high-level SSA    | `ir/anf/SSAANF.fs`                                           | Specialized ANF → typed blocks                |
-| 2.5  | Escape analysis        | `passes/anf/SSAEscapeAnalysis.fs`                           | SSA → scalar-replaced SSA                     |
-| 2.6  | Ref count insertion     | `passes/anf/ownership/SSARefCountInsertion.fs`              | SSA + memory ops                              |
-| 2.7  | Tail call detection     | `passes/anf/SSATailCallDetection.fs`                        | SSA → SSA                                     |
+| 2.4.5 | ANF → high-level SSA    | `ir/anf/SSAANF.fs`                                           | Higher-order specialized ANF → typed blocks   |
+| 2.5  | Direct-call specialization | `passes/anf/SSADirectCallSpecialization.fs`             | SSA → specialized SSA                         |
+| 2.6  | Escape analysis        | `passes/anf/SSAEscapeAnalysis.fs`                           | SSA → scalar-replaced SSA                     |
+| 2.7  | Ref count insertion     | `passes/anf/ownership/SSARefCountInsertion.fs`              | SSA + memory ops                              |
+| 2.8  | Tail call detection     | `passes/anf/SSATailCallDetection.fs`                        | SSA → SSA                                     |
 | 3.1  | SSA → MIR               | `passes/anf/ANF_to_MIR.fs`                                   | Typed blocks → SSA-form MIR                   |
 | 3.5  | MIR optimizations       | `passes/mir/MIR_Optimize.fs`                                | MIR → MIR                                     |
 | 4    | MIR → LIR               | `passes/mir/MIR_to_LIR.fs`                                    | MIR → LIR (virtual regs)                      |
@@ -219,9 +219,9 @@ prebuilt functions and for selecting reachable standard-library functions.
 
 ---
 
-## Pass 2.4.6: ANF to high-level SSA (`SSAANF.fs`)
+## Pass 2.4.5: ANF to high-level SSA (`SSAANF.fs`)
 
-**Input**: ANF after direct-call specialization
+**Input**: ANF after higher-order specialization
 **Output**: High-level SSA blocks with explicit edges and block parameters
 
 ### Responsibilities
@@ -229,7 +229,18 @@ prebuilt functions and for selecting reachable standard-library functions.
 - **Freshen values**: Give reused ANF temporaries distinct SSA definitions
 - **Carry joins**: Pass typed values on edges to block parameters
 
-## Pass 2.5: Escape Analysis (`SSAEscapeAnalysis.fs`)
+## Pass 2.5: Direct-Call Specialization (`SSADirectCallSpecialization.fs`)
+
+**Input**: High-level SSA
+**Output**: SSA with specialized direct calls and bounded literal clones
+
+The pass removes parameters whose literal value is identical at every direct
+call, and creates typed block clones for selected differing literal patterns.
+Call sites and function signatures change together. An exact tuple, record, or
+wide integer argument can be reconstructed in a clone's entry block; an unused
+caller construction is then removed.
+
+## Pass 2.6: Escape Analysis (`SSAEscapeAnalysis.fs`)
 
 **Input**: High-level SSA
 **Output**: SSA with eligible local aggregates scalar-replaced or uniquely reused
@@ -273,7 +284,7 @@ treated as one ownership family. Stack allocation, scalar replacement of
 managed fields, observable-destruction reuse, and interprocedural
 representation changes are outside the current scope.
 
-## Pass 2.6: Reference Count Insertion (`SSARefCountInsertion.fs`)
+## Pass 2.7: Reference Count Insertion (`SSARefCountInsertion.fs`)
 
 **Input**: High-level SSA
 **Output**: SSA with RefCountInc/RefCountDec operations
@@ -288,7 +299,7 @@ representation changes are outside the current scope.
 
 ---
 
-## Pass 2.7: Tail Call Optimization (`SSATailCallDetection.fs`)
+## Pass 2.8: Tail Call Optimization (`SSATailCallDetection.fs`)
 
 **Input**: SSA with refcounting
 **Output**: SSA annotated for tail calls / self-recursion loops
