@@ -123,7 +123,7 @@ let internal validateJsonTargetType
 let rec needsEqHelperForResolvedType (variantLookup: VariantLookup) (typ: SemanticType) : bool =
     match canonicalEqualityType variantLookup typ with
     | TFunction _ | TList _ | TDict _ | TTuple _ | TRecord _ -> true
-    | TSum (sumTypeName, _) -> sumTypeHasPayload variantLookup sumTypeName
+    | TSum _ -> true
     | _ -> false
 
 let private sanitizeHelperNamePrefix (input: string) : string =
@@ -149,14 +149,16 @@ let private stableHelperNameHash (input: string) : uint64 =
 let eqHelperName (typ: SemanticType) : string =
     let typeText = typeToHelperIdentityString typ
     let prefix = sanitizeHelperNamePrefix typeText
-    let hash = stableHelperNameHash typeText
+    // Diagnostic text omits dictionary key types, so it cannot identify a
+    // concrete helper: Dict<Int64, String> and Dict<String, String> print alike.
+    let hash = stableHelperNameHash (sprintf "%A" typ)
     $"__dark_eq_{prefix}_{hash:x16}"
 
 /// Name for a concrete canonical three-way comparison helper.
 let compareHelperName (typ: SemanticType) : string =
     let typeText = typeToHelperIdentityString typ
     let prefix = sanitizeHelperNamePrefix typeText
-    let hash = stableHelperNameHash typeText
+    let hash = stableHelperNameHash (sprintf "%A" typ)
     $"__dark_compare_{prefix}_{hash:x16}"
 
 /// Build a left-associative boolean conjunction chain.

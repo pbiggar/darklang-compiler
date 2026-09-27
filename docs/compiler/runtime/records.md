@@ -85,10 +85,13 @@ therefore handled on ARM64 and x86-64 without treating tuples as records.
 
 ## Equality and rendering
 
-The AOT checker admits equality only between compatible nominal types.
-Generated helpers project the same named fields and apply recursive equality;
-aliases of one resolved declaration compare as that declaration. The runtime
-descriptor prevents records from being confused with tuple payloads.
+The AOT checker admits equality between records with the same named fields and
+compatible field types, even when their declarations differ. It converts the
+right operand to the left record layout before generated helpers apply recursive
+equality; dictionary lookup uses the same conversion for a record key. Aliases
+of one resolved declaration compare as that declaration. Construction and
+field access still use nominal record metadata. The runtime descriptor prevents
+records from being confused with tuple payloads.
 
 Rendering uses the resolved qualified name and concrete generic arguments.
 Fields are recursively rendered in ordinal key order as `field: value`. Values
@@ -100,14 +103,14 @@ use an indented field-per-line layout.
 The interpreter can discover some invalid access/update situations while
 evaluating. The compiler reports the equivalent error during parsing or type
 checking when the invalidity is statically known. AOT monomorphization and
-ownership planning do not add record syntax or structural compatibility.
+ownership planning do not add record syntax.
 
 ## Key files
 
 | File | Purpose |
 | --- | --- |
 | `src/DarkCompiler/AST.fs` | nominal record references and public expressions |
-| `src/DarkCompiler/frontend/Parser.fs` | canonical interpreter-compatible grammar |
+| `src/DarkCompiler/frontend/interpreter/Parser.fs` | canonical interpreter-compatible grammar |
 | `src/DarkCompiler/frontend/TypeChecking.fs` | metadata, substitution, validation |
 | `src/DarkCompiler/frontend/ValueRendering.fs` | record rendering |
 | `src/DarkCompiler/passes/anf/AST_to_ANF.fs` | record allocation, clone, and projection |

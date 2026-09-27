@@ -35,11 +35,11 @@ Each IR is designed to make specific transformations easier:
 | LIR | Close to machine code  | Register constraints, instruction selection               |
 | ISA | Architecture-specific  | Encoding, branch offset calculation (ARM64 or x86-64)     |
 
-### Parsed and checked ASTs
+### Written and checked ASTs
 
-- `AST.fs` uses one generic syntax shape with distinct `ParsedType` and
-  `SemanticType` annotations. Parsing returns `ParsedProgram`; source-driven
-  checking performs the explicit conversion before name resolution.
+- The copied interpreter parser produces `WrittenTypes`. Validation runs on
+  that source representation before `WrittenChecking.fs` resolves names and
+  types directly into `CheckedAST.Program`.
 - Successful checking constructs the distinct recursive nodes in
   `CheckedAST.fs`. Required lambda types, typed recursion evidence, canonical
   nominal references, and checked value definitions are structural there,

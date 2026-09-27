@@ -1187,15 +1187,15 @@ let f (x: Float) : (Bool * Bool * Bool * Bool) =
 f (0.0)
 ---EXPECTED---
 Function f:
-let TempId 1 = t0 == t0
-let TempId 3 = !t1
-let TempId 4 = t0 <= t0
-let TempId 6 = (t1, t3, t4, t4)
-return t6
+let TempId 0 = t1 == t1
+let TempId 2 = t1 != t1
+let TempId 3 = t1 <= t1
+let TempId 4 = (t0, t2, t3, t3)
+return t4
 
 Main:
-let TempId 7 = f(0)
-return t7
+let TempId 5 = f(0)
+return t5
 
 ---NAME---
 self_comparison_bool_eq
@@ -2449,23 +2449,25 @@ let TempId 6 = (t2, t2)
 return t6
 
 ---NAME---
-cse_reuses_duplicate_tuple_get
+cse_reuses_duplicate_tuple_binding
 ---INPUT---
 let f (t: (Int64 * Int64)) : Int64 =
-  let a = t.0 in
-  let b = t.0 in
+  let (a, _) = t in
+  let b = a in
   a + b
 f ((1L, 2L))
 ---EXPECTED---
 Function f:
-let TempId 1 = t0.0
-let TempId 5 = t1 + t1
-return t5
+let TempId 0 = t1.0
+let TempId 2 = t0 : TInt64
+let TempId 3 = t2 : TInt64
+let TempId 4 = t3 + t3
+return t4
 
 Main:
-let TempId 6 = (1, 2)
-let TempId 7 = f(t6)
-return t7
+let TempId 5 = (1, 2)
+let TempId 6 = f(t5)
+return t6
 
 ---NAME---
 cse_reuses_duplicate_record_get
@@ -2533,23 +2535,27 @@ return t5
 tuple_get_from_local_tuple_alloc
 ---INPUT---
 let f (x: Int64) (y: Int64) : Int64 =
-  let tuple = (x, y) in
-  tuple.1
+  let (_, second) = (x, y) in
+  second
 ---EXPECTED---
 Function f:
-return t1
+let TempId 0 = t1 : TInt64
+let TempId 2 = t0 : TInt64
+return t2
 
 ---NAME---
 tuple_get_from_local_tuple_alloc_preserves_owned_projection
 ---INPUT---
 let f (value: Blob) : Blob =
-  let tuple = (value, 1L) in
-  tuple.0
+  let (first, _) = (value, 1L) in
+  first
 ---EXPECTED---
 Function f:
 let TempId 1 = (t0, 1)
 let TempId 3 = t1.0
-return t3
+let TempId 4 = t3 : TBlob
+let TempId 5 = t4 : TBlob
+return t5
 
 ---NAME---
 cse_reuses_duplicate_int64_to_float
@@ -2620,12 +2626,12 @@ let applyOnce (value: Int64) : Int64 =
   let increment = fun x -> x + 1L in
   increment (value)
 ---EXPECTED---
-Function __closure_20:
+Function __closure_63:
 let TempId 2 = t1 + 1
 return t2
 
 Function applyOnce:
-let TempId 6 = __closure_20((), t3)
+let TempId 6 = __closure_63((), t3)
 return t6
 
 ---NAME---
@@ -2635,13 +2641,13 @@ let addOffset (value: Int64) (offset: Int64) : Int64 =
   let add = fun x -> x + offset in
   add (value)
 ---EXPECTED---
-Function __closure_20:
+Function __closure_63:
 let TempId 2 = t0.1
 let TempId 4 = t1 + t2
 return t4
 
 Function addOffset:
-let TempId 7 = ClosureAlloc(__closure_20, [t6])
+let TempId 7 = ClosureAlloc(__closure_63, [t6])
 let TempId 9 = ClosureCall(t7, [t5])
 return t9
 
@@ -2652,15 +2658,15 @@ let makeIncrement () : (Int64) -> Int64 =
   let increment = fun x -> x + 1L in
   increment
 ---EXPECTED---
-Function __closure_20:
+Function __closure_63:
 let TempId 2 = t1 + 1
 return t2
 
-Function __closure_comparison_21:
+Function __closure_comparison_64:
 return true
 
 Function makeIncrement:
-let TempId 5 = ClosureAlloc(__closure_20, [&__closure_comparison_21])
+let TempId 5 = ClosureAlloc(__closure_63, [&__closure_comparison_64])
 return t5
 
 ---NAME---
@@ -2671,13 +2677,13 @@ let applyTwice (value: Int64) : Int64 =
   let once = increment (value) in
   increment (once)
 ---EXPECTED---
-Function __closure_20:
+Function __closure_63:
 let TempId 2 = t1 + 1
 return t2
 
 Function applyTwice:
-let TempId 6 = __closure_20((), t3)
-let TempId 8 = __closure_20((), t6)
+let TempId 6 = __closure_63((), t3)
+let TempId 8 = __closure_63((), t6)
 return t8
 
 ---NAME---

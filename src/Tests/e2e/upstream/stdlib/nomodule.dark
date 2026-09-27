@@ -293,18 +293,28 @@ module Equals =
 
 
   module TypeErrors =
+#compileerror="Operator is unavailable for this type"
     (5.7 != 6L) = error="Cannot perform equality check on Float and Int64"
+#compileerror="Operator is unavailable for this type"
     (5.7 != 5L) = error="Cannot perform equality check on Float and Int64"
+#compileerror="Operator is unavailable for this type"
     (5us == 5s) = error="Cannot perform equality check on UInt16 and Int16"
+#compileerror="Operator is unavailable for this type"
     (5y == 5l) = error="Cannot perform equality check on Int8 and Int32"
+#compileerror="Operator is unavailable for this type"
     (5L == 5l) = error="Cannot perform equality check on Int64 and Int32"
+#compileerror="Operator is unavailable for this type"
     (5us != 6s) = error="Cannot perform equality check on UInt16 and Int16"
     (Builtin.testRuntimeError "test" != Builtin.testRuntimeError "different msg") = error="Uncaught exception: test"
 
+#compileerror="Expected TUnit, got TSum (\"Darklang.Stdlib.Option.Option\", [TVar \"t\"])"
     (() != Stdlib.Option.Option.None) = error="Cannot perform equality check on Unit and Darklang.Stdlib.Option.Option<_>"
 
+#compileerror="Operator is unavailable for this type"
     (() != false) = error="Cannot perform equality check on Unit and Bool"
+#compileerror="Operator is unavailable for this type"
     (() != 0l) = error="Cannot perform equality check on Unit and Int32"
+#compileerror="Operator is unavailable for this type"
     (() != 0.0) = error="Cannot perform equality check on Unit and Float"
     // CLEANUP follow up here when DB references are fully resolved at parse-time
   // Other ways to call it
@@ -415,5 +425,7 @@ module Unwrap =
 
   ((Stdlib.Option.Option.None) |> Builtin.unwrap) = error="Cannot unwrap None"
   ((Stdlib.Result.Result.Error 5L) |> Builtin.unwrap) = error="Cannot unwrap Error: 5"
+#compileerror="Can only unwrap Options and Results, yet got TBool"
   (true |> Builtin.unwrap) = error="Can only unwrap Options and Results, yet got true"
+#compileerror="Builtin.unwrap expects 1 argument, got 2"
   (Builtin.unwrap 1 2) = error="Builtin.unwrap expects 1 argument, but got 2 arguments"

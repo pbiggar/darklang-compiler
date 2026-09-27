@@ -222,19 +222,19 @@ let xs = [10L, 20L, 30L] in match xs with | [a, b, c] -> a + b + c | _ -> 0L = 6
 match [1L, 2L, 3L] with | h :: t -> h | [] -> 0L = 1L
 
 // Cons pattern - tail is a list
-match [1L, 2L, 3L] with | h :: t -> match t with | [a, b] -> a + b | _ -> 0L | [] -> 0L = 5L
+match [1L, 2L, 3L] with | h :: t -> (match t with | [a, b] -> a + b | _ -> 0L) | [] -> 0L = 5L
 
 // Empty list doesn't match h :: t
 match [] with | h :: t -> 1L | [] -> 0L = 0L
 
 // Single element - tail is empty
-match [42L] with | h :: t -> match t with | [] -> h | _ -> 0L | [] -> 0L = 42L
+match [42L] with | h :: t -> (match t with | [] -> h | _ -> 0L) | [] -> 0L = 42L
 
 // Multiple head elements before rest
 match [1L, 2L, 3L, 4L] with | a :: b :: t -> a + b | [] -> 0L | _ -> 0L = 3L
 
 // Wildcard in head position
-match [1L, 2L, 3L] with | _ :: t -> match t with | [a, b] -> a + b | _ -> 0L | [] -> 0L = 5L
+match [1L, 2L, 3L] with | _ :: t -> (match t with | [a, b] -> a + b | _ -> 0L) | [] -> 0L = 5L
 
 // Wildcard as tail
 match [1L, 2L, 3L] with | h :: _ -> h | [] -> 0L = 1L
@@ -317,7 +317,7 @@ let x = [2L, 3L] in match [10L + 1L] @ x with | [a, b, c] -> a | _ -> 0L = 11L
 // Use in match case body
 match [1L, 2L, 3L] with | h :: rest -> Stdlib.List.length ([h] @ rest) | [] -> 0 = 3
 // Rebuild list with modified head
-match [1L, 2L, 3L] with | h :: rest -> match [h + 10L] @ rest with | [a, b, c] -> a + b + c | _ -> 0L | [] -> 0L = 16L
+match [1L, 2L, 3L] with | h :: rest -> (match [h + 10L] @ rest with | [a, b, c] -> a + b + c | _ -> 0L) | [] -> 0L = 16L
 
 // Chain of spreads
 let a = [3L] in let b = [2L] @ a in Stdlib.List.length ([1L] @ b) = 3
@@ -339,13 +339,13 @@ let fs = [1.0, 2.0] in match fs with | [a, b] -> a + b | _ -> 0.0 = 3.0
 // =====================================================
 
 // List of 2-tuples
-match [(1L, 2L), (3L, 4L)] with | [t1, t2] -> t1.0 + t2.1 | _ -> 0L = 5L
+match [(1L, 2L), (3L, 4L)] with | [(a, _), (_, b)] -> a + b | _ -> 0L = 5L
 
 // List of 2-tuples - product
-match [(2L, 3L), (4L, 5L)] with | [t1, t2] -> t1.0 * t1.1 + t2.0 * t2.1 | _ -> 0L = 26L
+match [(2L, 3L), (4L, 5L)] with | [(a, b), (c, d)] -> a * b + c * d | _ -> 0L = 26L
 
 // Single tuple in list
-match [(10L, 20L)] with | [t] -> t.0 + t.1 | _ -> 0L = 30L
+match [(10L, 20L)] with | [(a, b)] -> a + b | _ -> 0L = 30L
 
 // Recursive list construction with tuple elements
 let makePairs (n: Int64) : List<(Int64 * Int64)> =
@@ -365,16 +365,37 @@ match [(100L, 40L, 7L)] with | [(a, b, c)] -> a - b - c | _ -> 0L = 53L
 
 // Tuple arity mismatch under a guard should not bind missing elements as Int64 defaults.
 // This pattern cannot match a 2-tuple list element and must fall through.
-match [(1L, 2L)] with | [(a, b, c)] when true -> 1L = compileerror="Non-exhaustive match expression"
+match [(1L, 2L)] with | [(a, b, c)] when true -> 1L = compileerror="Tuple pattern does not match the scrutinee type"
 
 // List of float tuples
-match [(1.0, 2.5), (3.5, 4.0)] with | [t1, t2] -> t1.0 + t1.1 + t2.0 + t2.1 | _ -> 0.0 = 11.0
+match [(1.0, 2.5), (3.5, 4.0)] with | [(a, b), (c, d)] -> a + b + c + d | _ -> 0.0 = 11.0
 
 // Float tuple comparison inside list
-match [("a", 0.5)] with | [t] -> if t.1 < 0.6 then 1L else 0L | _ -> 0L = 1L
+match [("a", 0.5)] with | [(_, second)] -> if second < 0.6 then 1L else 0L | _ -> 0L = 1L
 
 // Cumulative float tuple selection in list
-let makeCumulative (table: List<(Int64 * Float)>) (running: Float) : List<(Int64 * Float)> = match Stdlib.List.head table with | None -> [] | Some item -> let c = Stdlib.Tuple2.first item in let p = Stdlib.Tuple2.second item in let newRunning = running + p in match Stdlib.List.tail table with | None -> [(c, newRunning)] | Some rest -> Stdlib.List.push (makeCumulative rest newRunning) ((c, newRunning)) let selectRandom (table: List<(Int64 * Float)>) (r: Float) (idx: Int) : Int64 = match Stdlib.List.getAt table idx with | None -> 0L | Some item -> let c = Stdlib.Tuple2.first item in let p = Stdlib.Tuple2.second item in if r < p then c else if idx + 1 >= Stdlib.List.length table then c else selectRandom table r (idx + 1) let table = [(97L, 0.27), (99L, 0.12), (103L, 0.12), (116L, 0.27)] in let cumulative = makeCumulative table 0.0 in let newSeed = (1L * 3877L + 29573L) % 139968L in let r = Stdlib.Int64.toFloat newSeed / 139968.0 in selectRandom cumulative r 0 = 97L
+let makeCumulative (table: List<(Int64 * Float)>) (running: Float) : List<(Int64 * Float)> =
+    match Stdlib.List.head table with
+    | None -> []
+    | Some item ->
+        let c = Stdlib.Tuple2.first item in
+        let p = Stdlib.Tuple2.second item in
+        let newRunning = running + p in
+        match Stdlib.List.tail table with
+        | None -> [(c, newRunning)]
+        | Some rest -> Stdlib.List.push (makeCumulative rest newRunning) ((c, newRunning))
+
+let selectRandom (table: List<(Int64 * Float)>) (r: Float) (idx: Int) : Int64 =
+    match Stdlib.List.getAt table idx with
+    | None -> 0L
+    | Some item ->
+        let c = Stdlib.Tuple2.first item in
+        let p = Stdlib.Tuple2.second item in
+        if r < p then c
+        else if idx + 1 >= Stdlib.List.length table then c
+        else selectRandom table r (idx + 1)
+
+let table = [(97L, 0.27), (99L, 0.12), (103L, 0.12), (116L, 0.27)] in let cumulative = makeCumulative table 0.0 in let newSeed = (1L * 3877L + 29573L) % 139968L in let r = Stdlib.Int64.toFloat newSeed / 139968.0 in selectRandom cumulative r 0 = stdout="97\n" stderr=""
 // =====================================================
 // Lists of Strings
 // =====================================================
@@ -577,7 +598,7 @@ Stdlib.Option.withDefault (Stdlib.List.getAt ([10L, 20L, 30L, 40L, 50L, 60L, 70L
 // If idx - 1 were changed to idx + 1, the second element onwards would
 // be extracted from wrong offsets (e.g., idx=1 would read s2 instead of s0).
 type WrappedList = NoList | WrapList of List<Int64>
-match WrapList ([100L, 200L, 300L, 400L]) with | WrapList ([a, b, c, d]) -> c - d | NoList -> 999L = -100L
+match WrapList ([100L, 200L, 300L, 400L]) with | WrapList ([a, b, c, d]) -> c - d | NoList -> 999L | _ -> 999L = -100L
 
 // =====================================================
 // Nested list offset multiplication test (kills mutation #105)
@@ -595,7 +616,7 @@ match WrapList ([100L, 200L, 300L, 400L]) with | WrapList ([a, b, c, d]) -> c - 
 // Sum of c+d+e with correct offsets: 30+40+50 = 120
 // Sum of c+d+e with / mutation: 20+20+20 = 60 (all read from s0)
 type WrappedList5 = NoList5 | WrapList5 of List<Int64>
-match WrapList5 ([10L, 20L, 30L, 40L, 50L]) with | WrapList5 ([a, b, c, d, e]) -> c + d + e | NoList5 -> 999L = 120L
+match WrapList5 ([10L, 20L, 30L, 40L, 50L]) with | WrapList5 ([a, b, c, d, e]) -> c + d + e | NoList5 -> 999L | _ -> 999L = 120L
 
 // =====================================================
 // groupSizes nodeCount % 3 == 0 test (kills mutation #108)
@@ -714,7 +735,7 @@ Stdlib.Float.toInt (sumFloatList ([1.5, 2.25]) * 100.0) = 375
 match [1.5] with | [value] -> Stdlib.Float.toInt (value * 100.0) | _ -> 0 = 150
 
 type WrappedFloatList = WrappedFloatList of List<Float>
-match WrappedFloatList ([1.5]) with | WrappedFloatList ([value]) -> Stdlib.Float.toInt (value * 100.0) = 150
+match WrappedFloatList ([1.5]) with | WrappedFloatList ([value]) -> Stdlib.Float.toInt (value * 100.0) | _ -> 0 = 150
 // =====================================================
 // List head type tracking test (kills mutation #167)
 // =====================================================

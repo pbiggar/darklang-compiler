@@ -53,7 +53,7 @@ let testOrderedSourceComposition (stdlib: CompilationContexts.StdlibResult) () :
             if output.ExitCode = 0 && output.Stdout = "42\n" then Ok ()
             else Error $"Unexpected multi-unit output: exit={output.ExitCode}; stdout={output.Stdout}; stderr={output.Stderr}"
 
-let testLastFunctionDeclarationWins (stdlib: CompilationContexts.StdlibResult) () : TestResult =
+let testDuplicateFunctionAcrossSourceUnitsRejected (stdlib: CompilationContexts.StdlibResult) () : TestResult =
     let report =
         compile
             stdlib
@@ -63,14 +63,7 @@ let testLastFunctionDeclarationWins (stdlib: CompilationContexts.StdlibResult) (
               source "second.dark" NameSyntax.SourceUnitPurpose.Library
                 "let overlaid (x: Int64): Int64 = x + 2L"
               source "entry.dark" NameSyntax.SourceUnitPurpose.Executable "overlaid 40L" ]
-    match report.Result with
-    | Error error -> Error error
-    | Ok binary ->
-        match execute report binary with
-        | Error error -> Error $"Overlay program did not execute: {error}"
-        | Ok output ->
-            if output.ExitCode = 0 && output.Stdout = "42\n" then Ok ()
-            else Error $"Unexpected overlay output: exit={output.ExitCode}; stdout={output.Stdout}; stderr={output.Stderr}"
+    expectCompileError "Duplicate function 'overlaid'" report
 
 let testNestedModuleUsesInterpreterRelativeCandidates (stdlib: CompilationContexts.StdlibResult) () : TestResult =
     let report =
@@ -174,7 +167,7 @@ let testLibraryGenericReachesStdlibSpecialization (stdlib: CompilationContexts.S
 
 let tests (stdlib: CompilationContexts.StdlibResult) = [
     ("compose ordered named source units", testOrderedSourceComposition stdlib)
-    ("last function declaration wins", testLastFunctionDeclarationWins stdlib)
+    ("duplicate function across source units rejected", testDuplicateFunctionAcrossSourceUnitsRejected stdlib)
     ("nested modules use interpreter relative candidates", testNestedModuleUsesInterpreterRelativeCandidates stdlib)
     ("a library may redeclare a function the stdlib carries", testLibraryRedeclaresStdlibCarriedFunction stdlib)
     ("a library generic reaches its stdlib specializations", testLibraryGenericReachesStdlibSpecialization stdlib)

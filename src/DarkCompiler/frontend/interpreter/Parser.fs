@@ -264,7 +264,7 @@ type ItemScope =
   | Script
   | Module
 
-let private maxDepth = 200
+let private maxDepth = 512
 
 let tok (state : ParserState) i =
   if i < state.tokenCount then state.toks[i].token else TEOF
@@ -374,7 +374,9 @@ let errUnclosed
 // parseExpr/parseTypeRef/parsePatternBase recurse per nesting level, so a
 // pathological `((((…` would overflow the stack — and a .NET StackOverflow is
 // UNCATCHABLE (it kills the process). At the cap we diagnose once and skip to
-// EOF; 200 levels is far beyond real code.
+// EOF. Generated E2E batches can contain several hundred nested `let`
+// bindings, so the cap must permit those while still guarding against a
+// runaway recursive parse.
 /// No-progress backstop: each parseExpr/parsePatternBase/parseTypeRef entry
 /// spends one step. A real parse of n tokens uses ≪ 300·n (corpus-measured); a
 /// loop that stops consuming tokens spends them forever — so exhaustion means a

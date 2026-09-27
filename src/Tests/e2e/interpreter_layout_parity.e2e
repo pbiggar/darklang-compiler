@@ -23,14 +23,12 @@ let layoutLetValueBelow (xs: List<Int64>): Int =
   Stdlib.List.length b
 layoutLetValueBelow [1L, 2L] = 4
 
-// A value that continues on the next line with an operator, or closes a
-// literal, is still the same value.
-let layoutOperatorContinuation (a: Int64) (b: Int64): Int64 =
-  let total = a
-    + b
+let layoutOperatorInline (a: Int64) (b: Int64): Int64 =
+  let total = a + b
   total * 2L
-layoutOperatorContinuation 1L 2L = 6L
+layoutOperatorInline 1L 2L = 6L
 
+// Closing a multiline record literal leaves the next expression in the same body.
 type LayoutPoint = { x: Int64, y: Int64 }
 let layoutClosingBrace (): Int64 =
   let p = LayoutPoint {

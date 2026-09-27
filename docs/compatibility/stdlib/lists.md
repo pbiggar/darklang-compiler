@@ -27,7 +27,7 @@ and `backend/testfiles/execution/stdlib/list.dark` at the stamped revision.
 
 Compiler evidence is anchored in:
 
-- `src/DarkCompiler/frontend/Parser.fs` for canonical source parsing
+- `src/DarkCompiler/frontend/interpreter/Parser.fs` for canonical source parsing
   and AST normalization;
 - `AST.fs`, `frontend/TypeChecking.fs`, and `passes/anf/AST_to_ANF.fs` for the
   canonical list form, homogeneous typing, private typed equality, native
@@ -48,12 +48,12 @@ Compiler evidence is anchored in:
 | Literals | `[]` and populated literals accept comma, semicolon, or newline separators, including trailing separators, and normalize to `ListLiteral`. | Canonical parser fixtures and `list_language_parity.e2e`. | parity |
 | Cons patterns | `head :: tail` is pattern syntax, associates right, and chained heads normalize to one internal `PListCons` without reordering bindings. | Syntax fixtures and nested/list-tuple cases in `lists.e2e`. | parity; `PListCons` is internal only |
 | Append | `@` associates right at interpreter precedence and normalizes to `Stdlib.List.append`. Both operands are homogeneous lists. | Canonical parser fixtures, AST-shape tests, and type/value probes in `list_language_parity.e2e`. | parity |
-| Inference | `[]` uses contextual polymorphic inference. A nonempty literal establishes one element type; heterogeneous elements and non-list cons tails are rejected. | `TypeChecking.fs`; focused positive and compile-error probes. | parity result, intentional AOT phase difference |
+| Inference | `[]` uses contextual polymorphic inference. A nonempty literal establishes one element type; heterogeneous elements and non-list cons tails are rejected. An aborting element has type `Never` and does not displace the list's concrete element type. | `WrittenChecking.fs`; focused positive and compile-error probes, including upstream `dlist.dark`. | parity result, intentional AOT phase difference |
 | Construction | Elements and append operands evaluate once, left to right, before native structural assembly. The skew-list builder and ownership rules remain native. | `AST_to_ANF.fs`; first-failure probes in `list_language_parity.e2e`; skew-list/refcount suites. | retained native equivalence |
 | Representation | Empty is the zero root; populated values use direct-payload skew-binary trees with persistent reference-counted edges. | `stdlib/__SkewList.dark`, `Runtime.fs`, refcount insertion, and both code generators. | intentional compiler architecture; behavior-equivalent |
 | Matching | Exact patterns require exact length; cons patterns require a nonempty list; nested patterns bind in source order and tails are canonical list values. | All `PList`/`PListCons` paths in `AST_to_ANF.fs`; `lists.e2e` and `pattern_matching.e2e`. | parity |
 | Match failure | Exhausted alternatives use the standard nonexhaustive-match failure and recursively render literal list/tuple values instead of a list-specific fallback. | `AST_to_ANF.fs`; exact failure probes in `pattern_matching.e2e` and `lists.e2e`. | parity text for shared representable values |
-| Equality | `==`/`!=` synthesize private typed structural equality: lengths and elements are compared recursively in order. No public `List.equals` call is generated. | `TypeChecking.fs`; scalar, nested, tuple, record, enum, and list equality probes. | retained native equivalence |
+| Equality | `==`/`!=` synthesize private typed structural equality: lengths and elements are compared recursively in order. No public `List.equals` call is generated. | `WrittenChecking.fs`; scalar, nested, tuple, record, enum, and list equality probes. | retained native equivalence |
 | Rendering | Boundary rendering is synthesized recursively for scalar, tuple, nested-list, record, and enum element types; concrete helpers have private `__` identities. | `ValueRendering.fs`, `ListDisplay.fs`, value-rendering and refcount tests. | retained native equivalence |
 
 The interpreter discovers a heterogeneous list while merging runtime

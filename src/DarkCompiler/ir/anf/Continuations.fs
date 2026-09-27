@@ -16,6 +16,7 @@ let rec bindReturns (expr: ANF.AExpr) (k: ANF.Atom -> ANF.AExpr) : ANF.AExpr =
         ANF.Join (parameter, bindReturns continuation k, bindReturns entry k)
     | ANF.Return atom ->
         k atom
+    | ANF.Let (_, ANF.RuntimeError _, _) -> expr
     | ANF.Let (id, cexpr, rest) ->
         ANF.Let (id, cexpr, bindReturns rest k)
     | ANF.If (cond, thenBranch, elseBranch) ->

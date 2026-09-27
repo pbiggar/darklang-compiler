@@ -30,13 +30,13 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
             // Pass 1: Parse user code only
             if plan.Verbosity >= 1 then println plan.Labels.Parse
             let parseResult =
-                parseSourceProgram plan.AllowInternal plan.Sources
-                |> Result.bind (fun (_, originalProgram) ->
+                parseWrittenSourceProgram plan.AllowInternal true plan.Sources
+                |> Result.bind (fun originalProgram ->
                     match plan.PackageManager with
                     | None -> Ok originalProgram
                     | Some config ->
                         let baseEnv = plan.BaseContext.TypeCheckEnv
-                        PackageManager.resolve config baseEnv.ResolutionEnv originalProgram
+                        PackageManager.resolveWritten config baseEnv.ResolutionEnv originalProgram
                         |> Result.bind (fun packages ->
                             let originalSources = AST.NonEmptyList.toList plan.Sources
                             packages
@@ -46,9 +46,9 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                   Source = package.Source })
                             |> fun packageSources ->
                                 AST.NonEmptyList.tryFromList (packageSources @ originalSources)
-                                |> Option.map (parseSourceProgram plan.AllowInternal)
+                                |> Option.map (parseWrittenSourceProgram plan.AllowInternal true)
                                 |> Option.defaultValue (Error "Package resolution produced an empty source program")
-                                |> Result.map snd))
+                                ))
             let parseTime = sw.Elapsed.TotalMilliseconds
             recordPassTiming plan.PassTimingRecorder "Parse" parseTime
             if plan.Verbosity >= 2 then
@@ -61,11 +61,17 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                 // Pass 1.5: Type Checking (user code with base TypeCheckEnv)
                 if plan.Verbosity >= 1 then println plan.Labels.TypeCheck
                 let typeCheckResult =
-                    checkProgramWithBaseEnv
-                        plan.PassTimingRecorder
-                        plan.Options.Warnings
-                        plan.BaseContext.TypeCheckEnv
+                    WrittenChecking.checkSourceUnitsWithBase
+                        plan.BaseContext.WrittenEnvironment
+                        plan.AllowInternal
+                        true
                         userAst
+                    |> Result.map (fun (typ, checkedProgram, _) ->
+                        typ,
+                        checkedProgram,
+                        CheckingTypes.mergeTypeCheckEnv
+                            plan.BaseContext.TypeCheckEnv
+                            (WrittenChecking.typeCheckEnvironment checkedProgram))
                 let typeCheckTime = sw.Elapsed.TotalMilliseconds - parseTime
                 recordPassTiming plan.PassTimingRecorder "Type Checking" typeCheckTime
                 if plan.Verbosity >= 2 then
@@ -73,7 +79,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                     println $"        {t}ms"
 
                 match typeCheckResult with
-                | Error typeErr -> Error (CheckingDiagnostics.typeErrorToString typeErr)
+                | Error typeErr -> Error typeErr
                 | Ok (programType, _, _) when
                     plan.Mode = FullProgram
                     && programType <> AST.TUnit
@@ -91,6 +97,11 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                     let jsonPlanningElapsed = sw.Elapsed.TotalMilliseconds - jsonPlanningStart
                     recordPassTiming plan.PassTimingRecorder "JSON Planning" jsonPlanningElapsed
                     let valueRenderingStart = Stopwatch.StartNew()
+                    let plannedUserAst =
+                        ValueRendering.rewriteDictionarySetCalls
+                            userEnv.IndexedTypeReg
+                            userEnv.IndexedSumTypeReg
+                            plannedUserAst
                     let plannedProgramType = CheckingTypes.resolveType userEnv.AliasReg programType
                     let renderedUserAst, boundaryProgramType =
                         if plan.Mode = FullProgram then

@@ -18,8 +18,8 @@ open SourcePreparation
 open PreambleAnalysis
 
 /// Load the stdlib and unicode_data.dark files
-/// Returns the merged stdlib AST or an error message
-let private loadStdlib () : Result<AST.ParsedProgram, string> =
+/// Returns validated interpreter source units in declaration order.
+let private loadStdlib () : Result<LibParser.Validation.ValidatedSourceFile list, string> =
     let stdlibFiles = [
         "stdlib/Types.dark"
         "stdlib/NoModule.dark"
@@ -139,9 +139,13 @@ let private loadStdlib () : Result<AST.ParsedProgram, string> =
         "stdlib/RuntimeTypes.dark"
         "stdlib/RuntimeTypesBase.dark"
         "stdlib/RuntimeFQTypeName.dark"
+        "stdlib/RuntimeFQFnName.dark"
+        "stdlib/RuntimeFQValueName.dark"
         "stdlib/RuntimeTypeReference.dark"
         "stdlib/PrettyPrinterRuntimeTypes.dark"
         "stdlib/RuntimeValueType.dark"
+        "stdlib/RuntimeDval.dark"
+        "stdlib/PrettyPrinterRuntimeError.dark"
         "stdlib/RuntimeValueTypeSupport.dark"
         "stdlib/PackageManager.dark"
         "stdlib/PackageManagerPickContext.dark"
@@ -210,17 +214,23 @@ let private loadStdlib () : Result<AST.ParsedProgram, string> =
         "stdlib/JsonParseError.dark"
         "stdlib/Json.dark"
     ]
-    let mergeFile
-        (acc: AST.ParsedTopLevel list)
-        (filename: string)
-        : Result<AST.ParsedTopLevel list, string> =
-        match loadDarkFileAllowInternal filename with
-        | Error err -> Error err
-        | Ok (AST.ParsedProgram items) ->
-            Ok (acc @ items)
+    let loadFile (filename: string) =
+        let exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)
+        let candidates = [
+            Path.Combine(exeDir, filename)
+            Path.Combine(exeDir, "..", "..", "..", "..", "src", "DarkCompiler", filename)
+            Path.Combine(Environment.CurrentDirectory, "src", "DarkCompiler", filename)
+        ]
+        match candidates |> List.tryFind File.Exists with
+        | None ->
+            let searched = String.Join(", ", candidates)
+            Error $"Could not find {filename} in any of: {searched}"
+        | Some path ->
+            File.ReadAllText path
+            |> WrittenParsing.parse LibParser.Validation.Script
+            |> Result.mapError (fun err -> $"Error parsing {filename}: {err}")
     stdlibFiles
-    |> List.fold (fun acc filename -> Result.bind (fun items -> mergeFile items filename) acc) (Ok [])
-    |> Result.bind (fun items -> Ok (AST.ParsedProgram items))
+    |> ResultList.traverse loadFile
 
 /// Build stdlib in isolation, returning reusable result
 /// This can be called once and the result reused for multiple user program compilations
@@ -237,16 +247,26 @@ let buildStdlibWithTrace
     match measure "Stdlib detail: Source loading and parsing" loadStdlib with
     | Error e ->
         Error e
-    | Ok stdlibAst ->
+    | Ok stdlibSources ->
         match
             measure
                 "Stdlib detail: Type checking"
-                (fun () -> TypeChecking.checkParsedDeclarationProgramWithEnv stdlibAst)
+                (fun () -> WrittenChecking.checkSourceUnitsWithBase None true false stdlibSources)
         with
         | Error e ->
-            let msg = CheckingDiagnostics.typeErrorToString e
-            Error msg
-        | Ok (_, typedStdlib, typeCheckEnv) ->
+            Error e
+        | Ok (_, checkedStdlib, writtenEnvironment) ->
+            let typeCheckEnv = WrittenChecking.typeCheckEnvironment checkedStdlib
+            let (CheckedAST.Program (checkedSymbols, checkedTopLevels)) = checkedStdlib
+            let symbols, materializedTopLevels =
+                CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
+                    checkedSymbols
+                    typeCheckEnv.AliasReg
+                    typeCheckEnv.IndexedTypeReg
+                    typeCheckEnv.VariantLookup
+                    typeCheckEnv.IndexedSumTypeReg
+                    checkedTopLevels
+            let typedStdlib = CheckedAST.programFromCheckedParts (symbols, materializedTopLevels)
             // Extract generic function definitions for on-demand monomorphization
             let genericFuncDefs = SpecializationIdentity.extractGenericFuncDefs typedStdlib
             // Build module registry once (reused across all compilations)
@@ -279,6 +299,7 @@ let buildStdlibWithTrace
                         registries
                         baseFuncNames
                         returnTypes
+                    |> fun context -> { context with WrittenEnvironment = Some writtenEnvironment }
                 let stdlibFunctions = anfResult.Functions
                 let stdlibOptions = defaultOptions
                 match buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty stdlibFunctions Map.empty false passTimingRecorder with
@@ -329,7 +350,6 @@ let buildStdlibWithTrace
                     | Ok allocatedFuncs ->
                         let stdlibCallGraph = DeadCodeElimination.buildCallGraph allocatedFuncs
                         Ok {
-                            AST = stdlibAst
                             TypedAST = typedStdlib
                             Context = contextWithLiftedNames
                             AllocatedFunctions = allocatedFuncs

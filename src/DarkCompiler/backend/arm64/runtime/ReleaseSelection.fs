@@ -188,6 +188,9 @@ let internal dictPayloadReleaseNeedsPlannedHelper (keyRelease: MemoryModel.RcRel
     | MemoryModel.DynamicBufferRelease _, _
     | _, MemoryModel.DynamicBufferRelease _ ->
         true
+    | MemoryModel.RecursiveRelease _, _
+    | _, MemoryModel.RecursiveRelease _ ->
+        true
     | MemoryModel.NoReleasePlan, MemoryModel.RootRelease (_, MemoryModel.TaggedList, _)
     | MemoryModel.NoReleasePlan, MemoryModel.RootRelease (_, MemoryModel.DictHeap, _)
     | MemoryModel.NoReleasePlan, MemoryModel.RootRelease (_, MemoryModel.ClosureHeap, _) ->

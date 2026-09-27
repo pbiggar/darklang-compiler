@@ -262,8 +262,9 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
             |> Result.bind (fun operandType ->
                 match operandType with
                 | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
-                | AST.TInt
-                | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 -> Ok operandType
+                | AST.TInt128 | AST.TInt
+                | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
+                | AST.TUInt128 -> Ok operandType
                 | _ -> Error $"Bitwise operator requires integer operands, got {operandType}")
         | AST.Eq | AST.Neq -> Ok AST.TBool
         | AST.Lt | AST.Gt | AST.Lte | AST.Gte ->
@@ -636,7 +637,12 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
             match funcType with
             | AST.TFunction (_, returnType) -> Ok returnType
             | _ -> Error "Apply requires a function type")
-    | CheckedAST.IndirectApply _ -> Ok AST.TBool
+    | CheckedAST.IndirectApply (func, _args) ->
+        inferTypeCore sumTypeNames typeNames func typeEnv typeReg variantLookup funcReg functionNames moduleRegistry
+        |> Result.bind (fun funcType ->
+            match funcType with
+            | AST.TFunction (_, returnType) -> Ok returnType
+            | _ -> Error "Indirect apply requires a function type")
     | CheckedAST.FuncRef name ->
         // Function reference has the function's type
         match Map.tryFind name funcReg with

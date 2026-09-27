@@ -21,7 +21,6 @@
     <Compile Include="NameResolution.fs" />
     <Compile Include="ResultList.fs" />
     <Compile Include="CheckedAST.fs" />
-    <Compile Include="PackageManager.fs" />
     <Compile Include="CallGraphReachability.fs" />
     <Compile Include="Bitset.fs" />
 
@@ -35,7 +34,10 @@
     <Compile Include="frontend/interpreter/Effects.fs" />
     <Compile Include="frontend/interpreter/Lexer.fs" />
     <Compile Include="frontend/interpreter/Parser.fs" />
-    <Compile Include="frontend/Parser.fs" />
+    <Compile Include="frontend/WrittenParsing.fs" />
+    <Compile Include="frontend/WrittenFormatter.fs" />
+    <Compile Include="frontend/WrittenSource.fs" />
+    <Compile Include="PackageManager.fs" />
     <Compile Include="frontend/checking/Diagnostics.fs" />
     <Compile Include="frontend/checking/Types.fs" />
     <Compile Include="frontend/checking/ComparisonPlanning.fs" />
@@ -57,8 +59,8 @@
     <Compile Include="frontend/checking/Declarations.fs" />
     <Compile Include="frontend/checking/ResolvedProgram.fs" />
     <Compile Include="frontend/TypeChecking.fs" />
-    <Compile Include="frontend/ValueRendering.fs" />
     <Compile Include="frontend/JsonPlanning.fs" />
+    <Compile Include="frontend/ValueRendering.fs" />
 
     <!-- AST -> ANF -->
     <Compile Include="memory/MemoryModel.fs" />
@@ -94,6 +96,7 @@
     <Compile Include="passes/anf/lowering/Primitives.fs" />
     <Compile Include="passes/preparation/TypeRegistries.fs" />
     <Compile Include="passes/preparation/SpecializationIdentity.fs" />
+    <Compile Include="frontend/WrittenChecking.fs" />
     <Compile Include="passes/preparation/TypeSubstitution.fs" />
     <Compile Include="passes/preparation/Monomorphization.fs" />
     <Compile Include="passes/preparation/InlineLambdas.fs" />

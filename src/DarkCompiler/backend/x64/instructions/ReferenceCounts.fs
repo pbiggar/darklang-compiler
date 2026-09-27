@@ -117,12 +117,12 @@ let private emitRefCountIncBuffer (ctx: FuncCtx) (skipTagged: bool) (str: LIR.Op
                 if skipTagged then
                     [X86_64.MOV_reg (scratch, refAddrReg)
                      X86_64.AND_imm (scratch, 1)
-                     X86_64.Jcc (X86_64.NE, skipLabel)]
+                     X86_64.Jcc (X86_64.NE, literalLabel)]
                 else
                     []
             preserveRegs
             @ [X86_64.TEST_reg (refAddrReg, refAddrReg)
-               X86_64.Jcc (X86_64.EQ, skipLabel)]
+               X86_64.Jcc (X86_64.EQ, literalLabel)]
             @ taggedGuard
             @ [X86_64.MOV_load (refValueReg, refAddrReg, 0)]
             @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL        // scratch = INT64_MAX
@@ -162,12 +162,12 @@ let private emitRefCountDecBuffer (ctx: FuncCtx) (skipTagged: bool) (str: LIR.Op
                 if skipTagged then
                     [X86_64.MOV_reg (scratch, refAddrReg)
                      X86_64.AND_imm (scratch, 1)
-                     X86_64.Jcc (X86_64.NE, skipLabel)]
+                     X86_64.Jcc (X86_64.NE, literalLabel)]
                 else
                     []
             preserveRegs
             @ [X86_64.TEST_reg (refAddrReg, refAddrReg)
-               X86_64.Jcc (X86_64.EQ, skipLabel)]
+               X86_64.Jcc (X86_64.EQ, literalLabel)]
             @ taggedGuard
             @ [X86_64.MOV_load (refValueReg, refAddrReg, 0)]
             @ loadImm64 scratch 0x7FFFFFFFFFFFFFFFL

@@ -1,0 +1,3 @@
+// Equality must preserve the distinction between Char and String.
+'a' == "a" = compileerror="Cannot compare Char and String"
+Stdlib.equals 'a' "a" = compileerror="Cannot compare Char and String"

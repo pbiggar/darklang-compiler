@@ -71,18 +71,19 @@ narrowed through Int64. Invalid or incomplete input returns typed
 
 Finite `Float.toString` output is the closest shortest decimal significand
 that parses back to the identical `Float.toBits` value. It uses fixed notation
-for decimal exponents from -4 through 11 and lowercase scientific notation
+for decimal exponents from -4 through 15 and lowercase scientific notation
 outside that range. Positive scientific exponents use `+` without zero
 padding. Only finite, fixed, integer forms receive `.0`. Special spellings are
 exactly `-0.0`, `Infinity`, `-Infinity`, and `NaN`.
 
-The shortest-roundtrip finite format is an intentional improvement over the
-pinned interpreter's `G12` formatting (`Float.fs:325-352`), which can discard
-bits. The fixed/scientific boundary, lowercase `e`, whole-number convention,
-and nonfinite spellings remain interpreter-compatible. Previously unresolved
-edges are locked by minimum-subnormal and maximum-finite round trips,
-powers-of-ten on both notation boundaries, halfway decimal input, negative
-zero, and a value requiring 17 significant digits.
+The current interpreter checkout, `I@1cc4bb7f63acdf29dc66458f3c401ed91d444775`,
+uses shortest-roundtrip formatting with this same notation boundary
+(`backend/src/Prelude/Prelude.fs:324-360`). Its earlier `v0.0.35` release used
+`G12`, which could discard bits. Minimum-subnormal and maximum-finite round
+trips, adjacent maximum values, powers of two, notation boundaries, halfway
+decimal input, negative zero, and 17-digit values have focused E2E coverage.
+For integral binary values, candidate selection uses the exact half-ULP
+interval, avoiding repeated large decimal conversions near the maximum float.
 
 ## Power and transcendental behavior
 

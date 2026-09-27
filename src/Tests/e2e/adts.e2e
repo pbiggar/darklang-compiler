@@ -10,10 +10,10 @@ match 42L with | 42L -> true | _ -> false = true
 type MyResult = MyOk of Int64 | MyErr match MyErr with | MyErr -> 1L | MyOk x -> 0L = 1L
 
 // Variant ordering - A is first variant
-type Three = A | B of Int64 | C match A with | A -> 0L | B x -> 1L | C -> 2L = 0L
+type Three = A | B of Int64 | C match Three.A with | A -> 0L | B x -> 1L | C -> 2L = 0L
 
 // C is third variant
-type Three = A | B of Int64 | C match C with | A -> 0L | B x -> 1L | C -> 2L = 2L
+type Three = A | B of Int64 | C match Three.C with | A -> 0L | B x -> 1L | C -> 2L = 2L
 
 // Multiple payload types in let binding
 type MyOption = MyNone | MySome of Int64 let n = MyNone in match n with | MyNone -> 0L | MySome x -> x = 0L
@@ -25,7 +25,7 @@ type MyOption = MyNone | MySome of Int64 match MySome 42L with | MyNone -> 0L | 
 type MyResult = MyOk of Int64 | MyErr match MyOk 100L with | MyOk v -> v | MyErr -> 0L = 100L
 
 // Verify B(77) returns payload
-type Three = A | B of Int64 | C match B 77L with | A -> 0L | B x -> x | C -> 0L = 77L
+type Three = A | B of Int64 | C match Three.B 77L with | A -> 0L | B x -> x | C -> 0L = 77L
 
 // ===================================================================
 // Sum Types with String Payloads
@@ -68,12 +68,12 @@ match SomeBool false with | SomeBool b -> if b then 1L else 0L | NoBool -> -1L =
 
 // Sum type with tuple payload
 type Pair = NoPair | MkPair of (Int64 * Int64)
-match MkPair ((10L, 20L)) with | MkPair t -> t.0 + t.1 | NoPair -> 0L = 30L
-match NoPair with | MkPair t -> t.0 | NoPair -> 99L = 99L
+match MkPair ((10L, 20L)) with | MkPair ((a, b)) -> a + b | NoPair -> 0L = 30L
+match NoPair with | MkPair ((a, _)) -> a | NoPair -> 99L = 99L
 
 // Tuple payload with 3 elements
 type Triple = NoTriple | MkTriple of (Int64 * Int64 * Int64)
-match MkTriple ((1L, 2L, 3L)) with | MkTriple t -> t.0 + t.1 + t.2 | NoTriple -> 0L = 6L
+match MkTriple ((1L, 2L, 3L)) with | MkTriple ((a, b, c)) -> a + b + c | NoTriple -> 0L = 6L
 
 // ===================================================================
 // Sum Types with Record Payloads

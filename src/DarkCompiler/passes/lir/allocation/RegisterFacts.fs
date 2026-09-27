@@ -256,7 +256,7 @@ let getDefinedVReg (instr: LIR.Instr) : int option =
 // ============================================================================
 
 let private isFixedFVRegId (id: int) : bool =
-    id = 1000 || id = 1001 || id = 1002 || id = 2000 || (id >= 3000 && id < 4000)
+    id = -1000 || id = -1001 || id = -1002 || id = -2000
 
 /// Get FVirtual register IDs used (read) by an instruction
 let getUsedFVRegs (instr: LIR.Instr) : int list =

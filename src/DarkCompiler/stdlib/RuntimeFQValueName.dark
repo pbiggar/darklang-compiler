@@ -1,0 +1,6 @@
+// RuntimeFQValueName.dark - canonical runtime value identities for error segments.
+
+module Darklang.LanguageTools.RuntimeTypes.FQValueName
+
+type Builtin = { name: String, version: Int32 }
+type FQValueName = Builtin of Builtin | Package of Darklang.LanguageTools.RuntimeTypes.Hash

@@ -10,6 +10,8 @@ open AST
 open CompilationContexts
 open CompilerOptions
 
+module WT = LibParser.WrittenTypes
+
 type Action =
     | Fuzz
     | Replay of sourcePath:string
@@ -1026,31 +1028,115 @@ let private sameFailure (expected: CaseOutcome) (candidate: CaseOutcome) : bool 
     | ResultMismatch _, ResultMismatch _ -> true
     | _ -> false
 
+/// The minimizer reads only the expression subset emitted by this fuzzer.
+/// Production source checking goes directly from WrittenTypes to CheckedAST.
+let rec private generatedExprOfWritten (written: WT.Expr) : Expr option =
+    let both left right build =
+        match generatedExprOfWritten left, generatedExprOfWritten right with
+        | Some left, Some right -> Some (build left right)
+        | _ -> None
+    match written with
+    | WT.EInt64 (_, (_, value), _) -> Some (Int64Literal value)
+    | WT.EBool (_, value) -> Some (BoolLiteral value)
+    | WT.EString (_, _, segments, _, _) ->
+        segments
+        |> List.fold
+            (fun result segment ->
+                match result, segment with
+                | Some text, WT.StringText (_, next) -> Some (text + next)
+                | _ -> None)
+            (Some "")
+        |> Option.map StringLiteral
+    | WT.EVariable (_, name) -> Some (Var name)
+    | WT.EInfix (_, (_, infix), left, right) ->
+        let op =
+            match infix with
+            | WT.InfixFnCall WT.ArithmeticPlus -> Some Add
+            | WT.InfixFnCall WT.ArithmeticMinus -> Some Sub
+            | WT.InfixFnCall WT.ArithmeticMultiply -> Some Mul
+            | WT.InfixFnCall WT.StringConcat -> Some StringConcat
+            | WT.InfixFnCall WT.ComparisonEquals -> Some Eq
+            | WT.InfixFnCall WT.ComparisonNotEquals -> Some Neq
+            | WT.InfixFnCall WT.ComparisonLessThan -> Some Lt
+            | WT.InfixFnCall WT.ComparisonGreaterThan -> Some Gt
+            | WT.InfixFnCall WT.ComparisonLessThanOrEqual -> Some Lte
+            | WT.InfixFnCall WT.ComparisonGreaterThanOrEqual -> Some Gte
+            | WT.BinOp WT.BinOpAnd -> Some And
+            | WT.BinOp WT.BinOpOr -> Some Or
+            | _ -> None
+        op |> Option.bind (fun selected -> both left right (fun a b -> BinOp (selected, a, b)))
+    | WT.ELet (_, WT.LPVariable (_, name), binding, body, _, _) ->
+        both binding body (fun value next -> Let (LPVariable name, value, next))
+    | WT.EIf (_, condition, thenBranch, Some elseBranch, _, _, _) ->
+        match
+            generatedExprOfWritten condition,
+            generatedExprOfWritten thenBranch,
+            generatedExprOfWritten elseBranch
+        with
+        | Some cond, Some yes, Some no -> Some (If (cond, yes, no))
+        | _ -> None
+    | _ -> None
+
 let private minimize
     (config: Config)
     (stdlib: StdlibResult)
     (source: string)
     : Result<string * CaseOutcome * int * int, string> =
     let parsed =
-        Parser.parseString false source
-        |> Result.map semanticProgramOfParsed
-        |> Result.bind (fun (Program topLevels) ->
-            match List.rev topLevels with
-            | Expression (_, expression) :: reversedDeclarations
-                when reversedDeclarations
-                     |> List.forall (function TypeDef _ | FunctionDef _ -> true | _ -> false) ->
-                Ok (List.rev reversedDeclarations, expression)
-            | _ -> Error "Minimizer input must end in one expression after any type and function declarations")
+        WrittenParsing.parse LibParser.Validation.Script source
+        |> Result.map LibParser.Validation.ValidatedSourceFile.toWrittenTypes
     match parsed with
-    | Error message -> Error $"Cannot minimize source: {message}"
-    | Ok (declarations, originalExpr) ->
+    | Error message -> Error $"Cannot parse minimizer input: {message}"
+    | Ok { declarations = writtenDeclarations; exprsToEval = [writtenExpr] }
+        when writtenDeclarations
+             |> List.forall (function WT.DFunction _ | WT.DType _ -> true | _ -> false) ->
+      match generatedExprOfWritten writtenExpr with
+      | None -> Error "Minimizer input is outside the generated expression subset"
+      | Some originalExpr ->
+        let lines = source.Split('\n')
+        let declarationStart = function
+            | WT.DFunction definition -> definition.range.start.row
+            | WT.DType definition -> definition.range.start.row
+            | _ -> 0
+        let expressionStart = (WT.exprRange writtenExpr).start.row
+        let declarations =
+            writtenDeclarations
+            |> List.mapi (fun index declaration ->
+                let nextRow =
+                    writtenDeclarations
+                    |> List.tryItem (index + 1)
+                    |> Option.map declarationStart
+                    |> Option.defaultValue expressionStart
+                let declarationText =
+                    lines[declarationStart declaration .. nextRow - 1]
+                    |> String.concat "\n"
+                    |> fun text -> text.TrimEnd()
+                declaration, declarationText)
+        let semanticType = function
+            | WT.TInt64 _ -> Some TInt64
+            | WT.TBool _ -> Some TBool
+            | WT.TString _ -> Some TString
+            | _ -> None
         let declarationEnvironment declarations =
             declarations
-            |> List.choose (function
-                | FunctionDef definition when List.isEmpty definition.TypeParams ->
+            |> List.choose (fun (declaration, _) ->
+                match declaration with
+                | WT.DFunction definition when List.isEmpty definition.typeParams ->
+                    let parameters =
+                        definition.parameters
+                        |> List.map (function
+                            | WT.FPNormal (_, _, typ, _, _, _, _) -> semanticType typ
+                            | WT.FPUnit _ -> Some TUnit)
                     let parameterTypes =
-                        definition.Params |> NonEmptyList.toList |> List.map snd
-                    Some (definition.Name, TFunction (parameterTypes, definition.ReturnType))
+                        List.foldBack
+                            (fun item accumulated ->
+                                item |> Option.bind (fun typ -> accumulated |> Option.map (fun rest -> typ :: rest)))
+                            parameters
+                            (Some [])
+                    match parameterTypes, semanticType definition.returnType with
+                    | Some parameterTypes, Some returnType ->
+                        Some (definition.name, TFunction (parameterTypes, returnType))
+                    | _ -> None
                 | _ -> None)
         match inferGeneratedType (declarationEnvironment declarations) originalExpr with
         | None -> Error "Minimizer input is outside the generated expression subset"
@@ -1074,7 +1160,7 @@ let private minimize
                 let rec reduce
                     (attempts: int)
                     (reductions: int)
-                    (currentDeclarations: TopLevel list)
+                    (currentDeclarations: (WT.Declaration * string) list)
                     (currentExpr: Expr)
                     (currentSource: string)
                     (currentOutcome: CaseOutcome)
@@ -1109,9 +1195,13 @@ let private minimize
                                     candidateExpr
                             with
                             | Some candidateType when candidateType = originalType ->
-                                let candidateSource =
-                                    Program (candidateDeclarations @ [Expression ([], candidateExpr)])
+                                let expressionSource =
+                                    Program [Expression ([], candidateExpr)]
                                     |> ASTPrettyPrinter.formatProgram
+                                let candidateSource =
+                                    candidateDeclarations
+                                    |> List.map snd
+                                    |> fun declarations -> String.concat "\n\n" (declarations @ [expressionSource])
                                 let candidateMetric = expressionSize candidateExpr, candidateSource.Length
                                 if candidateMetric < currentMetric then
                                     Some (candidateDeclarations, candidateExpr, candidateSource)
@@ -1129,6 +1219,7 @@ let private minimize
                         Ok (currentSource, currentOutcome, nextAttempts, reductions)
 
                 reduce 0 0 declarations originalExpr source originalOutcome
+    | Ok _ -> Error "Minimizer input must end in one expression after type and function declarations"
 
 let private describeProcessOutcome (outcome: ProcessOutcome) : string =
     match outcome with

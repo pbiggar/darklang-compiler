@@ -1,0 +1,2 @@
+// Identity lambdas retain an unconstrained parameter type until comparison.
+Stdlib.notEquals (fun value -> value) (fun value -> value) = true

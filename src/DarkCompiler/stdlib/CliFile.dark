@@ -86,3 +86,30 @@ let globMatchSegments (patternSegments: List<String>) (pathSegments: List<String
             | pathHead :: pathTail ->
                 Stdlib.Cli.File.__segmentMatches patternHead pathHead 0L 0L
                 && Stdlib.Cli.File.globMatchSegments patternTail pathTail
+
+let __tempError (errno: Int64) : Stdlib.Cli.Posix.Error =
+    let message =
+        if errno == 2L then "No such file or directory"
+        else if errno == 13L then "Permission denied"
+        else if errno == 17L then "File exists"
+        else if errno == 28L then "No space left on device"
+        else if errno == 36L then "File name too long"
+        else "Temporary file creation failed" in
+    Stdlib.Cli.Posix.Error { errno = Stdlib.Int.fromInt64 errno, message = message }
+
+let __createTempFrom (prefix: String) (attempts: Int64) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
+    if attempts == 0L then Error (Stdlib.Cli.File.__tempError 17L)
+    else
+        let path = prefix ++ Stdlib.Int64.toString (Stdlib.Int.__randomInt64Word ()) in
+        let errno = Stdlib.Cli.__createExclusive path in
+        if errno == 0L then Ok path
+        else if errno == 17L then Stdlib.Cli.File.__createTempFrom prefix (attempts - 1L)
+        else Error (Stdlib.Cli.File.__tempError errno)
+
+/// Atomically create a private temporary file and return its path.
+let createTemp () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
+    let prefix =
+        match Stdlib.Cli.Env.get "TMPDIR" with
+        | Some directory -> directory ++ "/dark-tmp-"
+        | None -> "/tmp/dark-tmp-" in
+    Stdlib.Cli.File.__createTempFrom prefix 100L

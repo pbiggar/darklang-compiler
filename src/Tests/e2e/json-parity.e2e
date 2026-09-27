@@ -22,10 +22,10 @@ Stdlib.Json.serialize (1e-5) = "1E-05"
 jsonParityError<Int64> (Stdlib.Json.parse<Int64> "1.2") = "Can't parse JSON `1.2` as type `Int64` at path: `root`"
 Stdlib.Json.serialize<List<Int64>> ([1L, 2L, 3L]) = "[1,2,3]"
 Stdlib.Json.parse<(Int64 * String)> "[42,\"answer\"]" = Ok ((42L, "answer"))
-Stdlib.Json.serialize<Dict<String>> (Dict { b = "two", a = "one" }) = "{\"a\":\"one\",\"b\":\"two\"}"
-Stdlib.Json.parse<Dict<String>> "{\"a\":\"one\",\"b\":\"two\"}" = Ok (Dict { a = "one", b = "two" })
-Stdlib.Json.serialize<List<(Dict<String> * Option<Int64>)>> ([(Stdlib.Dict.singleton "a" "b", Some 1L)]) = "[[{\"a\":\"b\"},{\"Some\":[1]}]]"
-Stdlib.Json.serialize<Result<List<(Dict<String> * Option<Int64>)>, String>> (Ok ([(Stdlib.Dict.singleton "a" "b", Some 1L), (Stdlib.Dict.singleton "c" "d", None)])) = "{\"Ok\":[[[{\"a\":\"b\"},{\"Some\":[1]}],[{\"c\":\"d\"},{\"None\":[]}]]]}"
+Stdlib.Json.serialize<Dict<String, String>> (Dict { "b": "two"; "a": "one" }) = "{\"a\":\"one\",\"b\":\"two\"}"
+Stdlib.Json.parse<Dict<String, String>> "{\"a\":\"one\",\"b\":\"two\"}" = Ok (Dict { "a": "one"; "b": "two" })
+Stdlib.Json.serialize<List<(Dict<String, String> * Option<Int64>)>> ([(Stdlib.Dict.singleton "a" "b", Some 1L)]) = "[[{\"a\":\"b\"},{\"Some\":[1]}]]"
+Stdlib.Json.serialize<Result<List<(Dict<String, String> * Option<Int64>)>, String>> (Ok ([(Stdlib.Dict.singleton "a" "b", Some 1L), (Stdlib.Dict.singleton "c" "d", None)])) = "{\"Ok\":[[[{\"a\":\"b\"},{\"Some\":[1]}],[{\"c\":\"d\"},{\"None\":[]}]]]}"
 Stdlib.Json.serialize<JsonParityPerson> (JsonParityPerson { Name = "Ada", Age = 36L }) = "{\"Age\":36,\"Name\":\"Ada\"}"
 Stdlib.Json.parse<JsonParityPerson> "{\"Name\":\"Ada\",\"Age\":36,\"extra\":true}" = Ok (JsonParityPerson { Name = "Ada", Age = 36L })
 Stdlib.Json.parse<JsonParityAlias> "{\"Name\":\"Ada\",\"Age\":36}" = Ok (JsonParityPerson { Name = "Ada", Age = 36L })

@@ -17,14 +17,11 @@ annotations; let bindings have optional annotations.
 
 ## Type representations
 
-Defined in `src/DarkCompiler/AST.fs`:
+Source type syntax is defined in
+`src/DarkCompiler/frontend/interpreter/WrittenTypes.fs`. Resolved semantic
+types are defined in `src/DarkCompiler/AST.fs`:
 
 ```fsharp
-type ParsedType =
-    // Source spellings only: primitives, functions, tuples, nominal names,
-    // collections, and source type variables.
-    // Privileged compiler sources may additionally spell PTInternalRawPtr.
-
 type SemanticType =
     | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
@@ -42,10 +39,9 @@ type SemanticType =
     | TDict of keyType:SemanticType * valueType:SemanticType
 ```
 
-The parser returns `ParsedProgram`, whose generic syntax nodes contain only
-`ParsedType`. Source-driven type-checker entry points cross once through
-`semanticProgramOfParsed` before name resolution. `TNever` is therefore a
-semantic bottom type and cannot occur in parsed source. `TInternalRawPtr` is an
+The interpreter parser returns `WrittenTypes`; `WrittenChecking` resolves
+source annotations and names directly into `CheckedAST.Program`. `TNever` is
+a semantic bottom type and cannot occur in written source. `TInternalRawPtr` is an
 internal-signature capability: public parsing rejects `RawPtr`, while
 privileged compiler sources use it for the unsafe runtime-support layer.
 

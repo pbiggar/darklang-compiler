@@ -76,11 +76,11 @@ comparisonGenericEquals<List<(Int64 * String)>> ([(1L, "one")]) ([(1L, "one")]) 
 comparisonGenericEquals<ComparisonRecord> (ComparisonRecord { name = "r", values = [(1L, true)] }) (ComparisonRecord { name = "r", values = [(1L, true)] }) = true
 
 // Dict equality compares mappings, independently of insertion order and shape.
-Dict { a = 1L; b = 2L } == Dict { b = 2L; a = 1L } = true
-comparisonGenericEquals<Dict<List<Int64>>> (Dict { a = [1L, 2L]; b = [3L] }) (Dict { b = [3L]; a = [1L, 2L] }) = true
-Dict { a = 1L } != Dict { a = 2L } = true
-Stdlib.equals (Dict { a = [1L, 2L]; b = [3L] }) (Dict { b = [3L]; a = [1L, 2L] }) = true
-Stdlib.notEquals (Dict { a = [1L, 2L] }) (Dict { a = [1L, 3L] }) = true
+Dict { "a": 1L; "b": 2L } == Dict { "b": 2L; "a": 1L } = true
+comparisonGenericEquals<Dict<String, List<Int64>>> (Dict { "a": [1L, 2L]; "b": [3L] }) (Dict { "b": [3L]; "a": [1L, 2L] }) = true
+Dict { "a": 1L } != Dict { "a": 2L } = true
+Stdlib.equals (Dict { "a": [1L, 2L]; "b": [3L] }) (Dict { "b": [3L]; "a": [1L, 2L] }) = true
+Stdlib.notEquals (Dict { "a": [1L, 2L] }) (Dict { "a": [1L, 3L] }) = true
 
 // Lambda identity is its source expression and deliberately ignores captures.
 let comparisonMakeLambda (captured: Int64): Int64 -> Int64 =
@@ -133,25 +133,27 @@ Builtin.testNan_v0 >= 0.0 = false
 
 // The compiler rejects these during AOT type checking. The interpreter reaches
 // the corresponding public runtime errors after evaluating both operands.
-'a' == "a" = error="Cannot perform equality check on Char and String"
-1L == 1.0 = error="Cannot perform equality check on Int64 and Float"
+'a' == "a" = compileerror="Cannot compare Char and String"
+1L == 1.0 = compileerror="Operator is unavailable for this type"
 type ComparisonNominalA = ComparisonOnlyA | ComparisonOtherA
 type ComparisonNominalB = ComparisonOnlyB | ComparisonOtherB
-ComparisonOnlyA == ComparisonOnlyB = error="Cannot perform equality check on ComparisonNominalA and ComparisonNominalB"
+ComparisonOnlyA == ComparisonOnlyB = compileerror="Unknown constructor 'ComparisonNominalA.ComparisonOnlyB'"
 type ComparisonRecordA = { value: Int64 }
 type ComparisonRecordB = { value: Int64 }
-(ComparisonRecordA { value = 1L } == ComparisonRecordB { value = 1L }) = error="Cannot perform equality check on ComparisonRecordA and ComparisonRecordB"
-true < false = error="Cannot perform numeric operation on Bool and Bool"
-"a" >= "b" = error="Cannot perform numeric operation on String and String"
-1L < 1.0 = error="Cannot perform numeric operation on Int64 and Float"
+// Record comparison follows field shape across distinct declaration names.
+(ComparisonRecordA { value = 1L } == ComparisonRecordB { value = 1L }) = true
+true < false = compileerror="Operator is unavailable for this type"
+"a" >= "b" = compileerror="Operator is unavailable for this type"
+1L < 1.0 = compileerror="Expected TInt64, got TFloat64"
 Stdlib.Blob.fromList ([]) != Stdlib.Blob.fromList ([]) = true
 let blob = Stdlib.Blob.fromList ([]) in blob == blob = true
 Stdlib.equals (Stdlib.Blob.fromList ([])) (Stdlib.Blob.fromList ([])) = false
 let publicBlob = Stdlib.Blob.fromList ([]) in Stdlib.equals publicBlob publicBlob = true
 Stdlib.notEquals (Stdlib.Blob.fromList ([])) (Stdlib.Blob.fromList ([])) = true
 
-// Public wrapper calls retain the compiler's intentional AOT mismatch timing.
-Stdlib.equals 'a' "a" = error="Type variable a$0 has conflicting inferences: Char vs String"
-Stdlib.notEquals 1L 1.0 = error="Type mismatch in float literal: expected Int64, got Float"
-Stdlib.equals ComparisonOnlyA ComparisonOnlyB = error="Type mismatch in constructor ComparisonOnlyB: expected ComparisonNominalA, got ComparisonNominalB"
-Stdlib.notEquals (ComparisonRecordA { value = 1L }) (ComparisonRecordB { value = 1L }) = error="Type mismatch in record literal: expected ComparisonRecordA, got ComparisonRecordB"
+// Public wrapper calls retain the compiler's intentional AOT mismatch timing
+// for incompatible operand types.
+Stdlib.equals 'a' "a" = compileerror="Cannot compare Char and String"
+Stdlib.notEquals 1L 1.0 = compileerror="has conflicting inferences: Int64 vs Float"
+Stdlib.equals ComparisonOnlyA ComparisonOnlyB = compileerror="has conflicting inferences: ComparisonNominalA vs ComparisonNominalB"
+Stdlib.notEquals (ComparisonRecordA { value = 1L }) (ComparisonRecordB { value = 1L }) = false

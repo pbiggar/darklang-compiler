@@ -1055,6 +1055,73 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
                         ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 2048us)
                         ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 2048us) ])
             | _ -> Error "fileIsDirectory expects exactly one path"
+        | LIR.FileCreateExclusive ->
+            match args with
+            | [path] ->
+                loadCliOperand ARM64Symbolic.X0 path
+                |> Result.map (fun loads ->
+                    let labelPrefix = $"__create_exclusive_{ctx.FunctionName}_{ctx.InstructionSite}"
+                    let copyLoop = $"{labelPrefix}_copy"
+                    let copyDone = $"{labelPrefix}_copy_done"
+                    let tooLong = $"{labelPrefix}_too_long"
+                    let failure = $"{labelPrefix}_failure"
+                    let complete = $"{labelPrefix}_complete"
+                    let syscalls = ARM64.targetSyscalls ctx.Target
+                    let openCall, failureCheck, normalizeError =
+                        match ARM64.targetOS ctx.Target with
+                        | Platform.Linux ->
+                            (loadImmediate ARM64Symbolic.X0 -100L
+                             @ [ ARM64Symbolic.MOV_reg (ARM64Symbolic.X1, ARM64Symbolic.SP) ]
+                             @ loadImmediate ARM64Symbolic.X2 194L
+                             @ loadImmediate ARM64Symbolic.X3 0o600L
+                             @ [ ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Open, 0)
+                                 ARM64Symbolic.SVC syscalls.SvcImmediate ],
+                             [ ARM64Symbolic.CMP_imm (ARM64Symbolic.X0, 0us)
+                               ARM64Symbolic.B_cond_label (ARM64Symbolic.LT, failure) ],
+                             [ARM64Symbolic.NEG (destReg, ARM64Symbolic.X0)])
+                        | Platform.MacOS ->
+                            ([ ARM64Symbolic.MOV_reg (ARM64Symbolic.X0, ARM64Symbolic.SP) ]
+                             @ loadImmediate ARM64Symbolic.X1 2562L
+                             @ loadImmediate ARM64Symbolic.X2 0o600L
+                             @ [ ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Open, 0)
+                                 ARM64Symbolic.SVC syscalls.SvcImmediate ],
+                             [ARM64Symbolic.B_cond_label (ARM64Symbolic.HS, failure)],
+                             [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)])
+                    loads
+                    @ [ ARM64Symbolic.SUB_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 2048us)
+                        ARM64Symbolic.SUB_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 2048us)
+                        ARM64Symbolic.LDR (ARM64Symbolic.X9, ARM64Symbolic.X0, 8s) ]
+                    @ loadImmediate ARM64Symbolic.X12 4096L
+                    @ [ ARM64Symbolic.CMP_reg (ARM64Symbolic.X9, ARM64Symbolic.X12)
+                        ARM64Symbolic.B_cond_label (ARM64Symbolic.GE, tooLong)
+                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X10, ARM64Symbolic.X0, 16us)
+                        ARM64Symbolic.MOV_reg (ARM64Symbolic.X11, ARM64Symbolic.SP)
+                        ARM64Symbolic.Label copyLoop
+                        ARM64Symbolic.CBZ (ARM64Symbolic.X9, copyDone)
+                        ARM64Symbolic.LDRB_imm (ARM64Symbolic.X12, ARM64Symbolic.X10, 0)
+                        ARM64Symbolic.STRB_reg (ARM64Symbolic.X12, ARM64Symbolic.X11)
+                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X10, ARM64Symbolic.X10, 1us)
+                        ARM64Symbolic.ADD_imm (ARM64Symbolic.X11, ARM64Symbolic.X11, 1us)
+                        ARM64Symbolic.SUB_imm (ARM64Symbolic.X9, ARM64Symbolic.X9, 1us)
+                        ARM64Symbolic.B_label copyLoop
+                        ARM64Symbolic.Label copyDone
+                        ARM64Symbolic.MOVZ (ARM64Symbolic.X12, 0us, 0)
+                        ARM64Symbolic.STRB_reg (ARM64Symbolic.X12, ARM64Symbolic.X11) ]
+                    @ openCall
+                    @ failureCheck
+                    @ [ ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Close, 0)
+                        ARM64Symbolic.SVC syscalls.SvcImmediate
+                        ARM64Symbolic.MOVZ (destReg, 0us, 0)
+                        ARM64Symbolic.B_label complete
+                        ARM64Symbolic.Label failure ]
+                    @ normalizeError
+                    @ [ ARM64Symbolic.B_label complete
+                        ARM64Symbolic.Label tooLong
+                        ARM64Symbolic.MOVZ (destReg, 36us, 0)
+                        ARM64Symbolic.Label complete
+                        ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 2048us)
+                        ARM64Symbolic.ADD_imm (ARM64Symbolic.SP, ARM64Symbolic.SP, 2048us) ])
+            | _ -> Error "fileCreateExclusive expects exactly one path"
         | LIR.SetEnv ->
             match args with
             | [name; value] ->

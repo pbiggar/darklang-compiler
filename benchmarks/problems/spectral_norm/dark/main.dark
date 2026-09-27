@@ -55,9 +55,7 @@ let dot (i: Int64) (n: Int64) (a: List<Float>) (b: List<Float>) (acc: Float) : F
     else dot (i + 1L) n a b (acc + getAt a i * getAt b i)
 
 let spectralNorm (n: Int64) (iterations: Int64) : Float =
-    let result = iterate iterations n (repeat 1.0 n) (repeat 0.0 n) in
-    let u = result.0 in
-    let v = result.1 in
+    let (u, v) = iterate iterations n (repeat 1.0 n) (repeat 0.0 n) in
     Stdlib.Float.sqrt (dot 0L n u v 0.0 / dot 0L n v v 0.0)
 
 let benchmarkArg (index: Int) : Int64 =

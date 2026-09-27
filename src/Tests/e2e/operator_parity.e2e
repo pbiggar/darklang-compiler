@@ -1,7 +1,8 @@
-// Public operator behavior pinned to darklang/dark 04fbe9d.
+// Public operator behavior follows the current darklang/dark interpreter grammar.
 
-2 ^ 3 = 8
-2 ^ 3 ^ 2 = 512
-2L ^ 3L = 8L
-2.0 ^ 3.0 = 8.0
-(^) 2 3 = 8
+2 ** 3 = 8
+2 ** 3 ** 2 = 512
+2L ** 3L = 8L
+2.0 ** 3.0 = 8.0
+(**) 2 3 = 8
+2 ^ 3 = 1

@@ -1,8 +1,8 @@
 // branch-shared.dark - A post-join alias forces a copy only on the mutating path.
 let pipeline (count: Int) (flag: Bool) : Int64 =
     let xs = Stdlib.List.repeatUnsafe count 7L in
-    let selected = if flag then
-        Stdlib.List.fold (Stdlib.List.map xs (fun x -> x + 1L)) 0L (fun acc x -> acc + x)
+    let selected =
+        if flag then Stdlib.List.fold (Stdlib.List.map xs (fun x -> x + 1L)) 0L (fun acc x -> acc + x)
         else 13L in
     let old = Stdlib.List.fold xs 0L (fun acc x -> acc + x) in
     selected + old

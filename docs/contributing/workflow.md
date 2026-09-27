@@ -34,39 +34,21 @@ type BinOp =
     // ...
 ```
 
-### Step 2: Lexer (`src/DarkCompiler/frontend/Parser.fs`)
+### Step 2: Lexer (`src/DarkCompiler/frontend/interpreter/Parser.fs`)
 
-Add a token type and lexer case:
+Extend the copied interpreter parser's tokenization and syntax only when the
+language itself gains a new operator. Keep the parser's upstream structure and
+behavior; add the corresponding `WrittenTypes` operator case.
 
-```fsharp
-type Token =
-    | TPercent  // <- Add token
-    // ...
+### Step 3: Parser (`src/DarkCompiler/frontend/interpreter/Parser.fs`)
 
-// In the lexer function, add:
-| '%' -> (TPercent, rest)
-```
+Add precedence and parsing in the interpreter parser, returning a written
+operator node. Its syntax tests should cover precedence and source roundtrips.
 
-### Step 3: Parser (`src/DarkCompiler/frontend/Parser.fs`)
+### Step 4: Type Checking (`src/DarkCompiler/frontend/WrittenChecking.fs`)
 
-Add operator precedence and parsing. For `%`, it has same precedence as `*` and `/`:
-
-```fsharp
-// In parseMulDiv or equivalent:
-| TPercent :: rest ->
-    // Parse right operand and build BinOp
-    AST.BinOp (AST.Mod, left, right)
-```
-
-### Step 4: Type Checking (`src/DarkCompiler/frontend/TypeChecking.fs`)
-
-Add type rules for the operator:
-
-```fsharp
-| AST.BinOp (AST.Mod, left, right) ->
-    // Both operands must be Int64, result is Int64
-    checkBinOp left right AST.TInt64 AST.TInt64
-```
+Resolve the written operator to its checked AST case after checking both
+operands and the result type.
 
 ### Step 5: ANF Representation (`src/DarkCompiler/ir/anf/ANF.fs`)
 

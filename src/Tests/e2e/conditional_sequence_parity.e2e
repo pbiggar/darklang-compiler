@@ -8,8 +8,8 @@ if false then 1L elif true then 2L else 3L = 2L
 if true then (if false then 1L else 2L) else 3L = 2L
 
 // Conditions are Boolean and the compiler statically unifies branch types
-if 5L then "yes" else "no" = error="Encountered a condition that must be a Bool, but got an Int64 (5)"
-if true then "yes" else 0L = error="Type mismatch: if branches must have same type: expected String, got Int64"
+if 5L then "yes" else "no" = compileerror="Expected TBool, got TInt64"
+if true then "yes" else 0L = compileerror="Expected TString, got TInt64"
 if false then [] else [1L] = [1L]
 if true then (if false then [] else [1L]) else [2L] = [1L]
 if false then () = ()
@@ -21,8 +21,8 @@ if true then Builtin.testRuntimeError "selected" else 7L = exit=1 stderr="Uncaug
 
 // A parenthesized statement sequence evaluates strictly to its final expression
 (() ; 42L) = 42L
-(paritySequenceHead (); paritySequenceTail ()) = 43L
-(() ; (() ; "done")) = "done"
-if true then (() ; 7L) else (() ; 9L) = 7L
-(1L ; "done") = error="Type mismatch in integer literal: expected Unit, got Int64"
+let _ = paritySequenceHead () in paritySequenceTail () = 43L
+(let _ = () in let _ = () in "done") = "done"
+if true then (let _ = () in 7L) else (let _ = () in 9L) = 7L
+(1L ; "done") = compileerror="Expected TUnit, got TInt64"
 (Builtin.testRuntimeError "first"; Builtin.testRuntimeError "second") = exit=1 stderr="Uncaught exception: first"

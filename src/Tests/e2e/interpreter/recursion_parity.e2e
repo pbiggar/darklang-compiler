@@ -46,7 +46,7 @@ parityFirst 3L = 1L
    if n == 0L then true else forwardOdd (n - 1L) in
  let forwardOdd (n: Int64) : Bool =
    if n == 0L then false else forwardEven (n - 1L) in
- forwardEven 4L)) = error="There is no variable named: forwardOdd"
+ forwardEven 4L)) = compileerror="Unknown function or value 'forwardOdd'"
 
 // A source package function with the same visible name makes nested self
 // selection ambiguous instead of choosing by spelling.
@@ -54,7 +54,7 @@ let collidingSumDown (x: Int64) : Int64 = x + 100L
 
 ((let collidingSumDown (n: Int64) : Int64 =
    if n <= 0L then 0L else n + (collidingSumDown (n - 1L)) in
- collidingSumDown 3L)) = error="Nested function name 'collidingSumDown' is ambiguous"
+ collidingSumDown 3L)) = compileerror="Nested function name 'collidingSumDown' is ambiguous"
 
 // A completed top-level group may be referenced from a later independent group.
 let completedDouble (x: Int64) : Int64 = x * 2L
@@ -67,4 +67,4 @@ Stdlib.Int64.add 4L 1L = 5L
 
 // Ordinary values do not acquire recursive scope. Value-annotation rejection
 // is parser-only and lives in syntax/recursion.syntax.
-((let eagerCycle = eagerCycle in eagerCycle)) = error="Unresolved value name: eagerCycle"
+((let eagerCycle = eagerCycle in eagerCycle)) = compileerror="Unbound local variable 'eagerCycle'"

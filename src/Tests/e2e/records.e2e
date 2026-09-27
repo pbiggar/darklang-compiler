@@ -128,21 +128,21 @@ let r = AllFloats { a = 1.0, b = 2.0, c = 3.0 } in r.a + r.b + r.c = 6.0
 // ===================================================================
 
 // Record update where variable only appears in the record part
-type Point = { x: Int64, y: Int64 }
-let p = Point { x = 10L, y = 20L } in { p with x = 5L }.y = 20L
+type PointRecordPart = { x: Int64, y: Int64 }
+let p = PointRecordPart { x = 10L, y = 20L } in { p with x = 5L }.y = 20L
 
 // Record update where a later field is replaced and earlier fields are preserved
-type Point = { x: Int64, y: Int64 }
-let p = Point { x = 10L, y = 20L } in { p with y = 5L }.x = 10L
-let p = Point { x = 10L, y = 20L } in { p with y = 5L }.y = 5L
+type PointRecordUpdate = { x: Int64, y: Int64 }
+let p = PointRecordUpdate { x = 10L, y = 20L } in { p with y = 5L }.x = 10L
+let p = PointRecordUpdate { x = 10L, y = 20L } in { p with y = 5L }.y = 5L
 
 // Record update on a three-field record preserves all untouched fields
 type Vec3 = { x: Int64, y: Int64, z: Int64 }
 let v = Vec3 { x = 10L, y = 20L, z = 30L } in { v with z = 5L }.x + { v with z = 5L }.y + { v with z = 5L }.z = 35L
 
 // Record update where variable only appears in the update part
-type Point = { x: Int64, y: Int64 }
-let ``val`` = 100L in { Point { x = 1L, y = 2L } with x = ``val`` }.x = 100L
+type PointUpdatePart = { x: Int64, y: Int64 }
+let ``val`` = 100L in { PointUpdatePart { x = 1L, y = 2L } with x = ``val`` }.x = 100L
 
 // Canonical validation, generic identity, nesting, ordering, and rendering.
 type PhantomRecord<'unused> = { value: Int64 }
@@ -155,9 +155,9 @@ type GenericInner<'a> = { value: a }
 type GenericOuter<'a> = { inner: GenericInner<a> }
 let outer = GenericOuter<String> { inner = GenericInner<String> { value = "nested" } } in outer.inner.value = "nested"
 
-type GenericInner<'a> = { value: a }
-type GenericOuter<'a> = { inner: GenericInner<a> }
-let outer = GenericOuter<String> { inner = GenericInner<String> { value = "before" } } in { outer with inner = { outer.inner with value = "after" } }.inner.value = "after"
+type GenericUpdateInner<'a> = { value: a }
+type GenericUpdateOuter<'a> = { inner: GenericUpdateInner<a> }
+let outer = GenericUpdateOuter<String> { inner = GenericUpdateInner<String> { value = "before" } } in { outer with inner = { outer.inner with value = "after" } }.inner.value = "after"
 
 type AliasRecord<'a> = { value: a }
 type AliasRecordView<'a> = AliasRecord<'a>
@@ -166,40 +166,37 @@ AliasRecordView<String> { value = "alias" } == AliasRecord<String> { value = "al
 type OrderedPresentation = { z: Int64; a: String }
 OrderedPresentation { z = 2L; a = "first" } = stdout="OrderedPresentation { a: \"first\", z: 2 }\n" stderr=""
 
-type DuplicateDeclarationField = { value: Int64; value: String }
-DuplicateDeclarationField { value = 7L }.value = 7L
-
 type DuplicateConstruction = { value: Int64 }
-DuplicateConstruction { value = 1L; value = 2L } = error="Duplicate field `value`"
+DuplicateConstruction { value = 1L; value = 2L } = compileerror="Duplicate record field 'value'"
 
 type MissingConstruction = { first: Int64; second: Int64 }
-MissingConstruction { first = 1L } = error="Missing fields in record literal: second"
+MissingConstruction { first = 1L } = compileerror="record literal does not contain exactly the declared field slots"
 
 type UnknownConstruction = { value: Int64 }
-UnknownConstruction { value = 1L; other = 2L } = error="Unknown fields in record literal: other"
+UnknownConstruction { value = 1L; other = 2L } = compileerror="Unknown field 'other' on UnknownConstruction"
 
 type EmptyConstructionKey = { value: Int64 }
-EmptyConstructionKey { ___ = 1L } = error="Empty key in record creation"
+EmptyConstructionKey { ___ = 1L } = compileerror="Unknown field '' on EmptyConstructionKey"
 
 type ExplicitArity<'a> = { value: a }
-ExplicitArity<Int64, String> { value = 1L } = error="Record type argument arity mismatch: expected 1, got 2"
+ExplicitArity<Int64, String> { value = 1L } = compileerror="Type 'ExplicitArity' expects 1 arguments, got 2"
 
 type UpdateLastWins = { value: Int64; untouched: String }
-let original = UpdateLastWins { value = 1L; untouched = "kept" } in let updated = { original with value = 2L; value = 3L } in updated.value = 3L
+let original = UpdateLastWins { value = 1L; untouched = "kept" } in let updated = { original with value = 2L; value = 3L } in updated.value = compileerror="Duplicate record field 'value'"
 
-type InvalidUpdate = { value: Int64 }
-let original = InvalidUpdate { value = 1L } in { original with other = 2L } = error="Unknown fields in record update: other"
+type InvalidUpdateField = { value: Int64 }
+let original = InvalidUpdateField { value = 1L } in { original with other = 2L } = compileerror="Unknown field 'other' on InvalidUpdateField"
 
-type InvalidUpdate = { value: Int64 }
-let original = InvalidUpdate { value = 1L } in { original with ___ = 2L } = error="Empty key in record update"
+type InvalidUpdateKey = { value: Int64 }
+let original = InvalidUpdateKey { value = 1L } in { original with ___ = 2L } = compileerror="Unknown field '' on InvalidUpdateKey"
 
-type AccessDiagnostics = { value: Int64 }
-let record = AccessDiagnostics { value = 1L } in record.___ = error="Field name is empty"
+type EmptyAccessDiagnostic = { value: Int64 }
+let record = EmptyAccessDiagnostic { value = 1L } in record.___ = compileerror="Unknown field '' on EmptyAccessDiagnostic"
 
-type AccessDiagnostics = { value: Int64 }
-let record = AccessDiagnostics { value = 1L } in record.other = error="Tried to access field 'other' but record type AccessDiagnostics has no such field"
+type MissingAccessDiagnostic = { value: Int64 }
+let record = MissingAccessDiagnostic { value = 1L } in record.other = compileerror="Unknown field 'other' on MissingAccessDiagnostic"
 
-let nonRecord = 1L in nonRecord.value = error="Attempting to access field 'value' on non-record type Int64"
+let nonRecord = 1L in nonRecord.value = compileerror="Field access requires a record value"
 
 // Projection-only scalar update chains remain correct when their intermediate
 // record allocations are removed before reference-count insertion.

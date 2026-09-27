@@ -35,23 +35,23 @@ ParityOrder.ParityOrder (Builtin.testRuntimeError "first") (Builtin.testRuntimeE
 
 // Exact field arity is checked before construction.
 type ParityArityFew = | ParityArityFew of Int64 * String
-ParityArityFew.ParityArityFew 1L = error="Expected 2 fields in ParityArityFew.`ParityArityFew`, but got 1"
+ParityArityFew.ParityArityFew 1L = compileerror="Constructor 'ParityArityFew.ParityArityFew' expects 2 fields"
 
 type ParityArityMany = | ParityArityMany of Int64 * String
-ParityArityMany.ParityArityMany 1L "one" true = error="Expected 2 fields in ParityArityMany.`ParityArityMany`, but got 3"
+ParityArityMany.ParityArityMany 1L "one" true = compileerror="Constructor 'ParityArityMany.ParityArityMany' expects 2 fields"
 
 // Constructor patterns preserve field arity instead of treating all fields as one tuple payload.
 type ParityPatternArity = | ParityPatternArity of Int64 * String
-match ParityPatternArity.ParityPatternArity 1L "one" with | ParityPatternArity payload -> payload = compileerror="Expected 2 fields in ParityPatternArity.`ParityPatternArity` pattern, but got 1"
+match ParityPatternArity.ParityPatternArity 1L "one" with | ParityPatternArity payload -> payload = compileerror="Constructor pattern 'ParityPatternArity.ParityPatternArity' has wrong field count"
 
 // A case name is ambiguous when more than one visible type declares it.
 type ParityAmbiguousLeft = | SharedParityCase
 type ParityAmbiguousRight = | SharedParityCase
-SharedParityCase = error="Ambiguous constructor reference 'SharedParityCase': constructor ParityAmbiguousLeft.SharedParityCase, constructor ParityAmbiguousRight.SharedParityCase"
+SharedParityCase = compileerror="Constructor 'SharedParityCase' requires an expected enum type"
 
 // Qualification selects the declaring nominal type despite a case collision.
 type ParityQualifiedLeft = | QualifiedParityCase
 type ParityQualifiedRight = | QualifiedParityCase
-ParityQualifiedLeft.QualifiedParityCase == ParityQualifiedRight.QualifiedParityCase = error="Cannot perform equality check on ParityQualifiedLeft and ParityQualifiedRight"
-let parityLeft = ParityQualifiedLeft.QualifiedParityCase in let parityRight = ParityQualifiedRight.QualifiedParityCase in parityLeft == parityRight = error="Cannot perform equality check on ParityQualifiedLeft and ParityQualifiedRight"
+ParityQualifiedLeft.QualifiedParityCase == ParityQualifiedRight.QualifiedParityCase = compileerror="Expected TSum (\"ParityQualifiedLeft\", []), got TSum (\"ParityQualifiedRight\", [])"
+let parityLeft = ParityQualifiedLeft.QualifiedParityCase in let parityRight = ParityQualifiedRight.QualifiedParityCase in parityLeft == parityRight = compileerror="Operator is unavailable for this type"
 ParityQualifiedLeft.QualifiedParityCase == ParityQualifiedLeft.QualifiedParityCase = stdout="true\n" stderr=""

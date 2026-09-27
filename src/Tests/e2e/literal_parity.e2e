@@ -2,7 +2,7 @@
 // The source contract is pinned in docs/compatibility/language/primitive-literals.md.
 
 // Existing arbitrary-precision Int values retain their suffix spelling.
-let identityInt (value: Int) : Int = value identityInt 9223372036854775808 = 9223372036854775808
+let identityInt (value: Int) : Int = value; identityInt 9223372036854775808 = 9223372036854775808
 
 // Interpreter string literals represent non-BMP Unicode as one scalar escape.
 "\U0001F600" = "😀"

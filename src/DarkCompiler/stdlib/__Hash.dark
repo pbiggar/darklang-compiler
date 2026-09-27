@@ -39,12 +39,15 @@ let __blob_eq (left: Blob) (right: Blob) : Bool = left == right
 // Hash specializations (monomorphized by compiler)
 let __hash_i64 (value: Int64) : Int64 = value
 let __hash_bool (value: Bool) : Int64 = if value then 1L else 0L
+// A constant hash keeps NaN and both zero signs in the same key bucket.
+let __hash_f64 (value: Float) : Int64 = 0L
 let __hash_str (value: String) : Int64 = __string_hash value
 let __hash_blob (value: Blob) : Int64 = __blob_hash value
 
 // Key equality specializations (monomorphized by compiler)
 let __key_eq_i64 (left: Int64) (right: Int64) : Bool = left == right
 let __key_eq_bool (left: Bool) (right: Bool) : Bool = left == right
+let __key_eq_f64 (left: Float) (right: Float) : Bool = left == right || (left != left && right != right)
 let __key_eq_str (left: String) (right: String) : Bool = left == right
 let __key_eq_blob (left: Blob) (right: Blob) : Bool = __blob_eq left right
 

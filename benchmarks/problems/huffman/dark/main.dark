@@ -6,7 +6,7 @@ type HuffmanTree =
     | Leaf of (Int64 * Int64)
     | Branch of ((Int64 * Int64) * (HuffmanTree * HuffmanTree))
 
-type Codec = { tree: HuffmanTree, codes: Dict<Int64> }
+type Codec = { tree: HuffmanTree, codes: Dict<String, Int64> }
 
 let symbolKey (symbol: Int64) : String =
     match Stdlib.String.getByteAt "abcdefghijklmnopqrstuvwxyzABCDEF" (Stdlib.Int.fromInt64 symbol) with
@@ -39,7 +39,7 @@ let insertTree (tree: HuffmanTree) (queue: List<HuffmanTree>) : List<HuffmanTree
         if treeComesFirst tree first then Stdlib.List.push queue tree
         else Stdlib.List.push (insertTree tree rest) first
 
-let countFrequencies (data: List<Int64>) (frequencies: Dict<Int64>) : Dict<Int64> =
+let countFrequencies (data: List<Int64>) (frequencies: Dict<String, Int64>) : Dict<String, Int64> =
     match data with
     | [] -> frequencies
     | symbol :: rest ->
@@ -50,7 +50,7 @@ let countFrequencies (data: List<Int64>) (frequencies: Dict<Int64>) : Dict<Int64
         | Some count ->
             countFrequencies rest (Stdlib.Dict.setOverridingDuplicates frequencies key (count + 1L))
 
-let frequenciesToQueue (symbol: Int64) (frequencies: Dict<Int64>) (queue: List<HuffmanTree>) : List<HuffmanTree> =
+let frequenciesToQueue (symbol: Int64) (frequencies: Dict<String, Int64>) (queue: List<HuffmanTree>) : List<HuffmanTree> =
     if symbol >= 32L then queue
     else
         match Stdlib.Dict.get frequencies (symbolKey symbol) with
@@ -71,7 +71,7 @@ let mergeMinimumTrees (queue: List<HuffmanTree>) : Stdlib.Option.Option<HuffmanT
 
 // Codes pack the bit pattern above its six-bit length so the dictionary holds
 // a primitive value. The benchmark alphabet is capped at 32 symbols.
-let buildCodes (tree: HuffmanTree) (bits: Int64) (length: Int64) (codes: Dict<Int64>) : Dict<Int64> =
+let buildCodes (tree: HuffmanTree) (bits: Int64) (length: Int64) (codes: Dict<String, Int64>) : Dict<String, Int64> =
     match tree with
     | Leaf ((symbol, _)) ->
         let codeLength = if length == 0L then 1L else length in
@@ -93,7 +93,7 @@ let prependCodeToReversed (bits: Int64) (index: Int64) (reversed: List<Int64>) :
         let bit = Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight bits index) 1L in
         prependCodeToReversed bits (index - 1L) (Stdlib.List.push reversed bit)
 
-let encodeReversed (data: List<Int64>) (codes: Dict<Int64>) (reversed: List<Int64>) : Stdlib.Result.Result<List<Int64>, String> =
+let encodeReversed (data: List<Int64>) (codes: Dict<String, Int64>) (reversed: List<Int64>) : Stdlib.Result.Result<List<Int64>, String> =
     match data with
     | [] -> Ok (Stdlib.List.reverse reversed)
     | symbol :: rest ->
@@ -158,12 +158,12 @@ let runIterations (remaining: Int64) (data: List<Int64>) (codec: Codec) (expecte
             match decode bits codec with
             | Error message -> Builtin.testRuntimeError message
             | Ok decoded ->
-                let bitResult = checksum bits 0L 0L in
-                let decodedResult = checksum decoded 0L 0L in
-                if decodedResult.1 != expectedChecksum then
+                let (bitCount, bitChecksum) = checksum bits 0L 0L in
+                let (_, decodedChecksum) = checksum decoded 0L 0L in
+                if decodedChecksum != expectedChecksum then
                     Builtin.testRuntimeError "Huffman round trip changed the input"
                 else
-                    let contribution = (bitResult.0 * 17L + bitResult.1 + decodedResult.1) % 1000000007L in
+                    let contribution = (bitCount * 17L + bitChecksum + decodedChecksum) % 1000000007L in
                     runIterations (remaining - 1L) data codec expectedChecksum ((result + contribution) % 1000000007L)
 
 let benchmarkArg (index: Int) : Int64 =
@@ -178,7 +178,7 @@ if size <= 0L || repetitions <= 0L then
     Builtin.testRuntimeError "Huffman size and repetitions must be positive"
 else
     let data = generateData size seed [] in
-    let expectedChecksum = (checksum data 0L 0L).1 in
+    let (_, expectedChecksum) = checksum data 0L 0L in
     match buildCodec data with
     | None -> Builtin.testRuntimeError "Huffman codec requires non-empty input"
     | Some codec ->

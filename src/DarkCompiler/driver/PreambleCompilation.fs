@@ -39,125 +39,120 @@ let buildPreambleContext
         }
         Ok (stdlib, emptyContext)
     else
-    match Parser.parseString allowInternal preamble with
-        | Error err ->
-            let msg = $"Preamble parse error: {err}"
-            Error msg
-        | Ok preambleAst ->
-            // Type-check preamble with stdlib context
-            match TypeChecking.checkParsedDeclarationProgramWithBaseEnv stdlib.Context.TypeCheckEnv preambleAst with
-            | Error typeErr ->
-                let msg = $"Preamble type error: {CheckingDiagnostics.typeErrorToString typeErr}"
+    match analyzePreamble allowInternal stdlib preamble with
+        | Error err -> Error err
+        | Ok analysis ->
+            let typedPreambleAst = analysis.TypedAST
+            let preambleTypeCheckEnv = analysis.TypeCheckEnv
+            // Extract generic function definitions from preamble
+            let preambleGenericDefs = SpecializationIdentity.extractGenericFuncDefs typedPreambleAst
+            // Merge stdlib generics with preamble generics
+            let mergedGenericDefs = Map.fold (fun acc k v -> Map.add k v acc) stdlib.Context.GenericFuncDefs preambleGenericDefs
+
+            // Convert preamble to ANF (mono → inline → lift → ANF)
+            match
+                convertTypedDeclarationsWithTrace
+                    passTimingRecorder
+                    (Some stdlib.Context)
+                    (Monomorphize (Some stdlib.Context.GenericFuncDefs))
+                    typedPreambleAst
+            with
+            | Error err ->
+                let msg = $"Preamble ANF conversion error: {err}"
                 Error msg
-            | Ok (_programType, typedPreambleAst, preambleTypeCheckEnv) ->
-                // Extract generic function definitions from preamble
-                let preambleGenericDefs = SpecializationIdentity.extractGenericFuncDefs typedPreambleAst
-                // Merge stdlib generics with preamble generics
-                let mergedGenericDefs = Map.fold (fun acc k v -> Map.add k v acc) stdlib.Context.GenericFuncDefs preambleGenericDefs
-
-                // Convert preamble to ANF (mono → inline → lift → ANF)
-                match
-                    convertTypedDeclarationsWithTrace
-                        passTimingRecorder
-                        (Some stdlib.Context)
-                        (Monomorphize (Some stdlib.Context.GenericFuncDefs))
-                        typedPreambleAst
-                with
+            | Ok preambleUserOnly ->
+                let preambleRegistries = preambleUserOnly.Registries
+                let preambleOptions = defaultOptions
+                let sw = Stopwatch.StartNew()
+                let preambleReturnTypes =
+                    mergeReturnTypes stdlib.Context.ReturnTypes preambleUserOnly.LocalReturnTypes
+                let baseFuncNames =
+                    preambleUserOnly.Functions
+                    |> List.fold
+                        (fun names func -> Set.add func.Name names)
+                        stdlib.Context.BaseFuncNames
+                let pipelineContext =
+                    let checkedValues =
+                        checkedValueArtifacts typedPreambleAst
+                        |> Map.fold (fun values name value -> Map.add name value values) stdlib.Context.CheckedValues
+                    buildContext
+                        stdlib.Context.Target
+                        preambleUserOnly.Symbols
+                        preambleTypeCheckEnv
+                        checkedValues
+                        mergedGenericDefs
+                        Map.empty
+                        preambleRegistries
+                        baseFuncNames
+                        preambleReturnTypes
+                        |> fun context -> { context with WrittenEnvironment = analysis.WrittenEnvironment }
+                match buildAnf 0 preambleOptions sw preambleRegistries ANF_Inlining.defaultConfig Map.empty Map.empty Set.empty preambleUserOnly.Functions Map.empty false passTimingRecorder with
                 | Error err ->
-                    let msg = $"Preamble ANF conversion error: {err}"
+                    let rcPrefix = "Reference count insertion error: "
+                    let msg =
+                        if err.StartsWith(rcPrefix) then
+                            let suffix = err.Substring(rcPrefix.Length)
+                            $"Preamble RC insertion error: {suffix}"
+                        else
+                            $"Preamble {err}"
                     Error msg
-                | Ok preambleUserOnly ->
-                    let preambleRegistries = preambleUserOnly.Registries
-                    let preambleOptions = defaultOptions
-                    let sw = Stopwatch.StartNew()
-                    let preambleReturnTypes =
-                        mergeReturnTypes stdlib.Context.ReturnTypes preambleUserOnly.LocalReturnTypes
-                    let baseFuncNames =
-                        preambleUserOnly.Functions
-                        |> List.fold
-                            (fun names func -> Set.add func.Name names)
-                            stdlib.Context.BaseFuncNames
-                    let pipelineContext =
-                        let checkedValues =
-                            checkedValueArtifacts typedPreambleAst
-                            |> Map.fold (fun values name value -> Map.add name value values) stdlib.Context.CheckedValues
-                        buildContext
-                            stdlib.Context.Target
-                            preambleUserOnly.Symbols
-                            preambleTypeCheckEnv
-                            checkedValues
-                            mergedGenericDefs
-                            Map.empty
-                            preambleRegistries
-                            baseFuncNames
-                            preambleReturnTypes
-                    match buildAnf 0 preambleOptions sw preambleRegistries ANF_Inlining.defaultConfig Map.empty Map.empty Set.empty preambleUserOnly.Functions Map.empty false passTimingRecorder with
+                | Ok (preambleFunctions, ssaFunctions, typeMap) ->
+                    let preambleExternalReturnTypes = preambleReturnTypes
+                    match lowerToAllocatedLir
+                        stdlib.Context.Target
+                        0
+                        preambleOptions
+                        sw
+                        passTimingRecorder
+                        None
+                        None
+                        "preamble"
+                        ssaFunctions
+                        typeMap
+                        preambleRegistries
+                        None
+                        preambleExternalReturnTypes with
                     | Error err ->
-                        let rcPrefix = "Reference count insertion error: "
-                        let msg =
-                            if err.StartsWith(rcPrefix) then
-                                let suffix = err.Substring(rcPrefix.Length)
-                                $"Preamble RC insertion error: {suffix}"
-                            else
-                                $"Preamble {err}"
+                        let msg = $"Preamble {err}"
                         Error msg
-                    | Ok (preambleFunctions, ssaFunctions, typeMap) ->
-                        let preambleExternalReturnTypes = preambleReturnTypes
-                        match lowerToAllocatedLir
-                            stdlib.Context.Target
-                            0
-                            preambleOptions
-                            sw
-                            passTimingRecorder
-                            None
-                            None
-                            "preamble"
-                            ssaFunctions
-                            typeMap
-                            preambleRegistries
-                            None
-                            preambleExternalReturnTypes with
-                        | Error err ->
-                            let msg = $"Preamble {err}"
-                            Error msg
-                        | Ok allocatedFuncs ->
-                            let stdlibFuncNames =
-                                stdlib.AllocatedFunctions
-                                |> List.map (fun func -> func.Name)
-                                |> Set.ofList
-                            let isStdlibFunction (name: string) : bool =
-                                Set.contains name stdlibFuncNames
-                            let preambleOnlyFuncs =
-                                allocatedFuncs
-                                |> List.filter (fun func -> not (isStdlibFunction func.Name))
-                            let preambleSymbolicFuncs = preambleOnlyFuncs
-                            let preambleLiftedFuncNames =
-                                preambleFunctions
-                                |> List.map (fun func -> func.Name)
-                                |> Set.ofList
-                            let baseFuncNames =
-                                Set.union pipelineContext.BaseFuncNames preambleLiftedFuncNames
-                            let pipelineContextWithLiftedNames = {
-                                pipelineContext with
-                                    BaseFuncNames = baseFuncNames
-                                    LambdaLiftFunctions =
-                                        buildLambdaLiftFunctionCatalog
-                                            pipelineContext.Registries
-                                            baseFuncNames
-                                            pipelineContext.ReturnTypes
-                            }
+                    | Ok allocatedFuncs ->
+                        let stdlibFuncNames =
+                            stdlib.AllocatedFunctions
+                            |> List.map (fun func -> func.Name)
+                            |> Set.ofList
+                        let isStdlibFunction (name: string) : bool =
+                            Set.contains name stdlibFuncNames
+                        let preambleOnlyFuncs =
+                            allocatedFuncs
+                            |> List.filter (fun func -> not (isStdlibFunction func.Name))
+                        let preambleSymbolicFuncs = preambleOnlyFuncs
+                        let preambleLiftedFuncNames =
+                            preambleFunctions
+                            |> List.map (fun func -> func.Name)
+                            |> Set.ofList
+                        let baseFuncNames =
+                            Set.union pipelineContext.BaseFuncNames preambleLiftedFuncNames
+                        let pipelineContextWithLiftedNames = {
+                            pipelineContext with
+                                BaseFuncNames = baseFuncNames
+                                LambdaLiftFunctions =
+                                    buildLambdaLiftFunctionCatalog
+                                        pipelineContext.Registries
+                                        baseFuncNames
+                                        pipelineContext.ReturnTypes
+                        }
 
-                            // Merge TypeMaps (stdlib + preamble)
-                            let mergedTypeMap = Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibTypeMap typeMap
+                        // Merge TypeMaps (stdlib + preamble)
+                        let mergedTypeMap = Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibTypeMap typeMap
 
-                            let context = {
-                                Context = pipelineContextWithLiftedNames
-                                ANFFunctions = preambleFunctions
-                                TypeMap = mergedTypeMap
-                                SymbolicFunctions = preambleSymbolicFuncs
-                                SymbolicCallGraph = DeadCodeElimination.buildCallGraph preambleSymbolicFuncs
-                            }
-                            Ok (stdlib, context)
+                        let context = {
+                            Context = pipelineContextWithLiftedNames
+                            ANFFunctions = preambleFunctions
+                            TypeMap = mergedTypeMap
+                            SymbolicFunctions = preambleSymbolicFuncs
+                            SymbolicCallGraph = DeadCodeElimination.buildCallGraph preambleSymbolicFuncs
+                        }
+                        Ok (stdlib, context)
 
 /// Build preamble context from a typed preamble analysis and precomputed specializations
 let buildPreambleContextFromAnalysis
@@ -218,6 +213,7 @@ let buildPreambleContextFromAnalysis
                 preambleRegistries
                 baseFuncNames
                 preambleReturnTypes
+            |> fun context -> { context with WrittenEnvironment = analysis.WrittenEnvironment }
         match buildAnf 0 preambleOptions sw preambleRegistries ANF_Inlining.defaultConfig Map.empty Map.empty Set.empty preambleUserOnly.Functions Map.empty false passTimingRecorder with
         | Error err ->
             let rcPrefix = "Reference count insertion error: "

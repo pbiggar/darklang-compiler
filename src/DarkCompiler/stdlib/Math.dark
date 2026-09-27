@@ -31,7 +31,7 @@ let __sinKernel (value: Float) : Float =
 let __cosKernel (value: Float) : Float =
     let squared = value * value in
     1.0
-    - 0.5 * squared
+        - 0.5 * squared
     + squared
         * squared
         * (0.0416666666666666

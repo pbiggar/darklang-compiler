@@ -184,13 +184,13 @@ let a = "one" in let b = "two" in (fun x -> a ++ " " ++ b ++ " " ++ x) "three" =
 // =====================================================
 
 // Capture tuple, access elements
-let t = (10L, 20L) in (fun x -> t.0 + t.1 + x) 5L = 35L
+let (a, b) = (10L, 20L) in (fun x -> a + b + x) 5L = 35L
 
 // Capture 3-tuple
-let t = (1L, 2L, 3L) in (fun x -> t.0 + t.1 + t.2 + x) 4L = 10L
+let (a, b, c) = (1L, 2L, 3L) in (fun x -> a + b + c + x) 4L = 10L
 
 // Capture tuple, use in arithmetic
-let pair = (5L, 3L) in (fun x -> (pair.0 - pair.1) * x) 7L = 14L
+let (a, b) = (5L, 3L) in (fun x -> (a - b) * x) 7L = 14L
 
 // =====================================================
 // Closures Capturing Records
@@ -323,7 +323,9 @@ applyThree (fun a -> a + 1L) (fun b -> b * 2L) (fun c -> c - 5L) 10L = 36L
 // Function variable partially applied inside lambda
 // Here 'f' is bound as a variable with type Int64 -> Int64 -> Int64
 // The lambda fun x -> f(x) partially applies f, returning (Int64) -> Int64
-let partialAdd (a: Int64) (b: Int64): Int64 = a + b let makeAdder = fun x -> partialAdd x in let addFive = makeAdder 5L in addFive 3L = 8L
+let partialAdd (a: Int64) (b: Int64): Int64 = a + b
+
+let makeAdder = fun x -> partialAdd x in let addFive = makeAdder 5L in addFive 3L = 8L
 
 // =====================================================
 // Apply Partial Application in Lambda Body (Mutation #113)
@@ -342,7 +344,9 @@ let partialAdd (a: Int64) (b: Int64): Int64 = a + b let makeAdder = fun x -> par
 // We create a 3-parameter lambda and partially apply it inside another lambda.
 // The outer lambda captures the 3-param function and calls it with just one arg,
 // returning a partially applied function.
-let partialAddThree (a: Int64) (b: Int64) (c: Int64): Int64 = a + b + c let makePartial = fun x -> partialAddThree x in let partial = makePartial 10L in partial 20L 12L = 42L
+let partialAddThree (a: Int64) (b: Int64) (c: Int64): Int64 = a + b + c
+
+let makePartial = fun x -> partialAddThree x in let partial = makePartial 10L in partial 20L 12L = 42L
 
 // =====================================================
 // Lambda in Nested Let Body (Mutation #122)

@@ -7,6 +7,22 @@ val empty = Dict { }
 let isEmpty<'k, 'v> (dict: Dict<k, v>) : Bool =
     __dict_is_null<k, v> dict
 
+// Compare entries by lookup so dictionary equality does not require ordering
+// its keys. In particular, runtime values can be structurally equal without
+// having an ordering defined for every value variant.
+let __equals<'k, 'v> (left: Dict<k, v>) (right: Dict<k, v>) : Bool =
+    if Stdlib.Dict.__size<k, v> left != Stdlib.Dict.__size<k, v> right then false
+    else
+        Stdlib.Dict.__foldHelper<k, v, Bool>
+            left
+            true
+            (fun equal key value ->
+                if equal then
+                    match Stdlib.Dict.get<k, v> right key with
+                    | None -> false
+                    | Some rightValue -> __key_eq<v> value rightValue
+                else false)
+
 let singleton<'k, 'v> (key: k) (value: v) : Dict<k, v> =
     Stdlib.Dict.__setOverwriting<k, v> (Stdlib.Dict.__empty<k, v> ()) key value
 

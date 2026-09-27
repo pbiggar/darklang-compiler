@@ -20,46 +20,46 @@ let __graphemeFromCode (value: Int64) : Unicode.Data.GraphemeBreak =
     else Unicode.Data.GraphemeBreak.GBOther
 
 let __uppercaseLookupGroup0 (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn Unicode.Data.Table54.__uppercaseChunk0 () 0L key 6L 25L valueIndex with
+    match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table54.__uppercaseChunk0 ()) 0L key 6L 25L valueIndex with
     | Some value -> Some value
     | None ->
-        match Unicode.Data.__lookupMappingValueIn Unicode.Data.Table55.__uppercaseChunk1 () 0L key 6L 25L valueIndex with
+        match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table55.__uppercaseChunk1 ()) 0L key 6L 25L valueIndex with
         | Some value -> Some value
         | None ->
-            match Unicode.Data.__lookupMappingValueIn Unicode.Data.Table56.__uppercaseChunk2 () 0L key 6L 25L valueIndex with
+            match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table56.__uppercaseChunk2 ()) 0L key 6L 25L valueIndex with
             | Some value -> Some value
             | None ->
-                match Unicode.Data.__lookupMappingValueIn Unicode.Data.Table57.__uppercaseChunk3 () 0L key 6L 25L valueIndex with
+                match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table57.__uppercaseChunk3 ()) 0L key 6L 25L valueIndex with
                 | Some value -> Some value
                 | None ->
                     None
 
 let __extendedPictographicLookupGroup0 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn Unicode.Data.Table40.__extendedPictographicChunk0 () 0L codepoint 14L with
+    match Unicode.Data.__lookupRangeIn (Unicode.Data.Table40.__extendedPictographicChunk0 ()) 0L codepoint 14L with
     | Some value -> Some value
     | None ->
-        match Unicode.Data.__lookupRangeIn Unicode.Data.Table41.__extendedPictographicChunk1 () 0L codepoint 14L with
+        match Unicode.Data.__lookupRangeIn (Unicode.Data.Table41.__extendedPictographicChunk1 ()) 0L codepoint 14L with
         | Some value -> Some value
         | None ->
-            match Unicode.Data.__lookupRangeIn Unicode.Data.Table42.__extendedPictographicChunk2 () 0L codepoint 14L with
+            match Unicode.Data.__lookupRangeIn (Unicode.Data.Table42.__extendedPictographicChunk2 ()) 0L codepoint 14L with
             | Some value -> Some value
             | None ->
-                match Unicode.Data.__lookupRangeIn Unicode.Data.Table43.__extendedPictographicChunk3 () 0L codepoint 14L with
+                match Unicode.Data.__lookupRangeIn (Unicode.Data.Table43.__extendedPictographicChunk3 ()) 0L codepoint 14L with
                 | Some value -> Some value
                 | None ->
                     None
 
 let __combiningClassLookupGroup0 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn Unicode.Data.Table25.__combiningClassChunk0 () 0L codepoint 14L with
+    match Unicode.Data.__lookupRangeIn (Unicode.Data.Table25.__combiningClassChunk0 ()) 0L codepoint 14L with
     | Some value -> Some value
     | None ->
-        match Unicode.Data.__lookupRangeIn Unicode.Data.Table26.__combiningClassChunk1 () 0L codepoint 14L with
+        match Unicode.Data.__lookupRangeIn (Unicode.Data.Table26.__combiningClassChunk1 ()) 0L codepoint 14L with
         | Some value -> Some value
         | None ->
-            match Unicode.Data.__lookupRangeIn Unicode.Data.Table27.__combiningClassChunk2 () 0L codepoint 14L with
+            match Unicode.Data.__lookupRangeIn (Unicode.Data.Table27.__combiningClassChunk2 ()) 0L codepoint 14L with
             | Some value -> Some value
             | None ->
-                match Unicode.Data.__lookupRangeIn Unicode.Data.Table28.__combiningClassChunk3 () 0L codepoint 14L with
+                match Unicode.Data.__lookupRangeIn (Unicode.Data.Table28.__combiningClassChunk3 ()) 0L codepoint 14L with
                 | Some value -> Some value
                 | None ->
                     None

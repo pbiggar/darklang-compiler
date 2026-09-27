@@ -33,18 +33,18 @@ empty record update is rejected
 ---SOURCE---
 { value with }
 ---EXPECT-ERROR---
-at least one record update field
+expected at least one 'field = value' in a record update
 
 ---NAME---
 empty record declaration is rejected
 ---SOURCE---
 type Empty = {}
 ---EXPECT-ERROR---
-Record type declarations require at least one field
+a record type needs at least one field
 
 ---NAME---
 record pattern is rejected
 ---SOURCE---
 match value with | Point { x = x } -> x | _ -> 0
 ---EXPECT-ERROR---
-Record patterns are not supported
+expected '->' in match case

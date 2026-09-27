@@ -1,0 +1,5 @@
+// Unannotated lambda parameters infer numeric types from their body.
+let applyInferredIncrement (value: Int64) : Int64 =
+  let increment = fun x -> x + 1L in
+  increment value
+applyInferredIncrement 2L = 3L

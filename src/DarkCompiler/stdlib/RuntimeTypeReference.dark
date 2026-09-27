@@ -25,7 +25,7 @@ type TypeReference =
     | TStream of Darklang.LanguageTools.RuntimeTypes.TypeReference
     | TTuple of Darklang.LanguageTools.RuntimeTypes.TypeReference * Darklang.LanguageTools.RuntimeTypes.TypeReference * List<Darklang.LanguageTools.RuntimeTypes.TypeReference>
     | TList of Darklang.LanguageTools.RuntimeTypes.TypeReference
-    | TDict of Darklang.LanguageTools.RuntimeTypes.TypeReference
+    | TDict of key: Darklang.LanguageTools.RuntimeTypes.TypeReference * value: Darklang.LanguageTools.RuntimeTypes.TypeReference
     | TCustomType of Darklang.LanguageTools.RuntimeTypes.NameResolution<Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName> * typeArgs: List<Darklang.LanguageTools.RuntimeTypes.TypeReference>
     | TFn of List<Darklang.LanguageTools.RuntimeTypes.TypeReference> * Darklang.LanguageTools.RuntimeTypes.TypeReference
     | TDB of Darklang.LanguageTools.RuntimeTypes.TypeReference

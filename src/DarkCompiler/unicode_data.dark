@@ -36,16 +36,16 @@ let __categoryFromCode (value: Int64) : Unicode.Data.GeneralCategory =
     else Unicode.Data.GeneralCategory.Cn
 
 let __generalCategoryLookupGroup5 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupRangeIn Unicode.Data.Table35.__generalCategoryChunk20 () 0L codepoint 14L with
+    match Unicode.Data.__lookupRangeIn (Unicode.Data.Table35.__generalCategoryChunk20 ()) 0L codepoint 14L with
     | Some value -> Some value
     | None ->
-        match Unicode.Data.__lookupRangeIn Unicode.Data.Table36.__generalCategoryChunk21 () 0L codepoint 14L with
+        match Unicode.Data.__lookupRangeIn (Unicode.Data.Table36.__generalCategoryChunk21 ()) 0L codepoint 14L with
         | Some value -> Some value
         | None ->
-            match Unicode.Data.__lookupRangeIn Unicode.Data.Table37.__generalCategoryChunk22 () 0L codepoint 14L with
+            match Unicode.Data.__lookupRangeIn (Unicode.Data.Table37.__generalCategoryChunk22 ()) 0L codepoint 14L with
             | Some value -> Some value
             | None ->
-                match Unicode.Data.__lookupRangeIn Unicode.Data.Table38.__generalCategoryChunk23 () 0L codepoint 14L with
+                match Unicode.Data.__lookupRangeIn (Unicode.Data.Table38.__generalCategoryChunk23 ()) 0L codepoint 14L with
                 | Some value -> Some value
                 | None ->
                     None
@@ -74,7 +74,7 @@ let __graphemeBreakLookup (codepoint: Int64) : Stdlib.Option.Option<Int64> =
                 None
 
 let __uppercaseLookupGroup3 (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Unicode.Data.__lookupMappingValueIn Unicode.Data.Table02.__uppercaseChunk12 () 0L key 6L 25L valueIndex with
+    match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table02.__uppercaseChunk12 ()) 0L key 6L 25L valueIndex with
     | Some value -> Some value
     | None ->
         None

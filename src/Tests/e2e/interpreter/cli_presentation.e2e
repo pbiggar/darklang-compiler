@@ -2,8 +2,8 @@
 // against darklang/dark 04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
 // All output cases are byte-exact so spaces, CR, ANSI escapes, and newlines matter.
 
-(Builtin.print "left"; Builtin.printLine "right"; ()) = stdout="leftright\n" stderr="" exact_bytes=true
-(Builtin.printLine "one"; Builtin.printLine "two"; ()) = stdout="one\ntwo\n" stderr="" exact_bytes=true disable_opt_anf=true disable_opt_mir=true disable_opt_lir=true
+(let _ = Builtin.print "left" in let _ = Builtin.printLine "right" in ()) = stdout="leftright\n" stderr="" exact_bytes=true
+(let _ = Builtin.printLine "one" in let _ = Builtin.printLine "two" in ()) = stdout="one\ntwo\n" stderr="" exact_bytes=true disable_opt_anf=true disable_opt_mir=true disable_opt_lir=true
 (let first = Builtin.stdinReadLine (()) in let second = Builtin.stdinReadLine (()) in first ++ "|" ++ second) = stdout="\"one|two\"\n" stderr="" stdin="one\r\ntwo" exact_bytes=true
 
 // Public String-only presentation prelude. Final Unit values never add output.
@@ -15,11 +15,11 @@ Stdlib.printLine "hé🙂" = stdout="hé🙂\n" stderr="" exact_bytes=true
 Stdlib.printLine "line\n" = stdout="line\n\n" stderr="" exact_bytes=true
 Stdlib.printLines ([]) = stdout="" stderr="" exact_bytes=true
 Stdlib.printLines (["one", "", "三\n"]) = stdout="one\n\n三\n\n" stderr="" exact_bytes=true
-(Stdlib.print "a"; Stdlib.printLine "b"; Stdlib.printLines (["c", "d"]); Stdlib.print "e"; ()) = stdout="ab\nc\nd\ne" stderr="" exact_bytes=true
-(Stdlib.print "optimized"; Stdlib.printLine " path"; ()) = stdout="optimized path\n" stderr="" exact_bytes=true
-(Stdlib.print "unoptimized"; Stdlib.printLine " path"; ()) = stdout="unoptimized path\n" stderr="" exact_bytes=true disable_opt_anf=true disable_opt_mir=true disable_opt_lir=true
+(let _ = Stdlib.print "a" in let _ = Stdlib.printLine "b" in let _ = Stdlib.printLines (["c", "d"]) in let _ = Stdlib.print "e" in ()) = stdout="ab\nc\nd\ne" stderr="" exact_bytes=true
+(let _ = Stdlib.print "optimized" in let _ = Stdlib.printLine " path" in ()) = stdout="optimized path\n" stderr="" exact_bytes=true
+(let _ = Stdlib.print "unoptimized" in let _ = Stdlib.printLine " path" in ()) = stdout="unoptimized path\n" stderr="" exact_bytes=true disable_opt_anf=true disable_opt_mir=true disable_opt_lir=true
 
-(Stdlib.Cli.Log.info "hello"; Stdlib.Cli.Log.warn "careful"; Stdlib.Cli.Log.error "bad"; Stdlib.Cli.Log.debug "trace"; Stdlib.Cli.Log.success "good"; ()) = stdout="\u001b[32m[INFO]\u001b[0m hello\n\u001b[33m[WARN]\u001b[0m careful\n\u001b[31m[ERROR]\u001b[0m bad\n\u001b[90m[DEBUG]\u001b[0m trace\n\u001b[32m[OK]\u001b[0m good\n" stderr="" exact_bytes=true
+(let _ = Stdlib.Cli.Log.info "hello" in let _ = Stdlib.Cli.Log.warn "careful" in let _ = Stdlib.Cli.Log.error "bad" in let _ = Stdlib.Cli.Log.debug "trace" in let _ = Stdlib.Cli.Log.success "good" in ()) = stdout="\u001b[32m[INFO]\u001b[0m hello\n\u001b[33m[WARN]\u001b[0m careful\n\u001b[31m[ERROR]\u001b[0m bad\n\u001b[90m[DEBUG]\u001b[0m trace\n\u001b[32m[OK]\u001b[0m good\n" stderr="" exact_bytes=true
 
 (Stdlib.Cli.UI.Progress.bar 0 0 "zero"; ()) = stdout="\r[------------------------------] 0% zero\n" stderr="" exact_bytes=true
 (Stdlib.Cli.UI.Progress.bar 1 3 "load"; ()) = stdout="\r[##########--------------------] 33% load" stderr="" exact_bytes=true
@@ -36,6 +36,6 @@ Stdlib.Cli.UI.Prompt.select "Pick" ["alpha"; "beta"] = stdout="Pick\n  \u001b[1m
 Stdlib.Cli.UI.Spinner.run "Working" (fun () -> 7L) = stdout="Working... \u001b[32mdone\u001b[0m\n7\n" stderr="" exact_bytes=true
 Stdlib.Cli.UI.Spinner.run "Working" (fun () -> let _ = Builtin.testRuntimeError "boom" in 0L) = exit=1 stdout="Working... " stderr="Uncaught exception: boom" exact_bytes=true
 
-(Stdlib.Cli.UI.Table.print ["Name"; "Value"] [["e\u0301"; "x"]; ["long"]]; ()) = stdout="\u001b[1mName  Value\u001b[0m\n----  -----\né     x    \nlong       \n" stderr="" exact_bytes=true
-(Stdlib.Cli.UI.Table.print ["G"] [["🇺🇸"]; ["가"]; ["1️⃣"]]; ()) = stdout="\u001b[1mG\u001b[0m\n-\n🇺🇸\n가\n1️⃣\n" stderr="" exact_bytes=true
-(Stdlib.Cli.UI.Table.print [] [["ignored"]]; ()) = stdout="\u001b[1m\u001b[0m\n\n\n" stderr="" exact_bytes=true
+(let _ = Stdlib.Cli.UI.Table.print ["Name", "Value"] [["e\u0301", "x"], ["long"]] in ()) = stdout="\u001b[1mName  Value\u001b[0m\n----  -----\né     x    \nlong       \n" stderr="" exact_bytes=true
+(let _ = Stdlib.Cli.UI.Table.print ["G"] [["🇺🇸"], ["가"], ["1️⃣"]] in ()) = stdout="\u001b[1mG\u001b[0m\n-\n🇺🇸\n가\n1️⃣\n" stderr="" exact_bytes=true
+(let _ = Stdlib.Cli.UI.Table.print [] [["ignored"]] in ()) = stdout="\u001b[1m\u001b[0m\n\n\n" stderr="" exact_bytes=true

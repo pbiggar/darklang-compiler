@@ -18,7 +18,7 @@ type DiffResult = { distance: Int64, work: Int64 }
 
 let diagonalKey (value: Int64) : String = Stdlib.Int64.toString value
 
-let frontierGet (frontier: Dict<Int64>) (diagonal: Int64) : Int64 =
+let frontierGet (frontier: Dict<String, Int64>) (diagonal: Int64) : Int64 =
     match Stdlib.Dict.get frontier (diagonalKey diagonal) with
     | Some value -> value
     | None -> Builtin.testRuntimeError ("missing Myers frontier diagonal " ++ diagonalKey diagonal)
@@ -28,12 +28,13 @@ let snake (left: String) (right: String) (leftLength: Int64) (rightLength: Int64
     else if byteAt left x == byteAt right y then snake left right leftLength rightLength (x + 1L) (y + 1L)
     else (x, y)
 
-let search (leftText: String) (rightText: String) (d: Int64) (k: Int64) (previous: Dict<Int64>) (current: Dict<Int64>) (outcome: (Bool * Int64)) : DiffResult =
+let search (leftText: String) (rightText: String) (d: Int64) (k: Int64) (previous: Dict<String, Int64>) (current: Dict<String, Int64>) (outcome: (Bool * Int64)) : DiffResult =
+    let (found, work) = outcome in
     if k > d then
-        if outcome.0 then DiffResult { distance = d, work = outcome.1 }
+        if found then DiffResult { distance = d, work = work }
         else if d >= stringLength leftText + stringLength rightText then
             Builtin.testRuntimeError "Myers search exceeded maximum edit distance"
-        else search leftText rightText (d + 1L) (-(d + 1L)) current Stdlib.Dict.empty ((false, outcome.1))
+        else search leftText rightText (d + 1L) (-(d + 1L)) current Stdlib.Dict.empty ((false, work))
     else
         let leftLength = stringLength leftText in
         let rightLength = stringLength rightText in
@@ -44,19 +45,19 @@ let search (leftText: String) (rightText: String) (d: Int64) (k: Int64) (previou
                 let previousLeft = frontierGet previous (k - 1L) in
                 let previousRight = frontierGet previous (k + 1L) in
                 if previousLeft < previousRight then previousRight else previousLeft + 1L in
-        let endpoint = snake leftText rightText leftLength rightLength choice (choice - k) in
-        let next = Stdlib.Dict.setOverridingDuplicates current (diagonalKey k) (endpoint.0) in
-        let nextWork = (outcome.1 + (endpoint.0 + 1L) * (endpoint.1 + 3L) + (k + d + 1L) * 17L) % 1000000007L in
-        search leftText rightText d (k + 2L) previous next ((outcome.0 || (endpoint.0 >= leftLength && endpoint.1 >= rightLength), nextWork))
+        let (endX, endY) = snake leftText rightText leftLength rightLength choice (choice - k) in
+        let next = Stdlib.Dict.setOverridingDuplicates current (diagonalKey k) endX in
+        let nextWork = (work + (endX + 1L) * (endY + 3L) + (k + d + 1L) * 17L) % 1000000007L in
+        search leftText rightText d (k + 2L) previous next ((found || (endX >= leftLength && endY >= rightLength), nextWork))
 
 let myers (leftText: String) (rightText: String) : DiffResult =
     let leftLength = stringLength leftText in
     let rightLength = stringLength rightText in
-    let start = snake leftText rightText leftLength rightLength 0L 0L in
-    let initialWork = (start.0 + 1L) * (start.1 + 3L) in
-    if start.0 >= leftLength && start.1 >= rightLength then DiffResult { distance = 0L, work = initialWork }
+    let (startX, startY) = snake leftText rightText leftLength rightLength 0L 0L in
+    let initialWork = (startX + 1L) * (startY + 3L) in
+    if startX >= leftLength && startY >= rightLength then DiffResult { distance = 0L, work = initialWork }
     else
-        let frontier = Stdlib.Dict.setOverridingDuplicates<Int64> Stdlib.Dict.empty (diagonalKey 0L) (start.0) in
+        let frontier = Stdlib.Dict.setOverridingDuplicates Stdlib.Dict.empty (diagonalKey 0L) startX in
         search leftText rightText 1L (-1L) frontier Stdlib.Dict.empty ((false, initialWork))
 
 let run (remaining: Int64) (leftText: String) (rightText: String) (result: Int64) : Int64 =

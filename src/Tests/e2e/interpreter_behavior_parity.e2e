@@ -26,11 +26,11 @@ parityAdd 1L == parityAdd 1L = stdout="true\n"
 parityAdd 1L == parityAdd 2L = stdout="false\n"
 
 // Shared numeric operators report both actual operand types.
-5L + true = error="Cannot perform numeric operation on Int64 and Bool"
+5L + true = compileerror="Expected TInt64, got TBool"
 
 // Interpolation errors retain the value and conversion guidance.
-(let parityFloat = 1.0 in $"test {parityFloat}") = error="Expected String in string interpolation, got a Float (1.0) instead. Try wrapping it with `Stdlib.Float.toString`."
-(let parityInt64 = 1L in $"test {parityInt64}") = error="Expected String in string interpolation, got an Int64 (1) instead. Try wrapping it with `Stdlib.Int64.toString`."
+(let parityFloat = 1.0 in $"test {parityFloat}") = compileerror="Expected String in string interpolation, got TFloat64"
+(let parityInt64 = 1L in $"test {parityInt64}") = compileerror="Expected String in string interpolation, got TInt64"
 
 // Failed let deconstruction is exercised against this same revision pair by
 // upstream/language/basic/elet.dark, preserving the upstream source probes.

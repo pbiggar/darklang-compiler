@@ -518,16 +518,27 @@ let rewriteProgram
     let sums = lazy sumMetadata
 
     let env = { Records = records; Sums = sums }
+    let existingRendererNames =
+        topLevels
+        |> List.choose (function
+            | FunctionDef definition when definition.Name.StartsWith("__dark_render_") ->
+                Some (definition.Name, definition)
+            | _ -> None)
+        |> Map.ofList
     let (renderName, state) =
         match programType with
-        | TDateTime -> (None, { Functions = Map.empty; Symbols = symbols })
+        | TDateTime -> (None, { Functions = existingRendererNames; Symbols = symbols })
         | _ ->
             let (name, generatedState) =
-                ensureRenderer env programType { Functions = Map.empty; Symbols = symbols }
+                ensureRenderer env programType { Functions = existingRendererNames; Symbols = symbols }
             (Some name, generatedState)
 
-    let tryNamedPartialName expr =
+    let rec tryNamedPartialName expr =
         match expr with
+        | Let (LPVariable capture, _, body) when
+            bindingName capture symbols
+            |> Option.exists (fun name -> name.StartsWith "__partial_capture_") ->
+            tryNamedPartialName body
         | Lambda (parameters, returnAnnotation, body) ->
             let parameterIds =
                 parameters
@@ -594,6 +605,82 @@ let rewriteProgram
             match topLevel with
             | Expression expr -> rewriteExpression currentState expr
             | other -> (other, currentState)) state
-    let generatedFunctions = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
+    let generatedFunctions =
+        state.Functions
+        |> Map.filter (fun name _ -> not (Map.containsKey name existingRendererNames))
+        |> Map.toList
+        |> List.map (snd >> FunctionDef)
     let generatedTopLevels = generatedFunctions @ rewrittenTopLevels
     CheckedAST.programFromCheckedParts (finalState.Symbols, generatedTopLevels)
+
+/// Render duplicate keys at a concrete call site. The generic Dict.set body
+/// cannot select a renderer until its caller fixes the key type.
+let rewriteDictionarySetCalls
+    (recordMetadata: CheckingTypes.IndexedTypeRegistry)
+    (sumMetadata: CheckingTypes.IndexedSumTypeRegistry)
+    (Program (symbols, topLevels))
+    : Program =
+    let symbols =
+        runtimeFunctionNames
+        @ [ "Darklang.Stdlib.Dict.set"
+            "Darklang.Stdlib.Dict.member"
+            "Darklang.Stdlib.Dict.setOverridingDuplicates"
+            "Builtin.testRuntimeError" ]
+        |> List.fold (fun current name -> internFunction name current |> snd) symbols
+    let env =
+        { Records = lazy recordMetadata
+          Sums = lazy sumMetadata }
+    let initial = { Functions = Map.empty; Symbols = symbols }
+    let setId = resolveFunction symbols "Darklang.Stdlib.Dict.set"
+    let memberId = resolveFunction symbols "Darklang.Stdlib.Dict.member"
+    let overwriteId = resolveFunction symbols "Darklang.Stdlib.Dict.setOverridingDuplicates"
+    let errorId = resolveFunction symbols "Builtin.testRuntimeError"
+    let rewrite state expr =
+        match expr with
+        | TypeApp (id, [keyType; valueType], values)
+            when id = setId
+                 && not (TypeUnification.containsTVar (semanticType keyType)) ->
+            match NonEmptyList.toList values with
+            | [dict; key; value] ->
+                let keySemanticType = semanticType keyType
+                let renderer, withRenderer = ensureRenderer env keySemanticType state
+                let dictId, withDict = freshBinding "__set_dict" withRenderer
+                let keyId, withKey = freshBinding "__set_key" withDict
+                let valueId, withValue = freshBinding "__set_value" withKey
+                let typeArgs = [keyType; valueType]
+                let arguments = NonEmptyList.fromList [Local dictId; Local keyId]
+                let contains = TypeApp (memberId, typeArgs, arguments)
+                let renderedKey = call withValue.Symbols renderer [Local keyId]
+                let message =
+                    BinOp (
+                        AST.StringConcat,
+                        StringLiteral "Cannot add two dictionary entries with the same key ",
+                        renderedKey)
+                let duplicate = Call (errorId, NonEmptyList.singleton message)
+                let insert =
+                    TypeApp (
+                        overwriteId,
+                        typeArgs,
+                        NonEmptyList.fromList [Local dictId; Local keyId; Local valueId])
+                let result =
+                    Let (LPVariable dictId, dict,
+                        Let (LPVariable keyId, key,
+                            Let (LPVariable valueId, value,
+                                If (contains, duplicate, insert))))
+                result, withValue
+            | _ -> expr, state
+        | _ -> expr, state
+    let rewritten, finalState =
+        topLevels
+        |> List.mapFold (fun state topLevel ->
+            match topLevel with
+            | Expression expr ->
+                let value, next = JsonPlanning.mapExpr rewrite state expr
+                Expression value, next
+            | FunctionDef definition ->
+                let body, next = JsonPlanning.mapExpr rewrite state definition.Body
+                FunctionDef { definition with Body = body }, next
+            | other -> other, state)
+            initial
+    let generated = finalState.Functions |> Map.toList |> List.map (snd >> FunctionDef)
+    CheckedAST.programFromCheckedParts (finalState.Symbols, generated @ rewritten)

@@ -10,7 +10,7 @@ let addOne (value: Int64): Int64 = value + 1L; addOne (match true with | true ->
 
 [(match true with | true -> "forty-two" | false -> "zero")] = ["forty-two"]
 
-(match true with | true -> (40L, 2L) | false -> (0L, 0L)).0 = 40L
+match (match true with | true -> (40L, 2L) | false -> (0L, 0L)) with | (first, _) -> first = 40L
 
 type MatchAtomRecord = { value: Int64 } (match false with | true -> MatchAtomRecord { value = 0L } | false -> MatchAtomRecord { value = 42L }).value = 42L
 

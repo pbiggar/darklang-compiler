@@ -18,8 +18,8 @@ HEAD. Compiler history is reproducible with `git show <revision>:<path>`.
 ## Source map
 
 Compiler ownership is split between the canonical
-[parser](../../../src/DarkCompiler/frontend/Parser.fs),
-[type checker](../../../src/DarkCompiler/frontend/TypeChecking.fs), and
+[parser](../../../src/DarkCompiler/frontend/interpreter/Parser.fs),
+[source checker](../../../src/DarkCompiler/frontend/WrittenChecking.fs), and
 [AST-to-ANF lowering](../../../src/DarkCompiler/passes/anf/AST_to_ANF.fs). The ANF `If`
 is converted to a typed shared result register and CFG join in
 [ANF-to-MIR](../../../src/DarkCompiler/passes/anf/ANF_to_MIR.fs). Runtime output support
@@ -56,6 +56,12 @@ same compiler source exercised through the full language pipeline.
 | Sequence result type | The final expression supplies the runtime value | Only the final expression supplies the inferred enclosing type, recursively | matched | E2E Int64, String, nested, and conditional-branch cases |
 | Conditional evaluation | Condition runs once; only the selected branch runs | Condition ANF is bound once. Computed branches cannot use eager `IfValue`; they lower to branch blocks and a shared typed join | matched; historical eager-primitive bug resolved | E2E divide-by-zero and runtime-error skipped-arm cases; raw-pointer condition-once case |
 | Sequence evaluation | Head, Unit check, then tail; a failing head prevents the tail | `bindReturns` orders head before tail and carries only the tail value; failure or non-termination prevents continuation | matched | E2E first-vs-second failure case and raw-pointer write-order case |
+
+The direct `WrittenTypes` checker reconciles both conditional result types before
+constructing the checked `If`. When `None` precedes `Some` in a generic callback,
+the resulting `Option` retains the concrete payload type. The
+`dict_filtermap_ownership.e2e` checks that dictionary and list filter-map
+callbacks release those payloads correctly.
 
 ## Syntax inventory and migration
 

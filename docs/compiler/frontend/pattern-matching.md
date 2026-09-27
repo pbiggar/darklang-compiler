@@ -198,7 +198,7 @@ alternatives with failed-binding rollback),
 guard then body decision order), and `backend/src/LibExecution/Interpreter.fs:1961`
 plus `packages/darklang/prettyPrinter/runtimeError.dark:253` (observable
 non-exhaustive failure). Current compiler anchors are `AST.fs`,
-`frontend/Parser.fs`, `frontend/checking/CheckMatches.fs`, and
+`frontend/interpreter/Parser.fs`, `frontend/checking/CheckMatches.fs`, and
 `passes/anf/lowering/PatternLowering.fs`.
 
 The public grammar accepts unit, literal, variable, wildcard, parenthesized or

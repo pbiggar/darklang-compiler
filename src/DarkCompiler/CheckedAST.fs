@@ -337,6 +337,8 @@ let allocateBinding name symbols =
             NextBindingOrdinal = symbols.NextBindingOrdinal - 1 }
     (id, symbols')
 
+let internal nextBindingOrdinal symbols = symbols.NextBindingOrdinal
+
 let internValue name symbols =
     match Map.tryFind name symbols.ValueIds with
     | Some id -> (id, symbols)

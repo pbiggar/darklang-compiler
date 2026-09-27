@@ -613,6 +613,14 @@ let internal convertTypedProgramToUserOnlyWithMode
                 sourceSymbols
                 baseContext.Symbols
                 (CheckedAST.programTopLevels typedProgram))
+    let symbols, topLevels =
+        CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
+            symbols
+            typeCheckEnv.AliasReg
+            typeCheckEnv.IndexedTypeReg
+            typeCheckEnv.VariantLookup
+            typeCheckEnv.IndexedSumTypeReg
+            topLevels
     let typedProgram = CheckedAST.programFromCheckedParts (symbols, topLevels)
 
     // Late AOT plans (notably Json) may introduce concrete calls to generic

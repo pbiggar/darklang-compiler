@@ -3,13 +3,14 @@ type MyRecord = { col1: Int64 }
 (let x = MyRecord { col1 = 1L } in x.col1) = 1L
 
 module Errors =
+  #compileerror="Unknown field '' on MyRecord"
   (let x = MyRecord { col1 = 1L } in x.___) = error="Field name is empty"
 
-  #compileerror="Tried to access field 'fieldName' but record type MyRecord has no such field"
+  #compileerror="Unknown field 'fieldName' on MyRecord"
   (let x = MyRecord { col1 = 1L } in x.fieldName) = error="Tried to access field `fieldName`, but it doesn't exist"
 
-  #compileerror="Attempting to access field 'fieldName' on non-record type RuntimeError"
+  #compileerror="Field access requires a record value"
   (Builtin.testRuntimeError "error").fieldName = error="Uncaught exception: error"
 
-  #compileerror="Attempting to access field 'fieldName' on non-record type Int64"
+  #compileerror="Field access requires a record value"
   (let x = 6L in x.fieldName) = error="Attempting to perform field access of an Int64, but this only works with records"

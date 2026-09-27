@@ -15,11 +15,10 @@ ANF → high-level SSA → SSA MIR → LIR → target ISA → Binary
 - **LIR**: Shared low-level instructions with virtual registers and abstract
   physical register names that each backend maps to its target ISA
 
-Before ANF, parsing produces the source-only `AST.ParsedProgram`, whose
-expressions cannot contain compiler-generated operations or resolved patterns
-and references. The explicit conversion into the internal semantic checker
-tree introduces `AST.SemanticType`; semantic-only `TNever` and the privileged
-`TInternalRawPtr` signature type cannot occur in public parsed trees.
+Before ANF, the interpreter parser produces source-only `WrittenTypes`.
+Validation and `WrittenChecking` resolve names and source type annotations
+directly into `CheckedAST.Program`; semantic-only `TNever` and the privileged
+`TInternalRawPtr` signature type cannot occur in public written source.
 Successful checking creates the private `CheckedAST.Program` consumed by
 preparation and lowering. Compiler-internal transformations rebuild that
 program without reopening the public parsed boundary.

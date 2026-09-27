@@ -1,0 +1,7 @@
+// A record alias retains the underlying record's construction and field access.
+
+type AliasBase<'a> = { value: a }
+type AliasView<'a> = AliasBase<a>
+
+AliasView<String> { value = "ok" }.value = "ok"
+AliasView<String> { value = "ok" } == AliasBase<String> { value = "ok" } = true

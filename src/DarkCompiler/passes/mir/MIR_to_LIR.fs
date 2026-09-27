@@ -28,6 +28,7 @@ let convertCliOperation (operation: MIR.CliOperation) : LIR.CliOperation =
     | MIR.DirectoryCurrent -> LIR.DirectoryCurrent
     | MIR.DirectoryListPacked -> LIR.DirectoryListPacked
     | MIR.FileIsDirectory -> LIR.FileIsDirectory
+    | MIR.FileCreateExclusive -> LIR.FileCreateExclusive
     | MIR.GetArgv -> LIR.GetArgv
     | MIR.Kill -> LIR.Kill
     | MIR.GetPid -> LIR.GetPid
@@ -301,8 +302,9 @@ let isUnsignedIntegerType (operandType: AST.SemanticType) : bool =
 
 let shiftCountMask (operandType: AST.SemanticType) : int64 =
     match operandType with
-    | AST.TInt8 | AST.TInt16 | AST.TInt32
-    | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 -> 31L
+    | AST.TInt8 | AST.TUInt8 -> 7L
+    | AST.TInt16 | AST.TUInt16 -> 15L
+    | AST.TInt32 | AST.TUInt32 -> 31L
     | AST.TInt64 | AST.TUInt64 -> 63L
     | _ -> 63L
 
@@ -2100,7 +2102,13 @@ let selectBlocksWithModuloChecks
                     let nextInstrsRev =
                         lirInstrs
                         |> List.fold (fun instrsRev lirInstr -> lirInstr :: instrsRev) currentInstrsRev
-                    loop rest counter currentLabel nextInstrsRev blocksRev nextState
+                    match instr with
+                    | MIR.RuntimeError _ | MIR.RuntimeErrorString _ ->
+                        // RuntimeError exits the process. Lowering unreachable
+                        // instructions can otherwise reject a dead print whose
+                        // placeholder operand has no printable representation.
+                        Ok (blocksRev, counter, currentLabel, nextInstrsRev, nextState)
+                    | _ -> loop rest counter currentLabel nextInstrsRev blocksRev nextState
 
     match loop block.Instrs 0 (convertLabel block.Label) [] [] state with
     | Error err -> Error err

@@ -13,13 +13,13 @@
 // ===================================================================
 
 // Simple tuple
-let t = (1L, 2L) in t.0 + t.1 = 3L
+let (a, b) = (1L, 2L) in a + b = 3L
 
 // Tuple destructuring
 let (a, b) = (10L, 20L) in a + b = 30L
 
 // Multiple tuples
-let t1 = (1L, 2L) in let t2 = (3L, 4L) in t1.0 + t2.1 = 5L
+let (a, _) = (1L, 2L) in let (_, b) = (3L, 4L) in a + b = 5L
 
 // ===================================================================
 // Tests for correct RefCountDec placement
@@ -30,20 +30,20 @@ let t1 = (1L, 2L) in let t2 = (3L, 4L) in t1.0 + t2.1 = 5L
 let t = (1L, 2L) in let (a, b) = t in a + b = 3L
 
 // Tuple aliased - alias is borrowed, original gets Dec
-let outer = (1L, 2L) in let inner = outer in inner.0 + inner.1 = 3L
+let outer = (1L, 2L) in let (a, b) = outer in a + b = 3L
 
 // ===================================================================
 // Memory reuse tests - free list reclaims and reuses memory
 // ===================================================================
 
 // Allocate two tuples of same size - second reuses freed memory
-let t1 = (1L, 2L) in let _ = t1.0 in let t2 = (3L, 4L) in t2.0 + t2.1 = 7L
+let t1 = (1L, 2L) in let (first, _) = t1 in let _ = first in let (a, b) = (3L, 4L) in a + b = 7L
 
 // Allocate many tuples - tests free list under pressure
-let a = (1L, 1L) in let b = (2L, 2L) in let c = (3L, 3L) in let d = (4L, 4L) in a.0 + b.0 + c.0 + d.0 = 10L
+let a = (1L, 1L) in let b = (2L, 2L) in let c = (3L, 3L) in let d = (4L, 4L) in let (a0, _) = a in let (b0, _) = b in let (c0, _) = c in let (d0, _) = d in a0 + b0 + c0 + d0 = 10L
 
 // 24-byte non-list payloads should use generic RC, not list-specific helper paths
-let t = (1L, 2L, 3L) in t.0 + t.1 + t.2 = stdout="6\n" stderr=""
+let (a, b, c) = (1L, 2L, 3L) in a + b + c = stdout="6\n" stderr=""
 type Point3 = { x: Int64, y: Int64, z: Int64 } let p = Point3 { x = 1L, y = 2L, z = 3L } in p.x + p.y + p.z = stdout="6\n" stderr=""
 
 // Displaying managed final values should release the printed value after output
@@ -79,10 +79,10 @@ type Point = { x: Int64, y: Int64 } let p = Point { x = 5L, y = 7L } in let q = 
 // ===================================================================
 
 // Tuple containing tuples - outer tuple owns nested refs
-let outer = ((1L, 2L), (3L, 4L)) in let (a, b) = outer in a.0 + b.1 = 5L
+let outer = ((1L, 2L), (3L, 4L)) in let ((a, _), (_, b)) = outer in a + b = 5L
 
 // Deeply nested tuple access (must use intermediate let bindings)
-let t = ((10L, 20L), (30L, 40L)) in let a = t.0 in let b = t.1 in a.0 + b.1 = 50L
+let t = ((10L, 20L), (30L, 40L)) in let ((a, _), (_, b)) = t in a + b = 50L
 
 // ===================================================================
 // Lists (also heap-allocated)
@@ -106,4 +106,8 @@ let xs = [1L, 2L] in match xs with | [a, b] -> a + b | _ -> 0L = 3L
 
 // 5000 allocations of 24-byte tuples = 120KB, but heap is 64KB
 // This succeeds only when released tuple storage is reused.
-let allocOne () : Int64 = let t = (1L, 1L) in t.0 + t.1; let reuseLoop (n: Int64) (acc: Int64) : Int64 = if n < 1L then acc else reuseLoop (n - 1L) (acc + allocOne ()); reuseLoop 5000L 0L = 10000L
+let allocOne () : Int64 = let (a, b) = (1L, 1L) in a + b
+
+let reuseLoop (n: Int64) (acc: Int64) : Int64 = if n < 1L then acc else reuseLoop (n - 1L) (acc + allocOne ())
+
+reuseLoop 5000L 0L = 10000L

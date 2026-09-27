@@ -13,4 +13,5 @@ let __isCustomTypeWithNoTypeArguments (valueType: Darklang.LanguageTools.Runtime
             | Package runtimeHash ->
                 Stdlib.List.length typeArguments == 0 &&
                 Darklang.LanguageTools.RuntimeTypes.hashToString runtimeHash == expectedHash
+        | _ -> false
     | _ -> false

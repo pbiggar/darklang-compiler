@@ -176,30 +176,14 @@ let private releasePlanIsDynamicBufferRelease (releasePlan: MemoryModel.RcReleas
     | _ ->
         false
 
-let private stableRcReleasePlanHash (releasePlan: MemoryModel.RcReleasePlan) : string =
-    let fnvOffset = 14695981039346656037UL
-    let fnvPrime = 1099511628211UL
-
-    sprintf "%A" releasePlan
-    |> Seq.fold (fun hash ch ->
-        (hash ^^^ (uint64 (int ch))) * fnvPrime)
-        fnvOffset
-    |> fun hash -> hash.ToString("x16")
-
 let internal recursiveNominalRefCountDecHelperLabel (sourceType: AST.SemanticType) : string =
-    let hash =
-        $"{sourceType}"
-        |> Seq.fold (fun hash ch ->
-            (hash ^^^ (uint64 (int ch))) * 1099511628211UL)
-            14695981039346656037UL
-        |> fun value -> value.ToString("x16")
-    $"__dark_recursive_nominal_rc_dec_{hash}"
+    $"__dark_recursive_nominal_rc_dec_{ReleasePlanFingerprint.rcSourceTypeFingerprint sourceType}"
 
 let internal plannedListDecHelperLabelForReleasePlan (releasePlan: MemoryModel.RcReleasePlan) : string =
-    $"{plannedListRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"
+    $"{plannedListRefCountDecHelperLabelPrefix}{ReleasePlanFingerprint.rcReleasePlanFingerprint releasePlan}"
 
 let private plannedDictDecHelperLabelForReleasePlan (releasePlan: MemoryModel.RcReleasePlan) : string =
-    $"{plannedDictRefCountDecHelperLabelPrefix}{stableRcReleasePlanHash releasePlan}"
+    $"{plannedDictRefCountDecHelperLabelPrefix}{ReleasePlanFingerprint.rcReleasePlanFingerprint releasePlan}"
 
 let rec internal rcReleasePlanContains
     (predicate: MemoryModel.RcReleasePlan -> bool)

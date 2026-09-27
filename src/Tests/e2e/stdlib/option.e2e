@@ -62,7 +62,7 @@ Stdlib.List.isEmpty (Stdlib.Option.toList None) = true
 // Pipe operator with Option functions
 // ===================================================================
 
-Some 42L |> Stdlib.Option.isSome () = true
+Some 42L |> Stdlib.Option.isSome = true
 Some 10L |> Stdlib.Option.map (fun x -> x * 2L) |> Stdlib.Option.withDefault 0L = 20L
 
 // ===================================================================

@@ -3,12 +3,15 @@
 (false && true) = false
 (false && false) = false
 (true && Builtin.testRuntimeError "msg") = error="Uncaught exception: msg"
+#compileerror="Expected TBool, got TInt64"
 (true && 5L) = error="&& only supports Booleans"
+#compileerror="Expected TBool, got TInt64"
 (false && 5L) = false
 //TODO bring back short-circuiting
 //(false && Builtin.testRuntimeError "msg") = false
 
 (Builtin.testRuntimeError "msg1" && Builtin.testRuntimeError "msg2") = error="Uncaught exception: msg1"
+#compileerror="Expected TInt, got TBool"
 (5 && true) = error="&& only supports Booleans"
 (true |> (&&) true) = true
 (true |> (&&) false) = false

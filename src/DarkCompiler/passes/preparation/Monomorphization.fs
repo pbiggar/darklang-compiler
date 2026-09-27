@@ -15,7 +15,7 @@ let private resolvedFunctionId (symbols: CheckedAST.Symbols) (name: string) : AS
 
 let private hasPredefinedKeyIntrinsic (typ: AST.SemanticType) : bool =
     match typ with
-    | AST.TInt64 | AST.TBool | AST.TString | AST.TBlob -> true
+    | AST.TInt64 | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob -> true
     | _ -> false
 
 let collectTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : Set<SpecKey> =

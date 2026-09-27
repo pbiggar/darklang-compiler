@@ -24,35 +24,35 @@ literal let pattern is rejected
 ---SOURCE---
 let 5 = 5 in 6
 ---EXPECT-ERROR---
-Expected a let binding pattern
+expected a pattern
 
 ---NAME---
 parenthesized constructor let pattern is rejected
 ---SOURCE---
 let Some (x) = value in x
 ---EXPECT-ERROR---
-Expected parameter
+expected ':'
 
 ---NAME---
 space-applied constructor let pattern is rejected
 ---SOURCE---
 let Some x = value in x
 ---EXPECT-ERROR---
-Expected a let binding pattern
+expected '=' in let binding
 
 ---NAME---
 typed lambda binder is rejected
 ---SOURCE---
 fun (x: Int64) -> x
 ---EXPECT-ERROR---
-Lambda parameter annotations are not supported
+expected ')' to close the '('
 
 ---NAME---
 fat arrow lambda is rejected
 ---SOURCE---
 (x: Int64) => x
 ---EXPECT-ERROR---
-does not use '=>'
+expected an expression
 
 ---NAME---
 local function annotations remain accepted

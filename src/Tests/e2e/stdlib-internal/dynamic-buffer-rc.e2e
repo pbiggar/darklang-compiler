@@ -12,7 +12,7 @@ let bufferStringProbe (s: String): Bool =
 
 let bufferPair (b: Blob): (Blob * Blob) = (b, b)
 let bufferBlobCount (b: Blob): Int64 = __raw_get<Int64> (__blob_to_rawptr (b)) (0L)
-let bufferBlobProbe (b: Blob): Int64 = let kept = bufferPair (b) in bufferBlobCount (kept.0)
+let bufferBlobProbe (b: Blob): Int64 = let kept = bufferPair (b) in let (first, _) = kept in bufferBlobCount first
 
 bufferStringProbe ("literal") = stdout="true\n" stderr="" disable_opt_inline=true
 bufferStringProbe ("literal") = stdout="true\n" stderr="" disable_opt_inline=true disable_leak_check=true

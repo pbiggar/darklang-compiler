@@ -7,9 +7,9 @@ let completedIdentity<'a> (x: a) : a = x
 (completedIdentity<Int64> 1L == 1L) && (completedIdentity<String> "ok" == "ok") = true
 
 // Alias-only cycles reject, while nominal recursive ADTs are valid.
-type RecursiveAliasA<'a> = RecursiveAliasB<a> type RecursiveAliasB<'a> = RecursiveAliasA<a> 0L = error="Invalid recursive type alias cycle involving"
+type RecursiveAliasA<'a> = RecursiveAliasB<a> type RecursiveAliasB<'a> = RecursiveAliasA<a> 0L = compileerror="Cyclic type alias 'RecursiveAliasB'"
 
-type RecursiveStreamAlias = Stream<RecursiveStreamAlias> 0L = error="Invalid recursive type alias cycle involving: RecursiveStreamAlias"
+type RecursiveStreamAlias = Stream<RecursiveStreamAlias> 0L = compileerror="Cyclic type alias 'RecursiveStreamAlias'"
 
 type RecursiveTree = RecursiveLeaf of Int64 | RecursiveBranch of RecursiveTree
 

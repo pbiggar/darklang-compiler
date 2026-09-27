@@ -106,22 +106,10 @@ let rec internal buildEqHelperExpr
         applyNamed "Darklang.Stdlib.Int.__equals" (NonEmptyList.fromList [leftExpr; rightExpr])
 
     | ExpandCurrent, TDict (keyType, valueType) ->
-        let entryType =
-            TTuple [resolveType aliasReg keyType; resolveType aliasReg valueType]
-        let listType = TList entryType
-        let leftEntries =
-            applyNamedWithTypes "Darklang.Stdlib.Dict.toList" [keyType; valueType] (NonEmptyList.singleton leftExpr)
-        let rightEntries =
-            applyNamedWithTypes "Darklang.Stdlib.Dict.toList" [keyType; valueType] (NonEmptyList.singleton rightExpr)
-        buildEqHelperExpr
-            aliasReg
-            typeReg
-            variantLookup
-            indexedSumTypeReg
-            UseHelperCall
-            listType
-            leftEntries
-            rightEntries
+        applyNamedWithTypes
+            "Darklang.Stdlib.Dict.__equals"
+            [keyType; valueType]
+            (NonEmptyList.fromList [leftExpr; rightExpr])
 
     | ExpandCurrent, TTuple elemTypes ->
         let leftTupleVar = "__dark_eq_helper_tuple_left"

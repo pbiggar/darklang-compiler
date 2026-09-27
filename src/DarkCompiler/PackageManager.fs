@@ -631,106 +631,18 @@ let private renderEntity (entity: LocatedEntity) : Result<ResolvedSource, string
                         | _ -> Error $"Invalid package type declaration {entity.Location}"
     with ex -> Error $"Could not render package {entity.Location}: {ex.Message}"
 
-let rec private typeNames (typ: AST.ParsedType) : string list =
-    match typ with
-    | AST.PTFunction (parameters, result) -> List.collect typeNames parameters @ typeNames result
-    | AST.PTTuple elements -> List.collect typeNames elements
-    | AST.PTRecord (name, arguments)
-    | AST.PTSum (name, arguments) -> name :: List.collect typeNames arguments
-    | AST.PTList inner
-    | AST.PTStream inner -> typeNames inner
-    | AST.PTDict (key, value) -> typeNames key @ typeNames value
-    | AST.PTInt8 | AST.PTInt16 | AST.PTInt32 | AST.PTInt64 | AST.PTInt128 | AST.PTInt
-    | AST.PTUInt8 | AST.PTUInt16 | AST.PTUInt32 | AST.PTUInt64 | AST.PTUInt128
-    | AST.PTBool | AST.PTFloat64 | AST.PTString | AST.PTBlob | AST.PTChar | AST.PTDateTime
-    | AST.PTUnit | AST.PTVar _ | AST.PTInternalRawPtr -> []
-
-let rec private patternNames (pattern: AST.ParsedPattern) : string list =
-    match pattern with
-    | AST.Parsed.PConstructor (name, fields) -> name :: List.collect patternNames fields
-    | AST.Parsed.PTuple patterns | AST.Parsed.PList patterns -> List.collect patternNames patterns
-    | AST.Parsed.PListCons (head, tail) -> List.collect patternNames head @ patternNames tail
-    | AST.Parsed.POr alternatives -> alternatives |> AST.NonEmptyList.toList |> List.collect patternNames
-    | _ -> []
-
-let rec private expressionNames (expr: AST.ParsedExpr) : string list =
-    let many expressions = List.collect expressionNames expressions
-    match expr with
-    | AST.Parsed.BinOp (_, left, right) -> expressionNames left @ expressionNames right
-    | AST.Parsed.UnaryOp (_, inner) -> expressionNames inner
-    | AST.Parsed.Let (_, value, body)
-    | AST.Parsed.RecursiveLet (_, value, body)
-    | AST.Parsed.Sequence (value, body) -> expressionNames value @ expressionNames body
-    | AST.Parsed.If (condition, yes, no) -> expressionNames condition @ expressionNames yes @ expressionNames no
-    | AST.Parsed.Apply (callee, types, arguments) ->
-        many [callee] @ List.collect typeNames types @ (arguments |> AST.NonEmptyList.toList |> many)
-    | AST.Parsed.TupleLiteral values | AST.Parsed.ListLiteral values -> many values
-    | AST.Parsed.TupleAccess (value, _) | AST.Parsed.RecordAccess (value, _) -> expressionNames value
-    | AST.Parsed.DictLiteral (keyType, valueType, entries) ->
-        typeNames keyType
-        @ typeNames valueType
-        @ (entries
-           |> List.collect (fun (key, value) -> expressionNames key @ expressionNames value))
-    | AST.Parsed.RecordLiteral (reference, fields) ->
-        reference.SourceTypeName :: List.collect typeNames reference.TypeArgs @ (fields |> List.map snd |> many)
-    | AST.Parsed.RecordUpdate (record, updates) -> expressionNames record @ (updates |> List.map snd |> many)
-    | AST.Parsed.Constructor (reference, _, fields) ->
-        let declaringType =
-            match reference with
-            | AST.Parsed.UnqualifiedConstructor -> []
-            | AST.Parsed.QualifiedConstructor name -> [name]
-        declaringType @ many fields
-    | AST.Parsed.Match (scrutinee, cases) ->
-        expressionNames scrutinee
-        @ (cases
-           |> List.collect (fun matchCase ->
-               (matchCase.Patterns |> AST.NonEmptyList.toList |> List.collect patternNames)
-               @ (matchCase.Guard |> Option.map expressionNames |> Option.defaultValue [])
-               @ expressionNames matchCase.Body))
-    | AST.Parsed.Lambda (parameters, returnType, body) ->
-        (parameters
-         |> AST.NonEmptyList.toList
-         |> List.collect (fun parameter -> parameter.SourceAnnotation |> Option.map typeNames |> Option.defaultValue []))
-        @ (returnType |> Option.map typeNames |> Option.defaultValue [])
-        @ expressionNames body
-    | AST.Parsed.InterpolatedString parts ->
-        parts
-        |> List.collect (function AST.Parsed.StringText _ -> [] | AST.Parsed.StringExpr value -> expressionNames value)
-    | AST.Parsed.Var name when name.Contains '.' -> [name]
-    | AST.Parsed.UnitLiteral | AST.Parsed.Int64Literal _ | AST.Parsed.Int128Literal _ | AST.Parsed.Int8Literal _
-    | AST.Parsed.Int16Literal _ | AST.Parsed.Int32Literal _ | AST.Parsed.UInt8Literal _ | AST.Parsed.UInt16Literal _
-    | AST.Parsed.UInt32Literal _ | AST.Parsed.UInt64Literal _ | AST.Parsed.UInt128Literal _ | AST.Parsed.BigIntLiteral _
-    | AST.Parsed.BoolLiteral _ | AST.Parsed.StringLiteral _ | AST.Parsed.CharLiteral _ | AST.Parsed.FloatLiteral _
-    | AST.Parsed.Var _ -> []
-
-let private sourceCandidates
-    (isKnownName: string -> bool)
-    (AST.ParsedProgram topLevels)
-    : string list =
-    topLevels
-    |> List.collect (function
-        | AST.ParsedFunctionDef definition ->
-            (definition.Params |> AST.NonEmptyList.toList |> List.collect (snd >> typeNames))
-            @ typeNames definition.ReturnType
-            @ expressionNames definition.Body
-        | AST.ParsedValueDef definition -> expressionNames ((match definition with AST.ParsedUncheckedValueDef (_, body) -> body))
-        | AST.ParsedTypeDef (AST.RecordDef (_, _, fields)) -> fields |> List.collect (snd >> typeNames)
-        | AST.ParsedTypeDef (AST.SumTypeDef (_, _, variants)) ->
-            variants |> List.collect (fun variant -> List.collect typeNames variant.Fields)
-        | AST.ParsedTypeDef (AST.TypeAlias (_, _, target)) -> typeNames target
-        | AST.ParsedExpression (_, expression) -> expressionNames expression)
-    |> List.filter (fun name -> name.Contains '.')
-    |> List.distinct
+let private candidatePrefixes (isKnownName: string -> bool) (names: string list) =
+    names
     |> List.filter (isKnownName >> not)
     |> List.collect (fun name ->
         let parts = name.Split('.') |> Array.toList
         [2 .. List.length parts] |> List.rev |> List.map (fun length -> parts |> List.take length |> String.concat "."))
     |> List.distinct
 
-let resolve
+let private resolveNames
     (config: Config)
     (resolutionEnv: NameResolution.ResolutionEnvironment)
-    (program: AST.ParsedProgram)
+    (names: string list)
     : Result<ResolvedSource list, string> =
     use client = new HttpClient()
     client.Timeout <- TimeSpan.FromSeconds 30.0
@@ -747,7 +659,7 @@ let resolve
             | Missing -> Ok None
             | Found json -> parseLocatedEntity kind hash json |> Result.map Some)
     let findRoots () =
-        sourceCandidates isKnownName program
+        candidatePrefixes isKnownName names
         |> List.filter (isKnownName >> not)
         |> ResultList.collectResults (fun name ->
             allKinds
@@ -793,3 +705,11 @@ let resolve
     findRoots ()
     |> Result.bind (fun roots -> roots |> List.map (fun (kind, hash) -> Some kind, hash) |> fun pending -> load pending Set.empty [])
     |> Result.bind (ResultList.mapResults renderEntity)
+
+let resolveWritten
+    (config: Config)
+    (resolutionEnv: NameResolution.ResolutionEnvironment)
+    (units: LibParser.Validation.ValidatedSourceFile list)
+    : Result<ResolvedSource list, string> =
+    WrittenSource.qualifiedNames units
+    |> Result.bind (resolveNames config resolutionEnv)

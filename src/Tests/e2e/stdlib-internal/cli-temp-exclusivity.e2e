@@ -1,0 +1,3 @@
+// cli-temp-exclusivity.e2e - Native exclusive create preserves an existing temporary file.
+
+let path = Stdlib.Cli.File.createTemp () |> Builtin.unwrap in let errno = Stdlib.Cli.__createExclusive path in let stillExists = Stdlib.Cli.FileSystem.pathExists path in let _ = Stdlib.Cli.FileSystem.deleteFile path |> Builtin.unwrap in (errno, stillExists) = (17L, true)

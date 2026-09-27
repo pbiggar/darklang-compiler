@@ -11,5 +11,6 @@ the upstream license is copied here as [LICENSE.md](LICENSE.md).
 integration definitions for the small set of interpreter modules referenced by
 the copied parser. They keep the parser implementation itself unchanged.
 
-The current production compiler still uses `frontend/Parser.fs`. This copied
-parser is present for the direct `WrittenTypes` to `CheckedAST` migration.
+The compiler parses with this copied parser, validates its `WrittenTypes`
+output, and checks declarations directly into `CheckedAST` through
+`frontend/WrittenChecking.fs`.

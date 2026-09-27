@@ -1,0 +1,4 @@
+// Regression: a dictionary with an empty key must compare equal after other
+// dictionary operations in the same compiled batch.
+Stdlib.Dict.singleton 1L "one" = Dict { 1L: "one" }
+Dict { "Content-Length": "0"; "": "empty" } = Dict { "Content-Length": "0"; "": "empty" }

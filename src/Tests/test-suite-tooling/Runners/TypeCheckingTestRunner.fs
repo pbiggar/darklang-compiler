@@ -8,9 +8,7 @@ module TestDSL.TypeCheckingTestRunner
 open System.IO
 open TestDSL.TypeCheckingFormat
 open CheckingDiagnostics
-open TypeChecking
 open AST
-open Parser
 
 /// Result of running a type checking test
 type TypeCheckingTestResult = {
@@ -25,7 +23,7 @@ type TypeCheckingTestResult = {
 /// Run a single type checking test
 let runTypeCheckingTest (test: TypeCheckingTest) : TypeCheckingTestResult =
     // Parse the source
-    let parseResult = parseString false test.Source
+    let parseResult = WrittenParsing.parse LibParser.Validation.Script test.Source
 
     match parseResult with
     | Error parseErr ->
@@ -48,7 +46,7 @@ let runTypeCheckingTest (test: TypeCheckingTest) : TypeCheckingTestResult =
 
     | Ok program ->
         // Type check the program
-        let typeCheckResult = checkParsedProgram program
+        let typeCheckResult = WrittenChecking.checkSourceUnits false false [program]
 
         match typeCheckResult, test.Expectation with
         | Ok (actualType, _), ExpectType expectedType ->
@@ -84,16 +82,16 @@ let runTypeCheckingTest (test: TypeCheckingTest) : TypeCheckingTestResult =
               ExpectedType = None
               ActualType = None
               ExpectedError = true
-              ActualError = Some (typeErrorToString typeErr) }
+              ActualError = Some typeErr }
 
         | Error typeErr, ExpectType expectedType ->
             // Type check failed but success was expected
             { Success = false
-              Message = $"Type check failed but {typeToString expectedType} was expected: {typeErrorToString typeErr}"
+              Message = $"Type check failed but {typeToString expectedType} was expected: {typeErr}"
               ExpectedType = Some expectedType
               ActualType = None
               ExpectedError = false
-              ActualError = Some (typeErrorToString typeErr) }
+              ActualError = Some typeErr }
 
 /// Run all tests from a test file
 let runTypeCheckingTestFile (path: string) : Result<TypeCheckingTestResult list, string> =

@@ -36,9 +36,9 @@ let combine (evens: List<Complex>) (odds: List<Complex>) (index: Int64) (size: I
 let fft (values: List<Complex>) (size: Int64) : List<Complex> =
     if size <= 1L then values
     else
-        let halves = split values true [] [] in
-        let evens = fft (halves.0) (size / 2L) in
-        let odds = fft (halves.1) (size / 2L) in
+        let (evenValues, oddValues) = split values true [] [] in
+        let evens = fft evenValues (size / 2L) in
+        let odds = fft oddValues (size / 2L) in
         combine evens odds 0L size [] []
 
 let generateInput (remaining: Int64) (index: Int64) (reversed: List<Complex>) : List<Complex> =

@@ -1,0 +1,4 @@
+// Duplicate-key errors render the concrete key type chosen at the call site.
+Stdlib.Dict.set (Dict { 1L: "a" }) 1L "b" = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key 1\n"
+type ErrorKey = { value: Int64 }
+Stdlib.Dict.set (Dict { ErrorKey { value = 1L }: "a" }) (ErrorKey { value = 1L }) "b" = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key ErrorKey { value: 1 }\n"
