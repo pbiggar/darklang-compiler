@@ -92,6 +92,16 @@ let fileIntrinsicModule : ModuleDef = {
     ]
 }
 
+/// Private socket syscalls. The Dark Network module converts signed errno
+/// results into typed values and owns the descriptors returned here.
+let networkIntrinsicModule : ModuleDef = {
+    Name = "Darklang.Stdlib.Network"
+    Functions = [
+        { Name = "__tcp4Socket"; TypeParams = []; ParamTypes = []; ReturnType = TInt64 }
+        { Name = "__close"; TypeParams = []; ParamTypes = [TInt64]; ReturnType = TInt64 }
+    ]
+}
+
 /// Private entropy primitive used to implement the upstream numeric random APIs.
 let randomModule : ModuleDef = {
     Name = "Darklang.Stdlib.Int"
@@ -265,6 +275,7 @@ let allModules : ModuleDef list = [
     floatIntrinsicModule
     cliIntrinsicModule
     fileIntrinsicModule
+    networkIntrinsicModule
     randomModule
     dateTimeModule
     builtinPresentationModule

@@ -36,6 +36,8 @@ let convertCliOperation (operation: MIR.CliOperation) : LIR.CliOperation =
     | MIR.SpawnProcess -> LIR.SpawnProcess
     | MIR.ProcessIO -> LIR.ProcessIO
     | MIR.TerminateProcess -> LIR.TerminateProcess
+    | MIR.SocketTcp4 -> LIR.SocketTcp4
+    | MIR.SocketClose -> LIR.SocketClose
 
 open ResultList
 

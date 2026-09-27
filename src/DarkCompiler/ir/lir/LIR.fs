@@ -88,6 +88,8 @@ type CliOperation =
     | SpawnProcess
     | ProcessIO
     | TerminateProcess
+    | SocketTcp4
+    | SocketClose
 
 /// Basic block label (wrapper type for type safety)
 type Label = Label of string
