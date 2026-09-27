@@ -14,7 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "infrastructure"))
 from benchmark_baseline import (  # noqa: E402
     BaselineError,
     TRACKS,
-    compare_suites,
+    blocking_regressions,
+    compare_dark_performance,
     load_dark_counts,
     load_snapshot,
     machine_architecture,
@@ -64,7 +65,7 @@ def compare_with_parent(
         )
 
     current = load_dark_counts(results_dir, profile)
-    comparison = compare_suites(current, snapshot.benchmarks)
+    comparison = compare_dark_performance(current, snapshot.benchmarks)
     if not quiet:
         print(f"Task parent: {parent}")
         print(
@@ -81,6 +82,11 @@ def compare_with_parent(
         f"Dark candidate/parent: {comparison.decision}; current/parent geometric "
         f"ratio {comparison.ratio:.6f}"
     )
+    for row in blocking_regressions(comparison):
+        print(
+            f"  blocking regression: {row.name}, current {row.current:,}, "
+            f"parent {row.baseline:,} ({row.percentage_delta:+.3f}%)"
+        )
     return 1 if comparison.decision == "regressed" else 0
 
 
@@ -92,7 +98,7 @@ def main() -> int:
         help="parent revision (default: merge-base of HEAD and the branch upstream)",
     )
     parser.add_argument(
-        "--quiet", action="store_true", help="print only the aggregate comparison"
+        "--quiet", action="store_true", help="print summary and blocking losses"
     )
     args = parser.parse_args()
 

@@ -104,6 +104,23 @@ class CompareWithParentTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertIn("Dark candidate/parent: regressed", output)
 
+    def test_parent_rejects_individual_loss_hidden_by_aggregate_gain(self) -> None:
+        first, second = self.snapshot["benchmarks"][:2]
+        for row, count in (
+            (first, (first["instructions"] * 1001 + 999) // 1000),
+            (second, second["instructions"] // 2),
+        ):
+            path = self.results / f"{row['name']}_cachegrind.json"
+            document = json.loads(path.read_text())
+            document["results"][0]["instructions"] = count
+            path.write_text(json.dumps(document))
+
+        result, output = self.compare()
+
+        self.assertEqual(result, 1)
+        self.assertIn("Dark candidate/parent: regressed", output)
+        self.assertIn(first["name"], output)
+
 
 if __name__ == "__main__":
     unittest.main()

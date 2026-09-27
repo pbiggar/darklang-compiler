@@ -186,12 +186,12 @@ schema, or architecture mismatch is never inferred or repaired: the command
 fails with explicit reset instructions. Only architectures with a trusted full
 run have a snapshot.
 
-All Dark decisions use the equal-weight geometric suite ratio, displayed as
-`current/baseline`: below 1 is improved, 1 is equal, and above 1 is regressed.
-Classification itself is exact: the tools compare arbitrary-precision integer
-products, then use logarithms only to display the ratio. Consequently a slower
-individual benchmark can be compensated by larger gains elsewhere. Every row's
-absolute and percentage delta is still reported.
+Full-profile Dark decisions use the equal-weight geometric suite ratio, displayed
+as `current/baseline`, and reject any individual loss of 0.1% or more even when
+the aggregate improves. Both checks use exact integer comparisons; logarithms
+only display the ratio. A smaller individual loss may pass when the aggregate
+improves, but task agents may hand it off only if it cannot be avoided. Quick
+and cross-architecture diagnostic comparisons retain their aggregate rule.
 
 ### Quick correctness and regression mode
 
@@ -263,9 +263,10 @@ Recording regenerates `RESULTS.x86_64.json`, `RESULTS.x86_64.md`, and appends
 `./benchmarks/run_benchmarks.sh --verify-parent full` is the task-readiness
 benchmark gate. It runs the complete suite, compares the measurements with the
 architecture-specific snapshot stored by the branch's upstream merge-base, and
-fails on an aggregate regression. It prints changed workload rows plus the
-aggregate `current/parent` ratio, or only the aggregate in the default quiet
-mode. It does not modify tracked benchmark files.
+fails on an aggregate regression or any individual loss of 0.1% or more. It
+prints changed workload rows plus the aggregate `current/parent` ratio in
+verbose mode; quiet mode also names blocking individual losses. It does not
+modify tracked benchmark files.
 
 `compare_with_parent.py` can perform the same comparison for an already-retained
 run without rebuilding or remeasuring. An explicit `--parent=<revision>`
@@ -275,10 +276,10 @@ of HEAD.
 ### Canonical verification (`--verify`)
 
 `./benchmarks/run_benchmarks.sh --verify full` compares a complete successful
-run to the full snapshot using the shared aggregate rule. Equal and improved
-runs pass; regressions fail. It writes only generated run artifacts (including a
-machine-readable decision) and leaves the snapshot, `RESULTS.md`, `BASELINES.md`,
-and `HISTORY.md` unchanged.
+run to the full snapshot using the full-profile rule. Equal and improved runs
+without a blocking individual loss pass; regressions fail. It writes only
+generated run artifacts (including a machine-readable decision) and leaves the
+snapshot, `RESULTS.md`, `BASELINES.md`, and `HISTORY.md` unchanged.
 
 That verification result is a canonical maintenance gate, not task-readiness
 evidence or a measurement of the task branch's effect.
@@ -286,9 +287,10 @@ evidence or a measurement of the task branch's effect.
 Normal full recording appends every valid Dark run to `HISTORY.md` with a
 unique timestamp/run identity and decision. An improvement atomically advances
 the snapshot and regenerates every Dark `RESULTS.md` row; equality changes only
-history; regression changes only history and returns failure. Thus snapshots are
-the best-known compatible complete run, not necessarily the newest compiler
-commit. `--verify-fresh` is the integration variant: unlike ordinary read-only
+history; a blocking individual loss also changes only history and returns
+failure. Thus snapshots are the best-known compatible complete run, not
+necessarily the newest compiler commit. `--verify-fresh` is the integration
+variant: unlike ordinary read-only
 verification, it fails on an improvement because that better run must first be
 recorded.
 

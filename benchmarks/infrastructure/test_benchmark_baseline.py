@@ -16,6 +16,7 @@ from benchmark_baseline import (
     BenchmarkCount,
     CompilerAttribution,
     TRACKS,
+    compare_dark_performance,
     compare_implementations,
     comparison_dict,
     create_snapshot,
@@ -122,6 +123,30 @@ class BenchmarkTrackTests(unittest.TestCase):
         rust = self.snapshot("rust", track.id, (100, 200))
         comparison = compare_implementations(dark, rust)
         self.assertAlmostEqual(comparison.ratio, 2.8284271247461903)
+
+    def test_individual_regression_overrides_aggregate_improvement(self) -> None:
+        comparison = compare_dark_performance(
+            (BenchmarkCount("alpha", 1002), BenchmarkCount("beta", 800)),
+            (BenchmarkCount("alpha", 1000), BenchmarkCount("beta", 1000)),
+        )
+        self.assertEqual(comparison.decision, "regressed")
+        self.assertLess(comparison.ratio, 1)
+
+    def test_individual_regression_threshold_is_strict(self) -> None:
+        baseline = (
+            BenchmarkCount("alpha", 1_000_000),
+            BenchmarkCount("beta", 1_000_000),
+        )
+        below = compare_dark_performance(
+            (BenchmarkCount("alpha", 1_000_999), BenchmarkCount("beta", 900_000)),
+            baseline,
+        )
+        at = compare_dark_performance(
+            (BenchmarkCount("alpha", 1_001_000), BenchmarkCount("beta", 900_000)),
+            baseline,
+        )
+        self.assertEqual(below.decision, "improved")
+        self.assertEqual(at.decision, "regressed")
 
     def test_concise_comparison_omits_baseline_and_per_benchmark_rows(self) -> None:
         baseline = self.snapshot("dark", "arm64-quick-cachegrind", (100, 200))

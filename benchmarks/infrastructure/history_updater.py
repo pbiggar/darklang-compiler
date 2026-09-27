@@ -10,7 +10,7 @@ from pathlib import Path
 
 from benchmark_baseline import (
     BaselineError, TRACKS, CompilerAttribution, atomic_write_json,
-    atomic_write_text, compare_suites, comparison_dict, create_snapshot,
+    atomic_write_text, compare_dark_performance, comparison_dict, create_snapshot,
     load_dark_counts, load_snapshot, machine_architecture, print_comparison,
     snapshot_path, write_snapshot,
 )
@@ -255,7 +255,7 @@ def main() -> int:
         else:
             snapshot_source = Path(args.snapshot_override) if args.snapshot_override else canonical
             previous = load_snapshot(snapshot_source, benchmarks_dir, "dark", track)
-            comparison = compare_suites(current, previous.benchmarks)
+            comparison = compare_dark_performance(current, previous.benchmarks)
             print_comparison(comparison, previous)
             decision = comparison.decision
             action = "advanced" if decision == "improved" else "unchanged-equal" if decision == "equal" else "preserved-stronger-baseline"

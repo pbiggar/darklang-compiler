@@ -574,6 +574,24 @@ def compare_suites(
     return SuiteComparison(decision, ratio, deltas)
 
 
+def blocking_regressions(comparison: SuiteComparison) -> tuple[BenchmarkDelta, ...]:
+    """Find losses of at least 0.1%, using exact counts at the boundary."""
+    return tuple(
+        row
+        for row in comparison.rows
+        if row.current * 1000 >= row.baseline * 1001
+    )
+
+
+def compare_dark_performance(
+    current: Iterable[BenchmarkCount], baseline: Iterable[BenchmarkCount]
+) -> SuiteComparison:
+    comparison = compare_suites(current, baseline)
+    if blocking_regressions(comparison):
+        return SuiteComparison("regressed", comparison.ratio, comparison.rows)
+    return comparison
+
+
 def compare_implementations(dark: Snapshot, rust: Snapshot) -> SuiteComparison:
     if dark.language != "dark" or rust.language != "rust":
         raise BaselineError("implementation comparison requires Dark and Rust snapshots")
@@ -635,6 +653,12 @@ def print_comparison(
         f"Dark {summary_name}: {comparison.decision}; current/baseline geometric ratio "
         f"{comparison.ratio:.6f}"
     )
+    if comparison.decision == "regressed":
+        for row in blocking_regressions(comparison):
+            print(
+                f"  blocking regression: {row.name}, current {row.current:,}, "
+                f"baseline {row.baseline:,} ({row.percentage_delta:+.3f}%)"
+            )
 
 
 def load_dark_counts(

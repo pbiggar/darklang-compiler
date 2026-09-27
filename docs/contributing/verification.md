@@ -5,7 +5,7 @@ This policy applies to all agents when they verify a proposed commit, change, fi
 Verification means both, for the active development target:
 
 - All tests pass.
-- Benchmarks do not regress.
+- The full benchmark suite passes its aggregate and individual regression gates.
 
 The merge train also rejects every candidate that changes anything under
 `benchmarks/problems/`. Benchmark problem implementations and their vendored
@@ -46,9 +46,9 @@ The benchmark command compares the retained measurements with the snapshot
 stored by the task branch's upstream merge-base and reports the aggregate
 `current/parent` ratio. Its default parent is
 `git merge-base HEAD @{upstream}`. The snapshot is the parent's canonical
-performance state, which integration keeps current by rejecting regressions and
-unrecorded improvements. If the workload contract changed, the command fails
-instead of comparing incompatible measurements.
+performance state, which integration keeps current by rejecting blocking
+regressions and unrecorded improvements. If the workload contract changed, the
+command fails instead of comparing incompatible measurements.
 
 `./benchmarks/run_benchmarks.sh --verify full` instead compares with the
 best-known compatible canonical snapshot. It is not the task-readiness gate and
@@ -94,18 +94,20 @@ must pass the x86_64 suite and its relevant x86_64 benchmark gate; a host ARM64
 run is required only when ARM64 is also declared in scope.
 
 Verification mode compares the full run with the compatible
-architecture-specific canonical Dark snapshot, not `RESULTS.md`. The decision is
-the exact comparison of the products of every positive instruction count; the
-reported equal-weight geometric `current/baseline` ratio is below 1 for an
-improvement and above 1 for a regression. Individual losses may be compensated
-by larger gains. Equal and improved aggregate runs pass ordinary read-only
-verification, regressions fail, and no tracked benchmark file is modified.
+architecture-specific canonical Dark snapshot, not `RESULTS.md`. It compares
+products of positive instruction counts for the aggregate and exact integer
+counts for each benchmark. An individual loss of 0.1% or more fails even when
+the equal-weight geometric `current/baseline` ratio is below 1. A smaller loss
+can pass only with an equal or improved aggregate; the task agent must establish
+that such a loss cannot be avoided before handoff. Read-only verification does
+not modify tracked benchmark files.
 
 When a compiler change improves aggregate full-profile performance, run
 `./benchmarks/run_benchmarks.sh full` in recording mode and commit the updated
 Dark snapshot and generated `benchmarks/RESULTS.md`; commit
 `benchmarks/BASELINES.md` only for an audited Rust refresh. Recording advances
-only on improvement and leaves the stronger snapshot/results on regression.
+only on aggregate improvement without a blocking individual regression and
+leaves the stronger snapshot/results on regression.
 Integration reruns every queued candidate with `--verify-fresh`. A regression
 fails the gate. When a candidate improves on the integration parent's snapshot,
 the read-only gate deliberately fails and the integrator rebases the owning
@@ -118,9 +120,10 @@ separate via `--refresh-baseline=rust`.
 
 If a rebase conflicts in generated `benchmarks/RESULTS.md`, resolve the source
 conflicts and run `./benchmarks/run_benchmarks.sh full` in recording mode. The
-run is the only valid resolution: it must prove an aggregate improvement,
-advance the canonical Dark snapshot, and replace `RESULTS.md` with fully
-regenerated results. Never hand-merge or select one conflicted version. If the
+run is the only valid resolution: it must prove an aggregate improvement without
+an individual regression of 0.1% or more, advance the canonical Dark snapshot,
+and replace `RESULTS.md` with fully regenerated results. Never hand-merge or
+select one conflicted version. If the
 run fails or does not advance and regenerate the files, abort the recovery.
 
 When reporting verification, include the exact commands run, whether they

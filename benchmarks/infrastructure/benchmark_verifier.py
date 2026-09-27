@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only exact-product verification of a canonical Dark benchmark snapshot."""
+"""Read-only aggregate and individual verification of a Dark benchmark snapshot."""
 
 import argparse
 import sys
@@ -9,7 +9,7 @@ from benchmark_baseline import (
     BaselineError,
     TRACKS,
     atomic_write_json,
-    compare_suites,
+    compare_dark_performance,
     comparison_dict,
     load_dark_counts,
     load_snapshot,
@@ -32,7 +32,7 @@ def main() -> int:
     parser.add_argument(
         "--quiet",
         action="store_true",
-        help="print only the aggregate comparison and snapshot action",
+        help="print summary, blocking losses, and snapshot action",
     )
     args = parser.parse_args()
     results_dir = Path(args.results_dir)
@@ -51,7 +51,7 @@ def main() -> int:
             track,
         )
         current = load_dark_counts(results_dir, profile)
-        comparison = compare_suites(current, baseline.benchmarks)
+        comparison = compare_dark_performance(current, baseline.benchmarks)
     except (BaselineError, OSError, ValueError) as error:
         print(f"Dark benchmark verification requires a baseline reset: {error}")
         print(

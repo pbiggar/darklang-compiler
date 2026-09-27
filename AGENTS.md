@@ -74,15 +74,19 @@ this repository and takes precedence where it is stricter.
 - Fix compiler warnings and errors before committing.
 - Validate performance against the task branch's parent with
   `./benchmarks/run_benchmarks.sh --verify-parent full`. This performs the full
-  benchmark measurement and fails on an aggregate regression against the
-  snapshot stored by the upstream merge-base. Do not run or report
+  benchmark measurement and fails on an aggregate regression or any individual
+  benchmark regression of 0.1% or more against the snapshot stored by the
+  upstream merge-base. Only attempt to land a smaller individual regression
+  when it cannot be avoided; investigate and explain that loss before handoff.
+  Do not run or report
   `./benchmarks/run_benchmarks.sh --verify full` as a task-readiness gate: that
   command compares with the best-known snapshot rather than the branch parent.
 - During merge-conflict recovery, never hand-merge, choose a side for, or edit
   conflict markers in generated `benchmarks/RESULTS.md`. With all source
   conflicts resolved in the rebased working tree, run
   `./benchmarks/run_benchmarks.sh full`; recording mode must prove an aggregate
-  improvement, advance the canonical Dark snapshot, and regenerate
+  improvement with no individual regression of 0.1% or more, advance the
+  canonical Dark snapshot, and regenerate
   `RESULTS.md`. Stage the regenerated files. If the run fails or does not
   replace the conflicted result, abort the recovery instead of guessing.
 
@@ -211,7 +215,7 @@ Committed: `<short hash>` — <commit subject>
 Merge train: ✅ queued `<branch>` at `<short hash>`
 Tests: ✅ <passed>/<total> passed — `<exact command>`
 Test runtime: ✅ no significant increase vs task parent, ratio <ratio>, delta <seconds>s
-Benchmarks: ✅ no regression vs task parent, ratio <ratio>
+Benchmarks: ✅ no blocking regression vs task parent, ratio <ratio>
   - Parent gate: `./benchmarks/run_benchmarks.sh --verify-parent full`
 Other validation: ✅ <result> — `<exact command>`
 Worktree: `<absolute task worktree path>`
