@@ -66,9 +66,8 @@ this repository and takes precedence where it is stricter.
   a .NET/F# project build. Run `./build --ai` first, and rebuild after changing
   source or project files before treating a test result as current.
 - Before declaring a task branch ready, run the complete already-built host
-  test suite with `./run-tests --ai`. The merge train separately measures
-  uncontended full-suite runtime and blocks significant increases or invalid
-  measurements unless a human approves an exact gate exception.
+  test suite with `./run-tests --ai`. Full-suite timing measurements are
+  optional diagnostics and do not block integration when the host is contended.
 - Do not run x64 tests on an ARM64 host unless explicitly testing x64 work.
   Likewise, do not run ARM64 tests on an x64 host unless explicitly testing
   ARM64 work.
@@ -154,8 +153,8 @@ this repository and takes precedence where it is stricter.
   `queued`, stop work on that task and report its handoff: do not inspect the
   job, poll status, wait for deployment, or report any later train outcome.
   A later user request starts a new task under the task-start rule above.
-- For an intentional violation of `benchmark-sources`, `benchmarks`, or
-  `test-runtime`, report the evidence and reason, verify the remaining gates,
+- For an intentional violation of `benchmark-sources` or `benchmarks`, report
+  the evidence and reason, verify the remaining gates,
   and use `./land --exception-gate GATE --exception-reason TEXT`. This only
   requests a human review of the exact failed train candidate; it does not
   approve that gate or excuse unrelated failures.
@@ -220,7 +219,6 @@ Surprises: <unexpected decisions, tradeoffs, or scope changes and why; omit if n
 Committed: `<short hash>` — <commit subject>
 Merge train: ✅ queued `<branch>` at `<short hash>`
 Tests: ✅ <passed>/<total> passed — `<exact command>`
-Test runtime: ✅ no significant increase vs task parent, ratio <ratio>, delta <seconds>s
 Benchmarks: ✅ no blocking regression vs task parent, ratio <ratio>
   - Parent gate: `./benchmarks/run_benchmarks.sh --verify-parent full`
 Other validation: ✅ <result> — `<exact command>`

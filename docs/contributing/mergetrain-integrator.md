@@ -55,9 +55,8 @@ A lander may attach a request to its exact committed branch:
   --exception-reason "Why the measured regression is acceptable"
 ```
 
-Eligible gates are `benchmark-sources`, `benchmarks`, and `test-runtime`.
-The latter is a blocking comparison of uncontended full-suite runtime against
-the integration parent. A request does not waive a gate. The candidate first
+Eligible gates are `benchmark-sources` and `benchmarks`.
+A request does not waive a gate. The candidate first
 fails normally, and the integrator stages its failed gate, exact candidate
 tree, integration base, destination, and gate config digest for review. It does
 not automatically repair that requested failure.

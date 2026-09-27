@@ -28,21 +28,9 @@ consume context on repeated per-workload details. Full build and measurement
 logs, the markdown report, and decision JSON remain in the reported results
 directory. Use `--verbose` when interactive diagnosis needs streamed details.
 
-The test runtime measurement requires a clean committed worktree, then runs the
-already-built full suite with affinity to two CPUs on Linux, preserving the
-host CPU-count E2E test, and records its wall time in
-`TestResults/ai/test-runtime.json`. It rejects a sample if competing work
-consumed more than 3% of one CPU, then retries on another CPU pair up to
-three times. The comparison uses an
-uncontended measurement of the branch's merge-base with the supplied ref.
-The first comparison for a parent builds and measures that parent in a temporary
-worktree; later comparisons reuse the measurement cached in the common Git
-directory. A candidate fails if it takes over 10% or over 60 seconds longer,
-whichever limit is stricter. Missing, mismatched, and contended measurements
-invalidate the timing comparison. The merge train runs both `./run-tests --ai`
-and the separate blocking `test-runtime` gate. A candidate with a significant
-increase or no valid uncontended sample remains blocked until fixed or an
-operator approves an exact gate exception.
+The merge train runs `./run-tests --ai` to check the complete already-built
+host suite. Full-suite timing remains useful for diagnosis, but it is not a
+blocking merge-train gate because contention can invalidate a comparison.
 
 The benchmark command compares the retained measurements with the snapshot
 stored by the task branch's upstream merge-base and reports the aggregate

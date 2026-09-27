@@ -51,12 +51,11 @@ Purpose: Serialize committed local task branches through one merge/test/push/ver
   regenerated benchmark files, and retrying; that retry must reproduce the
   recording. An exact human exception may waive this gate instead.
 - The train's `tests` gate runs the complete already-built host test suite with
-  `./run-tests --ai`. Its separate `test-runtime` gate compares uncontended
-  full-suite timing with the integration parent and blocks significant increases
-  or invalid measurements. A human operator may approve an exact exception.
+  `./run-tests --ai`. Full-suite timing measurements are optional diagnostics;
+  contention does not block integration.
 - A task agent may request an exception with `./land --exception-gate GATE
-  --exception-reason TEXT` for `benchmark-sources`, `benchmarks`, or
-  `test-runtime`. Requesting does not approve it. The integrator stages the
+  --exception-reason TEXT` for `benchmark-sources` or `benchmarks`. Requesting
+  does not approve it. The integrator stages the
   failed candidate for human review. In interactive `./mergetrain-status`,
   press `a` to review and confirm it; this retries the job. All other gates run.
 - Deployment requires either confirmation of the human-readable exact plan or prior bounded unattended approval. Agents never select train IDs or supply plan hashes; structured evidence may include identifiers for inspection.

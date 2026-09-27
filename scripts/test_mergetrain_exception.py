@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from scripts.mergetrain_exception import (
     ExceptionFlowError,
+    approve,
     approval_path,
     create_request,
     finalize,
@@ -129,11 +130,26 @@ class MergetrainExceptionTests(unittest.TestCase):
 
     def test_request_rejects_ineligible_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(ExceptionFlowError, "not eligible"):
-                create_request(
-                    Path(temp_dir), head="deadbeef", branch="task/x",
-                    gate="build", reason="skip it",
-                )
+            for gate in ("build", "test-runtime"):
+                with self.subTest(gate=gate), self.assertRaisesRegex(
+                    ExceptionFlowError, "not eligible"
+                ):
+                    create_request(
+                        Path(temp_dir), head="deadbeef", branch="task/x",
+                        gate=gate, reason="skip it",
+                    )
+
+    def test_approval_rejects_saved_retired_gate_review(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir)
+            self.git(repo, "init", "-q")
+            path = review_path(repo, 9)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({
+                "schema": 1, "job_id": 9, "gate": "test-runtime",
+            }), encoding="utf-8")
+            with self.assertRaisesRegex(ExceptionFlowError, "no longer eligible"):
+                approve(repo, 9)
 
     def test_status_review_selects_one_pending_job(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -146,6 +162,11 @@ class MergetrainExceptionTests(unittest.TestCase):
                     "schema": 1, "job_id": job_id, "gate": "benchmarks",
                     "reason": "Expected regression",
                 }), encoding="utf-8")
+            retired = review_path(repo, 9)
+            retired.write_text(json.dumps({
+                "schema": 1, "job_id": 9, "gate": "test-runtime",
+                "reason": "Old timing request",
+            }), encoding="utf-8")
             with patch("sys.stdin") as stdin, patch(
                 "builtins.input", return_value="8"
             ), patch("scripts.mergetrain_exception.approve") as approve_job:

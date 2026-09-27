@@ -98,15 +98,6 @@ class RecoveryFixture:
             self.repo / "run-tests",
             f"#!/bin/sh\n{test_condition}echo 'success: 1/1 passed'\n",
         )
-        self.executable(
-            self.repo / "scripts" / "test_runtime_gate.py",
-            """#!/usr/bin/env python3
-import subprocess, sys
-if sys.argv[1] == "run":
-    raise SystemExit(subprocess.run(["./run-tests", "--ai"], check=False).returncode)
-raise SystemExit(0)
-""",
-        )
 
     def write_fake_commands(self) -> None:
         self.executable(

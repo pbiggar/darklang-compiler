@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 
-ELIGIBLE_GATES = frozenset({"benchmark-sources", "benchmarks", "test-runtime"})
+ELIGIBLE_GATES = frozenset({"benchmark-sources", "benchmarks"})
 SCHEMA = 1
 
 
@@ -122,7 +122,7 @@ def stage_if_requested(repo: Path, details: dict[str, Any]) -> bool:
     if request is None or request.get("branch") != job.get("branch"):
         return False
     gate, gate_command = failed_gate(details)
-    if gate != request.get("gate"):
+    if gate not in ELIGIBLE_GATES or gate != request.get("gate"):
         return False
     job_id = int(job.get("id") or 0)
     candidate = str(job.get("deploy_sha") or "")
@@ -182,6 +182,8 @@ def approve(repo: Path, job_id: int) -> None:
     review = read_json(review_path(repo, job_id))
     if review is None:
         raise ExceptionFlowError("no staged exception review for this job")
+    if review.get("gate") not in ELIGIBLE_GATES:
+        raise ExceptionFlowError("gate is no longer eligible for an exception")
     details = inspect(repo, job_id)
     job = details.get("job") or {}
     gate, _failure = failed_gate(details)
@@ -264,7 +266,9 @@ def review_pending(repo: Path) -> None:
         (
             (int(path.stem), review)
             for path in reviews.glob("*.json")
-            if (review := read_json(path)) is not None and path.stem.isdecimal()
+            if (review := read_json(path)) is not None
+            and review.get("gate") in ELIGIBLE_GATES
+            and path.stem.isdecimal()
         ),
         key=lambda item: item[0],
     )
