@@ -57,8 +57,8 @@ Purpose: Serialize committed local task branches through one merge/test/push/ver
 - A task agent may request an exception with `./land --exception-gate GATE
   --exception-reason TEXT` for `benchmark-sources`, `benchmarks`, or
   `test-runtime`. Requesting does not approve it. The integrator stages the
-  failed candidate for human review; `./mergetrain-exception approve JOB_ID`
-  requires an interactive confirmation, then retries it. All other gates run.
+  failed candidate for human review. In interactive `./mergetrain-status`,
+  press `a` to review and confirm it; this retries the job. All other gates run.
 - Deployment requires either confirmation of the human-readable exact plan or prior bounded unattended approval. Agents never select train IDs or supply plan hashes; structured evidence may include identifiers for inspection.
 - Unattended approval is bound to the exact destination and execution policy. Any change blocks before push.
 - Recovery and destructive cleanup require their stated approval. Follow `status.next_action`; never rewrite permanent deploy audit refs.

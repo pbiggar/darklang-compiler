@@ -161,8 +161,7 @@ def stage_if_requested(repo: Path, details: dict[str, Any]) -> bool:
         return True
     write_json(path, review)
     print(
-        f"Job #{job_id}: {gate} exception requested for {head[:10]}; "
-        f"run ./mergetrain-exception approve {job_id} to review",
+        f"Job #{job_id}: {gate} waiver pending; mergetrain-status [a]",
         file=sys.stderr,
     )
     return True
@@ -253,7 +252,39 @@ def approve(repo: Path, job_id: int) -> None:
     except (KeyError, ValueError, TypeError, json.JSONDecodeError) as error:
         path.unlink(missing_ok=True)
         raise ExceptionFlowError("retry did not return a replacement job") from error
+    review_path(repo, job_id).unlink(missing_ok=True)
     print(f"Approved {review['gate']} for job #{job_id}; retried as job #{replacement_id}")
+
+
+def review_pending(repo: Path) -> None:
+    if not sys.stdin.isatty():
+        raise ExceptionFlowError("approval review requires an interactive terminal")
+    reviews = state_dir(repo) / "reviews"
+    pending = sorted(
+        (
+            (int(path.stem), review)
+            for path in reviews.glob("*.json")
+            if (review := read_json(path)) is not None and path.stem.isdecimal()
+        ),
+        key=lambda item: item[0],
+    )
+    if not pending:
+        print("No pending gate exceptions")
+        return
+    if len(pending) == 1:
+        approve(repo, pending[0][0])
+        return
+    print("Pending gate exceptions:")
+    for job_id, review in pending:
+        prefix = f"  #{job_id} {review['gate']}: "
+        reason = " ".join(str(review["reason"]).split())
+        print(prefix + reason[:max(0, 80 - len(prefix))])
+    selected = input("Job ID to review (blank to cancel): ").strip()
+    if not selected:
+        return
+    if not selected.isdecimal() or int(selected) not in {job_id for job_id, _ in pending}:
+        raise ExceptionFlowError("select a listed job ID")
+    approve(repo, int(selected))
 
 
 def run_gate(repo: Path, gate: str, command: Sequence[str]) -> int:
@@ -326,8 +357,7 @@ def main() -> int:
     request.add_argument("--branch", required=True)
     request.add_argument("--gate", required=True)
     request.add_argument("--reason", required=True)
-    approve_command = commands.add_parser("approve")
-    approve_command.add_argument("job_id", type=int)
+    commands.add_parser("review")
     gate_command = commands.add_parser("gate")
     gate_command.add_argument("gate")
     gate_command.add_argument("command", nargs=argparse.REMAINDER)
@@ -340,13 +370,16 @@ def main() -> int:
                 repo, head=args.head, branch=args.branch, gate=args.gate,
                 reason=args.reason,
             )
-        elif args.action == "approve":
-            approve(repo, args.job_id)
+        elif args.action == "review":
+            review_pending(repo)
         elif args.action == "finalize":
             finalize(repo)
         else:
             command = args.command[1:] if args.command[:1] == ["--"] else args.command
             return run_gate(repo, args.gate, command)
+    except (EOFError, KeyboardInterrupt):
+        print("Merge-train exception review canceled", file=sys.stderr)
+        return 1
     except (ExceptionFlowError, OSError, KeyError, ValueError) as error:
         print(f"Merge-train exception: {error}", file=sys.stderr)
         return 1

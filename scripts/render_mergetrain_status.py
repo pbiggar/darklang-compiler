@@ -213,8 +213,7 @@ def exception_labels(repo: Path) -> dict[int, str]:
             if review.get("schema") == 1:
                 job_id = int(review["job_id"])
                 labels[job_id] = (
-                    f"waiver: {review['gate']} pending; "
-                    f"./mergetrain-exception approve {job_id}"
+                    f"waiver: {review['gate']} pending; [w] review"
                 )
         except (OSError, ValueError, KeyError, TypeError):
             continue

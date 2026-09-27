@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-# mergetrain-exception - Review and approve an exact blocked gate exception.
-
-set -euo pipefail
-script_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-exec python3 "$script_root/scripts/mergetrain_exception.py" --repo "$script_root" "$@"

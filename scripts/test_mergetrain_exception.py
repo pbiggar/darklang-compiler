@@ -11,10 +11,10 @@ from unittest.mock import patch
 from scripts.mergetrain_exception import (
     ExceptionFlowError,
     approval_path,
-    approve,
     create_request,
     finalize,
     read_json,
+    review_pending,
     review_path,
     run_gate,
     stage_if_requested,
@@ -102,7 +102,8 @@ class MergetrainExceptionTests(unittest.TestCase):
                         "builtins.input", return_value=f"approve 7 {head[:12]} benchmarks"
                     ):
                         stdin.isatty.return_value = True
-                        approve(repo, 7)
+                        review_pending(repo)
+                    self.assertFalse(review_path(repo, 7).exists())
                     self.assertEqual(run_gate(repo, "benchmarks", fallback), 0)
                     approval_file = approval_path(repo, tree, "benchmarks")
                     approved = read_json(approval_file)
@@ -133,6 +134,31 @@ class MergetrainExceptionTests(unittest.TestCase):
                     Path(temp_dir), head="deadbeef", branch="task/x",
                     gate="build", reason="skip it",
                 )
+
+    def test_status_review_selects_one_pending_job(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repo = Path(temp_dir)
+            self.git(repo, "init", "-q")
+            for job_id in (7, 8):
+                path = review_path(repo, job_id)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps({
+                    "schema": 1, "job_id": job_id, "gate": "benchmarks",
+                    "reason": "Expected regression",
+                }), encoding="utf-8")
+            with patch("sys.stdin") as stdin, patch(
+                "builtins.input", return_value="8"
+            ), patch("scripts.mergetrain_exception.approve") as approve_job:
+                stdin.isatty.return_value = True
+                review_pending(repo)
+            approve_job.assert_called_once_with(repo, 8)
+
+    def test_status_review_requires_a_terminal(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch("sys.stdin") as stdin:
+                stdin.isatty.return_value = False
+                with self.assertRaisesRegex(ExceptionFlowError, "interactive terminal"):
+                    review_pending(Path(temp_dir))
 
 
 if __name__ == "__main__":

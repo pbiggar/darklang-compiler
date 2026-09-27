@@ -62,10 +62,10 @@ fails normally, and the integrator stages its failed gate, exact candidate
 tree, integration base, destination, and gate config digest for review. It does
 not automatically repair that requested failure.
 
-Status shows the blocked job and the review command. A human operator reads
-the reason, failed gate log, candidate identity, and other gate outcomes, then
-uses `./mergetrain-exception approve JOB_ID` from the integrator checkout.
-The command asks for an interactive typed confirmation and retries the job.
+Interactive `./mergetrain-status` shows the blocked job and its pending waiver.
+The operator presses `a`, selects the job if several are pending, reads the
+reason, failed gate log, candidate identity, and other gate outcomes, then
+types the requested confirmation. The status interface retries the job.
 The gate reruns on retry; only the approved gate's failure is waived if the
 replacement job ID, candidate tree, original commit ancestry, integration
 base, destination, and gate config still match. Mergetrain separately checks
