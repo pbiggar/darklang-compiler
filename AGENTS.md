@@ -39,6 +39,9 @@ this repository and takes precedence where it is stricter.
   Do not write explicit type arguments such as `Stdlib.List.getAt<Int64>`
   unless inference is genuinely ambiguous and the explicit arguments are
   required for the program to compile.
+- Standard library functions must not run shell commands or call executables
+  on the user's system. The sole exception is a standard library function
+  whose express purpose is to let the user make process calls.
 
 ## Change rules
 
