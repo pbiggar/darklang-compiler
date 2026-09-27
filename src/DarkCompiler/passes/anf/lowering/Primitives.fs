@@ -373,6 +373,8 @@ let tryCliIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option 
             | "Darklang.Stdlib.Cli.__spawnProcess" -> Some ANF.SpawnProcess
             | "Darklang.Stdlib.Cli.__processIO" -> Some ANF.ProcessIO
             | "Darklang.Stdlib.Cli.__terminateProcess" -> Some ANF.TerminateProcess
+            | "Darklang.Stdlib.Network.__tcp4Socket" -> Some ANF.SocketTcp4
+            | "Darklang.Stdlib.Network.__close" -> Some ANF.SocketClose
             | _ -> None
         operation |> Option.map (fun op -> ANF.CliNative (op, args))
 

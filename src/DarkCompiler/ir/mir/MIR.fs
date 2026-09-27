@@ -90,6 +90,8 @@ type CliOperation =
     | SpawnProcess
     | ProcessIO
     | TerminateProcess
+    | SocketTcp4
+    | SocketClose
 
 /// Basic block label (defined early for use in Phi nodes)
 type Label = Label of string

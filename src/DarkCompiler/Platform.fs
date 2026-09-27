@@ -89,6 +89,7 @@ type SyscallNumbers = {
     Getrandom: uint16 // Get random bytes (getentropy on macOS, getrandom on Linux)
     Gettimeofday: uint16 // Get current time (gettimeofday on macOS, clock_gettime on Linux)
     Nanosleep: uint16 // Blocking sleep with a normalized timespec
+    Socket: uint16 // Create a socket
 }
 
 let macOSARM64SyscallNumbers : SyscallNumbers = {
@@ -106,6 +107,7 @@ let macOSARM64SyscallNumbers : SyscallNumbers = {
     Getrandom = 439us
     Gettimeofday = 116us
     Nanosleep = 240us
+    Socket = 97us
 }
 
 let linuxARM64SyscallNumbers : SyscallNumbers = {
@@ -123,6 +125,7 @@ let linuxARM64SyscallNumbers : SyscallNumbers = {
     Getrandom = 278us
     Gettimeofday = 113us
     Nanosleep = 101us
+    Socket = 198us
 }
 
 let linuxX86_64SyscallNumbers : SyscallNumbers = {
@@ -140,6 +143,7 @@ let linuxX86_64SyscallNumbers : SyscallNumbers = {
     Getrandom = 318us
     Gettimeofday = 228us  // clock_gettime
     Nanosleep = 35us
+    Socket = 41us
 }
 
 /// Get syscall numbers for the given (OS, Arch) pair.

@@ -683,6 +683,47 @@ let internal emitCliNative (ctx: CodeGenContext) (dest: LIR.Reg) (operation: LIR
             Ok [ARM64Symbolic.MOVZ (syscalls.SyscallRegister, number, 0)
                 ARM64Symbolic.SVC syscalls.SvcImmediate
                 ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)]
+        | LIR.SocketTcp4 ->
+            let syscalls = ARM64.targetSyscalls ctx.Target
+            let socketType =
+                match ARM64.targetOS ctx.Target with
+                | Platform.Linux -> 524289L // SOCK_STREAM | SOCK_CLOEXEC
+                | Platform.MacOS -> 268435457L // SOCK_STREAM | SOCK_CLOEXEC
+            let normalize =
+                match ARM64.targetOS ctx.Target with
+                | Platform.Linux -> []
+                | Platform.MacOS ->
+                    let doneLabel = $"__socket_open_{ctx.FunctionName}_{ctx.InstructionSite}_done"
+                    [ARM64Symbolic.B_cond_label (ARM64Symbolic.LO, doneLabel)
+                     ARM64Symbolic.NEG (ARM64Symbolic.X0, ARM64Symbolic.X0)
+                     ARM64Symbolic.Label doneLabel]
+            Ok ([ARM64Symbolic.MOVZ (ARM64Symbolic.X0, 2us, 0)]
+                @ loadImmediate ARM64Symbolic.X1 socketType
+                @ [ARM64Symbolic.MOVZ (ARM64Symbolic.X2, 6us, 0)
+                   ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Socket, 0)
+                   ARM64Symbolic.SVC syscalls.SvcImmediate]
+                @ normalize
+                @ [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)])
+        | LIR.SocketClose ->
+            match args with
+            | [descriptor] ->
+                loadCliOperand ARM64Symbolic.X0 descriptor
+                |> Result.map (fun loads ->
+                    let syscalls = ARM64.targetSyscalls ctx.Target
+                    let normalize =
+                        match ARM64.targetOS ctx.Target with
+                        | Platform.Linux -> []
+                        | Platform.MacOS ->
+                            let doneLabel = $"__socket_close_{ctx.FunctionName}_{ctx.InstructionSite}_done"
+                            [ARM64Symbolic.B_cond_label (ARM64Symbolic.LO, doneLabel)
+                             ARM64Symbolic.NEG (ARM64Symbolic.X0, ARM64Symbolic.X0)
+                             ARM64Symbolic.Label doneLabel]
+                    loads
+                    @ [ARM64Symbolic.MOVZ (syscalls.SyscallRegister, syscalls.Numbers.Close, 0)
+                       ARM64Symbolic.SVC syscalls.SvcImmediate]
+                    @ normalize
+                    @ [ARM64Symbolic.MOV_reg (destReg, ARM64Symbolic.X0)])
+            | _ -> Error "SocketClose expects one descriptor"
         | LIR.CpuCount ->
             match ARM64.targetOS ctx.Target with
             | Platform.MacOS ->

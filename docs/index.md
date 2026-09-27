@@ -44,6 +44,7 @@ grouped by purpose; each subject has one canonical source.
 - [Parsed and checked AST boundary plan](project/parsed-checked-ast-plan.md)
 - [Interpreter parser migration plan](project/parser-written-types-migration.md)
 - [AST correctness follow-up](project/ast-correctness-next.md)
+- [Native HTTP stack plan](project/http-stack-plan.md)
 - [SSA boundary migration plan](project/ssa-boundary-migration.md)
 - [In-place mutation optimization checklist](project/perceus-checklist.md)
 - [Host test and compiler runtime profile (2026-09-27)](project/test-runtime-profile-2026-09-27.md)

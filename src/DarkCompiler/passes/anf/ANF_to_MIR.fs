@@ -147,6 +147,8 @@ let convertCliOperation (operation: ANF.CliOperation) : MIR.CliOperation =
     | ANF.SpawnProcess -> MIR.SpawnProcess
     | ANF.ProcessIO -> MIR.ProcessIO
     | ANF.TerminateProcess -> MIR.TerminateProcess
+    | ANF.SocketTcp4 -> MIR.SocketTcp4
+    | ANF.SocketClose -> MIR.SocketClose
 
 /// Precomputed descriptions for primitive ops (avoids formatting on hot path)
 let private binOpDescription (op: ANF.BinOp) : string =

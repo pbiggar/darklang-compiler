@@ -207,6 +207,24 @@ let internal emitCliNative (ctx: FuncCtx) (dest: LIR.Reg) (operation: LIR.CliOpe
             Ok (loadImm64 X86_64.RAX 39L
             @ [X86_64.SYSCALL]
             @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
+        | LIR.SocketTcp4 ->
+            // AF_INET, SOCK_STREAM|SOCK_CLOEXEC, IPPROTO_TCP.
+            Ok (loadImm64 X86_64.RDI 2L
+            @ loadImm64 X86_64.RSI 524289L
+            @ loadImm64 X86_64.RDX 6L
+            @ loadImm64 X86_64.RAX (int64 syscalls.Socket)
+            @ [X86_64.SYSCALL]
+            @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
+        | LIR.SocketClose ->
+            match args with
+            | [descriptor] ->
+                loadCliOperand X86_64.RDI descriptor
+                |> Result.map (fun loads ->
+                    loads
+                    @ loadImm64 X86_64.RAX (int64 syscalls.Close)
+                    @ [X86_64.SYSCALL]
+                    @ (if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]))
+            | _ -> Error "SocketClose expects one descriptor"
         | LIR.GetUid ->
             Ok (loadImm64 X86_64.RAX 102L
             @ [X86_64.SYSCALL]

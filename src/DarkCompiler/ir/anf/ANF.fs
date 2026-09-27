@@ -145,6 +145,8 @@ type CliOperation =
     | SpawnProcess
     | ProcessIO
     | TerminateProcess
+    | SocketTcp4
+    | SocketClose
 
 /// Immutable nominal metadata carried through fixed-block lowering for field
 /// layout, ownership, diagnostics, and rendering. It is compile-time metadata,

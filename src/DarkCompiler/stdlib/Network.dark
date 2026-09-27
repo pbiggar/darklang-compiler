@@ -1,0 +1,25 @@
+// Network.dark - Typed Dark wrapper for the first native socket operations.
+
+module Darklang.Stdlib.Network
+
+// The Stream handle supplies shared, idempotent close and closes on last-owner
+// release. The descriptor stays captured by its disposer, outside user values.
+type Socket = { lifecycle: Stream<Unit> }
+
+// Replaced by target-specific syscalls during native lowering. The fallback
+// lets stdlib preparation typecheck without opening a socket.
+let __tcp4Socket () : Int64 = -38L
+let __close (descriptor: Int64) : Int64 = -38L
+
+let openTcp4 () : Stdlib.Result.Result<Stdlib.Network.Socket, Int64> =
+    let descriptor = Stdlib.Network.__tcp4Socket () in
+    if descriptor < 0L then Error (0L - descriptor)
+    else
+        let lifecycle =
+            Stdlib.Stream.__new
+                (fun _unit -> None)
+                (fun _unit -> let _ = Stdlib.Network.__close descriptor in ()) in
+        Ok (Stdlib.Network.Socket { lifecycle = lifecycle })
+
+let close (socket: Stdlib.Network.Socket) : Unit =
+    Stdlib.Stream.close socket.lifecycle
