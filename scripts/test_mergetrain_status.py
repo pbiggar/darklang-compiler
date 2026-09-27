@@ -431,7 +431,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 return output
 
             try:
-                read_until(b"refreshing")
+                initial = read_until(b"refreshing")
                 started = time.monotonic()
                 os.write(master, b"m")
                 changed = read_until(b"[m] fewer")
@@ -440,7 +440,8 @@ class MergetrainStatusTests(unittest.TestCase):
                 self.assertNotIn(b"\x1b[2J", changed)
                 self.assertNotIn(b"refreshing\xe2\x80\xa6\r\n", changed)
                 self.assertLess(time.monotonic() - started, 1.0)
-                read_until(b"health: healthy", timeout=12.0)
+                if b"health: healthy" not in initial + changed:
+                    read_until(b"health: healthy", timeout=12.0)
                 os.write(master, b"q")
                 self.assertEqual(process.wait(timeout=10), 0)
             finally:
@@ -595,10 +596,14 @@ class MergetrainStatusTests(unittest.TestCase):
                 read_until(b"health: healthy")
                 self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"?")
+                help_page = read_until(b"[?/q/Esc] back")
+                self.assertIn(b"Keyboard shortcuts", help_page)
+                os.write(master, b"G")
+                read_until(b"source change diff for that benchmark commit")
+                os.write(master, b"g")
                 read_until(b"Keyboard shortcuts")
-                read_until(b"[?/q/Esc] back")
                 os.write(master, b"q")
-                read_until(b"health: healthy")
+                read_until(b"[1-9] detail")
                 self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"j")
                 read_until(b"\x1b[1;1H\x1b[2Kin train:")
@@ -616,7 +621,6 @@ class MergetrainStatusTests(unittest.TestCase):
                 os.write(master, b"b")
                 read_until(b"benchmarks p1")
                 os.write(master, b"g")
-                read_until(b"health: healthy")
                 os.write(master, b"1")
                 detail_output = read_until(b"benchmark result:")
                 self.assertIn(b"benchmark result:", detail_output)
