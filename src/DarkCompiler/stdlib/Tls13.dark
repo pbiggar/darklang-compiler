@@ -1,0 +1,88 @@
+// Tls13.dark - TLS 1.3 SHA-256 key derivation and bounded record framing.
+
+module Darklang.Stdlib.Tls13
+
+type Record = { contentType: Int64, payload: Blob, remaining: Blob }
+
+type RecordError =
+  | Incomplete
+  | Invalid of String
+
+let hkdfExtract (salt: Blob) (inputKeyMaterial: Blob) : Blob =
+  Stdlib.Crypto.sha256hmac salt inputKeyMaterial
+
+let __expandNext (key: Blob) (info: Blob) (blocksRemaining: Int64)
+  (previous: Blob) (blocks: List<Blob>) (counter: Int64) : Blob =
+  if blocksRemaining == 0L then Stdlib.Blob.concat (Stdlib.List.reverse blocks)
+  else
+    let input = Stdlib.Blob.concat
+                  [previous, info, Stdlib.Blob.__fromInt64List [counter]] in
+    let block = Stdlib.Crypto.sha256hmac key input in
+    Stdlib.Tls13.__expandNext key info (blocksRemaining - 1L) block
+      (Stdlib.List.push blocks block) (counter + 1L)
+
+// SHA-256 produces 32 bytes per block; RFC 5869 limits expansion to 255 blocks.
+let hkdfExpand (pseudoRandomKey: Blob) (info: Blob) (length: Int64)
+  : Stdlib.Result.Result<Blob, String> =
+  if length < 0L || length > 8160L then Error "Invalid HKDF output length"
+  else if length == 0L then Ok Stdlib.Blob.empty
+  else
+    let blocks = (length + 31L) / 32L in
+    let expanded = Stdlib.Tls13.__expandNext pseudoRandomKey info blocks
+                     Stdlib.Blob.empty [] 1L in
+    Ok (Stdlib.Blob.slice expanded 0 (Stdlib.Int.fromInt64 length))
+
+let hkdfExpandLabel (secret: Blob) (label: String) (context: Blob) (length: Int64)
+  : Stdlib.Result.Result<Blob, String> =
+  let fullLabel = "tls13 " ++ label in
+  let labelLength = Stdlib.String.__byteLength fullLabel in
+  let contextLength = Stdlib.Blob.__byteLength context in
+  if labelLength > 255L || contextLength > 255L then
+    Error "TLS HKDF label or context is too long"
+  else if length < 0L || length > 8160L then
+    Error "Invalid HKDF output length"
+  else
+    let info = Stdlib.Blob.concat [
+      Stdlib.Blob.__fromInt64List [length / 256L, length % 256L, labelLength],
+      Stdlib.String.toBlob fullLabel,
+      Stdlib.Blob.__fromInt64List [contextLength], context ] in
+    Stdlib.Tls13.hkdfExpand secret info length
+
+let __read16 (data: Blob) (offset: Int64) : Int64 =
+  Stdlib.Blob.__getByte data offset * 256L +
+  Stdlib.Blob.__getByte data (offset + 1L)
+
+let serializePlaintext (contentType: Int64) (payload: Blob)
+  : Stdlib.Result.Result<Blob, String> =
+  let payloadLength = Stdlib.Blob.__byteLength payload in
+  if contentType != 21L && contentType != 22L && contentType != 23L then
+    Error "Invalid TLS record content type"
+  else if payloadLength > 16384L then Error "TLS plaintext exceeds size limit"
+  else
+    Ok (Stdlib.Blob.concat [
+      Stdlib.Blob.__fromInt64List [contentType, 3L, 3L,
+                                     payloadLength / 256L, payloadLength % 256L],
+      payload ])
+
+let parseRecord (data: Blob) : Stdlib.Result.Result<Stdlib.Tls13.Record, Stdlib.Tls13.RecordError> =
+  let dataLength = Stdlib.Blob.__byteLength data in
+  if dataLength < 5L then Error Stdlib.Tls13.RecordError.Incomplete
+  else
+    let contentType = Stdlib.Blob.__getByte data 0L in
+    let version = Stdlib.Tls13.__read16 data 1L in
+    let payloadLength = Stdlib.Tls13.__read16 data 3L in
+    if version != 771L then Error (Stdlib.Tls13.RecordError.Invalid "Unsupported TLS record version")
+    else if contentType != 20L && contentType != 21L &&
+            contentType != 22L && contentType != 23L then
+      Error (Stdlib.Tls13.RecordError.Invalid "Invalid TLS record content type")
+    else if payloadLength > 16640L then
+      Error (Stdlib.Tls13.RecordError.Invalid "TLS record exceeds size limit")
+    else if dataLength < 5L + payloadLength then
+      Error Stdlib.Tls13.RecordError.Incomplete
+    else
+      Ok (Stdlib.Tls13.Record {
+        contentType = contentType,
+        payload = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 5L)
+                    (Stdlib.Int.fromInt64 payloadLength),
+        remaining = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 (5L + payloadLength))
+                      (Stdlib.Int.fromInt64 (dataLength - 5L - payloadLength)) })
