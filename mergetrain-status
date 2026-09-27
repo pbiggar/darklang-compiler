@@ -17,6 +17,8 @@ show_more_merges=false
 benchmark_page=0
 benchmark_detail_index=""
 show_benchmark_diff=false
+show_help=false
+help_return_scroll_offset=0
 attention_job_id=""
 attention_task=""
 attention_position=""
@@ -48,7 +50,7 @@ Continuously display merge-train health, active jobs, recent integration
 merges with recorded test runtimes, and benchmark results in pages of nine.
 Interactive terminals keep accepting keys while pages refresh.
 Use 1-9 for details, 0 for the next benchmark page, b for the previous page,
-and w to review a requested gate exception.
+and w to review a requested gate exception. Press ? for keyboard help.
 
 Options:
   --repo PATH          Repository whose merge-train status is displayed.
@@ -69,6 +71,38 @@ Options:
 
 Example:
   ./mergetrain-status --interval 5
+EOF
+}
+
+keyboard_help() {
+  cat <<'EOF'
+Keyboard shortcuts
+
+Navigation
+  j / Down       Scroll down
+  k / Up         Scroll up
+  PgDn / PgUp    Scroll one page
+  g / Home       Go to top
+  G / End        Go to bottom
+  ?              Show or close this help
+  q / Esc        Back, or quit from status
+
+Status
+  a              Open attention jobs
+  v              Open queued manual approvals
+  w              Review a requested gate waiver
+  m              Show more or fewer recent merges
+  c              Show or hide full conflict details
+  1-9            Open benchmark result
+  0 / b          Next / previous benchmark page
+
+Job review
+  n / p          Next / previous job
+  r              Retry an attention job (asks first)
+  A              Review and approve a policy change
+
+Benchmark result
+  d              Toggle report and source diff
 EOF
 }
 
@@ -345,7 +379,11 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
     if ((scroll_step < 3)); then
       scroll_step=3
     fi
-    output_lines="$(printf '%s\n' "$status_output" | awk 'END { print NR }')"
+    display_output="$status_output"
+    if [[ "$show_help" == true ]]; then
+      display_output="$(keyboard_help)"
+    fi
+    output_lines="$(printf '%s\n' "$display_output" | awk 'END { print NR }')"
     max_scroll=$((output_lines - viewport_lines))
     if ((max_scroll < 0)); then
       max_scroll=0
@@ -355,9 +393,12 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
     fi
     first_line=$((scroll_offset + 1))
     last_line=$((scroll_offset + viewport_lines))
-    visible_output="$(printf '%s\n' "$status_output" | sed -n "${first_line},${last_line}p")"
+    visible_output="$(printf '%s\n' "$display_output" | sed -n "${first_line},${last_line}p")"
     other_controls=""
-    if [[ "$retry_pending" == true ]]; then
+    if [[ "$show_help" == true ]]; then
+      controls="[j/k] scroll [PgUp/Dn] page [?/q/Esc] back"
+      other_controls="Keyboard help"
+    elif [[ "$retry_pending" == true ]]; then
       controls="Retry #$attention_job_id? Approval may become manual. [y] confirm  [n/Esc] cancel"
     elif [[ -n "$attention_job_id" ]]; then
       if [[ "$refresh_running" == true || "$refresh_status" == true ]]; then
@@ -376,14 +417,14 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
         controls="[j/k] scroll [PgUp/Dn] page [d] diff [q/Esc] back"
       fi
     else
-      controls="[j/k] scroll [PgUp/Dn] page [1-9] detail [0] next [b] prev"
+      controls="[j/k] scroll [PgUp/Dn] page [1-9] detail [0] next [b] prev [?] help"
       if [[ "$show_more_merges" == true ]]; then
         other_controls="[a] jobs [v] review [w] waiver [m] fewer [c] conflicts [q] quit | benchmarks p$((benchmark_page + 1))"
       else
         other_controls="[a] jobs [v] review [w] waiver [m] more [c] conflicts [q] quit | benchmarks p$((benchmark_page + 1))"
       fi
     fi
-    if [[ -n "$attention_job_id" ]]; then
+    if [[ "$show_help" == false && -n "$attention_job_id" ]]; then
       if [[ "$refresh_running" == true || "$refresh_status" == true ]]; then
         identity="Review #$attention_job_id loading…"
       else
@@ -436,7 +477,23 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
             "$pressed_key" != n && "$pressed_key" != $'\033' ]]; then
         continue
       fi
+      if [[ "$show_help" == true ]]; then
+        case "$pressed_key" in
+          \?|q|$'\033'|j|k|g|G|$'\033[A'|$'\033[B'|$'\033[5~'|$'\033[6~'|$'\033[H'|$'\033[F') ;;
+          *) continue ;;
+        esac
+      fi
       case "$pressed_key" in
+        \?)
+          if [[ "$show_help" == true ]]; then
+            show_help=false
+            scroll_offset=$help_return_scroll_offset
+          else
+            show_help=true
+            help_return_scroll_offset=$scroll_offset
+            scroll_offset=0
+          fi
+          ;;
         y)
           if [[ "$retry_pending" == true ]]; then
             retry_pending=false
@@ -616,7 +673,10 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
           fi
           ;;
         q|$'\033')
-          if [[ "$retry_pending" == true ]]; then
+          if [[ "$show_help" == true ]]; then
+            show_help=false
+            scroll_offset=$help_return_scroll_offset
+          elif [[ "$retry_pending" == true ]]; then
             retry_pending=false
           elif [[ -n "$attention_job_id" ]]; then
             attention_job_id=""

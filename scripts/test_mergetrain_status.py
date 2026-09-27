@@ -164,6 +164,10 @@ class MergetrainStatusTests(unittest.TestCase):
                 approval_page = read_until(b"APPROVAL 2/2  #308 Review gate waivers")
                 self.assertIn(b"APPROVAL 2/2  #308 Review gate waivers", approval_page)
                 self.assertIn(b"[A] approve & deploy", approval_page)
+                os.write(master, b"?")
+                read_until(b"Keyboard shortcuts")
+                os.write(master, b"?")
+                read_until(b"APPROVAL 2/2  #308 Review gate waivers")
                 os.write(master, b"j")
                 self.assertIn(
                     b"commit:",
@@ -588,6 +592,12 @@ class MergetrainStatusTests(unittest.TestCase):
                 return output
 
             try:
+                read_until(b"health: healthy")
+                self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
+                os.write(master, b"?")
+                read_until(b"Keyboard shortcuts")
+                read_until(b"[?/q/Esc] back")
+                os.write(master, b"q")
                 read_until(b"health: healthy")
                 self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"j")
