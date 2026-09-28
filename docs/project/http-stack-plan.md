@@ -77,7 +77,9 @@ AES-256-GCM/SHA-384, and ChaCha20-Poly1305/SHA-256. It supports RSA-PSS and
 P-256 ECDSA server authentication, RSA or P-256 ECDSA signed X.509 chains, hostname checks,
 and system CA bundles. Unsupported cipher, key, certificate, and protocol
 choices fail closed. Local TLS peers and protocol vectors exercise the profile;
-server-side TLS can follow the client.
+streamed HTTPS responses use the same authenticated TLS record path and close
+their connection when drained or explicitly closed. Server-side TLS can follow
+the client.
 
 ## 5. Compatibility and readiness
 

@@ -65,11 +65,13 @@ The later pure-surface audit is pinned to darklang/dark release `v0.0.35`,
 revision `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. The compiler copies the
 upstream `HttpClient` response and request-error types, `basicAuth`,
 `bearerToken`, and the four `ContentType` header values. The compiler now
-implements buffered `HttpClient.request` and `get` for plain HTTP in Dark,
+implements buffered `HttpClient.request` and `get` for HTTP and HTTPS in Dark,
 using DNS over UDP and a checked resolved address for each native TCP
 connection. `requestTrusted` explicitly allows local addresses. Each request
-closes its connection; redirects and cookies are not automatic. HTTPS,
-streaming responses, and the remaining method wrappers are still pending.
+closes its connection; redirects and cookies are not automatic. `HttpClient.stream`
+returns headers after parsing them and pulls HTTP or HTTPS body bytes on demand.
+Closing or draining its body stream closes the connection. The remaining method
+wrappers are still pending.
 
 `Stdlib.Http.Request.header` performs the upstream case-insensitive lookup.
 `Stdlib.HttpServer.get` and `post` construct handler records and `getMethod`

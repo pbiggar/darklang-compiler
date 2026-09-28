@@ -115,6 +115,7 @@ let private optimizeContextFromConversionResult (convResult: AST_to_ANF.Conversi
 /// - Remove trailing whitespace from each line
 /// - Alpha-rename temporary IDs, which are allocation-order details shared
 ///   with unrelated functions in the compiled standard library.
+/// - Alpha-rename generated closure IDs for the same reason.
 let normalizeIR (ir: string) : string =
     let normalized =
         ir.Split([|'\n'; '\r'|], StringSplitOptions.RemoveEmptyEntries)
@@ -144,7 +145,28 @@ let normalizeIR (ir: string) : string =
                     else $"TempId {canonicalId}"
                 (token.Index + token.Length, nextId, ids, (prefix + replacement) :: parts))
             (0, 0, Map.empty, [])
-    String.concat "" (List.rev reversedParts) + normalized.Substring(lastOffset)
+    let normalizedTemps =
+        String.concat "" (List.rev reversedParts) + normalized.Substring(lastOffset)
+    let closureMatches =
+        System.Text.RegularExpressions.Regex.Matches(
+            normalizedTemps, "__closure_(comparison_)?(\\d+)(?![0-9])")
+        |> Seq.cast<System.Text.RegularExpressions.Match>
+        |> Seq.toList
+    let lastClosureOffset, _, _, reversedClosureParts =
+        closureMatches
+        |> List.fold (fun (offset, nextId, ids, parts) token ->
+            let prefix = normalizedTemps.Substring(offset, token.Index - offset)
+            let original = token.Value
+            let canonicalId, nextId, ids =
+                match Map.tryFind original ids with
+                | Some id -> (id, nextId, ids)
+                | None -> (nextId, nextId + 1, Map.add original nextId ids)
+            let kind = token.Groups.[1].Value
+            let replacement = $"__closure_{kind}{canonicalId}"
+            (token.Index + token.Length, nextId, ids, (prefix + replacement) :: parts))
+            (0, 0, Map.empty, [])
+    String.concat "" (List.rev reversedClosureParts) +
+        normalizedTemps.Substring(lastClosureOffset)
 
 let private withoutSyntheticANFMain (ir: string) : string =
     let suffix = "\n\nMain:\nreturn 0"

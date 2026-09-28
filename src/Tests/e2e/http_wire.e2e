@@ -21,3 +21,14 @@ Stdlib.HttpWire.parseRequest (Stdlib.String.toBlob "GET / HTTP/1.1\r\nHost: \r\n
 Stdlib.HttpWire.serializeResponse 204L [] Stdlib.Blob.empty |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "485454502F312E3120323034204E6F20436F6E74656E740D0A0D0A"
 Stdlib.HttpWire.parseUrl "http://[::garbage]/" = Error "Invalid URL host"
 Stdlib.HttpWire.parseUrl "http://bad..host/" = Error "Invalid URL host"
+
+(match Stdlib.HttpWire.parseResponseHead "GET"
+       (Stdlib.String.toBlob "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhe") with
+ | Error error -> Error error
+ | Ok head -> Ok ((head.statusCode, head.mode, Stdlib.Blob.toHex head.remaining)))
+  = Ok ((200L, Stdlib.HttpWire.ResponseBodyMode.Fixed 5L, "6865"))
+
+(Stdlib.HttpWire.parseResponseHead "GET"
+   (Stdlib.String.toBlob "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n")
+ |> Stdlib.Result.map (fun head -> head.mode))
+  = Error (Stdlib.HttpWire.ParseError.Invalid "Ambiguous body framing")

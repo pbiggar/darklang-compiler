@@ -350,6 +350,52 @@ let __responseAt (status: Int64) (headers: List<(String * String)>) (body: Blob)
         remaining = Stdlib.Blob.slice blob (Stdlib.Int.fromInt64 next) (Stdlib.Int.fromInt64 (length - next))
     }
 
+type ResponseBodyMode =
+    | NoBody
+    | Fixed of Int64
+    | Chunked
+    | UntilClose
+
+type ParsedResponseHead = {
+    statusCode: Int64,
+    headers: List<(String * String)>,
+    mode: Stdlib.HttpWire.ResponseBodyMode,
+    remaining: Blob
+}
+
+let parseResponseHead (method: String) (blob: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpWire.ParsedResponseHead, Stdlib.HttpWire.ParseError> =
+    match Stdlib.HttpWire.__line blob 0L with
+    | Error error -> Error error
+    | Ok ((statusLine, afterStatus)) ->
+      match Stdlib.HttpWire.__status statusLine with
+      | Error error -> Error error
+      | Ok status ->
+        match Stdlib.HttpWire.__headers blob afterStatus 0L afterStatus [] with
+        | Error error -> Error error
+        | Ok ((headers, bodyStart)) ->
+          match Stdlib.HttpWire.__contentLength headers None with
+          | Error error -> Error error
+          | Ok maybeLength ->
+            match Stdlib.HttpWire.__transferEncoding headers false with
+            | Error error -> Error error
+            | Ok chunked ->
+              if chunked && Stdlib.Option.isSome maybeLength then
+                Error (Stdlib.HttpWire.ParseError.Invalid "Ambiguous body framing")
+              else
+                let noBody = method == "HEAD" || status < 200L ||
+                             status == 204L || status == 304L in
+                let mode =
+                  if noBody then Stdlib.HttpWire.ResponseBodyMode.NoBody
+                  else if chunked then Stdlib.HttpWire.ResponseBodyMode.Chunked
+                  else match maybeLength with
+                       | Some size -> Stdlib.HttpWire.ResponseBodyMode.Fixed size
+                       | None -> Stdlib.HttpWire.ResponseBodyMode.UntilClose in
+                Ok (Stdlib.HttpWire.ParsedResponseHead {
+                  statusCode = status, headers = headers, mode = mode,
+                  remaining = Stdlib.Blob.slice blob (Stdlib.Int.fromInt64 bodyStart)
+                                (Stdlib.Int.fromInt64 (Stdlib.Blob.__byteLength blob - bodyStart)) })
+
 let parseResponse (method: String) (endOfStream: Bool) (blob: Blob) : Stdlib.Result.Result<Stdlib.HttpWire.ParsedResponse, Stdlib.HttpWire.ParseError> =
     match Stdlib.HttpWire.__line blob 0L with
     | Error error -> Error error

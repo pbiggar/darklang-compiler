@@ -31,12 +31,15 @@ def main() -> None:
     suite = sys.argv[1] if len(sys.argv) > 1 else "TLS_AES_256_GCM_SHA384"
     authentication = sys.argv[2] if len(sys.argv) > 2 else "rsa"
     ca_authentication = sys.argv[3] if len(sys.argv) > 3 else "rsa"
+    response_mode = sys.argv[4] if len(sys.argv) > 4 else "buffered"
     if suite not in ("TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"):
         raise ValueError(f"Unsupported TLS test suite: {suite}")
     if authentication not in ("rsa", "ecdsa"):
         raise ValueError(f"Unsupported TLS test authentication: {authentication}")
     if ca_authentication not in ("rsa", "ecdsa"):
         raise ValueError(f"Unsupported TLS test CA: {ca_authentication}")
+    if response_mode not in ("buffered", "stream"):
+        raise ValueError(f"Unsupported TLS response mode: {response_mode}")
     with tempfile.TemporaryDirectory(prefix="dark-https-aes256-") as temporary:
         directory = Path(temporary)
         ca_key = directory / "ca.key"
@@ -71,17 +74,19 @@ def main() -> None:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
         source = directory / "client.dark"
-        source.write_text(f'''// client.dark - Local TLS cipher interoperability probe.
-let host = match Stdlib.Cli.Args.get 0 with
-           | Ok value -> value
-           | Error _ -> "localhost" in
-match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
-| Error _ -> Stdlib.printLine "CA read failed"
-| Ok pem ->
-  match Stdlib.Tls13Client.parsePemBundle pem with
-  | Error message -> Stdlib.printLine message
-  | Ok roots ->
-    match Stdlib.Network.connectTcp4 [127L, 0L, 0L, 1L] {port}L 2000L with
+        if response_mode == "stream":
+            operation = f'''    let authorities = if host == "badroot" then [] else roots in
+    match Stdlib.HttpClient.streamTrustedWithRoots authorities "GET" "https://localhost:{port}/" [] Stdlib.Blob.empty with
+    | Error _ -> Stdlib.printLine "TLS failed: stream request"
+    | Ok response ->
+      let bytes = Stdlib.Stream.toBlob response.body in
+      let _ = Stdlib.Stream.close response.body in
+      if response.statusCode == 200 && Stdlib.Blob.length bytes > 0 then
+        Stdlib.printLine "TLS OK"
+      else Stdlib.printLine "Unexpected HTTP response"
+'''
+        else:
+            operation = f'''    match Stdlib.Network.connectTcp4 [127L, 0L, 0L, 1L] {port}L 2000L with
     | Error _ -> Stdlib.printLine "TCP connect failed"
     | Ok connection ->
       let request = Stdlib.String.toBlob "GET / HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n" in
@@ -97,6 +102,18 @@ match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
              Stdlib.String.contains text "HTTP/1.1 200" then
             Stdlib.printLine "TLS OK"
           else Stdlib.printLine "Unexpected HTTP response"
+'''
+        source.write_text(f'''// client.dark - Local TLS cipher interoperability probe.
+let host = match Stdlib.Cli.Args.get 0 with
+           | Ok value -> value
+           | Error _ -> "localhost" in
+match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
+| Error _ -> Stdlib.printLine "CA read failed"
+| Ok pem ->
+  match Stdlib.Tls13Client.parsePemBundle pem with
+  | Error message -> Stdlib.printLine message
+  | Ok roots ->
+{operation}
 ''')
         binary = directory / "client"
         subprocess.run([str(ROOT / "dark"), str(source), "-o", str(binary)],
@@ -113,11 +130,13 @@ match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
                                         capture_output=True, timeout=30)
                 if result.returncode != 0 or "TLS OK" not in result.stdout:
                     raise RuntimeError(f"Dark TLS probe failed: {result.stdout} {result.stderr}")
-                rejected = subprocess.run([str(binary), "wrong.local"], cwd=ROOT,
+                rejection_case = "badroot" if response_mode == "stream" else "wrong.local"
+                rejected = subprocess.run([str(binary), rejection_case], cwd=ROOT,
                                           text=True, capture_output=True, timeout=30)
                 if rejected.returncode != 0 or "TLS failed:" not in rejected.stdout:
-                    raise RuntimeError(f"Invalid hostname was accepted: {rejected.stdout} {rejected.stderr}")
-                print(f"{suite} with {authentication} leaf and {ca_authentication} CA OK; invalid hostname rejected")
+                    raise RuntimeError(f"Invalid trust or hostname was accepted: {rejected.stdout} {rejected.stderr}")
+                rejection = "untrusted root" if response_mode == "stream" else "invalid hostname"
+                print(f"{suite} with {authentication} leaf and {ca_authentication} CA, {response_mode} OK; {rejection} rejected")
             finally:
                 peer.terminate()
                 peer.wait(timeout=5)
