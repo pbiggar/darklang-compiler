@@ -1070,6 +1070,9 @@ let __hmac (key: Blob) (data: Blob) (blockSize: Int64) (hashFn: Blob -> Blob) : 
 let sha256hmac (key: Blob) (data: Blob) : Blob =
     Stdlib.Crypto.__hmac key data 64L Stdlib.Crypto.sha256
 
+let sha384hmac (key: Blob) (data: Blob) : Blob =
+    Stdlib.Crypto.__hmac key data 128L Stdlib.Crypto.sha384
+
 // HMAC-SHA1
 let sha1hmac (key: Blob) (data: Blob) : Blob =
     Stdlib.Crypto.__hmac key data 64L Stdlib.Crypto.__sha1

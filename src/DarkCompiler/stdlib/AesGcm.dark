@@ -1,4 +1,4 @@
-// AesGcm.dark - AES-128 and GCM authenticated encryption for TLS 1.3 records.
+// AesGcm.dark - AES-128/256 and GCM authenticated encryption for TLS records.
 
 module Darklang.Stdlib.AesGcm
 
@@ -56,22 +56,26 @@ let __keyWord (expanded: List<Int64>) (index: Int64) : List<Int64> =
    Stdlib.AesGcm.__at expanded (index * 4L + 2L),
    Stdlib.AesGcm.__at expanded (index * 4L + 3L)]
 
-let __expandKey (expanded: List<Int64>) (word: Int64) (roundConstant: Int64)
+let __expandKey (expanded: List<Int64>) (word: Int64) (keyWords: Int64)
+  (roundConstant: Int64)
   : List<Int64> =
-  if word == 44L then expanded
+  if word == (if keyWords == 8L then 60L else 44L) then expanded
   else
     let previous = Stdlib.AesGcm.__keyWord expanded (word - 1L) in
     let temp =
-      if word % 4L == 0L then
+      if word % keyWords == 0L then
         [Stdlib.AesGcm.__xor (Stdlib.AesGcm.__sbox (Stdlib.AesGcm.__at previous 1L)) roundConstant,
          Stdlib.AesGcm.__sbox (Stdlib.AesGcm.__at previous 2L),
          Stdlib.AesGcm.__sbox (Stdlib.AesGcm.__at previous 3L),
          Stdlib.AesGcm.__sbox (Stdlib.AesGcm.__at previous 0L)]
+      else if keyWords == 8L && word % 8L == 4L then
+        Stdlib.List.map previous Stdlib.AesGcm.__sbox
       else previous in
-    let next = Stdlib.List.map2shortest (Stdlib.AesGcm.__keyWord expanded (word - 4L)) temp
+    let next = Stdlib.List.map2shortest (Stdlib.AesGcm.__keyWord expanded (word - keyWords)) temp
                  Stdlib.AesGcm.__xor in
     Stdlib.AesGcm.__expandKey (Stdlib.List.append expanded next) (word + 1L)
-      (if word % 4L == 0L then Stdlib.AesGcm.__xtime roundConstant else roundConstant)
+      keyWords
+      (if word % keyWords == 0L then Stdlib.AesGcm.__xtime roundConstant else roundConstant)
 
 let __addRoundKey (state: List<Int64>) (key: List<Int64>) (round: Int64)
   (index: Int64) (acc: List<Int64>) : List<Int64> =
@@ -106,18 +110,20 @@ let __mixColumns (state: List<Int64>) (index: Int64) (acc: List<Int64>) : List<I
   else Stdlib.AesGcm.__mixColumns state (index + 1L)
          (Stdlib.List.push acc (Stdlib.AesGcm.__mixByte state index))
 
-let __aesRound (state: List<Int64>) (key: List<Int64>) (round: Int64) : List<Int64> =
-  if round == 10L then
+let __aesRound (state: List<Int64>) (key: List<Int64>) (round: Int64)
+  (rounds: Int64) : List<Int64> =
+  if round == rounds then
     Stdlib.AesGcm.__addRoundKey (Stdlib.AesGcm.__shiftRows state 0L []) key round 0L []
   else
     let shifted = Stdlib.AesGcm.__shiftRows state 0L [] in
     let mixed = Stdlib.AesGcm.__mixColumns shifted 0L [] in
     Stdlib.AesGcm.__aesRound
-      (Stdlib.AesGcm.__addRoundKey mixed key round 0L []) key (round + 1L)
+      (Stdlib.AesGcm.__addRoundKey mixed key round 0L []) key (round + 1L) rounds
 
 let __encryptBlock (expandedKey: List<Int64>) (block: Blob) : Blob =
   let state = Stdlib.AesGcm.__addRoundKey (Stdlib.Blob.__toInt64List block) expandedKey 0L 0L [] in
-  Stdlib.Blob.__fromInt64List (Stdlib.AesGcm.__aesRound state expandedKey 1L)
+  let rounds = if Stdlib.List.length expandedKey == 240 then 14L else 10L in
+  Stdlib.Blob.__fromInt64List (Stdlib.AesGcm.__aesRound state expandedKey 1L rounds)
 
 let __bits (blob: Blob) : Stdlib.AesGcm.Bits128 =
   Stdlib.AesGcm.Bits128 {
@@ -235,24 +241,28 @@ let __sameTag (expected: Blob) (actual: Blob) (index: Int64) (difference: Int64)
 
 let encrypt (key: Blob) (nonce: Blob) (aad: Blob) (plaintext: Blob)
   : Stdlib.Result.Result<Blob, String> =
-  if Stdlib.Blob.__byteLength key != 16L || Stdlib.Blob.__byteLength nonce != 12L then
-    Error "AES-128-GCM requires a 16-byte key and 12-byte nonce"
+  let keyLength = Stdlib.Blob.__byteLength key in
+  if (keyLength != 16L && keyLength != 32L) || Stdlib.Blob.__byteLength nonce != 12L then
+    Error "AES-GCM requires a 16- or 32-byte key and 12-byte nonce"
   else if Stdlib.Blob.__byteLength plaintext > 16624L then
     Error "AES-GCM plaintext exceeds TLS record size"
   else
-    let expanded = Stdlib.AesGcm.__expandKey (Stdlib.Blob.__toInt64List key) 4L 1L in
+    let keyWords = keyLength / 4L in
+    let expanded = Stdlib.AesGcm.__expandKey (Stdlib.Blob.__toInt64List key) keyWords keyWords 1L in
     let ciphertext = Stdlib.AesGcm.__crypt expanded nonce plaintext 0L 2L [] in
     Ok (Stdlib.Blob.concat [ciphertext, Stdlib.AesGcm.__tag expanded nonce aad ciphertext])
 
 let decrypt (key: Blob) (nonce: Blob) (aad: Blob) (sealed: Blob)
   : Stdlib.Result.Result<Blob, String> =
   let length = Stdlib.Blob.__byteLength sealed in
-  if Stdlib.Blob.__byteLength key != 16L || Stdlib.Blob.__byteLength nonce != 12L then
-    Error "AES-128-GCM requires a 16-byte key and 12-byte nonce"
+  let keyLength = Stdlib.Blob.__byteLength key in
+  if (keyLength != 16L && keyLength != 32L) || Stdlib.Blob.__byteLength nonce != 12L then
+    Error "AES-GCM requires a 16- or 32-byte key and 12-byte nonce"
   else if length < 16L || length > 16640L then
     Error "Invalid AES-GCM ciphertext length"
   else
-    let expanded = Stdlib.AesGcm.__expandKey (Stdlib.Blob.__toInt64List key) 4L 1L in
+    let keyWords = keyLength / 4L in
+    let expanded = Stdlib.AesGcm.__expandKey (Stdlib.Blob.__toInt64List key) keyWords keyWords 1L in
     let ciphertext = Stdlib.Blob.slice sealed 0 (Stdlib.Int.fromInt64 (length - 16L)) in
     let actual = Stdlib.Blob.slice sealed (Stdlib.Int.fromInt64 (length - 16L)) 16 in
     let expected = Stdlib.AesGcm.__tag expanded nonce aad ciphertext in
