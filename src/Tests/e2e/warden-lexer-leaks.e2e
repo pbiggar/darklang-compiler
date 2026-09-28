@@ -27,11 +27,11 @@ let slice (value: String) (start_: Int64) (end_: Int64) : String =
 
 // Tokens use compact integer tags so the token arena can provide average O(1)
 // indexed access. Number tokens are encoded as 1000 + value.
-type Lexed = { tokens: Dict<Int64>, count: Int64 }
+type Lexed = { tokens: Dict<String, Int64>, count: Int64 }
 
 let tokenKey (index: Int64) : String = Stdlib.Int64.toString index
 
-let tokenAt (tokens: Dict<Int64>) (index: Int64) : Int64 =
+let tokenAt (tokens: Dict<String, Int64>) (index: Int64) : Int64 =
     match Stdlib.Dict.get tokens (tokenKey index) with
     | Some token -> token
     | None -> Builtin.testRuntimeError "missing token in Warden token arena"
@@ -56,15 +56,15 @@ let wordToken (word: String) : Int64 =
     | "y" -> 11L
     | _ -> Builtin.testRuntimeError "unknown identifier in Warden program"
 
-let lex (source: String) (index: Int64) (length: Int64) (tokenIndex: Int64) (tokens: Dict<Int64>) : Lexed =
+let lex (source: String) (index: Int64) (length: Int64) (tokenIndex: Int64) (tokens: Dict<String, Int64>) : Lexed =
     if index >= length then Lexed { tokens = tokens, count = tokenIndex }
     else
         let byte = byteAt source index in
         if byte == 32L || byte == 10L || byte == 13L || byte == 9L then lex source (index + 1L) length tokenIndex tokens
         else if byte >= 48L && byte <= 57L then
-            let number = scanNumber source index length 0L in
-            let next = Stdlib.Dict.setOverridingDuplicates tokens (tokenKey tokenIndex) (1000L + number.0) in
-            lex source (number.1) length (tokenIndex + 1L) next
+            let (number, nextIndex) = scanNumber source index length 0L in
+            let next = Stdlib.Dict.setOverridingDuplicates tokens (tokenKey tokenIndex) (1000L + number) in
+            lex source nextIndex length (tokenIndex + 1L) next
         else if (byte >= 97L && byte <= 122L) || (byte >= 65L && byte <= 90L) then
             let afterWord = scanWord source index length in
             let token = wordToken (slice source index afterWord) in
@@ -86,8 +86,8 @@ let lex (source: String) (index: Int64) (length: Int64) (tokenIndex: Int64) (tok
             lex source (index + 1L) length (tokenIndex + 1L) next
 
 
-let number = scanNumber "1" 0L 1L 0L in number.0 + number.1 = stdout="2\n" stderr=""
-let number = scanNumber "1" 0L 1L 0L in number.0 + number.1 = stdout="2\n" stderr="" disable_opt_inline=true
+let (number, nextIndex) = scanNumber "1" 0L 1L 0L in number + nextIndex = stdout="2\n" stderr=""
+let (number, nextIndex) = scanNumber "1" 0L 1L 0L in number + nextIndex = stdout="2\n" stderr="" disable_opt_inline=true
 let source = "x" in let lexed = lex source 0L (stringLength source) 0L Stdlib.Dict.empty in lexed.count = stdout="1\n" stderr=""
 let source = "1" in let lexed = lex source 0L (stringLength source) 0L Stdlib.Dict.empty in lexed.count = stdout="1\n" stderr=""
 let source = "1" in let lexed = lex source 0L (stringLength source) 0L Stdlib.Dict.empty in lexed.count = stdout="1\n" stderr="" disable_opt_inline=true

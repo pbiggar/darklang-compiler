@@ -9,8 +9,8 @@ let leakParsePiece (pattern: String) (index: Int64) : (LeakPiece * Int64) =
 let leakParsePieces (pattern: String) (index: Int64) (reversed: List<LeakPiece>) : List<LeakPiece> =
     if Stdlib.Int.fromInt64 index >= Stdlib.String.length pattern then Stdlib.List.reverse reversed
     else
-        let parsed = leakParsePiece pattern index in
-        leakParsePieces pattern (parsed.1) (Stdlib.List.push reversed (parsed.0))
+        let (piece, nextIndex) = leakParsePiece pattern index in
+        leakParsePieces pattern nextIndex (Stdlib.List.push reversed piece)
 
 Stdlib.List.length (leakParsePieces "a" 0L []) = stdout="1\n" stderr=""
 Stdlib.List.length ([LeakPiece { value = 1L }]) = stdout="1\n" stderr=""
@@ -21,15 +21,15 @@ let d = Stdlib.Dict.setOverridingDuplicates Stdlib.Dict.empty (Stdlib.Int64.toSt
 let leakPair (value: Int64) : (Int64 * Int64) = (value, value + 1L)
 let leakPairLoop (remaining: Int64) (sum: Int64) : Int64 =
     if remaining <= 0L then sum
-    else let pair = leakPair remaining in leakPairLoop (remaining - 1L) (sum + pair.0 + pair.1)
+    else let (first, second) = leakPair remaining in leakPairLoop (remaining - 1L) (sum + first + second)
 
 leakPairLoop 2L 0L = stdout="8\n" stderr=""
 
 let leakHeldTuple (remaining: Int64) : Int64 =
     if remaining <= 0L then 0L
     else
-        let pair = (remaining, remaining + 1L) in
-        let child = leakHeldTuple (pair.0 - 1L) in
-        child + pair.1
+        let (first, second) = (remaining, remaining + 1L) in
+        let child = leakHeldTuple (first - 1L) in
+        child + second
 
 leakHeldTuple 2L = stdout="5\n" stderr=""
