@@ -108,7 +108,7 @@ class MergetrainExceptionTests(unittest.TestCase):
                 with patch.dict(os.environ, environment):
                     self.assertEqual(run_gate(repo, "benchmarks", fallback), 7)
                     with patch("sys.stdin") as stdin, patch(
-                        "builtins.input", return_value=f"approve 7 {head[:12]} benchmarks"
+                        "builtins.input", return_value="y"
                     ):
                         stdin.isatty.return_value = True
                         review_pending(repo)
@@ -128,7 +128,7 @@ class MergetrainExceptionTests(unittest.TestCase):
                     details_path.write_text(json.dumps(source_details), encoding="utf-8")
                     self.assertTrue(stage_if_requested(repo, source_details))
                     with patch("sys.stdin") as stdin, patch(
-                        "builtins.input", return_value=f"approve 8 {head[:12]} benchmark-sources"
+                        "builtins.input", return_value="y"
                     ):
                         stdin.isatty.return_value = True
                         review_pending(repo)

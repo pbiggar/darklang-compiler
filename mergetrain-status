@@ -95,7 +95,7 @@ Status
   v              Open the first queued manual approval, including
                  the policy evidence needed for review.
   w              Start the separate review of a requested gate
-                 waiver. Approval requires typed confirmation.
+                 waiver. Approve with y; Enter defaults to no.
   m              Switch between 5 and 20 recent merges.
   c              Show or hide complete merge conflict reasons.
   1-9            Open the numbered benchmark result for its

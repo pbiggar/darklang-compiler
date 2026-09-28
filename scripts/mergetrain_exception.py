@@ -230,10 +230,9 @@ def approve(repo: Path, job_id: int) -> None:
         except OSError as error:
             print(f"  (could not read gate log: {error})")
     print("Other gates still run on retry; any failure blocks deployment.")
-    challenge = f"approve {job_id} {review['head_sha'][:12]} {review['gate']}"
     if not sys.stdin.isatty():
         raise ExceptionFlowError("approval requires an interactive terminal")
-    if input(f"Type '{challenge}' to approve: ").strip() != challenge:
+    if input("Approve this waiver? [y/N]: ").strip().lower() != "y":
         raise ExceptionFlowError("approval was not granted")
     approval = {**review, "approved": True}
     path = approval_path(repo, review["candidate_tree"], review["gate"])
