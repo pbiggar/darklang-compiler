@@ -174,6 +174,34 @@ def stage_if_requested(repo: Path, details: dict[str, Any]) -> bool:
     return True
 
 
+def stage_no_progress_benchmark_review(repo: Path, details: dict[str, Any]) -> bool:
+    """Request human review when recovery reproduced the exact failed benchmark tree."""
+    job = details.get("job") or {}
+    gate, _command = failed_gate(details)
+    head = str(job.get("head_sha") or "")
+    branch = str(job.get("branch") or "")
+    candidate = str(job.get("deploy_sha") or "")
+    if gate != "benchmarks" or not head or not branch or not candidate:
+        return False
+    request = {
+        "schema": SCHEMA,
+        "head_sha": head,
+        "branch": branch,
+        "gate": gate,
+        "reason": (
+            "Recovery reproduced the same candidate tree after a failed benchmarks "
+            "gate; another identical replacement cannot change the measured result."
+        ),
+    }
+    path = gate_request_path(repo, head, gate)
+    existing = read_json(path)
+    if existing is not None and existing != request:
+        raise ExceptionFlowError("a different benchmark exception request already exists")
+    if existing is None:
+        write_json(path, request)
+    return stage_if_requested(repo, details)
+
+
 def inspect(repo: Path, job_id: int) -> dict[str, Any]:
     completed = run(repo, "mergetrain", "--repo", str(repo), "inspect", str(job_id), "--json")
     try:

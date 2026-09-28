@@ -53,6 +53,9 @@ task branches in arrival order.
   rebasing the owning branch, recording the full suite, committing the
   regenerated benchmark files, and retrying; that retry must reproduce the
   recording. An exact human exception may waive this gate instead.
+- When benchmark recovery reproduces the failed candidate's exact tree, the
+  runner stages an exact `benchmarks` review and stops replacing the job.
+  This requests human review; it does not approve the regression.
 - The train's `tests` gate runs the complete already-built host test suite with
   `./run-tests --ai`. Full-suite timing measurements are optional diagnostics;
   contention does not block integration.
