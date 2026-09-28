@@ -1,4 +1,4 @@
-// http-fetch.dark - Fetch a plain HTTP page and indent its HTML for inspection.
+// http-fetch.dark - Fetch an HTTP or HTTPS page and indent its HTML for inspection.
 
 let byteLength (value: String) : Int64 = Stdlib.String.byteLength value
 let byteAt (value: String) (index: Int64) : Int64 =
@@ -236,6 +236,38 @@ let sendRequest (connectHostName: String) (connectPort: Int64)
         let _ = log "Connection closed" in
         result
 
+let sendSecureRequest (origin: Stdlib.HttpWire.Url)
+    : Stdlib.Result.Result<Stdlib.HttpWire.ParsedResponse, String> =
+    let _ = log ("Resolving connection host " ++ origin.host) in
+    match connectHost origin.host origin.port with
+    | Error message -> Error message
+    | Ok connection ->
+        let request = "GET " ++ origin.target ++ " HTTP/1.1\r\n" ++
+                      "Host: " ++ origin.authority ++ "\r\n" ++
+                      "Accept: text/html\r\n" ++
+                      "Connection: close\r\n\r\n" in
+        let _ = log ("Request line: GET " ++ origin.target ++ " HTTP/1.1") in
+        let _ = log ("Host header: " ++ origin.authority) in
+        let _ = log ("Sending " ++ Stdlib.Int64.toString (Stdlib.String.byteLength request) ++ " encrypted HTTP bytes") in
+        let result =
+            match Stdlib.Tls13Client.loadSystemRoots () with
+            | Error message -> Error ("Trust store: " ++ message)
+            | Ok roots ->
+                let _ = log ("Loaded " ++ Stdlib.Int.toString (Stdlib.List.length roots) ++ " system CA certificates") in
+                let _ = log ("Starting TLS 1.3 for " ++ origin.host) in
+                match Stdlib.Tls13Client.exchange connection origin.host "GET"
+                        roots (Stdlib.String.toBlob request) with
+                | Error message -> Error ("TLS: " ++ message)
+                | Ok response ->
+                    let _ = log ("Authenticated response bytes: " ++ Stdlib.Int.toString (Stdlib.Blob.length response)) in
+                    match Stdlib.HttpWire.parseResponse "GET" true response with
+                    | Ok parsed -> Ok parsed
+                    | Error (Invalid message) -> Error ("HTTP framing: " ++ message)
+                    | Error Incomplete -> Error "HTTP response is incomplete" in
+        let _ = Stdlib.Network.closeTcp connection in
+        let _ = log "Connection closed" in
+        result
+
 let proxyRequest (origin: Stdlib.HttpWire.Url) (proxyText: String)
     : Stdlib.Result.Result<Stdlib.HttpWire.ParsedResponse, String> =
     match Stdlib.HttpWire.parseUrl proxyText with
@@ -269,7 +301,7 @@ let proxyFor (host: String) : Stdlib.Option.Option<String> =
         | None -> Stdlib.Cli.Env.get "http_proxy"
 
 let printHeaders (headers: List<(String * String)>) : Unit =
-    Stdlib.List.iter headers (fun header -> log ("Header: " ++ header.0 ++ ": " ++ header.1))
+    Stdlib.List.iter headers (fun (name, value) -> log ("Header: " ++ name ++ ": " ++ value))
 
 let display (status: String) (headers: List<(String * String)>) (body: Blob) : Unit =
     let _ = log ("Response status: " ++ status) in
@@ -282,7 +314,7 @@ let display (status: String) (headers: List<(String * String)>) (body: Blob) : U
         Stdlib.printLine (formatHtml html)
 
 match Stdlib.Cli.Args.get 0 with
-| Error _ -> Stdlib.printLine "Usage: http-fetch <http://url>"
+| Error _ -> Stdlib.printLine "Usage: http-fetch <http://url|https://url>"
 | Ok url ->
     let _ = log ("URL: " ++ url) in
     match Stdlib.HttpWire.parseUrl url with
@@ -292,7 +324,11 @@ match Stdlib.Cli.Args.get 0 with
         let _ = log ("Host: " ++ parsed.host) in
         let _ = log ("Port: " ++ Stdlib.Int64.toString parsed.port) in
         let _ = log ("Request target: " ++ parsed.target) in
-        if parsed.scheme != "http" then log "Only plain http:// URLs are supported"
+        if parsed.scheme == "https" then
+            let _ = log "Mode: direct Dark DNS/TCP/TLS 1.3 with system CA verification" in
+            match sendSecureRequest parsed with
+            | Error message -> log ("FAILED: " ++ message)
+            | Ok response -> display (Stdlib.Int64.toString response.statusCode) response.headers response.body
         else
             match proxyFor parsed.host with
             | Some proxy ->

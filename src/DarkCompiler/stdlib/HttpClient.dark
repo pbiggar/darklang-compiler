@@ -189,7 +189,22 @@ let __readResponse (connection: Stdlib.Network.TcpConnection) (method: String)
                   Stdlib.HttpClient.__readResponse connection method
                     (Stdlib.Blob.concat [buffer, chunk]) informational
 
-let __request (trusted: Bool) (method: String) (urlText: String)
+let __parseSecureResponse (method: String) (buffer: Blob) (informational: Int64)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  if informational > 8L then Error Stdlib.HttpClient.RequestError.NetworkError
+  else
+    match Stdlib.HttpWire.parseResponse method true buffer with
+    | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+    | Ok parsed ->
+      if parsed.statusCode == 101L then Error Stdlib.HttpClient.RequestError.NetworkError
+      else if parsed.statusCode < 200L then
+        Stdlib.HttpClient.__parseSecureResponse method parsed.remaining (informational + 1L)
+      else Ok (Stdlib.HttpClient.Response {
+        statusCode = Stdlib.Int.fromInt64 parsed.statusCode,
+        headers = parsed.headers, body = parsed.body })
+
+let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
+  (method: String) (urlText: String)
   (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
   let normalizedMethod = Stdlib.String.toUppercase method in
@@ -209,7 +224,7 @@ let __request (trusted: Bool) (method: String) (urlText: String)
             Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol)
           else Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidUri)
       | Ok url ->
-          if url.scheme != "http" then
+          if url.scheme != "http" && url.scheme != "https" then
             Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol)
           else
             match Stdlib.HttpWire.serializeRequest normalizedMethod url
@@ -220,19 +235,39 @@ let __request (trusted: Bool) (method: String) (urlText: String)
                 | Error error -> Error error
                 | Ok connection ->
                     let result =
-                      match Stdlib.Network.writeTcp connection requestBytes with
-                      | Error code -> Error (Stdlib.HttpClient.__transportError code)
-                      | Ok () -> Stdlib.HttpClient.__readResponse connection normalizedMethod Stdlib.Blob.empty 0L in
+                      if url.scheme == "https" then
+                        let trust =
+                          match roots with
+                          | None -> Stdlib.Tls13Client.loadSystemRoots ()
+                          | Some provided -> Ok provided in
+                        match trust with
+                        | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+                        | Ok authorities ->
+                          match Stdlib.Tls13Client.exchange connection url.host normalizedMethod
+                                  authorities requestBytes with
+                          | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+                          | Ok response -> Stdlib.HttpClient.__parseSecureResponse
+                                             normalizedMethod response 0L
+                      else
+                        match Stdlib.Network.writeTcp connection requestBytes with
+                        | Error code -> Error (Stdlib.HttpClient.__transportError code)
+                        | Ok () -> Stdlib.HttpClient.__readResponse connection normalizedMethod Stdlib.Blob.empty 0L in
                     let _ = Stdlib.Network.closeTcp connection in
                     result
 
 let request (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
-  Stdlib.HttpClient.__request false method url headers body
+  Stdlib.HttpClient.__request false None method url headers body
 
 let requestTrusted (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
-  Stdlib.HttpClient.__request true method url headers body
+  Stdlib.HttpClient.__request true None method url headers body
+
+// Explicit trust roots are useful for a private HTTPS service and local TLS peers.
+let requestTrustedWithRoots (roots: List<Blob>) (method: String) (url: String)
+  (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__request true (Some roots) method url headers body
 
 let get (url: String) (headers: List<(String * String)>)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =

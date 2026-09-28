@@ -72,10 +72,11 @@ can be tested. Keep routing in Dark.
 TLS is not an operating-system syscall. An entirely Dark HTTPS client requires
 TLS record framing, handshake, authenticated encryption, key exchange, secure
 randomness, certificate-chain and hostname verification, and trust-store
-loading. The current Dark crypto and X.509 modules do not provide all of these.
-Implement a reviewed TLS 1.3 subset, with certificate validation mandatory,
-and test it against protocol vectors and local TLS peers. Do not accept an
-`https://` URL until verification works. Server-side TLS can follow the client.
+loading. The client implements a TLS 1.3 X25519/AES-128-GCM/SHA-256 profile
+with RSA-PSS server authentication, RSA-signed X.509 chains, hostname checks,
+and system CA bundles. Unsupported cipher, key, certificate, and protocol
+choices fail closed. Local TLS peers and protocol vectors exercise the profile;
+server-side TLS can follow the client.
 
 ## 5. Compatibility and readiness
 
