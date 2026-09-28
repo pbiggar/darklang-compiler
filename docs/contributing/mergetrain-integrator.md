@@ -63,11 +63,10 @@ integration, and the integrated policy change is limited to `gates`,
 `gate_parallelism`, or a standalone `state.worktree_root` relocation. The
 worktree location is excluded from the native destination and execution-policy
 approval hashes. It replays the job on current integration, checks the new
-commit and clean worktree, then runs `mergetrain validate` in an isolated
-queue against the current gate policy. Only a successful validation is enqueued
-with a fresh bounded `--auto` approval. The daemon repeats its gates before any
-deployment. Changes to reuse, verify hooks, or other execution policy settings
-remain operator decisions because pre-push gate validation cannot prove them.
+commit and clean worktree, then enqueues it with a fresh bounded `--auto`
+approval. The daemon runs the current gates once before deployment. Changes to
+reuse, verify hooks, or other execution policy settings remain operator
+decisions because the configured gates cannot prove them.
 If such a change pauses a deferred FIFO head, status shows its original
 number and reason. An operator can stage that exact commit as a manual job with
 `python3 scripts/mergetrain_fifo.py --repo . manual ORDER HEAD_SHA`, then use

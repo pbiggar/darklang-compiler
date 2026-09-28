@@ -246,7 +246,7 @@ class MergetrainRecoveryTests(unittest.TestCase):
 
             self.assertEqual(completed.returncode, 0, completed.stderr)
             calls = fixture.recorded_calls()
-            self.assertIn("validate", [call["command"] for call in calls])
+            self.assertNotIn("validate", [call["command"] for call in calls])
             self.assertTrue(any(
                 call["command"] == "enqueue" and "--auto" in call["args"]
                 for call in calls
@@ -285,14 +285,14 @@ class MergetrainRecoveryTests(unittest.TestCase):
             self.assertIn("--auto", enqueue["args"])
             self.assertLess(calls.index(enqueue), commands.index("dismiss"))
             self.assertEqual(len(list(fixture.attempts.glob("*.verification.json"))), 1)
-            self.assertLess(commands.index("validate"), calls.index(enqueue))
+            self.assertNotIn("validate", commands)
             policy_evidence = json.loads(
                 next(fixture.attempts.glob("*.policy.json")).read_text(encoding="utf-8")
             )
             self.assertIn("+gates:", policy_evidence["integration_policy_diff"])
             self.assertEqual(policy_evidence["job_policy_diff"], "")
 
-    def test_failed_current_policy_validation_keeps_original_job(self) -> None:
+    def test_policy_recovery_leaves_gates_to_replacement_job(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = RecoveryFixture(Path(temp_dir), tests_fail=False)
             fixture.git("switch", "-q", "main")
@@ -313,14 +313,10 @@ class MergetrainRecoveryTests(unittest.TestCase):
 
             completed = fixture.execute()
 
-            self.assertNotEqual(completed.returncode, 0)
-            self.assertIn("current policy validation failed", completed.stderr)
-            self.assertNotIn("dismiss", [call["command"] for call in fixture.recorded_calls()])
-            policy_evidence = json.loads(
-                next(fixture.attempts.glob("*.policy.json")).read_text(encoding="utf-8")
-            )
-            self.assertEqual(policy_evidence["policy_validation_result"], "failed")
-            self.assertTrue(Path(policy_evidence["policy_validation_log"]).exists())
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            commands = [call["command"] for call in fixture.recorded_calls()]
+            self.assertNotIn("validate", commands)
+            self.assertIn("enqueue", commands)
 
     def test_policy_change_in_job_requires_operator(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
