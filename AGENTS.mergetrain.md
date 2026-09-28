@@ -48,12 +48,11 @@ task branches in arrival order.
 - The `benchmark-sources` gate rejects candidates that change
   `benchmarks/problems/`. A lander may request a one-time exception, but only
   a human operator may approve the exact failed candidate and gate.
-- Every assembled queue candidate reruns `./benchmarks/run_benchmarks.sh
-  --verify-fresh full`. A regression fails unless a human approves an exact
-  `benchmarks` exception. An unrecorded improvement is ordinarily repaired by
-  rebasing the owning branch, recording the full suite, committing the
-  regenerated benchmark files, and retrying; that retry must reproduce the
-  recording. An exact human exception may waive this gate instead.
+- Every assembled queue candidate runs `./benchmarks/run_benchmarks.sh
+  --verify-deployed full` once. Its exact counts are compared with the last
+  deployed head, independently of the canonical best-known snapshot. A new
+  regression requires an exact human `benchmarks` exception. Only confirmed
+  deployment promotes the candidate's counts to the next comparison baseline.
 - When benchmark recovery reproduces the failed candidate's exact tree, the
   runner stages an exact `benchmarks` review and stops replacing the job.
   This requests human review; it does not approve the regression.

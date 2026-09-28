@@ -105,16 +105,15 @@ Dark snapshot and generated `benchmarks/RESULTS.md`; commit
 `benchmarks/BASELINES.md` only for an audited Rust refresh. Recording advances
 only on aggregate improvement without a blocking individual regression and
 leaves the stronger snapshot/results on regression.
-Integration reruns every queued candidate with `--verify-fresh`. A regression
-fails the gate unless the exact candidate has a human-approved exception. When
-a candidate improves on the integration parent's snapshot,
-the read-only gate deliberately fails and the integrator rebases the owning
-branch, runs the full suite in recording mode, commits the regenerated snapshot
-and `RESULTS.md`, and retries that new exact commit. The retry must reproduce
-the recorded result before deployment. An incompatible or missing snapshot
-requires one successful `--reset-dark-baseline` full run; partial, targeted,
-`all`, hyperfine, and failed runs cannot reset it. Audited Rust refreshes remain
-separate via `--refresh-baseline=rust`.
+Integration measures every queued candidate once with `--verify-deployed`.
+The gate compares its 29 exact instruction counts with the last deployed head's
+counts stored in the shared Git directory. A new regression fails unless the
+exact candidate has a human-approved exception. Deployment promotes those
+measured counts for the next candidate, including an approved regression. The
+canonical best-known snapshot remains separate. A missing or incompatible
+deployed baseline stops the gate; seed it from a complete measurement of the
+actual deployed head with `deployed_baseline.py seed RESULTS_DIR`. Audited Rust
+refreshes remain separate via `--refresh-baseline=rust`.
 
 If a rebase conflicts in generated `benchmarks/RESULTS.md`, resolve the source
 conflicts and run `./benchmarks/run_benchmarks.sh full` in recording mode. The

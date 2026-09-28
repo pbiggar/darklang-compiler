@@ -1,6 +1,6 @@
 #!/bin/bash
 # Main entry point for running benchmarks
-# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify|--verify-parent|--verify-fresh] [--quiet|--verbose] [--skip-smoke] [--reset-dark-baseline] [--refresh-baseline=rust] [--jobs[=N]] [full|benchmark_name|all]
+# Usage: ./benchmarks/run_benchmarks.sh [--hyperfine] [--verify|--verify-parent|--verify-fresh|--verify-deployed] [--quiet|--verbose] [--skip-smoke] [--reset-dark-baseline] [--refresh-baseline=rust] [--jobs[=N]] [full|benchmark_name|all]
 #
 # Options:
 #   --help                   Show this help message and exit
@@ -8,6 +8,7 @@
 #   --verify                 Read-only verification against the canonical snapshot
 #   --verify-parent          Read-only full verification against the branch parent
 #   --verify-fresh           Read-only integration gate; an unrecorded improvement fails
+#   --verify-deployed        Integration gate against exact deployed-head counts
 #   --quiet                  Print only phase summaries, failures, and result locations
 #   --verbose                Print per-benchmark details (verification is quiet by default)
 #   --skip-smoke             Skip the cache-free smoke gate only when the caller has
@@ -50,6 +51,7 @@ LIST_ONLY=false
 VERIFY_RESULTS=false
 VERIFY_PARENT=false
 VERIFY_FRESH=false
+VERIFY_DEPLOYED=false
 RESET_DARK_BASELINE=false
 SNAPSHOT_OVERRIDE=""
 JOB_COUNT=""
@@ -80,6 +82,11 @@ while [[ $# -gt 0 ]]; do
         --verify-fresh)
             VERIFY_RESULTS=true
             VERIFY_FRESH=true
+            shift
+            ;;
+        --verify-deployed)
+            VERIFY_RESULTS=true
+            VERIFY_DEPLOYED=true
             shift
             ;;
         --quiet)
@@ -150,6 +157,10 @@ fi
 
 if [ "$VERIFY_PARENT" = true ] && [ "$VERIFY_FRESH" = true ]; then
     pretty_fail "--verify-parent cannot be combined with --verify-fresh"
+    exit 1
+fi
+if [ "$VERIFY_DEPLOYED" = true ] && { [ "$VERIFY_PARENT" = true ] || [ "$VERIFY_FRESH" = true ]; }; then
+    pretty_fail "--verify-deployed cannot be combined with another verification mode"
     exit 1
 fi
 
@@ -501,7 +512,12 @@ fi
             fi
         fi
         if [ "$VERIFY_RESULTS" = true ]; then
-            if [ "$VERIFY_PARENT" = true ]; then
+            if [ "$VERIFY_DEPLOYED" = true ]; then
+                if ! python3 "$SCRIPT_DIR/infrastructure/deployed_baseline.py" verify "$OUTPUT_DIR"; then
+                    PROCESS_FAILURES+=("deployed_comparison")
+                    pretty_warn "deployed-head benchmark verification failed"
+                fi
+            elif [ "$VERIFY_PARENT" = true ]; then
                 PARENT_ARGS=()
                 if [ "$QUIET_MODE" = true ]; then
                     PARENT_ARGS+=(--quiet)
