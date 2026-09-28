@@ -764,72 +764,88 @@ let private isRenderedResultError (expectedMessage: string option) (run: E2ERun)
             | Some message -> output.Contains(message))
 
 let evaluateExpectations (test: E2ETest) (run: E2ERun) : E2ETestResult =
-    if test.ErrorExpectation = Some CompileError then
+    let unexpectedLeak =
         match run with
-        | Ran _ ->
-            failRun run "Expected compilation error but compilation succeeded"
-        | CompileFailed (_, error, _) ->
-            match test.ExpectedErrorMessage with
-            | Some expectedMsg when not (error.Contains(expectedMsg)) ->
-                failRun run $"Expected compile error message '{expectedMsg}' not found in stderr. Actual stderr: {error}"
-            | _ ->
-                Ok run
-    elif test.ErrorExpectation = Some AnyError then
-        let signalExitCode =
+        | Ran (_, _, stderr, _, _) when not test.DisableLeakCheck ->
+            let expectsLeak =
+                test.ExpectedStderr
+                |> Option.exists (fun expected -> expected.Contains("leaks:"))
+            if expectsLeak then
+                None
+            else
+                let report = System.Text.RegularExpressions.Regex.Match(stderr, @"(?m)^leaks: ([0-9]+)$")
+                if report.Success then Some report.Groups.[1].Value else None
+        | _ -> None
+
+    match unexpectedLeak with
+    | Some leak -> failRun run $"Compiled program leaked: leaks: {leak}"
+    | None ->
+        if test.ErrorExpectation = Some CompileError then
             match run with
-            | Ran (exitCode, _, _, _, _) when exitCode >= 128 -> Some exitCode
-            | _ -> None
-        match signalExitCode with
-        | Some exitCode ->
-            failRun run $"Expected a compiler or language error, but the generated program terminated by signal (exit {exitCode})"
-        | None when exitCodeFromRun run = 0 && not (isRenderedResultError test.ExpectedErrorMessage run) ->
-            failRun run "Expected compilation error but compilation succeeded"
-        | None ->
-            match test.ExpectedErrorMessage with
-            | Some expectedMsg ->
-                let output =
-                    if exitCodeFromRun run = 0 then stdoutFromRun run else stderrFromRun run
-                if output.Contains(expectedMsg) then
+            | Ran _ ->
+                failRun run "Expected compilation error but compilation succeeded"
+            | CompileFailed (_, error, _) ->
+                match test.ExpectedErrorMessage with
+                | Some expectedMsg when not (error.Contains(expectedMsg)) ->
+                    failRun run $"Expected compile error message '{expectedMsg}' not found in stderr. Actual stderr: {error}"
+                | _ ->
                     Ok run
-                else
-                    failRun run $"Expected error message '{expectedMsg}' not found in stderr. Actual stderr: {output}"
+        elif test.ErrorExpectation = Some AnyError then
+            let signalExitCode =
+                match run with
+                | Ran (exitCode, _, _, _, _) when exitCode >= 128 -> Some exitCode
+                | _ -> None
+            match signalExitCode with
+            | Some exitCode ->
+                failRun run $"Expected a compiler or language error, but the generated program terminated by signal (exit {exitCode})"
+            | None when exitCodeFromRun run = 0 && not (isRenderedResultError test.ExpectedErrorMessage run) ->
+                failRun run "Expected compilation error but compilation succeeded"
             | None ->
+                match test.ExpectedErrorMessage with
+                | Some expectedMsg ->
+                    let output =
+                        if exitCodeFromRun run = 0 then stdoutFromRun run else stderrFromRun run
+                    if output.Contains(expectedMsg) then
+                        Ok run
+                    else
+                        failRun run $"Expected error message '{expectedMsg}' not found in stderr. Actual stderr: {output}"
+                | None ->
+                    Ok run
+        elif Option.isSome test.ExpectedValueExpr then
+            if didValueEqualityPass run then
                 Ok run
-    elif Option.isSome test.ExpectedValueExpr then
-        if didValueEqualityPass run then
-            Ok run
+            else
+                let stderr = stderrFromRun run
+                let detail = if String.IsNullOrWhiteSpace stderr then "" else $"\n{stderr.Trim()}"
+                failRun run $"Value mismatch{detail}"
         else
-            let stderr = stderrFromRun run
-            let detail = if String.IsNullOrWhiteSpace stderr then "" else $"\n{stderr.Trim()}"
-            failRun run $"Value mismatch{detail}"
-    else
-        let stdoutMatches =
-            match test.ExpectedStdout with
-            | None -> true
-            | Some expected ->
-                let actual = stdoutFromRun run
-                match test.OutputMatch with
-                | TestDSL.E2EFormat.ExactBytes -> actual = expected
-                | TestDSL.E2EFormat.NormalizedText -> actual.Trim() = expected.Trim()
+            let stdoutMatches =
+                match test.ExpectedStdout with
+                | None -> true
+                | Some expected ->
+                    let actual = stdoutFromRun run
+                    match test.OutputMatch with
+                    | TestDSL.E2EFormat.ExactBytes -> actual = expected
+                    | TestDSL.E2EFormat.NormalizedText -> actual.Trim() = expected.Trim()
 
-        let stderrMatches =
-            match test.ExpectedStderr with
-            | None -> true
-            | Some expected ->
-                let actual = stderrFromRun run
-                match test.OutputMatch with
-                | TestDSL.E2EFormat.ExactBytes -> actual = expected
-                | TestDSL.E2EFormat.NormalizedText -> actual.Trim() = expected.Trim()
+            let stderrMatches =
+                match test.ExpectedStderr with
+                | None -> true
+                | Some expected ->
+                    let actual = stderrFromRun run
+                    match test.OutputMatch with
+                    | TestDSL.E2EFormat.ExactBytes -> actual = expected
+                    | TestDSL.E2EFormat.NormalizedText -> actual.Trim() = expected.Trim()
 
-        let exitCodeMatches = exitCodeFromRun run = test.ExpectedExitCode
+            let exitCodeMatches = exitCodeFromRun run = test.ExpectedExitCode
 
-        if stdoutMatches && stderrMatches && exitCodeMatches then
-            Ok run
-        else
-            let expectedStdout = test.ExpectedStdout |> Option.defaultValue "<not asserted>"
-            let expectedStderr = test.ExpectedStderr |> Option.defaultValue "<not asserted>"
-            failRun run
-                $"Output mismatch. stdout expected '{visibleOutput expectedStdout}', actual '{visibleOutput (stdoutFromRun run)}'; stderr expected '{visibleOutput expectedStderr}', actual '{visibleOutput (stderrFromRun run)}'"
+            if stdoutMatches && stderrMatches && exitCodeMatches then
+                Ok run
+            else
+                let expectedStdout = test.ExpectedStdout |> Option.defaultValue "<not asserted>"
+                let expectedStderr = test.ExpectedStderr |> Option.defaultValue "<not asserted>"
+                failRun run
+                    $"Output mismatch. stdout expected '{visibleOutput expectedStdout}', actual '{visibleOutput (stdoutFromRun run)}'; stderr expected '{visibleOutput expectedStderr}', actual '{visibleOutput (stderrFromRun run)}'"
 
 let private buildCompilerOptions (test: E2ETest)
     : CompilerOptions.CompilerOptions =

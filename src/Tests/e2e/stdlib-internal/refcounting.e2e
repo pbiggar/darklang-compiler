@@ -6,6 +6,9 @@ let dynamicString (s: String): String = s ++ "b"
 // Leak check detects refcount leaks for heap strings
 let s = dynamicString "a" in let _ = __refcount_inc_string s in 0L = stdout="0\n" stderr="leaks: 1\n" // leak_check
 
+// A parsed object field list must be released when nested in a parsed-value sum.
+let source = "{\"n\": null}" in match Stdlib.AltJson.__parseObjectFields source 1L 11L [] with | ParsedFields (fields, afterValue) -> Stdlib.AltJson.InternalParseValueResult.ParsedValue (Stdlib.AltJson.InternalRawJson.RawObject fields "raw") afterValue | InvalidFields -> Stdlib.AltJson.InternalParseValueResult.InvalidValue = stdout="Darklang.Stdlib.AltJson.InternalParseValueResult.ParsedValue(Darklang.Stdlib.AltJson.InternalRawJson.RawObject([(\"n\", Darklang.Stdlib.AltJson.InternalRawJson.RawNull(\"null\"))], \"raw\"), 11)\n" stderr="" // leak_check
+
 // Current leak-accounting baseline for memory-managed runtime shapes.
 // These tests intentionally record today's behavior so each shape can be
 // re-enabled to expect stderr="" as the refcounting implementation reaches it.

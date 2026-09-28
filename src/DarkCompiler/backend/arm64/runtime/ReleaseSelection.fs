@@ -185,20 +185,8 @@ let private listDecHelperForType (ctx: CodeGenContext) (sourceType: AST.Semantic
 
 let internal dictPayloadReleaseNeedsPlannedHelper (keyRelease: MemoryModel.RcReleasePlan) (valueRelease: MemoryModel.RcReleasePlan) : bool =
     match keyRelease, valueRelease with
-    | MemoryModel.DynamicBufferRelease _, _
-    | _, MemoryModel.DynamicBufferRelease _ ->
-        true
-    | MemoryModel.RecursiveRelease _, _
-    | _, MemoryModel.RecursiveRelease _ ->
-        true
-    | MemoryModel.NoReleasePlan, MemoryModel.RootRelease (_, MemoryModel.TaggedList, _)
-    | MemoryModel.NoReleasePlan, MemoryModel.RootRelease (_, MemoryModel.DictHeap, _)
-    | MemoryModel.NoReleasePlan, MemoryModel.RootRelease (_, MemoryModel.ClosureHeap, _) ->
-        true
-    | _, MemoryModel.RootRelease (_, MemoryModel.GenericHeap, _) ->
-        true
-    | _ ->
-        false
+    | MemoryModel.NoReleasePlan, MemoryModel.NoReleasePlan -> false
+    | _ -> true
 
 let internal dictDecHelperForReleasePlanWithFingerprint
     (releasePlanFingerprint: string)
