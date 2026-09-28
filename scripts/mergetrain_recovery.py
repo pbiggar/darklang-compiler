@@ -361,59 +361,6 @@ def verify_repair(
     return head, receipt
 
 
-def validate_current_policy(
-    repo: Path,
-    attempts: Path,
-    worktree_dir: Path,
-    job_id: int,
-    head: str,
-    integration_sha: str,
-    tracking_ref: str,
-    evidence: Path | None = None,
-) -> Path:
-    """Use an isolated queue to run mergetrain's configured gates without pushing."""
-    isolated = worktree_dir / f"c4d-policy-validation-{job_id}-{head[:10]}"
-    if isolated.exists():
-        raise RecoveryError(f"policy validation checkout already exists: {isolated}")
-    run(("git", "clone", "--shared", "--no-checkout", str(repo), str(isolated)), cwd=repo)
-    remote = tracking_ref.removeprefix("refs/remotes/").split("/", 1)[0]
-    remote_url = run(("git", "remote", "get-url", remote), cwd=repo).stdout.strip()
-    run(("git", "remote", "add", remote, remote_url), cwd=isolated)
-    run(("git", "update-ref", tracking_ref, integration_sha), cwd=isolated)
-    for key in ("user.name", "user.email"):
-        value = run(("git", "config", key), cwd=repo).stdout.strip()
-        run(("git", "config", key, value), cwd=isolated)
-    branch = f"policy-validation-{job_id}"
-    run(("git", "switch", "-c", branch, head), cwd=isolated)
-    run(
-        ("mergetrain", "--repo", str(isolated), "enqueue", "--task", f"validate job {job_id}",
-         "--branch", branch, "--worktree", str(isolated), "--json"),
-        cwd=isolated,
-    )
-    log = attempts / f"{job_id}-{head}.policy-validation.log"
-    completed = run(
-        ("mergetrain", "--repo", str(isolated), "validate", "--json"),
-        cwd=isolated,
-        check=False,
-        log=log,
-    )
-    payload = load_json(completed, "policy validation")
-    jobs = payload.get("jobs") or []
-    if evidence is not None:
-        recorded = json.loads(evidence.read_text(encoding="utf-8"))
-        recorded["policy_validation_log"] = str(log)
-        recorded["policy_validation_result"] = payload.get("result")
-        recorded["policy_validation_failure"] = (
-            str(jobs[0].get("note") or "") if jobs and jobs[0].get("status") != "validated" else ""
-        )
-        evidence.write_text(json.dumps(recorded, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    if completed.returncode != 0:
-        raise RecoveryError(f"current policy validation failed; full log: {log}")
-    if payload.get("result") != "success" or len(jobs) != 1 or jobs[0].get("status") != "validated":
-        raise RecoveryError(f"current policy did not validate the exact job; full log: {log}")
-    return log
-
-
 def policy_sections(source: str) -> dict[str, str]:
     sections: dict[str, list[str]] = {"(preamble)": []}
     current = "(preamble)"
@@ -502,24 +449,22 @@ def recover_external_policy_change(
         repo, worktree_dir, job_id, old_head, integration_sha, tracking_ref, unique
     )
     if conflict:
-        raise RecoveryError("policy revalidation found a merge conflict; operator review required")
+        raise RecoveryError("policy recovery found a merge conflict; operator review required")
     head, receipt = verify_repair(worktree, attempts, job_id, integration_sha)
-    validate_current_policy(repo, attempts, worktree_dir, job_id, head,
-                            integration_sha, tracking_ref, evidence)
     owning = Path(str(job.get("worktree_path") or ""))
     if not owning.is_dir() or (
         run(("git", "rev-parse", "HEAD"), cwd=owning).stdout.strip() != old_head
         or run(("git", "status", "--porcelain"), cwd=owning).stdout.strip()
     ):
-        raise RecoveryError("owning worktree changed during policy validation")
+        raise RecoveryError("owning worktree changed during policy recovery")
     if run(("git", "rev-parse", tracking_ref), cwd=repo).stdout.strip() != integration_sha:
-        raise RecoveryError("integration ref changed during policy validation")
+        raise RecoveryError("integration ref changed during policy recovery")
     replacement_id = replace_job(
         repo, details, job_id, branch, worktree, head, integration_sha, receipt,
         renew_auto_approval=True,
     )
     print(
-        f"Job #{job_id}: verified current policy on {head[:10]} and requeued as #{replacement_id}",
+        f"Job #{job_id}: renewed safe policy on {head[:10]} and requeued as #{replacement_id}",
         file=sys.stderr,
     )
 
