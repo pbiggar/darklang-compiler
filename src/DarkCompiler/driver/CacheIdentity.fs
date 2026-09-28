@@ -63,7 +63,9 @@ let summaryFacts (summary: FunctionSummary) = {
     X64Writes = summary.X64Writes
 }
 
-let private unknownSummary = {
+/// An explicit pessimistic result for a direct callee whose body is unavailable
+/// or whose canonical ID resolves to more than one body.
+let unknownSummary = {
     Version = None
     Purity = {
         ObservableEffects = true

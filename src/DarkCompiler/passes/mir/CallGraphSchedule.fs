@@ -8,11 +8,11 @@ let private required key values =
         Crash.crash "Call graph schedule lost an internal node")
 
 type Component = {
+    SCCs: MIR.Function list list
     Functions: MIR.Function list
-    Recursive: bool
 }
 
-let private directCallees (func: MIR.Function) : Set<AST.FunctionId> =
+let directCallees (func: MIR.Function) : Set<AST.FunctionId> =
     func.CFG.Blocks
     |> Map.fold (fun callees _ block ->
         block.Instrs
@@ -80,8 +80,6 @@ let calleeFirst (functions: MIR.Function list) : Component list =
                 let visited, members = collect visited Set.empty idx
                 visited, members :: components) (Set.empty, [])
     let components = List.rev components
-    let componentsByIndex =
-        components |> List.mapi (fun idx members -> idx, members) |> Map.ofList
     let functionByIndex = indexed |> Map.ofList
     let componentByNode =
         components
@@ -137,13 +135,5 @@ let calleeFirst (functions: MIR.Function list) : Component list =
         layer
         |> List.chunkBySize 512
         |> List.map (fun batch ->
-            let funcs = batch |> List.collect (fun idx -> required idx membersByIndex)
-            let recursive =
-                batch
-                |> List.exists (fun idx ->
-                    let members = required idx componentsByIndex
-                    Set.count members > 1
-                    || (members
-                        |> Set.exists (fun node ->
-                            required node graph |> Set.contains node)))
-            { Functions = funcs; Recursive = recursive }))
+            let sccs = batch |> List.map (fun idx -> required idx membersByIndex)
+            { SCCs = sccs; Functions = sccs |> List.concat }))

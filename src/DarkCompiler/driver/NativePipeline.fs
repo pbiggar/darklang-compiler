@@ -314,11 +314,24 @@ let internal lowerToAllocatedLirWithKnown
                     |> List.countBy (fun func -> func.Id)
                     |> List.choose (fun (id, count) -> if count > 1 then Some id else None)
                     |> Set.ofList
+                let directCalleeIds =
+                    mirFuncs
+                    |> List.fold (fun callees func ->
+                        Set.union callees (CallGraphSchedule.directCallees func)) Set.empty
                 // A current body always supersedes a cached fact with the same
                 // canonical ID, including a definition from another unit.
                 let externalSummaries =
                     externalSummaries
                     |> Map.filter (fun id _ -> not (Set.contains id localIds))
+                // Even an unresolved edge has a saved, pessimistic result.
+                // Consumers may select narrower facts only from this catalog
+                // after the scheduler has finalized a unique local callee.
+                let externalSummaries =
+                    Set.difference directCalleeIds localIds
+                    |> Set.fold (fun summaries id ->
+                        if Map.containsKey id summaries then summaries
+                        else Map.add id CompilationCacheIdentity.unknownSummary summaries)
+                        externalSummaries
                 if verbosity >= 2 then
                     let directCalls =
                         mirFuncs
@@ -351,7 +364,9 @@ let internal lowerToAllocatedLirWithKnown
                     knownRemovable
                     knownTypedConstants
                     knownWrites
-                    (componentFuncs: MIR.Function list) =
+                    (catalog: Map<AST.FunctionId, FunctionSummary>)
+                    (group: CallGraphSchedule.Component) =
+                    let componentFuncs = group.Functions
                     let mirProgram =
                         MIR.Program (componentFuncs, variantRegistry, mirRecordRegistry)
                     compileMirToLir
@@ -407,7 +422,7 @@ let internal lowerToAllocatedLirWithKnown
                         let allocatedFuncs =
                             funcsPreparedForAllocation |> List.map allocateFunction
                         let callAwareStart = sw.Elapsed.TotalMilliseconds
-                        let allocatedFuncs =
+                        let allocatedFuncs, callWrites =
                             let allWrites =
                                 match arch with
                                 | Platform.ARM64 -> ARM64CalleeClobbers.all
@@ -416,11 +431,9 @@ let internal lowerToAllocatedLirWithKnown
                                 match arch with
                                 | Platform.ARM64 -> ARM64CalleeClobbers.callWritesForSaves
                                 | Platform.X86_64 -> X64CalleeClobbers.callWritesForSaves
-                            // Batches contain no callee edge between different
-                            // SCCs. Internal recursive calls use the full ABI
-                            // envelope below; later MIR/LIR edges absent from
-                            // the schedule also remain unknown here.
-                            let callees = knownWrites
+                            // Calls introduced after MIR receive an explicit
+                            // pessimistic clobber result. A unique local callee
+                            // must still have been finalized by the scheduler.
                             let callEdges =
                                 funcsPreparedForAllocation
                                 |> List.fold (fun edges (func: LIR.Function) ->
@@ -437,6 +450,44 @@ let internal lowerToAllocatedLirWithKnown
                                     let existing =
                                         Map.tryFind func.Id edges |> Option.defaultValue Set.empty
                                     Map.add func.Id (Set.union existing calls) edges) Map.empty
+                            let sccPeers =
+                                group.SCCs
+                                |> List.collect (fun scc ->
+                                    let ids = scc |> List.map (fun func -> func.Id) |> Set.ofList
+                                    scc |> List.map (fun func -> func.Id, ids))
+                                |> Map.ofList
+                            callEdges
+                            |> Map.iter (fun caller calls ->
+                                let peers = Map.tryFind caller sccPeers |> Option.defaultValue Set.empty
+                                calls
+                                |> Set.iter (fun callee ->
+                                    if not (Set.contains caller ambiguousLocalIds)
+                                       && Set.contains callee localIds
+                                       && not (Set.contains callee ambiguousLocalIds)
+                                       && not (Set.contains callee peers) then
+                                        match Map.tryFind callee catalog with
+                                        | Some summary ->
+                                            let hasTargetWrites =
+                                                match arch with
+                                                | Platform.ARM64 -> Option.isSome summary.Arm64Writes
+                                                | Platform.X86_64 -> Option.isSome summary.X64Writes
+                                            match summary.Version with
+                                            | Some version when version.Function = callee
+                                                                && version.Target = target
+                                                                && hasTargetWrites -> ()
+                                            | _ ->
+                                                Crash.crash
+                                                    $"LIR introduced a call from {caller} before local callee {callee} was finalized"
+                                        | None ->
+                                            Crash.crash
+                                                $"LIR introduced a call from {caller} before local callee {callee} was scheduled"))
+                            let callees =
+                                callEdges
+                                |> Map.fold (fun writes _ calls ->
+                                    calls
+                                    |> Set.fold (fun writes callee ->
+                                        if Map.containsKey callee writes then writes
+                                        else Map.add callee allWrites writes) writes) knownWrites
                             let rec canReach target seen current =
                                 if current = target then true
                                 elif Set.contains current seen then false
@@ -445,65 +496,69 @@ let internal lowerToAllocatedLirWithKnown
                                         Map.tryFind current callEdges |> Option.defaultValue Set.empty
                                     next
                                     |> Set.exists (canReach target (Set.add current seen))
-                            List.map2
-                                (fun (prepared: LIR.Function) (allocated: LIR.Function) ->
-                                    let directCallees =
-                                        prepared.CFG.Blocks
-                                        |> Map.toList
-                                        |> List.collect (fun (_, block) ->
-                                            block.Instrs
-                                            |> List.choose (function
-                                                | LIR.Call (_, id, _) -> Some id
-                                                | _ -> None))
-                                        |> Set.ofList
-                                    let relevantCallees =
-                                        directCallees
-                                        |> Seq.map (fun id ->
-                                            id,
-                                            (if canReach prepared.Id Set.empty id then
-                                                 allWrites
-                                             else
-                                                 Map.tryFind id callees
-                                                 |> Option.defaultValue allWrites))
-                                        |> Map.ofSeq
-                                    let hasPreservedCallerReg =
-                                        prepared.CFG.Blocks
-                                        |> Map.exists (fun _ block ->
-                                            callWritesForSaves relevantCallees block
-                                            |> List.exists (fun writes ->
-                                                (RegisterPolicy.callerSavedRegs
-                                                 |> List.exists (fun reg ->
-                                                     not (Set.contains reg writes.Ints)))
-                                                    || (FloatAllocation.floatCallerSavedRegsFor arch
-                                                        |> List.exists (fun reg ->
-                                                            not (Set.contains reg writes.Floats)))))
-                                    let hasCallLiveValue =
-                                        not (List.isEmpty allocated.UsedCalleeSaved)
-                                        || (allocated.CFG.Blocks
-                                            |> Map.exists (fun _ block ->
+                            let allocated =
+                                List.map2
+                                    (fun (prepared: LIR.Function) (allocated: LIR.Function) ->
+                                        let directCallees =
+                                            prepared.CFG.Blocks
+                                            |> Map.toList
+                                            |> List.collect (fun (_, block) ->
                                                 block.Instrs
-                                                |> List.exists (function
-                                                    | LIR.SaveRegs (ints, floats) ->
-                                                        not (List.isEmpty ints && List.isEmpty floats)
-                                                    | _ -> false)))
-                                    let allocated =
-                                        if hasPreservedCallerReg && hasCallLiveValue then
-                                            let allocate () =
-                                                RegisterAllocation.allocateRegistersWithCallSummaries
-                                                    arch relevantCallees prepared
-                                                |> LIR_Peephole.removeSelfMovesFromFunction
-                                            match functionCaches with
-                                            | Some caches ->
-                                                caches.AllocateCallAwareLir
-                                                    allocated relevantCallees allocate
-                                            | None -> allocate ()
-                                        else allocated
-                                    match arch with
-                                    | Platform.ARM64 -> allocated
-                                    | Platform.X86_64 ->
-                                        X64CalleeClobbers.pruneFunction relevantCallees allocated)
-                                funcsPreparedForAllocation
-                                allocatedFuncs
+                                                |> List.choose (function
+                                                    | LIR.Call (_, id, _) -> Some id
+                                                    | _ -> None))
+                                            |> Set.ofList
+                                        let relevantCallees =
+                                            directCallees
+                                            |> Seq.map (fun id ->
+                                                id,
+                                                (if canReach prepared.Id Set.empty id then
+                                                     allWrites
+                                                 else
+                                                     Map.tryFind id callees
+                                                     |> Option.defaultWith (fun () ->
+                                                         Crash.crash
+                                                             $"Call graph has no LIR clobber summary for {prepared.Name}'s callee {id}")))
+                                            |> Map.ofSeq
+                                        let hasPreservedCallerReg =
+                                            prepared.CFG.Blocks
+                                            |> Map.exists (fun _ block ->
+                                                callWritesForSaves relevantCallees block
+                                                |> List.exists (fun writes ->
+                                                    (RegisterPolicy.callerSavedRegs
+                                                     |> List.exists (fun reg ->
+                                                         not (Set.contains reg writes.Ints)))
+                                                        || (FloatAllocation.floatCallerSavedRegsFor arch
+                                                            |> List.exists (fun reg ->
+                                                                not (Set.contains reg writes.Floats)))))
+                                        let hasCallLiveValue =
+                                            not (List.isEmpty allocated.UsedCalleeSaved)
+                                            || (allocated.CFG.Blocks
+                                                |> Map.exists (fun _ block ->
+                                                    block.Instrs
+                                                    |> List.exists (function
+                                                        | LIR.SaveRegs (ints, floats) ->
+                                                            not (List.isEmpty ints && List.isEmpty floats)
+                                                        | _ -> false)))
+                                        let allocated =
+                                            if hasPreservedCallerReg && hasCallLiveValue then
+                                                let allocate () =
+                                                    RegisterAllocation.allocateRegistersWithCallSummaries
+                                                        arch relevantCallees prepared
+                                                    |> LIR_Peephole.removeSelfMovesFromFunction
+                                                match functionCaches with
+                                                | Some caches ->
+                                                    caches.AllocateCallAwareLir
+                                                        allocated relevantCallees allocate
+                                                | None -> allocate ()
+                                            else allocated
+                                        match arch with
+                                        | Platform.ARM64 -> allocated
+                                        | Platform.X86_64 ->
+                                            X64CalleeClobbers.pruneFunction relevantCallees allocated)
+                                    funcsPreparedForAllocation
+                                    allocatedFuncs
+                            allocated, callees
                         recordPassTiming
                             passTimingRecorder
                             "Call-aware Allocation and Save Pruning"
@@ -513,18 +568,77 @@ let internal lowerToAllocatedLirWithKnown
                         if verbosity >= 2 then
                             let t = System.Math.Round(allocElapsed, 1)
                             println $"        {t}ms"
-                        Ok (allocatedFuncs, typedConstants))
+                        Ok (allocatedFuncs, typedConstants, callWrites))
                 let rec compile
                     knownPurity
                     knownLocalEffectFree
                     knownTypedConstants
                     knownWrites
-                    published
+                    (published: Map<AST.FunctionId, FunctionSummary>)
+                    (catalog: Map<AST.FunctionId, FunctionSummary>)
                     (completed: LIR.Function list list)
                     (remaining: CallGraphSchedule.Component list) =
                     match remaining with
                     | [] -> Ok (completed |> List.rev |> List.concat, published)
                     | group :: rest ->
+                        // Same-SCC calls cannot yet have final allocation facts.
+                        // Every other unique local edge must resolve to a
+                        // completed function, rather than silently taking the
+                        // same fallback as an unavailable external callee.
+                        group.SCCs
+                        |> List.iter (fun scc ->
+                            let sccIds = scc |> List.map (fun func -> func.Id) |> Set.ofList
+                            scc
+                            |> List.iter (fun func ->
+                                CallGraphSchedule.directCallees func
+                                |> Set.iter (fun callee ->
+                                    if not (Set.contains callee sccIds) then
+                                        let summary =
+                                            Map.tryFind callee catalog
+                                            |> Option.defaultWith (fun () ->
+                                                Crash.crash
+                                                    $"Call graph has no summary for {func.Name}'s callee {callee}")
+                                        match summary.Version with
+                                        | Some version when version.Function <> callee
+                                                            || version.Target <> target ->
+                                            Crash.crash
+                                                $"Call graph has a mismatched version for {func.Name}'s callee {callee}"
+                                        | _ -> ()
+                                        if Set.contains callee localIds
+                                           && not (Set.contains callee ambiguousLocalIds) then
+                                            let hasTargetWrites =
+                                                match Platform.archFor target with
+                                                | Platform.ARM64 -> Option.isSome summary.Arm64Writes
+                                                | Platform.X86_64 -> Option.isSome summary.X64Writes
+                                            match summary.Version with
+                                            | Some version when version.Function = callee
+                                                                && version.Target = target
+                                                                && hasTargetWrites -> ()
+                                            | _ ->
+                                                Crash.crash
+                                                    $"Call graph scheduled {func.Name} before finalized callee {callee}"
+                                        if not (Set.contains callee ambiguousLocalIds) then
+                                            let targetWrites =
+                                                match Platform.archFor target with
+                                                | Platform.ARM64 -> summary.Arm64Writes
+                                                | Platform.X86_64 -> summary.X64Writes
+                                            let purityMatches =
+                                                Map.tryFind callee knownPurity = Some summary.Purity
+                                            let constantMatches =
+                                                Map.tryFind callee knownTypedConstants = summary.ConstantReturn
+                                            let fullWrites =
+                                                match Platform.archFor target with
+                                                | Platform.ARM64 -> ARM64CalleeClobbers.all
+                                                | Platform.X86_64 -> X64CalleeClobbers.all
+                                            let writesMatch =
+                                                let current =
+                                                    Map.tryFind callee knownWrites
+                                                    |> Option.defaultValue fullWrites
+                                                let saved = targetWrites |> Option.defaultValue fullWrites
+                                                current = saved
+                                            if not (purityMatches && constantMatches && writesMatch) then
+                                                Crash.crash
+                                                    $"Call graph facts for {func.Name}'s callee {callee} disagree with its saved summary (purity={purityMatches}, constant={constantMatches}, writes={writesMatch})")))
                         let purityStart = sw.Elapsed.TotalMilliseconds
                         let purity =
                             MIROptimizationFacts.analyzePurityWithKnown
@@ -556,15 +670,25 @@ let internal lowerToAllocatedLirWithKnown
                         compileComponent
                             (Set.union knownEffectFree effectFree)
                             knownRemovable
-                            knownTypedConstants knownWrites group.Functions
-                        |> Result.bind (fun (allocated, typedConstants) ->
+                            knownTypedConstants knownWrites catalog group
+                        |> Result.bind (fun (allocated, typedConstants, callWrites) ->
+                            let scheduledIds =
+                                group.Functions
+                                |> List.countBy (fun func -> func.Id)
+                                |> Map.ofList
+                            let emittedIds =
+                                allocated
+                                |> List.countBy (fun (func: LIR.Function) -> func.Id)
+                                |> Map.ofList
+                            if scheduledIds <> emittedIds then
+                                Crash.crash "Call graph batch did not emit every scheduled function"
                             let clobberStart = sw.Elapsed.TotalMilliseconds
                             let knownWrites =
                                 (match Platform.archFor target with
                                  | Platform.ARM64 ->
-                                     ARM64CalleeClobbers.summariesWithKnown knownWrites allocated
+                                     ARM64CalleeClobbers.summariesWithKnown callWrites allocated
                                  | Platform.X86_64 ->
-                                     X64CalleeClobbers.summariesWithKnown knownWrites allocated)
+                                     X64CalleeClobbers.summariesWithKnown callWrites allocated)
                                 |> Map.filter (fun id _ -> not (Set.contains id ambiguousLocalIds))
                             recordPassTiming
                                 passTimingRecorder
@@ -575,7 +699,7 @@ let internal lowerToAllocatedLirWithKnown
                                 |> Map.fold (fun known id value -> Map.add id value known)
                                     knownTypedConstants
                                 |> Map.filter (fun id _ -> not (Set.contains id ambiguousLocalIds))
-                            let published =
+                            let batchSummaries =
                                 allocated
                                 |> List.fold (fun summaries (func: LIR.Function) ->
                                     let summary = {
@@ -589,15 +713,31 @@ let internal lowerToAllocatedLirWithKnown
                                         ConstantReturn = Map.tryFind func.Id typedConstants
                                         Arm64Writes =
                                             match Platform.archFor target with
-                                            | Platform.ARM64 -> Map.tryFind func.Id knownWrites
+                                            | Platform.ARM64 when Set.contains func.Id ambiguousLocalIds -> None
+                                            | Platform.ARM64 ->
+                                                Map.tryFind func.Id knownWrites
+                                                |> Option.defaultWith (fun () ->
+                                                    Crash.crash "Final ARM64 function lacks a clobber summary")
+                                                |> Some
                                             | Platform.X86_64 -> None
                                         X64Writes =
                                             match Platform.archFor target with
-                                            | Platform.X86_64 -> Map.tryFind func.Id knownWrites
+                                            | Platform.X86_64 when Set.contains func.Id ambiguousLocalIds -> None
+                                            | Platform.X86_64 ->
+                                                Map.tryFind func.Id knownWrites
+                                                |> Option.defaultWith (fun () ->
+                                                    Crash.crash "Final x64 function lacks a clobber summary")
+                                                |> Some
                                             | Platform.ARM64 -> None
                                     }
                                     CompilationCacheIdentity.mergeFunctionSummaries
-                                        summaries (Map.ofList [func.Id, summary])) published
+                                        summaries (Map.ofList [func.Id, summary])) Map.empty
+                            let published =
+                                CompilationCacheIdentity.mergeFunctionSummaries
+                                    published batchSummaries
+                            let catalog =
+                                CompilationCacheIdentity.mergeFunctionSummaries
+                                    catalog batchSummaries
                             compile
                                 (purity
                                  |> Map.fold (fun known id value -> Map.add id value known) knownPurity
@@ -607,6 +747,7 @@ let internal lowerToAllocatedLirWithKnown
                                 knownTypedConstants
                                 knownWrites
                                 published
+                                catalog
                                 (allocated :: completed)
                                 rest)
                 let initialPurity =
@@ -627,9 +768,14 @@ let internal lowerToAllocatedLirWithKnown
                             | Platform.X86_64 -> summary.X64Writes
                         writes |> Option.map (fun value -> id, value))
                     |> Map.ofList
+                let initialCatalog =
+                    ambiguousLocalIds
+                    |> Set.fold (fun summaries id ->
+                        Map.add id CompilationCacheIdentity.unknownSummary summaries)
+                        externalSummaries
                 compile
                     initialPurity Set.empty initialTypedConstants initialWrites
-                    Map.empty [] components
+                    Map.empty initialCatalog [] components
 
     let compileFunctionsWithTiming
         (label: string)
