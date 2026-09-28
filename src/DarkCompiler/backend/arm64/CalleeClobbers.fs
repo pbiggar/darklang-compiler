@@ -103,6 +103,8 @@ let private instructionWrites (callees: Map<AST.FunctionId, Writes>) instr =
     | LIR.FloatToBits (dest, _)
     | LIR.FpToGp (dest, _)
     | LIR.HeapLoad (dest, _, _) -> writeInt dest
+    // ARM64 emits the call result in X0; a separate LIR Mov writes its local
+    // destination. Counting Call.dest here would report a write that BL omits.
     | LIR.Call (_, callee, _) | LIR.TailCall (callee, _) ->
         Map.tryFind callee callees |> Option.defaultValue all
     | LIR.ArgMoves moves | LIR.TailArgMoves moves ->
@@ -126,20 +128,29 @@ let private summarizeFunction callees (func: LIR.Function) =
         block.Instrs
         |> List.fold (fun writes instr -> union writes (instructionWrites callees instr)) writes) empty
 
-let summaries (functions: LIR.Function list) =
-    let rec converge previous =
+let summariesWithKnown
+    (known: Map<AST.FunctionId, Writes>)
+    (functions: LIR.Function list) =
+    let localIds = functions |> List.map (fun func -> func.Id) |> Set.ofList
+    let external = known |> Map.filter (fun id _ -> not (Set.contains id localIds))
+    let rec converge local =
+        let available =
+            local |> Map.fold (fun acc id writes -> Map.add id writes acc) external
         let next =
             functions
             |> List.fold (fun acc func ->
-                let writes = summarizeFunction previous func
+                let writes = summarizeFunction available func
                 let old = Map.tryFind func.Id acc |> Option.defaultValue empty
-                Map.add func.Id (union old writes) acc) previous
-        if next = previous then next else converge next
+                Map.add func.Id (union old writes) acc) local
+        if next = local then available else converge next
     let initial =
         functions
         |> List.map (fun func -> func.Id, empty)
         |> Map.ofList
     converge initial
+
+let summaries (functions: LIR.Function list) =
+    summariesWithKnown Map.empty functions
 
 let private envelopeWrites callees beforeRestore =
     let calls =

@@ -1051,7 +1051,10 @@ let internal generateLinuxCliProcessLifecycleHelpers (enableLeakCheck: bool) : X
             X86_64.MOV_load (X86_64.RDI, X86_64.RBX, 8)
             X86_64.LEA (X86_64.RSI, X86_64.RSP, 32)
             X86_64.MOV_imm32 (X86_64.RDX, 1)
-            X86_64.XOR_reg (X86_64.R10, X86_64.R10) ]
+            X86_64.XOR_reg (X86_64.R10, X86_64.R10)
+            // wait4 writes an int; clear the upper half before a 64-bit load.
+            X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
+            X86_64.MOV_store (X86_64.RSP, 32, X86_64.RAX) ]
         @ syscall 61L
         @ [ X86_64.CMP_imm (X86_64.RAX, 0)
             X86_64.Jcc (X86_64.LT, "__dark_process_io_read_stdout")
@@ -1163,7 +1166,9 @@ let internal generateLinuxCliProcessLifecycleHelpers (enableLeakCheck: bool) : X
         @ [ X86_64.MOV_load (X86_64.RDI, X86_64.RBX, 8)
             X86_64.LEA (X86_64.RSI, X86_64.RSP, 32)
             X86_64.XOR_reg (X86_64.RDX, X86_64.RDX)
-            X86_64.XOR_reg (X86_64.R10, X86_64.R10) ]
+            X86_64.XOR_reg (X86_64.R10, X86_64.R10)
+            X86_64.XOR_reg (X86_64.RAX, X86_64.RAX)
+            X86_64.MOV_store (X86_64.RSP, 32, X86_64.RAX) ]
         @ syscall 61L
         @ [ X86_64.MOV_load (X86_64.R10, X86_64.RSP, 32)
             X86_64.MOV_reg32 (X86_64.R10, X86_64.R10)

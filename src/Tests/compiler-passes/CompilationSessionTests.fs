@@ -519,21 +519,6 @@ let testJsonDependenciesAreReusedBeforeLowering
         else
             Error $"Expected repeated JSON dependencies to bypass conversion and lowering, got ANF hits={session.AnfDependencyHitCount}, compiled hits={session.CompiledDependencyHitCount}")
 
-let testStableStartTrampolineIsReused
-    (stdlib: CompilationContexts.StdlibResult)
-    ()
-    : TestResult =
-    use session = new CompilationSession.CompilationSession()
-    expectCompiled (compile stdlib session CompilerOptions.defaultOptions "1L + 1L")
-    |> Result.bind (fun () -> expectCompiled (compile stdlib session CompilerOptions.defaultOptions "2L + 2L"))
-    |> Result.bind (fun () ->
-        if session.CompiledStartHitCount > 0
-           && session.CompiledStartMissCount = 1
-           && session.Arm64StartCodegenHitCount > 0 then
-            Ok ()
-        else
-            Error $"Expected source-independent _start lowering and codegen to be reused, got lowering hits={session.CompiledStartHitCount}, misses={session.CompiledStartMissCount}, codegen hits={session.Arm64StartCodegenHitCount}")
-
 let testDependencyMetadataIsReusedCompositionally
     (stdlib: CompilationContexts.StdlibResult)
     ()
@@ -597,7 +582,6 @@ let tests (target: Platform.Target) (stdlib: CompilationContexts.StdlibResult) =
         ("compilation session isolates and disposes registries", testSessionIsolationAndDisposal stdlib)
         ("compilation session segregates canonical JSON declaration shapes", testJsonPlanCacheSegregatesNominalShapes stdlib)
         ("compilation session reuses JSON dependencies before lowering", testJsonDependenciesAreReusedBeforeLowering stdlib)
-        ("compilation session reuses the stable start trampoline", testStableStartTrampolineIsReused stdlib)
         ("compilation session composes cached dependency metadata", testDependencyMetadataIsReusedCompositionally stdlib)
         ("compilation session reuses stdlib reachability", testStdlibReachabilityIsReused stdlib)
         ("compilation session reuses identical ARM64 helper programs", testArm64HelpersAreReused stdlib)

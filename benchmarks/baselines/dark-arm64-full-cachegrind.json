@@ -10,10 +10,10 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "contract_sha256": "2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861",
-  "generated_at": "2026-09-28T00:07:18+00:00",
+  "generated_at": "2026-09-28T22:43:14+00:00",
   "compiler": {
-    "commit": "e5aafcf02e8c4c3d963351df15dc17fddc3c1b86",
-    "subject": "Update direct-call specialization tuple E2E syntax"
+    "commit": "5e1546053deb17b3693aebcc568a4acb6b220d46",
+    "subject": "Merge commit '90100e427a354352b083aaefa98f16d75f06b6a3' into HEAD"
   },
   "benchmarks": [
     {
@@ -42,7 +42,7 @@
     },
     {
       "name": "fasta",
-      "instructions": 11579821
+      "instructions": 10284673
     },
     {
       "name": "fft",
@@ -54,7 +54,7 @@
     },
     {
       "name": "huffman",
-      "instructions": 402939116
+      "instructions": 402848481
     },
     {
       "name": "leibniz",
@@ -66,7 +66,7 @@
     },
     {
       "name": "matmul",
-      "instructions": 41573390
+      "instructions": 41471411
     },
     {
       "name": "merkletrees",
@@ -74,7 +74,7 @@
     },
     {
       "name": "myers_diff",
-      "instructions": 204586778
+      "instructions": 204576866
     },
     {
       "name": "nbody",
@@ -86,7 +86,7 @@
     },
     {
       "name": "nsieve",
-      "instructions": 130270283
+      "instructions": 130174722
     },
     {
       "name": "pisum",
@@ -102,11 +102,11 @@
     },
     {
       "name": "raytracer",
-      "instructions": 43359816
+      "instructions": 43213584
     },
     {
       "name": "regex_lite",
-      "instructions": 64745802
+      "instructions": 64746500
     },
     {
       "name": "spectral_norm",
@@ -126,11 +126,11 @@
     },
     {
       "name": "tinytemplate",
-      "instructions": 305727981
+      "instructions": 305727965
     },
     {
       "name": "warden",
-      "instructions": 44111729
+      "instructions": 44133167
     }
   ]
 }

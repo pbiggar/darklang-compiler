@@ -336,7 +336,8 @@ let buildStdlibWithTrace
                     let stdlibANFCallGraph = ANFDeadCodeElimination.buildCallGraph anfFunctions
 
                     let externalReturnTypes = returnTypes
-                    match lowerToAllocatedLir
+                    match lowerToAllocatedLirWithKnown
+                        Map.empty
                         target
                         0
                         stdlibOptions
@@ -352,12 +353,13 @@ let buildStdlibWithTrace
                         externalReturnTypes with
                     | Error e ->
                         Error e
-                    | Ok allocatedFuncs ->
+                    | Ok (allocatedFuncs, summaries) ->
                         let stdlibCallGraph = DeadCodeElimination.buildCallGraph allocatedFuncs
                         Ok {
                             TypedAST = typedStdlib
                             Context = contextWithLiftedNames
                             AllocatedFunctions = allocatedFuncs
+                            CallGraphSummaries = summaries
                             StdlibCallGraph = stdlibCallGraph
                             StdlibANFFunctions = stdlibFuncMap
                             StdlibANFOptimizationCandidates =
@@ -367,7 +369,6 @@ let buildStdlibWithTrace
                             StdlibTypeMap = typeMap
                         }
 
-/// Build stdlib in isolation with default settings
 let buildStdlib (target: Platform.Target) : Result<StdlibResult, string> =
     buildStdlibWithTrace target None
 
@@ -556,7 +557,8 @@ let buildStdlibSpecializations
                                 |> Map.ofList
                             let externalReturnTypes =
                                 mergeReturnTypes stdlib.Context.ReturnTypes localReturnTypes
-                            lowerToAllocatedLir
+                            lowerToAllocatedLirWithKnown
+                                stdlib.CallGraphSummaries
                                 stdlib.Context.Target
                                 0
                                 stdlibOptions
@@ -570,7 +572,7 @@ let buildStdlibSpecializations
                                 registries
                                 None
                                 externalReturnTypes
-                            |> Result.bind (fun allocatedFuncs ->
+                            |> Result.bind (fun (allocatedFuncs, newSummaries) ->
                                 let allLirFuncs = stdlib.AllocatedFunctions @ allocatedFuncs
                                 let mergedStdlibTypeMap =
                                     Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibTypeMap typeMap
@@ -620,6 +622,9 @@ let buildStdlibSpecializations
                                     stdlib with
                                         Context = updatedContext
                                         AllocatedFunctions = allLirFuncs
+                                        CallGraphSummaries =
+                                            CompilationCacheIdentity.mergeFunctionSummaries
+                                                stdlib.CallGraphSummaries newSummaries
                                         StdlibCallGraph = stdlibCallGraph
                                         StdlibANFFunctions = mergedStdlibAnfFunctions
                                         StdlibANFOptimizationCandidates = mergedOptimizationCandidates

@@ -128,7 +128,10 @@ let private summarizeFunctionEffects (func: Function) : FunctionEffectSummary =
 let private directCallees (func: Function) : Set<AST.FunctionId> =
     (summarizeFunctionEffects func).DirectCallees
 
-let analyzeEffectFreeFunctions (functions: Function list) : Set<AST.FunctionId> =
+let analyzeEffectFreeFunctionsWithKnown
+    (knownEffectFree: Set<AST.FunctionId>)
+    (functions: Function list)
+    : Set<AST.FunctionId> =
     // The fixed point changes only the proven-name set. MIR and call edges stay
     // fixed, so retain each function's scan instead of rebuilding it per round.
     let candidates =
@@ -141,7 +144,9 @@ let analyzeEffectFreeFunctions (functions: Function list) : Set<AST.FunctionId> 
             candidates
             |> List.filter (fun summary ->
                 summary.DirectCallees
-                |> Set.forall (fun callee -> Set.contains callee provenNames))
+                |> Set.forall (fun callee ->
+                    Set.contains callee provenNames
+                    || Set.contains callee knownEffectFree))
             |> List.map (fun summary -> summary.Id)
             |> Set.ofList
 
@@ -151,6 +156,148 @@ let analyzeEffectFreeFunctions (functions: Function list) : Set<AST.FunctionId> 
     |> List.map (fun summary -> summary.Id)
     |> Set.ofList
     |> removeCallersOfUnprovenFunctions
+
+let analyzeEffectFreeFunctions (functions: Function list) : Set<AST.FunctionId> =
+    analyzeEffectFreeFunctionsWithKnown Set.empty functions
+
+/// These fields distinguish a reusable result from a merely effect-free body.
+/// Unknown callees conservatively have every hazard. The fixed point unions
+/// hazards, so a previously proven property never becomes true by omission.
+type PuritySummary = {
+    ObservableEffects: bool
+    ReadsMutableState: bool
+    MayTrap: bool
+    MayDiverge: bool
+}
+
+let private noHazards = {
+    ObservableEffects = false
+    ReadsMutableState = false
+    MayTrap = false
+    MayDiverge = false
+}
+
+let private unknownHazards = {
+    ObservableEffects = true
+    ReadsMutableState = true
+    MayTrap = true
+    MayDiverge = true
+}
+
+let unknownPurity = unknownHazards
+
+let private unionHazards left right = {
+    ObservableEffects = left.ObservableEffects || right.ObservableEffects
+    ReadsMutableState = left.ReadsMutableState || right.ReadsMutableState
+    MayTrap = left.MayTrap || right.MayTrap
+    MayDiverge = left.MayDiverge || right.MayDiverge
+}
+
+let isPure summary = summary = noHazards
+
+let private hasControlCycle (cfg: CFG) =
+    let rec visit active visited label =
+        if Set.contains label active then true, visited
+        elif Set.contains label visited then false, visited
+        else
+            let block =
+                Map.tryFind label cfg.Blocks
+                |> Option.defaultWith (fun () -> Crash.crash "MIR purity graph has a missing block")
+            let successors =
+                match block.Terminator with
+                | Ret _ -> []
+                | Jump next -> [next]
+                | Branch (_, left, right) -> [left; right]
+            let active = Set.add label active
+            let visited = Set.add label visited
+            successors
+            |> List.fold (fun (cycle, seen) next ->
+                if cycle then cycle, seen else visit active seen next) (false, visited)
+    visit Set.empty Set.empty cfg.Entry |> fst
+
+let private localHazards (func: Function) =
+    let instructionHazards instr =
+        match instr with
+        | Call _ | TailCall _ -> noHazards
+        | IndirectCall _ | IndirectTailCall _
+        | ClosureCall _ | ClosureTailCall _ -> unknownHazards
+        | HeapLoad _ | RawGet _ | RawGetByte _
+        | CanonicalBufferEq _ ->
+            { noHazards with ReadsMutableState = true; MayTrap = true }
+        | BinOp (_, (Div | Mod), _, _, typ) when typ <> AST.TFloat64 ->
+            { noHazards with MayTrap = true }
+        | FloatToString _
+        | StringToRawPtr _ | RawPtrToString _
+        | BlobToRawPtr _ | RawPtrToBlob _
+        | DictToRawPtr _ | RawPtrToDict _
+        | ListToRawPtr _ | RawPtrToList _ -> unknownHazards
+        | _ when hasSideEffects instr -> unknownHazards
+        | _ -> noHazards
+    let local =
+        func.CFG.Blocks
+        |> Map.fold (fun summary _ block ->
+            block.Instrs
+            |> List.fold (fun summary instr ->
+                unionHazards summary (instructionHazards instr)) summary) noHazards
+    if hasControlCycle func.CFG then
+        { local with MayDiverge = true }
+    else local
+
+let analyzePurityWithKnown
+    (known: Map<AST.FunctionId, PuritySummary>)
+    (functions: Function list)
+    : Map<AST.FunctionId, PuritySummary> =
+    let ids = functions |> List.map (fun func -> func.Id) |> Set.ofList
+    let calls =
+        functions
+        |> List.map (fun func -> func.Id, directCallees func)
+        |> Map.ofList
+    let recursiveIds =
+        ANF_Inlining.findSCCs ids calls
+        |> List.filter (fun members ->
+            Set.count members > 1
+            || (members
+                |> Set.exists (fun id ->
+                    Map.tryFind id calls
+                    |> Option.defaultValue Set.empty
+                    |> Set.contains id)))
+        |> List.fold Set.union Set.empty
+    let initial =
+        functions
+        |> List.map (fun func ->
+            let hazards = localHazards func
+            let hazards =
+                if Set.contains func.Id recursiveIds then
+                    { hazards with MayDiverge = true }
+                else hazards
+            func.Id, hazards)
+        |> Map.ofList
+    let rec converge previous =
+        let next =
+            initial
+            |> Map.map (fun id local ->
+                Map.tryFind id calls
+                |> Option.defaultValue Set.empty
+                |> Set.fold (fun hazards callee ->
+                    let calleeHazards =
+                        Map.tryFind callee previous
+                        |> Option.orElseWith (fun () -> Map.tryFind callee known)
+                        |> Option.defaultValue unknownHazards
+                    unionHazards hazards calleeHazards) local)
+        if next = previous then next else converge next
+    converge initial
+
+/// CSE and LICM can move or reuse calls only when the full hazard profile is
+/// empty. A recursive SCC remains unproven because termination is unknown.
+let analyzePureFunctionsWithKnown
+    (knownPure: Set<AST.FunctionId>)
+    (functions: Function list)
+    : Set<AST.FunctionId> =
+    let known = knownPure |> Set.toList |> List.map (fun id -> id, noHazards) |> Map.ofList
+    analyzePurityWithKnown known functions
+    |> Map.toList
+    |> List.choose (fun (id, summary) -> if isPure summary then Some id else None)
+    |> Set.ofList
 
 /// Only direct callees can affect optimization of this function. Restricting
 /// the whole-program result to those names gives a compositional cache key.

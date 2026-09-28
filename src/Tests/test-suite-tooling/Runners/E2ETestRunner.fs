@@ -701,6 +701,7 @@ let buildSuiteContexts
                                                 ANFFunctions = []
                                                 TypeMap = specializedStdlib.StdlibTypeMap
                                                 SymbolicFunctions = []
+                                                CallGraphSummaries = Map.empty
                                                 SymbolicCallGraph = Map.empty
                                             } : CompilationContexts.PreambleContext)
                                     | Some analysis ->

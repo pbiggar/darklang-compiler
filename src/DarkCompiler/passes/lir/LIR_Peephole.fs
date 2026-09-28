@@ -565,55 +565,6 @@ let private optimizeInstrsWithChange (instrs: Instr list) : Instr list * bool =
 let optimizeInstrs (instrs: Instr list) : Instr list =
     optimizeInstrsWithChange instrs |> fst
 
-let private constantReturnValue (func: Function) : int64 option =
-    match func.TypedParams with
-    | [] ->
-        match Map.tryFind func.CFG.Entry func.CFG.Blocks with
-        | Some { Instrs = [Mov (_, Imm value)]; Terminator = Ret } -> Some value
-        | Some { Instrs = []; Terminator = Jump target } ->
-            match Map.tryFind target func.CFG.Blocks with
-            | Some { Instrs = [Mov (_, Imm value)]; Terminator = Ret } -> Some value
-            | _ -> None
-        | _ -> None
-    | _ -> None
-
-let private constantReturnFunctions (functions: Function list) : Map<AST.FunctionId, int64> =
-    functions
-    |> List.choose (fun func ->
-        constantReturnValue func
-        |> Option.map (fun value -> (func.Id, value)))
-    |> Map.ofList
-
-let private optimizeConstantCalls (constants: Map<AST.FunctionId, int64>) (instrs: Instr list) : Instr list =
-    let rec loop remaining =
-        match remaining with
-        | SaveRegs _ :: Call (dest, funcName, []) :: RestoreRegs _ :: Mov (moveDest, Reg (Physical X0)) :: rest
-            when sameReg dest moveDest ->
-            match Map.tryFind funcName constants with
-            | Some value -> Mov (dest, Imm value) :: loop rest
-            | None ->
-                match remaining with
-                | instr :: rest -> instr :: loop rest
-                | [] -> []
-        | Call (dest, funcName, []) :: rest ->
-            match Map.tryFind funcName constants with
-            | Some value -> Mov (dest, Imm value) :: loop rest
-            | None -> Call (dest, funcName, []) :: loop rest
-        | instr :: rest -> instr :: loop rest
-        | [] -> []
-
-    loop instrs
-
-let optimizeConstantReturnCallsInFunctions (functions: Function list) : Function list =
-    let constants = constantReturnFunctions functions
-    functions
-    |> List.map (fun func ->
-        let blocks =
-            func.CFG.Blocks
-            |> Map.map (fun _ block ->
-                { block with Instrs = optimizeConstantCalls constants block.Instrs })
-        { func with CFG = { func.CFG with Blocks = blocks } })
-
 let removeSelfMovesFromInstrs (instrs: Instr list) : Instr list =
     let rec loop remaining =
         match remaining with
@@ -1708,5 +1659,5 @@ let optimizeFunctionFor (arch: Platform.Arch) (func: Function) : Function =
 /// Optimize a program
 let optimizeProgram (program: Program) : Program =
     let (Program (functions, variants, records)) = program
-    let functions' = functions |> optimizeConstantReturnCallsInFunctions |> List.map optimizeFunction
+    let functions' = functions |> List.map optimizeFunction
     Program (functions', variants, records)

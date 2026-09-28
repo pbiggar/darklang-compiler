@@ -900,6 +900,62 @@ let testGenericRefCountDecMixedSumPayloadUsesVariantDispatch () : Result<unit, s
         else
             Error "x64 generic mixed boxed-sum payload release did not branch past remaining variant cases after a match"
 
+/// Test: x64 generic fixed-block RefCountDec dispatches nested mixed boxed-sum cleanup by tag.
+let testGenericRefCountDecNestedMixedSumPayloadUsesVariantDispatch () : Result<unit, string> =
+    let sumName = "X64NestedMixedSumPayloadDispatch"
+    let sumType = AST.TSum (sumName, [])
+    let parentType = AST.TTuple [sumType]
+    let variants : LIR.VariantRegistry =
+        Map.ofList [
+            (sumName,
+                { TypeParams = []
+                  Variants =
+                    [
+                        { Name = "X64NestedMixedSumNoPayload"; Tag = 0; Payload = None; FieldCount = 0 }
+                        { Name = "X64NestedMixedSumListPayload"; Tag = 1; Payload = Some (AST.TList AST.TBlob); FieldCount = 1 }
+                    ] })
+        ]
+    let sumShapes =
+        variants
+        |> Map.map (fun _ typeVariants ->
+            { MemoryModel.TypeParams = typeVariants.TypeParams
+              MemoryModel.UnaryPayloadTags = typeVariants.Variants |> List.choose (fun variant -> if variant.FieldCount = 1 then Some variant.Tag else None) |> Set.ofList
+              MemoryModel.Payloads =
+                typeVariants.Variants
+                |> List.sortBy (fun variant -> variant.Tag)
+                |> List.map (fun variant -> variant.Tag, variant.Payload) })
+    let program =
+        match
+            makeSimpleProgram
+                [
+                    LIR.RefCountDec (
+                        LIR.Physical LIR.X3,
+                        8,
+                        LIR.GenericHeap,
+                        Some (rcMetadataWithSumShapes sumShapes parentType))
+                ]
+                LIR.Ret
+        with
+        | LIR.Program (functions, _, records) ->
+            LIR.Program (functions, variants, records)
+
+    match CodeGen_X86_64.translateProgram (completeFixtureVariants program) false with
+    | Error e ->
+        Error e
+    | Ok instrs ->
+        let loadsNestedSumTag =
+            instrs
+            |> List.exists (function
+                | X86_64.MOV_load (_, X86_64.RDX, 0) ->
+                    true
+                | _ ->
+                    false)
+
+        if loadsNestedSumTag then
+            Ok ()
+        else
+            Error "x64 generic fixed-block nested mixed boxed-sum payload release did not dispatch on the child variant tag"
+
 /// Test: x64 DictHeap RefCountDec selects a planned helper for nested dict/list payload cleanup.
 let testDictRefCountDecDictListValueUsesPlannedHelper () : Result<unit, string> =
     let listType = AST.TList AST.TInt64

@@ -641,66 +641,7 @@ let testOptimizeCFGRejectsMissingSuccessorLabel () : TestResult =
     | ex when ex.Message.Contains("successor label") -> Ok ()
     | ex -> Error $"Expected missing successor label crash, got: {ex.Message}"
 
-let private functionWithInstrs name instrs : Function =
-    let label = Label $"{name}_entry"
-    let block : BasicBlock = {
-        Label = label
-        Instrs = instrs
-        Terminator = Ret
-    }
-    {
-        Id = TestIds.functionIdForName name
-        Name = name
-        TypedParams = []
-        CFG = {
-            Entry = label
-            Blocks = Map.ofList [(label, block)]
-        }
-        StackSize = 0
-        UsedCalleeSaved = []
-        CodegenFacts = None
-    }
-
-let testConstantReturnCallsAreRewritten () : TestResult =
-    let tagFunc =
-        functionWithInstrs
-            "Darklang.Stdlib.__FingerTree.__TAG_SINGLE"
-            [Mov (Physical X0, Imm 1L)]
-    let caller =
-        functionWithInstrs
-            "caller"
-            [
-                SaveRegs ([X1], [])
-                Call (
-                    Virtual 1,
-                    TestIds.functionIdForName "Darklang.Stdlib.__FingerTree.__TAG_SINGLE",
-                    []
-                )
-                RestoreRegs ([X1], [])
-                Mov (Virtual 1, Reg (Physical X0))
-                Cmp (Virtual 2, Reg (Virtual 1))
-            ]
-    let (Program (functions, _, _)) =
-        optimizeProgram (Program ([tagFunc; caller], Map.empty, Map.empty))
-    match functions |> List.tryFind (fun f -> f.Name = "caller") with
-    | None ->
-        Error "Expected optimized program to preserve caller"
-    | Some optimizedCaller ->
-        match Map.tryFind optimizedCaller.CFG.Entry optimizedCaller.CFG.Blocks with
-        | None ->
-            Error "Expected optimized caller to preserve entry block"
-        | Some block ->
-            let expected = [
-                Mov (Virtual 1, Imm 1L)
-                Cmp (Virtual 2, Reg (Virtual 1))
-            ]
-            if block.Instrs = expected then
-                Ok ()
-            else
-                Error $"Expected constant-return call to become a move, got: {block.Instrs}"
-
 let tests = [
-    ("LIR peephole rewrites constant-return calls", testConstantReturnCallsAreRewritten)
     ("LIR peephole removes self-moves from allocated function", testRemoveSelfMovesFromAllocatedFunction)
     ("LIR peephole removes floating copy-back moves", testRemoveFloatingCopyBackMovesFromAllocatedFunction)
     ("LIR peephole keeps floating copy-back after FPhi writes source", testFloatingCopyBackKeepsMoveAfterFPhiWritesSource)

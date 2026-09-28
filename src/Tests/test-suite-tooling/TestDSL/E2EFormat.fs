@@ -58,6 +58,7 @@ type E2ETest = {
     ExpectedErrorMessage: string option
     /// If set, test is skipped with this reason
     SkipReason: string option
+    /// Select the experimental native pipeline for this runner invocation.
     /// Compiler options for disabling optimizations
     DisableFreeList: bool
     DisableANFOpt: bool

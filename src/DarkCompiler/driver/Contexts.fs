@@ -180,6 +180,7 @@ type PreambleContext = {
     TypeMap: ANF.TypeMap
     /// Preamble's symbolic LIR functions after register allocation
     SymbolicFunctions: LIR.Function list
+    CallGraphSummaries: Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>
     /// Direct-call summary computed once with the reusable preamble unit.
     SymbolicCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>
 }
@@ -200,6 +201,7 @@ type StdlibResult = {
     Context: PipelineContext
     /// Pre-allocated stdlib functions (physical registers assigned, ready for merge)
     AllocatedFunctions: LIR.Function list
+    CallGraphSummaries: Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>
     /// Call graph for dead code elimination (which stdlib funcs call which other funcs)
     StdlibCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>
     /// Stdlib ANF functions indexed by name (for coverage analysis)

@@ -1,0 +1,23 @@
+// Observable semantics of direct-call facts across acyclic and recursive calls.
+
+let constantIntFact () : Int64 = 41L
+let addConstantFact (x: Int64) : Int64 = x + constantIntFact ()
+addConstantFact 1L = 42L
+
+let constantFloatFact () : Float = -0.0
+let floatBitsFact () : Int = Stdlib.Float.toBits (constantFloatFact ())
+floatBitsFact () = 9223372036854775808
+
+let effectfulConstantFact () : Int64 = let _ = Builtin.print "called" in 7L
+let useEffectfulConstantFact () : Int64 = effectfulConstantFact () + 1L
+useEffectfulConstantFact () = stdout="called8\n" stderr="" exact_bytes=true
+
+let recursiveFact (n: Int64) : Int64 =
+    if n == 0L then 7L else recursiveFact (n - 1L)
+recursiveFact 3L = 7L
+
+let preambleClosureFact (x: Int64) : Int64 = (fun y -> x + y) 2L
+let localClosure = fun y -> y * 3L in preambleClosureFact 10L + localClosure 4L = 24L
+
+let constantAfterTrapFact (divisor: Int64) : Int64 = let _ = 1L / divisor in 5L
+constantAfterTrapFact 0L = error="Cannot divide by 0"

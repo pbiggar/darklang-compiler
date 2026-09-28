@@ -1,4 +1,4 @@
-// NativePipeline.fs - Orchestrate MIR optimization, LIR lowering, and register allocation.
+// NativePipeline.fs - Compile direct-call components callee-first.
 
 module NativePipeline
 
@@ -19,6 +19,9 @@ open PipelineDiagnostics
 /// Run MIR/LIR optimizations on SSA MIR, returning an optimized LIR program.
 let private compileMirToLir
     (arch: Platform.Arch)
+    (knownEffectFree: Set<AST.FunctionId>)
+    (knownRemovable: Set<AST.FunctionId>)
+    (knownTypedConstants: Map<AST.FunctionId, AST.SemanticType * MIR.Operand>)
     (verbosity: int)
     (options: CompilerOptions)
     (sw: Stopwatch)
@@ -27,11 +30,30 @@ let private compileMirToLir
     (registries: AST_to_ANF.Registries)
     (stageSuffix: string)
     (mirProgram: MIR.Program)
-    : Result<LIR.Function list, string> =
+    : Result<LIR.Function list * Map<AST.FunctionId, AST.SemanticType * MIR.Operand>, string> =
 
     let suffix = if stageSuffix = "" then "" else $" ({stageSuffix})"
 
-    let ssaProgram = mirProgram
+    let ssaProgram =
+        let (MIR.Program (functions, variants, records)) = mirProgram
+        let rewriteCall instr =
+            match instr with
+            | MIR.Call (dest, callee, [], [], returnType) when Set.contains callee knownRemovable ->
+                match Map.tryFind callee knownTypedConstants with
+                | Some (typ, (MIR.Int64Const _ | MIR.BoolConst _ | MIR.FloatSymbol _ as value))
+                    when typ = returnType ->
+                    MIR.Mov (dest, value, Some returnType)
+                | _ -> instr
+            | _ -> instr
+        MIR.Program (
+            functions
+            |> List.map (fun func ->
+                let blocks =
+                    func.CFG.Blocks
+                    |> Map.map (fun _ block ->
+                        { block with Instrs = block.Instrs |> List.map rewriteCall })
+                { func with CFG = { func.CFG with Blocks = blocks } }),
+            variants, records)
 
     let mirOptions = buildMIROptimizeOptions options
     let mirPassLabel =
@@ -57,8 +79,7 @@ let private compileMirToLir
             let effectAnalysisStart = Stopwatch.GetTimestamp()
             let effectFreeFunctions =
                 if mirOptions.EnableLICM || mirOptions.EnableCSE then
-                    MIROptimizationFacts.analyzeEffectFreeFunctions
-                        (let (MIR.Program (functions, _, _)) = ssaProgram in functions)
+                    knownEffectFree
                 else
                     Set.empty
             let effectAnalysisTicks =
@@ -95,6 +116,26 @@ let private compileMirToLir
             optimized
         else
             ssaProgram
+    let optimizedProgram =
+        if mirOptions.EnableSCCP && not (Map.isEmpty knownTypedConstants) then
+            let (MIR.Program (functions, variants, records)) = optimizedProgram
+            let callResults = knownTypedConstants |> Map.map (fun _ (_, value) -> value)
+            let functions =
+                functions
+                |> List.map (fun func ->
+                    let cfg, changed =
+                        MIRSparseConditionalConstants.applySparseConditionalConstantPropagationWithCallResults
+                            callResults func.CFG
+                    if changed then { func with CFG = cfg } else func)
+            MIR.Program (functions, variants, records)
+        else optimizedProgram
+    let typedConstants =
+        let (MIR.Program (functions, _, _)) = optimizedProgram
+        functions
+        |> List.choose (fun func ->
+            MIR_Optimize.constantReturnOperand func
+            |> Option.map (fun value -> func.Id, (func.ReturnType, value)))
+        |> Map.ofList
     let mirOptElapsed = sw.Elapsed.TotalMilliseconds - mirOptStart
     recordPassTiming passTimingRecorder "MIR Optimizations" mirOptElapsed
     if shouldDumpIR verbosity options.DumpMIR then
@@ -163,9 +204,7 @@ let private compileMirToLir
             if options.DisableLIROpt || options.DisableLIRPeephole then
                 lirFuncs
             else
-                lirFuncs
-                |> LIR_Peephole.optimizeConstantReturnCallsInFunctions
-                |> List.map (LIR_Peephole.optimizeFunctionFor arch)
+                lirFuncs |> List.map (LIR_Peephole.optimizeFunctionFor arch)
         let lirOptElapsed = sw.Elapsed.TotalMilliseconds - lirOptStart
         recordPassTiming passTimingRecorder "LIR Peephole" lirOptElapsed
         if verbosity >= 2 then
@@ -174,7 +213,7 @@ let private compileMirToLir
         // Summarize finalized symbolic LIR once. The facts remain attached to
         // functions through allocation and tree shaking, so each executable
         // only unions metadata for its reachable compilation unit.
-        Ok (optimizedFuncs |> List.map LIR.attachFunctionCodegenFacts)
+        Ok (optimizedFuncs |> List.map LIR.attachFunctionCodegenFacts, typedConstants)
 
 /// Allocate registers for one symbolic LIR function.
 let private allocateRegistersForFunction
@@ -198,7 +237,8 @@ let private allocateRegistersForFunction
     allocatedFunc |> LIR_Peephole.removeSelfMovesFromFunction
 
 /// Run MIR+LIR passes (including register allocation) from SSA ANF functions.
-let internal lowerToAllocatedLir
+let internal lowerToAllocatedLirWithKnown
+    (externalSummaries: Map<AST.FunctionId, FunctionSummary>)
     (target: Platform.Target)
     (verbosity: int)
     (options: CompilerOptions)
@@ -212,7 +252,7 @@ let internal lowerToAllocatedLir
     (registries: AST_to_ANF.Registries)
     (projectedMirRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
     (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
-    : Result<LIR.Function list, string> =
+    : Result<LIR.Function list * Map<AST.FunctionId, FunctionSummary>, string> =
 
     let suffix = if stageSuffix = "" then "" else $" ({stageSuffix})"
 
@@ -225,9 +265,11 @@ let internal lowerToAllocatedLir
         |> fun external ->
             functions
             |> List.fold (fun types func -> Map.add func.Id func.ReturnType types) external
-    let compileFunctions (functionsToCompile: SSAANF.Function list) : Result<LIR.Function list, string> =
+    let compileFunctions
+        (functionsToCompile: SSAANF.Function list)
+        : Result<LIR.Function list * Map<AST.FunctionId, FunctionSummary>, string> =
         if List.isEmpty functionsToCompile then
-            Ok []
+            Ok ([], Map.empty)
         else
             if verbosity >= 1 then println $"  [mir.lower] ANF → MIR{suffix}..."
             let mirStart = sw.Elapsed.TotalMilliseconds
@@ -255,66 +297,130 @@ let internal lowerToAllocatedLir
             match mirResult with
             | Error err -> Error $"MIR conversion error: {err}"
             | Ok (mirFuncs, variantRegistry, mirRecordRegistry) ->
-                let mirProgram = MIR.Program (mirFuncs, variantRegistry, mirRecordRegistry)
                 let mirElapsed = sw.Elapsed.TotalMilliseconds - mirStart
                 recordPassTiming passTimingRecorder "ANF -> MIR" mirElapsed
                 if verbosity >= 2 then
                     let t = System.Math.Round(mirElapsed, 1)
                     println $"        {t}ms"
-                compileMirToLir
-                    (Platform.archFor target)
-                    verbosity
-                    options
-                    sw
+                let scheduleStart = sw.Elapsed.TotalMilliseconds
+                let components = CallGraphSchedule.calleeFirst mirFuncs
+                recordPassTiming
                     passTimingRecorder
-                    functionCaches
-                    registries
-                    stageSuffix
-                    mirProgram
-                |> Result.bind (fun lirFuncs ->
-                    let metadataPlanningStart = sw.Elapsed.TotalMilliseconds
-                    let funcsPreparedForAllocation =
-                        match Platform.archFor target with
-                        | Platform.ARM64 ->
-                            ARM64PrepareFunctions.prepareARM64FunctionsForAllocationWithCache
-                                releasePlanSummaryCache
-                                (passTimingRecorder
-                                 |> Option.map (fun recorder ->
-                                     fun name elapsedMs ->
-                                         recorder {
-                                             Pass = name
-                                             Elapsed = TimeSpan.FromMilliseconds elapsedMs
-                                         }))
-                                registries.RecordFieldsReg
-                                registries.RcSumShapeReg
-                                lirFuncs
-                        | Platform.X86_64 ->
-                            lirFuncs
-                    let metadataPlanningElapsed =
-                        sw.Elapsed.TotalMilliseconds - metadataPlanningStart
-                    recordPassTiming
+                    "Call Graph Scheduling"
+                    (sw.Elapsed.TotalMilliseconds - scheduleStart)
+                let localIds = mirFuncs |> List.map (fun func -> func.Id) |> Set.ofList
+                let ambiguousLocalIds =
+                    mirFuncs
+                    |> List.countBy (fun func -> func.Id)
+                    |> List.choose (fun (id, count) -> if count > 1 then Some id else None)
+                    |> Set.ofList
+                // A current body always supersedes a cached fact with the same
+                // canonical ID, including a definition from another unit.
+                let externalSummaries =
+                    externalSummaries
+                    |> Map.filter (fun id _ -> not (Set.contains id localIds))
+                if verbosity >= 2 then
+                    let directCalls =
+                        mirFuncs
+                        |> List.collect (fun func ->
+                            func.CFG.Blocks
+                            |> Map.toList
+                            |> List.collect (fun (_, block) ->
+                                block.Instrs
+                                |> List.choose (function
+                                    | MIR.Call (_, id, _, _, _)
+                                    | MIR.TailCall (id, _, _, _) -> Some id
+                                    | _ -> None)))
+                    let ambiguous, known, unresolved =
+                        directCalls
+                        |> List.fold (fun (ambiguous, known, unresolved) id ->
+                            if Set.contains id ambiguousLocalIds then
+                                ambiguous + 1, known, unresolved
+                            elif Set.contains id localIds
+                                 || (Map.tryFind id externalSummaries
+                                     |> Option.bind (fun summary -> summary.Version)
+                                     |> Option.isSome) then
+                                ambiguous, known + 1, unresolved
+                            else
+                                ambiguous, known, unresolved + 1)
+                            (0, 0, 0)
+                    println
+                        $"  [callgraph] functions={List.length mirFuncs} batches={List.length components} direct={List.length directCalls} known={known} ambiguous={ambiguous} unresolved={unresolved}"
+                let compileComponent
+                    knownEffectFree
+                    knownRemovable
+                    knownTypedConstants
+                    knownWrites
+                    (componentFuncs: MIR.Function list) =
+                    let mirProgram =
+                        MIR.Program (componentFuncs, variantRegistry, mirRecordRegistry)
+                    compileMirToLir
+                        (Platform.archFor target)
+                        knownEffectFree
+                        knownRemovable
+                        knownTypedConstants
+                        verbosity
+                        options
+                        sw
                         passTimingRecorder
-                        "ARM64 Function Metadata Planning"
-                        metadataPlanningElapsed
-                    if verbosity >= 1 then println "  [lir.allocate-registers] Register Allocation..."
-                    let allocStart = sw.Elapsed.TotalMilliseconds
-                    let arch = Platform.archFor target
-                    let allocateFunction func =
-                        let allocate () =
-                            allocateRegistersForFunction
-                                arch
-                                passTimingRecorder
-                                func
-                        match functionCaches with
-                        | Some caches -> caches.AllocateLir arch func allocate
-                        | None -> allocate ()
-                    let allocatedFuncs =
-                        funcsPreparedForAllocation |> List.map allocateFunction
-                    let allocatedFuncs =
-                        match arch with
-                        | Platform.X86_64 -> allocatedFuncs
-                        | Platform.ARM64 ->
-                            let callees = ARM64CalleeClobbers.summaries allocatedFuncs
+                        functionCaches
+                        registries
+                        stageSuffix
+                        mirProgram
+                    |> Result.bind (fun (lirFuncs, typedConstants) ->
+                        let metadataPlanningStart = sw.Elapsed.TotalMilliseconds
+                        let funcsPreparedForAllocation =
+                            match Platform.archFor target with
+                            | Platform.ARM64 ->
+                                ARM64PrepareFunctions.prepareARM64FunctionsForAllocationWithCache
+                                    releasePlanSummaryCache
+                                    (passTimingRecorder
+                                     |> Option.map (fun recorder ->
+                                         fun name elapsedMs ->
+                                             recorder {
+                                                 Pass = name
+                                                 Elapsed = TimeSpan.FromMilliseconds elapsedMs
+                                             }))
+                                    registries.RecordFieldsReg
+                                    registries.RcSumShapeReg
+                                    lirFuncs
+                            | Platform.X86_64 ->
+                                lirFuncs
+                        let metadataPlanningElapsed =
+                            sw.Elapsed.TotalMilliseconds - metadataPlanningStart
+                        recordPassTiming
+                            passTimingRecorder
+                            "ARM64 Function Metadata Planning"
+                            metadataPlanningElapsed
+                        if verbosity >= 1 then println "  [lir.allocate-registers] Register Allocation..."
+                        let allocStart = sw.Elapsed.TotalMilliseconds
+                        let arch = Platform.archFor target
+                        let allocateFunction func =
+                            let allocate () =
+                                allocateRegistersForFunction
+                                    arch
+                                    passTimingRecorder
+                                    func
+                            match functionCaches with
+                            | Some caches -> caches.AllocateLir arch func allocate
+                            | None -> allocate ()
+                        let allocatedFuncs =
+                            funcsPreparedForAllocation |> List.map allocateFunction
+                        let callAwareStart = sw.Elapsed.TotalMilliseconds
+                        let allocatedFuncs =
+                            let allWrites =
+                                match arch with
+                                | Platform.ARM64 -> ARM64CalleeClobbers.all
+                                | Platform.X86_64 -> X64CalleeClobbers.all
+                            let callWritesForSaves =
+                                match arch with
+                                | Platform.ARM64 -> ARM64CalleeClobbers.callWritesForSaves
+                                | Platform.X86_64 -> X64CalleeClobbers.callWritesForSaves
+                            // Batches contain no callee edge between different
+                            // SCCs. Internal recursive calls use the full ABI
+                            // envelope below; later MIR/LIR edges absent from
+                            // the schedule also remain unknown here.
+                            let callees = knownWrites
                             let callEdges =
                                 funcsPreparedForAllocation
                                 |> List.fold (fun edges (func: LIR.Function) ->
@@ -355,48 +461,182 @@ let internal lowerToAllocatedLir
                                         |> Seq.map (fun id ->
                                             id,
                                             (if canReach prepared.Id Set.empty id then
-                                                 ARM64CalleeClobbers.all
+                                                 allWrites
                                              else
                                                  Map.tryFind id callees
-                                                 |> Option.defaultValue ARM64CalleeClobbers.all))
+                                                 |> Option.defaultValue allWrites))
                                         |> Map.ofSeq
                                     let hasPreservedCallerReg =
                                         prepared.CFG.Blocks
                                         |> Map.exists (fun _ block ->
-                                            ARM64CalleeClobbers.callWritesForSaves relevantCallees block
+                                            callWritesForSaves relevantCallees block
                                             |> List.exists (fun writes ->
                                                 (RegisterPolicy.callerSavedRegs
                                                  |> List.exists (fun reg ->
                                                      not (Set.contains reg writes.Ints)))
-                                                || (FloatAllocation.floatCallerSavedRegs
-                                                    |> List.exists (fun reg ->
-                                                        not (Set.contains reg writes.Floats)))))
-                                    if hasPreservedCallerReg then
-                                        let allocate () =
-                                            RegisterAllocation.allocateRegistersWithCallSummaries
-                                                arch relevantCallees prepared
-                                            |> LIR_Peephole.removeSelfMovesFromFunction
-                                        match functionCaches with
-                                        | Some caches ->
-                                            caches.AllocateCallAwareLir
-                                                allocated relevantCallees allocate
-                                        | None -> allocate ()
-                                    else allocated)
+                                                    || (FloatAllocation.floatCallerSavedRegsFor arch
+                                                        |> List.exists (fun reg ->
+                                                            not (Set.contains reg writes.Floats)))))
+                                    let hasCallLiveValue =
+                                        not (List.isEmpty allocated.UsedCalleeSaved)
+                                        || (allocated.CFG.Blocks
+                                            |> Map.exists (fun _ block ->
+                                                block.Instrs
+                                                |> List.exists (function
+                                                    | LIR.SaveRegs (ints, floats) ->
+                                                        not (List.isEmpty ints && List.isEmpty floats)
+                                                    | _ -> false)))
+                                    let allocated =
+                                        if hasPreservedCallerReg && hasCallLiveValue then
+                                            let allocate () =
+                                                RegisterAllocation.allocateRegistersWithCallSummaries
+                                                    arch relevantCallees prepared
+                                                |> LIR_Peephole.removeSelfMovesFromFunction
+                                            match functionCaches with
+                                            | Some caches ->
+                                                caches.AllocateCallAwareLir
+                                                    allocated relevantCallees allocate
+                                            | None -> allocate ()
+                                        else allocated
+                                    match arch with
+                                    | Platform.ARM64 -> allocated
+                                    | Platform.X86_64 ->
+                                        X64CalleeClobbers.pruneFunction relevantCallees allocated)
                                 funcsPreparedForAllocation
                                 allocatedFuncs
-                    let allocElapsed = sw.Elapsed.TotalMilliseconds - allocStart
-                    recordPassTiming passTimingRecorder "Register Allocation" allocElapsed
-                    if verbosity >= 2 then
-                        let t = System.Math.Round(allocElapsed, 1)
-                        println $"        {t}ms"
-                    Ok allocatedFuncs)
+                        recordPassTiming
+                            passTimingRecorder
+                            "Call-aware Allocation and Save Pruning"
+                            (sw.Elapsed.TotalMilliseconds - callAwareStart)
+                        let allocElapsed = sw.Elapsed.TotalMilliseconds - allocStart
+                        recordPassTiming passTimingRecorder "Register Allocation" allocElapsed
+                        if verbosity >= 2 then
+                            let t = System.Math.Round(allocElapsed, 1)
+                            println $"        {t}ms"
+                        Ok (allocatedFuncs, typedConstants))
+                let rec compile
+                    knownPurity
+                    knownLocalEffectFree
+                    knownTypedConstants
+                    knownWrites
+                    published
+                    (completed: LIR.Function list list)
+                    (remaining: CallGraphSchedule.Component list) =
+                    match remaining with
+                    | [] -> Ok (completed |> List.rev |> List.concat, published)
+                    | group :: rest ->
+                        let purityStart = sw.Elapsed.TotalMilliseconds
+                        let purity =
+                            MIROptimizationFacts.analyzePurityWithKnown
+                                knownPurity group.Functions
+                            |> Map.map (fun id summary ->
+                                if Set.contains id ambiguousLocalIds then
+                                    MIROptimizationFacts.unknownPurity
+                                else summary)
+                        recordPassTiming
+                            passTimingRecorder
+                            "Call Graph Purity Summary"
+                            (sw.Elapsed.TotalMilliseconds - purityStart)
+                        let externalPure =
+                            externalSummaries
+                            |> Map.toList
+                            |> List.choose (fun (id, summary) ->
+                                if MIROptimizationFacts.isPure summary.Purity then Some id else None)
+                            |> Set.ofList
+                        let knownEffectFree = Set.union knownLocalEffectFree externalPure
+                        let effectFree =
+                            MIROptimizationFacts.analyzeEffectFreeFunctionsWithKnown
+                                knownEffectFree group.Functions
+                        let knownRemovable =
+                            knownPurity
+                            |> Map.toList
+                            |> List.choose (fun (id, summary) ->
+                                if MIROptimizationFacts.isPure summary then Some id else None)
+                            |> Set.ofList
+                        compileComponent
+                            (Set.union knownEffectFree effectFree)
+                            knownRemovable
+                            knownTypedConstants knownWrites group.Functions
+                        |> Result.bind (fun (allocated, typedConstants) ->
+                            let clobberStart = sw.Elapsed.TotalMilliseconds
+                            let knownWrites =
+                                (match Platform.archFor target with
+                                 | Platform.ARM64 ->
+                                     ARM64CalleeClobbers.summariesWithKnown knownWrites allocated
+                                 | Platform.X86_64 ->
+                                     X64CalleeClobbers.summariesWithKnown knownWrites allocated)
+                                |> Map.filter (fun id _ -> not (Set.contains id ambiguousLocalIds))
+                            recordPassTiming
+                                passTimingRecorder
+                                "Call Graph Clobber Summary"
+                                (sw.Elapsed.TotalMilliseconds - clobberStart)
+                            let knownTypedConstants =
+                                typedConstants
+                                |> Map.fold (fun known id value -> Map.add id value known)
+                                    knownTypedConstants
+                                |> Map.filter (fun id _ -> not (Set.contains id ambiguousLocalIds))
+                            let published =
+                                allocated
+                                |> List.fold (fun summaries (func: LIR.Function) ->
+                                    let summary = {
+                                        Version =
+                                            Some (FunctionVersion(
+                                                stageSuffix, func.Id, target, options, func))
+                                        Purity =
+                                            Map.tryFind func.Id purity
+                                            |> Option.defaultWith (fun () ->
+                                                Crash.crash "Compiled function lacks a purity summary")
+                                        ConstantReturn = Map.tryFind func.Id typedConstants
+                                        Arm64Writes =
+                                            match Platform.archFor target with
+                                            | Platform.ARM64 -> Map.tryFind func.Id knownWrites
+                                            | Platform.X86_64 -> None
+                                        X64Writes =
+                                            match Platform.archFor target with
+                                            | Platform.X86_64 -> Map.tryFind func.Id knownWrites
+                                            | Platform.ARM64 -> None
+                                    }
+                                    CompilationCacheIdentity.mergeFunctionSummaries
+                                        summaries (Map.ofList [func.Id, summary])) published
+                            compile
+                                (purity
+                                 |> Map.fold (fun known id value -> Map.add id value known) knownPurity
+                                 |> Map.filter (fun id _ -> not (Set.contains id ambiguousLocalIds)))
+                                (Set.union knownLocalEffectFree effectFree
+                                 |> Set.filter (fun id -> not (Set.contains id ambiguousLocalIds)))
+                                knownTypedConstants
+                                knownWrites
+                                published
+                                (allocated :: completed)
+                                rest)
+                let initialPurity =
+                    externalSummaries |> Map.map (fun _ summary -> summary.Purity)
+                let initialTypedConstants =
+                    externalSummaries
+                    |> Map.toList
+                    |> List.choose (fun (id, summary) ->
+                        summary.ConstantReturn |> Option.map (fun value -> id, value))
+                    |> Map.ofList
+                let initialWrites =
+                    externalSummaries
+                    |> Map.toList
+                    |> List.choose (fun (id, summary) ->
+                        let writes =
+                            match Platform.archFor target with
+                            | Platform.ARM64 -> summary.Arm64Writes
+                            | Platform.X86_64 -> summary.X64Writes
+                        writes |> Option.map (fun value -> id, value))
+                    |> Map.ofList
+                compile
+                    initialPurity Set.empty initialTypedConstants initialWrites
+                    Map.empty [] components
 
     let compileFunctionsWithTiming
         (label: string)
         (functionsToCompile: SSAANF.Function list)
-        : Result<LIR.Function list, string> =
+        : Result<LIR.Function list * Map<AST.FunctionId, FunctionSummary>, string> =
         if List.isEmpty functionsToCompile then
-            Ok []
+            Ok ([], Map.empty)
         else
             let startTime = sw.Elapsed.TotalMilliseconds
             compileFunctions functionsToCompile
@@ -405,21 +645,11 @@ let internal lowerToAllocatedLir
                 recordPassTiming passTimingRecorder label elapsed
                 compiled)
 
-    let (startFunctions, otherFunctions) =
-        functions |> List.partition (fun func -> func.Name = "_start")
-
     let compileResult =
-        match passTimingRecorder, startFunctions with
-        | Some _, _ :: _ ->
-            compileFunctionsWithTiming "Start Function Compilation" startFunctions
-            |> Result.bind (fun compiledStart ->
-                compileFunctions otherFunctions
-                |> Result.map (fun compiledOther -> compiledStart @ compiledOther))
-        | _ ->
-            compileFunctions functions
+        compileFunctionsWithTiming "Call Graph Compilation" functions
 
     compileResult
-    |> Result.map (fun compiledFuncs ->
+    |> Result.map (fun (compiledFuncs, summaries) ->
         // Keep per-name queues so duplicate function names (e.g. lifted __closure_N from
         // different compilation units) preserve distinct bodies in original order.
         let compiledQueues : Map<string, LIR.Function list> =
@@ -450,4 +680,4 @@ let internal lowerToAllocatedLir
                 | _ ->
                     Crash.crash $"lowerToAllocatedLir: missing compiled function for '{name}'"
 
-        rebuildOrder functionOrder compiledQueues [])
+        rebuildOrder functionOrder compiledQueues [], summaries)

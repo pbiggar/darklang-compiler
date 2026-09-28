@@ -163,6 +163,7 @@
     <Compile Include="passes/mir/optimization/SparseConditionalConstants.fs" />
     <Compile Include="passes/mir/optimization/CommonExpressions.fs" />
     <Compile Include="passes/mir/MIR_Optimize.fs" />
+    <Compile Include="passes/mir/CallGraphSchedule.fs" />
 
     <!-- MIR -> LIR -->
     <Compile Include="ir/lir/LIR.fs" />
@@ -172,6 +173,7 @@
     <Compile Include="passes/lir/DeadCodeElimination.fs" />
     <Compile Include="passes/lir/FunctionTreeShaking.fs" />
     <Compile Include="backend/arm64/CalleeClobbers.fs" />
+    <Compile Include="backend/x64/CalleeClobbers.fs" />
 
     <!-- Register allocation -->
     <Compile Include="passes/lir/allocation/Model.fs" />

@@ -1,5 +1,35 @@
 # Call-graph-directed compilation pipeline
 
+## Implementation status (2026-09-28)
+
+The migration is implemented in one callee-first native driver. It schedules distinct MIR
+nodes by direct-call SCC and dependency depth, publishes structured purity,
+typed constant returns, and ARM64/x64 clobber summaries, and carries consumed
+callee facts into cross-unit dependency cache keys. Recursive and unresolved
+calls keep conservative contracts. The old driver, selector, start-lowering
+cache, and LIR constant-call list scan have been removed. The final ARM64 full
+benchmark gate improved on the task parent (ratio 0.995683) without an
+individual regression, and recording advanced the canonical snapshot. The
+complete host suite passed 10,734/10,734; the complete x64 suite passed
+10,690/10,690. The x64 QEMU quick comparison against the exact task parent
+improved (ratio 0.999983; 29/29 programs measured).
+
+On a three-run x64 raytracer compile, the task-parent median was 9.675s and
+the new driver's median was 10.369s (7.2% longer). The verbose pass trace
+shows seven callee-first batches for nine program functions; repeated batch
+setup accounts for part of the additional compiler work. This is a measured
+compile-time tradeoff alongside the generated-code improvement, and remains a
+target for later scheduler tuning.
+
+During migration, treating possible divergence as a reason to withhold every
+MIR call optimization caused large recursive benchmark losses. The production
+driver retains the established effect-free proof within a compilation unit,
+while cross-unit optimization requires the stronger published purity proof.
+Deleting a constant-return call always requires that stronger proof. ARM64
+`Call.dest` is excluded from clobbers because its backend emits only `BL` and
+a separate result move; x64 includes it because its backend emits the move
+inside `Call`.
+
 This plan builds a second native compilation pipeline around explicit function
 dependencies. It reuses established frontend, IR, allocation, and backend
 passes where possible, then removes the old orchestration after the new path

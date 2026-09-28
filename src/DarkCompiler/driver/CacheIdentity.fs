@@ -2,6 +2,88 @@
 
 module CompilationCacheIdentity
 
+/// The finalized immutable LIR object is the version token. A function cache
+/// hit retains that object, while a changed body produces another one. The
+/// target and options complete the identity without hashing a whole LIR body
+/// on every session-cache lookup.
+[<Sealed>]
+type FunctionVersion
+    (unitName: string,
+     functionId: AST.FunctionId,
+     target: Platform.Target,
+     options: CompilerOptions.CompilerOptions,
+     body: LIR.Function) =
+    member _.Unit = unitName
+    member _.Function = functionId
+    member _.Target = target
+    member _.Options = options
+    member _.Body = body
+
+    override _.Equals(other: obj) =
+        match other with
+        | :? FunctionVersion as version ->
+            unitName = version.Unit
+            && functionId = version.Function
+            && target = version.Target
+            && options = version.Options
+            && System.Object.ReferenceEquals(body, version.Body)
+        | _ -> false
+
+    override _.GetHashCode() =
+        System.HashCode.Combine(
+            unitName,
+            functionId,
+            target,
+            options,
+            System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(body))
+
+/// The catalog indexes by canonical ID for direct-call lookup, while Version
+/// retains the exact producer identity. None marks a collision or ambiguity.
+type FunctionSummary = {
+    Version: FunctionVersion option
+    Purity: MIROptimizationFacts.PuritySummary
+    ConstantReturn: (AST.SemanticType * MIR.Operand) option
+    Arm64Writes: ARM64CalleeClobbers.Writes option
+    X64Writes: X64CalleeClobbers.Writes option
+}
+
+/// Cache reuse depends on the facts a pass can observe. A new producer body
+/// with identical facts leaves its callers' optimized output unchanged.
+type FunctionSummaryFacts = {
+    Purity: MIROptimizationFacts.PuritySummary
+    ConstantReturn: (AST.SemanticType * MIR.Operand) option
+    Arm64Writes: ARM64CalleeClobbers.Writes option
+    X64Writes: X64CalleeClobbers.Writes option
+}
+
+let summaryFacts (summary: FunctionSummary) = {
+    Purity = summary.Purity
+    ConstantReturn = summary.ConstantReturn
+    Arm64Writes = summary.Arm64Writes
+    X64Writes = summary.X64Writes
+}
+
+let private unknownSummary = {
+    Version = None
+    Purity = {
+        ObservableEffects = true
+        ReadsMutableState = true
+        MayTrap = true
+        MayDiverge = true
+    }
+    ConstantReturn = None
+    Arm64Writes = None
+    X64Writes = None
+}
+
+let mergeFunctionSummaries left right =
+    right
+    |> Map.fold (fun summaries id summary ->
+        match Map.tryFind id summaries with
+        | None -> Map.add id summary summaries
+        | Some existing when existing = summary && Option.isSome summary.Version -> summaries
+        | Some _ -> Map.add id unknownSummary summaries) left
+
 open ARM64CodeGenTypes
 open CodeGen
 open System
@@ -60,13 +142,7 @@ type internal CompiledDependencyConfig = {
     Target: Platform.Target
     Options: CompilerOptions
     NonInlineableFunctionNames: Set<AST.FunctionId>
-}
-
-[<NoComparison>]
-type internal StartCompilationConfig = {
-    Target: Platform.Target
-    Options: CompilerOptions
-    BoundaryProgramType: AST.SemanticType
+    KnownSummaries: Map<AST.FunctionId, FunctionSummaryFacts>
 }
 
 [<NoComparison>]

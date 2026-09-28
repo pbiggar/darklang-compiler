@@ -34,15 +34,16 @@ let private labelsForMode (mode: CompileMode) : UserCompileLabels =
         }
 
 let private buildCompilePlan (request: CompileRequest) : UserCompilePlan =
-    let (stdlib, baseContext, prebuiltSymbolic, prebuiltCallGraph, skipNames) =
+    let (stdlib, baseContext, prebuiltSymbolic, prebuiltCallGraph, prebuiltSummaries, skipNames) =
         match request.Context with
         | StdlibOnly stdlib ->
-            stdlib, stdlib.Context, [], Map.empty, Set.empty
+            stdlib, stdlib.Context, [], Map.empty, Map.empty, Set.empty
         | StdlibWithPreamble (stdlib, preambleCtx) ->
             let preambleFuncs = preambleCtx.SymbolicFunctions
             let preambleFuncNameSet =
                 preambleFuncs |> List.map (fun f -> f.Name) |> Set.ofList
-            stdlib, preambleCtx.Context, preambleFuncs, preambleCtx.SymbolicCallGraph, preambleFuncNameSet
+            stdlib, preambleCtx.Context, preambleFuncs, preambleCtx.SymbolicCallGraph,
+            preambleCtx.CallGraphSummaries, preambleFuncNameSet
 
     let emitFunctionEvents, treeShakeUserFunctions =
         match request.Mode with
@@ -68,6 +69,7 @@ let private buildCompilePlan (request: CompileRequest) : UserCompilePlan =
         Monomorphization = monomorphization
         ExternalInlineCandidates = stdlib.StdlibInlineCandidates
         PrebuiltSymbolicFunctions = prebuiltSymbolic
+        PrebuiltCallGraphSummaries = prebuiltSummaries
         PrebuiltCallGraph = prebuiltCallGraph
         SkipFunctionNames = skipNames
         EmitFunctionEvents = emitFunctionEvents

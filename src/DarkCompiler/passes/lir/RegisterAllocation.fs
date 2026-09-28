@@ -52,7 +52,8 @@ let private timePhase
 /// Assign the colors that actually span calls to preserved registers. Coloring
 /// still determines interference; this permutation only chooses which physical
 /// register represents each color, so it cannot create a new conflict.
-let private chooseArm64RegistersForCalls
+let private chooseRegistersForCalls
+    (arch: Platform.Arch)
     (calleeWrites: Map<AST.FunctionId, ARM64CalleeClobbers.Writes> option)
     (blocks: LIR.BasicBlock array)
     (classifiedBlocks: ClassifiedBlock array)
@@ -92,7 +93,7 @@ let private chooseArm64RegistersForCalls
         |> Array.toList
     let callCount reg = Map.tryFind reg callCounts |> Option.defaultValue 0
     let ordered = usedRegs |> List.sortBy (fun reg -> (-callCount reg, reg))
-    let calleeRegs = calleeSavedRegsFor Platform.ARM64
+    let calleeRegs = calleeSavedRegsFor arch
     let mustUseCallee = max 0 (List.length ordered - List.length callerSavedRegs)
     let crossingCount = ordered |> List.filter (fun reg -> callCount reg > 0) |> List.length
     let targetRegs, sourceRegs =
@@ -111,9 +112,12 @@ let private chooseArm64RegistersForCalls
                             classifiedBlocks.[idx].InstrFacts
                             liveness.[idx].LiveOut
                             floatLiveness.[idx].LiveOut
-                    let writes = ARM64CalleeClobbers.callWritesForSaves callees block
+                    let writes =
+                        match arch with
+                        | Platform.ARM64 -> ARM64CalleeClobbers.callWritesForSaves callees block
+                        | Platform.X86_64 -> X64CalleeClobbers.callWritesForSaves callees block
                     if List.length snapshots <> List.length writes then
-                        Crash.crash "ARM64 call liveness and clobber envelopes disagree"
+                        Crash.crash "Call liveness and clobber envelopes disagree"
                     List.zip snapshots writes
                     |> List.map (fun ((liveInts, _), writes) ->
                         let liveColors =
@@ -173,7 +177,7 @@ let private chooseArm64RegistersForCalls
                 |> List.map (fun color ->
                     Map.tryFind color remap
                     |> Option.defaultWith (fun () ->
-                        Crash.crash $"Missing call-aware ARM64 color for {color}"))
+                        Crash.crash $"Missing call-aware color for {color}"))
             (targetRegs, sourceRegs)
     let remap = List.zip sourceRegs targetRegs |> Map.ofList
     let remappedAllocations =
@@ -182,7 +186,7 @@ let private chooseArm64RegistersForCalls
             | Some (PhysReg reg) ->
                 match Map.tryFind reg remap with
                 | Some mapped -> Some (PhysReg mapped)
-                | None -> Crash.crash $"Missing ARM64 register remapping for {reg}"
+                | None -> Crash.crash $"Missing register remapping for {reg}"
             | other -> other)
     { allocation with
         Allocations = remappedAllocations
@@ -401,7 +405,10 @@ let private allocateRegistersInternal
     let result =
         match arch with
         | Platform.ARM64 ->
-            chooseArm64RegistersForCalls
+            chooseRegistersForCalls arch
+                calleeWrites blocks classifiedBlocks domain floatDomain livenessBits floatLiveness colorResult
+        | Platform.X86_64 when Option.isSome calleeWrites ->
+            chooseRegistersForCalls arch
                 calleeWrites blocks classifiedBlocks domain floatDomain livenessBits floatLiveness colorResult
         | Platform.X86_64 -> colorResult
 

@@ -249,6 +249,25 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             "MIR Registry Projection Preparation"
                             mirRegistryTimer.Elapsed.TotalMilliseconds
 
+                        let mergeSummaries left right =
+                            CompilationCacheIdentity.mergeFunctionSummaries left right
+                        let baseSummaries =
+                            mergeSummaries
+                                plan.Stdlib.CallGraphSummaries
+                                plan.PrebuiltCallGraphSummaries
+                        let dependencyKnownSummaries =
+                            let directCallees =
+                                ANFDeadCodeElimination.buildCallGraph dependencyFunctions
+                                |> Map.fold (fun calls _ callees ->
+                                    Set.union calls callees) Set.empty
+                            let relevantIds =
+                                [plan.Stdlib.StdlibANFCallGraph; plan.PrebuiltCallGraph]
+                                |> List.fold (fun ids graph ->
+                                    Set.union ids (CallGraphReachability.findReachable graph directCallees))
+                                    directCallees
+                            baseSummaries
+                            |> Map.filter (fun id _ -> Set.contains id relevantIds)
+
                         let compileDependencyFunctions () =
                             buildAnf
                                 plan.Verbosity
@@ -264,7 +283,8 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 true
                                 plan.PassTimingRecorder
                             |> Result.bind (fun (_anfDependencies, ssaDependencies, dependencyTypeMap) ->
-                                lowerToAllocatedLir
+                                lowerToAllocatedLirWithKnown
+                                    dependencyKnownSummaries
                                     plan.BaseContext.Target
                                     plan.Verbosity
                                     plan.Options
@@ -281,7 +301,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
 
                         let dependencyLirResult =
                             if List.isEmpty dependencyFunctions then
-                                Ok []
+                                Ok ([], Map.empty)
                             else
                                 match plan.Session with
                                 | Some current ->
@@ -291,6 +311,10 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             Target = plan.BaseContext.Target
                                             Options = plan.Options
                                             NonInlineableFunctionNames = userOnly.NonInlineableFunctionNames
+                                            KnownSummaries =
+                                                dependencyKnownSummaries
+                                                |> Map.map (fun _ summary ->
+                                                    CompilationCacheIdentity.summaryFacts summary)
                                         }
                                         compileDependencyFunctions
                                 | None ->
@@ -379,13 +403,16 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                         match dependencyLirResult, programAnfResult with
                         | Error err, _
                         | _, Error err -> Error err
-                        | Ok allocatedDependencyFuncs, Ok (_printedFunctions, ssaFunctions, programTypeMap) ->
+                        | Ok (allocatedDependencyFuncs, dependencySummaries), Ok (_printedFunctions, ssaFunctions, programTypeMap) ->
+                                let summariesThroughDependencies =
+                                    mergeSummaries baseSummaries dependencySummaries
                                 let reachableSSAFunctions =
                                     SSADirectCallSpecialization.reachableFrom
                                         (Set.singleton programEntryId)
                                         ssaFunctions
                                 let programLirResult =
-                                    lowerToAllocatedLir
+                                    lowerToAllocatedLirWithKnown
+                                        summariesThroughDependencies
                                         plan.BaseContext.Target
                                         plan.Verbosity
                                         plan.Options
@@ -399,6 +426,11 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         userRegistries
                                         (Some projectedMirRegistries)
                                         externalReturnTypes
+                                let summariesForStart =
+                                    match programLirResult with
+                                    | Ok (_, programSummaries) ->
+                                        mergeSummaries summariesThroughDependencies programSummaries
+                                    | Error _ -> summariesThroughDependencies
                                 let startResultId = ANF.TempId 0
                                 let startFunction =
                                     let startId =
@@ -436,7 +468,8 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         false
                                         plan.PassTimingRecorder
                                     |> Result.bind (fun (_startAnf, startSSA, startTypeMap) ->
-                                        lowerToAllocatedLir
+                                        lowerToAllocatedLirWithKnown
+                                            summariesForStart
                                             plan.BaseContext.Target
                                             plan.Verbosity
                                             plan.Options
@@ -453,22 +486,11 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                 programEntryId
                                                 (programEntryName, boundaryProgramType)
                                                 externalReturnTypes))
-                                let startLirResult =
-                                    match plan.Session with
-                                    | Some current ->
-                                        current.CompileStart
-                                            {
-                                                Target = plan.BaseContext.Target
-                                                Options = plan.Options
-                                                BoundaryProgramType = boundaryProgramType
-                                            }
-                                            compileStart
-                                    | None ->
-                                        compileStart ()
+                                let startLirResult = compileStart ()
                                 match programLirResult, startLirResult with
                                 | Error err, _
                                 | _, Error err -> Error err
-                                | Ok allocatedProgramFuncs, Ok allocatedStartFuncs ->
+                                | Ok (allocatedProgramFuncs, _), Ok (allocatedStartFuncs, _) ->
                                     let allocatedUserFuncs =
                                         allocatedStartFuncs
                                         @ allocatedProgramFuncs

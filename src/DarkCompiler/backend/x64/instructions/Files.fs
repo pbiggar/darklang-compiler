@@ -91,6 +91,7 @@ let internal emitFileReadBlob (ctx: FuncCtx) (dest: LIR.Reg) (path: LIR.Operand)
             @ loadImm64 X86_64.RCX 1L
             @ [X86_64.MOV_store (X86_64.R10, 0, X86_64.RCX)
                X86_64.MOV_store (X86_64.R10, 8, X86_64.R9)]
+            @ genLeakCounterInc ctx
             // read(fd, buf, count)
             @ [X86_64.MOV_reg (X86_64.RDI, X86_64.R8)]        // fd
             @ [X86_64.LEA (X86_64.RSI, X86_64.R10, 16)]
@@ -109,8 +110,9 @@ let internal emitFileReadBlob (ctx: FuncCtx) (dest: LIR.Reg) (path: LIR.Operand)
                X86_64.MOV_store (scratch, 8, X86_64.R10)]      // payload = string ptr
             @ loadImm64 X86_64.RCX 1L
             @ [X86_64.MOV_store (scratch, 16, X86_64.RCX)      // refcount = 1
-               X86_64.MOV_reg (X86_64.RAX, scratch)
-               X86_64.JMP cleanupLabel]
+               X86_64.MOV_reg (X86_64.RAX, scratch)]
+            @ genLeakCounterInc ctx
+            @ [X86_64.JMP cleanupLabel]
             // === Error path ===
             @ [X86_64.Label errorLabel]
             // Allocate error string "File not found".
@@ -133,15 +135,11 @@ let internal emitFileReadBlob (ctx: FuncCtx) (dest: LIR.Reg) (path: LIR.Operand)
             @ loadImm64 X86_64.RCX 1L
             @ [X86_64.MOV_store (scratch, 16, X86_64.RCX)       // refcount
                X86_64.MOV_reg (X86_64.RAX, scratch)]
+            @ genLeakCounterInc ctx
+            @ genLeakCounterInc ctx
             // === Cleanup ===
             @ [X86_64.Label cleanupLabel
                X86_64.ADD_imm (X86_64.RSP, 4240)]
-            @ (if ctx.EnableLeakCheck then
-                   [ X86_64.LEA_rip (X86_64.R11, "_leak_count")
-                     X86_64.MOV_load (X86_64.RDX, X86_64.R11, 0)
-                     X86_64.ADD_imm (X86_64.RDX, 2)
-                     X86_64.MOV_store (X86_64.R11, 0, X86_64.RDX) ]
-               else [])
             @ restores
             @ [X86_64.MOV_reg (destReg, X86_64.RAX)]))
 

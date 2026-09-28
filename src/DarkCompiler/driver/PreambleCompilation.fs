@@ -35,6 +35,7 @@ let buildPreambleContext
             ANFFunctions = []
             TypeMap = stdlib.StdlibTypeMap
             SymbolicFunctions = []
+            CallGraphSummaries = Map.empty
             SymbolicCallGraph = Map.empty
         }
         Ok (stdlib, emptyContext)
@@ -98,7 +99,8 @@ let buildPreambleContext
                     Error msg
                 | Ok (preambleFunctions, ssaFunctions, typeMap) ->
                     let preambleExternalReturnTypes = preambleReturnTypes
-                    match lowerToAllocatedLir
+                    match lowerToAllocatedLirWithKnown
+                        stdlib.CallGraphSummaries
                         stdlib.Context.Target
                         0
                         preambleOptions
@@ -115,7 +117,7 @@ let buildPreambleContext
                     | Error err ->
                         let msg = $"Preamble {err}"
                         Error msg
-                    | Ok allocatedFuncs ->
+                    | Ok (allocatedFuncs, summaries) ->
                         let stdlibFuncNames =
                             stdlib.AllocatedFunctions
                             |> List.map (fun func -> func.Name)
@@ -150,6 +152,7 @@ let buildPreambleContext
                             ANFFunctions = preambleFunctions
                             TypeMap = mergedTypeMap
                             SymbolicFunctions = preambleSymbolicFuncs
+                            CallGraphSummaries = summaries
                             SymbolicCallGraph = DeadCodeElimination.buildCallGraph preambleSymbolicFuncs
                         }
                         Ok (stdlib, context)
@@ -226,7 +229,8 @@ let buildPreambleContextFromAnalysis
             Error msg
         | Ok (preambleFunctions, ssaFunctions, typeMap) ->
             let preambleExternalReturnTypes = preambleReturnTypes
-            match lowerToAllocatedLir
+            match lowerToAllocatedLirWithKnown
+                stdlib.CallGraphSummaries
                 stdlib.Context.Target
                 0
                 preambleOptions
@@ -243,7 +247,7 @@ let buildPreambleContextFromAnalysis
             | Error err ->
                 let msg = $"Preamble {err}"
                 Error msg
-            | Ok allocatedFuncs ->
+            | Ok (allocatedFuncs, summaries) ->
                 let stdlibFuncNames =
                     stdlib.AllocatedFunctions
                     |> List.map (fun func -> func.Name)
@@ -262,5 +266,6 @@ let buildPreambleContextFromAnalysis
                     ANFFunctions = preambleFunctions
                     TypeMap = mergedTypeMap
                     SymbolicFunctions = preambleSymbolicFuncs
+                    CallGraphSummaries = summaries
                     SymbolicCallGraph = DeadCodeElimination.buildCallGraph preambleSymbolicFuncs
                 }))

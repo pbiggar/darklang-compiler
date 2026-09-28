@@ -25,9 +25,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             obj,
             Dictionary<
                 CompiledDependencyConfig,
-                Result<LIR.Function list, string>>>(ObjectReferenceComparer())
-    let compiledStartFunctions =
-        Dictionary<StartCompilationConfig, Result<LIR.Function list, string>>()
+                Result<LIR.Function list * Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>, string>>>(ObjectReferenceComparer())
     let optimizedMirFunctions =
         Dictionary<MirOptimizationKey, MIR.Function>(MirOptimizationKeyNameHashComparer())
     let allocatedLirFunctions =
@@ -117,8 +115,6 @@ type CompilationSession(collectCodegenMetrics: bool) =
     let mutable anfDependencyMissCount = 0
     let mutable compiledDependencyHitCount = 0
     let mutable compiledDependencyMissCount = 0
-    let mutable compiledStartHitCount = 0
-    let mutable compiledStartMissCount = 0
     let mutable mirOptimizationHitCount = 0
     let mutable mirOptimizationMissCount = 0
     let mutable allocatedLirFunctionHitCount = 0
@@ -175,8 +171,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member internal _.CompileDependencies
         (dependencyIdentity: obj)
         (config: CompiledDependencyConfig)
-        (compile: unit -> Result<LIR.Function list, string>)
-        : Result<LIR.Function list, string> =
+        (compile: unit -> Result<LIR.Function list * Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>, string>)
+        : Result<LIR.Function list * Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>, string> =
         if disposed || config.Options.EnableCoverage then
             compile ()
         else
@@ -184,7 +180,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 match compiledDependenciesByIdentity.TryGetValue dependencyIdentity with
                 | true, entries -> entries
                 | false, _ ->
-                    let entries = Dictionary<CompiledDependencyConfig, Result<LIR.Function list, string>>()
+                    let entries = Dictionary<CompiledDependencyConfig, Result<LIR.Function list * Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>, string>>()
                     compiledDependenciesByIdentity.[dependencyIdentity] <- entries
                     entries
             match entries.TryGetValue config with
@@ -214,23 +210,6 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 | false, _ ->
                     arm64LirOpMetrics.[key] <-
                         struct (1, symbolicInstructionCount, elapsedTicks))
-
-    member internal _.CompileStart
-        (config: StartCompilationConfig)
-        (compile: unit -> Result<LIR.Function list, string>)
-        : Result<LIR.Function list, string> =
-        if disposed || config.Options.EnableCoverage then
-            compile ()
-        else
-            match compiledStartFunctions.TryGetValue config with
-            | true, result ->
-                compiledStartHitCount <- compiledStartHitCount + 1
-                result
-            | false, _ ->
-                let result = compile ()
-                compiledStartFunctions.[config] <- result
-                compiledStartMissCount <- compiledStartMissCount + 1
-                result
 
     member _.OptimizeMirFunction
         (key: MirOptimizationKey)
@@ -669,7 +648,6 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member _.CachedCompiledDependencyCount =
         if disposed then 0
         else compiledDependenciesByIdentity.Values |> Seq.sumBy (fun entries -> entries.Count)
-    member _.CachedCompiledStartCount = if disposed then 0 else compiledStartFunctions.Count
     member _.CachedMirOptimizationCount = if disposed then 0 else optimizedMirFunctions.Count
     member _.CachedAllocatedLirFunctionCount = if disposed then 0 else allocatedLirFunctions.Count
     member _.CachedStdlibReachabilityCount =
@@ -696,8 +674,6 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member _.AnfDependencyMissCount = anfDependencyMissCount
     member _.CompiledDependencyHitCount = compiledDependencyHitCount
     member _.CompiledDependencyMissCount = compiledDependencyMissCount
-    member _.CompiledStartHitCount = compiledStartHitCount
-    member _.CompiledStartMissCount = compiledStartMissCount
     member _.MirOptimizationHitCount = mirOptimizationHitCount
     member _.MirOptimizationMissCount = mirOptimizationMissCount
     member _.AllocatedLirFunctionHitCount = allocatedLirFunctionHitCount
@@ -737,7 +713,6 @@ type CompilationSession(collectCodegenMetrics: bool) =
             (jsonPlanning :> System.IDisposable).Dispose()
             anfDependenciesByContext.Clear()
             compiledDependenciesByIdentity.Clear()
-            compiledStartFunctions.Clear()
             optimizedMirFunctions.Clear()
             allocatedLirFunctions.Clear()
             callAwareLirFunctions.Clear()

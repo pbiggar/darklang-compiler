@@ -46,6 +46,23 @@ Passes 1–5 are shared across targets. Passes 6–8 live under
 `Platform.Target` before stdlib construction, and `BinaryOutput.generateBinary`
 selects the backend from that explicit target.
 
+After whole-program ANF and ownership work, `NativePipeline` lowers the current
+function inventory to MIR and schedules direct-call strongly connected
+components callee first. Independent components at the same dependency depth
+share a batch. Each batch proceeds through MIR optimization, LIR lowering, and
+register allocation before callers at a later depth. Calls within a recursive
+component use conservative clobber information during allocation.
+
+Finalized functions publish a versioned summary of observable effects, mutable
+reads, traps, possible divergence, typed constant returns, and target-specific
+register writes. Later functions, including functions in another compilation
+unit, consume the summaries of their direct callees. Missing, ambiguous, and
+indirect callees remain unknown. MIR may substitute a constant result after a
+returning call; it removes the call only when the callee is also proven safe to
+omit. ARM64 and x64 allocation use finalized callee writes to choose registers
+and reduce call saves. A session cache key includes the callee facts actually
+consumed by dependency compilation.
+
 ---
 
 ## Pass 1: Parser (`frontend/interpreter/Parser.fs`)

@@ -35,6 +35,7 @@ type internal UserCompilePlan = {
     Monomorphization: MonomorphizationMode
     ExternalInlineCandidates: Map<AST.FunctionId, ANF_Inlining.FunctionInfo>
     PrebuiltSymbolicFunctions: LIR.Function list
+    PrebuiltCallGraphSummaries: Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>
     PrebuiltCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>
     SkipFunctionNames: Set<string>
     EmitFunctionEvents: bool

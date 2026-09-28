@@ -210,7 +210,7 @@ let private sameReturnOperand left right =
         (System.BitConverter.DoubleToInt64Bits leftValue) = (System.BitConverter.DoubleToInt64Bits rightValue)
     | _ -> left = right
 
-let private constantReturnOperand (func: Function) : Operand option =
+let constantReturnOperand (func: Function) : Operand option =
     let hasTailCall =
         func.CFG.Blocks
         |> Map.exists (fun _ block ->
