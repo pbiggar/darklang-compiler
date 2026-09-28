@@ -212,10 +212,11 @@ let __authenticate (flight: Stdlib.Tls13Handshake.ServerFlight)
           | Ok key ->
             let length = Stdlib.Blob.__byteLength flight.transcript in
             let verifyLength = Stdlib.Blob.__byteLength verifyBytes in
-            if length < verifyLength + 36L then Error "Invalid TLS handshake transcript"
+            let finishedLength = if flight.cipherSuite == 4866L then 52L else 36L in
+            if length < verifyLength + finishedLength then Error "Invalid TLS handshake transcript"
             else
               let prefix = Stdlib.Blob.slice flight.transcript 0
-                             (Stdlib.Int.fromInt64 (length - verifyLength - 36L)) in
+                             (Stdlib.Int.fromInt64 (length - verifyLength - finishedLength)) in
               let input = if flight.cipherSuite == 4866L then
                             Stdlib.Tls13Certificate.certificateVerifyInput384 prefix
                           else Stdlib.Tls13Certificate.certificateVerifyInput prefix in
