@@ -17,6 +17,9 @@ type RecordError =
 let hkdfExtract (salt: Blob) (inputKeyMaterial: Blob) : Blob =
   Stdlib.Crypto.sha256hmac salt inputKeyMaterial
 
+let hkdfExtract384 (salt: Blob) (inputKeyMaterial: Blob) : Blob =
+  Stdlib.Crypto.sha384hmac salt inputKeyMaterial
+
 let __expandNext (key: Blob) (info: Blob) (blocksRemaining: Int64)
   (previous: Blob) (blocks: List<Blob>) (counter: Int64) : Blob =
   if blocksRemaining == 0L then Stdlib.Blob.concat (Stdlib.List.reverse blocks)
@@ -38,6 +41,26 @@ let hkdfExpand (pseudoRandomKey: Blob) (info: Blob) (length: Int64)
                      Stdlib.Blob.empty [] 1L in
     Ok (Stdlib.Blob.slice expanded 0 (Stdlib.Int.fromInt64 length))
 
+let __expandNext384 (key: Blob) (info: Blob) (blocksRemaining: Int64)
+  (previous: Blob) (blocks: List<Blob>) (counter: Int64) : Blob =
+  if blocksRemaining == 0L then Stdlib.Blob.concat (Stdlib.List.reverse blocks)
+  else
+    let input = Stdlib.Blob.concat
+                  [previous, info, Stdlib.Blob.__fromInt64List [counter]] in
+    let block = Stdlib.Crypto.sha384hmac key input in
+    Stdlib.Tls13.__expandNext384 key info (blocksRemaining - 1L) block
+      (Stdlib.List.push blocks block) (counter + 1L)
+
+let hkdfExpand384 (pseudoRandomKey: Blob) (info: Blob) (length: Int64)
+  : Stdlib.Result.Result<Blob, String> =
+  if length < 0L || length > 12240L then Error "Invalid HKDF output length"
+  else if length == 0L then Ok Stdlib.Blob.empty
+  else
+    let blocks = (length + 47L) / 48L in
+    let expanded = Stdlib.Tls13.__expandNext384 pseudoRandomKey info blocks
+                     Stdlib.Blob.empty [] 1L in
+    Ok (Stdlib.Blob.slice expanded 0 (Stdlib.Int.fromInt64 length))
+
 let hkdfExpandLabel (secret: Blob) (label: String) (context: Blob) (length: Int64)
   : Stdlib.Result.Result<Blob, String> =
   let fullLabel = "tls13 " ++ label in
@@ -53,6 +76,22 @@ let hkdfExpandLabel (secret: Blob) (label: String) (context: Blob) (length: Int6
       Stdlib.String.toBlob fullLabel,
       Stdlib.Blob.__fromInt64List [contextLength], context ] in
     Stdlib.Tls13.hkdfExpand secret info length
+
+let hkdfExpandLabel384 (secret: Blob) (label: String) (context: Blob) (length: Int64)
+  : Stdlib.Result.Result<Blob, String> =
+  let fullLabel = "tls13 " ++ label in
+  let labelLength = Stdlib.String.__byteLength fullLabel in
+  let contextLength = Stdlib.Blob.__byteLength context in
+  if labelLength > 255L || contextLength > 255L then
+    Error "TLS HKDF label or context is too long"
+  else if length < 0L || length > 12240L then
+    Error "Invalid HKDF output length"
+  else
+    let info = Stdlib.Blob.concat [
+      Stdlib.Blob.__fromInt64List [length / 256L, length % 256L, labelLength],
+      Stdlib.String.toBlob fullLabel,
+      Stdlib.Blob.__fromInt64List [contextLength], context ] in
+    Stdlib.Tls13.hkdfExpand384 secret info length
 
 let __read16 (data: Blob) (offset: Int64) : Int64 =
   Stdlib.Blob.__getByte data offset * 256L +
@@ -250,6 +289,16 @@ let trafficKeys (secret: Blob) : Stdlib.Result.Result<Stdlib.Tls13.TrafficKeys, 
         | Error message -> Error message
         | Ok iv -> Ok (Stdlib.Tls13.TrafficKeys { key = key, iv = iv, sequence = 0L })
 
+let trafficKeys384 (secret: Blob) : Stdlib.Result.Result<Stdlib.Tls13.TrafficKeys, String> =
+  if Stdlib.Blob.__byteLength secret != 48L then Error "TLS SHA-384 traffic secret must be 48 bytes"
+  else
+    match Stdlib.Tls13.hkdfExpandLabel384 secret "key" Stdlib.Blob.empty 32L with
+    | Error message -> Error message
+    | Ok key ->
+      match Stdlib.Tls13.hkdfExpandLabel384 secret "iv" Stdlib.Blob.empty 12L with
+      | Error message -> Error message
+      | Ok iv -> Ok (Stdlib.Tls13.TrafficKeys { key = key, iv = iv, sequence = 0L })
+
 let __nonceBytes (iv: Blob) (sequence: Int64) (index: Int64)
   (acc: List<Int64>) : Blob =
   if index == 12L then Stdlib.Blob.__fromInt64List (Stdlib.List.reverse acc)
@@ -272,7 +321,8 @@ let sealRecord (keys: Stdlib.Tls13.TrafficKeys) (contentType: Int64) (content: B
   if contentType != 21L && contentType != 22L && contentType != 23L then
     Error "Invalid TLS inner content type"
   else if length > 16384L then Error "TLS inner plaintext exceeds size limit"
-  else if Stdlib.Blob.__byteLength keys.key != 16L ||
+  else if (Stdlib.Blob.__byteLength keys.key != 16L &&
+           Stdlib.Blob.__byteLength keys.key != 32L) ||
           Stdlib.Blob.__byteLength keys.iv != 12L ||
           keys.sequence < 0L || keys.sequence == 9223372036854775807L then
     Error "Invalid TLS traffic keys or sequence"
@@ -301,7 +351,8 @@ let openRecord (keys: Stdlib.Tls13.TrafficKeys) (record: Stdlib.Tls13.Record)
   let length = Stdlib.Blob.__byteLength record.payload in
   if record.contentType != 23L || length < 17L || length > 16640L then
     Error "Invalid TLS encrypted record"
-  else if Stdlib.Blob.__byteLength keys.key != 16L ||
+  else if (Stdlib.Blob.__byteLength keys.key != 16L &&
+           Stdlib.Blob.__byteLength keys.key != 32L) ||
           Stdlib.Blob.__byteLength keys.iv != 12L ||
           keys.sequence < 0L || keys.sequence == 9223372036854775807L then
     Error "Invalid TLS traffic keys or sequence"
