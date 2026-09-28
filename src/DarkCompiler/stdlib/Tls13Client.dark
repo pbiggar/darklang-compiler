@@ -37,7 +37,7 @@ let __send (connection: Stdlib.Network.TcpConnection) (bytes: Blob)
   | Error _ -> Error "TLS socket write failed"
 
 let __hello (connection: Stdlib.Network.TcpConnection) (host: String)
-  : Stdlib.Result.Result<(Blob * Blob * Blob * Blob), String> =
+  : Stdlib.Result.Result<(Blob * Blob * Blob * Blob * Int64), String> =
   match Stdlib.X25519.generateKeyPair () with
   | Error message -> Error message
   | Ok pair ->
@@ -67,7 +67,8 @@ let __hello (connection: Stdlib.Network.TcpConnection) (host: String)
                     match Stdlib.X25519.sharedSecret pair.privateKey hello.keyShare with
                     | Error message -> Error message
                     | Ok shared -> Ok ((shared, helloRecord.payload,
-                                         received.record.payload, received.pending))
+                                         received.record.payload, received.pending,
+                                         hello.cipherSuite))
 
 let __serverFlight (connection: Stdlib.Network.TcpConnection)
   (state: Stdlib.Tls13Handshake.ServerFlight) (pending: Blob) (count: Int64)
@@ -215,7 +216,9 @@ let __authenticate (flight: Stdlib.Tls13Handshake.ServerFlight)
             else
               let prefix = Stdlib.Blob.slice flight.transcript 0
                              (Stdlib.Int.fromInt64 (length - verifyLength - 36L)) in
-              let input = Stdlib.Tls13Certificate.certificateVerifyInput prefix in
+              let input = if flight.cipherSuite == 4866L then
+                            Stdlib.Tls13Certificate.certificateVerifyInput384 prefix
+                          else Stdlib.Tls13Certificate.certificateVerifyInput prefix in
               match Stdlib.RsaPss.verifySha256 key.modulus key.exponent
                       input verify.signature with
               | Error message -> Error message
@@ -235,32 +238,57 @@ let __masterSecret (shared: Blob) : Stdlib.Result.Result<Blob, String> =
     | Error message -> Error message
     | Ok handshakeDerived -> Ok (Stdlib.Tls13.hkdfExtract handshakeDerived zero)
 
+let __masterSecret384 (shared: Blob) : Stdlib.Result.Result<Blob, String> =
+  let zero = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 48 0L) in
+  let early = Stdlib.Tls13.hkdfExtract384 zero zero in
+  let emptyHash = Stdlib.Crypto.sha384 Stdlib.Blob.empty in
+  match Stdlib.Tls13.hkdfExpandLabel384 early "derived" emptyHash 48L with
+  | Error message -> Error message
+  | Ok earlyDerived ->
+    let handshake = Stdlib.Tls13.hkdfExtract384 earlyDerived shared in
+    match Stdlib.Tls13.hkdfExpandLabel384 handshake "derived" emptyHash 48L with
+    | Error message -> Error message
+    | Ok handshakeDerived -> Ok (Stdlib.Tls13.hkdfExtract384 handshakeDerived zero)
+
 let __finish (connection: Stdlib.Network.TcpConnection)
   (flight: Stdlib.Tls13Handshake.ServerFlight) (shared: Blob) (pending: Blob)
   : Stdlib.Result.Result<Stdlib.Tls13Client.SecureKeys, String> =
-  match Stdlib.Tls13Client.__masterSecret shared with
+  let is384 = flight.cipherSuite == 4866L in
+  let masterSecret = if is384 then Stdlib.Tls13Client.__masterSecret384 shared
+                     else Stdlib.Tls13Client.__masterSecret shared in
+  match masterSecret with
   | Error message -> Error message
   | Ok master ->
-    let hash = Stdlib.Crypto.sha256 flight.transcript in
-    match Stdlib.Tls13.hkdfExpandLabel master "c ap traffic" hash 32L with
+    let hash = if is384 then Stdlib.Crypto.sha384 flight.transcript
+               else Stdlib.Crypto.sha256 flight.transcript in
+    let length = if is384 then 48L else 32L in
+    let expand = if is384 then Stdlib.Tls13.hkdfExpandLabel384
+                 else Stdlib.Tls13.hkdfExpandLabel in
+    let trafficKeys = if is384 then Stdlib.Tls13.trafficKeys384
+                      else Stdlib.Tls13.trafficKeys in
+    match expand master "c ap traffic" hash length with
     | Error message -> Error message
     | Ok clientSecret ->
-      match Stdlib.Tls13.hkdfExpandLabel master "s ap traffic" hash 32L with
+      match expand master "s ap traffic" hash length with
       | Error message -> Error message
       | Ok serverSecret ->
-        match Stdlib.Tls13.trafficKeys clientSecret with
+        match trafficKeys clientSecret with
         | Error message -> Error message
         | Ok clientKeys ->
-          match Stdlib.Tls13.trafficKeys serverSecret with
+          match trafficKeys serverSecret with
           | Error message -> Error message
           | Ok serverKeys ->
-            match Stdlib.Tls13Handshake.finishedVerifyData
-                    flight.clientHandshakeSecret flight.transcript with
+            let verify =
+              if is384 then
+                Stdlib.Tls13Handshake.finishedVerifyData384 flight.clientHandshakeSecret flight.transcript
+              else
+                Stdlib.Tls13Handshake.finishedVerifyData flight.clientHandshakeSecret flight.transcript in
+            match verify with
             | Error message -> Error message
             | Ok verifyData ->
-              let finishedHeader = Stdlib.Blob.__fromInt64List [20L, 0L, 0L, 32L] in
+              let finishedHeader = Stdlib.Blob.__fromInt64List [20L, 0L, 0L, length] in
               let finishedMessage = Stdlib.Blob.concat [finishedHeader, verifyData] in
-              match Stdlib.Tls13.trafficKeys flight.clientHandshakeSecret with
+              match trafficKeys flight.clientHandshakeSecret with
               | Error message -> Error message
               | Ok handshakeKeys ->
                 match Stdlib.Tls13.sealRecord handshakeKeys 22L finishedMessage with
@@ -275,8 +303,9 @@ let handshake (connection: Stdlib.Network.TcpConnection) (host: String)
   (roots: List<Blob>) : Stdlib.Result.Result<Stdlib.Tls13Client.SecureKeys, String> =
   match Stdlib.Tls13Client.__hello connection host with
   | Error message -> Error message
-  | Ok ((shared, clientHello, serverHello, pending)) ->
-    match Stdlib.Tls13Handshake.startServerFlight shared clientHello serverHello with
+  | Ok ((shared, clientHello, serverHello, pending, cipherSuite)) ->
+    match Stdlib.Tls13Handshake.startServerFlightForSuite
+            shared clientHello serverHello cipherSuite with
     | Error message -> Error message
     | Ok initial ->
       match Stdlib.Tls13Client.__serverFlight connection initial pending 0L with

@@ -79,3 +79,9 @@ let certificateVerifyInput (transcript: Blob) : Blob =
   Stdlib.Blob.concat
     [prefix, Stdlib.String.toBlob "TLS 1.3, server CertificateVerify",
      Stdlib.Blob.__fromInt64List [0L], Stdlib.Crypto.sha256 transcript]
+
+let certificateVerifyInput384 (transcript: Blob) : Blob =
+  let prefix = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 64 (32L)) in
+  Stdlib.Blob.concat
+    [prefix, Stdlib.String.toBlob "TLS 1.3, server CertificateVerify",
+     Stdlib.Blob.__fromInt64List [0L], Stdlib.Crypto.sha384 transcript]
