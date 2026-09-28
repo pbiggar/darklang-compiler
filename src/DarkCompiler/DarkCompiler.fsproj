@@ -110,7 +110,7 @@
     <Compile Include="passes/anf/lowering/TypeInference.fs" />
     <Compile Include="passes/ownership/AnalyzeFunctionOwnership.fs" />
     <Compile Include="passes/ownership/FuseOwnershipListCalls.fs" />
-    <Compile Include="passes/anf/ANF_Inlining.fs" />
+    <Compile Include="passes/anf/InliningCommon.fs" />
     <Compile Include="passes/anf/LowerOwnershipVariants.fs" />
     <Compile Include="passes/anf/lowering/Aggregates.fs" />
     <Compile Include="passes/anf/lowering/LoweringCallbacks.fs" />
@@ -138,6 +138,7 @@
     <Compile Include="passes/anf/TailCallDetection.fs" />
     <Compile Include="ir/anf/SSAANF.fs" />
     <Compile Include="passes/anf/SSADirectCallSpecialization.fs" />
+    <Compile Include="passes/anf/SSAInlining.fs" />
     <Compile Include="passes/anf/SSAHigherOrderSpecialization.fs" />
     <Compile Include="passes/anf/SSAEscapeAnalysis.fs" />
     <Compile Include="passes/anf/ownership/SSAReturnAnalysis.fs" />

@@ -1,0 +1,63 @@
+// Inlined nested arithmetic must retain its dependency order when moved out of a loop.
+// Edigits Benchmark - Computing digits of e
+// Direct translation of the Rust fixed-point algorithm. Each List element
+// stores one decimal digit, matching Rust's Vec<u8> representation logically.
+
+let repeat (value: Int64) (count: Int64) : List<Int64> =
+    match Stdlib.List.repeat (Stdlib.Int.fromInt64 count) value with
+    | Ok values -> values
+    | Error message -> Builtin.testRuntimeError message
+
+// Divide the fixed-point digit vector by n in one left-to-right traversal.
+let divideByN (digits: List<Int64>) (n: Int64) (carry: Int64) (reversed: List<Int64>) : List<Int64> =
+    match digits with
+    | [] -> Stdlib.List.reverse reversed
+    | digit :: tail ->
+        let current = carry * 10L + digit in
+        divideByN tail n (current % n) (Stdlib.List.push reversed (current / n))
+
+// Add the current factorial term right-to-left, matching Rust's reverse loop.
+let addReversed (e: List<Int64>) (term: List<Int64>) (carry: Int64) (result: List<Int64>) : List<Int64> =
+    match (e, term) with
+    | (eDigit :: eTail, termDigit :: termTail) ->
+        let total = eDigit + termDigit + carry in
+        addReversed eTail termTail (total / 10L) (Stdlib.List.push result (total % 10L))
+    | _ -> result
+
+let addWithCarry (e: List<Int64>) (term: List<Int64>) : List<Int64> =
+    addReversed (Stdlib.List.reverse e) (Stdlib.List.reverse term) 0L []
+
+let addFactorialTerms (e: List<Int64>) (term: List<Int64>) (n: Int64) : List<Int64> =
+    if n > 50L then e
+    else
+        let newTerm = divideByN term n 0L [] in
+        let newE = addWithCarry e newTerm in
+        addFactorialTerms newE newTerm (n + 1L)
+
+let initDigits (len: Int64) : List<Int64> =
+    Stdlib.List.push (repeat 0L (len - 1L)) 1L
+
+let computeEDigits (numDigits: Int64) : List<Int64> =
+    // Rust uses indices 0..=precision, hence numDigits + 11 elements.
+    let len = numDigits + 11L in
+    let e = initDigits len in
+    let term = initDigits len in
+    addFactorialTerms e term 1L
+
+let computeChecksum (digits: List<Int64>) (idx: Int64) (acc: Int64) (numDigits: Int64) : Int64 =
+    if idx >= numDigits then acc
+    else
+        match digits with
+        | [] -> acc
+        | digit :: tail ->
+            let newAcc = (acc + digit * (idx + 1L)) % 1000000007L in
+            computeChecksum tail (idx + 1L) newAcc numDigits
+
+let runIterations (remaining: Int64) (numDigits: Int64) : Int64 =
+    if remaining <= 0L then 0L
+    else
+        let digits = computeEDigits numDigits in
+        let checksum = computeChecksum digits 0L 0L numDigits in
+        if remaining == 1L then checksum else runIterations (remaining - 1L) numDigits
+
+runIterations 1L 5L = stdout="61\n" stderr="" disable_leak_check=true

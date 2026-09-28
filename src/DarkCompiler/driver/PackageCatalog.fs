@@ -33,7 +33,7 @@ type internal UserCompilePlan = {
     Stdlib: StdlibResult
     BaseContext: PipelineContext
     Monomorphization: MonomorphizationMode
-    ExternalInlineCandidates: Map<AST.FunctionId, ANF_Inlining.FunctionInfo>
+    ExternalInlineCandidates: Map<AST.FunctionId, InliningCommon.FunctionInfo>
     PrebuiltSymbolicFunctions: LIR.Function list
     PrebuiltCallGraphSummaries: Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>
     PrebuiltCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>

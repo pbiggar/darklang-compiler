@@ -210,7 +210,7 @@ type StdlibResult = {
     /// calls to already-monomorphized stdlib helpers.
     StdlibANFOptimizationCandidates: Map<string, ANF.Function>
     /// Pre-reference-count stdlib ANF functions available as user inlining candidates
-    StdlibInlineCandidates: Map<AST.FunctionId, ANF_Inlining.FunctionInfo>
+    StdlibInlineCandidates: Map<AST.FunctionId, InliningCommon.FunctionInfo>
     /// Call graph at ANF level (for coverage analysis reachability)
     StdlibANFCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>
     /// TypeMap from RC insertion (needed for getReachableStdlibFunctions)

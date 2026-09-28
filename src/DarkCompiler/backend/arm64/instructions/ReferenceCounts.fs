@@ -578,6 +578,7 @@ let private emitRefCountIncBuffer (ctx: CodeGenContext) (skipTagged: bool) (str:
     // Increment the leading refcount for a dynamic buffer.
     // Literal strings have refcount = INT64_MAX as sentinel (don't modify read-only memory)
     match str with
+    | LIR.Imm 0L -> Ok []
     | LIR.StringSymbol _ ->
         // Literal string - no refcount, no-op
         Ok []
@@ -614,6 +615,7 @@ let private emitRefCountDecBuffer (ctx: CodeGenContext) (skipTagged: bool) (str:
     // Decrement the leading refcount for a dynamic buffer.
     // Literal strings have refcount = INT64_MAX as sentinel (don't modify read-only memory)
     match str with
+    | LIR.Imm 0L -> Ok []
     | LIR.StringSymbol _ ->
         // Literal string - no refcount, no-op
         Ok []

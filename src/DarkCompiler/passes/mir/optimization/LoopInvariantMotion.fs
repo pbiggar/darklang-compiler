@@ -382,9 +382,33 @@ let internal applyLoopInvariantCodeMotionWithEffectFreeCalls
             if Map.isEmpty hoistMap then
                 (cfgAcc, changedAcc)
             else
+                // Discovery can find a consumer in an earlier block on a later
+                // pass. Schedule the collected instructions by dependency before
+                // moving them together into the preheader.
+                let rec orderHoists ordered pending =
+                    match pending with
+                    | [] -> List.rev ordered
+                    | _ ->
+                        let pendingDests =
+                            pending |> List.choose getInstrDest |> Set.ofList
+                        match
+                            pending
+                            |> List.indexed
+                            |> List.tryFind (fun (_, instr) ->
+                                Set.isEmpty (Set.intersect (getInstrUses instr) pendingDests))
+                        with
+                        | Some (index, instr) ->
+                            let remaining =
+                                pending
+                                |> List.indexed
+                                |> List.choose (fun (current, item) ->
+                                    if current = index then None else Some item)
+                            orderHoists (instr :: ordered) remaining
+                        | None -> Crash.crash "LICM found a cycle among hoisted instructions"
                 let hoistedInstrs =
                     blockOrder
                     |> List.collect (fun label -> Map.tryFind label hoistMap |> Option.defaultValue [])
+                    |> orderHoists []
                     |> List.map rewriteInvariantInstr
 
                 let blocks' =

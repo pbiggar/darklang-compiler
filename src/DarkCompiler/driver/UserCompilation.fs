@@ -274,7 +274,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 plan.Options
                                 sw
                                 userRegistries
-                                ANF_Inlining.defaultConfig
+                                InliningCommon.defaultConfig
                                 plan.ExternalInlineCandidates
                                 plan.Stdlib.StdlibANFOptimizationCandidates
                                 userOnly.NonInlineableFunctionNames
@@ -392,7 +392,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         plan.Options
                                         sw
                                         userRegistries
-                                        ANF_Inlining.defaultConfig
+                                        InliningCommon.defaultConfig
                                         plan.ExternalInlineCandidates
                                         plan.Stdlib.StdlibANFOptimizationCandidates
                                         userOnly.NonInlineableFunctionNames
@@ -459,7 +459,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         plan.Options
                                         sw
                                         startRegistries
-                                        ANF_Inlining.defaultConfig
+                                        InliningCommon.defaultConfig
                                         Map.empty
                                         Map.empty
                                         Set.empty

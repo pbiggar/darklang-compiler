@@ -91,7 +91,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                         coverageOptions
                         sw
                         userRegistries
-                        ANF_Inlining.defaultConfig
+                        InliningCommon.defaultConfig
                         Map.empty
                         Map.empty
                         userOnly.NonInlineableFunctionNames

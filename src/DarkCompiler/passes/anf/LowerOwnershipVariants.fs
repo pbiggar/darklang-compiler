@@ -156,7 +156,7 @@ let lower
                                 |> fun (parameters, mapping, current) ->
                                     List.rev parameters, mapping, current
                             let renamedBody, nextVarGen =
-                                ANF_Inlining.renameExpr mapping afterParameters source.Body
+                                InliningCommon.renameExpr mapping afterParameters source.Body
                             let clone = {
                                 source with
                                     Id = memberDefinition.Function.Definition.Id

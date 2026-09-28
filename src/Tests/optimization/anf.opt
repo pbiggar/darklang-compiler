@@ -101,8 +101,7 @@ else
 let TempId 21417 = Darklang.Stdlib.String.__byteSlice(t21392, t21409, t21413)
 return t21417
 else
-let TempId 38878 = Unicode.segmentUtf8(t21392, 0, 0, "", 0)
-let TempId 21419 = t38878
+let TempId 21419 = Darklang.Stdlib.String.__toGraphemes(t21392)
 let TempId 21420 = Darklang.Stdlib.String.__trimStart(t21419)
 let TempId 21421 = Darklang.Stdlib.String.__trimEnd(t21420)
 let TempId 21422 = Darklang.Stdlib.String.join(t21421, "")
@@ -141,8 +140,7 @@ return t21368
 else
 let TempId 21371 = t21362 == 1
 if t21371 then
-let TempId 38876 = Unicode.segmentUtf8(t21352, 0, 0, "", 0)
-let TempId 21372 = t38876
+let TempId 21372 = Darklang.Stdlib.String.__toGraphemes(t21352)
 let TempId 21373 = Darklang.Stdlib.String.__trimStart(t21372)
 let TempId 21374 = Darklang.Stdlib.String.join(t21373, "")
 return t21374
@@ -179,8 +177,7 @@ else
 let TempId 21387 = Darklang.Stdlib.String.__byteSlice(t21376, 0, t21384)
 return t21387
 else
-let TempId 38877 = Unicode.segmentUtf8(t21376, 0, 0, "", 0)
-let TempId 21389 = t38877
+let TempId 21389 = Darklang.Stdlib.String.__toGraphemes(t21376)
 let TempId 21390 = Darklang.Stdlib.String.__trimEnd(t21389)
 let TempId 21391 = Darklang.Stdlib.String.join(t21390, "")
 return t21391

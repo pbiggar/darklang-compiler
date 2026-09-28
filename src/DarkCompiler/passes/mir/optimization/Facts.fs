@@ -253,7 +253,7 @@ let analyzePurityWithKnown
         |> List.map (fun func -> func.Id, directCallees func)
         |> Map.ofList
     let recursiveIds =
-        ANF_Inlining.findSCCs ids calls
+        InliningCommon.findSCCs ids calls
         |> List.filter (fun members ->
             Set.count members > 1
             || (members

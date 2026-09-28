@@ -38,7 +38,7 @@ let internal buildConversionResult
 // program policy causes excessive compile-time and ANF growth. This policy is
 // deliberately limited to shallow, very small ordinary helpers; the other
 // specialized inlining modes remain available to user programs.
-let internal stdlibInliningConfig : ANF_Inlining.InliningConfig = {
+let internal stdlibInliningConfig : InliningCommon.InliningConfig = {
     MaxFunctionSize = 1
     MaxInlineDepth = 1
     MaxExternalInlineSites = 0
@@ -54,8 +54,8 @@ let internal buildAnf
     (options: CompilerOptions)
     (sw: Stopwatch)
     (registries: AST_to_ANF.Registries)
-    (inliningConfig: ANF_Inlining.InliningConfig)
-    (externalInlineCandidates: Map<AST.FunctionId, ANF_Inlining.FunctionInfo>)
+    (inliningConfig: InliningCommon.InliningConfig)
+    (externalInlineCandidates: Map<AST.FunctionId, InliningCommon.FunctionInfo>)
     (externalOptimizationFunctions: Map<string, ANF.Function>)
     (nonInlineableFunctionNames: Set<AST.FunctionId>)
     (functions: ANF.Function list)
@@ -117,31 +117,13 @@ let internal buildAnf
     if shouldDumpIR verbosity options.DumpANF then
         printANFProgram options "=== ANF (after optimization) ===" anfOptimized
 
-    if verbosity >= 1 then println "  [anf.inline] ANF Inlining..."
-    let inlineStart = sw.Elapsed.TotalMilliseconds
-    let anfInlined =
-        if options.DisableInlining then
-            anfOptimized
-        else
-            ANF_Inlining.inlineProgramWithExternalCandidatesAndExclusions
-                inliningConfig
-                externalInlineCandidates
-                nonInlineableFunctionNames
-                anfOptimized
-
-    let inlineElapsed = sw.Elapsed.TotalMilliseconds - inlineStart
-    recordPassTiming passTimingRecorder "ANF Inlining" inlineElapsed
-    if verbosity >= 2 then
-        let t = System.Math.Round(inlineElapsed, 1)
-        println $"        {t}ms"
-
-    let convResult = buildConversionResult anfInlined registries ownershipContracts
+    let convResult = buildConversionResult anfOptimized registries ownershipContracts
 
     let preSpecializationContext = RcTypeFacts.createContext convResult
-    let (ANF.Program (preRCFunctions, _)) = anfInlined
+    let (ANF.Program (preRCFunctions, _)) = anfOptimized
     let ssaBeforeSpecializationResult =
         RefCountInsertion.verifyOwnershipContracts
-            preSpecializationContext ownershipContracts anfInlined
+            preSpecializationContext ownershipContracts anfOptimized
         |> Result.bind (fun () ->
             preRCFunctions
             |> List.fold (fun result func ->
@@ -158,11 +140,8 @@ let internal buildAnf
     match ssaBeforeSpecializationResult with
     | Error err -> Error $"Reference count insertion error: {err}"
     | Ok ssaBeforeSpecialization ->
-        if verbosity >= 1 && specializeInternalSignatures then
-            println "  [ssa.specialize-closures] SSA Higher-Order Specialization..."
-        let higherOrderStart = sw.Elapsed.TotalMilliseconds
         let externalSSAResult =
-            if options.DisableInlining || not specializeInternalSignatures then Ok []
+            if options.DisableInlining || Map.isEmpty externalInlineCandidates then Ok []
             else
                 let atomTargets = function
                     | ANF.FuncRef id -> Set.singleton id
@@ -222,12 +201,31 @@ let internal buildAnf
                 |> Result.map List.rev
         externalSSAResult
         |> Result.map (fun externalSSA ->
+            if verbosity >= 1 then println "  [ssa.inline] SSA Inlining..."
+            let inlineStart = sw.Elapsed.TotalMilliseconds
+            let ssaInlined =
+                if options.DisableInlining then ssaBeforeSpecialization
+                else
+                    SSAInlining.inlineProgramWithExternalCandidatesAndExclusions
+                        inliningConfig
+                        externalInlineCandidates
+                        externalSSA
+                        nonInlineableFunctionNames
+                        preRCFunctions
+                        ssaBeforeSpecialization
+            let inlineElapsed = sw.Elapsed.TotalMilliseconds - inlineStart
+            recordPassTiming passTimingRecorder "SSA Inlining" inlineElapsed
+            if verbosity >= 2 then
+                println $"        {System.Math.Round(inlineElapsed, 1)}ms"
+            if verbosity >= 1 && specializeInternalSignatures then
+                println "  [ssa.specialize-closures] SSA Higher-Order Specialization..."
+            let higherOrderStart = sw.Elapsed.TotalMilliseconds
             let higherOrder: SSAHigherOrderSpecialization.Specialization =
                 if options.DisableInlining || not specializeInternalSignatures then
-                    { Functions = ssaBeforeSpecialization; CloneOrigins = Map.empty }
+                    { Functions = ssaInlined; CloneOrigins = Map.empty }
                 else
                     SSAHigherOrderSpecialization.specializeProgramWithExternalFunctionsAndNames
-                        registries.FunctionNames externalSSA ssaBeforeSpecialization
+                        registries.FunctionNames externalSSA ssaInlined
             let elapsed = sw.Elapsed.TotalMilliseconds - higherOrderStart
             if specializeInternalSignatures then
                 recordPassTiming passTimingRecorder "SSA Higher-Order Specialization" elapsed

@@ -448,7 +448,7 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
         { Name = "AST to ANF Tests"; Tests = ASTToANFTests.tests }
         { Name = "RefCount Insertion Tests"; Tests = RefCountInsertionTests.tests }
         { Name = "TailCall Detection Tests"; Tests = TailCallDetectionTests.tests }
-        { Name = "ANF Inlining Tests"; Tests = ANFInliningTests.tests }
+        { Name = "SSA Inlining Tests"; Tests = SSAInliningTests.tests }
         { Name = "Monomorphization Tests"; Tests = MonomorphizationTests.tests }
         { Name = "Lambda Lifting Tests"; Tests = LambdaLiftingTests.tests }
         { Name = "Formatting Roundtrip Tests"; Tests = FormattingRoundtripTests.tests formattingRoundtripTestFiles }

@@ -1,0 +1,355 @@
+# SSA inlining fixtures. Each case runs the production SSA inliner on the last
+# FUNCTION. See README.md for syntax and benchmark provenance.
+
+---NAME---
+literal argument inlines
+---FUNCTION---
+ssaAddOne(t0:Int64) -> Int64
+let t1:Int64 = add(t0,1)
+return t1
+---FUNCTION---
+ssaLiteralCaller() -> Int64
+let t2:Int64 = call ssaAddOne(41)
+return t2
+---EXPECT---
+calls ssaAddOne = 0
+
+# nbody: applyPair has 59 ANF bindings and ten projected sites. Each projection
+# is followed by two typed aliases before the next tuple field is read.
+---NAME---
+nbody ten projected tuple sites inline
+---FUNCTION---
+ssaLargePair(t0:Body) -> Tuple<Body,Body>
+let t1:Int64 = field(t0,0)
+repeat_add t2..t56 from t1
+let t57:Body = body(t56,t1)
+let t58:Body = body(t1,t56)
+let t100:Tuple<Body,Body> = tuple(t57,t58)
+return t100
+---FUNCTION---
+ssaProjectedCaller(t0:Body) -> Body
+project_chain ssaLargePair 10 from t0 at t200 of Body aliases 2
+---EXPECT---
+calls ssaLargePair = 0
+ops tuple_alloc = 0
+ops body_alloc = 1 after escape
+
+---NAME---
+projected tuple site cap
+---FUNCTION---
+ssaLargePair(t0:Body) -> Tuple<Body,Body>
+let t1:Int64 = field(t0,0)
+repeat_add t2..t56 from t1
+let t57:Body = body(t56,t1)
+let t58:Body = body(t1,t56)
+let t100:Tuple<Body,Body> = tuple(t57,t58)
+return t100
+---FUNCTION---
+ssaProjectedCaller(t0:Body) -> Body
+project_chain ssaLargePair 13 from t0 at t200 of Body aliases 2
+---EXPECT---
+calls ssaLargePair >= 1
+
+# merkletrees: hashVal fixes the recursive loop's starting index at zero.
+---NAME---
+merkletrees expands eight hash rounds
+---FUNCTION---
+ssaHashLoop(t0:Int64,t1:Int64,t2:Int64) -> Int64
+let t3:Bool = gte(t2,8)
+if t3
+  return t0
+else
+  let t4:Int64 = bitand(t1,255)
+  let t5:Int64 = bitxor(t0,t4)
+  let t6:Int64 = mul(t5,1099511628211)
+  let t7:Int64 = add(t2,1)
+  let t8:Int64 = call ssaHashLoop(t6,t1,t7)
+  return t8
+endif
+---FUNCTION---
+ssaHashVal(t0:Int64) -> Int64
+let t1:Int64 = call ssaHashLoop(-3750763034362895579,t0,0)
+return t1
+---FUNCTION---
+ssaHashCaller(t0:Int64) -> Int64
+let t1:Int64 = call ssaHashVal(t0)
+return t1
+---EXPECT---
+calls ssaHashLoop = 0
+ops mul = 8
+
+---NAME---
+nine hash rounds stay a call
+---FUNCTION---
+ssaHashLoop(t0:Int64,t1:Int64,t2:Int64) -> Int64
+let t3:Bool = gte(t2,9)
+if t3
+  return t0
+else
+  let t4:Int64 = bitand(t1,255)
+  let t5:Int64 = bitxor(t0,t4)
+  let t6:Int64 = mul(t5,1099511628211)
+  let t7:Int64 = add(t2,1)
+  let t8:Int64 = call ssaHashLoop(t6,t1,t7)
+  return t8
+endif
+---FUNCTION---
+ssaHashVal(t0:Int64) -> Int64
+let t1:Int64 = call ssaHashLoop(-3750763034362895579,t0,0)
+return t1
+---FUNCTION---
+ssaHashCaller(t0:Int64) -> Int64
+let t1:Int64 = call ssaHashVal(t0)
+return t1
+---EXPECT---
+calls ssaHashLoop = 1
+
+---NAME---
+symbolic hash start stays a call
+---FUNCTION---
+ssaHashLoop(t0:Int64,t1:Int64,t2:Int64) -> Int64
+let t3:Bool = gte(t2,8)
+if t3
+  return t0
+else
+  let t4:Int64 = bitand(t1,255)
+  let t5:Int64 = bitxor(t0,t4)
+  let t6:Int64 = mul(t5,1099511628211)
+  let t7:Int64 = add(t2,1)
+  let t8:Int64 = call ssaHashLoop(t6,t1,t7)
+  return t8
+endif
+---FUNCTION---
+ssaSymbolicHashCaller(t0:Int64,t1:Int64) -> Int64
+let t2:Int64 = call ssaHashLoop(1,t0,t1)
+return t2
+---EXPECT---
+calls ssaHashLoop = 1
+
+# fasta, spectral_norm, and quicksort: lookup helpers return Options through
+# branches, and the caller immediately projects a scalar payload.
+---NAME---
+lookup Option return paths scalarize
+---FUNCTION---
+ssaLookup(t0:Bool) -> Option<Int64>
+if t0
+  let t1:Option<Int64> = some(2)
+  return t1
+else
+  let t2:Option<Int64> = none()
+  return t2
+endif
+---FUNCTION---
+ssaLookupCaller(t0:Bool) -> Int64
+let t1:Option<Int64> = call ssaLookup(t0)
+let t2:Int64 = payload(t1)
+return t2
+---EXPECT---
+calls ssaLookup = 0
+ops option_alloc = 0 after escape
+
+# Stdlib list lookup has two None exits and one Some exit. Its caller branches
+# on the tag and reads the payload in a successor block.
+---NAME---
+three-path lookup with branched consumer scalarizes
+---FUNCTION---
+ssaThreePathLookup(t0:Bool,t1:Bool) -> Option<Int64>
+if t0
+  let t2:Option<Int64> = none()
+  return t2
+else
+  if t1
+    let t3:Option<Int64> = none()
+    return t3
+  else
+    let t4:Option<Int64> = some(2)
+    return t4
+  endif
+endif
+---FUNCTION---
+ssaThreePathCaller(t0:Bool,t1:Bool) -> Int64
+let t2:Option<Int64> = call ssaThreePathLookup(t0,t1)
+let t3:Int64 = get(t2,0)
+let t4:Bool = lt(t3,1)
+if t4
+  let t5:Int64 = payload(t2)
+  return t5
+else
+  return 0
+endif
+---EXPECT---
+calls ssaThreePathLookup = 0
+ops option_alloc = 0 after escape
+
+# The old inliner keeps a managed call when duplicating its continuation
+# would exceed the 1024-binding growth budget.
+---NAME---
+large managed continuation keeps call
+---FUNCTION---
+ssaFourPathLookup(t0:Bool,t1:Bool) -> Option<Int64>
+if t0
+  if t1
+    let t2:Option<Int64> = some(1)
+    return t2
+  else
+    let t3:Option<Int64> = none()
+    return t3
+  endif
+else
+  if t1
+    let t4:Option<Int64> = some(2)
+    return t4
+  else
+    let t5:Option<Int64> = none()
+    return t5
+  endif
+endif
+---FUNCTION---
+ssaLargeContinuation(t0:Int64,t1:Bool,t2:Bool) -> Int64
+let t3:Option<Int64> = call ssaFourPathLookup(t1,t2)
+repeat_add t100..t164 from t0
+repeat_add t165..t229 from t164
+repeat_add t230..t294 from t229
+repeat_add t295..t359 from t294
+repeat_add t360..t424 from t359
+repeat_add t425..t489 from t424
+return t489
+---EXPECT---
+calls ssaFourPathLookup = 1
+
+# spectral_norm's getAt returns Option<Float>; keep its payload layout in a
+# separate fixture from the Int64 lookups in fasta and quicksort.
+---NAME---
+float lookup Option return paths scalarize
+---FUNCTION---
+ssaFloatLookup(t0:Bool) -> Option<Float>
+if t0
+  let t1:Option<Float> = some_float(1.5)
+  return t1
+else
+  let t2:Option<Float> = none_float()
+  return t2
+endif
+---FUNCTION---
+ssaFloatLookupCaller(t0:Bool) -> Float
+let t1:Option<Float> = call ssaFloatLookup(t0)
+let t2:Float = payload_float(t1)
+return t2
+---EXPECT---
+calls ssaFloatLookup = 0
+ops option_alloc = 0 after escape
+
+# spectral_norm: independent small scalar calls retain the same inline budget.
+---NAME---
+sequential scalar helpers inline
+---FUNCTION---
+ssaScalarHelper(t0:Int64) -> Int64
+let t1:Int64 = add(t0,1)
+return t1
+---FUNCTION---
+ssaScalarCaller(t0:Int64) -> Int64
+let t1:Int64 = call ssaScalarHelper(t0)
+let t2:Int64 = call ssaScalarHelper(t1)
+let t3:Int64 = call ssaScalarHelper(t2)
+let t4:Int64 = call ssaScalarHelper(t3)
+let t5:Int64 = call ssaScalarHelper(t4)
+return t5
+---EXPECT---
+calls ssaScalarHelper = 0
+blocks = 1
+
+# huffman: treeComesFirst calls branch-returning accessors for both operands.
+---NAME---
+repeated branching scalar accessor inlines
+---FUNCTION---
+ssaTreeWeight(t0:Bool) -> Int64
+if t0
+  return 2
+else
+  return 3
+endif
+---FUNCTION---
+ssaTreeComesFirst(t0:Bool,t1:Bool) -> Bool
+let t2:Int64 = call ssaTreeWeight(t0)
+let t3:Int64 = call ssaTreeWeight(t1)
+let t4:Bool = lt(t2,t3)
+return t4
+---EXPECT---
+calls ssaTreeWeight = 0
+
+# raytracer: short vector helper chains such as normalize -> length -> dot.
+---NAME---
+nested scalar helper chain inlines
+---FUNCTION---
+ssaDot(t0:Int64,t1:Int64) -> Int64
+let t2:Int64 = mul(t0,t1)
+return t2
+---FUNCTION---
+ssaLength(t0:Int64,t1:Int64) -> Int64
+let t2:Int64 = call ssaDot(t0,t1)
+let t3:Int64 = add(t2,1)
+return t3
+---FUNCTION---
+ssaNormalize(t0:Int64,t1:Int64) -> Int64
+let t2:Int64 = call ssaLength(t0,t1)
+let t3:Int64 = div(t0,t2)
+return t3
+---FUNCTION---
+ssaTraceCaller(t0:Int64,t1:Int64) -> Int64
+let t2:Int64 = call ssaNormalize(t0,t1)
+return t2
+---EXPECT---
+calls ssaDot = 0
+calls ssaLength = 0
+calls ssaNormalize = 0
+
+# Lookup-heavy benchmarks call eligible Stdlib wrappers repeatedly. The
+# inliner allows eight external sites in one caller and limits a ninth.
+---NAME---
+eight external wrapper sites inline
+---EXTERNAL-FUNCTION---
+Darklang.Stdlib.Int64.shiftLeft(t0:Int64) -> Int64
+let t1:Int64 = mul(t0,2)
+return t1
+---FUNCTION---
+ssaExternalCaller(t0:Int64) -> Int64
+call_chain Darklang.Stdlib.Int64.shiftLeft 8 from t0 at t1
+---EXPECT---
+calls Darklang.Stdlib.Int64.shiftLeft = 0
+
+---NAME---
+nine external wrapper sites stay bounded
+---EXTERNAL-FUNCTION---
+Darklang.Stdlib.Int64.shiftLeft(t0:Int64) -> Int64
+let t1:Int64 = mul(t0,2)
+return t1
+---FUNCTION---
+ssaExternalCaller(t0:Int64) -> Int64
+call_chain Darklang.Stdlib.Int64.shiftLeft 9 from t0 at t1
+---EXPECT---
+calls Darklang.Stdlib.Int64.shiftLeft = 9
+
+# fannkuch immediately projects nextPerm's three results, but nextPerm is
+# recursive. The projected-result exception must not expand this recursion.
+---NAME---
+recursive projected triple stays a call
+---FUNCTION---
+ssaNextPerm(t0:Body,t1:Body,t2:Int64) -> Tuple<Body,Body,Bool>
+let t3:Bool = gte(t2,1)
+if t3
+  let t4:Tuple<Body,Body,Bool> = tuple3(t0,t1,true)
+  return t4
+else
+  let t5:Int64 = add(t2,1)
+  let t6:Tuple<Body,Body,Bool> = call ssaNextPerm(t0,t1,t5)
+  return t6
+endif
+---FUNCTION---
+ssaFannkuchCaller(t0:Body,t1:Body) -> Bool
+let t2:Tuple<Body,Body,Bool> = call ssaNextPerm(t0,t1,0)
+let t3:Body = get(t2,0)
+let t4:Body = get(t2,1)
+let t5:Bool = get(t2,2)
+return t5
+---EXPECT---
+calls ssaNextPerm = 1

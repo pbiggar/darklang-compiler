@@ -320,7 +320,7 @@ let buildStdlibWithTrace
                         |> Map.ofList
                     let stdlibInlineCandidates =
                         stdlibFunctions
-                        |> ANF_Inlining.buildExternalCandidateInfoMap ANF_Inlining.defaultConfig
+                        |> InliningCommon.buildExternalCandidateInfoMap InliningCommon.defaultConfig
                     let stdlibLiftedFuncNames =
                         anfFunctions
                         |> List.map (fun f -> f.Name)
@@ -588,7 +588,7 @@ let buildStdlibSpecializations
                                         stdlib.StdlibANFOptimizationCandidates
                                 let newInlineCandidateMap =
                                     anfFuncs
-                                    |> ANF_Inlining.buildExternalCandidateInfoMap ANF_Inlining.defaultConfig
+                                    |> InliningCommon.buildExternalCandidateInfoMap InliningCommon.defaultConfig
                                 let mergedStdlibInlineCandidates =
                                     Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibInlineCandidates newInlineCandidateMap
                                 let allAnfFunctions =

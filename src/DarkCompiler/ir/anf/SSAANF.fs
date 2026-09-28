@@ -40,7 +40,7 @@ type private Renaming = {
     FreshValueTypes: Map<ANF.TempId, AST.SemanticType>
 }
 
-let private renamedAtom mapping atom = ANF_Inlining.renameAtom mapping atom
+let private renamedAtom mapping atom = InliningCommon.renameAtom mapping atom
 
 // LIR uses these virtual IDs for physical spill and ABI scratch registers.
 let private isReservedBackendId (ANF.TempId id) =
@@ -79,7 +79,7 @@ let rec private freshenDefinitions
     : Result<ANF.AExpr * Renaming, string> =
     match expr with
     | ANF.Let (id, operation, rest) ->
-        let operation' = ANF_Inlining.renameCExpr mapping operation
+        let operation' = InliningCommon.renameCExpr mapping operation
         define typeMap id None state
         |> Result.bind (fun (defined, afterDefinition) ->
             freshenDefinitions typeMap (Map.add id defined mapping) afterDefinition rest
@@ -119,7 +119,7 @@ let rec private freshenTypedDefinitions
     | RLet (id, operation, rest, _) ->
         let typ =
             RcInsertExpression.inferBindingType (withTempTypes ctx types) id operation rest
-        let operation' = ANF_Inlining.renameCExpr mapping operation
+        let operation' = InliningCommon.renameCExpr mapping operation
         define Map.empty id (Some typ) state
         |> Result.bind (fun (defined, afterDefinition) ->
             let types' =

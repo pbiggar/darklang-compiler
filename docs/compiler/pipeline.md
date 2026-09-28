@@ -24,8 +24,8 @@ The Dark compiler transforms source code through a series of passes, each with a
 | 2.2  | Generated result output | `passes/anf/PrintInsertion.fs`                   | ANF → ANF                                     |
 | 2.25 | Function reachability   | `passes/anf/ANFDeadCodeElimination.fs`           | ANF → reachable ANF                           |
 | 2.3  | ANF optimizations       | `passes/anf/ANF_Optimize.fs`                                | ANF → ANF                                     |
-| 2.4  | ANF inlining            | `passes/anf/ANF_Inlining.fs`                                | ANF → ANF                                     |
-| 2.4.5 | ANF → high-level SSA    | `ir/anf/SSAANF.fs`                                           | Inlined ANF → typed blocks                     |
+| 2.4  | ANF → high-level SSA    | `ir/anf/SSAANF.fs`                                           | Optimized ANF → typed blocks                   |
+| 2.4.5 | SSA inlining           | `passes/anf/SSAInlining.fs`                                 | SSA → SSA                                     |
 | 2.4.6 | Known closure specialization | `passes/anf/SSAHigherOrderSpecialization.fs`   | SSA → specialized SSA                         |
 | 2.5  | Direct-call specialization | `passes/anf/SSADirectCallSpecialization.fs`             | SSA → specialized SSA                         |
 | 2.6  | Escape analysis        | `passes/anf/SSAEscapeAnalysis.fs`                           | SSA → scalar-replaced SSA                     |
@@ -210,26 +210,26 @@ prebuilt functions and for selecting reachable standard-library functions.
 
 ---
 
-## Pass 2.4: ANF Inlining (`ANF_Inlining.fs`)
+## Pass 2.4: ANF to high-level SSA (`SSAANF.fs`)
 
-**Input**: ANF
-**Output**: ANF with selected calls inlined
-
-### Responsibilities
-- **Inline small functions**: Reduce call overhead when safe
-- **Preserve semantics**: Respect evaluation order and side effects
-
----
-
-## Pass 2.4.5: ANF to high-level SSA (`SSAANF.fs`)
-
-**Input**: Inlined ANF
+**Input**: Optimized ANF
 **Output**: High-level SSA blocks with explicit edges and block parameters
 
 ### Responsibilities
 - **Build CFG**: Convert structured ANF joins and branches to basic blocks
 - **Freshen values**: Give reused ANF temporaries distinct SSA definitions
 - **Carry joins**: Pass typed values on edges to block parameters
+
+---
+
+## Pass 2.4.5: SSA Inlining (`SSAInlining.fs`)
+
+**Input**: Typed SSA blocks
+**Output**: SSA with selected direct calls inlined
+
+### Responsibilities
+- **Clone callee blocks**: Freshen block labels and value identities at each call
+- **Connect returns**: Route every callee return to one typed continuation
 
 ## Pass 2.4.6: Known Closure Specialization (`SSAHigherOrderSpecialization.fs`)
 

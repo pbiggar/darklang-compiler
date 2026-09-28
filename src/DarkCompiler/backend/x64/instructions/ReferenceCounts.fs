@@ -92,6 +92,7 @@ let internal emitRefCountDec (ctx: FuncCtx) (addr: LIR.Reg) (payloadSize: int) (
 
 let private emitRefCountIncBuffer (ctx: FuncCtx) (skipTagged: bool) (str: LIR.Operand) : Result<X86_64.Instr list, string> =
     match str with
+    | LIR.Imm 0L -> Ok []
     | LIR.StringSymbol _ -> Ok []  // Literal string - no refcount
     | LIR.Reg reg ->
         resolveReg reg
@@ -137,6 +138,7 @@ let private emitRefCountIncBuffer (ctx: FuncCtx) (skipTagged: bool) (str: LIR.Op
 
 let private emitRefCountDecBuffer (ctx: FuncCtx) (skipTagged: bool) (str: LIR.Operand) : Result<X86_64.Instr list, string> =
     match str with
+    | LIR.Imm 0L -> Ok []
     | LIR.StringSymbol _ -> Ok []  // Literal string - no refcount
     | LIR.Reg reg ->
         resolveReg reg

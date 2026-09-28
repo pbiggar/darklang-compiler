@@ -536,12 +536,32 @@ let insertBlockLocal
                 Map.tryFind label liveness.AtTerminator
                 |> Option.defaultValue Set.empty
                 |> liveOwners definitions
+            let immediateScalar = function
+                | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128
+                | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
+                | AST.TInt | AST.TBool | AST.TFloat64 | AST.TChar
+                | AST.TDateTime | AST.TUnit -> true
+                | _ -> false
+            let borrowedOwners =
+                List.zip target.Parameters arguments
+                |> List.fold (fun owners (parameter, argument) ->
+                    match argument with
+                    | Var source when immediateScalar parameter.Type ->
+                        Set.union owners (liveOwners definitions (Set.singleton source))
+                    | Var source
+                        when Set.contains parameter.Id definitions.Owned
+                             && Option.isNone (ownerOf definitions source)
+                             && not (isNonRcSentinel definitions source) ->
+                        // The successor owns a retained borrowed projection.
+                        // Its aggregate source no longer needs to survive the edge.
+                        Set.union owners (liveOwners definitions (Set.singleton source))
+                    | _ -> owners) Set.empty
             let required =
                 Map.tryFind successor liveness.AtEntry
                 |> Option.defaultValue Set.empty
                 |> liveOwners definitions
             let releaseOwners =
-                Set.difference before required
+                Set.difference (Set.union before borrowedOwners) required
                 |> fun owners -> Set.difference owners transferred
             let operations, next, types =
                 appendBindings (block.Operations @ bindings) releaseOwners next types
