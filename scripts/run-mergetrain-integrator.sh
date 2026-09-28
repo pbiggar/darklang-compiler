@@ -602,6 +602,21 @@ while true; do
         sleep "$interval_seconds"
         continue
       fi
+      recovery_branch="$(json_value job.branch <<<"$prior_details")"
+      recovery_worktree="$(json_value job.worktree_path <<<"$prior_details")"
+      if [[ "$recovery_branch" == mergetrain-repair/* && -d "$recovery_worktree" ]]; then
+        if [[ "$(git -C "$recovery_worktree" rev-parse HEAD)" == "$deployed_sha" ]] &&
+           [[ -z "$(git -C "$recovery_worktree" status --porcelain)" ]]; then
+          if git -C "$repo_root" worktree remove "$recovery_worktree" &&
+             git -C "$repo_root" branch -d "$recovery_branch"; then
+            log_info "Removed deployed recovery worktree for job #$prior_id"
+          else
+            log_warn "Could not remove deployed recovery worktree for job #$prior_id"
+          fi
+        else
+          log_warn "Deployed recovery worktree for job #$prior_id is not clean at its deployed commit"
+        fi
+      fi
     fi
   fi
   if ! fifo_snapshot="$(python3 "$integrator_source_root/scripts/mergetrain_fifo.py" \

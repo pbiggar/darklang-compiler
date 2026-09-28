@@ -46,7 +46,7 @@ def measure(results: Path):
 
 def verify(results: Path) -> int:
     repo, benchmarks, track, current = measure(results)
-    base = git(repo, "rev-parse", "refs/remotes/mergetrain-local/main")
+    base = git(repo, "rev-parse", "main")
     baseline = load_snapshot(state_dir(repo) / f"{track.id}.json", benchmarks, "dark", track)
     if baseline.compiler.commit != base:
         raise BaselineError(
@@ -64,7 +64,7 @@ def verify(results: Path) -> int:
 
 def seed(results: Path) -> None:
     repo, benchmarks, track, snapshot = measure(results)
-    head = git(repo, "rev-parse", "refs/remotes/mergetrain-local/main")
+    head = git(repo, "rev-parse", "main")
     if snapshot.compiler.commit != head:
         raise BaselineError("seed measurement is not the deployed integration head")
     target = state_dir(repo) / f"{track.id}.json"
@@ -74,7 +74,7 @@ def seed(results: Path) -> None:
 
 
 def promote(repo: Path, commit: str) -> None:
-    head = git(repo, "rev-parse", "refs/remotes/mergetrain-local/main")
+    head = git(repo, "rev-parse", "main")
     if head != commit:
         raise BaselineError("deployed head differs from candidate; cannot promote measurement")
     track = TRACKS[f"{machine_architecture()}-full-cachegrind"]
