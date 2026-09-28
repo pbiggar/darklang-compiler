@@ -44,6 +44,15 @@ For the oldest attention job, the integrator:
    the verified replacement before dismissing the old blocked row, so a crash
    cannot lose the repair.
 
+If a benchmark recovery produces the same tree as the failed candidate, the
+integrator keeps the failed job at the FIFO head and stages its exact candidate
+for human `benchmarks` exception review. It does not enqueue another identical
+replacement or approve the gate itself.
+
+The FIFO ledger records a deployed head in `completed` before admitting the
+next task, including when the integrator discovers that deployment on its next
+pass. Native job history remains the deployment audit.
+
 For `approval_execution_policy_changed`, the integrator records the original
 job's policy failure and the exact `.mergetrain.yaml` diff between its enqueue
 base and current integration in an attempt artifact. It automatically recovers

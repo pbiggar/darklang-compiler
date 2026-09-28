@@ -14,10 +14,14 @@ from pathlib import Path
 from typing import Any, Sequence
 
 if __package__:
-    from .mergetrain_exception import ExceptionFlowError, stage_if_requested
+    from .mergetrain_exception import (
+        ExceptionFlowError, stage_if_requested, stage_no_progress_benchmark_review,
+    )
     from .mergetrain_fifo import note_replacement, note_resolved
 else:
-    from mergetrain_exception import ExceptionFlowError, stage_if_requested
+    from mergetrain_exception import (
+        ExceptionFlowError, stage_if_requested, stage_no_progress_benchmark_review,
+    )
     from mergetrain_fifo import note_replacement, note_resolved
 
 
@@ -657,6 +661,25 @@ def recover(repo: Path, attempts: Path, job_id: int) -> None:
         )
         if current_owning != owning_snapshot:
             raise RecoveryError("Codex changed the original owning worktree")
+    failed_candidate = str(job.get("deploy_sha") or "")
+    if failure.category == "gate_failed" and failure.gate == "benchmarks" and failed_candidate:
+        recovered_tree = run(("git", "rev-parse", "HEAD^{tree}"), cwd=worktree).stdout.strip()
+        failed_tree = run(
+            ("git", "rev-parse", f"{failed_candidate}^{{tree}}"), cwd=repo
+        ).stdout.strip()
+        if recovered_tree == failed_tree:
+            if run(("git", "rev-parse", tracking_ref), cwd=repo).stdout.strip() != integration_sha:
+                raise RecoveryError("integration advanced during no-progress benchmark review")
+            try:
+                if stage_no_progress_benchmark_review(repo, details):
+                    print(
+                        f"Job #{job_id}: unchanged benchmark candidate awaits exact human review",
+                        file=sys.stderr,
+                    )
+                    return
+            except ExceptionFlowError as error:
+                raise RecoveryError(str(error)) from error
+            raise RecoveryError("benchmark recovery made no source progress")
     replacement_id = replace_job(
         repo, details, job_id, branch, worktree, head, integration_sha, receipt
     )

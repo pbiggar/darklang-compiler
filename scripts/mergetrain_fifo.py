@@ -150,6 +150,10 @@ def prepare(repo: Path) -> dict[str, Any]:
         job = inspect(repo, int(current["native_id"]))
         status = job.get("status")
         if status == "deployed" and job.get("verify_status") not in {"failed", "unknown"}:
+            state.setdefault("completed", []).append({
+                "order": current["order"], "outcome": "deployed",
+            })
+            state["completed"] = state["completed"][-100:]
             state["head"] = None
             save(repo, state)
             current = None

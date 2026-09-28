@@ -92,6 +92,9 @@ class FifoDispatchTests(unittest.TestCase):
                 subprocess.run(["git", "commit", "-q", "-m", "change verify policy"], cwd=repo, check=True)
                 with self.assertRaisesRegex(DispatchError, "policy changed outside gates"):
                     prepare(repo)
+                self.assertEqual(load(repo)["completed"], [
+                    {"order": 1, "outcome": "deployed"}
+                ])
                 self.assertEqual(load(repo)["head"]["order"], 2)
                 self.assertTrue(load(repo)["head"]["admitting"])
                 with self.assertRaisesRegex(DispatchError, "exact FIFO head"):

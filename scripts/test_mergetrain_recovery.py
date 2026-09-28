@@ -20,7 +20,8 @@ from scripts.mergetrain_exception import create_request, review_path
 
 class RecoveryFixture:
     def __init__(
-        self, root: Path, *, conflict: bool = False, tests_fail: bool = True
+        self, root: Path, *, conflict: bool = False, tests_fail: bool = True,
+        codex_noop: bool = False,
     ) -> None:
         self.root = root
         self.repo = root / "repo"
@@ -31,6 +32,7 @@ class RecoveryFixture:
         self.codex_marker = root / "codex-called"
         self.details = root / "details.json"
         self.tests_fail = tests_fail
+        self.codex_noop = codex_noop
         self.bin.mkdir()
         self.repo.mkdir()
         self.git("init", "-q", "-b", "main")
@@ -137,7 +139,9 @@ import os, pathlib, subprocess, sys
 worktree = pathlib.Path(sys.argv[sys.argv.index("-C") + 1])
 pathlib.Path(os.environ["RECOVERY_TEST_CODEX_MARKER"]).write_text(str(worktree), encoding="utf-8")
 feature = worktree / "feature.txt"
-if "<<<<<<<" in feature.read_text(encoding="utf-8"):
+if os.environ.get("RECOVERY_TEST_CODEX_NOOP") == "1":
+    pass
+elif "<<<<<<<" in feature.read_text(encoding="utf-8"):
     feature.write_text("main\\njob\\n", encoding="utf-8")
     (worktree / "repair.txt").write_text("merged\\n", encoding="utf-8")
     subprocess.run(["git", "add", "feature.txt", "repair.txt"], cwd=worktree, check=True)
@@ -158,6 +162,7 @@ output.write_text("Recovery committed.\\n", encoding="utf-8")
         env["RECOVERY_TEST_CALLS"] = str(self.calls)
         env["RECOVERY_TEST_DETAILS"] = str(self.details)
         env["RECOVERY_TEST_CODEX_MARKER"] = str(self.codex_marker)
+        env["RECOVERY_TEST_CODEX_NOOP"] = "1" if self.codex_noop else "0"
         return env
 
     def set_failure(self, category: str, gate: str = "", detail: str = "") -> None:
@@ -343,6 +348,24 @@ class MergetrainRecoveryTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             self.assertTrue(review_path(fixture.repo, 4).is_file())
             self.assertFalse(fixture.codex_marker.exists())
+            self.assertEqual(
+                [call["command"] for call in fixture.recorded_calls()], ["inspect"]
+            )
+
+    def test_unchanged_benchmark_repair_stages_review_without_requeue(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = RecoveryFixture(Path(temp_dir), codex_noop=True)
+            fixture.set_failure("gate_failed", "benchmarks", "exit_code=1")
+            details = json.loads(fixture.details.read_text(encoding="utf-8"))
+            details["job"]["deploy_sha"] = fixture.old_head
+            fixture.details.write_text(json.dumps(details), encoding="utf-8")
+
+            completed = fixture.execute()
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("unchanged benchmark candidate awaits exact human review", completed.stderr)
+            self.assertTrue(review_path(fixture.repo, 4).is_file())
+            self.assertTrue(fixture.codex_marker.exists())
             self.assertEqual(
                 [call["command"] for call in fixture.recorded_calls()], ["inspect"]
             )
