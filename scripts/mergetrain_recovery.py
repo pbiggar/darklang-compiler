@@ -186,7 +186,7 @@ def dismiss_superseded(repo: Path, job_id: int, integration_sha: str, equivalent
 
 def create_recovery_worktree(
     repo: Path,
-    attempts: Path,
+    worktree_dir: Path,
     job_id: int,
     old_head: str,
     integration_sha: str,
@@ -194,7 +194,7 @@ def create_recovery_worktree(
     commits: list[str],
 ) -> tuple[Path, str, bool]:
     short = old_head[:10]
-    worktree = attempts / f"recovery-{job_id}-{short}"
+    worktree = worktree_dir / f"c4d-mergetrain-recovery-{job_id}-{short}"
     branch = f"mergetrain-repair/{job_id}-{short}"
     if worktree.exists():
         raise RecoveryError(f"recovery worktree already exists: {worktree}")
@@ -364,6 +364,7 @@ def verify_repair(
 def validate_current_policy(
     repo: Path,
     attempts: Path,
+    worktree_dir: Path,
     job_id: int,
     head: str,
     integration_sha: str,
@@ -371,7 +372,7 @@ def validate_current_policy(
     evidence: Path | None = None,
 ) -> Path:
     """Use an isolated queue to run mergetrain's configured gates without pushing."""
-    isolated = attempts / f"policy-validation-{job_id}-{head[:10]}"
+    isolated = worktree_dir / f"c4d-policy-validation-{job_id}-{head[:10]}"
     if isolated.exists():
         raise RecoveryError(f"policy validation checkout already exists: {isolated}")
     run(("git", "clone", "--shared", "--no-checkout", str(repo), str(isolated)), cwd=repo)
@@ -428,6 +429,7 @@ def policy_sections(source: str) -> dict[str, str]:
 def recover_external_policy_change(
     repo: Path,
     attempts: Path,
+    worktree_dir: Path,
     details: dict[str, Any],
     job_id: int,
     old_head: str,
@@ -497,12 +499,13 @@ def recover_external_policy_change(
         dismiss_superseded(repo, job_id, integration_sha, equivalent)
         return
     worktree, branch, conflict = create_recovery_worktree(
-        repo, attempts, job_id, old_head, integration_sha, tracking_ref, unique
+        repo, worktree_dir, job_id, old_head, integration_sha, tracking_ref, unique
     )
     if conflict:
         raise RecoveryError("policy revalidation found a merge conflict; operator review required")
     head, receipt = verify_repair(worktree, attempts, job_id, integration_sha)
-    validate_current_policy(repo, attempts, job_id, head, integration_sha, tracking_ref, evidence)
+    validate_current_policy(repo, attempts, worktree_dir, job_id, head,
+                            integration_sha, tracking_ref, evidence)
     owning = Path(str(job.get("worktree_path") or ""))
     if not owning.is_dir() or (
         run(("git", "rev-parse", "HEAD"), cwd=owning).stdout.strip() != old_head
@@ -581,7 +584,7 @@ def replace_job(
     return replacement_id
 
 
-def recover(repo: Path, attempts: Path, job_id: int) -> None:
+def recover(repo: Path, attempts: Path, worktree_dir: Path, job_id: int) -> None:
     details = inspect_job(repo, job_id)
     job = details.get("job") or {}
     if not bool(job.get("auto_deploy")):
@@ -608,7 +611,7 @@ def recover(repo: Path, attempts: Path, job_id: int) -> None:
         raise RecoveryError(str(error)) from error
 
     if failure.category == "deploy_authorization_changed":
-        recover_external_policy_change(repo, attempts, details, job_id, old_head)
+        recover_external_policy_change(repo, attempts, worktree_dir, details, job_id, old_head)
         return
 
     if failure.category == "gate_failed" and failure.transient:
@@ -630,7 +633,7 @@ def recover(repo: Path, attempts: Path, job_id: int) -> None:
         return
 
     worktree, branch, conflict = create_recovery_worktree(
-        repo, attempts, job_id, old_head, integration_sha, tracking_ref, unique
+        repo, worktree_dir, job_id, old_head, integration_sha, tracking_ref, unique
     )
     print(
         f"Job #{job_id}: fresh recovery worktree {worktree}; "
@@ -693,13 +696,17 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", type=Path, required=True)
     parser.add_argument("--attempt-dir", type=Path, required=True)
+    parser.add_argument("--worktree-dir", type=Path,
+                        default=Path("/Users/paulbiggar/projects"))
     parser.add_argument("--job-id", type=int, required=True)
     args = parser.parse_args()
     repo = args.repo.resolve()
     attempts = args.attempt_dir.resolve()
+    worktree_dir = args.worktree_dir.resolve()
     attempts.mkdir(parents=True, exist_ok=True)
+    worktree_dir.mkdir(parents=True, exist_ok=True)
     try:
-        recover(repo, attempts, args.job_id)
+        recover(repo, attempts, worktree_dir, args.job_id)
         return 0
     except RecoveryError as error:
         print(f"Job #{args.job_id}: operator attention required — {error}", file=sys.stderr)

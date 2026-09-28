@@ -3,6 +3,9 @@ version: 2
 project:
   name: dark-compiler
 
+state:
+  worktree_root: /Users/paulbiggar/projects
+
 git:
   remote: mergetrain-local
   integration_branch: main

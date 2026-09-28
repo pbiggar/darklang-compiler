@@ -13,7 +13,8 @@ Run the continuous fuzz-to-E2E workflow from the repository root:
 
 When launched from the primary coordination checkout, the script first creates
 a dedicated campaign worktree from the configured local integration ref and
-continues there before building or writing any artifacts.
+continues there before building or writing any artifacts. Campaign and fix
+worktrees are created directly under `/Users/paulbiggar/projects/`.
 
 The fuzzer chooses and prints a seed, then generates cases without a fixed case
 limit. Use optional flags when a run needs to be reproducible or tuned:

@@ -8,7 +8,7 @@ cd "$SCRIPT_DIR"
 ORIGINAL_ARGS=("$@")
 
 usage() {
-    echo "Usage: ./fuzz [--seed N] [--timeout-ms N] [--depth N]"
+    echo "Usage: ./fuzz [--seed N] [--timeout-ms N] [--depth N] [--worktree-dir PATH]"
     echo ""
     echo "Continuously fuzzes the compiler and minimizes every finding."
     echo "Each compiler fix and its landing require separate approval. Stop with Ctrl-C."
@@ -18,6 +18,8 @@ usage() {
     echo "                  Otherwise a seed is chosen and printed."
     echo "  --timeout-ms N  Per-process timeout in milliseconds (default: 2000)."
     echo "  --depth N       Maximum generated AST depth (default: 6)."
+    echo "  --worktree-dir PATH  Parent for campaign and fix worktrees."
+    echo "                  Default: /Users/paulbiggar/projects."
     echo "  --help, -h      Show this help."
 }
 
@@ -71,6 +73,7 @@ SEED_SET=false
 NEXT_SEED=0
 TIMEOUT_MS=2000
 DEPTH=6
+WORKTREE_DIR=/Users/paulbiggar/projects
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -103,6 +106,14 @@ while [[ $# -gt 0 ]]; do
             if ! DEPTH="$(parse_positive_int32 --depth "$2")"; then
                 exit 2
             fi
+            shift 2
+            ;;
+        --worktree-dir)
+            if [[ $# -lt 2 || -z "$2" || "$2" != /* ]]; then
+                echo "Error: --worktree-dir requires an absolute path." >&2
+                exit 2
+            fi
+            WORKTREE_DIR="$2"
             shift 2
             ;;
         --help|-h)
@@ -162,7 +173,7 @@ git rev-parse --verify --quiet "$INTEGRATION_REF^{commit}" >/dev/null || {
 
 if [[ "$SCRIPT_DIR" == /Users/paulbiggar/projects/c4d-for-dcb ]]; then
     # This checkout coordinates integration and must stay read-only.
-    campaign="/tmp/dark-fuzzer-campaign-$(date -u +%Y%m%dT%H%M%S)-$$"
+    campaign="$WORKTREE_DIR/c4d-fuzzer-campaign-$(date -u +%Y%m%dT%H%M%S)-$$"
     branch="fuzz/campaign-$(date -u +%Y%m%dT%H%M%S)-$$"
     git worktree add -b "$branch" "$campaign" "$INTEGRATION_REF"
     git -C "$campaign" branch --set-upstream-to="$INTEGRATION_REF" "$branch"
@@ -231,8 +242,7 @@ ask_codex_to_fix() {
     local base branch worktree runtime_dir
     base="$(git rev-parse "$INTEGRATION_REF^{commit}")"
     branch="fuzz/fix-$(date -u +%Y%m%dT%H%M%S)-$$-$CAMPAIGN"
-    mkdir -p "$SCRIPT_DIR/fuzz-results/worktrees"
-    worktree="$SCRIPT_DIR/fuzz-results/worktrees/fix-$(date -u +%Y%m%dT%H%M%S)-$$-$CAMPAIGN"
+    worktree="$WORKTREE_DIR/c4d-fuzzer-fix-$(date -u +%Y%m%dT%H%M%S)-$$-$CAMPAIGN"
     git worktree add -b "$branch" "$worktree" "$base"
     git -C "$worktree" branch --set-upstream-to="$INTEGRATION_REF" "$branch"
     runtime_dir="$(mktemp -d "$SCRIPT_DIR/fuzz-results/codex-runtime.XXXXXX")"

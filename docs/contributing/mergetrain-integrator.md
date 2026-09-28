@@ -152,9 +152,12 @@ writes a job line when it reaches a final state because a log file cannot
 rewrite earlier lines. Detailed daemon and recovery output remains in the
 attempt directory.
 
-Recovery worktrees, Codex logs, bounded final messages, verification command
-logs, and receipts live under the configured attempt directory. Their names
-include the original job and commit identities. A failed recovery is preserved
+Merge-train validation worktrees use `state.worktree_root` in
+`.mergetrain.yaml`; recovery worktrees live directly under
+`/Users/paulbiggar/projects/` too. Codex logs, bounded final messages,
+verification command logs, and receipts live
+under the configured attempt directory. Their names include the original job
+and commit identities. A failed recovery is preserved
 for inspection instead of mutating or discarding the original task checkout.
 
 E2E tests may read stable system locations, but they may not write through a
