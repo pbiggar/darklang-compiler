@@ -5,25 +5,25 @@ let __stringRefcount (s: String): Int64 = __raw_get<Int64> (__string_to_rawptr s
 let dynamicString (s: String): String = s ++ "b"
 
 // Raw float load should preserve float type through if-join
-let rawPtr = __raw_alloc 8L in let _ = __raw_slot_init<Float> rawPtr 0L 1.5 in let rawVal = __raw_get<Float> rawPtr 0L in if true then rawVal else 2.5 = 1.5
+let rawPtr = __raw_alloc 8L in let _ = __raw_slot_init<Float> rawPtr 0L 1.5 in let rawVal = __raw_get<Float> rawPtr 0L in let _ = __raw_free rawPtr in if true then rawVal else 2.5 = 1.5
 
 // __raw_get<T> should preserve T through ANF inferType when lowered to __raw_get_* intrinsics.
 // Regression: a fallback to TInt64 made this tuple/list pattern arm get optimized away.
-let p = __raw_alloc 8L in let _ = __raw_slot_init<List<String> * Int64> p 0L (["a"], 1L) in let x = __raw_get<List<String> * Int64> p 0L in match x with | ([_], _) -> 1L | _ -> 2L = 1L
+let p = __raw_alloc 8L in let _ = __raw_slot_init<List<String> * Int64> p 0L (["a"], 1L) in let x = __raw_take<List<String> * Int64> p 0L in let _ = __raw_free p in match x with | ([_], _) -> 1L | _ -> 2L = 1L
 
 // If lowered via IfValue in atom position, dead branch side effects must remain lazy.
-let p = __raw_alloc 8L in let _ = __raw_write_word p 0L 1L in let _ = if true then 0L else let _ = __raw_write_word p 0L 99L in 0L in __raw_get<Int64> p 0L = 1L
+let p = __raw_alloc 8L in let _ = __raw_write_word p 0L 1L in let _ = if true then 0L else let _ = __raw_write_word p 0L 99L in 0L in let value = __raw_get<Int64> p 0L in let _ = __raw_free p in value = 1L
 
 // Conditional conditions run exactly once, and statement sequences run left-to-right.
-let p = __raw_alloc 8L in let _ = __raw_write_word p 0L 0L in let _ = if (__raw_write_word p 0L (__raw_get<Int64> p 0L + 1L); true) then () else () in __raw_get<Int64> p 0L = 1L
-let p = __raw_alloc 8L in (__raw_write_word p 0L 1L; __raw_write_word p 0L 2L; __raw_get<Int64> p 0L) = 2L
+let p = __raw_alloc 8L in let _ = __raw_write_word p 0L 0L in let _ = if (__raw_write_word p 0L (__raw_get<Int64> p 0L + 1L); true) then () else () in let value = __raw_get<Int64> p 0L in let _ = __raw_free p in value = 1L
+let p = __raw_alloc 8L in let _ = __raw_write_word p 0L 1L in let _ = __raw_write_word p 0L 2L in let value = __raw_get<Int64> p 0L in let _ = __raw_free p in value = 2L
 
 // Allocator should fail gracefully (exit=1) instead of SIGSEGV when bump allocation exceeds heap.
 let p1 = __raw_alloc 600000000L in let p2 = __raw_alloc 8L in let _ = __raw_write_word p2 0L 1L in 0L = exit=1 stderr="Out of heap memory"
 
 // Raw slot initialization distinguishes typed slot edges from raw metadata writes.
-let p = __raw_alloc 8L in let _ = __raw_slot_init<Float> p 0L 1.5 in let rawVal = __raw_get<Float> p 0L in rawVal = 1.5
-let p = __raw_alloc 16L in let s = dynamicString "a" in let _ = __raw_slot_init<String> p 0L s in __stringRefcount s = stdout="2\n" // RawSlotInit<String> retains typed slot edge
+let p = __raw_alloc 8L in let _ = __raw_slot_init<Float> p 0L 1.5 in let rawVal = __raw_get<Float> p 0L in let _ = __raw_free p in rawVal = 1.5
+let p = __raw_alloc 16L in let s = dynamicString "a" in let _ = __raw_slot_init<String> p 0L s in let count = __stringRefcount s in let field = __raw_take<String> p 0L in let _ = __raw_free p in count = stdout="2\n" // RawSlotInit<String> retains typed slot edge
 
 // Structured values expose RawPtr views without routing through Stdlib.Int64.
 let s = "a" ++ "b" in __raw_get<Int64> (__string_to_rawptr s) 8L = 2L

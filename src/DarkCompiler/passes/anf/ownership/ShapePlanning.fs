@@ -125,6 +125,9 @@ let internal bindingNeedsShapeAutomaticDec
        | AST.TFunction _, ClosureAlloc _ -> true
        | AST.TFunction _, Call (funcName, _) ->
            match Map.tryFind funcName ctx.FuncReg with
+           // Raw list reads retain their result before returning it. A caller
+           // that consumes the closure must release that returned ownership.
+           | Some (name, _) when name.StartsWith("Darklang.Stdlib.List.__treeValue") -> true
            | Some (name, _) -> not (name.StartsWith("Darklang.Stdlib."))
            | None -> true
        | AST.TFunction _, ClosureCall _ -> true

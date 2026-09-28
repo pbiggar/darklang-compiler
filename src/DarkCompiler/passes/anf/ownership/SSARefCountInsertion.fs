@@ -310,6 +310,32 @@ let insertBlockLocal
                             binding :: bindings, after, Map.add newId typ types)
                             ([], next, types)
                     let captureBindings = List.rev captureBindings
+                    let reuseCleanupBindings, next, types =
+                        match operation with
+                        | RecordReuse (sourceDescriptor, _, Var source, _) ->
+                            sourceDescriptor.Fields
+                            |> List.mapi (fun index (_, typ) -> index, typ)
+                            |> List.filter (fun (_, typ) ->
+                                rcShapeForType ctx typ |> rcShapeNeedsOwnedScopeRelease)
+                            |> List.fold (fun (bindings, current, types) (index, typ) ->
+                                let fieldId, afterField = freshVar current
+                                let releaseId, afterRelease = freshVar afterField
+                                let shape = rcShapeForType ctx typ
+                                let (_, _, _, kind, metadata, nullableString) =
+                                    createReturnDec ctx fieldId typ shape None
+                                let release =
+                                    releaseExprForShape fieldId typ shape kind metadata nullableString
+                                bindings
+                                @ [ fieldId, RecordGet (sourceDescriptor, Var source, index)
+                                    releaseId, release ],
+                                afterRelease,
+                                types
+                                |> Map.add fieldId typ
+                                |> Map.add releaseId AST.TUnit)
+                                ([], next, types)
+                        | RecordReuse _ ->
+                            Crash.crash "SSA RC: record reuse source must be a variable"
+                        | _ -> [], next, types
                     let operation =
                         match operation with
                         | RawSlotInit (ptr, offset, Var source, valueType)
@@ -380,6 +406,7 @@ let insertBlockLocal
                             ([], next, types)
                     operations
                     @ captureBindings
+                    @ reuseCleanupBindings
                     @ ((id, operation) :: borrowedResultRetain)
                     @ List.rev releases,
                     next,
@@ -489,7 +516,7 @@ let insertBlockLocal
                 | None -> Crash.crash "SSA RC: missing jump successor"
             if List.length target.Parameters <> List.length arguments then
                 Crash.crash "SSA RC: jump argument count does not match parameters"
-            let bindings, next, types, _ =
+            let bindings, next, types, transferred =
                 List.zip target.Parameters arguments
                 |> List.fold (fun (bindings, next, types, transferred) (parameter, argument) ->
                     if not (Set.contains parameter.Id definitions.Owned) then
@@ -505,7 +532,20 @@ let insertBlockLocal
                                 bindings @ [binding], after, Map.add id typ types, transferred
                         | _ -> bindings, next, types, transferred)
                     ([], next, types, Set.empty)
-            Map.add label { block with Operations = block.Operations @ bindings } blocks,
+            let before =
+                Map.tryFind label liveness.AtTerminator
+                |> Option.defaultValue Set.empty
+                |> liveOwners definitions
+            let required =
+                Map.tryFind successor liveness.AtEntry
+                |> Option.defaultValue Set.empty
+                |> liveOwners definitions
+            let releaseOwners =
+                Set.difference before required
+                |> fun owners -> Set.difference owners transferred
+            let operations, next, types =
+                appendBindings (block.Operations @ bindings) releaseOwners next types
+            Map.add label { block with Operations = operations } blocks,
             next,
             types
         | SSAANF.Branch (_, yes, no) ->

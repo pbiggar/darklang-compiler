@@ -77,13 +77,10 @@ let lower resolveFunction (lowerScalar: LowerScalar) env vg (OwnedRegion (block,
         values |> List.mapFold (fun state value ->
             let buffer = lookup "release buffer" value buffers
             let operation =
-                if Set.contains value sharedValues then
-                    ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayRelease", [buffer.Pointer])
-                else
-                    match buffer.Layout with
-                    | RecycledArray length -> ANF.RefCountDec (buffer.Pointer, payloadSize length, MemoryModel.GenericHeap, metadata length)
-                    | MappedArray _ -> ANF.MappedFree buffer.Pointer
-                    | RuntimeArray _ -> ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayRelease", [buffer.Pointer])
+                match buffer.Layout with
+                | RecycledArray length -> ANF.RefCountDec (buffer.Pointer, payloadSize length, MemoryModel.GenericHeap, metadata length)
+                | MappedArray _ when not (Set.contains value sharedValues) -> ANF.MappedFree buffer.Pointer
+                | MappedArray _ | RuntimeArray _ -> ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayRelease", [buffer.Pointer])
             let _, bindings, next = emit operation state
             bindings, next) vg
         |> fun (bindings, next) -> List.concat bindings, next
@@ -91,6 +88,18 @@ let lower resolveFunction (lowerScalar: LowerScalar) env vg (OwnedRegion (block,
     let prepareMutation buffer ownership vg =
         match ownership with
         | Consume -> ANF.Return buffer.Pointer, vg
+        | ConsumeOrCopy when (match buffer.Layout with RecycledArray _ -> true | _ -> false) ->
+            let length =
+                match buffer.Layout with
+                | RecycledArray length -> length
+                | _ -> Crash.crash "List region: expected recycled array"
+            let copy, allocated, afterAllocation =
+                emit (ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayAllocate", [buffer.Length])) vg
+            let _, copied, afterCopy =
+                emit (ANF.Call (resolveFunction "Darklang.Stdlib.List.__arrayCopy", [buffer.Pointer; copy; word 0; buffer.Length])) afterAllocation
+            let _, released, afterRelease =
+                emit (ANF.RefCountDec (buffer.Pointer, payloadSize length, MemoryModel.GenericHeap, metadata length)) afterCopy
+            wrap (allocated @ copied @ released) (ANF.Return copy), afterRelease
         | ConsumeOrCopy ->
             let prepared, bindings, next =
                 emit
@@ -217,7 +226,11 @@ let lower resolveFunction (lowerScalar: LowerScalar) env vg (OwnedRegion (block,
                                 let _, leftWrite, afterLeft = write target (elementOffset index) right afterRight
                                 let _, rightWrite, final = write target (elementOffset other) left afterLeft
                                 leftLoad @ rightLoad @ leftWrite @ rightWrite, final) afterDestination
-                    lowerRest values (Map.add output.Id { buffer with Pointer = target } buffers) afterMutation
+                    let outputLayout =
+                        match ownership with
+                        | ConsumeOrCopy -> RuntimeArray output.Id
+                        | Consume | BorrowAndCopy -> buffer.Layout
+                    lowerRest values (Map.add output.Id { buffer with Pointer = target; Layout = outputLayout } buffers) afterMutation
                     |> Result.map (fun (body, final) ->
                         bindReturns evaluation (fun _ ->
                             bindReturns preparation (fun selected ->

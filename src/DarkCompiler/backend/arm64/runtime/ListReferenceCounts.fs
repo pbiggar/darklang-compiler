@@ -380,6 +380,12 @@ let private generateListRefCountDecHelperWith
         | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, MemoryModel.FixedBlockPayloadRelease _)
         | MemoryModel.RootRelease (payloadSize, MemoryModel.GenericHeap, MemoryModel.BoxedSumPayloadRelease _) ->
             releasePlanGenericFieldFrom baseReg fieldOffset payloadSize path fieldReleasePlan
+        | MemoryModel.RecursiveRelease sourceType ->
+            releasePlanManagedRootFieldFrom
+                baseReg
+                fieldOffset
+                path
+                (recursiveNominalRefCountDecHelperLabel sourceType)
         | _ ->
             []
 
