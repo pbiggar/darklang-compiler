@@ -16,8 +16,8 @@ Usage: $0 [OPTIONS]
 
 Continuously validate and deploy auto-approved merge-train jobs. Recover
 transient gate failures, dismiss patch-equivalent work, and ask Codex to repair
-semantic conflicts or reproducible gates in a fresh worktree. Independently
-verify each committed repair before replacing the blocked queue row.
+semantic conflicts or reproducible gates in a fresh worktree. Check each
+repair commit's identity and clean worktree before replacing the blocked row.
 
 Options:
   --repo PATH          Repository whose merge-train queue is processed.

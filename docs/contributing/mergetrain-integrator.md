@@ -34,10 +34,11 @@ For the oldest attention job, the integrator:
 5. Asks Codex to resolve a stopped cherry-pick or repair a reproducible build,
    test, or benchmark failure. Codex may edit and commit only in the fresh
    recovery worktree; it cannot change queue state or deploy.
-6. Independently verifies the committed repair with diff and policy checks,
-   `./build --ai`, `./run-tests --ai`, and
-   `./benchmarks/run_benchmarks.sh --verify-parent full`. The commands and exact
-   parent/head identities are retained in a JSON verification receipt.
+6. Checks that the repair produced a new commit and left a clean worktree.
+   The integration and repair identities are retained in a JSON receipt.
+   Focused checks during repair are useful, but a separate full build, test,
+   and benchmark run is not required before replacement. The train runs its
+   configured gates on the replacement candidate before deployment.
 7. Replaces the blocked job. A mergetrain implementation with the native
    `replace` command performs this atomically. Version 3 compatibility enqueues
    the verified replacement before dismissing the old blocked row, so a crash
@@ -48,8 +49,8 @@ job's policy failure and the exact `.mergetrain.yaml` diff between its enqueue
 base and current integration in an attempt artifact. It automatically recovers
 only when the job did not change that file, the current control checkout matches
 integration, and the integrated policy change is limited to `gates` or
-`gate_parallelism`. It replays the job on current integration, runs the ordinary
-independent readiness checks, then runs `mergetrain validate` in an isolated
+`gate_parallelism`. It replays the job on current integration, checks the new
+commit and clean worktree, then runs `mergetrain validate` in an isolated
 queue against the current gate policy. Only a successful validation is enqueued
 with a fresh bounded `--auto` approval. The daemon repeats its gates before any
 deployment. Changes to reuse, verify hooks, or other execution policy settings
