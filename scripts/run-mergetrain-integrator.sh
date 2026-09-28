@@ -585,6 +585,25 @@ while true; do
     fi
   fi
   rm -f "$pre_status_log"
+  # Preserve the exact measurement before FIFO preparation retires a deployed
+  # head. This also completes promotion after a runner restart.
+  prior_fifo="$(python3 "$integrator_source_root/scripts/mergetrain_fifo.py" --repo "$repo_root" show)"
+  prior_id="$(json_value head.native_id <<<"$prior_fifo")"
+  if [[ -n "$prior_id" ]]; then
+    prior_details="$(mergetrain --repo "$repo_root" inspect "$prior_id" --json)"
+    prior_state="$(json_value job.status <<<"$prior_details")"
+    prior_verify="$(json_value job.verify_status <<<"$prior_details")"
+    if [[ "$prior_state" == deployed && "$prior_verify" != failed && "$prior_verify" != unknown ]]; then
+      deployed_sha="$(json_value job.deploy_sha <<<"$prior_details")"
+      if [[ -z "$deployed_sha" ]] || ! python3 "$integrator_source_root/benchmarks/infrastructure/deployed_baseline.py" promote "$repo_root" "$deployed_sha"; then
+        log_error "Could not promote deployed benchmark counts for job #$prior_id; queue paused"
+        flock -u "$dispatch_lock_fd"
+        if [[ "$run_once" == true ]]; then exit 1; fi
+        sleep "$interval_seconds"
+        continue
+      fi
+    fi
+  fi
   if ! fifo_snapshot="$(python3 "$integrator_source_root/scripts/mergetrain_fifo.py" \
     --repo "$repo_root" prepare)"; then
     log_error "Could not preserve ordinary job arrival order; daemon paused"

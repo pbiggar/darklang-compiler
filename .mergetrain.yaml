@@ -24,4 +24,4 @@ gates:
   - name: leaks
     run: python3 ${repo}/scripts/mergetrain_exception.py --repo ${repo} gate leaks -- python3 scripts/check_compiled_leaks.py
   - name: benchmarks
-    run: python3 ${repo}/scripts/mergetrain_exception.py --repo ${repo} gate benchmarks -- ./benchmarks/run_benchmarks.sh --verify-fresh full
+    run: python3 ${repo}/scripts/mergetrain_exception.py --repo ${repo} gate benchmarks -- ./benchmarks/run_benchmarks.sh --verify-deployed full

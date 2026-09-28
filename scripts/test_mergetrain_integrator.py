@@ -457,12 +457,12 @@ raise SystemExit(1)
             self.assertIn("Job #4 ERROR: recovery needs attention", completed.stderr)
             self.assertNotIn("Job #5 ERROR: recovery needs attention", completed.stderr)
 
-    def test_merge_train_requires_recorded_benchmark_results(self) -> None:
+    def test_merge_train_compares_deployed_benchmark_results(self) -> None:
         source_root = Path(__file__).resolve().parent.parent
         config = (source_root / ".mergetrain.yaml").read_text(encoding="utf-8")
 
         self.assertIn(
-            "gate benchmarks -- ./benchmarks/run_benchmarks.sh --verify-fresh full", config
+            "gate benchmarks -- ./benchmarks/run_benchmarks.sh --verify-deployed full", config
         )
         self.assertIn(
             "gate benchmark-sources -- python3 benchmarks/check_sources_unchanged.py", config
@@ -606,6 +606,9 @@ raise SystemExit(1)
                 capture_output=True,
                 check=False,
             )
+            # The fake daemon does not produce a benchmark measurement for its
+            # deployed job. Reset its synthetic FIFO state for the second run.
+            (repo / ".git" / "mergetrain-fifo.json").unlink(missing_ok=True)
             plain = subprocess.run(
                 [
                     environment["INTEGRATOR_SCRIPT"],

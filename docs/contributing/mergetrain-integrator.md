@@ -51,7 +51,9 @@ replacement or approve the gate itself.
 
 The FIFO ledger records a deployed head in `completed` before admitting the
 next task, including when the integrator discovers that deployment on its next
-pass. Native job history remains the deployment audit.
+pass. Before retiring that head, the integrator promotes its measured 29
+instruction counts to the deployed-head baseline. A missing or incompatible
+measurement pauses admission; native job history remains the deployment audit.
 
 For `approval_execution_policy_changed`, the integrator records the original
 job's policy failure and the exact `.mergetrain.yaml` diff between its enqueue

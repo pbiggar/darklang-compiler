@@ -16,6 +16,8 @@ CONTROL_FILES = frozenset({
     ".mergetrain.yaml", "AGENTS.md", "AGENTS.mergetrain.md", "land",
     "mergetrain-status", "docs/contributing/mergetrain-integrator.md",
     "docs/contributing/verification.md",
+    "benchmarks/run_benchmarks.sh",
+    "benchmarks/infrastructure/deployed_baseline.py",
 })
 CONTROL_SCRIPTS = frozenset({
     "approve_attention_job.py", "mergetrain_control.py", "mergetrain_exception.py",
