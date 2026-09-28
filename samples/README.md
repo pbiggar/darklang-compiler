@@ -7,12 +7,14 @@ Build and run the standalone Dark program:
 ```sh
 ./build --ai
 ./dark samples/http-fetch.dark -o /tmp/http-fetch
-/tmp/http-fetch http://example.com/
+/tmp/http-fetch https://example.com/
 ```
 
-Pass any plain `http://` URL, including a local server URL. This is a diagnostic
-tool: it prints URL parsing, DNS and connection attempts, request and response
-details, then indents the HTML for inspection. It uses `HTTP_PROXY` (or
-`http_proxy`) when set, except for hosts matched by `NO_PROXY` (or `no_proxy`).
-Both paths use Dark DNS, TCP, and HTTP framing directly to show connection and
-response errors. HTTPS is not yet supported by the Dark HTTP stack.
+Pass an `http://` or `https://` URL, including a local server URL. This is a diagnostic
+tool: it prints URL parsing, request and response details, then indents the
+HTML for inspection. Plain HTTP also prints DNS and connection attempts and
+uses `HTTP_PROXY` (or `http_proxy`) when set, except for hosts matched by
+`NO_PROXY` (or `no_proxy`). HTTPS uses Dark DNS, TCP, and TLS 1.3, and validates
+an RSA server certificate
+against the system CA bundle. Servers selecting an unsupported key or TLS mode
+fail with a network error.
