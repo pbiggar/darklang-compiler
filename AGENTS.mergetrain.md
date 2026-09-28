@@ -73,8 +73,9 @@ task branches in arrival order.
 - Automated recovery preserves the original enqueued branch and owning
   worktree. The integrator creates a fresh recovery branch and worktree from
   the current integration commit, asks Codex to perform any semantic merge
-  there, independently reruns the repository readiness gates, and only then
-  replaces the blocked queue row. Codex never pushes or changes queue state.
+  there, checks the new commit and clean worktree, and then replaces the
+  blocked queue row. The train runs the configured gates before deployment.
+  Codex never pushes or changes queue state.
 - The repository integrator admits only the oldest unfinished ordinary job.
   Its shared Git directory ledger retains arrival order through native retry
   and repair rows. An attention head blocks later ordinary jobs. Tooling-only

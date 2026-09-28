@@ -148,7 +148,7 @@ else:
             head = subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=repo, text=True
             ).strip()
-            request_file = repo / ".git" / "mergetrain-exceptions" / "requests" / f"{head}.json"
+            request_file = repo / ".git" / "mergetrain-exceptions" / "requests" / f"{head}-benchmarks.json"
             self.assertEqual(
                 json.loads(request_file.read_text(encoding="utf-8"))["gate"],
                 "benchmarks",

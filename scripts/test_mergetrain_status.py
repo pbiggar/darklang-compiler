@@ -627,7 +627,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 self.assertEqual(calls_path.read_text(encoding="utf-8"), "status\n")
                 os.write(master, b"d")
                 diff_output = read_until(b"benchmarks/RESULTS.md excluded")
-                self.assertIn(b"benchmark commit diff:", diff_output)
+                self.assertIn(b"source change diff:", diff_output)
                 self.assertIn(b"benchmarks/RESULTS.md excluded", diff_output)
                 os.write(master, b"d")
                 read_until(b"benchmark result:")

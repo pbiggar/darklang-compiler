@@ -430,7 +430,7 @@ class MergetrainRecoveryTests(unittest.TestCase):
             self.assertEqual(len(list(fixture.attempts.glob("*.verification.json"))), 1)
             self.assertIn("replace", [call["command"] for call in fixture.recorded_calls()])
 
-    def test_reproducible_test_failure_uses_codex_and_full_verification(self) -> None:
+    def test_reproducible_test_failure_checks_commit_before_train_gates(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = RecoveryFixture(Path(temp_dir))
             fixture.set_failure("gate_failed", "tests", "exit_code=1")
@@ -438,13 +438,9 @@ class MergetrainRecoveryTests(unittest.TestCase):
             self.assertEqual(completed.returncode, 0, completed.stderr)
             receipt_path = next(fixture.attempts.glob("*.verification.json"))
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-            commands = [item["command"] for item in receipt["commands"]]
-            self.assertIn(["./build", "--ai"], commands)
-            self.assertIn(["./run-tests", "--ai"], commands)
-            self.assertIn(
-                ["./benchmarks/run_benchmarks.sh", "--verify-parent", "full"],
-                commands,
-            )
+            self.assertEqual(receipt["checks"], ["new committed head", "clean worktree"])
+            self.assertNotIn("commands", receipt)
+            self.assertIn("replace", [call["command"] for call in fixture.recorded_calls()])
 
     def test_partial_supersession_replays_only_unique_commits(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
