@@ -608,7 +608,7 @@ while true; do
         if [[ "$(git -C "$recovery_worktree" rev-parse HEAD)" == "$deployed_sha" ]] &&
            [[ -z "$(git -C "$recovery_worktree" status --porcelain)" ]]; then
           if git -C "$repo_root" worktree remove "$recovery_worktree" &&
-             git -C "$repo_root" branch -d "$recovery_branch"; then
+             git -C "$repo_root" branch -D "$recovery_branch"; then
             log_info "Removed deployed recovery worktree for job #$prior_id"
           else
             log_warn "Could not remove deployed recovery worktree for job #$prior_id"

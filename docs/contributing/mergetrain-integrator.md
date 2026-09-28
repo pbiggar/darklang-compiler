@@ -34,6 +34,9 @@ For the oldest attention job, the integrator:
 5. Asks Codex to resolve a stopped cherry-pick or repair a reproducible build,
    test, or benchmark failure. Codex may edit and commit only in the fresh
    recovery worktree; it cannot change queue state or deploy.
+   Recovery runs with writable shared Git metadata so staging and committing
+   work in the linked worktree. The integrator checks the resulting commit and
+   worktree before replacement.
 6. Checks that the repair produced a new commit and left a clean worktree.
    The integration and repair identities are retained in a JSON receipt.
    Focused checks during repair are useful, but a separate full build, test,
