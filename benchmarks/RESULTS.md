@@ -2,12 +2,12 @@
 
 Best-known compatible full-profile Dark performance vs audited Rust references, with diagnostic reference runtimes (instruction counts).
 
-**Snapshot timestamp:** 2026-09-27T21:42:34+00:00
+**Snapshot timestamp:** 2026-09-28T00:07:18+00:00
 **Architecture:** `arm64`
 **Profile:** `full` (schema 2)
 **Measurement policy:** `cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs`
 **Workload contract:** `2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861`
-**Compiler commit:** `6b794638888647e67f482147ce8de6c84f438eac` - Merge commit 'cda1f3d3b4' into mergetrain-repair/330-335-combined-20260927
+**Compiler commit:** `e5aafcf02e8c4c3d963351df15dc17fddc3c1b86` - Update direct-call specialization tuple E2E syntax
 **Diagnostic references:** informational only; multipliers are instructions divided by Rust for the same workload.
 Every displayed diagnostic row matched the profile's expected stdout.
 
@@ -18,7 +18,7 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | collatz | 70,193,412 (0.91x) | 76,735,737 | - | - | - | - |
 | edigits | 48,977,757 (71.1x) | 688,749 | - | - | - | - |
 | factorial | 58,966 (0.06x) | 970,290 | - | - | - | - |
-| fannkuch | 221,209,614 (126x) | 1,760,885 | - | - | - | - |
+| fannkuch | 221,209,578 (126x) | 1,760,885 | - | - | - | - |
 | fasta | 11,579,821 (16.9x) | 686,768 | - | - | - | - |
 | fft | 1,784,410 (3.93x) | 454,262 | - | - | - | - |
 | fib | 7,630,191 (1.26x) | 6,054,417 | - | - | - | - |
@@ -40,5 +40,5 @@ Every displayed diagnostic row matched the profile's expected stdout.
 | string_equality | 1,178,012 (0.80x) | 1,479,564 | - | - | - | - |
 | sum_to_n | 57,968 (0.22x) | 260,246 | - | - | - | - |
 | tak | 48,004,629 (0.12x) | 391,110,808 | - | - | - | - |
-| tinytemplate | 305,728,773 (727x) | 420,354 | - | - | - | - |
+| tinytemplate | 305,727,981 (727x) | 420,354 | - | - | - | - |
 | warden | 44,111,729 (163x) | 270,345 | - | - | - | - |
