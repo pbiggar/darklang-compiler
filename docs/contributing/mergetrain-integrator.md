@@ -57,8 +57,10 @@ For `approval_execution_policy_changed`, the integrator records the original
 job's policy failure and the exact `.mergetrain.yaml` diff between its enqueue
 base and current integration in an attempt artifact. It automatically recovers
 only when the job did not change that file, the current control checkout matches
-integration, and the integrated policy change is limited to `gates` or
-`gate_parallelism`. It replays the job on current integration, checks the new
+integration, and the integrated policy change is limited to `gates`,
+`gate_parallelism`, or a standalone `state.worktree_root` relocation. The
+worktree location is excluded from the native destination and execution-policy
+approval hashes. It replays the job on current integration, checks the new
 commit and clean worktree, then runs `mergetrain validate` in an isolated
 queue against the current gate policy. Only a successful validation is enqueued
 with a fresh bounded `--auto` approval. The daemon repeats its gates before any

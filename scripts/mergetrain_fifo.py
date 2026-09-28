@@ -116,8 +116,32 @@ def policy_sections(source: str) -> dict[str, str]:
     return {name: "".join(lines) for name, lines in sections.items()}
 
 
+def safe_policy_change(before: dict[str, str], after: dict[str, str]) -> bool:
+    """Allow gate changes and a standalone runner worktree location change."""
+    changed = {
+        key for key in before.keys() | after.keys() if before.get(key) != after.get(key)
+    }
+    if "state" in changed:
+        def worktree_root_only(section: str | None) -> bool:
+            if section is None:
+                return True
+            lines = [line for line in section.splitlines() if line.strip()]
+            return (
+                len(lines) == 2
+                and lines[0] == "state:"
+                and lines[1].startswith("  worktree_root: ")
+                and bool(lines[1].removeprefix("  worktree_root: ").strip())
+            )
+
+        if not (worktree_root_only(before.get("state")) and
+                worktree_root_only(after.get("state"))):
+            return False
+        changed.remove("state")
+    return changed <= {"gates", "gate_parallelism"}
+
+
 def auto_approval_still_safe(repo: Path, deferred: dict[str, Any]) -> bool:
-    """Only gate changes can renew old unattended approval through validation."""
+    """Renew approval only when changed settings are covered by the new run."""
     if not deferred["auto"]:
         return False
     base = deferred.get("base_sha")
@@ -126,12 +150,9 @@ def auto_approval_still_safe(repo: Path, deferred: dict[str, Any]) -> bool:
     current = git(repo, "rev-parse", "main")
     before = policy_sections(git(repo, "show", f"{base}:.mergetrain.yaml"))
     after = policy_sections(git(repo, "show", f"{current}:.mergetrain.yaml"))
-    changed = {
-        key for key in before.keys() | after.keys() if before.get(key) != after.get(key)
-    }
-    if not changed <= {"gates", "gate_parallelism"}:
+    if not safe_policy_change(before, after):
         raise DispatchError(
-            f"job #{deferred['order']} policy changed outside gates; "
+            f"job #{deferred['order']} policy changed outside safe renewal settings; "
             "operator manual admission required: "
             f"python3 scripts/mergetrain_fifo.py --repo . manual "
             f"{deferred['order']} {deferred['head_sha']}"
@@ -234,6 +255,7 @@ def prepare(repo: Path) -> dict[str, Any]:
                 raise DispatchError(f"deferred job #{current['order']} changed commit")
             current["native_id"] = int(replacement["id"])
         current.pop("admitting", None)
+        current.pop("recovery_failed", None)
         save(repo, state)
 
     for job_id in fresh:

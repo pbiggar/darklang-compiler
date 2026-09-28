@@ -17,12 +17,12 @@ if __package__:
     from .mergetrain_exception import (
         ExceptionFlowError, stage_if_requested, stage_no_progress_benchmark_review,
     )
-    from .mergetrain_fifo import note_replacement, note_resolved
+    from .mergetrain_fifo import note_replacement, note_resolved, safe_policy_change
 else:
     from mergetrain_exception import (
         ExceptionFlowError, stage_if_requested, stage_no_progress_benchmark_review,
     )
-    from mergetrain_fifo import note_replacement, note_resolved
+    from mergetrain_fifo import note_replacement, note_resolved, safe_policy_change
 
 
 class RecoveryError(RuntimeError):
@@ -485,10 +485,10 @@ def recover_external_policy_change(
         section for section in before.keys() | after.keys()
         if before.get(section) != after.get(section)
     }
-    if not changed_sections <= {"gates", "gate_parallelism"}:
+    if not safe_policy_change(before, after):
         changed = ", ".join(sorted(changed_sections))
         raise RecoveryError(
-            f"execution policy changed outside validated gate settings ({changed}); "
+            f"execution policy changed outside safe renewal settings ({changed}); "
             f"operator review required; evidence: {evidence}"
         )
 
