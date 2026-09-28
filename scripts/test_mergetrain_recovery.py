@@ -224,6 +224,35 @@ output.write_text("Recovery committed.\\n", encoding="utf-8")
 
 
 class MergetrainRecoveryTests(unittest.TestCase):
+    def test_worktree_location_policy_change_is_verified_and_requeued(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = RecoveryFixture(Path(temp_dir), tests_fail=False)
+            fixture.git("switch", "-q", "main")
+            with (fixture.repo / ".mergetrain.yaml").open("a", encoding="utf-8") as config:
+                config.write(f"state:\n  worktree_root: {temp_dir}/train-worktrees\n")
+            fixture.git("add", ".mergetrain.yaml")
+            fixture.git("commit", "-q", "-m", "relocate train worktrees")
+            fixture.git("push", "-q", "mergetrain-local", "main")
+            owning_worktree = Path(temp_dir) / "task-worktree"
+            fixture.git("worktree", "add", "-q", str(owning_worktree), "task/job")
+            fixture.set_failure(
+                "deploy_authorization_changed", detail="approval_execution_policy_changed"
+            )
+            details = json.loads(fixture.details.read_text(encoding="utf-8"))
+            details["job"]["worktree_path"] = str(owning_worktree)
+            fixture.details.write_text(json.dumps(details), encoding="utf-8")
+
+            completed = fixture.execute()
+
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            calls = fixture.recorded_calls()
+            self.assertIn("validate", [call["command"] for call in calls])
+            self.assertTrue(any(
+                call["command"] == "enqueue" and "--auto" in call["args"]
+                for call in calls
+            ))
+            self.assertFalse(fixture.codex_marker.exists())
+
     def test_policy_change_on_integration_is_verified_and_requeued(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = RecoveryFixture(Path(temp_dir), tests_fail=False)
@@ -332,7 +361,7 @@ class MergetrainRecoveryTests(unittest.TestCase):
             completed = fixture.execute()
 
             self.assertNotEqual(completed.returncode, 0)
-            self.assertIn("outside validated gate settings", completed.stderr)
+            self.assertIn("outside safe renewal settings", completed.stderr)
             self.assertNotIn("enqueue", [call["command"] for call in fixture.recorded_calls()])
 
     def test_requested_failed_gate_waits_for_human_instead_of_repair(self) -> None:

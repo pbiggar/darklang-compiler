@@ -7,11 +7,25 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts.mergetrain_fifo import (
-    DispatchError, admit_manual, load, prepare, retry_head,
+    DispatchError, admit_manual, load, policy_sections, prepare, retry_head,
+    safe_policy_change,
 )
 
 
 class FifoDispatchTests(unittest.TestCase):
+    def test_worktree_location_only_can_renew_approval(self) -> None:
+        base = "version: 2\ngates:\n  - name: tests\n"
+        relocated = base + "state:\n  worktree_root: /tmp/mergetrain-worktrees\n\n"
+        self.assertTrue(safe_policy_change(policy_sections(base), policy_sections(relocated)))
+        self.assertFalse(safe_policy_change(
+            policy_sections(base),
+            policy_sections(relocated + "  db: /tmp/other-state.db\n"),
+        ))
+        self.assertFalse(safe_policy_change(
+            policy_sections(base),
+            policy_sections(relocated + "deploy:\n  verify: []\n"),
+        ))
+
     def test_attention_head_stays_ahead_of_later_jobs_and_replacement(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
@@ -90,7 +104,7 @@ class FifoDispatchTests(unittest.TestCase):
                 config.write_text(config.read_text() + "verify:\n  command: changed\n", encoding="utf-8")
                 subprocess.run(["git", "add", ".mergetrain.yaml"], cwd=repo, check=True)
                 subprocess.run(["git", "commit", "-q", "-m", "change verify policy"], cwd=repo, check=True)
-                with self.assertRaisesRegex(DispatchError, "policy changed outside gates"):
+                with self.assertRaisesRegex(DispatchError, "outside safe renewal settings"):
                     prepare(repo)
                 self.assertEqual(load(repo)["completed"], [
                     {"order": 1, "outcome": "deployed"}
@@ -107,6 +121,7 @@ class FifoDispatchTests(unittest.TestCase):
                 subprocess.run(["git", "commit", "-q", "-m", "restore verify policy"], cwd=repo, check=True)
                 self.assertEqual(second["head"]["order"], 2)
                 self.assertEqual(second["head"]["native_id"], 5)
+                self.assertNotIn("recovery_failed", second["head"])
                 self.assertEqual([item["order"] for item in second["pending"]], [3])
                 self.assertEqual(load(repo)["head"]["order"], 2)
 
