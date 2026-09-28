@@ -1,4 +1,4 @@
-// ANF_Optimize.fs - Schedule ANF expression and accumulator optimizations.
+// ANF_Optimize.fs - Preserve ANF rewrite checks while production optimization uses SSA.
 
 module ANF_Optimize
 

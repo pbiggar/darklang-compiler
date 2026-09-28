@@ -13,7 +13,7 @@ type OptimizeAExprResult = {
     Uses: Set<TempId>
 }
 
-type private ScalarUnaryCSEOp =
+type internal ScalarUnaryCSEOp =
     | PrimitiveUnary of UnaryOp
     | FloatSqrtOp
     | FloatAbsOp
@@ -22,7 +22,7 @@ type private ScalarUnaryCSEOp =
     | FloatToInt64Op
     | FloatToBitsOp
 
-type private CSEKey =
+type internal CSEKey =
     | BinaryValue of BinOp * Atom * Atom
     | UnaryValue of ScalarUnaryCSEOp * Atom
     | ConditionalValue of cond:Atom * thenValue:Atom * elseValue:Atom
@@ -89,7 +89,7 @@ let private isRecordProjectionCSEType (fieldType: AST.SemanticType) : bool =
 /// allocation identity, mutable-memory observations, and ownership semantics.
 /// Keep this match exhaustive so every new CExpr case requires an explicit CSE
 /// decision instead of silently falling through a permissive purity test.
-let private tryCSEKey (cexpr: CExpr) : CSEKey option =
+let internal tryCSEKey (cexpr: CExpr) : CSEKey option =
     match cexpr with
     | Prim (op, left, right) -> Some (binaryCSEKey op left right)
     | UnaryPrim (op, atom) -> Some (UnaryValue (PrimitiveUnary op, atom))

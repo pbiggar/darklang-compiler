@@ -252,14 +252,26 @@ let private scalarType = function
 let private eligibleProjectedResult
     (candidate: Candidate)
     (config: InliningCommon.InliningConfig) =
-    let rec returnedTuple = function
-        | Let (tupleId, TupleAlloc fields, Return (Var returned)) when tupleId = returned ->
-            Some fields
-        | Let (_, _, rest) -> returnedTuple rest
-        | _ -> None
-    let rec freshScalarRecords bindings = function
-        | Let (tupleId, TupleAlloc fields, Return (Var returned)) when tupleId = returned ->
-            let ids = fields |> List.choose (function Var id -> Some id | _ -> None)
+    let returnedTuples =
+        candidate.Body.Blocks
+        |> Map.toList
+        |> List.choose (fun (_, block) ->
+            match List.tryLast block.Operations, block.Terminator with
+            | Some (tupleId, TupleAlloc fields), SSAANF.Return (Var returned)
+                when tupleId = returned -> Some fields
+            | _, SSAANF.Return _ -> Some []
+            | _ -> None)
+    let bindings =
+        candidate.Body.Blocks
+        |> Map.fold (fun known _ block ->
+            block.Operations
+            |> List.fold (fun values (id, operation) ->
+                Map.add id operation values) known) Map.empty
+    let info = candidate.Info
+    match candidate.Body.ReturnType, returnedTuples with
+    | AST.TTuple elements, [fields] when not (List.isEmpty fields) ->
+        let ids = fields |> List.choose (function Var id -> Some id | _ -> None)
+        let freshScalarRecords =
             List.length ids = List.length fields
             && Set.count (Set.ofList ids) = List.length ids
             && (ids
@@ -269,17 +281,10 @@ let private eligibleProjectedResult
                     | Some (RecordClone (descriptor, _, _)) ->
                         descriptor.Fields |> List.forall (snd >> scalarType)
                     | _ -> false))
-        | Let (id, operation, rest) ->
-            freshScalarRecords (Map.add id operation bindings) rest
-        | _ -> false
-    let info = candidate.Info
-    match info.Func.ReturnType with
-    | AST.TTuple elements ->
         info.Size <= config.MaxProjectedTupleInlineSize
         && not info.IsRecursive && not info.HasClosures && not info.HasTailCalls
-        && Option.isSome (returnedTuple info.Func.Body)
         && (List.forall scalarType elements
-            || freshScalarRecords Map.empty info.Func.Body)
+            || freshScalarRecords)
     | _ -> false
 
 let private tryProjectedPlan
@@ -758,6 +763,23 @@ let inlineProgramWithExternalCandidatesAndExclusions
     (excludedLocalNames: Set<AST.FunctionId>)
     (localSource: ANF.Function list)
     (functions: SSAANF.Function list) =
+    let withSSAFacts (body: SSAANF.Function) (info: InliningCommon.FunctionInfo) =
+        let operations =
+            body.Blocks
+            |> Map.toList
+            |> List.collect (fun (_, block) -> block.Operations |> List.map snd)
+        { info with
+            Size = List.length operations
+            HasClosures =
+                operations
+                |> List.exists (function
+                    | ClosureAlloc _ | ClosureCall _ | ClosureTailCall _ -> true
+                    | _ -> false)
+            HasTailCalls =
+                operations
+                |> List.exists (function
+                    | TailCall _ | IndirectTailCall _ | ClosureTailCall _ -> true
+                    | _ -> false) }
     let localInfo =
         InliningCommon.buildFunctionInfoMap localSource
         |> Map.filter (fun name _ -> not (Set.contains name excludedLocalNames))
@@ -769,13 +791,13 @@ let inlineProgramWithExternalCandidatesAndExclusions
         externalCandidates
         |> Map.fold (fun current name info ->
             match Map.tryFind name allSSA with
-            | Some body -> Map.add name { Info = info; Body = body } current
+            | Some body -> Map.add name { Info = withSSAFacts body info; Body = body } current
             | None -> current) Map.empty
         |> fun external ->
             localInfo
             |> Map.fold (fun current name info ->
                 match Map.tryFind name allSSA with
-                | Some body -> Map.add name { Info = info; Body = body } current
+                | Some body -> Map.add name { Info = withSSAFacts body info; Body = body } current
                 | None -> current) external
     let externalNames = externalCandidates |> Map.keys |> Set.ofSeq
     functions |> List.map (inlineFunction config candidates externalNames)

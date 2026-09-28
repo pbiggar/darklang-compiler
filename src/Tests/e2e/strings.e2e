@@ -196,6 +196,9 @@ let hasByte (value: String) (index: Int64) : Bool = match Stdlib.String.getByteA
 // Payload-consuming byte matches load the byte only for an in-range index.
 let byteOr (value: String) (index: Int64) (fallback: UInt8) : UInt8 = match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with | Some byte -> byte | None -> fallback let result = byteOr "abc" (-1L) 7uy == 7uy && byteOr "abc" 1L 7uy == 98uy && byteOr "abc" 3L 7uy == 7uy in result = stdout="true\n" stderr=""
 
+// The None arm comes first, so the SSA bounds predicate must reverse the branch.
+let byteOrNoneFirst (value: String) (index: Int64) : UInt8 = match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with | None -> 7uy | Some byte -> byte let result = byteOrNoneFirst "abc" (-1L) == 7uy && byteOrNoneFirst "abc" 1L == 98uy && byteOrNoneFirst "abc" 3L == 7uy in result = stdout="true\n" stderr=""
+
 // =============================================================================
 // Stdlib.String.startsWith Tests
 // =============================================================================

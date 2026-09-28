@@ -14,12 +14,20 @@ type private Expr =
 
 type private Fixture = { Source: ANF.Function; SSA: SSAANF.Function; IsExternal: bool }
 type private Assertion = { Text: string; AfterEscape: bool; Measure: SSAANF.Function -> int; Minimum: bool; Expected: int }
-type private Case = { Name: string; Functions: Fixture list; Assertions: Assertion list }
+type private Case = {
+    Name: string
+    Functions: Fixture list
+    Assertions: Assertion list
+    OptimizeSSA: bool
+    SkipInlining: bool
+}
 type private RawCase = {
     Name: string
     Functions: string list list
     ExternalFunctions: string list list
     Expected: string list
+    OptimizeSSA: bool
+    SkipInlining: bool
 }
 
 let private problem message = Crash.crash $"SSA inlining fixture: {message}"
@@ -45,6 +53,8 @@ let rec private typ (text: string) =
     | "Int64" -> AST.TInt64
     | "Float" -> AST.TFloat64
     | "Bool" -> AST.TBool
+    | "Unit" -> AST.TUnit
+    | "FnInt64" -> AST.TFunction ([AST.TInt64], AST.TInt64)
     | "Body" -> AST.TRecord ("Body", [])
     | "Option<Int64>" -> AST.TSum ("Darklang.Stdlib.Option.Option", [AST.TInt64])
     | "Option<Float>" -> AST.TSum ("Darklang.Stdlib.Option.Option", [AST.TFloat64])
@@ -79,7 +89,10 @@ let private operands text =
 
 let private operation valueType text =
     let call = Regex.Match(text, @"^call\s+([A-Za-z_][A-Za-z_0-9.]*)\((.*)\)$")
-    if call.Success then
+    let closure = Regex.Match(text, @"^closure\s+([A-Za-z_][A-Za-z_0-9.]*)$")
+    if closure.Success then
+        ClosureAlloc (TestIds.functionIdForName closure.Groups.[1].Value, [])
+    elif call.Success then
         Call (TestIds.functionIdForName call.Groups.[1].Value, operands call.Groups.[2].Value)
     else
         let matched = Regex.Match(text, @"^([a-z_][a-z_0-9]*)\((.*)\)$")
@@ -94,6 +107,8 @@ let private operation valueType text =
         | "add", _ -> binary Add
         | "mul", _ -> binary Mul
         | "div", _ -> binary Div
+        | "mod", _ -> binary Mod
+        | "eq", _ -> binary Eq
         | "gte", _ -> binary Gte
         | "lt", _ -> binary Lt
         | "bitand", _ -> binary BitAnd
@@ -101,6 +116,9 @@ let private operation valueType text =
         | "tuple", fields when List.length fields = 2 -> TupleAlloc fields
         | "tuple3", fields when List.length fields = 3 -> TupleAlloc fields
         | "get", [source; IntLiteral (Int64 index)] -> TupleGet (source, int index)
+        | "copy", [source] -> Atom source
+        | "closure_call", closureValue :: arguments ->
+            ClosureCall (closureValue, arguments)
         | "typed", [source] -> TypedAtom (source, valueType)
         | "body", fields when List.length fields = 2 -> RecordAlloc (bodyDescriptor, fields)
         | "field", [source; IntLiteral (Int64 index)] -> RecordGet (bodyDescriptor, source, int index)
@@ -264,7 +282,7 @@ let private operations (func: SSAANF.Function) =
 
 let private parseAssertion text =
     let calls = Regex.Match(text, @"^calls\s+([A-Za-z_][A-Za-z_0-9.]*)\s*(=|>=)\s*(\d+)$")
-    let ops = Regex.Match(text, @"^ops\s+(mul|option_alloc|tuple_alloc|body_alloc)\s*(=|>=)\s*(\d+)(\s+after escape)?$")
+    let ops = Regex.Match(text, @"^ops\s+(add|mul|bitand|mod|not|tuple_get|record_get|closure_alloc|closure_call|option_alloc|tuple_alloc|body_alloc)\s*(=|>=)\s*(\d+)(\s+after escape)?$")
     let blocks = Regex.Match(text, @"^blocks\s*(=|>=)\s*(\d+)$")
     let count predicate func =
         operations func |> List.sumBy (fun (_, operation) -> if predicate operation then 1 else 0)
@@ -277,6 +295,14 @@ let private parseAssertion text =
         let predicate =
             match ops.Groups.[1].Value with
             | "mul" -> function Prim (Mul, _, _) -> true | _ -> false
+            | "add" -> function Prim (Add, _, _) -> true | _ -> false
+            | "bitand" -> function Prim (BitAnd, _, _) -> true | _ -> false
+            | "mod" -> function Prim (Mod, _, _) -> true | _ -> false
+            | "not" -> function UnaryPrim (Not, _) -> true | _ -> false
+            | "tuple_get" -> function TupleGet _ -> true | _ -> false
+            | "record_get" -> function RecordGet _ -> true | _ -> false
+            | "closure_alloc" -> function ClosureAlloc _ -> true | _ -> false
+            | "closure_call" -> function ClosureCall _ -> true | _ -> false
             | "tuple_alloc" -> function TupleAlloc _ -> true | _ -> false
             | "body_alloc" -> function
                 | RecordAlloc (descriptor, _) | RecordClone (descriptor, _, _)
@@ -304,6 +330,8 @@ let private parseSections (content: string) =
     let mutable functions: string list list = []
     let mutable externalFunctions: string list list = []
     let mutable expected: string list = []
+    let mutable optimizeSSA = false
+    let mutable skipInlining = false
     let mutable cases: RawCase list = []
     let flushSection () =
         let values = List.rev lines
@@ -314,6 +342,8 @@ let private parseSections (content: string) =
         | "FUNCTION" -> functions <- values :: functions
         | "EXTERNAL-FUNCTION" -> externalFunctions <- values :: externalFunctions
         | "EXPECT" -> expected <- expected @ values
+        | "OPTIMIZE-SSA" -> optimizeSSA <- true
+        | "NO-INLINE" -> skipInlining <- true
         | "" -> ()
         | other -> problem $"unknown section {other}"
         lines <- []
@@ -325,12 +355,15 @@ let private parseSections (content: string) =
                 { Name = name
                   Functions = List.rev functions
                   ExternalFunctions = List.rev externalFunctions
-                  Expected = expected } :: cases
+                  Expected = expected
+                  OptimizeSSA = optimizeSSA
+                  SkipInlining = skipInlining } :: cases
             name <- ""; functions <- []; externalFunctions <- []; expected <- []
+            optimizeSSA <- false; skipInlining <- false
     for rawLine in content.Replace("\r\n", "\n").Split('\n') do
         let line = rawLine.Trim()
         if line <> "" && not (line.StartsWith("#", StringComparison.Ordinal)) then
-            let marker = Regex.Match(line, @"^---(NAME|FUNCTION|EXTERNAL-FUNCTION|EXPECT)---$")
+            let marker = Regex.Match(line, @"^---(NAME|FUNCTION|EXTERNAL-FUNCTION|EXPECT|OPTIMIZE-SSA|NO-INLINE)---$")
             if marker.Success then
                 flushSection ()
                 if marker.Groups.[1].Value = "NAME" then flushCase ()
@@ -350,21 +383,45 @@ let private parseCase (raw: RawCase) : Case =
     let names = functions |> List.map (fun fixture -> fixture.Source.Id)
     if List.length names <> (names |> Set.ofList |> Set.count) then
         problem $"case '{raw.Name}' defines a function twice"
-    { Name = raw.Name; Functions = functions; Assertions = List.map parseAssertion raw.Expected }
+    { Name = raw.Name
+      Functions = functions
+      Assertions = List.map parseAssertion raw.Expected
+      OptimizeSSA = raw.OptimizeSSA
+      SkipInlining = raw.SkipInlining }
 
 let private runCase (case: Case) : Result<unit, string> =
     let functions = case.Functions
     let externals, locals = functions |> List.partition (fun fixture -> fixture.IsExternal)
     let externalSources = List.map (fun fixture -> fixture.Source) externals
+    let optimizeContext: ANFConstants.OptimizeContext =
+        { TypeReg = Map.ofList ["Body", bodyDescriptor.Fields]
+          RecordTypeParams = Map.ofList ["Body", []]
+          SumShapeReg = Map.empty
+          FunctionNames =
+            functions
+            |> List.map (fun fixture -> fixture.Source.Id, fixture.Source.Name)
+            |> Map.ofList }
+    let localSSA =
+        locals
+        |> List.map (fun fixture -> fixture.SSA)
+        |> fun bodies ->
+            if case.OptimizeSSA then
+                List.map
+                    (SSAOptimization.optimizeFunction
+                        optimizeContext ANFConstants.defaultOptimizeOptions)
+                    bodies
+            else bodies
     let result =
-        SSAInlining.inlineProgramWithExternalCandidatesAndExclusions
-            InliningCommon.defaultConfig
-            (InliningCommon.buildExternalCandidateInfoMap InliningCommon.defaultConfig externalSources)
-            (List.map (fun fixture -> fixture.SSA) externals)
-            Set.empty
-            (List.map (fun fixture -> fixture.Source) locals)
-            (List.map (fun fixture -> fixture.SSA) locals)
-        |> List.last
+        if case.SkipInlining then List.last localSSA
+        else
+            SSAInlining.inlineProgramWithExternalCandidatesAndExclusions
+                InliningCommon.defaultConfig
+                (InliningCommon.buildExternalCandidateInfoMap InliningCommon.defaultConfig externalSources)
+                (List.map (fun fixture -> fixture.SSA) externals)
+                Set.empty
+                (List.map (fun fixture -> fixture.Source) locals)
+                localSSA
+            |> List.last
     let escaped = lazy (SSAEscapeAnalysis.optimizeFunction Map.empty Map.empty result)
     case.Assertions
     |> List.tryPick (fun assertion ->

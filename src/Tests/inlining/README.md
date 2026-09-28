@@ -26,8 +26,12 @@ integer, Float, or Boolean literals and `tN` variables. Types are `Int64`,
 `Tuple<Body,Body,Bool>`, `Option<Int64>`, and `Option<Float>`. `Body` is a two-field managed
 record stand-in for benchmark records and lists. Operations used by the
 fixtures are `add`, `mul`, `div`, `gte`, `lt`, `bitand`, `bitxor`, `tuple`,
-`tuple3`, `get`, `typed`, `body`, `field`, `some`, `none`, `payload`,
+`tuple3`, `get`, `typed`, `copy`, `body`, `field`, `closure`, `closure_call`,
+`some`, `none`, `payload`,
 `some_float`, `none_float`, `payload_float`, and `call`.
+The `---OPTIMIZE-SSA---` marker runs the SSA optimizer before inlining;
+`---NO-INLINE---` checks the optimized body alone. The same plain-text format
+also supplies the focused SSA optimization cases in `../ssa-optimization/ssa.opt`.
 Bind IDs must be unique within a function. `---EXTERNAL-FUNCTION---` declares
 an external inline candidate, separate from the local functions compiled in
 the case.
@@ -43,6 +47,7 @@ and `call_chain callee 8 from t0 at t1`.
 | Benchmark source | Inlining situation | Fixture |
 | --- | --- | --- |
 | `nbody/dark/main.dark` | `applyPair` has 59 bindings, returns fresh managed records, and has ten projected calls in `advanceStep`. | 59-binding producer with fresh records at ten sites and a 13-site growth boundary. |
+| `nbody/dark/main.dark` | Projected tuple eligibility depends on aliases removed by SSA optimization. | Optimized-body case keeps both projections and removes the callee tuple. |
 | `merkletrees/dark/main.dark` | `hashVal` calls `hashLoop` at literal index zero. | Eight-round expansion, nine-round boundary, and symbolic start. |
 | `fasta`, `quicksort` | Lookup helpers return `Option<Int64>` on different paths. | Two-return scalar projection, three-return tag branch with payload read in a successor block, and a managed-result copy budget. |
 | `spectral_norm` | The hot lookup returns `Option<Float>`. | Float Option return and projection, plus the shared three-return CFG shape. |
@@ -56,12 +61,11 @@ The `nbody` fixture includes the two typed aliases found between real tuple
 projections. It checks call removal and scalar replacement: only the returned
 `Body` allocation survives escape analysis. The actual `advanceStep` has no
 `applyPair` calls or temporary tuples, and five final body allocations. Its
-Cachegrind count is 10,805,794 versus 10,805,795 for the parent. The
+Cachegrind count is 10,805,793 versus 10,805,795 for the task parent. The
 three-return Option fixture now covers a tag branch and a successor-block
 payload read. The resulting `quicksort` and `spectral_norm` MIR has no
-temporary 16-byte Option allocations, matching the parent. The latest full
-comparison is still blocked by `edigits` at +0.141%; `quicksort` is +0.056%
-and `spectral_norm` differs by 85 instructions.
+temporary 16-byte Option allocations, matching the parent. The full parent
+benchmark gate passes at aggregate ratio 0.999744.
 
 `regex_lite` also has immediate tuple projections, while `fft` has nested
 record helpers. Add fixtures for them when their optimized IR shows a distinct

@@ -1,4 +1,4 @@
-// ANFPipeline.fs - Orchestrate ANF optimization and reference counting.
+// ANFPipeline.fs - Construct and optimize SSA after ANF helper lowering.
 
 module ANFPipeline
 
@@ -48,7 +48,7 @@ let internal stdlibInliningConfig : InliningCommon.InliningConfig = {
     MaxProjectedTupleInlineSites = 0
 }
 
-/// Run ANF optimization, construct SSA, and elaborate function ownership on SSA.
+/// Lower accumulator helpers, construct SSA, then optimize and elaborate ownership.
 let internal buildAnf
     (verbosity: int)
     (options: CompilerOptions)
@@ -65,9 +65,9 @@ let internal buildAnf
     : Result<ANF.Function list * SSAANF.Function list * ANF.TypeMap, string> =
 
     let anfOptions = buildANFOptimizeOptions options
-    let anfPassLabel =
+    let ssaPassLabel =
         formatPassGroup
-            "ANF Optimizations"
+            "SSA Optimizations"
             [
                 ("const_folding", anfOptions.EnableConstFolding)
                 ("const_prop", anfOptions.EnableConstProp)
@@ -76,13 +76,14 @@ let internal buildAnf
                 ("cse", anfOptions.EnableCSE)
                 ("strength_reduction", anfOptions.EnableStrengthReduction)
             ]
-    if verbosity >= 1 then println $"  [anf.optimize] {anfPassLabel}..."
+    if verbosity >= 1 && anfOptions.EnableTailRecursionModuloOperation then
+        println "  [anf.accumulators] ANF Accumulator Lowering..."
     let anfProgram =
         ANF.Program (functions, ANF.Return ANF.UnitLiteral)
         |> ANF_Intrinsics.canonicalizeProgram registries.FunctionIds registries.FuncReg
     if shouldDumpIR verbosity options.DumpANF then
         printANFProgram options "=== ANF (before optimization) ===" anfProgram
-    let anfOptStart = sw.Elapsed.TotalMilliseconds
+    let anfLoweringStart = sw.Elapsed.TotalMilliseconds
     let singletonRecursiveNames =
         registries.RecursiveMembers
         |> Map.toSeq
@@ -97,25 +98,21 @@ let internal buildAnf
           SumShapeReg = registries.RcSumShapeReg
           FunctionNames = registries.FunctionNames }
     let anfOptimized =
-        if shouldRunANFOptimize anfOptions then
-            ANF_Optimize.optimizeProgramWithOptionsAndExternalFunctionsWithTrace
-                (passTimingRecorder
-                 |> Option.map (fun recorder name elapsed ->
-                     recorder { Pass = name; Elapsed = elapsed }))
+        if anfOptions.EnableTailRecursionModuloOperation then
+            ANFAccumulatorLowering.lower
                 anfOptimizeContext
-                anfOptions
                 singletonRecursiveNames
                 externalOptimizationFunctions
                 anfProgram
         else
             anfProgram
-    let anfOptElapsed = sw.Elapsed.TotalMilliseconds - anfOptStart
-    recordPassTiming passTimingRecorder "ANF Optimizations" anfOptElapsed
+    let anfLoweringElapsed = sw.Elapsed.TotalMilliseconds - anfLoweringStart
+    recordPassTiming passTimingRecorder "ANF Accumulator Lowering" anfLoweringElapsed
     if verbosity >= 2 then
-        let t = System.Math.Round(anfOptElapsed, 1)
+        let t = System.Math.Round(anfLoweringElapsed, 1)
         println $"        {t}ms"
     if shouldDumpIR verbosity options.DumpANF then
-        printANFProgram options "=== ANF (after optimization) ===" anfOptimized
+        printANFProgram options "=== ANF (after accumulator lowering) ===" anfOptimized
 
     let convResult = buildConversionResult anfOptimized registries ownershipContracts
 
@@ -140,6 +137,23 @@ let internal buildAnf
     match ssaBeforeSpecializationResult with
     | Error err -> Error $"Reference count insertion error: {err}"
     | Ok ssaBeforeSpecialization ->
+        if verbosity >= 1 then println $"  [ssa.optimize] {ssaPassLabel}..."
+        let ssaOptStart = sw.Elapsed.TotalMilliseconds
+        let runSSAOptimize =
+            anfOptions.EnableConstFolding
+            || anfOptions.EnableConstProp
+            || anfOptions.EnableCopyProp
+            || anfOptions.EnableDCE
+            || anfOptions.EnableCSE
+            || anfOptions.EnableStrengthReduction
+        let ssaBeforeSpecialization =
+            if runSSAOptimize then
+                ssaBeforeSpecialization
+                |> List.map (SSAOptimization.optimizeFunction anfOptimizeContext anfOptions)
+            else ssaBeforeSpecialization
+        recordPassTiming
+            passTimingRecorder "SSA Optimizations"
+            (sw.Elapsed.TotalMilliseconds - ssaOptStart)
         let externalSSAResult =
             if options.DisableInlining || Map.isEmpty externalInlineCandidates then Ok []
             else

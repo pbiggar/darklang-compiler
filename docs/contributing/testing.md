@@ -20,21 +20,26 @@ constant integer addition
 return 3
 ```
 
-ANF fixtures can instead select an optimized function from the prebuilt
-stdlib. This is the preferred proof for a stdlib implementation optimization:
+The production high-level optimizer runs on SSA. Its focused cases live in
+`src/Tests/ssa-optimization/ssa.opt` and use typed functions with operation
+counts instead of exact ANF snapshots:
 
 ```text
 ---NAME---
-stdlib power loop uses strength reduction
----STDLIB-FUNCTION---
-Darklang.Stdlib.Int64.__powerLoop
----EXPECTED---
-Function Darklang.Stdlib.Int64.__powerLoop:
-...
+power loop modulo two becomes a mask
+---OPTIMIZE-SSA---
+---NO-INLINE---
+---FUNCTION---
+powerParity(t0:Int64) -> Int64
+let t1:Int64 = mod(t0,2)
+return t1
+---EXPECT---
+ops mod = 0
+ops bitand = 1
 ```
 
 Use E2E tests alongside these fixtures for observable behavior. The
-optimization fixture must show that the intended optimized IR is present; a
+optimization fixture must show that the intended transformation occurred; a
 behavior-only test is not evidence that an optimization occurred.
 
 Value-equality E2E checks normally share a generated executable. Add

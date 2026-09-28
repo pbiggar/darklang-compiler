@@ -51,16 +51,18 @@ terminators after construction and after each transforming pass.
    arguments. Convert external optimization templates and cache identities.
 7. **Move inlining.** Freshen block and value identities, then connect every
    inlined return to a typed continuation.
-8. **Move ANF optimization.** Port its fixed-point scheduler without changing
-   iteration order or effect barriers. Move component rewrites in focused steps;
-   one fixed-point iteration must run entirely in one IR.
+8. **Move expression optimization.** Run its bounded fixed point on typed SSA,
+   retaining the scalar rewrite and effect facts. Move component rewrites in
+   focused steps; one fixed-point iteration runs entirely in one IR. Keep the
+   structural accumulator-helper rewrite as a separate lowering step ahead of
+   SSA until direct SSA construction can generate those helpers.
 9. **Move reachability and generated output.** Convert every call-graph query,
    including repeated user and stdlib reachability, then move print insertion
    while retaining its consuming ownership boundary.
 10. **Construct SSA directly.** At this point the boundary is immediately
     after checked-AST lowering. Make expression, lambda, monomorphization,
-    list-region, and ownership-variant lowering emit typed SSA values and
-    blocks directly. Remove the ANF-to-SSA converter, structured ANF types and
+    list-region, accumulator-helper, and ownership-variant lowering emit typed
+    SSA values and blocks directly. Remove the ANF-to-SSA converter, structured ANF types and
     production passes, obsolete dumps, and obsolete pass fixtures.
 
 Each numbered step is a separately reviewable unit. A unit is complete only

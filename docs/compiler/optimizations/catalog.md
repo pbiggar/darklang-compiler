@@ -51,9 +51,11 @@ from Git history.
 - **Code motion and closures:** shared leading conditional-binding hoisting and
   capture-free local closure devirtualization.
 
-## ANF simplification
+## High-level SSA simplification
 
-`passes/anf/ANF_Optimize.fs` and `src/Tests/optimization/anf.opt` own:
+`passes/anf/SSAOptimization.fs` runs the production fixed point. It uses the
+scalar rewrite and effect facts in `passes/anf/optimization/` and has focused
+plain-text cases in `src/Tests/ssa-optimization/ssa.opt`. These cover:
 
 - literal folding for float negation, absolute value, square root,
   Int64/Float conversions, Float bit conversion and comparison, string
@@ -61,17 +63,22 @@ from Git history.
   shifts, and bitwise work;
 - integer, UInt64, Float, Boolean, bitwise, shift, negation, comparison, and
   empty-string identities;
-- conditional simplification, negated-condition folding, integer
-  reassociation/cancellation/factorization, and safe multiplication/division
-  strength reduction;
+- conditional simplification, inverted Boolean returns, and safe
+  multiplication/division strength reduction;
 - common-subexpression reuse through a dedicated, exhaustive value key for
   conditional values, tuple projections, non-owning non-Float scalar record
   projections, scalar conversions, Float unary operations, commutative
   operations, and reversed relational comparisons;
 - ownership-safe local tuple projection forwarding and unused-binding
-  elimination; and
-- shared leading conditional binding hoisting and capture-free local closure
-  devirtualization.
+  elimination;
+- direct checked list and string byte indexing when an Int64 index was
+  temporarily converted, including bounds-only and guarded byte-payload
+  uses; and
+- capture-free local closure devirtualization.
+
+The older structured ANF optimizer remains a test oracle for shared scalar
+rewrites. Accumulator helper generation is a separate pre-SSA lowering step
+in `passes/anf/ANFAccumulatorLowering.fs`.
 
 Floating-point rewrites retain NaN, signed-zero, rounding, overflow, and
 evaluation-order restrictions. Managed-value forwarding retains ownership

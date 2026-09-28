@@ -1,34 +1,30 @@
-// StdlibOptimizationTests.fs - Whole-pipeline checks for optimized prebuilt stdlib ANF.
+// StdlibOptimizationTests.fs - Check optimization in prebuilt stdlib output.
 
 module StdlibOptimizationTests
 
-open ANF
-
 type TestResult = Result<unit, string>
 
-let rec private containsBinOp (target: BinOp) (expr: AExpr) : bool =
-    match expr with
-    | Let (_, Prim (op, _, _), body) -> op = target || containsBinOp target body
-    | Let (_, _, body) -> containsBinOp target body
-    | Join (_, thenBranch, elseBranch)
-    | If (_, thenBranch, elseBranch) ->
-        containsBinOp target thenBranch || containsBinOp target elseBranch
-    | Jump _ | Return _ -> false
-
-let private testStdlibANFStrengthReduction
+let private testStdlibPowerMask
     (stdlib: CompilationContexts.StdlibResult)
     ()
     : TestResult =
-    match Map.tryFind "Darklang.Stdlib.Int64.__powerLoop" stdlib.StdlibANFFunctions with
-    | None -> Error "Missing Stdlib.Int64.__powerLoop from prebuilt stdlib ANF"
-    | Some powerLoop ->
-        if containsBinOp Mod powerLoop.Body then
-            Error "Expected stdlib ANF optimization to strength-reduce exponent % 2"
-        elif not (containsBinOp BitAnd powerLoop.Body) then
-            Error "Expected strength-reduced exponent bit mask in Stdlib.Int64.__powerLoop"
-        else
+    let powerLoop =
+        stdlib.AllocatedFunctions
+        |> List.tryFind (fun func ->
+            func.Name = "Darklang.Stdlib.Int64.__powerLoop")
+    match powerLoop with
+    | None -> Error "Missing prebuilt Stdlib.Int64.__powerLoop"
+    | Some func ->
+        let instructions =
+            func.CFG.Blocks
+            |> Map.toList
+            |> List.collect (fun (_, block) -> block.Instrs)
+        if instructions
+           |> List.exists (function LIR.And_imm (_, _, 1L) -> true | _ -> false) then
             Ok ()
+        else
+            Error "Expected an exponent bit mask in prebuilt Stdlib.Int64.__powerLoop"
 
 let tests (stdlib: CompilationContexts.StdlibResult) = [
-    ("prebuilt stdlib ANF applies strength reduction", testStdlibANFStrengthReduction stdlib)
+    ("prebuilt stdlib power uses a bit mask", testStdlibPowerMask stdlib)
 ]

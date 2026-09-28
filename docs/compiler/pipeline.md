@@ -23,8 +23,9 @@ The Dark compiler transforms source code through a series of passes, each with a
 | 2 (regions) | List representation and ownership | `passes/hir/`, `passes/storage/`, `passes/ownership/`, `passes/anf/LowerListRegions.fs` | Closed semantic lists → storage → owned arrays → ANF |
 | 2.2  | Generated result output | `passes/anf/PrintInsertion.fs`                   | ANF → ANF                                     |
 | 2.25 | Function reachability   | `passes/anf/ANFDeadCodeElimination.fs`           | ANF → reachable ANF                           |
-| 2.3  | ANF optimizations       | `passes/anf/ANF_Optimize.fs`                                | ANF → ANF                                     |
-| 2.4  | ANF → high-level SSA    | `ir/anf/SSAANF.fs`                                           | Optimized ANF → typed blocks                   |
+| 2.3  | Accumulator helper lowering | `passes/anf/ANFAccumulatorLowering.fs`                  | ANF → ANF with recursive helpers              |
+| 2.4  | ANF → high-level SSA    | `ir/anf/SSAANF.fs`                                           | ANF → typed blocks                             |
+| 2.4.1 | SSA optimizations     | `passes/anf/SSAOptimization.fs`                              | SSA → simplified SSA                           |
 | 2.4.5 | SSA inlining           | `passes/anf/SSAInlining.fs`                                 | SSA → SSA                                     |
 | 2.4.6 | Known closure specialization | `passes/anf/SSAHigherOrderSpecialization.fs`   | SSA → specialized SSA                         |
 | 2.5  | Direct-call specialization | `passes/anf/SSADirectCallSpecialization.fs`             | SSA → specialized SSA                         |
@@ -193,32 +194,43 @@ prebuilt functions and for selecting reachable standard-library functions.
 
 ---
 
-## Pass 2.3: ANF Optimizations (`ANF_Optimize.fs`)
+## Pass 2.3: Accumulator Helper Lowering (`ANFAccumulatorLowering.fs`)
 
 **Input**: ANF
-**Output**: Optimized ANF
+**Output**: ANF with eligible recursive helpers
 
-### Responsibilities
-- **Constant folding**: Fold literals and algebraic identities
-- **Constant propagation**: Substitute known literals
-- **Copy propagation**: Remove trivial `let` bindings
-- **Dead code elimination**: Drop unused bindings without side effects
-- **Strength reduction**: `mul/div/mod` by powers of 2 → shifts/bitwise ops
-
-### Sub-passes (grouped)
-- `const_folding`, `const_prop`, `copy_prop`, `dce`, `strength_reduction`
+The structural tail-recursion-modulo-operation rewrite creates helpers for
+addition, subtraction, multiplication, fixed constructors, and lists. It
+still consumes structured ANF and remains ahead of SSA construction until
+the direct SSA-lowering step.
 
 ---
 
 ## Pass 2.4: ANF to high-level SSA (`SSAANF.fs`)
 
-**Input**: Optimized ANF
+**Input**: ANF after accumulator helper lowering
 **Output**: High-level SSA blocks with explicit edges and block parameters
 
 ### Responsibilities
 - **Build CFG**: Convert structured ANF joins and branches to basic blocks
 - **Freshen values**: Give reused ANF temporaries distinct SSA definitions
 - **Carry joins**: Pass typed values on edges to block parameters
+
+---
+
+## Pass 2.4.1: SSA Optimizations (`SSAOptimization.fs`)
+
+**Input**: Typed SSA blocks
+**Output**: Simplified SSA blocks
+
+The bounded fixed-point pass applies scalar folding and strength reduction,
+literal and alias propagation, ownership-safe dead-definition removal, and
+common-expression reuse across dominating blocks. It folds constant and
+Boolean-return branches, removes unreachable blocks, merges simple jumps,
+and devirtualizes capture-free local closures. The string-byte and list-index
+rewrites preserve the corresponding checked-access behavior without temporary
+converted indices or Option values. Block labels are compacted before
+inlining so earlier eliminated branches do not change later block layout.
 
 ---
 

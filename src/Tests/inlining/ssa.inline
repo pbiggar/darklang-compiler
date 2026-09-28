@@ -353,3 +353,26 @@ let t5:Bool = get(t2,2)
 return t5
 ---EXPECT---
 calls ssaNextPerm = 1
+# The ANF source still has aliases. Eligibility must use the optimized SSA body.
+---NAME---
+projected managed tuple uses optimized SSA eligibility
+---OPTIMIZE-SSA---
+---FUNCTION---
+pairBodies(t0:Body,t6:Int64) -> Tuple<Body,Body>
+let t1:Body = body(1,2)
+let t2:Body = copy(t1)
+repeat_add t20..t42 from t6
+let t3:Body = body(t42,4)
+let t4:Body = copy(t3)
+let t5:Tuple<Body,Body> = tuple(t2,t4)
+return t5
+---FUNCTION---
+useBodies(t10:Body,t14:Int64) -> Tuple<Body,Body>
+let t11:Tuple<Body,Body> = call pairBodies(t10,t14)
+let t12:Body = get(t11,0)
+let t13:Body = get(t11,1)
+let t15:Tuple<Body,Body> = tuple(t12,t13)
+return t15
+---EXPECT---
+calls pairBodies = 0
+ops tuple_alloc = 1

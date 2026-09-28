@@ -1,0 +1,93 @@
+# SSA optimization cases on typed blocks. The assertions describe the
+# transformation's useful result, including a dominated use in another block.
+
+---NAME---
+power loop modulo two becomes a mask
+---OPTIMIZE-SSA---
+---NO-INLINE---
+---FUNCTION---
+powerParity(t0:Int64) -> Int64
+let t1:Int64 = mod(t0,2)
+return t1
+---EXPECT---
+ops mod = 0
+ops bitand = 1
+
+---NAME---
+tree tag load is shared with dominated branch
+---OPTIMIZE-SSA---
+---NO-INLINE---
+---FUNCTION---
+treeTag(t0:Body) -> Int64
+let t1:Int64 = field(t0,0)
+let t2:Bool = eq(t1,0)
+if t2
+return t1
+else
+let t3:Int64 = field(t0,0)
+return t3
+endif
+---EXPECT---
+ops record_get = 1
+
+---NAME---
+constant condition removes unused successor
+---OPTIMIZE-SSA---
+---NO-INLINE---
+---FUNCTION---
+choose() -> Int64
+if true
+return 41
+else
+return 42
+endif
+---EXPECT---
+blocks = 1
+
+---NAME---
+inverted Boolean return branch becomes a negation
+---OPTIMIZE-SSA---
+---NO-INLINE---
+---FUNCTION---
+invert(t0:Bool) -> Bool
+if t0
+return false
+else
+return true
+endif
+---EXPECT---
+blocks = 1
+ops not = 1
+
+---NAME---
+capture free closure calls become direct
+---OPTIMIZE-SSA---
+---NO-INLINE---
+---FUNCTION---
+lifted(t0:Unit,t1:Int64) -> Int64
+return t1
+---FUNCTION---
+invoke(t0:Int64) -> Int64
+let t1:FnInt64 = closure lifted
+let t2:Int64 = closure_call(t1,t0)
+return t2
+---EXPECT---
+calls lifted = 1
+ops closure_alloc = 0
+ops closure_call = 0
+
+---NAME---
+calls remain separate across an SSA branch
+---OPTIMIZE-SSA---
+---NO-INLINE---
+---FUNCTION---
+helper(t0:Int64) -> Int64
+return t0
+---FUNCTION---
+caller(t0:Int64) -> Int64
+let t1:Int64 = call helper(t0)
+let t2:Int64 = call helper(t0)
+let t3:Int64 = add(t1,t2)
+return t3
+---EXPECT---
+calls helper = 2
