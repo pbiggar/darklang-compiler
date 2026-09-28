@@ -29,8 +29,14 @@ def wait_for_port(port: int, peer: subprocess.Popen[bytes]) -> None:
 
 def main() -> None:
     suite = sys.argv[1] if len(sys.argv) > 1 else "TLS_AES_256_GCM_SHA384"
+    authentication = sys.argv[2] if len(sys.argv) > 2 else "rsa"
+    ca_authentication = sys.argv[3] if len(sys.argv) > 3 else "rsa"
     if suite not in ("TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"):
         raise ValueError(f"Unsupported TLS test suite: {suite}")
+    if authentication not in ("rsa", "ecdsa"):
+        raise ValueError(f"Unsupported TLS test authentication: {authentication}")
+    if ca_authentication not in ("rsa", "ecdsa"):
+        raise ValueError(f"Unsupported TLS test CA: {ca_authentication}")
     with tempfile.TemporaryDirectory(prefix="dark-https-aes256-") as temporary:
         directory = Path(temporary)
         ca_key = directory / "ca.key"
@@ -40,11 +46,24 @@ def main() -> None:
         leaf_cert = directory / "leaf.pem"
         extensions = directory / "leaf.ext"
         extensions.write_text("subjectAltName=DNS:localhost\nextendedKeyUsage=serverAuth\n")
-        run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
-            "-keyout", str(ca_key), "-out", str(ca_cert), "-days", "1",
-            "-subj", "/CN=Dark test CA", "-addext", "basicConstraints=critical,CA:TRUE")
-        run("openssl", "req", "-newkey", "rsa:2048", "-nodes", "-keyout",
-            str(leaf_key), "-out", str(leaf_csr), "-subj", "/CN=localhost")
+        if ca_authentication == "ecdsa":
+            run("openssl", "ecparam", "-name", "prime256v1", "-genkey", "-noout",
+                "-out", str(ca_key))
+            run("openssl", "req", "-x509", "-new", "-key", str(ca_key),
+                "-out", str(ca_cert), "-days", "1", "-subj", "/CN=Dark test CA",
+                "-addext", "basicConstraints=critical,CA:TRUE")
+        else:
+            run("openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                "-keyout", str(ca_key), "-out", str(ca_cert), "-days", "1",
+                "-subj", "/CN=Dark test CA", "-addext", "basicConstraints=critical,CA:TRUE")
+        if authentication == "ecdsa":
+            run("openssl", "ecparam", "-name", "prime256v1", "-genkey", "-noout",
+                "-out", str(leaf_key))
+            run("openssl", "req", "-new", "-key", str(leaf_key), "-out",
+                str(leaf_csr), "-subj", "/CN=localhost")
+        else:
+            run("openssl", "req", "-newkey", "rsa:2048", "-nodes", "-keyout",
+                str(leaf_key), "-out", str(leaf_csr), "-subj", "/CN=localhost")
         run("openssl", "x509", "-req", "-in", str(leaf_csr), "-CA", str(ca_cert),
             "-CAkey", str(ca_key), "-CAcreateserial", "-out", str(leaf_cert),
             "-days", "1", "-extfile", str(extensions))
@@ -98,7 +117,7 @@ match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
                                           text=True, capture_output=True, timeout=30)
                 if rejected.returncode != 0 or "TLS failed:" not in rejected.stdout:
                     raise RuntimeError(f"Invalid hostname was accepted: {rejected.stdout} {rejected.stderr}")
-                print(f"{suite} OK; invalid hostname rejected")
+                print(f"{suite} with {authentication} leaf and {ca_authentication} CA OK; invalid hostname rejected")
             finally:
                 peer.terminate()
                 peer.wait(timeout=5)

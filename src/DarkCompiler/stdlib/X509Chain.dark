@@ -1,4 +1,4 @@
-// X509Chain.dark - bounded RSA X.509 path checks before HTTPS identity is trusted.
+// X509Chain.dark - bounded X.509 path checks before HTTPS identity is trusted.
 
 module Darklang.Stdlib.X509Chain
 
@@ -47,8 +47,12 @@ let __algorithm (data: Blob) (item: Stdlib.X509Identity.Tlv)
       let hash =
         if encoded == "2A864886F70D01010B" then 256L
         else if encoded == "2A864886F70D01010C" then 384L
+        else if encoded == "2A8648CE3D040302" then 1256L
         else 0L in
       if hash == 0L then Error "Unsupported X.509 signature algorithm"
+      else if hash == 1256L then
+        if oid.end_ == item.end_ then Ok hash
+        else Error "Invalid X.509 signature algorithm"
       else
         match Stdlib.X509Identity.__expect data oid.end_ item.end_ 5L with
         | Ok nullValue ->
@@ -311,6 +315,10 @@ let __caAllowed (certificate: Stdlib.X509Chain.Certificate)
 let __signedBy (child: Stdlib.X509Chain.Certificate)
   (parent: Stdlib.X509Chain.Certificate) : Bool =
   if Stdlib.Bool.not (Stdlib.X509Chain.__same child.issuer parent.subject) then false
+  else if child.signatureHash == 1256L then
+    match Stdlib.P256.verifySha256 parent.spki child.tbs child.signature with
+    | Ok valid -> valid
+    | Error _ -> false
   else
     match Stdlib.RsaSpki.parse parent.spki with
     | Error _ -> false

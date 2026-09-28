@@ -64,14 +64,15 @@ let parseCertificateVerify (handshake: Blob)
   else
     let algorithm = Stdlib.Tls13Certificate.__read16 handshake 4L in
     let signatureLength = Stdlib.Tls13Certificate.__read16 handshake 6L in
-    if algorithm != 2052L || signatureLength < 256L || signatureLength > 1024L
-       || signatureLength != length - 8L then
-      Error "Invalid TLS CertificateVerify message"
-    else
+    if ((algorithm == 2052L && signatureLength >= 256L && signatureLength <= 1024L)
+        || (algorithm == 1027L && signatureLength >= 70L && signatureLength <= 72L))
+       && signatureLength == length - 8L then
       Ok (Stdlib.Tls13Certificate.CertificateVerify {
             algorithm = algorithm,
             signature = Stdlib.Blob.slice handshake (Stdlib.Int.fromInt64 8L)
                           (Stdlib.Int.fromInt64 signatureLength) })
+    else
+      Error "Invalid TLS CertificateVerify message"
 
 let certificateVerifyInput (transcript: Blob) : Blob =
   // RFC 8446 section 4.4.3: context separation precedes the transcript hash.
