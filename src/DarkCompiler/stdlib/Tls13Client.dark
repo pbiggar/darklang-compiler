@@ -103,7 +103,7 @@ let __pemLine (state: Stdlib.Tls13Client.PemState) (line: String)
       count = state.count, roots = state.roots })
   else if text == "-----END CERTIFICATE-----" then
     if Stdlib.Bool.not state.inside then Error "Unexpected X.509 certificate end"
-    else if state.count >= 256L then Error "X.509 trust bundle certificate limit exceeded"
+    else if state.count >= 2048L then Error "X.509 trust bundle certificate limit exceeded"
     else
       match Stdlib.Base64.decode state.encoded with
       | Error message -> Error message
@@ -162,30 +162,35 @@ let __pemChunks (bundle: Blob) (offset: Int64)
       else Ok (Stdlib.List.reverse completed.roots)
   else
     let remaining = length - offset in
-    let chunkLength = if remaining > 2048L then 2048L else remaining in
+    let chunkLength = if remaining > 1024L then 1024L else remaining in
     match Stdlib.Tls13Client.__pemBytes bundle offset (offset + chunkLength) state with
     | Error message -> Error message
     | Ok next -> Stdlib.Tls13Client.__pemChunks bundle (offset + chunkLength) next
 
+let parsePemBundle (contents: Blob) : Stdlib.Result.Result<List<Blob>, String> =
+  if Stdlib.Blob.__byteLength contents > 1048576L then
+    Error "X.509 trust bundle exceeds size limit"
+  else Stdlib.Tls13Client.__pemChunks contents 0L
+         (Stdlib.Tls13Client.PemState {
+           line = [], lineLength = 0L, encoded = "", inside = false,
+           count = 0L, roots = [] })
+
+let __readBundle (paths: List<String>) : Stdlib.Result.Result<List<Blob>, String> =
+  match paths with
+  | [] -> Error "No system X.509 trust bundle is available"
+  | path :: rest ->
+    match Stdlib.Cli.FileSystem.readFile path with
+    | Error _ -> Stdlib.Tls13Client.__readBundle rest
+    | Ok contents -> Stdlib.Tls13Client.parsePemBundle contents
+
 let loadSystemRoots () : Stdlib.Result.Result<List<Blob>, String> =
-  let linux = "/etc/ssl/certs/ca-certificates.crt" in
-  let mac = "/etc/ssl/cert.pem" in
-  let bundle =
-    match Stdlib.Cli.FileSystem.readFile linux with
-    | Ok contents -> Some contents
-    | Error _ ->
-      match Stdlib.Cli.FileSystem.readFile mac with
-      | Ok contents -> Some contents
-      | Error _ -> None in
-  match bundle with
-  | None -> Error "No system X.509 trust bundle is available"
-  | Some contents ->
-    if Stdlib.Blob.__byteLength contents > 262144L then
-      Error "X.509 trust bundle exceeds size limit"
-    else Stdlib.Tls13Client.__pemChunks contents 0L
-           (Stdlib.Tls13Client.PemState {
-             line = [], lineLength = 0L, encoded = "", inside = false,
-             count = 0L, roots = [] })
+  Stdlib.Tls13Client.__readBundle [
+    "/etc/ssl/certs/ca-certificates.crt",
+    "/etc/ssl/cert.pem",
+    "/etc/pki/tls/certs/ca-bundle.crt",
+    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+    "/etc/ssl/ca-bundle.pem",
+    "/usr/local/share/certs/ca-root-nss.crt" ]
 
 let __authenticate (flight: Stdlib.Tls13Handshake.ServerFlight)
   (host: String) (roots: List<Blob>) : Stdlib.Result.Result<Unit, String> =
