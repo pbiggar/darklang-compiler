@@ -25,8 +25,10 @@ def serve(listener: socket.socket, cert: Path, key: Path) -> None:
         [b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhe",
          b"llo\r\n6\r\n wo", b"rld\r\n0\r\n\r\n"],
         [b"HTTP/1.1 200 OK\r\nContent-Length: 11\r\n\r\nhello"],
+        [b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nhello world"],
+        [b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nhello world"],
     ]
-    for pieces in responses:
+    for response_index, pieces in enumerate(responses):
         connection, _ = listener.accept()
         with context.wrap_socket(connection, server_side=True) as secure:
             request = b""
@@ -38,6 +40,12 @@ def serve(listener: socket.socket, cert: Path, key: Path) -> None:
             for piece in pieces:
                 secure.sendall(piece)
                 time.sleep(0.01)
+            if response_index == 4:
+                secure.settimeout(1)
+                try:
+                    secure.unwrap()
+                except OSError:
+                    pass
 
 
 def main() -> None:
@@ -59,7 +67,7 @@ def main() -> None:
             "-days", "1", "-extfile", str(extensions))
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
-            listener.listen(3)
+            listener.listen(5)
             port = listener.getsockname()[1]
             source = directory / "client.dark"
             source.write_text(f'''// client.dark - Local HTTPS streaming interoperability probe.
@@ -93,12 +101,20 @@ match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
                     raise RuntimeError(f"{name} HTTPS stream failed: {result.stdout} {result.stderr}")
             truncated = subprocess.run([str(binary)], text=True, capture_output=True,
                                        timeout=30, cwd=ROOT)
-            if truncated.returncode == 0 or "HTTP fixed-length response was truncated" not in truncated.stderr:
+            if truncated.returncode == 0 or "HTTP response stream read failed" not in truncated.stderr:
                 raise RuntimeError(f"Truncated HTTPS stream was accepted: {truncated.stdout} {truncated.stderr}")
+            close_delimited = subprocess.run([str(binary)], text=True, capture_output=True,
+                                             timeout=30, cwd=ROOT)
+            if close_delimited.returncode == 0 or "HTTP response stream read failed" not in close_delimited.stderr:
+                raise RuntimeError(f"Unauthenticated HTTPS EOF was accepted: {close_delimited.stdout} {close_delimited.stderr}")
+            notified = subprocess.run([str(binary)], text=True, capture_output=True,
+                                      timeout=30, cwd=ROOT)
+            if notified.returncode != 0 or "STREAM OK" not in notified.stdout:
+                raise RuntimeError(f"Authenticated HTTPS close failed: {notified.stdout} {notified.stderr}")
             peer.join(timeout=5)
             if peer.is_alive():
                 raise RuntimeError("Local TLS peer did not finish")
-            print("HTTPS fixed, chunked, and truncated streaming responses verified")
+            print("HTTPS fixed, chunked, and authenticated close-delimited streams verified; truncation rejected")
 
 
 if __name__ == "__main__":

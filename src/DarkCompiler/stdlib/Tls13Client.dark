@@ -344,10 +344,7 @@ let __readApplication (connection: Stdlib.Network.TcpConnection)
     Error "TLS HTTP response limit exceeded"
   else
     match Stdlib.Tls13Client.__receiveRecord connection pending with
-    | Error message ->
-      if message == "TLS peer closed during record" &&
-         Stdlib.Tls13Client.__framedComplete method response 0L then Ok response
-      else Error message
+    | Error message -> Error message
     | Ok received ->
       if received.record.contentType != 23L then Error "Unexpected TLS application record"
       else
@@ -416,9 +413,7 @@ let readApplicationChunk (connection: Stdlib.Network.TcpConnection)
   if state.records >= 8192L then Error "TLS HTTP response record limit exceeded"
   else
     match Stdlib.Tls13Client.__receiveRecord connection state.pending with
-    | Error message ->
-      if message == "TLS peer closed during record" then Ok None
-      else Error message
+    | Error message -> Error message
     | Ok received ->
       if received.record.contentType != 23L then Error "Unexpected TLS application record"
       else
