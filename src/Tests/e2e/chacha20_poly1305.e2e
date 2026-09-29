@@ -1,0 +1,91 @@
+// chacha20_poly1305.e2e - RFC 8439 ChaCha20 block and AEAD vectors.
+
+(let key = Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F"
+ let nonce = Stdlib.Blob.fromHex "000000090000004A00000000"
+ match (key, nonce) with
+ | (Ok k, Ok n) -> Stdlib.Chacha20Poly1305.block k n 1L |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "fixture")
+  = Ok "10F1E7E4D13B5915500FDD1FA32071C4C7D1F4C733C068030422AA9AC3D46C4ED2826446079FAA0914C2D705D98B02A2B5129CD1DE164EB9CBD083E8A2503C4E"
+
+(let key = Stdlib.Blob.fromHex "85D6BE7857556D337F4452FE42D506A80103808AFB0DB2FD4ABFF6AF4149F51B"
+ match key with
+ | Error _ -> Error "fixture"
+ | Ok k ->
+   Stdlib.Chacha20Poly1305.poly1305 k
+     (Stdlib.String.toBlob "Cryptographic Forum Research Group")
+   |> Stdlib.Result.map Stdlib.Blob.toHex)
+  = Ok "A8061DC1305136C6C22B8BAF0C0127A9"
+
+(let key = Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F"
+ let nonce = Stdlib.Blob.fromHex "000000000000000000000000"
+ let aad = Stdlib.String.toBlob "header"
+ let content = Stdlib.String.toBlob "authenticated TLS record"
+ match (key, nonce) with
+ | (Ok k, Ok n) ->
+   match Stdlib.Chacha20Poly1305.encrypt k n aad content with
+   | Error message -> Error message
+   | Ok sealed ->
+     Stdlib.Chacha20Poly1305.decrypt k n aad sealed
+     |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "fixture")
+  = Ok "61757468656E7469636174656420544C53207265636F7264"
+
+(let key = Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F"
+ let nonce = Stdlib.Blob.fromHex "000000000000000000000000"
+ match (key, nonce) with
+ | (Ok k, Ok n) ->
+   match Stdlib.Chacha20Poly1305.encrypt k n Stdlib.Blob.empty (Stdlib.String.toBlob "body") with
+   | Error message -> Error message
+   | Ok sealed ->
+     Stdlib.Chacha20Poly1305.decrypt k n (Stdlib.String.toBlob "changed") sealed
+     |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "fixture")
+  = Error "ChaCha20-Poly1305 authentication failed"
+
+(match Stdlib.Blob.fromHex "020000560303000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F00130300002E002B0002030400330024001D0020202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F" with
+ | Error _ -> Error (Stdlib.Tls13.RecordError.Invalid "fixture")
+ | Ok bytes -> Stdlib.Tls13.parseServerHello bytes
+               |> Stdlib.Result.map (fun hello -> hello.cipherSuite))
+  = Ok 4867L
+
+(let secret = Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000"
+ match secret with
+ | Error _ -> Error "fixture"
+ | Ok s ->
+   match Stdlib.Tls13.trafficKeysChaCha s with
+   | Error message -> Error message
+   | Ok keys ->
+     match Stdlib.Tls13.sealRecord keys 23L (Stdlib.String.toBlob "chacha record") with
+     | Error message -> Error message
+     | Ok sealed ->
+       match Stdlib.Tls13.parseRecord sealed.bytes with
+       | Error _ -> Error "record parse failed"
+       | Ok record ->
+         Stdlib.Tls13.openRecord keys record
+         |> Stdlib.Result.map (fun opened ->
+              (Stdlib.Blob.toHex opened.content, opened.nextKeys.sequence,
+               opened.nextKeys.cipherSuite)))
+  = Ok (("636861636861207265636F7264", 1L, 4867L))
+
+(let secret = Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000"
+ match secret with
+ | Error _ -> Error "fixture"
+ | Ok s ->
+   match Stdlib.Tls13.trafficKeysChaCha s with
+   | Error message -> Error message
+   | Ok keys ->
+     match Stdlib.Tls13.sealRecord keys 23L (Stdlib.String.toBlob "chacha record") with
+     | Error message -> Error message
+     | Ok sealed ->
+       match Stdlib.Tls13.parseRecord sealed.bytes with
+       | Error _ -> Error "record parse failed"
+       | Ok record ->
+         let changed = Stdlib.Tls13.Record {
+           contentType = record.contentType,
+           payload = Stdlib.Blob.concat [Stdlib.Blob.slice record.payload 0 1,
+                     Stdlib.String.toBlob "x",
+                     Stdlib.Blob.slice record.payload 2 (Stdlib.Blob.length record.payload - 2)],
+           remaining = record.remaining } in
+         Stdlib.Tls13.openRecord keys changed
+         |> Stdlib.Result.map (fun opened -> Stdlib.Blob.toHex opened.content))
+  = Error "ChaCha20-Poly1305 authentication failed"

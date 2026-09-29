@@ -146,7 +146,7 @@ let startServerFlightForSuite (sharedSecret: Blob) (clientHello: Blob) (serverHe
   (cipherSuite: Int64)
   : Stdlib.Result.Result<Stdlib.Tls13Handshake.ServerFlight, String> =
   let secrets =
-    if cipherSuite == 4865L then
+    if cipherSuite == 4865L || cipherSuite == 4867L then
       Stdlib.Tls13Handshake.deriveHandshakeSecrets sharedSecret clientHello serverHello
     else if cipherSuite == 4866L then
       Stdlib.Tls13Handshake.deriveHandshakeSecrets384 sharedSecret clientHello serverHello
@@ -155,6 +155,7 @@ let startServerFlightForSuite (sharedSecret: Blob) (clientHello: Blob) (serverHe
   | Error message -> Error message
   | Ok secrets ->
       let keys = if cipherSuite == 4866L then Stdlib.Tls13.trafficKeys384 secrets.server
+                 else if cipherSuite == 4867L then Stdlib.Tls13.trafficKeysChaCha secrets.server
                  else Stdlib.Tls13.trafficKeys secrets.server in
       match keys with
       | Error message -> Error message

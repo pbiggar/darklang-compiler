@@ -266,6 +266,7 @@ let __finish (connection: Stdlib.Network.TcpConnection)
     let expand = if is384 then Stdlib.Tls13.hkdfExpandLabel384
                  else Stdlib.Tls13.hkdfExpandLabel in
     let trafficKeys = if is384 then Stdlib.Tls13.trafficKeys384
+                      else if flight.cipherSuite == 4867L then Stdlib.Tls13.trafficKeysChaCha
                       else Stdlib.Tls13.trafficKeys in
     match expand master "c ap traffic" hash length with
     | Error message -> Error message

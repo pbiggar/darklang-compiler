@@ -6,7 +6,7 @@ type Record = { contentType: Int64, payload: Blob, remaining: Blob }
 
 type ServerHello = { random: Blob, keyShare: Blob, cipherSuite: Int64, remaining: Blob }
 
-type TrafficKeys = { key: Blob, iv: Blob, sequence: Int64 }
+type TrafficKeys = { key: Blob, iv: Blob, sequence: Int64, cipherSuite: Int64 }
 type OpenedRecord = { contentType: Int64, content: Blob, nextKeys: Stdlib.Tls13.TrafficKeys }
 type SealedRecord = { bytes: Blob, nextKeys: Stdlib.Tls13.TrafficKeys }
 
@@ -157,7 +157,7 @@ let clientHello (host: String) (random: Blob) (keyShare: Blob)
                        [sni, versions, groups, signatures, certificateSignatures, shares] in
     let body = Stdlib.Blob.concat [
       Stdlib.Blob.__fromInt64List [3L, 3L], random,
-      Stdlib.Blob.__fromInt64List [0L, 0L, 4L, 19L, 2L, 19L, 1L, 1L, 0L],
+      Stdlib.Blob.__fromInt64List [0L, 0L, 6L, 19L, 2L, 19L, 1L, 19L, 3L, 1L, 0L],
       Stdlib.Tls13.__u16 (Stdlib.Blob.__byteLength extensions), extensions ] in
     let bodyLength = Stdlib.Blob.__byteLength body in
     let handshake = Stdlib.Blob.concat [
@@ -226,7 +226,8 @@ let parseServerHello (data: Blob)
       else if sessionLength != 0L || cipherOffset + 5L > bodyEnd then
         Error (Stdlib.Tls13.RecordError.Invalid "Invalid ServerHello session ID")
       else if (Stdlib.Tls13.__read16 data cipherOffset != 4865L &&
-               Stdlib.Tls13.__read16 data cipherOffset != 4866L) ||
+               Stdlib.Tls13.__read16 data cipherOffset != 4866L &&
+               Stdlib.Tls13.__read16 data cipherOffset != 4867L) ||
               Stdlib.Blob.__getByte data (cipherOffset + 2L) != 0L then
         Error (Stdlib.Tls13.RecordError.Invalid "Unsupported ServerHello cipher or compression")
       else
@@ -289,7 +290,8 @@ let trafficKeys (secret: Blob) : Stdlib.Result.Result<Stdlib.Tls13.TrafficKeys, 
     | Ok key ->
         match Stdlib.Tls13.hkdfExpandLabel secret "iv" Stdlib.Blob.empty 12L with
         | Error message -> Error message
-        | Ok iv -> Ok (Stdlib.Tls13.TrafficKeys { key = key, iv = iv, sequence = 0L })
+        | Ok iv -> Ok (Stdlib.Tls13.TrafficKeys { key = key, iv = iv, sequence = 0L,
+                                                  cipherSuite = 4865L })
 
 let trafficKeys384 (secret: Blob) : Stdlib.Result.Result<Stdlib.Tls13.TrafficKeys, String> =
   if Stdlib.Blob.__byteLength secret != 48L then Error "TLS SHA-384 traffic secret must be 48 bytes"
@@ -299,7 +301,19 @@ let trafficKeys384 (secret: Blob) : Stdlib.Result.Result<Stdlib.Tls13.TrafficKey
     | Ok key ->
       match Stdlib.Tls13.hkdfExpandLabel384 secret "iv" Stdlib.Blob.empty 12L with
       | Error message -> Error message
-      | Ok iv -> Ok (Stdlib.Tls13.TrafficKeys { key = key, iv = iv, sequence = 0L })
+      | Ok iv -> Ok (Stdlib.Tls13.TrafficKeys { key = key, iv = iv, sequence = 0L,
+                                                cipherSuite = 4866L })
+
+let trafficKeysChaCha (secret: Blob) : Stdlib.Result.Result<Stdlib.Tls13.TrafficKeys, String> =
+  if Stdlib.Blob.__byteLength secret != 32L then Error "TLS ChaCha20 traffic secret must be 32 bytes"
+  else
+    match Stdlib.Tls13.hkdfExpandLabel secret "key" Stdlib.Blob.empty 32L with
+    | Error message -> Error message
+    | Ok key ->
+      match Stdlib.Tls13.hkdfExpandLabel secret "iv" Stdlib.Blob.empty 12L with
+      | Error message -> Error message
+      | Ok iv -> Ok (Stdlib.Tls13.TrafficKeys { key = key, iv = iv, sequence = 0L,
+                                                cipherSuite = 4867L })
 
 let __nonceBytes (iv: Blob) (sequence: Int64) (index: Int64)
   (acc: List<Int64>) : Blob =
@@ -315,7 +329,8 @@ let __nonceBytes (iv: Blob) (sequence: Int64) (index: Int64)
 
 let __nextKeys (keys: Stdlib.Tls13.TrafficKeys) : Stdlib.Tls13.TrafficKeys =
   Stdlib.Tls13.TrafficKeys {
-    key = keys.key, iv = keys.iv, sequence = keys.sequence + 1L }
+    key = keys.key, iv = keys.iv, sequence = keys.sequence + 1L,
+    cipherSuite = keys.cipherSuite }
 
 let sealRecord (keys: Stdlib.Tls13.TrafficKeys) (contentType: Int64) (content: Blob)
   : Stdlib.Result.Result<Stdlib.Tls13.SealedRecord, String> =
@@ -323,8 +338,11 @@ let sealRecord (keys: Stdlib.Tls13.TrafficKeys) (contentType: Int64) (content: B
   if contentType != 21L && contentType != 22L && contentType != 23L then
     Error "Invalid TLS inner content type"
   else if length > 16384L then Error "TLS inner plaintext exceeds size limit"
-  else if (Stdlib.Blob.__byteLength keys.key != 16L &&
-           Stdlib.Blob.__byteLength keys.key != 32L) ||
+  else if (keys.cipherSuite == 4865L && Stdlib.Blob.__byteLength keys.key != 16L) ||
+          (keys.cipherSuite == 4866L && Stdlib.Blob.__byteLength keys.key != 32L) ||
+          (keys.cipherSuite == 4867L && Stdlib.Blob.__byteLength keys.key != 32L) ||
+          (keys.cipherSuite != 4865L && keys.cipherSuite != 4866L &&
+           keys.cipherSuite != 4867L) ||
           Stdlib.Blob.__byteLength keys.iv != 12L ||
           keys.sequence < 0L || keys.sequence == 9223372036854775807L then
     Error "Invalid TLS traffic keys or sequence"
@@ -335,7 +353,10 @@ let sealRecord (keys: Stdlib.Tls13.TrafficKeys) (contentType: Int64) (content: B
     let inner = Stdlib.Blob.concat
                   [content, Stdlib.Blob.__fromInt64List [contentType]] in
     let nonce = Stdlib.Tls13.__nonceBytes keys.iv keys.sequence 0L [] in
-    match Stdlib.AesGcm.encrypt keys.key nonce header inner with
+    let encrypted = if keys.cipherSuite == 4867L then
+                      Stdlib.Chacha20Poly1305.encrypt keys.key nonce header inner
+                    else Stdlib.AesGcm.encrypt keys.key nonce header inner in
+    match encrypted with
     | Error message -> Error message
     | Ok payload ->
         Ok (Stdlib.Tls13.SealedRecord {
@@ -353,8 +374,11 @@ let openRecord (keys: Stdlib.Tls13.TrafficKeys) (record: Stdlib.Tls13.Record)
   let length = Stdlib.Blob.__byteLength record.payload in
   if record.contentType != 23L || length < 17L || length > 16640L then
     Error "Invalid TLS encrypted record"
-  else if (Stdlib.Blob.__byteLength keys.key != 16L &&
-           Stdlib.Blob.__byteLength keys.key != 32L) ||
+  else if (keys.cipherSuite == 4865L && Stdlib.Blob.__byteLength keys.key != 16L) ||
+          (keys.cipherSuite == 4866L && Stdlib.Blob.__byteLength keys.key != 32L) ||
+          (keys.cipherSuite == 4867L && Stdlib.Blob.__byteLength keys.key != 32L) ||
+          (keys.cipherSuite != 4865L && keys.cipherSuite != 4866L &&
+           keys.cipherSuite != 4867L) ||
           Stdlib.Blob.__byteLength keys.iv != 12L ||
           keys.sequence < 0L || keys.sequence == 9223372036854775807L then
     Error "Invalid TLS traffic keys or sequence"
@@ -362,7 +386,10 @@ let openRecord (keys: Stdlib.Tls13.TrafficKeys) (record: Stdlib.Tls13.Record)
     let header = Stdlib.Blob.__fromInt64List
                    [23L, 3L, 3L, length / 256L, length % 256L] in
     let nonce = Stdlib.Tls13.__nonceBytes keys.iv keys.sequence 0L [] in
-    match Stdlib.AesGcm.decrypt keys.key nonce header record.payload with
+    let decrypted = if keys.cipherSuite == 4867L then
+                      Stdlib.Chacha20Poly1305.decrypt keys.key nonce header record.payload
+                    else Stdlib.AesGcm.decrypt keys.key nonce header record.payload in
+    match decrypted with
     | Error message -> Error message
     | Ok inner ->
         let index = Stdlib.Tls13.__innerType inner (Stdlib.Blob.__byteLength inner - 1L) in

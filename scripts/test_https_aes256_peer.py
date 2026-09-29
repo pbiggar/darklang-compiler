@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Exercise the Dark TLS client against a local TLS 1.3 AES-256-GCM peer."""
+"""Exercise the Dark TLS client against a forced local TLS 1.3 cipher suite."""
 
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -27,6 +28,9 @@ def wait_for_port(port: int, peer: subprocess.Popen[bytes]) -> None:
 
 
 def main() -> None:
+    suite = sys.argv[1] if len(sys.argv) > 1 else "TLS_AES_256_GCM_SHA384"
+    if suite not in ("TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"):
+        raise ValueError(f"Unsupported TLS test suite: {suite}")
     with tempfile.TemporaryDirectory(prefix="dark-https-aes256-") as temporary:
         directory = Path(temporary)
         ca_key = directory / "ca.key"
@@ -48,7 +52,7 @@ def main() -> None:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
         source = directory / "client.dark"
-        source.write_text(f'''// client.dark - Local AES-256-GCM TLS interoperability probe.
+        source.write_text(f'''// client.dark - Local TLS cipher interoperability probe.
 let host = match Stdlib.Cli.Args.get 0 with
            | Ok value -> value
            | Error _ -> "localhost" in
@@ -72,7 +76,7 @@ match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
         | Ok text ->
           if Stdlib.String.contains text "HTTP/1.0 200" ||
              Stdlib.String.contains text "HTTP/1.1 200" then
-            Stdlib.printLine "TLS_AES_256_GCM_SHA384 OK"
+            Stdlib.printLine "TLS OK"
           else Stdlib.printLine "Unexpected HTTP response"
 ''')
         binary = directory / "client"
@@ -82,19 +86,19 @@ match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
             peer = subprocess.Popen(["openssl", "s_server", "-accept", str(port),
                                      "-cert", str(leaf_cert), "-key", str(leaf_key),
                                      "-tls1_3", "-ciphersuites",
-                                     "TLS_AES_256_GCM_SHA384", "-www"],
+                                     suite, "-www"],
                                     stdout=log, stderr=subprocess.STDOUT)
             try:
                 wait_for_port(port, peer)
                 result = subprocess.run([str(binary)], cwd=ROOT, text=True,
                                         capture_output=True, timeout=30)
-                if result.returncode != 0 or "TLS_AES_256_GCM_SHA384 OK" not in result.stdout:
+                if result.returncode != 0 or "TLS OK" not in result.stdout:
                     raise RuntimeError(f"Dark TLS probe failed: {result.stdout} {result.stderr}")
                 rejected = subprocess.run([str(binary), "wrong.local"], cwd=ROOT,
                                           text=True, capture_output=True, timeout=30)
                 if rejected.returncode != 0 or "TLS failed:" not in rejected.stdout:
                     raise RuntimeError(f"Invalid hostname was accepted: {rejected.stdout} {rejected.stderr}")
-                print("TLS_AES_256_GCM_SHA384 OK; invalid hostname rejected")
+                print(f"{suite} OK; invalid hostname rejected")
             finally:
                 peer.terminate()
                 peer.wait(timeout=5)

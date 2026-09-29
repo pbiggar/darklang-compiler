@@ -82,7 +82,7 @@
  let server = Stdlib.Blob.fromHex "02000000"
  match (shared, client, server) with
  | (Ok secret, Ok ch, Ok sh) ->
-   match Stdlib.Tls13Handshake.startServerFlightForSuite secret ch sh 4867L with
+   match Stdlib.Tls13Handshake.startServerFlightForSuite secret ch sh 4868L with
    | Error message -> Error message
    | Ok _ -> Error "Unexpected cipher accepted"
  | _ -> Error "Invalid fixture")
