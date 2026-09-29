@@ -271,7 +271,8 @@ let private propagateConstantCallResults
             functions
             |> List.map (fun func ->
                 let cfg, changed =
-                    applySparseConditionalConstantPropagationWithCallResults callResults func.CFG
+                    applySparseConditionalConstantPropagationWithCallResults
+                        (fun id -> Map.tryFind id callResults) func.CFG
                 if changed then optimizeAgain (withOptimizedCFG func cfg) else func)
 
 /// Optimize a program

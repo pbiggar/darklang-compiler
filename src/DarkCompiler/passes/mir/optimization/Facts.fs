@@ -305,7 +305,8 @@ let effectFreeCallsForFunction
     (effectFreeFunctions: Set<AST.FunctionId>)
     (func: Function)
     : Set<AST.FunctionId> =
-    Set.intersect effectFreeFunctions (directCallees func)
+    directCallees func
+    |> Set.filter (fun id -> Set.contains id effectFreeFunctions)
 
 /// Get the destination VReg of an instruction (if any)
 let getInstrDest (instr: Instr) : VReg option =

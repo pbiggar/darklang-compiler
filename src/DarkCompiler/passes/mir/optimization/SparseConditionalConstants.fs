@@ -51,7 +51,7 @@ type private AnalysisState = {
     Definitions: Map<VReg, Instr>
     HeapValues: Map<VReg, Map<int, LatticeValue>>
     TrackHeapValues: bool
-    CallResults: Map<AST.FunctionId, Operand>
+    CallResults: AST.FunctionId -> Operand option
     Worklist: BlockWorklist
     Pending: Set<Label>
 }
@@ -527,7 +527,7 @@ let private instructionValue
         Some (destination, evaluatedOperationValue values [source] folded)
     | Call (destination, functionName, _, _, returnType) ->
         let value =
-            match Map.tryFind functionName state.CallResults with
+            match state.CallResults functionName with
             | Some result -> typedOperandValue values returnType result
             | None -> integerRangeForType returnType |> Option.defaultValue Overdefined
         Some (destination, value)
@@ -656,7 +656,7 @@ let private recordHeapStore users address offset source state =
         | IntegerRange _
         | Overdefined -> state
 
-let private analyze (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : AnalysisState =
+let private analyze (callResults: AST.FunctionId -> Operand option) (cfg: CFG) : AnalysisState =
     let users = buildRegisterUsers cfg
     let definitions =
         cfg.Blocks
@@ -766,7 +766,7 @@ let private analyze (callResults: Map<AST.FunctionId, Operand>) (cfg: CFG) : Ana
     analyzeWorklist initial
 
 let private applyToCFG
-    (callResults: Map<AST.FunctionId, Operand>)
+    (callResults: AST.FunctionId -> Operand option)
     (copies: CopyMap)
     (cfg: CFG)
     : CFG * bool =
@@ -903,7 +903,7 @@ let private applyToCFG
     (optimized, optimized <> cfg)
 
 let applySparseConditionalConstantPropagationWithCallResults
-    (callResults: Map<AST.FunctionId, Operand>)
+    (callResults: AST.FunctionId -> Operand option)
     (cfg: CFG)
     : CFG * bool =
     let hasConditionalBranch =
@@ -919,7 +919,7 @@ let applySparseConditionalConstantPropagationWithCallResults
 /// reachable edges. Straight-line returns use the local rewrite alone.
 let applySparseConditionalSimplification (cfg: CFG) : CFG * bool =
     let copies = cfg |> buildCopyMap |> resolveCopyMap
-    applyToCFG Map.empty copies cfg
+    applyToCFG (fun _ -> None) copies cfg
 
 let applySparseConditionalConstantPropagation (cfg: CFG) : CFG * bool =
-    applySparseConditionalConstantPropagationWithCallResults Map.empty cfg
+    applySparseConditionalConstantPropagationWithCallResults (fun _ -> None) cfg

@@ -119,13 +119,14 @@ let private compileMirToLir
     let optimizedProgram =
         if mirOptions.EnableSCCP && not (Map.isEmpty knownTypedConstants) then
             let (MIR.Program (functions, variants, records)) = optimizedProgram
-            let callResults = knownTypedConstants |> Map.map (fun _ (_, value) -> value)
+            let callResult id =
+                Map.tryFind id knownTypedConstants |> Option.map snd
             let functions =
                 functions
                 |> List.map (fun func ->
                     let cfg, changed =
                         MIRSparseConditionalConstants.applySparseConditionalConstantPropagationWithCallResults
-                            callResults func.CFG
+                            callResult func.CFG
                     if changed then { func with CFG = cfg } else func)
             MIR.Program (functions, variants, records)
         else optimizedProgram
@@ -687,6 +688,8 @@ let internal lowerToAllocatedLirWithKnownGroups
                         let effectFree =
                             MIROptimizationFacts.analyzeEffectFreeFunctionsWithKnown
                                 knownEffectFree group.Functions
+                        let batchEffectFree =
+                            effectFree |> Set.fold (fun known id -> Set.add id known) knownEffectFree
                         let newlyRemovable =
                             purity
                             |> Map.toList
@@ -694,7 +697,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                                 if MIROptimizationFacts.isPure summary then Some id else None)
                             |> Set.ofList
                         compileComponent
-                            (Set.union knownEffectFree effectFree)
+                            batchEffectFree
                             knownRemovable
                             knownTypedConstants knownWrites catalog group
                         |> Result.bind (fun (allocated, typedConstants, callWrites) ->
@@ -779,10 +782,14 @@ let internal lowerToAllocatedLirWithKnownGroups
                                  |> Map.fold (fun known id value ->
                                      if Set.contains id ambiguousLocalIds then known
                                      else Map.add id value known) knownPurity)
-                                (Set.union knownEffectFree
-                                    (Set.difference effectFree ambiguousLocalIds))
-                                (Set.union knownRemovable
-                                    (Set.difference newlyRemovable ambiguousLocalIds))
+                                (effectFree
+                                 |> Set.fold (fun known id ->
+                                     if Set.contains id ambiguousLocalIds then known
+                                     else Set.add id known) knownEffectFree)
+                                (newlyRemovable
+                                 |> Set.fold (fun known id ->
+                                     if Set.contains id ambiguousLocalIds then known
+                                     else Set.add id known) knownRemovable)
                                 knownTypedConstants
                                 knownWrites
                                 published
