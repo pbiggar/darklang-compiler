@@ -31,7 +31,7 @@ let private writeFloat = function
 /// The modeled operations lower to writes of their stated destinations only.
 /// Every other opcode retains the complete ABI clobber set, including backend
 /// expansions with hidden scratch registers or calls to runtime helpers.
-let private instructionWrites (callees: Map<AST.FunctionId, Writes>) instr =
+let private instructionWrites (calleeWrites: AST.FunctionId -> Writes option) instr =
     match instr with
     | LIR.Mov (dest, LIR.Imm _)
     | LIR.Mov (dest, LIR.Reg _)
@@ -106,7 +106,7 @@ let private instructionWrites (callees: Map<AST.FunctionId, Writes>) instr =
     // ARM64 emits the call result in X0; a separate LIR Mov writes its local
     // destination. Counting Call.dest here would report a write that BL omits.
     | LIR.Call (_, callee, _) | LIR.TailCall (callee, _) ->
-        Map.tryFind callee callees |> Option.defaultValue all
+        calleeWrites callee |> Option.defaultValue all
     | LIR.ArgMoves moves | LIR.TailArgMoves moves ->
         if moves |> List.exists (fun (_, operand) ->
             match operand with
@@ -122,27 +122,26 @@ let private instructionWrites (callees: Map<AST.FunctionId, Writes>) instr =
         { Ints = Set.ofList ints; Floats = Set.ofList floats }
     | _ -> all
 
-let private summarizeFunction callees (func: LIR.Function) =
+let private summarizeFunction calleeWrites (func: LIR.Function) =
     func.CFG.Blocks
     |> Map.fold (fun writes _ block ->
         block.Instrs
-        |> List.fold (fun writes instr -> union writes (instructionWrites callees instr)) writes) empty
+        |> List.fold (fun writes instr -> union writes (instructionWrites calleeWrites instr)) writes) empty
 
 let summariesWithKnown
     (known: Map<AST.FunctionId, Writes>)
     (functions: LIR.Function list) =
-    let localIds = functions |> List.map (fun func -> func.Id) |> Set.ofList
-    let external = known |> Map.filter (fun id _ -> not (Set.contains id localIds))
     let rec converge local =
-        let available =
-            local |> Map.fold (fun acc id writes -> Map.add id writes acc) external
+        let lookup id =
+            Map.tryFind id local
+            |> Option.orElseWith (fun () -> Map.tryFind id known)
         let next =
             functions
             |> List.fold (fun acc func ->
-                let writes = summarizeFunction available func
+                let writes = summarizeFunction lookup func
                 let old = Map.tryFind func.Id acc |> Option.defaultValue empty
                 Map.add func.Id (union old writes) acc) local
-        if next = local then available else converge next
+        if next = local then local else converge next
     let initial =
         functions
         |> List.map (fun func -> func.Id, empty)
@@ -165,9 +164,10 @@ let private envelopeWrites callees beforeRestore =
     match calls with
     | [_] when safeEnvelope ->
         // Saves precede argument setup, so its writes matter too.
+        let lookup id = Map.tryFind id callees
         beforeRestore
         |> List.fold (fun writes instr ->
-            union writes (instructionWrites callees instr)) empty
+            union writes (instructionWrites lookup instr)) empty
         |> Some
     | _ -> None
 

@@ -8,6 +8,7 @@ let private required key values =
         Crash.crash "Call graph schedule lost an internal node")
 
 type Component = {
+    NodeIndices: int list
     SCCs: MIR.Function list list
     Functions: MIR.Function list
 }
@@ -87,6 +88,7 @@ let calleeFirst (functions: MIR.Function list) : Component list =
             members |> Set.toList |> List.map (fun node -> node, componentIdx))
         |> List.concat
         |> Map.ofList
+    let nodesByIndex = components |> List.mapi (fun idx members -> idx, members) |> Map.ofList
     let membersByIndex =
         components
         |> List.mapi (fun idx members ->
@@ -136,4 +138,6 @@ let calleeFirst (functions: MIR.Function list) : Component list =
         |> List.chunkBySize 512
         |> List.map (fun batch ->
             let sccs = batch |> List.map (fun idx -> required idx membersByIndex)
-            { SCCs = sccs; Functions = sccs |> List.concat }))
+            { NodeIndices = batch |> List.collect (fun idx -> required idx nodesByIndex |> Set.toList)
+              SCCs = sccs
+              Functions = sccs |> List.concat }))

@@ -237,7 +237,7 @@ let private allocateRegistersForFunction
     allocatedFunc |> LIR_Peephole.removeSelfMovesFromFunction
 
 /// Run MIR+LIR passes (including register allocation) from SSA ANF functions.
-let internal lowerToAllocatedLirWithKnown
+let internal lowerToAllocatedLirWithKnownGroups
     (externalSummaries: Map<AST.FunctionId, FunctionSummary>)
     (target: Platform.Target)
     (verbosity: int)
@@ -247,8 +247,7 @@ let internal lowerToAllocatedLirWithKnown
     (functionCaches: FunctionCompilationCaches option)
     (releasePlanSummaryCache: ARM64CodeGenTypes.ReleasePlanSummaryCache option)
     (stageSuffix: string)
-    (functions: SSAANF.Function list)
-    (typeMap: ANF.TypeMap)
+    (functionGroups: (SSAANF.Function list * ANF.TypeMap) list)
     (registries: AST_to_ANF.Registries)
     (projectedMirRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
     (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
@@ -256,6 +255,7 @@ let internal lowerToAllocatedLirWithKnown
 
     let suffix = if stageSuffix = "" then "" else $" ({stageSuffix})"
 
+    let functions = functionGroups |> List.collect fst
     let functionOrder = functions |> List.map (fun f -> f.Name)
     // Function-affinity batches still call helpers compiled in sibling batches.
     // Keep the complete AOT return-type plan available while lowering each one.
@@ -282,21 +282,33 @@ let internal lowerToAllocatedLirWithKnown
                             Elapsed = TimeSpan.FromMilliseconds elapsedMs
                         })
             let mirResult =
-                ANF_to_MIR.toMIRSSAFunctionsOnlyWithTrace
-                    mirPhaseRecorder
-                    projectedMirRegistries
-                    registries.RecursiveMembers
-                    (not options.DisableTCO)
-                    functionsToCompile
-                    typeMap
-                    registries.FuncParams
-                    registries.VariantLookup
-                    registries.RecordFieldsReg
-                    options.EnableCoverage
-                    returnTypeReg
+                functionGroups
+                |> List.fold (fun result (groupFunctions, typeMap) ->
+                    result
+                    |> Result.bind (fun accumulated ->
+                        if List.isEmpty groupFunctions then Ok accumulated
+                        else
+                            ANF_to_MIR.toMIRSSAFunctionsOnlyWithTrace
+                                mirPhaseRecorder
+                                projectedMirRegistries
+                                registries.RecursiveMembers
+                                (not options.DisableTCO)
+                                groupFunctions
+                                typeMap
+                                registries.FuncParams
+                                registries.VariantLookup
+                                registries.RecordFieldsReg
+                                options.EnableCoverage
+                                returnTypeReg
+                            |> Result.map (fun (mir, variants, records) ->
+                                let prior, _, _ = accumulated
+                                prior @ mir, variants, records)))
+                    (Ok ([], Map.empty, Map.empty))
             match mirResult with
             | Error err -> Error $"MIR conversion error: {err}"
             | Ok (mirFuncs, variantRegistry, mirRecordRegistry) ->
+                if List.length mirFuncs <> List.length functionsToCompile then
+                    Crash.crash "ANF to MIR did not emit exactly one node per function"
                 let mirElapsed = sw.Elapsed.TotalMilliseconds - mirStart
                 recordPassTiming passTimingRecorder "ANF -> MIR" mirElapsed
                 if verbosity >= 2 then
@@ -304,6 +316,28 @@ let internal lowerToAllocatedLirWithKnown
                     println $"        {t}ms"
                 let scheduleStart = sw.Elapsed.TotalMilliseconds
                 let components = CallGraphSchedule.calleeFirst mirFuncs
+                let expectedNodes = Set.ofList [0 .. List.length mirFuncs - 1]
+                let scheduledNodes = components |> List.collect (fun group -> group.NodeIndices)
+                if List.length scheduledNodes <> List.length mirFuncs
+                   || Set.ofList scheduledNodes <> expectedNodes then
+                    Crash.crash "Call graph did not schedule each MIR function exactly once"
+                let pipelineStages =
+                    Set.ofList ["ANF -> MIR"; "Purity"; "MIR Optimization";
+                                "MIR -> LIR"; "LIR Peephole";
+                                "Register Allocation"; "Clobber Summary"]
+                let recordStages stages (group: CallGraphSchedule.Component) visits =
+                    group.NodeIndices
+                    |> List.fold (fun visits node ->
+                        stages
+                        |> List.fold (fun visits stage ->
+                            let key = node, stage
+                            if Set.contains key visits then
+                                Crash.crash $"Pipeline stage {stage} ran twice for function node {node}"
+                            Set.add key visits) visits) visits
+                let initialVisits =
+                    components
+                    |> List.fold (fun visits group ->
+                        recordStages ["ANF -> MIR"] group visits) Set.empty
                 recordPassTiming
                     passTimingRecorder
                     "Call Graph Scheduling"
@@ -419,8 +453,6 @@ let internal lowerToAllocatedLirWithKnown
                             match functionCaches with
                             | Some caches -> caches.AllocateLir arch func allocate
                             | None -> allocate ()
-                        let allocatedFuncs =
-                            funcsPreparedForAllocation |> List.map allocateFunction
                         let callAwareStart = sw.Elapsed.TotalMilliseconds
                         let allocatedFuncs, callWrites =
                             let allWrites =
@@ -497,8 +529,8 @@ let internal lowerToAllocatedLirWithKnown
                                     next
                                     |> Set.exists (canReach target (Set.add current seen))
                             let allocated =
-                                List.map2
-                                    (fun (prepared: LIR.Function) (allocated: LIR.Function) ->
+                                funcsPreparedForAllocation
+                                |> List.map (fun (prepared: LIR.Function) ->
                                         let directCallees =
                                             prepared.CFG.Blocks
                                             |> Map.toList
@@ -531,17 +563,8 @@ let internal lowerToAllocatedLirWithKnown
                                                         || (FloatAllocation.floatCallerSavedRegsFor arch
                                                             |> List.exists (fun reg ->
                                                                 not (Set.contains reg writes.Floats)))))
-                                        let hasCallLiveValue =
-                                            not (List.isEmpty allocated.UsedCalleeSaved)
-                                            || (allocated.CFG.Blocks
-                                                |> Map.exists (fun _ block ->
-                                                    block.Instrs
-                                                    |> List.exists (function
-                                                        | LIR.SaveRegs (ints, floats) ->
-                                                            not (List.isEmpty ints && List.isEmpty floats)
-                                                        | _ -> false)))
                                         let allocated =
-                                            if hasPreservedCallerReg && hasCallLiveValue then
+                                            if hasPreservedCallerReg then
                                                 let allocate () =
                                                     RegisterAllocation.allocateRegistersWithCallSummaries
                                                         arch relevantCallees prepared
@@ -549,15 +572,13 @@ let internal lowerToAllocatedLirWithKnown
                                                 match functionCaches with
                                                 | Some caches ->
                                                     caches.AllocateCallAwareLir
-                                                        allocated relevantCallees allocate
+                                                        prepared relevantCallees allocate
                                                 | None -> allocate ()
-                                            else allocated
+                                            else allocateFunction prepared
                                         match arch with
                                         | Platform.ARM64 -> allocated
                                         | Platform.X86_64 ->
                                             X64CalleeClobbers.pruneFunction relevantCallees allocated)
-                                    funcsPreparedForAllocation
-                                    allocatedFuncs
                             allocated, callees
                         recordPassTiming
                             passTimingRecorder
@@ -571,15 +592,26 @@ let internal lowerToAllocatedLirWithKnown
                         Ok (allocatedFuncs, typedConstants, callWrites))
                 let rec compile
                     knownPurity
-                    knownLocalEffectFree
+                    knownEffectFree
+                    knownRemovable
                     knownTypedConstants
                     knownWrites
                     (published: Map<AST.FunctionId, FunctionSummary>)
                     (catalog: Map<AST.FunctionId, FunctionSummary>)
                     (completed: LIR.Function list list)
+                    visits
                     (remaining: CallGraphSchedule.Component list) =
                     match remaining with
-                    | [] -> Ok (completed |> List.rev |> List.concat, published)
+                    | [] ->
+                        let expectedVisits =
+                            expectedNodes
+                            |> Set.fold (fun visits node ->
+                                pipelineStages
+                                |> Set.fold (fun visits stage ->
+                                    Set.add (node, stage) visits) visits) Set.empty
+                        if visits <> expectedVisits then
+                            Crash.crash "A function skipped a native compiler pipeline stage"
+                        Ok (completed |> List.rev |> List.concat, published)
                     | group :: rest ->
                         // Same-SCC calls cannot yet have final allocation facts.
                         // Every other unique local edge must resolve to a
@@ -647,22 +679,16 @@ let internal lowerToAllocatedLirWithKnown
                                 if Set.contains id ambiguousLocalIds then
                                     MIROptimizationFacts.unknownPurity
                                 else summary)
+                        let visits = recordStages ["Purity"] group visits
                         recordPassTiming
                             passTimingRecorder
                             "Call Graph Purity Summary"
                             (sw.Elapsed.TotalMilliseconds - purityStart)
-                        let externalPure =
-                            externalSummaries
-                            |> Map.toList
-                            |> List.choose (fun (id, summary) ->
-                                if MIROptimizationFacts.isPure summary.Purity then Some id else None)
-                            |> Set.ofList
-                        let knownEffectFree = Set.union knownLocalEffectFree externalPure
                         let effectFree =
                             MIROptimizationFacts.analyzeEffectFreeFunctionsWithKnown
                                 knownEffectFree group.Functions
-                        let knownRemovable =
-                            knownPurity
+                        let newlyRemovable =
+                            purity
                             |> Map.toList
                             |> List.choose (fun (id, summary) ->
                                 if MIROptimizationFacts.isPure summary then Some id else None)
@@ -672,6 +698,11 @@ let internal lowerToAllocatedLirWithKnown
                             knownRemovable
                             knownTypedConstants knownWrites catalog group
                         |> Result.bind (fun (allocated, typedConstants, callWrites) ->
+                            let visits =
+                                recordStages
+                                    ["MIR Optimization"; "MIR -> LIR";
+                                     "LIR Peephole"; "Register Allocation"]
+                                    group visits
                             let scheduledIds =
                                 group.Functions
                                 |> List.countBy (fun func -> func.Id)
@@ -683,22 +714,27 @@ let internal lowerToAllocatedLirWithKnown
                             if scheduledIds <> emittedIds then
                                 Crash.crash "Call graph batch did not emit every scheduled function"
                             let clobberStart = sw.Elapsed.TotalMilliseconds
-                            let knownWrites =
+                            let localWrites =
                                 (match Platform.archFor target with
                                  | Platform.ARM64 ->
                                      ARM64CalleeClobbers.summariesWithKnown callWrites allocated
                                  | Platform.X86_64 ->
                                      X64CalleeClobbers.summariesWithKnown callWrites allocated)
                                 |> Map.filter (fun id _ -> not (Set.contains id ambiguousLocalIds))
+                            let knownWrites =
+                                localWrites
+                                |> Map.fold (fun writes id value -> Map.add id value writes) knownWrites
+                            let visits = recordStages ["Clobber Summary"] group visits
                             recordPassTiming
                                 passTimingRecorder
                                 "Call Graph Clobber Summary"
                                 (sw.Elapsed.TotalMilliseconds - clobberStart)
                             let knownTypedConstants =
                                 typedConstants
-                                |> Map.fold (fun known id value -> Map.add id value known)
+                                |> Map.fold (fun known id value ->
+                                    if Set.contains id ambiguousLocalIds then known
+                                    else Map.add id value known)
                                     knownTypedConstants
-                                |> Map.filter (fun id _ -> not (Set.contains id ambiguousLocalIds))
                             let batchSummaries =
                                 allocated
                                 |> List.fold (fun summaries (func: LIR.Function) ->
@@ -740,18 +776,28 @@ let internal lowerToAllocatedLirWithKnown
                                     catalog batchSummaries
                             compile
                                 (purity
-                                 |> Map.fold (fun known id value -> Map.add id value known) knownPurity
-                                 |> Map.filter (fun id _ -> not (Set.contains id ambiguousLocalIds)))
-                                (Set.union knownLocalEffectFree effectFree
-                                 |> Set.filter (fun id -> not (Set.contains id ambiguousLocalIds)))
+                                 |> Map.fold (fun known id value ->
+                                     if Set.contains id ambiguousLocalIds then known
+                                     else Map.add id value known) knownPurity)
+                                (Set.union knownEffectFree
+                                    (Set.difference effectFree ambiguousLocalIds))
+                                (Set.union knownRemovable
+                                    (Set.difference newlyRemovable ambiguousLocalIds))
                                 knownTypedConstants
                                 knownWrites
                                 published
                                 catalog
                                 (allocated :: completed)
+                                visits
                                 rest)
                 let initialPurity =
                     externalSummaries |> Map.map (fun _ summary -> summary.Purity)
+                let initialRemovable =
+                    initialPurity
+                    |> Map.toList
+                    |> List.choose (fun (id, summary) ->
+                        if MIROptimizationFacts.isPure summary then Some id else None)
+                    |> Set.ofList
                 let initialTypedConstants =
                     externalSummaries
                     |> Map.toList
@@ -774,8 +820,9 @@ let internal lowerToAllocatedLirWithKnown
                         Map.add id CompilationCacheIdentity.unknownSummary summaries)
                         externalSummaries
                 compile
-                    initialPurity Set.empty initialTypedConstants initialWrites
-                    Map.empty initialCatalog [] components
+                    initialPurity initialRemovable initialRemovable
+                    initialTypedConstants initialWrites
+                    Map.empty initialCatalog [] initialVisits components
 
     let compileFunctionsWithTiming
         (label: string)
@@ -827,3 +874,24 @@ let internal lowerToAllocatedLirWithKnown
                     Crash.crash $"lowerToAllocatedLir: missing compiled function for '{name}'"
 
         rebuildOrder functionOrder compiledQueues [], summaries)
+
+let internal lowerToAllocatedLirWithKnown
+    (externalSummaries: Map<AST.FunctionId, FunctionSummary>)
+    (target: Platform.Target)
+    (verbosity: int)
+    (options: CompilerOptions)
+    (sw: Stopwatch)
+    (passTimingRecorder: PassTimingRecorder option)
+    (functionCaches: FunctionCompilationCaches option)
+    (releasePlanSummaryCache: ARM64CodeGenTypes.ReleasePlanSummaryCache option)
+    (stageSuffix: string)
+    (functions: SSAANF.Function list)
+    (typeMap: ANF.TypeMap)
+    (registries: AST_to_ANF.Registries)
+    (projectedMirRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
+    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
+    : Result<LIR.Function list * Map<AST.FunctionId, FunctionSummary>, string> =
+    lowerToAllocatedLirWithKnownGroups
+        externalSummaries target verbosity options sw passTimingRecorder
+        functionCaches releasePlanSummaryCache stageSuffix
+        [functions, typeMap] registries projectedMirRegistries externalReturnTypes

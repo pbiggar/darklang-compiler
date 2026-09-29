@@ -410,27 +410,6 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     SSADirectCallSpecialization.reachableFrom
                                         (Set.singleton programEntryId)
                                         ssaFunctions
-                                let programLirResult =
-                                    lowerToAllocatedLirWithKnown
-                                        summariesThroughDependencies
-                                        plan.BaseContext.Target
-                                        plan.Verbosity
-                                        plan.Options
-                                        sw
-                                        plan.PassTimingRecorder
-                                        None
-                                        releasePlanSummaryCache
-                                        plan.Labels.StageSuffix
-                                        reachableSSAFunctions
-                                        programTypeMap
-                                        userRegistries
-                                        (Some projectedMirRegistries)
-                                        externalReturnTypes
-                                let summariesForStart =
-                                    match programLirResult with
-                                    | Ok (_, programSummaries) ->
-                                        mergeSummaries summariesThroughDependencies programSummaries
-                                    | Error _ -> summariesThroughDependencies
                                 let startResultId = ANF.TempId 0
                                 let startFunction =
                                     let startId =
@@ -453,7 +432,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         FuncParams =
                                             Map.add programEntryName [] userRegistries.FuncParams
                                 }
-                                let compileStart () =
+                                let programLirResult =
                                     buildAnf
                                         plan.Verbosity
                                         plan.Options
@@ -468,8 +447,8 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         false
                                         plan.PassTimingRecorder
                                     |> Result.bind (fun (_startAnf, startSSA, startTypeMap) ->
-                                        lowerToAllocatedLirWithKnown
-                                            summariesForStart
+                                        lowerToAllocatedLirWithKnownGroups
+                                            summariesThroughDependencies
                                             plan.BaseContext.Target
                                             plan.Verbosity
                                             plan.Options
@@ -478,19 +457,20 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             None
                                             releasePlanSummaryCache
                                             plan.Labels.StageSuffix
-                                            startSSA
-                                            startTypeMap
+                                            [reachableSSAFunctions, programTypeMap;
+                                             startSSA, startTypeMap]
                                             startRegistries
                                             (Some projectedMirRegistries)
                                             (Map.add
                                                 programEntryId
                                                 (programEntryName, boundaryProgramType)
                                                 externalReturnTypes))
-                                let startLirResult = compileStart ()
-                                match programLirResult, startLirResult with
-                                | Error err, _
-                                | _, Error err -> Error err
-                                | Ok (allocatedProgramFuncs, _), Ok (allocatedStartFuncs, _) ->
+                                match programLirResult with
+                                | Error err -> Error err
+                                | Ok (allocatedProgramAndStart, _) ->
+                                    let allocatedStartFuncs, allocatedProgramFuncs =
+                                        allocatedProgramAndStart
+                                        |> List.partition (fun func -> func.Id = startFunction.Id)
                                     let allocatedUserFuncs =
                                         allocatedStartFuncs
                                         @ allocatedProgramFuncs
