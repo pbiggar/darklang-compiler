@@ -30,7 +30,6 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
     let functionNameIs id expected =
         Map.tryFind id functionNames
         |> Option.orElseWith (fun () -> Map.tryFind id funcReg |> Option.map fst)
-        |> Option.orElseWith (fun () -> AST.tryFunctionCanonicalName id)
         |> Option.contains expected
     match expr with
     | CheckedAST.RecursiveLet _ -> Error "RecursiveLet must be lowered during lambda lifting"
@@ -435,7 +434,8 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             let displayName =
                 Map.tryFind funcName functionNames
                 |> Option.orElseWith (fun () -> Map.tryFind funcName funcReg |> Option.map fst)
-                |> Option.defaultValue (AST.functionIdValue funcName)
+                |> Option.defaultWith (fun () ->
+                    Crash.crash "Atom lowering lost function name metadata")
 
             let rec convertArgs (argExprs: CheckedAST.Expr list) (vg: ANF.VarGen) (accAtoms: ANF.Atom list) (accBindings: (ANF.TempId * ANF.CExpr) list) : Result<ANF.Atom list * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
                 match argExprs with

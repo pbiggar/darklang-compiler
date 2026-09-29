@@ -212,6 +212,10 @@ let internal checkResolvedProgramInternal
             baseEnv
             |> Option.map (fun existing -> existing.TypeCatalog)
             |> Option.defaultValue CheckedAST.emptyTypeCatalog
+        FunctionCatalog =
+            baseEnv
+            |> Option.map (fun existing -> existing.FunctionCatalog)
+            |> Option.defaultValue CheckedAST.emptyFunctionCatalog
         TypeReg = canonicalProgramTypeReg
         IndexedTypeReg = programIndexedTypeReg
         RecordTypeNames = programIndexedTypeReg |> Map.keys |> Set.ofSeq

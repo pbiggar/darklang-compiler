@@ -591,7 +591,7 @@ let convertFunctionsWithOwnershipWithTrace
         result
     let sumTypeNames = registries.SumMetadata
     let inertScopes = registries.InertFunctionScopes
-    let rec loop funcs vg acc =
+    let rec loop conversionRegistries funcs vg acc =
         match funcs with
         | [] -> Ok (List.rev acc, vg)
         | func :: rest ->
@@ -604,13 +604,13 @@ let convertFunctionsWithOwnershipWithTrace
                 vg
                 registries.TypeReg
                 registries.VariantLookup
-                registries.FuncReg
-                registries.FunctionIds
-                registries.FunctionNames
+                conversionRegistries.FuncReg
+                conversionRegistries.FunctionIds
+                conversionRegistries.FunctionNames
                 registries.ModuleRegistry
             |> Result.mapError (fun error -> $"Function '{func.Name}': {error}")
             |> Result.bind (fun (anfFunc, vg') ->
-                loop rest vg' (anfFunc :: acc))
+                loop conversionRegistries rest vg' (anfFunc :: acc))
     let ownershipContext : AnalyzeFunctionOwnership.Context = {
         TypeReg = registries.TypeReg
         TypeNames = registries.TypeNames
@@ -641,7 +641,21 @@ let convertFunctionsWithOwnershipWithTrace
                         functions)
         measure
             "AST -> ANF detail: Checked function lowering"
-            (fun () -> loop fusion.Functions varGen [])
+            (fun () ->
+                let conversionRegistries =
+                    fusion.Functions
+                    |> List.fold (fun (regs: Registries) func ->
+                        let paramTypes =
+                            CheckedAST.functionParameterTypes func
+                            |> paramsToList
+                            |> List.map snd
+                        let funcType =
+                            AST.TFunction (paramTypes, CheckedAST.functionReturnType func)
+                        { regs with
+                            FuncReg = Map.add func.Id (func.Name, funcType) regs.FuncReg
+                            FunctionIds = Map.add func.Name func.Id regs.FunctionIds
+                            FunctionNames = Map.add func.Id func.Name regs.FunctionNames }) registries
+                loop conversionRegistries fusion.Functions varGen [])
         |> Result.bind (fun (anfFunctions, nextVarGen) ->
             measure
                 "AST -> ANF detail: Ownership variant lowering"

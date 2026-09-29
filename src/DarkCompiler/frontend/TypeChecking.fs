@@ -160,14 +160,20 @@ let private constructCheckedProgram
         env.VariantLookup
         (env.Values |> Map.keys |> Set.ofSeq)
         env.TypeCatalog
+        (CheckedAST.includeFunctionNames (env.ModuleRegistry |> Map.keys) env.FunctionCatalog)
         recordFieldCounts
         program
     |> Result.map (fun checkedProgram ->
-        let catalog =
+        let typeCatalog =
             checkedProgram
             |> CheckedAST.programSymbols
             |> CheckedAST.typeCatalog
-        (CheckedAST.normalizeInferenceType typ, checkedProgram, { env with TypeCatalog = catalog }))
+        let functionCatalog =
+            checkedProgram
+            |> CheckedAST.programSymbols
+            |> CheckedAST.functionCatalog
+        (CheckedAST.normalizeInferenceType typ, checkedProgram,
+         { env with TypeCatalog = typeCatalog; FunctionCatalog = functionCatalog }))
     |> Result.mapError GenericError
 
 /// Type-check a program

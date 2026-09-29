@@ -271,9 +271,12 @@ let private cloneGroups
             InferOwnedFunctionGroups.candidateBoundaries candidate
             |> List.map (fun boundary -> boundary.Name + suffix))
     let cloneIds =
-        cloneNames
-        |> List.map (fun name -> name, AST.functionIdForName name)
-        |> Map.ofList
+        AST.allocateFunctionIds
+            (seq {
+                yield! reservedFunctions |> Map.keys
+                yield! definitions |> Seq.map (fun definition -> definition.Definition.Id)
+            })
+            cloneNames
     selections
     |> Map.toList
     |> List.fold (fun result (identity, candidate) ->
@@ -310,7 +313,9 @@ let private cloneGroups
                                     Body = rewriteCalls rewrite original.Definition.Body
                             }
                         }
-                        if Map.containsKey cloneId reservedFunctions
+                        if Map.containsKey name definitionsByName
+                           || (reservedFunctions |> Map.exists (fun _ reservedName -> reservedName = name))
+                           || Map.containsKey cloneId reservedFunctions
                            || Map.containsKey cloneId definitionsById
                            || Set.contains cloneId generatedIds
                            || Option.isSome (hir.CallSignature clone.Definition.Id)

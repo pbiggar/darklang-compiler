@@ -200,9 +200,17 @@ let private materializeProgramValues
         |> Set.ofList
     let valueTypes = currentValues |> List.map (fun (_, (id, typ, _)) -> id, typ) |> Map.ofList
     let helperName name = $"__dark_value_materializer_{name}"
+    let symbols =
+        currentValues
+        |> List.fold (fun symbols (name, (id, _, _)) ->
+            if not (Set.contains id cheapValueIds) then
+                CheckedAST.internFunction (helperName name) symbols |> snd
+            else symbols) symbols
     let helperIds =
         bindings
-        |> List.map (fun (name, id, _) -> id, AST.functionIdForName (helperName name))
+        |> List.choose (fun (name, id, _) ->
+            CheckedAST.tryFindFunctionId (helperName name) symbols
+            |> Option.map (fun functionId -> id, functionId))
         |> Map.ofList
     let bindingOrder =
         bindings
@@ -323,12 +331,6 @@ let private materializeProgramValues
                     Body = body
                     Recursion = None
                 }))
-    let symbols =
-        currentValues
-        |> List.fold (fun symbols (name, (id, _, _)) ->
-            if Set.contains id usedValues && not (Set.contains id cheapValueIds) then
-                CheckedAST.internFunction (helperName name) symbols |> snd
-            else symbols) symbols
     CheckedAST.programFromCheckedParts (symbols, List.rev materialized @ helpers)
 
 let internal prepareProgramForAnf
@@ -365,12 +367,18 @@ let internal prepareProgramForAnf
                     Monomorphization.replaceTypeAppsInProgramWithRegistry specRegistry program
                 else
                     let localSpecs = collectLocalSpecs localGenericDefs program
-                    let specialization = Monomorphization.specializeFromSpecs localGenericDefs localSpecs
+                    let specialization =
+                        Monomorphization.specializeFromSpecs
+                            (CheckedAST.programSymbols program)
+                            localGenericDefs
+                            localSpecs
                     let combinedSpecRegistry =
                         mergeSpecRegistries specRegistry specialization.SpecRegistry
                     let (CheckedAST.Program (symbols, items)) = program
                     let symbols, specializedFunctions =
-                        SpecializationIdentity.importSpecializedFunctions symbols specialization.SpecializedFuncs
+                        SpecializationIdentity.importSpecializedFunctions
+                            specialization.Symbols
+                            specialization.SpecializedFuncs
                     let specializedTopLevels = specializedFunctions |> List.map CheckedAST.FunctionDef
                     let programWithSpecializations = CheckedAST.programFromCheckedParts (symbols, specializedTopLevels @ items)
                     Monomorphization.replaceTypeAppsInProgramWithRegistry combinedSpecRegistry programWithSpecializations)
@@ -405,6 +413,7 @@ let internal prepareProgramForAnf
 
 let internal buildRegistriesForProgram
     (passTimingRecorder: PassTimingRecorder option)
+    (existingFunctionOrdinal: uint64)
     (symbols: CheckedAST.Symbols)
     (baseProvidesModuleFunctionParams: bool)
     (moduleRegistry: AST.ModuleRegistry)
@@ -444,6 +453,23 @@ let internal buildRegistriesForProgram
         measure "AST -> ANF Registry: Base Overlay Merge" (fun () ->
             AST_to_ANF.mergeRegistriesWithTrace
                 phaseRecorder baseRegistries localRegistries)
+    let mergedRegistries = {
+        mergedRegistries with
+            FunctionIds =
+                CheckedAST.functionIds symbols
+                |> Map.fold (fun ids name id ->
+                    if AST.functionIdValue id < existingFunctionOrdinal
+                       || Map.tryFind name ids = Some id then ids
+                    else Map.add name id ids)
+                    mergedRegistries.FunctionIds
+            FunctionNames =
+                CheckedAST.functionNames symbols
+                |> Map.fold (fun names id name ->
+                    if AST.functionIdValue id < existingFunctionOrdinal
+                       || Map.tryFind id names = Some name then names
+                    else Map.add id name names)
+                    mergedRegistries.FunctionNames
+    }
     (mergedRegistries, localRegistries, resolvedFunctions)
 
 type internal DeclarationConversion = {
@@ -488,9 +514,18 @@ let internal convertTypedDeclarationsWithTrace
         |> Option.map (fun context -> context.Registries.ModuleRegistry)
         |> Option.defaultWith Stdlib.buildModuleRegistry
     let baseRegistries =
-        baseContext
-        |> Option.map (fun context -> context.Registries)
-        |> Option.defaultValue (emptyRegistries moduleRegistry)
+        let registries =
+            baseContext
+            |> Option.map (fun context -> context.Registries)
+            |> Option.defaultValue (emptyRegistries moduleRegistry)
+        let symbols = CheckedAST.programSymbols typedProgram
+        { registries with
+            FunctionIds =
+                CheckedAST.functionIds symbols
+                |> Map.fold (fun ids name id -> Map.add name id ids) registries.FunctionIds
+            FunctionNames =
+                CheckedAST.functionNames symbols
+                |> Map.fold (fun names id name -> Map.add id name names) registries.FunctionNames }
     let baseFuncNames =
         baseContext
         |> Option.map (fun context -> context.BaseFuncNames)
@@ -526,6 +561,9 @@ let internal convertTypedDeclarationsWithTrace
             let (registries, localRegistries, resolvedFunctions) =
                 buildRegistriesForProgram
                     passTimingRecorder
+                    (baseContext
+                     |> Option.map (fun context -> CheckedAST.nextFunctionOrdinal context.Symbols)
+                     |> Option.defaultValue 0UL)
                     (CheckedAST.programSymbols liftedProgram)
                     (Option.isSome baseContext)
                     moduleRegistry
@@ -541,7 +579,31 @@ let internal convertTypedDeclarationsWithTrace
                 (ANF.VarGen 0)
                 resolvedFunctions
             |> Result.map (fun converted ->
-                { Symbols = CheckedAST.programSymbols liftedProgram
+                let symbols =
+                    converted.Functions
+                    |> List.fold (fun symbols func ->
+                        CheckedAST.registerGeneratedFunction func.Name func.Id symbols)
+                        (CheckedAST.programSymbols liftedProgram)
+                let registries = {
+                    registries with
+                        FunctionIds =
+                            converted.Functions
+                            |> List.fold (fun ids func -> Map.add func.Name func.Id ids) registries.FunctionIds
+                        FunctionNames =
+                            converted.Functions
+                            |> List.fold (fun names func -> Map.add func.Id func.Name names) registries.FunctionNames
+                        FuncReg =
+                            AST_to_ANF.extendFunctionRegistryWithConverted
+                                registries.FuncReg converted.Functions
+                        FuncParams =
+                            converted.Functions
+                            |> List.fold (fun parameters func ->
+                                let args =
+                                    func.TypedParams
+                                    |> List.mapi (fun index param -> $"arg{index}", param.Type)
+                                Map.add func.Name args parameters) registries.FuncParams
+                }
+                { Symbols = symbols
                   Functions = converted.Functions
                   Registries = registries
                   LocalReturnTypes = extractReturnTypes localRegistries.FuncReg })))
@@ -572,6 +634,7 @@ let private convertTypedProgramToConversionResult
             let (registries, _localRegistries, resolvedFunctions) =
                 buildRegistriesForProgram
                     None
+                    0UL
                     (CheckedAST.programSymbols liftedProgram)
                     false
                     moduleRegistry
@@ -642,7 +705,10 @@ let internal convertTypedProgramToUserOnlyWithMode
                         Set.empty
                     else
                         let localSpecs = collectLocalSpecs localGenericDefs typedProgram
-                        (Monomorphization.specializeFromSpecs localGenericDefs localSpecs).ExternalSpecs
+                        (Monomorphization.specializeFromSpecs
+                            (CheckedAST.programSymbols typedProgram)
+                            localGenericDefs
+                            localSpecs).ExternalSpecs
                         |> Set.filter (fun (funcName, _) ->
                             Map.containsKey funcName baseContext.GenericFuncDefs)
                 let requested =
@@ -673,11 +739,13 @@ let internal convertTypedProgramToUserOnlyWithMode
                         (specRegistry, accFunctions, symbols)
                     else
                         let specialization =
-                            Monomorphization.specializeFromSpecs baseContext.GenericFuncDefs missingSpecs
+                            Monomorphization.specializeFromSpecs symbols baseContext.GenericFuncDefs missingSpecs
                         let combinedRegistry =
                             mergeSpecRegistries specRegistry specialization.SpecRegistry
                         let symbols, specializedFunctions =
-                            SpecializationIdentity.importSpecializedFunctions symbols specialization.SpecializedFuncs
+                            SpecializationIdentity.importSpecializedFunctions
+                                specialization.Symbols
+                                specialization.SpecializedFuncs
                         let symbols, materializedTopLevels =
                             specializedFunctions
                             |> List.filter (fun fn ->
@@ -743,6 +811,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                 let (registries, localRegistries, resolvedFunctions) =
                     buildRegistriesForProgram
                         passTimingRecorder
+                        (CheckedAST.nextFunctionOrdinal baseContext.Symbols)
                         (CheckedAST.programSymbols liftedProgram)
                         true
                         baseContext.Registries.ModuleRegistry

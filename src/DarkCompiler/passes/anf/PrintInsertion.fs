@@ -112,19 +112,29 @@ let rec wrapReturnWithPrint
         (If (cond, thenBranch', elseBranch'), varGen2)
 
 /// Insert Print at the end of the main expression
-let insertPrint (functions: ANF.Function list) (mainExpr: ANF.AExpr) (programType: AST.SemanticType) : ANF.Program =
-    let resolveFunction = AST.functionIdForName
+let insertPrint
+    (functionIds: Map<string, AST.FunctionId>)
+    (functions: ANF.Function list)
+    (mainExpr: ANF.AExpr)
+    (programType: AST.SemanticType)
+    : ANF.Program =
+    let resolveFunction name =
+        Map.tryFind name functionIds
+        |> Option.defaultWith (fun () -> Crash.crash $"Print helper '{name}' has no allocated identity")
     let varGen = VarGen 2000  // Start high to avoid conflicts
     let (exprWithPrint, _) = wrapReturnWithPrint resolveFunction programType varGen mainExpr
     ANF.Program (functions, exprWithPrint)
 
 /// Insert Print into a named entry function
 let insertPrintInEntry
+    (functionIds: Map<string, AST.FunctionId>)
     (entryName: string)
     (programType: AST.SemanticType)
     (functions: ANF.Function list)
     : Result<ANF.Function list, string> =
-    let resolveFunction = AST.functionIdForName
+    let resolveFunction name =
+        Map.tryFind name functionIds
+        |> Option.defaultWith (fun () -> Crash.crash $"Print helper '{name}' has no allocated identity")
     let varGen = VarGen 2000  // Start high to avoid conflicts
     let rec update found remaining =
         match remaining with
@@ -144,6 +154,7 @@ let insertPrintInEntry
 /// Observe the source value immediately before the generated value renderer
 /// consumes it. The ordinary result printer sees only the rendered string.
 let insertRootWordProbeInEntry
+    (functionNames: Map<AST.FunctionId, string>)
     (entryName: string)
     (tupleWords: bool)
     (functions: ANF.Function list)
@@ -152,7 +163,8 @@ let insertRootWordProbeInEntry
         match expr with
         | Return _ -> (expr, varGen)
         | Let (id, Call (callee, [value]), body)
-            when (AST.functionIdValue callee).StartsWith("__dark_render_value_") ->
+            when (Map.tryFind callee functionNames
+                  |> Option.exists (fun name -> name.StartsWith("__dark_render_value_"))) ->
             if tupleWords then
                 let field0, vg1 = freshVar varGen
                 let print0, vg2 = freshVar vg1

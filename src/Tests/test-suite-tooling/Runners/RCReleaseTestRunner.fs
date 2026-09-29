@@ -18,7 +18,12 @@ type private TypedShape = {
 type private BuildState = {
     AvailableRegisters: LIR.PhysReg list
     Instructions: LIR.Instr list
+    FunctionIds: Map<string, AST.FunctionId>
 }
+
+let private closureId name ids =
+    Map.tryFind name ids
+    |> Option.defaultWith (fun () -> Crash.crash $"Release fixture closure '{name}' was not allocated")
 
 let private fixtureRegisters =
     [ LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7; LIR.X8; LIR.X9
@@ -237,18 +242,19 @@ let rec private buildInto (typed: TypedShape) target state : Result<BuildState, 
         |> Result.map (fun (captureRegisters, afterBuild) ->
             let operands = captureRegisters |> List.map (physical >> LIR.Reg)
             let withClosure =
-                append [ LIR.ClosureAlloc (physical target, TestIds.functionIdForName $"rc_fixture_closure_{typed.Path}", operands) ] afterBuild
+                let name = $"rc_fixture_closure_{typed.Path}"
+                append [ LIR.ClosureAlloc (physical target, closureId name afterBuild.FunctionIds, operands) ] afterBuild
             captureRegisters |> List.fold (fun current register -> releaseRegister register current) withClosure)
 
-let rec private collectClosureFunctions (typed: TypedShape) : LIR.Function list =
-    let nested = typed.Children |> List.collect collectClosureFunctions
+let rec private collectClosureFunctions ids (typed: TypedShape) : LIR.Function list =
+    let nested = typed.Children |> List.collect (collectClosureFunctions ids)
     match typed.Shape with
     | ClosureValue _ ->
         let name = $"rc_fixture_closure_{typed.Path}"
         let label = LIR.Label $"{name}_entry"
         let captureTuple = AST.TTuple (AST.TInt64 :: (typed.Children |> List.map _.Type))
         let func : LIR.Function =
-            { Id = TestIds.functionIdForName name
+            { Id = closureId name ids
               Name = name
               TypedParams = [{ Reg = physical LIR.X0; Type = captureTuple }]
               CFG =
@@ -278,6 +284,15 @@ let private rootReleaseInstruction typed rootRegister metadata =
 
 let private buildProgram test =
     let typed = describeShape "root" test.Root
+    let rec closureNames typed =
+        let nested = typed.Children |> List.collect closureNames
+        match typed.Shape with
+        | ClosureValue _ -> $"rc_fixture_closure_{typed.Path}" :: nested
+        | _ -> nested
+    let functionIds =
+        AST.allocateFunctionIds
+            [TestIds.functionIdForName "_start"; TestIds.functionIdForName "__dark_compiler_program_entry"]
+            (closureNames typed)
     let rootRegister, preserved =
         match test.Placement with
         | CanonicalRoot -> LIR.X19, []
@@ -285,7 +300,8 @@ let private buildProgram test =
     let unavailable = rootRegister :: (preserved |> List.map _.Register) |> Set.ofList
     let initialState =
         { AvailableRegisters = fixtureRegisters |> List.filter (fun register -> not (Set.contains register unavailable))
-          Instructions = [] }
+          Instructions = []
+          FunctionIds = functionIds }
     let records = collectRecords typed
     let variants = collectVariants typed
     let shapes = sumShapes variants
@@ -325,7 +341,7 @@ let private buildProgram test =
                   StackSize = 0
                   UsedCalleeSaved = []
                   CodegenFacts = None }
-            LIR.Program (main :: collectClosureFunctions typed, variants, records), preserved))
+            LIR.Program (main :: collectClosureFunctions functionIds typed, variants, records), preserved))
 
 let runRCReleaseTest target test =
     buildProgram test

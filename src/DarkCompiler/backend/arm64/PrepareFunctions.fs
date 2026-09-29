@@ -123,8 +123,10 @@ let prepareARM64FunctionsForAllocationWithCache
     (phaseRecorder: (string -> float -> unit) option)
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
+    (highestReservedId: AST.FunctionId)
+    (knownHelperIds: Map<string, AST.FunctionId>)
     (functions: LIR.Function list)
-    : LIR.Function list =
+    : LIR.Function list * Map<string, AST.FunctionId> =
     let recordPhase name (timer: System.Diagnostics.Stopwatch) =
         match phaseRecorder with
         | Some record ->
@@ -140,15 +142,31 @@ let prepareARM64FunctionsForAllocationWithCache
             sumShapeRegistry
     recordPhase "ARM64 Function Facts Planning" factsTimer
     let outliningTimer = System.Diagnostics.Stopwatch.StartNew()
-    let helperLabels = helperLabelsForFunctions functionsWithFacts
-    let helperIds =
+    let newHelperLabels =
+        helperLabelsForFunctions functionsWithFacts
+        |> Set.filter (fun label -> not (Map.containsKey label knownHelperIds))
+    let newHelperIds =
         AST.allocateFunctionIds
-            (functionsWithFacts |> List.map (fun func -> func.Id))
-            helperLabels
+            (Seq.append (Seq.singleton highestReservedId) (knownHelperIds |> Map.toSeq |> Seq.map snd))
+            newHelperLabels
+    let helperIds =
+        newHelperIds |> Map.fold (fun ids label id -> Map.add label id ids) knownHelperIds
+    let helperId label =
+        Map.tryFind label helperIds
+        |> Option.defaultWith (fun () -> Crash.crash $"ARM64 helper '{label}' has no allocated identity")
     let outlinedFunctions =
-        functionsWithFacts |> List.map (outlineExpensiveGenericReleasesInFunction helperIds)
+        functionsWithFacts
+        |> List.map (fun func ->
+            let localIds =
+                helperLabelsForFunctions [func]
+                |> Set.fold (fun ids label -> Map.add label (helperId label) ids) Map.empty
+            let facts =
+                func.CodegenFacts
+                |> Option.map (fun facts -> { facts with Arm64GenericHelperIds = localIds })
+            { func with CodegenFacts = facts }
+            |> outlineExpensiveGenericReleasesInFunction helperIds)
     recordPhase "ARM64 Generic Release Outlining" outliningTimer
-    outlinedFunctions
+    outlinedFunctions, helperIds
 
 let prepareARM64FunctionsForAllocation
     (functions: LIR.Function list)
@@ -156,7 +174,19 @@ let prepareARM64FunctionsForAllocation
     let functionsWithFacts = attachARM64CodegenFactsToFunctions functions
     let helperLabels = helperLabelsForFunctions functionsWithFacts
     let helperIds = AST.allocateFunctionIds (functionsWithFacts |> List.map (fun func -> func.Id)) helperLabels
-    functionsWithFacts |> List.map (outlineExpensiveGenericReleasesInFunction helperIds)
+    let helperId label =
+        Map.tryFind label helperIds
+        |> Option.defaultWith (fun () -> Crash.crash $"ARM64 helper '{label}' has no allocated identity")
+    functionsWithFacts
+    |> List.map (fun func ->
+        let localIds =
+            helperLabelsForFunctions [func]
+            |> Set.fold (fun ids label -> Map.add label (helperId label) ids) Map.empty
+        let facts =
+            func.CodegenFacts
+            |> Option.map (fun facts -> { facts with Arm64GenericHelperIds = localIds })
+        { func with CodegenFacts = facts }
+        |> outlineExpensiveGenericReleasesInFunction helperIds)
 
 /// Explicit preparation entry point for tools that construct LIR directly.
 /// Production performs the same preparation before register allocation.
@@ -164,7 +194,7 @@ let prepareARM64Program
     (LIR.Program (functions, variants, records))
     : LIR.Program =
     let sumShapeRegistry = rcSumShapeRegistryFromVariantRegistry variants
-    let functionsWithFacts =
+    let functionsWithFacts, _ =
         functions
         |> List.map (fun func ->
             match func.CodegenFacts with
@@ -175,4 +205,7 @@ let prepareARM64Program
             None
             records
             sumShapeRegistry
+            (functions
+             |> List.fold (fun highest func -> max highest func.Id) (AST.functionId 0UL))
+            Map.empty
     LIR.Program (functionsWithFacts, variants, records)

@@ -269,7 +269,7 @@ type BindingId =
     | TopLevelValueId of canonicalName:string
 
 [<Struct; StructuralEquality; StructuralComparison>]
-type FunctionId = private FunctionId of canonicalName:string
+type FunctionId = private FunctionId of ordinal:uint64
 
 [<Struct; StructuralEquality; StructuralComparison>]
 type TypeId = private TypeId of int
@@ -297,15 +297,23 @@ let topLevelValueId canonicalName = TopLevelValueId canonicalName
 let bindingDisplayName = function
     | LocalBindingId (_, sourceName) -> sourceName
     | TopLevelValueId canonicalName -> Some canonicalName
-let functionIdForName canonicalName = FunctionId canonicalName
-let functionIdValue (FunctionId canonicalName) = canonicalName
-let tryFunctionCanonicalName (FunctionId canonicalName) = Some canonicalName
-let allocateFunctionIds (_existing: seq<FunctionId>) (names: seq<string>) : Map<string, FunctionId> =
+let functionId ordinal = FunctionId ordinal
+let functionIdValue (FunctionId ordinal) = ordinal
+let nextFunctionIdOrdinal ordinal =
+    if ordinal = System.UInt64.MaxValue then
+        Crash.crash "Function identity allocation exhausted"
+    ordinal + 1UL
+let allocateFunctionIds (existing: seq<FunctionId>) (names: seq<string>) : Map<string, FunctionId> =
+    let first =
+        existing
+        |> Seq.map functionIdValue
+        |> Seq.fold (fun next ordinal -> max next (nextFunctionIdOrdinal ordinal)) 0UL
     names
     |> Seq.distinct
     |> Seq.sort
-    |> Seq.map (fun name -> name, functionIdForName name)
-    |> Map.ofSeq
+    |> Seq.fold (fun (next, ids) name ->
+        nextFunctionIdOrdinal next, Map.add name (functionId next) ids) (first, Map.empty)
+    |> snd
 let typeId ordinal = TypeId ordinal
 let constructorId owner canonicalName runtimeTag =
     ConstructorId (owner, canonicalName, runtimeTag)

@@ -48,7 +48,7 @@ let testRecordAllocationStartsFieldsAtOffsetZero () : TestResult =
         )
     let typeMap : ANF.TypeMap = Map.ofList [(ANF.TempId 0, AST.TRecord ("LayoutRecord", []))]
 
-    match ANF_to_MIR.toMIR program typeMap Map.empty (AST.TRecord ("LayoutRecord", [])) Map.empty Map.empty false Map.empty with
+    match ANF_to_MIR.toMIR program typeMap Map.empty (AST.TRecord ("LayoutRecord", [])) Map.empty Map.empty false Map.empty (Map.ofList [AST.functionId 0UL, "_start"]) with
     | Error err ->
         Error $"Unexpected record lowering error: {err}"
     | Ok (MIR.Program (functions, _, _)) ->
@@ -102,6 +102,7 @@ let testNestedTerminalBranchesHaveNoInventedReturn () : TestResult =
         denseTypes
         Map.empty
         (Map.ofList [(TestIds.functionIdForName name, AST.TFloat64)])
+        (Map.ofList [(TestIds.functionIdForName name, name)])
         false
     |> Result.bind (fun lowered ->
         let rec visit seen pending =
@@ -201,6 +202,7 @@ let testPreRcSsaTypesBranchLocalDefinitions () : TestResult =
             [|Some AST.TBool|]
             Map.empty
             (Map.ofList [functionId, AST.TInt64])
+            (Map.ofList [functionId, name])
             false)
     |> Result.bind MIR_SSA_Verify.verifyFunction
 

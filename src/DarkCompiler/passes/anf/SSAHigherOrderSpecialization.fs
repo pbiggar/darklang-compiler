@@ -309,7 +309,7 @@ let private helperName definitions request =
     let suffix =
         request.Arguments
         |> List.map (fun argument ->
-            $"{AST.functionIdValue argument.Callable.Target}_{argument.Index}")
+            $"{name definitions argument.Callable.Target}_{argument.Index}")
         |> String.concat "__"
     $"{name definitions request.Helper}__known_{suffix}"
 
@@ -473,7 +473,8 @@ let private rewriteKnownCalls definitions returns generatedNames requests (func:
                     { block with Operations = operations }) }
     // Closure allocations and aliases made dead by routing are removed by the
     // following SSA cleanup. Preserve the ownership-visible operation order.
-    SSADirectCallSpecialization.removeUnusedRematerializedValues rewritten
+    let functionNames = definitions |> Map.map (fun _ func -> func.Name)
+    SSADirectCallSpecialization.removeUnusedRematerializedValues functionNames rewritten
 
 let specializeProgramWithExternalFunctionsAndNames
     (reservedNames: Map<AST.FunctionId, string>)
@@ -503,8 +504,8 @@ let specializeProgramWithExternalFunctionsAndNames
         |> Set.ofList
     let helperNames = requests |> List.map (helperName definitions) |> Set.ofList
     let exists name =
-        let id = AST.functionIdForName name
-        Map.containsKey id definitions || Map.containsKey id reservedNames
+        (definitions |> Map.values |> Seq.exists (fun func -> func.Name = name))
+        || (reservedNames |> Map.values |> Seq.contains name)
     let usable =
         requests
         |> List.filter (fun request ->
@@ -519,8 +520,11 @@ let specializeProgramWithExternalFunctionsAndNames
                 not (exists target) && not (Set.contains target helperNames))))
     let generatedNames =
         Set.union targetNames helperNames
-        |> Seq.map (fun name -> name, AST.functionIdForName name)
-        |> Map.ofSeq
+        |> AST.allocateFunctionIds
+            (seq {
+                yield! definitions |> Map.keys
+                yield! reservedNames |> Map.keys
+            })
     let targetCallables =
         usable |> List.collect (fun request -> request.Arguments)
         |> List.map (fun argument -> argument.Callable)

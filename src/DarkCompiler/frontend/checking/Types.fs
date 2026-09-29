@@ -81,6 +81,7 @@ type Substitution = Map<string, SemanticType>
 /// Collected type checking environment - can be passed to compile user code with stdlib
 type TypeCheckEnv = {
     TypeCatalog: CheckedAST.TypeCatalog
+    FunctionCatalog: CheckedAST.FunctionCatalog
     TypeReg: TypeRegistry
     IndexedTypeReg: IndexedTypeRegistry
     RecordTypeNames: Set<string>
@@ -103,6 +104,7 @@ let mergeTypeCheckEnv (baseEnv: TypeCheckEnv) (overlay: TypeCheckEnv) : TypeChec
     let mergeMap m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
     {
         TypeCatalog = overlay.TypeCatalog
+        FunctionCatalog = overlay.FunctionCatalog
         TypeReg = mergeMap baseEnv.TypeReg overlay.TypeReg
         IndexedTypeReg = mergeMap baseEnv.IndexedTypeReg overlay.IndexedTypeReg
         RecordTypeNames = Set.union baseEnv.RecordTypeNames overlay.RecordTypeNames

@@ -38,6 +38,9 @@ type private Globals = {
 /// source units. The representation stays inside this direct checker.
 type Environment = private Environment of Globals * CheckedAST.Symbols
 
+let includeAllocatedFunctions (allocated: CheckedAST.Symbols) (Environment (globals, symbols)) : Environment =
+    Environment (globals, CheckedAST.includeAllocatedFunctionNames allocated symbols)
+
 let private emptyGlobals = {
     Functions = Map.empty
     Values = Map.empty
@@ -2962,6 +2965,7 @@ let typeCheckEnvironment (program: CheckedAST.Program) : CheckingTypes.TypeCheck
         |> NameResolution.addCandidates sourceCandidates
     {
         TypeCatalog = CheckedAST.typeCatalog symbols
+        FunctionCatalog = CheckedAST.functionCatalog symbols
         TypeReg = recordTypes
         IndexedTypeReg = indexedRecords
         RecordTypeNames = recordTypes |> Map.keys |> Set.ofSeq

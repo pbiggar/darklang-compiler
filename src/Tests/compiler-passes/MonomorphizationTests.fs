@@ -34,7 +34,7 @@ let testPreservesTypeVarsInSpecialization () : TestResult =
           Function = funcDef
           DirectDependencies = Set.empty }
     let specialized =
-        specializeFromSpecs (Map.ofList ["id", artifact]) (Set.ofList [("id", [TVar "t"])])
+        specializeFromSpecs symbols (Map.ofList ["id", artifact]) (Set.ofList [("id", [TVar "t"])])
     match specialized.SpecializedFuncs with
     | [specializedArtifact] ->
         let definition = specializedArtifact.Function
@@ -91,7 +91,7 @@ let testSpecializeFromSpecs () : TestResult =
             })
         ]
     let initialSpecs : Set<SpecKey> = Set.ofList [ ("id", [TInt64]) ]
-    let result = specializeFromSpecs genericDefs initialSpecs
+    let result = specializeFromSpecs symbols genericDefs initialSpecs
     let hasFunction =
         result.SpecializedFuncs
         |> List.exists (fun artifact -> artifact.Function.Name = "id_i64")

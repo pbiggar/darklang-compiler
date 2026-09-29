@@ -285,7 +285,9 @@ let getOptimizedMIR
 
                 // Generated output participates in reference-count insertion.
                 let (ANF.Program (functions, mainExpr)) = optimized
-                let printed = PrintInsertion.insertPrint functions mainExpr programType
+                let functionNames = convResult.FuncReg |> Map.map (fun _ (name, _) -> name)
+                let functionIds = functionNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
+                let printed = PrintInsertion.insertPrint functionIds functions mainExpr programType
                 let convResultOptimized = { convResult with Program = printed }
                 match RefCountInsertion.insertRCInProgram convResultOptimized with
                 | Error e -> Error $"RC insertion error: {e}"
@@ -293,7 +295,7 @@ let getOptimizedMIR
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
 
                     // Convert to MIR
-                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false (returnTypesFor stdlib) with
+                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false (returnTypesFor stdlib) (Map.add (AST.functionId 0UL) "_start" functionNames) with
                     | Error e -> Error $"MIR conversion error: {e}"
                     | Ok mirProgram ->
                         // SSA construction
@@ -334,7 +336,9 @@ let getOptimizedLIR
 
                 // Generated output participates in reference-count insertion.
                 let (ANF.Program (functions, mainExpr)) = optimized
-                let printed = PrintInsertion.insertPrint functions mainExpr programType
+                let functionNames = convResult.FuncReg |> Map.map (fun _ (name, _) -> name)
+                let functionIds = functionNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
+                let printed = PrintInsertion.insertPrint functionIds functions mainExpr programType
                 let convResultOptimized = { convResult with Program = printed }
                 match RefCountInsertion.insertRCInProgram convResultOptimized with
                 | Error e -> Error $"RC insertion error: {e}"
@@ -342,7 +346,7 @@ let getOptimizedLIR
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
 
                     // Convert to MIR
-                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false (returnTypesFor stdlib) with
+                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false (returnTypesFor stdlib) (Map.add (AST.functionId 0UL) "_start" functionNames) with
                     | Error e -> Error $"MIR conversion error: {e}"
                     | Ok mirProgram ->
                         // SSA construction and optimization

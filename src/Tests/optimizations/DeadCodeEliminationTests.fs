@@ -26,7 +26,8 @@ let private namedFunctionWith name instrs =
 let private functionWith instrs = namedFunctionWith "user" instrs
 
 let private expectCalls expected instrs =
-    let actual = DeadCodeElimination.getCalledFunctions (functionWith instrs)
+    let ids = expected |> List.map (fun name -> name, TestIds.functionIdForName name) |> Map.ofList
+    let actual = DeadCodeElimination.getCalledFunctions ids (functionWith instrs)
     let expectedIds = expected |> List.map TestIds.functionIdForName |> Set.ofList
     if actual = expectedIds then
         Ok ()
@@ -70,7 +71,11 @@ let testFilteredFunctionsPreserveReachableSetAndInputOrder () : TestResult =
               TestIds.functionIdForName "stdlib_c", Set.empty
               TestIds.functionIdForName "unused", Set.empty ]
     let actual =
-        DeadCodeElimination.filterFunctions callGraph userFunctions stdlibFunctions
+        let ids =
+            userFunctions @ stdlibFunctions
+            |> List.map (fun func -> func.Name, func.Id)
+            |> Map.ofList
+        DeadCodeElimination.filterFunctions callGraph ids userFunctions stdlibFunctions
         |> List.map (fun function_ -> function_.Name)
     let expected = [ "stdlib_c"; "stdlib_a"; "stdlib_b" ]
     if actual = expected then

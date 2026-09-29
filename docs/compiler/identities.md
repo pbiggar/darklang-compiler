@@ -37,7 +37,7 @@ These types are distinct even when their representation contains integers. An
 integer for a field slot must not accidentally be usable as a binding or
 constructor identity.
 
-### Name-backed and allocated IDs
+### Allocated IDs and name metadata
 
 The semantic IDs do not all have the same allocation model.
 
@@ -48,13 +48,15 @@ global binding namespace or recursively rewriting either body. The recursion
 IDs remain deterministic structural IDs assigned to one parsed program and
 travel with that body's recursion evidence.
 
-`FunctionId` retains a private, canonical-name-backed form. `TypeId` is a
-compact integer allocated while constructing checked syntax. The immutable
-type catalog from a checked base is threaded into later construction: imported
-names reuse their existing IDs, and only newly encountered canonical type
-names consume the next integer. Each checked unit retains only the names it
-uses, while its updated type catalog can seed the next unit. Composition
-reuses syntax without renumbering or traversing it.
+`FunctionId` is a private `uint64` assigned from an immutable function catalog.
+The checker and later function-generating passes thread that catalog through
+construction. A known canonical name reuses its ID; each new function takes
+the next ordinal. Names stay in the catalog for diagnostics and emitted
+symbols. Independently allocated catalogs cannot be composed when the same
+ordinal names different functions. `TypeId` is likewise a compact integer
+allocated while constructing checked syntax. The immutable type catalog from
+a checked base is threaded into later construction, so imported names reuse
+their IDs and new type names consume the next integer.
 
 `ConstructorId` combines its integer `TypeId` owner and case name with the
 already-validated runtime tag. `FieldId` combines the same kind of owner with

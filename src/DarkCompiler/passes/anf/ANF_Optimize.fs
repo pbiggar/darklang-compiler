@@ -79,7 +79,14 @@ let optimizeProgramWithOptionsAndExternalFunctionsWithTrace
                 { optimized with Body = devirtualizeCaptureFreeClosures optimized.Body }))
 
     // Optimize main expression
-    let mainFunc = { Id = AST.functionIdForName "__dark_anf_optimization_main"
+    let mainId =
+        AST.allocateFunctionIds
+            (functions |> List.map (fun func -> func.Id))
+            ["__dark_anf_optimization_main"]
+        |> Map.tryFind "__dark_anf_optimization_main"
+        |> Option.defaultWith (fun () ->
+            Crash.crash "ANF optimization main identity was not allocated")
+    let mainFunc = { Id = mainId
                      Name = "__main__"
                      TypedParams = []
                      ReturnType = AST.TUnit
@@ -96,9 +103,14 @@ let optimizeProgramWithOptionsAndExternalFunctionsWithTrace
         let activeEligible = Set.intersect eligibleTailRecursionNames programFunctionIds
         let helpers =
             measure "ANF Optimize detail: Accumulator helper planning" (fun () ->
-                planTailRecursionModuloHelpers
-                    context.FunctionNames
-                    activeEligible)
+                if Set.isEmpty activeEligible then Map.empty
+                else
+                    let functionNames =
+                        functions'
+                        |> List.fold (fun names func -> Map.add func.Id func.Name names) context.FunctionNames
+                    planTailRecursionModuloHelpers
+                        functionNames
+                        activeEligible)
         if Map.isEmpty helpers then optimizedProgram
         else
             // Each rewrite can add helpers, so carry the fresh ID cursor through

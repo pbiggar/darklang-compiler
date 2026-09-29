@@ -375,14 +375,15 @@ let internal knownLiteralsForAtoms (env: ValueEnv) (atoms: Atom list) : ScalarLi
     loop atoms []
 
 let internal knownValueForCExpr
+    (functionNames: Map<AST.FunctionId, string>)
     (env: ValueEnv)
     (cexpr: CExpr)
     : KnownValue option =
     let words name =
-        match AST.functionIdValue name with
-        | "Darklang.Stdlib.Int128.__fromWords" ->
+        match Map.tryFind name functionNames with
+        | Some "Darklang.Stdlib.Int128.__fromWords" ->
             Some (fun low high -> Int128Value (name, low, high))
-        | "Darklang.Stdlib.UInt128.__fromWords" ->
+        | Some "Darklang.Stdlib.UInt128.__fromWords" ->
             Some (fun low high -> UInt128Value (name, low, high))
         | _ -> None
     match cexpr with
@@ -397,8 +398,8 @@ let internal knownValueForCExpr
         |> Option.map (fun literals -> RecordValue (descriptor, literals))
     | _ -> None
 
-let internal addKnownBinding (id: TempId) (cexpr: CExpr) (env: ValueEnv) : ValueEnv =
-    match knownValueForCExpr env cexpr with
+let internal addKnownBinding functionNames (id: TempId) (cexpr: CExpr) (env: ValueEnv) : ValueEnv =
+    match knownValueForCExpr functionNames env cexpr with
     | Some value -> Map.add id value env
     | None -> Map.remove id env
 
@@ -437,7 +438,8 @@ let internal boundedCloneGroups
     |> List.rev
 
 let internal buildLiteralClones
-    (idExists: AST.FunctionId -> bool)
+    (existingIds: AST.FunctionId seq)
+    (existingNames: Set<string>)
     (groups: (AST.FunctionId * string * LiteralPattern list) list)
     : LiteralClone list =
     let proposedSpecs =
@@ -449,12 +451,15 @@ let internal buildLiteralClones
                 (id, cloneName, pattern)))
     let proposedNames = proposedSpecs |> List.map (fun (_, name, _) -> name)
     let namesAreUnique = List.length proposedNames = (proposedNames |> List.distinct |> List.length)
-    if namesAreUnique
-       && proposedNames |> List.forall (AST.functionIdForName >> idExists >> not) then
+    if namesAreUnique && proposedNames |> List.forall (fun name -> not (Set.contains name existingNames)) then
+        let allocated = AST.allocateFunctionIds existingIds proposedNames
         proposedSpecs
         |> List.map (fun (originalId, cloneName, pattern) ->
+            let cloneId =
+                Map.tryFind cloneName allocated
+                |> Option.defaultWith (fun () -> Crash.crash "Literal clone identity was not allocated")
             { OriginalId = originalId
-              CloneId = AST.functionIdForName cloneName
+              CloneId = cloneId
               CloneName = cloneName
               Pattern = pattern })
     else
@@ -519,7 +524,7 @@ let internal cexprForKnownValue (value: KnownValue) : CExpr =
         )
     | TupleValue fields -> TupleAlloc (atoms fields)
     | RecordValue (descriptor, fields) -> RecordAlloc (descriptor, atoms fields)
-let internal isRematerializedValue (cexpr: CExpr) : bool =
-    match knownValueForCExpr Map.empty cexpr with
+let internal isRematerializedValue functionNames (cexpr: CExpr) : bool =
+    match knownValueForCExpr functionNames Map.empty cexpr with
     | Some _ -> true
     | None -> false

@@ -33,8 +33,8 @@ let rec private blockCalls (block: Block<'leaf, 'id>) =
         | Drop _ -> calls) Set.empty
 
 type private DfsFrame =
-    | Enter of string
-    | Exit of string
+    | Enter of uint64
+    | Exit of uint64
 
 let private adjacent adjacency name =
     match Map.tryFind name adjacency with
@@ -99,7 +99,7 @@ let private stronglyConnectedComponents vertices sourceIndex adjacency =
 
 type private NameComponent = {
     Index: int
-    Members: string list
+    Members: uint64 list
     Dependencies: Set<int>
 }
 
@@ -208,7 +208,7 @@ let private orderedNames vertices adjacency =
                 order (remaining - 1) unresolved ready (selected.Members :: ordered)
     order components.Length unresolved ready []
 
-/// Graph operations use the canonical string already carried by each identity.
+/// Graph operations use the numeric value carried by each identity.
 /// This avoids boxing FunctionId structs at every map and set comparison.
 /// SCC members are returned callee-first with independent components in source order.
 let internal orderedFunctionIds vertices adjacency =

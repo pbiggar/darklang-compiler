@@ -168,13 +168,18 @@ let rec collectCalledFunctions (expr: CheckedAST.Expr) : Set<AST.FunctionId> =
         |> combine
 
 /// Specialize only the requested generic specs, returning new functions and a registry
-let specializeFromSpecs (genericFuncDefs: GenericFuncDefs) (initialSpecs: Set<SpecKey>) : SpecializationResult =
+let specializeFromSpecs
+    (initialSymbols: CheckedAST.Symbols)
+    (genericFuncDefs: GenericFuncDefs)
+    (initialSpecs: Set<SpecKey>)
+    : SpecializationResult =
     let rec iterate
         (pendingSpecs: Set<SpecKey>)
         (processedSpecs: Set<SpecKey>)
         (accFuncs: GenericFunctionArtifact list)
         (specRegistry: SpecRegistry)
         (externalSpecs: Set<SpecKey>)
+        (symbols: CheckedAST.Symbols)
         : SpecializationResult =
         let newSpecs = Set.difference pendingSpecs processedSpecs
         if Set.isEmpty newSpecs then
@@ -185,18 +190,19 @@ let specializeFromSpecs (genericFuncDefs: GenericFuncDefs) (initialSpecs: Set<Sp
                     { artifact with Symbols = symbols })
             { SpecializedFuncs = specializedFuncs
               SpecRegistry = specRegistry
-              ExternalSpecs = externalSpecs }
+              ExternalSpecs = externalSpecs
+              Symbols = symbols }
         else
-            let (newFuncs, newPendingSpecs, newRegistry, newExternal) =
+            let (newFuncs, newPendingSpecs, newRegistry, newExternal, nextSymbols) =
                 newSpecs
                 |> Set.toList
                 |> List.fold
-                    (fun (funcs, pending, registry, external) (funcName, typeArgs) ->
+                    (fun (funcs, pending, registry, external, symbols) (funcName, typeArgs) ->
                         match Map.tryFind funcName genericFuncDefs with
                         | Some artifact ->
                             let specializedName = specName artifact.Function.Name typeArgs
                             let (specializedId, specializedSymbols) =
-                                CheckedAST.internFunction specializedName artifact.Symbols
+                                CheckedAST.internFunction specializedName symbols
                             let specialized =
                                 specializeFunction specializedId artifact.Function typeArgs
                             let specializedArtifact =
@@ -205,10 +211,10 @@ let specializeFromSpecs (genericFuncDefs: GenericFuncDefs) (initialSpecs: Set<Sp
                                   DirectDependencies = directDependencies specialized.Body }
                             let registry' = Map.add (funcName, typeArgs) specialized.Name registry
                             let bodySpecs = collectTypeAppsFromFunc artifact.Symbols specialized
-                            (specializedArtifact :: funcs, Set.union pending bodySpecs, registry', external)
+                            (specializedArtifact :: funcs, Set.union pending bodySpecs, registry', external, specializedSymbols)
                         | None ->
-                            (funcs, pending, registry, Set.add (funcName, typeArgs) external))
-                    ([], Set.empty, specRegistry, externalSpecs)
+                            (funcs, pending, registry, Set.add (funcName, typeArgs) external, symbols))
+                    ([], Set.empty, specRegistry, externalSpecs, symbols)
 
             iterate
                 newPendingSpecs
@@ -216,8 +222,9 @@ let specializeFromSpecs (genericFuncDefs: GenericFuncDefs) (initialSpecs: Set<Sp
                 (newFuncs @ accFuncs)
                 newRegistry
                 newExternal
+                nextSymbols
 
-    iterate initialSpecs Set.empty [] Map.empty Set.empty
+    iterate initialSpecs Set.empty [] Map.empty Set.empty initialSymbols
 
 /// Replace TypeApp with Call using specialized name in an expression
 let rec replaceTypeApps (symbols: CheckedAST.Symbols) (expr: CheckedAST.Expr) : CheckedAST.Expr =
@@ -828,11 +835,11 @@ let private registryWithExternalSpecs (specialization: SpecializationResult) : S
 
 let internal monomorphizeWithGenericFuncDefs (genericFuncDefs: GenericFuncDefs) (program: CheckedAST.Program) : CheckedAST.Program =
     let initialSpecs = collectInitialMonomorphizationSpecs program
-    let specialization = specializeFromSpecs genericFuncDefs initialSpecs
     let symbols = CheckedAST.programSymbols program
+    let specialization = specializeFromSpecs symbols genericFuncDefs initialSpecs
     let topLevels = CheckedAST.programTopLevels program
     let symbols, specializedFunctions =
-        importSpecializedFunctions symbols specialization.SpecializedFuncs
+        importSpecializedFunctions specialization.Symbols specialization.SpecializedFuncs
     let specializedTopLevels = specializedFunctions |> List.map CheckedAST.FunctionDef
     let programWithSpecializations = CheckedAST.programFromCheckedParts (symbols, specializedTopLevels @ topLevels)
     match replaceTypeAppsInProgramWithRegistry (registryWithExternalSpecs specialization) programWithSpecializations with

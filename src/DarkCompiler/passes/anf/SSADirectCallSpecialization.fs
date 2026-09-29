@@ -123,7 +123,7 @@ let private rewriteFunction rewriteMap (func: SSAANF.Function) =
 
 // Definitions dominate their uses, so a CFG walk from entry sees every known
 // construction before a valid use, including joins whose labels sort earlier.
-let private knownValues (func: SSAANF.Function) =
+let private knownValues functionNames (func: SSAANF.Function) =
     let rec walk visited known label =
         if Set.contains label visited then visited, known
         else
@@ -134,7 +134,7 @@ let private knownValues (func: SSAANF.Function) =
                 let known =
                     block.Operations
                     |> List.fold (fun facts (id, operation) ->
-                        match Facts.knownValueForCExpr facts operation with
+                        match Facts.knownValueForCExpr functionNames facts operation with
                         | Some value -> Map.add id value facts
                         | None -> facts) known
                 let successors =
@@ -146,10 +146,10 @@ let private knownValues (func: SSAANF.Function) =
                     walk seen facts successor) (visited, known) successors
     walk Set.empty Map.empty func.Entry |> snd
 
-let private knownCallsInProgram functions =
+let private knownCallsInProgram functionNames functions =
     functions
     |> List.fold (fun calls func ->
-        let known = knownValues func
+        let known = knownValues functionNames func
         operations func
         |> List.fold (fun current (_, operation) ->
             match operation with
@@ -224,8 +224,8 @@ let private cloneGroups
             else Some (func.Id, func.Name, patterns))
     |> List.sortBy (fun (id, _, _) -> id)
 
-let private routeFunction clonesByName (func: SSAANF.Function) =
-    let known = knownValues func
+let private routeFunction functionNames clonesByName (func: SSAANF.Function) =
+    let known = knownValues functionNames func
     mapOperations
         (fun (id, operation) -> id, Facts.routeCExpr clonesByName known operation)
         func
@@ -239,12 +239,12 @@ let private terminatorUses used = function
     | SSAANF.Jump (_, arguments) -> List.fold atomUse used arguments
     | SSAANF.Branch (condition, _, _) -> atomUse used condition
 
-let internal removeUnusedRematerializedValues (func: SSAANF.Function) =
+let internal removeUnusedRematerializedValues functionNames (func: SSAANF.Function) =
     let definitions = operations func |> Map.ofList
     let removable =
         definitions
         |> Map.filter (fun _ operation ->
-            Facts.isRematerializedValue operation
+            Facts.isRematerializedValue functionNames operation
             || match operation with
                | ClosureAlloc _ | Atom _ | TypedAtom _ | IfValue _ -> true
                | _ -> false)
@@ -302,6 +302,7 @@ let internal removeUnusedRematerializedValues (func: SSAANF.Function) =
                         |> List.filter (fun (id, _) -> not (Set.contains id removed)) }) }
 
 let private cloneFunction
+    functionNames
     clonesByName
     (functionsById: Map<AST.FunctionId, SSAANF.Function>)
     (clone: LiteralClone) =
@@ -345,29 +346,40 @@ let private cloneFunction
         Name = clone.CloneName
         TypedParams = parameters
         Blocks = blocks }
-    |> routeFunction clonesByName
+    |> routeFunction functionNames clonesByName
 
 let specializeProgramWithFunctionNames functionNames functions =
+    let functionNames =
+        functions
+        |> List.fold (fun names (func: SSAANF.Function) ->
+            Map.add func.Id func.Name names) functionNames
     let exposed = List.map exposeKnownIndirectTargets functions
     let analysis = analyzeProgram exposed
     let rewriteMap = buildRewriteMap analysis exposed
     let rewritten = List.map (rewriteFunction rewriteMap) exposed
     let analysis = analyzeProgram rewritten
-    let knownCalls = knownCallsInProgram rewritten
+    let knownCalls = knownCallsInProgram functionNames rewritten
     let localIds = rewritten |> List.map (fun func -> func.Id) |> Set.ofList
-    let idExists id = Set.contains id localIds || Map.containsKey id functionNames
-    let clones =
+    let cloneCandidates =
         cloneGroups analysis knownCalls rewritten
         |> Facts.boundedCloneGroups
-        |> Facts.buildLiteralClones idExists
+    let clones =
+        if List.isEmpty cloneCandidates then []
+        else
+            let existingIds = seq {
+                yield! localIds
+                yield! functionNames |> Map.keys
+            }
+            let existingNames = functionNames |> Map.values |> Set.ofSeq
+            Facts.buildLiteralClones existingIds existingNames cloneCandidates
     let clonesByName = clones |> List.groupBy (fun clone -> clone.OriginalId) |> Map.ofList
     let functionsById: Map<AST.FunctionId, SSAANF.Function> =
         rewritten |> List.map (fun func -> func.Id, func) |> Map.ofList
-    let cloned = clones |> List.map (cloneFunction clonesByName functionsById)
-    let routed = rewritten |> List.map (routeFunction clonesByName)
+    let cloned = clones |> List.map (cloneFunction functionNames clonesByName functionsById)
+    let routed = rewritten |> List.map (routeFunction functionNames clonesByName)
     {
         Functions =
-            (cloned @ routed) |> List.map removeUnusedRematerializedValues
+            (cloned @ routed) |> List.map (removeUnusedRematerializedValues functionNames)
         CloneOrigins =
             clones |> List.map (fun clone -> clone.CloneId, clone.OriginalId) |> Map.ofList
     }

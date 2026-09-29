@@ -10,26 +10,23 @@ open LIR
 /// Test result type
 type TestResult = Result<unit, string>
 
-/// Semantic identities retain the complete source name. These two names
-/// collide under the former 31-bit FNV representation.
+/// Sequential allocation distinguishes names that collided under the former
+/// 31-bit FNV representation.
 let testFunctionIdentitiesDoNotHashCollide () : TestResult =
     let generated = TestIds.functionIdForName "e2eBatchde340de328b830e8_Check5"
     let stdlib = TestIds.functionIdForName "Darklang.Stdlib.Int64.__digitToString"
     if generated <> stdlib then Ok ()
     else Error "Distinct function names received the same semantic identity"
 
-/// Independently checked units and later optimization-generated functions
-/// must compose without sharing an ordinal allocator.
+/// A threaded catalog reuses a name's identity and allocates the next
+/// declaration immediately after it.
 let testFunctionIdentitiesComposeAcrossUnits () : TestResult =
     let name = "User.Module.generated<Int64>"
-    let first, _ = CheckedAST.internFunction name (CheckedAST.emptySymbols ())
-    let second, _ = CheckedAST.internFunction name (CheckedAST.emptySymbols ())
-    let generated =
-        AST.allocateFunctionIds Seq.empty [name]
-        |> Map.tryFind name
-    match generated with
-    | Some generated when first = second && second = generated -> Ok ()
-    | _ -> Error "Independent units assigned different identities to the same canonical function"
+    let first, symbols = CheckedAST.internFunction name (CheckedAST.emptySymbols ())
+    let second, symbols = CheckedAST.internFunction name symbols
+    let next, _ = CheckedAST.internFunction "User.Module.next" symbols
+    if first = second && AST.functionIdValue next = AST.functionIdValue first + 1UL then Ok ()
+    else Error "Threaded function allocation did not preserve and advance identities"
 
 let testMirToLirSymbolicOperands () : TestResult =
     let label = MIR.Label "entry"

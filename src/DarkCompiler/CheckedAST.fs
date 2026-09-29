@@ -272,6 +272,30 @@ type TypeCatalog = private {
 
 let emptyTypeCatalog = { Names = Map.empty; Ids = Map.empty; NextOrdinal = 0 }
 
+type FunctionCatalog = private {
+    Names: Map<AST.FunctionId, string>
+    Ids: Map<string, AST.FunctionId>
+    NextOrdinal: uint64
+}
+
+let emptyFunctionCatalog = {
+    Names = Map.ofList [AST.functionId 0UL, "_start"; AST.functionId 1UL, "__dark_compiler_program_entry"]
+    Ids = Map.ofList ["_start", AST.functionId 0UL; "__dark_compiler_program_entry", AST.functionId 1UL]
+    NextOrdinal = 2UL
+}
+
+let includeFunctionNames names (catalog: FunctionCatalog) : FunctionCatalog =
+    names
+    |> Seq.distinct
+    |> Seq.sort
+    |> Seq.fold (fun catalog name ->
+        if Map.containsKey name catalog.Ids then catalog
+        else
+            let id = AST.functionId catalog.NextOrdinal
+            { Names = Map.add id name catalog.Names
+              Ids = Map.add name id catalog.Ids
+              NextOrdinal = AST.nextFunctionIdOrdinal catalog.NextOrdinal }) catalog
+
 /// Immutable declaration catalog shared by independently checked units.
 /// Checked bodies own their lexical BindingIds; this catalog contains only
 /// cross-unit declarations and an allocation cursor used while constructing a
@@ -282,6 +306,7 @@ type GlobalCatalog = private {
     NextBindingOrdinal: int
     FunctionNames: Map<AST.FunctionId, string>
     FunctionIds: Map<string, AST.FunctionId>
+    NextFunctionOrdinal: uint64
     TypeNames: Map<AST.TypeId, string>
     TypeIds: Map<string, AST.TypeId>
     BaseTypes: TypeCatalog
@@ -304,27 +329,35 @@ let (|Program|) (CheckedProgram (symbols, topLevels)) = symbols, topLevels
 let internal programFromCheckedParts (symbols, topLevels) : Program =
     CheckedProgram (symbols, topLevels)
 
-let private emptySymbolsWithTypes baseTypes =
-    let startId = AST.functionIdForName "_start"
-    let programEntryId = AST.functionIdForName "__dark_compiler_program_entry"
-    { BindingNames = Map.empty
-      ValueIds = Map.empty
-      NextBindingOrdinal = -1
-      FunctionNames =
-        Map.ofList [startId, "_start"; programEntryId, "__dark_compiler_program_entry"]
-      FunctionIds =
-        Map.ofList ["_start", startId; "__dark_compiler_program_entry", programEntryId]
-      TypeNames = Map.empty
-      TypeIds = Map.empty
-      BaseTypes = baseTypes
-      NextTypeOrdinal = baseTypes.NextOrdinal
-      ConstructorNames = Map.empty
-      ConstructorIds = Map.empty
-      ConstructorLookups = []
-      FieldNames = Map.empty
-      FieldIds = Map.empty }
+let private emptySymbolsWithCatalogs (baseTypes: TypeCatalog) (baseFunctions: FunctionCatalog) =
+    let initial = {
+        BindingNames = Map.empty
+        ValueIds = Map.empty
+        NextBindingOrdinal = -1
+        FunctionNames = baseFunctions.Names
+        FunctionIds = baseFunctions.Ids
+        NextFunctionOrdinal = baseFunctions.NextOrdinal
+        TypeNames = Map.empty
+        TypeIds = Map.empty
+        BaseTypes = baseTypes
+        NextTypeOrdinal = baseTypes.NextOrdinal
+        ConstructorNames = Map.empty
+        ConstructorIds = Map.empty
+        ConstructorLookups = []
+        FieldNames = Map.empty
+        FieldIds = Map.empty
+    }
+    ["_start"; "__dark_compiler_program_entry"]
+    |> List.fold (fun symbols name ->
+        if Map.containsKey name symbols.FunctionIds then symbols
+        else
+            let id = AST.functionId symbols.NextFunctionOrdinal
+            { symbols with
+                FunctionNames = Map.add id name symbols.FunctionNames
+                FunctionIds = Map.add name id symbols.FunctionIds
+                NextFunctionOrdinal = AST.nextFunctionIdOrdinal symbols.NextFunctionOrdinal }) initial
 
-let emptySymbols () = emptySymbolsWithTypes emptyTypeCatalog
+let emptySymbols () = emptySymbolsWithCatalogs emptyTypeCatalog emptyFunctionCatalog
 
 let private registerBinding id name symbols =
     { symbols with BindingNames = Map.add id name symbols.BindingNames }
@@ -353,11 +386,51 @@ let internFunction name symbols =
     match Map.tryFind name symbols.FunctionIds with
     | Some id -> (id, symbols)
     | None ->
-        let id = AST.functionIdForName name
+        let id = AST.functionId symbols.NextFunctionOrdinal
         (id,
          { symbols with
              FunctionIds = Map.add name id symbols.FunctionIds
-             FunctionNames = Map.add id name symbols.FunctionNames })
+             FunctionNames = Map.add id name symbols.FunctionNames
+             NextFunctionOrdinal = AST.nextFunctionIdOrdinal symbols.NextFunctionOrdinal })
+
+let registerGeneratedFunction name id symbols =
+    match Map.tryFind name symbols.FunctionIds, Map.tryFind id symbols.FunctionNames with
+    | Some existing, _ when existing <> id ->
+        Crash.crash "Generated function name has a different allocated identity"
+    | _, Some existing when existing <> name ->
+        Crash.crash "Generated function identity belongs to another name"
+    | _ ->
+        { symbols with
+            FunctionIds = Map.add name id symbols.FunctionIds
+            FunctionNames = Map.add id name symbols.FunctionNames
+            NextFunctionOrdinal = max symbols.NextFunctionOrdinal (AST.nextFunctionIdOrdinal (AST.functionIdValue id)) }
+
+let includeAllocatedFunctionNames (allocated: Symbols) (target: Symbols) : Symbols =
+    let isNew id = AST.functionIdValue id >= target.NextFunctionOrdinal
+    let names =
+        allocated.FunctionNames
+        |> Map.fold (fun names id name ->
+            if not (isNew id) then names
+            else
+                match Map.tryFind id names with
+                | Some existing when existing <> name ->
+                    Crash.crash "Allocated function identity belongs to another name"
+                | Some _ -> names
+                | None -> Map.add id name names) target.FunctionNames
+    let ids =
+        allocated.FunctionIds
+        |> Map.fold (fun ids name id ->
+            if not (isNew id) then ids
+            else
+                match Map.tryFind name ids with
+                | Some existing when existing <> id ->
+                    Crash.crash "Allocated function name has another identity"
+                | Some _ -> ids
+                | None -> Map.add name id ids) target.FunctionIds
+    { target with
+        FunctionNames = names
+        FunctionIds = ids
+        NextFunctionOrdinal = max target.NextFunctionOrdinal allocated.NextFunctionOrdinal }
 
 let internType name symbols =
     match Map.tryFind name symbols.TypeIds with
@@ -405,9 +478,15 @@ let internField typeName name index symbols =
 
 let functionName id symbols =
     Map.tryFind id symbols.FunctionNames
-    |> Option.orElse (AST.tryFunctionCanonicalName id)
 
 let functionNames symbols = symbols.FunctionNames
+let functionIds symbols = symbols.FunctionIds
+let nextFunctionOrdinal symbols = symbols.NextFunctionOrdinal
+let functionCatalog symbols : FunctionCatalog = {
+    Names = symbols.FunctionNames
+    Ids = symbols.FunctionIds
+    NextOrdinal = symbols.NextFunctionOrdinal
+}
 let tryFindFunctionId name symbols = Map.tryFind name symbols.FunctionIds
 let typeName id symbols =
     Map.tryFind id symbols.TypeNames
@@ -416,7 +495,7 @@ let typeNames symbols = symbols.TypeNames
 let tryFindTypeId name symbols =
     Map.tryFind name symbols.TypeIds
     |> Option.orElseWith (fun () -> Map.tryFind name symbols.BaseTypes.Ids)
-let typeCatalog symbols = {
+let typeCatalog symbols : TypeCatalog = {
     Names = Map.fold (fun names id name -> Map.add id name names) symbols.BaseTypes.Names symbols.TypeNames
     Ids = Map.fold (fun ids name id -> Map.add name id ids) symbols.BaseTypes.Ids symbols.TypeIds
     NextOrdinal = symbols.NextTypeOrdinal
@@ -453,21 +532,22 @@ let programTopLevels (Program (_, topLevels)) : TopLevel list = topLevels
 let internal withProgramTopLevels topLevels (Program (symbols, _)) : Program =
     CheckedProgram (symbols, topLevels)
 
-/// A checked unit is self-describing: semantic IDs carry canonical identity
-/// and lexical IDs carry body-local presentation metadata. Reusable artifacts
-/// therefore retain only their fresh-binding cursor, not a projection of the
-/// global declaration catalog and not a walk-derived symbol slice.
+/// Keep the function catalog for checked bodies that refer to functions beyond
+/// their top-level declarations. Lexical binding names stay local to each body.
 let catalogForCheckedUnit (symbols: Symbols) : Symbols =
-    { emptySymbols () with NextBindingOrdinal = symbols.NextBindingOrdinal }
+    { emptySymbols () with
+        NextBindingOrdinal = symbols.NextBindingOrdinal
+        FunctionNames = symbols.FunctionNames
+        FunctionIds = symbols.FunctionIds
+        NextFunctionOrdinal = symbols.NextFunctionOrdinal }
 
 let bindingCursor (symbols: Symbols) : int = symbols.NextBindingOrdinal
 
 let includeBindingCursor (cursor: int) (symbols: Symbols) : Symbols =
     { symbols with NextBindingOrdinal = min cursor symbols.NextBindingOrdinal }
 
-/// Compose independently checked units structurally. Cross-unit declarations
-/// have canonical identities and lexical BindingIds are body-local, so neither
-/// checked expressions nor recursive evidence require rewriting.
+/// Compose checked units that share an allocation catalog. Lexical BindingIds
+/// remain body-local, so checked expressions do not need rewriting.
 let composeTopLevels
     (sourceCatalog: Symbols)
     (targetCatalog: Symbols)
@@ -480,20 +560,35 @@ let composeTopLevels
             | _ -> Map.add key value combined) target source
     let mergeTypeName names id name =
         match Map.tryFind id names with
+        | Some existing when existing = name -> names
         | Some existing when existing <> name ->
             Crash.crash "Composed type catalogs assign one TypeId to different names"
         | _ -> Map.add id name names
     let mergeTypeId ids name id =
         match Map.tryFind name ids with
+        | Some existing when existing = id -> ids
         | Some existing when existing <> id ->
             Crash.crash "Composed type catalogs assign different TypeIds to one name"
+        | _ -> Map.add name id ids
+    let mergeFunctionName names id name =
+        match Map.tryFind id names with
+        | Some existing when existing = name -> names
+        | Some existing when existing <> name ->
+            Crash.crash $"Composed function catalogs assign FunctionId {AST.functionIdValue id} to both '{existing}' and '{name}'"
+        | _ -> Map.add id name names
+    let mergeFunctionId ids name id =
+        match Map.tryFind name ids with
+        | Some existing when existing = id -> ids
+        | Some existing when existing <> id ->
+            Crash.crash $"Composed function catalogs assign '{name}' both FunctionIds {AST.functionIdValue existing} and {AST.functionIdValue id}"
         | _ -> Map.add name id ids
     let catalog = {
         BindingNames = merge sourceCatalog.BindingNames targetCatalog.BindingNames
         ValueIds = merge sourceCatalog.ValueIds targetCatalog.ValueIds
         NextBindingOrdinal = min sourceCatalog.NextBindingOrdinal targetCatalog.NextBindingOrdinal
-        FunctionNames = merge sourceCatalog.FunctionNames targetCatalog.FunctionNames
-        FunctionIds = merge sourceCatalog.FunctionIds targetCatalog.FunctionIds
+        FunctionNames = Map.fold mergeFunctionName targetCatalog.FunctionNames sourceCatalog.FunctionNames
+        FunctionIds = Map.fold mergeFunctionId targetCatalog.FunctionIds sourceCatalog.FunctionIds
+        NextFunctionOrdinal = max sourceCatalog.NextFunctionOrdinal targetCatalog.NextFunctionOrdinal
         TypeNames = Map.fold mergeTypeName targetCatalog.TypeNames sourceCatalog.TypeNames
         TypeIds = Map.fold mergeTypeId targetCatalog.TypeIds sourceCatalog.TypeIds
         BaseTypes = targetCatalog.BaseTypes
@@ -513,8 +608,20 @@ let composeDeclaredTopLevels
     (targetCatalog: Symbols)
     (topLevels: TopLevel list)
     : Symbols * TopLevel list =
+    // The checked unit inherited the target's earlier function catalog. Its
+    // new names include helpers referenced only from bodies, so the delta
+    // cannot be reconstructed from top-level definitions alone.
+    let newFunctionNames, newFunctionIds =
+        if sourceCatalog.NextFunctionOrdinal < targetCatalog.NextFunctionOrdinal then
+            sourceCatalog.FunctionNames, sourceCatalog.FunctionIds
+        else
+            let isNew id = AST.functionIdValue id >= targetCatalog.NextFunctionOrdinal
+            sourceCatalog.FunctionNames |> Map.filter (fun id _ -> isNew id),
+            sourceCatalog.FunctionIds |> Map.filter (fun _ id -> isNew id)
     let initial =
         { catalogForCheckedUnit sourceCatalog with
+            FunctionNames = newFunctionNames
+            FunctionIds = newFunctionIds
             NextTypeOrdinal = sourceCatalog.NextTypeOrdinal
             ConstructorLookups = sourceCatalog.ConstructorLookups }
     let declarations =
@@ -1075,6 +1182,7 @@ let internal ofTypedProgram
     (variantLookup: Map<string, string * string list * int * AST.SemanticType list>)
     (externalValueNames: Set<string>)
     (baseTypes: TypeCatalog)
+    (baseFunctions: FunctionCatalog)
     (recordFieldCounts: string -> int option)
     (AST.Program topLevels)
     : Result<Program, string> =
@@ -1088,7 +1196,7 @@ let internal ofTypedProgram
         |> Set.toList
         |> List.fold (fun (environment, symbols) name ->
             let (id, symbols) = internValue name symbols
-            (Map.add name id environment, symbols)) (Map.empty, emptySymbolsWithTypes baseTypes)
+            (Map.add name id environment, symbols)) (Map.empty, emptySymbolsWithCatalogs baseTypes baseFunctions)
     let initialSymbols =
         topLevels
         |> List.fold (fun symbols topLevel ->

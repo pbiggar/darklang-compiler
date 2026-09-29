@@ -16,6 +16,7 @@ let private addCallsFromOperands (ops: LIR.Operand list) (calls: Set<AST.Functio
 
 /// Add function identities referenced by one instruction to the current call set.
 let private addCallsFromInstr
+    (functionIds: Map<string, AST.FunctionId>)
     (instr: LIR.Instr)
     (calls: Set<AST.FunctionId>)
     : Set<AST.FunctionId> =
@@ -146,7 +147,10 @@ let private addCallsFromInstr
             match payloadType with
             | Some (AST.TList elemType) ->
                 match ListDisplay.getDisplayStringFunc elemType with
-                | Some funcName -> Set.add (AST.functionIdForName funcName) calls
+                | Some funcName ->
+                    match Map.tryFind funcName functionIds with
+                    | Some id -> Set.add id calls
+                    | None -> Crash.crash $"List display helper '{funcName}' has no allocated identity"
                 | None -> calls
             | _ -> calls) calls
     | LIR.HeapStore (_, _, src, _) -> addCallFromOperand src calls
@@ -173,15 +177,15 @@ let private addCallsFromInstr
         calls |> addCallFromOperand path |> addCallFromOperand content
 
 /// Add every function-call edge in one LIR function to an existing call set.
-let private addCalledFunctions (func: LIR.Function) (calls: Set<AST.FunctionId>) : Set<AST.FunctionId> =
+let private addCalledFunctions functionIds (func: LIR.Function) (calls: Set<AST.FunctionId>) : Set<AST.FunctionId> =
     func.CFG.Blocks
     |> Map.fold (fun calls _ block ->
         block.Instrs
-        |> List.fold (fun calls instr -> addCallsFromInstr instr calls) calls) calls
+        |> List.fold (fun calls instr -> addCallsFromInstr functionIds instr calls) calls) calls
 
 /// Extract function identities called from a LIR function.
-let getCalledFunctions (func: LIR.Function) : Set<AST.FunctionId> =
-    addCalledFunctions func Set.empty
+let getCalledFunctions functionIds (func: LIR.Function) : Set<AST.FunctionId> =
+    addCalledFunctions functionIds func Set.empty
 
 let requiresListDisplayHelpers (func: LIR.Function) : bool =
     func.CFG.Blocks
@@ -197,9 +201,9 @@ let requiresListDisplayHelpers (func: LIR.Function) : bool =
             | _ -> false))
 
 /// Build call graph from list of functions
-let buildCallGraph (funcs: LIR.Function list) : Map<AST.FunctionId, Set<AST.FunctionId>> =
+let buildCallGraph functionIds (funcs: LIR.Function list) : Map<AST.FunctionId, Set<AST.FunctionId>> =
     funcs
-    |> List.map (fun f -> f.Id, getCalledFunctions f)
+    |> List.map (fun f -> f.Id, getCalledFunctions functionIds f)
     |> Map.ofList
 
 /// Compute transitive closure of reachable functions.
@@ -230,7 +234,8 @@ let filterFunctionsWithUserCallGraph
 
 /// Filter functions to only include reachable ones
 let filterFunctions (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+                    (functionIds: Map<string, AST.FunctionId>)
                     (userFuncs: LIR.Function list)
                     (stdlibFuncs: LIR.Function list) : LIR.Function list =
-    let userCallGraph = buildCallGraph userFuncs
+    let userCallGraph = buildCallGraph functionIds userFuncs
     filterFunctionsWithUserCallGraph callGraph userCallGraph userFuncs stdlibFuncs

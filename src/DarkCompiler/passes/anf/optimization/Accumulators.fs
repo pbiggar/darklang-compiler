@@ -852,7 +852,7 @@ let private freshHelperName
         let candidate =
             if suffix = 0 then $"{funcName}$trmo"
             else $"{funcName}$trmo{suffix}"
-        if Map.containsKey (AST.functionIdForName candidate) functionNames
+        if functionNames |> Map.values |> Seq.contains candidate
            || Set.contains candidate generatedNames then
             choose (suffix + 1)
         else
@@ -865,14 +865,23 @@ let internal planTailRecursionModuloHelpers
     let helperNames, _ =
         eligibleFunctions
         |> Set.toList
-        |> List.map (fun functionId -> functionId, AST.functionIdValue functionId)
+        |> List.map (fun functionId ->
+            match Map.tryFind functionId functionNames with
+            | Some name -> functionId, name
+            | None -> Crash.crash "Accumulator helper source has no function name")
         |> List.sortBy snd
         |> List.mapFold (fun generatedNames (functionId, functionName) ->
             let helperName = freshHelperName functionNames generatedNames functionName
             ((functionId, helperName), Set.add helperName generatedNames)) Set.empty
+    let allocated =
+        AST.allocateFunctionIds (functionNames |> Map.keys) (helperNames |> List.map snd)
     helperNames
     |> List.map (fun (functionId, helperName) ->
-        functionId, (helperName, AST.functionIdForName helperName))
+        let helperId =
+            match Map.tryFind helperName allocated with
+            | Some id -> id
+            | None -> Crash.crash "Accumulator helper identity was not allocated"
+        functionId, (helperName, helperId))
     |> Map.ofList
 
 let rec private transformConstructorWrapperBody
@@ -1149,11 +1158,14 @@ let internal transformTailRecursionModuloListConstructors
     (program: Program)
     : Program * VarGen =
     let (Program (functions, mainExpr)) = program
+    let externalNamesById =
+        externalFunctions
+        |> Map.toList
+        |> List.map (fun (name, func) -> func.Id, name)
+        |> Map.ofList
     let isListPush id =
-        let name = AST.functionIdValue id
-        name.StartsWith("Darklang.Stdlib.List.push_")
-        && (Map.tryFind name externalFunctions
-            |> Option.exists (fun functionDefinition -> functionDefinition.Id = id))
+        Map.tryFind id externalNamesById
+        |> Option.exists (fun name -> name.StartsWith("Darklang.Stdlib.List.push_"))
     let (functionsReversed, finalVarGen) =
         functions
         |> List.fold
@@ -1181,7 +1193,10 @@ let internal transformTailRecursionModuloListConstructors
                 let finishTarget =
                     pushName
                     |> Option.map (fun id ->
-                        let name = AST.functionIdValue id
+                        let name =
+                            Map.tryFind id externalNamesById
+                            |> Option.defaultWith (fun () ->
+                                Crash.crash "List push target has no external function name")
                         name.Replace(
                             "Darklang.Stdlib.List.push_",
                             "Darklang.Stdlib.List.__reverseInto_"

@@ -354,6 +354,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     println "  [anf.print-result] Print Insertion..."
                                 let printStart = sw.Elapsed.TotalMilliseconds
                                 PrintInsertion.insertPrintInEntry
+                                    userOnly.FunctionIds
                                     programEntryName
                                     boundaryProgramType
                                     functions
@@ -362,6 +363,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     | NoNativeLayoutProbe -> Ok printedFunctions
                                     | (RootWord | TupleWords) as probe ->
                                         PrintInsertion.insertRootWordProbeInEntry
+                                            userOnly.FunctionNames
                                             programEntryName
                                             (probe = TupleWords)
                                             printedFunctions)
@@ -481,7 +483,9 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         if plan.Options.DisableFunctionTreeShaking then Map.empty
                                         else
                                             let localCallGraph =
-                                                DeadCodeElimination.buildCallGraph allocatedUserFuncs
+                                                DeadCodeElimination.buildCallGraph
+                                                    userOnly.FunctionIds
+                                                    allocatedUserFuncs
                                             Map.fold
                                                 (fun graph id calls -> Map.add id calls graph)
                                                 plan.PrebuiltCallGraph
@@ -529,7 +533,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                         |> List.fold (fun ids func ->
                                                             Set.union
                                                                 ids
-                                                                (DeadCodeElimination.getCalledFunctions func)) Set.empty
+                                                                (DeadCodeElimination.getCalledFunctions userOnly.FunctionIds func)) Set.empty
                                                         |> Set.filter (fun id ->
                                                             Map.containsKey id allUserById
                                                             && not (Set.contains id reachable))

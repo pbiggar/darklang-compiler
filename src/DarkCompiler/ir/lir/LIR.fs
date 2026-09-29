@@ -428,6 +428,7 @@ type FunctionCodegenFacts = {
     /// failure and therefore needs the backend's shared error routine.
     NeedsRuntimeErrorHelper: bool
     Arm64RcHelperRequirements: Arm64RcHelperRequirements option
+    Arm64GenericHelperIds: Map<string, AST.FunctionId>
 }
 
 /// Function with CFG. CodegenFacts is absent only for hand-built or legacy LIR;
@@ -535,6 +536,7 @@ let analyzeFunctionCodegenFacts (func: Function) : FunctionCodegenFacts =
                     | MappedFree _ -> true
                     | _ -> false))
         Arm64RcHelperRequirements = None
+        Arm64GenericHelperIds = Map.empty
     }
 
 let attachFunctionCodegenFacts (func: Function) : Function =

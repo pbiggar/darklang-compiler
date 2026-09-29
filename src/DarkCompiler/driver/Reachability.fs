@@ -81,6 +81,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     RecursiveMembers = userOnly.RecursiveMembers
                 }
                 PrintInsertion.insertPrintInEntry
+                    userOnly.FunctionIds
                     "_start"
                     boundaryProgramType
                     (entryFunction :: userOnly.UserFunctions)

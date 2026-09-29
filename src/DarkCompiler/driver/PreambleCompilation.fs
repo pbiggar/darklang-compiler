@@ -86,7 +86,11 @@ let buildPreambleContext
                         preambleRegistries
                         baseFuncNames
                         preambleReturnTypes
-                        |> fun context -> { context with WrittenEnvironment = analysis.WrittenEnvironment }
+                        |> fun context ->
+                            { context with
+                                WrittenEnvironment =
+                                    analysis.WrittenEnvironment
+                                    |> Option.map (WrittenChecking.includeAllocatedFunctions preambleUserOnly.Symbols) }
                 match buildAnf 0 preambleOptions sw preambleRegistries InliningCommon.defaultConfig Map.empty Map.empty Set.empty preambleUserOnly.Functions Map.empty false passTimingRecorder with
                 | Error err ->
                     let rcPrefix = "Reference count insertion error: "
@@ -98,6 +102,8 @@ let buildPreambleContext
                             $"Preamble {err}"
                     Error msg
                 | Ok (preambleFunctions, ssaFunctions, typeMap) ->
+                    let pipelineContext =
+                        includeCompiledFunctions preambleFunctions pipelineContext
                     let preambleExternalReturnTypes = preambleReturnTypes
                     match lowerToAllocatedLirWithKnown
                         stdlib.CallGraphSummaries
@@ -153,7 +159,10 @@ let buildPreambleContext
                             TypeMap = mergedTypeMap
                             SymbolicFunctions = preambleSymbolicFuncs
                             CallGraphSummaries = summaries
-                            SymbolicCallGraph = DeadCodeElimination.buildCallGraph preambleSymbolicFuncs
+                            SymbolicCallGraph =
+                                DeadCodeElimination.buildCallGraph
+                                    (CheckedAST.functionIds pipelineContextWithLiftedNames.Symbols)
+                                    preambleSymbolicFuncs
                         }
                         Ok (stdlib, context)
 
@@ -173,7 +182,9 @@ let buildPreambleContextFromAnalysis
 
     let (CheckedAST.Program (symbols, items)) = analysis.TypedAST
     let symbols, specializedFunctions =
-        SpecializationIdentity.importSpecializedFunctions symbols specialization.SpecializedFuncs
+        SpecializationIdentity.importSpecializedFunctions
+            specialization.Symbols
+            specialization.SpecializedFuncs
     let specializedTopLevels = specializedFunctions |> List.map CheckedAST.FunctionDef
     let specializedAndOriginalTopLevels = specializedTopLevels @ items
     let symbols, materializedTopLevels =
@@ -216,7 +227,11 @@ let buildPreambleContextFromAnalysis
                 preambleRegistries
                 baseFuncNames
                 preambleReturnTypes
-            |> fun context -> { context with WrittenEnvironment = analysis.WrittenEnvironment }
+            |> fun context ->
+                { context with
+                    WrittenEnvironment =
+                        analysis.WrittenEnvironment
+                        |> Option.map (WrittenChecking.includeAllocatedFunctions preambleUserOnly.Symbols) }
         match buildAnf 0 preambleOptions sw preambleRegistries InliningCommon.defaultConfig Map.empty Map.empty Set.empty preambleUserOnly.Functions Map.empty false passTimingRecorder with
         | Error err ->
             let rcPrefix = "Reference count insertion error: "
@@ -228,6 +243,8 @@ let buildPreambleContextFromAnalysis
                     $"Preamble {err}"
             Error msg
         | Ok (preambleFunctions, ssaFunctions, typeMap) ->
+            let pipelineContext =
+                includeCompiledFunctions preambleFunctions pipelineContext
             let preambleExternalReturnTypes = preambleReturnTypes
             match lowerToAllocatedLirWithKnown
                 stdlib.CallGraphSummaries
@@ -267,5 +284,8 @@ let buildPreambleContextFromAnalysis
                     TypeMap = mergedTypeMap
                     SymbolicFunctions = preambleSymbolicFuncs
                     CallGraphSummaries = summaries
-                    SymbolicCallGraph = DeadCodeElimination.buildCallGraph preambleSymbolicFuncs
+                    SymbolicCallGraph =
+                        DeadCodeElimination.buildCallGraph
+                            (CheckedAST.functionIds pipelineContext.Symbols)
+                            preambleSymbolicFuncs
                 }))

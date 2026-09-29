@@ -439,6 +439,7 @@ type CFGBuilder = {
     ExtraTypeMap: Map<ANF.TempId, AST.SemanticType>
     TypeReg: Map<string, (string * AST.SemanticType) list>
     ReturnTypeReg: Map<AST.FunctionId, AST.SemanticType>  // Function identity -> return type
+    FunctionNames: Map<AST.FunctionId, string>
     FuncId: AST.FunctionId
     FuncName: string  // For generating unique labels per function
     ParamRegs: MIR.VReg list  // Parameter VRegs for self-recursive tail call loop optimization
@@ -539,7 +540,10 @@ let private directCallReturnType (builder: CFGBuilder) (funcName: AST.FunctionId
     match Map.tryFind funcName builder.ReturnTypeReg with
     | Some t -> t
     | None ->
-        let canonicalName = AST.functionIdValue funcName
+        let canonicalName =
+            Map.tryFind funcName builder.FunctionNames
+            |> Option.defaultWith (fun () ->
+                Crash.crash "MIR lowering lost direct-call function name metadata")
         match tryGetIntrinsicReturnType canonicalName with
         | Some t -> t
         | None when canonicalName.StartsWith("__dark_eq_") -> AST.TBool
@@ -1686,6 +1690,7 @@ let convertSSAANFFunction
     (typeById: AST.SemanticType option array)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
     (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
+    (functionNames: Map<AST.FunctionId, string>)
     (enableCoverage: bool)
     : Result<MIR.Function, string> =
     let mirLabel (SSAANF.Label id) =
@@ -1769,6 +1774,7 @@ let convertSSAANFFunction
             |> List.fold (fun types param -> Map.add param.Id param.Type types) ssaFunc.FreshValueTypes
         TypeReg = typeReg
         ReturnTypeReg = returnTypeReg
+        FunctionNames = functionNames
         FuncId = ssaFunc.Id
         FuncName = ssaFunc.Name
         ParamRegs = bodyParamRegs
@@ -1931,6 +1937,7 @@ let private convertANFFunctionWithTailCalls
     (typeById: AST.SemanticType option array)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
     (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
+    (functionNames: Map<AST.FunctionId, string>)
     (enableCoverage: bool)
     (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
     (enableTCO: bool)
@@ -1940,7 +1947,7 @@ let private convertANFFunctionWithTailCalls
         let withTailCalls =
             if enableTCO then SSATailCallDetection.detect recursiveMembers ssaFunc
             else ssaFunc
-        convertSSAANFFunction withTailCalls typeById typeReg returnTypeReg enableCoverage)
+        convertSSAANFFunction withTailCalls typeById typeReg returnTypeReg functionNames enableCoverage)
 
 let convertANFFunction
     (anfFunc: ANF.Function)
@@ -1948,10 +1955,11 @@ let convertANFFunction
     (typeById: AST.SemanticType option array)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
     (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
+    (functionNames: Map<AST.FunctionId, string>)
     (enableCoverage: bool)
     : Result<MIR.Function, string> =
     convertANFFunctionWithTailCalls
-        anfFunc typeMap typeById typeReg returnTypeReg enableCoverage Map.empty true
+        anfFunc typeMap typeById typeReg returnTypeReg functionNames enableCoverage Map.empty true
 
 /// Convert ANF program to MIR program
 /// mainExprType: the type of the main expression (used for _start's return type)
@@ -1968,6 +1976,7 @@ let toMIR
     (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
     (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
+    (functionNames: Map<AST.FunctionId, string>)
     : Result<MIR.Program, string> =
     let (ANF.Program (functions, mainExpr)) = program
     // TypeMap spans the whole program, so materialize its dense lookup once and
@@ -1976,12 +1985,16 @@ let toMIR
 
     // Build return type registry for all functions (needed for caller to know return type)
     let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
-    let startId = AST.functionIdForName "_start"
+    let startId =
+        functionNames
+        |> Map.toSeq
+        |> Seq.tryPick (fun (id, name) -> if name = "_start" then Some id else None)
+        |> Option.defaultWith (fun () -> Crash.crash "MIR start function has no allocated identity")
     // Phase 2: Convert all functions to MIR
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
     match
         mapResults
-            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg enableCoverage)
+            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg functionNames enableCoverage)
             functions
     with
     | Error err -> Error err
@@ -1996,7 +2009,7 @@ let toMIR
         ReturnOwnership = ANF.OwnedReturn
         Body = mainExpr
     }
-    match convertANFFunction startFuncANF typeMap typeById typeReg returnTypeReg enableCoverage with
+    match convertANFFunction startFuncANF typeMap typeById typeReg returnTypeReg functionNames enableCoverage with
     | Error err -> Error err
     | Ok startFunc ->
     let allFuncs = mirFuncs @ [startFunc]
@@ -2021,6 +2034,7 @@ let private toMIRFunctionsOnlyInternal
     (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
     (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
+    (functionNames: Map<AST.FunctionId, string>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let startPhase () =
         phaseRecorder |> Option.map (fun _ -> System.Diagnostics.Stopwatch.StartNew())
@@ -2057,7 +2071,7 @@ let private toMIRFunctionsOnlyInternal
         recordPhase "Tail Call Detection" tailCallTimer
         let conversionTimer = startPhase ()
         mapResults
-            (fun ssaFunc -> convertSSAANFFunction ssaFunc typeById typeReg returnTypeReg enableCoverage)
+            (fun ssaFunc -> convertSSAANFFunction ssaFunc typeById typeReg returnTypeReg functionNames enableCoverage)
             withTailCalls
         |> Result.map (fun mirFuncs ->
             recordPhase "SSA ANF -> MIR Function Conversion" conversionTimer
@@ -2085,6 +2099,7 @@ let toMIRSSAFunctionsOnlyWithTrace
     (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
     (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
+    (functionNames: Map<AST.FunctionId, string>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let maxId =
         typeMap
@@ -2096,7 +2111,7 @@ let toMIRSSAFunctionsOnlyWithTrace
         else functions
     withTailCalls
     |> mapResults (fun func ->
-        convertSSAANFFunction func typeById typeReg returnTypeReg enableCoverage)
+        convertSSAANFFunction func typeById typeReg returnTypeReg functionNames enableCoverage)
     |> Result.map (fun mirFuncs ->
         phaseRecorder |> Option.iter (fun record -> record "SSA ANF -> MIR Function Conversion" 0.0)
         let variantRegistry, recordRegistry =
@@ -2115,6 +2130,7 @@ let toMIRFunctionsOnly
     (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
     (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
+    (functionNames: Map<AST.FunctionId, string>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let (ANF.Program (functions, _)) = program
     let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
@@ -2129,6 +2145,7 @@ let toMIRFunctionsOnly
         typeRegForRecords
         enableCoverage
         returnTypeReg
+        functionNames
 
 let toMIRFunctionsOnlyWithTrace
     (phaseRecorder: (string -> float -> unit) option)
@@ -2142,6 +2159,7 @@ let toMIRFunctionsOnlyWithTrace
     (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
     (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
+    (functionNames: Map<AST.FunctionId, string>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     toMIRFunctionsOnlyInternal
         phaseRecorder
@@ -2154,3 +2172,4 @@ let toMIRFunctionsOnlyWithTrace
         typeRegForRecords
         enableCoverage
         returnTypeReg
+        functionNames

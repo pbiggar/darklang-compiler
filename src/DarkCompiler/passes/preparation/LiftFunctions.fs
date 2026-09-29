@@ -393,7 +393,9 @@ let rec liftLambdasInProgram
     let funcReturnTypesById =
         [ "Builtin.testRuntimeError"; "Builtin.crash" ]
         |> List.fold (fun returnTypes name ->
-            Map.add (AST.functionIdForName name) AST.TNever returnTypes) funcReturnTypes
+            match CheckedAST.tryFindFunctionId name symbols with
+            | Some id -> Map.add id AST.TNever returnTypes
+            | None -> Crash.crash $"Builtin function '{name}' has no allocated identity") funcReturnTypes
 
     let initialState = {
         Symbols = symbols

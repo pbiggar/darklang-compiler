@@ -486,7 +486,6 @@ let rec inferTypeCore (sumTypeNames: SumMetadata) (typeNames: TypeNameRegistry) 
             Map.tryFind funcName funcReg
             |> Option.map fst
             |> Option.orElseWith (fun () -> Map.tryFind funcName functionNames)
-            |> Option.orElseWith (fun () -> AST.tryFunctionCanonicalName funcName)
         if displayName = Some "Builtin.unwrap" then
             match argList with
             | [argExpr] ->
@@ -549,7 +548,8 @@ let rec inferTypeCore (sumTypeNames: SumMetadata) (typeNames: TypeNameRegistry) 
                     // These are raw memory operations that work with 8-byte values
                     let funcName =
                         displayName
-                        |> Option.defaultValue (AST.functionIdValue funcName)
+                        |> Option.defaultWith (fun () ->
+                            Crash.crash $"Type inference lost function name metadata for FunctionId {AST.functionIdValue funcName}")
                     if funcName.StartsWith("Builtin.pmEvaluateValue_") then
                         let suffix = funcName.Substring("Builtin.pmEvaluateValue_".Length)
                         tryParseMangledTypeWithSumTypeNames sumTypeNames.Names suffix

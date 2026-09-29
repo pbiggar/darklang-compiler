@@ -276,6 +276,7 @@ type SuiteContext = {
 
 type private PreamblePlan = {
     Spec: PreambleBuildSpec
+    Tests: E2ETest list
     Analysis: CompilationContexts.PreambleAnalysis option
     Specialization: SpecializationResult
     StdlibSpecs: Set<SpecKey>
@@ -577,20 +578,26 @@ let private buildPreamblePlan
             | Some analysis -> analysis.GenericFuncDefs
         let preambleSpecsForDefs = filterSpecsByDefs preambleGenericDefs preambleSpecs
         let stdlibSpecsFromPreamble = filterSpecsByDefs stdlib.Context.GenericFuncDefs preambleSpecs
+        let specializationSymbols =
+            analysisOpt
+            |> Option.map (fun analysis -> CheckedAST.programSymbols analysis.TypedAST)
+            |> Option.defaultValue stdlib.Context.Symbols
         let specialization =
             if Map.isEmpty preambleGenericDefs then
                 {
                     SpecializedFuncs = []
                     SpecRegistry = Map.empty
                     ExternalSpecs = Set.empty
+                    Symbols = specializationSymbols
                 }
             else
-                specializeFromSpecs preambleGenericDefs preambleSpecsForDefs
+                specializeFromSpecs specializationSymbols preambleGenericDefs preambleSpecsForDefs
         let stdlibSpecsFromSpecialization =
             filterSpecsByDefs stdlib.Context.GenericFuncDefs specialization.ExternalSpecs
         let stdlibSpecs = Set.union stdlibSpecsFromPreamble stdlibSpecsFromSpecialization
         let plan = {
             Spec = spec
+            Tests = tests
             Analysis = analysisOpt
             Specialization = specialization
             StdlibSpecs = stdlibSpecs
@@ -704,7 +711,7 @@ let buildSuiteContexts
                                                 CallGraphSummaries = Map.empty
                                                 SymbolicCallGraph = Map.empty
                                             } : CompilationContexts.PreambleContext)
-                                    | Some analysis ->
+                                    | Some analysis when Set.isEmpty plan.StdlibSpecs ->
                                         PreambleCompilation.buildPreambleContextFromAnalysis
                                             specializedStdlib
                                             analysis
@@ -712,6 +719,28 @@ let buildSuiteContexts
                                             plan.Spec.SourceFile
                                             plan.Spec.FunctionLineMap
                                             nestedRecorder
+                                        |> Result.map snd
+                                        |> Result.mapError (fun err ->
+                                            $"Preamble build error ({plan.Spec.SourceFile}): {err}")
+                                    | Some _ ->
+                                        analyzePreambleForPlan specializedStdlib plan.Spec plan.Tests
+                                        |> Result.bind (fun analyzed ->
+                                            let analysis =
+                                                analyzed
+                                                |> Option.defaultWith (fun () ->
+                                                    Crash.crash "A nonempty preamble disappeared during specialization")
+                                            let specialization =
+                                                specializeFromSpecs
+                                                    (CheckedAST.programSymbols analysis.TypedAST)
+                                                    analysis.GenericFuncDefs
+                                                    (plan.Specialization.SpecRegistry |> Map.keys |> Set.ofSeq)
+                                            PreambleCompilation.buildPreambleContextFromAnalysis
+                                                specializedStdlib
+                                                analysis
+                                                specialization
+                                                plan.Spec.SourceFile
+                                                plan.Spec.FunctionLineMap
+                                                nestedRecorder)
                                         |> Result.map snd
                                         |> Result.mapError (fun err ->
                                             $"Preamble build error ({plan.Spec.SourceFile}): {err}")

@@ -487,9 +487,18 @@ let private generatePreparedARM64WithOptionsAndCache
     let plannedGenericDecHelpers = rcHelperRequirements.PlannedGenericDecHelpers
     let plannedDictDecHelpers = rcHelperRequirements.PlannedDictDecHelpers
     let helperIds =
-        AST.allocateFunctionIds
-            (functions |> List.map (fun func -> func.Id))
-            (plannedGenericDecHelpers |> Map.keys)
+        functions
+        |> List.fold (fun ids func ->
+            let localIds =
+                func.CodegenFacts
+                |> Option.map (fun facts -> facts.Arm64GenericHelperIds)
+                |> Option.defaultValue Map.empty
+            localIds
+            |> Map.fold (fun ids label id ->
+                match Map.tryFind label ids with
+                | Some existing when existing <> id ->
+                    Crash.crash $"ARM64 generic helper '{label}' has conflicting identities"
+                | _ -> Map.add label id ids) ids) Map.empty
     let functionNames =
         helperIds
         |> Map.fold (fun names name id -> Map.add id name names)

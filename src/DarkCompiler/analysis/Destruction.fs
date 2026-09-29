@@ -25,9 +25,8 @@ type FunctionScopeContract = {
 
 /// These compiler primitives can perform effects, but neither owns a value
 /// whose destruction invokes user code. Unknown external calls remain unproven.
-let private inertPrimitiveIds =
+let private inertPrimitiveNames =
     Set.ofList ["Builtin.printLine"; "Builtin.print"]
-    |> Set.map AST.functionIdForName
 
 /// Reject callers transitively from locally unproven scopes and unavailable
 /// callees. Safe recursive components are accepted without unfolding paths.
@@ -37,8 +36,11 @@ let inertFunctionScopesWithBase
     (contracts: Map<AST.FunctionId, FunctionScopeContract>) =
     let names = contracts |> Map.keys |> Set.ofSeq
     let inertPrimitives =
-        inertPrimitiveIds
-        |> Set.filter (fun id -> Map.containsKey id functionNames)
+        functionNames
+        |> Map.toSeq
+        |> Seq.choose (fun (id, name) ->
+            if Set.contains name inertPrimitiveNames then Some id else None)
+        |> Set.ofSeq
     let primitives =
         Set.union knownInert inertPrimitives
         |> fun inert -> Set.difference inert names

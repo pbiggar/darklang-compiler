@@ -309,13 +309,17 @@ let buildStdlibWithTrace
                         registries
                         baseFuncNames
                         returnTypes
-                    |> fun context -> { context with WrittenEnvironment = Some writtenEnvironment }
+                    |> fun context ->
+                        { context with
+                            WrittenEnvironment =
+                                Some (WrittenChecking.includeAllocatedFunctions anfResult.Symbols writtenEnvironment) }
                 let stdlibFunctions = anfResult.Functions
                 let stdlibOptions = defaultOptions
                 match buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty stdlibFunctions Map.empty false passTimingRecorder with
                 | Error e ->
                     Error e
                 | Ok (anfFunctions, ssaFunctions, typeMap) ->
+                    let context = includeCompiledFunctions anfFunctions context
                     let stdlibFuncMap =
                         anfFunctions
                         |> List.map (fun f -> f.Name, f)
@@ -359,7 +363,10 @@ let buildStdlibWithTrace
                     | Error e ->
                         Error e
                     | Ok (allocatedFuncs, summaries) ->
-                        let stdlibCallGraph = DeadCodeElimination.buildCallGraph allocatedFuncs
+                        let stdlibCallGraph =
+                            DeadCodeElimination.buildCallGraph
+                                (allocatedFuncs |> List.map (fun func -> func.Name, func.Id) |> Map.ofList)
+                                allocatedFuncs
                         Ok {
                             TypedAST = typedStdlib
                             Context = contextWithLiftedNames
@@ -403,7 +410,11 @@ let buildStdlibSpecializations
                 (fun acc name typeInfo -> Map.add name typeInfo acc)
                 stdlib.Context.TypeCheckEnv.IndexedTypeReg
                 externalIndexedTypeReg
-        let specialization = Monomorphization.specializeFromSpecs stdlib.Context.GenericFuncDefs specs
+        let specialization =
+            Monomorphization.specializeFromSpecs
+                stdlib.Context.Symbols
+                stdlib.Context.GenericFuncDefs
+                specs
         let initialCombinedSpecRegistry = mergeSpecRegistries stdlib.Context.SpecRegistry specialization.SpecRegistry
         let existingNames =
             stdlib.StdlibANFFunctions
@@ -425,7 +436,7 @@ let buildStdlibSpecializations
             |> Result.bind (fun (typeDefs, _functions) ->
                 let symbols, newSpecializedFunctions =
                     SpecializationIdentity.importSpecializedFunctions
-                        stdlib.Context.Symbols
+                        specialization.Symbols
                         newSpecializedFuncs
                 let initiallyMaterializedTopLevels, symbols =
                     newSpecializedFunctions
@@ -451,11 +462,16 @@ let buildStdlibSpecializations
                     |> Set.filter (fun (funcName, _) ->
                         Map.containsKey funcName stdlib.Context.GenericFuncDefs)
                 let helperSpecialization =
-                    Monomorphization.specializeFromSpecs stdlib.Context.GenericFuncDefs helperSpecs
+                    Monomorphization.specializeFromSpecs
+                        symbols
+                        stdlib.Context.GenericFuncDefs
+                        helperSpecs
                 let combinedSpecRegistry =
                     mergeSpecRegistries initialCombinedSpecRegistry helperSpecialization.SpecRegistry
                 let symbols, helperSpecializedFunctions =
-                    SpecializationIdentity.importSpecializedFunctions symbols helperSpecialization.SpecializedFuncs
+                    SpecializationIdentity.importSpecializedFunctions
+                        helperSpecialization.Symbols
+                        helperSpecialization.SpecializedFuncs
                 let symbols, materializedTopLevels =
                     (helperSpecializedFunctions @ initiallyMaterializedFunctions)
                     |> List.filter (fun f -> not (Set.contains f.Name existingNames))
@@ -505,6 +521,7 @@ let buildStdlibSpecializations
                     let (registries, localRegistries, resolvedFunctions) =
                         buildRegistriesForProgram
                             passTimingRecorder
+                            (CheckedAST.nextFunctionOrdinal stdlib.Context.Symbols)
                             (CheckedAST.programSymbols preparedProgram)
                             true
                             stdlib.Context.Registries.ModuleRegistry
@@ -517,6 +534,12 @@ let buildStdlibSpecializations
                         TypeRegistries.recordTypeParamsRegistry externalTypeReg
                     let registries = {
                         registries with
+                            FunctionIds =
+                                CheckedAST.functionIds (CheckedAST.programSymbols preparedProgram)
+                                |> Map.fold (fun ids name id -> Map.add name id ids) registries.FunctionIds
+                            FunctionNames =
+                                CheckedAST.functionNames (CheckedAST.programSymbols preparedProgram)
+                                |> Map.fold (fun names id name -> Map.add id name names) registries.FunctionNames
                             TypeReg =
                                 Map.fold
                                     (fun acc name recordInfo -> Map.add name recordInfo acc)
@@ -597,7 +620,10 @@ let buildStdlibSpecializations
                                     mergedStdlibAnfFunctions
                                     |> Map.toList
                                     |> List.map snd
-                                let stdlibCallGraph = DeadCodeElimination.buildCallGraph allLirFuncs
+                                let stdlibCallGraph =
+                                    DeadCodeElimination.buildCallGraph
+                                        (allLirFuncs |> List.map (fun func -> func.Name, func.Id) |> Map.ofList)
+                                        allLirFuncs
                                 let stdlibAnfCallGraph = ANFDeadCodeElimination.buildCallGraph allAnfFunctions
                                 let baseFuncNames =
                                     anfFunctions
@@ -611,6 +637,9 @@ let buildStdlibSpecializations
                                 let updatedContext = {
                                     stdlib.Context with
                                         Symbols = CheckedAST.programSymbols preparedProgram
+                                        WrittenEnvironment =
+                                            stdlib.Context.WrittenEnvironment
+                                            |> Option.map (WrittenChecking.includeAllocatedFunctions (CheckedAST.programSymbols preparedProgram))
                                         Registries = registries
                                         SpecRegistry = combinedSpecRegistry
                                         BaseFuncNames = baseFuncNames
@@ -623,6 +652,8 @@ let buildStdlibSpecializations
                                         LambdaLiftVariantLookup = lambdaLiftVariantLookup
                                         ReturnTypes = externalReturnTypes
                                 }
+                                let updatedContext =
+                                    includeCompiledFunctions anfFunctions updatedContext
                                 Ok {
                                     stdlib with
                                         Context = updatedContext

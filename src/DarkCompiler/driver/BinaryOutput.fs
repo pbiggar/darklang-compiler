@@ -16,6 +16,84 @@ open CompilationCacheIdentity
 open CompilationSession
 open PipelineDiagnostics
 
+let private finalizeArm64GenericHelperIds
+    (LIR.Program (functions, variants, records))
+    (functionGroups: CodeGen.FunctionGroup list)
+    (metadataGroups: CodeGen.MetadataGroup list) =
+    let sourceNames =
+        functions
+        |> List.fold (fun names (func: LIR.Function) ->
+            match Map.tryFind func.Id names with
+            | Some existing when existing <> func.Name ->
+                Crash.crash
+                    $"Executable assigns FunctionId {AST.functionIdValue func.Id} to both '{existing}' and '{func.Name}'"
+            | _ -> Map.add func.Id func.Name names) Map.empty
+    let labels =
+        functions
+        |> List.collect (fun func ->
+            func.CodegenFacts
+            |> Option.map (fun facts -> facts.Arm64GenericHelperIds |> Map.keys |> Seq.toList)
+            |> Option.defaultValue [])
+    let finalIds = AST.allocateFunctionIds (sourceNames |> Map.keys) labels
+    let finalizedId label =
+        Map.tryFind label finalIds
+        |> Option.defaultWith (fun () -> Crash.crash $"ARM64 helper '{label}' has no final identity")
+    let finalizeFunction (func: LIR.Function) =
+        let localIds =
+            func.CodegenFacts
+            |> Option.map (fun facts -> facts.Arm64GenericHelperIds)
+            |> Option.defaultValue Map.empty
+        if Map.isEmpty localIds then func
+        else
+            let replacements =
+                localIds
+                |> Map.fold (fun ids label oldId ->
+                    let newId = finalizedId label
+                    match Map.tryFind oldId ids with
+                    | Some existing when existing <> newId ->
+                        Crash.crash $"ARM64 helper identity {AST.functionIdValue oldId} names two helpers in '{func.Name}'"
+                    | _ -> Map.add oldId newId ids) Map.empty
+            let rewrite = function
+                | LIR.Call (dest, id, args) ->
+                    match Map.tryFind id replacements with
+                    | Some replacement -> LIR.Call (dest, replacement, args)
+                    | None -> LIR.Call (dest, id, args)
+                | LIR.TailCall (id, args) ->
+                    match Map.tryFind id replacements with
+                    | Some replacement -> LIR.TailCall (replacement, args)
+                    | None -> LIR.TailCall (id, args)
+                | instr -> instr
+            let blocks =
+                func.CFG.Blocks
+                |> Map.map (fun _ block ->
+                    { block with Instrs = block.Instrs |> List.map rewrite })
+            let facts =
+                func.CodegenFacts
+                |> Option.map (fun facts ->
+                    { facts with
+                        Arm64GenericHelperIds =
+                            localIds
+                            |> Map.map (fun label _ -> finalizedId label) })
+            { func with CFG = { func.CFG with Blocks = blocks }; CodegenFacts = facts }
+    let finalized = functions |> List.map finalizeFunction
+    let byId =
+        List.zip functions finalized
+        |> List.groupBy (fun (original, _) -> original.Id)
+        |> Map.ofList
+    let remap (func: LIR.Function) =
+        Map.tryFind func.Id byId
+        |> Option.bind (List.tryPick (fun (original, finalized) ->
+            if obj.ReferenceEquals(original, func) then Some finalized else None))
+        |> Option.defaultWith (fun () ->
+            Crash.crash $"Executable group contains unknown function '{func.Name}'")
+    let functionGroups =
+        functionGroups
+        |> List.map (fun group -> { group with Functions = group.Functions |> List.map remap })
+    let metadataGroups =
+        metadataGroups
+        |> List.map (fun group -> { group with Functions = group.Functions |> List.map remap })
+    LIR.Program (finalized, variants, records), functionGroups, metadataGroups
+
 /// Run codegen, encoding, and binary generation
 let internal generateBinary
     (target: Platform.Target)
@@ -94,6 +172,8 @@ let internal generateBinary
 
     | Platform.ARM64Backend armTarget ->
         // ARM64 backend (original)
+        let allocatedProgram, functionGroups, metadataGroups =
+            finalizeArm64GenericHelperIds allocatedProgram functionGroups metadataGroups
         if verbosity >= 1 then println codegenLabel
         let codegenStart = sw.Elapsed.TotalMilliseconds
         let coverageExprCount = if options.EnableCoverage then LIR.countCoverageHits allocatedProgram else 0

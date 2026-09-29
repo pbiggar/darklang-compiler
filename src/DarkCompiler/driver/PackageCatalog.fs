@@ -193,7 +193,9 @@ let private materializeReachablePackageValueCatalog
         let specialization =
             typedProgram
             |> collectProgramSpecs
-            |> Monomorphization.specializeFromSpecs genericDefs
+            |> Monomorphization.specializeFromSpecs
+                (CheckedAST.programSymbols typedProgram)
+                genericDefs
         let requestedEvaluatorTypes =
             specialization.ExternalSpecs
             |> Set.toList
@@ -332,7 +334,9 @@ let private materializeReachablePackageValueCatalog
                     (generatedFunctions |> List.map AST.FunctionDef)
                 )
             TypeChecking.checkDeclarationProgramWithBaseEnvAndSettings
-                baseContext.TypeCheckEnv
+                { baseContext.TypeCheckEnv with
+                    FunctionCatalog =
+                        CheckedAST.functionCatalog (CheckedAST.programSymbols typedProgram) }
                 false
                 warningSettings
                 syntheticProgram

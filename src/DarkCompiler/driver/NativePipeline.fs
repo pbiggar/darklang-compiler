@@ -301,6 +301,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                                 registries.RecordFieldsReg
                                 options.EnableCoverage
                                 returnTypeReg
+                                registries.FunctionNames
                             |> Result.map (fun (mir, variants, records) ->
                                 let prior, _, _ = accumulated
                                 prior @ mir, variants, records)))
@@ -345,6 +346,11 @@ let internal lowerToAllocatedLirWithKnownGroups
                     (sw.Elapsed.TotalMilliseconds - scheduleStart)
                 let graphSetupStart = sw.Elapsed.TotalMilliseconds
                 let localIds = mirFuncs |> List.map (fun func -> func.Id) |> Set.ofList
+                let highestReservedId =
+                    registries.FunctionNames
+                    |> Map.fold
+                        (fun highest id _ -> max highest id)
+                        (Set.fold max (AST.functionId 0UL) localIds)
                 let ambiguousLocalIds =
                     mirFuncs
                     |> List.countBy (fun func -> func.Id)
@@ -401,6 +407,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                     knownTypedConstants
                     knownWrites
                     (catalog: Map<AST.FunctionId, FunctionSummary>)
+                    (helperIds: Map<string, AST.FunctionId>)
                     (group: CallGraphSchedule.Component) =
                     let componentFuncs = group.Functions
                     let mirProgram =
@@ -420,7 +427,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                         mirProgram
                     |> Result.bind (fun (lirFuncs, typedConstants) ->
                         let metadataPlanningStart = sw.Elapsed.TotalMilliseconds
-                        let funcsPreparedForAllocation =
+                        let funcsPreparedForAllocation, helperIds =
                             match Platform.archFor target with
                             | Platform.ARM64 ->
                                 ARM64PrepareFunctions.prepareARM64FunctionsForAllocationWithCache
@@ -434,9 +441,11 @@ let internal lowerToAllocatedLirWithKnownGroups
                                              }))
                                     registries.RecordFieldsReg
                                     registries.RcSumShapeReg
+                                    highestReservedId
+                                    helperIds
                                     lirFuncs
                             | Platform.X86_64 ->
-                                lirFuncs
+                                lirFuncs, helperIds
                         let metadataPlanningElapsed =
                             sw.Elapsed.TotalMilliseconds - metadataPlanningStart
                         recordPassTiming
@@ -591,7 +600,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                         if verbosity >= 2 then
                             let t = System.Math.Round(allocElapsed, 1)
                             println $"        {t}ms"
-                        Ok (allocatedFuncs, typedConstants, callWrites))
+                        Ok (allocatedFuncs, typedConstants, callWrites, helperIds))
                 let rec compile
                     knownPurity
                     knownEffectFree
@@ -600,6 +609,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                     knownWrites
                     (published: Map<AST.FunctionId, FunctionSummary>)
                     (catalog: Map<AST.FunctionId, FunctionSummary>)
+                    (helperIds: Map<string, AST.FunctionId>)
                     (completed: LIR.Function list list)
                     visits
                     (remaining: CallGraphSchedule.Component list) =
@@ -700,8 +710,8 @@ let internal lowerToAllocatedLirWithKnownGroups
                         compileComponent
                             batchEffectFree
                             knownRemovable
-                            knownTypedConstants knownWrites catalog group
-                        |> Result.bind (fun (allocated, typedConstants, callWrites) ->
+                            knownTypedConstants knownWrites catalog helperIds group
+                        |> Result.bind (fun (allocated, typedConstants, callWrites, helperIds) ->
                             let visits =
                                 recordStages
                                     ["MIR Optimization"; "MIR -> LIR";
@@ -795,6 +805,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                                 knownWrites
                                 published
                                 catalog
+                                helperIds
                                 (allocated :: completed)
                                 visits
                                 rest)
@@ -835,7 +846,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                 compile
                     initialPurity initialRemovable initialRemovable
                     initialTypedConstants initialWrites
-                    Map.empty initialCatalog [] initialVisits components
+                    Map.empty initialCatalog Map.empty [] initialVisits components
 
     let compileFunctionsWithTiming
         (label: string)

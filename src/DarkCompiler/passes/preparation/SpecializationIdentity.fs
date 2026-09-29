@@ -68,6 +68,7 @@ type SpecializationResult = {
     SpecializedFuncs: GenericFunctionArtifact list
     SpecRegistry: SpecRegistry
     ExternalSpecs: Set<SpecKey>
+    Symbols: CheckedAST.Symbols
 }
 
 /// Extract generic function definitions (functions with type parameters)
@@ -99,10 +100,14 @@ let importSpecializedFunctions
         // Import each artifact through its names so the destination owns one
         // collision-free identity namespace.
         let symbols, imported =
-            CheckedAST.composeTopLevels
-                artifact.Symbols
-                symbols
-                [CheckedAST.FunctionDef artifact.Function]
+            if CheckedAST.tryFindFunctionId artifact.Function.Name symbols = Some artifact.Function.Id
+               && CheckedAST.functionName artifact.Function.Id symbols = Some artifact.Function.Name then
+                symbols, [CheckedAST.FunctionDef artifact.Function]
+            else
+                CheckedAST.composeTopLevels
+                    artifact.Symbols
+                    symbols
+                    [CheckedAST.FunctionDef artifact.Function]
         let importedFunction =
             match imported with
             | [CheckedAST.FunctionDef functionDef] -> functionDef

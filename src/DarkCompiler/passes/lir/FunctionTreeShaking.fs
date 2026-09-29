@@ -29,7 +29,8 @@ let filterUserFunctionsWithCallGraph
 
 /// Filter user functions to only include reachable ones
 let filterUserFunctions (entryName: string option) (functions: LIR.Function list) : LIR.Function list =
-    let callGraph = DeadCodeElimination.buildCallGraph functions
+    let ids = functions |> List.map (fun func -> func.Name, func.Id) |> Map.ofList
+    let callGraph = DeadCodeElimination.buildCallGraph ids functions
     filterUserFunctionsWithCallGraph entryName callGraph functions
 
 /// Filter stdlib functions using a precomputed user call graph.
@@ -51,7 +52,11 @@ let filterStdlibFunctions
     (userFunctions: LIR.Function list)
     (stdlibFunctions: LIR.Function list)
     : LIR.Function list =
-    DeadCodeElimination.filterFunctions stdlibCallGraph userFunctions stdlibFunctions
+    let ids =
+        userFunctions @ stdlibFunctions
+        |> List.map (fun func -> func.Name, func.Id)
+        |> Map.ofList
+    DeadCodeElimination.filterFunctions stdlibCallGraph ids userFunctions stdlibFunctions
 
 /// Compute reachable stdlib function names from a user ANF program
 let getReachableStdlibNames
@@ -59,8 +64,18 @@ let getReachableStdlibNames
     (userProgram: ANF.Program)
     : Set<AST.FunctionId> =
     let (ANF.Program (userFuncs, userMainExpr)) = userProgram
+    let startId =
+        AST.allocateFunctionIds
+            (seq {
+                yield! userFuncs |> Seq.map (fun func -> func.Id)
+                yield! stdlibCallGraph |> Map.keys
+            })
+            ["__dark_tree_shaking_start"]
+        |> Map.tryFind "__dark_tree_shaking_start"
+        |> Option.defaultWith (fun () ->
+            Crash.crash "Tree-shaking start identity was not allocated")
     let startFunc : ANF.Function =
-        { Id = AST.functionIdForName "__dark_tree_shaking_start"
+        { Id = startId
           Name = "_start"
           TypedParams = []
           ReturnType = AST.TUnit

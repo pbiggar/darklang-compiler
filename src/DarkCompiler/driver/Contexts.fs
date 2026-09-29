@@ -23,20 +23,24 @@ let internal buildLambdaLiftFunctionCatalog
     (baseFuncNames: Set<string>)
     (returnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
     : LiftFunctions.FunctionCatalog =
+    let functionId name =
+        Map.tryFind name registries.FunctionIds
+        |> Option.defaultWith (fun () ->
+            Crash.crash $"Lambda-lift function '{name}' has no allocated identity")
     let parameters =
         registries.FuncParams
         |> Map.toSeq
         |> Seq.map (fun (name, parameters) ->
-            AST.functionIdForName name, parameters |> List.map snd)
+            functionId name, parameters |> List.map snd)
         |> Map.ofSeq
         |> fun parameters ->
             registries.ModuleRegistry
             |> Map.fold (fun current name moduleFunc ->
-                Map.add (AST.functionIdForName name) moduleFunc.ParamTypes current) parameters
+                Map.add (functionId name) moduleFunc.ParamTypes current) parameters
         |> fun parameters ->
             baseFuncNames
             |> Set.fold (fun current name ->
-                let id = AST.functionIdForName name
+                let id = functionId name
                 if Map.containsKey id current then current else Map.add id [] current) parameters
     let genericDefs =
         registries.ModuleRegistry
@@ -45,7 +49,7 @@ let internal buildLambdaLiftFunctionCatalog
             if List.isEmpty moduleFunc.TypeParams then None
             else
                 Some (
-                    AST.functionIdForName name,
+                    functionId name,
                     (moduleFunc.TypeParams, moduleFunc.ReturnType)
                 ))
         |> Map.ofSeq
@@ -54,7 +58,7 @@ let internal buildLambdaLiftFunctionCatalog
         ReturnTypes =
             registries.ModuleRegistry
             |> Map.fold (fun current name moduleFunc ->
-                Map.add (AST.functionIdForName name) moduleFunc.ReturnType current)
+                Map.add (functionId name) moduleFunc.ReturnType current)
                 (returnTypes |> Map.map (fun _ (_, returnType) -> returnType))
         GenericDefs = genericDefs
     }
@@ -132,6 +136,47 @@ type PipelineContext = {
     PackageCatalogGenericCallers: Set<string>
 }
 
+let internal includeCompiledFunctions
+    (functions: ANF.Function list)
+    (context: PipelineContext)
+    : PipelineContext =
+    let symbols =
+        functions
+        |> List.fold (fun symbols func ->
+            CheckedAST.registerGeneratedFunction func.Name func.Id symbols)
+            context.Symbols
+    let functionIds, functionNames, returnTypes, baseFuncNames =
+        functions
+        |> List.fold (fun (ids, names, returns, baseNames) func ->
+            (Map.add func.Name func.Id ids,
+             Map.add func.Id func.Name names,
+             Map.add func.Id (func.Name, func.ReturnType) returns,
+             Set.add func.Name baseNames))
+            (context.Registries.FunctionIds,
+             context.Registries.FunctionNames,
+             context.ReturnTypes,
+             context.BaseFuncNames)
+    let registries = {
+        context.Registries with
+            FunctionIds = functionIds
+            FunctionNames = functionNames
+            FuncReg =
+                AST_to_ANF.extendFunctionRegistryWithConverted
+                    context.Registries.FuncReg functions
+    }
+    { context with
+        Symbols = symbols
+        TypeCheckEnv =
+            { context.TypeCheckEnv with FunctionCatalog = CheckedAST.functionCatalog symbols }
+        WrittenEnvironment =
+            context.WrittenEnvironment
+            |> Option.map (WrittenChecking.includeAllocatedFunctions symbols)
+        Registries = registries
+        BaseFuncNames = baseFuncNames
+        LambdaLiftFunctions =
+            buildLambdaLiftFunctionCatalog registries baseFuncNames returnTypes
+        ReturnTypes = returnTypes }
+
 let internal buildContext
     (target: Platform.Target)
     (symbols: CheckedAST.Symbols)
@@ -150,7 +195,8 @@ let internal buildContext
     {
         Symbols = symbols
         Target = target
-        TypeCheckEnv = typeCheckEnv
+        TypeCheckEnv =
+            { typeCheckEnv with FunctionCatalog = CheckedAST.functionCatalog symbols }
         WrittenEnvironment = None
         CheckedValues = checkedValues
         GenericFuncDefs = genericFuncDefs
