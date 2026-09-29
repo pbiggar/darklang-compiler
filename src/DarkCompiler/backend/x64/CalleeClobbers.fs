@@ -4,27 +4,23 @@ module X64CalleeClobbers
 
 type Writes = ARM64CalleeClobbers.Writes
 
-let private empty : Writes = { Ints = Set.empty; Floats = Set.empty }
+let private empty : Writes = { Ints = 0UL; Floats = 0UL }
 let all : Writes = {
-    Ints = Set.ofList [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5;
-                       LIR.X6; LIR.X7; LIR.X8; LIR.X9; LIR.X10; LIR.X11;
-                       LIR.X12; LIR.X13; LIR.X14; LIR.X15]
-    Floats = Set.ofList [LIR.D0; LIR.D1; LIR.D2; LIR.D3; LIR.D4; LIR.D5;
-                         LIR.D6; LIR.D7; LIR.D8; LIR.D9; LIR.D10; LIR.D11;
-                         LIR.D12; LIR.D13]
+    Ints = (1UL <<< 16) - 1UL
+    Floats = (1UL <<< 14) - 1UL
 }
 
 let private union (left: Writes) (right: Writes) : Writes = {
-    Ints = Set.union left.Ints right.Ints
-    Floats = Set.union left.Floats right.Floats
+    Ints = left.Ints ||| right.Ints
+    Floats = left.Floats ||| right.Floats
 }
 
 let private intWrite = function
-    | LIR.Physical reg -> { empty with Ints = Set.singleton reg }
+    | LIR.Physical reg -> { empty with Ints = ARM64CalleeClobbers.intBit reg }
     | LIR.Virtual _ -> all
 
 let private floatWrite = function
-    | LIR.FPhysical reg -> { empty with Floats = Set.singleton reg }
+    | LIR.FPhysical reg -> { empty with Floats = ARM64CalleeClobbers.floatBit reg }
     | LIR.FVirtual -1 -> empty
     | LIR.FVirtual _ -> all
 
@@ -43,7 +39,8 @@ let private instructionWrites calleeWrites = function
         calleeWrites callee |> Option.defaultValue all
     | LIR.SaveRegs _ -> empty
     | LIR.RestoreRegs (ints, floats) ->
-        { Ints = Set.ofList ints; Floats = Set.ofList floats }
+        { Ints = ARM64CalleeClobbers.ofInts ints
+          Floats = ARM64CalleeClobbers.ofFloats floats }
     | _ -> all
 
 let private summarizeFunction calleeWrites (func: LIR.Function) =
@@ -54,7 +51,8 @@ let private summarizeFunction calleeWrites (func: LIR.Function) =
     |> fun writes ->
         // Return shuttles may be emitted after symbolic LIR and use these ABI
         // result registers even for an otherwise empty function.
-        union writes { empty with Ints = Set.singleton LIR.X0; Floats = Set.singleton LIR.D0 }
+        union writes { empty with Ints = ARM64CalleeClobbers.intBit LIR.X0
+                                  Floats = ARM64CalleeClobbers.floatBit LIR.D0 }
 
 let summariesWithKnown
     (known: Map<AST.FunctionId, Writes>)
@@ -101,8 +99,8 @@ let pruneFunction callees (func: LIR.Function) : LIR.Function =
             | LIR.SaveRegs (ints, floats) :: LIR.Call (dest, callee, []) :: LIR.RestoreRegs (restoreInts, restoreFloats) :: rest
                 when ints = restoreInts && floats = restoreFloats ->
                 let writes = Map.tryFind callee callees |> Option.defaultValue all
-                let keptInts = ints |> List.filter (fun reg -> Set.contains reg writes.Ints)
-                let keptFloats = floats |> List.filter (fun reg -> Set.contains reg writes.Floats)
+                let keptInts = ints |> List.filter (fun reg -> ARM64CalleeClobbers.containsInt reg writes)
+                let keptFloats = floats |> List.filter (fun reg -> ARM64CalleeClobbers.containsFloat reg writes)
                 // Preserve the original stack parity at the call site. The
                 // backend emits each saved GP or FP register as eight bytes.
                 let keptInts, keptFloats =

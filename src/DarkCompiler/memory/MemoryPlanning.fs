@@ -278,16 +278,6 @@ let rcShapeOfTypeWithSums
                     let subst = rcShapeTypeSubstitution sumInfo.TypeParams typeArgs
                     let expandingNominals = Set.add sourceType expandingNominals
 
-                    let variantShapes =
-                        sumInfo.Payloads
-                        |> List.map (fun maybePayload ->
-                            match maybePayload with
-                            | tag, Some payload ->
-                                let payloadShape = payload |> applyRcShapeTypeSubstitution subst |> classify expandingNominals
-                                { Tag = tag; FieldShapes = [(8, payloadShape)] }
-                            | tag, None ->
-                                { Tag = tag; FieldShapes = [] })
-
                     let hasPayloadVariant =
                         sumInfo.Payloads
                         |> List.exists (fun (_, payload) -> Option.isSome payload)
@@ -302,28 +292,44 @@ let rcShapeOfTypeWithSums
                         | _ -> None
 
                     let nullablePointerShape =
-                        match nullablePointerSumPayloadType sumReg sourceType with
-                        | Some (AST.TString | AST.TChar | AST.TBlob) ->
-                            // These canonical buffers share a header; the
-                            // dynamic-int operation also skips the zero word.
-                            Some DynamicInt
-                        | Some payloadType ->
-                            Some (payloadType |> applyRcShapeTypeSubstitution subst |> classify expandingNominals)
-                        | None -> None
+                        if Option.isSome transparentPayloadShape then None
+                        else
+                            match nullablePointerSumPayloadType sumReg sourceType with
+                            | Some (AST.TString | AST.TChar | AST.TBlob) ->
+                                // These canonical buffers share a header; the
+                                // dynamic-int operation also skips the zero word.
+                                Some DynamicInt
+                            | Some payloadType ->
+                                Some (payloadType |> applyRcShapeTypeSubstitution subst |> classify expandingNominals)
+                            | None -> None
 
                     let spareTaggedListShape =
-                        match sumInfo.Payloads |> List.sortBy snd with
-                        | [(_, None); (payloadTag, Some payload)] when Set.contains payloadTag sumInfo.UnaryPayloadTags ->
-                            let payloadType = applyRcShapeTypeSubstitution subst payload
-                            match payloadType with
-                            | AST.TList _ -> Some (classify expandingNominals payloadType)
+                        if Option.isSome transparentPayloadShape || Option.isSome nullablePointerShape then None
+                        else
+                            match sumInfo.Payloads |> List.sortBy snd with
+                            | [(_, None); (payloadTag, Some payload)] when Set.contains payloadTag sumInfo.UnaryPayloadTags ->
+                                let payloadType = applyRcShapeTypeSubstitution subst payload
+                                match payloadType with
+                                | AST.TList _ -> Some (classify expandingNominals payloadType)
+                                | _ -> None
                             | _ -> None
-                        | _ -> None
 
                     match transparentPayloadShape |> Option.orElse nullablePointerShape |> Option.orElse spareTaggedListShape with
                     | Some shape -> shape
                     | None when isSpareImmediateSumType sumReg sourceType -> Immediate
                     | None when hasPayloadVariant ->
+                        let variantShapes =
+                            sumInfo.Payloads
+                            |> List.map (fun maybePayload ->
+                                match maybePayload with
+                                | tag, Some payload ->
+                                    let payloadShape =
+                                        payload
+                                        |> applyRcShapeTypeSubstitution subst
+                                        |> classify expandingNominals
+                                    { Tag = tag; FieldShapes = [(8, payloadShape)] }
+                                | tag, None ->
+                                    { Tag = tag; FieldShapes = [] })
                         let fieldShapes =
                             variantShapes
                             |> List.collect (fun variant -> variant.FieldShapes)

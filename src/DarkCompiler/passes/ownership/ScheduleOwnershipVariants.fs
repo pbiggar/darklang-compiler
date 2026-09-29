@@ -150,7 +150,6 @@ let private withInternalOwnership semantics definitions =
                 | None -> semantics.CallOwnership call
     })
 
-/// Reanalyze the complete cumulatively materialized program after each round.
 /// Only calls in original functions to original functions are scheduling
 /// roots; recursive edges remain atomic inside their selected SCC clone.
 let scheduleWithTrace
@@ -238,7 +237,11 @@ let scheduleWithTrace
             (requests: Map<CallSiteIdentity, MaterializeOwnershipVariants.Request<'id>>)
             history
             demandCache
-            inferredGroups =
+            inferredGroups
+            cachedFacts
+            changedCallers
+            versions
+            analyzedVersions =
             if number > limits.MaxIterations then Error (IterationLimitExceeded limits.MaxIterations)
             else
                 let orderedRequests = requests |> Map.toList |> List.map snd
@@ -261,12 +264,31 @@ let scheduleWithTrace
                         measure
                             "Ownership detail: Scheduling program analysis round"
                             (fun () ->
-                                VerifyOwnedHIR.analyzeFunctions
-                                    (MaterializeOwnershipVariants.hirContracts materialized hir)
-                                    (MaterializeOwnershipVariants.ownershipSemantics materialized semantics)
-                                    (MaterializeOwnershipVariants.functions materialized))
-                        |> Result.mapError AnalysisFailed
-                        |> Result.bind (fun facts ->
+                                let currentSemantics =
+                                    MaterializeOwnershipVariants.ownershipSemantics materialized programSemantics
+                                MaterializeOwnershipVariants.originals materialized
+                                |> List.fold (fun result definition ->
+                                    result
+                                    |> Result.bind (fun (cache, visits) ->
+                                        let id = definition.Definition.Id
+                                        if Set.contains id changedCallers then
+                                            let version = Map.tryFind id versions |> Option.defaultValue 0
+                                            let visit = id, version
+                                            if Set.contains visit visits then
+                                                Crash.crash "Ownership caller was analyzed twice at one body version"
+                                            VerifyOwnership.analyzeFunction currentSemantics definition
+                                            |> Result.mapError (VerifyOwnedHIR.OwnershipVerificationFailed >> AnalysisFailed)
+                                            |> Result.map (fun facts -> Map.add id facts cache, Set.add visit visits)
+                                        elif Map.containsKey id cache then Ok (cache, visits)
+                                        else Crash.crash "Unchanged ownership caller has no cached facts"))
+                                    (Ok (cachedFacts, analyzedVersions)))
+                        |> Result.bind (fun (factsByCaller, analyzedVersions) ->
+                            let facts =
+                                MaterializeOwnershipVariants.originals materialized
+                                |> List.collect (fun definition ->
+                                    match Map.tryFind definition.Definition.Id factsByCaller with
+                                    | Some facts -> facts
+                                    | None -> Crash.crash "Ownership caller facts were lost")
                             measure
                                 "Ownership detail: Scheduling call selection round"
                                 (fun () ->
@@ -324,13 +346,24 @@ let scheduleWithTrace
                                         AddedCalls = additions |> List.map (fun request -> { Caller = request.Caller; Result = request.Call.Result.Id })
                                         GeneratedGroups = groupCount
                                     }
+                                    let nextVersions =
+                                        additions
+                                        |> List.fold (fun versions request ->
+                                            let prior =
+                                                Map.tryFind request.Caller versions
+                                                |> Option.defaultValue 0
+                                            Map.add request.Caller (prior + 1) versions) versions
                                     loop
                                         (number + 1)
                                         next
                                         (iteration :: history)
                                         demandCache
-                                        inferredGroups)))
-        loop 1 Map.empty [] Map.empty [])
+                                        inferredGroups
+                                        factsByCaller
+                                        (additions |> List.map (fun request -> request.Caller) |> Set.ofList)
+                                        nextVersions
+                                        analyzedVersions)))
+        loop 1 Map.empty [] Map.empty [] Map.empty originalIds Map.empty Set.empty)
 
 let schedule limits hir semantics reservedSymbols definitions =
     scheduleWithTrace None limits hir semantics reservedSymbols definitions

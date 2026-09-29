@@ -50,8 +50,38 @@ The measured revisions, corpus sizes, and phase tables are in the
   cumulative function-expression lowering fell from 3.33 to 1.09 seconds.
   Ownership and call-graph times stayed near their parent values; they remain
   separate costs.
+- **Ownership representation queries.** One ownership analysis repeatedly
+  classified the same semantic types while constructing, elaborating, and
+  verifying its intermediate program. Reusing the classification within that
+  analysis reduced its measured full-suite phase from 9.96 to 4.42 seconds.
+  Specialized ownership scheduling also need not reanalyze an unchanged
+  original caller in each materialization round; body-version tracking now
+  asserts that each version is analyzed at most once.
+- **Allocation is spread across graph and backend data structures.** In the
+  10,800-test parent trace, function identities, function-name maps, ownership
+  graph sets, SSA dominator sets, and register clobber sets recur among the
+  leading allocation samples. The post-FIFO historical revision used far less
+  memory on the same focused HAMT workload. Graph identity conversion,
+  compact register-write masks, and a change-driven dominator worklist remove
+  some of that structural allocation. Focused allocation fell from 17.53 GB
+  on the parent to 12.45 GB after these changes. Ownership group set
+  differences and function-name map reconstruction remain visible in the
+  focused allocation stacks.
+- **The current allocation reduction is real but incomplete.** On the same
+  10,800-test corpus, the parent allocated 117.73 GB in a sampled full-suite
+  trace and this branch allocated 101.57 GB after the ownership, graph,
+  clobber, and SSA changes. The remaining samples still concentrate in
+  function identities and function-name and clobber maps. GC suspension did
+  not fall reliably between these two traced runs (23.63 versus 22.60
+  seconds); host load and collection behavior vary, so allocation reduction
+  should not be translated directly into a claimed wall-time saving.
+- **Historical allocation causes differ by revision.** The pre-FIFO SCCP
+  revision allocates heavily in Boolean path-fact maps and lists. A later
+  10,800-test checkpoint allocates heavily in repeated symbol maps, binding
+  identities, and backend register sets. These are distinct regressions; a
+  high total allocation count alone does not identify the current cause.
 
-The final 10,800-test profile takes 114.95 seconds, including 21.87 seconds
+An earlier 10,800-test profile took 114.95 seconds, including 21.87 seconds
 in call graph compilation, 17.19 seconds in AST-to-ANF conversion, 11.28
 seconds in dependency lookup, and 10.09 seconds in SSA optimization. Some
 phase totals are nested and cannot be added. The remembered 30-second

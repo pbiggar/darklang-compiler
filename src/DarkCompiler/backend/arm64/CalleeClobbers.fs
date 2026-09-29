@@ -2,29 +2,56 @@
 
 module ARM64CalleeClobbers
 
+[<Struct>]
 type Writes = {
-    Ints: Set<LIR.PhysReg>
-    Floats: Set<LIR.PhysFPReg>
+    Ints: uint64
+    Floats: uint64
 }
 
-let private empty = { Ints = Set.empty; Floats = Set.empty }
+let intBit reg =
+    let index =
+        match reg with
+        | LIR.X0 -> 0 | LIR.X1 -> 1 | LIR.X2 -> 2 | LIR.X3 -> 3
+        | LIR.X4 -> 4 | LIR.X5 -> 5 | LIR.X6 -> 6 | LIR.X7 -> 7
+        | LIR.X8 -> 8 | LIR.X9 -> 9 | LIR.X10 -> 10 | LIR.X11 -> 11
+        | LIR.X12 -> 12 | LIR.X13 -> 13 | LIR.X14 -> 14 | LIR.X15 -> 15
+        | LIR.X16 -> 16 | LIR.X17 -> 17
+        | LIR.X19 -> 18 | LIR.X20 -> 19 | LIR.X21 -> 20 | LIR.X22 -> 21
+        | LIR.X23 -> 22 | LIR.X24 -> 23 | LIR.X25 -> 24 | LIR.X26 -> 25
+        | LIR.X27 -> 26 | LIR.X29 -> 27 | LIR.X30 -> 28 | LIR.SP -> 29
+    1UL <<< index
+
+let floatBit reg =
+    let index =
+        match reg with
+        | LIR.D0 -> 0 | LIR.D1 -> 1 | LIR.D2 -> 2 | LIR.D3 -> 3
+        | LIR.D4 -> 4 | LIR.D5 -> 5 | LIR.D6 -> 6 | LIR.D7 -> 7
+        | LIR.D8 -> 8 | LIR.D9 -> 9 | LIR.D10 -> 10 | LIR.D11 -> 11
+        | LIR.D12 -> 12 | LIR.D13 -> 13 | LIR.D14 -> 14 | LIR.D15 -> 15
+    1UL <<< index
+
+let ofInts regs = regs |> List.fold (fun mask reg -> mask ||| intBit reg) 0UL
+let ofFloats regs = regs |> List.fold (fun mask reg -> mask ||| floatBit reg) 0UL
+let containsInt reg writes = writes.Ints &&& intBit reg <> 0UL
+let containsFloat reg writes = writes.Floats &&& floatBit reg <> 0UL
+
+let private empty = { Ints = 0UL; Floats = 0UL }
 let all = {
-    Ints = Set.ofList [LIR.X0; LIR.X1; LIR.X2; LIR.X3; LIR.X4; LIR.X5; LIR.X6; LIR.X7;
-                       LIR.X8; LIR.X9; LIR.X10; LIR.X11; LIR.X12; LIR.X13; LIR.X14; LIR.X15]
-    Floats = Set.ofList [LIR.D0; LIR.D1; LIR.D2; LIR.D3; LIR.D4; LIR.D5; LIR.D6; LIR.D7]
+    Ints = (1UL <<< 16) - 1UL
+    Floats = (1UL <<< 8) - 1UL
 }
 
 let private union left right = {
-    Ints = Set.union left.Ints right.Ints
-    Floats = Set.union left.Floats right.Floats
+    Ints = left.Ints ||| right.Ints
+    Floats = left.Floats ||| right.Floats
 }
 
 let private writeInt = function
-    | LIR.Physical reg -> { empty with Ints = Set.singleton reg }
+    | LIR.Physical reg -> { empty with Ints = intBit reg }
     | LIR.Virtual _ -> all
 
 let private writeFloat = function
-    | LIR.FPhysical reg -> { empty with Floats = Set.singleton reg }
+    | LIR.FPhysical reg -> { empty with Floats = floatBit reg }
     | LIR.FVirtual -1 -> empty // Reserved D16 return shuttle.
     | LIR.FVirtual _ -> all
 
@@ -41,17 +68,17 @@ let private instructionWrites (calleeWrites: AST.FunctionId -> Writes option) in
     | LIR.Mov (dest, LIR.StackSlot offset) ->
         let baseWrites = writeInt dest
         if offset >= -256 && offset <= 255 then baseWrites
-        else union baseWrites { empty with Ints = Set.singleton LIR.X10 }
+        else union baseWrites { empty with Ints = intBit LIR.X10 }
     | LIR.Store (offset, _) ->
         if offset >= -256 && offset <= 255 then empty
-        else { empty with Ints = Set.singleton LIR.X10 }
+        else { empty with Ints = intBit LIR.X10 }
     | LIR.Add (dest, _, LIR.Reg _)
     | LIR.Sub (dest, _, LIR.Reg _)
     | LIR.Add (dest, _, LIR.Imm _)
     | LIR.Sub (dest, _, LIR.Imm _) ->
         match instr with
         | LIR.Add (_, _, LIR.Imm n) | LIR.Sub (_, _, LIR.Imm n) when n < 0L || n >= 4096L ->
-            union (writeInt dest) { empty with Ints = Set.singleton LIR.X9 }
+            union (writeInt dest) { empty with Ints = intBit LIR.X9 }
         | _ -> writeInt dest
     | LIR.Mul (dest, _, _)
     | LIR.Sdiv (dest, _, _)
@@ -81,13 +108,13 @@ let private instructionWrites (calleeWrites: AST.FunctionId -> Writes option) in
     | LIR.FCmp _ -> empty
     | LIR.Cmp (_, LIR.Imm value) ->
         if value >= 0L && value < 4096L then empty
-        else { empty with Ints = Set.singleton LIR.X9 }
+        else { empty with Ints = intBit LIR.X9 }
     | LIR.FLoad (dest, _) ->
         // A literal outside FMOV's immediate range is addressed via X9.
-        union (writeFloat dest) { empty with Ints = Set.singleton LIR.X9 }
+        union (writeFloat dest) { empty with Ints = intBit LIR.X9 }
     | LIR.FSpillLoad (dest, _) ->
-        union (writeFloat dest) { empty with Ints = Set.singleton LIR.X10 }
-    | LIR.FSpillStore _ -> { empty with Ints = Set.singleton LIR.X10 }
+        union (writeFloat dest) { empty with Ints = intBit LIR.X10 }
+    | LIR.FSpillStore _ -> { empty with Ints = intBit LIR.X10 }
     | LIR.FMov (dest, _)
     | LIR.FAdd (dest, _, _)
     | LIR.FSub (dest, _, _)
@@ -114,12 +141,12 @@ let private instructionWrites (calleeWrites: AST.FunctionId -> Writes option) in
             | _ -> true) then all
         else
             // Parallel move cycles use reserved X16, outside the saved set.
-            { empty with Ints = moves |> List.map fst |> Set.ofList }
+            { empty with Ints = moves |> List.map fst |> ofInts }
     | LIR.FArgMoves moves ->
-        { empty with Floats = moves |> List.map fst |> Set.ofList }
+        { empty with Floats = moves |> List.map fst |> ofFloats }
     | LIR.SaveRegs _ -> empty
     | LIR.RestoreRegs (ints, floats) ->
-        { Ints = Set.ofList ints; Floats = Set.ofList floats }
+        { Ints = ofInts ints; Floats = ofFloats floats }
     | _ -> all
 
 let private summarizeFunction calleeWrites (func: LIR.Function) =
@@ -204,8 +231,8 @@ let private pruneBlock (callees: Map<AST.FunctionId, Writes>) (block: LIR.BasicB
                 when ints = restoreInts && floats = restoreFloats ->
                 match envelopeWrites callees beforeRestore with
                 | Some writes ->
-                    let keptInts = ints |> List.filter (fun reg -> Set.contains reg writes.Ints)
-                    let keptFloats = floats |> List.filter (fun reg -> Set.contains reg writes.Floats)
+                    let keptInts = ints |> List.filter (fun reg -> containsInt reg writes)
+                    let keptFloats = floats |> List.filter (fun reg -> containsFloat reg writes)
                     LIR.SaveRegs (keptInts, keptFloats) :: beforeRestore
                     @ (LIR.RestoreRegs (keptInts, keptFloats) :: rewrite tail)
                 | _ ->

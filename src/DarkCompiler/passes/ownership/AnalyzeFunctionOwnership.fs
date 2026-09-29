@@ -42,14 +42,6 @@ let hirContracts analysis =
 let schedule analysis = analysis.Schedule
 let originalFunctions analysis = ElaborateFunctionOwnership.functions analysis.Ownership
 
-let private isManaged context (value: HIR.Value) =
-    value.Type
-    |> MemoryPlanning.rcShapeOfTypeWithSums
-        context.RecordFieldsReg
-        context.RecordTypeParamsReg
-        context.RcSumShapeReg
-    |> MemoryPlanning.rcShapeNeedsOwnedScopeRelease
-
 let private callContract isManaged (call: HIR.FunctionCall) : HIR.PrimitiveContract = {
     Inputs = call.Arguments
     Operands = []
@@ -72,6 +64,22 @@ let analyzeWithTrace
         recordTiming
         |> Option.iter (fun record -> record name timer.Elapsed)
         result
+    // HIR construction and ownership verification ask about the same semantic
+    // types repeatedly. Keep their representation decisions in this analysis.
+    let managedTypes = System.Collections.Generic.Dictionary<AST.SemanticType, bool>()
+    let isManaged (value: HIR.Value) =
+        match managedTypes.TryGetValue value.Type with
+        | true, managed -> managed
+        | false, _ ->
+            let managed =
+                value.Type
+                |> MemoryPlanning.rcShapeOfTypeWithSums
+                    context.RecordFieldsReg
+                    context.RecordTypeParamsReg
+                    context.RcSumShapeReg
+                |> MemoryPlanning.rcShapeNeedsOwnedScopeRelease
+            managedTypes.[value.Type] <- managed
+            managed
     let infer types expression =
         LoweringTypeInference.inferTypeCore
             context.SumMetadata
@@ -85,7 +93,7 @@ let analyzeWithTrace
             context.ModuleRegistry
     let calls : ConstructHIRFunctions.CallContracts = {
         ExternalSignature = fun _ -> None
-        Contract = fun _ -> Some (callContract (isManaged context))
+        Contract = fun _ -> Some (callContract isManaged)
     }
     measure
         "Ownership detail: HIR construction"
@@ -107,7 +115,7 @@ let analyzeWithTrace
                         contract.Inputs
                         |> List.choose (fun value ->
                             if value.Id = input.Id then Some (OwnedIR.Consumed input.Id)
-                            elif isManaged context value then Some (OwnedIR.Borrowed value.Id)
+                            elif isManaged value then Some (OwnedIR.Borrowed value.Id)
                             else None)
                     | ConstructHIRFunctions.Literal _
                     | ConstructHIRFunctions.Unary _
@@ -115,11 +123,11 @@ let analyzeWithTrace
                     | ConstructHIRFunctions.FreshManaged _ ->
                         contract.Inputs
                         |> List.choose (fun value ->
-                            if isManaged context value then Some (OwnedIR.Borrowed value.Id) else None)
+                            if isManaged value then Some (OwnedIR.Borrowed value.Id) else None)
                 Outputs =
                     contract.Outputs
                     |> List.choose (fun output ->
-                        if isManaged context output.Value then Some output.Value.Id else None)
+                        if isManaged output.Value then Some output.Value.Id else None)
             } : OwnedIR.Contract<HIR.ValueId>)
         let dialect : ElaborateFunctionOwnership.Dialect<ConstructHIRFunctions.Primitive, ConstructHIRFunctions.Block> = {
             Body = ConstructHIRFunctions.body
@@ -140,7 +148,7 @@ let analyzeWithTrace
                     RequiredInputs = Set.empty
                     UniqueOutputs = Set.empty
                   }
-            IsManaged = isManaged context
+            IsManaged = isManaged
             ExternalCallOwnership = fun _ -> None
         }
         ElaborateFunctionOwnership.elaborateFunctionsWithTrace recordTiming dialect definitions
@@ -149,7 +157,7 @@ let analyzeWithTrace
             let hir : VerifyOwnedHIR.HIRContracts<ConstructHIRFunctions.Primitive> = {
                 Leaf = ConstructHIRFunctions.primitiveContract
                 CallSignature = fun _ -> None
-                CallContract = fun call -> Some (callContract (isManaged context) call)
+                CallContract = fun call -> Some (callContract isManaged call)
             }
             let ownedFunctions = ElaborateFunctionOwnership.functions analysis
             let ownership = ElaborateFunctionOwnership.semantics analysis

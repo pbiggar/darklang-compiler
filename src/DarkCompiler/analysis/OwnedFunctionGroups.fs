@@ -33,8 +33,8 @@ let rec private blockCalls (block: Block<'leaf, 'id>) =
         | Drop _ -> calls) Set.empty
 
 type private DfsFrame =
-    | Enter of AST.FunctionId
-    | Exit of AST.FunctionId
+    | Enter of string
+    | Exit of string
 
 let private adjacent adjacency name =
     match Map.tryFind name adjacency with
@@ -99,13 +99,11 @@ let private stronglyConnectedComponents vertices sourceIndex adjacency =
 
 type private NameComponent = {
     Index: int
-    Members: AST.FunctionId list
+    Members: string list
     Dependencies: Set<int>
 }
 
-/// Return call-graph SCC members callee-first. Independent components retain
-/// the source position of their earliest member.
-let internal orderedFunctionIds vertices adjacency =
+let private orderedNames vertices adjacency =
     let vertexNames = Set.ofList vertices
     if Set.count vertexNames <> List.length vertices then
         Crash.crash "Function call graph contains duplicate definitions"
@@ -209,6 +207,27 @@ let internal orderedFunctionIds vertices adjacency =
                         (unresolved, Set.remove selectedIndex ready)
                 order (remaining - 1) unresolved ready (selected.Members :: ordered)
     order components.Length unresolved ready []
+
+/// Graph operations use the canonical string already carried by each identity.
+/// This avoids boxing FunctionId structs at every map and set comparison.
+/// SCC members are returned callee-first with independent components in source order.
+let internal orderedFunctionIds vertices adjacency =
+    let identityByName =
+        vertices
+        |> List.map (fun id -> AST.functionIdValue id, id)
+        |> Map.ofList
+    let namedAdjacency =
+        adjacency
+        |> Map.toList
+        |> List.map (fun (id, targets) ->
+            AST.functionIdValue id,
+            (targets |> List.map AST.functionIdValue))
+        |> Map.ofList
+    orderedNames (vertices |> List.map AST.functionIdValue) namedAdjacency
+    |> List.map (List.map (fun name ->
+        match Map.tryFind name identityByName with
+        | Some id -> id
+        | None -> Crash.crash "Function SCC lost its canonical identity"))
 
 let private groups definitions names callsByFunction adjacency =
     let definitionsByName =

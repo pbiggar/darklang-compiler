@@ -134,7 +134,7 @@ let private chooseRegistersForCalls
             let callerCost color reg =
                 callSites
                 |> List.sumBy (fun (liveColors, writes) ->
-                    if Set.contains color liveColors && Set.contains reg writes.Ints then 1 else 0)
+                    if Set.contains color liveColors && ARM64CalleeClobbers.containsInt reg writes then 1 else 0)
             let bestCallerCost color =
                 callerSavedRegs |> List.map (callerCost color) |> List.min
             let crossesFullClobber color =
@@ -142,7 +142,7 @@ let private chooseRegistersForCalls
                 |> List.exists (fun (liveColors, writes) ->
                     Set.contains color liveColors
                     && (callerSavedRegs
-                        |> List.forall (fun reg -> Set.contains reg writes.Ints)))
+                        |> List.forall (fun reg -> ARM64CalleeClobbers.containsInt reg writes)))
             let calleeCount =
                 ordered
                 |> List.filter (fun color ->
@@ -238,7 +238,7 @@ let private chooseArm64FloatRegistersForCalls
     let callerCost color reg =
         callSites
         |> List.sumBy (fun (liveColors, writes) ->
-            if Set.contains color liveColors && Set.contains reg writes.Floats then 1 else 0)
+            if Set.contains color liveColors && ARM64CalleeClobbers.containsFloat reg writes then 1 else 0)
     let bestCallerCost color =
         floatCallerSavedRegs |> List.map (callerCost color) |> List.min
     let crossesFullClobber color =
@@ -246,7 +246,7 @@ let private chooseArm64FloatRegistersForCalls
         |> List.exists (fun (liveColors, writes) ->
             Set.contains color liveColors
             && (floatCallerSavedRegs
-                |> List.forall (fun reg -> Set.contains reg writes.Floats)))
+                |> List.forall (fun reg -> ARM64CalleeClobbers.containsFloat reg writes)))
     let mustUseCallee = max 0 (List.length usedRegs - List.length floatCallerSavedRegs)
     let calleeCount =
         usedRegs

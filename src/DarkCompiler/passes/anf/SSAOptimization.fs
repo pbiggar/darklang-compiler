@@ -250,30 +250,55 @@ let private eliminateDominatedDuplicatesWithCandidates candidates (func: SSAANF.
             |> List.fold (fun current target ->
                 let existing = Map.tryFind target current |> Option.defaultValue Set.empty
                 Map.add target (Set.add source existing) current) preds) Map.empty
+    let incomingByLabel =
+        labels
+        |> Set.fold (fun incoming label ->
+            let sources =
+                Map.tryFind label predecessors
+                |> Option.defaultValue Set.empty
+                |> Set.toList
+            Map.add label sources incoming) Map.empty
+    let successorsByLabel =
+        func.Blocks
+        |> Map.map (fun _ block ->
+            match block.Terminator with
+            | SSAANF.Return _ -> []
+            | SSAANF.Jump (target, _) -> [target]
+            | SSAANF.Branch (_, yes, no) -> [yes; no])
     let initial =
         labels
         |> Set.fold (fun dom label ->
             Map.add label
                 (if label = func.Entry then Set.singleton label else labels)
                 dom) Map.empty
-    let rec settle known =
-        let next =
-            labels
-            |> Set.fold (fun dom label ->
-                if label = func.Entry then Map.add label (Set.singleton label) dom
+    let rec settle known pending =
+        match pending |> Set.toSeq |> Seq.tryHead with
+        | None -> known
+        | Some label ->
+            let pending = Set.remove label pending
+            let next =
+                if label = func.Entry then Set.singleton label
                 else
                     let incoming =
-                        Map.tryFind label predecessors
-                        |> Option.defaultValue Set.empty
-                        |> Set.toList
-                        |> List.choose (fun source -> Map.tryFind source known)
+                        match Map.tryFind label incomingByLabel with
+                        | Some sources -> sources |> List.choose (fun source -> Map.tryFind source known)
+                        | None -> Crash.crash "SSA dominator predecessor index lost a block"
                     let common =
                         match incoming with
                         | [] -> Set.empty
                         | first :: rest -> List.fold Set.intersect first rest
-                    Map.add label (Set.add label common) dom) Map.empty
-        if next = known then known else settle next
-    let dominators = settle initial
+                    Set.add label common
+            match Map.tryFind label known with
+            | Some prior when prior = next -> settle known pending
+            | Some _ ->
+                let successors =
+                    match Map.tryFind label successorsByLabel with
+                    | Some targets -> targets
+                    | None -> Crash.crash "SSA dominator successor index lost a block"
+                let pending = successors |> List.fold (fun work target -> Set.add target work) pending
+                settle (Map.add label next known) pending
+            | None -> Crash.crash "SSA dominator state lost a block"
+    let dominators = settle initial labels
     { func with
         Blocks =
             func.Blocks

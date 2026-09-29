@@ -51,6 +51,7 @@ type MaterializationError<'id when 'id: comparison> =
 
 let groups plan = plan.Groups
 let rewrites plan = plan.Rewrites
+let originals plan = plan.Originals
 let functions plan =
     plan.Originals
     @ (plan.Groups
@@ -371,13 +372,19 @@ let private materializeWithRequests
                     })
             |> List.sortBy (fun rewrite -> rewrite.Site)
         let bySite = rewrites |> List.map (fun rewrite -> rewrite.Site, rewrite.Specialized) |> Map.ofList
+        let rewrittenCallers =
+            rewrites
+            |> List.map (fun rewrite -> rewrite.Site.Caller)
+            |> Set.ofList
         let originals =
             definitions |> List.map (fun definition ->
-                let rewrite (call: HIR.FunctionCall) =
-                    match Map.tryFind { Caller = definition.Definition.Id; Result = call.Result.Id } bySite with
-                    | Some specialized -> specialized
-                    | None -> call
-                { definition with Definition = { definition.Definition with Body = rewriteCalls rewrite definition.Definition.Body } })
+                if Set.contains definition.Definition.Id rewrittenCallers then
+                    let rewrite (call: HIR.FunctionCall) =
+                        match Map.tryFind { Caller = definition.Definition.Id; Result = call.Result.Id } bySite with
+                        | Some specialized -> specialized
+                        | None -> call
+                    { definition with Definition = { definition.Definition with Body = rewriteCalls rewrite definition.Definition.Body } }
+                else definition)
         let plan = { Originals = originals; Groups = groups; Rewrites = rewrites }
         VerifyOwnedHIR.verifyFunctions (hirContracts plan hir) (ownershipSemantics plan semantics) (functions plan)
         |> Result.mapError InvalidMaterializedProgram

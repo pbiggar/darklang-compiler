@@ -561,10 +561,10 @@ let internal lowerToAllocatedLirWithKnownGroups
                                                 |> List.exists (fun writes ->
                                                     (RegisterPolicy.callerSavedRegs
                                                      |> List.exists (fun reg ->
-                                                         not (Set.contains reg writes.Ints)))
+                                                         not (ARM64CalleeClobbers.containsInt reg writes)))
                                                         || (FloatAllocation.floatCallerSavedRegsFor arch
                                                             |> List.exists (fun reg ->
-                                                                not (Set.contains reg writes.Floats)))))
+                                                                not (ARM64CalleeClobbers.containsFloat reg writes)))))
                                         let allocated =
                                             if hasPreservedCallerReg then
                                                 let allocate () =
