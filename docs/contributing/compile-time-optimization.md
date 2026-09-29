@@ -41,6 +41,15 @@ The measured revisions, corpus sizes, and phase tables are in the
   call graph compilations, setup and initial-fact construction took 3.35 and
   5.14 seconds. Restricting the catalog to direct external callees reduced
   those phases to 0.08 and 0.01 seconds in a subsequent full-suite profile.
+- **Sum representation lookup.** Lowering a sum value repeatedly searched the
+  entire constructor catalog and sorted candidate cases, even when the sum had
+  many cases and could not use the special one- or two-case representation.
+  The larger standard library amplified this cost in unchanged functions. In
+  complete runs of the same 10,800-test suite, an unchanged large-match
+  function fell from 59.62 to 1.68 ms after cases were grouped once by owner;
+  cumulative function-expression lowering fell from 3.33 to 1.09 seconds.
+  Ownership and call-graph times stayed near their parent values; they remain
+  separate costs.
 
 The final 10,800-test profile takes 114.95 seconds, including 21.87 seconds
 in call graph compilation, 17.19 seconds in AST-to-ANF conversion, 11.28

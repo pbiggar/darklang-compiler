@@ -12,7 +12,7 @@ open ClosureAnalysis
 open LiftExpressions
 open LiftFunctions
 
-let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (expr: CheckedAST.Expr) (typeEnv: Map<AST.BindingId, AST.SemanticType>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<AST.SemanticType, string> =
+let rec inferTypeCore (sumTypeNames: SumMetadata) (typeNames: TypeNameRegistry) (expr: CheckedAST.Expr) (typeEnv: Map<AST.BindingId, AST.SemanticType>) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<AST.SemanticType, string> =
     let fieldIndex id =
         tryFindFieldIndex id typeNames
         |> Option.defaultWith (fun () -> Crash.crash "Checked field identity is absent from layout metadata")
@@ -376,7 +376,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                 | Some _ -> Map.empty
                 | None -> Crash.crash $"Unknown constructor '{variantName}' in pattern"
             | AST.PResolvedConstructor (declaringType, _, tag, fieldPatterns) ->
-                match tryFindVariantByTag declaringType tag variantLookup with
+                match tryFindVariantByTag declaringType tag sumTypeNames.Cases with
                 | Some (_, typeParams, _, fieldTypes)
                     when List.length fieldPatterns = List.length fieldTypes ->
                     let subst =
@@ -552,22 +552,22 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                         |> Option.defaultValue (AST.functionIdValue funcName)
                     if funcName.StartsWith("Builtin.pmEvaluateValue_") then
                         let suffix = funcName.Substring("Builtin.pmEvaluateValue_".Length)
-                        tryParseMangledTypeWithSumTypeNames sumTypeNames suffix
+                        tryParseMangledTypeWithSumTypeNames sumTypeNames.Names suffix
                         |> Result.map (fun resultType ->
                             AST.TSum ("Darklang.Stdlib.Option.Option", [resultType]))
                     elif funcName.StartsWith("__raw_get_") then
                         // Preserve the monomorphized return type; defaulting to Int64 can
                         // incorrectly mark pattern-match branches as impossible.
                         let suffix = funcName.Substring("__raw_get_".Length)
-                        tryParseMangledTypeWithSumTypeNames sumTypeNames suffix
+                        tryParseMangledTypeWithSumTypeNames sumTypeNames.Names suffix
                     elif funcName.StartsWith("__raw_take_") then
                         let suffix = funcName.Substring("__raw_take_".Length)
-                        tryParseMangledTypeWithSumTypeNames sumTypeNames suffix
+                        tryParseMangledTypeWithSumTypeNames sumTypeNames.Names suffix
                     elif funcName.StartsWith("__stream_to_rawptr_") then
                         Ok AST.TInternalRawPtr
                     elif funcName.StartsWith("__rawptr_to_stream_") then
                         let suffix = funcName.Substring("__rawptr_to_stream_".Length)
-                        tryParseMangledTypeWithSumTypeNames sumTypeNames suffix |> Result.map AST.TStream
+                        tryParseMangledTypeWithSumTypeNames sumTypeNames.Names suffix |> Result.map AST.TStream
                     elif funcName.StartsWith("__raw_slot_init_") then
                         // __raw_slot_init<T> returns Unit
                         Ok AST.TUnit
@@ -594,7 +594,7 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                     elif funcName.StartsWith("__rawptr_to_dict_") then
                         // __rawptr_to_dict<k, v> returns Dict<k, v>
                         let suffix = funcName.Substring("__rawptr_to_dict_".Length)
-                        tryParseMangledTypeWithSumTypeNames sumTypeNames $"dict_{suffix}"
+                        tryParseMangledTypeWithSumTypeNames sumTypeNames.Names $"dict_{suffix}"
                     // List intrinsics - monomorphized versions for the skew list.
                     elif funcName.StartsWith("__list_is_null_") then
                         // __list_is_null<a> returns Bool
@@ -608,12 +608,12 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) 
                     elif funcName.StartsWith("__rawptr_to_list_") then
                         // __rawptr_to_list<a> returns List<a> - parse element type from mangled name
                         let suffix = funcName.Substring("__rawptr_to_list_".Length)
-                        tryParseMangledTypeWithSumTypeNames sumTypeNames suffix
+                        tryParseMangledTypeWithSumTypeNames sumTypeNames.Names suffix
                         |> Result.map AST.TList
                     elif funcName.StartsWith("__list_empty_") then
                         // Preserve the semantic list type for match/type inference.
                         let suffix = funcName.Substring("__list_empty_".Length)
-                        tryParseMangledTypeWithSumTypeNames sumTypeNames suffix
+                        tryParseMangledTypeWithSumTypeNames sumTypeNames.Names suffix
                         |> Result.map AST.TList
                     else
                         Error $"Unknown function: '{funcName}'"

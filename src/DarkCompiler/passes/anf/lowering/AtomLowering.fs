@@ -16,7 +16,7 @@ open LoweringTypeInference
 open LoweringAggregates
 open LoweringCallbacks
 
-let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (functionIds: FunctionIdRegistry) (sumTypeNames: SumMetadata) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     let fieldIndex id =
         tryFindFieldIndex id typeNames
         |> Option.defaultWith (fun () -> Crash.crash "Checked field identity is absent from layout metadata")
@@ -300,7 +300,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                     | Ok operandType when isCompoundType operandType ->
                         // Generate structural equality
                         let (eqBindings, eqResultAtom, varGen3) =
-                            generateStructuralEquality functionId leftAtom rightAtom operandType varGen2 typeReg variantLookup
+                            generateStructuralEquality functionId leftAtom rightAtom operandType varGen2 typeReg variantLookup sumTypeNames.Cases
                         // For Neq, negate the result
                         let (finalAtom, finalBindings, varGen4) =
                             if op = AST.Neq then
@@ -468,7 +468,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                         Ok (ANF.Var tempVar, allBindings, varGen2)
                     | None ->
                     // Check if it's a raw memory intrinsic
-                    match tryRawMemoryIntrinsic functionId sumTypeNames displayName argAtoms with
+                    match tryRawMemoryIntrinsic functionId sumTypeNames.Names displayName argAtoms with
                     | Some intrinsicExpr ->
                         // Raw memory intrinsic call
                         let allBindings = argBindings @ [(tempVar, intrinsicExpr)]
@@ -697,8 +697,8 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                 Error $"Unknown constructor tag: {tag}"
             | Some (typeName, typeParams, tag, variantFieldTypes) ->
                 let typeArgs = CheckedAST.semanticTypeArgs constructorReference.TypeArgs
-                let isNullableBuffer = Option.isSome (nullablePointerSumPayloadType typeName typeArgs variantLookup)
-                let spareWord = spareImmediateSumSentinel typeName typeArgs variantLookup
+                let isNullableBuffer = Option.isSome (nullablePointerSumPayloadType typeName typeArgs sumTypeNames.Cases)
+                let spareWord = spareImmediateSumSentinel typeName typeArgs sumTypeNames.Cases
                 // Check if ANY variant in this type has a payload
                 // Note: We get typeName from variantLookup, not from AST (which may be empty)
                 let typeHasPayloadVariants =
@@ -724,7 +724,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                             Error $"Constructor '{typeName}' inferred unexpected type '{inferredType}'")
 
                 match fields with
-                | [field] when Option.isSome (transparentSumPayloadType typeName typeArgs variantLookup) || isNullableBuffer || Option.isSome spareWord ->
+                | [field] when Option.isSome (transparentSumPayloadType typeName typeArgs sumTypeNames.Cases) || isNullableBuffer || Option.isSome spareWord ->
                     toAtomCore sumTypeNames typeNames inertScopes field varGen env typeReg variantLookup funcReg functionNames moduleRegistry
                     |> Result.map (fun (payload, bindings, next) ->
                         let resultVar, final = ANF.freshVar next

@@ -71,7 +71,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                     RecordFieldsReg = userOnly.RecordFieldsReg
                     RecordTypeParamsReg = userOnly.RecordTypeParamsReg
                     VariantLookup = userOnly.VariantLookup
-                    SumTypeNames = userOnly.SumTypeNames
+                    SumMetadata = userOnly.SumMetadata
                     RcSumShapeReg = userOnly.RcSumShapeReg
                     FuncReg = userOnly.FuncReg
                     FunctionIds = userOnly.FunctionIds

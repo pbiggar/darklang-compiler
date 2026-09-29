@@ -11,7 +11,7 @@ open LiftFunctions
 open LoweringTypeInference
 open ANFContinuations
 
-let rec toANFCore (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+let rec toANFCore (functionIds: FunctionIdRegistry) (sumTypeNames: SumMetadata) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     let resolveFunction name =
         Map.tryFind name functionIds
         |> Option.defaultWith (fun () -> Crash.crash $"List-region helper '{name}' is absent from registries")
@@ -25,13 +25,13 @@ let rec toANFCore (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) 
             region |> SelectListStorage.selectStorage |> ElaborateListOwnership.elaborateOwnership |> LowerListRegions.lower resolveFunction lower env varGen)
     | None -> toANFUnplannedCore functionIds sumTypeNames typeNames inertScopes expr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
 
-and private toANFUnplannedCore (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
+and private toANFUnplannedCore (functionIds: FunctionIdRegistry) (sumTypeNames: SumMetadata) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     ExpressionLowering.lowerExpression (toANFCore functionIds) (toAtomCore functionIds) (toANFBoundAtomCore functionIds) functionIds sumTypeNames typeNames inertScopes expr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
 
-and toAtomCore (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
+and toAtomCore (functionIds: FunctionIdRegistry) (sumTypeNames: SumMetadata) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>) (expr: CheckedAST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (functionNames: FunctionNameRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen, string> =
     AtomLowering.lowerAtom (toANFCore functionIds) (toAtomCore functionIds) (toANFBoundAtomCore functionIds) functionIds sumTypeNames typeNames inertScopes expr varGen env typeReg variantLookup funcReg functionNames moduleRegistry
 
-and toANFBoundAtomCore (functionIds: FunctionIdRegistry) (sumTypeNames: Set<string>) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>)
+and toANFBoundAtomCore (functionIds: FunctionIdRegistry) (sumTypeNames: SumMetadata) (typeNames: TypeNameRegistry) (inertScopes: Set<AST.FunctionId>)
     (expr: CheckedAST.Expr)
     (varGen: ANF.VarGen)
     (env: VarEnv)

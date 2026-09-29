@@ -12,7 +12,7 @@ type Context = {
     RecordFieldsReg: Map<string, (string * AST.SemanticType) list>
     RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
-    SumTypeNames: Set<string>
+    SumMetadata: SumMetadata
     RcSumShapeReg: MemoryModel.RcSumShapeRegistry
     FuncReg: FunctionRegistry
     FunctionNames: FunctionNameRegistry
@@ -74,7 +74,7 @@ let analyzeWithTrace
         result
     let infer types expression =
         LoweringTypeInference.inferTypeCore
-            context.SumTypeNames
+            context.SumMetadata
             context.TypeNames
             expression
             types

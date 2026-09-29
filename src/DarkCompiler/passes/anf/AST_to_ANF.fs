@@ -29,7 +29,7 @@ let toANFWithMetadata
     let functionNames = funcReg |> Map.map (fun _ (name, _) -> name)
     toANFCore
         (functionIdsFromNames functionNames)
-        (sumTypeNamesFromVariantLookup variantLookup)
+        (sumMetadataFromVariantLookup variantLookup)
         typeNames
         (DestructionAnalysis.inertFunctionScopes Map.empty Map.empty)
         expr
@@ -75,7 +75,7 @@ let allocateTypedParams
 let private convertFunctionWithSumTypeNames
     (recordTiming: (string -> System.TimeSpan -> unit) option)
     (symbols: CheckedAST.Symbols)
-    (sumTypeNames: Set<string>)
+    (sumTypeNames: SumMetadata)
     (inertScopes: Set<AST.FunctionId>)
     (funcDef: CheckedAST.FunctionDef)
     (varGen: ANF.VarGen)
@@ -170,7 +170,7 @@ let convertFunction
     convertFunctionWithSumTypeNames
         None
         symbols
-        (sumTypeNamesFromVariantLookup variantLookup)
+        (sumMetadataFromVariantLookup variantLookup)
         (DestructionAnalysis.inertFunctionScopes Map.empty Map.empty)
         funcDef
         varGen
@@ -211,7 +211,7 @@ type UserOnlyResult = {
     RecordFieldsReg: Map<string, (string * AST.SemanticType) list>
     RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
-    SumTypeNames: Set<string>
+    SumMetadata: SumMetadata
     LocalRecordFieldsReg: Map<string, (string * AST.SemanticType) list>
     LocalVariantLookup: VariantLookup
     RcSumShapeReg: MemoryModel.RcSumShapeRegistry
@@ -233,7 +233,7 @@ type Registries = {
     RecordFieldsReg: Map<string, (string * AST.SemanticType) list>
     RecordTypeParamsReg: Map<string, string list>
     VariantLookup: VariantLookup
-    SumTypeNames: Set<string>
+    SumMetadata: SumMetadata
     RcSumShapeReg: MemoryModel.RcSumShapeRegistry
     FuncReg: FunctionRegistry
     FunctionIds: FunctionIdRegistry
@@ -432,11 +432,12 @@ let private buildRegistriesInternal
     let funcParams =
         Map.fold (fun acc k v -> Map.add k v acc) userFuncParams moduleFuncParams
 
+    let sumMetadata = sumMetadataFromVariantLookup variantLookup
     let scopeContractsStart =
         if Option.isSome phaseRecorder then Stopwatch.GetTimestamp() else 0L
     let scopeContracts =
         ExtractListRegions.scopeContracts
-            (fun types expr -> inferTypeCore sumTypeNames (typeNamesFromSymbols symbols) expr types typeReg variantLookup funcReg functionNames moduleRegistry)
+            (fun types expr -> inferTypeCore sumMetadata (typeNamesFromSymbols symbols) expr types typeReg variantLookup funcReg functionNames moduleRegistry)
             functions
     phaseRecorder
     |> Option.iter (fun record ->
@@ -459,7 +460,7 @@ let private buildRegistriesInternal
         RecordFieldsReg = recordFieldsRegistry typeReg
         RecordTypeParamsReg = recordTypeParamsRegistry typeReg
         VariantLookup = variantLookup
-        SumTypeNames = sumTypeNames
+        SumMetadata = sumMetadata
         RcSumShapeReg = rcSumShapeRegistryFromVariantLookup variantLookup
         FuncReg = funcReg
         FunctionIds = functionIds
@@ -540,7 +541,7 @@ let mergeRegistriesWithTrace
         RecordFieldsReg = mergeMaps baseRegs.RecordFieldsReg overlay.RecordFieldsReg
         RecordTypeParamsReg = mergeMaps baseRegs.RecordTypeParamsReg overlay.RecordTypeParamsReg
         VariantLookup = mergeMaps baseRegs.VariantLookup overlay.VariantLookup
-        SumTypeNames = Set.union baseRegs.SumTypeNames overlay.SumTypeNames
+        SumMetadata = mergeSumMetadata baseRegs.SumMetadata overlay.SumMetadata
         RcSumShapeReg = mergeMaps baseRegs.RcSumShapeReg overlay.RcSumShapeReg
         FuncReg = mergeMaps baseRegs.FuncReg overlay.FuncReg
         FunctionIds = mergeMaps baseRegs.FunctionIds overlay.FunctionIds
@@ -588,7 +589,7 @@ let convertFunctionsWithOwnershipWithTrace
         recordTiming
         |> Option.iter (fun record -> record name timer.Elapsed)
         result
-    let sumTypeNames = registries.SumTypeNames
+    let sumTypeNames = registries.SumMetadata
     let inertScopes = registries.InertFunctionScopes
     let rec loop funcs vg acc =
         match funcs with
@@ -616,7 +617,7 @@ let convertFunctionsWithOwnershipWithTrace
         RecordFieldsReg = registries.RecordFieldsReg
         RecordTypeParamsReg = registries.RecordTypeParamsReg
         VariantLookup = registries.VariantLookup
-        SumTypeNames = registries.SumTypeNames
+        SumMetadata = registries.SumMetadata
         RcSumShapeReg = registries.RcSumShapeReg
         FuncReg = registries.FuncReg
         FunctionNames = registries.FunctionNames
@@ -672,7 +673,7 @@ let convertExprToAnf
     (expr: CheckedAST.Expr)
     : Result<ANF.AExpr * ANF.VarGen, string> =
     let emptyEnv : VarEnv = Map.empty
-    let sumTypeNames = registries.SumTypeNames
+    let sumTypeNames = registries.SumMetadata
     toANFCore registries.FunctionIds sumTypeNames registries.TypeNames registries.InertFunctionScopes expr varGen emptyEnv registries.TypeReg registries.VariantLookup registries.FuncReg registries.FunctionNames registries.ModuleRegistry
 
 /// Synthesize an entrypoint function from a main expression

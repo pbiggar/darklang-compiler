@@ -43,7 +43,8 @@ let private extractWithParameters parameterTypes expression =
     let functionNames = functions |> Map.map (fun _ (name, _) -> name)
     let infer types expr =
         LoweringTypeInference.inferTypeCore
-            Set.empty TypeRegistries.emptyTypeNames expr types Map.empty Map.empty functions functionNames Map.empty
+            (LoweringPrimitives.sumMetadataFromVariantLookup Map.empty)
+            TypeRegistries.emptyTypeNames expr types Map.empty Map.empty functions functionNames Map.empty
     ExtractListRegions.tryExtract
         (Set.ofList [
             TestIds.functionIdForName "mapCallback"

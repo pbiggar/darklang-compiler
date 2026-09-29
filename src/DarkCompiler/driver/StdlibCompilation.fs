@@ -534,10 +534,10 @@ let buildStdlibSpecializations
                                     externalRecordTypeParamsReg
                             VariantLookup =
                                 Map.fold (fun acc k v -> Map.add k v acc) registries.VariantLookup externalVariantLookup
-                            SumTypeNames =
-                                Set.union
-                                    registries.SumTypeNames
-                                    (LoweringPrimitives.sumTypeNamesFromVariantLookup externalVariantLookup)
+                            SumMetadata =
+                                LoweringPrimitives.mergeSumMetadata
+                                    registries.SumMetadata
+                                    (LoweringPrimitives.sumMetadataFromVariantLookup externalVariantLookup)
                             RcSumShapeReg =
                                 Map.fold
                                     (fun acc name shape -> Map.add name shape acc)

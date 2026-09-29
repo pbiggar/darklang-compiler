@@ -40,7 +40,7 @@ let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Re
         RecordFieldsReg = Map.empty
         RecordTypeParamsReg = Map.empty
         VariantLookup = Map.empty
-        SumTypeNames = Set.empty
+        SumMetadata = { Names = Set.empty; Cases = Map.empty }
         RcSumShapeReg = Map.empty
         FuncReg = Map.empty
         FunctionIds = Map.empty
@@ -815,7 +815,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                         RecordFieldsReg = registries.RecordFieldsReg
                         RecordTypeParamsReg = registries.RecordTypeParamsReg
                         VariantLookup = registries.VariantLookup
-                        SumTypeNames = registries.SumTypeNames
+                        SumMetadata = registries.SumMetadata
                         LocalRecordFieldsReg = localRegistries.RecordFieldsReg
                         LocalVariantLookup = localRegistries.VariantLookup
                         RcSumShapeReg = registries.RcSumShapeReg

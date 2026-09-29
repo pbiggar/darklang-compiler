@@ -107,6 +107,7 @@ let rec generateStructuralEquality
     (varGen: ANF.VarGen)
     (typeReg: TypeRegistry)
     (variantLookup: VariantLookup)
+    (sumCases: SumRepresentationIndex)
     : (ANF.TempId * ANF.CExpr) list * ANF.Atom * ANF.VarGen =
     // Keep bindings in reverse order during construction to avoid quadratic
     // list appends when comparing deeply nested structures.
@@ -191,6 +192,7 @@ let rec generateStructuralEquality
                                 vg2
                                 typeReg
                                 variantLookup
+                                sumCases
                         let updatedBindingsRev =
                             addForwardBindingsToRev withElemBindingsRev nestedBindings
                         (nestedResult, updatedBindingsRev, vgNested)
@@ -257,6 +259,7 @@ let rec generateStructuralEquality
                                     vg2
                                     typeReg
                                     variantLookup
+                                    sumCases
                             let updatedBindingsRev =
                                 addForwardBindingsToRev withFieldBindingsRev nestedBindings
                             (nestedResult, updatedBindingsRev, vgNested)
@@ -275,11 +278,12 @@ let rec generateStructuralEquality
 
     | AST.TSum (typeName, typeArgs) ->
         let hasAnyPayload =
-            variantLookup
-            |> Map.exists (fun _ (tName, _, _, fields) ->
-                tName = typeName && not (List.isEmpty fields))
+            sumCases
+            |> Map.tryFind typeName
+            |> Option.defaultValue Map.empty
+            |> Map.exists (fun _ case -> not (List.isEmpty case.Fields))
 
-        match nullablePointerSumPayloadType typeName typeArgs variantLookup with
+        match nullablePointerSumPayloadType typeName typeArgs sumCases with
         | Some AST.TString ->
             let cmpVar, vg' = ANF.freshVar varGen
             ([(cmpVar, ANF.CanonicalBufferEq (MemoryModel.NullableUtf8String, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
@@ -289,14 +293,14 @@ let rec generateStructuralEquality
         | Some _ ->
             let cmpVar, vg' = ANF.freshVar varGen
             ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
-        | None when Option.isSome (spareImmediateSumSentinel typeName typeArgs variantLookup) ->
+        | None when Option.isSome (spareImmediateSumSentinel typeName typeArgs sumCases) ->
             let cmpVar, vg' = ANF.freshVar varGen
             ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
-        | None when transparentSumPayloadType typeName typeArgs variantLookup = Some AST.TString
-                    || transparentSumPayloadType typeName typeArgs variantLookup = Some AST.TChar ->
+        | None when transparentSumPayloadType typeName typeArgs sumCases = Some AST.TString
+                    || transparentSumPayloadType typeName typeArgs sumCases = Some AST.TChar ->
             let (cmpVar, vg') = ANF.freshVar varGen
             ([(cmpVar, primitiveEquality AST.TString leftAtom rightAtom)], ANF.Var cmpVar, vg')
-        | None when Option.isSome (transparentSumPayloadType typeName typeArgs variantLookup) || not hasAnyPayload ->
+        | None when Option.isSome (transparentSumPayloadType typeName typeArgs sumCases) || not hasAnyPayload ->
             let (cmpVar, vg') = ANF.freshVar varGen
             ([(cmpVar, ANF.Prim (ANF.Eq, leftAtom, rightAtom))], ANF.Var cmpVar, vg')
         | None ->

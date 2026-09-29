@@ -72,6 +72,34 @@ let internal materializeComparisonPlan
 /// Variant lookup - maps variant names to (type name, type params, tag index, field types)
 type VariantLookup = Map<string, (string * string list * int * AST.SemanticType list)>
 
+/// Qualified sum cases grouped once when conversion registries are built.
+type SumCase = {
+    TypeParams: string list
+    Tag: int
+    Fields: AST.SemanticType list
+}
+
+type SumRepresentationIndex = Map<string, Map<string, SumCase>>
+
+let sumRepresentationIndex (variantLookup: VariantLookup) : SumRepresentationIndex =
+    variantLookup
+    |> Map.fold (fun byType name (owner, typeParams, tag, fields) ->
+        if name.StartsWith($"{owner}.") then
+            let existing = Map.tryFind owner byType |> Option.defaultValue Map.empty
+            let cases = Map.add name { TypeParams = typeParams; Tag = tag; Fields = fields } existing
+            Map.add owner cases byType
+        else byType) Map.empty
+
+let private mergeSumCaseIndexes
+    (baseIndex: SumRepresentationIndex)
+    (overlay: SumRepresentationIndex)
+    : SumRepresentationIndex =
+    overlay
+    |> Map.fold (fun combined owner cases ->
+        let existing = Map.tryFind owner combined |> Option.defaultValue Map.empty
+        let merged = Map.fold (fun byName name case -> Map.add name case byName) existing cases
+        Map.add owner merged combined) baseIndex
+
 /// Every constructible source value has a one-word native root. A unary
 /// single-case sum can share that root without reserving a tag or sentinel.
 let internal canUseTransparentPayload = MemoryPlanning.canUseTransparentSumPayload
@@ -92,19 +120,19 @@ let rec private substituteTransparentPayloadType (subst: Map<string, AST.Semanti
     | AST.TFunction (args, result) -> AST.TFunction (List.map recurse args, recurse result)
     | _ -> typ
 
-let internal transparentSumPayloadType (typeName: string) (typeArgs: AST.SemanticType list) (variantLookup: VariantLookup) : AST.SemanticType option =
-    let cases =
-        variantLookup
-        |> Map.toList
-        |> List.choose (fun (key, (owner, typeParams, _, fields)) ->
-            if owner = typeName && List.length typeParams = List.length typeArgs && key.StartsWith($"{typeName}.") then
-                let subst = List.zip typeParams typeArgs |> Map.ofList
-                let concreteFields = fields |> List.map (substituteTransparentPayloadType subst)
-                Some concreteFields
-            else None)
-    match cases with
-    | [[payloadType]] when canUseTransparentPayload payloadType ->
-        Some payloadType
+let private concreteFields (typeArgs: AST.SemanticType list) (case: SumCase) : AST.SemanticType list =
+    let subst = List.zip case.TypeParams typeArgs |> Map.ofList
+    case.Fields |> List.map (substituteTransparentPayloadType subst)
+
+let internal transparentSumPayloadType (typeName: string) (typeArgs: AST.SemanticType list) (sumCases: SumRepresentationIndex) : AST.SemanticType option =
+    match Map.tryFind typeName sumCases with
+    | Some cases when Map.count cases = 1 ->
+        match cases |> Map.values |> Seq.tryHead with
+        | Some case when List.length case.TypeParams = List.length typeArgs ->
+            match concreteFields typeArgs case with
+            | [payloadType] when canUseTransparentPayload payloadType -> Some payloadType
+            | _ -> None
+        | _ -> None
     | _ -> None
 
 /// These payloads always have a nonzero managed root, even when their contents
@@ -115,26 +143,28 @@ let internal canUseNullaryZeroForPayload = function
     | AST.TTuple _ | AST.TRecord _ -> true
     | _ -> false
 
-let private unaryPayloadOfTwoCaseSum (typeName: string) (typeArgs: AST.SemanticType list) (variantLookup: VariantLookup) : AST.SemanticType option =
-    let cases =
-        variantLookup
-        |> Map.toList
-        |> List.choose (fun (key, (owner, typeParams, _, fields)) ->
-            if owner = typeName && List.length typeParams = List.length typeArgs && key.StartsWith($"{typeName}.") then
-                let subst = List.zip typeParams typeArgs |> Map.ofList
-                let concreteFields = fields |> List.map (substituteTransparentPayloadType subst)
-                Some concreteFields
-            else None)
-    match cases |> List.sort with
-    | [[]; [payloadType]] -> Some payloadType
+let private unaryPayloadOfTwoCaseSum (typeName: string) (typeArgs: AST.SemanticType list) (sumCases: SumRepresentationIndex) : AST.SemanticType option =
+    let unaryCase =
+        match Map.tryFind typeName sumCases with
+        | Some cases when Map.count cases = 2 ->
+            match cases |> Map.values |> Seq.toList with
+            | [nullary; unary] when List.isEmpty nullary.Fields && List.length unary.Fields = 1 -> Some unary
+            | [unary; nullary] when List.isEmpty nullary.Fields && List.length unary.Fields = 1 -> Some unary
+            | _ -> None
+        | _ -> None
+    match unaryCase with
+    | Some case when List.length case.TypeParams = List.length typeArgs ->
+        match concreteFields typeArgs case with
+        | [payloadType] -> Some payloadType
+        | _ -> None
     | _ -> None
 
-let internal nullablePointerSumPayloadType typeName typeArgs variantLookup =
-    unaryPayloadOfTwoCaseSum typeName typeArgs variantLookup
+let internal nullablePointerSumPayloadType typeName typeArgs sumCases =
+    unaryPayloadOfTwoCaseSum typeName typeArgs sumCases
     |> Option.filter canUseNullaryZeroForPayload
 
-let internal spareImmediateSumSentinel typeName typeArgs variantLookup =
-    match unaryPayloadOfTwoCaseSum typeName typeArgs variantLookup with
+let internal spareImmediateSumSentinel typeName typeArgs sumCases =
+    match unaryPayloadOfTwoCaseSum typeName typeArgs sumCases with
     | Some AST.TUnit -> Some 1L
     | Some AST.TBool -> Some 2L
     | Some (AST.TInt8 | AST.TUInt8) -> Some 256L
@@ -145,15 +175,15 @@ let internal spareImmediateSumSentinel typeName typeArgs variantLookup =
     | Some (AST.TList _) -> Some 4L
     | _ -> None
 
-let internal sumPayloadExpr (sourceType: AST.SemanticType) (sourceAtom: ANF.Atom) (variantLookup: VariantLookup) : ANF.CExpr =
+let internal sumPayloadExpr (sourceType: AST.SemanticType) (sourceAtom: ANF.Atom) (sumCases: SumRepresentationIndex) : ANF.CExpr =
     match sourceType with
     | AST.TSum (typeName, typeArgs) ->
         let payloadType =
-            transparentSumPayloadType typeName typeArgs variantLookup
-            |> Option.orElseWith (fun () -> nullablePointerSumPayloadType typeName typeArgs variantLookup)
+            transparentSumPayloadType typeName typeArgs sumCases
+            |> Option.orElseWith (fun () -> nullablePointerSumPayloadType typeName typeArgs sumCases)
             |> Option.orElseWith (fun () ->
-                match spareImmediateSumSentinel typeName typeArgs variantLookup with
-                | Some _ -> unaryPayloadOfTwoCaseSum typeName typeArgs variantLookup
+                match spareImmediateSumSentinel typeName typeArgs sumCases with
+                | Some _ -> unaryPayloadOfTwoCaseSum typeName typeArgs sumCases
                 | None -> None)
         match payloadType with
         | Some payload -> ANF.TypedAtom (sourceAtom, payload)
@@ -163,6 +193,21 @@ let internal sumPayloadExpr (sourceType: AST.SemanticType) (sourceAtom: ANF.Atom
 let sumTypeNamesFromVariantLookup (variantLookup: VariantLookup) : Set<string> =
     variantLookup
     |> Map.fold (fun names _ (typeName, _, _, _) -> Set.add typeName names) Set.empty
+
+type SumMetadata = {
+    Names: Set<string>
+    Cases: SumRepresentationIndex
+}
+
+let sumMetadataFromVariantLookup (variantLookup: VariantLookup) : SumMetadata = {
+    Names = sumTypeNamesFromVariantLookup variantLookup
+    Cases = sumRepresentationIndex variantLookup
+}
+
+let mergeSumMetadata (baseMetadata: SumMetadata) (overlay: SumMetadata) : SumMetadata = {
+    Names = Set.union baseMetadata.Names overlay.Names
+    Cases = mergeSumCaseIndexes baseMetadata.Cases overlay.Cases
+}
 
 let internal tryFindRecordTypeNameById
     (typeId: AST.TypeId)
@@ -191,12 +236,13 @@ let internal tryFindVariantForType
 let internal tryFindVariantByTag
     (typeName: string)
     (tag: int)
-    (variantLookup: VariantLookup)
+    (sumCases: SumRepresentationIndex)
     : (string * string list * int * AST.SemanticType list) option =
-    variantLookup
-    |> Map.toSeq
-    |> Seq.tryPick (fun (_, ((declaringType, _, variantTag, _) as variant)) ->
-        if declaringType = typeName && variantTag = tag then Some variant else None)
+    sumCases
+    |> Map.tryFind typeName
+    |> Option.bind (fun cases ->
+        cases |> Map.values |> Seq.tryFind (fun case -> case.Tag = tag))
+    |> Option.map (fun case -> typeName, case.TypeParams, case.Tag, case.Fields)
 
 /// Checked constructors already identify their owner, case, and runtime tag.
 /// Use that identity directly instead of scanning every registered variant.
