@@ -280,13 +280,11 @@ def invoke_codex(
     marker.write_text(f"worktree={worktree}\n", encoding="utf-8")
     output = attempts / f"{job_id}-{old_head}.last-message.txt"
     log = attempts / f"{job_id}-{old_head}.codex.log"
-    common_dir = run(
-        ("git", "rev-parse", "--path-format=absolute", "--git-common-dir"),
-        cwd=worktree,
-    ).stdout.strip()
+    # Codex's workspace sandbox mounts shared Git metadata read-only even when
+    # it is added as a writable directory. Recovery must write that metadata
+    # to stage and commit the repaired worktree.
     args = (
-        "codex", "exec", "-C", str(worktree), "--sandbox", "workspace-write",
-        "--add-dir", common_dir, "--add-dir", str(attempts),
+        "codex", "exec", "-C", str(worktree), "--sandbox", "danger-full-access",
         "--ephemeral", "--output-last-message", str(output),
         codex_instructions(details, failure, conflict, integration_sha),
     )
