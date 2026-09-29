@@ -86,11 +86,7 @@ let private rewriteOperations context options typeEnv tupleEnv env operations =
 
 let private rewriteIndexCalls (context: OptimizeContext) uses operations =
     let hasName id name = Map.tryFind id context.FunctionNames = Some name
-    let resolve name =
-        context.FunctionNames
-        |> Map.toSeq
-        |> Seq.tryPick (fun (id, displayName) ->
-            if displayName = name then Some id else None)
+    let resolve name = Map.tryFind name context.FunctionIds
     let rec rewrite = function
         | (indexId, Call (fromInt64, [nativeIndex])) ::
           (resultId, Call (getAt, [listValue; Var usedIndex])) :: rest
@@ -134,15 +130,17 @@ let private rewriteIndexCalls (context: OptimizeContext) uses operations =
     rewrite operations
 
 let private rewriteByteOptionMatches (context: OptimizeContext) (func: SSAANF.Function) =
-    let resolve name =
-        context.FunctionNames
-        |> Map.toSeq
-        |> Seq.tryPick (fun (id, displayName) ->
-            if displayName = name then Some id else None)
+    let resolve name = Map.tryFind name context.FunctionIds
     match resolve "Darklang.Stdlib.String.__getByteAtInt64",
           resolve "Darklang.Stdlib.String.__byteLength",
           resolve "Darklang.Stdlib.String.__byteAtUnchecked" with
-    | Some checkedByte, Some byteLength, Some uncheckedByte ->
+    | Some checkedByte, Some byteLength, Some uncheckedByte
+        when func.Blocks
+             |> Map.exists (fun _ block ->
+                 block.Operations
+                 |> List.exists (function
+                     | _, Call (target, _) when target = checkedByte -> true
+                     | _ -> false)) ->
         let predecessors =
             func.Blocks
             |> Map.fold (fun counts _ block ->

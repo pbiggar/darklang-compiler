@@ -16,7 +16,7 @@ grouped by purpose; each subject has one canonical source.
 - [Test DSLs](contributing/testing.md)
 - [Differential compiler fuzzing](contributing/fuzzing.md)
 - [Verification and performance gates](contributing/verification.md)
-- [Investigating compiler compile time](contributing/compile-time-optimization.md)
+- [Compiler compile-time findings](contributing/compile-time-optimization.md)
 - [Merge-train integrator recovery](contributing/mergetrain-integrator.md)
 - [Agent operating rules](../AGENTS.md)
 

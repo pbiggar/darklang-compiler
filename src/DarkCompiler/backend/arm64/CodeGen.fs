@@ -1001,6 +1001,7 @@ let generateARM64WithOptionsAndCaches
     (target: ARM64.TargetConfig)
     (options: CodeGenOptions)
     (preparedSumShapeRegistry: MemoryModel.RcSumShapeRegistry option)
+    (knownCalleeWrites: Map<AST.FunctionId, ARM64CalleeClobbers.Writes> option)
     (functionCache: FunctionCodegenCache option)
     (refinementCache: (LIR.Function -> Map<AST.FunctionId, ARM64CalleeClobbers.Writes> -> (unit -> LIR.Function) -> LIR.Function) option)
     (functionGroupCache: FunctionGroupCodegenCache option)
@@ -1013,7 +1014,8 @@ let generateARM64WithOptionsAndCaches
     (program: LIR.Program)
     : Result<GeneratedProgram, string> =
     let (LIR.Program (functions, variants, records)) = program
-    let refinedFunctions = ARM64CalleeClobbers.refineWithCache refinementCache functions
+    let refinedFunctions =
+        ARM64CalleeClobbers.refineWithCache refinementCache knownCalleeWrites functions
     let refinedProgram = LIR.Program (refinedFunctions, variants, records)
     // Group order may differ from program order because _start is emitted first.
     // IDs can also recur across separately compiled units, so match the exact
@@ -1072,6 +1074,7 @@ let generateARM64WithOptionsAndCache
     generateARM64WithOptionsAndCaches
         target
         options
+        None
         None
         functionCache
         None

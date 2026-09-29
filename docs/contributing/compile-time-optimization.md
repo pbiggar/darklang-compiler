@@ -1,69 +1,50 @@
-# Investigating compiler compile time
+# Compiler compile-time findings
 
-Compile-time improvements start by finding how often work runs and how much
-input each run processes. A slow pass may have an expensive algorithm, or a
-cheap algorithm may be called thousands of unnecessary times. Measure both
-before changing it.
+This page records compiler-specific causes found in full host-suite profiles.
+The measured revisions, corpus sizes, and phase tables are in the
+[historical comparison](../project/test-runtime-history-2026-09-29.md).
 
-## Establish a comparable measurement
+## Confirmed sources of excess work
 
-- Use the same target, test selection, build configuration, and batching for
-  the baseline and candidate. Record the revision and the number of logical
-  tests, physical compilations, functions, and compilation batches.
-- Measure wall time and compiler phase time separately from execution of the
-  generated programs. Check host contention before interpreting a wall-time
-  difference. Repeat a measurement when the host is noisy.
-- Treat nested phase timings as a hierarchy. A child phase is already included
-  in its parent; adding both exaggerates the total.
-- Compare an end-to-end workload as well as a focused case. A local improvement
-  can shift work to another stage or change generated-code performance.
+- **SCCP traversal order.** At `313ad16db5`, depth-first propagation through
+  large E2E batch callers repeatedly revisited paths: SCCP used 46.81 seconds
+  of a 91.25-second suite. The FIFO worklist merge at `797ff13051` reduced
+  SCCP to 2.88 seconds on a slightly larger corpus. It remains about three
+  seconds in the current pipeline.
+- **Call graph staging.** Callee summaries were formerly finalized too late
+  for some callers, causing additional pipeline work. The callee-first
+  pipeline now publishes each function's final facts before its callers and
+  asserts one visit per native pipeline stage for each scheduled function
+  node. Summary publication was later changed to merge only new batch facts.
+- **Backend clobber analysis.** Before this task, output generation recomputed
+  a whole-program register-write fixed point for every binary even though
+  callee-first compilation had already produced those facts. A direct probe
+  measured 20.84 seconds in 1,378 code-generation calls. Passing the saved
+  summaries forward and looking up only direct callees reduced full-suite
+  code generation from 22.68 to 4.32 seconds in successive profiles. Four
+  reused float-list helpers in the emitted binary had no saved summaries;
+  analyzing only those missing bodies preserved their narrow call saves.
+- **Checked-unit symbol composition.** A simple user expression carried 2,728
+  function-name entries into a base catalog with 4,614 entries, mostly
+  reimporting names the base already owned. The old full-suite symbol-import
+  phase used 18.11 seconds across 1,712 calls. Composing declarations from
+  the checked unit's top levels reduced that phase to 0.04 seconds in the
+  same 10,800-test corpus.
+- **SSA string rewrites.** The SSA optimizer searched the complete function
+  catalog for fixed string helper names on each fixed-point iteration. It
+  also built predecessor and use maps for a byte-match rewrite in functions
+  with no matching call. Direct name lookup and a call-presence check reduced
+  the full-suite SSA optimization phase from 25.26 to 7.48 seconds in
+  successive candidate profiles.
+- **Call graph initial facts.** Each compilation copied the entire external
+  summary catalog before considering which functions it called. Across 1,922
+  call graph compilations, setup and initial-fact construction took 3.35 and
+  5.14 seconds. Restricting the catalog to direct external callees reduced
+  those phases to 0.08 and 0.01 seconds in a subsequent full-suite profile.
 
-## Find repeated work first
-
-- Trace a costly operation from its callers. Count invocations by compilation
-  stage and input size, then ask which calls represent distinct semantic work.
-- Order producers before consumers when one analysis establishes facts needed
-  by later work. For example, a callee can publish a summary before a caller
-  is optimized. This can avoid a second pass over the whole program.
-- Batch related work at the smallest scope that preserves the needed facts.
-  Measure batch setup as well as the work inside each batch; many tiny batches
-  can cost more than the analysis they enable.
-- Move reuse checks before expensive preparation when the required cache
-  identity is already available. Report hits, misses, and invalidation causes;
-  a cache that only saves the final step leaves earlier repeated work intact.
-- Check the boundary between compilation and output generation. A later stage
-  may silently repeat a whole-program analysis whose result was already known
-  earlier; pass the summary forward and measure both sides of the boundary.
-
-## Check how cost grows
-
-- Measure input size, iteration count, and time per invocation. Compare small
-  and large cases. Repeatedly scanning an entire graph or catalog for each
-  function can turn linear work into quadratic work.
-- Inspect fixed-point passes for full structure copies, equality checks, and
-  analyses repeated after no relevant fact changed. Count productive and
-  unchanged iterations before altering the algorithm.
-- Distinguish a larger corpus from more work per compilation. A small increase
-  in physical compilations cannot explain a much larger increase in pass
-  invocations without another change in scheduling or reuse.
-- Watch for full-catalog searches inside a per-function or fixed-point pass.
-  Resolve stable names or identities once, then use direct lookups while the
-  pass visits individual functions and blocks.
-
-## Carry facts across boundaries
-
-- If an earlier representation already knows a fact, pass a validated summary
-  to the later stage instead of reconstructing it from a lower-level form that
-  has lost context. Direct-call relationships, types, reachability, and effect
-  summaries are common examples.
-- Give each summary an explicit scope and identity. Include the inputs that
-  can change its meaning in reuse decisions, and invalidate only consumers of
-  changed facts. Unknown or recursive cases still need conservative behavior.
-- Keep one source of truth for a fact. When a new summary path replaces an old
-  scan, remove the redundant path after correctness and performance checks
-  establish that all entry points use the new one.
-
-For compiler behavior changes, establish the observable case with a focused
-end-to-end test before the fix. Then run the full host suite and the relevant
-benchmark gate. A compile-time win is complete only when correctness and
-generated-code performance remain acceptable.
+The final 10,800-test profile takes 114.95 seconds, including 21.87 seconds
+in call graph compilation, 17.19 seconds in AST-to-ANF conversion, 11.28
+seconds in dependency lookup, and 10.09 seconds in SSA optimization. Some
+phase totals are nested and cannot be added. The remembered 30-second
+full-suite revision has not been verified; the fastest verified historical
+checkpoint is `9ddd172a14` at 46.00 seconds for 10,150 tests.

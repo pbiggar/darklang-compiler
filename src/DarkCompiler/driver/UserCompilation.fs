@@ -467,7 +467,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                                 externalReturnTypes))
                                 match programLirResult with
                                 | Error err -> Error err
-                                | Ok (allocatedProgramAndStart, _) ->
+                                | Ok (allocatedProgramAndStart, programSummaries) ->
                                     let allocatedStartFuncs, allocatedProgramFuncs =
                                         allocatedProgramAndStart
                                         |> List.partition (fun func -> func.Id = startFunction.Id)
@@ -666,6 +666,12 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             lirVariantRegistry,
                                             userRegistries.RecordFieldsReg
                                         )
+                                    let knownArm64CalleeWrites =
+                                        mergeSummaries summariesThroughDependencies programSummaries
+                                        |> Map.toList
+                                        |> List.choose (fun (id, summary) ->
+                                            summary.Arm64Writes |> Option.map (fun writes -> id, writes))
+                                        |> Map.ofList
                                     let freshProgramContextIdentity = box allocatedProgramFuncs
                                     let startProgramFuncs, otherUserFuncs =
                                         retainedUserFuncs
@@ -737,6 +743,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                              ]
                                              |> List.filter (fun group -> not (List.isEmpty group.Functions)))
                                             userRegistries.RcSumShapeReg
+                                            knownArm64CalleeWrites
                                             allocatedProgram
                                     match binaryResult with
                                     | Error err -> Error err

@@ -96,7 +96,8 @@ let internal buildAnf
         { TypeReg = registries.RecordFieldsReg
           RecordTypeParams = registries.RecordTypeParamsReg
           SumShapeReg = registries.RcSumShapeReg
-          FunctionNames = registries.FunctionNames }
+          FunctionNames = registries.FunctionNames
+          FunctionIds = registries.FunctionIds }
     let anfOptimized =
         if anfOptions.EnableTailRecursionModuloOperation then
             ANFAccumulatorLowering.lower

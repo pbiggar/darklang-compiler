@@ -220,9 +220,21 @@ let private pruneBlock (callees: Map<AST.FunctionId, Writes>) (block: LIR.BasicB
 
 let refineWithCache
     (cache: (LIR.Function -> Map<AST.FunctionId, Writes> -> (unit -> LIR.Function) -> LIR.Function) option)
+    (knownWrites: Map<AST.FunctionId, Writes> option)
     (functions: LIR.Function list)
     : LIR.Function list =
-    let callees = summaries functions
+    let callees =
+        match knownWrites with
+        | None -> summaries functions
+        | Some known ->
+            // Reused stdlib variants can appear in the final binary without
+            // a unique saved summary. Analyze just those bodies, using the
+            // finalized summaries for every other callee.
+            let missing =
+                functions
+                |> List.filter (fun func -> not (Map.containsKey func.Id known))
+            summariesWithKnown known missing
+            |> Map.fold (fun writes id value -> Map.add id value writes) known
     functions
     |> List.map (fun func ->
         let hasSaves =
@@ -240,7 +252,11 @@ let refineWithCache
                     |> List.choose (function LIR.Call (_, id, _) -> Some id | _ -> None))
                 |> Set.ofList
             let relevant =
-                callees |> Map.filter (fun id _ -> Set.contains id directIds)
+                directIds
+                |> Set.fold (fun writes id ->
+                    match Map.tryFind id callees with
+                    | Some value -> Map.add id value writes
+                    | None -> writes) Map.empty
             let generate () =
                 let blocks = func.CFG.Blocks |> Map.map (fun _ block -> pruneBlock relevant block)
                 if blocks = func.CFG.Blocks then func
@@ -250,4 +266,4 @@ let refineWithCache
             | None -> generate ())
 
 let refine (functions: LIR.Function list) : LIR.Function list =
-    refineWithCache None functions
+    refineWithCache None None functions

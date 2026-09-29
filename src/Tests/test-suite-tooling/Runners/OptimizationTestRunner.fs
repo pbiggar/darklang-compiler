@@ -107,7 +107,12 @@ let private optimizeContextFromConversionResult (convResult: AST_to_ANF.Conversi
     { TypeReg = convResult.RecordFieldsReg
       RecordTypeParams = convResult.RecordTypeParamsReg
       SumShapeReg = convResult.RcSumShapeReg
-      FunctionNames = convResult.FuncReg |> Map.map (fun _ (name, _) -> name) }
+      FunctionNames = convResult.FuncReg |> Map.map (fun _ (name, _) -> name)
+      FunctionIds =
+        convResult.FuncReg
+        |> Map.toList
+        |> List.map (fun (id, (name, _)) -> name, id)
+        |> Map.ofList }
 
 /// Normalize IR output for comparison
 /// - Trim whitespace

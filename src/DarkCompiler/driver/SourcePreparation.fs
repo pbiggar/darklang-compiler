@@ -609,7 +609,7 @@ let internal convertTypedProgramToUserOnlyWithMode
     let sourceSymbols = CheckedAST.programSymbols typedProgram
     let symbols, topLevels =
         measure "AST -> ANF Symbol Import" (fun () ->
-            CheckedAST.composeTopLevels
+            CheckedAST.composeDeclaredTopLevels
                 sourceSymbols
                 baseContext.Symbols
                 (CheckedAST.programTopLevels typedProgram))

@@ -474,7 +474,10 @@ let composeTopLevels
     (topLevels: TopLevel list)
     : Symbols * TopLevel list =
     let merge source target =
-        Map.fold (fun combined key value -> Map.add key value combined) target source
+        Map.fold (fun combined key value ->
+            match Map.tryFind key combined with
+            | Some existing when existing = value -> combined
+            | _ -> Map.add key value combined) target source
     let mergeTypeName names id name =
         match Map.tryFind id names with
         | Some existing when existing <> name ->
@@ -502,6 +505,65 @@ let composeTopLevels
         FieldIds = merge sourceCatalog.FieldIds targetCatalog.FieldIds
     }
     (catalog, topLevels)
+
+/// Import only declarations introduced by a checked unit. References in its
+/// bodies carry canonical IDs, while the target already owns external names.
+let composeDeclaredTopLevels
+    (sourceCatalog: Symbols)
+    (targetCatalog: Symbols)
+    (topLevels: TopLevel list)
+    : Symbols * TopLevel list =
+    let initial =
+        { catalogForCheckedUnit sourceCatalog with
+            NextTypeOrdinal = sourceCatalog.NextTypeOrdinal
+            ConstructorLookups = sourceCatalog.ConstructorLookups }
+    let declarations =
+        topLevels
+        |> List.fold (fun symbols topLevel ->
+            match topLevel with
+            | FunctionDef definition ->
+                { symbols with
+                    FunctionNames = Map.add definition.Id definition.Name symbols.FunctionNames
+                    FunctionIds = Map.add definition.Name definition.Id symbols.FunctionIds }
+            | ValueDef definition ->
+                { symbols with
+                    BindingNames = Map.add definition.Id definition.Name symbols.BindingNames
+                    ValueIds = Map.add definition.Name definition.Id symbols.ValueIds }
+            | TypeDef (id, checkedDefinition) ->
+                let definition = semanticTypeDef checkedDefinition
+                let name =
+                    match definition with
+                    | AST.RecordDef (name, _, _)
+                    | AST.SumTypeDef (name, _, _)
+                    | AST.TypeAlias (name, _, _) -> name
+                let symbols =
+                    { symbols with
+                        TypeNames = Map.add id name symbols.TypeNames
+                        TypeIds = Map.add name id symbols.TypeIds }
+                match definition with
+                | AST.RecordDef (_, _, fields) ->
+                    fields
+                    |> List.fold (fun symbols (fieldName, _) ->
+                        match Map.tryFind (name, fieldName) sourceCatalog.FieldIds with
+                        | None -> symbols
+                        | Some fieldId ->
+                            { symbols with
+                                FieldNames = Map.add fieldId (name, fieldName) symbols.FieldNames
+                                FieldIds = Map.add (name, fieldName) fieldId symbols.FieldIds }) symbols
+                | AST.SumTypeDef (_, _, variants) ->
+                    variants
+                    |> List.fold (fun symbols variant ->
+                        match Map.tryFind (name, variant.Name) sourceCatalog.ConstructorIds with
+                        | None -> symbols
+                        | Some constructorId ->
+                            { symbols with
+                                ConstructorNames =
+                                    Map.add constructorId (name, variant.Name) symbols.ConstructorNames
+                                ConstructorIds =
+                                    Map.add (name, variant.Name) constructorId symbols.ConstructorIds }) symbols
+                | AST.TypeAlias _ -> symbols
+            | Expression _ -> symbols) initial
+    composeTopLevels declarations targetCatalog topLevels
 
 let valueDefName (valueDef: ValueDef) : string = valueDef.Name
 

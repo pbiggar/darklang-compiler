@@ -400,6 +400,10 @@ let private runCase (case: Case) : Result<unit, string> =
           FunctionNames =
             functions
             |> List.map (fun fixture -> fixture.Source.Id, fixture.Source.Name)
+            |> Map.ofList
+          FunctionIds =
+            functions
+            |> List.map (fun fixture -> fixture.Source.Name, fixture.Source.Id)
             |> Map.ofList }
     let localSSA =
         locals

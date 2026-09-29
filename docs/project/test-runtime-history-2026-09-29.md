@@ -106,3 +106,36 @@ increase. The repeated global analyses and per-compilation catalog work above
 are better targets. The 46-second revision demonstrates a real historical
 suite time, but its smaller corpus and older pipeline do not establish that
 today's suite can reach 30 seconds without further changes.
+
+## Follow-up on the 10,800-test corpus
+
+The task branch based on `921dec3cfa` removed the repeated analyses above.
+The measurements below use one corpus and runner configuration throughout.
+They are successive full-suite profiles on the same host, with changing host
+load. They establish the phase reductions more reliably than the difference
+between any two wall times.
+
+| Profile | Runner | Code generation | Symbol import | SSA optimization | Call graph compilation |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Parent `921dec3cfa` | 176.06 s | 22.68 s | 18.11 s | 31.12 s | 32.79 s |
+| Backend summary reuse | 119.65 s | 4.32 s | 8.76 s | 25.26 s | 24.90 s |
+| SSA direct lookup | 104.58 s | 3.63 s | 9.29 s | 7.48 s | 25.46 s |
+| Sparse symbol import | 98.15 s | 4.57 s | 0.04 s | 7.63 s | 26.39 s |
+| Final branch | 114.95 s | 5.86 s | 0.05 s | 10.09 s | 21.87 s |
+
+Backend output had recomputed register-write summaries over the whole emitted
+program for every binary. The call graph had already computed summaries for
+most functions. Passing those facts through removed the bulk of code-generation
+time. Four reused float-list helpers lacked saved facts; a bounded fallback
+analyzes their emitted bodies so their callers retain the same narrow register
+saves. The final profile's call graph setup and initial-fact phases take 0.07
+and 0.01 seconds, compared with 3.35 and 5.14 seconds in a probe before
+restricting imported summaries to direct external callees.
+
+The final run passed 10,800 of 10,800 tests. Its 114.95-second wall time is
+above the 98.15-second candidate despite lower call graph cost. Other timed
+phases also moved upward together, consistent with host contention; these
+runs do not establish an exact end-to-end speedup on an uncontended host.
+The 46-second historical suite had 650 fewer tests and an older pipeline, so
+it is evidence of a former checkpoint rather than a measured target for the
+current corpus.

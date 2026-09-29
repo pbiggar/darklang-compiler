@@ -32,6 +32,7 @@ let internal generateBinary
     (functionGroups: CodeGen.FunctionGroup list)
     (metadataGroups: CodeGen.MetadataGroup list)
     (arm64SumShapeRegistry: MemoryModel.RcSumShapeRegistry)
+    (knownArm64CalleeWrites: Map<AST.FunctionId, ARM64CalleeClobbers.Writes>)
     (allocatedProgram: LIR.Program)
     : Result<byte array, string> =
 
@@ -179,6 +180,7 @@ let internal generateBinary
                 arm64Target
                 codegenOptions
                 (Some arm64SumShapeRegistry)
+                (Some knownArm64CalleeWrites)
                 functionCache
                 refinementCache
                 functionGroupCache

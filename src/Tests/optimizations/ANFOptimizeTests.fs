@@ -29,7 +29,8 @@ let private emptyContext : ANFConstants.OptimizeContext =
     { TypeReg = Map.empty
       RecordTypeParams = Map.empty
       SumShapeReg = Map.empty
-      FunctionNames = Map.empty }
+      FunctionNames = Map.empty
+      FunctionIds = Map.empty }
 
 let private optimizationFunctionNames =
     [ "Int.fromInt64"
@@ -46,6 +47,11 @@ let private markerContext : ANFConstants.OptimizeContext =
     { TypeReg = Map.empty
       RecordTypeParams = Map.empty
       FunctionNames = optimizationFunctionNames
+      FunctionIds =
+        optimizationFunctionNames
+        |> Map.toList
+        |> List.map (fun (id, name) -> name, id)
+        |> Map.ofList
       SumShapeReg =
         Map.ofList [
             ("Marker",

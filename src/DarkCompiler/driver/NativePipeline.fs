@@ -343,6 +343,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                     passTimingRecorder
                     "Call Graph Scheduling"
                     (sw.Elapsed.TotalMilliseconds - scheduleStart)
+                let graphSetupStart = sw.Elapsed.TotalMilliseconds
                 let localIds = mirFuncs |> List.map (fun func -> func.Id) |> Set.ofList
                 let ambiguousLocalIds =
                     mirFuncs
@@ -353,20 +354,16 @@ let internal lowerToAllocatedLirWithKnownGroups
                     mirFuncs
                     |> List.fold (fun callees func ->
                         Set.union callees (CallGraphSchedule.directCallees func)) Set.empty
-                // A current body always supersedes a cached fact with the same
-                // canonical ID, including a definition from another unit.
-                let externalSummaries =
-                    externalSummaries
-                    |> Map.filter (fun id _ -> not (Set.contains id localIds))
-                // Even an unresolved edge has a saved, pessimistic result.
-                // Consumers may select narrower facts only from this catalog
-                // after the scheduler has finalized a unique local callee.
+                // A current body supersedes a cached fact with the same ID.
+                // Only direct external callees can affect this unit; their
+                // summaries already include transitive facts.
                 let externalSummaries =
                     Set.difference directCalleeIds localIds
                     |> Set.fold (fun summaries id ->
-                        if Map.containsKey id summaries then summaries
-                        else Map.add id CompilationCacheIdentity.unknownSummary summaries)
-                        externalSummaries
+                        let summary =
+                            Map.tryFind id externalSummaries
+                            |> Option.defaultValue CompilationCacheIdentity.unknownSummary
+                        Map.add id summary summaries) Map.empty
                 if verbosity >= 2 then
                     let directCalls =
                         mirFuncs
@@ -394,6 +391,10 @@ let internal lowerToAllocatedLirWithKnownGroups
                             (0, 0, 0)
                     println
                         $"  [callgraph] functions={List.length mirFuncs} batches={List.length components} direct={List.length directCalls} known={known} ambiguous={ambiguous} unresolved={unresolved}"
+                recordPassTiming
+                    passTimingRecorder
+                    "Call Graph Setup"
+                    (sw.Elapsed.TotalMilliseconds - graphSetupStart)
                 let compileComponent
                     knownEffectFree
                     knownRemovable
@@ -797,6 +798,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                                 (allocated :: completed)
                                 visits
                                 rest)
+                let initialFactsStart = sw.Elapsed.TotalMilliseconds
                 let initialPurity =
                     externalSummaries |> Map.map (fun _ summary -> summary.Purity)
                 let initialRemovable =
@@ -826,6 +828,10 @@ let internal lowerToAllocatedLirWithKnownGroups
                     |> Set.fold (fun summaries id ->
                         Map.add id CompilationCacheIdentity.unknownSummary summaries)
                         externalSummaries
+                recordPassTiming
+                    passTimingRecorder
+                    "Call Graph Initial Facts"
+                    (sw.Elapsed.TotalMilliseconds - initialFactsStart)
                 compile
                     initialPurity initialRemovable initialRemovable
                     initialTypedConstants initialWrites
