@@ -330,7 +330,7 @@ let private cloneGroups
 /// through their complete candidate, and keep outside calls established.
 /// The caller reserves all other symbols in the compilation unit. No changes
 /// escape this pass unless the complete materialized program verifies.
-let materialize
+let private materializeWithRequests
     (hir: VerifyOwnedHIR.HIRContracts<'leaf>)
     (semantics: Semantics<'leaf, 'id>)
     (reservedFunctions: Map<AST.FunctionId, string>)
@@ -382,3 +382,23 @@ let materialize
         VerifyOwnedHIR.verifyFunctions (hirContracts plan hir) (ownershipSemantics plan semantics) (functions plan)
         |> Result.mapError InvalidMaterializedProgram
         |> Result.map (fun () -> plan))
+
+/// Empty demand keeps the original program and its validation boundary without
+/// rebuilding and re-verifying an identical derived program.
+let materialize
+    (hir: VerifyOwnedHIR.HIRContracts<'leaf>)
+    (semantics: Semantics<'leaf, 'id>)
+    (reservedFunctions: Map<AST.FunctionId, string>)
+    (definitions: Function<'leaf, 'id> list)
+    (requests: Request<'id> list)
+    : Result<Plan<'leaf, 'id>, MaterializationError<'id>> =
+    if List.isEmpty requests then
+        OwnedFunctionGroups.discover definitions
+        |> Result.mapError GroupingFailed
+        |> Result.bind (fun _ ->
+            VerifyOwnedHIR.verifyFunctions hir semantics definitions
+            |> Result.mapError InvalidOriginalProgram)
+        |> Result.map (fun () ->
+            { Originals = definitions; Groups = []; Rewrites = [] })
+    else
+        materializeWithRequests hir semantics reservedFunctions definitions requests
