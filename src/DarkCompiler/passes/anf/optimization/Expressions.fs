@@ -288,9 +288,7 @@ let private trySimplifyAdjacentLet
     : AExpr option =
     let hasName id name = Map.tryFind id context.FunctionNames = Some name
     let resolve name =
-        context.FunctionNames
-        |> Map.toSeq
-        |> Seq.tryPick (fun (id, displayName) -> if displayName = name then Some id else None)
+        Map.tryFind name context.FunctionIds
         |> Option.defaultWith (fun () ->
             Crash.crash $"ANF optimization helper '{name}' is absent from registries")
 
@@ -313,10 +311,7 @@ let private trySimplifyAdjacentLet
                 if name = publicPrefix || name.StartsWith(publicPrefix + "_") then
                     let internalName =
                         "Darklang.Stdlib.List.__getAt" + name.Substring(publicPrefix.Length)
-                    context.FunctionNames
-                    |> Map.toSeq
-                    |> Seq.tryPick (fun (id, displayName) ->
-                        if displayName = internalName then Some id else None)
+                    Map.tryFind internalName context.FunctionIds
                 else None)
         internalGetAt
         |> Option.map (fun target ->

@@ -844,7 +844,7 @@ let rec private transformConstructorBody
             (If (cond, thenBranch', elseBranch'), final)
 
 let private freshHelperName
-    (functionNames: FunctionNameRegistry)
+    (occupiedNames: Set<string>)
     (generatedNames: Set<string>)
     (funcName: string)
     : string =
@@ -852,7 +852,7 @@ let private freshHelperName
         let candidate =
             if suffix = 0 then $"{funcName}$trmo"
             else $"{funcName}$trmo{suffix}"
-        if functionNames |> Map.values |> Seq.contains candidate
+        if Set.contains candidate occupiedNames
            || Set.contains candidate generatedNames then
             choose (suffix + 1)
         else
@@ -862,6 +862,7 @@ let private freshHelperName
 let internal planTailRecursionModuloHelpers
     (functionNames: FunctionNameRegistry)
     (eligibleFunctions: Set<AST.FunctionId>) =
+    let occupiedNames = functionNames |> Map.values |> Set.ofSeq
     let helperNames, _ =
         eligibleFunctions
         |> Set.toList
@@ -871,7 +872,7 @@ let internal planTailRecursionModuloHelpers
             | None -> Crash.crash "Accumulator helper source has no function name")
         |> List.sortBy snd
         |> List.mapFold (fun generatedNames (functionId, functionName) ->
-            let helperName = freshHelperName functionNames generatedNames functionName
+            let helperName = freshHelperName occupiedNames generatedNames functionName
             ((functionId, helperName), Set.add helperName generatedNames)) Set.empty
     let allocated =
         AST.allocateFunctionIds (functionNames |> Map.keys) (helperNames |> List.map snd)

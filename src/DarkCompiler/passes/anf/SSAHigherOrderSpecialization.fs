@@ -503,9 +503,14 @@ let specializeProgramWithExternalFunctionsAndNames
         |> List.map (fun argument -> targetName definitions argument.Callable.Target)
         |> Set.ofList
     let helperNames = requests |> List.map (helperName definitions) |> Set.ofList
+    let occupiedNames =
+        seq {
+            yield! definitions |> Map.values |> Seq.map (fun func -> func.Name)
+            yield! reservedNames |> Map.values
+        }
+        |> Set.ofSeq
     let exists name =
-        (definitions |> Map.values |> Seq.exists (fun func -> func.Name = name))
-        || (reservedNames |> Map.values |> Seq.contains name)
+        Set.contains name occupiedNames
     let usable =
         requests
         |> List.filter (fun request ->

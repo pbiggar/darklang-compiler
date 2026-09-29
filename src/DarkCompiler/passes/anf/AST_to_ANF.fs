@@ -447,7 +447,7 @@ let private buildRegistriesInternal
         record "AST -> ANF Registry: Scope Contracts" elapsed)
     let inertFunctionScopes =
         if includeModuleFunctionParams then
-            DestructionAnalysis.inertFunctionScopes functionNames scopeContracts
+            DestructionAnalysis.inertFunctionScopes functionIds scopeContracts
         else
             Set.empty
     {
@@ -523,12 +523,13 @@ let mergeRegistriesWithTrace
     let functionNames =
         measure "AST -> ANF Registry: Function Name Merge" (fun () ->
             mergeMaps baseRegs.FunctionNames overlay.FunctionNames)
+    let functionIds = mergeMaps baseRegs.FunctionIds overlay.FunctionIds
     let scopeContracts = mergeMaps baseRegs.ScopeContracts overlay.ScopeContracts
     let localInertFunctionScopes =
         measure "AST -> ANF Registry: Inert Scope Analysis" (fun () ->
             DestructionAnalysis.inertFunctionScopesWithBase
                 baseRegs.InertFunctionScopes
-                functionNames
+                functionIds
                 overlay.ScopeContracts)
     measure "AST -> ANF Registry: Other Overlay Maps" (fun () -> {
         TypeReg = mergeMaps baseRegs.TypeReg overlay.TypeReg
@@ -544,7 +545,7 @@ let mergeRegistriesWithTrace
         SumMetadata = mergeSumMetadata baseRegs.SumMetadata overlay.SumMetadata
         RcSumShapeReg = mergeMaps baseRegs.RcSumShapeReg overlay.RcSumShapeReg
         FuncReg = mergeMaps baseRegs.FuncReg overlay.FuncReg
-        FunctionIds = mergeMaps baseRegs.FunctionIds overlay.FunctionIds
+        FunctionIds = functionIds
         FunctionNames = functionNames
         FuncParams = mergeMaps baseRegs.FuncParams overlay.FuncParams
         ModuleRegistry = baseRegs.ModuleRegistry

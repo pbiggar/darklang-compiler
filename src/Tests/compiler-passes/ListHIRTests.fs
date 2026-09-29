@@ -200,11 +200,11 @@ let tests = [
               "right", contract DestructionAnalysis.InertScope ["left"; "Builtin.printLine"] ]
             |> List.map (fun (name, value) -> fid name, value)
             |> Map.ofList
-        let functionNames =
+        let functionIds =
             ["resource"; "indirect"; "caller"; "unknown"; "external"; "left"; "right"; "Builtin.print"; "Builtin.printLine"]
-            |> List.map (fun name -> fid name, name)
+            |> List.map (fun name -> name, fid name)
             |> Map.ofList
-        let actual = DestructionAnalysis.inertFunctionScopes functionNames contracts
+        let actual = DestructionAnalysis.inertFunctionScopes functionIds contracts
         let expected =
             ["left"; "right"; "Builtin.print"; "Builtin.printLine"]
             |> List.map fid
@@ -223,15 +223,15 @@ let tests = [
                 (fid "callee")
                 { safe with LocalDestruction = DestructionAnalysis.UnprovenScope }
                 contracts
-        let functionNames = Map.ofList [fid "callee", "callee"; fid "caller", "caller"]
-        if Set.contains (fid "caller") (DestructionAnalysis.inertFunctionScopes functionNames contracts)
-           && not (Set.contains (fid "caller") (DestructionAnalysis.inertFunctionScopes functionNames replaced)) then Ok ()
+        let functionIds = Map.ofList ["callee", fid "callee"; "caller", fid "caller"]
+        if Set.contains (fid "caller") (DestructionAnalysis.inertFunctionScopes functionIds contracts)
+           && not (Set.contains (fid "caller") (DestructionAnalysis.inertFunctionScopes functionIds replaced)) then Ok ()
         else Error "Replacing a definition did not revoke its transitive scope proof")
     "Scope destruction does not trust a shadowed primitive", (fun () ->
         let functionId = TestIds.functionIdForName "Builtin.printLine"
         let contracts = Map.ofList [functionId, { DestructionAnalysis.LocalDestruction = DestructionAnalysis.UnprovenScope; DestructionAnalysis.Calls = Set.empty }]
-        let functionNames = Map.ofList [functionId, "Builtin.printLine"]
-        if Set.contains functionId (DestructionAnalysis.inertFunctionScopes functionNames contracts) then Error "Shadowed primitive retained its built-in contract"
+        let functionIds = Map.ofList ["Builtin.printLine", functionId]
+        if Set.contains functionId (DestructionAnalysis.inertFunctionScopes functionIds contracts) then Error "Shadowed primitive retained its built-in contract"
         else Ok ())
     "List HIR accepts deep shared continuations", (fun () ->
         match extract (manyBranches 64) with

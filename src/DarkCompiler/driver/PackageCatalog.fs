@@ -94,19 +94,23 @@ let private optionSomeExpr (value: AST.Expr) : AST.Expr =
 let private call (name: string) (args: AST.Expr list) : AST.Expr =
     AST.applyNamed name (AST.NonEmptyList.fromList args)
 
-let private addOrderedGroup
-    (key: 'key)
-    (value: 'value)
-    (groups: ('key * 'value list) list)
+let private orderedGroups
+    (entries: ('key * 'value) list)
     : ('key * 'value list) list
-    when 'key: equality =
-    let rec add remaining =
-        match remaining with
-        | [] -> [(key, [value])]
-        | (existingKey, values) :: rest when existingKey = key ->
-            (existingKey, values @ [value]) :: rest
-        | group :: rest -> group :: add rest
-    add groups
+    when 'key: comparison =
+    let order, groups =
+        entries
+        |> List.fold (fun (order, groups) (key, value) ->
+            match Map.tryFind key groups with
+            | Some values -> order, Map.add key (value :: values) groups
+            | None -> key :: order, Map.add key [value] groups) ([], Map.empty)
+    order
+    |> List.rev
+    |> List.map (fun key ->
+        let values =
+            Map.tryFind key groups
+            |> Option.defaultWith (fun () -> Crash.crash "Ordered package group is missing")
+        key, List.rev values)
 
 let private nestedIf
     (cases: (AST.Expr * AST.Expr) list)
@@ -230,10 +234,8 @@ let private materializeReachablePackageValueCatalog
             let findGroups =
                 reachableEntries
                 |> List.filter (fun entry -> List.isEmpty entry.RuntimeType.TypeArguments)
-                |> List.fold
-                    (fun groups entry ->
-                        addOrderedGroup entry.RuntimeType entry.ValueHash groups)
-                    []
+                |> List.map (fun entry -> entry.RuntimeType, entry.ValueHash)
+                |> orderedGroups
             let findCases =
                 findGroups
                 |> List.map (fun (catalogType, hashes) ->
@@ -260,9 +262,7 @@ let private materializeReachablePackageValueCatalog
                             ((branchId, entry.ValueHash), location))))
             let locationGroups =
                 visibleLocations
-                |> List.fold
-                    (fun groups (key, location) -> addOrderedGroup key location groups)
-                    []
+                |> orderedGroups
             let locationExpr (location: CatalogPackageLocation) =
                 AST.RecordLiteral (
                     AST.unresolvedRecordReference "Darklang.LanguageTools.ProgramTypes.PackageLocation" [],
