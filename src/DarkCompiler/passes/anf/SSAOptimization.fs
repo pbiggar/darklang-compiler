@@ -236,7 +236,7 @@ let private rewriteByteOptionMatches (context: OptimizeContext) (func: SSAANF.Fu
         |> fst
     | _ -> func
 
-let private eliminateDominatedDuplicates (func: SSAANF.Function) =
+let private eliminateDominatedDuplicatesWithCandidates candidates (func: SSAANF.Function) =
     let labels = func.Blocks |> Map.keys |> Set.ofSeq
     let predecessors =
         func.Blocks
@@ -274,18 +274,6 @@ let private eliminateDominatedDuplicates (func: SSAANF.Function) =
                     Map.add label (Set.add label common) dom) Map.empty
         if next = known then known else settle next
     let dominators = settle initial
-    let candidates =
-        func.Blocks
-        |> Map.toList
-        |> List.collect (fun (label, block) ->
-            block.Operations
-            |> List.mapi (fun index (id, operation) ->
-                ANFExpressionOptimization.tryCSEKey operation
-                |> Option.map (fun key -> key, (label, index, id)))
-            |> List.choose id)
-        |> List.groupBy fst
-        |> List.map (fun (key, values) -> key, List.map snd values)
-        |> Map.ofList
     { func with
         Blocks =
             func.Blocks
@@ -311,6 +299,22 @@ let private eliminateDominatedDuplicates (func: SSAANF.Function) =
                                 match prior with
                                 | Some source -> id, Atom (Var source)
                                 | None -> id, operation) }) }
+
+let private eliminateDominatedDuplicates (func: SSAANF.Function) =
+    let candidates =
+        func.Blocks
+        |> Map.toList
+        |> List.collect (fun (label, block) ->
+            block.Operations
+            |> List.mapi (fun index (id, operation) ->
+                ANFExpressionOptimization.tryCSEKey operation
+                |> Option.map (fun key -> key, (label, index, id)))
+            |> List.choose id)
+        |> List.groupBy fst
+        |> List.map (fun (key, values) -> key, List.map snd values)
+        |> Map.ofList
+    if candidates |> Map.forall (fun _ values -> List.length values < 2) then func
+    else eliminateDominatedDuplicatesWithCandidates candidates func
 
 let private mergeSinglePredecessorJumps (func: SSAANF.Function) =
     let predecessors =
@@ -392,21 +396,7 @@ let private simplifyBooleanReturnBranches (func: SSAANF.Function) =
     { func with Blocks = blocks; FreshValueTypes = types }
 
 let private devirtualizeCaptureFreeClosures (func: SSAANF.Function) =
-    let useCounts = useCounts func
-    let callsThrough closureId =
-        func.Blocks
-        |> Map.toList
-        |> List.sumBy (fun (_, block) ->
-            block.Operations
-            |> List.sumBy (fun (_, operation) ->
-                match operation with
-                | ClosureCall (Var id, arguments)
-                | ClosureTailCall (Var id, arguments)
-                    when id = closureId
-                         && not (List.exists (ANFEffects.atomUsesTemp closureId) arguments) ->
-                    1
-                | _ -> 0))
-    let candidates =
+    let allocations =
         func.Blocks
         |> Map.toList
         |> List.collect (fun (_, block) ->
@@ -414,36 +404,53 @@ let private devirtualizeCaptureFreeClosures (func: SSAANF.Function) =
             |> List.choose (function
                 | id, ClosureAlloc (target, []) -> Some (id, target)
                 | _ -> None))
-        |> List.choose (fun (id, target) ->
-            let calls = callsThrough id
-            if calls > 0 && Map.tryFind id useCounts = Some calls then
-                Some (id, target)
-            else None)
-        |> Map.ofList
-    if Map.isEmpty candidates then func
+    if List.isEmpty allocations then func
     else
-        { func with
-            Blocks =
-                func.Blocks
-                |> Map.map (fun _ block ->
-                    { block with
-                        Operations =
-                            block.Operations
-                            |> List.choose (fun (id, operation) ->
-                                match operation with
-                                | ClosureAlloc (_, []) when Map.containsKey id candidates ->
-                                    None
-                                | ClosureCall (Var closureId, arguments) ->
-                                    match Map.tryFind closureId candidates with
-                                    | Some target ->
-                                        Some (id, Call (target, UnitLiteral :: arguments))
-                                    | None -> Some (id, operation)
-                                | ClosureTailCall (Var closureId, arguments) ->
-                                    match Map.tryFind closureId candidates with
-                                    | Some target ->
-                                        Some (id, TailCall (target, UnitLiteral :: arguments))
-                                    | None -> Some (id, operation)
-                                | _ -> Some (id, operation)) }) }
+        let counts = useCounts func
+        let callsThrough =
+            func.Blocks
+            |> Map.fold (fun calls _ block ->
+                block.Operations
+                |> List.fold (fun calls (_, operation) ->
+                    match operation with
+                    | ClosureCall (Var id, arguments)
+                    | ClosureTailCall (Var id, arguments)
+                        when not (List.exists (ANFEffects.atomUsesTemp id) arguments) ->
+                        let count = Map.tryFind id calls |> Option.defaultValue 0
+                        Map.add id (count + 1) calls
+                    | _ -> calls) calls) Map.empty
+        let candidates =
+            allocations
+            |> List.choose (fun (id, target) ->
+                let calls = Map.tryFind id callsThrough |> Option.defaultValue 0
+                if calls > 0 && Map.tryFind id counts = Some calls then
+                    Some (id, target)
+                else None)
+            |> Map.ofList
+        if Map.isEmpty candidates then func
+        else
+            { func with
+                Blocks =
+                    func.Blocks
+                    |> Map.map (fun _ block ->
+                        { block with
+                            Operations =
+                                block.Operations
+                                |> List.choose (fun (id, operation) ->
+                                    match operation with
+                                    | ClosureAlloc (_, []) when Map.containsKey id candidates ->
+                                        None
+                                    | ClosureCall (Var closureId, arguments) ->
+                                        match Map.tryFind closureId candidates with
+                                        | Some target ->
+                                            Some (id, Call (target, UnitLiteral :: arguments))
+                                        | None -> Some (id, operation)
+                                    | ClosureTailCall (Var closureId, arguments) ->
+                                        match Map.tryFind closureId candidates with
+                                        | Some target ->
+                                            Some (id, TailCall (target, UnitLiteral :: arguments))
+                                        | None -> Some (id, operation)
+                                    | _ -> Some (id, operation)) }) }
 
 let private rewriteOnce context options (func: SSAANF.Function) =
     let typeEnv =
