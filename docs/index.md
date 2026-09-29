@@ -51,6 +51,7 @@ grouped by purpose; each subject has one canonical source.
 - [Call-graph-directed pipeline plan](project/callgraph-pipeline-plan.md)
 - [In-place mutation optimization checklist](project/perceus-checklist.md)
 - [Host test and compiler runtime profile (2026-09-27)](project/test-runtime-profile-2026-09-27.md)
+- [Historical host-suite compile-time comparison (2026-09-29)](project/test-runtime-history-2026-09-29.md)
 
 ## Benchmarks
 

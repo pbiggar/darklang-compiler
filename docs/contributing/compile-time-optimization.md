@@ -31,6 +31,9 @@ before changing it.
 - Move reuse checks before expensive preparation when the required cache
   identity is already available. Report hits, misses, and invalidation causes;
   a cache that only saves the final step leaves earlier repeated work intact.
+- Check the boundary between compilation and output generation. A later stage
+  may silently repeat a whole-program analysis whose result was already known
+  earlier; pass the summary forward and measure both sides of the boundary.
 
 ## Check how cost grows
 
@@ -43,6 +46,9 @@ before changing it.
 - Distinguish a larger corpus from more work per compilation. A small increase
   in physical compilations cannot explain a much larger increase in pass
   invocations without another change in scheduling or reuse.
+- Watch for full-catalog searches inside a per-function or fixed-point pass.
+  Resolve stable names or identities once, then use direct lookups while the
+  pass visits individual functions and blocks.
 
 ## Carry facts across boundaries
 
