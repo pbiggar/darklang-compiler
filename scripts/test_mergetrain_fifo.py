@@ -8,11 +8,80 @@ from unittest.mock import patch
 
 from scripts.mergetrain_fifo import (
     DispatchError, admit_manual, load, policy_sections, prepare, retry_head,
-    safe_policy_change,
+    safe_policy_change, save,
 )
 
 
 class FifoDispatchTests(unittest.TestCase):
+    def test_automatic_retry_renews_approval_and_preserves_fifo_and_owner(self) -> None:
+        for approved in (True, False):
+            with self.subTest(approved=approved), tempfile.TemporaryDirectory() as directory:
+                repo = Path(directory) / "repo"
+                repo.mkdir()
+                subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+                subprocess.run(["git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                                "commit", "-q", "--allow-empty", "-m", "base"], cwd=repo, check=True)
+                sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+                original = {"id": 17, "branch": "main", "head_sha": sha, "base_sha": sha,
+                            "worktree_path": str(repo), "status": "failed", "auto_deploy": False}
+                state = {"schema": 1, "head": {"native_id": 17, "order": 16, "recovery_failed": "old failure"},
+                         "pending": [{"order": 18}], "completed": []}
+                save(repo, state)
+                calls = []
+                queued = {}
+                def fake_train(_repo: Path, *args: str) -> dict:
+                    calls.append(args)
+                    if args[0] == "inspect":
+                        return {"job": queued if args[1] == "21" else original}
+                    if args[0] == "status":
+                        return {"recent_jobs": [{"id": 21, "state": "waiting"}]}
+                    if args[0] == "enqueue":
+                        self.assertIn("--auto", args)
+                        worktree = args[args.index("--worktree") + 1]
+                        self.assertEqual(subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=worktree, text=True).strip(), sha)
+                        queued.update({**original, "id": 21, "auto_deploy": approved,
+                                       "branch": args[args.index("--branch") + 1],
+                                       "worktree_path": worktree})
+                        return {"job": queued}
+                    if args[0] == "dismiss":
+                        if sum(call[0] == "dismiss" for call in calls) == 1:
+                            raise DispatchError("interrupted dismissal")
+                        return {"ok": True}
+                    raise AssertionError(args)
+                with patch("scripts.mergetrain_fifo.train", side_effect=fake_train):
+                    if approved:
+                        with self.assertRaisesRegex(DispatchError, "interrupted dismissal"):
+                            retry_head(repo, 17, auto=True, worktree_root=Path(directory) / "retries")
+                        self.assertEqual(load(repo), state)
+                        result = retry_head(repo, 17, auto=True, worktree_root=Path(directory) / "retries")
+                        self.assertTrue(result["job"]["auto_deploy"])
+                        updated = load(repo)
+                        self.assertEqual(updated["head"]["native_id"], 21)
+                        self.assertEqual(updated["head"]["order"], 16)
+                        self.assertTrue(updated["head"]["auto"])
+                        self.assertNotIn("recovery_failed", updated["head"])
+                        self.assertEqual(updated["pending"], state["pending"])
+                        self.assertEqual([call[0] for call in calls],
+                                         ["inspect", "enqueue", "dismiss", "inspect", "status", "inspect", "dismiss"])
+                    else:
+                        with self.assertRaisesRegex(DispatchError, "automatic approval"):
+                            retry_head(repo, 17, auto=True, worktree_root=Path(directory) / "retries")
+                        self.assertEqual(load(repo), state)
+                        self.assertNotIn("dismiss", [call[0] for call in calls])
+                self.assertEqual(subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip(), sha)
+                self.assertEqual(subprocess.check_output(["git", "status", "--porcelain"], cwd=repo, text=True), "")
+
+    def test_automatic_retry_refuses_uncertain_push_before_enqueue(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
+            with patch("scripts.mergetrain_fifo.train", return_value={"job": {
+                "status": "blocked", "pending_deploy_sha": "a" * 40,
+            }}) as train:
+                with self.assertRaisesRegex(DispatchError, "reconcile"):
+                    retry_head(repo, 17, auto=True)
+                train.assert_called_once_with(repo, "inspect", "17")
+
     def test_worktree_location_only_can_renew_approval(self) -> None:
         base = "version: 2\ngates:\n  - name: tests\n"
         relocated = base + "state:\n  worktree_root: /tmp/mergetrain-worktrees\n\n"

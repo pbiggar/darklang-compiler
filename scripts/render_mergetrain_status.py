@@ -134,7 +134,7 @@ def render_attention_job(
         if manual_policy_job:
             lines.append("This manual job awaits validation and exact-plan confirmation.")
         else:
-            lines.append("Retry after a policy change creates a manual job; it does not renew --auto approval.")
+            lines.append("[r] retries this exact commit with fresh bounded automatic approval for the current destination and policy.")
         evidence = attempt_dir / f"{job_id}-{head}.policy.json"
         if evidence.is_file():
             recorded = json.loads(evidence.read_text(encoding="utf-8"))

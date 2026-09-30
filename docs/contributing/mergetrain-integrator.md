@@ -144,11 +144,14 @@ independent verification remain operator decisions.
 replacements with `v`. The detail view shows the recorded failure and policy
 diff, and `n`/`p` move between review pages. The selected job ID and task stay
 visible at the bottom while the page scrolls. `r` offers a confirmed
-`mergetrain retry` for the selected FIFO head and records its replacement under
-the original arrival number. Deferred jobs are listed in status but cannot be
-retried ahead of the head. Retry does not renew
-an expired unattended policy approval: mergetrain creates a manual replacement
-when the policy no longer matches. On a blocked policy job or its queued manual
+automatic retry for the selected FIFO head and records its replacement under
+the original arrival number. Confirmation grants fresh bounded automatic
+approval for the current destination and execution policy. The exact enqueued
+commit is checked out in a separate retry worktree and enqueued with `--auto`;
+the original is dismissed only after the replacement confirms that commit
+and automatic approval. Dirty or changed original worktrees and jobs whose
+push may already have landed are refused. Deferred jobs cannot be retried
+ahead of the head. On a blocked policy job or its queued manual
 replacement, `A` starts a human review: it displays the job's policy diff,
 requires the operator to type its job ID and commit prefix, retries a blocked
 job as manual when needed, validates a train containing the manual job, then
