@@ -127,12 +127,13 @@ let private measureFunctionPhase
 let internal ownedDictionaryFrontierParams (func: Function) : Set<TempId> =
     let candidates =
         func.TypedParams
-        |> List.mapi (fun index parameter ->
-            index, parameter, internalOwnedTailParamKind func index parameter)
-        |> List.choose (fun (index, parameter, kind) ->
-            match parameter.Type, kind with
-            | (AST.TDict _ | AST.TTuple _), Some NonEscapingLoopState ->
-                Some (index, parameter)
+        |> List.indexed
+        |> List.choose (fun (index, parameter) ->
+            match parameter.Type with
+            | AST.TDict _ | AST.TTuple _ ->
+                match internalOwnedTailParamKind func index parameter with
+                | Some NonEscapingLoopState -> Some (index, parameter)
+                | _ -> None
             | _ -> None)
     let hasDictionary =
         candidates

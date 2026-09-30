@@ -253,10 +253,6 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
 
                         let mergeSummaries left right =
                             CompilationCacheIdentity.mergeFunctionSummaries left right
-                        let baseSummaries =
-                            mergeSummaries
-                                plan.Stdlib.CallGraphSummaries
-                                plan.PrebuiltCallGraphSummaries
                         let dependencyKnownSummaries =
                             let directCallees =
                                 ANFDeadCodeElimination.buildCallGraph dependencyFunctions
@@ -267,8 +263,15 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 |> List.fold (fun ids graph ->
                                     Set.union ids (CallGraphReachability.findReachable graph directCallees))
                                     directCallees
-                            baseSummaries
-                            |> Map.filter (fun id _ -> Set.contains id relevantIds)
+                            let select summaries =
+                                relevantIds
+                                |> Set.fold (fun selected id ->
+                                    match Map.tryFind id summaries with
+                                    | Some summary -> Map.add id summary selected
+                                    | None -> selected) Map.empty
+                            mergeSummaries
+                                (select plan.Stdlib.CallGraphSummaries)
+                                (select plan.PrebuiltCallGraphSummaries)
 
                         let compileDependencyFunctions () =
                             buildAnf
@@ -411,7 +414,9 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                         | _, Error err -> Error err
                         | Ok (allocatedDependencyFuncs, dependencySummaries), Ok (_printedFunctions, ssaFunctions, programTypeMap) ->
                                 let summariesThroughDependencies =
-                                    mergeSummaries baseSummaries dependencySummaries
+                                    mergeSummaries
+                                        (mergeSummaries plan.Stdlib.CallGraphSummaries plan.PrebuiltCallGraphSummaries)
+                                        dependencySummaries
                                 let reachableSSAFunctions =
                                     SSADirectCallSpecialization.reachableFrom
                                         (Set.singleton programEntryId)

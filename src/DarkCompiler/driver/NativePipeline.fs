@@ -347,10 +347,10 @@ let internal lowerToAllocatedLirWithKnownGroups
                 let graphSetupStart = sw.Elapsed.TotalMilliseconds
                 let localIds = mirFuncs |> List.map (fun func -> func.Id) |> Set.ofList
                 let highestReservedId =
-                    registries.FunctionNames
-                    |> Map.fold
-                        (fun highest id _ -> max highest id)
-                        (Set.fold max (AST.functionId 0UL) localIds)
+                    let highestLocal =
+                        if Set.isEmpty localIds then AST.functionId 0UL else Set.maxElement localIds
+                    if Map.isEmpty registries.FunctionNames then highestLocal
+                    else max highestLocal (fst (Map.maxKeyValue registries.FunctionNames))
                 let ambiguousLocalIds =
                     mirFuncs
                     |> List.countBy (fun func -> func.Id)

@@ -183,9 +183,6 @@ let internal buildAnf
                         Set.union (atomTargets condition) (Set.union (anfTargets yes) (anfTargets no))
                     | ANF.Join (_, continuation, entry) ->
                         Set.union (anfTargets continuation) (anfTargets entry)
-                let candidates =
-                    externalInlineCandidates
-                    |> Map.map (fun _ info -> info.Func)
                 let localTargets =
                     ssaBeforeSpecialization
                     |> List.fold (fun ids func ->
@@ -199,14 +196,14 @@ let internal buildAnf
                     | [] -> seen
                     | id :: rest when Set.contains id seen -> relevant seen rest
                     | id :: rest ->
-                        match Map.tryFind id candidates with
+                        match Map.tryFind id externalInlineCandidates with
                         | None -> relevant seen rest
-                        | Some func ->
-                            relevant (Set.add id seen) (Set.toList (anfTargets func.Body) @ rest)
+                        | Some info ->
+                            relevant (Set.add id seen) (Set.toList (anfTargets info.Func.Body) @ rest)
                 let selected = relevant Set.empty (Set.toList localTargets)
-                candidates
-                |> Map.toList
-                |> List.choose (fun (id, func) -> if Set.contains id selected then Some func else None)
+                selected
+                |> Set.toList
+                |> List.choose (fun id -> Map.tryFind id externalInlineCandidates |> Option.map (fun info -> info.Func))
                 |> List.fold (fun result func ->
                     result
                     |> Result.bind (fun accumulated ->
@@ -242,7 +239,7 @@ let internal buildAnf
                     { Functions = ssaInlined; CloneOrigins = Map.empty }
                 else
                     SSAHigherOrderSpecialization.specializeProgramWithExternalFunctionsAndNames
-                        registries.FunctionNames externalSSA ssaInlined
+                        registries.FunctionIds nextFunctionOrdinal externalSSA ssaInlined
             let elapsed = sw.Elapsed.TotalMilliseconds - higherOrderStart
             if specializeInternalSignatures then
                 recordPassTiming passTimingRecorder "SSA Higher-Order Specialization" elapsed
@@ -300,25 +297,28 @@ let internal buildAnf
             let ctx =
                 RcTypeFacts.createContext
                     { convResult with FuncReg = specializedRegistry }
+            let sourceId id =
+                Map.tryFind id specialization.CloneOrigins |> Option.defaultValue id
+                |> fun id -> Map.tryFind id higherOrder.CloneOrigins |> Option.defaultValue id
             let originalFrontiers =
-                let externalTemplates =
-                    externalInlineCandidates
-                    |> Map.values
-                    |> Seq.map (fun info -> info.Func)
-                    |> Seq.toList
-                externalTemplates @ preRCFunctions
-                |> List.map (fun func ->
-                    func.Id, RefCountInsertion.ownedDictionaryFrontierParams func)
-                |> Map.ofList
+                let localTemplates = preRCFunctions |> List.map (fun func -> func.Id, func) |> Map.ofList
+                ssaAfterEscape
+                |> List.map (fun func -> sourceId func.Id)
+                |> Set.ofList
+                |> Set.fold (fun frontiers id ->
+                    let template =
+                        Map.tryFind id localTemplates
+                        |> Option.orElseWith (fun () ->
+                            Map.tryFind id externalInlineCandidates |> Option.map (fun info -> info.Func))
+                    match template with
+                    | None -> frontiers
+                    | Some func -> Map.add id (RefCountInsertion.ownedDictionaryFrontierParams func) frontiers) Map.empty
             if verbosity >= 1 then println "  [anf.reference-counts] Reference Count Insertion..."
             let rcStart = sw.Elapsed.TotalMilliseconds
             let ssaAfterRC =
                 ssaAfterEscape
                 |> List.map (fun ssa ->
-                    let sourceId =
-                        Map.tryFind ssa.Id specialization.CloneOrigins
-                        |> Option.defaultValue ssa.Id
-                        |> fun id -> Map.tryFind id higherOrder.CloneOrigins |> Option.defaultValue id
+                    let sourceId = sourceId ssa.Id
                     let retainedParams =
                         ssa.TypedParams |> List.map (fun parameter -> parameter.Id) |> Set.ofList
                     let frontierParams =

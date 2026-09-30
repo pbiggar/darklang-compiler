@@ -664,19 +664,30 @@ let private cloneLinearAt
         | _ -> None
     | _ -> None
 
-let private callSites (state: State) =
-    state.Function.Blocks
-    |> Map.toList
-    |> List.collect (fun (label, block) ->
-        block.Operations
-        |> List.indexed
-        |> List.choose (fun (index, (id, operation)) ->
-            match operation with
-            | Call (name, arguments) when not (Set.contains id state.Processed) ->
-                Some (label, index, id, name, arguments)
-            | _ -> None))
+let private callSitesInBlock processed (block: SSAANF.Block) =
+    block.Operations
+    |> List.indexed
+    |> List.choose (fun (index, (id, operation)) ->
+        match operation with
+        | Call (name, arguments) when not (Set.contains id processed) ->
+            Some (index, id, name, arguments)
+        | _ -> None)
+    |> List.rev
 
-let private countExternalCalls externalNames (func: SSAANF.Function) =
+// Cache each block's reverse-ordered pending sites. Declined calls consume the
+// worklist directly; only replaced/new blocks need operand discovery again.
+let private refreshCallSites (state: State) previous =
+    state.Function.Blocks
+    |> Map.fold (fun sites label block ->
+        match Map.tryFind label previous with
+        | Some (original, pending) when System.Object.ReferenceEquals(original, block) ->
+            Map.add label (block, pending) sites
+        | _ ->
+            match callSitesInBlock state.Processed block with
+            | [] -> sites
+            | pending -> Map.add label (block, pending) sites) Map.empty
+
+let private countExternalCalls externalCandidates (func: SSAANF.Function) =
     func.Blocks
     |> Map.toSeq
     |> Seq.sumBy (fun (_, block) ->
@@ -684,7 +695,7 @@ let private countExternalCalls externalNames (func: SSAANF.Function) =
         |> List.sumBy (fun (_, operation) ->
             match operation with
             | Call (name, _) | BorrowedCall (name, _)
-                when Set.contains name externalNames -> 1
+                when Map.containsKey name externalCandidates -> 1
             | _ -> 0))
 
 let private isMandatoryExternal (candidate: Candidate) =
@@ -699,10 +710,10 @@ let private isMandatoryExternal (candidate: Candidate) =
 let private inlineFunction
     (config: InliningCommon.InliningConfig)
     (candidates: Map<AST.FunctionId, Candidate>)
-    (externalNames: Set<AST.FunctionId>)
+    (externalCandidates: Map<AST.FunctionId, InliningCommon.FunctionInfo>)
     (func: SSAANF.Function) =
     let useExternal =
-        countExternalCalls externalNames func <= config.MaxExternalInlineSites
+        countExternalCalls externalCandidates func <= config.MaxExternalInlineSites
     let siteCounts =
         func.Blocks
         |> Map.toSeq
@@ -713,18 +724,28 @@ let private inlineFunction
                 let previous = Map.tryFind name counts |> Option.defaultValue 0
                 Map.add name (previous + 1) counts
             | _ -> counts) Map.empty
-    let rec visit state =
-        match callSites state with
-        | [] -> state.Function
-        | sites ->
-            let label, index, id, name, arguments = List.last sites
+    let rec visit state sites previousBlocks =
+        let sites =
+            if System.Object.ReferenceEquals(previousBlocks, state.Function.Blocks) then sites
+            else refreshCallSites state sites
+        if Map.isEmpty sites then state.Function
+        else
+            let label, (block, pending) = Map.maxKeyValue sites
+            let index, id, name, arguments, remaining =
+                match pending with
+                | (index, id, name, arguments) :: rest -> index, id, name, arguments, rest
+                | [] -> Crash.crash "SSA inlining retained an empty site worklist"
+            let sites =
+                if List.isEmpty remaining then Map.remove label sites
+                else Map.add label (block, remaining) sites
+            let visitNext next = visit next sites state.Function.Blocks
             let state = { state with Processed = Set.add id state.Processed }
             let depth = Map.tryFind id state.Depths |> Option.defaultValue 0
             match Map.tryFind name candidates, Map.tryFind label state.Function.Blocks with
             | Some candidate, Some block when candidate.Info.IsRecursive ->
                 match tryExpandBoundedCall config state block index id arguments candidate with
-                | Some expanded -> visit expanded
-                | None -> visit state
+                | Some expanded -> visitNext expanded
+                | None -> visitNext state
             | Some candidate, Some block
                 when (not candidate.Info.IsExternal || useExternal || isMandatoryExternal candidate)
                      && List.length candidate.Body.TypedParams = List.length arguments ->
@@ -732,11 +753,11 @@ let private inlineFunction
                 match tryProjectedPlan config state.Function block index id count candidate with
                 | Some projection ->
                     match cloneLinearAt state block index id arguments candidate depth (Some projection) with
-                    | Some inlined -> visit inlined
-                    | None -> cloneAt state block index id arguments candidate depth (Some projection) |> visit
+                    | Some inlined -> visitNext inlined
+                    | None -> cloneAt state block index id arguments candidate depth (Some projection) |> visitNext
                 | None when InliningCommon.shouldInline candidate.Info config depth ->
                     match cloneLinearAt state block index id arguments candidate depth None with
-                    | Some inlined -> visit inlined
+                    | Some inlined -> visitNext inlined
                     | None ->
                         let returns =
                             candidate.Body.Blocks
@@ -750,11 +771,12 @@ let private inlineFunction
                            || canShareLargeContinuation candidate.Body.ReturnType
                            || Option.isSome
                                (continuationRegion state.Function block id after returns) then
-                            cloneAt state block index id arguments candidate depth None |> visit
-                        else visit state
-                | None -> visit state
-            | _ -> visit state
-    visit (initialState func)
+                            cloneAt state block index id arguments candidate depth None |> visitNext
+                        else visitNext state
+                | None -> visitNext state
+            | _ -> visitNext state
+    let state = initialState func
+    visit state (refreshCallSites state Map.empty) state.Function.Blocks
 
 let inlineProgramWithExternalCandidatesAndExclusions
     (config: InliningCommon.InliningConfig)
@@ -764,22 +786,19 @@ let inlineProgramWithExternalCandidatesAndExclusions
     (localSource: ANF.Function list)
     (functions: SSAANF.Function list) =
     let withSSAFacts (body: SSAANF.Function) (info: InliningCommon.FunctionInfo) =
-        let operations =
+        let size, hasClosures, hasTailCalls =
             body.Blocks
-            |> Map.toList
-            |> List.collect (fun (_, block) -> block.Operations |> List.map snd)
-        { info with
-            Size = List.length operations
-            HasClosures =
-                operations
-                |> List.exists (function
-                    | ClosureAlloc _ | ClosureCall _ | ClosureTailCall _ -> true
-                    | _ -> false)
-            HasTailCalls =
-                operations
-                |> List.exists (function
-                    | TailCall _ | IndirectTailCall _ | ClosureTailCall _ -> true
-                    | _ -> false) }
+            |> Map.fold (fun facts _ block ->
+                block.Operations
+                |> List.fold (fun (size, closures, tails) (_, operation) ->
+                    let closure, tail =
+                        match operation with
+                        | ClosureAlloc _ | ClosureCall _ -> true, false
+                        | ClosureTailCall _ -> true, true
+                        | TailCall _ | IndirectTailCall _ -> false, true
+                        | _ -> false, false
+                    size + 1, closures || closure, tails || tail) facts) (0, false, false)
+        { info with Size = size; HasClosures = hasClosures; HasTailCalls = hasTailCalls }
     let localInfo =
         InliningCommon.buildFunctionInfoMap localSource
         |> Map.filter (fun name _ -> not (Set.contains name excludedLocalNames))
@@ -788,10 +807,10 @@ let inlineProgramWithExternalCandidatesAndExclusions
         |> List.map (fun func -> func.Id, func)
         |> Map.ofList
     let candidates =
-        externalCandidates
-        |> Map.fold (fun current name info ->
-            match Map.tryFind name allSSA with
-            | Some body -> Map.add name { Info = withSSAFacts body info; Body = body } current
+        allSSA
+        |> Map.fold (fun current name body ->
+            match Map.tryFind name externalCandidates with
+            | Some info -> Map.add name { Info = withSSAFacts body info; Body = body } current
             | None -> current) Map.empty
         |> fun external ->
             localInfo
@@ -799,5 +818,4 @@ let inlineProgramWithExternalCandidatesAndExclusions
                 match Map.tryFind name allSSA with
                 | Some body -> Map.add name { Info = withSSAFacts body info; Body = body } current
                 | None -> current) external
-    let externalNames = externalCandidates |> Map.keys |> Set.ofSeq
-    functions |> List.map (inlineFunction config candidates externalNames)
+    functions |> List.map (inlineFunction config candidates externalCandidates)

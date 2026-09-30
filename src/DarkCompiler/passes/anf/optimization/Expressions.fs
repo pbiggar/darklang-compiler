@@ -892,22 +892,28 @@ let optimizeToFixedPoint (context: OptimizeContext) (options: OptimizeOptions) (
 
     optimize func maxIterations
 
-let rec private collectAExprTempIds (expr: AExpr) (tempIds: Set<TempId>) : Set<TempId> =
+let rec private maxAExprTempId (expr: AExpr) greatest =
+    let add (TempId id) greatest =
+        match greatest with
+        | ValueNone -> ValueSome id
+        | ValueSome previous -> ValueSome (max id previous)
+    let addAtomUse atom greatest = foldAtomTempIds add atom greatest
+    let addCExprUses expr greatest = foldCExprTempIds add expr greatest
     match expr with
-    | Jump (target, atom) -> tempIds |> Set.add target |> addAtomUse atom
+    | Jump (target, atom) -> greatest |> add target |> addAtomUse atom
     | Join (parameter, continuation, entry) ->
-        tempIds |> Set.add parameter.Id |> collectAExprTempIds continuation |> collectAExprTempIds entry
-    | Return atom -> addAtomUse atom tempIds
+        greatest |> add parameter.Id |> maxAExprTempId continuation |> maxAExprTempId entry
+    | Return atom -> addAtomUse atom greatest
     | Let (tid, cexpr, body) ->
-        tempIds
-        |> Set.add tid
+        greatest
+        |> add tid
         |> addCExprUses cexpr
-        |> collectAExprTempIds body
+        |> maxAExprTempId body
     | If (cond, thenBranch, elseBranch) ->
-        tempIds
+        greatest
         |> addAtomUse cond
-        |> collectAExprTempIds thenBranch
-        |> collectAExprTempIds elseBranch
+        |> maxAExprTempId thenBranch
+        |> maxAExprTempId elseBranch
 
 /// Count uses of a local closure while rejecting every use that is not a call
 /// through that exact closure value. A positive result proves the allocation
@@ -1006,24 +1012,17 @@ let rec internal devirtualizeCaptureFreeClosures (expr: AExpr) : AExpr =
             devirtualizeCaptureFreeClosures elseBranch)
 
 let internal freshVarGenForProgram (Program (functions, mainExpr)) : VarGen =
-    let tempIds =
+    let greatest =
         functions
-        |> List.fold
-            (fun tempIds func ->
-                func.TypedParams
-                |> List.fold (fun ids param -> Set.add param.Id ids) tempIds
-                |> collectAExprTempIds func.Body)
-            Set.empty
-        |> collectAExprTempIds mainExpr
-
-    match
-        tempIds
-        |> Set.fold
-            (fun greatest (TempId tempId) ->
+        |> List.fold (fun greatest func ->
+            func.TypedParams
+            |> List.fold (fun greatest parameter ->
+                let (TempId id) = parameter.Id
                 match greatest with
-                | None -> Some tempId
-                | Some greatestId -> Some (max greatestId tempId))
-            None
-    with
-    | None -> initialVarGen
-    | Some greatestId -> VarGen (greatestId + 1)
+                | ValueNone -> ValueSome id
+                | ValueSome previous -> ValueSome (max id previous)) greatest
+            |> maxAExprTempId func.Body) ValueNone
+        |> maxAExprTempId mainExpr
+    match greatest with
+    | ValueNone -> initialVarGen
+    | ValueSome id -> VarGen (id + 1)

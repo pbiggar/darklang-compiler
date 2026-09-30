@@ -477,7 +477,8 @@ let private rewriteKnownCalls definitions returns generatedNames requests (func:
     SSADirectCallSpecialization.removeUnusedRematerializedValues functionNames rewritten
 
 let specializeProgramWithExternalFunctionsAndNames
-    (reservedNames: Map<AST.FunctionId, string>)
+    (reservedIds: Map<string, AST.FunctionId>)
+    (nextFunctionOrdinal: uint64)
     (externalFunctions: SSAANF.Function list)
     (functions: SSAANF.Function list) =
     let definitions =
@@ -503,14 +504,11 @@ let specializeProgramWithExternalFunctionsAndNames
         |> List.map (fun argument -> targetName definitions argument.Callable.Target)
         |> Set.ofList
     let helperNames = requests |> List.map (helperName definitions) |> Set.ofList
-    let occupiedNames =
-        seq {
-            yield! definitions |> Map.values |> Seq.map (fun func -> func.Name)
-            yield! reservedNames |> Map.values
-        }
-        |> Set.ofSeq
+    // Empty request sets still run rewriteKnownCalls for rematerialization cleanup.
+    // The forward catalog and allocation cursor avoid rebuilding global indexes.
     let exists name =
-        Set.contains name occupiedNames
+        Map.containsKey name reservedIds
+        || (definitions |> Map.exists (fun _ func -> func.Name = name))
     let usable =
         requests
         |> List.filter (fun request ->
@@ -524,12 +522,15 @@ let specializeProgramWithExternalFunctionsAndNames
             && (targets |> List.forall (fun target ->
                 not (exists target) && not (Set.contains target helperNames))))
     let generatedNames =
-        Set.union targetNames helperNames
-        |> AST.allocateFunctionIds
-            (seq {
-                yield! definitions |> Map.keys
-                yield! reservedNames |> Map.keys
-            })
+        if List.isEmpty requests then Map.empty
+        else
+            let nextOrdinal =
+                if Map.isEmpty definitions then nextFunctionOrdinal
+                else
+                    let id, _ = Map.maxKeyValue definitions
+                    max nextFunctionOrdinal (AST.nextFunctionIdOrdinal (AST.functionIdValue id))
+            Set.union targetNames helperNames
+            |> AST.allocateFunctionIdsFromOrdinal nextOrdinal
     let targetCallables =
         usable |> List.collect (fun request -> request.Arguments)
         |> List.map (fun argument -> argument.Callable)

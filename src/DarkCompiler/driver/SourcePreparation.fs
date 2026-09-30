@@ -453,23 +453,12 @@ let internal buildRegistriesForProgram
         measure "AST -> ANF Registry: Base Overlay Merge" (fun () ->
             AST_to_ANF.mergeRegistriesWithTrace
                 phaseRecorder baseRegistries localRegistries)
-    let mergedRegistries = {
-        mergedRegistries with
-            FunctionIds =
-                CheckedAST.functionIds symbols
-                |> Map.fold (fun ids name id ->
-                    if AST.functionIdValue id < existingFunctionOrdinal
-                       || Map.tryFind name ids = Some id then ids
-                    else Map.add name id ids)
-                    mergedRegistries.FunctionIds
-            FunctionNames =
-                CheckedAST.functionNames symbols
-                |> Map.fold (fun names id name ->
-                    if AST.functionIdValue id < existingFunctionOrdinal
-                       || Map.tryFind id names = Some name then names
-                    else Map.add id name names)
-                    mergedRegistries.FunctionNames
-    }
+    let mergedRegistries =
+        CheckedAST.allocatedFunctionNamesSince existingFunctionOrdinal symbols
+        |> List.fold (fun (registries: AST_to_ANF.Registries) (id, name) ->
+            { registries with
+                FunctionIds = Map.add name id registries.FunctionIds
+                FunctionNames = Map.add id name registries.FunctionNames }) mergedRegistries
     (mergedRegistries, localRegistries, resolvedFunctions)
 
 type internal DeclarationConversion = {

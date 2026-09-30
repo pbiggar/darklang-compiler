@@ -113,14 +113,13 @@ let internal mustPreserveEvaluation (context: OptimizeContext) (cexpr: CExpr) : 
     | RuntimeError _ -> true
     | RuntimeErrorString _ -> true
 
-/// Add the TempId used by an atom to an existing liveness set.
-let internal addAtomUse (atom: Atom) (uses: Set<TempId>) : Set<TempId> =
+/// Fold operand identities without prescribing a set allocation.
+let inline internal foldAtomTempIds add (atom: Atom) state =
     match atom with
-    | Var tid -> Set.add tid uses
-    | _ -> uses
+    | Var tid -> add tid state
+    | _ -> state
 
-let private addAtomUses (atoms: Atom list) (uses: Set<TempId>) : Set<TempId> =
-    List.fold (fun uses atom -> addAtomUse atom uses) uses atoms
+let internal addAtomUse atom uses = foldAtomTempIds Set.add atom uses
 
 let atomUsesTemp (tid: TempId) (atom: Atom) : bool =
     match atom with
@@ -130,8 +129,10 @@ let atomUsesTemp (tid: TempId) (atom: Atom) : bool =
 let atomsUseTemp (tid: TempId) (atoms: Atom list) : bool =
     List.exists (atomUsesTemp tid) atoms
 
-/// Add every TempId used by a CExpr to an existing liveness set.
-let internal addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
+/// Fold every operand identity; callers can collect uses or compute maxima.
+let inline internal foldCExprTempIds add (cexpr: CExpr) uses =
+    let addAtomUse atom state = foldAtomTempIds add atom state
+    let addAtomUses atoms state = List.fold (fun state atom -> addAtomUse atom state) state atoms
     match cexpr with
     | Atom a -> addAtomUse a uses
     | TypedAtom (a, _) -> addAtomUse a uses
@@ -218,6 +219,8 @@ let internal addCExprUses (cexpr: CExpr) (uses: Set<TempId>) : Set<TempId> =
     | FloatToString atom -> addAtomUse atom uses
     | RuntimeError _ -> uses
     | RuntimeErrorString atom -> addAtomUse atom uses
+
+let internal addCExprUses cexpr uses = foldCExprTempIds Set.add cexpr uses
 
 /// Complete operand interface for lexical-scope verification.
 let cexprTempUses (cexpr: CExpr) : Set<TempId> = addCExprUses cexpr Set.empty
