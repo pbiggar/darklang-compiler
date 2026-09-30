@@ -112,6 +112,14 @@ def failure_from(details: dict[str, Any]) -> Failure:
         match = re.fullmatch(r"Failed gate \d+/\d+: (.+)", message)
         if event.get("state") in {"failure", "failed", "error"} and match:
             return Failure(category, match.group(1), str(event.get("detail") or ""))
+        if category == "gate_failed":
+            match = re.fullmatch(r"Running gate \d+/\d+: (.+)", message)
+            if match and event.get("state") == "active":
+                # Some runners report only a job-level failure after starting
+                # a gate. Preserve the outcome, including interruption details.
+                return Failure(category, match.group(1), str(outcome.get("message") or ""))
+            if re.fullmatch(r"(?:Passed|Finished|Completed) gate \d+/\d+: (.+)", message):
+                break
     return Failure(category, "", str(outcome.get("message") or ""))
 
 
@@ -574,7 +582,7 @@ def recover(repo: Path, attempts: Path, worktree_dir: Path, job_id: int) -> None
         raise RecoveryError(f"operator-only failure category: {failure.category}")
     if failure.category == "push_rejected" and "non-fast-forward" not in failure.detail.lower():
         raise RecoveryError(f"operator-only push rejection: {failure.detail}")
-    if failure.category == "gate_failed" and failure.gate not in {"build", "tests", "benchmarks"}:
+    if failure.category == "gate_failed" and failure.gate not in {"diff-check", "build", "tests", "benchmarks"}:
         raise RecoveryError(f"operator-only gate failure: {failure.gate or 'unknown'}")
 
     tracking_ref, integration_sha = configured_integration(repo)
@@ -608,6 +616,8 @@ def recover(repo: Path, attempts: Path, worktree_dir: Path, job_id: int) -> None
         repo, worktree, attempts, job_id, old_head, details, failure, conflict, integration_sha
     )
     head, receipt = verify_repair(worktree, attempts, job_id, integration_sha)
+    if failure.gate == "diff-check":
+        run(("git", "diff", "--check", f"{integration_sha}..HEAD"), cwd=worktree)
     if owning_worktree is not None and owning_snapshot is not None:
         current_owning = (
             run(("git", "rev-parse", "HEAD"), cwd=owning_worktree).stdout.strip(),

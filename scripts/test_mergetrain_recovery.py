@@ -13,6 +13,7 @@ from pathlib import Path
 from scripts.mergetrain_recovery import (
     Failure,
     codex_instructions,
+    failure_from,
     preserve_failure_evidence,
 )
 from scripts.mergetrain_exception import create_request, review_path
@@ -147,9 +148,10 @@ elif "<<<<<<<" in feature.read_text(encoding="utf-8"):
     subprocess.run(["git", "add", "feature.txt", "repair.txt"], cwd=worktree, check=True)
     subprocess.run(["git", "cherry-pick", "--continue"], cwd=worktree, check=True)
 else:
+    feature.write_text(feature.read_text(encoding="utf-8").rstrip() + "\\n", encoding="utf-8")
     repair = worktree / "repair.txt"
     repair.write_text("repaired\\n", encoding="utf-8")
-    subprocess.run(["git", "add", "repair.txt"], cwd=worktree, check=True)
+    subprocess.run(["git", "add", "feature.txt", "repair.txt"], cwd=worktree, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "repair gate failure"], cwd=worktree, check=True)
 output = pathlib.Path(sys.argv[sys.argv.index("--output-last-message") + 1])
 output.write_text("Recovery committed.\\n", encoding="utf-8")
@@ -224,6 +226,61 @@ output.write_text("Recovery committed.\\n", encoding="utf-8")
 
 
 class MergetrainRecoveryTests(unittest.TestCase):
+    def test_job_failure_identifies_last_running_gate(self) -> None:
+        details = {
+            "outcome": {"failure_category": "gate_failed", "message": "command failed (2)"},
+            "events": [
+                {"state": "active", "message": "Running gate 1/7: diff-check"},
+                {"state": "error", "message": "Job #17 failed"},
+            ],
+        }
+        self.assertEqual(failure_from(details), Failure("gate_failed", "diff-check", "command failed (2)"))
+
+    def test_completed_gate_is_not_mistaken_for_failed_gate(self) -> None:
+        details = {
+            "outcome": {"failure_category": "gate_failed", "message": "unknown failure"},
+            "events": [
+                {"state": "active", "message": "Running gate 1/7: build"},
+                {"state": "success", "message": "Passed gate 1/7: build"},
+                {"state": "error", "message": "Job #17 failed"},
+            ],
+        }
+        self.assertEqual(failure_from(details).gate, "")
+
+    def test_diff_check_failure_repairs_whitespace_without_changing_owner(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = RecoveryFixture(Path(temp_dir), tests_fail=False)
+            (fixture.repo / "feature.txt").write_text("job\n\n", encoding="utf-8")
+            fixture.git("add", "feature.txt")
+            fixture.git("commit", "-q", "-m", "introduce whitespace failure")
+            fixture.old_head = fixture.git_output("rev-parse", "HEAD")
+            fixture.set_failure("gate_failed", "diff-check", "extra blank line at EOF")
+            details = json.loads(fixture.details.read_text())
+            details["events"] = [
+                {"state": "active", "message": "Running gate 1/7: diff-check"},
+                {"state": "error", "message": "Job #4 failed"},
+            ]
+            fixture.details.write_text(json.dumps(details))
+            completed = fixture.execute()
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("replace", [call["command"] for call in fixture.recorded_calls()])
+            self.assertEqual(fixture.git_output("rev-parse", "HEAD"), fixture.old_head)
+            self.assertEqual((fixture.repo / "feature.txt").read_text(), "job\n\n")
+            self.assertEqual(fixture.git_output("status", "--porcelain"), "")
+
+    def test_unrepaired_whitespace_is_not_replaced(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = RecoveryFixture(Path(temp_dir), tests_fail=False, codex_noop=True)
+            (fixture.repo / "feature.txt").write_text("job\n\n", encoding="utf-8")
+            fixture.git("add", "feature.txt")
+            fixture.git("commit", "-q", "-m", "introduce whitespace failure")
+            fixture.old_head = fixture.git_output("rev-parse", "HEAD")
+            fixture.set_failure("gate_failed", "diff-check", "extra blank line at EOF")
+            completed = fixture.execute()
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("git diff --check", completed.stderr)
+            self.assertNotIn("replace", [call["command"] for call in fixture.recorded_calls()])
+
     def test_baseline_error_neither_repairs_compiler_nor_requests_exception(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = RecoveryFixture(Path(temp_dir))
