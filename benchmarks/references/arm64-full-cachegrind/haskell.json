@@ -1,0 +1,232 @@
+{
+  "schema_version": 1,
+  "language": "haskell",
+  "track": {
+    "id": "arm64-full-cachegrind",
+    "architecture": "arm64",
+    "profile": "full",
+    "backend": "cachegrind",
+    "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
+  },
+  "version": "The Glorious Glasgow Haskell Compilation System, version 9.10.3",
+  "generated_at": "2026-09-30T23:16:41.656847+00:00",
+  "build_flags": [
+    "-O2",
+    "-j1",
+    "-fno-full-laziness"
+  ],
+  "runtime_flags": [],
+  "tools": {
+    "valgrind": "valgrind-3.26.0",
+    "machine": "Linux-7.0.14-aarch64-with-glibc2.43",
+    "executable": "/usr/bin/ghc"
+  },
+  "contract_sha256": "2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861",
+  "benchmarks": [
+    {
+      "name": "ackermann",
+      "instructions": 233400994,
+      "output_valid": true,
+      "workload_sha256": "8b184199406f4d6a10d090c94885447b5b6d5f0ee2b7afff9b5ce8d6e95a1bf8",
+      "source_sha256": "1fb60c08959de160724c55b01fbc34fad2adbe7d05e7d24b463affc158ae6e49"
+    },
+    {
+      "name": "binary_trees",
+      "instructions": 8898851,
+      "output_valid": true,
+      "workload_sha256": "ad86ec16bb214060d2a10c9ed9b8e35e8a8306635d23736dee1aa2b70eaf3cd2",
+      "source_sha256": "b9f9bf2ae58bca4244007f087fe796cd14ed8c0625e214c5917d6fdec3b5f51b"
+    },
+    {
+      "name": "collatz",
+      "instructions": 128727727,
+      "output_valid": true,
+      "workload_sha256": "e8628fd5b72fbebd99988476fdde4f967f49b86259228d25532616caac55b01d",
+      "source_sha256": "ad469c72ec33077d47e8ccd8d7b120d700496120fd788546226315a1c2a7017d"
+    },
+    {
+      "name": "edigits",
+      "instructions": 265141921,
+      "output_valid": true,
+      "workload_sha256": "e6a45797198ec5152dec5dcbefee5702516a3528b2be69d851e16897c67652b5",
+      "source_sha256": "fedbfc8a1819d4e08e0d74c5e5d99212087538fd286abcda4230f7bafd6f5d9c"
+    },
+    {
+      "name": "factorial",
+      "instructions": 125292326,
+      "output_valid": true,
+      "workload_sha256": "04301cfa8b92397aef638f29f35447ea220480db56e3fb8ec7982df049d33068",
+      "source_sha256": "f675c9965d3ef4e5a1baab256eb2eae22a9619e1c81d75de8fb43eacf71b0447"
+    },
+    {
+      "name": "fannkuch",
+      "instructions": 1718122,
+      "output_valid": true,
+      "workload_sha256": "e8c04a82cb4f42c4b9da9991a7ee9809eb9e9809015de4bc4a93095a09f9e363",
+      "source_sha256": "47e4873af4aaab56e20aa59fa8b01c02818346c337034e604b8bb3070cb12097"
+    },
+    {
+      "name": "fasta",
+      "instructions": 57213413,
+      "output_valid": true,
+      "workload_sha256": "1b67fa1ea35b61e966ae881ca5fedc7b8ee7c7b2558f573f63f9487a265d8e82",
+      "source_sha256": "52360c660d641a0f4e806667bad375940744f8534a19fb3fca09ebb31302de61"
+    },
+    {
+      "name": "fft",
+      "instructions": 973158,
+      "output_valid": true,
+      "workload_sha256": "647fecdc96cad1bbde584c3a498654ab73b97a1502e9ef544b9b5c65410b8078",
+      "source_sha256": "dcca479cacb96f0eef0977d28ad6669cc7d8459031aad1ffdf3d8b3c86ffdba3"
+    },
+    {
+      "name": "fib",
+      "instructions": 11719410,
+      "output_valid": true,
+      "workload_sha256": "b879244eaa8143f869d10a2fa6f104e18c0f1ae8d7f4f8f337a113ac2203d80b",
+      "source_sha256": "dea9eefb111544e1a60ab5b737e34ea39e1ac7811b18616fdd37bb4ebdb78161"
+    },
+    {
+      "name": "huffman",
+      "instructions": 51915841,
+      "output_valid": true,
+      "workload_sha256": "eadfb54e1579ab5a09ce600993a3ed9e64d616b8b4b30db73fe579db3dc97055",
+      "source_sha256": "a8108b2114292305cd26a813e63f9636eee63cfe77904c1a8e6e617d65c7349c"
+    },
+    {
+      "name": "leibniz",
+      "instructions": 38600186,
+      "output_valid": true,
+      "workload_sha256": "66f479ce0c668f29324cccef5f67f6e2cc87895ebe6030408d9f1494636c6ee3",
+      "source_sha256": "b19d9ed1bdafc7053857672fa7c05fc38139b7916da12fdd8983b463d2e808c9"
+    },
+    {
+      "name": "mandelbrot",
+      "instructions": 152762299,
+      "output_valid": true,
+      "workload_sha256": "18a0845a6187e417874ec7c1662089c59a02e34bdbb50821b96534e481d7e516",
+      "source_sha256": "d712542f7aa7d24c701cf4c0b1df67722d4bbc459c3e34170bf7c4d8ca8d7d80"
+    },
+    {
+      "name": "matmul",
+      "instructions": 2291323,
+      "output_valid": true,
+      "workload_sha256": "71d04ea5520a50a526186b11abc4047851f3650d0489cdb248045a1a78c69eb0",
+      "source_sha256": "84abb65190a814584a58106c433177f72830de63512c57cdc7b7902c868f1535"
+    },
+    {
+      "name": "merkletrees",
+      "instructions": 16803531,
+      "output_valid": true,
+      "workload_sha256": "f9f4b19982fa6c99cb500386b2034965bd1349b8df9ac96db6dc2d692a454b21",
+      "source_sha256": "4f39d95fea6ceef7c29298a6fb183cef70fcf6adc95ada877ea12e8e4085ae9c"
+    },
+    {
+      "name": "myers_diff",
+      "instructions": 2015809,
+      "output_valid": true,
+      "workload_sha256": "dc95ca39f7aaeea2d9ba0c23109051302b21ed19c65087f70e262d358388714d",
+      "source_sha256": "8f55f6d7d1bf8c09a0f35310f76c441bf61d3c43cc94e814b611e067ba9ffd9e"
+    },
+    {
+      "name": "nbody",
+      "instructions": 10853927,
+      "output_valid": true,
+      "workload_sha256": "20f891a9c78b63192162125c450062f3c03e352690e7190575d1f384caa9833b",
+      "source_sha256": "023699c0d57c7bf2003f160755416de591b4e18a78e3a0bd05775c7453e3332d"
+    },
+    {
+      "name": "nqueen",
+      "instructions": 8914559,
+      "output_valid": true,
+      "workload_sha256": "461ca8f117f4ee22f01e0b999c3cfe0d65c03471443c3adbf2c3cc483a8046ac",
+      "source_sha256": "effe41943dfb7b13246cbbd4d3833e6f1b28d2da6be1893abda837fa7c3f2f1e"
+    },
+    {
+      "name": "nsieve",
+      "instructions": 1044317,
+      "output_valid": true,
+      "workload_sha256": "971c8a73a6530e7fdb1b7b9260bb10b0e05934084a7357beccb297d0aeb67b78",
+      "source_sha256": "4591d8af281d469354238f7a7be98338f61269e8e3fe48e23547efb74a5c0556"
+    },
+    {
+      "name": "pisum",
+      "instructions": 2029711,
+      "output_valid": true,
+      "workload_sha256": "56902902b6ea8cac19240511e100761acd6e11e0cae77a4a9113f49aa5320af6",
+      "source_sha256": "d8b17466214c535ae6336bc8c4cf92cfd9dc2ef9fd7fd4c488acc97a402dc49e"
+    },
+    {
+      "name": "primes",
+      "instructions": 4260329,
+      "output_valid": true,
+      "workload_sha256": "e4b8f4e31a4c34520e1575deed302c2d2fbded0cb769c1d37d06ed29f4ffe3a5",
+      "source_sha256": "985c079d4d002e63d37593270405e85fed01ae10f77989c9684cd2f2d6249bf3"
+    },
+    {
+      "name": "quicksort",
+      "instructions": 12134973,
+      "output_valid": true,
+      "workload_sha256": "052e12050a881fd1532c27eb27d66e25934520ccdf0cff4d4ce2905482f55a54",
+      "source_sha256": "5bcdd56d5284efa1ab30a928bd6fec55985da2b8adc0ca8cb3b5c1696f7fd2a5"
+    },
+    {
+      "name": "raytracer",
+      "instructions": 12276041,
+      "output_valid": true,
+      "workload_sha256": "c59df9d1c6c4cb5c1122c14d41293b572aaf138aab6e1d345366178764443c31",
+      "source_sha256": "4eb07e5cddce841f2b60fba78e7c888eeebecea612eb8917f93520c2dc020770"
+    },
+    {
+      "name": "regex_lite",
+      "instructions": 867990,
+      "output_valid": true,
+      "workload_sha256": "865bd1fb460b8b3dd3fdc900036bb41034f3e92e905b2e091b036f0c58e9306d",
+      "source_sha256": "0109f6999bd83712367ecfbd05c229e2f40477be756632b114866780e8c159ae"
+    },
+    {
+      "name": "spectral_norm",
+      "instructions": 9857137,
+      "output_valid": true,
+      "workload_sha256": "59ecdaf80b39abc8571e97e0b5f3b71138c083db45b129882a34006835c6aae9",
+      "source_sha256": "d58151473709e648b93a9a40cc46070e35649049105e92c341568be3be138d91"
+    },
+    {
+      "name": "string_equality",
+      "instructions": 194765556,
+      "output_valid": true,
+      "workload_sha256": "39a71ae6adeb0313c764cc35c707c97ba7cdc47bdcad07d0ebfd994f6c866fce",
+      "source_sha256": "4a4331fe9abef7c1491ef6b1bc4af7b1132f9cd922dd665a450c734abfa6cdc5"
+    },
+    {
+      "name": "sum_to_n",
+      "instructions": 10940691,
+      "output_valid": true,
+      "workload_sha256": "0213547ce564b206815d83c209de178dbdcdc51eeb96fe740313aac35f5a4828",
+      "source_sha256": "40a3302d30d6f9223e87c52a968bfddc133387fa6e5ce6c170a6ecd05ad01415"
+    },
+    {
+      "name": "tak",
+      "instructions": 431125109,
+      "output_valid": true,
+      "workload_sha256": "87295519d89551287bfc0f7e01505a371ff3f69c4a3493b9d6974e51376978b5",
+      "source_sha256": "4b7a191bc77677046de6fd5cf5d84944ba882ae366a2ba1197692ef4f5936169"
+    },
+    {
+      "name": "tinytemplate",
+      "instructions": 2164752,
+      "output_valid": true,
+      "workload_sha256": "0bc95d1f0cd980b3c75c955ecb80d5866508409a7cb45a732fcf49139d58839b",
+      "source_sha256": "7344923d0f15948b8f21e5ef52a4d73eb8ecd7a6f678827aecfdf5788361634d"
+    },
+    {
+      "name": "warden",
+      "instructions": 737195,
+      "output_valid": true,
+      "workload_sha256": "1d2ca8b4322dfbe647b5c909c04ed122324030ee60a05788885ee9fef0d99d8c",
+      "source_sha256": "6a9bbce48fbe3d64d19f46378bece98bf610e961666c9aa033e8ee888dc510b7"
+    }
+  ],
+  "missing_implementations": [],
+  "provenance": "Upstream adaptations and shared reference ports; see IMPLEMENTATIONS.md. Output-validated; algorithm parity requires separate review."
+}

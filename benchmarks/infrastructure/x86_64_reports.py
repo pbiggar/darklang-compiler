@@ -1,6 +1,7 @@
 """Render stored QEMU snapshots without invoking compilers or measurements."""
 
 from benchmark_baseline import TRACKS, compare_suites, track_dict
+from benchmark_reports import table
 
 TRACK = TRACKS["x86_64-quick-qemu"]
 
@@ -25,10 +26,8 @@ def render_results(dark, rust) -> tuple[dict[str, object], str]:
             }
         )
         rust_text = "—" if rust_row is None else f"{rust_row.instructions:,}"
-        ratio_text = "—" if ratio is None else f"{ratio:.3f}×"
-        rows_markdown.append(
-            f"| {dark_row.name} | {dark_row.instructions:,} | {rust_text} | {ratio_text} |"
-        )
+        ratio_text = "—" if ratio is None else f"{ratio:.3f}x"
+        rows_markdown.append([dark_row.name, f"{dark_row.instructions:,}", rust_text, ratio_text])
     payload = {
         "schema_version": 1,
         "suite": "dark-compiler",
@@ -49,11 +48,10 @@ def render_results(dark, rust) -> tuple[dict[str, object], str]:
             f"**Generated:** {dark.generated_at}",
             f"**Track:** `{TRACK.id}`",
             f"**Measurement policy:** `{TRACK.measurement_policy}`",
-            f"**Overall Dark/Rust:** `{comparison.ratio:.6f}×`",
+            f"**Overall Dark/Rust:** `{comparison.ratio:.6f}x`",
             "",
-            "| Benchmark | Dark instructions | Rust instructions | Dark/Rust |",
-            "| --- | ---: | ---: | ---: |",
-            *rows_markdown,
+            *table(["Benchmark", "Dark instructions", "Rust instructions", "Dark/Rust"],
+                   rows_markdown, (1, 2, 3)),
             "",
         ]
     )
