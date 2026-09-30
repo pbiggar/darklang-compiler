@@ -41,11 +41,22 @@ This probe uses its own fixed representative program and records both process
 wall time and reported pipeline time. A large gap is a reason to investigate
 startup, JIT, and standard-library setup outside the reported pipeline.
 A batch test profile may hide these costs through shared prepared contexts.
-Conversely, a large generated batch caller can stress analyses that are cheap
-for ordinary programs. Compare the same test selection with
-`--e2e-batch-size=1` when investigating that distinction; expect more setup and
-compiler invocations. Per-test times divided across a batch do not identify
-which function was expensive.
+Changing batch size is also a way to discover overhead before you know which
+phase is responsible. Run the same test selection with several sizes, for
+example `--e2e-batch-size=1`, `--e2e-batch-size=64`, and
+`--e2e-batch-size=8192`, retaining separate timing JSON and logs for each run.
+Compare total time, phase times, invocation counts, and actual physical
+executions; incompatible tests may prevent the requested batch size from
+being reached.
+
+If larger batches reduce total time and a phase's invocation count, investigate
+setup or analysis repeated per compilation. If larger batches increase time
+in a phase despite fewer compilations, investigate scaling with the generated
+caller, CFG, or combined program size. If little changes, check which work
+still runs per test or function regardless of batching. These are leads to
+verify with counters and repeated runs, not proof from one noisy comparison.
+Per-test times divided across a batch do not identify which function was
+expensive.
 
 ## Narrow a hot phase to the operation responsible
 
