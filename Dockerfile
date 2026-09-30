@@ -4,6 +4,7 @@
 ARG QEMU_VERSION=11.1.1
 ARG QEMU_COMMIT=c3d48b7d1e89604920e5b81b91140c2ad39a1943
 ARG HERDR_VERSION=0.9.0
+ARG MERGETRAIN_VERSION=3.3.0
 FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS dotnet10
 FROM mcr.microsoft.com/dotnet/sdk:11.0.100-rc.1 AS dotnet11
 FROM node:26-bookworm-slim AS node
@@ -58,6 +59,7 @@ FROM docker.io/docker/sandbox-templates:codex
 ARG TARGETARCH
 ARG PROXY_CA_CERT_B64
 ARG HERDR_VERSION
+ARG MERGETRAIN_VERSION
 
 USER root
 
@@ -98,6 +100,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       libstdc++6 \
       ocaml \
       python3 \
+      python3-venv \
       shellcheck \
       sqlite3 \
       sudo \
@@ -111,6 +114,11 @@ RUN if [ -n "$PROXY_CA_CERT_B64" ]; then \
       printf '%s' "$PROXY_CA_CERT_B64" | base64 --decode > /usr/local/share/ca-certificates/proxy-ca.crt; \
       update-ca-certificates; \
     fi
+
+RUN python3 -m venv /opt/mergetrain && \
+    /opt/mergetrain/bin/pip install --no-cache-dir "mergetrain==${MERGETRAIN_VERSION}" && \
+    ln -s /opt/mergetrain/bin/mergetrain /usr/local/bin/mergetrain && \
+    mergetrain --version
 
 RUN mkdir -p /home/agent/.nuget/packages /workspace && \
     chown -R agent:agent /home/agent /workspace
