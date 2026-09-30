@@ -14,6 +14,7 @@
     <Compile Include="Platform.fs" />
     <Compile Include="memory/RuntimeDataLayout.fs" />
     <Compile Include="AST.fs" />
+    <Compile Include="FunctionIdMap.fs" />
     <Compile Include="NameSyntax.fs" />
     <Compile Include="ASTPrettyPrinter.fs" />
     <Compile Include="ListDisplay.fs" />

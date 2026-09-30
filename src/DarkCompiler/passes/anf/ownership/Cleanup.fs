@@ -108,7 +108,7 @@ let internal functionParamReturnTransfersOwnedAccumulator
     (paramType: AST.SemanticType)
     : bool =
     let displayName =
-        Map.tryFind funcName ctx.FuncReg |> Option.map fst |> Option.defaultValue ""
+        FunctionIdMap.tryFind funcName ctx.FuncReg |> Option.map fst |> Option.defaultValue ""
     let isMapHelper =
         displayName = "Darklang.Stdlib.List.__mapHelper"
         || displayName.StartsWith("Darklang.Stdlib.List.__mapHelper_")
@@ -426,7 +426,7 @@ let private isSelfTailCallTarget
     : bool =
     targetFunc = currentFuncName
     ||
-       match Map.tryFind currentFuncName ctx.FuncReg, Map.tryFind targetFunc ctx.FuncReg with
+       match FunctionIdMap.tryFind currentFuncName ctx.FuncReg, FunctionIdMap.tryFind targetFunc ctx.FuncReg with
        | Some (currentName, _), Some (targetName, _) -> targetName.StartsWith($"{currentName}_")
        | _ -> false
 
@@ -609,7 +609,7 @@ let private isClosureMapHelperTarget
     (ctx: TypeContext)
     (targetFunc: AST.FunctionId)
     : bool =
-    match Map.tryFind targetFunc ctx.FuncReg with
+    match FunctionIdMap.tryFind targetFunc ctx.FuncReg with
     | Some (name, _) ->
         name = "Darklang.Stdlib.List.__mapHelper"
         || name.StartsWith("Darklang.Stdlib.List.__mapHelper_")

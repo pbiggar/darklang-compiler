@@ -37,7 +37,7 @@ let private buildCompilePlan (request: CompileRequest) : UserCompilePlan =
     let (stdlib, baseContext, prebuiltSymbolic, prebuiltCallGraph, prebuiltSummaries, skipNames) =
         match request.Context with
         | StdlibOnly stdlib ->
-            stdlib, stdlib.Context, [], Map.empty, Map.empty, Set.empty
+            stdlib, stdlib.Context, [], FunctionIdMap.empty, FunctionIdMap.empty, Set.empty
         | StdlibWithPreamble (stdlib, preambleCtx) ->
             let preambleFuncs = preambleCtx.SymbolicFunctions
             let preambleFuncNameSet =

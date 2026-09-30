@@ -201,30 +201,30 @@ let requiresListDisplayHelpers (func: LIR.Function) : bool =
             | _ -> false))
 
 /// Build call graph from list of functions
-let buildCallGraph functionIds (funcs: LIR.Function list) : Map<AST.FunctionId, Set<AST.FunctionId>> =
+let buildCallGraph functionIds (funcs: LIR.Function list) : FunctionIdMap<Set<AST.FunctionId>> =
     funcs
     |> List.map (fun f -> f.Id, getCalledFunctions functionIds f)
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 /// Compute transitive closure of reachable functions.
-let findReachable (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>) (roots: Set<AST.FunctionId>) : Set<AST.FunctionId> =
+let findReachable (callGraph: FunctionIdMap<Set<AST.FunctionId>>) (roots: Set<AST.FunctionId>) : Set<AST.FunctionId> =
     CallGraphReachability.findReachable callGraph roots
 
 /// Collect the direct calls made by functions already represented in a call graph.
 let directCallsFromFunctions
-    (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+    (callGraph: FunctionIdMap<Set<AST.FunctionId>>)
     (functions: LIR.Function list)
     : Set<AST.FunctionId> =
     functions
     |> List.fold (fun calls func ->
-        match Map.tryFind func.Id callGraph with
+        match FunctionIdMap.tryFind func.Id callGraph with
         | Some functionCalls -> Set.union calls functionCalls
         | None -> calls) Set.empty
 
 /// Filter functions to only include those reachable from a precomputed user call graph.
 let filterFunctionsWithUserCallGraph
-    (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
-    (userCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+    (callGraph: FunctionIdMap<Set<AST.FunctionId>>)
+    (userCallGraph: FunctionIdMap<Set<AST.FunctionId>>)
     (userFuncs: LIR.Function list)
     (stdlibFuncs: LIR.Function list)
     : LIR.Function list =
@@ -233,7 +233,7 @@ let filterFunctionsWithUserCallGraph
     stdlibFuncs |> List.filter (fun f -> Set.contains f.Id reachable)
 
 /// Filter functions to only include reachable ones
-let filterFunctions (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+let filterFunctions (callGraph: FunctionIdMap<Set<AST.FunctionId>>)
                     (functionIds: Map<string, AST.FunctionId>)
                     (userFuncs: LIR.Function list)
                     (stdlibFuncs: LIR.Function list) : LIR.Function list =

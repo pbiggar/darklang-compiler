@@ -36,8 +36,8 @@ type OptimizationTestResult = {
     Actual: string option
 }
 
-let private externalReturnTypes : Map<AST.FunctionId, string * AST.SemanticType> =
-    Map.ofList [
+let private externalReturnTypes : FunctionIdMap<string * AST.SemanticType> =
+    FunctionIdMap.ofList [
         (TestIds.functionIdForName "__hash_i64", ("__hash_i64", TInt64))
         (TestIds.functionIdForName "__hash_str", ("__hash_str", TInt64))
         (TestIds.functionIdForName "__hash_bool", ("__hash_bool", TInt64))
@@ -49,13 +49,13 @@ let private externalReturnTypes : Map<AST.FunctionId, string * AST.SemanticType>
 
 let private externalFunctionNames =
     externalReturnTypes
-    |> Map.toList
+    |> FunctionIdMap.toList
     |> List.map (fun (id, (name, _)) -> (id, name))
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 let private returnTypesFor (stdlib: CompilationContexts.StdlibResult) =
     externalReturnTypes
-    |> Map.fold (fun returnTypes id value -> Map.add id value returnTypes) stdlib.Context.ReturnTypes
+    |> FunctionIdMap.fold (fun returnTypes id value -> FunctionIdMap.add id value returnTypes) stdlib.Context.ReturnTypes
 
 let private typeCheckWithStdlib
     (stdlib: CompilationContexts.StdlibResult)
@@ -107,10 +107,10 @@ let private optimizeContextFromConversionResult (convResult: AST_to_ANF.Conversi
     { TypeReg = convResult.RecordFieldsReg
       RecordTypeParams = convResult.RecordTypeParamsReg
       SumShapeReg = convResult.RcSumShapeReg
-      FunctionNames = convResult.FuncReg |> Map.map (fun _ (name, _) -> name)
+      FunctionNames = convResult.FuncReg |> FunctionIdMap.map (fun _ (name, _) -> name)
       FunctionIds =
         convResult.FuncReg
-        |> Map.toList
+        |> FunctionIdMap.toList
         |> List.map (fun (id, (name, _)) -> name, id)
         |> Map.ofList }
 
@@ -195,12 +195,12 @@ let private removeSyntheticMIREntry (MIR.Program (functions, variants, records))
     )
 
 let private formatMIRForOptimizationTest
-    (functionNames: Map<AST.FunctionId, string>)
+    (functionNames: FunctionIdMap<string>)
     (syntheticMain: bool)
     (program: MIR.Program)
     : string =
     let functionNames =
-        Map.fold (fun names id name -> Map.add id name names) functionNames externalFunctionNames
+        FunctionIdMap.fold (fun names id name -> FunctionIdMap.add id name names) functionNames externalFunctionNames
     if syntheticMain then
         formatMIRWithFunctionNames functionNames (removeSyntheticMIREntry program)
     else
@@ -256,7 +256,7 @@ let getOptimizedStdlibANF (stdlib: CompilationContexts.StdlibResult) (functionNa
             stdlib.StdlibANFFunctions
             |> Map.values
             |> Seq.map (fun candidate -> (candidate.Id, candidate.Name))
-            |> Map.ofSeq
+            |> FunctionIdMap.ofSeq
         Ok (formatANFFunction functionNames func)
 
 /// Compile source and get MIR after optimization
@@ -285,8 +285,8 @@ let getOptimizedMIR
 
                 // Generated output participates in reference-count insertion.
                 let (ANF.Program (functions, mainExpr)) = optimized
-                let functionNames = convResult.FuncReg |> Map.map (fun _ (name, _) -> name)
-                let functionIds = functionNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
+                let functionNames = convResult.FuncReg |> FunctionIdMap.map (fun _ (name, _) -> name)
+                let functionIds = functionNames |> FunctionIdMap.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
                 let printed = PrintInsertion.insertPrint functionIds functions mainExpr programType
                 let convResultOptimized = { convResult with Program = printed }
                 match RefCountInsertion.insertRCInProgram convResultOptimized with
@@ -295,7 +295,7 @@ let getOptimizedMIR
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
 
                     // Convert to MIR
-                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false (returnTypesFor stdlib) (Map.add (AST.functionId 0UL) "_start" functionNames) with
+                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false (returnTypesFor stdlib) (FunctionIdMap.add (AST.functionId 0UL) "_start" functionNames) with
                     | Error e -> Error $"MIR conversion error: {e}"
                     | Ok mirProgram ->
                         // SSA construction
@@ -307,7 +307,7 @@ let getOptimizedMIR
                         // SSA form is now preserved (phi resolution happens in register allocation)
                         // Pretty-print the optimized MIR (still in SSA form)
                         let functionNames =
-                            convResultOptimized.FuncReg |> Map.map (fun _ (name, _) -> name)
+                            convResultOptimized.FuncReg |> FunctionIdMap.map (fun _ (name, _) -> name)
                         Ok (formatMIRForOptimizationTest functionNames syntheticMain optimizedMir))
 
 /// Compile source and get LIR after optimization
@@ -336,8 +336,8 @@ let getOptimizedLIR
 
                 // Generated output participates in reference-count insertion.
                 let (ANF.Program (functions, mainExpr)) = optimized
-                let functionNames = convResult.FuncReg |> Map.map (fun _ (name, _) -> name)
-                let functionIds = functionNames |> Map.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
+                let functionNames = convResult.FuncReg |> FunctionIdMap.map (fun _ (name, _) -> name)
+                let functionIds = functionNames |> FunctionIdMap.toSeq |> Seq.map (fun (id, name) -> name, id) |> Map.ofSeq
                 let printed = PrintInsertion.insertPrint functionIds functions mainExpr programType
                 let convResultOptimized = { convResult with Program = printed }
                 match RefCountInsertion.insertRCInProgram convResultOptimized with
@@ -346,7 +346,7 @@ let getOptimizedLIR
                     let anfAfterTCO = TailCallDetection.detectTailCallsInProgram anfAfterRC
 
                     // Convert to MIR
-                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false (returnTypesFor stdlib) (Map.add (AST.functionId 0UL) "_start" functionNames) with
+                    match ANF_to_MIR.toMIR anfAfterTCO typeMap Map.empty programType convResultOptimized.VariantLookup (TypeRegistries.recordFieldsRegistry convResultOptimized.TypeReg) false (returnTypesFor stdlib) (FunctionIdMap.add (AST.functionId 0UL) "_start" functionNames) with
                     | Error e -> Error $"MIR conversion error: {e}"
                     | Ok mirProgram ->
                         // SSA construction and optimization

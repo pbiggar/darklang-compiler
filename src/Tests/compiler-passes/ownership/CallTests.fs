@@ -13,7 +13,7 @@ open RcCleanupTests
 let private functionRegistry entries : TypeRegistries.FunctionRegistry =
     entries
     |> List.map (fun (name, typ) -> TestIds.functionIdForName name, (name, typ))
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 let testBorrowedCallMaterializesOwnedLocal () : TestResult =
     let nodeType = AST.TList AST.TInt64
@@ -219,7 +219,7 @@ let testPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
             Map.ofList [
                 ("Color", { TypeParams = []; Payloads = [0, None; 1, None]; UnaryPayloadTags = Set.empty })
             ]
-        FuncReg = Map.empty
+        FuncReg = FunctionIdMap.empty
         FuncParams = Map.empty
         TempTypes = Map.empty
         ClosureFuncs = Map.empty
@@ -266,7 +266,7 @@ let testGenericPureEnumBindingDoesNotGetAutomaticDec () : TestResult =
             Map.ofList [
                 ("Phantom", { TypeParams = ["a"]; Payloads = [0, None; 1, None]; UnaryPayloadTags = Set.empty })
             ]
-        FuncReg = Map.empty
+        FuncReg = FunctionIdMap.empty
         FuncParams = Map.empty
         TempTypes = Map.empty
         ClosureFuncs = Map.empty
@@ -323,8 +323,8 @@ let testProgramRcFreshTempsFollowExistingProgramTemps () : TestResult =
     }
     let conversion : AST_to_ANF.ConversionResult = {
         Program = Program ([func], Return UnitLiteral)
-        OwnershipContracts = Map.empty
-        RecursiveMembers = Map.empty
+        OwnershipContracts = FunctionIdMap.empty
+        RecursiveMembers = FunctionIdMap.empty
         TypeReg = Map.empty
         RecordFieldsReg = Map.empty
         RecordTypeParamsReg = Map.empty
@@ -373,14 +373,14 @@ let testProgramRcRejectsDriftedOwnershipContract () : TestResult =
     let conversion : AST_to_ANF.ConversionResult = {
         Program = Program ([func], Return UnitLiteral)
         OwnershipContracts =
-            Map.ofList [
+            FunctionIdMap.ofList [
                 functionId,
                 ({
                     Parameters = [OwnedIR.UniqueCallParameter]
                     Result = OwnedIR.UnmanagedCallResult
                  }: OwnedIR.CallSignature)
             ]
-        RecursiveMembers = Map.empty
+        RecursiveMembers = FunctionIdMap.empty
         TypeReg = Map.empty
         RecordFieldsReg = Map.empty
         RecordTypeParamsReg = Map.empty

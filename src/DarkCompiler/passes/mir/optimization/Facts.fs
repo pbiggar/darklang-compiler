@@ -244,21 +244,21 @@ let private localHazards (func: Function) =
     else local
 
 let analyzePurityWithKnown
-    (known: Map<AST.FunctionId, PuritySummary>)
+    (known: FunctionIdMap<PuritySummary>)
     (functions: Function list)
-    : Map<AST.FunctionId, PuritySummary> =
+    : FunctionIdMap<PuritySummary> =
     let ids = functions |> List.map (fun func -> func.Id) |> Set.ofList
     let calls =
         functions
         |> List.map (fun func -> func.Id, directCallees func)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let recursiveIds =
         InliningCommon.findSCCs ids calls
         |> List.filter (fun members ->
             Set.count members > 1
             || (members
                 |> Set.exists (fun id ->
-                    Map.tryFind id calls
+                    FunctionIdMap.tryFind id calls
                     |> Option.defaultValue Set.empty
                     |> Set.contains id)))
         |> List.fold Set.union Set.empty
@@ -271,17 +271,17 @@ let analyzePurityWithKnown
                     { hazards with MayDiverge = true }
                 else hazards
             func.Id, hazards)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let rec converge previous =
         let next =
             initial
-            |> Map.map (fun id local ->
-                Map.tryFind id calls
+            |> FunctionIdMap.map (fun id local ->
+                FunctionIdMap.tryFind id calls
                 |> Option.defaultValue Set.empty
                 |> Set.fold (fun hazards callee ->
                     let calleeHazards =
-                        Map.tryFind callee previous
-                        |> Option.orElseWith (fun () -> Map.tryFind callee known)
+                        FunctionIdMap.tryFind callee previous
+                        |> Option.orElseWith (fun () -> FunctionIdMap.tryFind callee known)
                         |> Option.defaultValue unknownHazards
                     unionHazards hazards calleeHazards) local)
         if next = previous then next else converge next
@@ -293,9 +293,9 @@ let analyzePureFunctionsWithKnown
     (knownPure: Set<AST.FunctionId>)
     (functions: Function list)
     : Set<AST.FunctionId> =
-    let known = knownPure |> Set.toList |> List.map (fun id -> id, noHazards) |> Map.ofList
+    let known = knownPure |> Set.toList |> List.map (fun id -> id, noHazards) |> FunctionIdMap.ofList
     analyzePurityWithKnown known functions
-    |> Map.toList
+    |> FunctionIdMap.toList
     |> List.choose (fun (id, summary) -> if isPure summary then Some id else None)
     |> Set.ofList
 

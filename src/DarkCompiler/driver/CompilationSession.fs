@@ -25,7 +25,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             obj,
             Dictionary<
                 CompiledDependencyConfig,
-                Result<LIR.Function list * Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>, string>>>(ObjectReferenceComparer())
+                Result<LIR.Function list * FunctionIdMap<CompilationCacheIdentity.FunctionSummary>, string>>>(ObjectReferenceComparer())
     let optimizedMirFunctions =
         Dictionary<MirOptimizationKey, MIR.Function>(MirOptimizationKeyNameHashComparer())
     let allocatedLirFunctions =
@@ -171,8 +171,8 @@ type CompilationSession(collectCodegenMetrics: bool) =
     member internal _.CompileDependencies
         (dependencyIdentity: obj)
         (config: CompiledDependencyConfig)
-        (compile: unit -> Result<LIR.Function list * Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>, string>)
-        : Result<LIR.Function list * Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>, string> =
+        (compile: unit -> Result<LIR.Function list * FunctionIdMap<CompilationCacheIdentity.FunctionSummary>, string>)
+        : Result<LIR.Function list * FunctionIdMap<CompilationCacheIdentity.FunctionSummary>, string> =
         if disposed || config.Options.EnableCoverage then
             compile ()
         else
@@ -180,7 +180,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
                 match compiledDependenciesByIdentity.TryGetValue dependencyIdentity with
                 | true, entries -> entries
                 | false, _ ->
-                    let entries = Dictionary<CompiledDependencyConfig, Result<LIR.Function list * Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>, string>>()
+                    let entries = Dictionary<CompiledDependencyConfig, Result<LIR.Function list * FunctionIdMap<CompilationCacheIdentity.FunctionSummary>, string>>()
                     compiledDependenciesByIdentity.[dependencyIdentity] <- entries
                     entries
             match entries.TryGetValue config with
@@ -249,7 +249,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
 
     member _.AllocateCallAwareLirFunction
         (baseFunction: LIR.Function)
-        (callees: Map<AST.FunctionId, ARM64CalleeClobbers.Writes>)
+        (callees: FunctionIdMap<ARM64CalleeClobbers.Writes>)
         (allocate: unit -> LIR.Function)
         : LIR.Function =
         let key = { Base = baseFunction; Callees = callees }
@@ -264,7 +264,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
 
     member _.RefineArm64LirFunction
         (baseFunction: LIR.Function)
-        (callees: Map<AST.FunctionId, ARM64CalleeClobbers.Writes>)
+        (callees: FunctionIdMap<ARM64CalleeClobbers.Writes>)
         (refine: unit -> LIR.Function)
         : LIR.Function =
         let key = { Base = baseFunction; Callees = callees }
@@ -279,9 +279,9 @@ type CompilationSession(collectCodegenMetrics: bool) =
 
     member internal _.ReachableStdlibFunctions
         (contextIdentity: obj)
-        (userCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+        (userCallGraph: FunctionIdMap<Set<AST.FunctionId>>)
         (userFunctions: LIR.Function list)
-        (stdlibCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+        (stdlibCallGraph: FunctionIdMap<Set<AST.FunctionId>>)
         (stdlibFunctions: LIR.Function list)
         : LIR.Function list =
         let directCalls =
@@ -291,7 +291,7 @@ type CompilationSession(collectCodegenMetrics: bool) =
             // Excluding those user-local names makes equivalent stdlib queries
             // share one session entry instead of fragmenting the cache by each
             // compilation's generated function names.
-            |> Set.filter (fun name -> Map.containsKey name stdlibCallGraph)
+            |> Set.filter (fun name -> FunctionIdMap.containsKey name stdlibCallGraph)
         if disposed then
             let reachable = DeadCodeElimination.findReachable stdlibCallGraph directCalls
             stdlibFunctions

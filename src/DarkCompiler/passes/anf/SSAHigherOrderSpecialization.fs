@@ -28,7 +28,7 @@ type private RewrittenCallable = {
 }
 type Specialization = {
     Functions: SSAANF.Function list
-    CloneOrigins: Map<AST.FunctionId, AST.FunctionId>
+    CloneOrigins: FunctionIdMap<AST.FunctionId>
 }
 
 let private maxPairs = 16
@@ -45,9 +45,9 @@ let private tryAtom (known: Map<TempId, Callable>) (atom: Atom) : Callable optio
     | _ -> None
 
 let private instantiateReturn
-    (definitions: Map<AST.FunctionId, SSAANF.Function>)
-    (returns: Map<AST.FunctionId, Callable>) name (arguments: Atom list) =
-    match Map.tryFind name definitions, Map.tryFind name returns with
+    (definitions: FunctionIdMap<SSAANF.Function>)
+    (returns: FunctionIdMap<Callable>) name (arguments: Atom list) =
+    match FunctionIdMap.tryFind name definitions, FunctionIdMap.tryFind name returns with
     | Some func, Some callable when List.length func.TypedParams = List.length arguments ->
         let replacements =
             List.zip (func.TypedParams |> List.map (fun parameter -> parameter.Id)) arguments
@@ -169,17 +169,17 @@ let private returnFact definitions returns (func: SSAANF.Function) =
                  | _ -> true) -> Some first
     | _ -> None
 
-let private buildReturns (definitions: Map<AST.FunctionId, SSAANF.Function>) =
+let private buildReturns (definitions: FunctionIdMap<SSAANF.Function>) =
     let rec solve remaining current =
         if remaining = 0 then current else
         let next =
             definitions
-            |> Map.fold (fun facts name func ->
+            |> FunctionIdMap.fold (fun facts name func ->
                 match returnFact definitions facts func with
-                | Some callable -> Map.add name callable facts
+                | Some callable -> FunctionIdMap.add name callable facts
                 | None -> facts) current
         if next = current then current else solve (remaining - 1) next
-    solve (Map.count definitions + 1) Map.empty
+    solve (FunctionIdMap.count definitions + 1) FunctionIdMap.empty
 
 let private shape (target: SSAANF.Function) (callable: Callable) =
     match callable.Convention with
@@ -242,10 +242,10 @@ let private closureCallArity parameterId (helper: SSAANF.Function) =
         | _ -> None)
 
 let private validArgument
-    (definitions: Map<AST.FunctionId, SSAANF.Function>)
+    (definitions: FunctionIdMap<SSAANF.Function>)
     (helper: SSAANF.Function) (argument: KnownArgument) =
     match List.tryItem argument.Index helper.TypedParams,
-          Map.tryFind argument.Callable.Target definitions with
+          FunctionIdMap.tryFind argument.Callable.Target definitions with
     | Some parameter, Some target ->
         match shape target argument.Callable with
         | Some targetShape ->
@@ -262,9 +262,9 @@ let private validArgument
     | _ -> false
 
 let private knownArguments
-    (definitions: Map<AST.FunctionId, SSAANF.Function>)
+    (definitions: FunctionIdMap<SSAANF.Function>)
     (known: Map<TempId, Callable>) helperName (arguments: Atom list) =
-    match Map.tryFind helperName definitions with
+    match FunctionIdMap.tryFind helperName definitions with
     | None -> []
     | Some helper ->
         arguments
@@ -299,8 +299,8 @@ let private requestsInFunction definitions returns (func: SSAANF.Function) =
                 | [] -> None
                 | knownArguments -> Some { Helper = helper; Arguments = knownArguments }))
 
-let private name (definitions: Map<AST.FunctionId, SSAANF.Function>) id =
-    match Map.tryFind id definitions with
+let private name (definitions: FunctionIdMap<SSAANF.Function>) id =
+    match FunctionIdMap.tryFind id definitions with
     | Some func -> func.Name
     | None -> Crash.crash "Higher-order specialization lost function display metadata"
 
@@ -335,7 +335,7 @@ let private mapOperations transform (func: SSAANF.Function) =
                 { block with Operations = List.map transform block.Operations }) }
 
 let private required definitions id =
-    match Map.tryFind id definitions with
+    match FunctionIdMap.tryFind id definitions with
     | Some func -> func
     | None -> Crash.crash "Higher-order specialization lost a validated function"
 
@@ -473,7 +473,7 @@ let private rewriteKnownCalls definitions returns generatedNames requests (func:
                     { block with Operations = operations }) }
     // Closure allocations and aliases made dead by routing are removed by the
     // following SSA cleanup. Preserve the ownership-visible operation order.
-    let functionNames = definitions |> Map.map (fun _ func -> func.Name)
+    let functionNames = definitions |> FunctionIdMap.map (fun _ func -> func.Name)
     SSADirectCallSpecialization.removeUnusedRematerializedValues functionNames rewritten
 
 let specializeProgramWithExternalFunctionsAndNames
@@ -484,7 +484,7 @@ let specializeProgramWithExternalFunctionsAndNames
     let definitions =
         externalFunctions @ functions
         |> List.map (fun func -> func.Id, func)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let returns = buildReturns definitions
     let requests =
         functions
@@ -508,7 +508,7 @@ let specializeProgramWithExternalFunctionsAndNames
     // The forward catalog and allocation cursor avoid rebuilding global indexes.
     let exists name =
         Map.containsKey name reservedIds
-        || (definitions |> Map.exists (fun _ func -> func.Name = name))
+        || (definitions |> FunctionIdMap.exists (fun _ func -> func.Name = name))
     let usable =
         requests
         |> List.filter (fun request ->
@@ -525,9 +525,9 @@ let specializeProgramWithExternalFunctionsAndNames
         if List.isEmpty requests then Map.empty
         else
             let nextOrdinal =
-                if Map.isEmpty definitions then nextFunctionOrdinal
+                if FunctionIdMap.isEmpty definitions then nextFunctionOrdinal
                 else
-                    let id, _ = Map.maxKeyValue definitions
+                    let id, _ = FunctionIdMap.maxKeyValue definitions
                     max nextFunctionOrdinal (AST.nextFunctionIdOrdinal (AST.functionIdValue id))
             Set.union targetNames helperNames
             |> AST.allocateFunctionIdsFromOrdinal nextOrdinal
@@ -547,5 +547,5 @@ let specializeProgramWithExternalFunctionsAndNames
         @ (usable
            |> List.map (fun request ->
                generatedId generatedNames (helperName definitions request), request.Helper))
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     { Functions = targets @ rewritten @ helpers; CloneOrigins = origins }

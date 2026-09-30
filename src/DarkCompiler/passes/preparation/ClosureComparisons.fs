@@ -81,7 +81,7 @@ let internal planLambdaComparison
                         names
                         remainingArgs
                     |> List.forall id)
-            match isSynthesizedSuffix, Map.tryFind targetName state.FuncParams with
+            match isSynthesizedSuffix, FunctionIdMap.tryFind targetName state.FuncParams with
             | true, Some targetParams when List.length targetParams >= providedCount ->
                 let captureNames, state =
                     [0 .. providedCount - 1]

@@ -20,7 +20,7 @@ type private Definitions = {
 let private isEmptyListCall (funcReg: TypeRegistries.FunctionRegistry) operation =
     match operation with
     | Call (target, []) ->
-        Map.tryFind target funcReg
+        FunctionIdMap.tryFind target funcReg
         |> Option.exists (fun (name, _) -> name.StartsWith("Darklang.Stdlib.List.__empty"))
     | _ -> false
 
@@ -111,7 +111,7 @@ let private borrowedSource (definitions: Definitions) operation =
     // Pattern lowering reuses scalar getAt wrappers for erased payload types.
     // Their result can still point into the source list after the call returns.
     | Call (target, Var source :: _)
-        when Map.tryFind target definitions.FuncReg
+        when FunctionIdMap.tryFind target definitions.FuncReg
              |> Option.exists (fun (name, _) -> name.StartsWith("Darklang.Stdlib.List.__getAt")) ->
         Some source
     | Prim ((BitAnd | BitOr), Var source, _) -> Some source
@@ -229,7 +229,7 @@ let private capturedValues (definitions: Definitions) (operation: CExpr) : Atom 
     | RecordReuse (_, _, _, values) -> values
     | Call (target, [_; value])
     | TailCall (target, [_; value])
-        when Map.tryFind target definitions.FuncReg
+        when FunctionIdMap.tryFind target definitions.FuncReg
              |> Option.exists (fun (name, _) ->
                  name.StartsWith("Darklang.Stdlib.List.__push_i64")
                  || name.StartsWith("Darklang.Stdlib.List.__pushBack_i64")) ->

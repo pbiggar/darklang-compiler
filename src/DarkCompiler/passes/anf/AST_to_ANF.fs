@@ -26,12 +26,12 @@ let toANFWithMetadata
     (funcReg: FunctionRegistry)
     (moduleRegistry: AST.ModuleRegistry)
     : Result<ANF.AExpr * ANF.VarGen, string> =
-    let functionNames = funcReg |> Map.map (fun _ (name, _) -> name)
+    let functionNames = funcReg |> FunctionIdMap.map (fun _ (name, _) -> name)
     toANFCore
         (functionIdsFromNames functionNames)
         (sumMetadataFromVariantLookup variantLookup)
         typeNames
-        (DestructionAnalysis.inertFunctionScopes Map.empty Map.empty)
+        (DestructionAnalysis.inertFunctionScopes Map.empty FunctionIdMap.empty)
         expr
         varGen
         env
@@ -166,12 +166,12 @@ let convertFunction
     (funcReg: FunctionRegistry)
     (moduleRegistry: AST.ModuleRegistry)
     : Result<ANF.Function * ANF.VarGen, string> =
-    let functionNames = funcReg |> Map.map (fun _ (name, _) -> name)
+    let functionNames = funcReg |> FunctionIdMap.map (fun _ (name, _) -> name)
     convertFunctionWithSumTypeNames
         None
         symbols
         (sumMetadataFromVariantLookup variantLookup)
-        (DestructionAnalysis.inertFunctionScopes Map.empty Map.empty)
+        (DestructionAnalysis.inertFunctionScopes Map.empty FunctionIdMap.empty)
         funcDef
         varGen
         typeReg
@@ -184,8 +184,8 @@ let convertFunction
 /// Result type that includes registries needed for later passes
 type ConversionResult = {
     Program: ANF.Program
-    OwnershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>
-    RecursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>
+    OwnershipContracts: FunctionIdMap<OwnedIR.CallSignature>
+    RecursiveMembers: FunctionIdMap<AST.LoweredRecursiveMember>
     TypeReg: TypeRegistry
     RecordFieldsReg: Map<string, (string * AST.SemanticType) list>
     RecordTypeParamsReg: Map<string, string list>
@@ -200,10 +200,10 @@ type ConversionResult = {
 /// Used for compiling user code separately from the prebuilt stdlib
 type UserOnlyResult = {
     Symbols: CheckedAST.Symbols
-    ScopeContracts: Map<AST.FunctionId, DestructionAnalysis.FunctionScopeContract>
+    ScopeContracts: FunctionIdMap<DestructionAnalysis.FunctionScopeContract>
     InertFunctionScopes: Set<AST.FunctionId>
     UserFunctions: ANF.Function list   // Only user functions, not merged with stdlib
-    OwnershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>
+    OwnershipContracts: FunctionIdMap<OwnedIR.CallSignature>
     NonInlineableFunctionNames: Set<AST.FunctionId> // Late external specializations compiled in this unit
     MainExpr: ANF.AExpr                // User's main expression
     TypeReg: TypeRegistry              // Merged registries (for lookups)
@@ -218,15 +218,15 @@ type UserOnlyResult = {
     FuncReg: FunctionRegistry
     FunctionIds: FunctionIdRegistry
     FunctionNames: FunctionNameRegistry
-    LocalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>
+    LocalReturnTypes: FunctionIdMap<string * AST.SemanticType>
     FuncParams: Map<string, (string * AST.SemanticType) list>
     ModuleRegistry: AST.ModuleRegistry
-    RecursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>
+    RecursiveMembers: FunctionIdMap<AST.LoweredRecursiveMember>
 }
 
 /// Registry bundle used during ANF conversion
 type Registries = {
-    ScopeContracts: Map<AST.FunctionId, DestructionAnalysis.FunctionScopeContract>
+    ScopeContracts: FunctionIdMap<DestructionAnalysis.FunctionScopeContract>
     InertFunctionScopes: Set<AST.FunctionId>
     TypeReg: TypeRegistry
     TypeNames: TypeNameRegistry
@@ -240,7 +240,7 @@ type Registries = {
     FunctionNames: FunctionNameRegistry
     FuncParams: Map<string, (string * AST.SemanticType) list>
     ModuleRegistry: AST.ModuleRegistry
-    RecursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>
+    RecursiveMembers: FunctionIdMap<AST.LoweredRecursiveMember>
 }
 
 /// Retain semantic recursive identities alongside lowered ANF. Native symbol
@@ -248,7 +248,7 @@ type Registries = {
 /// recovered exclusively from this registry.
 let loweredRecursiveMemberRegistry
     (functions: CheckedAST.FunctionDef list)
-    : Map<AST.FunctionId, AST.LoweredRecursiveMember> =
+    : FunctionIdMap<AST.LoweredRecursiveMember> =
     functions
     |> List.choose (fun func ->
         match func.Recursion with
@@ -259,7 +259,7 @@ let loweredRecursiveMemberRegistry
                     : AST.LoweredRecursiveMember)
             )
         | _ -> None)
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 /// Split program into type defs, function defs, and a single expression
 let splitDeclarations (program: CheckedAST.Program) : Result<AST.TypeDef list * CheckedAST.FunctionDef list, string> =
@@ -379,12 +379,12 @@ let private buildRegistriesInternal
             let paramTypes = CheckedAST.functionParameterTypes f |> paramsToList |> normalizeSyntheticNullaryParams symbols |> List.map snd
             let funcType = AST.TFunction (paramTypes, CheckedAST.functionReturnType f)
             (f.Id, (f.Name, funcType)))
-        |> Map.ofList
+        |> FunctionIdMap.ofList
 
     let localFunctionNames : FunctionNameRegistry =
         functions
         |> List.map (fun func -> func.Id, func.Name)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let localTypeNames : TypeNameRegistry =
         let names =
             typeDefs
@@ -400,7 +400,7 @@ let private buildRegistriesInternal
         { TypeNames = names }
     let functionNames : FunctionNameRegistry =
         functions
-        |> List.fold (fun names func -> Map.add func.Id func.Name names) (CheckedAST.functionNames symbols)
+        |> List.fold (fun names func -> FunctionIdMap.add func.Id func.Name names) (CheckedAST.functionNames symbols)
     // Overlay symbols already include the inherited namespace, but their
     // reverse index is merged with the base registry immediately afterward.
     // Retain only local entries here so small compilation units do not rebuild
@@ -522,9 +522,9 @@ let mergeRegistriesWithTrace
     let mergeMaps m1 m2 = Map.fold (fun acc k v -> Map.add k v acc) m1 m2
     let functionNames =
         measure "AST -> ANF Registry: Function Name Merge" (fun () ->
-            mergeMaps baseRegs.FunctionNames overlay.FunctionNames)
+            FunctionIdMap.merge baseRegs.FunctionNames overlay.FunctionNames)
     let functionIds = mergeMaps baseRegs.FunctionIds overlay.FunctionIds
-    let scopeContracts = mergeMaps baseRegs.ScopeContracts overlay.ScopeContracts
+    let scopeContracts = FunctionIdMap.merge baseRegs.ScopeContracts overlay.ScopeContracts
     let localInertFunctionScopes =
         measure "AST -> ANF Registry: Inert Scope Analysis" (fun () ->
             DestructionAnalysis.inertFunctionScopesWithBase
@@ -544,12 +544,12 @@ let mergeRegistriesWithTrace
         VariantLookup = mergeMaps baseRegs.VariantLookup overlay.VariantLookup
         SumMetadata = mergeSumMetadata baseRegs.SumMetadata overlay.SumMetadata
         RcSumShapeReg = mergeMaps baseRegs.RcSumShapeReg overlay.RcSumShapeReg
-        FuncReg = mergeMaps baseRegs.FuncReg overlay.FuncReg
+        FuncReg = FunctionIdMap.merge baseRegs.FuncReg overlay.FuncReg
         FunctionIds = functionIds
         FunctionNames = functionNames
         FuncParams = mergeMaps baseRegs.FuncParams overlay.FuncParams
         ModuleRegistry = baseRegs.ModuleRegistry
-        RecursiveMembers = mergeMaps baseRegs.RecursiveMembers overlay.RecursiveMembers
+        RecursiveMembers = FunctionIdMap.merge baseRegs.RecursiveMembers overlay.RecursiveMembers
     })
 
 let mergeRegistries baseRegs overlay =
@@ -559,7 +559,7 @@ let mergeRegistries baseRegs overlay =
 type FunctionConversion = {
     Functions: ANF.Function list
     VarGen: ANF.VarGen
-    OwnershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>
+    OwnershipContracts: FunctionIdMap<OwnedIR.CallSignature>
 }
 
 let extendFunctionRegistryWithConverted
@@ -568,7 +568,7 @@ let extendFunctionRegistryWithConverted
     : FunctionRegistry =
     functions
     |> List.fold (fun registry functionDefinition ->
-        Map.add
+        FunctionIdMap.add
             functionDefinition.Id
             (functionDefinition.Name,
              AST.TFunction (
@@ -653,9 +653,9 @@ let convertFunctionsWithOwnershipWithTrace
                         let funcType =
                             AST.TFunction (paramTypes, CheckedAST.functionReturnType func)
                         { regs with
-                            FuncReg = Map.add func.Id (func.Name, funcType) regs.FuncReg
+                            FuncReg = FunctionIdMap.add func.Id (func.Name, funcType) regs.FuncReg
                             FunctionIds = Map.add func.Name func.Id regs.FunctionIds
-                            FunctionNames = Map.add func.Id func.Name regs.FunctionNames }) registries
+                            FunctionNames = FunctionIdMap.add func.Id func.Name regs.FunctionNames }) registries
                 loop conversionRegistries fusion.Functions varGen [])
         |> Result.bind (fun (anfFunctions, nextVarGen) ->
             measure

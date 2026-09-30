@@ -21,7 +21,7 @@ let internal buildBaseFuncNames
 let internal buildLambdaLiftFunctionCatalog
     (registries: AST_to_ANF.Registries)
     (baseFuncNames: Set<string>)
-    (returnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
+    (returnTypes: FunctionIdMap<string * AST.SemanticType>)
     : LiftFunctions.FunctionCatalog =
     let functionId name =
         Map.tryFind name registries.FunctionIds
@@ -32,16 +32,16 @@ let internal buildLambdaLiftFunctionCatalog
         |> Map.toSeq
         |> Seq.map (fun (name, parameters) ->
             functionId name, parameters |> List.map snd)
-        |> Map.ofSeq
+        |> FunctionIdMap.ofSeq
         |> fun parameters ->
             registries.ModuleRegistry
             |> Map.fold (fun current name moduleFunc ->
-                Map.add (functionId name) moduleFunc.ParamTypes current) parameters
+                FunctionIdMap.add (functionId name) moduleFunc.ParamTypes current) parameters
         |> fun parameters ->
             baseFuncNames
             |> Set.fold (fun current name ->
                 let id = functionId name
-                if Map.containsKey id current then current else Map.add id [] current) parameters
+                if FunctionIdMap.containsKey id current then current else FunctionIdMap.add id [] current) parameters
     let genericDefs =
         registries.ModuleRegistry
         |> Map.toSeq
@@ -52,22 +52,22 @@ let internal buildLambdaLiftFunctionCatalog
                     functionId name,
                     (moduleFunc.TypeParams, moduleFunc.ReturnType)
                 ))
-        |> Map.ofSeq
+        |> FunctionIdMap.ofSeq
     {
         Params = parameters
         ReturnTypes =
             registries.ModuleRegistry
             |> Map.fold (fun current name moduleFunc ->
-                Map.add (functionId name) moduleFunc.ReturnType current)
-                (returnTypes |> Map.map (fun _ (_, returnType) -> returnType))
+                FunctionIdMap.add (functionId name) moduleFunc.ReturnType current)
+                (returnTypes |> FunctionIdMap.map (fun _ (_, returnType) -> returnType))
         GenericDefs = genericDefs
     }
 
 let internal mergeReturnTypes
-    (baseReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
-    (overlayReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
-    : Map<AST.FunctionId, string * AST.SemanticType> =
-    Map.fold (fun acc k v -> Map.add k v acc) baseReturnTypes overlayReturnTypes
+    (baseReturnTypes: FunctionIdMap<string * AST.SemanticType>)
+    (overlayReturnTypes: FunctionIdMap<string * AST.SemanticType>)
+    : FunctionIdMap<string * AST.SemanticType> =
+    FunctionIdMap.fold (fun acc k v -> FunctionIdMap.add k v acc) baseReturnTypes overlayReturnTypes
 
 let internal packageCatalogFunctionNames =
     Set.ofList [
@@ -132,7 +132,7 @@ type PipelineContext = {
     LambdaLiftTypeReg: TypeRegistries.TypeRegistry
     LambdaLiftVariantLookup: LoweringPrimitives.VariantLookup
     ProjectedMirRegistries: MIR.VariantRegistry * MIR.RecordRegistry
-    ReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>
+    ReturnTypes: FunctionIdMap<string * AST.SemanticType>
     PackageCatalogGenericCallers: Set<string>
 }
 
@@ -149,8 +149,8 @@ let internal includeCompiledFunctions
         functions
         |> List.fold (fun (ids, names, returns, baseNames) func ->
             (Map.add func.Name func.Id ids,
-             Map.add func.Id func.Name names,
-             Map.add func.Id (func.Name, func.ReturnType) returns,
+             FunctionIdMap.add func.Id func.Name names,
+             FunctionIdMap.add func.Id (func.Name, func.ReturnType) returns,
              Set.add func.Name baseNames))
             (context.Registries.FunctionIds,
              context.Registries.FunctionNames,
@@ -180,16 +180,16 @@ let internal includeCompiledFunctions
             functions
             |> List.fold (fun catalog func ->
                 let parameters =
-                    match Map.tryFind func.Id catalog.Params with
+                    match FunctionIdMap.tryFind func.Id catalog.Params with
                     | Some _ -> catalog.Params
-                    | None -> Map.add func.Id [] catalog.Params
+                    | None -> FunctionIdMap.add func.Id [] catalog.Params
                 let returnType =
                     match Map.tryFind func.Name registries.ModuleRegistry with
                     | Some definition -> definition.ReturnType
                     | None -> func.ReturnType
                 { catalog with
                     Params = parameters
-                    ReturnTypes = Map.add func.Id returnType catalog.ReturnTypes })
+                    ReturnTypes = FunctionIdMap.add func.Id returnType catalog.ReturnTypes })
                 context.LambdaLiftFunctions
         ReturnTypes = returnTypes }
 
@@ -202,7 +202,7 @@ let internal buildContext
     (specRegistry: SpecializationIdentity.SpecRegistry)
     (registries: AST_to_ANF.Registries)
     (baseFuncNames: Set<string>)
-    (returnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
+    (returnTypes: FunctionIdMap<string * AST.SemanticType>)
     : PipelineContext =
     let (lambdaLiftTypeReg, lambdaLiftVariantLookup) =
         LiftFunctions.prepareLambdaLiftBaseTypes
@@ -242,9 +242,9 @@ type PreambleContext = {
     TypeMap: ANF.TypeMap
     /// Preamble's symbolic LIR functions after register allocation
     SymbolicFunctions: LIR.Function list
-    CallGraphSummaries: Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>
+    CallGraphSummaries: FunctionIdMap<CompilationCacheIdentity.FunctionSummary>
     /// Direct-call summary computed once with the reusable preamble unit.
-    SymbolicCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>
+    SymbolicCallGraph: FunctionIdMap<Set<AST.FunctionId>>
 }
 
 /// Parsed and typechecked preamble analysis for suite-level specialization
@@ -263,18 +263,18 @@ type StdlibResult = {
     Context: PipelineContext
     /// Pre-allocated stdlib functions (physical registers assigned, ready for merge)
     AllocatedFunctions: LIR.Function list
-    CallGraphSummaries: Map<AST.FunctionId, CompilationCacheIdentity.FunctionSummary>
+    CallGraphSummaries: FunctionIdMap<CompilationCacheIdentity.FunctionSummary>
     /// Call graph for dead code elimination (which stdlib funcs call which other funcs)
-    StdlibCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>
+    StdlibCallGraph: FunctionIdMap<Set<AST.FunctionId>>
     /// Stdlib ANF functions indexed by name (for coverage analysis)
     StdlibANFFunctions: Map<string, ANF.Function>
     /// Pre-reference-count bodies available to optimizations that introduce
     /// calls to already-monomorphized stdlib helpers.
     StdlibANFOptimizationCandidates: Map<string, ANF.Function>
     /// Pre-reference-count stdlib ANF functions available as user inlining candidates
-    StdlibInlineCandidates: Map<AST.FunctionId, InliningCommon.FunctionInfo>
+    StdlibInlineCandidates: FunctionIdMap<InliningCommon.FunctionInfo>
     /// Call graph at ANF level (for coverage analysis reachability)
-    StdlibANFCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>
+    StdlibANFCallGraph: FunctionIdMap<Set<AST.FunctionId>>
     /// TypeMap from RC insertion (needed for getReachableStdlibFunctions)
     StdlibTypeMap: ANF.TypeMap
 }

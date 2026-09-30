@@ -52,19 +52,19 @@ let private initialBoundary dialect (definition: HIR.Function<'block>) : OwnedIR
     }
 
 let private signatureRegistry
-    (boundaries: Map<AST.FunctionId, OwnedIR.FunctionSignature<HIR.ValueId>>)
-    : Result<Map<AST.FunctionId, OwnedIR.CallSignature>, ElaborationError> =
+    (boundaries: FunctionIdMap<OwnedIR.FunctionSignature<HIR.ValueId>>)
+    : Result<FunctionIdMap<OwnedIR.CallSignature>, ElaborationError> =
     boundaries
-    |> Map.toList
+    |> FunctionIdMap.toList
     |> List.fold (fun result (target, boundary) ->
         result
         |> Result.bind (fun registry ->
             VerifyOwnership.callSignatureOfFunction boundary
             |> Result.mapError (fun error -> InvalidFunctionBoundary (target, error))
-            |> Result.map (fun signature -> Map.add target signature registry))) (Ok Map.empty)
+            |> Result.map (fun signature -> FunctionIdMap.add target signature registry))) (Ok FunctionIdMap.empty)
 
 let private resolveCall externalOwnership registry (call: HIR.FunctionCall) =
-    match Map.tryFind call.Target registry with
+    match FunctionIdMap.tryFind call.Target registry with
     | Some signature -> Some signature
     | None -> externalOwnership call
 
@@ -164,35 +164,35 @@ let private convergeBoundaries
     let initial =
         definitions
         |> List.map (fun definition -> definition.Id, initialBoundary dialect definition)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let callsByFunction =
         definitions
         |> List.map (fun definition -> definition.Id, blockCalls dialect definition.Body)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let groups =
         callsByFunction
-        |> Map.map (fun _ calls -> Set.toList calls)
+        |> FunctionIdMap.map (fun _ calls -> Set.toList calls)
         |> OwnedFunctionGroups.orderedFunctionIds (definitions |> List.map (fun definition -> definition.Id))
     let definitionsById =
-        definitions |> List.map (fun definition -> definition.Id, definition) |> Map.ofList
+        definitions |> List.map (fun definition -> definition.Id, definition) |> FunctionIdMap.ofList
     let boundaryState group boundaries =
         group
         |> List.map (fun definition ->
-            match Map.tryFind definition.Id boundaries with
+            match FunctionIdMap.tryFind definition.Id boundaries with
             | Some boundary -> definition.Id, boundary
             | None -> Crash.crash "Whole-function ownership group lost its boundary")
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let updateSignatures boundaries signatures group =
         group
         |> List.fold (fun result definition ->
             result
             |> Result.bind (fun signatures ->
-                match Map.tryFind definition.Id boundaries with
+                match FunctionIdMap.tryFind definition.Id boundaries with
                 | None -> Crash.crash "Inferred ownership group lost its boundary"
                 | Some boundary ->
                     VerifyOwnership.callSignatureOfFunction boundary
                     |> Result.mapError (fun error -> InvalidFunctionBoundary (definition.Id, error))
-                    |> Result.map (fun signature -> Map.add definition.Id signature signatures))) (Ok signatures)
+                    |> Result.map (fun signature -> FunctionIdMap.add definition.Id signature signatures))) (Ok signatures)
     let inferGroup (boundaries, signatures) group =
         let ownership = resolveCall dialect.ExternalCallOwnership signatures
         group
@@ -200,7 +200,7 @@ let private convergeBoundaries
             result
             |> Result.bind (fun inferred ->
                 inferBoundary dialect ownership definition
-                |> Result.map (fun boundary -> Map.add definition.Id boundary inferred))) (Ok boundaries)
+                |> Result.map (fun boundary -> FunctionIdMap.add definition.Id boundary inferred))) (Ok boundaries)
         |> Result.bind (fun nextBoundaries ->
             updateSignatures nextBoundaries signatures group
             |> Result.map (fun nextSignatures -> nextBoundaries, nextSignatures))
@@ -224,13 +224,13 @@ let private convergeBoundaries
                 let group =
                     ids
                     |> List.map (fun id ->
-                        match Map.tryFind id definitionsById with
+                        match FunctionIdMap.tryFind id definitionsById with
                         | Some definition -> definition
                         | None -> Crash.crash "Whole-function ownership group lost its definition")
                 match group with
                 | [definition] ->
                     let recursive =
-                        match Map.tryFind definition.Id callsByFunction with
+                        match FunctionIdMap.tryFind definition.Id callsByFunction with
                         | Some calls -> Set.contains definition.Id calls
                         | None -> Crash.crash "Whole-function ownership group lost its call set"
                     if recursive then convergeGroup state group
@@ -423,7 +423,7 @@ let elaborateFunctionsWithTrace
                 |> List.fold (fun result definition ->
                     result
                     |> Result.bind (fun functions ->
-                        match Map.tryFind definition.Id boundaries with
+                        match FunctionIdMap.tryFind definition.Id boundaries with
                         | None -> Crash.crash "Whole-function ownership boundary disappeared during elaboration"
                         | Some boundary ->
                             elaborateFunction dialect ownership boundary definition

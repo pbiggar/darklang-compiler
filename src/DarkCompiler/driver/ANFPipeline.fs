@@ -15,7 +15,7 @@ open PipelineDiagnostics
 let internal buildConversionResult
     (program: ANF.Program)
     (registries: AST_to_ANF.Registries)
-    (ownershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>)
+    (ownershipContracts: FunctionIdMap<OwnedIR.CallSignature>)
     : AST_to_ANF.ConversionResult =
     let (ANF.Program (functions, _)) = program
     let funcReg =
@@ -56,11 +56,11 @@ let internal buildAnf
     (registries: AST_to_ANF.Registries)
     (nextFunctionOrdinal: uint64)
     (inliningConfig: InliningCommon.InliningConfig)
-    (externalInlineCandidates: Map<AST.FunctionId, InliningCommon.FunctionInfo>)
+    (externalInlineCandidates: FunctionIdMap<InliningCommon.FunctionInfo>)
     (externalOptimizationFunctions: Map<string, ANF.Function>)
     (nonInlineableFunctionNames: Set<AST.FunctionId>)
     (functions: ANF.Function list)
-    (ownershipContracts: Map<AST.FunctionId, OwnedIR.CallSignature>)
+    (ownershipContracts: FunctionIdMap<OwnedIR.CallSignature>)
     (specializeInternalSignatures: bool)
     (passTimingRecorder: PassTimingRecorder option)
     : Result<ANF.Function list * SSAANF.Function list * ANF.TypeMap, string> =
@@ -88,7 +88,7 @@ let internal buildAnf
     let singletonRecursiveNames =
         functions
         |> List.choose (fun func ->
-            match Map.tryFind func.Id registries.RecursiveMembers with
+            match FunctionIdMap.tryFind func.Id registries.RecursiveMembers with
             | Some memberInfo when memberInfo.Typed.Resolved.Availability = AST.SelfRecursiveMember ->
                 Some func.Id
             | _ -> None)
@@ -158,7 +158,7 @@ let internal buildAnf
             passTimingRecorder "SSA Optimizations"
             (sw.Elapsed.TotalMilliseconds - ssaOptStart)
         let externalSSAResult =
-            if options.DisableInlining || Map.isEmpty externalInlineCandidates then Ok []
+            if options.DisableInlining || FunctionIdMap.isEmpty externalInlineCandidates then Ok []
             else
                 let atomTargets = function
                     | ANF.FuncRef id -> Set.singleton id
@@ -196,14 +196,14 @@ let internal buildAnf
                     | [] -> seen
                     | id :: rest when Set.contains id seen -> relevant seen rest
                     | id :: rest ->
-                        match Map.tryFind id externalInlineCandidates with
+                        match FunctionIdMap.tryFind id externalInlineCandidates with
                         | None -> relevant seen rest
                         | Some info ->
                             relevant (Set.add id seen) (Set.toList (anfTargets info.Func.Body) @ rest)
                 let selected = relevant Set.empty (Set.toList localTargets)
                 selected
                 |> Set.toList
-                |> List.choose (fun id -> Map.tryFind id externalInlineCandidates |> Option.map (fun info -> info.Func))
+                |> List.choose (fun id -> FunctionIdMap.tryFind id externalInlineCandidates |> Option.map (fun info -> info.Func))
                 |> List.fold (fun result func ->
                     result
                     |> Result.bind (fun accumulated ->
@@ -236,7 +236,7 @@ let internal buildAnf
             let higherOrderStart = sw.Elapsed.TotalMilliseconds
             let higherOrder: SSAHigherOrderSpecialization.Specialization =
                 if options.DisableInlining || not specializeInternalSignatures then
-                    { Functions = ssaInlined; CloneOrigins = Map.empty }
+                    { Functions = ssaInlined; CloneOrigins = FunctionIdMap.empty }
                 else
                     SSAHigherOrderSpecialization.specializeProgramWithExternalFunctionsAndNames
                         registries.FunctionIds nextFunctionOrdinal externalSSA ssaInlined
@@ -253,7 +253,7 @@ let internal buildAnf
             let specialization: SSADirectCallSpecialization.Specialization =
                 if options.DisableInlining || not specializeInternalSignatures then
                     { Functions = higherOrder.Functions
-                      CloneOrigins = Map.empty }
+                      CloneOrigins = FunctionIdMap.empty }
                 else
                     SSADirectCallSpecialization.specializeProgramWithFunctionNames
                         registries.FunctionNames higherOrder.Functions
@@ -287,7 +287,7 @@ let internal buildAnf
             let specializedRegistry =
                 ssaAfterEscape
                 |> List.fold (fun registry func ->
-                    Map.add
+                    FunctionIdMap.add
                         func.Id
                         (func.Name,
                          AST.TFunction (
@@ -298,21 +298,21 @@ let internal buildAnf
                 RcTypeFacts.createContext
                     { convResult with FuncReg = specializedRegistry }
             let sourceId id =
-                Map.tryFind id specialization.CloneOrigins |> Option.defaultValue id
-                |> fun id -> Map.tryFind id higherOrder.CloneOrigins |> Option.defaultValue id
+                FunctionIdMap.tryFind id specialization.CloneOrigins |> Option.defaultValue id
+                |> fun id -> FunctionIdMap.tryFind id higherOrder.CloneOrigins |> Option.defaultValue id
             let originalFrontiers =
-                let localTemplates = preRCFunctions |> List.map (fun func -> func.Id, func) |> Map.ofList
+                let localTemplates = preRCFunctions |> List.map (fun func -> func.Id, func) |> FunctionIdMap.ofList
                 ssaAfterEscape
                 |> List.map (fun func -> sourceId func.Id)
                 |> Set.ofList
                 |> Set.fold (fun frontiers id ->
                     let template =
-                        Map.tryFind id localTemplates
+                        FunctionIdMap.tryFind id localTemplates
                         |> Option.orElseWith (fun () ->
-                            Map.tryFind id externalInlineCandidates |> Option.map (fun info -> info.Func))
+                            FunctionIdMap.tryFind id externalInlineCandidates |> Option.map (fun info -> info.Func))
                     match template with
                     | None -> frontiers
-                    | Some func -> Map.add id (RefCountInsertion.ownedDictionaryFrontierParams func) frontiers) Map.empty
+                    | Some func -> FunctionIdMap.add id (RefCountInsertion.ownedDictionaryFrontierParams func) frontiers) FunctionIdMap.empty
             if verbosity >= 1 then println "  [anf.reference-counts] Reference Count Insertion..."
             let rcStart = sw.Elapsed.TotalMilliseconds
             let ssaAfterRC =
@@ -322,7 +322,7 @@ let internal buildAnf
                     let retainedParams =
                         ssa.TypedParams |> List.map (fun parameter -> parameter.Id) |> Set.ofList
                     let frontierParams =
-                        Map.tryFind sourceId originalFrontiers
+                        FunctionIdMap.tryFind sourceId originalFrontiers
                         |> Option.defaultValue Set.empty
                         |> Set.intersect retainedParams
                     RcSSARefCountInsertion.insertBlockLocal ctx frontierParams ssa)

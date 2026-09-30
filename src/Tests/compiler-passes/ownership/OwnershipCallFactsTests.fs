@@ -45,7 +45,7 @@ let private ownership registrations aliases : Semantics<Leaf, HIR.ValueId> =
     {
         Leaf = fun (Fresh value) -> { Inputs = []; Outputs = [value.Id] }
         LeafUniqueness = fun (Fresh value) -> { RequiredInputs = Set.empty; UniqueOutputs = Set.singleton value.Id }
-        CallOwnership = fun call -> Map.tryFind call.Target registrations |> Option.map snd
+        CallOwnership = fun call -> FunctionIdMap.tryFind call.Target registrations |> Option.map snd
         ScalarUses = uses
         ScalarEscapes = uses
         BlockArgument = argument
@@ -56,7 +56,7 @@ let private hir registrations : VerifyOwnedHIR.HIRContracts<Leaf> = {
         Inputs = []; Operands = []; Outputs = [{ Value = value; Alias = HIR.FreshManaged }]
         Effects = Set.singleton HIR.MayAllocate
     }
-    CallSignature = fun target -> Map.tryFind target registrations |> Option.map fst
+    CallSignature = fun target -> FunctionIdMap.tryFind target registrations |> Option.map fst
     CallContract = fun call ->
         let alias =
             match call.Result.Type, call.Arguments with
@@ -70,7 +70,7 @@ let private hir registrations : VerifyOwnedHIR.HIRContracts<Leaf> = {
         }
 }
 let private analyze registrations aliases definitions =
-    let registrations = Map.ofList registrations
+    let registrations = FunctionIdMap.ofList registrations
     VerifyOwnedHIR.analyzeFunctions (hir registrations) (ownership registrations aliases) definitions
 let private expect expected result =
     match result with
@@ -225,7 +225,7 @@ let private testFailureDiscardsFacts () =
     let input = managed 0
     let invocation = call "inspect" [input] (scalar 10)
     let caller = unitFunction "caller" [input, UniqueParameter input.Id] [invoke invocation]
-    let registrations = Map.ofList [external invocation [BorrowedCallParameter] UnmanagedCallResult]
+    let registrations = FunctionIdMap.ofList [external invocation [BorrowedCallParameter] UnmanagedCallResult]
     let semantics = ownership registrations Map.empty
     match VerifyOwnership.analyzeFunction semantics caller,
           VerifyOwnership.verifyFunction semantics caller.Ownership caller.Definition.Body,
@@ -259,7 +259,7 @@ let private testRejectsUniqueUseAfterAliasingResult () =
     let produce = call "produce" [input] output
     let consume = call "consumeUnique" [input] (scalar 10)
     let caller = unitFunction "caller" [input, UniqueParameter input.Id] [invoke produce; invoke consume; Drop output.Id]
-    let registrations = Map.ofList [external produce [BorrowedCallParameter] ProducedCallResult;
+    let registrations = FunctionIdMap.ofList [external produce [BorrowedCallParameter] ProducedCallResult;
                                     external consume [UniqueCallParameter] UnmanagedCallResult]
     let semantics = ownership registrations Map.empty
     match VerifyOwnership.analyzeFunction semantics caller,
@@ -305,7 +305,7 @@ let private testTypedFailure () =
     let input = managed 0
     let invocation = call "inspect" [input] (scalar 10)
     let caller = unitFunction "caller" [input, UniqueParameter input.Id] [invoke invocation; Drop input.Id]
-    let registrations = Map.ofList [external invocation [BorrowedCallParameter] UnmanagedCallResult]
+    let registrations = FunctionIdMap.ofList [external invocation [BorrowedCallParameter] UnmanagedCallResult]
     let contracts = { hir registrations with CallSignature = fun _ -> Some { Parameters = [AST.TInt64]; Result = AST.TUnit } }
     let semantics = ownership registrations Map.empty
     match VerifyOwnedHIR.analyzeFunctions contracts semantics [caller], VerifyOwnedHIR.verifyFunctions contracts semantics [caller] with
@@ -318,7 +318,7 @@ let private testSpecializationHandoff () =
     let invocation = call "identity" [input] output
     let caller = definition "caller" [input, UniqueParameter input.Id] [invoke invocation] output (ProducedResult output.Id)
     let definitions = [identity; caller]
-    let semantics, contracts = ownership Map.empty Map.empty, hir Map.empty
+    let semantics, contracts = ownership FunctionIdMap.empty Map.empty, hir FunctionIdMap.empty
     let report result = result |> Result.mapError (sprintf "%A")
     VerifyOwnedHIR.analyzeFunctions contracts semantics definitions |> report
     |> Result.bind (fun facts ->
@@ -330,7 +330,7 @@ let private testSpecializationHandoff () =
                 SelectOwnershipVariants.select catalog
                     { Target = identity.Definition.Name; Established = fact.Established; UniqueArguments = fact.UniqueArguments } |> report)
             |> Result.bind (fun selection ->
-                MaterializeOwnershipVariants.materialize contracts semantics Map.empty definitions
+                MaterializeOwnershipVariants.materialize contracts semantics FunctionIdMap.empty definitions
                     [{ Caller = fact.Caller; Call = fact.Call; Selection = selection }] |> report)
             |> Result.bind (fun plan ->
                 VerifyOwnedHIR.analyzeFunctions

@@ -69,7 +69,7 @@ let private request caller call selection : Request<HIR.ValueId> = {
     Call = call
     Selection = selection
 }
-let private run definitions requests = materialize (contracts definitions) semantics Map.empty definitions requests
+let private run definitions requests = materialize (contracts definitions) semantics FunctionIdMap.empty definitions requests
 
 let private identity () =
     let input = value 0
@@ -164,7 +164,7 @@ let private testRecursiveAtomicity self () =
             let symbols =
                 members
                 |> List.map (fun memberDefinition -> memberDefinition.Original, memberDefinition.Function.Definition.Id)
-                |> Map.ofList
+                |> FunctionIdMap.ofList
             let contract = ownershipSemantics plan semantics
             let check memberDefinition =
                 let definition = memberDefinition.Function
@@ -177,7 +177,7 @@ let private testRecursiveAtomicity self () =
                 | [Evaluate (HIR.Branch (_, _, yes, _))] ->
                     match yes.Body.Operations with
                     | [Evaluate (HIR.Call invocation)] ->
-                        Map.tryFind expectedTarget symbols = Some invocation.Target
+                        FunctionIdMap.tryFind expectedTarget symbols = Some invocation.Target
                         && contract.CallOwnership invocation = Some unique
                     | _ -> false
                 | _ -> false
@@ -265,7 +265,7 @@ let private testRejectsCollisions () =
                     materialize
                         (contracts definitions)
                         semantics
-                        (Map.ofList [symbol, symbolName])
+                        (FunctionIdMap.ofList [symbol, symbolName])
                         definitions
                         requests
                 let declared = run (definitions @ [shadow]) requests
@@ -350,7 +350,7 @@ let private testRejectsStaleBodyProof () =
                 { definition with Definition = { definition.Definition with Body = body } }
             else definition)
         let escaping = { semantics with ScalarEscapes = semantics.ScalarUses }
-        match materialize (contracts changed) escaping Map.empty changed [request "first" firstCall chosen] with
+        match materialize (contracts changed) escaping FunctionIdMap.empty changed [request "first" firstCall chosen] with
         | Error (InvalidMaterializedProgram (VerifyOwnedHIR.OwnershipVerificationFailed (NonUniqueUse id)))
             when id = (value 0).Id -> Ok ()
         | actual -> Error (sprintf "Expected changed body provenance to invalidate the old candidate proof, got %A" actual))
@@ -376,8 +376,8 @@ let private testRejectsRegisteredCollisions () =
                             else None
                 }
                 let owned = { semantics with CallOwnership = fun call -> if call.Target = symbol then Some unique else None }
-                match materialize typed semantics Map.empty definitions requests,
-                      materialize (contracts definitions) owned Map.empty definitions requests with
+                match materialize typed semantics FunctionIdMap.empty definitions requests,
+                      materialize (contracts definitions) owned FunctionIdMap.empty definitions requests with
                 | Error (SymbolCollision first), Error (SymbolCollision second)
                     when first = symbolName && second = symbolName -> Ok ()
                 | actual -> Error (sprintf "Expected registered symbol collisions to be rejected, got %A" actual)

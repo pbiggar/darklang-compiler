@@ -15,7 +15,7 @@ let translateFunction
     (enableLeakCheck: bool)
     (recordRegistry: LIR.RecordRegistry)
     (sumShapeRegistry: MemoryModel.RcSumShapeRegistry)
-    (functionNames: Map<AST.FunctionId, string>)
+    (functionNames: FunctionIdMap<string>)
     (func: LIR.Function)
     : Result<X86_64.Instr list, string> =
     let epilogueLabel = "_epilogue_" + func.Name

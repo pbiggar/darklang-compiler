@@ -29,7 +29,7 @@ type OptimizeContext = {
     TypeReg: Map<string, (string * AST.SemanticType) list>
     RecordTypeParams: Map<string, string list>
     SumShapeReg: RcSumShapeRegistry
-    FunctionNames: Map<AST.FunctionId, string>
+    FunctionNames: FunctionIdMap<string>
     FunctionIds: Map<string, AST.FunctionId>
 }
 

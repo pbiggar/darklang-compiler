@@ -44,7 +44,7 @@ type CodeGenContext = {
     RawSlotInitRetainTargets: Map<AST.SemanticType, LIR.Arm64SlotInitRootRetainTarget option> option
     ClosurePayloadSizes: Map<string, int>
     ClosureCaptureTypes: Map<string, AST.SemanticType list>
-    FunctionNames: Map<AST.FunctionId, string>
+    FunctionNames: FunctionIdMap<string>
     FunctionName: string
     /// Deterministic block/instruction identity for labels emitted by an effect.
     /// One source effect can be cloned into multiple CFG locations.
@@ -58,7 +58,7 @@ type CodeGenContext = {
 }
 
 let internal functionName (ctx: CodeGenContext) (functionId: AST.FunctionId) : string =
-    match Map.tryFind functionId ctx.FunctionNames with
+    match FunctionIdMap.tryFind functionId ctx.FunctionNames with
     | Some name -> name
     | None -> Crash.crash $"ARM64 code generation: missing function name for identity {AST.functionIdValue functionId}"
 
@@ -152,7 +152,7 @@ type internal RcHelperRequirements = LIR.Arm64RcHelperRequirements
 
 type Arm64ProgramFacts = {
     ClosurePayloadSizesFromParams: Map<string, int>
-    ClosurePayloadSizesFromAllocs: Map<AST.FunctionId, int>
+    ClosurePayloadSizesFromAllocs: FunctionIdMap<int>
     ClosureCaptureTypes: Map<string, AST.SemanticType list>
     RecursiveReleaseTypes: Set<AST.SemanticType>
     CliArgvHelperLabels: Set<string>

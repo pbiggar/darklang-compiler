@@ -35,8 +35,8 @@ let buildPreambleContext
             ANFFunctions = []
             TypeMap = stdlib.StdlibTypeMap
             SymbolicFunctions = []
-            CallGraphSummaries = Map.empty
-            SymbolicCallGraph = Map.empty
+            CallGraphSummaries = FunctionIdMap.empty
+            SymbolicCallGraph = FunctionIdMap.empty
         }
         Ok (stdlib, emptyContext)
     else
@@ -91,7 +91,7 @@ let buildPreambleContext
                                 WrittenEnvironment =
                                     analysis.WrittenEnvironment
                                     |> Option.map (WrittenChecking.includeAllocatedFunctions preambleUserOnly.Symbols) }
-                match buildAnf 0 preambleOptions sw preambleRegistries (CheckedAST.nextFunctionOrdinal preambleUserOnly.Symbols) InliningCommon.defaultConfig Map.empty Map.empty Set.empty preambleUserOnly.Functions Map.empty false passTimingRecorder with
+                match buildAnf 0 preambleOptions sw preambleRegistries (CheckedAST.nextFunctionOrdinal preambleUserOnly.Symbols) InliningCommon.defaultConfig FunctionIdMap.empty Map.empty Set.empty preambleUserOnly.Functions FunctionIdMap.empty false passTimingRecorder with
                 | Error err ->
                     let rcPrefix = "Reference count insertion error: "
                     let msg =
@@ -217,7 +217,7 @@ let buildPreambleContextFromAnalysis
                     WrittenEnvironment =
                         analysis.WrittenEnvironment
                         |> Option.map (WrittenChecking.includeAllocatedFunctions preambleUserOnly.Symbols) }
-        match buildAnf 0 preambleOptions sw preambleRegistries (CheckedAST.nextFunctionOrdinal preambleUserOnly.Symbols) InliningCommon.defaultConfig Map.empty Map.empty Set.empty preambleUserOnly.Functions Map.empty false passTimingRecorder with
+        match buildAnf 0 preambleOptions sw preambleRegistries (CheckedAST.nextFunctionOrdinal preambleUserOnly.Symbols) InliningCommon.defaultConfig FunctionIdMap.empty Map.empty Set.empty preambleUserOnly.Functions FunctionIdMap.empty false passTimingRecorder with
         | Error err ->
             let rcPrefix = "Reference count insertion error: "
             let msg =

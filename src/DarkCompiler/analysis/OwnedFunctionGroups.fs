@@ -218,7 +218,7 @@ let internal orderedFunctionIds vertices adjacency =
         |> Map.ofList
     let namedAdjacency =
         adjacency
-        |> Map.toList
+        |> FunctionIdMap.toList
         |> List.map (fun (id, targets) ->
             AST.functionIdValue id,
             (targets |> List.map AST.functionIdValue))
@@ -233,7 +233,7 @@ let private groups definitions names callsByFunction adjacency =
     let definitionsByName =
         definitions
         |> List.map (fun definition -> definition.Definition.Id, definition)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     orderedFunctionIds
         (definitions |> List.map (fun definition -> definition.Definition.Id))
         adjacency
@@ -242,13 +242,13 @@ let private groups definitions names callsByFunction adjacency =
         let members =
             memberNames
             |> List.map (fun name ->
-                match Map.tryFind name definitionsByName with
+                match FunctionIdMap.tryFind name definitionsByName with
                 | Some definition -> definition
                 | None -> Crash.crash "Owned function SCC lost its definition")
         let calls =
             members
             |> List.map (fun definition ->
-                match Map.tryFind definition.Definition.Id callsByFunction with
+                match FunctionIdMap.tryFind definition.Definition.Id callsByFunction with
                 | Some targets -> targets
                 | None -> Crash.crash "Owned function SCC lost its call set")
             |> Set.unionMany
@@ -285,9 +285,9 @@ let discover
             |> List.map (fun definition ->
                 definition.Definition.Id,
                 blockCalls definition.Definition.Body)
-            |> Map.ofList
+            |> FunctionIdMap.ofList
         let adjacency =
             callsByFunction
-            |> Map.map (fun _ calls -> Set.toList calls)
+            |> FunctionIdMap.map (fun _ calls -> Set.toList calls)
         groups definitions names callsByFunction adjacency
         |> Ok

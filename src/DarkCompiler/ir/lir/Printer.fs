@@ -56,7 +56,7 @@ let private prettyPrintLIRRcKind = function
     | LIR.ClosureHeap -> "closure"
 
 let private prettyPrintFunctionName functionNames id =
-    Map.tryFind id functionNames
+    FunctionIdMap.tryFind id functionNames
     |> Option.defaultWith (fun () -> string id)
 
 let private prettyPrintLIROperandWithNames functionNames operand =
@@ -350,7 +350,7 @@ let private prettyPrintLIRTerminator (term: LIR.Terminator) : string =
 /// Format symbolic LIR program with CFG structure
 let formatLIR (LIR.Program (functions, _, _)) : string =
     let functionNames =
-        functions |> List.map (fun func -> (func.Id, func.Name)) |> Map.ofList
+        functions |> List.map (fun func -> (func.Id, func.Name)) |> FunctionIdMap.ofList
     let prettyPrintCalleeSaved (regs: LIR.PhysReg list) : string =
         regs
         |> List.map prettyPrintLIRPhysReg

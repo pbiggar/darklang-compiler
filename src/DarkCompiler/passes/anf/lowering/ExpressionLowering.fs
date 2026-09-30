@@ -29,8 +29,8 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
         |> Option.defaultWith (fun () ->
             Crash.crash $"Expression lowering function '{name}' is absent from registries")
     let functionNameIs id expected =
-        Map.tryFind id functionNames
-        |> Option.orElseWith (fun () -> Map.tryFind id funcReg |> Option.map fst)
+        FunctionIdMap.tryFind id functionNames
+        |> Option.orElseWith (fun () -> FunctionIdMap.tryFind id funcReg |> Option.map fst)
         |> Option.contains expected
     match expr with
     | CheckedAST.RecursiveLet _ -> Error "RecursiveLet must be lowered during lambda lifting"
@@ -639,8 +639,8 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
         // If an argument is a function reference, wrap it in a trivial closure for uniform calling convention
         let argExprList = exprArgsToList args
         let displayName =
-            Map.tryFind funcName functionNames
-            |> Option.orElseWith (fun () -> Map.tryFind funcName funcReg |> Option.map fst)
+            FunctionIdMap.tryFind funcName functionNames
+            |> Option.orElseWith (fun () -> FunctionIdMap.tryFind funcName funcReg |> Option.map fst)
             |> Option.defaultWith (fun () ->
                 Crash.crash $"Expression lowering lost function name metadata for FunctionId {AST.functionIdValue funcName}")
 
@@ -733,7 +733,7 @@ let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (to
                     Ok (withArgSetups finalExpr, varGen2)
                 | None ->
                 // Check if it's a defined function
-                match Map.tryFind funcName funcReg with
+                match FunctionIdMap.tryFind funcName funcReg with
                 | Some (_, AST.TFunction (paramTypes, _)) ->
                     // Direct call to defined function
                     let normalizedArgAtoms = normalizeSyntheticNullaryArgAtoms paramTypes argExprList argAtoms

@@ -156,27 +156,27 @@ let private summarizeFunction calleeWrites (func: LIR.Function) =
         |> List.fold (fun writes instr -> union writes (instructionWrites calleeWrites instr)) writes) empty
 
 let summariesWithKnown
-    (known: Map<AST.FunctionId, Writes>)
+    (known: FunctionIdMap<Writes>)
     (functions: LIR.Function list) =
     let rec converge local =
         let lookup id =
-            Map.tryFind id local
-            |> Option.orElseWith (fun () -> Map.tryFind id known)
+            FunctionIdMap.tryFind id local
+            |> Option.orElseWith (fun () -> FunctionIdMap.tryFind id known)
         let next =
             functions
             |> List.fold (fun acc func ->
                 let writes = summarizeFunction lookup func
-                let old = Map.tryFind func.Id acc |> Option.defaultValue empty
-                Map.add func.Id (union old writes) acc) local
+                let old = FunctionIdMap.tryFind func.Id acc |> Option.defaultValue empty
+                FunctionIdMap.add func.Id (union old writes) acc) local
         if next = local then local else converge next
     let initial =
         functions
         |> List.map (fun func -> func.Id, empty)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     converge initial
 
 let summaries (functions: LIR.Function list) =
-    summariesWithKnown Map.empty functions
+    summariesWithKnown FunctionIdMap.empty functions
 
 let private envelopeWrites callees beforeRestore =
     let calls =
@@ -191,7 +191,7 @@ let private envelopeWrites callees beforeRestore =
     match calls with
     | [_] when safeEnvelope ->
         // Saves precede argument setup, so its writes matter too.
-        let lookup id = Map.tryFind id callees
+        let lookup id = FunctionIdMap.tryFind id callees
         beforeRestore
         |> List.fold (fun writes instr ->
             union writes (instructionWrites lookup instr)) empty
@@ -217,7 +217,7 @@ let callWritesForSaves callees (block: LIR.BasicBlock) : Writes list =
         | [] -> []
     collect block.Instrs
 
-let private pruneBlock (callees: Map<AST.FunctionId, Writes>) (block: LIR.BasicBlock) =
+let private pruneBlock (callees: FunctionIdMap<Writes>) (block: LIR.BasicBlock) =
     let rec rewrite instrs =
         match instrs with
         | LIR.SaveRegs (ints, floats) :: rest ->
@@ -246,8 +246,8 @@ let private pruneBlock (callees: Map<AST.FunctionId, Writes>) (block: LIR.BasicB
     else { block with Instrs = rewritten }
 
 let refineWithCache
-    (cache: (LIR.Function -> Map<AST.FunctionId, Writes> -> (unit -> LIR.Function) -> LIR.Function) option)
-    (knownWrites: Map<AST.FunctionId, Writes> option)
+    (cache: (LIR.Function -> FunctionIdMap<Writes> -> (unit -> LIR.Function) -> LIR.Function) option)
+    (knownWrites: FunctionIdMap<Writes> option)
     (functions: LIR.Function list)
     : LIR.Function list =
     let callees =
@@ -259,9 +259,9 @@ let refineWithCache
             // finalized summaries for every other callee.
             let missing =
                 functions
-                |> List.filter (fun func -> not (Map.containsKey func.Id known))
+                |> List.filter (fun func -> not (FunctionIdMap.containsKey func.Id known))
             summariesWithKnown known missing
-            |> Map.fold (fun writes id value -> Map.add id value writes) known
+            |> FunctionIdMap.fold (fun writes id value -> FunctionIdMap.add id value writes) known
     functions
     |> List.map (fun func ->
         let hasSaves =
@@ -281,9 +281,9 @@ let refineWithCache
             let relevant =
                 directIds
                 |> Set.fold (fun writes id ->
-                    match Map.tryFind id callees with
-                    | Some value -> Map.add id value writes
-                    | None -> writes) Map.empty
+                    match FunctionIdMap.tryFind id callees with
+                    | Some value -> FunctionIdMap.add id value writes
+                    | None -> writes) FunctionIdMap.empty
             let generate () =
                 let blocks = func.CFG.Blocks |> Map.map (fun _ block -> pruneBlock relevant block)
                 if blocks = func.CFG.Blocks then func

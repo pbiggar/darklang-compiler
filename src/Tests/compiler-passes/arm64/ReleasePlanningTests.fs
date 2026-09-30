@@ -327,13 +327,13 @@ let testGenericReleaseHelpersPreserveOwnershipPolicy () : TestResult =
                     requirements.PlannedGenericDecHelpers
                     |> Map.keys
                     |> Seq.choose (fun name -> Map.tryFind name helperIdsByName |> Option.map (fun id -> id, name))
-                    |> Map.ofSeq)
-                |> Option.defaultValue Map.empty
+                    |> FunctionIdMap.ofSeq)
+                |> Option.defaultValue FunctionIdMap.empty
             func.CFG.Blocks
             |> Map.values
             |> Seq.collect (fun block -> block.Instrs)
             |> Seq.tryPick (function
-                | LIR.Call (_, id, _) -> Map.tryFind id helperNamesById
+                | LIR.Call (_, id, _) -> FunctionIdMap.tryFind id helperNamesById
                 | _ -> None)
         let specs =
             func.CodegenFacts

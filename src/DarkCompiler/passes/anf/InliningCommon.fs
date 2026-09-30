@@ -136,25 +136,25 @@ let rec private analyzeExpr (expr: AExpr) : FunctionAnalysis =
 // ============================================================================
 
 /// Build reverse call graph: Map<callee, Set<callers>>
-let buildReverseCallGraph (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>) : Map<AST.FunctionId, Set<AST.FunctionId>> =
+let buildReverseCallGraph (callGraph: FunctionIdMap<Set<AST.FunctionId>>) : FunctionIdMap<Set<AST.FunctionId>> =
     callGraph
-    |> Map.fold (fun acc caller callees ->
+    |> FunctionIdMap.fold (fun acc caller callees ->
         callees
         |> Set.fold (fun acc' callee ->
-            let existing = Map.tryFind callee acc' |> Option.defaultValue Set.empty
-            Map.add callee (Set.add caller existing) acc'
+            let existing = FunctionIdMap.tryFind callee acc' |> Option.defaultValue Set.empty
+            FunctionIdMap.add callee (Set.add caller existing) acc'
         ) acc
-    ) Map.empty
+    ) FunctionIdMap.empty
 
 /// DFS to compute finish order (for Kosaraju's algorithm)
-let rec dfsFinishOrder (graph: Map<AST.FunctionId, Set<AST.FunctionId>>) (node: AST.FunctionId)
+let rec dfsFinishOrder (graph: FunctionIdMap<Set<AST.FunctionId>>) (node: AST.FunctionId)
                        (visited: Set<AST.FunctionId>) (order: AST.FunctionId list)
     : Set<AST.FunctionId> * AST.FunctionId list =
     if Set.contains node visited then
         (visited, order)
     else
         let visited' = Set.add node visited
-        let neighbors = Map.tryFind node graph |> Option.defaultValue Set.empty
+        let neighbors = FunctionIdMap.tryFind node graph |> Option.defaultValue Set.empty
         let (visited'', order') =
             neighbors
             |> Set.fold (fun (v, o) neighbor ->
@@ -163,7 +163,7 @@ let rec dfsFinishOrder (graph: Map<AST.FunctionId, Set<AST.FunctionId>>) (node: 
         (visited'', node :: order')
 
 /// DFS to collect SCC members
-let rec dfsCollectSCC (graph: Map<AST.FunctionId, Set<AST.FunctionId>>) (node: AST.FunctionId)
+let rec dfsCollectSCC (graph: FunctionIdMap<Set<AST.FunctionId>>) (node: AST.FunctionId)
                       (visited: Set<AST.FunctionId>) (scc: Set<AST.FunctionId>)
     : Set<AST.FunctionId> * Set<AST.FunctionId> =
     if Set.contains node visited then
@@ -171,7 +171,7 @@ let rec dfsCollectSCC (graph: Map<AST.FunctionId, Set<AST.FunctionId>>) (node: A
     else
         let visited' = Set.add node visited
         let scc' = Set.add node scc
-        let neighbors = Map.tryFind node graph |> Option.defaultValue Set.empty
+        let neighbors = FunctionIdMap.tryFind node graph |> Option.defaultValue Set.empty
         neighbors
         |> Set.fold (fun (v, c) neighbor ->
             dfsCollectSCC graph neighbor v c
@@ -181,7 +181,7 @@ let rec dfsCollectSCC (graph: Map<AST.FunctionId, Set<AST.FunctionId>>) (node: A
 /// Returns list of SCCs, where each SCC is a Set of function names
 let findSCCs
     (funcNames: Set<AST.FunctionId>)
-    (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+    (callGraph: FunctionIdMap<Set<AST.FunctionId>>)
     : Set<AST.FunctionId> list =
     let reverseGraph = buildReverseCallGraph callGraph
 
@@ -209,7 +209,7 @@ let findSCCs
 /// or direct self-recursion (calls itself)
 let findRecursiveFunctions
     (funcs: Function list)
-    (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+    (callGraph: FunctionIdMap<Set<AST.FunctionId>>)
     : Set<AST.FunctionId> =
     let funcNames = funcs |> List.map (fun f -> f.Id) |> Set.ofList
     let sccs = findSCCs funcNames callGraph
@@ -224,7 +224,7 @@ let findRecursiveFunctions
     let directlyRecursive =
         funcs
         |> List.filter (fun f ->
-            let calls = Map.tryFind f.Id callGraph |> Option.defaultValue Set.empty
+            let calls = FunctionIdMap.tryFind f.Id callGraph |> Option.defaultValue Set.empty
             Set.contains f.Id calls
         )
         |> List.map (fun f -> f.Id)
@@ -252,18 +252,18 @@ let private buildFunctionInfo
 /// highest TempId needed to initialize the inliner's fresh-variable generator.
 let private buildFunctionInfoMapAndMaxTempId
     (funcs: Function list)
-    : Map<AST.FunctionId, FunctionInfo> * int =
+    : FunctionIdMap<FunctionInfo> * int =
     let analyzedFuncs = funcs |> List.map (fun func -> (func, analyzeExpr func.Body))
     let callGraph =
         analyzedFuncs
         |> List.map (fun (func, analysis) -> (func.Id, analysis.Calls))
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let recursiveFuncs = findRecursiveFunctions funcs callGraph
     let infoMap =
         analyzedFuncs
         |> List.map (fun (func, analysis) ->
             (func.Id, buildFunctionInfo recursiveFuncs func analysis))
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let maxTempId =
         analyzedFuncs
         |> List.fold (fun programMaxTempId (func, analysis) ->
@@ -277,7 +277,7 @@ let private buildFunctionInfoMapAndMaxTempId
     (infoMap, maxTempId)
 
 /// Build function info map for all functions
-let buildFunctionInfoMap (funcs: Function list) : Map<AST.FunctionId, FunctionInfo> =
+let buildFunctionInfoMap (funcs: Function list) : FunctionIdMap<FunctionInfo> =
     buildFunctionInfoMapAndMaxTempId funcs |> fst
 
 // ============================================================================
@@ -491,10 +491,10 @@ let private shouldUseExternalCandidate (info: FunctionInfo) (config: InliningCon
 let buildExternalCandidateInfoMap
     (config: InliningConfig)
     (functions: Function list)
-    : Map<AST.FunctionId, FunctionInfo> =
+    : FunctionIdMap<FunctionInfo> =
     buildFunctionInfoMap functions
-    |> Map.fold (fun candidates name info ->
+    |> FunctionIdMap.fold (fun candidates name info ->
         if shouldUseExternalCandidate info config then
-            Map.add name { info with IsExternal = true } candidates
+            FunctionIdMap.add name { info with IsExternal = true } candidates
         else
-            candidates) Map.empty
+            candidates) FunctionIdMap.empty

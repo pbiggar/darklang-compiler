@@ -66,7 +66,7 @@ let testBranchFalseEdgeFallsThrough () : TestResult =
     let ctx : ARM64CodeGenTypes.CodeGenContext = {
         Target = target; Options = ARM64CodeGenTypes.defaultOptions; SumShapeRegistry = Map.empty; RecordRegistry = Map.empty
         RawSlotInitRetainTargets = None
-        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; FunctionNames = Map.empty
+        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; FunctionNames = FunctionIdMap.empty
         FunctionName = func.Name; InstructionSite = ""; StackSize = 0; UsedCalleeSaved = []; UsedCalleeSavedF = []
         HeapOverflowLabel = "__heap_oom_arm64_layout"
         RecordLirOpExpansion = None
@@ -115,7 +115,7 @@ let testSharedReturnTransferCost () : TestResult =
     let ctx : ARM64CodeGenTypes.CodeGenContext = {
         Target = target; Options = ARM64CodeGenTypes.defaultOptions; SumShapeRegistry = Map.empty; RecordRegistry = Map.empty
         RawSlotInitRetainTargets = None
-        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; FunctionNames = Map.empty
+        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; FunctionNames = FunctionIdMap.empty
         FunctionName = func.Name; InstructionSite = ""; StackSize = 0; UsedCalleeSaved = []; UsedCalleeSavedF = []
         HeapOverflowLabel = "__heap_oom_common_return"
         RecordLirOpExpansion = None
@@ -132,7 +132,7 @@ let testDynamicBufferRcInstructionCost () : TestResult =
     let ctx : ARM64CodeGenTypes.CodeGenContext = {
         Target = target; Options = ARM64CodeGenTypes.defaultOptions; SumShapeRegistry = Map.empty; RecordRegistry = Map.empty
         RawSlotInitRetainTargets = None
-        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; FunctionNames = Map.empty
+        ClosurePayloadSizes = Map.empty; ClosureCaptureTypes = Map.empty; FunctionNames = FunctionIdMap.empty
         FunctionName = "buffer_rc_cost"; InstructionSite = ""; StackSize = 0; UsedCalleeSaved = []; UsedCalleeSavedF = []
         HeapOverflowLabel = "__heap_oom_buffer_rc_cost"
         RecordLirOpExpansion = None
@@ -240,7 +240,7 @@ let private generatedEntryTransfers
         RawSlotInitRetainTargets = None
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty
-        FunctionNames = Map.empty
+        FunctionNames = FunctionIdMap.empty
         FunctionName = func.Name
         InstructionSite = ""
         StackSize = func.StackSize

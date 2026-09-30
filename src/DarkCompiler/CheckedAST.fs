@@ -285,14 +285,14 @@ let private mergeFunctionOrdinals left right =
     merge [] left right
 
 type FunctionCatalog = private {
-    Names: Map<AST.FunctionId, string>
+    Names: FunctionIdMap<string>
     Ids: Map<string, AST.FunctionId>
     NextOrdinal: uint64
     Ordinals: AST.FunctionId list
 }
 
 let emptyFunctionCatalog = {
-    Names = Map.ofList [AST.functionId 0UL, "_start"; AST.functionId 1UL, "__dark_compiler_program_entry"]
+    Names = FunctionIdMap.ofList [AST.functionId 0UL, "_start"; AST.functionId 1UL, "__dark_compiler_program_entry"]
     Ids = Map.ofList ["_start", AST.functionId 0UL; "__dark_compiler_program_entry", AST.functionId 1UL]
     Ordinals = [AST.functionId 1UL; AST.functionId 0UL]
     NextOrdinal = 2UL
@@ -306,7 +306,7 @@ let includeFunctionNames names (catalog: FunctionCatalog) : FunctionCatalog =
         if Map.containsKey name catalog.Ids then catalog
         else
             let id = AST.functionId catalog.NextOrdinal
-            { Names = Map.add id name catalog.Names
+            { Names = FunctionIdMap.add id name catalog.Names
               Ordinals = id :: catalog.Ordinals
               Ids = Map.add name id catalog.Ids
               NextOrdinal = AST.nextFunctionIdOrdinal catalog.NextOrdinal }) catalog
@@ -319,7 +319,7 @@ type GlobalCatalog = private {
     BindingNames: Map<AST.BindingId, string>
     ValueIds: Map<string, AST.BindingId>
     NextBindingOrdinal: int
-    FunctionNames: Map<AST.FunctionId, string>
+    FunctionNames: FunctionIdMap<string>
     FunctionIds: Map<string, AST.FunctionId>
     FunctionOrdinals: AST.FunctionId list
     NextFunctionOrdinal: uint64
@@ -371,7 +371,7 @@ let private emptySymbolsWithCatalogs (baseTypes: TypeCatalog) (baseFunctions: Fu
             let id = AST.functionId symbols.NextFunctionOrdinal
             { symbols with
                 FunctionOrdinals = id :: symbols.FunctionOrdinals
-                FunctionNames = Map.add id name symbols.FunctionNames
+                FunctionNames = FunctionIdMap.add id name symbols.FunctionNames
                 FunctionIds = Map.add name id symbols.FunctionIds
                 NextFunctionOrdinal = AST.nextFunctionIdOrdinal symbols.NextFunctionOrdinal }) initial
 
@@ -409,11 +409,11 @@ let internFunction name symbols =
          { symbols with
              FunctionOrdinals = id :: symbols.FunctionOrdinals
              FunctionIds = Map.add name id symbols.FunctionIds
-             FunctionNames = Map.add id name symbols.FunctionNames
+             FunctionNames = FunctionIdMap.add id name symbols.FunctionNames
              NextFunctionOrdinal = AST.nextFunctionIdOrdinal symbols.NextFunctionOrdinal })
 
 let registerGeneratedFunction name id symbols =
-    match Map.tryFind name symbols.FunctionIds, Map.tryFind id symbols.FunctionNames with
+    match Map.tryFind name symbols.FunctionIds, FunctionIdMap.tryFind id symbols.FunctionNames with
     | Some existing, _ when existing <> id ->
         Crash.crash "Generated function name has a different allocated identity"
     | _, Some existing when existing <> name ->
@@ -421,10 +421,10 @@ let registerGeneratedFunction name id symbols =
     | _ ->
         { symbols with
             FunctionOrdinals =
-                if Map.containsKey id symbols.FunctionNames then symbols.FunctionOrdinals
+                if FunctionIdMap.containsKey id symbols.FunctionNames then symbols.FunctionOrdinals
                 else mergeFunctionOrdinals [id] symbols.FunctionOrdinals
             FunctionIds = Map.add name id symbols.FunctionIds
-            FunctionNames = Map.add id name symbols.FunctionNames
+            FunctionNames = FunctionIdMap.add id name symbols.FunctionNames
             NextFunctionOrdinal = max symbols.NextFunctionOrdinal (AST.nextFunctionIdOrdinal (AST.functionIdValue id)) }
 
 /// Names allocated at or after an inherited catalog cursor, including helpers
@@ -433,7 +433,7 @@ let allocatedFunctionNamesSince ordinal (symbols: Symbols) =
     symbols.FunctionOrdinals
     |> List.takeWhile (fun id -> AST.functionIdValue id >= ordinal)
     |> List.map (fun id ->
-        match Map.tryFind id symbols.FunctionNames with
+        match FunctionIdMap.tryFind id symbols.FunctionNames with
         | Some name -> id, name
         | None -> Crash.crash "Function allocation index lost its catalog entry")
 
@@ -488,7 +488,7 @@ let internField typeName name index symbols =
         (id, symbols)
 
 let functionName id symbols =
-    Map.tryFind id symbols.FunctionNames
+    FunctionIdMap.tryFind id symbols.FunctionNames
 
 let functionNames symbols = symbols.FunctionNames
 let functionIds symbols = symbols.FunctionIds
@@ -584,11 +584,11 @@ let composeTopLevels
             Crash.crash "Composed type catalogs assign different TypeIds to one name"
         | _ -> Map.add name id ids
     let mergeFunctionName names id name =
-        match Map.tryFind id names with
+        match FunctionIdMap.tryFind id names with
         | Some existing when existing = name -> names
         | Some existing when existing <> name ->
             Crash.crash $"Composed function catalogs assign FunctionId {AST.functionIdValue id} to both '{existing}' and '{name}'"
-        | _ -> Map.add id name names
+        | _ -> FunctionIdMap.add id name names
     let mergeFunctionId ids name id =
         match Map.tryFind name ids with
         | Some existing when existing = id -> ids
@@ -601,9 +601,9 @@ let composeTopLevels
         NextBindingOrdinal = min sourceCatalog.NextBindingOrdinal targetCatalog.NextBindingOrdinal
         FunctionOrdinals =
             sourceCatalog.FunctionOrdinals
-            |> List.filter (fun id -> not (Map.containsKey id targetCatalog.FunctionNames))
+            |> List.filter (fun id -> not (FunctionIdMap.containsKey id targetCatalog.FunctionNames))
             |> fun added -> mergeFunctionOrdinals added targetCatalog.FunctionOrdinals
-        FunctionNames = Map.fold mergeFunctionName targetCatalog.FunctionNames sourceCatalog.FunctionNames
+        FunctionNames = FunctionIdMap.fold mergeFunctionName targetCatalog.FunctionNames sourceCatalog.FunctionNames
         FunctionIds = Map.fold mergeFunctionId targetCatalog.FunctionIds sourceCatalog.FunctionIds
         NextFunctionOrdinal = max sourceCatalog.NextFunctionOrdinal targetCatalog.NextFunctionOrdinal
         TypeNames = Map.fold mergeTypeName targetCatalog.TypeNames sourceCatalog.TypeNames
@@ -633,7 +633,7 @@ let composeDeclaredTopLevels
             sourceCatalog.FunctionNames, sourceCatalog.FunctionIds, sourceCatalog.FunctionOrdinals
         else
             let allocated = allocatedFunctionNamesSince targetCatalog.NextFunctionOrdinal sourceCatalog
-            allocated |> Map.ofList,
+            allocated |> FunctionIdMap.ofList,
             allocated |> List.map (fun (id, name) -> name, id) |> Map.ofList,
             allocated |> List.map fst
     let initial =
@@ -650,9 +650,9 @@ let composeDeclaredTopLevels
             | FunctionDef definition ->
                 { symbols with
                     FunctionOrdinals =
-                        if Map.containsKey definition.Id symbols.FunctionNames then symbols.FunctionOrdinals
+                        if FunctionIdMap.containsKey definition.Id symbols.FunctionNames then symbols.FunctionOrdinals
                         else mergeFunctionOrdinals [definition.Id] symbols.FunctionOrdinals
-                    FunctionNames = Map.add definition.Id definition.Name symbols.FunctionNames
+                    FunctionNames = FunctionIdMap.add definition.Id definition.Name symbols.FunctionNames
                     FunctionIds = Map.add definition.Name definition.Id symbols.FunctionIds }
             | ValueDef definition ->
                 { symbols with

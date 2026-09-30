@@ -54,7 +54,7 @@ let private timePhase
 /// register represents each color, so it cannot create a new conflict.
 let private chooseRegistersForCalls
     (arch: Platform.Arch)
-    (calleeWrites: Map<AST.FunctionId, ARM64CalleeClobbers.Writes> option)
+    (calleeWrites: FunctionIdMap<ARM64CalleeClobbers.Writes> option)
     (blocks: LIR.BasicBlock array)
     (classifiedBlocks: ClassifiedBlock array)
     (domain: VRegDomain)
@@ -193,7 +193,7 @@ let private chooseRegistersForCalls
         UsedCalleeSaved = targetRegs |> List.filter (fun reg -> List.contains reg calleeRegs) |> List.sort }
 
 let private chooseArm64FloatRegistersForCalls
-    (callees: Map<AST.FunctionId, ARM64CalleeClobbers.Writes>)
+    (callees: FunctionIdMap<ARM64CalleeClobbers.Writes>)
     (blocks: LIR.BasicBlock array)
     (classifiedBlocks: ClassifiedBlock array)
     (intDomain: VRegDomain)
@@ -298,7 +298,7 @@ let private chooseArm64FloatRegistersForCalls
 
 let private allocateRegistersInternal
     (arch: Platform.Arch)
-    (calleeWrites: Map<AST.FunctionId, ARM64CalleeClobbers.Writes> option)
+    (calleeWrites: FunctionIdMap<ARM64CalleeClobbers.Writes> option)
     (swOpt: System.Diagnostics.Stopwatch option)
     (func: LIR.Function)
     : LIR.Function * RegisterAllocationTiming list =
@@ -645,7 +645,7 @@ let allocateRegisters (arch: Platform.Arch) (func: LIR.Function) : LIR.Function 
 
 let allocateRegistersWithCallSummaries
     (arch: Platform.Arch)
-    (callees: Map<AST.FunctionId, ARM64CalleeClobbers.Writes>)
+    (callees: FunctionIdMap<ARM64CalleeClobbers.Writes>)
     (func: LIR.Function)
     : LIR.Function =
     allocateRegistersInternal arch (Some callees) None func |> fst

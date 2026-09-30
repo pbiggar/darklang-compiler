@@ -868,7 +868,7 @@ let internal planTailRecursionModuloHelpers
         eligibleFunctions
         |> Set.toList
         |> List.map (fun functionId ->
-            match Map.tryFind functionId functionNames with
+            match FunctionIdMap.tryFind functionId functionNames with
             | Some name -> functionId, name
             | None -> Crash.crash "Accumulator helper source has no function name")
         |> List.sortBy snd
@@ -884,7 +884,7 @@ let internal planTailRecursionModuloHelpers
             | Some id -> id
             | None -> Crash.crash "Accumulator helper identity was not allocated"
         functionId, (helperName, helperId))
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 let rec private transformConstructorWrapperBody
     (funcName: AST.FunctionId)
@@ -919,7 +919,7 @@ let rec private transformConstructorWrapperBody
 /// constructors with destination passing. Constructor fields other than the
 /// recursive path must already be atoms, so no effects move across the call.
 let internal transformTailRecursionModuloFixedConstructors
-    (helpers: Map<AST.FunctionId, string * AST.FunctionId>)
+    (helpers: FunctionIdMap<string * AST.FunctionId>)
     (initialVarGen: VarGen)
     (program: Program)
     : Program * VarGen =
@@ -932,7 +932,7 @@ let internal transformTailRecursionModuloFixedConstructors
                     match func.ReturnType with
                     | AST.TRecord _ | AST.TSum _ -> true
                     | _ -> false
-                let candidate = Map.containsKey func.Id helpers && managedReturn
+                let candidate = FunctionIdMap.containsKey func.Id helpers && managedReturn
                 let contexts =
                     if candidate then constructorContextCount func.Id func.ReturnType func.Body else 0
                 let recursiveCalls =
@@ -942,7 +942,7 @@ let internal transformTailRecursionModuloFixedConstructors
                    || contexts <> recursiveCalls then
                     (func :: rewritten, varGen)
                 else
-                    let helperName, helperId = Map.find func.Id helpers
+                    let helperName, helperId = FunctionIdMap.find func.Id helpers
                     let destinationId, afterDestination = freshVar varGen
                     let destinationOffsetId, afterOffset = freshVar afterDestination
                     let rootId, afterRoot = freshVar afterOffset
@@ -976,7 +976,7 @@ let internal transformTailRecursionModuloFixedConstructors
     Program (List.rev functionsReversed, mainExpr), finalVarGen
 
 let internal transformTailRecursionModuloAddition
-    (helpers: Map<AST.FunctionId, string * AST.FunctionId>)
+    (helpers: FunctionIdMap<string * AST.FunctionId>)
     (initialVarGen: VarGen)
     (program: Program)
     : Program * VarGen =
@@ -986,7 +986,7 @@ let internal transformTailRecursionModuloAddition
         |> List.fold
             (fun (rewritten, varGen) func ->
                 let candidate =
-                    Map.containsKey func.Id helpers
+                    FunctionIdMap.containsKey func.Id helpers
                     && (nativeIntegerTypeName func.ReturnType |> Option.isSome)
                 let pairs = if candidate then siblingAdditionCount func.Id func.Body else 0
                 let recursiveCalls =
@@ -997,7 +997,7 @@ let internal transformTailRecursionModuloAddition
                 if not eligible then
                     (func :: rewritten, varGen)
                 else
-                    let helperName, helperId = Map.find func.Id helpers
+                    let helperName, helperId = FunctionIdMap.find func.Id helpers
                     let (accumulatorId, varGenAfterAccumulator) = freshVar varGen
                     let (helperBody, varGenAfterHelper) =
                         transformAccumulatorBody
@@ -1037,7 +1037,7 @@ let internal transformTailRecursionModuloAddition
 /// parameter/literal factor into an accumulator helper. Modular machine-word
 /// multiplication is associative at every supported width.
 let internal transformTailRecursionModuloMultiplication
-    (helpers: Map<AST.FunctionId, string * AST.FunctionId>)
+    (helpers: FunctionIdMap<string * AST.FunctionId>)
     (initialVarGen: VarGen)
     (program: Program)
     : Program * VarGen =
@@ -1047,7 +1047,7 @@ let internal transformTailRecursionModuloMultiplication
         |> List.fold
             (fun (rewritten, varGen) func ->
                 let candidate =
-                    Map.containsKey func.Id helpers
+                    FunctionIdMap.containsKey func.Id helpers
                     && (nativeIntegerTypeName func.ReturnType |> Option.isSome)
                 let integerParams =
                     if candidate then
@@ -1065,7 +1065,7 @@ let internal transformTailRecursionModuloMultiplication
                 if not eligible then
                     (func :: rewritten, varGen)
                 else
-                    let helperName, helperId = Map.find func.Id helpers
+                    let helperName, helperId = FunctionIdMap.find func.Id helpers
                     let (accumulatorId, varGenAfterAccumulator) = freshVar varGen
                     let (helperBody, varGenAfterHelper) =
                         transformMultiplicationAccumulatorBody
@@ -1092,7 +1092,7 @@ let internal transformTailRecursionModuloMultiplication
     Program (List.rev functionsReversed, mainExpr), finalVarGen
 
 let internal transformTailRecursionModuloSubtraction
-    (helpers: Map<AST.FunctionId, string * AST.FunctionId>)
+    (helpers: FunctionIdMap<string * AST.FunctionId>)
     (initialVarGen: VarGen)
     (program: Program)
     : Program * VarGen =
@@ -1102,7 +1102,7 @@ let internal transformTailRecursionModuloSubtraction
         |> List.fold
             (fun (rewritten, varGen) func ->
                 let candidate =
-                    Map.containsKey func.Id helpers
+                    FunctionIdMap.containsKey func.Id helpers
                     && (nativeIntegerTypeName func.ReturnType |> Option.isSome)
                 let integerParams =
                     if candidate then
@@ -1120,7 +1120,7 @@ let internal transformTailRecursionModuloSubtraction
                 if not eligible then
                     (func :: rewritten, varGen)
                 else
-                    let helperName, helperId = Map.find func.Id helpers
+                    let helperName, helperId = FunctionIdMap.find func.Id helpers
                     let accumulatorId, afterAccumulator = freshVar varGen
                     let helperBody, afterHelper =
                         transformSubtractionAccumulatorBody
@@ -1154,7 +1154,7 @@ let internal transformTailRecursionModuloSubtraction
 /// accumulator loop and finish with the existing linear `__reverseInto`
 /// kernel. Every recursive call must have the same constructor boundary.
 let internal transformTailRecursionModuloListConstructors
-    (helpers: Map<AST.FunctionId, string * AST.FunctionId>)
+    (helpers: FunctionIdMap<string * AST.FunctionId>)
     (externalFunctions: Map<string, Function>)
     (initialVarGen: VarGen)
     (program: Program)
@@ -1164,16 +1164,16 @@ let internal transformTailRecursionModuloListConstructors
         externalFunctions
         |> Map.toList
         |> List.map (fun (name, func) -> func.Id, name)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let isListPush id =
-        Map.tryFind id externalNamesById
+        FunctionIdMap.tryFind id externalNamesById
         |> Option.exists (fun name -> name.StartsWith("Darklang.Stdlib.List.push_"))
     let (functionsReversed, finalVarGen) =
         functions
         |> List.fold
             (fun (rewritten, varGen) func ->
                 let candidate =
-                    Map.containsKey func.Id helpers
+                    FunctionIdMap.containsKey func.Id helpers
                     && (match func.ReturnType with AST.TList _ -> true | _ -> false)
                 let wrappedCalls =
                     if candidate then wrappedListPrependCount isListPush func.Id func.Body else 0
@@ -1196,7 +1196,7 @@ let internal transformTailRecursionModuloListConstructors
                     pushName
                     |> Option.map (fun id ->
                         let name =
-                            Map.tryFind id externalNamesById
+                            FunctionIdMap.tryFind id externalNamesById
                             |> Option.defaultWith (fun () ->
                                 Crash.crash "List push target has no external function name")
                         name.Replace(
@@ -1219,7 +1219,7 @@ let internal transformTailRecursionModuloListConstructors
                         Map.tryFind targetName externalFunctions
                         |> Option.map (fun func -> func.Id)
                         |> Option.defaultWith (fun () -> Crash.crash "Eligible list TRMC finish target is absent")
-                    let helperName, helperId = Map.find func.Id helpers
+                    let helperName, helperId = FunctionIdMap.find func.Id helpers
                     let accumulatorId, varGenAfterAccumulator = freshVar varGen
                     let suffixCellId, varGenAfterSuffixCell = freshVar varGenAfterAccumulator
                     let helperBody, varGenAfterHelper =

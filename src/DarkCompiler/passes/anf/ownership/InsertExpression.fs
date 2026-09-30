@@ -25,7 +25,7 @@ let internal inferBindingType
     let maybeType = inferCExprType ctx cexpr
     let rec inferAliasedVarTypeFromUse (aliasedTemp: TempId) (nextBody: ReturnAnnotatedExpr) : AST.SemanticType option =
         let inferFromCall (funcName: AST.FunctionId) (args: Atom list) : AST.SemanticType option =
-            match Map.tryFind funcName ctx.FuncReg with
+            match FunctionIdMap.tryFind funcName ctx.FuncReg with
             | Some (_, AST.TFunction (paramTypes, _)) ->
                 args
                 |> List.mapi (fun idx atom -> idx, atom)
@@ -90,7 +90,7 @@ let rec insertRCWithAnalysis
     (types: Map<TempId, AST.SemanticType>)
     : AExpr * VarGen * Map<TempId, AST.SemanticType> =
     let functionHasName id expected =
-        Map.tryFind id ctx.FuncReg
+        FunctionIdMap.tryFind id ctx.FuncReg
         |> Option.map (fun (name, _) -> name = expected)
         |> Option.defaultValue false
     let pendingIds = returnDecs |> List.map (fun (id, _, _, _, _, _) -> id) |> Set.ofList
@@ -117,13 +117,13 @@ let rec insertRCWithAnalysis
             false
     let mapHelperTransfersSecondParam =
         let isMapHelper (funcName: AST.FunctionId) : bool =
-            match Map.tryFind funcName ctx.FuncReg with
+            match FunctionIdMap.tryFind funcName ctx.FuncReg with
             | Some (name, _) ->
                 name = "Darklang.Stdlib.List.__mapHelper"
                 || name.StartsWith("Darklang.Stdlib.List.__mapHelper_")
             | None -> false
         let secondParamTransfersOwnership (funcName: AST.FunctionId) : bool =
-            match Map.tryFind funcName ctx.FuncReg with
+            match FunctionIdMap.tryFind funcName ctx.FuncReg with
             | Some (_, AST.TFunction (_ :: secondParamType :: _, _)) ->
                 secondParamType
                 |> rcShapeForType ctx

@@ -103,25 +103,25 @@ let optimizeProgramWithOptionsAndExternalFunctionsWithTrace
         let activeEligible = Set.intersect eligibleTailRecursionNames programFunctionIds
         let helpers =
             measure "ANF Optimize detail: Accumulator helper planning" (fun () ->
-                if Set.isEmpty activeEligible then Map.empty
+                if Set.isEmpty activeEligible then FunctionIdMap.empty
                 else
                     let functionNames =
                         functions'
-                        |> List.fold (fun names func -> Map.add func.Id func.Name names) context.FunctionNames
+                        |> List.fold (fun names func -> FunctionIdMap.add func.Id func.Name names) context.FunctionNames
                     let functionIds =
                         functions'
                         |> List.fold (fun ids func -> Map.add func.Name func.Id ids) context.FunctionIds
                     // This standalone rewrite-check API has no checked symbol table.
                     let nextFunctionOrdinal =
                         functionNames
-                        |> Map.fold (fun next id _ ->
+                        |> FunctionIdMap.fold (fun next id _ ->
                             max next (AST.nextFunctionIdOrdinal (AST.functionIdValue id))) 0UL
                     planTailRecursionModuloHelpers
                         nextFunctionOrdinal
                         functionNames
                         functionIds
                         activeEligible)
-        if Map.isEmpty helpers then optimizedProgram
+        if FunctionIdMap.isEmpty helpers then optimizedProgram
         else
             // Each rewrite can add helpers, so carry the fresh ID cursor through
             // the ordered passes instead of rescanning every intermediate program.

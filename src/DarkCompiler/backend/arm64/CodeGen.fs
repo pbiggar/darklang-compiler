@@ -148,7 +148,7 @@ let private generatePreparedARM64WithOptionsAndCache
     let emptyProgramMetadata = {
         Facts = {
             ClosurePayloadSizesFromParams = Map.empty
-            ClosurePayloadSizesFromAllocs = Map.empty
+            ClosurePayloadSizesFromAllocs = FunctionIdMap.empty
             ClosureCaptureTypes = Map.empty
             RecursiveReleaseTypes = Set.empty
             CliArgvHelperLabels = Set.empty
@@ -259,7 +259,7 @@ let private generatePreparedARM64WithOptionsAndCache
                             Facts = {
                                 metadata.Facts with
                                     ClosurePayloadSizesFromAllocs =
-                                        Map.add
+                                        FunctionIdMap.add
                                             funcName
                                             payloadSize
                                             metadata.Facts.ClosurePayloadSizesFromAllocs
@@ -378,7 +378,7 @@ let private generatePreparedARM64WithOptionsAndCache
 
     let isEmptyMetadata (metadata: Arm64ProgramMetadata) =
         Map.isEmpty metadata.Facts.ClosurePayloadSizesFromParams
-        && Map.isEmpty metadata.Facts.ClosurePayloadSizesFromAllocs
+        && FunctionIdMap.isEmpty metadata.Facts.ClosurePayloadSizesFromAllocs
         && Map.isEmpty metadata.Facts.ClosureCaptureTypes
         && Set.isEmpty metadata.Facts.RecursiveReleaseTypes
         && Set.isEmpty metadata.Facts.CliArgvHelperLabels
@@ -404,7 +404,7 @@ let private generatePreparedARM64WithOptionsAndCache
                         left.Facts.ClosurePayloadSizesFromParams
                         right.Facts.ClosurePayloadSizesFromParams
                 ClosurePayloadSizesFromAllocs =
-                    mergeMaps
+                    FunctionIdMap.merge
                         left.Facts.ClosurePayloadSizesFromAllocs
                         right.Facts.ClosurePayloadSizesFromAllocs
                 ClosureCaptureTypes =
@@ -474,10 +474,10 @@ let private generatePreparedARM64WithOptionsAndCache
     let needsCliProcessLifecycleHelpers = programMetadata.Facts.NeedsCliProcessLifecycleHelpers
 
     let closurePayloadSizes =
-        let functionNames = functions |> List.map (fun func -> func.Id, func.Name) |> Map.ofList
-        Map.fold
+        let functionNames = functions |> List.map (fun func -> func.Id, func.Name) |> FunctionIdMap.ofList
+        FunctionIdMap.fold
             (fun acc funcId payloadSize ->
-                match Map.tryFind funcId functionNames with
+                match FunctionIdMap.tryFind funcId functionNames with
                 | Some funcName -> Map.add funcName payloadSize acc
                 | None -> Crash.crash $"ARM64 metadata: missing closure target name for identity {AST.functionIdValue funcId}")
             programMetadata.Facts.ClosurePayloadSizesFromParams
@@ -501,8 +501,8 @@ let private generatePreparedARM64WithOptionsAndCache
                 | _ -> Map.add label id ids) ids) Map.empty
     let functionNames =
         helperIds
-        |> Map.fold (fun names name id -> Map.add id name names)
-            (functions |> List.map (fun func -> func.Id, func.Name) |> Map.ofList)
+        |> Map.fold (fun names name id -> FunctionIdMap.add id name names)
+            (functions |> List.map (fun func -> func.Id, func.Name) |> FunctionIdMap.ofList)
 
     // StackSize and UsedCalleeSaved are set per-function in convertFunction.
     let ctx = {
@@ -962,7 +962,7 @@ let private generatePreparedARM64WithOptionsAndCache
             ClosurePayloadSizesFromParams =
                 programMetadata.Facts.ClosurePayloadSizesFromParams |> Map.toList
             ClosurePayloadSizesFromAllocs =
-                programMetadata.Facts.ClosurePayloadSizesFromAllocs |> Map.toList
+                programMetadata.Facts.ClosurePayloadSizesFromAllocs |> FunctionIdMap.toList
             ClosureCaptureTypes =
                 programMetadata.Facts.ClosureCaptureTypes |> Map.toList
             RecursiveReleaseTypes =
@@ -1010,9 +1010,9 @@ let generateARM64WithOptionsAndCaches
     (target: ARM64.TargetConfig)
     (options: CodeGenOptions)
     (preparedSumShapeRegistry: MemoryModel.RcSumShapeRegistry option)
-    (knownCalleeWrites: Map<AST.FunctionId, ARM64CalleeClobbers.Writes> option)
+    (knownCalleeWrites: FunctionIdMap<ARM64CalleeClobbers.Writes> option)
     (functionCache: FunctionCodegenCache option)
-    (refinementCache: (LIR.Function -> Map<AST.FunctionId, ARM64CalleeClobbers.Writes> -> (unit -> LIR.Function) -> LIR.Function) option)
+    (refinementCache: (LIR.Function -> FunctionIdMap<ARM64CalleeClobbers.Writes> -> (unit -> LIR.Function) -> LIR.Function) option)
     (functionGroupCache: FunctionGroupCodegenCache option)
     (functionGroups: FunctionGroup list)
     (metadataGroupCache: MetadataGroupCache option)
@@ -1033,13 +1033,13 @@ let generateARM64WithOptionsAndCaches
         let byId =
             List.zip functions refinedFunctions
             |> List.groupBy (fun (original, _) -> original.Id)
-            |> Map.ofList
+            |> FunctionIdMap.ofList
         functionGroups
         |> List.map (fun group ->
             let groupFunctions =
                 group.Functions
                 |> List.map (fun func ->
-                    Map.tryFind func.Id byId
+                    FunctionIdMap.tryFind func.Id byId
                     |> Option.bind (List.tryPick (fun (original, refined) ->
                         if obj.ReferenceEquals(original, func) then Some refined
                         else None))

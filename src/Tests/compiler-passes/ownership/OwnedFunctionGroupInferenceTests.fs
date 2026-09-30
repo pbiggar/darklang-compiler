@@ -63,7 +63,7 @@ let private semantics mappings registeredCalls : Semantics<TestLeaf, string> =
             RequiredInputs = Set.empty
             UniqueOutputs = Set.empty
         }
-        CallOwnership = fun call -> Map.tryFind call.Target registeredCalls
+        CallOwnership = fun call -> FunctionIdMap.tryFind call.Target registeredCalls
         ScalarUses = fun _ -> Set.empty
         ScalarEscapes = fun _ -> Set.empty
         BlockArgument = fun value ->
@@ -120,7 +120,7 @@ let private testInfersAcyclicGroupsCalleeFirst () =
                     intermediate, "intermediate"
                     entryResult, "entryResult"
                 ]
-                (Map.ofList [
+                (FunctionIdMap.ofList [
                     TestIds.functionIdForName "leaf", transferredCall
                     TestIds.functionIdForName "external", transferredCall
                 ]))
@@ -162,7 +162,7 @@ let private testInfersSelfAndMutuallyRecursiveGroups () =
     let mutualB = recursive "mutualB" "mutualA" mutualBValue
     let actual =
         InferOwnedFunctionGroups.infer
-            (semantics [] Map.empty)
+            (semantics [] FunctionIdMap.empty)
             [self; mutualA; mutualB]
         |> Result.map (List.map groupSummary)
     let expected = Ok [
@@ -197,7 +197,7 @@ let private testReportsFailingGroupNames () =
     let second = wideDefinition "second" "first" secondParameters (unitValue 51)
     match
         InferOwnedFunctionGroups.infer
-            (semantics (firstParameters @ secondParameters) Map.empty)
+            (semantics (firstParameters @ secondParameters) FunctionIdMap.empty)
             [first; second]
     with
     | Error (
@@ -214,7 +214,7 @@ let private testReportsGroupingFailures () =
             "duplicate"
             (signature [UnmanagedParameter] UnmanagedResult)
             (block [parameter "unit" bodyValue] [] bodyValue)
-    match InferOwnedFunctionGroups.infer (semantics [] Map.empty) [duplicate; duplicate] with
+    match InferOwnedFunctionGroups.infer (semantics [] FunctionIdMap.empty) [duplicate; duplicate] with
     | Error (
         InferOwnedFunctionGroups.FunctionGroupingFailed (
             OwnedFunctionGroups.DuplicateFunctionName id))

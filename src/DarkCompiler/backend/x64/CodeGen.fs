@@ -69,7 +69,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
     let functionNames =
         functions
         |> List.map (fun func -> func.Id, func.Name)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
 
     let closureCaptureTypes = closureCaptureTypesFromParams functions
 
@@ -647,9 +647,9 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
     let closurePayloadSizes =
         let allocationSizes =
             closurePayloadSizesFromAllocs functions
-            |> Map.toList
+            |> FunctionIdMap.toList
             |> List.map (fun (funcId, payloadSize) ->
-                match Map.tryFind funcId functionNames with
+                match FunctionIdMap.tryFind funcId functionNames with
                 | Some funcName -> funcName, payloadSize
                 | None -> Crash.crash $"x64 metadata: missing closure target name for identity {AST.functionIdValue funcId}")
             |> Map.ofList
@@ -768,7 +768,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                     EnableLeakCheck = enableLeakCheck
                     RecordRegistry = recordRegistry
                     SumShapeRegistry = sumShapeRegistry
-                    FunctionNames = Map.empty
+                    FunctionNames = FunctionIdMap.empty
                 }
             else
                 []

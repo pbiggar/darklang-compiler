@@ -19,7 +19,7 @@ type TestResult = Result<unit, string>
 
 let private emptyTypeReg : TypeRegistry = Map.empty
 let private emptyVariantLookup : VariantLookup = Map.empty
-let private emptyFuncReg : FunctionRegistry = Map.empty
+let private emptyFuncReg : FunctionRegistry = FunctionIdMap.empty
 let private emptyModuleRegistry : AST.ModuleRegistry = Map.empty
 
 let private checkedProgram source : Result<CheckedAST.Program, string> =
@@ -149,7 +149,7 @@ let private lowerTwoElementListPattern (elementType: AST.SemanticType) : Result<
           "Darklang.Stdlib.List.__headUnsafe_i64", AST.TFunction ([listType], elementType)
           "Darklang.Stdlib.List.__headUnsafeFloat", AST.TFunction ([listType], elementType) ]
         |> List.map (fun (name, typ) -> TestIds.functionIdForName name, (name, typ))
-        |> Map.ofList
+        |> FunctionIdMap.ofList
 
     toANF expr ANF.initialVarGen env emptyTypeReg emptyVariantLookup listPatternFunctions emptyModuleRegistry
     |> Result.map fst
@@ -213,7 +213,7 @@ let testSyntheticNullaryCallLowersToZeroArgs () : TestResult =
         )
     let env : VarEnv = Map.empty
     let funcReg : FunctionRegistry =
-        Map.ofList [
+        FunctionIdMap.ofList [
             (TestIds.functionIdForName funcName, (funcName, AST.TFunction ([], AST.TInt64)))
         ]
 
@@ -241,7 +241,7 @@ let testSyntheticUnitParamLowersFunctionToZeroParams () : TestResult =
         Recursion = None
     }
     let funcReg : FunctionRegistry =
-        Map.ofList [
+        FunctionIdMap.ofList [
             (TestIds.functionIdForName "syntheticNullary",
              ("syntheticNullary", AST.TFunction ([], AST.TInt64)))
         ]

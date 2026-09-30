@@ -48,7 +48,7 @@ let testRecordAllocationStartsFieldsAtOffsetZero () : TestResult =
         )
     let typeMap : ANF.TypeMap = Map.ofList [(ANF.TempId 0, AST.TRecord ("LayoutRecord", []))]
 
-    match ANF_to_MIR.toMIR program typeMap Map.empty (AST.TRecord ("LayoutRecord", [])) Map.empty Map.empty false Map.empty (Map.ofList [AST.functionId 0UL, "_start"]) with
+    match ANF_to_MIR.toMIR program typeMap Map.empty (AST.TRecord ("LayoutRecord", [])) Map.empty Map.empty false FunctionIdMap.empty (FunctionIdMap.ofList [AST.functionId 0UL, "_start"]) with
     | Error err ->
         Error $"Unexpected record lowering error: {err}"
     | Ok (MIR.Program (functions, _, _)) ->
@@ -101,8 +101,8 @@ let testNestedTerminalBranchesHaveNoInventedReturn () : TestResult =
         types
         denseTypes
         Map.empty
-        (Map.ofList [(TestIds.functionIdForName name, AST.TFloat64)])
-        (Map.ofList [(TestIds.functionIdForName name, name)])
+        (FunctionIdMap.ofList [(TestIds.functionIdForName name, AST.TFloat64)])
+        (FunctionIdMap.ofList [(TestIds.functionIdForName name, name)])
         false
     |> Result.bind (fun lowered ->
         let rec visit seen pending =
@@ -189,7 +189,7 @@ let testPreRcSsaTypesBranchLocalDefinitions () : TestResult =
         TypeReg = Map.empty
         VariantLookup = Map.empty
         SumShapeReg = Map.empty
-        FuncReg = Map.ofList [functionId, (name, AST.TFunction ([AST.TBool], AST.TInt64))]
+        FuncReg = FunctionIdMap.ofList [functionId, (name, AST.TFunction ([AST.TBool], AST.TInt64))]
         FuncParams = Map.empty
         TempTypes = Map.empty
         ClosureFuncs = Map.empty
@@ -201,8 +201,8 @@ let testPreRcSsaTypesBranchLocalDefinitions () : TestResult =
             ssaFunc
             [|Some AST.TBool|]
             Map.empty
-            (Map.ofList [functionId, AST.TInt64])
-            (Map.ofList [functionId, name])
+            (FunctionIdMap.ofList [functionId, AST.TInt64])
+            (FunctionIdMap.ofList [functionId, name])
             false)
     |> Result.bind MIR_SSA_Verify.verifyFunction
 

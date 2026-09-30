@@ -129,7 +129,7 @@ let internal generateDictRefCountDecHelper
         EnableLeakCheck = enableLeakCheck
         RecordRegistry = recordRegistry
         SumShapeRegistry = sumShapeRegistry
-        FunctionNames = Map.empty
+        FunctionNames = FunctionIdMap.empty
     }
 
     let addChild (suffix: string) : X86_64.Instr list =

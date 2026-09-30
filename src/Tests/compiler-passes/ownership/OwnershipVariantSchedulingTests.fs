@@ -87,7 +87,7 @@ let private testPropagatesUniquenessToFixedPoint () =
         ScheduleOwnershipVariants.defaultLimits
         contracts
         semantics
-        Map.empty
+        FunctionIdMap.empty
         definitions
     |> Result.mapError (sprintf "%A")
     |> Result.bind (fun plan ->
@@ -103,7 +103,7 @@ let private testPropagatesUniquenessToFixedPoint () =
 let private testBoundsConvergence () =
     let definitions, _, _ = fixture ()
     let limits = { ScheduleOwnershipVariants.defaultLimits with MaxIterations = 1 }
-    match ScheduleOwnershipVariants.schedule limits contracts semantics Map.empty definitions with
+    match ScheduleOwnershipVariants.schedule limits contracts semantics FunctionIdMap.empty definitions with
     | Error (ScheduleOwnershipVariants.IterationLimitExceeded 1) -> Ok ()
     | actual -> Error (sprintf "Expected the scheduler iteration bound, got %A" actual)
 
@@ -125,7 +125,7 @@ let private testSkipsUnusedWideVariantSearch () =
         ScheduleOwnershipVariants.defaultLimits
         contracts
         semantics
-        Map.empty
+        FunctionIdMap.empty
         [wide]
     |> Result.mapError (sprintf "%A")
     |> Result.bind (fun plan ->
@@ -146,7 +146,7 @@ let private testEmptyDemandStillValidatesMaterialization () =
             ScheduleOwnershipVariants.defaultLimits
             contracts
             semantics
-            Map.empty
+            FunctionIdMap.empty
             [invalid]
     with
     | Error (
@@ -185,7 +185,7 @@ let private testSchedulesRecursiveDemandAtomically () =
         ScheduleOwnershipVariants.defaultLimits
         contracts
         semantics
-        Map.empty
+        FunctionIdMap.empty
         [loop; caller]
     |> Result.mapError (sprintf "%A")
     |> Result.bind (fun plan ->
@@ -207,7 +207,7 @@ let private testLowersSpecializedCallsAndContracts () =
         ScheduleOwnershipVariants.defaultLimits
         contracts
         semantics
-        Map.empty
+        FunctionIdMap.empty
         definitions
     |> Result.mapError (sprintf "%A")
     |> Result.bind (fun scheduled ->
@@ -242,7 +242,7 @@ let private testLowersSpecializedCallsAndContracts () =
             Set.empty
         |> Result.mapError (sprintf "%A")
         |> Result.bind (fun lowered ->
-            let cloneContracts = lowered.Contracts |> Map.toList
+            let cloneContracts = lowered.Contracts |> FunctionIdMap.toList
             let rewrittenTargets =
                 lowered.Functions
                 |> List.tryFind (fun functionDefinition -> functionDefinition.Id = caller.Id)

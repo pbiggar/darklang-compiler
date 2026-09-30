@@ -94,7 +94,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                         userRegistries
                         (CheckedAST.nextFunctionOrdinal symbolsWithEntry)
                         InliningCommon.defaultConfig
-                        Map.empty
+                        FunctionIdMap.empty
                         Map.empty
                         userOnly.NonInlineableFunctionNames
                         printedFunctions
@@ -110,8 +110,8 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                         stdlib.StdlibANFFunctions
                         |> Map.toList
                         |> List.map (fun (name, func) -> func.Id, name)
-                        |> Map.ofList
+                        |> FunctionIdMap.ofList
                     reachableStdlibNames
                     |> Set.toList
-                    |> List.choose (fun id -> Map.tryFind id namesById)
+                    |> List.choose (fun id -> FunctionIdMap.tryFind id namesById)
                     |> Set.ofList)

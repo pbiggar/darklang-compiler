@@ -357,9 +357,9 @@ let constructFunctions infer dependencies calls (definitions: CheckedAST.Functio
     let internalSignatures =
         definitions
         |> List.map (fun definition -> definition.Id, signatureOfCheckedFunction definition)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let callSignature target =
-        match Map.tryFind target internalSignatures with
+        match FunctionIdMap.tryFind target internalSignatures with
         | Some signature -> Some signature
         | None -> calls.ExternalSignature target
     definitions
@@ -375,13 +375,13 @@ let constructFunctions infer dependencies calls (definitions: CheckedAST.Functio
 /// The opaque operation preserves its typed boundary and all visible parameter
 /// dependencies without weakening the strict construction API above.
 let constructFunctionsWithOpaqueFallback functionNames infer dependencies calls (definitions: CheckedAST.FunctionDef list) =
-    let functionHasName id name = Map.tryFind id functionNames = Some name
+    let functionHasName id name = FunctionIdMap.tryFind id functionNames = Some name
     let internalSignatures =
         definitions
         |> List.map (fun definition -> definition.Id, signatureOfCheckedFunction definition)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let callSignature target =
-        match Map.tryFind target internalSignatures with
+        match FunctionIdMap.tryFind target internalSignatures with
         | Some signature -> Some signature
         | None -> calls.ExternalSignature target
     let opaque (definition: CheckedAST.FunctionDef) =

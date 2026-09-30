@@ -114,7 +114,7 @@ let private incomingFacts (func: SSAANF.Function) : Map<SSAANF.Label, Facts> =
     settle (Map.ofList [func.Entry, emptyFacts]) [func.Entry]
 
 let detect
-    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
+    (recursiveMembers: FunctionIdMap<AST.LoweredRecursiveMember>)
     (func: SSAANF.Function)
     : SSAANF.Function =
     if not (TailCallDetection.isEligibleFunctionName func.Name) then func
@@ -130,7 +130,7 @@ let detect
                 entry.Operations (Return UnitLiteral)
         let ownedParams = TailCallDetection.leadingRetainedParams paramIds entryExpr
         let isCurrentMember target =
-            match Map.tryFind func.Id recursiveMembers, Map.tryFind target recursiveMembers with
+            match FunctionIdMap.tryFind func.Id recursiveMembers, FunctionIdMap.tryFind target recursiveMembers with
             | Some current, Some other ->
                 current.Typed.Resolved.Parsed.Binding = other.Typed.Resolved.Parsed.Binding
             | None, None -> target = func.Id

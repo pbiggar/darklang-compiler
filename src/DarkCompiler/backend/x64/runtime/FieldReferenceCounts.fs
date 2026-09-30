@@ -244,7 +244,7 @@ let internal generateRecursiveNominalRefCountDecHelper
         EnableLeakCheck = enableLeakCheck
         RecordRegistry = recordRegistry
         SumShapeRegistry = sumShapeRegistry
-        FunctionNames = Map.empty
+        FunctionNames = FunctionIdMap.empty
     }
     let helperLabel = recursiveNominalRefCountDecHelperLabel sourceType
     let workerLabel (typ: AST.SemanticType) = $"{recursiveNominalRefCountDecHelperLabel typ}_worker"

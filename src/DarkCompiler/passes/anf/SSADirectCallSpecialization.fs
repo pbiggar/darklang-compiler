@@ -9,7 +9,7 @@ module Facts = DirectCallFacts
 
 type Specialization = {
     Functions: SSAANF.Function list
-    CloneOrigins: Map<AST.FunctionId, AST.FunctionId>
+    CloneOrigins: FunctionIdMap<AST.FunctionId>
 }
 
 let private operations (func: SSAANF.Function) =
@@ -58,7 +58,7 @@ let private buildRewriteMap
     (functions: SSAANF.Function list) =
     functions
     |> List.choose (fun func ->
-        match Map.tryFind func.Id analysis.DirectCalls with
+        match FunctionIdMap.tryFind func.Id analysis.DirectCalls with
         | None -> None
         | Some _ when Set.contains func.Id analysis.IndirectTargets -> None
         | Some calls ->
@@ -74,7 +74,7 @@ let private buildRewriteMap
                     | _ -> KeepParameter)
             if List.forall ((=) KeepParameter) rewrites then None
             else Some (func.Id, rewrites))
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 let private rewriteTerminator substitutions = function
     | SSAANF.Return atom -> SSAANF.Return (Facts.rewriteAtom substitutions atom)
@@ -96,7 +96,7 @@ let private rewriteBody rewriteMap substitutions (func: SSAANF.Function) =
                     Terminator = rewriteTerminator substitutions block.Terminator }) }
 
 let private rewriteFunction rewriteMap (func: SSAANF.Function) =
-    match Map.tryFind func.Id rewriteMap with
+    match FunctionIdMap.tryFind func.Id rewriteMap with
     | None -> rewriteBody rewriteMap Map.empty func
     | Some rewrites ->
         let rec pair parameters rewrites accumulated =
@@ -157,7 +157,7 @@ let private knownCallsInProgram functionNames functions =
             | BorrowedCall (name, arguments)
             | TailCall (name, arguments) ->
                 Facts.addKnownCall name arguments known current
-            | _ -> current) calls) Map.empty
+            | _ -> current) calls) FunctionIdMap.empty
 
 let private directCallsTo target (func: SSAANF.Function) =
     operations func
@@ -187,7 +187,7 @@ let private cloneGroups
     (functions: SSAANF.Function list) =
     functions
     |> List.choose (fun func ->
-        match Map.tryFind func.Id knownCalls with
+        match FunctionIdMap.tryFind func.Id knownCalls with
         | None -> None
         | Some _ when Set.contains func.Id analysis.IndirectTargets -> None
         | Some calls ->
@@ -304,10 +304,10 @@ let internal removeUnusedRematerializedValues functionNames (func: SSAANF.Functi
 let private cloneFunction
     functionNames
     clonesByName
-    (functionsById: Map<AST.FunctionId, SSAANF.Function>)
+    (functionsById: FunctionIdMap<SSAANF.Function>)
     (clone: LiteralClone) =
     let original: SSAANF.Function =
-        match Map.tryFind clone.OriginalId functionsById with
+        match FunctionIdMap.tryFind clone.OriginalId functionsById with
         | Some func -> func
         | None -> Crash.crash $"Missing SSA direct-call clone source '{clone.OriginalId}'"
     let values = Map.ofList clone.Pattern
@@ -334,7 +334,7 @@ let private cloneFunction
                 | LiteralValue _ -> None
                 | value -> Some (parameter.Id, Facts.cexprForKnownValue value)))
         |> List.choose id
-    let rewritten = rewriteBody Map.empty substitutions original
+    let rewritten = rewriteBody FunctionIdMap.empty substitutions original
     let blocks =
         rewritten.Blocks
         |> Map.change rewritten.Entry (function
@@ -352,7 +352,7 @@ let specializeProgramWithFunctionNames functionNames functions =
     let functionNames =
         functions
         |> List.fold (fun names (func: SSAANF.Function) ->
-            Map.add func.Id func.Name names) functionNames
+            FunctionIdMap.add func.Id func.Name names) functionNames
     let exposed = List.map exposeKnownIndirectTargets functions
     let analysis = analyzeProgram exposed
     let rewriteMap = buildRewriteMap analysis exposed
@@ -368,35 +368,35 @@ let specializeProgramWithFunctionNames functionNames functions =
         else
             let existingIds = seq {
                 yield! localIds
-                yield! functionNames |> Map.keys
+                yield! functionNames |> FunctionIdMap.keys
             }
-            let existingNames = functionNames |> Map.values |> Set.ofSeq
+            let existingNames = functionNames |> FunctionIdMap.values |> Set.ofSeq
             Facts.buildLiteralClones existingIds existingNames cloneCandidates
-    let clonesByName = clones |> List.groupBy (fun clone -> clone.OriginalId) |> Map.ofList
-    let functionsById: Map<AST.FunctionId, SSAANF.Function> =
-        rewritten |> List.map (fun func -> func.Id, func) |> Map.ofList
+    let clonesByName = clones |> List.groupBy (fun clone -> clone.OriginalId) |> FunctionIdMap.ofList
+    let functionsById: FunctionIdMap<SSAANF.Function> =
+        rewritten |> List.map (fun func -> func.Id, func) |> FunctionIdMap.ofList
     let cloned = clones |> List.map (cloneFunction functionNames clonesByName functionsById)
     let routed = rewritten |> List.map (routeFunction functionNames clonesByName)
     {
         Functions =
             (cloned @ routed) |> List.map (removeUnusedRematerializedValues functionNames)
         CloneOrigins =
-            clones |> List.map (fun clone -> clone.CloneId, clone.OriginalId) |> Map.ofList
+            clones |> List.map (fun clone -> clone.CloneId, clone.OriginalId) |> FunctionIdMap.ofList
     }
 
 let reachableFrom (roots: Set<AST.FunctionId>) (functions: SSAANF.Function list) =
-    let byId = functions |> List.map (fun func -> func.Id, func) |> Map.ofList
+    let byId = functions |> List.map (fun func -> func.Id, func) |> FunctionIdMap.ofList
     let rec visit seen pending =
         match pending with
         | [] -> seen
         | id :: rest when Set.contains id seen -> visit seen rest
         | id :: rest ->
             let successors =
-                match Map.tryFind id byId with
+                match FunctionIdMap.tryFind id byId with
                 | None -> []
                 | Some func ->
                     let analysis = analyzeProgram [func]
-                    (analysis.DirectCalls |> Map.keys |> Seq.toList)
+                    (analysis.DirectCalls |> FunctionIdMap.keys |> Seq.toList)
                     @ (analysis.IndirectTargets |> Set.toList)
             visit (Set.add id seen) (successors @ rest)
     let reachable = visit Set.empty (Set.toList roots)

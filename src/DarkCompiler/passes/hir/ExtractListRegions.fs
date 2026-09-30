@@ -90,19 +90,19 @@ let scopeContracts infer (functions: CheckedAST.FunctionDef list) =
         func.Id,
         ({ LocalDestruction = if localInert then DestructionAnalysis.InertScope else DestructionAnalysis.UnprovenScope
            Calls = calls func.Body }: DestructionAnalysis.FunctionScopeContract))
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 /// A failed recognition is semantic absence, not a compiler failure. The
 /// original checked expression then uses the supported persistent List path.
 let tryExtract
     (inertScopes: Set<AST.FunctionId>)
-    (functionNames: Map<AST.FunctionId, string>)
+    (functionNames: FunctionIdMap<string>)
     (parameterTypes: Map<AST.BindingId, AST.SemanticType>)
     (infer: Map<AST.BindingId, AST.SemanticType> -> CheckedAST.Expr -> Result<AST.SemanticType, string>)
     (freeVariables: CheckedAST.Expr -> Set<AST.BindingId>)
     (expression: CheckedAST.Expr)
     : FunctionalRegion option =
-    let functionHasName id name = Map.tryFind id functionNames = Some name
+    let functionHasName id name = FunctionIdMap.tryFind id functionNames = Some name
     let inertExpression = inertExpression infer (fun name -> Set.contains name inertScopes)
     let types state =
         state.Values

@@ -65,7 +65,7 @@ let testFilteredFunctionsPreserveReachableSetAndInputOrder () : TestResult =
           namedFunctionWith "stdlib_a" []
           namedFunctionWith "stdlib_b" [] ]
     let callGraph =
-        Map.ofList
+        FunctionIdMap.ofList
             [ TestIds.functionIdForName "stdlib_a", Set.empty
               TestIds.functionIdForName "stdlib_b", Set.ofList [ TestIds.functionIdForName "stdlib_c" ]
               TestIds.functionIdForName "stdlib_c", Set.empty

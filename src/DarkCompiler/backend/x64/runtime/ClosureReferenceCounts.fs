@@ -8,7 +8,7 @@ open X64ReleaseSelection
 open X64FieldReferenceCounts
 open X64ListReferenceCounts
 
-let internal closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<AST.FunctionId, int> =
+let internal closurePayloadSizesFromAllocs (functions: LIR.Function list) : FunctionIdMap<int> =
     functions
     |> List.collect (fun func ->
         func.CFG.Blocks
@@ -20,7 +20,7 @@ let internal closurePayloadSizesFromAllocs (functions: LIR.Function list) : Map<
                     Some (funcName, (List.length captures + 1) * 8)
                 | _ ->
                     None)))
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 let internal closureCaptureTypesFromParams (functions: LIR.Function list) : Map<string, AST.SemanticType list> =
     functions
@@ -109,7 +109,7 @@ let internal generateClosureRefCountDecHelper
         EnableLeakCheck = enableLeakCheck
         RecordRegistry = recordRegistry
         SumShapeRegistry = sumShapeRegistry
-        FunctionNames = Map.empty
+        FunctionNames = FunctionIdMap.empty
     }
 
     let payloadCases =

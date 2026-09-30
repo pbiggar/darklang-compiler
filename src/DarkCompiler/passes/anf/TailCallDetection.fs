@@ -409,7 +409,7 @@ let isEligibleFunctionName (name: string) : bool =
 
 /// Detect tail calls in a function
 let private detectTailCallsInFunctionWithRegistry
-    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
+    (recursiveMembers: FunctionIdMap<AST.LoweredRecursiveMember>)
     (func: Function)
     : Function =
     if not (isEligibleFunctionName func.Name) then
@@ -419,7 +419,7 @@ let private detectTailCallsInFunctionWithRegistry
         let paramIds = func.TypedParams |> List.map (fun param -> param.Id) |> Set.ofList
         let ownedParams = leadingRetainedParams paramIds func.Body
         let isCurrentMember targetName =
-            match Map.tryFind func.Id recursiveMembers, Map.tryFind targetName recursiveMembers with
+            match FunctionIdMap.tryFind func.Id recursiveMembers, FunctionIdMap.tryFind targetName recursiveMembers with
             | Some currentMember, Some targetMember ->
                 currentMember.Typed.Resolved.Parsed.Binding = targetMember.Typed.Resolved.Parsed.Binding
             | None, None -> targetName = func.Id
@@ -430,7 +430,7 @@ let private detectTailCallsInFunctionWithRegistry
         { func with Body = body' }
 
 let detectTailCallsInFunction (func: Function) : Function =
-    detectTailCallsInFunctionWithRegistry Map.empty func
+    detectTailCallsInFunctionWithRegistry FunctionIdMap.empty func
 
 /// Detect tail calls in a program
 let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =
@@ -440,7 +440,7 @@ let detectTailCallsInProgram (program: ANF.Program) : ANF.Program =
     ANF.Program (functions |> List.map detectTailCallsInFunction, main)
 
 let detectTailCallsInProgramWithRecursion
-    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
+    (recursiveMembers: FunctionIdMap<AST.LoweredRecursiveMember>)
     (program: ANF.Program)
     : ANF.Program =
     let (ANF.Program (functions, main)) = program

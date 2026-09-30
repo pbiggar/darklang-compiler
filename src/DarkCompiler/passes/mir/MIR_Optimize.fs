@@ -251,10 +251,10 @@ let constantReturnOperand (func: Function) : Operand option =
         Some first
     | _ -> None
 
-let private constantCallResults (functions: Function list) : Map<AST.FunctionId, Operand> =
+let private constantCallResults (functions: Function list) : FunctionIdMap<Operand> =
     functions
     |> List.choose (fun func -> constantReturnOperand func |> Option.map (fun value -> (func.Id, value)))
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 let private propagateConstantCallResults
     (optimizeAgain: Function -> Function)
@@ -265,14 +265,14 @@ let private propagateConstantCallResults
         functions
     else
         let callResults = constantCallResults functions
-        if Map.isEmpty callResults then
+        if FunctionIdMap.isEmpty callResults then
             functions
         else
             functions
             |> List.map (fun func ->
                 let cfg, changed =
                     applySparseConditionalConstantPropagationWithCallResults
-                        (fun id -> Map.tryFind id callResults) func.CFG
+                        (fun id -> FunctionIdMap.tryFind id callResults) func.CFG
                 if changed then optimizeAgain (withOptimizedCFG func cfg) else func)
 
 /// Optimize a program

@@ -55,23 +55,23 @@ let private summarizeFunction calleeWrites (func: LIR.Function) =
                                   Floats = ARM64CalleeClobbers.floatBit LIR.D0 }
 
 let summariesWithKnown
-    (known: Map<AST.FunctionId, Writes>)
+    (known: FunctionIdMap<Writes>)
     (functions: LIR.Function list) =
     let rec converge local =
         let lookup id =
-            Map.tryFind id local
-            |> Option.orElseWith (fun () -> Map.tryFind id known)
+            FunctionIdMap.tryFind id local
+            |> Option.orElseWith (fun () -> FunctionIdMap.tryFind id known)
         let next =
             functions
             |> List.fold (fun acc func ->
                 let writes = summarizeFunction lookup func
-                let old = Map.tryFind func.Id acc |> Option.defaultValue empty
-                Map.add func.Id (union old writes) acc) local
+                let old = FunctionIdMap.tryFind func.Id acc |> Option.defaultValue empty
+                FunctionIdMap.add func.Id (union old writes) acc) local
         if next = local then local else converge next
     let initial =
         functions
         |> List.map (fun func -> func.Id, empty)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     converge initial
 
 /// Calls with argument setup or an unrecognized save envelope retain the full
@@ -85,7 +85,7 @@ let callWritesForSaves callees (block: LIR.BasicBlock) : Writes list =
             let writes =
                 match beforeRestore, List.tryItem (List.length beforeRestore) rest with
                 | [LIR.Call (_, callee, [])], Some (LIR.RestoreRegs ([], [])) ->
-                    Map.tryFind callee callees |> Option.defaultValue all
+                    FunctionIdMap.tryFind callee callees |> Option.defaultValue all
                 | _ -> all
             writes :: collect rest
         | _ :: rest -> collect rest
@@ -98,7 +98,7 @@ let pruneFunction callees (func: LIR.Function) : LIR.Function =
             match instrs with
             | LIR.SaveRegs (ints, floats) :: LIR.Call (dest, callee, []) :: LIR.RestoreRegs (restoreInts, restoreFloats) :: rest
                 when ints = restoreInts && floats = restoreFloats ->
-                let writes = Map.tryFind callee callees |> Option.defaultValue all
+                let writes = FunctionIdMap.tryFind callee callees |> Option.defaultValue all
                 let keptInts = ints |> List.filter (fun reg -> ARM64CalleeClobbers.containsInt reg writes)
                 let keptFloats = floats |> List.filter (fun reg -> ARM64CalleeClobbers.containsFloat reg writes)
                 // Preserve the original stack parity at the call site. The

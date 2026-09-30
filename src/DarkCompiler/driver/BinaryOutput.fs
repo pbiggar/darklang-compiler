@@ -23,18 +23,18 @@ let private finalizeArm64GenericHelperIds
     let sourceNames =
         functions
         |> List.fold (fun names (func: LIR.Function) ->
-            match Map.tryFind func.Id names with
+            match FunctionIdMap.tryFind func.Id names with
             | Some existing when existing <> func.Name ->
                 Crash.crash
                     $"Executable assigns FunctionId {AST.functionIdValue func.Id} to both '{existing}' and '{func.Name}'"
-            | _ -> Map.add func.Id func.Name names) Map.empty
+            | _ -> FunctionIdMap.add func.Id func.Name names) FunctionIdMap.empty
     let labels =
         functions
         |> List.collect (fun func ->
             func.CodegenFacts
             |> Option.map (fun facts -> facts.Arm64GenericHelperIds |> Map.keys |> Seq.toList)
             |> Option.defaultValue [])
-    let finalIds = AST.allocateFunctionIds (sourceNames |> Map.keys) labels
+    let finalIds = AST.allocateFunctionIds (sourceNames |> FunctionIdMap.keys) labels
     let finalizedId label =
         Map.tryFind label finalIds
         |> Option.defaultWith (fun () -> Crash.crash $"ARM64 helper '{label}' has no final identity")
@@ -49,17 +49,17 @@ let private finalizeArm64GenericHelperIds
                 localIds
                 |> Map.fold (fun ids label oldId ->
                     let newId = finalizedId label
-                    match Map.tryFind oldId ids with
+                    match FunctionIdMap.tryFind oldId ids with
                     | Some existing when existing <> newId ->
                         Crash.crash $"ARM64 helper identity {AST.functionIdValue oldId} names two helpers in '{func.Name}'"
-                    | _ -> Map.add oldId newId ids) Map.empty
+                    | _ -> FunctionIdMap.add oldId newId ids) FunctionIdMap.empty
             let rewrite = function
                 | LIR.Call (dest, id, args) ->
-                    match Map.tryFind id replacements with
+                    match FunctionIdMap.tryFind id replacements with
                     | Some replacement -> LIR.Call (dest, replacement, args)
                     | None -> LIR.Call (dest, id, args)
                 | LIR.TailCall (id, args) ->
-                    match Map.tryFind id replacements with
+                    match FunctionIdMap.tryFind id replacements with
                     | Some replacement -> LIR.TailCall (replacement, args)
                     | None -> LIR.TailCall (id, args)
                 | instr -> instr
@@ -79,9 +79,9 @@ let private finalizeArm64GenericHelperIds
     let byId =
         List.zip functions finalized
         |> List.groupBy (fun (original, _) -> original.Id)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let remap (func: LIR.Function) =
-        Map.tryFind func.Id byId
+        FunctionIdMap.tryFind func.Id byId
         |> Option.bind (List.tryPick (fun (original, finalized) ->
             if obj.ReferenceEquals(original, func) then Some finalized else None))
         |> Option.defaultWith (fun () ->
@@ -110,7 +110,7 @@ let internal generateBinary
     (functionGroups: CodeGen.FunctionGroup list)
     (metadataGroups: CodeGen.MetadataGroup list)
     (arm64SumShapeRegistry: MemoryModel.RcSumShapeRegistry)
-    (knownArm64CalleeWrites: Map<AST.FunctionId, ARM64CalleeClobbers.Writes>)
+    (knownArm64CalleeWrites: FunctionIdMap<ARM64CalleeClobbers.Writes>)
     (allocatedProgram: LIR.Program)
     : Result<byte array, string> =
 

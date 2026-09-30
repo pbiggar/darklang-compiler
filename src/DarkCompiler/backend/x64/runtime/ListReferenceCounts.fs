@@ -55,7 +55,7 @@ let private generateListRefCountDecHelperWith
         EnableLeakCheck = enableLeakCheck
         RecordRegistry = recordRegistry
         SumShapeRegistry = sumShapeRegistry
-        FunctionNames = Map.empty
+        FunctionNames = FunctionIdMap.empty
     }
 
     let leakDec =

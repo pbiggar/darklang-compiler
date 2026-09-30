@@ -11,7 +11,7 @@ open RefCountInsertion
 let internal verifyJoin body =
     let ctx : TypeContext = {
         TypeReg = Map.empty; VariantLookup = Map.empty; SumShapeReg = Map.empty
-        FuncReg = Map.empty; FuncParams = Map.empty; ClosureFuncs = Map.empty
+        FuncReg = FunctionIdMap.empty; FuncParams = Map.empty; ClosureFuncs = Map.empty
         TempTypes = Map.ofList [TempId 1, AST.TInt64; TempId 2, AST.TInt64]
         TypePlanning = createRcTypePlanningContext ()
     }
@@ -29,7 +29,7 @@ let internal testJoinCleanupPaths () =
     let childType = AST.TTuple [AST.TInt64]
     let ctx : TypeContext = {
         TypeReg = Map.empty; VariantLookup = Map.empty; SumShapeReg = Map.empty
-        FuncReg = Map.ofList [TestIds.functionIdForName "observe", ("observe", AST.TFunction ([AST.TInt64], AST.TUnit))]
+        FuncReg = FunctionIdMap.ofList [TestIds.functionIdForName "observe", ("observe", AST.TFunction ([AST.TInt64], AST.TUnit))]
         FuncParams = Map.empty; ClosureFuncs = Map.empty; TempTypes = Map.empty
         TypePlanning = createRcTypePlanningContext ()
     }

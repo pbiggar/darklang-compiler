@@ -37,10 +37,10 @@ let private functions : TypeRegistries.FunctionRegistry =
         "Darklang.Stdlib.List.repeatUnsafe_i64", AST.TFunction ([AST.TInt; AST.TInt64], AST.TList AST.TInt64)
     ]
     |> List.map (fun (name, typ) -> TestIds.functionIdForName name, (name, typ))
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 let private extractWithParameters parameterTypes expression =
-    let functionNames = functions |> Map.map (fun _ (name, _) -> name)
+    let functionNames = functions |> FunctionIdMap.map (fun _ (name, _) -> name)
     let infer types expr =
         LoweringTypeInference.inferTypeCore
             (LoweringPrimitives.sumMetadataFromVariantLookup Map.empty)
@@ -199,7 +199,7 @@ let tests = [
               "left", contract DestructionAnalysis.InertScope ["right"]
               "right", contract DestructionAnalysis.InertScope ["left"; "Builtin.printLine"] ]
             |> List.map (fun (name, value) -> fid name, value)
-            |> Map.ofList
+            |> FunctionIdMap.ofList
         let functionIds =
             ["resource"; "indirect"; "caller"; "unknown"; "external"; "left"; "right"; "Builtin.print"; "Builtin.printLine"]
             |> List.map (fun name -> name, fid name)
@@ -214,12 +214,12 @@ let tests = [
         let fid = TestIds.functionIdForName
         let safe : DestructionAnalysis.FunctionScopeContract = { LocalDestruction = DestructionAnalysis.InertScope; Calls = Set.empty }
         let contracts =
-            Map.ofList [
+            FunctionIdMap.ofList [
                 fid "callee", safe
                 fid "caller", { safe with Calls = Set.singleton (fid "callee") }
             ]
         let replaced =
-            Map.add
+            FunctionIdMap.add
                 (fid "callee")
                 { safe with LocalDestruction = DestructionAnalysis.UnprovenScope }
                 contracts
@@ -229,7 +229,7 @@ let tests = [
         else Error "Replacing a definition did not revoke its transitive scope proof")
     "Scope destruction does not trust a shadowed primitive", (fun () ->
         let functionId = TestIds.functionIdForName "Builtin.printLine"
-        let contracts = Map.ofList [functionId, { DestructionAnalysis.LocalDestruction = DestructionAnalysis.UnprovenScope; DestructionAnalysis.Calls = Set.empty }]
+        let contracts = FunctionIdMap.ofList [functionId, { DestructionAnalysis.LocalDestruction = DestructionAnalysis.UnprovenScope; DestructionAnalysis.Calls = Set.empty }]
         let functionIds = Map.ofList ["Builtin.printLine", functionId]
         if Set.contains functionId (DestructionAnalysis.inertFunctionScopes functionIds contracts) then Error "Shadowed primitive retained its built-in contract"
         else Ok ())

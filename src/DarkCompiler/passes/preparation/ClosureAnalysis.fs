@@ -16,9 +16,9 @@ type LiftState = {
     ComparisonFuncs: Map<AST.FunctionId * AST.SemanticType list, string>
     ComparableFunctionParams: Set<AST.SemanticType list>
     TypeEnv: Map<AST.BindingId, AST.SemanticType>
-    FuncParams: Map<AST.FunctionId, AST.SemanticType list>
-    FuncReturnTypes: Map<AST.FunctionId, AST.SemanticType>
-    GenericFuncDefs: Map<AST.FunctionId, string list * AST.SemanticType>
+    FuncParams: FunctionIdMap<AST.SemanticType list>
+    FuncReturnTypes: FunctionIdMap<AST.SemanticType>
+    GenericFuncDefs: FunctionIdMap<string list * AST.SemanticType>
     TypeReg: TypeRegistry
     VariantLookup: VariantLookup
     RecursiveSelf: (AST.BindingId * AST.BindingId * AST.SemanticType * CheckedAST.RecursiveMember) option
@@ -26,7 +26,7 @@ type LiftState = {
 
 let private liftedNameExists (state: LiftState) (name: string) : bool =
     (CheckedAST.tryFindFunctionId name state.Symbols
-     |> Option.exists (fun id -> Map.containsKey id state.FuncParams))
+     |> Option.exists (fun id -> FunctionIdMap.containsKey id state.FuncParams))
     || (state.LiftedFunctions |> List.exists (fun f -> f.Name = name))
 
 let rec private findNextLiftedNameCounter
@@ -238,9 +238,9 @@ let rec reconcileBranchTypes (left: AST.SemanticType) (right: AST.SemanticType) 
 let rec simpleInferType
     (expr: CheckedAST.Expr)
     (typeEnv: Map<AST.BindingId, AST.SemanticType>)
-    (funcParams: Map<AST.FunctionId, AST.SemanticType list>)
-    (funcReturnTypes: Map<AST.FunctionId, AST.SemanticType>)
-    (genericFuncDefs: Map<AST.FunctionId, string list * AST.SemanticType>)
+    (funcParams: FunctionIdMap<AST.SemanticType list>)
+    (funcReturnTypes: FunctionIdMap<AST.SemanticType>)
+    (genericFuncDefs: FunctionIdMap<string list * AST.SemanticType>)
     (typeReg: TypeRegistry)
     (variantLookup: VariantLookup)
     (typeNames: TypeNameRegistry)
@@ -341,7 +341,7 @@ let rec simpleInferType
     | CheckedAST.UnitLiteral -> Some AST.TUnit
     | CheckedAST.Local id -> Map.tryFind id typeEnv
     | CheckedAST.FuncRef name ->
-        match Map.tryFind name funcParams, Map.tryFind name funcReturnTypes with
+        match FunctionIdMap.tryFind name funcParams, FunctionIdMap.tryFind name funcReturnTypes with
         | Some parameters, Some returnType ->
             Some (AST.TFunction (parameters, returnType))
         | _ -> None
@@ -511,18 +511,18 @@ let rec simpleInferType
         | AST.Neg | AST.BitNot ->
             simpleInferType operand typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup typeNames
     | CheckedAST.Call (funcName, args) ->
-        Map.tryFind funcName funcReturnTypes
+        FunctionIdMap.tryFind funcName funcReturnTypes
     | CheckedAST.TypeApp (funcName, typeArgs, _) ->
         // Look up the generic function's definition and apply type substitution
         let typeArgs = CheckedAST.semanticTypeArgs typeArgs
-        match Map.tryFind funcName genericFuncDefs with
+        match FunctionIdMap.tryFind funcName genericFuncDefs with
         | Some (typeParams, returnType) when List.length typeParams = List.length typeArgs ->
             // Build substitution from type params to type args
             let subst = List.zip typeParams typeArgs |> Map.ofList
             Some (applySubstToType subst returnType)
         | _ ->
             // Fall back to funcReturnTypes for non-generic or arity mismatch
-            Map.tryFind funcName funcReturnTypes
+            FunctionIdMap.tryFind funcName funcReturnTypes
     | CheckedAST.If (_, thenExpr, elseExpr) ->
         match simpleInferType thenExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup typeNames,
               simpleInferType elseExpr typeEnv funcParams funcReturnTypes genericFuncDefs typeReg variantLookup typeNames with

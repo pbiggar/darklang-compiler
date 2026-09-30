@@ -22,7 +22,7 @@ type Group<'id> =
 
 type Program<'leaf, 'id> =
     private
-    | Program of Map<AST.FunctionId, OwnedFunctionGroups.Group<'leaf, 'id>>
+    | Program of FunctionIdMap<OwnedFunctionGroups.Group<'leaf, 'id>>
 
 type InferenceError<'id when 'id: comparison> =
     | FunctionGroupingFailed of OwnedFunctionGroups.GroupingError
@@ -130,7 +130,7 @@ let prepareWithTrace
         |> List.fold (fun index group ->
             OwnedFunctionGroups.functions group
             |> List.fold (fun index definition ->
-                Map.add definition.Definition.Id group index) index) Map.empty
+                FunctionIdMap.add definition.Definition.Id group index) index) FunctionIdMap.empty
         |> Program)
 
 let prepare definitions = prepareWithTrace None definitions
@@ -139,7 +139,7 @@ let prepare definitions = prepareWithTrace None definitions
 /// independent external demands. Materialization rewrites them when the group
 /// is selected by a call entering the component.
 let isInternalRecursiveCall (Program groups) caller target =
-    match Map.tryFind target groups with
+    match FunctionIdMap.tryFind target groups with
     | Some group when OwnedFunctionGroups.isRecursive group ->
         group
         |> OwnedFunctionGroups.functions
@@ -157,7 +157,7 @@ let inferDemandWithTrace
     target
     uniqueArguments
     : Result<Group<'id> option, InferenceError<'id>> =
-    match Map.tryFind target groups with
+    match FunctionIdMap.tryFind target groups with
     | None -> Error (DemandTargetMissing target)
     | Some discovered ->
         let definitions = OwnedFunctionGroups.functions discovered

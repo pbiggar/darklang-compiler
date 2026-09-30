@@ -695,7 +695,7 @@ let private countExternalCalls externalCandidates (func: SSAANF.Function) =
         |> List.sumBy (fun (_, operation) ->
             match operation with
             | Call (name, _) | BorrowedCall (name, _)
-                when Map.containsKey name externalCandidates -> 1
+                when FunctionIdMap.containsKey name externalCandidates -> 1
             | _ -> 0))
 
 let private isMandatoryExternal (candidate: Candidate) =
@@ -709,8 +709,8 @@ let private isMandatoryExternal (candidate: Candidate) =
 
 let private inlineFunction
     (config: InliningCommon.InliningConfig)
-    (candidates: Map<AST.FunctionId, Candidate>)
-    (externalCandidates: Map<AST.FunctionId, InliningCommon.FunctionInfo>)
+    (candidates: FunctionIdMap<Candidate>)
+    (externalCandidates: FunctionIdMap<InliningCommon.FunctionInfo>)
     (func: SSAANF.Function) =
     let useExternal =
         countExternalCalls externalCandidates func <= config.MaxExternalInlineSites
@@ -721,9 +721,9 @@ let private inlineFunction
         |> Seq.fold (fun counts (_, operation) ->
             match operation with
             | Call (name, _) ->
-                let previous = Map.tryFind name counts |> Option.defaultValue 0
-                Map.add name (previous + 1) counts
-            | _ -> counts) Map.empty
+                let previous = FunctionIdMap.tryFind name counts |> Option.defaultValue 0
+                FunctionIdMap.add name (previous + 1) counts
+            | _ -> counts) FunctionIdMap.empty
     let rec visit state sites previousBlocks =
         let sites =
             if System.Object.ReferenceEquals(previousBlocks, state.Function.Blocks) then sites
@@ -741,7 +741,7 @@ let private inlineFunction
             let visitNext next = visit next sites state.Function.Blocks
             let state = { state with Processed = Set.add id state.Processed }
             let depth = Map.tryFind id state.Depths |> Option.defaultValue 0
-            match Map.tryFind name candidates, Map.tryFind label state.Function.Blocks with
+            match FunctionIdMap.tryFind name candidates, Map.tryFind label state.Function.Blocks with
             | Some candidate, Some block when candidate.Info.IsRecursive ->
                 match tryExpandBoundedCall config state block index id arguments candidate with
                 | Some expanded -> visitNext expanded
@@ -749,7 +749,7 @@ let private inlineFunction
             | Some candidate, Some block
                 when (not candidate.Info.IsExternal || useExternal || isMandatoryExternal candidate)
                      && List.length candidate.Body.TypedParams = List.length arguments ->
-                let count = Map.tryFind name siteCounts |> Option.defaultValue 0
+                let count = FunctionIdMap.tryFind name siteCounts |> Option.defaultValue 0
                 match tryProjectedPlan config state.Function block index id count candidate with
                 | Some projection ->
                     match cloneLinearAt state block index id arguments candidate depth (Some projection) with
@@ -780,7 +780,7 @@ let private inlineFunction
 
 let inlineProgramWithExternalCandidatesAndExclusions
     (config: InliningCommon.InliningConfig)
-    (externalCandidates: Map<AST.FunctionId, InliningCommon.FunctionInfo>)
+    (externalCandidates: FunctionIdMap<InliningCommon.FunctionInfo>)
     (externalSSA: SSAANF.Function list)
     (excludedLocalNames: Set<AST.FunctionId>)
     (localSource: ANF.Function list)
@@ -801,21 +801,21 @@ let inlineProgramWithExternalCandidatesAndExclusions
         { info with Size = size; HasClosures = hasClosures; HasTailCalls = hasTailCalls }
     let localInfo =
         InliningCommon.buildFunctionInfoMap localSource
-        |> Map.filter (fun name _ -> not (Set.contains name excludedLocalNames))
+        |> FunctionIdMap.filter (fun name _ -> not (Set.contains name excludedLocalNames))
     let allSSA =
         externalSSA @ functions
         |> List.map (fun func -> func.Id, func)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let candidates =
         allSSA
-        |> Map.fold (fun current name body ->
-            match Map.tryFind name externalCandidates with
-            | Some info -> Map.add name { Info = withSSAFacts body info; Body = body } current
-            | None -> current) Map.empty
+        |> FunctionIdMap.fold (fun current name body ->
+            match FunctionIdMap.tryFind name externalCandidates with
+            | Some info -> FunctionIdMap.add name { Info = withSSAFacts body info; Body = body } current
+            | None -> current) FunctionIdMap.empty
         |> fun external ->
             localInfo
-            |> Map.fold (fun current name info ->
-                match Map.tryFind name allSSA with
-                | Some body -> Map.add name { Info = withSSAFacts body info; Body = body } current
+            |> FunctionIdMap.fold (fun current name info ->
+                match FunctionIdMap.tryFind name allSSA with
+                | Some body -> FunctionIdMap.add name { Info = withSSAFacts body info; Body = body } current
                 | None -> current) external
     functions |> List.map (inlineFunction config candidates externalCandidates)

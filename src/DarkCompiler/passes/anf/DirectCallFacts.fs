@@ -11,7 +11,7 @@ type internal ParameterRewrite =
     | ReplaceParameterWith of Atom
 
 type internal ProgramAnalysis = {
-    DirectCalls: Map<AST.FunctionId, Atom list list>
+    DirectCalls: FunctionIdMap<Atom list list>
     IndirectTargets: Set<AST.FunctionId>
 }
 
@@ -44,7 +44,7 @@ let internal maxLiteralClonesPerFunction = 4
 let internal maxLiteralClonesPerProgram = 16
 
 let internal emptyAnalysis = {
-    DirectCalls = Map.empty
+    DirectCalls = FunctionIdMap.empty
     IndirectTargets = Set.empty
 }
 
@@ -63,8 +63,8 @@ let internal addDirectCall
     (args: Atom list)
     (analysis: ProgramAnalysis)
     : ProgramAnalysis =
-    let existing = Map.tryFind name analysis.DirectCalls |> Option.defaultValue []
-    { analysis with DirectCalls = Map.add name (args :: existing) analysis.DirectCalls }
+    let existing = FunctionIdMap.tryFind name analysis.DirectCalls |> Option.defaultValue []
+    { analysis with DirectCalls = FunctionIdMap.add name (args :: existing) analysis.DirectCalls }
 
 let internal analyzeAtom (atom: Atom) (analysis: ProgramAnalysis) : ProgramAnalysis =
     match atom with
@@ -247,11 +247,11 @@ let internal rewriteAtom (substitutions: Map<TempId, Atom>) (atom: Atom) : Atom 
     | _ -> atom
 
 let internal rewriteCallArgs
-    (rewriteMap: Map<AST.FunctionId, ParameterRewrite list>)
+    (rewriteMap: FunctionIdMap<ParameterRewrite list>)
     (name: AST.FunctionId)
     (args: Atom list)
     : Atom list =
-    match Map.tryFind name rewriteMap with
+    match FunctionIdMap.tryFind name rewriteMap with
     | None -> args
     | Some rewrites ->
         let rec loop rewrites args rewritten =
@@ -265,7 +265,7 @@ let internal rewriteCallArgs
         loop rewrites args []
 
 let internal rewriteCExpr
-    (rewriteMap: Map<AST.FunctionId, ParameterRewrite list>)
+    (rewriteMap: FunctionIdMap<ParameterRewrite list>)
     (substitutions: Map<TempId, Atom>)
     (cexpr: CExpr)
     : CExpr =
@@ -375,12 +375,12 @@ let internal knownLiteralsForAtoms (env: ValueEnv) (atoms: Atom list) : ScalarLi
     loop atoms []
 
 let internal knownValueForCExpr
-    (functionNames: Map<AST.FunctionId, string>)
+    (functionNames: FunctionIdMap<string>)
     (env: ValueEnv)
     (cexpr: CExpr)
     : KnownValue option =
     let words name =
-        match Map.tryFind name functionNames with
+        match FunctionIdMap.tryFind name functionNames with
         | Some "Darklang.Stdlib.Int128.__fromWords" ->
             Some (fun low high -> Int128Value (name, low, high))
         | Some "Darklang.Stdlib.UInt128.__fromWords" ->
@@ -407,11 +407,11 @@ let internal addKnownCall
     (name: AST.FunctionId)
     (args: Atom list)
     (env: ValueEnv)
-    (calls: Map<AST.FunctionId, KnownValue option list list>)
-    : Map<AST.FunctionId, KnownValue option list list> =
+    (calls: FunctionIdMap<KnownValue option list list>)
+    : FunctionIdMap<KnownValue option list list> =
     let values = args |> List.map (knownValueForAtom env)
-    let existing = Map.tryFind name calls |> Option.defaultValue []
-    Map.add name (values :: existing) calls
+    let existing = FunctionIdMap.tryFind name calls |> Option.defaultValue []
+    FunctionIdMap.add name (values :: existing) calls
 let internal literalPatternAt
     (eligibleIndices: Set<int>)
     (values: KnownValue option list)
@@ -476,7 +476,7 @@ let internal removePatternArguments
     |> List.choose id
 
 let internal routeDirectCall
-    (clonesByName: Map<AST.FunctionId, LiteralClone list>)
+    (clonesByName: FunctionIdMap<LiteralClone list>)
     (env: ValueEnv)
     (name: AST.FunctionId)
     (args: Atom list)
@@ -486,14 +486,14 @@ let internal routeDirectCall
         |> List.forall (fun (index, value) ->
             List.tryItem index args |> Option.bind (knownValueForAtom env) = Some value)
     let matchingClone =
-        Map.tryFind name clonesByName
+        FunctionIdMap.tryFind name clonesByName
         |> Option.bind (List.tryFind (fun clone -> matchesPattern clone.Pattern))
     match matchingClone with
     | Some clone -> (clone.CloneId, removePatternArguments clone.Pattern args)
     | None -> (name, args)
 
 let internal routeCExpr
-    (clonesByName: Map<AST.FunctionId, LiteralClone list>)
+    (clonesByName: FunctionIdMap<LiteralClone list>)
     (env: ValueEnv)
     (cexpr: CExpr)
     : CExpr =

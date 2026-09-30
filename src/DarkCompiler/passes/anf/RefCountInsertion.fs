@@ -49,7 +49,7 @@ let private addFunctionPhaseTimings
 
 let internal verifyOwnershipContracts
     (ctx: TypeContext)
-    (contracts: Map<AST.FunctionId, OwnedIR.CallSignature>)
+    (contracts: FunctionIdMap<OwnedIR.CallSignature>)
     (Program (functions, main): Program)
     : Result<unit, string> =
     let managed typ =
@@ -84,7 +84,7 @@ let internal verifyOwnershipContracts
             | _ -> Ok ()
     let rec verifyCalls owner expression =
         let verifyCall target arguments =
-            match Map.tryFind target contracts with
+            match FunctionIdMap.tryFind target contracts with
             | None -> Ok ()
             | Some contract when List.length arguments = List.length contract.Parameters -> Ok ()
             | Some _ -> Error $"Ownership call arity changed in {owner}"
@@ -105,7 +105,7 @@ let internal verifyOwnershipContracts
     functions
     |> List.fold (fun result functionDefinition ->
         result |> Result.bind (fun () ->
-            match Map.tryFind functionDefinition.Id contracts with
+            match FunctionIdMap.tryFind functionDefinition.Id contracts with
             | Some contract -> verifyFunction functionDefinition contract
             | None -> Ok ())
         |> Result.bind (fun () -> verifyCalls functionDefinition.Name functionDefinition.Body)) (Ok ())

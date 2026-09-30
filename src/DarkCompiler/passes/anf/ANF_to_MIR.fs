@@ -352,7 +352,7 @@ let isFloatAtom (floatRegs: Set<int>) (atom: ANF.Atom) : bool =
 
 /// Helper to check if a CExpr produces a float value
 /// returnTypeReg: map from function name to return type (for checking Call results)
-let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>) (cexpr: ANF.CExpr) : bool =
+let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: FunctionIdMap<AST.SemanticType>) (cexpr: ANF.CExpr) : bool =
     match cexpr with
     | ANF.Prim (op, left, right) ->
         // Comparisons and boolean ops always produce Bool, not Float
@@ -373,7 +373,7 @@ let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<AST.FunctionId,
     | ANF.BorrowedCall (funcName, _)
     | ANF.TailCall (funcName, _) ->
         // Check if the called function returns a float
-        match Map.tryFind funcName returnTypeReg with
+        match FunctionIdMap.tryFind funcName returnTypeReg with
         | Some AST.TFloat64 -> true
         | _ -> false
     | ANF.IndirectCall _ | ANF.IndirectTailCall _ ->
@@ -389,14 +389,14 @@ let cexprProducesFloat (floatRegs: Set<int>) (returnTypeReg: Map<AST.FunctionId,
 /// externalReturnTypes: return types for functions not in `functions` (e.g., specialized functions compiled elsewhere)
 let buildReturnTypeReg
     (functions: ANF.Function list)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
-    : Map<AST.FunctionId, AST.SemanticType> =
+    (externalReturnTypes: FunctionIdMap<string * AST.SemanticType>)
+    : FunctionIdMap<AST.SemanticType> =
     let externalById =
         externalReturnTypes
-        |> Map.map (fun _ (_, typ) -> typ)
+        |> FunctionIdMap.map (fun _ (_, typ) -> typ)
     functions
     |> List.fold
-        (fun returnTypes anfFunc -> Map.add anfFunc.Id anfFunc.ReturnType returnTypes)
+        (fun returnTypes anfFunc -> FunctionIdMap.add anfFunc.Id anfFunc.ReturnType returnTypes)
         externalById
 
 /// Return type for monomorphized intrinsics not tracked in the return type registry
@@ -438,8 +438,8 @@ type CFGBuilder = {
     SourceTempIdMax: int
     ExtraTypeMap: Map<ANF.TempId, AST.SemanticType>
     TypeReg: Map<string, (string * AST.SemanticType) list>
-    ReturnTypeReg: Map<AST.FunctionId, AST.SemanticType>  // Function identity -> return type
-    FunctionNames: Map<AST.FunctionId, string>
+    ReturnTypeReg: FunctionIdMap<AST.SemanticType>  // Function identity -> return type
+    FunctionNames: FunctionIdMap<string>
     FuncId: AST.FunctionId
     FuncName: string  // For generating unique labels per function
     ParamRegs: MIR.VReg list  // Parameter VRegs for self-recursive tail call loop optimization
@@ -530,18 +530,18 @@ let private closureCallReturnType (builder: CFGBuilder) (resultTempId: ANF.TempI
     | ANF.Var closureId ->
         match Map.tryFind closureId builder.ClosureFuncs with
         | Some funcName ->
-            match Map.tryFind funcName builder.ReturnTypeReg with
+            match FunctionIdMap.tryFind funcName builder.ReturnTypeReg with
             | Some t -> t
             | None -> resultTempType ()
         | None -> resultTempType ()
     | _ -> resultTempType ()
 
 let private directCallReturnType (builder: CFGBuilder) (funcName: AST.FunctionId) : AST.SemanticType =
-    match Map.tryFind funcName builder.ReturnTypeReg with
+    match FunctionIdMap.tryFind funcName builder.ReturnTypeReg with
     | Some t -> t
     | None ->
         let canonicalName =
-            Map.tryFind funcName builder.FunctionNames
+            FunctionIdMap.tryFind funcName builder.FunctionNames
             |> Option.defaultWith (fun () ->
                 Crash.crash "MIR lowering lost direct-call function name metadata")
         match tryGetIntrinsicReturnType canonicalName with
@@ -1689,8 +1689,8 @@ let convertSSAANFFunction
     (ssaFunc: SSAANF.Function)
     (typeById: AST.SemanticType option array)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
-    (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
-    (functionNames: Map<AST.FunctionId, string>)
+    (returnTypeReg: FunctionIdMap<AST.SemanticType>)
+    (functionNames: FunctionIdMap<string>)
     (enableCoverage: bool)
     : Result<MIR.Function, string> =
     let mirLabel (SSAANF.Label id) =
@@ -1936,10 +1936,10 @@ let private convertANFFunctionWithTailCalls
     (typeMap: ANF.TypeMap)
     (typeById: AST.SemanticType option array)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
-    (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
-    (functionNames: Map<AST.FunctionId, string>)
+    (returnTypeReg: FunctionIdMap<AST.SemanticType>)
+    (functionNames: FunctionIdMap<string>)
     (enableCoverage: bool)
-    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
+    (recursiveMembers: FunctionIdMap<AST.LoweredRecursiveMember>)
     (enableTCO: bool)
     : Result<MIR.Function, string> =
     SSAANF.convertFunction (maxTempIdInFunction anfFunc) typeMap anfFunc
@@ -1954,12 +1954,12 @@ let convertANFFunction
     (typeMap: ANF.TypeMap)
     (typeById: AST.SemanticType option array)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
-    (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
-    (functionNames: Map<AST.FunctionId, string>)
+    (returnTypeReg: FunctionIdMap<AST.SemanticType>)
+    (functionNames: FunctionIdMap<string>)
     (enableCoverage: bool)
     : Result<MIR.Function, string> =
     convertANFFunctionWithTailCalls
-        anfFunc typeMap typeById typeReg returnTypeReg functionNames enableCoverage Map.empty true
+        anfFunc typeMap typeById typeReg returnTypeReg functionNames enableCoverage FunctionIdMap.empty true
 
 /// Convert ANF program to MIR program
 /// mainExprType: the type of the main expression (used for _start's return type)
@@ -1975,8 +1975,8 @@ let toMIR
     (variantLookup: LoweringPrimitives.VariantLookup)
     (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
-    (functionNames: Map<AST.FunctionId, string>)
+    (externalReturnTypes: FunctionIdMap<string * AST.SemanticType>)
+    (functionNames: FunctionIdMap<string>)
     : Result<MIR.Program, string> =
     let (ANF.Program (functions, mainExpr)) = program
     // TypeMap spans the whole program, so materialize its dense lookup once and
@@ -1987,7 +1987,7 @@ let toMIR
     let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
     let startId =
         functionNames
-        |> Map.toSeq
+        |> FunctionIdMap.toSeq
         |> Seq.tryPick (fun (id, name) -> if name = "_start" then Some id else None)
         |> Option.defaultWith (fun () -> Crash.crash "MIR start function has no allocated identity")
     // Phase 2: Convert all functions to MIR
@@ -2026,15 +2026,15 @@ let toMIR
 let private toMIRFunctionsOnlyInternal
     (phaseRecorder: (string -> float -> unit) option)
     (projectedRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
-    (tailCallConfig: (Map<AST.FunctionId, AST.LoweredRecursiveMember> * bool) option)
+    (tailCallConfig: (FunctionIdMap<AST.LoweredRecursiveMember> * bool) option)
     (program: ANF.Program)
     (typeMap: ANF.TypeMap)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
     (variantLookup: LoweringPrimitives.VariantLookup)
     (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
-    (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
-    (functionNames: Map<AST.FunctionId, string>)
+    (returnTypeReg: FunctionIdMap<AST.SemanticType>)
+    (functionNames: FunctionIdMap<string>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let startPhase () =
         phaseRecorder |> Option.map (fun _ -> System.Diagnostics.Stopwatch.StartNew())
@@ -2054,7 +2054,7 @@ let private toMIRFunctionsOnlyInternal
     let members, enabled =
         match tailCallConfig with
         | Some config -> config
-        | None -> Map.empty, true
+        | None -> FunctionIdMap.empty, true
     let ssaTimer = startPhase ()
     let ssaResult =
         mapResults
@@ -2090,7 +2090,7 @@ let private toMIRFunctionsOnlyInternal
 let toMIRSSAFunctionsOnlyWithTrace
     (phaseRecorder: (string -> float -> unit) option)
     (projectedRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
-    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
+    (recursiveMembers: FunctionIdMap<AST.LoweredRecursiveMember>)
     (enableTCO: bool)
     (functions: SSAANF.Function list)
     (typeMap: ANF.TypeMap)
@@ -2098,8 +2098,8 @@ let toMIRSSAFunctionsOnlyWithTrace
     (variantLookup: LoweringPrimitives.VariantLookup)
     (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
-    (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
-    (functionNames: Map<AST.FunctionId, string>)
+    (returnTypeReg: FunctionIdMap<AST.SemanticType>)
+    (functionNames: FunctionIdMap<string>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let maxId =
         typeMap
@@ -2129,8 +2129,8 @@ let toMIRFunctionsOnly
     (variantLookup: LoweringPrimitives.VariantLookup)
     (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
-    (functionNames: Map<AST.FunctionId, string>)
+    (externalReturnTypes: FunctionIdMap<string * AST.SemanticType>)
+    (functionNames: FunctionIdMap<string>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     let (ANF.Program (functions, _)) = program
     let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
@@ -2150,7 +2150,7 @@ let toMIRFunctionsOnly
 let toMIRFunctionsOnlyWithTrace
     (phaseRecorder: (string -> float -> unit) option)
     (projectedRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
-    (recursiveMembers: Map<AST.FunctionId, AST.LoweredRecursiveMember>)
+    (recursiveMembers: FunctionIdMap<AST.LoweredRecursiveMember>)
     (enableTCO: bool)
     (program: ANF.Program)
     (typeMap: ANF.TypeMap)
@@ -2158,8 +2158,8 @@ let toMIRFunctionsOnlyWithTrace
     (variantLookup: LoweringPrimitives.VariantLookup)
     (typeRegForRecords: Map<string, (string * AST.SemanticType) list>)
     (enableCoverage: bool)
-    (returnTypeReg: Map<AST.FunctionId, AST.SemanticType>)
-    (functionNames: Map<AST.FunctionId, string>)
+    (returnTypeReg: FunctionIdMap<AST.SemanticType>)
+    (functionNames: FunctionIdMap<string>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
     toMIRFunctionsOnlyInternal
         phaseRecorder

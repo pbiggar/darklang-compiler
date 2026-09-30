@@ -19,7 +19,7 @@ let private prettyPrintANFAtom = function
     | ANF.FuncRef name -> $"&{name}"
 
 let private prettyPrintFunctionName functionNames id =
-    Map.tryFind id functionNames
+    FunctionIdMap.tryFind id functionNames
     |> Option.defaultWith (fun () -> string id)
 
 let private prettyPrintANFAtomWithNames functionNames atom =
@@ -257,7 +257,7 @@ let rec private prettyPrintANFExpr functionNames expression =
 /// Format ANF program in a pinned format
 let formatANF (ANF.Program (functions, mainExpr)) : string =
     let functionNames =
-        functions |> List.map (fun func -> (func.Id, func.Name)) |> Map.ofList
+        functions |> List.map (fun func -> (func.Id, func.Name)) |> FunctionIdMap.ofList
     let funcStrs =
         functions
         |> List.map (fun func ->
@@ -272,7 +272,7 @@ let formatANF (ANF.Program (functions, mainExpr)) : string =
         funcStrs + "\n\nMain:\n" + mainStr
 
 /// Format one ANF function while resolving calls against the supplied names.
-let formatANFFunction (functionNames: Map<AST.FunctionId, string>) (func: ANF.Function) : string =
+let formatANFFunction (functionNames: FunctionIdMap<string>) (func: ANF.Function) : string =
     $"Function {func.Name}:\n{prettyPrintANFExpr functionNames func.Body}"
 
 /// Format only matching ANF functions, optionally as a compact inventory.

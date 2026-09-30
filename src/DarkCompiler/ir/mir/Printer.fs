@@ -19,7 +19,7 @@ let private prettyPrintMIROperand = function
     | MIR.FuncAddr name -> $"&{name}"
 
 let private prettyPrintFunctionName functionNames id =
-    Map.tryFind id functionNames
+    FunctionIdMap.tryFind id functionNames
     |> Option.defaultWith (fun () -> string id)
 
 let private prettyPrintMIROperandWithNames functionNames operand =
@@ -238,7 +238,7 @@ let formatMIRWithFunctionNames externalFunctionNames (program: MIR.Program) : st
     let (MIR.Program (functions, _, _)) = program
     let functionNames =
         functions
-        |> List.fold (fun names func -> Map.add func.Id func.Name names) externalFunctionNames
+        |> List.fold (fun names func -> FunctionIdMap.add func.Id func.Name names) externalFunctionNames
     let prettyPrintBlock (block: MIR.BasicBlock) =
         let labelLine = $"  {prettyPrintMIRLabel block.Label}:"
         let instrLines = block.Instrs |> List.map (prettyPrintMIRInstr functionNames) |> List.map (fun line -> $"    {line}")
@@ -272,7 +272,7 @@ let formatMIRWithFunctionNames externalFunctionNames (program: MIR.Program) : st
     |> List.map prettyPrintFunction
     |> String.concat "\n\n"
 
-let formatMIR program = formatMIRWithFunctionNames Map.empty program
+let formatMIR program = formatMIRWithFunctionNames FunctionIdMap.empty program
 
 /// Format only matching MIR functions, optionally as block/instruction counts.
 let formatMIRDump (filter: string option) (summary: bool) (MIR.Program (functions, variants, records)) : string =

@@ -286,7 +286,7 @@ let private trySimplifyAdjacentLet
     (cexpr: CExpr)
     (body: AExpr)
     : AExpr option =
-    let hasName id name = Map.tryFind id context.FunctionNames = Some name
+    let hasName id name = FunctionIdMap.tryFind id context.FunctionNames = Some name
     let resolve name =
         Map.tryFind name context.FunctionIds
         |> Option.defaultWith (fun () ->
@@ -296,7 +296,7 @@ let private trySimplifyAdjacentLet
     | Call (fromInt64Id, [nativeIndex]),
       Let (resultTid, Call (getAtId, [listValue; Var indexTid]), resultBody)
         when hasName fromInt64Id "Darklang.Stdlib.Int.fromInt64"
-             && (Map.tryFind getAtId context.FunctionNames
+             && (FunctionIdMap.tryFind getAtId context.FunctionNames
                  |> Option.exists (fun name ->
                      name = "Darklang.Stdlib.List.getAt"
                      || name.StartsWith("Darklang.Stdlib.List.getAt_")))
@@ -305,7 +305,7 @@ let private trySimplifyAdjacentLet
         // The converted index always fits in Int64. Call the list primitive
         // with that index directly, preserving getAt's bounds check.
         let internalGetAt =
-            Map.tryFind getAtId context.FunctionNames
+            FunctionIdMap.tryFind getAtId context.FunctionNames
             |> Option.bind (fun name ->
                 let publicPrefix = "Darklang.Stdlib.List.getAt"
                 if name = publicPrefix || name.StartsWith(publicPrefix + "_") then

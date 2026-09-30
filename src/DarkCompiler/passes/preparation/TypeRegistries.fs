@@ -82,11 +82,11 @@ let rcSumShapeRegistryFromVariantLookup (variantLookup: VariantLookup) : MemoryM
 
 /// Function registry keyed by semantic identity. Names are retained as
 /// definition metadata for diagnostics and backend symbol emission.
-type FunctionRegistry = Map<AST.FunctionId, string * AST.SemanticType>
+type FunctionRegistry = FunctionIdMap<string * AST.SemanticType>
 
 /// Display metadata for every resolved function identity, including compiler
 /// intrinsics that do not have ordinary checked definitions.
-type FunctionNameRegistry = Map<AST.FunctionId, string>
+type FunctionNameRegistry = FunctionIdMap<string>
 
 /// Resolve the small set of explicitly named lowering conventions to their
 /// canonical semantic identities without rebuilding the inverse name table at
@@ -95,7 +95,7 @@ type FunctionIdRegistry = Map<string, AST.FunctionId>
 
 let functionIdsFromNames (names: FunctionNameRegistry) : FunctionIdRegistry =
     names
-    |> Map.toSeq
+    |> FunctionIdMap.toSeq
     |> Seq.map (fun (id, name) -> name, id)
     |> Map.ofSeq
 

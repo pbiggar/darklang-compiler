@@ -80,11 +80,11 @@ let unknownSummary = {
 
 let mergeFunctionSummaries left right =
     right
-    |> Map.fold (fun summaries id summary ->
-        match Map.tryFind id summaries with
-        | None -> Map.add id summary summaries
+    |> FunctionIdMap.fold (fun summaries id summary ->
+        match FunctionIdMap.tryFind id summaries with
+        | None -> FunctionIdMap.add id summary summaries
         | Some existing when existing = summary && Option.isSome summary.Version -> summaries
-        | Some _ -> Map.add id unknownSummary summaries) left
+        | Some _ -> FunctionIdMap.add id unknownSummary summaries) left
 
 open ARM64CodeGenTypes
 open CodeGen
@@ -144,7 +144,7 @@ type internal CompiledDependencyConfig = {
     Target: Platform.Target
     Options: CompilerOptions
     NonInlineableFunctionNames: Set<AST.FunctionId>
-    KnownSummaries: Map<AST.FunctionId, FunctionSummaryFacts>
+    KnownSummaries: FunctionIdMap<FunctionSummaryFacts>
 }
 
 [<NoComparison>]
@@ -171,14 +171,14 @@ type internal AllocatedLirFunctionCache =
 
 type internal CallAwareLirFunctionCache =
     LIR.Function
-        -> Map<AST.FunctionId, ARM64CalleeClobbers.Writes>
+        -> FunctionIdMap<ARM64CalleeClobbers.Writes>
         -> (unit -> LIR.Function)
         -> LIR.Function
 
 [<NoComparison>]
 type internal CallAwareLirFunctionKey = {
     Base: LIR.Function
-    Callees: Map<AST.FunctionId, ARM64CalleeClobbers.Writes>
+    Callees: FunctionIdMap<ARM64CalleeClobbers.Writes>
 }
 
 type internal CallAwareLirFunctionKeyComparer() =

@@ -6,12 +6,12 @@
 module CallGraphReachability
 
 /// Compute the transitive closure of reachable nodes in a call graph.
-let findReachable (callGraph: Map<'node, Set<'node>>) (roots: Set<'node>) : Set<'node> =
+let findReachable (callGraph: FunctionIdMap<Set<AST.FunctionId>>) (roots: Set<AST.FunctionId>) : Set<AST.FunctionId> =
     let rec visit reachable toVisit =
         match toVisit with
         | [] -> reachable
         | name :: rest ->
-            let calls = Map.tryFind name callGraph |> Option.defaultValue Set.empty
+            let calls = FunctionIdMap.tryFind name callGraph |> Option.defaultValue Set.empty
             let (reachable', toVisit') =
                 calls
                 |> Set.fold (fun (known, pending) calledName ->

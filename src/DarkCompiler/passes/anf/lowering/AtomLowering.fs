@@ -28,8 +28,8 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
         |> Option.defaultWith (fun () ->
             Crash.crash $"Atom lowering function '{name}' is absent from registries")
     let functionNameIs id expected =
-        Map.tryFind id functionNames
-        |> Option.orElseWith (fun () -> Map.tryFind id funcReg |> Option.map fst)
+        FunctionIdMap.tryFind id functionNames
+        |> Option.orElseWith (fun () -> FunctionIdMap.tryFind id funcReg |> Option.map fst)
         |> Option.contains expected
     match expr with
     | CheckedAST.RecursiveLet _ -> Error "RecursiveLet must be lowered during lambda lifting"
@@ -432,8 +432,8 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
             // Function call in atom position: convert all arguments to atoms
             let argExprList = exprArgsToList args
             let displayName =
-                Map.tryFind funcName functionNames
-                |> Option.orElseWith (fun () -> Map.tryFind funcName funcReg |> Option.map fst)
+                FunctionIdMap.tryFind funcName functionNames
+                |> Option.orElseWith (fun () -> FunctionIdMap.tryFind funcName funcReg |> Option.map fst)
                 |> Option.defaultWith (fun () ->
                     Crash.crash "Atom lowering lost function name metadata")
 
@@ -502,7 +502,7 @@ let lowerAtom (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBou
                                 | None ->
                                         // Assume it's a defined function (direct call)
                                         let callArgAtoms =
-                                            match Map.tryFind funcName funcReg with
+                                            match FunctionIdMap.tryFind funcName funcReg with
                                             | Some (_, AST.TFunction (paramTypes, _)) ->
                                                 normalizeSyntheticNullaryArgAtoms paramTypes argExprList argAtoms
                                             | _ ->

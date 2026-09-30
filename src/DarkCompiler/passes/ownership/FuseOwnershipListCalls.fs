@@ -142,7 +142,7 @@ let private substitute parameters body =
     |> fst
 
 type private State = {
-    Selected: Map<AST.FunctionId, CallSiteIdentity list>
+    Selected: FunctionIdMap<CallSiteIdentity list>
     Fused: Set<CallSiteIdentity>
     FusedValues: CheckedAST.Expr list
 }
@@ -169,7 +169,7 @@ let private isSafeArgument = function
     | _ -> false
 
 let private isSupportedTransformTarget functionNames target =
-    match Map.tryFind target functionNames with
+    match FunctionIdMap.tryFind target functionNames with
     | Some "Darklang.Stdlib.List.map_i64_i64"
     | Some "Darklang.Stdlib.List.reverse_i64" -> true
     | _ -> false
@@ -230,11 +230,11 @@ let fuse
     : Result =
     let boundaryId =
         functionNames
-        |> Map.toSeq
+        |> FunctionIdMap.toSeq
         |> Seq.tryPick (fun (id, name) ->
             if name = "Darklang.Stdlib.List.__arrayOwnershipBoundary_i64" then Some id
             else None)
-    let checkedById = functions |> List.map (fun definition -> definition.Id, definition) |> Map.ofList
+    let checkedById = functions |> List.map (fun definition -> definition.Id, definition) |> FunctionIdMap.ofList
     let rewrites =
         MaterializeOwnershipVariants.rewrites plan
         |> List.map (fun rewrite -> rewrite.Site, rewrite.Ownership)
@@ -249,11 +249,11 @@ let fuse
              |> List.map (fun (target, targetRewrites) ->
                  target,
                  (targetRewrites |> List.sortBy (fun rewrite -> rewrite.Site) |> List.map (fun rewrite -> rewrite.Site)))
-             |> Map.ofList))
-        |> Map.ofList
+             |> FunctionIdMap.ofList))
+        |> FunctionIdMap.ofList
     let fuseFunction (definition: CheckedAST.FunctionDef) =
         let initial = {
-            Selected = Map.tryFind definition.Id selectedByCaller |> Option.defaultValue Map.empty
+            Selected = FunctionIdMap.tryFind definition.Id selectedByCaller |> Option.defaultValue FunctionIdMap.empty
             Fused = Set.empty
             FusedValues = []
         }
@@ -264,13 +264,13 @@ let fuse
                 bindValue pattern value body,
                 { state with FusedValues = removeFirst value state.FusedValues }
             | CheckedAST.Call (target, arguments) ->
-                match Map.tryFind target state.Selected with
+                match FunctionIdMap.tryFind target state.Selected with
                 | Some (site :: rest) ->
                     let selected =
-                        if List.isEmpty rest then Map.remove target state.Selected
-                        else Map.add target rest state.Selected
+                        if List.isEmpty rest then FunctionIdMap.remove target state.Selected
+                        else FunctionIdMap.add target rest state.Selected
                     let next = { state with Selected = selected }
-                    match Map.tryFind site rewrites, Map.tryFind target checkedById with
+                    match Map.tryFind site rewrites, FunctionIdMap.tryFind target checkedById with
                     | Some ownership, Some callee
                         when eligible functionNames callee ownership
                              && (AST.NonEmptyList.toList arguments |> List.forall isSafeArgument) ->

@@ -346,11 +346,11 @@ let private withFunctionSemantics
                     signatures
                     |> List.map (fun (functionDefinition, signature) ->
                         functionDefinition.Definition.Id, signature)
-                    |> Map.ofList
+                    |> FunctionIdMap.ofList
                 let programSemantics = {
                     semantics with
                         CallOwnership = fun call ->
-                            match Map.tryFind call.Target registry with
+                            match FunctionIdMap.tryFind call.Target registry with
                             | Some signature -> Some signature
                             | None -> semantics.CallOwnership call
                 }

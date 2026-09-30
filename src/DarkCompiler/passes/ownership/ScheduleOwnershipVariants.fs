@@ -141,11 +141,11 @@ let private withInternalOwnership semantics definitions =
         result |> Result.bind (fun registry ->
             VerifyOwnership.callSignatureOfFunction definition.Ownership
             |> Result.mapError (fun error -> InvalidFunctionBoundary (definition.Definition.Id, error))
-            |> Result.map (fun boundary -> Map.add definition.Definition.Id boundary registry))) (Ok Map.empty)
+            |> Result.map (fun boundary -> FunctionIdMap.add definition.Definition.Id boundary registry))) (Ok FunctionIdMap.empty)
     |> Result.map (fun registry -> {
         semantics with
             CallOwnership = fun call ->
-                match Map.tryFind call.Target registry with
+                match FunctionIdMap.tryFind call.Target registry with
                 | Some boundary -> Some boundary
                 | None -> semantics.CallOwnership call
     })
@@ -178,7 +178,7 @@ let scheduleWithTrace
         |> Result.map (fun program -> programSemantics, program))
     |> Result.bind (fun (programSemantics, program) ->
         let originalIds = definitions |> List.map (fun definition -> definition.Definition.Id) |> Set.ofList
-        let definitionsById = definitions |> List.map (fun definition -> definition.Definition.Id, definition) |> Map.ofList
+        let definitionsById = definitions |> List.map (fun definition -> definition.Definition.Id, definition) |> FunctionIdMap.ofList
         let definitionsByName = definitions |> List.map (fun definition -> definition.Definition.Name, definition) |> Map.ofList
         let sourceCalls = originalCalls definitions
         let resolveDemand
@@ -196,7 +196,7 @@ let scheduleWithTrace
             | Some resolution -> Ok (resolution, demandCache, inferredGroups)
             | None ->
                 let target =
-                    match Map.tryFind fact.Call.Target definitionsById with
+                    match FunctionIdMap.tryFind fact.Call.Target definitionsById with
                     | Some definition -> definition.Definition.Name
                     | None -> Crash.crash "Filtered original call target has no definition"
                 InferOwnedFunctionGroups.inferDemandWithTrace
@@ -272,21 +272,21 @@ let scheduleWithTrace
                                     |> Result.bind (fun (cache, visits) ->
                                         let id = definition.Definition.Id
                                         if Set.contains id changedCallers then
-                                            let version = Map.tryFind id versions |> Option.defaultValue 0
+                                            let version = FunctionIdMap.tryFind id versions |> Option.defaultValue 0
                                             let visit = id, version
                                             if Set.contains visit visits then
                                                 Crash.crash "Ownership caller was analyzed twice at one body version"
                                             VerifyOwnership.analyzeFunction currentSemantics definition
                                             |> Result.mapError (VerifyOwnedHIR.OwnershipVerificationFailed >> AnalysisFailed)
-                                            |> Result.map (fun facts -> Map.add id facts cache, Set.add visit visits)
-                                        elif Map.containsKey id cache then Ok (cache, visits)
+                                            |> Result.map (fun facts -> FunctionIdMap.add id facts cache, Set.add visit visits)
+                                        elif FunctionIdMap.containsKey id cache then Ok (cache, visits)
                                         else Crash.crash "Unchanged ownership caller has no cached facts"))
                                     (Ok (cachedFacts, analyzedVersions)))
                         |> Result.bind (fun (factsByCaller, analyzedVersions) ->
                             let facts =
                                 MaterializeOwnershipVariants.originals materialized
                                 |> List.collect (fun definition ->
-                                    match Map.tryFind definition.Definition.Id factsByCaller with
+                                    match FunctionIdMap.tryFind definition.Definition.Id factsByCaller with
                                     | Some facts -> facts
                                     | None -> Crash.crash "Ownership caller facts were lost")
                             measure
@@ -350,9 +350,9 @@ let scheduleWithTrace
                                         additions
                                         |> List.fold (fun versions request ->
                                             let prior =
-                                                Map.tryFind request.Caller versions
+                                                FunctionIdMap.tryFind request.Caller versions
                                                 |> Option.defaultValue 0
-                                            Map.add request.Caller (prior + 1) versions) versions
+                                            FunctionIdMap.add request.Caller (prior + 1) versions) versions
                                     loop
                                         (number + 1)
                                         next
@@ -363,7 +363,7 @@ let scheduleWithTrace
                                         (additions |> List.map (fun request -> request.Caller) |> Set.ofList)
                                         nextVersions
                                         analyzedVersions)))
-        loop 1 Map.empty [] Map.empty [] Map.empty originalIds Map.empty Set.empty)
+        loop 1 Map.empty [] Map.empty [] FunctionIdMap.empty originalIds FunctionIdMap.empty Set.empty)
 
 let schedule limits hir semantics reservedSymbols definitions =
     scheduleWithTrace None limits hir semantics reservedSymbols definitions

@@ -12,7 +12,7 @@ open MemoryShapeTests
 let private functionRegistry entries : TypeRegistries.FunctionRegistry =
     entries
     |> List.map (fun (name, typ) -> TestIds.functionIdForName name, (name, typ))
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 let rec private hasDecAfterNonSelfTailCall
     (funcName: AST.FunctionId)
@@ -164,7 +164,7 @@ let private rawSlotTransferTestFunction
             ("makeList", AST.TFunction ([], listType))
         ]
         |> List.map (fun (name, typ) -> TestIds.functionIdForName name, (name, typ))
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let ctx : TypeContext = {
         TypeReg = Map.empty
         VariantLookup = Map.empty
@@ -303,7 +303,7 @@ let testBranchLocalTempReuseUsesCurrentTypeContext () : TestResult =
         TypeReg = Map.empty
         VariantLookup = Map.empty
         SumShapeReg = Map.empty
-        FuncReg = Map.empty
+        FuncReg = FunctionIdMap.empty
         FuncParams = Map.empty
         TempTypes = Map.empty
         ClosureFuncs = Map.empty
@@ -863,7 +863,7 @@ let testStaticStringBindingSkipsNoOpRcTraffic () : TestResult =
         TypeReg = Map.empty
         VariantLookup = Map.empty
         SumShapeReg = Map.empty
-        FuncReg = Map.empty
+        FuncReg = FunctionIdMap.empty
         FuncParams = Map.empty
         TempTypes = Map.empty
         ClosureFuncs = Map.empty
@@ -903,7 +903,7 @@ let testKnownEmptyListBindingSkipsNoOpRcTraffic () : TestResult =
         TypeReg = Map.empty
         VariantLookup = Map.empty
         SumShapeReg = Map.empty
-        FuncReg = Map.empty
+        FuncReg = FunctionIdMap.empty
         FuncParams = Map.empty
         TempTypes = Map.empty
         ClosureFuncs = Map.empty
@@ -944,7 +944,7 @@ let testAggregateSkipsRetainsForKnownNonRcSentinels () : TestResult =
         TypeReg = Map.empty
         VariantLookup = Map.empty
         SumShapeReg = Map.empty
-        FuncReg = Map.empty
+        FuncReg = FunctionIdMap.empty
         FuncParams = Map.empty
         TempTypes = Map.empty
         ClosureFuncs = Map.empty
@@ -991,7 +991,7 @@ let testAggregateSkipsRetainForConditionalStaticString () : TestResult =
         TypeReg = Map.empty
         VariantLookup = Map.empty
         SumShapeReg = Map.empty
-        FuncReg = Map.empty
+        FuncReg = FunctionIdMap.empty
         FuncParams = Map.empty
         TempTypes = Map.empty
         ClosureFuncs = Map.empty

@@ -29,7 +29,7 @@ let private emptyContext : ANFConstants.OptimizeContext =
     { TypeReg = Map.empty
       RecordTypeParams = Map.empty
       SumShapeReg = Map.empty
-      FunctionNames = Map.empty
+      FunctionNames = FunctionIdMap.empty
       FunctionIds = Map.empty }
 
 let private optimizationFunctionNames =
@@ -41,7 +41,7 @@ let private optimizationFunctionNames =
     |> List.map (fun name ->
         let fullName = $"Darklang.Stdlib.{name}"
         TestIds.functionIdForName fullName, fullName)
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 let private markerContext : ANFConstants.OptimizeContext =
     { TypeReg = Map.empty
@@ -49,7 +49,7 @@ let private markerContext : ANFConstants.OptimizeContext =
       FunctionNames = optimizationFunctionNames
       FunctionIds =
         optimizationFunctionNames
-        |> Map.toList
+        |> FunctionIdMap.toList
         |> List.map (fun (id, name) -> name, id)
         |> Map.ofList
       SumShapeReg =

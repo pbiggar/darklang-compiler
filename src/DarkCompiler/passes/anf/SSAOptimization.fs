@@ -85,7 +85,7 @@ let private rewriteOperations context options typeEnv tupleEnv env operations =
     |> fun (reversed, known, tuples, _) -> List.rev reversed, known, tuples
 
 let private rewriteIndexCalls (context: OptimizeContext) uses operations =
-    let hasName id name = Map.tryFind id context.FunctionNames = Some name
+    let hasName id name = FunctionIdMap.tryFind id context.FunctionNames = Some name
     let resolve name = Map.tryFind name context.FunctionIds
     let rec rewrite = function
         | (indexId, Call (fromInt64, [nativeIndex])) ::
@@ -93,12 +93,12 @@ let private rewriteIndexCalls (context: OptimizeContext) uses operations =
             when indexId = usedIndex
                  && Map.tryFind indexId uses = Some 1
                  && hasName fromInt64 "Darklang.Stdlib.Int.fromInt64"
-                 && (Map.tryFind getAt context.FunctionNames
+                 && (FunctionIdMap.tryFind getAt context.FunctionNames
                      |> Option.exists (fun name ->
                          name = "Darklang.Stdlib.List.getAt"
                          || name.StartsWith("Darklang.Stdlib.List.getAt_"))) ->
             let target =
-                Map.tryFind getAt context.FunctionNames
+                FunctionIdMap.tryFind getAt context.FunctionNames
                 |> Option.bind (fun name ->
                     let publicPrefix = "Darklang.Stdlib.List.getAt"
                     if name = publicPrefix || name.StartsWith(publicPrefix + "_") then

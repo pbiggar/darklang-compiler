@@ -24,24 +24,24 @@ let liftLambdasInFunc (funcDef: CheckedAST.FunctionDef) (state: LiftState) : Res
 /// State extended with semantic function catalogs and emitted wrappers.
 type LiftStateWithFuncs = {
     State: LiftState
-    FuncParams: Map<AST.FunctionId, AST.SemanticType list>
-    GeneratedWrappers: Map<AST.FunctionId, AST.FunctionId * AST.FunctionId>
+    FuncParams: FunctionIdMap<AST.SemanticType list>
+    GeneratedWrappers: FunctionIdMap<AST.FunctionId * AST.FunctionId>
 }
 
 type FunctionCatalog = {
-    Params: Map<AST.FunctionId, AST.SemanticType list>
-    ReturnTypes: Map<AST.FunctionId, AST.SemanticType>
-    GenericDefs: Map<AST.FunctionId, string list * AST.SemanticType>
+    Params: FunctionIdMap<AST.SemanticType list>
+    ReturnTypes: FunctionIdMap<AST.SemanticType>
+    GenericDefs: FunctionIdMap<string list * AST.SemanticType>
 }
 
 /// Generate a wrapper for a named function used as a value.
 let generateFuncWrapper
     (origFuncId: AST.FunctionId)
-    (funcParams: Map<AST.FunctionId, AST.SemanticType list>)
-    (funcReturnTypes: Map<AST.FunctionId, AST.SemanticType>)
+    (funcParams: FunctionIdMap<AST.SemanticType list>)
+    (funcReturnTypes: FunctionIdMap<AST.SemanticType>)
     (stateWithFuncs: LiftStateWithFuncs)
     : Result<(CheckedAST.FunctionDef * LiftStateWithFuncs), string> =
-    match Map.tryFind origFuncId funcParams, Map.tryFind origFuncId funcReturnTypes with
+    match FunctionIdMap.tryFind origFuncId funcParams, FunctionIdMap.tryFind origFuncId funcReturnTypes with
     | Some parameters, Some returnType ->
         let origFuncName = AST.functionIdValue origFuncId
         // Create wrapper: __funcref_wrapper_N(__closure, ...params) = origFunc(...params)
@@ -88,7 +88,7 @@ let generateFuncWrapper
                         LiftedFunctions = comparisonDef :: stateWithName.LiftedFunctions
                 }
                 GeneratedWrappers =
-                    Map.add
+                    FunctionIdMap.add
                         origFuncId
                         (wrapperId, comparisonDef.Id)
                         stateWithFuncs.GeneratedWrappers
@@ -335,37 +335,37 @@ let rec liftLambdasInProgram
                              canonicalizeNamedTypeRefs recordNames mergedSumTypeNames fieldType)) })
 
     // First pass: collect all function definitions and their parameters
-    let userFuncParams : Map<AST.FunctionId, AST.SemanticType list> =
+    let userFuncParams : FunctionIdMap<AST.SemanticType list> =
         topLevels
         |> List.choose (function
             | CheckedAST.FunctionDef f ->
                 Some (f.Id, CheckedAST.functionParameterTypes f |> paramsToList |> List.map snd)
             | _ -> None)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
 
     // Collect user function return types
-    let userFuncReturnTypes : Map<AST.FunctionId, AST.SemanticType> =
+    let userFuncReturnTypes : FunctionIdMap<AST.SemanticType> =
         topLevels
         |> List.choose (function
             | CheckedAST.FunctionDef f -> Some (f.Id, CheckedAST.functionReturnType f)
             | _ -> None)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
 
     // Collect user generic function definitions (for TypeApp substitution)
-    let userGenericFuncDefs : Map<AST.FunctionId, string list * AST.SemanticType> =
+    let userGenericFuncDefs : FunctionIdMap<string list * AST.SemanticType> =
         topLevels
         |> List.choose (function
             | CheckedAST.FunctionDef f when not (List.isEmpty f.TypeParams) ->
                 Some (f.Id, (f.TypeParams, CheckedAST.functionReturnType f))
             | _ -> None)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
 
     let funcParams =
-        Map.fold (fun acc k v -> Map.add k v acc) baseFunctions.Params userFuncParams
+        FunctionIdMap.fold (fun acc k v -> FunctionIdMap.add k v acc) baseFunctions.Params userFuncParams
     let funcReturnTypes =
-        Map.fold (fun acc k v -> Map.add k v acc) baseFunctions.ReturnTypes userFuncReturnTypes
+        FunctionIdMap.fold (fun acc k v -> FunctionIdMap.add k v acc) baseFunctions.ReturnTypes userFuncReturnTypes
     let genericFuncDefs =
-        Map.fold (fun acc k v -> Map.add k v acc) baseFunctions.GenericDefs userGenericFuncDefs
+        FunctionIdMap.fold (fun acc k v -> FunctionIdMap.add k v acc) baseFunctions.GenericDefs userGenericFuncDefs
     let locallyComparedFunctionParams =
         topLevels
         |> List.choose (function
@@ -394,7 +394,7 @@ let rec liftLambdasInProgram
         [ "Builtin.testRuntimeError"; "Builtin.crash" ]
         |> List.fold (fun returnTypes name ->
             match CheckedAST.tryFindFunctionId name symbols with
-            | Some id -> Map.add id AST.TNever returnTypes
+            | Some id -> FunctionIdMap.add id AST.TNever returnTypes
             | None -> Crash.crash $"Builtin function '{name}' has no allocated identity") funcReturnTypes
 
     let initialState = {
@@ -446,7 +446,7 @@ let rec liftLambdasInProgram
             |> List.distinct
 
         // Generate wrappers for functions used as values
-        let stateWithFuncs = { State = state'; FuncParams = funcParams; GeneratedWrappers = Map.empty }
+        let stateWithFuncs = { State = state'; FuncParams = funcParams; GeneratedWrappers = FunctionIdMap.empty }
         let rec generateWrappers (funcIds: AST.FunctionId list) (st: LiftStateWithFuncs) (wrapperAcc: CheckedAST.FunctionDef list) =
             match funcIds with
             | [] -> Ok (wrapperAcc, st)
@@ -466,14 +466,14 @@ let rec liftLambdasInProgram
 /// Collect function identities that are used as values (not in call position).
 and collectFuncRefsInExpr
     (expr: CheckedAST.Expr)
-    (knownFuncs: Map<AST.FunctionId, AST.SemanticType list>)
+    (knownFuncs: FunctionIdMap<AST.SemanticType list>)
     : AST.FunctionId list =
     let rec collect (bound: Set<AST.BindingId>) candidate =
         let collectChildren children = children |> List.collect (collect bound)
         match candidate with
         | CheckedAST.BoundaryRender (_, value) -> collect bound value
         | CheckedAST.FuncRef id ->
-            if Map.containsKey id knownFuncs then [id] else []
+            if FunctionIdMap.containsKey id knownFuncs then [id] else []
         | CheckedAST.Call (_, args) | CheckedAST.TypeApp (_, _, args) ->
             args |> exprArgsToList |> collectChildren
         | CheckedAST.Let (pattern, value, body) ->
@@ -523,7 +523,7 @@ and collectFuncRefsInExpr
 
 /// Replace function references with wrapper references in a TopLevel
 and replaceFuncRefsWithWrappers
-    (wrapperMap: Map<AST.FunctionId, AST.FunctionId * AST.FunctionId>)
+    (wrapperMap: FunctionIdMap<AST.FunctionId * AST.FunctionId>)
     (topLevel: CheckedAST.TopLevel)
     : CheckedAST.TopLevel =
     match topLevel with
@@ -538,7 +538,7 @@ and replaceFuncRefsWithWrappers
 
 /// Replace function references with wrapper references in an expression
 and replaceInExpr
-    (wrapperMap: Map<AST.FunctionId, AST.FunctionId * AST.FunctionId>)
+    (wrapperMap: FunctionIdMap<AST.FunctionId * AST.FunctionId>)
     (expr: CheckedAST.Expr)
     : CheckedAST.Expr =
     let rec replace (bound: Set<AST.BindingId>) candidate =
@@ -546,12 +546,12 @@ and replaceInExpr
         match candidate with
         | CheckedAST.BoundaryRender (renderer, value) -> CheckedAST.BoundaryRender (renderer, replace bound value)
         | CheckedAST.FuncRef id ->
-            match Map.tryFind id wrapperMap with
+            match FunctionIdMap.tryFind id wrapperMap with
             | Some (wrapperId, comparisonId) ->
                 CheckedAST.Closure (wrapperId, [CheckedAST.FuncRef comparisonId])
             | None -> candidate
         | CheckedAST.Closure (funcName, captures) ->
-            let wrapper = Map.tryFind funcName wrapperMap
+            let wrapper = FunctionIdMap.tryFind funcName wrapperMap
             match wrapper with
             | Some (wrapperId, comparisonId) ->
                 CheckedAST.Closure (

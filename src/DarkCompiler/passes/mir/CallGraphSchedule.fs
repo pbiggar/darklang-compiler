@@ -33,14 +33,14 @@ let calleeFirst (functions: MIR.Function list) : Component list =
         indexed
         |> List.groupBy (fun (_, func) -> func.Id)
         |> List.map (fun (id, entries) -> id, entries |> List.map fst)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let graph =
         functionByIndex
         |> Array.map (fun func ->
             directCallees func
             |> Set.toList
             |> List.choose (fun id ->
-                match Map.tryFind id byId with
+                match FunctionIdMap.tryFind id byId with
                 | Some [unique] -> Some unique
                 | _ -> None)
             |> Set.ofList)

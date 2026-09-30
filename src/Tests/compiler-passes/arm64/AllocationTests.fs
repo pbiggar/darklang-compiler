@@ -17,7 +17,7 @@ let private convertRawAlloc
         RawSlotInitRetainTargets = None
         ClosurePayloadSizes = Map.empty
         ClosureCaptureTypes = Map.empty
-        FunctionNames = Map.empty
+        FunctionNames = FunctionIdMap.empty
         FunctionName = "test"
         InstructionSite = "test_0"
         StackSize = 0

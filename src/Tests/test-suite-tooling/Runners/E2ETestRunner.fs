@@ -708,8 +708,8 @@ let buildSuiteContexts
                                                 ANFFunctions = []
                                                 TypeMap = specializedStdlib.StdlibTypeMap
                                                 SymbolicFunctions = []
-                                                CallGraphSummaries = Map.empty
-                                                SymbolicCallGraph = Map.empty
+                                                CallGraphSummaries = FunctionIdMap.empty
+                                                SymbolicCallGraph = FunctionIdMap.empty
                                             } : CompilationContexts.PreambleContext)
                                     | Some analysis when Set.isEmpty plan.StdlibSpecs ->
                                         PreambleCompilation.buildPreambleContextFromAnalysis

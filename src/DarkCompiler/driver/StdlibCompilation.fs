@@ -315,7 +315,7 @@ let buildStdlibWithTrace
                                 Some (WrittenChecking.includeAllocatedFunctions anfResult.Symbols writtenEnvironment) }
                 let stdlibFunctions = anfResult.Functions
                 let stdlibOptions = defaultOptions
-                match buildAnf 0 stdlibOptions sw registries (CheckedAST.nextFunctionOrdinal anfResult.Symbols) stdlibInliningConfig Map.empty Map.empty Set.empty stdlibFunctions Map.empty false passTimingRecorder with
+                match buildAnf 0 stdlibOptions sw registries (CheckedAST.nextFunctionOrdinal anfResult.Symbols) stdlibInliningConfig FunctionIdMap.empty Map.empty Set.empty stdlibFunctions FunctionIdMap.empty false passTimingRecorder with
                 | Error e ->
                     Error e
                 | Ok (anfFunctions, ssaFunctions, typeMap) ->
@@ -331,7 +331,7 @@ let buildStdlibWithTrace
 
                     let externalReturnTypes = returnTypes
                     match lowerToAllocatedLirWithKnown
-                        Map.empty
+                        FunctionIdMap.empty
                         target
                         0
                         stdlibOptions
@@ -524,7 +524,7 @@ let buildStdlibSpecializations
                                 |> Map.fold (fun ids name id -> Map.add name id ids) registries.FunctionIds
                             FunctionNames =
                                 CheckedAST.functionNames (CheckedAST.programSymbols preparedProgram)
-                                |> Map.fold (fun names id name -> Map.add id name names) registries.FunctionNames
+                                |> FunctionIdMap.fold (fun names id name -> FunctionIdMap.add id name names) registries.FunctionNames
                             TypeReg =
                                 Map.fold
                                     (fun acc name recordInfo -> Map.add name recordInfo acc)
@@ -562,7 +562,7 @@ let buildStdlibSpecializations
                     |> Result.bind (fun (anfFuncs, _varGen1) ->
                         let stdlibOptions = defaultOptions
                         let sw = Stopwatch.StartNew()
-                        buildAnf 0 stdlibOptions sw registries (CheckedAST.nextFunctionOrdinal (CheckedAST.programSymbols preparedProgram)) stdlibInliningConfig Map.empty Map.empty Set.empty anfFuncs Map.empty false passTimingRecorder
+                        buildAnf 0 stdlibOptions sw registries (CheckedAST.nextFunctionOrdinal (CheckedAST.programSymbols preparedProgram)) stdlibInliningConfig FunctionIdMap.empty Map.empty Set.empty anfFuncs FunctionIdMap.empty false passTimingRecorder
                         |> Result.bind (fun (anfFunctions, ssaFunctions, typeMap) ->
                             let newAnfFuncMap =
                                 anfFunctions
@@ -600,7 +600,7 @@ let buildStdlibSpecializations
                                     anfFuncs
                                     |> InliningCommon.buildExternalCandidateInfoMap InliningCommon.defaultConfig
                                 let mergedStdlibInlineCandidates =
-                                    Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibInlineCandidates newInlineCandidateMap
+                                    FunctionIdMap.fold (fun acc k v -> FunctionIdMap.add k v acc) stdlib.StdlibInlineCandidates newInlineCandidateMap
                                 let allAnfFunctions =
                                     mergedStdlibAnfFunctions
                                     |> Map.toList

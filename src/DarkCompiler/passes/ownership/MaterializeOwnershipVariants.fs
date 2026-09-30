@@ -84,14 +84,14 @@ let hirContracts plan (source: VerifyOwnedHIR.HIRContracts<'leaf>) =
     let registry =
         members plan
         |> List.map (fun memberDefinition -> memberDefinition.Function.Definition.Id, memberDefinition)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     { source with
         CallSignature = fun target ->
-            match Map.tryFind target registry with
+            match FunctionIdMap.tryFind target registry with
             | Some memberDefinition -> Some (typedSignature memberDefinition.Function)
             | None -> source.CallSignature target
         CallContract = fun call ->
-            match Map.tryFind call.Target registry with
+            match FunctionIdMap.tryFind call.Target registry with
             | Some memberDefinition -> source.CallContract { call with Target = memberDefinition.Original }
             | None -> source.CallContract call }
 
@@ -100,10 +100,10 @@ let ownershipSemantics plan (source: Semantics<'leaf, 'id>) =
         members plan
         |> List.map (fun memberDefinition ->
             memberDefinition.Function.Definition.Id, verifiedCallSignature memberDefinition.Function.Ownership)
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     { source with
         CallOwnership = fun call ->
-            match Map.tryFind call.Target registry with
+            match FunctionIdMap.tryFind call.Target registry with
             | Some signature -> Some signature
             | None -> source.CallOwnership call }
 
@@ -172,14 +172,14 @@ let private site (request: Request<'id>) = { Caller = request.Caller; Result = r
 
 let private validateRequests definitions discovered semantics requests =
     let definitionsByName = definitions |> List.map (fun definition -> definition.Definition.Name, definition) |> Map.ofList
-    let definitionsById = definitions |> List.map (fun definition -> definition.Definition.Id, definition) |> Map.ofList
+    let definitionsById = definitions |> List.map (fun definition -> definition.Definition.Id, definition) |> FunctionIdMap.ofList
     let groupNames =
         discovered
         |> List.collect (fun group ->
             let members = OwnedFunctionGroups.functions group
             let ids = members |> List.map (fun definition -> definition.Definition.Id) |> Set.ofList
             members |> List.map (fun definition -> definition.Definition.Id, ids))
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let callSites =
         definitions
         |> List.collect (fun definition ->
@@ -189,7 +189,7 @@ let private validateRequests definitions discovered semantics requests =
     let validateCandidate request selected =
         let target = selectedTargetBoundary selected
         let requestTargetName =
-            match Map.tryFind request.Call.Target definitionsById with
+            match FunctionIdMap.tryFind request.Call.Target definitionsById with
             | Some definition -> definition.Definition.Name
             | None -> $"function#{AST.functionIdValue request.Call.Target}"
         let boundaries = selectedCandidate selected |> InferOwnedFunctionGroups.candidateBoundaries
@@ -211,7 +211,7 @@ let private validateRequests definitions discovered semantics requests =
                 Map.tryFind target.Name definitionsByName
                 |> Option.map (fun definition -> definition.Definition.Id)
             if targetId <> Some request.Call.Target then Error (BoundaryMismatch requestTargetName)
-            elif Map.tryFind request.Call.Target groupNames <> Some ids then
+            elif FunctionIdMap.tryFind request.Call.Target groupNames <> Some ids then
                 Error (GroupMembershipMismatch target.Name)
             elif Set.contains request.Caller ids then
                 Error (MixedRecursiveCandidate (site request))
@@ -231,7 +231,7 @@ let private validateRequests definitions discovered semantics requests =
                         | InferredVariant selected -> validateCandidate request selected
                         | EstablishedBoundary expected ->
                             let actual =
-                                match Map.tryFind request.Call.Target definitionsById with
+                                match FunctionIdMap.tryFind request.Call.Target definitionsById with
                                 | Some definition ->
                                     VerifyOwnership.callSignatureOfFunction definition.Ownership
                                     |> Result.map Some
@@ -240,7 +240,7 @@ let private validateRequests definitions discovered semantics requests =
                             | Ok (Some actual) when actual = expected -> Ok ()
                             | _ ->
                                 let targetName =
-                                    match Map.tryFind request.Call.Target definitionsById with
+                                    match FunctionIdMap.tryFind request.Call.Target definitionsById with
                                     | Some definition -> definition.Definition.Name
                                     | None -> $"function#{AST.functionIdValue request.Call.Target}"
                                 Error (BoundaryMismatch targetName)
@@ -250,11 +250,11 @@ let private validateRequests definitions discovered semantics requests =
 let private cloneGroups
     (hir: VerifyOwnedHIR.HIRContracts<'leaf>)
     (semantics: Semantics<'leaf, 'id>)
-    (reservedFunctions: Map<AST.FunctionId, string>)
+    (reservedFunctions: FunctionIdMap<string>)
     definitions
     requests =
     let definitionsByName = definitions |> List.map (fun definition -> definition.Definition.Name, definition) |> Map.ofList
-    let definitionsById = definitions |> List.map (fun definition -> definition.Definition.Id, definition) |> Map.ofList
+    let definitionsById = definitions |> List.map (fun definition -> definition.Definition.Id, definition) |> FunctionIdMap.ofList
     let selections =
         requests
         |> List.choose (fun request ->
@@ -273,7 +273,7 @@ let private cloneGroups
     let cloneIds =
         AST.allocateFunctionIds
             (seq {
-                yield! reservedFunctions |> Map.keys
+                yield! reservedFunctions |> FunctionIdMap.keys
                 yield! definitions |> Seq.map (fun definition -> definition.Definition.Id)
             })
             cloneNames
@@ -291,9 +291,9 @@ let private cloneGroups
                         |> Option.map (fun definition -> definition.Definition.Id)
                         |> Option.defaultWith (fun () -> Crash.crash "Ownership boundary definition is absent")
                     originalId, Map.find (boundary.Name + suffix) cloneIds)
-                |> Map.ofList
+                |> FunctionIdMap.ofList
             let rewrite (call: HIR.FunctionCall) =
-                match Map.tryFind call.Target symbols with
+                match FunctionIdMap.tryFind call.Target symbols with
                 | Some symbol -> { call with Target = symbol }
                 | None -> call
             boundaries
@@ -314,9 +314,9 @@ let private cloneGroups
                             }
                         }
                         if Map.containsKey name definitionsByName
-                           || (reservedFunctions |> Map.exists (fun _ reservedName -> reservedName = name))
-                           || Map.containsKey cloneId reservedFunctions
-                           || Map.containsKey cloneId definitionsById
+                           || (reservedFunctions |> FunctionIdMap.exists (fun _ reservedName -> reservedName = name))
+                           || FunctionIdMap.containsKey cloneId reservedFunctions
+                           || FunctionIdMap.containsKey cloneId definitionsById
                            || Set.contains cloneId generatedIds
                            || Option.isSome (hir.CallSignature clone.Definition.Id)
                            || Option.isSome (semantics.CallOwnership (boundaryCall clone)) then
@@ -339,7 +339,7 @@ let private cloneGroups
 let private materializeWithRequests
     (hir: VerifyOwnedHIR.HIRContracts<'leaf>)
     (semantics: Semantics<'leaf, 'id>)
-    (reservedFunctions: Map<AST.FunctionId, string>)
+    (reservedFunctions: FunctionIdMap<string>)
     (definitions: Function<'leaf, 'id> list)
     (requests: Request<'id> list)
     : Result<Plan<'leaf, 'id>, MaterializationError<'id>> =
@@ -400,7 +400,7 @@ let private materializeWithRequests
 let materialize
     (hir: VerifyOwnedHIR.HIRContracts<'leaf>)
     (semantics: Semantics<'leaf, 'id>)
-    (reservedFunctions: Map<AST.FunctionId, string>)
+    (reservedFunctions: FunctionIdMap<string>)
     (definitions: Function<'leaf, 'id> list)
     (requests: Request<'id> list)
     : Result<Plan<'leaf, 'id>, MaterializationError<'id>> =

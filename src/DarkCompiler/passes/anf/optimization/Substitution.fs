@@ -162,7 +162,7 @@ let private substCExprWithChange (env: Map<TempId, Atom>) (cexpr: CExpr) : struc
 
 /// Optimize a CExpr with constant folding
 let optimizeCExpr (context: OptimizeContext) (options: OptimizeOptions) (env: ConstEnv) (typeEnv: TypeEnv) (tupleEnv: TupleEnv) (cexpr: CExpr) : CExpr * bool =
-    let hasName id name = Map.tryFind id context.FunctionNames = Some name
+    let hasName id name = FunctionIdMap.tryFind id context.FunctionNames = Some name
     // First, substitute known constants
     let struct (cexpr', substitutionChanged) = substCExprWithChange env cexpr
 

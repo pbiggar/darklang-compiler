@@ -21,9 +21,9 @@ let private convertProgramToAnf (typedAst: CheckedAST.Program) : Result<ANF.Prog
     let monomorphized = monomorphize typedAst
     let inlined = inlineLambdasInProgram monomorphized
     let functionCatalog : FunctionCatalog = {
-        Params = Map.empty
-        ReturnTypes = Map.empty
-        GenericDefs = Map.empty
+        Params = FunctionIdMap.empty
+        ReturnTypes = FunctionIdMap.empty
+        GenericDefs = FunctionIdMap.empty
     }
     liftLambdasInProgram Map.empty Map.empty functionCatalog inlined
     |> Result.bind (fun lifted ->

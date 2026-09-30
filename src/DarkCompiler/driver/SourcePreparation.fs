@@ -22,18 +22,18 @@ open CompilationContexts
 /// but we need return types for all callable functions (including stdlib)
 let internal extractReturnTypes
     (funcReg: TypeRegistries.FunctionRegistry)
-    : Map<AST.FunctionId, string * AST.SemanticType> =
+    : FunctionIdMap<string * AST.SemanticType> =
     funcReg
-    |> Map.toSeq
+    |> FunctionIdMap.toSeq
     |> Seq.choose (fun (id, (name, typ)) ->
         match typ with
         | AST.TFunction (_, retType) -> Some (id, (name, retType))
         | other -> Crash.crash $"extractReturnTypes: Non-function type '{other}' found in FuncReg for '{name}'")
-    |> Map.ofSeq
+    |> FunctionIdMap.ofSeq
 
 let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Registries =
     {
-        ScopeContracts = Map.empty
+        ScopeContracts = FunctionIdMap.empty
         InertFunctionScopes = Set.empty
         TypeReg = Map.empty
         TypeNames = TypeRegistries.emptyTypeNames
@@ -42,12 +42,12 @@ let private emptyRegistries (moduleRegistry: AST.ModuleRegistry) : AST_to_ANF.Re
         VariantLookup = Map.empty
         SumMetadata = { Names = Set.empty; Cases = Map.empty }
         RcSumShapeReg = Map.empty
-        FuncReg = Map.empty
+        FuncReg = FunctionIdMap.empty
         FunctionIds = Map.empty
-        FunctionNames = Map.empty
+        FunctionNames = FunctionIdMap.empty
         FuncParams = Map.empty
         ModuleRegistry = moduleRegistry
-        RecursiveMembers = Map.empty
+        RecursiveMembers = FunctionIdMap.empty
     }
 
 let private liftLambdasWithBase
@@ -458,14 +458,14 @@ let internal buildRegistriesForProgram
         |> List.fold (fun (registries: AST_to_ANF.Registries) (id, name) ->
             { registries with
                 FunctionIds = Map.add name id registries.FunctionIds
-                FunctionNames = Map.add id name registries.FunctionNames }) mergedRegistries
+                FunctionNames = FunctionIdMap.add id name registries.FunctionNames }) mergedRegistries
     (mergedRegistries, localRegistries, resolvedFunctions)
 
 type internal DeclarationConversion = {
     Symbols: CheckedAST.Symbols
     Functions: ANF.Function list
     Registries: AST_to_ANF.Registries
-    LocalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>
+    LocalReturnTypes: FunctionIdMap<string * AST.SemanticType>
 }
 
 let internal splitDeclarations
@@ -514,7 +514,7 @@ let internal convertTypedDeclarationsWithTrace
                 |> Map.fold (fun ids name id -> Map.add name id ids) registries.FunctionIds
             FunctionNames =
                 CheckedAST.functionNames symbols
-                |> Map.fold (fun names id name -> Map.add id name names) registries.FunctionNames }
+                |> FunctionIdMap.fold (fun names id name -> FunctionIdMap.add id name names) registries.FunctionNames }
     let baseFuncNames =
         baseContext
         |> Option.map (fun context -> context.BaseFuncNames)
@@ -580,7 +580,7 @@ let internal convertTypedDeclarationsWithTrace
                             |> List.fold (fun ids func -> Map.add func.Name func.Id ids) registries.FunctionIds
                         FunctionNames =
                             converted.Functions
-                            |> List.fold (fun names func -> Map.add func.Id func.Name names) registries.FunctionNames
+                            |> List.fold (fun names func -> FunctionIdMap.add func.Id func.Name names) registries.FunctionNames
                         FuncReg =
                             AST_to_ANF.extendFunctionRegistryWithConverted
                                 registries.FuncReg converted.Functions
@@ -607,7 +607,7 @@ let private convertTypedProgramToConversionResult
     let baseRegistries = emptyRegistries moduleRegistry
     let baseFuncNames = buildBaseFuncNames baseRegistries
     let baseFunctions =
-        buildLambdaLiftFunctionCatalog baseRegistries baseFuncNames Map.empty
+        buildLambdaLiftFunctionCatalog baseRegistries baseFuncNames FunctionIdMap.empty
     prepareProgramForAnf
         (Monomorphize None)
         Map.empty
@@ -853,7 +853,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                     let convertedReturnTypes =
                         converted.Functions
                         |> List.fold (fun returnTypes functionDefinition ->
-                            Map.add
+                            FunctionIdMap.add
                                 functionDefinition.Id
                                 (functionDefinition.Name, functionDefinition.ReturnType)
                                 returnTypes) localReturnTypes
@@ -866,7 +866,7 @@ let internal convertTypedProgramToUserOnlyWithMode
                         NonInlineableFunctionNames =
                             Set.union
                                 nonInlineableFunctionNames
-                                (converted.OwnershipContracts |> Map.keys |> Set.ofSeq)
+                                (converted.OwnershipContracts |> FunctionIdMap.keys |> Set.ofSeq)
                         MainExpr = anfExpr
                         TypeReg = registries.TypeReg
                         TypeNames = registries.TypeNames

@@ -12,7 +12,7 @@ open RcCleanupTests
 
 let private fid = TestIds.functionIdForName
 let private functionRegistry entries : TypeRegistries.FunctionRegistry =
-    entries |> List.map (fun (name, typ) -> fid name, (name, typ)) |> Map.ofList
+    entries |> List.map (fun (name, typ) -> fid name, (name, typ)) |> FunctionIdMap.ofList
 
 let testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator () : TestResult =
     let sourceListType = AST.TList AST.TInt64

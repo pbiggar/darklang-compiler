@@ -20,7 +20,7 @@ let private buildUserRoots (entryName: string option) (functions: LIR.Function l
 /// Filter user functions to only include reachable ones
 let filterUserFunctionsWithCallGraph
     (entryName: string option)
-    (callGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+    (callGraph: FunctionIdMap<Set<AST.FunctionId>>)
     (functions: LIR.Function list)
     : LIR.Function list =
     let roots = buildUserRoots entryName functions
@@ -35,8 +35,8 @@ let filterUserFunctions (entryName: string option) (functions: LIR.Function list
 
 /// Filter stdlib functions using a precomputed user call graph.
 let filterStdlibFunctionsWithUserCallGraph
-    (stdlibCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
-    (userCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+    (stdlibCallGraph: FunctionIdMap<Set<AST.FunctionId>>)
+    (userCallGraph: FunctionIdMap<Set<AST.FunctionId>>)
     (userFunctions: LIR.Function list)
     (stdlibFunctions: LIR.Function list)
     : LIR.Function list =
@@ -48,7 +48,7 @@ let filterStdlibFunctionsWithUserCallGraph
 
 /// Filter stdlib functions to only include those reachable from user code
 let filterStdlibFunctions
-    (stdlibCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+    (stdlibCallGraph: FunctionIdMap<Set<AST.FunctionId>>)
     (userFunctions: LIR.Function list)
     (stdlibFunctions: LIR.Function list)
     : LIR.Function list =
@@ -60,7 +60,7 @@ let filterStdlibFunctions
 
 /// Compute reachable stdlib function names from a user ANF program
 let getReachableStdlibNames
-    (stdlibCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+    (stdlibCallGraph: FunctionIdMap<Set<AST.FunctionId>>)
     (userProgram: ANF.Program)
     : Set<AST.FunctionId> =
     let (ANF.Program (userFuncs, userMainExpr)) = userProgram
@@ -68,7 +68,7 @@ let getReachableStdlibNames
         AST.allocateFunctionIds
             (seq {
                 yield! userFuncs |> Seq.map (fun func -> func.Id)
-                yield! stdlibCallGraph |> Map.keys
+                yield! stdlibCallGraph |> FunctionIdMap.keys
             })
             ["__dark_tree_shaking_start"]
         |> Map.tryFind "__dark_tree_shaking_start"

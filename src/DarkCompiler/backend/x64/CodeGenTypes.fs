@@ -12,11 +12,11 @@ type internal FuncCtx = {
     EnableLeakCheck: bool
     RecordRegistry: LIR.RecordRegistry
     SumShapeRegistry: MemoryModel.RcSumShapeRegistry
-    FunctionNames: Map<AST.FunctionId, string>
+    FunctionNames: FunctionIdMap<string>
 }
 
 let internal functionName (ctx: FuncCtx) (functionId: AST.FunctionId) : string =
-    match Map.tryFind functionId ctx.FunctionNames with
+    match FunctionIdMap.tryFind functionId ctx.FunctionNames with
     | Some name -> name
     | None -> Crash.crash $"x64 code generation: missing function name for identity {AST.functionIdValue functionId}"
 

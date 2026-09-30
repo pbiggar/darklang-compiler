@@ -256,7 +256,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                         let dependencyKnownSummaries =
                             let directCallees =
                                 ANFDeadCodeElimination.buildCallGraph dependencyFunctions
-                                |> Map.fold (fun calls _ callees ->
+                                |> FunctionIdMap.fold (fun calls _ callees ->
                                     Set.union calls callees) Set.empty
                             let relevantIds =
                                 [plan.Stdlib.StdlibANFCallGraph; plan.PrebuiltCallGraph]
@@ -266,9 +266,9 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                             let select summaries =
                                 relevantIds
                                 |> Set.fold (fun selected id ->
-                                    match Map.tryFind id summaries with
-                                    | Some summary -> Map.add id summary selected
-                                    | None -> selected) Map.empty
+                                    match FunctionIdMap.tryFind id summaries with
+                                    | Some summary -> FunctionIdMap.add id summary selected
+                                    | None -> selected) FunctionIdMap.empty
                             mergeSummaries
                                 (select plan.Stdlib.CallGraphSummaries)
                                 (select plan.PrebuiltCallGraphSummaries)
@@ -307,7 +307,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
 
                         let dependencyLirResult =
                             if List.isEmpty dependencyFunctions then
-                                Ok ([], Map.empty)
+                                Ok ([], FunctionIdMap.empty)
                             else
                                 match plan.Session with
                                 | Some current ->
@@ -319,7 +319,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             NonInlineableFunctionNames = userOnly.NonInlineableFunctionNames
                                             KnownSummaries =
                                                 dependencyKnownSummaries
-                                                |> Map.map (fun _ summary ->
+                                                |> FunctionIdMap.map (fun _ summary ->
                                                     CompilationCacheIdentity.summaryFacts summary)
                                         }
                                         compileDependencyFunctions
@@ -434,7 +434,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 let startRegistries = {
                                     userRegistries with
                                         FuncReg =
-                                            Map.add
+                                            FunctionIdMap.add
                                                 programEntryId
                                                 (programEntryName, AST.TFunction ([], boundaryProgramType))
                                                 userRegistries.FuncReg
@@ -449,11 +449,11 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         startRegistries
                                         (CheckedAST.nextFunctionOrdinal symbolsWithEntries)
                                         InliningCommon.defaultConfig
-                                        Map.empty
+                                        FunctionIdMap.empty
                                         Map.empty
                                         Set.empty
                                         [startFunction]
-                                        Map.empty
+                                        FunctionIdMap.empty
                                         false
                                         plan.PassTimingRecorder
                                     |> Result.bind (fun (_startAnf, startSSA, startTypeMap) ->
@@ -471,7 +471,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                              startSSA, startTypeMap]
                                             startRegistries
                                             (Some projectedMirRegistries)
-                                            (Map.add
+                                            (FunctionIdMap.add
                                                 programEntryId
                                                 (programEntryName, boundaryProgramType)
                                                 externalReturnTypes))
@@ -488,14 +488,14 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                     let allSymbolicUserFuncs = plan.PrebuiltSymbolicFunctions @ allocatedUserFuncs
                                     let userCallGraphStart = sw.Elapsed.TotalMilliseconds
                                     let userCallGraph =
-                                        if plan.Options.DisableFunctionTreeShaking then Map.empty
+                                        if plan.Options.DisableFunctionTreeShaking then FunctionIdMap.empty
                                         else
                                             let localCallGraph =
                                                 DeadCodeElimination.buildCallGraph
                                                     userOnly.FunctionIds
                                                     allocatedUserFuncs
-                                            Map.fold
-                                                (fun graph id calls -> Map.add id calls graph)
+                                            FunctionIdMap.fold
+                                                (fun graph id calls -> FunctionIdMap.add id calls graph)
                                                 plan.PrebuiltCallGraph
                                                 localCallGraph
                                     let userCallGraphElapsed =
@@ -530,20 +530,20 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                             let allUserById =
                                                 allSymbolicUserFuncs
                                                 |> List.map (fun func -> func.Id, func)
-                                                |> Map.ofList
+                                                |> FunctionIdMap.ofList
                                             let rec close reachable pending =
                                                 if Set.isEmpty pending then reachable
                                                 else
                                                     let discovered =
                                                         pending
                                                         |> Set.toList
-                                                        |> List.choose (fun id -> Map.tryFind id allUserById)
+                                                        |> List.choose (fun id -> FunctionIdMap.tryFind id allUserById)
                                                         |> List.fold (fun ids func ->
                                                             Set.union
                                                                 ids
                                                                 (DeadCodeElimination.getCalledFunctions userOnly.FunctionIds func)) Set.empty
                                                         |> Set.filter (fun id ->
-                                                            Map.containsKey id allUserById
+                                                            FunctionIdMap.containsKey id allUserById
                                                             && not (Set.contains id reachable))
                                                     close (Set.union reachable discovered) discovered
                                             let initial =
@@ -644,7 +644,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         dependencyNames
                                         |> Set.toList
                                         |> List.choose (fun id ->
-                                            Map.tryFind id userRegistries.FunctionNames)
+                                            FunctionIdMap.tryFind id userRegistries.FunctionNames)
                                         |> Set.ofList
                                     let loweredDependencyNames =
                                         allocatedDependencyFuncs
@@ -680,10 +680,10 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         )
                                     let knownArm64CalleeWrites =
                                         mergeSummaries summariesThroughDependencies programSummaries
-                                        |> Map.toList
+                                        |> FunctionIdMap.toList
                                         |> List.choose (fun (id, summary) ->
                                             summary.Arm64Writes |> Option.map (fun writes -> id, writes))
-                                        |> Map.ofList
+                                        |> FunctionIdMap.ofList
                                     let freshProgramContextIdentity = box allocatedProgramFuncs
                                     let startProgramFuncs, otherUserFuncs =
                                         retainedUserFuncs

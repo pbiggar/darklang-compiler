@@ -132,7 +132,7 @@ let private testFallsBackToOpaqueCheckedFunctionForScheduling () =
                 variable "unsupported",
                 CheckedAST.TupleLiteral (CheckedAST.tupleElementsOfList [CheckedAST.Int64Literal 1L; CheckedAST.Int64Literal 2L]),
                 local "first"))
-    match ConstructHIRFunctions.constructFunctionsWithOpaqueFallback Map.empty infer dependencies noCalls [source] with
+    match ConstructHIRFunctions.constructFunctionsWithOpaqueFallback FunctionIdMap.empty infer dependencies noCalls [source] with
     | Ok [constructed] ->
         let block = ConstructHIRFunctions.body constructed.Body
         match block.Parameters, block.Operations with

@@ -32,7 +32,7 @@ let private arithmeticOperations = [
 let private intrinsicFunctions
     (functionIds: FunctionIdRegistry)
     (functions: FunctionRegistry)
-    : Map<AST.FunctionId, ArithmeticIntrinsic> =
+    : FunctionIdMap<ArithmeticIntrinsic> =
     nativeIntegerTypes
     |> List.collect (fun (typeName, operandType) ->
         arithmeticOperations
@@ -40,20 +40,20 @@ let private intrinsicFunctions
             let name = $"Darklang.Stdlib.{typeName}.{operationName}"
             Map.tryFind name functionIds
             |> Option.map (fun id ->
-                match Map.tryFind id functions with
+                match FunctionIdMap.tryFind id functions with
                 | Some (_, AST.TFunction ([left; right], result))
                     when left = operandType && right = operandType && result = operandType ->
                     id, { OperandType = operandType; Operation = operation }
                 | _ ->
                     Crash.crash $"Arithmetic intrinsic {name} has an unexpected signature")))
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 let private canonicalizeCExpr intrinsics cexpr =
     match cexpr with
     | Call (target, [left; right])
     | BorrowedCall (target, [left; right])
     | TailCall (target, [left; right]) ->
-        match Map.tryFind target intrinsics with
+        match FunctionIdMap.tryFind target intrinsics with
         | Some intrinsic -> Prim (intrinsic.Operation, left, right)
         | None -> cexpr
     | _ -> cexpr
@@ -76,18 +76,18 @@ let canonicalizeProgram
     (program: Program)
     : Program =
     let intrinsics = intrinsicFunctions functionIds functions
-    if Map.isEmpty intrinsics then program
+    if FunctionIdMap.isEmpty intrinsics then program
     else
         let (Program (definitions, main)) = program
         let initialVarGen =
-            if definitions |> List.exists (fun definition -> Map.containsKey definition.Id intrinsics) then
+            if definitions |> List.exists (fun definition -> FunctionIdMap.containsKey definition.Id intrinsics) then
                 freshVarGenForProgram program
             else
                 initialVarGen
         let definitions, _ =
             definitions
             |> List.mapFold (fun varGen definition ->
-                match Map.tryFind definition.Id intrinsics with
+                match FunctionIdMap.tryFind definition.Id intrinsics with
                 | None ->
                     { definition with Body = canonicalizeExpr intrinsics definition.Body }, varGen
                 | Some intrinsic ->

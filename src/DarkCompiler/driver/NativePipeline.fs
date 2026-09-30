@@ -21,7 +21,7 @@ let private compileMirToLir
     (arch: Platform.Arch)
     (knownEffectFree: Set<AST.FunctionId>)
     (knownRemovable: Set<AST.FunctionId>)
-    (knownTypedConstants: Map<AST.FunctionId, AST.SemanticType * MIR.Operand>)
+    (knownTypedConstants: FunctionIdMap<AST.SemanticType * MIR.Operand>)
     (verbosity: int)
     (options: CompilerOptions)
     (sw: Stopwatch)
@@ -30,7 +30,7 @@ let private compileMirToLir
     (registries: AST_to_ANF.Registries)
     (stageSuffix: string)
     (mirProgram: MIR.Program)
-    : Result<LIR.Function list * Map<AST.FunctionId, AST.SemanticType * MIR.Operand>, string> =
+    : Result<LIR.Function list * FunctionIdMap<AST.SemanticType * MIR.Operand>, string> =
 
     let suffix = if stageSuffix = "" then "" else $" ({stageSuffix})"
 
@@ -39,7 +39,7 @@ let private compileMirToLir
         let rewriteCall instr =
             match instr with
             | MIR.Call (dest, callee, [], [], returnType) when Set.contains callee knownRemovable ->
-                match Map.tryFind callee knownTypedConstants with
+                match FunctionIdMap.tryFind callee knownTypedConstants with
                 | Some (typ, (MIR.Int64Const _ | MIR.BoolConst _ | MIR.FloatSymbol _ as value))
                     when typ = returnType ->
                     MIR.Mov (dest, value, Some returnType)
@@ -117,10 +117,10 @@ let private compileMirToLir
         else
             ssaProgram
     let optimizedProgram =
-        if mirOptions.EnableSCCP && not (Map.isEmpty knownTypedConstants) then
+        if mirOptions.EnableSCCP && not (FunctionIdMap.isEmpty knownTypedConstants) then
             let (MIR.Program (functions, variants, records)) = optimizedProgram
             let callResult id =
-                Map.tryFind id knownTypedConstants |> Option.map snd
+                FunctionIdMap.tryFind id knownTypedConstants |> Option.map snd
             let functions =
                 functions
                 |> List.map (fun func ->
@@ -136,7 +136,7 @@ let private compileMirToLir
         |> List.choose (fun func ->
             MIR_Optimize.constantReturnOperand func
             |> Option.map (fun value -> func.Id, (func.ReturnType, value)))
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     let mirOptElapsed = sw.Elapsed.TotalMilliseconds - mirOptStart
     recordPassTiming passTimingRecorder "MIR Optimizations" mirOptElapsed
     if shouldDumpIR verbosity options.DumpMIR then
@@ -239,7 +239,7 @@ let private allocateRegistersForFunction
 
 /// Run MIR+LIR passes (including register allocation) from SSA ANF functions.
 let internal lowerToAllocatedLirWithKnownGroups
-    (externalSummaries: Map<AST.FunctionId, FunctionSummary>)
+    (externalSummaries: FunctionIdMap<FunctionSummary>)
     (target: Platform.Target)
     (verbosity: int)
     (options: CompilerOptions)
@@ -251,8 +251,8 @@ let internal lowerToAllocatedLirWithKnownGroups
     (functionGroups: (SSAANF.Function list * ANF.TypeMap) list)
     (registries: AST_to_ANF.Registries)
     (projectedMirRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
-    : Result<LIR.Function list * Map<AST.FunctionId, FunctionSummary>, string> =
+    (externalReturnTypes: FunctionIdMap<string * AST.SemanticType>)
+    : Result<LIR.Function list * FunctionIdMap<FunctionSummary>, string> =
 
     let suffix = if stageSuffix = "" then "" else $" ({stageSuffix})"
 
@@ -262,15 +262,15 @@ let internal lowerToAllocatedLirWithKnownGroups
     // Keep the complete AOT return-type plan available while lowering each one.
     let returnTypeReg =
         externalReturnTypes
-        |> Map.map (fun _ (_, typ) -> typ)
+        |> FunctionIdMap.map (fun _ (_, typ) -> typ)
         |> fun external ->
             functions
-            |> List.fold (fun types func -> Map.add func.Id func.ReturnType types) external
+            |> List.fold (fun types func -> FunctionIdMap.add func.Id func.ReturnType types) external
     let compileFunctions
         (functionsToCompile: SSAANF.Function list)
-        : Result<LIR.Function list * Map<AST.FunctionId, FunctionSummary>, string> =
+        : Result<LIR.Function list * FunctionIdMap<FunctionSummary>, string> =
         if List.isEmpty functionsToCompile then
-            Ok ([], Map.empty)
+            Ok ([], FunctionIdMap.empty)
         else
             if verbosity >= 1 then println $"  [mir.lower] ANF → MIR{suffix}..."
             let mirStart = sw.Elapsed.TotalMilliseconds
@@ -349,8 +349,8 @@ let internal lowerToAllocatedLirWithKnownGroups
                 let highestReservedId =
                     let highestLocal =
                         if Set.isEmpty localIds then AST.functionId 0UL else Set.maxElement localIds
-                    if Map.isEmpty registries.FunctionNames then highestLocal
-                    else max highestLocal (fst (Map.maxKeyValue registries.FunctionNames))
+                    if FunctionIdMap.isEmpty registries.FunctionNames then highestLocal
+                    else max highestLocal (fst (FunctionIdMap.maxKeyValue registries.FunctionNames))
                 let ambiguousLocalIds =
                     mirFuncs
                     |> List.countBy (fun func -> func.Id)
@@ -367,9 +367,9 @@ let internal lowerToAllocatedLirWithKnownGroups
                     Set.difference directCalleeIds localIds
                     |> Set.fold (fun summaries id ->
                         let summary =
-                            Map.tryFind id externalSummaries
+                            FunctionIdMap.tryFind id externalSummaries
                             |> Option.defaultValue CompilationCacheIdentity.unknownSummary
-                        Map.add id summary summaries) Map.empty
+                        FunctionIdMap.add id summary summaries) FunctionIdMap.empty
                 if verbosity >= 2 then
                     let directCalls =
                         mirFuncs
@@ -388,7 +388,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                             if Set.contains id ambiguousLocalIds then
                                 ambiguous + 1, known, unresolved
                             elif Set.contains id localIds
-                                 || (Map.tryFind id externalSummaries
+                                 || (FunctionIdMap.tryFind id externalSummaries
                                      |> Option.bind (fun summary -> summary.Version)
                                      |> Option.isSome) then
                                 ambiguous, known + 1, unresolved
@@ -406,7 +406,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                     knownRemovable
                     knownTypedConstants
                     knownWrites
-                    (catalog: Map<AST.FunctionId, FunctionSummary>)
+                    (catalog: FunctionIdMap<FunctionSummary>)
                     (helperIds: Map<string, AST.FunctionId>)
                     (group: CallGraphSchedule.Component) =
                     let componentFuncs = group.Functions
@@ -491,24 +491,24 @@ let internal lowerToAllocatedLirWithKnownGroups
                                                 | _ -> None))
                                         |> Set.ofList
                                     let existing =
-                                        Map.tryFind func.Id edges |> Option.defaultValue Set.empty
-                                    Map.add func.Id (Set.union existing calls) edges) Map.empty
+                                        FunctionIdMap.tryFind func.Id edges |> Option.defaultValue Set.empty
+                                    FunctionIdMap.add func.Id (Set.union existing calls) edges) FunctionIdMap.empty
                             let sccPeers =
                                 group.SCCs
                                 |> List.collect (fun scc ->
                                     let ids = scc |> List.map (fun func -> func.Id) |> Set.ofList
                                     scc |> List.map (fun func -> func.Id, ids))
-                                |> Map.ofList
+                                |> FunctionIdMap.ofList
                             callEdges
-                            |> Map.iter (fun caller calls ->
-                                let peers = Map.tryFind caller sccPeers |> Option.defaultValue Set.empty
+                            |> FunctionIdMap.iter (fun caller calls ->
+                                let peers = FunctionIdMap.tryFind caller sccPeers |> Option.defaultValue Set.empty
                                 calls
                                 |> Set.iter (fun callee ->
                                     if not (Set.contains caller ambiguousLocalIds)
                                        && Set.contains callee localIds
                                        && not (Set.contains callee ambiguousLocalIds)
                                        && not (Set.contains callee peers) then
-                                        match Map.tryFind callee catalog with
+                                        match FunctionIdMap.tryFind callee catalog with
                                         | Some summary ->
                                             let hasTargetWrites =
                                                 match arch with
@@ -526,17 +526,17 @@ let internal lowerToAllocatedLirWithKnownGroups
                                                 $"LIR introduced a call from {caller} before local callee {callee} was scheduled"))
                             let callees =
                                 callEdges
-                                |> Map.fold (fun writes _ calls ->
+                                |> FunctionIdMap.fold (fun writes _ calls ->
                                     calls
                                     |> Set.fold (fun writes callee ->
-                                        if Map.containsKey callee writes then writes
-                                        else Map.add callee allWrites writes) writes) knownWrites
+                                        if FunctionIdMap.containsKey callee writes then writes
+                                        else FunctionIdMap.add callee allWrites writes) writes) knownWrites
                             let rec canReach target seen current =
                                 if current = target then true
                                 elif Set.contains current seen then false
                                 else
                                     let next =
-                                        Map.tryFind current callEdges |> Option.defaultValue Set.empty
+                                        FunctionIdMap.tryFind current callEdges |> Option.defaultValue Set.empty
                                     next
                                     |> Set.exists (canReach target (Set.add current seen))
                             let allocated =
@@ -558,11 +558,11 @@ let internal lowerToAllocatedLirWithKnownGroups
                                                 (if canReach prepared.Id Set.empty id then
                                                      allWrites
                                                  else
-                                                     Map.tryFind id callees
+                                                     FunctionIdMap.tryFind id callees
                                                      |> Option.defaultWith (fun () ->
                                                          Crash.crash
                                                              $"Call graph has no LIR clobber summary for {prepared.Name}'s callee {id}")))
-                                            |> Map.ofSeq
+                                            |> FunctionIdMap.ofSeq
                                         let hasPreservedCallerReg =
                                             prepared.CFG.Blocks
                                             |> Map.exists (fun _ block ->
@@ -607,8 +607,8 @@ let internal lowerToAllocatedLirWithKnownGroups
                     knownRemovable
                     knownTypedConstants
                     knownWrites
-                    (published: Map<AST.FunctionId, FunctionSummary>)
-                    (catalog: Map<AST.FunctionId, FunctionSummary>)
+                    (published: FunctionIdMap<FunctionSummary>)
+                    (catalog: FunctionIdMap<FunctionSummary>)
                     (helperIds: Map<string, AST.FunctionId>)
                     (completed: LIR.Function list list)
                     visits
@@ -638,7 +638,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                                 |> Set.iter (fun callee ->
                                     if not (Set.contains callee sccIds) then
                                         let summary =
-                                            Map.tryFind callee catalog
+                                            FunctionIdMap.tryFind callee catalog
                                             |> Option.defaultWith (fun () ->
                                                 Crash.crash
                                                     $"Call graph has no summary for {func.Name}'s callee {callee}")
@@ -667,16 +667,16 @@ let internal lowerToAllocatedLirWithKnownGroups
                                                 | Platform.ARM64 -> summary.Arm64Writes
                                                 | Platform.X86_64 -> summary.X64Writes
                                             let purityMatches =
-                                                Map.tryFind callee knownPurity = Some summary.Purity
+                                                FunctionIdMap.tryFind callee knownPurity = Some summary.Purity
                                             let constantMatches =
-                                                Map.tryFind callee knownTypedConstants = summary.ConstantReturn
+                                                FunctionIdMap.tryFind callee knownTypedConstants = summary.ConstantReturn
                                             let fullWrites =
                                                 match Platform.archFor target with
                                                 | Platform.ARM64 -> ARM64CalleeClobbers.all
                                                 | Platform.X86_64 -> X64CalleeClobbers.all
                                             let writesMatch =
                                                 let current =
-                                                    Map.tryFind callee knownWrites
+                                                    FunctionIdMap.tryFind callee knownWrites
                                                     |> Option.defaultValue fullWrites
                                                 let saved = targetWrites |> Option.defaultValue fullWrites
                                                 current = saved
@@ -687,7 +687,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                         let purity =
                             MIROptimizationFacts.analyzePurityWithKnown
                                 knownPurity group.Functions
-                            |> Map.map (fun id summary ->
+                            |> FunctionIdMap.map (fun id summary ->
                                 if Set.contains id ambiguousLocalIds then
                                     MIROptimizationFacts.unknownPurity
                                 else summary)
@@ -703,7 +703,7 @@ let internal lowerToAllocatedLirWithKnownGroups
                             effectFree |> Set.fold (fun known id -> Set.add id known) knownEffectFree
                         let newlyRemovable =
                             purity
-                            |> Map.toList
+                            |> FunctionIdMap.toList
                             |> List.choose (fun (id, summary) ->
                                 if MIROptimizationFacts.isPure summary then Some id else None)
                             |> Set.ofList
@@ -720,11 +720,11 @@ let internal lowerToAllocatedLirWithKnownGroups
                             let scheduledIds =
                                 group.Functions
                                 |> List.countBy (fun func -> func.Id)
-                                |> Map.ofList
+                                |> FunctionIdMap.ofList
                             let emittedIds =
                                 allocated
                                 |> List.countBy (fun (func: LIR.Function) -> func.Id)
-                                |> Map.ofList
+                                |> FunctionIdMap.ofList
                             if scheduledIds <> emittedIds then
                                 Crash.crash "Call graph batch did not emit every scheduled function"
                             let clobberStart = sw.Elapsed.TotalMilliseconds
@@ -734,10 +734,10 @@ let internal lowerToAllocatedLirWithKnownGroups
                                      ARM64CalleeClobbers.summariesWithKnown callWrites allocated
                                  | Platform.X86_64 ->
                                      X64CalleeClobbers.summariesWithKnown callWrites allocated)
-                                |> Map.filter (fun id _ -> not (Set.contains id ambiguousLocalIds))
+                                |> FunctionIdMap.filter (fun id _ -> not (Set.contains id ambiguousLocalIds))
                             let knownWrites =
                                 localWrites
-                                |> Map.fold (fun writes id value -> Map.add id value writes) knownWrites
+                                |> FunctionIdMap.fold (fun writes id value -> FunctionIdMap.add id value writes) knownWrites
                             let visits = recordStages ["Clobber Summary"] group visits
                             recordPassTiming
                                 passTimingRecorder
@@ -745,9 +745,9 @@ let internal lowerToAllocatedLirWithKnownGroups
                                 (sw.Elapsed.TotalMilliseconds - clobberStart)
                             let knownTypedConstants =
                                 typedConstants
-                                |> Map.fold (fun known id value ->
+                                |> FunctionIdMap.fold (fun known id value ->
                                     if Set.contains id ambiguousLocalIds then known
-                                    else Map.add id value known)
+                                    else FunctionIdMap.add id value known)
                                     knownTypedConstants
                             let batchSummaries =
                                 allocated
@@ -757,15 +757,15 @@ let internal lowerToAllocatedLirWithKnownGroups
                                             Some (FunctionVersion(
                                                 stageSuffix, func.Id, target, options, func))
                                         Purity =
-                                            Map.tryFind func.Id purity
+                                            FunctionIdMap.tryFind func.Id purity
                                             |> Option.defaultWith (fun () ->
                                                 Crash.crash "Compiled function lacks a purity summary")
-                                        ConstantReturn = Map.tryFind func.Id typedConstants
+                                        ConstantReturn = FunctionIdMap.tryFind func.Id typedConstants
                                         Arm64Writes =
                                             match Platform.archFor target with
                                             | Platform.ARM64 when Set.contains func.Id ambiguousLocalIds -> None
                                             | Platform.ARM64 ->
-                                                Map.tryFind func.Id knownWrites
+                                                FunctionIdMap.tryFind func.Id knownWrites
                                                 |> Option.defaultWith (fun () ->
                                                     Crash.crash "Final ARM64 function lacks a clobber summary")
                                                 |> Some
@@ -774,14 +774,14 @@ let internal lowerToAllocatedLirWithKnownGroups
                                             match Platform.archFor target with
                                             | Platform.X86_64 when Set.contains func.Id ambiguousLocalIds -> None
                                             | Platform.X86_64 ->
-                                                Map.tryFind func.Id knownWrites
+                                                FunctionIdMap.tryFind func.Id knownWrites
                                                 |> Option.defaultWith (fun () ->
                                                     Crash.crash "Final x64 function lacks a clobber summary")
                                                 |> Some
                                             | Platform.ARM64 -> None
                                     }
                                     CompilationCacheIdentity.mergeFunctionSummaries
-                                        summaries (Map.ofList [func.Id, summary])) Map.empty
+                                        summaries (FunctionIdMap.ofList [func.Id, summary])) FunctionIdMap.empty
                             let published =
                                 CompilationCacheIdentity.mergeFunctionSummaries
                                     published batchSummaries
@@ -790,9 +790,9 @@ let internal lowerToAllocatedLirWithKnownGroups
                                     catalog batchSummaries
                             compile
                                 (purity
-                                 |> Map.fold (fun known id value ->
+                                 |> FunctionIdMap.fold (fun known id value ->
                                      if Set.contains id ambiguousLocalIds then known
-                                     else Map.add id value known) knownPurity)
+                                     else FunctionIdMap.add id value known) knownPurity)
                                 (effectFree
                                  |> Set.fold (fun known id ->
                                      if Set.contains id ambiguousLocalIds then known
@@ -811,33 +811,33 @@ let internal lowerToAllocatedLirWithKnownGroups
                                 rest)
                 let initialFactsStart = sw.Elapsed.TotalMilliseconds
                 let initialPurity =
-                    externalSummaries |> Map.map (fun _ summary -> summary.Purity)
+                    externalSummaries |> FunctionIdMap.map (fun _ summary -> summary.Purity)
                 let initialRemovable =
                     initialPurity
-                    |> Map.toList
+                    |> FunctionIdMap.toList
                     |> List.choose (fun (id, summary) ->
                         if MIROptimizationFacts.isPure summary then Some id else None)
                     |> Set.ofList
                 let initialTypedConstants =
                     externalSummaries
-                    |> Map.toList
+                    |> FunctionIdMap.toList
                     |> List.choose (fun (id, summary) ->
                         summary.ConstantReturn |> Option.map (fun value -> id, value))
-                    |> Map.ofList
+                    |> FunctionIdMap.ofList
                 let initialWrites =
                     externalSummaries
-                    |> Map.toList
+                    |> FunctionIdMap.toList
                     |> List.choose (fun (id, summary) ->
                         let writes =
                             match Platform.archFor target with
                             | Platform.ARM64 -> summary.Arm64Writes
                             | Platform.X86_64 -> summary.X64Writes
                         writes |> Option.map (fun value -> id, value))
-                    |> Map.ofList
+                    |> FunctionIdMap.ofList
                 let initialCatalog =
                     ambiguousLocalIds
                     |> Set.fold (fun summaries id ->
-                        Map.add id CompilationCacheIdentity.unknownSummary summaries)
+                        FunctionIdMap.add id CompilationCacheIdentity.unknownSummary summaries)
                         externalSummaries
                 recordPassTiming
                     passTimingRecorder
@@ -846,14 +846,14 @@ let internal lowerToAllocatedLirWithKnownGroups
                 compile
                     initialPurity initialRemovable initialRemovable
                     initialTypedConstants initialWrites
-                    Map.empty initialCatalog Map.empty [] initialVisits components
+                    FunctionIdMap.empty initialCatalog Map.empty [] initialVisits components
 
     let compileFunctionsWithTiming
         (label: string)
         (functionsToCompile: SSAANF.Function list)
-        : Result<LIR.Function list * Map<AST.FunctionId, FunctionSummary>, string> =
+        : Result<LIR.Function list * FunctionIdMap<FunctionSummary>, string> =
         if List.isEmpty functionsToCompile then
-            Ok ([], Map.empty)
+            Ok ([], FunctionIdMap.empty)
         else
             let startTime = sw.Elapsed.TotalMilliseconds
             compileFunctions functionsToCompile
@@ -900,7 +900,7 @@ let internal lowerToAllocatedLirWithKnownGroups
         rebuildOrder functionOrder compiledQueues [], summaries)
 
 let internal lowerToAllocatedLirWithKnown
-    (externalSummaries: Map<AST.FunctionId, FunctionSummary>)
+    (externalSummaries: FunctionIdMap<FunctionSummary>)
     (target: Platform.Target)
     (verbosity: int)
     (options: CompilerOptions)
@@ -913,8 +913,8 @@ let internal lowerToAllocatedLirWithKnown
     (typeMap: ANF.TypeMap)
     (registries: AST_to_ANF.Registries)
     (projectedMirRegistries: (MIR.VariantRegistry * MIR.RecordRegistry) option)
-    (externalReturnTypes: Map<AST.FunctionId, string * AST.SemanticType>)
-    : Result<LIR.Function list * Map<AST.FunctionId, FunctionSummary>, string> =
+    (externalReturnTypes: FunctionIdMap<string * AST.SemanticType>)
+    : Result<LIR.Function list * FunctionIdMap<FunctionSummary>, string> =
     lowerToAllocatedLirWithKnownGroups
         externalSummaries target verbosity options sw passTimingRecorder
         functionCaches releasePlanSummaryCache stageSuffix

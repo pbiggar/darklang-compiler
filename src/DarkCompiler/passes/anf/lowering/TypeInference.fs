@@ -483,9 +483,9 @@ let rec inferTypeCore (sumTypeNames: SumMetadata) (typeNames: TypeNameRegistry) 
     | CheckedAST.Call (funcName, args) ->
         let argList = exprArgsToList args
         let displayName =
-            Map.tryFind funcName funcReg
+            FunctionIdMap.tryFind funcName funcReg
             |> Option.map fst
-            |> Option.orElseWith (fun () -> Map.tryFind funcName functionNames)
+            |> Option.orElseWith (fun () -> FunctionIdMap.tryFind funcName functionNames)
         if displayName = Some "Builtin.unwrap" then
             match argList with
             | [argExpr] ->
@@ -536,7 +536,7 @@ let rec inferTypeCore (sumTypeNames: SumMetadata) (typeNames: TypeNameRegistry) 
                 Error $"Internal error: runtime failure function expects 1 argument, got {List.length argList}"
         else
             // Look up function return type from the function registry
-            match Map.tryFind funcName funcReg with
+            match FunctionIdMap.tryFind funcName funcReg with
             | Some (_, AST.TFunction (_, returnType)) -> Ok returnType
             | Some (name, _) -> Error $"Expected function type for {name} in funcReg"
             | None ->
@@ -645,12 +645,12 @@ let rec inferTypeCore (sumTypeNames: SumMetadata) (typeNames: TypeNameRegistry) 
             | _ -> Error "Indirect apply requires a function type")
     | CheckedAST.FuncRef name ->
         // Function reference has the function's type
-        match Map.tryFind name funcReg with
+        match FunctionIdMap.tryFind name funcReg with
         | Some (_, returnType) -> Ok returnType
         | None -> Error "Cannot infer type: undefined function identity"
     | CheckedAST.Closure (funcName, _) ->
         // Closure has function type (without the closure param)
-        match Map.tryFind funcName funcReg with
+        match FunctionIdMap.tryFind funcName funcReg with
         | Some (_, AST.TFunction (_ :: restParams, returnType)) ->
             Ok (AST.TFunction (restParams, returnType))
         | Some (_, funcType) -> Ok funcType

@@ -15,7 +15,7 @@ let testInferCallReturnsFunctionReturnType () : TestResult =
         VariantLookup = Map.empty
         SumShapeReg = Map.empty
         FuncReg =
-            Map.ofList [
+            FunctionIdMap.ofList [
                 (fid "mkPair", ("mkPair", AST.TFunction ([AST.TInt64], AST.TTuple [AST.TInt64; AST.TInt64])))
             ]
         FuncParams = Map.empty
@@ -39,7 +39,7 @@ let testMalformedRawGetIntrinsicDoesNotInferInt64 () : TestResult =
         TypeReg = Map.empty
         VariantLookup = Map.empty
         SumShapeReg = Map.empty
-        FuncReg = Map.empty
+        FuncReg = FunctionIdMap.empty
         FuncParams = Map.empty
         TempTypes = Map.empty
         ClosureFuncs = Map.empty

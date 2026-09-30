@@ -131,9 +131,9 @@ let runANF2MIRTest (input: ANF.Program) (expected: MIR.Program) : PassTestResult
         let (ANF.Program (functions, _)) = input
         functions
         |> List.map (fun func -> func.Id, func.Name)
-        |> Map.ofList
-        |> Map.add (AST.functionId 0UL) "_start"
-    match ANF_to_MIR.toMIR input typeMap emptyTypeReg AST.TInt64 Map.empty Map.empty false Map.empty functionNames with
+        |> FunctionIdMap.ofList
+        |> FunctionIdMap.add (AST.functionId 0UL) "_start"
+    match ANF_to_MIR.toMIR input typeMap emptyTypeReg AST.TInt64 Map.empty Map.empty false FunctionIdMap.empty functionNames with
     | Error err ->
         { Success = false
           Message = $"MIR conversion error: {err}"

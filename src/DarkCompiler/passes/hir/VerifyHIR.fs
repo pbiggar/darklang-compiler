@@ -158,7 +158,7 @@ let verifyFunctions (dialect: Dialect<'leaf, 'block>) (definitions: Function<'bl
         let signatures =
             definitions
             |> List.map (fun definition -> definition.Id, functionSignature dialect definition)
-            |> Map.ofList
+            |> FunctionIdMap.ofList
         let inconsistentRegistration =
             definitions
             |> List.tryPick (fun definition ->
@@ -172,7 +172,7 @@ let verifyFunctions (dialect: Dialect<'leaf, 'block>) (definitions: Function<'bl
             let programDialect = {
                 dialect with
                     CallSignature = fun target ->
-                        match Map.tryFind target signatures with
+                        match FunctionIdMap.tryFind target signatures with
                         | Some signature -> Some signature
                         | None -> dialect.CallSignature target
             }

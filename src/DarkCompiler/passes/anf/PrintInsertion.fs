@@ -154,7 +154,7 @@ let insertPrintInEntry
 /// Observe the source value immediately before the generated value renderer
 /// consumes it. The ordinary result printer sees only the rendered string.
 let insertRootWordProbeInEntry
-    (functionNames: Map<AST.FunctionId, string>)
+    (functionNames: FunctionIdMap<string>)
     (entryName: string)
     (tupleWords: bool)
     (functions: ANF.Function list)
@@ -163,7 +163,7 @@ let insertRootWordProbeInEntry
         match expr with
         | Return _ -> (expr, varGen)
         | Let (id, Call (callee, [value]), body)
-            when (Map.tryFind callee functionNames
+            when (FunctionIdMap.tryFind callee functionNames
                   |> Option.exists (fun name -> name.StartsWith("__dark_render_value_"))) ->
             if tupleWords then
                 let field0, vg1 = freshVar varGen

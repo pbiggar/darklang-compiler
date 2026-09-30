@@ -33,8 +33,8 @@ let private inertPrimitiveNames =
 let inertFunctionScopesWithBase
     (knownInert: Set<AST.FunctionId>)
     (functionIds: Map<string, AST.FunctionId>)
-    (contracts: Map<AST.FunctionId, FunctionScopeContract>) =
-    let names = contracts |> Map.keys |> Set.ofSeq
+    (contracts: FunctionIdMap<FunctionScopeContract>) =
+    let names = contracts |> FunctionIdMap.keys |> Set.ofSeq
     let inertPrimitives =
         inertPrimitiveNames
         |> List.choose (fun name -> Map.tryFind name functionIds)
@@ -44,15 +44,15 @@ let inertFunctionScopesWithBase
         |> fun inert -> Set.difference inert names
     let unavailable calls = not (Set.isSubset calls (Set.union names primitives))
     let unproven =
-        contracts |> Map.toSeq |> Seq.choose (fun (name, contract) ->
+        contracts |> FunctionIdMap.toSeq |> Seq.choose (fun (name, contract) ->
             match contract.LocalDestruction with
             | UnprovenScope -> Some name
             | InertScope when unavailable contract.Calls -> Some name
             | InertScope -> None) |> Set.ofSeq
     let callers =
-        contracts |> Map.fold (fun callers name contract ->
+        contracts |> FunctionIdMap.fold (fun callers name contract ->
             contract.Calls |> Set.fold (fun callers target ->
-                Map.change target (fun previous -> Some (Set.add name (Option.defaultValue Set.empty previous))) callers) callers) Map.empty
+                FunctionIdMap.change target (fun previous -> Some (Set.add name (Option.defaultValue Set.empty previous))) callers) callers) FunctionIdMap.empty
     let rejected = CallGraphReachability.findReachable callers unproven
     Set.union primitives (Set.difference names rejected)
 

@@ -7,7 +7,7 @@ open OwnedIR
 
 type Lowered = {
     Functions: ANF.Function list
-    Contracts: Map<AST.FunctionId, CallSignature>
+    Contracts: FunctionIdMap<CallSignature>
     VarGen: ANF.VarGen
 }
 
@@ -37,7 +37,7 @@ let rec private rewriteAll targets expression =
     let rewriteCExpr cexpr =
         match directTarget cexpr with
         | Some target ->
-            Map.tryFind target targets
+            FunctionIdMap.tryFind target targets
             |> Option.map (fun replacement -> replaceTarget replacement cexpr)
             |> Option.defaultValue cexpr
         | None -> cexpr
@@ -94,7 +94,7 @@ let lower
     (varGen: ANF.VarGen)
     (elidedSites: Set<CallSiteIdentity>)
     : Result<Lowered, LoweringError> =
-    let anfById = originalANF |> List.map (fun functionDefinition -> functionDefinition.Id, functionDefinition) |> Map.ofList
+    let anfById = originalANF |> List.map (fun functionDefinition -> functionDefinition.Id, functionDefinition) |> FunctionIdMap.ofList
     let replacements =
         MaterializeOwnershipVariants.rewrites plan
         |> List.filter (fun rewrite -> not (Set.contains rewrite.Site elidedSites))
@@ -114,12 +114,12 @@ let lower
             (ownedCalls definition.Definition.Body
              |> List.map (fun call ->
                  { Caller = definition.Definition.Id; Result = call.Result.Id }, call.Target)))
-        |> Map.ofList
+        |> FunctionIdMap.ofList
     originalANF
     |> List.fold (fun result functionDefinition ->
         result |> Result.bind (fun rewritten ->
             let sites =
-                Map.tryFind functionDefinition.Id callsByCaller
+                FunctionIdMap.tryFind functionDefinition.Id callsByCaller
                 |> Option.defaultValue []
                 |> List.filter (fun (site, _) -> not (Set.contains site elidedSites))
             let hasSelectedCall =
@@ -139,11 +139,11 @@ let lower
                     |> List.map (fun memberDefinition ->
                         memberDefinition.Original,
                         memberDefinition.Function.Definition.Id)
-                    |> Map.ofList
+                    |> FunctionIdMap.ofList
                 members
                 |> List.fold (fun result memberDefinition ->
                     result |> Result.bind (fun (clones, currentVarGen) ->
-                        match Map.tryFind memberDefinition.Original anfById with
+                        match FunctionIdMap.tryFind memberDefinition.Original anfById with
                         | None -> Error (MissingSourceFunction memberDefinition.Original)
                         | Some source ->
                             let parameters, mapping, afterParameters =
@@ -174,7 +174,7 @@ let lower
             |> List.fold (fun result definition ->
                 result |> Result.bind (fun contracts ->
                     callSignature definition
-                    |> Result.map (fun signature -> Map.add definition.Definition.Id signature contracts))) (Ok Map.empty)
+                    |> Result.map (fun signature -> FunctionIdMap.add definition.Definition.Id signature contracts))) (Ok FunctionIdMap.empty)
             |> Result.map (fun contracts -> {
                 Functions = originals @ clones
                 Contracts = contracts

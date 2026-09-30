@@ -52,7 +52,7 @@ let createContext (result: ConversionResult) : TypeContext =
         functions
         |> List.fold
             (fun registry func ->
-                Map.add
+                FunctionIdMap.add
                     func.Id
                     (func.Name, AST.TFunction (
                         func.TypedParams |> List.map (fun param -> param.Type),
@@ -88,7 +88,7 @@ let tryGetType (ctx: TypeContext) (tempId: TempId) : AST.SemanticType option =
 
 /// Try to get a function's return type from the function registry
 let tryGetFuncReturnTypeFromReg (ctx: TypeContext) (funcName: AST.FunctionId) : AST.SemanticType option =
-    match Map.tryFind funcName ctx.FuncReg with
+    match FunctionIdMap.tryFind funcName ctx.FuncReg with
     | Some (_, AST.TFunction (_, retType)) -> Some retType
     | Some (_, otherType) -> Some otherType
     | None -> None
@@ -102,7 +102,7 @@ let inferAtomType (ctx: TypeContext) (atom: Atom) : AST.SemanticType option =
     | StringLiteral _ -> Some AST.TString
     | FloatLiteral _ -> Some AST.TFloat64
     | Var tid -> tryGetType ctx tid
-    | FuncRef funcName -> Map.tryFind funcName ctx.FuncReg |> Option.map snd
+    | FuncRef funcName -> FunctionIdMap.tryFind funcName ctx.FuncReg |> Option.map snd
 
 let private isIntegerType (typ: AST.SemanticType) : bool =
     match typ with
@@ -257,7 +257,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.SemanticType option =
     | Call (funcName, args)
     | BorrowedCall (funcName, args) ->
         // Return type from function registry (with special-case inference for stdlib list/tuple helpers)
-        let displayName = Map.tryFind funcName ctx.FuncReg |> Option.map fst
+        let displayName = FunctionIdMap.tryFind funcName ctx.FuncReg |> Option.map fst
         match displayName, args with
         | Some name, [listAtom; _]
             when name.StartsWith("Darklang.Stdlib.List.getAt")
@@ -335,7 +335,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.SemanticType option =
         // Closure payload size is resolved by the backend from the function
         // pointer, so ownership insertion must preserve the source function type
         // instead of treating the closure as an ordinary fixed block.
-        match Map.tryFind funcName ctx.FuncReg with
+        match FunctionIdMap.tryFind funcName ctx.FuncReg with
         | Some (_, (AST.TFunction _ as funcType)) -> Some funcType
         | Some (displayName, otherType) ->
             Crash.crash $"RefCountInsertion: ClosureAlloc target '{displayName}' has non-function type {otherType}"
@@ -379,7 +379,7 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.SemanticType option =
                     | Some t -> t
                     | None -> Crash.crash $"RefCountInsertion: type not found for temp {tid} in TupleAlloc"
                 | FuncRef funcName ->
-                    match Map.tryFind funcName ctx.FuncReg with
+                    match FunctionIdMap.tryFind funcName ctx.FuncReg with
                     | Some (_, typ) -> typ
                     | None -> Crash.crash $"RefCountInsertion: type not found for function {funcName} in TupleAlloc")
         Some (AST.TTuple elemTypes)

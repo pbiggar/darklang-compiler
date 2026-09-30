@@ -134,10 +134,10 @@ let getCalledFunctions (func: ANF.Function) : Set<AST.FunctionId> =
     extractFromAExpr func.Body |> Set.ofList
 
 /// Build call graph from list of ANF functions
-let buildCallGraph (funcs: ANF.Function list) : Map<AST.FunctionId, Set<AST.FunctionId>> =
+let buildCallGraph (funcs: ANF.Function list) : FunctionIdMap<Set<AST.FunctionId>> =
     funcs
     |> List.map (fun f -> f.Id, getCalledFunctions f)
-    |> Map.ofList
+    |> FunctionIdMap.ofList
 
 /// Retain functions reachable from the named roots, preserving input order.
 let filterReachableFunctions
@@ -149,7 +149,7 @@ let filterReachableFunctions
     funcs |> List.filter (fun func -> Set.contains func.Id reachable)
 
 /// Get the set of stdlib functions reachable from user functions
-let getReachableStdlib (stdlibCallGraph: Map<AST.FunctionId, Set<AST.FunctionId>>)
+let getReachableStdlib (stdlibCallGraph: FunctionIdMap<Set<AST.FunctionId>>)
                        (userFuncs: ANF.Function list) : Set<AST.FunctionId> =
     // Get all functions called from user code
     let userCalls =
