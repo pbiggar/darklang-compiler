@@ -9,6 +9,12 @@ native queue treats them as active and would reject re-enqueueing their branch.
 An attention job blocks all later ordinary jobs until it is repaired or
 resolved. The daemon owns ordinary job gates and deployment.
 
+Deferred admission uses the exact saved commit. If the original branch or
+worktree has changed, including untracked editor swap files, the dispatcher
+creates a clean admission branch and worktree at that commit. It preserves the
+original files and FIFO position, and records the admission identity before
+enqueue so an interrupted handoff can resume without duplicating the job.
+
 `./land` sends a commit whose entire change is in the explicit merge-train
 tooling allowlist through a separate control path. It merges that commit onto
 current local `main` in an isolated worktree, checks the merged tree and runs

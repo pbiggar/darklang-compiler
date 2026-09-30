@@ -8,11 +8,68 @@ from unittest.mock import patch
 
 from scripts.mergetrain_fifo import (
     DispatchError, admit_manual, load, policy_sections, prepare, retry_head,
-    safe_policy_change, save,
+    safe_policy_change, save, admission_source,
 )
 
 
 class FifoDispatchTests(unittest.TestCase):
+    def test_deferred_admission_uses_saved_commit_and_resumes_interrupted_enqueue(self) -> None:
+        for change in ("swap", "tracked", "advanced"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
+                repo = Path(directory) / "repo"
+                repo.mkdir()
+                subprocess.run(["git", "init", "-q", "-b", "task/source"], cwd=repo, check=True)
+                subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+                subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
+                report = repo / "report.md"
+                report.write_text("queued report\n")
+                subprocess.run(["git", "add", "report.md"], cwd=repo, check=True)
+                subprocess.run(["git", "commit", "-q", "-m", "queued"], cwd=repo, check=True)
+                sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+                edited = repo / ".report.md.swp" if change == "swap" else report
+                edited.write_text("editor session\n")
+                if change == "advanced":
+                    subprocess.run(["git", "add", "report.md"], cwd=repo, check=True)
+                    subprocess.run(["git", "commit", "-q", "-m", "later work"], cwd=repo, check=True)
+                owner_head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True)
+                owner_status = subprocess.check_output(["git", "status", "--porcelain"], cwd=repo, text=True)
+                save(repo, {"schema": 1, "head": {
+                    "native_id": 23, "order": 23, "branch": "task/source", "worktree": str(repo),
+                    "head_sha": sha, "base_sha": sha, "auto": True, "task": "report", "admitting": True,
+                }, "pending": [], "completed": []})
+                queued = {}
+                enqueues = []
+                def fake_train(_repo: Path, *args: str) -> dict:
+                    if args[0] == "status":
+                        return {"contract_version": 4, "recent_jobs":
+                                [{"id": 29, "state": "waiting"}] if queued else []}
+                    if args[0] == "inspect":
+                        return {"job": queued}
+                    if args[0] == "enqueue":
+                        enqueues.append(args)
+                        self.assertIn("--auto", args)
+                        worktree = args[args.index("--worktree") + 1]
+                        self.assertEqual((Path(worktree) / "report.md").read_text(), "queued report\n")
+                        self.assertEqual(subprocess.check_output(["git", "status", "--porcelain"], cwd=worktree, text=True), "")
+                        queued.update(id=29, head_sha=sha, branch=args[args.index("--branch") + 1])
+                        raise DispatchError("interrupted after native enqueue")
+                    raise AssertionError(args)
+                with patch("scripts.mergetrain_fifo.train", side_effect=fake_train), patch(
+                    "scripts.mergetrain_fifo.auto_approval_still_safe", return_value=True
+                ), patch("scripts.mergetrain_fifo.admission_source", side_effect=lambda repo, job:
+                         admission_source(repo, job, Path(directory) / "admissions")):
+                    with self.assertRaisesRegex(DispatchError, "interrupted"):
+                        prepare(repo)
+                    self.assertIn("admission_branch", load(repo)["head"])
+                    result = prepare(repo)
+                self.assertEqual(len(enqueues), 1)
+                self.assertEqual(result["head"]["native_id"], 29)
+                self.assertEqual(result["head"]["order"], 23)
+                self.assertNotIn("admitting", result["head"])
+                self.assertEqual(edited.read_text(), "editor session\n")
+                self.assertEqual(subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True), owner_head)
+                self.assertEqual(subprocess.check_output(["git", "status", "--porcelain"], cwd=repo, text=True), owner_status)
+
     def test_automatic_retry_renews_approval_and_preserves_fifo_and_owner(self) -> None:
         for approved in (True, False):
             with self.subTest(approved=approved), tempfile.TemporaryDirectory() as directory:
@@ -150,6 +207,8 @@ class FifoDispatchTests(unittest.TestCase):
 
             with patch("scripts.mergetrain_fifo.train", side_effect=fake_train), patch(
                 "scripts.mergetrain_fifo.inspect", side_effect=lambda _repo, number: jobs[number]
+            ), patch(
+                "scripts.mergetrain_fifo.admission_source", side_effect=lambda _repo, job: (job["branch"], job["worktree"])
             ):
                 first = prepare(repo)
                 self.assertEqual(first["head"]["order"], 1)

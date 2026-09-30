@@ -163,6 +163,32 @@ def auto_approval_still_safe(repo: Path, deferred: dict[str, Any]) -> bool:
     return True
 
 
+def admission_source(repo: Path, job: dict[str, Any],
+                     worktree_root: Path = RETRY_WORKTREE_ROOT) -> tuple[str, str]:
+    """Pin deferred admission to its committed revision without touching the owner."""
+    sha = str(job["head_sha"])
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise DispatchError("deferred job lacks an exact commit")
+    branch = str(job.get("admission_branch") or job["branch"])
+    source = Path(str(job.get("admission_worktree") or job["worktree"]))
+    if source.is_dir() and (
+        git(source, "rev-parse", "HEAD") == sha
+        and git(source, "branch", "--show-current") == branch
+        and not git(source, "status", "--porcelain")
+    ):
+        return branch, str(source)
+    branch = f"mergetrain-repair/admit-{job['order']}-{sha[:10]}"
+    source = worktree_root.resolve() / f"mergetrain-admit-{job['order']}-{sha[:10]}"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    if not source.exists():
+        git(repo, "worktree", "add", "-b", branch, str(source), sha)
+    if (git(source, "rev-parse", "HEAD") != sha
+            or git(source, "branch", "--show-current") != branch
+            or git(source, "status", "--porcelain")):
+        raise DispatchError("isolated admission worktree is not clean at the exact commit")
+    return branch, str(source)
+
+
 def prepare(repo: Path) -> dict[str, Any]:
     """Admit only the oldest unfinished ordinary job to the native daemon."""
     state = load(repo)
@@ -235,7 +261,7 @@ def prepare(repo: Path) -> dict[str, Any]:
         candidates = []
         for job_id in fresh:
             native = inspect(repo, job_id)
-            if (native.get("branch") == current["branch"]
+            if (native.get("branch") == current.get("admission_branch", current["branch"])
                     and native.get("head_sha") == current["head_sha"]):
                 candidates.append(job_id)
         if len(candidates) > 1:
@@ -244,8 +270,7 @@ def prepare(repo: Path) -> dict[str, Any]:
             current["native_id"] = candidates[0]
             fresh.remove(candidates[0])
         else:
-            args = ["enqueue", "--task", current["task"], "--branch", current["branch"],
-                    "--worktree", current["worktree"]]
+            args = ["enqueue", "--task", current["task"]]
             try:
                 if auto_approval_still_safe(repo, current):
                     args.append("--auto")
@@ -253,6 +278,11 @@ def prepare(repo: Path) -> dict[str, Any]:
                 current["recovery_failed"] = str(error)
                 save(repo, state)
                 raise
+            branch, worktree = admission_source(repo, current)
+            current["admission_branch"] = branch
+            current["admission_worktree"] = worktree
+            save(repo, state)  # Persist the snapshot identity before native enqueue.
+            args.extend(["--branch", branch, "--worktree", worktree])
             replacement = train(repo, *args).get("job") or {}
             if replacement.get("head_sha") != current["head_sha"]:
                 raise DispatchError(f"deferred job #{current['order']} changed commit")
