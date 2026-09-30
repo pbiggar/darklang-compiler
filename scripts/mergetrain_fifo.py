@@ -18,6 +18,9 @@ class DispatchError(RuntimeError):
     pass
 
 
+RETRY_WORKTREE_ROOT = Path("/Users/paulbiggar/projects/c4d-worktrees")
+
+
 def git(repo: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(repo), *args], capture_output=True, text=True, check=False
@@ -327,13 +330,58 @@ def note_resolved(repo: Path, job_id: int, outcome: str) -> None:
     save(repo, state)
 
 
-def retry_head(repo: Path, job_id: int) -> dict[str, Any]:
+def retry_head(repo: Path, job_id: int, *, auto: bool = False,
+               worktree_root: Path = RETRY_WORKTREE_ROOT) -> dict[str, Any]:
     state = load(repo)
     head = state.get("head")
     if head is None and state.get("pending"):
         raise DispatchError("a deferred FIFO job must be admitted before retry")
     if head is not None and int(head["native_id"]) != job_id:
         raise DispatchError(f"job #{job_id} is behind FIFO head #{head['order']}")
+    if auto:
+        original = inspect(repo, job_id)
+        if original.get("status") not in {"blocked", "failed"}:
+            raise DispatchError("automatic retry requires a blocked or failed job")
+        if original.get("pending_deploy_sha"):
+            raise DispatchError("job may already have landed; reconcile it before retry")
+        source = Path(str(original.get("worktree_path") or ""))
+        sha = str(original.get("head_sha") or "")
+        if not original.get("worktree_path") or not source.is_dir() or not re.fullmatch(r"[0-9a-f]{40}", sha):
+            raise DispatchError("job lacks its owning worktree or exact commit")
+        if git(source, "rev-parse", "HEAD") != sha or git(source, "status", "--porcelain"):
+            raise DispatchError("owning worktree is not clean at the enqueued commit")
+        branch = f"mergetrain-repair/retry-{job_id}-{sha[:10]}"
+        worktree = worktree_root.resolve() / f"mergetrain-retry-{job_id}-{sha[:10]}"
+        worktree.parent.mkdir(parents=True, exist_ok=True)
+        if worktree.exists():
+            if (git(worktree, "rev-parse", "HEAD") != sha
+                    or git(worktree, "branch", "--show-current") != branch
+                    or git(worktree, "status", "--porcelain")):
+                raise DispatchError("existing retry worktree does not match the clean exact commit")
+            # Resume an enqueue or dismissal interrupted before the FIFO update.
+            snapshot = train(repo, "status", "--limit", "1000")
+            candidates = [inspect(repo, number) for number in active_ids(snapshot)]
+            matches = [job for job in candidates if job.get("branch") == branch]
+            if len(matches) > 1:
+                raise DispatchError("multiple active retry jobs")
+            result = {"job": matches[0]} if matches else {}
+        else:
+            git(repo, "worktree", "add", "-b", branch, str(worktree), sha)
+            result = {}
+        if not result:
+            result = train(repo, "enqueue", "--task", str(original.get("task") or f"retry job {job_id}"),
+                           "--branch", branch, "--worktree", str(worktree), "--auto")
+        replacement = result.get("job") or {}
+        replacement_id = int(replacement.get("id") or 0)
+        if replacement_id <= 0 or replacement.get("head_sha") != sha or replacement.get("auto_deploy") is not True:
+            raise DispatchError("retry enqueue did not confirm the exact commit with automatic approval; original job preserved")
+        updated = entry(replacement_id, replacement)
+        train(repo, "dismiss", str(job_id), "--note", f"replaced by job #{replacement_id} at {sha[:12]}")
+        if head is not None:
+            updated["order"] = head["order"]
+            state["head"] = updated
+            save(repo, state)
+        return result
     result = train(repo, "retry", str(job_id))
     replacement = result.get("replacement") or result.get("job") or {}
     replacement_id = int(replacement.get("id") or 0)
@@ -373,6 +421,8 @@ def main() -> int:
     resolved.add_argument("outcome")
     retry = sub.add_parser("retry")
     retry.add_argument("job_id", type=int)
+    retry.add_argument("--auto", action="store_true", help="Grant fresh bounded automatic approval for the exact enqueued commit")
+    retry.add_argument("--worktree-root", type=Path, default=RETRY_WORKTREE_ROOT)
     manual = sub.add_parser("manual")
     manual.add_argument("order", type=int)
     manual.add_argument("head_sha")
@@ -393,7 +443,7 @@ def main() -> int:
         elif args.action == "retry":
             with (ledger_path(repo).parent / "mergetrain-dispatch.lock").open("a") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
-                result = retry_head(repo, args.job_id)
+                result = retry_head(repo, args.job_id, auto=args.auto, worktree_root=args.worktree_root)
         elif args.action == "manual":
             with (ledger_path(repo).parent / "mergetrain-dispatch.lock").open("a") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)

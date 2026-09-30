@@ -110,6 +110,9 @@ class MergetrainStatusTests(unittest.TestCase):
                             "message": "approval_execution_policy_changed: policy changed"},
                 "events": [],
             }
+            owner = root / "owner"
+            subprocess.run(["git", "worktree", "add", "-q", "-b", "task/review", str(owner), base], cwd=repo, check=True)
+            details["job"].update(worktree_path=str(owner), auto_deploy=False)
             details_path = root / "details.json"
             details_path.write_text(json.dumps(details), encoding="utf-8")
             calls_path = root / "calls"
@@ -117,7 +120,7 @@ class MergetrainStatusTests(unittest.TestCase):
             fake.write_text(
                 "#!/usr/bin/env python3\n"
                 "import json, os, pathlib, sys\n"
-                "command = next(arg for arg in sys.argv if arg in {'status', 'inspect', 'retry'})\n"
+                "command = next(arg for arg in sys.argv if arg in {'status', 'inspect', 'retry', 'enqueue', 'dismiss'})\n"
                 "with pathlib.Path(os.environ['STATUS_TEST_CALLS']).open('a') as calls:\n"
                 "    calls.write(command + '\\n')\n"
                 "if command == 'inspect':\n"
@@ -127,6 +130,14 @@ class MergetrainStatusTests(unittest.TestCase):
                 "    print(json.dumps(details))\n"
                 "elif command == 'retry':\n"
                 "    print(json.dumps({'job': {'id': 300}}))\n"
+                "elif command == 'enqueue':\n"
+                "    job = json.loads(pathlib.Path(os.environ['STATUS_TEST_DETAILS']).read_text())['job']\n"
+                "    job.update(id=300, auto_deploy='--auto' in sys.argv, status='queued',\n"
+                "        branch=sys.argv[sys.argv.index('--branch') + 1],\n"
+                "        worktree_path=sys.argv[sys.argv.index('--worktree') + 1])\n"
+                "    print(json.dumps({'job': job}))\n"
+                "elif command == 'dismiss':\n"
+                "    print(json.dumps({'ok': True}))\n"
                 "else:\n"
                 "    print(json.dumps({'contract_version': 4, 'health': 'healthy',\n"
                 "        'state': 'attention', 'summary': '1 job needs attention',\n"
@@ -164,7 +175,7 @@ class MergetrainStatusTests(unittest.TestCase):
             master, slave = pty.openpty()
             process = subprocess.Popen(
                 [str(source_root / "mergetrain-status"), "--repo", str(repo),
-                 "--interval", "30", "--color", "never"],
+                 "--interval", "30", "--color", "never", "--retry-worktree-root", str(root / "retries")],
                 cwd=repo, env=environment, stdin=slave, stdout=slave, stderr=slave,
                 close_fds=True,
             )
@@ -220,11 +231,13 @@ class MergetrainStatusTests(unittest.TestCase):
                 os.write(master, b"a")
                 read_until(b"[r] retry")
                 os.write(master, b"r")
-                read_until(b"Retry #299? Approval may become manual.")
+                confirmation = read_until(b"Retry #299 with automatic approval?")
+                self.assertNotIn(b"Approval may become manual", confirmation)
                 self.assertNotIn("retry\n", calls_path.read_text(encoding="utf-8"))
                 os.write(master, b"y")
                 read_until(b"retried job 299 as 300")
-                self.assertIn("retry\n", calls_path.read_text(encoding="utf-8"))
+                self.assertIn("enqueue\n", calls_path.read_text(encoding="utf-8"))
+                self.assertIn("dismiss\n", calls_path.read_text(encoding="utf-8"))
                 os.write(master, b"q")
                 self.assertEqual(process.wait(timeout=10), 0)
             finally:

@@ -37,6 +37,7 @@ redraw=true
 next_refresh=0
 status_output="Loading merge-train status…"
 status_json=""
+retry_worktree_root="/Users/paulbiggar/projects/c4d-worktrees"
 screen_lines=()
 attention_ids=()
 approval_ids=()
@@ -57,6 +58,8 @@ Options:
                        Default: $repo_root
   --attempt-dir PATH   Integrator evidence directory.
                        Default: $attempt_dir
+  --retry-worktree-root PATH  Directory for isolated automatic retries.
+                       Default: $retry_worktree_root
   --interval SECONDS   Delay between status refreshes.
                        Default: $interval_seconds
   --benchmark-page N   Start at benchmark page N (zero-based).
@@ -107,7 +110,7 @@ Job review
   n / p          Review the next / previous attention or approval
                  job without returning to status.
   r              Ask before retrying the selected attention job.
-                 A changed execution policy may require manual approval.
+                 Confirming grants fresh bounded automatic approval.
   A              Start policy-change approval. Review the policy diff,
                  confirm the job identity, then review the exact deploy
                  plan separately before anything is deployed.
@@ -126,6 +129,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --attempt-dir)
       attempt_dir="$2"
+      shift 2
+      ;;
+    --retry-worktree-root)
+      retry_worktree_root="$2"
       shift 2
       ;;
     --interval)
@@ -411,7 +418,7 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
       controls="[j/k] scroll [PgUp/Dn] page [?/q/Esc] back"
       other_controls="Keyboard help"
     elif [[ "$retry_pending" == true ]]; then
-      controls="Retry #$attention_job_id? Approval may become manual. [y] confirm  [n/Esc] cancel"
+      controls="Retry #$attention_job_id with automatic approval? [y] confirm  [n/Esc] cancel"
     elif [[ -n "$attention_job_id" ]]; then
       if [[ "$refresh_running" == true || "$refresh_status" == true ]]; then
         controls="Loading review…  [q/Esc] back"
@@ -506,7 +513,8 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
           if [[ "$retry_pending" == true ]]; then
             retry_pending=false
             if retry_result="$(python3 "$script_root/scripts/mergetrain_fifo.py" \
-                --repo "$repo_root" retry "$attention_job_id" 2>&1)"; then
+                --repo "$repo_root" retry "$attention_job_id" --auto \
+                --worktree-root "$retry_worktree_root" 2>&1)"; then
               action_message="$retry_result"
               attention_job_id=""
             else
