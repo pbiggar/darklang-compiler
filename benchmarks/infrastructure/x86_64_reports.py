@@ -58,5 +58,3 @@ def render_results(dark, rust) -> tuple[dict[str, object], str]:
         ]
     )
     return payload, markdown
-
-
