@@ -18,9 +18,9 @@ let lower
     let (Program (functions, _)) = program
     let programFunctionIds = functions |> List.map (fun func -> func.Id) |> Set.ofList
     let activeEligible = Set.intersect eligibleTailRecursionNames programFunctionIds
-    let helpers = planTailRecursionModuloHelpers context.FunctionNames activeEligible
-    if Map.isEmpty helpers then program
+    if Set.isEmpty activeEligible then program
     else
+        let helpers = planTailRecursionModuloHelpers context.FunctionNames activeEligible
         (program, freshVarGenForProgram program)
         |> fun (current, varGen) ->
             transformTailRecursionModuloAddition helpers varGen current
