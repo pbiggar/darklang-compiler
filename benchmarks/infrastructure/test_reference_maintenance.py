@@ -42,6 +42,19 @@ def reference(root: Path, language: str) -> dict:
 
 
 class ReferenceMaintenanceTests(unittest.TestCase):
+    def test_refresh_rejects_omitted_or_output_invalid_implementations(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fixture(root)
+            rows = reference(root, "python")["benchmarks"]
+            with self.assertRaisesRegex(ValueError, "every available implementation"):
+                measured_reference(root, "python", "full", "arm64", "v1",
+                                   "2026-09-30T00:00:00+00:00", rows[:1], [], [], {})
+            rows[0]["output_valid"] = False
+            with self.assertRaisesRegex(ValueError, "output-invalid"):
+                measured_reference(root, "python", "full", "arm64", "v1",
+                                   "2026-09-30T00:00:00+00:00", rows, [], [], {})
+
     def test_one_changed_workload_preserves_other_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

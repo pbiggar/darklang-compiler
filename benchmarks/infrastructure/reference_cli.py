@@ -195,8 +195,11 @@ def status(root: Path, profile: str) -> None:
         rows = document["benchmarks"] if document else []
         current = sum(row["name"] in names and row_status(root, document, row, profile) == "current" for row in rows)
         coverage = sum(source_path(root, name, language).is_file() for name in names)
-        executable = VERSIONS.get(language, ["dark" if language == "dark" else language])[0]
+        executable = VERSIONS.get(language, [{"dark": str(root.parent / "dark"),
+                                              "haskell": "ghc"}.get(language, language)])[0]
         installed = "installed" if shutil.which(executable) else "unavailable"
+        if language == "darklang-interpreter":
+            installed = "provide executable and rundir at refresh"
         version = document["version"] if document else "not recorded"
         print(f"{LANGUAGES[language]}: sources {coverage}/{len(names)}, current {current}/{len(names)}, "
               f"stored version {version}; {executable} {installed}")

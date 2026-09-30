@@ -50,6 +50,9 @@ def documents(root: Path, track: str) -> dict[str, dict]:
             result[language] = document
         elif language == "rust" and canonical.is_file():
             result[language] = canonical_document(root, canonical)
+        if language in result and (result[language]["language"] != language
+                                   or result[language]["track"]["id"] != track):
+            raise ValueError(f"{canonical}: canonical snapshot identity disagrees with its path")
     return result
 
 

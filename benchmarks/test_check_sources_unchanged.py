@@ -113,7 +113,8 @@ class BenchmarkSourceGateTests(unittest.TestCase):
 
         source_gate = (
             "  - name: benchmark-sources\n"
-            "    run: python3 benchmarks/check_sources_unchanged.py "
+            "    run: python3 ${repo}/scripts/mergetrain_exception.py --repo ${repo} "
+            "gate benchmark-sources -- python3 benchmarks/check_sources_unchanged.py "
             "--base ${integration_ref}\n"
         )
         self.assertIn(source_gate, config)

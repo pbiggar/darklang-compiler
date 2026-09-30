@@ -82,6 +82,8 @@ def validate_reference(document: dict) -> None:
         raise ValueError("reference snapshot has no complete track identity")
     if track["id"] != f'{track["architecture"]}-{track["profile"]}-{track["backend"]}':
         raise ValueError("reference track id disagrees with its metadata")
+    if track["id"] not in TRACKS:
+        raise ValueError(f'unsupported reference track: {track["id"]}')
     if not isinstance(document.get("version"), str) or not isinstance(document.get("generated_at"), str):
         raise ValueError("reference snapshot lacks version or timestamp provenance")
     rows = document.get("benchmarks")
@@ -144,6 +146,12 @@ def measured_reference(root: Path, language: str, profile: str, architecture: st
                        build_flags: list[str], runtime_flags: list[str],
                        tools: dict[str, str]) -> dict:
     names = load_profile(root, profile)
+    expected = {name for name in names if source_digest(root, name, language) is not None}
+    measured = [row.get("name") for row in rows]
+    if len(measured) != len(set(measured)) or set(measured) != expected:
+        raise ValueError(f"{language}: refresh must measure every available implementation exactly once")
+    if any(row.get("output_valid") is not True for row in rows):
+        raise ValueError(f"{language}: refresh contains output-invalid measurements")
     return {
         "schema_version": 1,
         "language": language,
