@@ -352,7 +352,7 @@ let insertRCInFunction (ctx: TypeContext) (func: Function) (varGen: VarGen) : Fu
 // ============================================================================
 
 let private isTempMissing (typeMap: ANF.TypeMap) (tempId: TempId) : bool =
-    not (Map.containsKey tempId typeMap)
+    ANF.TypeMap.tryFind tempId typeMap |> Option.isNone
 
 let rec collectMissingTempIdsInExpr
     (typeMap: ANF.TypeMap)
@@ -547,7 +547,8 @@ let private insertRCInProgramInternal
     // Verify TypeMap completeness - all defined TempIds should have types
     let verificationTimer = startPhase ()
     let program' = ANF.Program (functions', mainExpr')
-    let missingTypes = verifyTypeMapCompleteness program' finalTypeMap
+    let frozenTypes = finalTypeMap |> Map.toSeq |> ANF.TypeMap.ofSeq
+    let missingTypes = verifyTypeMapCompleteness program' frozenTypes
     recordPhase "Reference Count Verification" verificationTimer
     if not (List.isEmpty missingTypes) then
         let missingStr = missingTypes |> List.map (fun (TempId n) -> $"t{n}") |> String.concat ", "
@@ -555,7 +556,7 @@ let private insertRCInProgramInternal
 
     ownershipVerification
     |> Result.bind (fun () -> verifyJoinInterfaces (withTempTypes ctx finalTypeMap) program')
-    |> Result.map (fun () -> program', finalTypeMap)
+    |> Result.map (fun () -> program', frozenTypes)
 
 /// Insert RC operations into a program
 /// Returns (ANF.Program, TypeMap) where TypeMap contains all TempId -> Type mappings

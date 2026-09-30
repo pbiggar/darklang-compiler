@@ -489,9 +489,9 @@ the allocator is aware of this via `isX86_64 arch` checks.
 **Output**: Executable file (Mach-O or ELF)
 
 ### Responsibilities
-- **Literal pool resolution** (arm64): resolve symbolic data labels into
-  literal pools. x64 uses RIP-relative addressing instead, and has no
-  literal pools.
+- **Literal pool resolution**: ARM64 resolves symbolic string and float data
+  labels into literal pools. x64 collects string literals for RIP-relative
+  addressing and materializes float bits as immediates.
 - **Label resolution**: fix up branch offsets to real byte distances.
 - **Instruction encoding**: convert symbolic instructions to bytes per
   the ISA spec (fixed 32-bit on arm64, variable 1–15 bytes on x64).

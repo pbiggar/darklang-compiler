@@ -132,11 +132,10 @@ let serializeElf (binary: Binary_ELF.ElfBinary) : byte array =
 
 /// Create float data bytes from float pool
 let createFloatData (floatPool: LiteralPool.FloatPool) : byte array =
-    let bytes = Array.zeroCreate (floatPool.Floats.Count * 8)
-    // Map enumeration is already ordered by the pool index.
+    let bytes = Array.zeroCreate (floatPool.Floats.Length * 8)
+    // Array order is the first-use literal index.
     floatPool.Floats
-    |> Map.toSeq
-    |> Seq.iteri (fun index (_idx, floatVal) ->
+    |> Array.iteri (fun index floatVal ->
         writeUInt64LittleEndian
             bytes
             (index * 8)
@@ -149,12 +148,11 @@ let createFloatData (floatPool: LiteralPool.FloatPool) : byte array =
 let createStringData (stringPool: LiteralPool.StringPool) : byte array =
     let totalSize =
         stringPool.Strings
-        |> Map.fold (fun size _idx (_str, len) -> size + 16 + align8Int len) 0
+        |> Array.fold (fun size (_str, len) -> size + 16 + align8Int len) 0
     let bytes = Array.zeroCreate totalSize
-    // Array.zeroCreate supplies the alignment padding. Map enumeration is
-    // already ordered by the pool index.
+    // Array.zeroCreate supplies the alignment padding; entries are in ID order.
     stringPool.Strings
-    |> Map.fold (fun offset _idx (str, len) ->
+    |> Array.fold (fun offset (str, len) ->
         let alignedLen = align8Int len
         writeUInt64LittleEndian bytes offset 0x7FFFFFFFFFFFFFFFUL
         writeUInt64LittleEndian bytes (offset + 8) (uint64 len)

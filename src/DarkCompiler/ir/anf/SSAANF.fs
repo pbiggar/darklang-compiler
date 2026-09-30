@@ -59,7 +59,7 @@ let private define
         let valueType =
             match knownType with
             | Some typ -> Some typ
-            | None -> Map.tryFind id typeMap
+            | None -> ANF.TypeMap.tryFind id typeMap
         match valueType with
         | None -> Error $"SSA ANF: missing type for repeated value {id}"
         | Some typ ->
@@ -112,15 +112,15 @@ let rec private freshenTypedDefinitions
     (mapping: Map<ANF.TempId, ANF.TempId>)
     (state: Renaming)
     (ctx: TypeContext)
-    (types: ANF.TypeMap)
+    (types: Map<ANF.TempId, AST.SemanticType>)
     (expr: ReturnAnnotatedExpr)
-    : Result<ANF.AExpr * Renaming * ANF.TypeMap, string> =
+    : Result<ANF.AExpr * Renaming * Map<ANF.TempId, AST.SemanticType>, string> =
     match expr with
     | RLet (id, operation, rest, _) ->
         let typ =
             RcInsertExpression.inferBindingType (withTempTypes ctx types) id operation rest
         let operation' = InliningCommon.renameCExpr mapping operation
-        define Map.empty id (Some typ) state
+        define ANF.TypeMap.empty id (Some typ) state
         |> Result.bind (fun (defined, afterDefinition) ->
             let types' =
                 match operation with
@@ -162,7 +162,7 @@ let rec private freshenTypedDefinitions
             |> Result.map (fun (no', final, finalTypes) ->
                 ANF.If (renamedAtom mapping condition, yes', no'), final, finalTypes))
     | RJoin (parameter, continuation, entry, _) ->
-        define Map.empty parameter.Id (Some parameter.Type) state
+        define ANF.TypeMap.empty parameter.Id (Some parameter.Type) state
         |> Result.bind (fun (defined, afterDefinition) ->
             let scoped = Map.add parameter.Id defined mapping
             let types' = Map.add parameter.Id parameter.Type types

@@ -19,7 +19,7 @@ let private allOperations (func: SSAANF.Function) =
     |> Map.toList
     |> List.collect (fun (_, block) -> block.Operations)
 
-let private scalarAtom (types: TypeMap) = function
+let private scalarAtom (types: Map<TempId, AST.SemanticType>) = function
     | UnitLiteral | IntLiteral _ | BoolLiteral _ | FloatLiteral _ -> true
     | Var id ->
         Map.tryFind id types

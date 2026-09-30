@@ -46,7 +46,7 @@ let testRecordAllocationStartsFieldsAtOffsetZero () : TestResult =
                 ANF.Return (ANF.Var (ANF.TempId 0))
             )
         )
-    let typeMap : ANF.TypeMap = Map.ofList [(ANF.TempId 0, AST.TRecord ("LayoutRecord", []))]
+    let typeMap = ANF.TypeMap.ofSeq [(ANF.TempId 0, AST.TRecord ("LayoutRecord", []))]
 
     match ANF_to_MIR.toMIR program typeMap Map.empty (AST.TRecord ("LayoutRecord", [])) Map.empty Map.empty false FunctionIdMap.empty (FunctionIdMap.ofList [AST.functionId 0UL, "_start"]) with
     | Error err ->
@@ -88,9 +88,8 @@ let testNestedTerminalBranchesHaveNoInventedReturn () : TestResult =
                 ANF.If (ANF.Var second, loop 2, loop 3),
                 ANF.Return (ANF.FloatLiteral 3.5))
     }
-    let denseTypes = [|Some AST.TBool; Some AST.TBool; Some AST.TFloat64; Some AST.TFloat64|]
     let types =
-        Map.ofList [
+        ANF.TypeMap.ofSeq [
             (first, AST.TBool)
             (second, AST.TBool)
             (ANF.TempId 2, AST.TFloat64)
@@ -99,7 +98,6 @@ let testNestedTerminalBranchesHaveNoInventedReturn () : TestResult =
     ANF_to_MIR.convertANFFunction
         func
         types
-        denseTypes
         Map.empty
         (FunctionIdMap.ofList [(TestIds.functionIdForName name, AST.TFloat64)])
         (FunctionIdMap.ofList [(TestIds.functionIdForName name, name)])
@@ -199,7 +197,7 @@ let testPreRcSsaTypesBranchLocalDefinitions () : TestResult =
     |> Result.bind (fun ssaFunc ->
         ANF_to_MIR.convertSSAANFFunction
             ssaFunc
-            [|Some AST.TBool|]
+            (ANF.TypeMap.ofSeq [ANF.TempId 0, AST.TBool])
             Map.empty
             (FunctionIdMap.ofList [functionId, AST.TInt64])
             (FunctionIdMap.ofList [functionId, name])
@@ -295,8 +293,38 @@ let testSsaReturnFlowThroughSwappedParameters () : TestResult =
         Error $"Swapped live parameters were lost: {live.AtEntry}"
     else Ok ()
 
+/// Imported units can start at high IDs, leave gaps, and refine earlier types.
+let testTypeInformationComposition () : TestResult =
+    let original = ANF.TypeMap.ofSeq [
+        ANF.TempId 4002, AST.TString
+        ANF.TempId 4000, AST.TInt64
+        ANF.TempId 4002, AST.TBool
+    ]
+    let imported = ANF.TypeMap.ofSeq [
+        ANF.TempId 3999, AST.TUnit
+        ANF.TempId 4002, AST.TFloat64
+        ANF.TempId 4004, AST.TString
+    ]
+    let merged = ANF.TypeMap.merge original imported
+    let expected = [
+        3998, None; 3999, Some AST.TUnit; 4000, Some AST.TInt64
+        4001, None; 4002, Some AST.TFloat64; 4003, None
+        4004, Some AST.TString; 4005, None
+    ]
+    if expected |> List.exists (fun (id, typ) -> ANF.TypeMap.tryFind (ANF.TempId id) merged <> typ) then
+        Error "Composed type information lost a gap, boundary, or later definition"
+    elif ANF.TypeMap.tryFind (ANF.TempId 4002) original <> Some AST.TBool then
+        Error "Composition changed the original unit's type information"
+    elif ANF.TypeMap.tryFind (ANF.TempId 0) ANF.TypeMap.empty <> None then
+        Error "An empty unit contains type information"
+    elif ANF.TypeMap.merge original ANF.TypeMap.empty <> original
+         || ANF.TypeMap.merge ANF.TypeMap.empty imported <> imported then
+        Error "Composition with an empty unit lost type information"
+    else Ok ()
+
 let tests : (string * (unit -> TestResult)) list =
     [
+        ("type information composition preserves gaps and unit boundaries", testTypeInformationComposition)
         ("raw_get intrinsic fallback crashes instead of defaulting to Int64", testRawGetIntrinsicReturnTypeDoesNotDefaultToInt64)
         ("variant registry rejects inconsistent type parameters", testBuildVariantRegistryRejectsInconsistentTypeParams)
         ("record allocation starts fields at offset zero", testRecordAllocationStartsFieldsAtOffsetZero)

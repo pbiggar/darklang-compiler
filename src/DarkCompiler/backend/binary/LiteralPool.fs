@@ -1,59 +1,47 @@
-// LiteralPool.fs - Literal pool storage for late constant resolution
-//
-// Provides string and float literal pools used during backend emission/encoding.
+// LiteralPool.fs - Dense literal storage for late constant resolution.
+// Pools are frozen once in first-use order; reverse indexes deduplicate values.
 
 module LiteralPool
 
-/// String pool for late constant resolution (used by LIR/codegen)
 type StringPool = {
-    Strings: Map<int, string * int>
+    Strings: (string * int) array
     StringToId: Map<string, int>
-    NextId: int
 }
 
-/// Float pool for late constant resolution (used by LIR/codegen)
-/// Uses int64 bit representation as key to distinguish -0.0 from 0.0
+/// Exact IEEE-754 bits distinguish signed zero and NaN payloads.
 type FloatPool = {
-    Floats: Map<int, float>
+    Floats: float array
     FloatBitsToId: Map<int64, int>
-    NextId: int
 }
 
-/// Empty string pool
 let emptyStringPool : StringPool = {
-    Strings = Map.empty
+    Strings = [||]
     StringToId = Map.empty
-    NextId = 0
 }
 
-/// Empty float pool
 let emptyFloatPool : FloatPool = {
-    Floats = Map.empty
+    Floats = [||]
     FloatBitsToId = Map.empty
-    NextId = 0
 }
 
-/// Add a string to the pool (deduplicated), returning index and updated pool
-let addString (pool: StringPool) (value: string) : int * StringPool =
-    match Map.tryFind value pool.StringToId with
-    | Some idx -> (idx, pool)
-    | None ->
-        let len = System.Text.Encoding.UTF8.GetByteCount value
-        let idx = pool.NextId
-        let strings = Map.add idx (value, len) pool.Strings
-        let stringToId = Map.add value idx pool.StringToId
-        let pool' = { pool with Strings = strings; StringToId = stringToId; NextId = idx + 1 }
-        (idx, pool')
+/// Build in first-use order without copying a growing array for every literal.
+let createStringPool (values: seq<string>) : StringPool =
+    let entries, ids, _ =
+        values
+        |> Seq.fold (fun (entries, ids, next) value ->
+            if Map.containsKey value ids then entries, ids, next
+            else
+                let length = System.Text.Encoding.UTF8.GetByteCount value
+                (value, length) :: entries, Map.add value next ids, next + 1)
+            ([], Map.empty, 0)
+    { Strings = entries |> List.rev |> List.toArray; StringToId = ids }
 
-/// Add a float to the pool (deduplicated by bit pattern), returning index and updated pool
-/// Uses bit-level comparison to distinguish -0.0 from 0.0 (they're equal in IEEE 754 comparison)
-let addFloat (pool: FloatPool) (value: float) : int * FloatPool =
-    let bits = System.BitConverter.DoubleToInt64Bits(value)
-    match Map.tryFind bits pool.FloatBitsToId with
-    | Some idx -> (idx, pool)
-    | None ->
-        let idx = pool.NextId
-        let floats = Map.add idx value pool.Floats
-        let floatBitsToId = Map.add bits idx pool.FloatBitsToId
-        let pool' = { pool with Floats = floats; FloatBitsToId = floatBitsToId; NextId = idx + 1 }
-        (idx, pool')
+let createFloatPool (values: seq<float>) : FloatPool =
+    let entries, ids, _ =
+        values
+        |> Seq.fold (fun (entries, ids, next) value ->
+            let bits = System.BitConverter.DoubleToInt64Bits value
+            if Map.containsKey bits ids then entries, ids, next
+            else value :: entries, Map.add bits next ids, next + 1)
+            ([], Map.empty, 0)
+    { Floats = entries |> List.rev |> List.toArray; FloatBitsToId = ids }

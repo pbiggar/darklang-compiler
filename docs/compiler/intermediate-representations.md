@@ -373,8 +373,8 @@ LIR stores string/float constants by value (`StringSymbol`/`FloatSymbol`)
 instead of pool indices. This avoids remapping constants when merging
 prebuilt functions (stdlib, preamble, user code). ARM64 builds literal pools
 during resolution once the full program layout is known. x64 instead
-materializes float bits as immediates and allocates string literals during code
-generation, so it does not emit float or string pools.
+materializes float bits as immediates and collects a string pool for RIP-relative
+references.
 
 Key differences from older indexed LIR:
 - `StringSymbol "hello"` and `FloatSymbol 1.5` are used directly.
@@ -382,24 +382,25 @@ Key differences from older indexed LIR:
 
 ## Constant Pools
 
-Literal pools are defined in `backend/binary/LiteralPool.fs` and built during ARM64 resolution
-(`backend/arm64/Resolve.fs`). The x64 backend does not use them.
+Literal pools are defined in `backend/binary/LiteralPool.fs` and built during
+ARM64 resolution (`backend/arm64/Resolve.fs`) and x64 string resolution
+(`backend/x64/Resolve.fs`). Entries are dense arrays in first-use order, frozen
+once after deduplication. Reverse indexes map values to their array indices;
+float deduplication uses exact bits, preserving signed zero and NaN payloads.
 
 ### String Pool
 ```fsharp
 type StringPool = {
-    Strings: Map<int, string * int>  // index → (value, length)
+    Strings: (string * int) array   // index → (value, UTF-8 byte length)
     StringToId: Map<string, int>      // value → index
-    NextId: int
 }
 ```
 
 ### Float Pool
 ```fsharp
 type FloatPool = {
-    Floats: Map<int, float>
+    Floats: float array
     FloatBitsToId: Map<int64, int>
-    NextId: int
 }
 ```
 
@@ -408,7 +409,10 @@ type FloatPool = {
 ### SSA Construction (Pass 3)
 `SSAANF.fs` converts final optimized ANF into explicit blocks. Repeated ANF
 temporaries receive fresh value IDs, and joins carry typed block arguments.
-`ANF_to_MIR.fs` lowers those arguments directly to MIR phis.
+`ANF_to_MIR.fs` lowers those arguments directly to MIR phis. Frozen program-wide
+`ANF.TypeMap` metadata uses a dense array with an ID offset and absent slots for
+gaps. MIR lowering shares this table directly. Branch-local type recovery keeps
+persistent environments so independently traversed branches retain their types.
 
 ### Phi Resolution (Pass 5)
 Register allocation resolves phi nodes by inserting parallel moves at

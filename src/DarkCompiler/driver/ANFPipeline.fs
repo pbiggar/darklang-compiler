@@ -328,10 +328,8 @@ let internal buildAnf
                     RcSSARefCountInsertion.insertBlockLocal ctx frontierParams ssa)
             let typeMap =
                 ssaAfterRC
-                |> List.fold (fun types func ->
-                    func.FreshValueTypes
-                    |> Map.fold (fun current id typ -> Map.add id typ current) types)
-                    Map.empty
+                |> Seq.collect (fun func -> Map.toSeq func.FreshValueTypes)
+                |> ANF.TypeMap.ofSeq
             let rcElapsed = sw.Elapsed.TotalMilliseconds - rcStart
             recordPassTiming passTimingRecorder "Reference Count Insertion" rcElapsed
             if verbosity >= 2 then

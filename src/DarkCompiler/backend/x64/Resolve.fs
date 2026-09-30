@@ -103,15 +103,15 @@ type private PatchState = { Errors: string list }
 /// Collect every symbolic string reference in first-use order. The empty string
 /// is always first because runtime helpers also address that canonical buffer.
 let collectStringPool (instructions: Instr list) : LiteralPool.StringPool =
-    let (_, initial) = LiteralPool.addString LiteralPool.emptyStringPool ""
-    instructions
-    |> List.fold (fun pool instruction ->
-        match instruction with
-        | LEA_rip (_, label) ->
-            match X86_64.tryStringLiteralValue label with
-            | Some value -> LiteralPool.addString pool value |> snd
-            | None -> pool
-        | _ -> pool) initial
+    seq {
+        yield ""
+        yield!
+            instructions
+            |> Seq.choose (function
+                | LEA_rip (_, label) -> X86_64.tryStringLiteralValue label
+                | _ -> None)
+    }
+    |> LiteralPool.createStringPool
 
 let private stringEntrySize (length: int) : int =
     16 + ((length + 7) &&& (~~~7))
@@ -126,9 +126,7 @@ let dataLabelOffsets
     let dataStart = (codeFileOffset + codeSize + 7) &&& (~~~7)
     let (dataEnd, literalLabels) =
         stringPool.Strings
-        |> Map.toList
-        |> List.sortBy fst
-        |> List.fold (fun (offset, labels) (_, (value, length)) ->
+        |> Array.fold (fun (offset, labels) (value, length) ->
             let labels = Map.add (X86_64.stringLiteralLabel value) offset labels
             (offset + stringEntrySize length, labels)) (dataStart, Map.empty)
     let emptyOffset =

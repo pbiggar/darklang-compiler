@@ -194,18 +194,6 @@ let private unaryOpDescription (op: ANF.UnaryOp) : string =
 let private appendInstrsRev (instrs: MIR.Instr list) (revInstrs: MIR.Instr list) : MIR.Instr list =
     (List.rev instrs) @ revInstrs
 
-/// Build a dense type lookup array for TempIds up to maxId
-let private buildTypeById (maxId: int) (typeMap: ANF.TypeMap) : AST.SemanticType option array =
-    if maxId < 0 then
-        [||]
-    else
-        let arr = Array.create (maxId + 1) None
-        typeMap
-        |> Map.iter (fun (ANF.TempId id) typ ->
-            if id >= 0 && id <= maxId then
-                arr.[id] <- Some typ)
-        arr
-
 /// Map ANF TempId to MIR virtual register
 let tempToVReg (ANF.TempId id) : MIR.VReg = MIR.VReg id
 
@@ -433,7 +421,7 @@ type CFGBuilder = {
     SelfTailIncoming: (MIR.Label * MIR.Operand list) list
     LabelGen: MIR.LabelGen
     RegGen: MIR.RegGen
-    TypeById: AST.SemanticType option array
+    TypeById: ANF.TypeMap
     // Fresh MIR registers start above this function's source TempIds and must use ExtraTypeMap.
     SourceTempIdMax: int
     ExtraTypeMap: Map<ANF.TempId, AST.SemanticType>
@@ -455,8 +443,8 @@ type CFGBuilder = {
 let private tryFindTypeById (builder: CFGBuilder) (id: int) : AST.SemanticType option =
     match Map.tryFind (ANF.TempId id) builder.ExtraTypeMap with
     | Some typ -> Some typ
-    | None when id >= 0 && id <= builder.SourceTempIdMax && id < builder.TypeById.Length ->
-        builder.TypeById.[id]
+    | None when id >= 0 && id <= builder.SourceTempIdMax ->
+        ANF.TypeMap.tryFind (ANF.TempId id) builder.TypeById
     | None -> None
 
 /// Lookup a TempId, checking extra types for newly created regs
@@ -1687,7 +1675,7 @@ let private materializeFloatPhiSources
 /// operation-specific layout and coverage handling stay in one place.
 let convertSSAANFFunction
     (ssaFunc: SSAANF.Function)
-    (typeById: AST.SemanticType option array)
+    (typeById: ANF.TypeMap)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
     (returnTypeReg: FunctionIdMap<AST.SemanticType>)
     (functionNames: FunctionIdMap<string>)
@@ -1934,7 +1922,6 @@ let convertSSAANFFunction
 let private convertANFFunctionWithTailCalls
     (anfFunc: ANF.Function)
     (typeMap: ANF.TypeMap)
-    (typeById: AST.SemanticType option array)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
     (returnTypeReg: FunctionIdMap<AST.SemanticType>)
     (functionNames: FunctionIdMap<string>)
@@ -1947,19 +1934,18 @@ let private convertANFFunctionWithTailCalls
         let withTailCalls =
             if enableTCO then SSATailCallDetection.detect recursiveMembers ssaFunc
             else ssaFunc
-        convertSSAANFFunction withTailCalls typeById typeReg returnTypeReg functionNames enableCoverage)
+        convertSSAANFFunction withTailCalls typeMap typeReg returnTypeReg functionNames enableCoverage)
 
 let convertANFFunction
     (anfFunc: ANF.Function)
     (typeMap: ANF.TypeMap)
-    (typeById: AST.SemanticType option array)
     (typeReg: Map<string, (string * AST.SemanticType) list>)
     (returnTypeReg: FunctionIdMap<AST.SemanticType>)
     (functionNames: FunctionIdMap<string>)
     (enableCoverage: bool)
     : Result<MIR.Function, string> =
     convertANFFunctionWithTailCalls
-        anfFunc typeMap typeById typeReg returnTypeReg functionNames enableCoverage FunctionIdMap.empty true
+        anfFunc typeMap typeReg returnTypeReg functionNames enableCoverage FunctionIdMap.empty true
 
 /// Convert ANF program to MIR program
 /// mainExprType: the type of the main expression (used for _start's return type)
@@ -1979,10 +1965,6 @@ let toMIR
     (functionNames: FunctionIdMap<string>)
     : Result<MIR.Program, string> =
     let (ANF.Program (functions, mainExpr)) = program
-    // TypeMap spans the whole program, so materialize its dense lookup once and
-    // retain a per-function source bound when sharing it with each CFG builder.
-    let typeById = buildTypeById (maxTempIdInProgram program) typeMap
-
     // Build return type registry for all functions (needed for caller to know return type)
     let returnTypeReg = buildReturnTypeReg functions externalReturnTypes
     let startId =
@@ -1994,7 +1976,7 @@ let toMIR
     // Each function gets its own RegGen starting from (maxTempId + 1) for deterministic compilation
     match
         mapResults
-            (fun anfFunc -> convertANFFunction anfFunc typeMap typeById typeReg returnTypeReg functionNames enableCoverage)
+            (fun anfFunc -> convertANFFunction anfFunc typeMap typeReg returnTypeReg functionNames enableCoverage)
             functions
     with
     | Error err -> Error err
@@ -2009,7 +1991,7 @@ let toMIR
         ReturnOwnership = ANF.OwnedReturn
         Body = mainExpr
     }
-    match convertANFFunction startFuncANF typeMap typeById typeReg returnTypeReg functionNames enableCoverage with
+    match convertANFFunction startFuncANF typeMap typeReg returnTypeReg functionNames enableCoverage with
     | Error err -> Error err
     | Ok startFunc ->
     let allFuncs = mirFuncs @ [startFunc]
@@ -2046,11 +2028,6 @@ let private toMIRFunctionsOnlyInternal
         | _ -> ()
 
     let (ANF.Program (functions, _mainExpr)) = program
-    // Avoid rescanning the global TypeMap for every function conversion.
-    let typeLookupTimer = startPhase ()
-    let typeById = buildTypeById (maxTempIdInProgram program) typeMap
-    recordPhase "ANF -> MIR Type Lookup Preparation" typeLookupTimer
-
     let members, enabled =
         match tailCallConfig with
         | Some config -> config
@@ -2071,7 +2048,7 @@ let private toMIRFunctionsOnlyInternal
         recordPhase "Tail Call Detection" tailCallTimer
         let conversionTimer = startPhase ()
         mapResults
-            (fun ssaFunc -> convertSSAANFFunction ssaFunc typeById typeReg returnTypeReg functionNames enableCoverage)
+            (fun ssaFunc -> convertSSAANFFunction ssaFunc typeMap typeReg returnTypeReg functionNames enableCoverage)
             withTailCalls
         |> Result.map (fun mirFuncs ->
             recordPhase "SSA ANF -> MIR Function Conversion" conversionTimer
@@ -2101,17 +2078,13 @@ let toMIRSSAFunctionsOnlyWithTrace
     (returnTypeReg: FunctionIdMap<AST.SemanticType>)
     (functionNames: FunctionIdMap<string>)
     : Result<MIR.Function list * MIR.VariantRegistry * MIR.RecordRegistry, string> =
-    let maxId =
-        typeMap
-        |> Map.fold (fun largest (ANF.TempId id) _ -> max largest id) -1
-    let typeById = buildTypeById maxId typeMap
     let withTailCalls =
         if enableTCO then
             functions |> List.map (SSATailCallDetection.detect recursiveMembers)
         else functions
     withTailCalls
     |> mapResults (fun func ->
-        convertSSAANFFunction func typeById typeReg returnTypeReg functionNames enableCoverage)
+        convertSSAANFFunction func typeMap typeReg returnTypeReg functionNames enableCoverage)
     |> Result.map (fun mirFuncs ->
         phaseRecorder |> Option.iter (fun record -> record "SSA ANF -> MIR Function Conversion" 0.0)
         let variantRegistry, recordRegistry =

@@ -120,12 +120,9 @@ let runANF2MIRTest (input: ANF.Program) (expected: MIR.Program) : PassTestResult
     // Pass-test ANF DSL is int-only, so map all TempIds to TInt64.
     let maxId = maxTempIdInProgram input
     let typeMap : ANF.TypeMap =
-        if maxId < 0 then
-            Map.empty
-        else
-            [0 .. maxId]
-            |> List.map (fun id -> (ANF.TempId id, AST.TInt64))
-            |> Map.ofList
+        [0 .. maxId]
+        |> Seq.map (fun id -> (ANF.TempId id, AST.TInt64))
+        |> ANF.TypeMap.ofSeq
     let emptyTypeReg : Map<string, (string * AST.SemanticType) list> = Map.empty
     let functionNames =
         let (ANF.Program (functions, _)) = input

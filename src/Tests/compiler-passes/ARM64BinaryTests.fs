@@ -140,8 +140,7 @@ let private readUInt32LE (bytes: byte array) (offset: int) : uint32 =
     ||| (uint32 bytes.[offset + 3] <<< 24)
 
 let testMachOConstSectionOffsetPointsToAlignedData () : TestResult =
-    let (_stringId, stringPool) =
-        LiteralPool.addString LiteralPool.emptyStringPool "abc"
+    let stringPool = LiteralPool.createStringPool ["abc"]
 
     let binary =
         createExecutableWithPools [|0xD65F03C0u|] stringPool LiteralPool.emptyFloatPool false
@@ -467,7 +466,40 @@ let testWriteToFileReturnsErrorForInvalidPath () : TestResult =
     | Ok () -> Error "Expected invalid output path to return Error"
     | Error _ -> Ok ()
 
+/// Literal IDs must agree with the bytes and labels emitted by both formats.
+let testLiteralFirstUseLayout () : TestResult =
+    let stringRef value = ARM64Symbolic.DataLabel (ARM64Symbolic.StringLiteral value)
+    let floatRef bits =
+        ARM64Symbolic.DataLabel (ARM64Symbolic.FloatLiteral (System.BitConverter.Int64BitsToDouble bits))
+    let floatBits = [0L; System.Int64.MinValue; 0x7ff8000000000001L; 0x7ff8000000000002L]
+    let refs =
+        [stringRef "é"; stringRef ""; stringRef "é"; stringRef "z"]
+        @ (floatBits |> List.map floatRef)
+        @ [floatRef System.Int64.MinValue; floatRef 0x7ff8000000000001L]
+    let strings, floats = ARM64_Resolve.collectPoolsFromLabelRefs refs
+    let expectedStrings =
+        ["é"; ""; "z"]
+        |> List.collect (fun value ->
+            let bytes = System.Text.Encoding.UTF8.GetBytes value
+            let padding = (8 - bytes.Length % 8) % 8
+            [ yield! uint64ToBytes 0x7fffffffffffffffUL
+              yield! uint64ToBytes (uint64 bytes.Length)
+              yield! bytes
+              yield! Array.create padding 0uy ])
+        |> List.toArray
+    let expectedFloats = floatBits |> List.collect (uint64 >> uint64ToBytes >> Array.toList) |> List.toArray
+    let machoStrings, labels = Binary_Generation_MachO.createStringData strings
+    if Binary_Generation_ELF.createStringData strings <> expectedStrings || machoStrings <> expectedStrings then
+        Error "Literal string layout lost first-use order, UTF-8 length, deduplication, or alignment"
+    elif labels <> Map.ofList ["str_0", 0; "str_1", 24; "str_2", 40] then
+        Error $"Mach-O string labels disagree with literal IDs: {labels}"
+    elif Binary_Generation_ELF.createFloatData floats <> expectedFloats
+         || Binary_Generation_MachO.createFloatData floats <> expectedFloats then
+        Error "Literal float layout lost signed zero, NaN payloads, or deduplication"
+    else Ok ()
+
 let tests = [
+    ("literal first-use layout preserves UTF-8 and exact float bits", testLiteralFirstUseLayout)
     ("uint32ToBytes", testUint32ToBytes)
     ("uint64ToBytes", testUint64ToBytes)
     ("padString", testPadString)

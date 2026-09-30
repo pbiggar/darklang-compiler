@@ -136,7 +136,7 @@ let buildPreambleContext
                         let preambleSymbolicFuncs = preambleOnlyFuncs
 
                         // Merge TypeMaps (stdlib + preamble)
-                        let mergedTypeMap = Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibTypeMap typeMap
+                        let mergedTypeMap = ANF.TypeMap.merge stdlib.StdlibTypeMap typeMap
 
                         let context = {
                             Context = pipelineContext
@@ -261,7 +261,7 @@ let buildPreambleContextFromAnalysis
                     |> List.filter (fun func -> not (isStdlibFunction func.Name))
                 let preambleSymbolicFuncs = preambleOnlyFuncs
 
-                let mergedTypeMap = Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibTypeMap typeMap
+                let mergedTypeMap = ANF.TypeMap.merge stdlib.StdlibTypeMap typeMap
 
                 Ok (stdlib, {
                     Context = pipelineContext

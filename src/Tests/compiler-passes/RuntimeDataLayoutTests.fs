@@ -10,7 +10,7 @@ let private checkCounter image offset =
     else Ok ()
 
 let private checkArm64 stringLength () =
-    let _, strings = LiteralPool.addString LiteralPool.emptyStringPool (String.replicate stringLength "x")
+    let strings = LiteralPool.createStringPool [String.replicate stringLength "x"]
     let code = [|0xd65f03c0u|] // RET; only data layout is under test.
     let labels = ARM64_Encoding.computeLeakCounterLabel Platform.Linux 120 4 0 (ARM64_Encoding.getStringPoolSize strings)
     let image = Binary_Generation_ELF.createExecutableWithPools code strings LiteralPool.emptyFloatPool true
@@ -19,7 +19,7 @@ let private checkArm64 stringLength () =
     | None -> Error "ARM64 counter relocation is absent"
 
 let private checkX86 stringLength () =
-    let _, strings = LiteralPool.addString LiteralPool.emptyStringPool (String.replicate stringLength "x")
+    let strings = LiteralPool.createStringPool [String.replicate stringLength "x"]
     let code = [|0xc3uy|] // RET; only data layout is under test.
     let labels = X86_64_Resolve.dataLabelOffsets 120 code.Length strings
     let image = Binary_Generation_ELF_X86_64.createExecutableWithPools code strings LiteralPool.emptyFloatPool true 0

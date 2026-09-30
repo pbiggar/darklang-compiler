@@ -295,9 +295,67 @@ let freshVar (VarGen n) : TempId * VarGen =
 /// Initial variable generator
 let initialVarGen = VarGen 0
 
-/// Type map for tracking TempId -> Type mappings
-/// Used by reference counting pass to determine which values are heap-allocated
-type TypeMap = Map<TempId, AST.SemanticType>
+/// Frozen program-wide type information. The offset avoids allocating the
+/// unused prefix of independently lowered units; gaps denote absent values.
+type TypeMap = private {
+    FirstId: int
+    Types: AST.SemanticType option array
+}
+
+module TypeMap =
+    let empty = { FirstId = 0; Types = [||] }
+
+    let tryFind (TempId id) types =
+        let index = id - types.FirstId
+        if index < 0 || index >= types.Types.Length then None
+        else types.Types.[index]
+
+    /// Duplicate IDs retain the last definition, matching accumulation order.
+    /// Sorting once permits filling gaps between allocated IDs.
+    let ofSeq (entries: seq<TempId * AST.SemanticType>) =
+        let ordered =
+            entries
+            |> Seq.groupBy fst
+            |> Seq.map (fun (_, definitions) ->
+                match Seq.tryLast definitions with
+                | Some definition -> definition
+                | None -> Crash.crash "ANF type table received an empty identity group")
+            |> Seq.sortBy fst
+            |> Seq.toArray
+        match Array.tryHead ordered with
+        | None -> empty
+        | Some (TempId first, _) ->
+            if first < 0 then Crash.crash "ANF type table contains a negative TempId"
+            let slots =
+                ordered
+                |> Seq.mapi (fun index (TempId current, typ) ->
+                    let previous =
+                        if index = 0 then first - 1
+                        else
+                            let (TempId id, _) = ordered.[index - 1]
+                            id
+                    seq {
+                        for _ in 1 .. current - previous - 1 do yield None
+                        yield Some typ
+                    })
+                |> Seq.concat
+                |> Seq.toArray
+            { FirstId = first; Types = slots }
+
+    /// Overlay later metadata while preserving entries absent from that unit.
+    let merge earlier later =
+        match Array.isEmpty earlier.Types, Array.isEmpty later.Types with
+        | true, _ -> later
+        | _, true -> earlier
+        | _ ->
+            let first = min earlier.FirstId later.FirstId
+            let last = max (earlier.FirstId + earlier.Types.Length) (later.FirstId + later.Types.Length)
+            { FirstId = first
+              Types = Array.init (last - first) (fun index ->
+                let id = TempId (first + index)
+                match tryFind id later with
+                | Some typ -> Some typ
+                | None -> tryFind id earlier) }
 
 /// Program with type information for reference counting
 type TypedProgram = {

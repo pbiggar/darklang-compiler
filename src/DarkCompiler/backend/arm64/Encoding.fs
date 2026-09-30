@@ -1640,17 +1640,16 @@ let getCodeSize (instructions: ARM64.Instr list) : int =
 /// Keys use exact IEEE-754 bits so positive and negative zero remain distinct.
 /// Floats are stored as 8-byte IEEE 754 doubles, aligned to 8 bytes
 let private computeFloatLiteralOffsets (codeFileOffset: int) (codeSize: int) (floatPool: LiteralPool.FloatPool) : Map<int64, int> =
-    if floatPool.Floats.IsEmpty then
+    if Array.isEmpty floatPool.Floats then
         Map.empty
     else
         // Floats start after headers + code, 8-byte aligned
         let startOffset = codeFileOffset + codeSize
         let alignedStart = (startOffset + 7) &&& (~~~7)
 
-        // Map.fold visits the pool in index order, preserving its layout
-        // without materializing an intermediate ordered list.
+        // Pool arrays retain first-use layout order.
         floatPool.Floats
-        |> Map.fold (fun (offset, offsetMap) _idx floatValue ->
+        |> Array.fold (fun (offset, offsetMap) floatValue ->
             let bits = System.BitConverter.DoubleToInt64Bits floatValue
             let newMap = Map.add bits offset offsetMap
             (offset + 8, newMap))  // Each double is 8 bytes
@@ -1661,10 +1660,10 @@ let private computeFloatLiteralOffsets (codeFileOffset: int) (codeSize: int) (fl
 /// codeFileOffset: where code starts in the file/segment
 /// Compute the size of the float pool in bytes
 let getFloatPoolSize (floatPool: LiteralPool.FloatPool) : int =
-    floatPool.Floats.Count * 8  // Each double is 8 bytes
+    floatPool.Floats.Length * 8  // Each double is 8 bytes
 
 let private computeStringLiteralOffsets (codeFileOffset: int) (codeSize: int) (floatPoolSize: int) (stringPool: LiteralPool.StringPool) : Map<string, int> =
-    if stringPool.Strings.IsEmpty then
+    if Array.isEmpty stringPool.Strings then
         Map.empty
     else
         // Strings start after headers + code + floats
@@ -1673,10 +1672,9 @@ let private computeStringLiteralOffsets (codeFileOffset: int) (codeSize: int) (f
         let startOffset = floatStart + floatPoolSize
 
         // Each string has format: [refcount:8][length:8][data:N][padding:P]
-        // Map.fold visits the pool in index order, preserving its layout
-        // without materializing an intermediate ordered list.
+        // Pool arrays retain first-use layout order.
         stringPool.Strings
-        |> Map.fold (fun (offset, offsetMap) _idx (str, len) ->
+        |> Array.fold (fun (offset, offsetMap) (str, len) ->
             let newMap = Map.add str offset offsetMap
             let alignedLen = ((len + 7) / 8) * 8
             (offset + 8 + alignedLen + 8, newMap))
@@ -1687,7 +1685,7 @@ let private computeStringLiteralOffsets (codeFileOffset: int) (codeSize: int) (f
 /// Each string has format: [refcount:8][length:8][data:N][padding:P]
 let getStringPoolSize (stringPool: LiteralPool.StringPool) : int =
     stringPool.Strings
-    |> Map.fold (fun size _idx (_str, len) ->
+    |> Array.fold (fun size (_str, len) ->
             let alignedLen = ((len + 7) / 8) * 8
             size + 8 + alignedLen + 8) 0
 
@@ -1708,8 +1706,8 @@ let private computeCodeFileOffset
         let headerSize = 32
         let pageZeroCommandSize = 72
         let hasData =
-            not stringPool.Strings.IsEmpty
-            || not floatPool.Floats.IsEmpty
+            not (Array.isEmpty stringPool.Strings)
+            || not (Array.isEmpty floatPool.Floats)
             || enableLeakCheck
         let numTextSections = if hasData then 2 else 1
         let textSegmentCommandSize = 72 + (80 * numTextSections)

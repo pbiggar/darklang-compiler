@@ -588,7 +588,7 @@ let buildStdlibSpecializations
                             |> Result.bind (fun (allocatedFuncs, newSummaries) ->
                                 let allLirFuncs = stdlib.AllocatedFunctions @ allocatedFuncs
                                 let mergedStdlibTypeMap =
-                                    Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibTypeMap typeMap
+                                    ANF.TypeMap.merge stdlib.StdlibTypeMap typeMap
                                 let mergedStdlibAnfFunctions =
                                     Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibANFFunctions newAnfFuncMap
                                 let mergedOptimizationCandidates =
