@@ -28,37 +28,45 @@ let directCallees (func: MIR.Function) : Set<AST.FunctionId> =
 /// SCCs at equal dependency depth are batched to amortize stage setup.
 let calleeFirst (functions: MIR.Function list) : Component list =
     let indexed = functions |> List.mapi (fun idx func -> idx, func)
+    let functionByIndex = functions |> List.toArray
     let byId =
         indexed
         |> List.groupBy (fun (_, func) -> func.Id)
         |> List.map (fun (id, entries) -> id, entries |> List.map fst)
         |> Map.ofList
     let graph =
-        indexed
-        |> List.map (fun (idx, func) ->
-            let edges =
-                directCallees func
-                |> Set.toList
-                |> List.choose (fun id ->
-                    match Map.tryFind id byId with
-                    | Some [unique] -> Some unique
-                    | _ -> None)
-                |> Set.ofList
-            idx, edges)
-        |> Map.ofList
+        functionByIndex
+        |> Array.map (fun func ->
+            directCallees func
+            |> Set.toList
+            |> List.choose (fun id ->
+                match Map.tryFind id byId with
+                | Some [unique] -> Some unique
+                | _ -> None)
+            |> Set.ofList)
     let reverse =
-        graph
-        |> Map.fold (fun reversed caller callees ->
-            callees
-            |> Set.fold (fun reversed callee ->
-                let callers = Map.tryFind callee reversed |> Option.defaultValue Set.empty
-                Map.add callee (Set.add caller callers) reversed) reversed)
-            (indexed |> List.map (fun (idx, _) -> idx, Set.empty) |> Map.ofList)
+        let callersByNode =
+            graph
+            |> Array.mapi (fun caller callees ->
+                callees |> Set.toArray |> Array.map (fun callee -> callee, caller))
+            |> Array.concat
+            |> Array.groupBy fst
+            |> Array.sortBy fst
+            |> Array.toList
+        // Nodes without incoming edges still own an empty row. Fill the
+        // consecutive domain once, without copying an array for every edge.
+        Array.unfold (fun (node, remaining) ->
+            if node = graph.Length then None
+            else
+                match remaining with
+                | (callee, callers) :: rest when callee = node ->
+                    Some (callers |> Array.map snd |> Set.ofArray, (node + 1, rest))
+                | _ -> Some (Set.empty, (node + 1, remaining))) (0, callersByNode)
     let rec finish visited order idx =
         if Set.contains idx visited then visited, order
         else
             let visited, order =
-                required idx graph
+                graph.[idx]
                 |> Set.fold (fun (visited, order) callee ->
                     finish visited order callee) (Set.add idx visited, order)
             visited, idx :: order
@@ -69,7 +77,7 @@ let calleeFirst (functions: MIR.Function list) : Component list =
     let rec collect visited members idx =
         if Set.contains idx visited then visited, members
         else
-            required idx reverse
+            reverse.[idx]
             |> Set.fold (fun (visited, members) caller ->
                 collect visited members caller)
                 (Set.add idx visited, Set.add idx members)
@@ -80,45 +88,39 @@ let calleeFirst (functions: MIR.Function list) : Component list =
             else
                 let visited, members = collect visited Set.empty idx
                 visited, members :: components) (Set.empty, [])
-    let components = List.rev components
-    let functionByIndex = indexed |> Map.ofList
+    let nodesByIndex = components |> List.rev |> List.toArray
     let componentByNode =
-        components
-        |> List.mapi (fun componentIdx members ->
-            members |> Set.toList |> List.map (fun node -> node, componentIdx))
-        |> List.concat
-        |> Map.ofList
-    let nodesByIndex = components |> List.mapi (fun idx members -> idx, members) |> Map.ofList
+        nodesByIndex
+        |> Array.mapi (fun componentIdx members ->
+            members |> Set.toArray |> Array.map (fun node -> node, componentIdx))
+        |> Array.concat
+        |> Array.sortBy fst
+        |> Array.map snd
     let membersByIndex =
-        components
-        |> List.mapi (fun idx members ->
-            idx,
-            (members
-             |> Set.toList
-             |> List.map (fun node -> required node functionByIndex)))
-        |> Map.ofList
+        nodesByIndex
+        |> Array.map (fun members ->
+            members
+            |> Set.toList
+            |> List.map (fun node -> functionByIndex.[node]))
     let edges =
-        components
-        |> List.mapi (fun idx members ->
-            let callees =
-                members
-                |> Set.fold (fun acc node -> Set.union acc (required node graph)) Set.empty
-                |> Set.toList
-                |> List.map (fun node -> required node componentByNode)
-                |> List.filter ((<>) idx)
-                |> Set.ofList
-            idx, callees)
-        |> Map.ofList
+        nodesByIndex
+        |> Array.mapi (fun idx members ->
+            members
+            |> Set.fold (fun acc node -> Set.union acc graph.[node]) Set.empty
+            |> Set.toList
+            |> List.map (fun node -> componentByNode.[node])
+            |> List.filter ((<>) idx)
+            |> Set.ofList)
     let rec visit seen ordered idx =
         if Set.contains idx seen then seen, ordered
         else
             let seen, ordered =
-                required idx edges
+                edges.[idx]
                 |> Set.fold (fun (seen, ordered) callee ->
                     visit seen ordered callee) (seen, ordered)
             Set.add idx seen, idx :: ordered
     let _, reverseOrder =
-        [0 .. List.length components - 1]
+        [0 .. nodesByIndex.Length - 1]
         |> List.fold (fun (seen, ordered) idx ->
             visit seen ordered idx) (Set.empty, [])
     let ordered = List.rev reverseOrder
@@ -126,7 +128,7 @@ let calleeFirst (functions: MIR.Function list) : Component list =
         ordered
         |> List.fold (fun depths idx ->
             let depth =
-                required idx edges
+                edges.[idx]
                 |> Set.fold (fun depth callee ->
                     max depth (1 + required callee depths)) 0
             Map.add idx depth depths) Map.empty
@@ -137,7 +139,7 @@ let calleeFirst (functions: MIR.Function list) : Component list =
         layer
         |> List.chunkBySize 512
         |> List.map (fun batch ->
-            let sccs = batch |> List.map (fun idx -> required idx membersByIndex)
-            { NodeIndices = batch |> List.collect (fun idx -> required idx nodesByIndex |> Set.toList)
+            let sccs = batch |> List.map (fun idx -> membersByIndex.[idx])
+            { NodeIndices = batch |> List.collect (fun idx -> nodesByIndex.[idx] |> Set.toList)
               SCCs = sccs
               Functions = sccs |> List.concat }))
