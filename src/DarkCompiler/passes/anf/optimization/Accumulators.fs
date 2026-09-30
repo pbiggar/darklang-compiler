@@ -860,6 +860,7 @@ let private freshHelperName
     choose 0
 
 let internal planTailRecursionModuloHelpers
+    (nextFunctionOrdinal: uint64)
     (functionNames: FunctionNameRegistry)
     (functionIds: FunctionIdRegistry)
     (eligibleFunctions: Set<AST.FunctionId>) =
@@ -875,8 +876,7 @@ let internal planTailRecursionModuloHelpers
             let helperName = freshHelperName functionIds generatedNames functionName
             ((functionId, helperName), Set.add helperName generatedNames)) Set.empty
     let allocated =
-        if List.isEmpty helperNames then Map.empty
-        else AST.allocateFunctionIds (functionNames |> Map.keys) (helperNames |> List.map snd)
+        AST.allocateFunctionIdsFromOrdinal nextFunctionOrdinal (helperNames |> List.map snd)
     helperNames
     |> List.map (fun (functionId, helperName) ->
         let helperId =

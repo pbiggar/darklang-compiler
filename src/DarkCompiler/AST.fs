@@ -303,17 +303,21 @@ let nextFunctionIdOrdinal ordinal =
     if ordinal = System.UInt64.MaxValue then
         Crash.crash "Function identity allocation exhausted"
     ordinal + 1UL
-let allocateFunctionIds (existing: seq<FunctionId>) (names: seq<string>) : Map<string, FunctionId> =
-    let first =
-        existing
-        |> Seq.map functionIdValue
-        |> Seq.fold (fun next ordinal -> max next (nextFunctionIdOrdinal ordinal)) 0UL
+/// Allocate deterministic identities from an already-maintained catalog cursor.
+let allocateFunctionIdsFromOrdinal (first: uint64) (names: seq<string>) : Map<string, FunctionId> =
     names
     |> Seq.distinct
     |> Seq.sort
     |> Seq.fold (fun (next, ids) name ->
         nextFunctionIdOrdinal next, Map.add name (functionId next) ids) (first, Map.empty)
     |> snd
+
+let allocateFunctionIds (existing: seq<FunctionId>) (names: seq<string>) : Map<string, FunctionId> =
+    let first =
+        existing
+        |> Seq.map functionIdValue
+        |> Seq.fold (fun next ordinal -> max next (nextFunctionIdOrdinal ordinal)) 0UL
+    allocateFunctionIdsFromOrdinal first names
 let typeId ordinal = TypeId ordinal
 let constructorId owner canonicalName runtimeTag =
     ConstructorId (owner, canonicalName, runtimeTag)
