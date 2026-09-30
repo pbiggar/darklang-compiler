@@ -35,6 +35,28 @@ from scripts.render_mergetrain_status import (
 )
 
 
+def benchmark_fixture(counts: dict[str, int], contract: str = "test", rust_count: int = 100) -> dict:
+    track = {"id": "arm64-full-cachegrind", "architecture": "arm64", "profile": "full",
+             "backend": "cachegrind", "measurement_policy": "test"}
+    snapshot = {"schema_version": 2, "language": "dark", "track": track,
+                "contract_sha256": contract, "generated_at": "2026-09-30T00:00:00+00:00",
+                "benchmarks": [{"name": name, "instructions": value} for name, value in counts.items()]}
+    rust = {"track": track, "contract_sha256": contract,
+            "benchmarks": [{"name": name, "instructions": rust_count} for name in counts]}
+    return {"snapshot": snapshot, "rust": rust}
+
+
+def write_benchmark_fixture(repo: Path, count: int, contract: str = "test") -> Path:
+    payload = benchmark_fixture({"sample": count}, contract)
+    snapshot = repo / "benchmarks" / "baselines" / "dark-arm64-full-cachegrind.json"
+    reference = repo / "benchmarks" / "references" / "arm64-full-cachegrind" / "rust.json"
+    snapshot.parent.mkdir(parents=True, exist_ok=True)
+    reference.parent.mkdir(parents=True, exist_ok=True)
+    snapshot.write_text(json.dumps(payload["snapshot"]))
+    reference.write_text(json.dumps(payload["rust"]))
+    return snapshot
+
+
 class MergetrainStatusTests(unittest.TestCase):
     def test_integrator_activity_is_scoped_to_live_process_and_repository(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -287,6 +309,16 @@ class MergetrainStatusTests(unittest.TestCase):
         self.assertEqual(human_age(now - timedelta(hours=2), now=now), "2h")
         self.assertEqual(human_age(now - timedelta(days=3), now=now), "3d")
 
+    @patch("scripts.render_mergetrain_status.git_file")
+    def test_reference_upgrade_does_not_manufacture_compiler_progress(self, mock_git_file: MagicMock) -> None:
+        previous = json.dumps(benchmark_fixture({"sample": 200}, rust_count=100))
+        current = json.dumps(benchmark_fixture({"sample": 200}, rust_count=50))
+        mock_git_file.side_effect = lambda _repo, revision: current if revision == "current" else previous
+        comparison = benchmark_changes_for_commit(Path("."), "current")
+        self.assertNotIsInstance(comparison, str)
+        self.assertEqual(comparison.aggregate_change, 0.0)
+        self.assertEqual(comparison.workload_changes, ())
+
     def test_tiny_benchmark_changes_render_as_approximately_zero(self) -> None:
         self.assertEqual(percentage(-0.009), "~0%")
         self.assertEqual(percentage(0.009), "~0%")
@@ -296,28 +328,8 @@ class MergetrainStatusTests(unittest.TestCase):
     def test_benchmark_detail_data_contains_only_changed_workloads(
         self, mock_git_file: MagicMock
     ) -> None:
-        identity = (
-            "**Architecture:** `arm64`\n"
-            "**Profile:** `full`\n"
-            "**Measurement policy:** `test`\n"
-            "**Workload contract:** `test`\n"
-        )
-        previous = (
-            identity
-            + "| Benchmark | Dark (2.0x) | Rust |\n"
-            + "|---|---:|---:|\n"
-            + "| faster | 200 (2.0x) | 100 |\n"
-            + "| slower | 100 (1.0x) | 100 |\n"
-            + "| same | 100 (1.0x) | 100 |\n"
-        )
-        current = (
-            identity
-            + "| Benchmark | Dark (1.9x) | Rust |\n"
-            + "|---|---:|---:|\n"
-            + "| faster | 150 (1.5x) | 100 |\n"
-            + "| slower | 120 (1.2x) | 100 |\n"
-            + "| same | 100 (1.0x) | 100 |\n"
-        )
+        previous = json.dumps(benchmark_fixture({"faster": 200, "slower": 100, "same": 100}))
+        current = json.dumps(benchmark_fixture({"faster": 150, "slower": 120, "same": 100}))
         mock_git_file.side_effect = lambda _repo, revision: (
             current if revision == "current" else previous
         )
@@ -472,13 +484,7 @@ class MergetrainStatusTests(unittest.TestCase):
             subprocess.run(
                 ["git", "config", "user.name", "Status Test"], cwd=repo, check=True
             )
-            results = repo / "benchmarks" / "RESULTS.md"
-            results.write_text(
-                "| Benchmark | Dark (3.0x) | Rust |\n"
-                "|---|---:|---:|\n"
-                "| sample | 300 (3.0x) | 100 |\n",
-                encoding="utf-8",
-            )
+            results = write_benchmark_fixture(repo, 300)
             subprocess.run(["git", "add", "."], cwd=repo, check=True)
             subprocess.run(
                 ["git", "commit", "-q", "-m", "Initial results"],
@@ -495,12 +501,7 @@ class MergetrainStatusTests(unittest.TestCase):
                 cwd=repo,
                 check=True,
             )
-            results.write_text(
-                results.read_text(encoding="utf-8").replace("300", "280").replace(
-                    "3.0x", "2.8x"
-                ),
-                encoding="utf-8",
-            )
+            write_benchmark_fixture(repo, 280)
             subprocess.run(["git", "add", "."], cwd=repo, check=True)
             subprocess.run(
                 [
@@ -832,16 +833,7 @@ class MergetrainStatusTests(unittest.TestCase):
             subprocess.run(
                 ["git", "config", "user.name", "Status Test"], cwd=repo, check=True
             )
-            (repo / "benchmarks" / "RESULTS.md").write_text(
-                "**Architecture:** `arm64`\n"
-                "**Profile:** `full`\n"
-                "**Measurement policy:** `test`\n"
-                "**Workload contract:** `test`\n"
-                "| Benchmark | Dark (3.0x) | Rust |\n"
-                "|---|---:|---:|\n"
-                "| sample | 300 (3.0x) | 100 |\n",
-                encoding="utf-8",
-            )
+            write_benchmark_fixture(repo, 300)
             subprocess.run(["git", "add", "."], cwd=repo, check=True)
             subprocess.run(
                 ["git", "commit", "-q", "-m", "Initial benchmark results"],
@@ -876,35 +868,19 @@ class MergetrainStatusTests(unittest.TestCase):
                     cwd=repo,
                     check=True,
                 )
-            (repo / "benchmarks" / "RESULTS.md").write_text(
-                "**Architecture:** `arm64`\n"
-                "**Profile:** `full`\n"
-                "**Measurement policy:** `test`\n"
-                "**Workload contract:** `test`\n"
-                "| Benchmark | Dark (2.8x) | Rust |\n"
-                "|---|---:|---:|\n"
-                "| sample | 280 (2.8x) | 100 |\n",
-                encoding="utf-8",
-            )
+            write_benchmark_fixture(repo, 280)
             (repo / "optimization.txt").write_text(
                 "optimized implementation\n", encoding="utf-8"
             )
-            subprocess.run(["git", "add", "benchmarks/RESULTS.md"], cwd=repo, check=True)
+            subprocess.run(["git", "add", "benchmarks"], cwd=repo, check=True)
             subprocess.run(["git", "add", "optimization.txt"], cwd=repo, check=True)
             subprocess.run(
                 ["git", "commit", "-q", "-m", "Record benchmark improvement"],
                 cwd=repo,
                 check=True,
             )
-            results_path = repo / "benchmarks" / "RESULTS.md"
-            results_path.write_text(
-                results_path.read_text(encoding="utf-8").replace(
-                    "**Workload contract:** `test`",
-                    "**Workload contract:** `test-v2`",
-                ),
-                encoding="utf-8",
-            )
-            subprocess.run(["git", "add", "benchmarks/RESULTS.md"], cwd=repo, check=True)
+            write_benchmark_fixture(repo, 280, contract="test-v2")
+            subprocess.run(["git", "add", "benchmarks"], cwd=repo, check=True)
             subprocess.run(
                 ["git", "commit", "-q", "-m", "Change benchmark contract"],
                 cwd=repo,

@@ -156,9 +156,10 @@ opens mergetrain's exact deploy plan for a separate interactive confirmation.
 The plan can include other jobs, and declining it leaves the validated train
 ready without pushing.
 
-Generated `benchmarks/RESULTS.md` is never hand-merged. Source conflicts are
-resolved first, then a successful improving full recording run must regenerate
-the result and canonical snapshot.
+Generated benchmark reports are never hand-merged. Resolve source and snapshot
+conflicts first, then run `./benchmarks/bench report`. Do not combine snapshot
+rows by hand. Report regeneration requires no new improvement; the independent
+Darklang performance gates still determine readiness.
 
 ## Artifacts
 

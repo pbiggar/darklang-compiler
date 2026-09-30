@@ -101,8 +101,8 @@ not modify tracked benchmark files.
 
 When a compiler change improves aggregate full-profile performance, run
 `./benchmarks/run_benchmarks.sh full` in recording mode and commit the updated
-Dark snapshot and generated `benchmarks/RESULTS.md`; commit
-`benchmarks/BASELINES.md` only for an audited Rust refresh. Recording advances
+Dark snapshot and generated `benchmarks/RESULTS.md`; commit all reports changed by `./benchmarks/bench report`. Rust refreshes store
+independent reference JSON; `BASELINES.md` is now a generated reference index. Recording advances
 only on aggregate improvement without a blocking individual regression and
 leaves the stronger snapshot/results on regression.
 Integration measures every queued candidate once with `--verify-deployed`.
@@ -115,13 +115,29 @@ deployed baseline stops the gate; seed it from a complete measurement of the
 actual deployed head with `deployed_baseline.py seed RESULTS_DIR`. Audited Rust
 refreshes remain separate via `--refresh-baseline=rust`.
 
-If a rebase conflicts in generated `benchmarks/RESULTS.md`, resolve the source
-conflicts and run `./benchmarks/run_benchmarks.sh full` in recording mode. The
-run is the only valid resolution: it must prove an aggregate improvement without
-an individual regression of 0.1% or more, advance the canonical Dark snapshot,
-and replace `RESULTS.md` with fully regenerated results. Never hand-merge or
-select one conflicted version. If the
-run fails or does not advance and regenerate the files, abort the recovery.
+Generated reports (`RESULTS.md`, `BASELINES.md`, and `reports/*.md`) are
+presentation artifacts. After resolving source and snapshot conflicts, run
+`./benchmarks/bench report` and stage the regenerated files. Never hand-merge
+reports. Regeneration requires no new Darklang improvement and performs no
+measurement. Never combine snapshot rows by hand: select a complete compatible
+snapshot under its recording rules, or remeasure if neither snapshot describes
+the merged sources. A Darklang snapshot may advance only under its existing
+recording rules; report regeneration cannot approve or promote it.
+
+Reference upgrades use `./benchmarks/bench refresh LANGUAGE`. They update only
+that language's validated snapshot and regenerate the reports. Output failures
+preserve its old snapshot; missing implementations are explicit coverage gaps.
+Reference versions and stale measurements do not affect Darklang regression
+checks. Changes under `benchmarks/problems/` still require a `benchmark-sources`
+exception, including new reference implementations. Algorithm parity audits
+are reviewed separately and are never approved by a measurement refresh.
+
+The train runs `./benchmarks/bench report --check` as the `benchmark-reports`
+gate. This checks deterministic report consistency without writing files or
+running benchmarks. The `benchmarks` gate uses
+`./benchmarks/bench verify --against deployed`, which delegates to the existing
+`--verify-deployed full` runner with its same thresholds and baseline promotion
+rules. The status display reads structured snapshots rather than Markdown.
 
 When reporting verification, include the exact commands run, whether they
 passed or failed, and any residual risk. Report the task-parent comparison's

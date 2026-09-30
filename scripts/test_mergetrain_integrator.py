@@ -462,7 +462,7 @@ raise SystemExit(1)
         config = (source_root / ".mergetrain.yaml").read_text(encoding="utf-8")
 
         self.assertIn(
-            "gate benchmarks -- ./benchmarks/run_benchmarks.sh --verify-deployed full", config
+            "gate benchmarks -- ./benchmarks/bench verify --against deployed", config
         )
         self.assertIn(
             "gate benchmark-sources -- python3 benchmarks/check_sources_unchanged.py", config

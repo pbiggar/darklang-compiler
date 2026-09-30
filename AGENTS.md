@@ -88,14 +88,14 @@ this repository and takes precedence where it is stricter.
   Do not run or report
   `./benchmarks/run_benchmarks.sh --verify full` as a task-readiness gate: that
   command compares with the best-known snapshot rather than the branch parent.
-- During merge-conflict recovery, never hand-merge, choose a side for, or edit
-  conflict markers in generated `benchmarks/RESULTS.md`. With all source
-  conflicts resolved in the rebased working tree, run
-  `./benchmarks/run_benchmarks.sh full`; recording mode must prove an aggregate
-  improvement with no individual regression of 0.1% or more, advance the
-  canonical Dark snapshot, and regenerate
-  `RESULTS.md`. Stage the regenerated files. If the run fails or does not
-  replace the conflicted result, abort the recovery instead of guessing.
+- During merge-conflict recovery, never hand-merge generated benchmark reports
+  or choose a conflicted side. Resolve sources and measurement snapshots first,
+  then run `./benchmarks/bench report` and stage its generated files.
+  Regeneration runs no benchmarks and requires no new performance improvement.
+  Never combine measurement rows by hand: retain a complete compatible snapshot
+  under its recording rules, or remeasure when neither is valid for the merged
+  sources. Applicable Darklang regression gates remain independent.
+  `./benchmarks/bench report --check` verifies presentation consistency only.
 
 ## Bounded inspection
 

@@ -2,7 +2,7 @@
 # Run cachegrind benchmark for a given problem
 # Usage: ./cachegrind_runner.sh <benchmark_name> <output_dir> [parity_status] [baseline_refresh] [dark_binary] [profile]
 #
-# By default, only runs Dark and uses the cached Rust row from BASELINES.md.
+# By default, only measures Dark; the summary processor reads stored Rust JSON.
 # Pass `rust` as baseline_refresh to re-run the audited Rust reference.
 
 set -e

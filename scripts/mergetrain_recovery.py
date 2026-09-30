@@ -237,15 +237,18 @@ snapshot and benchmarks/RESULTS.md only if it proves an aggregate improvement.
 If it reports a regression, produces no tracked benchmark change, or cannot
 complete, do not commit a repair.
 
-If benchmarks/RESULTS.md is conflicted, never hand-merge it or choose a side.
-Resolve source conflicts first; recording mode is the only valid resolution.
+If generated benchmark reports are conflicted, never hand-merge them or choose a side.
+Resolve source and snapshot conflicts first, then run ./benchmarks/bench report.
+Report regeneration alone does not establish performance readiness.
 """
     elif failure.category in {"merge_conflict", "semantic_conflict"}:
         benchmark_rule = """
-If benchmarks/RESULTS.md is conflicted, never hand-merge it or choose a side.
-Resolve source conflicts first, then run ./benchmarks/run_benchmarks.sh full.
-Only commit generated benchmark files when recording mode proves an aggregate
-improvement and regenerates RESULTS.md. Abort the cherry-pick otherwise.
+If generated benchmark reports are conflicted, never hand-merge them or choose a side.
+Resolve source and snapshot conflicts first, then run ./benchmarks/bench report.
+Do not combine snapshot rows by hand: retain a complete compatible snapshot
+under its recording rules, or remeasure if neither is valid for the merged sources.
+Report regeneration requires no new performance improvement. The applicable
+Darklang regression gates must still pass independently.
 """
     state = (
         "A cherry-pick is stopped at conflicts. Resolve the semantic merge, preserving both changes, then continue it."

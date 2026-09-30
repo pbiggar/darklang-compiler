@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -357,53 +358,71 @@ def is_conflict_reason(reason: object) -> bool:
     return isinstance(reason, str) and "conflict" in reason.casefold()
 
 
+def benchmark_payload(contents: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(contents)
+    except (ValueError, TypeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
 def displayed_benchmark_ratio(contents: str) -> str | None:
-    header_prefix = "| Benchmark | Dark ("
-    for line in contents.splitlines():
-        if line.startswith(header_prefix) and ") |" in line:
-            return line[len(header_prefix) :].split(") |", 1)[0]
-    return None
+    rows = benchmark_rows(contents)
+    ratios = [dark / rust for dark, rust in rows.values() if rust is not None]
+    if not ratios or len(ratios) != len(rows):
+        return None
+    return f"{math.exp(math.fsum(math.log(value) for value in ratios) / len(ratios)):.1f}x"
 
 
-def benchmark_rows(contents: str) -> dict[str, tuple[int, int]]:
-    rows: dict[str, tuple[int, int]] = {}
-    for line in contents.splitlines():
-        if not line.startswith("|"):
-            continue
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if len(cells) < 3 or cells[0] in {"Benchmark", "---"}:
-            continue
-        dark_text = cells[1].split(" ", 1)[0].replace(",", "")
-        rust_text = cells[2].replace(",", "")
-        try:
-            dark = int(dark_text)
-            rust = int(rust_text)
-        except ValueError:
-            continue
-        if dark > 0 and rust > 0:
-            rows[cells[0]] = (dark, rust)
-    return rows
+def benchmark_rows(contents: str) -> dict[str, tuple[int, int | None]]:
+    payload = benchmark_payload(contents)
+    snapshot = payload.get("snapshot", {})
+    rust = payload.get("rust", {})
+    reference = rust.get("benchmarks", []) if isinstance(rust, dict) else []
+    rust_counts = {row["name"]: row["instructions"] for row in reference
+                   if isinstance(row, dict) and isinstance(row.get("name"), str)
+                   and type(row.get("instructions")) is int and row["instructions"] > 0}
+    if (rust.get("track") != snapshot.get("track")
+            or rust.get("contract_sha256") != snapshot.get("contract_sha256")):
+        rust_counts = {}
+    return {row["name"]: (row["instructions"], rust_counts.get(row["name"]))
+            for row in snapshot.get("benchmarks", [])
+            if isinstance(row, dict) and isinstance(row.get("name"), str)
+            and type(row.get("instructions")) is int and row["instructions"] > 0}
 
 
 def benchmark_identity(contents: str) -> tuple[str, ...]:
-    prefixes = (
-        "**Architecture:**",
-        "**Profile:**",
-        "**Measurement policy:**",
-        "**Workload contract:**",
-    )
-    return tuple(line for line in contents.splitlines() if line.startswith(prefixes))
+    snapshot = benchmark_payload(contents).get("snapshot", {})
+    track = snapshot.get("track", {})
+    return tuple(str(track.get(key, "")) for key in
+                 ("architecture", "profile", "backend", "measurement_policy")) + (snapshot.get("contract_sha256", ""),)
 
 
 def git_file(repo: Path, revision: str) -> str | None:
-    completed = subprocess.run(
-        ["git", "-C", str(repo), "show", f"{revision}:benchmarks/RESULTS.md"],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-    )
-    return completed.stdout if completed.returncode == 0 else None
+    """Read historical structured snapshots; report layout has no semantic role."""
+    def read(path: str) -> dict | None:
+        completed = subprocess.run(
+            ["git", "-C", str(repo), "show", f"{revision}:{path}"], check=False,
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+        )
+        if completed.returncode != 0:
+            return None
+        try:
+            value = json.loads(completed.stdout)
+        except ValueError:
+            return None
+        return value if isinstance(value, dict) else None
+
+    architecture = "arm64" if platform.machine().lower() in {"aarch64", "arm64"} else "x86_64"
+    tracks = [f"{architecture}-full-cachegrind"]
+    if architecture != "arm64":
+        tracks.append("arm64-full-cachegrind")
+    for track in tracks:
+        snapshot = read(f"benchmarks/baselines/dark-{track}.json")
+        if snapshot is not None:
+            rust = read(f"benchmarks/references/{track}/rust.json") or read(f"benchmarks/baselines/rust-{track}.json") or {}
+            return json.dumps({"snapshot": snapshot, "rust": rust})
+    return None
 
 
 def percentage(value: float | None) -> str:
@@ -427,8 +446,8 @@ class BenchmarkWorkloadChange:
     name: str
     previous_instructions: int
     current_instructions: int
-    previous_ratio: float
-    current_ratio: float
+    previous_ratio: float | None
+    current_ratio: float | None
 
     @property
     def saved_instructions(self) -> int:
@@ -464,29 +483,18 @@ def benchmark_comparison(
     if not current or current.keys() != previous.keys():
         return "comparison unavailable"
 
+    # Compiler progress is Dark/Dark. A Rust upgrade cannot manufacture a win.
     current_dark = math.prod(dark for dark, _rust in current.values())
-    current_rust = math.prod(rust for _dark, rust in current.values())
     previous_dark = math.prod(dark for dark, _rust in previous.values())
-    previous_rust = math.prod(rust for _dark, rust in previous.values())
-    exact_current = current_dark * previous_rust
-    exact_previous = previous_dark * current_rust
-    log_change = math.fsum(
-        math.log(current[name][0] / current[name][1])
-        - math.log(previous[name][0] / previous[name][1])
-        for name in current
-    ) / len(current)
-    aggregate_change = (
-        0.0
-        if exact_current == exact_previous
-        else (math.exp(log_change) - 1) * 100
-    )
+    log_change = math.fsum(math.log(current[name][0] / previous[name][0]) for name in current) / len(current)
+    aggregate_change = 0.0 if current_dark == previous_dark else (math.exp(log_change) - 1) * 100
     workload_changes = tuple(
         BenchmarkWorkloadChange(
             name=name,
             previous_instructions=previous[name][0],
             current_instructions=current[name][0],
-            previous_ratio=previous[name][0] / previous[name][1],
-            current_ratio=current[name][0] / current[name][1],
+            previous_ratio=previous[name][0] / previous[name][1] if previous[name][1] else None,
+            current_ratio=current[name][0] / current[name][1] if current[name][1] else None,
         )
         for name in current
         if current[name][0] != previous[name][0]
@@ -522,8 +530,8 @@ def benchmark_source(repo: Path, commit: str, subject: str) -> tuple[str, str] |
         .splitlines()
     )
     def generated(path: str) -> bool:
-        return path == "benchmarks/RESULTS.md" or path.startswith(
-            "benchmarks/baselines/"
+        return path in {"benchmarks/RESULTS.md", "benchmarks/BASELINES.md"} or path.startswith(
+            ("benchmarks/baselines/", "benchmarks/references/", "benchmarks/reports/")
         )
 
     if not changed or not all(map(generated, changed)):
@@ -551,7 +559,7 @@ def benchmark_changes(
         f"--skip={skip}",
         "--format=%H%x09%h%x09%cI%x09%s",
         "--",
-        "benchmarks/RESULTS.md",
+        "benchmarks/baselines/dark-*-full-cachegrind.json",
     )
     if not history:
         return []
@@ -602,13 +610,9 @@ def benchmark_detail(repo: Path, commit: str, *, color: bool) -> str:
             f"{source_subject}"
         )
     if current_contents is not None:
-        metadata = [
-            line.replace("**", "").replace("`", "")
-            for line in current_contents.splitlines()
-            if line.startswith(
-                ("**Snapshot timestamp:**", "**Architecture:**", "**Profile:**")
-            )
-        ]
+        snapshot = benchmark_payload(current_contents).get("snapshot", {})
+        track = snapshot.get("track", {})
+        metadata = [str(snapshot.get("generated_at", "")), str(track.get("architecture", "")), str(track.get("profile", ""))]
         if metadata:
             lines.append(styled(" · ".join(metadata), DIM, color))
     if isinstance(comparison, str):
@@ -685,7 +689,9 @@ def benchmark_detail(repo: Path, commit: str, *, color: bool) -> str:
     for change in comparison.workload_changes:
         style = change_style(change.change)
         ratio_transition = (
-            f"{change.previous_ratio:.3g}x → {change.current_ratio:.3g}x"
+            (f"{change.previous_ratio:.3g}x" if change.previous_ratio is not None else "n/a")
+            + " → "
+            + (f"{change.current_ratio:.3g}x" if change.current_ratio is not None else "n/a")
         )
         lines.append(
             styled(f"{change.name:<{names_width}}", BOLD, color)
@@ -723,6 +729,7 @@ def benchmark_diff(repo: Path, commit: str, *, color: bool) -> str:
         "--",
         ".",
         ":(exclude)benchmarks/RESULTS.md",
+        ":(exclude)benchmarks/reports/**",
     )
 
     def diff_line(line: str) -> str:

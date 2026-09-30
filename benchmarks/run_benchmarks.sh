@@ -501,12 +501,12 @@ fi
             PROCESSOR_ARGS+=(--quiet)
         fi
         if [ "$REFRESH_BASELINE" = "false" ]; then
-            if ! python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR" --use-baseline "${PROCESSOR_ARGS[@]}"; then
+            if ! python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR" --profile "${PROFILE:-full}" --use-baseline "${PROCESSOR_ARGS[@]}"; then
                 PROCESS_FAILURES+=("cachegrind_processor")
                 pretty_warn "cachegrind_processor failed (continuing)"
             fi
         else
-            if ! python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR" "${PROCESSOR_ARGS[@]}"; then
+            if ! python3 "$SCRIPT_DIR/infrastructure/cachegrind_processor.py" "$OUTPUT_DIR" --profile "${PROFILE:-full}" "${PROCESSOR_ARGS[@]}"; then
                 PROCESS_FAILURES+=("cachegrind_processor")
                 pretty_warn "cachegrind_processor failed (continuing)"
             fi

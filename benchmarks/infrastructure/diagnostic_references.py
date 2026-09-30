@@ -18,15 +18,13 @@ from pathlib import Path
 
 from benchmark_baseline import (
     CACHEGRIND_POLICY,
-    TRACKS,
     atomic_write_json,
     contract_digest,
-    load_snapshot,
     normalize_architecture,
-    snapshot_path,
 )
 from benchmark_profiles import load_invocation, load_profile
-from history_updater import update_results
+from benchmark_reports import generate_reports
+from reference_snapshots import measured_reference, save_reference
 
 
 LANGUAGES = ("darklang-interpreter", "node", "ocaml", "python")
@@ -350,21 +348,9 @@ def main() -> int:
                 f"benchmarks are not in profile {args.profile}: "
                 f"{', '.join(sorted(unknown_benchmarks))}"
             )
-    output = args.output or (
-        benchmarks_dir / "baselines" / f"diagnostic-{architecture}-{args.profile}-cachegrind.json"
-    )
+    if (args.benchmarks or args.allow_partial) and args.output is None:
+        parser.error("partial diagnostic experiments require --output; stored references require a complete refresh")
     implementations: dict[str, object] = {}
-    if output.is_file():
-        existing = json.loads(output.read_text())
-        compatible = (
-            existing.get("schema_version") == 1
-            and existing.get("architecture") == architecture
-            and existing.get("profile") == args.profile
-            and existing.get("measurement_policy") == CACHEGRIND_POLICY
-            and existing.get("contract_sha256") == contract_digest(benchmarks_dir, args.profile)
-        )
-        if compatible and isinstance(existing.get("implementations"), dict):
-            implementations.update(existing["implementations"])
     try:
         with tempfile.TemporaryDirectory(prefix="diagnostic-references-") as temporary:
             build_dir = Path(temporary)
@@ -422,33 +408,27 @@ def main() -> int:
                 }
                 if errors:
                     implementations[language]["errors"] = errors
-        atomic_write_json(
-            output,
-            {
-                "schema_version": 1,
-                "architecture": architecture,
-                "profile": args.profile,
+        timestamp = datetime.now(timezone.utc).isoformat()
+        if args.output is not None:
+            atomic_write_json(args.output, {
+                "schema_version": 1, "architecture": architecture, "profile": args.profile,
                 "measurement_policy": CACHEGRIND_POLICY,
                 "contract_sha256": contract_digest(benchmarks_dir, args.profile),
-                "generated_at": datetime.now(timezone.utc).isoformat(),
-                "implementations": implementations,
-            },
-        )
-        canonical_output = (
-            benchmarks_dir
-            / "baselines"
-            / f"diagnostic-{architecture}-{args.profile}-cachegrind.json"
-        )
-        if output.resolve() == canonical_output.resolve():
-            track = TRACKS[f"{architecture}-{args.profile}-cachegrind"]
-            dark_snapshot = load_snapshot(
-                snapshot_path(benchmarks_dir, "dark", track),
-                benchmarks_dir,
-                "dark",
-                track,
-            )
-            update_results(benchmarks_dir, dark_snapshot)
-        print(f"Diagnostic references written to: {output}")
+                "generated_at": timestamp, "implementations": implementations,
+            })
+            print(f"Diagnostic experiment written to: {args.output}")
+        else:
+            for language, implementation in implementations.items():
+                document = measured_reference(
+                    benchmarks_dir, language, args.profile, architecture,
+                    implementation["version"], timestamp, implementation["benchmarks"],
+                    ["-O3"] if language == "ocaml" else [],
+                    ["--stack-size=400000"] if language == "node" else [],
+                    {"valgrind": command_version(["valgrind", "--version"])},
+                )
+                save_reference(benchmarks_dir, document)
+            generate_reports(benchmarks_dir)
+            print("Independent diagnostic references and reports updated")
         return 0
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"Diagnostic reference measurement failed: {error}", file=sys.stderr)

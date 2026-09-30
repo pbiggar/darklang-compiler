@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "language": "rust",
+  "track": {
+    "id": "arm64-full-cachegrind",
+    "architecture": "arm64",
+    "profile": "full",
+    "backend": "cachegrind",
+    "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
+  },
+  "version": "not recorded",
+  "generated_at": "not recorded",
+  "contract_sha256": "2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861",
+  "benchmarks": [
+    {
+      "name": "ackermann",
+      "instructions": 89558784,
+      "output_valid": true
+    },
+    {
+      "name": "binary_trees",
+      "instructions": 63993594,
+      "output_valid": true
+    },
+    {
+      "name": "collatz",
+      "instructions": 76735737,
+      "output_valid": true
+    },
+    {
+      "name": "edigits",
+      "instructions": 688749,
+      "output_valid": true
+    },
+    {
+      "name": "factorial",
+      "instructions": 970290,
+      "output_valid": true
+    },
+    {
+      "name": "fannkuch",
+      "instructions": 1760885,
+      "output_valid": true
+    },
+    {
+      "name": "fasta",
+      "instructions": 686768,
+      "output_valid": true
+    },
+    {
+      "name": "fft",
+      "instructions": 454262,
+      "output_valid": true
+    },
+    {
+      "name": "fib",
+      "instructions": 6054417,
+      "output_valid": true
+    },
+    {
+      "name": "huffman",
+      "instructions": 2868263,
+      "output_valid": true
+    },
+    {
+      "name": "leibniz",
+      "instructions": 14258894,
+      "output_valid": true
+    },
+    {
+      "name": "mandelbrot",
+      "instructions": 12557270,
+      "output_valid": true
+    },
+    {
+      "name": "matmul",
+      "instructions": 649416,
+      "output_valid": true
+    },
+    {
+      "name": "merkletrees",
+      "instructions": 2523420,
+      "output_valid": true
+    },
+    {
+      "name": "myers_diff",
+      "instructions": 687142,
+      "output_valid": true
+    },
+    {
+      "name": "nbody",
+      "instructions": 4249498,
+      "output_valid": true
+    },
+    {
+      "name": "nqueen",
+      "instructions": 5914962,
+      "output_valid": true
+    },
+    {
+      "name": "nsieve",
+      "instructions": 380354,
+      "output_valid": true
+    },
+    {
+      "name": "pisum",
+      "instructions": 1160413,
+      "output_valid": true
+    },
+    {
+      "name": "primes",
+      "instructions": 1260125,
+      "output_valid": true
+    },
+    {
+      "name": "quicksort",
+      "instructions": 6095209,
+      "output_valid": true
+    },
+    {
+      "name": "raytracer",
+      "instructions": 4067427,
+      "output_valid": true
+    },
+    {
+      "name": "regex_lite",
+      "instructions": 409856,
+      "output_valid": true
+    },
+    {
+      "name": "spectral_norm",
+      "instructions": 5106524,
+      "output_valid": true
+    },
+    {
+      "name": "string_equality",
+      "instructions": 1479564,
+      "output_valid": true
+    },
+    {
+      "name": "sum_to_n",
+      "instructions": 260246,
+      "output_valid": true
+    },
+    {
+      "name": "tak",
+      "instructions": 391110808,
+      "output_valid": true
+    },
+    {
+      "name": "tinytemplate",
+      "instructions": 420354,
+      "output_valid": true
+    },
+    {
+      "name": "warden",
+      "instructions": 270345,
+      "output_valid": true
+    }
+  ],
+  "build_flags": [],
+  "runtime_flags": [],
+  "provenance": "Imported audited counts from BASELINES.md using the track and contract named by the original RESULTS.md. Rust version, measurement date and per-source hashes were not recorded."
+}

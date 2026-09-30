@@ -3,7 +3,6 @@
 
 import argparse
 import json
-import math
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -27,72 +26,6 @@ def format_ratio(value: float) -> str:
     if value >= 10:
         return f"{value:.1f}x"
     return f"{value:.2f}x"
-
-
-DIAGNOSTIC_LANGUAGES = (
-    ("darklang-interpreter", "Darklang interpreter"),
-    ("node", "Node"),
-    ("ocaml", "OCaml"),
-    ("python", "Python"),
-)
-
-
-def load_diagnostic_references(
-    benchmarks_dir: Path, snapshot
-) -> dict[str, dict[str, int]]:
-    path = (
-        benchmarks_dir
-        / "baselines"
-        / f"diagnostic-{snapshot.architecture}-{snapshot.profile}-cachegrind.json"
-    )
-    if not path.is_file():
-        return {}
-    document = json.loads(path.read_text())
-    expected = {
-        "schema_version": 1,
-        "architecture": snapshot.architecture,
-        "profile": snapshot.profile,
-        "measurement_policy": snapshot.measurement_policy,
-        "contract_sha256": snapshot.contract_sha256,
-    }
-    for field, value in expected.items():
-        if document.get(field) != value:
-            # Diagnostic runtimes are never a canonical recording gate. A stale
-            # snapshot simply disappears from the generated comparison until it
-            # is refreshed for the active workload contract.
-            return {}
-    implementations = document.get("implementations")
-    if not isinstance(implementations, dict):
-        raise BaselineError("diagnostic reference snapshot implementations must be an object")
-    counts: dict[str, dict[str, int]] = {}
-    for language, _ in DIAGNOSTIC_LANGUAGES:
-        implementation = implementations.get(language)
-        if implementation is None:
-            continue
-        if not isinstance(implementation, dict) or not isinstance(
-            implementation.get("benchmarks"), list
-        ):
-            raise BaselineError(f"diagnostic {language} benchmark rows must be a list")
-        language_counts: dict[str, int] = {}
-        seen_names: set[str] = set()
-        for row in implementation["benchmarks"]:
-            if not isinstance(row, dict) or not isinstance(row.get("name"), str):
-                raise BaselineError(f"diagnostic {language} row is malformed")
-            instructions = row.get("instructions")
-            if not isinstance(instructions, int) or instructions <= 0:
-                raise BaselineError(f"diagnostic {language} instruction count must be positive")
-            if row["name"] in seen_names:
-                raise BaselineError(f"diagnostic {language} repeats {row['name']}")
-            seen_names.add(row["name"])
-            output_valid = row.get("output_valid")
-            if not isinstance(output_valid, bool):
-                raise BaselineError(
-                    f"diagnostic {language} output-valid marker must be boolean"
-                )
-            if output_valid:
-                language_counts[row["name"]] = instructions
-        counts[language] = language_counts
-    return counts
 
 
 def load_json_results(results_dir: Path) -> dict:
@@ -123,99 +56,31 @@ def run_metadata(results_dir: Path) -> tuple[str, CompilerAttribution]:
     return timestamp, CompilerAttribution(version[0], version[1] if len(version) > 1 else "")
 
 
-def load_baselines(benchmarks_dir: Path) -> dict[str, int]:
-    rows = {}
-    for line in (benchmarks_dir / "BASELINES.md").read_text().splitlines():
-        if not line.startswith("|") or line.startswith("| Benchmark") or line.startswith("|---"):
-            continue
-        cells = [cell.strip() for cell in line.split("|")[1:-1]]
-        if len(cells) >= 3 and cells[1] == "rust":
-            rows[cells[0]] = int(cells[2].replace(",", ""))
-    return rows
+def update_baselines(benchmarks_dir: Path, json_results: dict, profile: str, timestamp: str) -> None:
+    """Persist a measured Rust reference independently of Darklang's decision."""
+    from diagnostic_references import command_version
+    from reference_snapshots import measured_reference, save_reference
 
-
-def update_baselines(benchmarks_dir: Path, json_results: dict) -> None:
-    existing = load_baselines(benchmarks_dir)
-    details = {}
-    for name, results in json_results.items():
-        rust = [row for row in results if row.get("language", "").lower() == "rust"]
-        if len(rust) == 1:
-            details[name] = rust[0]
-            existing[name] = rust[0]["instructions"]
-    lines = [
-        "# Benchmark Baselines", "", "Reference instruction counts for the human-audited Rust benchmark pairs.", "",
-        "| Benchmark     | Language | Instructions     |",
-        "|---------------|----------|------------------|",
-    ]
-    old_rows = {name: {"instructions": count} for name, count in existing.items()}
-    old_rows.update(details)
-    for name in sorted(old_rows):
-        row = old_rows[name]
-        lines.append(
-            f"| {name:<13} | rust     | {format_number(row['instructions']):>16} |"
-        )
-    atomic_write_text(benchmarks_dir / "BASELINES.md", "\n".join(lines) + "\n")
+    rows = []
+    for name in load_profile(benchmarks_dir, profile):
+        rust = [row for row in json_results[name] if row.get("language", "").lower() == "rust"]
+        if len(rust) != 1:
+            raise BaselineError(f"{name}: expected one validated Rust row")
+        rows.append({"name": name, "instructions": rust[0]["instructions"], "output_valid": True})
+    document = measured_reference(
+        benchmarks_dir, "rust", profile, machine_architecture(),
+        command_version(["rustc", "--version"]), timestamp, rows,
+        ["rustc -C opt-level=3; Cargo --release"], [],
+        {"valgrind": command_version(["valgrind", "--version"])},
+    )
+    save_reference(benchmarks_dir, document)
 
 
 def update_results(benchmarks_dir: Path, snapshot) -> None:
-    baselines = load_baselines(benchmarks_dir)
-    diagnostics = load_diagnostic_references(benchmarks_dir, snapshot)
-    rows = [(row.name, row.instructions, baselines.get(row.name)) for row in snapshot.benchmarks]
-    ratios = [dark / rust for _, dark, rust in rows if rust]
-    geometric = math.prod(ratios) ** (1 / len(ratios))
-    diagnostic_geometric = {}
-    for language, _ in DIAGNOSTIC_LANGUAGES:
-        language_ratios = [
-            diagnostics[language][name] / rust
-            for name, _, rust in rows
-            if rust and name in diagnostics.get(language, {})
-        ]
-        if language_ratios:
-            diagnostic_geometric[language] = math.prod(language_ratios) ** (
-                1 / len(language_ratios)
-            )
-    lines = [
-        "# Benchmark Results",
-        "",
-        "Best-known compatible full-profile Dark performance vs audited Rust "
-        "references, with diagnostic reference runtimes (instruction counts).",
-        "",
-        f"**Snapshot timestamp:** {snapshot.generated_at}",
-        f"**Architecture:** `{snapshot.architecture}`",
-        f"**Profile:** `{snapshot.profile}` (schema {snapshot.schema_version})",
-        f"**Measurement policy:** `{snapshot.measurement_policy}`",
-        f"**Workload contract:** `{snapshot.contract_sha256}`",
-        f"**Compiler commit:** `{snapshot.compiler.commit}`"
-        + (f" - {snapshot.compiler.subject}" if snapshot.compiler.subject else ""),
-        "**Diagnostic references:** informational only; multipliers are instructions "
-        "divided by Rust for the same workload.",
-        "Every displayed diagnostic row matched the profile's expected stdout.",
-        "",
-    ]
-    headers = ["Benchmark", f"Dark ({format_ratio(geometric)})", "Rust"]
-    headers.extend(
-        f"{label} ({format_ratio(diagnostic_geometric[language])})"
-        if language in diagnostic_geometric
-        else label
-        for language, label in DIAGNOSTIC_LANGUAGES
-    )
-    lines.extend(["| " + " | ".join(headers) + " |", "|---|" + "---:|" * (len(headers) - 1)])
-    for name, dark, rust in rows:
-        dark_cell = (
-            format_number(dark)
-            if rust is None
-            else f"{format_number(dark)} ({format_ratio(dark / rust)})"
-        )
-        cells = [name, dark_cell, format_number(rust) if rust else "-"]
-        for language, _ in DIAGNOSTIC_LANGUAGES:
-            diagnostic = diagnostics.get(language, {}).get(name)
-            cells.append(
-                f"{format_number(diagnostic)} ({format_ratio(diagnostic / rust)})"
-                if diagnostic and rust
-                else "-"
-            )
-        lines.append("| " + " | ".join(cells) + " |")
-    atomic_write_text(benchmarks_dir / "RESULTS.md", "\n".join(lines) + "\n")
+    """Regenerate reports from stored snapshots after a successful recording."""
+    from benchmark_reports import generate_reports
+
+    generate_reports(benchmarks_dir)
 
 
 def validate_rust_refresh(json_results: dict, profile: list[str]) -> None:
@@ -247,7 +112,7 @@ def main() -> int:
         current = load_dark_counts(results_dir, profile)
         if args.refresh_baseline:
             validate_rust_refresh(json_results, profile)
-            update_baselines(benchmarks_dir, json_results)
+            update_baselines(benchmarks_dir, json_results, args.profile, timestamp)
         if args.reset_dark_baseline:
             active = create_snapshot(benchmarks_dir, "dark", track, current, timestamp, compiler)
             write_snapshot(canonical, active)

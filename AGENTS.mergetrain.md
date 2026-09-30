@@ -44,12 +44,12 @@ task branches in arrival order.
 
 - A task agent runs `./land` and stops when it prints `queued` or `landed`. The script's internal `--auto` enqueue authorizes only the configured ordinary runner's bounded unattended validation and deployment; it does not authorize the task agent to monitor or deploy an ordinary job.
 - Only a separately authorized runner uses `deploy` or a daemon.
-- A recovery conflict in generated `benchmarks/RESULTS.md` is resolved only by a successful improving `./benchmarks/run_benchmarks.sh full` recording from the rebased source. Never hand-merge or choose one side of that file; if recording does not regenerate it from an improved canonical snapshot, recovery stops.
+- Recovery conflicts in generated benchmark reports are resolved with `./benchmarks/bench report` after source and snapshot conflicts are resolved. Never hand-merge reports or combine snapshot rows by hand. Regeneration requires no new improvement; Darklang performance readiness remains governed by the independent regression gates.
 - The `benchmark-sources` gate rejects candidates that change
   `benchmarks/problems/`. A lander may request a one-time exception, but only
   a human operator may approve the exact failed candidate and gate.
-- Every assembled queue candidate runs `./benchmarks/run_benchmarks.sh
-  --verify-deployed full` once. Its exact counts are compared with the last
+- Every assembled queue candidate runs `./benchmarks/bench verify --against
+  deployed` once (delegating to the existing `--verify-deployed full` runner). Its exact counts are compared with the last
   deployed head, independently of the canonical best-known snapshot. A new
   regression requires an exact human `benchmarks` exception. Only confirmed
   deployment promotes the candidate's counts to the next comparison baseline.

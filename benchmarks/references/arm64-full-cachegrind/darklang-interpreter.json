@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "language": "darklang-interpreter",
+  "track": {
+    "id": "arm64-full-cachegrind",
+    "architecture": "arm64",
+    "profile": "full",
+    "backend": "cachegrind",
+    "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
+  },
+  "version": "Darklang CLI alpha-0b3888d (unable to check for updates)",
+  "generated_at": "2026-09-15T07:45:58.287134+00:00",
+  "contract_sha256": "4efd0c2330fbe360b4d9fb060515cd16222d400b0186e8ade17e98a04edc9f97",
+  "build_flags": [],
+  "runtime_flags": [],
+  "benchmarks": [
+    {
+      "name": "ackermann",
+      "instructions": 295450197862,
+      "output_valid": true
+    },
+    {
+      "name": "binary_trees",
+      "instructions": 10539988398,
+      "output_valid": true
+    },
+    {
+      "name": "collatz",
+      "instructions": 424757265260,
+      "output_valid": true
+    },
+    {
+      "name": "edigits",
+      "instructions": 9579126978,
+      "output_valid": true
+    },
+    {
+      "name": "factorial",
+      "instructions": 5403174630,
+      "output_valid": true
+    },
+    {
+      "name": "fannkuch",
+      "instructions": 12839313429,
+      "output_valid": true
+    },
+    {
+      "name": "fasta",
+      "instructions": 7739275817,
+      "output_valid": true
+    },
+    {
+      "name": "fft",
+      "instructions": 2212941147,
+      "output_valid": true
+    },
+    {
+      "name": "fib",
+      "instructions": 15095723230,
+      "output_valid": true
+    },
+    {
+      "name": "huffman",
+      "instructions": 9087251458,
+      "output_valid": true
+    },
+    {
+      "name": "leibniz",
+      "instructions": 151080303976,
+      "output_valid": true
+    },
+    {
+      "name": "mandelbrot",
+      "instructions": 76696314807,
+      "output_valid": true
+    },
+    {
+      "name": "matmul",
+      "instructions": 7760332418,
+      "output_valid": true
+    },
+    {
+      "name": "merkletrees",
+      "instructions": 51421932780,
+      "output_valid": true
+    },
+    {
+      "name": "myers_diff",
+      "instructions": 4670031121,
+      "output_valid": true
+    },
+    {
+      "name": "nbody",
+      "instructions": 27005569055,
+      "output_valid": true
+    },
+    {
+      "name": "nqueen",
+      "instructions": 19342874779,
+      "output_valid": true
+    },
+    {
+      "name": "nsieve",
+      "instructions": 1938134698,
+      "output_valid": true
+    },
+    {
+      "name": "pisum",
+      "instructions": 10805308243,
+      "output_valid": true
+    },
+    {
+      "name": "primes",
+      "instructions": 14200381458,
+      "output_valid": true
+    },
+    {
+      "name": "quicksort",
+      "instructions": 8610104455,
+      "output_valid": true
+    },
+    {
+      "name": "raytracer",
+      "instructions": 39823213701,
+      "output_valid": true
+    },
+    {
+      "name": "regex_lite",
+      "instructions": 652648435,
+      "output_valid": true
+    },
+    {
+      "name": "spectral_norm",
+      "instructions": 60452108981,
+      "output_valid": true
+    },
+    {
+      "name": "string_equality",
+      "instructions": 2287266006,
+      "output_valid": true
+    },
+    {
+      "name": "sum_to_n",
+      "instructions": 29651727831,
+      "output_valid": true
+    },
+    {
+      "name": "tak",
+      "instructions": 472304535056,
+      "output_valid": true
+    },
+    {
+      "name": "tinytemplate",
+      "instructions": 5054772489,
+      "output_valid": true
+    },
+    {
+      "name": "warden",
+      "instructions": 29400568988,
+      "output_valid": true
+    }
+  ],
+  "provenance": "Imported from baselines/diagnostic-arm64-full-cachegrind.json; original suite contract retained. Per-source hashes and build flags were not recorded."
+}

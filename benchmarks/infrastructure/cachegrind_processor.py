@@ -3,7 +3,7 @@
 Process cachegrind benchmark results and generate summary reports.
 Usage: python3 cachegrind_processor.py <results_dir> [--use-baseline] [--quiet]
 
-When --use-baseline is passed, reads the audited Rust baseline from BASELINES.md
+When --use-baseline is passed, reads the audited Rust reference snapshot
 instead of requiring it in the results directory.
 """
 
@@ -14,38 +14,21 @@ import sys
 from pathlib import Path
 
 
-def parse_baselines_file(baselines_path: Path) -> dict:
-    """Parse BASELINES.md instruction counts per benchmark."""
-    if not baselines_path.exists():
+def load_reference_counts(benchmarks_dir: Path, profile: str) -> dict:
+    """Read compatible Rust counts from structured snapshots, never Markdown."""
+    from benchmark_baseline import machine_architecture
+    from benchmark_reports import documents
+    from reference_snapshots import row_status
+
+    track = f"{machine_architecture()}-{profile}-cachegrind"
+    reference = documents(benchmarks_dir, track).get("rust")
+    if reference is None:
         return {}
-
-    baselines = {}
-    content = baselines_path.read_text()
-
-    in_table = False
-    for line in content.split("\n"):
-        if line.startswith("| Benchmark"):
-            in_table = True
-            continue
-        if line.startswith("|---"):
-            continue
-        if in_table and line.startswith("|"):
-            cols = [c.strip() for c in line.split("|")]
-            if len(cols) >= 4:
-                benchmark = cols[1].strip()
-                lang = cols[2].strip().lower()
-                try:
-                    entry = {
-                        "language": lang,
-                        "instructions": int(cols[3].replace(",", "")),
-                    }
-                    if benchmark not in baselines:
-                        baselines[benchmark] = []
-                    baselines[benchmark].append(entry)
-                except (ValueError, IndexError):
-                    pass
-
-    return baselines
+    return {
+        row["name"]: [{"language": "rust", "instructions": row["instructions"]}]
+        for row in reference["benchmarks"]
+        if row_status(benchmarks_dir, reference, row, profile) == "current"
+    }
 
 
 def format_number(n: int) -> str:
@@ -191,6 +174,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("results_dir")
     parser.add_argument("--use-baseline", action="store_true")
+    parser.add_argument("--profile", choices=("full", "quick"), default="full")
     parser.add_argument(
         "--quiet",
         action="store_true",
@@ -211,19 +195,18 @@ def main():
         print("No cachegrind results found.")
         sys.exit(0)
 
-    # If using baseline, merge with the audited Rust row from BASELINES.md.
+    # If using a reference, merge only compatible structured Rust rows.
     if args.use_baseline:
-        baselines_path = benchmarks_dir / "BASELINES.md"
-        baselines = parse_baselines_file(baselines_path)
+        baselines = load_reference_counts(benchmarks_dir, args.profile)
         if baselines:
             if not args.quiet:
-                print("  Using cached baselines from BASELINES.md")
+                print("  Using compatible stored Rust reference counts")
             results = merge_with_baselines(
                 results, baselines, load_parity_statuses(benchmarks_dir)
             )
 
     generate_summary(results, results_dir, quiet=args.quiet)
-    # history_updater.py owns the current-state RESULTS.md and BASELINES.md tables.
+    # bench report owns current-state reports; this file writes run-local summaries.
 
 
 if __name__ == "__main__":

@@ -17,6 +17,8 @@ gates:
     run: python3 scripts/check_e2e_temp_paths.py
   - name: benchmark-sources
     run: python3 ${repo}/scripts/mergetrain_exception.py --repo ${repo} gate benchmark-sources -- python3 benchmarks/check_sources_unchanged.py --base ${integration_ref}
+  - name: benchmark-reports
+    run: ./benchmarks/bench report --check
   - name: build
     run: ./build --ai
   - name: tests
@@ -24,4 +26,4 @@ gates:
   - name: leaks
     run: python3 ${repo}/scripts/mergetrain_exception.py --repo ${repo} gate leaks -- python3 scripts/check_compiled_leaks.py
   - name: benchmarks
-    run: python3 ${repo}/scripts/mergetrain_exception.py --repo ${repo} gate benchmarks -- ./benchmarks/run_benchmarks.sh --verify-deployed full
+    run: python3 ${repo}/scripts/mergetrain_exception.py --repo ${repo} gate benchmarks -- ./benchmarks/bench verify --against deployed

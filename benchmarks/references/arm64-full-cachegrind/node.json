@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "language": "node",
+  "track": {
+    "id": "arm64-full-cachegrind",
+    "architecture": "arm64",
+    "profile": "full",
+    "backend": "cachegrind",
+    "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
+  },
+  "version": "v26.8.2",
+  "generated_at": "2026-09-15T07:45:58.287134+00:00",
+  "contract_sha256": "4efd0c2330fbe360b4d9fb060515cd16222d400b0186e8ade17e98a04edc9f97",
+  "build_flags": [],
+  "runtime_flags": [],
+  "benchmarks": [
+    {
+      "name": "ackermann",
+      "instructions": 2988949523,
+      "output_valid": true
+    },
+    {
+      "name": "binary_trees",
+      "instructions": 571585402,
+      "output_valid": true
+    },
+    {
+      "name": "collatz",
+      "instructions": 2333314226,
+      "output_valid": true
+    },
+    {
+      "name": "edigits",
+      "instructions": 547241171,
+      "output_valid": true
+    },
+    {
+      "name": "factorial",
+      "instructions": 716988606,
+      "output_valid": true
+    },
+    {
+      "name": "fannkuch",
+      "instructions": 582055776,
+      "output_valid": true
+    },
+    {
+      "name": "fasta",
+      "instructions": 593012606,
+      "output_valid": true
+    },
+    {
+      "name": "fib",
+      "instructions": 634144326,
+      "output_valid": true
+    },
+    {
+      "name": "leibniz",
+      "instructions": 659604280,
+      "output_valid": true
+    },
+    {
+      "name": "mandelbrot",
+      "instructions": 1288160359,
+      "output_valid": true
+    },
+    {
+      "name": "matmul",
+      "instructions": 534382802,
+      "output_valid": true
+    },
+    {
+      "name": "merkletrees",
+      "instructions": 2013094566,
+      "output_valid": true
+    },
+    {
+      "name": "nbody",
+      "instructions": 1291011435,
+      "output_valid": true
+    },
+    {
+      "name": "nqueen",
+      "instructions": 727914031,
+      "output_valid": true
+    },
+    {
+      "name": "nsieve",
+      "instructions": 526439017,
+      "output_valid": true
+    },
+    {
+      "name": "pisum",
+      "instructions": 564837012,
+      "output_valid": true
+    },
+    {
+      "name": "primes",
+      "instructions": 767760434,
+      "output_valid": true
+    },
+    {
+      "name": "quicksort",
+      "instructions": 630143924,
+      "output_valid": true
+    },
+    {
+      "name": "spectral_norm",
+      "instructions": 953697743,
+      "output_valid": true
+    },
+    {
+      "name": "sum_to_n",
+      "instructions": 888926608,
+      "output_valid": true
+    },
+    {
+      "name": "tak",
+      "instructions": 2191746728,
+      "output_valid": true
+    }
+  ],
+  "provenance": "Imported from baselines/diagnostic-arm64-full-cachegrind.json; original suite contract retained. Per-source hashes and build flags were not recorded."
+}

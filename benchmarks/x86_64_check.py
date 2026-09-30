@@ -31,6 +31,7 @@ from benchmark_baseline import (  # noqa: E402
     write_snapshot,
 )
 from benchmark_profiles import load_invocation, load_profile  # noqa: E402
+from x86_64_reports import render_results  # noqa: E402
 
 
 SCHEMA_VERSION = 1
@@ -368,61 +369,6 @@ def compare(base_path: Path, candidate_path: Path, decision_path: Path) -> int:
     return 1 if comparison.decision == "regressed" else 0
 
 
-def render_results(dark, rust) -> tuple[dict[str, object], str]:
-    rust_by_name = {row.name: row for row in rust.benchmarks}
-    comparable_dark = tuple(row for row in dark.benchmarks if row.name in rust_by_name)
-    comparison = compare_suites(
-        comparable_dark, (rust_by_name[row.name] for row in comparable_dark)
-    )
-    rows_json = []
-    rows_markdown = []
-    for dark_row in dark.benchmarks:
-        rust_row = rust_by_name.get(dark_row.name)
-        ratio = dark_row.instructions / rust_row.instructions if rust_row else None
-        rows_json.append(
-            {
-                "name": dark_row.name,
-                "dark": dark_row.instructions,
-                "rust": rust_row.instructions if rust_row else None,
-                "dark_rust_ratio": ratio,
-            }
-        )
-        rust_text = "—" if rust_row is None else f"{rust_row.instructions:,}"
-        ratio_text = "—" if ratio is None else f"{ratio:.3f}×"
-        rows_markdown.append(
-            f"| {dark_row.name} | {dark_row.instructions:,} | {rust_text} | {ratio_text} |"
-        )
-    payload = {
-        "schema_version": 1,
-        "suite": "dark-compiler",
-        "track": track_dict(TRACK),
-        "contract_sha256": dark.contract_sha256,
-        "compiler": {"commit": dark.compiler.commit, "subject": dark.compiler.subject},
-        "generated_at": dark.generated_at,
-        "overall_dark_rust_ratio": comparison.ratio,
-        "benchmarks": rows_json,
-    }
-    markdown = "\n".join(
-        [
-            "# x86_64 QEMU Benchmark Results",
-            "",
-            "Canonical quick-profile guest instruction counts under pinned QEMU.",
-            "",
-            f"**Compiler:** `{dark.compiler.commit}` - {dark.compiler.subject}",
-            f"**Generated:** {dark.generated_at}",
-            f"**Track:** `{TRACK.id}`",
-            f"**Measurement policy:** `{TRACK.measurement_policy}`",
-            f"**Overall Dark/Rust:** `{comparison.ratio:.6f}×`",
-            "",
-            "| Benchmark | Dark instructions | Rust instructions | Dark/Rust |",
-            "| --- | ---: | ---: | ---: |",
-            *rows_markdown,
-            "",
-        ]
-    )
-    return payload, markdown
-
-
 def append_history(repository: Path, payload: dict[str, object], decision: str, ratio: float) -> None:
     path = repository / "benchmarks" / "HISTORY.x86_64.md"
     header = "\n".join(
@@ -493,6 +439,9 @@ def record(
     result_payload, result_markdown = render_results(active_dark, active_rust)
     atomic_write_json(benchmarks_dir / "RESULTS.x86_64.json", result_payload)
     atomic_write_text(benchmarks_dir / "RESULTS.x86_64.md", result_markdown)
+    from benchmark_reports import generate_reports
+
+    generate_reports(benchmarks_dir)
     append_history(repository, result_payload, decision, ratio)
     print(
         f"X86_64_RECORD decision={decision} ratio={ratio:.6f} "

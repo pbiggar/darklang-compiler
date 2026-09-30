@@ -6,6 +6,98 @@ remain available for diagnostics but do not contribute canonical ratios.
 See [APPLICATION-BENCHMARKS.md](APPLICATION-BENCHMARKS.md) for the research and
 selection criteria behind full-application workloads.
 
+## Unified reference maintenance
+
+`./benchmarks/bench` manages reference measurements and generated comparisons.
+Report generation and status inspection run no compilers or benchmarks:
+
+```bash
+./benchmarks/bench report          # regenerate every stored track's reports
+./benchmarks/bench report --check  # read-only consistency gate
+./benchmarks/bench status          # native full-profile stored versions and coverage
+```
+
+Install the desired runtime/compiler version, then explicitly refresh that
+language when measurement is appropriate:
+
+```bash
+./benchmarks/bench refresh ocaml
+./benchmarks/bench refresh python --profile quick
+./benchmarks/bench refresh all
+```
+
+Refreshes build and measure sequentially under Cachegrind. They check exact
+stdout, capture compiler/runtime versions and flags, detect source/workload
+changes during the run, and atomically replace only the measured language's
+snapshot after successful validation. Other languages' files remain intact,
+even when stale. A failed build, execution, or output check preserves that
+language's old snapshot. In `refresh all`, each successful language is committed
+independently before the next; a later failure preserves earlier refreshes.
+This command currently refreshes the supported references with implementations:
+Rust, Python, Node, and OCaml 5. Missing implementations are recorded explicitly.
+Haskell, Roc, and Koka appear in every report; their execution adapters and
+implementations remain future work. Selecting one currently fails before any
+measurement. OCaml refresh requires major version 5. Cargo application builds
+use `--release --locked --offline`; prepare cached dependencies beforehand.
+
+`refresh dark` delegates to the existing native full recorder, preserving
+Darklang's monotonic rules. `refresh dark --profile quick` delegates to
+`quick_check.sh --build`. `refresh all` refreshes references only. Timing is
+not yet supported by this maintenance interface; the existing Dark/Rust
+`--hyperfine` runner remains available separately.
+
+References live in `references/<architecture>-<profile>-<backend>/<language>.json`.
+Darklang and QEMU regression snapshots retain their existing `baselines/`
+format and recording rules. `RESULTS.md` indexes generated `reports/*.md`;
+`BASELINES.md` indexes independent reference snapshots. Each report contains
+absolute instruction counts, per-workload Rust ratios, stored versions,
+coverage, and geometric means over the exact common workload set of languages
+with current measurements. Unaudited ratios are labeled informational.
+Missing languages are explicitly excluded from aggregates. A stale row is
+shown with its stored count but never used in a ratio.
+
+Fresh references carry per-row invocation and source hashes. Changing one
+workload invalidates only its affected rows; historical imports that lack row
+hashes conservatively require their original whole-suite contract to match.
+Historical data retain their original timestamps and contract identities;
+unknown Rust versions and build flags are not guessed. `bench import-legacy`
+can split historical shared diagnostic files and the old Rust Markdown table
+without measurements; it never overwrites an existing independent reference.
+
+Measurement refresh does not approve algorithm parity. Dark/Rust remain
+covered by `PARITY.json`. Reviewed reference-language audits belong in
+`REFERENCE-PARITY.json`, keyed by benchmark and language:
+
+```json
+{
+  "schema_version": 1,
+  "benchmarks": {
+    "fib": {
+      "ocaml": {
+        "status": "comparable",
+        "source_sha256": "<reviewed OCaml source hash>",
+        "rust_sha256": "<reviewed Rust source hash>",
+        "reason": "Reviewed equivalent algorithm, workload, result, and optimization opportunities"
+      }
+    }
+  }
+}
+```
+
+Hashes use the same source digest helpers as measurement: a single main source
+for script/native inputs, or the complete vendored Rust tree for Cargo inputs.
+Audits require human review of equivalence; hashes must not be refreshed merely
+to clear a stale status. Instruction ratios include runtime startup overhead
+and do not measure elapsed-time speed.
+
+The merge train runs `bench report --check` separately from
+`bench verify --against deployed`. The latter delegates to the unchanged
+Darklang deployed-head gate. Task readiness remains the full parent gate:
+`bench verify --against parent`. Neither gate measures reference languages or
+uses their ratios to decide a Darklang regression. See
+[verification policy](../docs/contributing/verification.md) for recording and
+conflict-recovery rules.
+
 ## Prerequisites
 
 Install before running benchmarks:
@@ -161,7 +253,7 @@ because reducing cheaper workloads is unnecessary once the suite target is met. 
 completed full Cachegrind run records its measurements in
 the architecture-specific canonical JSON snapshot and `HISTORY.md`; targeted
 runs and `all` are diagnostic and do not update canonical files. `RESULTS.md` is
-presentation regenerated from that full snapshot plus `BASELINES.md`'s
+presentation regenerated from that full snapshot plus independent JSON
 audited Rust references. Recording accepts an optional `--machine` ID from
 the registry in `HISTORY.md`; omitted machine metadata is left blank rather than
 guessing the runner's identity. Verification does not update history.
@@ -286,7 +378,7 @@ evidence or a measurement of the task branch's effect.
 
 Normal full recording appends every valid Dark run to `HISTORY.md` with a
 unique timestamp/run identity and decision. An improvement atomically advances
-the snapshot and regenerates every Dark `RESULTS.md` row; equality changes only
+the snapshot and regenerates the combined comparison reports; equality changes only
 history; a blocking individual loss also changes only history and returns
 failure. Thus snapshots are the best-known compatible complete run, not
 necessarily the newest compiler commit. `--verify-fresh` is the integration
@@ -295,17 +387,17 @@ verification, it fails on an improvement because that better run must first be
 recorded.
 
 `--refresh-baseline=rust` is separate from Dark reset/advancement. It refreshes
-only the audited reference data in `BASELINES.md` after a complete successful
+only the independent Rust reference after a complete successful
 run; Rust values do not affect the Dark monotonic decision.
 
 ### Diagnostic reference runtimes
 
-`RESULTS.md` also shows instruction counts and Rust-relative multipliers for
+The linked comparison reports also show instruction counts and Rust-relative multipliers for
 the Darklang interpreter, Node, OCaml, and Python wherever an implementation is
 available. These rows are informational: they do not participate in the Dark
 baseline decision, verification, or benchmark parity contract. Their
 architecture-specific measurements live in
-`baselines/diagnostic-<architecture>-full-cachegrind.json` and are regenerated
+`references/<architecture>-full-cachegrind/<language>.json` and are regenerated
 independently:
 
 ```bash
@@ -357,7 +449,8 @@ Hyperfine should remain at one job when avoiding timing skew matters.
 
 ```
 benchmarks/
-  run_benchmarks.sh          # Main entry point
+  bench                     # Reference maintenance and report entry point
+  run_benchmarks.sh          # Darklang measurement and recording runner
   quick_check.sh             # Complete reduced-workload monotonic gate
   README.md                  # This file
   baselines/                 # Canonical Dark and diagnostic reference snapshots
@@ -372,7 +465,10 @@ benchmarks/
     cachegrind_processor.py  # Generate instruction count summary
     diagnostic_references.py # Refresh interpreter/Node/OCaml/Python counts
     benchmark_baseline.py    # Snapshot contract and exact shared comparison
-    history_updater.py       # Monotonic full recorder and history writer
+    history_updater.py       # Monotonic full recorder
+    reference_cli.py         # Unified maintenance CLI
+    reference_snapshots.py   # Independent reference contracts
+    benchmark_reports.py     # Deterministic report generation
 
   problems/
     fib/                     # Each benchmark has its own directory
