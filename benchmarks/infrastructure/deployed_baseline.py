@@ -5,7 +5,12 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+import sys
+from dataclasses import replace
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from scripts.mergetrain_control import measured_code_unchanged
 
 from benchmark_baseline import (
     BaselineError, CompilerAttribution, TRACKS, atomic_write_json,
@@ -44,14 +49,26 @@ def measure(results: Path):
     return repo, benchmarks, track, snapshot
 
 
+def aligned_baseline(repo: Path, benchmarks: Path, track):
+    """Carry measured counts across proven tooling-only integration advances."""
+    base = git(repo, "rev-parse", "main")
+    target = state_dir(repo) / f"{track.id}.json"
+    baseline = load_snapshot(target, benchmarks, "dark", track)
+    if baseline.compiler.commit != base:
+        if not measured_code_unchanged(repo, baseline.compiler.commit, base):
+            raise BaselineError(
+                f"deployed benchmark baseline {baseline.compiler.commit} differs from integration head {base}"
+            )
+        baseline = replace(
+            baseline, compiler=CompilerAttribution(base, git(repo, "log", "-1", "--format=%s", base))
+        )
+        write_snapshot(target, baseline)
+    return baseline
+
+
 def verify(results: Path) -> int:
     repo, benchmarks, track, current = measure(results)
-    base = git(repo, "rev-parse", "main")
-    baseline = load_snapshot(state_dir(repo) / f"{track.id}.json", benchmarks, "dark", track)
-    if baseline.compiler.commit != base:
-        raise BaselineError(
-            f"deployed benchmark baseline {baseline.compiler.commit} differs from integration head {base}"
-        )
+    baseline = aligned_baseline(repo, benchmarks, track)
     comparison = compare_dark_performance(current.benchmarks, baseline.benchmarks)
     print_comparison(comparison, baseline, details=False)
     decision = comparison_dict(comparison, "full", baseline, "deployed-head-comparison")

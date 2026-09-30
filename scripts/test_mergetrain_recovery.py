@@ -224,6 +224,22 @@ output.write_text("Recovery committed.\\n", encoding="utf-8")
 
 
 class MergetrainRecoveryTests(unittest.TestCase):
+    def test_baseline_error_neither_repairs_compiler_nor_requests_exception(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fixture = RecoveryFixture(Path(temp_dir))
+            fixture.set_failure("gate_failed", "benchmarks", "exit_code=1")
+            details = json.loads(fixture.details.read_text())
+            log = fixture.root / "train.log"
+            log.write_text("Deployed benchmark baseline error: baseline differs from integration head\n")
+            details["job"]["log_path"] = str(log)
+            fixture.details.write_text(json.dumps(details))
+            completed = fixture.execute()
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("baseline needs reconciliation", completed.stderr)
+            self.assertFalse(fixture.codex_marker.exists())
+            self.assertFalse(review_path(fixture.repo, 4).exists())
+            self.assertEqual([call["command"] for call in fixture.recorded_calls()], ["inspect"])
+
     def test_worktree_location_policy_change_is_verified_and_requeued(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fixture = RecoveryFixture(Path(temp_dir), tests_fail=False)
