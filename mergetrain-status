@@ -444,15 +444,11 @@ for summary in json.load(sys.stdin).get("recent_jobs", []):
       fi
       other_controls="$identity"
     fi
-    progress=""
-    if [[ "$refresh_running" == true || "$refresh_status" == true ]]; then
-      progress="refreshing…"
-    fi
     footer_width=$((terminal_columns - 1))
     mapfile -t visible_lines < <(printf '%s\n' "${visible_output:-Loading merge-train status…}")
     visible_lines[viewport_lines]="${controls:0:footer_width}"
     visible_lines[viewport_lines + 1]="${other_controls:0:footer_width}"
-    visible_lines[viewport_lines + 2]="${progress:0:footer_width}"
+    visible_lines[viewport_lines + 2]=""
     if ((${#screen_lines[@]} == 0)); then
       printf '\033[H\033[2J'
     fi
