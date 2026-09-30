@@ -132,7 +132,10 @@ that directory.
 ## Operator boundaries
 
 Automatic recovery is limited to the cases above, non-fast-forward push races,
-and attributable build, test, or benchmark gate failures. Unknown categories,
+and attributable diff-check, build, test, or benchmark gate failures. Whitespace
+repairs must pass `git diff --check` against their integration base before
+replacement. A job-level gate failure is attributed to its last running gate
+when the runner omits a gate-specific failure event. Unknown categories,
 policy failures outside the gate-change case, non-fast-forward-independent push
 rejection, repeated transient failures, dirty owning worktrees, and failed
 independent verification remain operator decisions.
