@@ -59,6 +59,13 @@ instruction counts to the deployed-head baseline. A missing or incompatible
 measurement pauses admission. It then removes a clean recovery worktree at the
 deployed commit. Native job history remains the deployment audit.
 
+The benchmark gate carries the deployed counts across tooling-only integration
+advances only when control receipts prove every intervening landing and its
+actual changed paths leave the compiler and measurement inputs unchanged.
+Changes to the benchmark runner require fresh measurement. A baseline error
+pauses recovery before Codex or exception review: bookkeeping failures cannot
+be repaired by changing compiler source or approving a benchmark regression.
+
 For `approval_execution_policy_changed`, the integrator records the original
 job's policy failure and the exact `.mergetrain.yaml` diff between its enqueue
 base and current integration in an attempt artifact. It automatically recovers

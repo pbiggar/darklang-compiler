@@ -89,6 +89,32 @@ def audit(path: Path, values: dict[str, str]) -> None:
     temporary.replace(path)
 
 
+def measured_code_unchanged(repo: Path, base: str, head: str) -> bool:
+    """Prove an integration advance consists solely of recorded tooling landings."""
+    if run(repo, "git", "merge-base", "--is-ancestor", base, head, check=False).returncode:
+        return False
+    receipts = {}
+    for path in (common_dir(repo) / "mergetrain-control").glob("*.json"):
+        record = json.loads(path.read_text(encoding="utf-8"))
+        if record.get("status") in {"prepared", "landed"}:
+            receipts[record.get("merged")] = record
+    current = head
+    while current != base:
+        record = receipts.get(current)
+        if record is None or not record.get("base"):
+            return False
+        previous = record["base"]
+        if git(repo, "rev-parse", f"{current}^1") != previous:
+            return False
+        paths = changed_paths(repo, previous, current)
+        # The benchmark runner can change the measurement itself. Its changes
+        # require a fresh measurement even though they use the tooling path.
+        if not all(eligible_path(path) and path != "benchmarks/run_benchmarks.sh" for path in paths):
+            return False
+        current = previous
+    return True
+
+
 def land_control(repo: Path, head: str, task: str) -> str:
     allowed, paths = classify(repo, head)
     if not allowed:

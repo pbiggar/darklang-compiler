@@ -546,7 +546,15 @@ def recover(repo: Path, attempts: Path, worktree_dir: Path, job_id: int) -> None
         if owning_snapshot != (old_head, ""):
             raise RecoveryError("owning worktree is not clean at the enqueued commit")
     failure = failure_from(details)
-    preserve_failure_evidence(details, attempts, job_id, old_head)
+    evidence = preserve_failure_evidence(details, attempts, job_id, old_head)
+    failure_text = str((details.get("outcome") or {}).get("message") or "")
+    if evidence is not None:
+        failure_text += evidence.read_text(encoding="utf-8")
+    if failure.gate == "benchmarks" and "Deployed benchmark baseline error:" in failure_text:
+        raise RecoveryError(
+            "deployed benchmark baseline needs reconciliation; "
+            "compiler repair and benchmark exceptions cannot fix baseline bookkeeping"
+        )
     try:
         if stage_if_requested(repo, details):
             return
