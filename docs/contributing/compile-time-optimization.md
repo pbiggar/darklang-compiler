@@ -41,13 +41,18 @@ This probe uses its own fixed representative program and records both process
 wall time and reported pipeline time. A large gap is a reason to investigate
 startup, JIT, and standard-library setup outside the reported pipeline.
 A batch test profile may hide these costs through shared prepared contexts.
+Each compatible check remains a separate function; batching shares the generated
+caller and executable. A large caller can therefore stress analyses that are
+cheap for ordinary programs even while batching reduces repeated setup.
 Changing batch size is also a way to discover overhead before you know which
 phase is responsible. Run the same test selection with several sizes, for
 example `--e2e-batch-size=1`, `--e2e-batch-size=64`, and
 `--e2e-batch-size=8192`, retaining separate timing JSON and logs for each run.
-Compare total time, phase times, invocation counts, and actual physical
-executions; incompatible tests may prevent the requested batch size from
-being reached.
+Compare suite wall time, phase times, invocation counts, and the timing JSON's
+actual physical executions and largest observed batch. Check that logical test
+coverage is unchanged; incompatible tests may prevent the requested batch size
+from being reached. See the [batching policy](verification.md) for the recorded
+counts and supported sizes.
 
 If larger batches reduce total time and a phase's invocation count, investigate
 setup or analysis repeated per compilation. If larger batches increase time
