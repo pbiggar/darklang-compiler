@@ -5,11 +5,9 @@ ARG QEMU_VERSION=11.1.1
 ARG QEMU_COMMIT=c3d48b7d1e89604920e5b81b91140c2ad39a1943
 ARG HERDR_VERSION=0.9.0
 ARG MERGETRAIN_VERSION=3.3.0
-FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS dotnet10
 FROM mcr.microsoft.com/dotnet/sdk:11.0.100-rc.1 AS dotnet11
 FROM node:26-bookworm-slim AS node
-FROM docker.io/docker/sandbox-templates:claude-code AS claude
-FROM rust:1.89.0-slim-bookworm AS rust
+FROM rust:1.98.0-slim-bookworm AS rust
 RUN --mount=type=cache,target=/usr/local/rustup/downloads \
     rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu && \
     rm -rf /usr/local/rustup/tmp/*
@@ -63,13 +61,9 @@ ARG MERGETRAIN_VERSION
 
 USER root
 
-# Install both SDK/runtime generations in the default host. This makes .NET 11
-# the default while preserving .NET 10 for existing worktrees and binaries.
-COPY --from=dotnet10 /usr/share/dotnet /usr/share/dotnet
+# Install the .NET 11 SDK/runtime in the default host.
 COPY --from=dotnet11 /usr/share/dotnet /usr/share/dotnet
 COPY --from=node /usr/local /usr/local
-COPY --from=claude --chown=agent:agent /home/agent/.local/bin/claude /home/agent/.local/bin/claude
-COPY --from=claude --chown=agent:agent /home/agent/.local/share/claude /home/agent/.local/share/claude
 COPY --from=rust /usr/local/cargo /usr/local/cargo
 COPY --from=rust /usr/local/rustup /usr/local/rustup
 COPY --from=qemu-builder /opt/dcb/qemu /opt/dcb/qemu
@@ -132,9 +126,6 @@ ENV CARGO_HOME=/usr/local/cargo
 ENV RUSTUP_HOME=/usr/local/rustup
 ENV PATH=/usr/share/dotnet:/home/agent/.dotnet/tools:/home/agent/.local/bin:/usr/local/cargo/bin:$PATH
 
-RUN --mount=type=bind,source=scripts/install-darklang-interpreter.sh,target=/tmp/install-darklang-interpreter.sh \
-    bash /tmp/install-darklang-interpreter.sh
-
 RUN --mount=type=bind,source=scripts/install-herdr.sh,target=/tmp/install-herdr.sh \
     bash /tmp/install-herdr.sh "$TARGETARCH" "$HERDR_VERSION"
 
@@ -154,18 +145,26 @@ RUN herdr plugin install szrenwei/herdr-agent-metrics \
 RUN git config --global alias.ci commit && \
     git config --global alias.co checkout && \
     git config --global alias.st status
+
 RUN echo 'parse_git_branch() { git branch 2>/dev/null | grep "^*" | sed "s/* //"; }' >> ~/.bashrc && \
     echo 'short_path() { pwd | sed "s|$HOME|~|"; }' >> ~/.bashrc && \
     echo 'PS1="\[\033[1;32m\]\u@dark\[\033[0m\]:\[\033[1;34m\]\$(short_path)\[\033[0m\]\[\033[1;33m\]\$(parse_git_branch | sed \"s/.*/ (&)/\")\[\033[0m\]\$ "' >> ~/.bashrc && \
-    echo 'if [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi' >> ~/.bashrc && \
-    echo '/usr/local/bin/start-herdr-server >/dev/null 2>&1 || true' >> ~/.bashrc
+    echo 'if [ -f /etc/bash_completion ]; then . /etc/bash_completion; fi' >> ~/.bashrc
 
 USER root
 COPY --chmod=0755 scripts/start-herdr-server.sh /usr/local/bin/start-herdr-server
-USER agent
 
-VOLUME ["/home/agent/.config/herdr", "/home/agent/.local/state/herdr"]
+RUN mkdir -p \
+      /home/agent/.config/herdr \
+      /home/agent/.local/state/herdr \
+      /home/agent/.codex && \
+    chown -R agent:agent \
+      /home/agent/.config/herdr \
+      /home/agent/.local/state/herdr \
+      /home/agent/.codex
+
+USER agent
 
 WORKDIR /workspace
 
-CMD ["bash", "-lc", "/usr/local/bin/start-herdr-server && exec sleep infinity"]
+CMD ["sleep", "infinity"]

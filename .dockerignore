@@ -4,3 +4,11 @@
 !Dockerfile
 !scripts/
 !scripts/install-darklang-interpreter.sh
+!scripts/install-herdr.sh
+!scripts/start-herdr-server.sh
+!config/
+!config/herdr/
+!config/herdr/config.toml
+!config/herdr/plugins/
+!config/herdr/plugins/auto-codex/
+!config/herdr/plugins/auto-codex/**
