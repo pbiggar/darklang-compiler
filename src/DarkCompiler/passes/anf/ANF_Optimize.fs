@@ -111,7 +111,13 @@ let optimizeProgramWithOptionsAndExternalFunctionsWithTrace
                     let functionIds =
                         functions'
                         |> List.fold (fun ids func -> Map.add func.Name func.Id ids) context.FunctionIds
+                    // This standalone rewrite-check API has no checked symbol table.
+                    let nextFunctionOrdinal =
+                        functionNames
+                        |> Map.fold (fun next id _ ->
+                            max next (AST.nextFunctionIdOrdinal (AST.functionIdValue id))) 0UL
                     planTailRecursionModuloHelpers
+                        nextFunctionOrdinal
                         functionNames
                         functionIds
                         activeEligible)

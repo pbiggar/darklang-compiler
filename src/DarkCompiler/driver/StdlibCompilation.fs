@@ -315,7 +315,7 @@ let buildStdlibWithTrace
                                 Some (WrittenChecking.includeAllocatedFunctions anfResult.Symbols writtenEnvironment) }
                 let stdlibFunctions = anfResult.Functions
                 let stdlibOptions = defaultOptions
-                match buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty stdlibFunctions Map.empty false passTimingRecorder with
+                match buildAnf 0 stdlibOptions sw registries (CheckedAST.nextFunctionOrdinal anfResult.Symbols) stdlibInliningConfig Map.empty Map.empty Set.empty stdlibFunctions Map.empty false passTimingRecorder with
                 | Error e ->
                     Error e
                 | Ok (anfFunctions, ssaFunctions, typeMap) ->
@@ -577,7 +577,7 @@ let buildStdlibSpecializations
                     |> Result.bind (fun (anfFuncs, _varGen1) ->
                         let stdlibOptions = defaultOptions
                         let sw = Stopwatch.StartNew()
-                        buildAnf 0 stdlibOptions sw registries stdlibInliningConfig Map.empty Map.empty Set.empty anfFuncs Map.empty false passTimingRecorder
+                        buildAnf 0 stdlibOptions sw registries (CheckedAST.nextFunctionOrdinal (CheckedAST.programSymbols preparedProgram)) stdlibInliningConfig Map.empty Map.empty Set.empty anfFuncs Map.empty false passTimingRecorder
                         |> Result.bind (fun (anfFunctions, ssaFunctions, typeMap) ->
                             let newAnfFuncMap =
                                 anfFunctions

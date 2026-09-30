@@ -182,6 +182,8 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                         let programEntryName = "__dark_compiler_program_entry"
                         let programEntryId, symbolsWithProgramEntry =
                             CheckedAST.internFunction programEntryName userOnly.Symbols
+                        let startId, symbolsWithEntries =
+                            CheckedAST.internFunction "_start" symbolsWithProgramEntry
                         let hasReservedName =
                             functionsToCompile
                             |> List.exists (fun func -> func.Name = programEntryName)
@@ -274,6 +276,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                 plan.Options
                                 sw
                                 userRegistries
+                                (CheckedAST.nextFunctionOrdinal symbolsWithEntries)
                                 InliningCommon.defaultConfig
                                 plan.ExternalInlineCandidates
                                 plan.Stdlib.StdlibANFOptimizationCandidates
@@ -394,6 +397,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         plan.Options
                                         sw
                                         userRegistries
+                                        (CheckedAST.nextFunctionOrdinal symbolsWithEntries)
                                         InliningCommon.defaultConfig
                                         plan.ExternalInlineCandidates
                                         plan.Stdlib.StdlibANFOptimizationCandidates
@@ -414,8 +418,6 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         ssaFunctions
                                 let startResultId = ANF.TempId 0
                                 let startFunction =
-                                    let startId =
-                                        CheckedAST.internFunction "_start" symbolsWithProgramEntry |> fst
                                     AST_to_ANF.synthesizeEntryFunction
                                         startId
                                         "_start"
@@ -440,6 +442,7 @@ let internal compileUserWithPlan (plan: UserCompilePlan) : CompileReport =
                                         plan.Options
                                         sw
                                         startRegistries
+                                        (CheckedAST.nextFunctionOrdinal symbolsWithEntries)
                                         InliningCommon.defaultConfig
                                         Map.empty
                                         Map.empty

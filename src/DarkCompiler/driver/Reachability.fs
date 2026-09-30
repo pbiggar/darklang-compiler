@@ -56,8 +56,8 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
             | Ok userOnly ->
                 let coverageOptions = { defaultOptions with DisableANFOpt = true; DisableInlining = true }
                 let sw = Stopwatch.StartNew()
+                let entryId, symbolsWithEntry = CheckedAST.internFunction "_start" userOnly.Symbols
                 let entryFunction =
-                    let entryId = CheckedAST.internFunction "_start" userOnly.Symbols |> fst
                     AST_to_ANF.synthesizeEntryFunction
                         entryId
                         "_start"
@@ -92,6 +92,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib: StdlibResult) (source: string
                         coverageOptions
                         sw
                         userRegistries
+                        (CheckedAST.nextFunctionOrdinal symbolsWithEntry)
                         InliningCommon.defaultConfig
                         Map.empty
                         Map.empty

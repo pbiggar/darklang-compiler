@@ -54,6 +54,7 @@ let internal buildAnf
     (options: CompilerOptions)
     (sw: Stopwatch)
     (registries: AST_to_ANF.Registries)
+    (nextFunctionOrdinal: uint64)
     (inliningConfig: InliningCommon.InliningConfig)
     (externalInlineCandidates: Map<AST.FunctionId, InliningCommon.FunctionInfo>)
     (externalOptimizationFunctions: Map<string, ANF.Function>)
@@ -101,6 +102,7 @@ let internal buildAnf
     let anfOptimized =
         if anfOptions.EnableTailRecursionModuloOperation then
             ANFAccumulatorLowering.lower
+                nextFunctionOrdinal
                 anfOptimizeContext
                 singletonRecursiveNames
                 externalOptimizationFunctions
