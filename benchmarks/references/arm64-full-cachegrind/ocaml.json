@@ -9,116 +9,173 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "version": "5.4.0",
-  "generated_at": "2026-09-15T07:45:58.287134+00:00",
-  "contract_sha256": "4efd0c2330fbe360b4d9fb060515cd16222d400b0186e8ade17e98a04edc9f97",
-  "build_flags": [],
+  "generated_at": "2026-09-30T18:24:11.832467+00:00",
+  "build_flags": [
+    "-O3"
+  ],
   "runtime_flags": [],
+  "tools": {
+    "valgrind": "valgrind-3.26.0",
+    "machine": "Linux-7.0.14-aarch64-with-glibc2.43"
+  },
+  "contract_sha256": "2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861",
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 162425405,
-      "output_valid": true
+      "instructions": 162424721,
+      "output_valid": true,
+      "workload_sha256": "8b184199406f4d6a10d090c94885447b5b6d5f0ee2b7afff9b5ce8d6e95a1bf8",
+      "source_sha256": "961c21fcedc28fb6676325e021157b21aa8dcdea2a9cf641f73c90af11fb7a32"
     },
     {
       "name": "binary_trees",
-      "instructions": 2708791,
-      "output_valid": true
+      "instructions": 2708104,
+      "output_valid": true,
+      "workload_sha256": "ad86ec16bb214060d2a10c9ed9b8e35e8a8306635d23736dee1aa2b70eaf3cd2",
+      "source_sha256": "1837dba22e043927445b922c5896527223592b27a5831235c36df011745d4084"
     },
     {
       "name": "collatz",
-      "instructions": 259431304,
-      "output_valid": true
+      "instructions": 259426785,
+      "output_valid": true,
+      "workload_sha256": "e8628fd5b72fbebd99988476fdde4f967f49b86259228d25532616caac55b01d",
+      "source_sha256": "b0258cb2b89bd919eb5bd18133380c447c6f7b209ca0c6f56de7a4dcbd461784"
     },
     {
       "name": "edigits",
-      "instructions": 1714617,
-      "output_valid": true
+      "instructions": 1713937,
+      "output_valid": true,
+      "workload_sha256": "e6a45797198ec5152dec5dcbefee5702516a3528b2be69d851e16897c67652b5",
+      "source_sha256": "058a1e6f15ade552bb490086d45a37b193e8e76e1730756002ebe7bfa0ed5b29"
     },
     {
       "name": "factorial",
-      "instructions": 11869471,
-      "output_valid": true
+      "instructions": 11868786,
+      "output_valid": true,
+      "workload_sha256": "04301cfa8b92397aef638f29f35447ea220480db56e3fb8ec7982df049d33068",
+      "source_sha256": "dd169970236bb37b0e713f5c197b1eb0bfc6aeaa27fab2c1aa309eb6cd6b8345"
     },
     {
       "name": "fannkuch",
-      "instructions": 3336708,
-      "output_valid": true
+      "instructions": 3336015,
+      "output_valid": true,
+      "workload_sha256": "e8c04a82cb4f42c4b9da9991a7ee9809eb9e9809015de4bc4a93095a09f9e363",
+      "source_sha256": "6b411dc98149abb06749c6b0a4470c06b1e337c2745f04f58fd885a173916596"
     },
     {
       "name": "fasta",
-      "instructions": 34651837,
-      "output_valid": true
+      "instructions": 34651136,
+      "output_valid": true,
+      "workload_sha256": "1b67fa1ea35b61e966ae881ca5fedc7b8ee7c7b2558f573f63f9487a265d8e82",
+      "source_sha256": "e615aa81e76a28b8dc57bdebb69180911d1c2ee5a11360b35fb68aa9beac0ab5"
     },
     {
       "name": "fib",
-      "instructions": 10715807,
-      "output_valid": true
+      "instructions": 10715091,
+      "output_valid": true,
+      "workload_sha256": "b879244eaa8143f869d10a2fa6f104e18c0f1ae8d7f4f8f337a113ac2203d80b",
+      "source_sha256": "ec418dafdbed08724403833039c932ba21530d11307ea5a88446a99aa9147abd"
     },
     {
       "name": "leibniz",
-      "instructions": 50800280,
-      "output_valid": true
+      "instructions": 50795726,
+      "output_valid": true,
+      "workload_sha256": "66f479ce0c668f29324cccef5f67f6e2cc87895ebe6030408d9f1494636c6ee3",
+      "source_sha256": "66ebaa47a2100e78d137ab544810af3b4e42a0b741621e2b017b60740a4c109e"
     },
     {
       "name": "mandelbrot",
-      "instructions": 27495820,
-      "output_valid": true
+      "instructions": 27495155,
+      "output_valid": true,
+      "workload_sha256": "18a0845a6187e417874ec7c1662089c59a02e34bdbb50821b96534e481d7e516",
+      "source_sha256": "26c334e7625a7116a6676c7efc07eeded1810884f102614863d7e7276e54a0b0"
     },
     {
       "name": "matmul",
-      "instructions": 1389225,
-      "output_valid": true
+      "instructions": 1388545,
+      "output_valid": true,
+      "workload_sha256": "71d04ea5520a50a526186b11abc4047851f3650d0489cdb248045a1a78c69eb0",
+      "source_sha256": "7b7ae6b66853666dfde635dfdbb8cc82909188cdb7318807432b5b22ad6f7bac"
     },
     {
       "name": "merkletrees",
-      "instructions": 21267710,
-      "output_valid": true
+      "instructions": 21267006,
+      "output_valid": true,
+      "workload_sha256": "f9f4b19982fa6c99cb500386b2034965bd1349b8df9ac96db6dc2d692a454b21",
+      "source_sha256": "0ff82ff3b6b88e496220ae791fbab1e8f764120827eccf9497bd4df34982b36c"
     },
     {
       "name": "nbody",
-      "instructions": 12868834,
-      "output_valid": true
+      "instructions": 12868135,
+      "output_valid": true,
+      "workload_sha256": "20f891a9c78b63192162125c450062f3c03e352690e7190575d1f384caa9833b",
+      "source_sha256": "3a827741a1cf1173cdbdf73784dfa1719075579473cd09a61e69bae5b6323829"
     },
     {
       "name": "nqueen",
-      "instructions": 11937397,
-      "output_valid": true
+      "instructions": 11933225,
+      "output_valid": true,
+      "workload_sha256": "461ca8f117f4ee22f01e0b999c3cfe0d65c03471443c3adbf2c3cc483a8046ac",
+      "source_sha256": "5ccc5810ae4d9aac7fef7e29a566004fe8d368d7c69a1963f037aa0481f41c14"
     },
     {
       "name": "nsieve",
-      "instructions": 806276,
-      "output_valid": true
+      "instructions": 805596,
+      "output_valid": true,
+      "workload_sha256": "971c8a73a6530e7fdb1b7b9260bb10b0e05934084a7357beccb297d0aeb67b78",
+      "source_sha256": "740e592af6c349953950eea83a3a05831cb52bd40a7c87ce770cf36f8af0dbf8"
     },
     {
       "name": "pisum",
-      "instructions": 2146514,
-      "output_valid": true
+      "instructions": 2145813,
+      "output_valid": true,
+      "workload_sha256": "56902902b6ea8cac19240511e100761acd6e11e0cae77a4a9113f49aa5320af6",
+      "source_sha256": "2d9a511ebcb362821f0c1202e8de4fb7d72f644782c35faf0326592d8766432b"
     },
     {
       "name": "primes",
-      "instructions": 8789707,
-      "output_valid": true
+      "instructions": 8789011,
+      "output_valid": true,
+      "workload_sha256": "e4b8f4e31a4c34520e1575deed302c2d2fbded0cb769c1d37d06ed29f4ffe3a5",
+      "source_sha256": "33cd589b48ff2d724bb8f1e187bbaf8a84876a2109faa24ccb5babb8001faa7b"
     },
     {
       "name": "quicksort",
-      "instructions": 41909401,
-      "output_valid": true
+      "instructions": 41908736,
+      "output_valid": true,
+      "workload_sha256": "052e12050a881fd1532c27eb27d66e25934520ccdf0cff4d4ce2905482f55a54",
+      "source_sha256": "d4b4428bf974576a41cfe3d2d5064ea4fefdb1f16eec1885c5a3e859a655d012"
     },
     {
       "name": "spectral_norm",
-      "instructions": 22765979,
-      "output_valid": true
+      "instructions": 22765301,
+      "output_valid": true,
+      "workload_sha256": "59ecdaf80b39abc8571e97e0b5f3b71138c083db45b129882a34006835c6aae9",
+      "source_sha256": "c741e33a4a0d08053f25edd925e6f4b14b4648dabdb681072425d1e166b27c7d"
     },
     {
       "name": "sum_to_n",
-      "instructions": 9549026,
-      "output_valid": true
+      "instructions": 9548341,
+      "output_valid": true,
+      "workload_sha256": "0213547ce564b206815d83c209de178dbdcdc51eeb96fe740313aac35f5a4828",
+      "source_sha256": "e427c191efc0a1d8703b24b0a7cabd04d183d64c6e34061a6a06f95c406b18b9"
     },
     {
       "name": "tak",
-      "instructions": 499216513,
-      "output_valid": true
+      "instructions": 499215818,
+      "output_valid": true,
+      "workload_sha256": "87295519d89551287bfc0f7e01505a371ff3f69c4a3493b9d6974e51376978b5",
+      "source_sha256": "822a762bbb17beaad1b2e64c0098e50f4a5dc0ecda252181e625c445805f7153"
     }
   ],
-  "provenance": "Imported from baselines/diagnostic-arm64-full-cachegrind.json; original suite contract retained. Per-source hashes and build flags were not recorded."
+  "missing_implementations": [
+    "fft",
+    "huffman",
+    "myers_diff",
+    "raytracer",
+    "regex_lite",
+    "string_equality",
+    "tinytemplate",
+    "warden"
+  ]
 }

@@ -9,116 +9,171 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "version": "Python 3.14.4",
-  "generated_at": "2026-09-15T07:45:58.287134+00:00",
-  "contract_sha256": "4efd0c2330fbe360b4d9fb060515cd16222d400b0186e8ade17e98a04edc9f97",
+  "generated_at": "2026-09-30T18:20:48.547498+00:00",
   "build_flags": [],
   "runtime_flags": [],
+  "tools": {
+    "valgrind": "valgrind-3.26.0",
+    "machine": "Linux-7.0.14-aarch64-with-glibc2.43"
+  },
+  "contract_sha256": "2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861",
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 7435285696,
-      "output_valid": true
+      "instructions": 7435704574,
+      "output_valid": true,
+      "workload_sha256": "8b184199406f4d6a10d090c94885447b5b6d5f0ee2b7afff9b5ce8d6e95a1bf8",
+      "source_sha256": "c776094fb20b8a2c4acd8f389e52815363ab0885325d3a6b60275ba688c06c84"
     },
     {
       "name": "binary_trees",
-      "instructions": 340787116,
-      "output_valid": true
+      "instructions": 341126991,
+      "output_valid": true,
+      "workload_sha256": "ad86ec16bb214060d2a10c9ed9b8e35e8a8306635d23736dee1aa2b70eaf3cd2",
+      "source_sha256": "c9439a978df30041179f6c739a9365616fd965dabee3d189cb18143f2dee7949"
     },
     {
       "name": "collatz",
-      "instructions": 8205426289,
-      "output_valid": true
+      "instructions": 8205793113,
+      "output_valid": true,
+      "workload_sha256": "e8628fd5b72fbebd99988476fdde4f967f49b86259228d25532616caac55b01d",
+      "source_sha256": "fb6f456887f2cdd254fa18b76a35771df776fe27a98533a709497cd08bd063ef"
     },
     {
       "name": "edigits",
-      "instructions": 59056689,
-      "output_valid": true
+      "instructions": 59381256,
+      "output_valid": true,
+      "workload_sha256": "e6a45797198ec5152dec5dcbefee5702516a3528b2be69d851e16897c67652b5",
+      "source_sha256": "cd6a1b206c54510495ec6bf68380d28f0e4e79329884a6b7762cb54cd5c312ea"
     },
     {
       "name": "factorial",
-      "instructions": 174922629,
-      "output_valid": true
+      "instructions": 175310447,
+      "output_valid": true,
+      "workload_sha256": "04301cfa8b92397aef638f29f35447ea220480db56e3fb8ec7982df049d33068",
+      "source_sha256": "933c8714035677e9eeab1f241ab31218d300c1eeedc996465f34f154ea00e0ec"
     },
     {
       "name": "fannkuch",
-      "instructions": 121114833,
-      "output_valid": true
+      "instructions": 121459169,
+      "output_valid": true,
+      "workload_sha256": "e8c04a82cb4f42c4b9da9991a7ee9809eb9e9809015de4bc4a93095a09f9e363",
+      "source_sha256": "c600647c5ccaa3eb1767e0457081df29b8144a71c8b0e77ffa756d1bcd1518f4"
     },
     {
       "name": "fasta",
-      "instructions": 101484096,
-      "output_valid": true
+      "instructions": 101856084,
+      "output_valid": true,
+      "workload_sha256": "1b67fa1ea35b61e966ae881ca5fedc7b8ee7c7b2558f573f63f9487a265d8e82",
+      "source_sha256": "3231b155a90b08f3451f7dce7a16845d92517c163c6b92f3ec0ed163b674a026"
     },
     {
       "name": "fib",
-      "instructions": 328935849,
-      "output_valid": true
+      "instructions": 329254205,
+      "output_valid": true,
+      "workload_sha256": "b879244eaa8143f869d10a2fa6f104e18c0f1ae8d7f4f8f337a113ac2203d80b",
+      "source_sha256": "b558fd483cb8bfe9a1eea6061353d6fcb4614514b70a7323bb08416760fc7e59"
     },
     {
       "name": "leibniz",
-      "instructions": 2142960942,
-      "output_valid": true
+      "instructions": 2143378778,
+      "output_valid": true,
+      "workload_sha256": "66f479ce0c668f29324cccef5f67f6e2cc87895ebe6030408d9f1494636c6ee3",
+      "source_sha256": "bc9f9cc196122a828418403cbc9b334a1f67f2a56c472a8590224062da8552a2"
     },
     {
       "name": "mandelbrot",
-      "instructions": 1379292050,
-      "output_valid": true
+      "instructions": 1379592067,
+      "output_valid": true,
+      "workload_sha256": "18a0845a6187e417874ec7c1662089c59a02e34bdbb50821b96534e481d7e516",
+      "source_sha256": "47b06e7910055a4d0cba2567063316dd056b18ef8d9f083523cbccebd120908b"
     },
     {
       "name": "matmul",
-      "instructions": 53587209,
-      "output_valid": true
+      "instructions": 53991465,
+      "output_valid": true,
+      "workload_sha256": "71d04ea5520a50a526186b11abc4047851f3650d0489cdb248045a1a78c69eb0",
+      "source_sha256": "58e2b50462664dfee1a282046bdcf39e185a468c1f7740479ad0029f5f3724a9"
     },
     {
       "name": "merkletrees",
-      "instructions": 2037355255,
-      "output_valid": true
+      "instructions": 2037739708,
+      "output_valid": true,
+      "workload_sha256": "f9f4b19982fa6c99cb500386b2034965bd1349b8df9ac96db6dc2d692a454b21",
+      "source_sha256": "8dd6d7b9c6a442148cc3c377fc18b0cc5190e6de2b39decd1fc4acb7cfa33d91"
     },
     {
       "name": "nbody",
-      "instructions": 893653392,
-      "output_valid": true
+      "instructions": 894052104,
+      "output_valid": true,
+      "workload_sha256": "20f891a9c78b63192162125c450062f3c03e352690e7190575d1f384caa9833b",
+      "source_sha256": "f73f0b9ce40737e572bca213124787a02ec9689a61c4ec9cd64ebbdee34ee440"
     },
     {
       "name": "nqueen",
-      "instructions": 496834180,
-      "output_valid": true
+      "instructions": 497150720,
+      "output_valid": true,
+      "workload_sha256": "461ca8f117f4ee22f01e0b999c3cfe0d65c03471443c3adbf2c3cc483a8046ac",
+      "source_sha256": "a279d50ab0428c8ee8a9e644c1f498b8927c892f799fdb7690f55a41839b1c30"
     },
     {
       "name": "nsieve",
-      "instructions": 41209623,
-      "output_valid": true
+      "instructions": 41551604,
+      "output_valid": true,
+      "workload_sha256": "971c8a73a6530e7fdb1b7b9260bb10b0e05934084a7357beccb297d0aeb67b78",
+      "source_sha256": "f2ab494c7bc8e643d4c46f9d9fb1d36810e35ccaf09a508cdc4dec93995b9b80"
     },
     {
       "name": "pisum",
-      "instructions": 108169809,
-      "output_valid": true
+      "instructions": 108569346,
+      "output_valid": true,
+      "workload_sha256": "56902902b6ea8cac19240511e100761acd6e11e0cae77a4a9113f49aa5320af6",
+      "source_sha256": "a4d69a7f51d79a5e03c655272578731e1e3465be6552305f64153a10789d0711"
     },
     {
       "name": "primes",
-      "instructions": 87074623,
-      "output_valid": true
+      "instructions": 87477763,
+      "output_valid": true,
+      "workload_sha256": "e4b8f4e31a4c34520e1575deed302c2d2fbded0cb769c1d37d06ed29f4ffe3a5",
+      "source_sha256": "ad5b006c0a154514a2714f184b23ed1888c4d0b4594bd1f3fbb167b46a56618b"
     },
     {
       "name": "quicksort",
-      "instructions": 105043240,
-      "output_valid": true
+      "instructions": 105397936,
+      "output_valid": true,
+      "workload_sha256": "052e12050a881fd1532c27eb27d66e25934520ccdf0cff4d4ce2905482f55a54",
+      "source_sha256": "1f00b825807a1e7f6ae26759ce7db24cd90bdfb21efb2316229a143d4eb76799"
     },
     {
       "name": "spectral_norm",
-      "instructions": 748807741,
-      "output_valid": true
+      "instructions": 749209899,
+      "output_valid": true,
+      "workload_sha256": "59ecdaf80b39abc8571e97e0b5f3b71138c083db45b129882a34006835c6aae9",
+      "source_sha256": "6b8543e2d80e0be76cae807f43ab195458a195653cb0bd709287daea44221b8c"
     },
     {
       "name": "sum_to_n",
-      "instructions": 942028993,
-      "output_valid": true
+      "instructions": 942410530,
+      "output_valid": true,
+      "workload_sha256": "0213547ce564b206815d83c209de178dbdcdc51eeb96fe740313aac35f5a4828",
+      "source_sha256": "c38a1884ed719dafc34590cd7db59ee444c0df0513fb16d54a39f57f91d0e035"
     },
     {
       "name": "tak",
-      "instructions": 10868859617,
-      "output_valid": true
+      "instructions": 10869264660,
+      "output_valid": true,
+      "workload_sha256": "87295519d89551287bfc0f7e01505a371ff3f69c4a3493b9d6974e51376978b5",
+      "source_sha256": "4eec43998448330c13e33154078436850085ad8cf2e9ec54ff42cd9204401b62"
     }
   ],
-  "provenance": "Imported from baselines/diagnostic-arm64-full-cachegrind.json; original suite contract retained. Per-source hashes and build flags were not recorded."
+  "missing_implementations": [
+    "fft",
+    "huffman",
+    "myers_diff",
+    "raytracer",
+    "regex_lite",
+    "string_equality",
+    "tinytemplate",
+    "warden"
+  ]
 }

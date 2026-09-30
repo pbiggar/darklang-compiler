@@ -8,117 +8,174 @@
     "backend": "cachegrind",
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
-  "version": "v26.8.2",
-  "generated_at": "2026-09-15T07:45:58.287134+00:00",
-  "contract_sha256": "4efd0c2330fbe360b4d9fb060515cd16222d400b0186e8ade17e98a04edc9f97",
+  "version": "v26.10.0",
+  "generated_at": "2026-09-30T18:24:04.098744+00:00",
   "build_flags": [],
-  "runtime_flags": [],
+  "runtime_flags": [
+    "--stack-size=400000"
+  ],
+  "tools": {
+    "valgrind": "valgrind-3.26.0",
+    "machine": "Linux-7.0.14-aarch64-with-glibc2.43"
+  },
+  "contract_sha256": "2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861",
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 2988949523,
-      "output_valid": true
+      "instructions": 1661723975,
+      "output_valid": true,
+      "workload_sha256": "8b184199406f4d6a10d090c94885447b5b6d5f0ee2b7afff9b5ce8d6e95a1bf8",
+      "source_sha256": "1f9dd2246f68e452000f818a6f0c34de23c77d8f91c35e31e5822590ebf8a688"
     },
     {
       "name": "binary_trees",
-      "instructions": 571585402,
-      "output_valid": true
+      "instructions": 579774945,
+      "output_valid": true,
+      "workload_sha256": "ad86ec16bb214060d2a10c9ed9b8e35e8a8306635d23736dee1aa2b70eaf3cd2",
+      "source_sha256": "708b43875068ee7cf231ba382f2da0a28d03e65508364b61cce50c4d92ba7494"
     },
     {
       "name": "collatz",
-      "instructions": 2333314226,
-      "output_valid": true
+      "instructions": 3305592343,
+      "output_valid": true,
+      "workload_sha256": "e8628fd5b72fbebd99988476fdde4f967f49b86259228d25532616caac55b01d",
+      "source_sha256": "0d963f1e7fa7b580b686c546d262109d30152db7c3498174c7c9592c32380734"
     },
     {
       "name": "edigits",
-      "instructions": 547241171,
-      "output_valid": true
+      "instructions": 571031817,
+      "output_valid": true,
+      "workload_sha256": "e6a45797198ec5152dec5dcbefee5702516a3528b2be69d851e16897c67652b5",
+      "source_sha256": "f231848eba6f26505516863d6a3da1bacd35e6bee32dcb49a034846cf7f5b34f"
     },
     {
       "name": "factorial",
-      "instructions": 716988606,
-      "output_valid": true
+      "instructions": 731860721,
+      "output_valid": true,
+      "workload_sha256": "04301cfa8b92397aef638f29f35447ea220480db56e3fb8ec7982df049d33068",
+      "source_sha256": "d98966530bd54b1ae6efe9b55893a07978c4d5a1b8a8a2b2aa1588e5e7193b2f"
     },
     {
       "name": "fannkuch",
-      "instructions": 582055776,
-      "output_valid": true
+      "instructions": 592000703,
+      "output_valid": true,
+      "workload_sha256": "e8c04a82cb4f42c4b9da9991a7ee9809eb9e9809015de4bc4a93095a09f9e363",
+      "source_sha256": "19787519b9e962083ea8c57284ab127f31730a177020ff55cc2b0512749d52f1"
     },
     {
       "name": "fasta",
-      "instructions": 593012606,
-      "output_valid": true
+      "instructions": 607530667,
+      "output_valid": true,
+      "workload_sha256": "1b67fa1ea35b61e966ae881ca5fedc7b8ee7c7b2558f573f63f9487a265d8e82",
+      "source_sha256": "cc1f792f23288361802320897ea95b33accec362671e628e4ed7ea490c89fd51"
     },
     {
       "name": "fib",
-      "instructions": 634144326,
-      "output_valid": true
+      "instructions": 745085135,
+      "output_valid": true,
+      "workload_sha256": "b879244eaa8143f869d10a2fa6f104e18c0f1ae8d7f4f8f337a113ac2203d80b",
+      "source_sha256": "1c605cafe08788b37c9c56f5a04787e7d9e1cb8e9fa44c3acc6edccf959c94ba"
     },
     {
       "name": "leibniz",
-      "instructions": 659604280,
-      "output_valid": true
+      "instructions": 1449516939,
+      "output_valid": true,
+      "workload_sha256": "66f479ce0c668f29324cccef5f67f6e2cc87895ebe6030408d9f1494636c6ee3",
+      "source_sha256": "d275fa1696c497f73bc2ac743a57bef36ec11581554a6b106be2c06e596eb6f8"
     },
     {
       "name": "mandelbrot",
-      "instructions": 1288160359,
-      "output_valid": true
+      "instructions": 1598795677,
+      "output_valid": true,
+      "workload_sha256": "18a0845a6187e417874ec7c1662089c59a02e34bdbb50821b96534e481d7e516",
+      "source_sha256": "d960987321f418001ca2dbf0766aae9511f17ea7d8c2ece6be430a3728f9b8f2"
     },
     {
       "name": "matmul",
-      "instructions": 534382802,
-      "output_valid": true
+      "instructions": 549119175,
+      "output_valid": true,
+      "workload_sha256": "71d04ea5520a50a526186b11abc4047851f3650d0489cdb248045a1a78c69eb0",
+      "source_sha256": "c8588f769fa11ed3712e873399c4b204ca5b6c34d3793922997c8e39d554a448"
     },
     {
       "name": "merkletrees",
-      "instructions": 2013094566,
-      "output_valid": true
+      "instructions": 1564950434,
+      "output_valid": true,
+      "workload_sha256": "f9f4b19982fa6c99cb500386b2034965bd1349b8df9ac96db6dc2d692a454b21",
+      "source_sha256": "e9b7a5c4d342d9b006a5e40dc4b1259b209a3639726748246c9749074897b666"
     },
     {
       "name": "nbody",
-      "instructions": 1291011435,
-      "output_valid": true
+      "instructions": 1304099402,
+      "output_valid": true,
+      "workload_sha256": "20f891a9c78b63192162125c450062f3c03e352690e7190575d1f384caa9833b",
+      "source_sha256": "c3a63f6a9b362ded3d290a992d37e5bea9e526f0ebb0a3c55ec94ae4aa4f6261"
     },
     {
       "name": "nqueen",
-      "instructions": 727914031,
-      "output_valid": true
+      "instructions": 668329410,
+      "output_valid": true,
+      "workload_sha256": "461ca8f117f4ee22f01e0b999c3cfe0d65c03471443c3adbf2c3cc483a8046ac",
+      "source_sha256": "93329a8e21047ec8e291e9c351e2d12e597c396cbaa84007c398b0c4c9c83770"
     },
     {
       "name": "nsieve",
-      "instructions": 526439017,
-      "output_valid": true
+      "instructions": 539634556,
+      "output_valid": true,
+      "workload_sha256": "971c8a73a6530e7fdb1b7b9260bb10b0e05934084a7357beccb297d0aeb67b78",
+      "source_sha256": "f0521da5994a39b7f37a4ca6df3359da667ed5a76885a31c9667223657bcd757"
     },
     {
       "name": "pisum",
-      "instructions": 564837012,
-      "output_valid": true
+      "instructions": 581574634,
+      "output_valid": true,
+      "workload_sha256": "56902902b6ea8cac19240511e100761acd6e11e0cae77a4a9113f49aa5320af6",
+      "source_sha256": "fdacaa5975fc04191140fac8f20fd4c644f3b7a6df60ab7a02b550b5f9373af7"
     },
     {
       "name": "primes",
-      "instructions": 767760434,
-      "output_valid": true
+      "instructions": 774936899,
+      "output_valid": true,
+      "workload_sha256": "e4b8f4e31a4c34520e1575deed302c2d2fbded0cb769c1d37d06ed29f4ffe3a5",
+      "source_sha256": "54e36f322a97191f975d35db980bbcb79ab9db3a426bbc9ecc70401d1a7a273a"
     },
     {
       "name": "quicksort",
-      "instructions": 630143924,
-      "output_valid": true
+      "instructions": 642796524,
+      "output_valid": true,
+      "workload_sha256": "052e12050a881fd1532c27eb27d66e25934520ccdf0cff4d4ce2905482f55a54",
+      "source_sha256": "ad928421ed7070b22d5d16b0d1c631e08d1494816c75fd4cd237656e0ae03e79"
     },
     {
       "name": "spectral_norm",
-      "instructions": 953697743,
-      "output_valid": true
+      "instructions": 969228137,
+      "output_valid": true,
+      "workload_sha256": "59ecdaf80b39abc8571e97e0b5f3b71138c083db45b129882a34006835c6aae9",
+      "source_sha256": "673b32a1b8f54cdb0cbcf2b31838d3e96ea841a471d588af862f425614a8580a"
     },
     {
       "name": "sum_to_n",
-      "instructions": 888926608,
-      "output_valid": true
+      "instructions": 900216037,
+      "output_valid": true,
+      "workload_sha256": "0213547ce564b206815d83c209de178dbdcdc51eeb96fe740313aac35f5a4828",
+      "source_sha256": "5af86046947f01a2430eb631149831a941059603c07601cdbb321ca3af308b2b"
     },
     {
       "name": "tak",
-      "instructions": 2191746728,
-      "output_valid": true
+      "instructions": 5832873760,
+      "output_valid": true,
+      "workload_sha256": "87295519d89551287bfc0f7e01505a371ff3f69c4a3493b9d6974e51376978b5",
+      "source_sha256": "39e54d7afe53eb7a05e4068d68942f111a5650e20d8529d55ba39eb18f4a7bda"
     }
   ],
-  "provenance": "Imported from baselines/diagnostic-arm64-full-cachegrind.json; original suite contract retained. Per-source hashes and build flags were not recorded."
+  "missing_implementations": [
+    "fft",
+    "huffman",
+    "myers_diff",
+    "raytracer",
+    "regex_lite",
+    "string_equality",
+    "tinytemplate",
+    "warden"
+  ]
 }
