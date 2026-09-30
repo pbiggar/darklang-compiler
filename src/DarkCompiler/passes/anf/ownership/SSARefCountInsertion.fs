@@ -14,14 +14,14 @@ type private Definitions = {
     Owned: Set<TempId>
     OwnedParams: Set<TempId>
     Types: Map<TempId, AST.SemanticType>
-    FuncNames: Map<AST.FunctionId, string>
+    FuncReg: TypeRegistries.FunctionRegistry
 }
 
-let private isEmptyListCall (funcNames: Map<AST.FunctionId, string>) operation =
+let private isEmptyListCall (funcReg: TypeRegistries.FunctionRegistry) operation =
     match operation with
     | Call (target, []) ->
-        Map.tryFind target funcNames
-        |> Option.exists (fun name -> name.StartsWith("Darklang.Stdlib.List.__empty"))
+        Map.tryFind target funcReg
+        |> Option.exists (fun (name, _) -> name.StartsWith("Darklang.Stdlib.List.__empty"))
     | _ -> false
 
 let private definitions
@@ -30,7 +30,6 @@ let private definitions
     (func: SSAANF.Function)
     : Definitions =
     let types = func.FreshValueTypes
-    let funcNames = ctx.FuncReg |> Map.map (fun _ (name, _) -> name)
     let operations =
         func.Blocks
         |> Map.fold (fun state _ block ->
@@ -62,7 +61,7 @@ let private definitions
                           | _ -> false)
                    && not (cexprProducesNonRcSentinel operation)
                    && not isNullContainer
-                   && not (isEmptyListCall funcNames operation) then
+                   && not (isEmptyListCall ctx.FuncReg operation) then
                     Set.add id state
                 else state
             | None -> state) Set.empty
@@ -102,7 +101,7 @@ let private definitions
       Owned = Set.union ownedBlockParams ownedParams
       OwnedParams = ownedParams
       Types = types
-      FuncNames = funcNames }
+      FuncReg = ctx.FuncReg }
 
 let private sourceOfAlias operation =
     RcReturnAnalysis.tryOwnershipPreservingAliasSource operation
@@ -112,8 +111,8 @@ let private borrowedSource (definitions: Definitions) operation =
     // Pattern lowering reuses scalar getAt wrappers for erased payload types.
     // Their result can still point into the source list after the call returns.
     | Call (target, Var source :: _)
-        when Map.tryFind target definitions.FuncNames
-             |> Option.exists (fun name -> name.StartsWith("Darklang.Stdlib.List.__getAt")) ->
+        when Map.tryFind target definitions.FuncReg
+             |> Option.exists (fun (name, _) -> name.StartsWith("Darklang.Stdlib.List.__getAt")) ->
         Some source
     | Prim ((BitAnd | BitOr), Var source, _) -> Some source
     | TupleGet (Var source, _)
@@ -148,7 +147,7 @@ let private isNonRcSentinel (definitions: Definitions) (id: TempId) : bool =
                 match Map.tryFind id definitions.Types with
                 | Some (AST.TList _ | AST.TDict _) -> true
                 | _ -> false
-            | Some operation when isEmptyListCall definitions.FuncNames operation -> true
+            | Some operation when isEmptyListCall definitions.FuncReg operation -> true
             | Some operation ->
                 sourceOfAlias operation
                 |> Option.exists (follow (Set.add id visited))
@@ -230,8 +229,8 @@ let private capturedValues (definitions: Definitions) (operation: CExpr) : Atom 
     | RecordReuse (_, _, _, values) -> values
     | Call (target, [_; value])
     | TailCall (target, [_; value])
-        when Map.tryFind target definitions.FuncNames
-             |> Option.exists (fun name ->
+        when Map.tryFind target definitions.FuncReg
+             |> Option.exists (fun (name, _) ->
                  name.StartsWith("Darklang.Stdlib.List.__push_i64")
                  || name.StartsWith("Darklang.Stdlib.List.__pushBack_i64")) ->
         [value]

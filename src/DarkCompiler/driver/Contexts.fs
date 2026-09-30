@@ -174,7 +174,23 @@ let internal includeCompiledFunctions
         Registries = registries
         BaseFuncNames = baseFuncNames
         LambdaLiftFunctions =
-            buildLambdaLiftFunctionCatalog registries baseFuncNames returnTypes
+            // Registries for declared signatures are unchanged here. Retain
+            // their parameter and generic metadata; generated names previously
+            // entered the base-name catalog with an empty parameter list.
+            functions
+            |> List.fold (fun catalog func ->
+                let parameters =
+                    match Map.tryFind func.Id catalog.Params with
+                    | Some _ -> catalog.Params
+                    | None -> Map.add func.Id [] catalog.Params
+                let returnType =
+                    match Map.tryFind func.Name registries.ModuleRegistry with
+                    | Some definition -> definition.ReturnType
+                    | None -> func.ReturnType
+                { catalog with
+                    Params = parameters
+                    ReturnTypes = Map.add func.Id returnType catalog.ReturnTypes })
+                context.LambdaLiftFunctions
         ReturnTypes = returnTypes }
 
 let internal buildContext

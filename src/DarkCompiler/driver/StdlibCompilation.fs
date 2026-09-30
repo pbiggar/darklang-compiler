@@ -327,21 +327,6 @@ let buildStdlibWithTrace
                     let stdlibInlineCandidates =
                         stdlibFunctions
                         |> InliningCommon.buildExternalCandidateInfoMap InliningCommon.defaultConfig
-                    let stdlibLiftedFuncNames =
-                        anfFunctions
-                        |> List.map (fun f -> f.Name)
-                        |> Set.ofList
-                    let baseFuncNames =
-                        Set.union context.BaseFuncNames stdlibLiftedFuncNames
-                    let contextWithLiftedNames = {
-                        context with
-                            BaseFuncNames = baseFuncNames
-                            LambdaLiftFunctions =
-                                buildLambdaLiftFunctionCatalog
-                                    context.Registries
-                                    baseFuncNames
-                                    context.ReturnTypes
-                    }
                     let stdlibANFCallGraph = ANFDeadCodeElimination.buildCallGraph anfFunctions
 
                     let externalReturnTypes = returnTypes
@@ -369,7 +354,7 @@ let buildStdlibWithTrace
                                 allocatedFuncs
                         Ok {
                             TypedAST = typedStdlib
-                            Context = contextWithLiftedNames
+                            Context = context
                             AllocatedFunctions = allocatedFuncs
                             CallGraphSummaries = summaries
                             StdlibCallGraph = stdlibCallGraph
