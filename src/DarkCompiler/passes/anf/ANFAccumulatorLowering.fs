@@ -20,7 +20,8 @@ let lower
     let activeEligible = Set.intersect eligibleTailRecursionNames programFunctionIds
     if Set.isEmpty activeEligible then program
     else
-        let helpers = planTailRecursionModuloHelpers context.FunctionNames activeEligible
+        let helpers =
+            planTailRecursionModuloHelpers context.FunctionNames context.FunctionIds activeEligible
         (program, freshVarGenForProgram program)
         |> fun (current, varGen) ->
             transformTailRecursionModuloAddition helpers varGen current

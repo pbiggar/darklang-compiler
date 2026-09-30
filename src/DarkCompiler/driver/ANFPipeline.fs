@@ -85,13 +85,13 @@ let internal buildAnf
         printANFProgram options "=== ANF (before optimization) ===" anfProgram
     let anfLoweringStart = sw.Elapsed.TotalMilliseconds
     let singletonRecursiveNames =
-        registries.RecursiveMembers
-        |> Map.toSeq
-        |> Seq.choose (fun (name, memberInfo) ->
-            match memberInfo.Typed.Resolved.Availability with
-            | AST.SelfRecursiveMember -> Some name
+        functions
+        |> List.choose (fun func ->
+            match Map.tryFind func.Id registries.RecursiveMembers with
+            | Some memberInfo when memberInfo.Typed.Resolved.Availability = AST.SelfRecursiveMember ->
+                Some func.Id
             | _ -> None)
-        |> Set.ofSeq
+        |> Set.ofList
     let anfOptimizeContext : ANFConstants.OptimizeContext =
         { TypeReg = registries.RecordFieldsReg
           RecordTypeParams = registries.RecordTypeParamsReg

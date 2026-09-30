@@ -108,8 +108,12 @@ let optimizeProgramWithOptionsAndExternalFunctionsWithTrace
                     let functionNames =
                         functions'
                         |> List.fold (fun names func -> Map.add func.Id func.Name names) context.FunctionNames
+                    let functionIds =
+                        functions'
+                        |> List.fold (fun ids func -> Map.add func.Name func.Id ids) context.FunctionIds
                     planTailRecursionModuloHelpers
                         functionNames
+                        functionIds
                         activeEligible)
         if Map.isEmpty helpers then optimizedProgram
         else
