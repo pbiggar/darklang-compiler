@@ -1,89 +1,127 @@
-# Compiler compile-time findings
+# Finding compiler slowdowns
 
-This page records compiler-specific causes found in full host-suite profiles.
-The measured revisions, corpus sizes, and phase tables are in the
-[historical comparison](../project/test-runtime-history-2026-09-29.md).
+Use this guide to form and test hypotheses about compiler cost. A suspicious
+loop or collection operation is a lead; measure its contribution on the
+current revision before changing it. Historical fixes illustrate patterns,
+but do not establish today's bottleneck.
 
-## Confirmed sources of excess work
+## Start with the workload and a baseline
 
-- **SCCP traversal order.** At `313ad16db5`, depth-first propagation through
-  large E2E batch callers repeatedly revisited paths: SCCP used 46.81 seconds
-  of a 91.25-second suite. The FIFO worklist merge at `797ff13051` reduced
-  SCCP to 2.88 seconds on a slightly larger corpus. It remains about three
-  seconds in the current pipeline.
-- **Call graph staging.** Callee summaries were formerly finalized too late
-  for some callers, causing additional pipeline work. The callee-first
-  pipeline now publishes each function's final facts before its callers and
-  asserts one visit per native pipeline stage for each scheduled function
-  node. Summary publication was later changed to merge only new batch facts.
-- **Backend clobber analysis.** Before this task, output generation recomputed
-  a whole-program register-write fixed point for every binary even though
-  callee-first compilation had already produced those facts. A direct probe
-  measured 20.84 seconds in 1,378 code-generation calls. Passing the saved
-  summaries forward and looking up only direct callees reduced full-suite
-  code generation from 22.68 to 4.32 seconds in successive profiles. Four
-  reused float-list helpers in the emitted binary had no saved summaries;
-  analyzing only those missing bodies preserved their narrow call saves.
-- **Checked-unit symbol composition.** A simple user expression carried 2,728
-  function-name entries into a base catalog with 4,614 entries, mostly
-  reimporting names the base already owned. The old full-suite symbol-import
-  phase used 18.11 seconds across 1,712 calls. Composing declarations from
-  the checked unit's top levels reduced that phase to 0.04 seconds in the
-  same 10,800-test corpus.
-- **SSA string rewrites.** The SSA optimizer searched the complete function
-  catalog for fixed string helper names on each fixed-point iteration. It
-  also built predecessor and use maps for a byte-match rewrite in functions
-  with no matching call. Direct name lookup and a call-presence check reduced
-  the full-suite SSA optimization phase from 25.26 to 7.48 seconds in
-  successive candidate profiles.
-- **Call graph initial facts.** Each compilation copied the entire external
-  summary catalog before considering which functions it called. Across 1,922
-  call graph compilations, setup and initial-fact construction took 3.35 and
-  5.14 seconds. Restricting the catalog to direct external callees reduced
-  those phases to 0.08 and 0.01 seconds in a subsequent full-suite profile.
-- **Sum representation lookup.** Lowering a sum value repeatedly searched the
-  entire constructor catalog and sorted candidate cases, even when the sum had
-  many cases and could not use the special one- or two-case representation.
-  The larger standard library amplified this cost in unchanged functions. In
-  complete runs of the same 10,800-test suite, an unchanged large-match
-  function fell from 59.62 to 1.68 ms after cases were grouped once by owner;
-  cumulative function-expression lowering fell from 3.33 to 1.09 seconds.
-  Ownership and call-graph times stayed near their parent values; they remain
-  separate costs.
-- **Ownership representation queries.** One ownership analysis repeatedly
-  classified the same semantic types while constructing, elaborating, and
-  verifying its intermediate program. Reusing the classification within that
-  analysis reduced its measured full-suite phase from 9.96 to 4.42 seconds.
-  Specialized ownership scheduling also need not reanalyze an unchanged
-  original caller in each materialization round; body-version tracking now
-  asserts that each version is analyzed at most once.
-- **Allocation is spread across graph and backend data structures.** In the
-  10,800-test parent trace, function identities, function-name maps, ownership
-  graph sets, SSA dominator sets, and register clobber sets recur among the
-  leading allocation samples. The post-FIFO historical revision used far less
-  memory on the same focused HAMT workload. Graph identity conversion,
-  compact register-write masks, and a change-driven dominator worklist remove
-  some of that structural allocation. Focused allocation fell from 17.53 GB
-  on the parent to 12.45 GB after these changes. Ownership group set
-  differences and function-name map reconstruction remain visible in the
-  focused allocation stacks.
-- **The current allocation reduction is real but incomplete.** On the same
-  10,800-test corpus, the parent allocated 117.73 GB in a sampled full-suite
-  trace and this branch allocated 101.57 GB after the ownership, graph,
-  clobber, and SSA changes. The remaining samples still concentrate in
-  function identities and function-name and clobber maps. GC suspension did
-  not fall reliably between these two traced runs (23.63 versus 22.60
-  seconds); host load and collection behavior vary, so allocation reduction
-  should not be translated directly into a claimed wall-time saving.
-- **Historical allocation causes differ by revision.** The pre-FIFO SCCP
-  revision allocates heavily in Boolean path-fact maps and lists. A later
-  10,800-test checkpoint allocates heavily in repeated symbol maps, binding
-  identities, and backend register sets. These are distinct regressions; a
-  high total allocation count alone does not identify the current cause.
+Decide which behavior is slow: a fresh CLI compilation, repeated compilation
+in one process, a particular large function, or the complete test suite.
+These workloads exercise different setup costs, caches, and graph sizes.
+Record the commit, dirty state, source or test selection, architecture, build
+configuration, batch size, and cache state with the measurements. Keep raw
+logs and temporary instrumentation in ignored artifacts.
 
-An earlier 10,800-test profile took 114.95 seconds, including 21.87 seconds
-in call graph compilation, 17.19 seconds in AST-to-ANF conversion, 11.28
-seconds in dependency lookup, and 10.09 seconds in SSA optimization. Some
-phase totals are nested and cannot be added. The remembered 30-second
-full-suite revision has not been verified; the fastest verified historical
-checkpoint is `9ddd172a14` at 46.00 seconds for 10,150 tests.
+Build first, then collect compiler phase timings across the host suite:
+
+```sh
+./build --ai
+./run-tests --ai \
+  --timings-json=TestResults/ai/compiler-timings.json \
+  --codegen-profile-json=TestResults/ai/compiler-codegen.json \
+  > TestResults/ai/compiler-profile.log 2>&1
+```
+
+Use `--filter=json`, for example, to narrow a second run to a subsystem.
+The codegen output provides per-function ARM64 metrics and cache information;
+it does not provide equivalent per-function coverage for every compiler phase
+or backend. See the [profiling options](../../benchmarks/README.md#targeted-compiler-benchmarks).
+
+For a single program, `./dark -vv program.dark -o /tmp/program` reports pass
+timings. To measure fresh-process latency with repeated samples:
+
+```sh
+python3 benchmarks/targeted/compile-latency/measure.py \
+  --output /tmp/compiler-latency.json
+```
+
+This probe uses its own fixed representative program and records both process
+wall time and reported pipeline time. A large gap is a reason to investigate
+startup, JIT, and standard-library setup outside the reported pipeline.
+A batch test profile may hide these costs through shared prepared contexts.
+Conversely, a large generated batch caller can stress analyses that are cheap
+for ordinary programs. Compare the same test selection with
+`--e2e-batch-size=1` when investigating that distinction; expect more setup and
+compiler invocations. Per-test times divided across a batch do not identify
+which function was expensive.
+
+## Narrow a hot phase to the operation responsible
+
+Rank phases by total time, then inspect invocation counts and time per call.
+Many cheap calls suggest repeated work; a few expensive calls suggest large
+inputs or poor scaling. Nested detail timings are included in their parents:
+do not sum overlapping phases or equate them with total suite wall time,
+especially when suites run concurrently.
+
+Search for the measured phase name or its implementation with `rg`, then read
+the relevant call sites and loops. Add narrowly scoped timers and counters
+when the existing phase is too broad. Useful measurements include functions,
+blocks, edges, instructions, catalog entries, iterations, cache hits/misses,
+and the number of distinct bodies processed. Attribute expensive calls to a
+function or input size where possible. For a hot fixed-point pass, separately
+measure analysis, rewriting, equality checks, and iterations rather than
+assuming the whole pass is expensive for one reason.
+
+If phase timers cannot explain the cost, use .NET CPU sampling and allocation
+tracing, for example with `dotnet-trace` when available. Capture stacks around
+the focused workload and identify compiler callers behind generic collection
+operations. CPU samples show where execution spends time; allocation samples
+show where objects are created. Neither alone proves how much elapsed time a
+change will save. Measure allocation volume, GC time, and elapsed time
+separately; lower allocation need not produce a proportional latency drop.
+
+## Patterns to investigate
+
+| Potential slowdown | What to look for | How to test the hypothesis |
+| --- | --- | --- |
+| Whole-catalog scans inside local work | A lookup, constructor query, or helper-name search filters/sorts every function or type for each expression or pass iteration. | Count scans and entries visited; vary catalog size while keeping the user program fixed. Check whether a direct lookup or index by owner can answer the same query. |
+| Oversized analysis inputs | A small program copies or analyzes all stdlib/external summaries, symbols, or constructors although it uses only a few. | Compare input catalog size with declarations actually imported or callees referenced. Time setup separately from analysis of reachable bodies. |
+| Repeated analysis of unchanged bodies | Ownership, lowering, or backend summary construction revisits the same function in materialization rounds or for each emitted binary. | Count visits by function and body version. Trace which dependency or body change invalidated each result; distinguish legitimate reanalysis from duplicate work. |
+| Fixed-point or worklist churn | A pass repeatedly traverses the whole CFG, reconstructs maps, compares entire IRs, or revisits nodes whose facts did not change. | Record iterations, node visits, and fact changes; time equality checks separately. Try long copy chains, loops, joins, and large batch callers to expose scaling. |
+| Analysis before applicability checks | A specialized rewrite builds predecessor, use, or dominator maps for functions with no relevant operation. | Count candidates versus successful rewrites and time rejected cases. Test a cheap necessary-condition check before building expensive supporting data. |
+| Cache misses or expensive hits | Reused functions/plans are regenerated, cache keys are costly to construct, or hit paths still rebuild substantial metadata. | Measure hits, misses, key construction, and hit-path time separately. Compare cold and warm runs and inspect why equivalent requests get different keys. |
+| Structural allocation and copying | Persistent maps/sets are rebuilt in nested loops; identities are converted repeatedly; immutable lists are repeatedly appended or concatenated. | Follow allocation stacks to their compiler callers and count collection sizes/copies. Vary graph or instruction count to distinguish linear work from quadratic growth. |
+| Repeated representation queries | Lowering or ownership repeatedly derives the same layout or classification from a semantic type. | Count queries and distinct types within one analysis. Check whether results can be shared within that scope without crossing incompatible contexts. |
+| IR growth | Inlining, specialization, helper generation, or batching greatly increases the function or instruction count before a hot pass. | Compare IR counts before and after the expanding stage and time downstream passes against those counts. Determine whether excess work starts at expansion or in a later algorithm. |
+
+Examples of these patterns include looking up a sum's constructors by scanning
+the complete constructor catalog, and recomputing a binary's register-clobber
+summaries after the compilation pipeline already produced them. Use those as
+questions to ask of new code, not as claims that those old costs remain.
+
+For IR inspection, prefer `--dump-function=TEXT`, `--dump-ir-summary`, and
+`--dump-ir-output=FILE` with the relevant dump flag. Keep verbose output in an
+ignored artifact; full-program dumps often obscure the function responsible.
+
+## Prove the cause and validate the change
+
+Create a focused workload that preserves the suspected cause, then vary one
+size dimension: catalog entries, copy-chain length, CFG edges, specializations,
+or instructions. For example, hold a tiny user function fixed while increasing
+unrelated declarations to test whether its lowering depends on catalog size.
+A minimal example that removes the large graph or catalog may also remove the
+slowdown. Compare repeated samples and operation counts to distinguish host
+contention from algorithmic growth.
+
+Change one cause at a time. Match the fix to the evidence: index repeated
+queries, restrict analysis to relevant inputs, reuse valid summaries, or avoid
+building analysis data for inapplicable rewrites. For any reuse, establish the
+scope and invalidation rules: function identity alone may be insufficient if
+the body, target, type arguments, or dependency facts change. Preserve semantic
+validation and diagnostics, including ahead-of-time match checking.
+
+Compare parent and candidate with the same inputs, configuration, batch size,
+and cache conditions. Alternate repeated runs when host load varies, retain
+individual samples, and report the measured phase plus end-to-end time. Do
+not compare different test corpora as evidence for a particular improvement
+or translate historical allocation totals into predicted latency savings.
+
+Check that the improvement survives the broader workload and has not shifted
+cost into another phase, setup, or memory retention. Compiler latency and the
+speed of generated programs are separate outcomes: faster compilation can
+still emit slower code. Follow the [verification policy](verification.md) for
+compiler changes, including host correctness tests and the full parent
+benchmark gate. Keep investigation findings and raw measurements in ignored
+artifacts unless a durable report is explicitly requested.
