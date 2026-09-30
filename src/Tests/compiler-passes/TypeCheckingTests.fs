@@ -406,7 +406,37 @@ let testManyTopLevelFunctionsAndLetsAreStackSafe () : TestResult =
     | Ok (typ, _) -> Error $"Expected Int64 result, got {typeToString typ}"
     | Error error -> Error $"Expected large program to type check, got: {typeErrorToString error}"
 
+// Filtering must preserve same-spelled survivors and their import precedence.
+let testFilteredResolutionCandidates () : TestResult =
+    let candidate owner =
+        NameResolution.candidate "SharedCase"
+            (NameResolution.ConstructorSymbol (owner, "SharedCase"))
+            (NameResolution.SourceDeclaration owner)
+        |> Option.defaultWith (fun () -> Crash.crash "Test candidate has an invalid fixed spelling")
+    let first = candidate "First"
+    let second = candidate "Second"
+    let environment =
+        NameResolution.empty
+        |> NameResolution.addCandidates [first; second]
+    let filtered =
+        environment
+        |> NameResolution.filterCandidates (fun candidate -> candidate.Identity = first.Identity)
+    let imported = NameResolution.merge filtered NameResolution.empty
+    let removed = NameResolution.filterCandidates (fun _ -> false) environment
+    match NameResolution.resolve NameResolution.ResolutionContext.Constructor "SharedCase" environment,
+          NameResolution.resolve NameResolution.ResolutionContext.Constructor "SharedCase" filtered,
+          NameResolution.resolve NameResolution.ResolutionContext.Constructor "SharedCase" imported,
+          NameResolution.resolve NameResolution.ResolutionContext.Constructor "SharedCase" removed with
+    | Error (NameResolution.AmbiguousReference _), Ok local, Ok imported,
+      Error (NameResolution.UnresolvedName _) when
+          local.Identity = first.Identity
+          && local.Provenance = first.Provenance
+          && imported.Identity = first.Identity
+          && imported.Provenance = NameResolution.PackageDeclaration "First" -> Ok ()
+    | result -> Error $"Filtered/imported candidate resolution changed: {result}"
+
 let tests = [
+    ("Filtered name-resolution candidates preserve survivors and imports", testFilteredResolutionCandidates)
     ("Integer literal", testInt64Literal)
     ("Int128 literal", testInt128Literal)
     ("UInt128 literal", testUInt128Literal)

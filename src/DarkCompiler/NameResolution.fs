@@ -194,9 +194,38 @@ let filterCandidates
     (predicate: Candidate -> bool)
     (environment: ResolutionEnvironment)
     : ResolutionEnvironment =
-    environment.OrderedCandidates
-    |> List.filter predicate
-    |> fun filtered -> addCandidates filtered empty
+    // Imported candidates correspond to the same ordered declarations, with
+    // import provenance already applied. Preserve those objects and only edit
+    // index entries whose declarations are actually removed.
+    let ordered, imported, changedNames =
+        List.foldBack2 (fun candidate importedCandidate (ordered, imported, changed) ->
+            if predicate candidate then
+                candidate :: ordered, importedCandidate :: imported, changed
+            else
+                ordered, imported, Set.add candidate.VisibleName changed)
+            environment.OrderedCandidates
+            environment.ImportedOrderedCandidates
+            ([], [], Set.empty)
+    if Set.isEmpty changedNames then environment
+    else
+        let candidates, importedCandidates =
+            changedNames
+            |> Set.fold (fun (candidates, importedCandidates) name ->
+                let retained =
+                    Map.tryFind name environment.CandidatesByVisibleName
+                    |> Option.defaultWith (fun () ->
+                        Crash.crash "Filtered declaration has no candidate index entry")
+                    |> List.filter predicate
+                match retained with
+                | [] -> Map.remove name candidates, Map.remove name importedCandidates
+                | _ ->
+                    Map.add name retained candidates,
+                    Map.add name (List.map importCandidate retained) importedCandidates)
+                (environment.CandidatesByVisibleName, environment.ImportedCandidatesByVisibleName)
+        { OrderedCandidates = ordered
+          CandidatesByVisibleName = candidates
+          ImportedOrderedCandidates = imported
+          ImportedCandidatesByVisibleName = importedCandidates }
 
 let merge
     (baseEnvironment: ResolutionEnvironment)

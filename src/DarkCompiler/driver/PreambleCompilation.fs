@@ -134,34 +134,19 @@ let buildPreambleContext
                             allocatedFuncs
                             |> List.filter (fun func -> not (isStdlibFunction func.Name))
                         let preambleSymbolicFuncs = preambleOnlyFuncs
-                        let preambleLiftedFuncNames =
-                            preambleFunctions
-                            |> List.map (fun func -> func.Name)
-                            |> Set.ofList
-                        let baseFuncNames =
-                            Set.union pipelineContext.BaseFuncNames preambleLiftedFuncNames
-                        let pipelineContextWithLiftedNames = {
-                            pipelineContext with
-                                BaseFuncNames = baseFuncNames
-                                LambdaLiftFunctions =
-                                    buildLambdaLiftFunctionCatalog
-                                        pipelineContext.Registries
-                                        baseFuncNames
-                                        pipelineContext.ReturnTypes
-                        }
 
                         // Merge TypeMaps (stdlib + preamble)
                         let mergedTypeMap = Map.fold (fun acc k v -> Map.add k v acc) stdlib.StdlibTypeMap typeMap
 
                         let context = {
-                            Context = pipelineContextWithLiftedNames
+                            Context = pipelineContext
                             ANFFunctions = preambleFunctions
                             TypeMap = mergedTypeMap
                             SymbolicFunctions = preambleSymbolicFuncs
                             CallGraphSummaries = summaries
                             SymbolicCallGraph =
                                 DeadCodeElimination.buildCallGraph
-                                    (CheckedAST.functionIds pipelineContextWithLiftedNames.Symbols)
+                                    (CheckedAST.functionIds pipelineContext.Symbols)
                                     preambleSymbolicFuncs
                         }
                         Ok (stdlib, context)
