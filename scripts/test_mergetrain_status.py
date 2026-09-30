@@ -396,11 +396,14 @@ class MergetrainStatusTests(unittest.TestCase):
             fake = fake_bin / "mergetrain"
             fake.write_text(
                 "#!/usr/bin/env python3\n"
-                "import json, sys, time\n"
+                "import json, pathlib, sys, time\n"
                 "if 'status' in sys.argv:\n"
+                "    calls = pathlib.Path(__file__).with_suffix('.calls')\n"
+                "    count = int(calls.read_text()) + 1 if calls.exists() else 1\n"
+                "    calls.write_text(str(count))\n"
                 "    time.sleep(2)\n"
                 "    print(json.dumps({'contract_version': 4, 'health': 'healthy',\n"
-                "        'state': 'idle', 'summary': 'No active jobs',\n"
+                "        'state': 'idle', 'summary': f'No active jobs (poll {count})',\n"
                 "        'next_action': {'code': 'queue_empty', 'requires_approval': 'none'},\n"
                 "        'warnings': [], 'attention_jobs': [], 'recent_jobs': []}))\n"
                 "else:\n"
@@ -414,7 +417,7 @@ class MergetrainStatusTests(unittest.TestCase):
             master, slave = pty.openpty()
             process = subprocess.Popen(
                 [str(source_root / "mergetrain-status"), "--repo", str(source_root),
-                 "--interval", "30", "--color", "never"],
+                 "--interval", "1", "--color", "never"],
                 cwd=source_root, env=environment, stdin=slave, stdout=slave,
                 stderr=slave, close_fds=True,
             )
@@ -431,17 +434,21 @@ class MergetrainStatusTests(unittest.TestCase):
                 return output
 
             try:
-                initial = read_until(b"refreshing")
+                initial = read_until(b"Loading merge-train status")
                 started = time.monotonic()
                 os.write(master, b"m")
                 changed = read_until(b"[m] fewer")
                 self.assertIn(b"[m] fewer", changed)
                 self.assertIn(b"\x1b[7;1H\x1b[2K", changed)
                 self.assertNotIn(b"\x1b[2J", changed)
-                self.assertNotIn(b"refreshing\xe2\x80\xa6\r\n", changed)
+                self.assertNotIn(b"refreshing", initial + changed)
                 self.assertLess(time.monotonic() - started, 1.0)
                 if b"health: healthy" not in initial + changed:
-                    read_until(b"health: healthy", timeout=12.0)
+                    loaded = read_until(b"health: healthy", timeout=12.0)
+                    self.assertNotIn(b"refreshing", loaded)
+                refreshed = read_until(b"No active jobs (poll 2)", timeout=12.0)
+                self.assertNotIn(b"refreshing", refreshed)
+                self.assertNotIn(b"\x1b[2J", refreshed)
                 os.write(master, b"q")
                 self.assertEqual(process.wait(timeout=10), 0)
             finally:
