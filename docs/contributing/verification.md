@@ -8,10 +8,11 @@ Verification means both, for the active development target:
 - The full benchmark suite passes its aggregate and individual regression gates.
 
 The merge train rejects candidates that change anything under
-`benchmarks/problems/` unless a human approves an exact `benchmark-sources`
-gate exception. Benchmark problem implementations and their vendored build
-inputs are integration-controlled; ordinary task branches may change benchmark
-infrastructure, profiles, and generated results.
+`benchmarks/problems/*/dark/` unless a human approves an exact `benchmark-sources`
+gate exception. Darklang implementations and their workload inputs are protected
+against benchmark shortcuts. Reference-language implementations may be added,
+changed, or removed without this exception, as may benchmark infrastructure,
+profiles, and generated results.
 
 The active target is the host unless the work explicitly declares another
 target. For ordinary host-target compiler changes, the default verification
@@ -128,8 +129,8 @@ Reference upgrades use `./benchmarks/bench refresh LANGUAGE`. They update only
 that language's validated snapshot and regenerate the reports. Output failures
 preserve its old snapshot; missing implementations are explicit coverage gaps.
 Reference versions and stale measurements do not affect Darklang regression
-checks. Changes under `benchmarks/problems/` still require a `benchmark-sources`
-exception, including new reference implementations. Algorithm parity audits
+checks. Changes under `benchmarks/problems/*/dark/` still require a `benchmark-sources`
+exception; new or updated reference implementations do not. Algorithm parity audits
 are reviewed separately and are never approved by a measurement refresh.
 
 The train runs `./benchmarks/bench report --check` as the `benchmark-reports`

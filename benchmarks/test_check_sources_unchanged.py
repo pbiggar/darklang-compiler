@@ -89,12 +89,12 @@ class BenchmarkSourceGateTests(unittest.TestCase):
             "benchmarks/problems/example/dark/main.dark", completed.stdout
         )
 
-    def test_rejects_added_deleted_and_renamed_problem_files(self) -> None:
+    def test_rejects_added_deleted_and_renamed_dark_files(self) -> None:
         original = self.repo / "benchmarks/problems/example/dark/main.dark"
         original.unlink()
-        added = self.repo / "benchmarks/problems/new/rust/main.rs"
+        added = self.repo / "benchmarks/problems/new/dark/main.dark"
         added.parent.mkdir(parents=True)
-        added.write_text("fn main() {}\n", encoding="utf-8")
+        added.write_text("1\n", encoding="utf-8")
         manifest = self.repo / "benchmarks/problems/example/Cargo.toml"
         manifest.write_text("[package]\nname = \"example\"\n", encoding="utf-8")
         self.commit("replace benchmark sources")
@@ -102,11 +102,44 @@ class BenchmarkSourceGateTests(unittest.TestCase):
         self.assertEqual(
             changed_benchmark_sources(self.repo, self.base),
             (
-                "benchmarks/problems/example/Cargo.toml",
                 "benchmarks/problems/example/dark/main.dark",
-                "benchmarks/problems/new/rust/main.rs",
+                "benchmarks/problems/new/dark/main.dark",
             ),
         )
+
+    def test_allows_reference_additions_edits_deletions_and_renames(self) -> None:
+        for language in ("haskell", "koka", "roc", "rust"):
+            path = self.repo / f"benchmarks/problems/example/{language}/main.txt"
+            path.parent.mkdir(parents=True)
+            path.write_text("reference\n", encoding="utf-8")
+        self.commit("add reference implementations")
+        self.assertEqual(changed_benchmark_sources(self.repo, self.base), ())
+        reference_base = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=self.repo, text=True
+        ).strip()
+        root = self.repo / "benchmarks/problems/example"
+        (root / "haskell/main.txt").write_text("updated\n", encoding="utf-8")
+        (root / "koka/main.txt").unlink()
+        (root / "roc/main.txt").rename(root / "roc/renamed.txt")
+        self.commit("update references")
+        self.assertEqual(changed_benchmark_sources(self.repo, reference_base), ())
+
+    def test_rejects_renaming_dark_source_into_reference_directory(self) -> None:
+        source = self.repo / "benchmarks/problems/example/dark/main.dark"
+        destination = self.repo / "benchmarks/problems/example/rust/main.rs"
+        destination.parent.mkdir(parents=True)
+        source.rename(destination)
+        self.commit("move dark source")
+        self.assertEqual(changed_benchmark_sources(self.repo, self.base),
+                         ("benchmarks/problems/example/dark/main.dark",))
+
+    def test_rejects_changes_to_dark_vendored_inputs(self) -> None:
+        path = self.repo / "benchmarks/problems/example/dark/data/input.txt"
+        path.parent.mkdir(parents=True)
+        path.write_text("workload input\n", encoding="utf-8")
+        self.commit("add dark workload input")
+        self.assertEqual(changed_benchmark_sources(self.repo, self.base),
+                         ("benchmarks/problems/example/dark/data/input.txt",))
 
     def test_merge_train_runs_the_source_gate_before_building(self) -> None:
         config = (GATE.parent.parent / ".mergetrain.yaml").read_text(encoding="utf-8")

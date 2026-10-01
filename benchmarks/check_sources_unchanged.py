@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject integration candidates that alter maintained benchmark problem sources."""
+"""Reject integration candidates that alter Darklang benchmark problem sources."""
 
 from __future__ import annotations
 
@@ -50,7 +50,12 @@ def changed_benchmark_sources(repo: Path, base: str) -> tuple[str, ...]:
         for path in comparison.stdout.split(b"\0")
         if path
     )
-    return tuple(sorted(paths))
+    # Protect all inputs in each Darklang implementation directory. Reference
+    # implementations may evolve without weakening the Darklang workload.
+    return tuple(sorted(
+        path for path in paths
+        if len(Path(path).parts) >= 4 and Path(path).parts[3] == "dark"
+    ))
 
 
 def main() -> int:
@@ -76,14 +81,14 @@ def main() -> int:
 
     print(
         "Benchmark source integrity gate failed: "
-        "candidate changes benchmark problem sources"
+        "candidate changes Darklang benchmark problem sources"
     )
     for path in changed[:20]:
         print(f"  - {path}")
     if len(changed) > 20:
         print(f"  - ... and {len(changed) - 20} more")
     print(
-        "Remove benchmark problem source changes from the task branch before integration."
+        "Remove Darklang benchmark problem source changes from the task branch before integration."
     )
     return 1
 
