@@ -16,6 +16,8 @@ CONTROL_FILES = frozenset({
     ".mergetrain.yaml", "AGENTS.md", "AGENTS.mergetrain.md", "land",
     "mergetrain-status", "docs/contributing/mergetrain-integrator.md",
     "docs/contributing/verification.md",
+    "benchmarks/check_sources_unchanged.py",
+    "benchmarks/test_check_sources_unchanged.py",
     "benchmarks/run_benchmarks.sh",
     "benchmarks/infrastructure/deployed_baseline.py",
 })
@@ -28,6 +30,7 @@ CONTROL_SCRIPTS = frozenset({
     "test_mergetrain_recovery.py", "test_mergetrain_status.py",
 })
 FOCUSED_TESTS = (
+    "benchmarks.test_check_sources_unchanged",
     "scripts.test_land", "scripts.test_mergetrain_control", "scripts.test_mergetrain_fifo",
     "scripts.test_mergetrain_integrator", "scripts.test_mergetrain_recovery",
     "scripts.test_mergetrain_exception", "scripts.test_mergetrain_status",

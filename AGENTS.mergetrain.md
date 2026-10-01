@@ -46,7 +46,8 @@ task branches in arrival order.
 - Only a separately authorized runner uses `deploy` or a daemon.
 - Recovery conflicts in generated benchmark reports are resolved with `./benchmarks/bench report` after source and snapshot conflicts are resolved. Never hand-merge reports or combine snapshot rows by hand. Regeneration requires no new improvement; Darklang performance readiness remains governed by the independent regression gates.
 - The `benchmark-sources` gate rejects candidates that change
-  `benchmarks/problems/`. A lander may request a one-time exception, but only
+  `benchmarks/problems/*/dark/`, including workload inputs. Reference-language
+  implementations may be added or changed without this exception. A lander may request a one-time exception, but only
   a human operator may approve the exact failed candidate and gate.
 - Every assembled queue candidate runs `./benchmarks/bench verify --against
   deployed` once (delegating to the existing `--verify-deployed full` runner). Its exact counts are compared with the last
