@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,17 +17,19 @@ from benchmark_baseline import CACHEGRIND_POLICY, machine_architecture
 from benchmark_parity import load_contract, validate_entry
 from benchmark_profiles import load_invocation, load_profile
 from benchmark_reports import documents, generate_reports
-from diagnostic_references import command_version, measure_one, parse_instruction_count
+from diagnostic_references import command_version, implementation_version, measure_one, parse_instruction_count
+from native_references import COMPILERS, build_flags, measure_native, roc_mode, version_command
 from reference_snapshots import (
     LANGUAGES, REFERENCE_LANGUAGES, measured_reference, read_json, reference_path,
     row_status, save_reference, source_path, source_digest, workload_digest,
 )
 
 
-SUPPORTED = ("rust", "python", "node", "ocaml")
+SUPPORTED = REFERENCE_LANGUAGES
 BUILD_FLAGS = {"rust": ["rustc -C opt-level=3; Cargo --release --locked --offline"],
                "python": [], "node": [], "ocaml": ["-O3"]}
-RUNTIME_FLAGS = {"rust": [], "python": [], "node": ["--stack-size=400000"], "ocaml": []}
+RUNTIME_FLAGS = {language: [] for language in SUPPORTED}
+RUNTIME_FLAGS["node"] = ["--stack-size=400000"]
 VERSIONS = {"rust": ["rustc", "--version"], "python": ["python3", "--version"],
             "node": ["node", "--version"], "ocaml": ["ocamlopt", "-version"]}
 
@@ -53,10 +56,20 @@ def measure_rust(root: Path, temporary: Path, name: str, profile: str, timeout: 
     return {"name": name, "instructions": parse_instruction_count(measured.stderr), "output_valid": True}
 
 
-def preflight(root: Path, language: str, profile: str) -> tuple[str, dict[str, str]]:
+def preflight(root: Path, language: str, profile: str, args=None) -> tuple[str, dict[str, str]]:
     if language not in SUPPORTED:
         raise ValueError(f"{LANGUAGES[language]} execution adapter is not implemented")
-    executable = VERSIONS[language][0]
+    if language == "darklang-interpreter":
+        interpreter = getattr(args, "darklang_interpreter", None)
+        rundir = getattr(args, "darklang_rundir", None)
+        if interpreter is None or rundir is None or not rundir.is_dir():
+            raise ValueError("interpreter refresh requires --darklang-interpreter and a prepared --darklang-rundir directory")
+        executable = str(interpreter.resolve())
+    elif language in COMPILERS:
+        supplied = getattr(args, "compiler", None)
+        executable = str(supplied.resolve()) if supplied else COMPILERS[language]
+    else:
+        executable = VERSIONS[language][0]
     for tool in ("valgrind", executable):
         if shutil.which(tool) is None:
             raise ValueError(f"required executable is unavailable: {tool}")
@@ -71,11 +84,21 @@ def preflight(root: Path, language: str, profile: str) -> tuple[str, dict[str, s
         if any((source_path(root, name, language).parent / "Cargo.toml").is_file() for name in names):
             if shutil.which("cargo") is None:
                 raise ValueError("Cargo is required for application references")
-    version = command_version(VERSIONS[language])
+    mode = roc_mode(executable) if language == "roc" else "legacy"
+    if language == "darklang-interpreter":
+        version = implementation_version(language, interpreter, rundir)
+    else:
+        version = command_version(version_command(language, executable, mode) if language in COMPILERS else VERSIONS[language])
     if language == "ocaml" and version.split(".", 1)[0] != "5":
         raise ValueError(f"OCaml 5 is required; installed version is {version}")
     tools = {"valgrind": command_version(["valgrind", "--version"]),
              "machine": platform.platform()}
+    if language in COMPILERS or language == "darklang-interpreter":
+        tools["executable"] = shutil.which(executable)
+    if language == "koka" and shutil.which("gcc"):
+        tools["gcc"] = command_version(["gcc", "--version"])
+    if language == "roc":
+        tools["roc_build_mode"] = mode
     if language == "rust" and shutil.which("cargo"):
         tools["cargo"] = command_version(["cargo", "--version"])
     return version, tools
@@ -93,11 +116,15 @@ def refresh(root: Path, args) -> None:
         names = load_profile(root, args.profile)
         languages = [language for language in SUPPORTED
                      if any(source_path(root, name, language).is_file() for name in names)]
+        if "darklang-interpreter" in languages and (getattr(args, "darklang_interpreter", None) is None
+                                                    or getattr(args, "darklang_rundir", None) is None):
+            languages.remove("darklang-interpreter")
+            print("Darklang interpreter: skipped (provide executable and prepared rundir to include it)")
         for language in REFERENCE_LANGUAGES:
-            if language not in languages:
-                print(f"{LANGUAGES[language]}: skipped (no supported implementations)")
+            if language not in languages and language != "darklang-interpreter":
+                print(f"{LANGUAGES[language]}: skipped (no implementations)")
     # All requested toolchains are checked before any build or measurement.
-    prepared = {language: preflight(root, language, args.profile) for language in languages}
+    prepared = {language: preflight(root, language, args.profile, args) for language in languages}
     for language in languages:
         version, tools = prepared[language]
         names = load_profile(root, args.profile)
@@ -105,27 +132,51 @@ def refresh(root: Path, args) -> None:
                     for name in names}
         rows = []
         with tempfile.TemporaryDirectory(prefix="benchmark-reference-") as temporary:
-            for name in names:
-                if not source_path(root, name, language).is_file():
-                    continue
+            def measure(name):
                 if language == "rust":
                     row = measure_rust(root, Path(temporary), name, args.profile, args.timeout)
+                elif language in COMPILERS:
+                    row = measure_native(root, Path(temporary), name, language, args.profile,
+                                         tools["executable"], tools.get("roc_build_mode", "legacy"), args.timeout)
                 else:
                     row = measure_one(root, Path(temporary), name, language, args.profile,
-                                      None, None, args.timeout)
+                                      getattr(args, "darklang_interpreter", None),
+                                      getattr(args, "darklang_rundir", None), args.timeout)
                 if row is None:
                     raise ValueError(f"{name} {language}: implementation disappeared during refresh")
-                rows.append(row)
                 print(f'{language} {name}: {row["instructions"]:,}', flush=True)
+                return row
+
+            available = [name for name in names if source_path(root, name, language).is_file()]
+            jobs = getattr(args, "jobs", 1)
+            if jobs == 1:
+                rows = [measure(name) for name in available]
+            else:
+                # Each workload builds in a private directory; interpreter state is copied too.
+                with ThreadPoolExecutor(max_workers=jobs) as executor:
+                    futures = [executor.submit(measure, name) for name in available]
+                    rows = [future.result() for future in as_completed(futures)]
+                rows.sort(key=lambda row: names.index(row["name"]))
         after = {name: (source_digest(root, name, language), workload_digest(root, args.profile, name))
                  for name in load_profile(root, args.profile)}
-        if identity != after or version != command_version(VERSIONS[language]):
+        if language == "darklang-interpreter":
+            current_version = implementation_version(language, args.darklang_interpreter, args.darklang_rundir)
+        elif language in COMPILERS:
+            current_version = command_version(version_command(language, tools["executable"], tools.get("roc_build_mode", "legacy")))
+        else:
+            current_version = command_version(VERSIONS[language])
+        if identity != after or version != current_version:
             raise ValueError(f"{language}: sources, workloads, or toolchain changed during measurement; snapshot preserved")
         document = measured_reference(
             root, language, args.profile, machine_architecture(), version,
             datetime.now(timezone.utc).isoformat(), rows,
-            BUILD_FLAGS[language], RUNTIME_FLAGS[language], tools,
+            build_flags(language, tools.get("roc_build_mode", "legacy")) if language in COMPILERS else BUILD_FLAGS.get(language, []),
+            RUNTIME_FLAGS[language], tools,
         )
+        if language in COMPILERS:
+            document["provenance"] = "Upstream adaptations and shared reference ports; see IMPLEMENTATIONS.md. Output-validated; algorithm parity requires separate review."
+        if language == "darklang-interpreter":
+            document["provenance"] = "Shared Dark sources adapted for interpreter CLI arguments and compatibility syntax; private prepared rundir per workload."
         save_reference(root, document)
         # Each language commits independently; a later language failure cannot erase it.
         generate_reports(root)
@@ -189,14 +240,12 @@ def status(root: Path, profile: str) -> None:
     names = load_profile(root, profile)
     print(f"Track: {track}")
     for language in LANGUAGES:
-        if language == "darklang-interpreter" and language not in stored:
-            continue
         document = stored.get(language)
         rows = document["benchmarks"] if document else []
         current = sum(row["name"] in names and row_status(root, document, row, profile) == "current" for row in rows)
         coverage = sum(source_path(root, name, language).is_file() for name in names)
         executable = VERSIONS.get(language, [{"dark": str(root.parent / "dark"),
-                                              "haskell": "ghc"}.get(language, language)])[0]
+                                              **COMPILERS}.get(language, language)])[0]
         installed = "installed" if shutil.which(executable) else "unavailable"
         if language == "darklang-interpreter":
             installed = "provide executable and rundir at refresh"
@@ -212,7 +261,11 @@ def main() -> int:
     refresh_parser.add_argument("language", choices=["dark", *REFERENCE_LANGUAGES, "all"])
     refresh_parser.add_argument("--profile", choices=("full", "quick"), default="full")
     refresh_parser.add_argument("--metric", choices=("instructions",), default="instructions")
+    refresh_parser.add_argument("--jobs", type=int, default=1, help="parallel reference workloads (default: 1)")
     refresh_parser.add_argument("--timeout", type=int, default=3600)
+    refresh_parser.add_argument("--compiler", type=Path, help="explicit GHC, Roc, or Koka compiler executable")
+    refresh_parser.add_argument("--darklang-interpreter", type=Path)
+    refresh_parser.add_argument("--darklang-rundir", type=Path, help="prepared interpreter package/trace run directory")
     report_parser = commands.add_parser("report", help="regenerate reports without running benchmarks")
     report_parser.add_argument("--check", action="store_true", help="check consistency without writing files")
     status_parser = commands.add_parser("status", help="show stored versions and coverage without executing toolchains")
@@ -225,8 +278,16 @@ def main() -> int:
     root = Path(__file__).resolve().parent.parent
     try:
         if args.command == "refresh":
-            if args.timeout <= 0:
-                parser.error("--timeout must be positive")
+            if args.timeout <= 0 or args.jobs <= 0:
+                parser.error("--timeout and --jobs must be positive")
+            if args.language == "dark" and args.jobs != 1:
+                parser.error("--jobs applies to reference refreshes")
+            if args.compiler is not None and args.language not in COMPILERS:
+                parser.error("--compiler applies to a single haskell, roc, or koka refresh")
+            if (args.darklang_interpreter is None) != (args.darklang_rundir is None):
+                parser.error("--darklang-interpreter and --darklang-rundir must be provided together")
+            if args.darklang_interpreter is not None and args.language not in {"darklang-interpreter", "all"}:
+                parser.error("interpreter options apply to darklang-interpreter or all")
             refresh(root, args)
         elif args.command == "report":
             changed = generate_reports(root, check=args.check)

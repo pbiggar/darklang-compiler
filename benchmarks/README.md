@@ -33,12 +33,43 @@ snapshot after successful validation. Other languages' files remain intact,
 even when stale. A failed build, execution, or output check preserves that
 language's old snapshot. In `refresh all`, each successful language is committed
 independently before the next; a later failure preserves earlier refreshes.
-This command currently refreshes the supported references with implementations:
-Rust, Python, Node, and OCaml 5. Missing implementations are recorded explicitly.
-Haskell, Roc, and Koka appear in every report; their execution adapters and
-implementations remain future work. Selecting one currently fails before any
-measurement. OCaml refresh requires major version 5. Cargo application builds
-use `--release --locked --offline`; prepare cached dependencies beforehand.
+Supported references are Rust, Haskell, Python, Node, Roc, OCaml 5, Koka, and
+the Darklang interpreter. All seven reference languages cover 29 workloads; the interpreter reuses the
+29 Dark sources through a compatibility adapter.
+See [implementation provenance](IMPLEMENTATIONS.md) for upstream adaptations,
+tested toolchains, and algorithm differences. OCaml refresh requires major
+version 5. Cargo application builds use `--release --locked --offline`; prepare
+cached dependencies beforehand.
+
+GHC, Roc, and Koka are found on `PATH`, or selected explicitly for one refresh:
+
+```bash
+./benchmarks/bench refresh haskell --compiler /path/to/ghc
+./benchmarks/bench refresh roc --compiler /path/to/roc
+./benchmarks/bench refresh koka --compiler /path/to/koka
+./benchmarks/bench refresh darklang-interpreter \
+  --darklang-interpreter /path/to/dark \
+  --darklang-rundir /path/to/prepared-rundir
+```
+
+Install toolchains independently; these references do not require additions to
+the repository Dockerfile. Native builds run in temporary copies of each
+implementation directory, including helper modules. Source hashes cover that
+whole directory, excluding compiler outputs. Haskell uses `-O2 -j1
+-fno-full-laziness`; Koka uses `-O2 --compile --target=c --jobs=1`.
+Roc uses its detected legacy `--optimize --max-threads=1` or current
+`--opt=speed --jobs=1` interface. The sources currently target the legacy Roc
+syntax and a pinned basic-cli platform; the first build may download it.
+
+The interpreter needs an executable and a prepared runtime directory containing
+its package database. To prepare one, run the installed interpreter once with
+`DARK_CONFIG_RUNDIR=/absolute/path/to/prepared-rundir/` (for example, `version`),
+and check that its database is initialized. Each workload receives a private
+copy; the supplied directory is not used for execution. `refresh all` includes
+the interpreter only when both interpreter flags are supplied, otherwise prints
+an explicit skip. It preflights the installed native toolchains before measuring
+any references. Full interpreter runs can be substantially slower than native
+runs; use `--timeout` to set a per-workload limit.
 
 `refresh dark` delegates to the existing native full recorder, preserving
 Darklang's monotonic rules. `refresh dark --profile quick` delegates to
@@ -51,9 +82,10 @@ Darklang and QEMU regression snapshots retain their existing `baselines/`
 format and recording rules. `RESULTS.md` indexes generated `reports/*.md`;
 `BASELINES.md` indexes independent reference snapshots. Each report contains
 absolute instruction counts, per-workload Rust ratios, stored versions,
-coverage, and geometric means over the exact common workload set of languages
-with current measurements. Unaudited ratios are labeled informational.
-Missing languages are explicitly excluded from aggregates. A stale row is
+coverage, and separate geometric means for the fixed original 21 and full 29
+workloads, plus summed instruction counts for each set. Missing measurements
+make that language’s aggregate unavailable; they never shrink the set used for
+another language. Unaudited ratios are labeled informational. A stale row is
 shown with its stored count but never used in a ratio.
 
 Fresh references carry per-row invocation and source hashes. Changing one
@@ -85,7 +117,8 @@ covered by `PARITY.json`. Reviewed reference-language audits belong in
 ```
 
 Hashes use the same source digest helpers as measurement: a single main source
-for script/native inputs, or the complete vendored Rust tree for Cargo inputs.
+for scripts and OCaml, the complete implementation directory for Haskell, Roc,
+and Koka, or the complete vendored Rust tree for Cargo inputs.
 Audits require human review of equivalence; hashes must not be refreshed merely
 to clear a stale status. Instruction ratios include runtime startup overhead
 and do not measure elapsed-time speed.
@@ -401,7 +434,7 @@ architecture-specific measurements live in
 independently:
 
 ```bash
-python3 benchmarks/infrastructure/diagnostic_references.py \
+./benchmarks/bench refresh darklang-interpreter \
   --darklang-interpreter=/path/to/dark \
   --darklang-rundir=/path/to/prepared-rundir \
   --jobs=4
@@ -412,14 +445,19 @@ the executed expression. The diagnostic runner therefore prepares a temporary
 copy of each Dark benchmark with its declared `profiles.json` integer arguments
 substituted at the `Stdlib.Cli.Args.int64` boundary. That copy also
 translates the compiler's documented interpreter-compatibility spellings where
-the latest interpreter surface has since changed (including dictionary type
-arguments, tuple projections, and enum-value qualification).
+the interpreter surface differs (including dictionary type
+arguments, tuple projections, enum-value qualification, and unwrapping
+`Int64.fromFloat` conversions. Out-of-range conversions still fail.
 Each parallel interpreter worker receives a private copy of the prepared
 rundir, preventing trace-store lock contention from affecting the measurement.
 The runner validates exact stdout before recording the instruction count. The
 maintained benchmark sources are not changed. A full interpreter refresh can
 take tens of minutes per workload under Cachegrind, so the runner's default
-per-workload timeout is one hour.
+per-workload timeout is one hour. `bench refresh` defaults to one worker;
+use `--jobs N` to measure independent references in parallel when CPU capacity
+is available. Each workload is isolated and a failed worker preserves the whole
+previous language snapshot. Interpreter snapshot identity includes the adapter
+source, so changes to compatibility conversions invalidate its counts.
 
 Every diagnostic implementation must match the profile's expected stdout
 exactly before its measurement can be recorded. Node, OCaml, and Python consume

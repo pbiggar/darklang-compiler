@@ -12,13 +12,32 @@ from reference_snapshots import (
 )
 
 
+ORIGINAL_WORKLOADS = frozenset({
+    "ackermann", "binary_trees", "collatz", "edigits", "factorial", "fannkuch", "fasta",
+    "fib", "leibniz", "mandelbrot", "matmul", "merkletrees", "nbody", "nqueen", "nsieve",
+    "pisum", "primes", "quicksort", "spectral_norm", "sum_to_n", "tak",
+})
+
+
 def markdown(value: object) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ").replace("\r", " ")
 
 
-def table(headers: list[str], rows: list[list[object]]) -> list[str]:
-    return ["| " + " | ".join(headers) + " |", "| " + " | ".join(["---"] * len(headers)) + " |",
-            *("| " + " | ".join(markdown(cell) for cell in row) + " |" for row in rows)]
+def table(headers: list[str], rows: list[list[object]],
+          right_aligned: tuple[int, ...] = ()) -> list[str]:
+    cells = [[markdown(cell) for cell in row] for row in [headers, *rows]]
+    widths = [max(3, *(len(cell) for cell in column))
+              for column in zip(*cells, strict=True)]
+
+    def render(row: list[str]) -> str:
+        return "| " + " | ".join(
+            cell.rjust(width) if index in right_aligned else cell.ljust(width)
+            for index, (cell, width) in enumerate(zip(row, widths, strict=True))
+        ) + " |"
+
+    separators = ["-" * (width - 1) + ":" if index in right_aligned else "-" * width
+                  for index, width in enumerate(widths)]
+    return [render(cells[0]), render(separators), *(render(row) for row in cells[1:])]
 
 
 def canonical_document(root: Path, path: Path) -> dict:
@@ -61,8 +80,6 @@ def report_for_track(root: Path, track_id: str) -> str:
     names = load_profile(root, track.profile)
     stored = documents(root, track_id)
     languages = list(LANGUAGES)
-    if "darklang-interpreter" not in stored:
-        languages.remove("darklang-interpreter")
     values: dict[str, dict[str, int]] = {}
     statuses: dict[str, dict[str, str]] = {}
     rows_by_language = {}
@@ -118,33 +135,43 @@ def report_for_track(root: Path, track_id: str) -> str:
                          f'{row["instructions"]:,} ({status})' if row else status)
             rust = values["rust"].get(name)
             count = values[language].get(name)
-            ratio_cells.append(f"{count / rust:.3f}×" if count and rust else "unavailable")
+            ratio_cells.append(f"{count / rust:.3f}x" if count and rust else "unavailable")
         absolute.append(cells)
         ratios.append(ratio_cells)
     headers = ["Benchmark", *(LANGUAGES[language] for language in languages)]
-    lines.extend(table(headers, absolute))
+    lines.extend(table(headers, absolute, tuple(range(1, len(headers)))))
     lines.extend(["", "## Instructions relative to Rust", "",
                   "Ratios for unaudited implementations are informational comparisons of validated output.", ""])
-    lines.extend(table(headers, ratios))
-    eligible = [language for language in languages if values[language]]
-    common = [name for name in names if eligible and all(name in values[language] for language in eligible)]
-    lines.extend(["", "## Common-workload aggregate", ""])
-    if "rust" in eligible and common:
-        lines.extend(["All included languages use this exact workload set: " + ", ".join(f"`{name}`" for name in common) + ".", "",
-                      "Geometric means below are informational unless every included row is audited.", ""])
+    lines.extend(table(headers, ratios, tuple(range(1, len(headers)))))
+    original = [name for name in names if name in ORIGINAL_WORKLOADS]
+    groups = [(f"Original {len(original)} workloads", original),
+              (f"All {len(names)} workloads", names)]
+    lines.extend(["", "## Aggregate comparisons", "",
+                  "Fixed workload sets keep averages comparable as language coverage grows.",
+                  "Geometric means are informational unless every included row is audited.", ""])
+    for label, group in groups:
+        if not group:
+            continue
+        lines.extend([f"### {label}", "",
+                      ", ".join(f"`{name}`" for name in group) + ".", ""])
         summary = []
-        for language in eligible:
-            ratio = math.exp(math.fsum(math.log(values[language][name] / values["rust"][name])
-                                      for name in common) / len(common))
-            summary.append([LANGUAGES[language], f"{ratio:.3f}×",
-                            "audited" if all(audited(root, name, language) for name in common) else "unaudited"])
-        lines.extend(table(["Language", "Instructions / Rust", "Parity"], summary))
-        excluded = [LANGUAGES[language] for language in languages if language not in eligible]
-        if excluded:
-            lines.extend(["", "Excluded because no current measurements exist: " + ", ".join(excluded) + "."])
-    else:
-        lines.append("Unavailable: no shared current workload set with a Rust reference.")
-    return "\n".join(lines) + "\n"
+        rust_complete = all(name in values["rust"] for name in group)
+        for language in languages:
+            coverage = sum(name in values[language] for name in group)
+            complete = rust_complete and coverage == len(group)
+            if complete:
+                ratio = math.exp(math.fsum(math.log(values[language][name] / values["rust"][name])
+                                          for name in group) / len(group))
+                ratio_text = f"{ratio:.3f}x"
+                instruction_text = f"{sum(values[language][name] for name in group):,}"
+                parity = "audited" if all(audited(root, name, language) for name in group) else "unaudited"
+            else:
+                ratio_text, instruction_text, parity = "unavailable", "unavailable", "incomplete"
+            summary.append([LANGUAGES[language], ratio_text, instruction_text,
+                            f"{coverage}/{len(group)}", parity])
+        lines.extend(table(["Language", "Instructions / Rust", "Total instructions", "Current rows", "Parity"], summary, (1, 2, 3)))
+        lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def report_outputs(root: Path) -> dict[Path, str]:
@@ -156,7 +183,7 @@ def report_outputs(root: Path) -> dict[Path, str]:
         raise ValueError(f"unsupported report tracks: {', '.join(sorted(unknown))}")
     output = {}
     index = ["# Benchmark Results", "", "Generated by `./benchmarks/bench report` from stored measurements; no benchmarks are run.", "",
-             "Each report compares Darklang with Rust, Haskell, Python, Node, Roc, OCaml 5, and Koka.", "",
+             "Each report compares Darklang with Rust, Haskell, Python, Node, Roc, OCaml 5, Koka, and the Darklang interpreter.", "",
              "Reference upgrades do not change Darklang's regression baselines.", ""]
     baseline_index = ["# Benchmark References", "", "Independent stored reference measurements, including version and workload provenance.", ""]
     for track in sorted(tracks):

@@ -12,105 +12,132 @@ Snapshots are independent. Stale values are retained for provenance and excluded
 
 ## Stored versions and coverage
 
-| Language | Version / compiler commit | Measured | Current rows | Audited current rows | Build flags | Runtime flags |
-| --- | --- | --- | --- | --- | --- | --- |
-| Darklang | 4c46c96eacff55406a5761060be8ddfafea01b9e | 2026-09-29T10:09:56+00:00 | 29/29 | 29/29 | not recorded | not recorded |
-| Rust | rustc 1.98.0 (88d9e12ae 2026-08-18) | 2026-09-30T18:18:10.032444+00:00 | 29/29 | 29/29 | rustc -C opt-level=3; Cargo --release --locked --offline | not recorded |
-| Haskell | not recorded | not recorded | 0/29 | 0/0 | not recorded | not recorded |
-| Python | Python 3.14.4 | 2026-09-30T18:20:48.547498+00:00 | 21/29 | 0/21 | not recorded | not recorded |
-| Node | v26.10.0 | 2026-09-30T18:24:04.098744+00:00 | 21/29 | 0/21 | not recorded | --stack-size=400000 |
-| Roc | not recorded | not recorded | 0/29 | 0/0 | not recorded | not recorded |
-| OCaml 5 | 5.4.0 | 2026-09-30T18:24:11.832467+00:00 | 21/29 | 0/21 | -O3 | not recorded |
-| Koka | not recorded | not recorded | 0/29 | 0/0 | not recorded | not recorded |
-| Darklang interpreter | Darklang CLI alpha-0b3888d (unable to check for updates) | 2026-09-15T07:45:58.287134+00:00 | 0/29 | 0/0 | not recorded | not recorded |
+| Language             | Version / compiler commit                                                          | Measured                         | Current rows | Audited current rows | Build flags                                              | Runtime flags       |
+| -------------------- | ---------------------------------------------------------------------------------- | -------------------------------- | ------------ | -------------------- | -------------------------------------------------------- | ------------------- |
+| Darklang             | 4c46c96eacff55406a5761060be8ddfafea01b9e                                           | 2026-09-29T10:09:56+00:00        | 29/29        | 29/29                | not recorded                                             | not recorded        |
+| Rust                 | rustc 1.98.0 (88d9e12ae 2026-08-18)                                                | 2026-09-30T22:49:24.673286+00:00 | 29/29        | 29/29                | rustc -C opt-level=3; Cargo --release --locked --offline | not recorded        |
+| Haskell              | The Glorious Glasgow Haskell Compilation System, version 9.10.3                    | 2026-09-30T23:16:41.656847+00:00 | 29/29        | 0/29                 | -O2, -j1, -fno-full-laziness                             | not recorded        |
+| Python               | Python 3.14.4                                                                      | 2026-09-30T22:51:43.939609+00:00 | 29/29        | 0/29                 | not recorded                                             | not recorded        |
+| Node                 | v26.10.0                                                                           | 2026-09-30T22:53:19.949001+00:00 | 29/29        | 0/29                 | not recorded                                             | --stack-size=400000 |
+| Roc                  | roc nightly pre-release, built from commit d73ea10 on Tue Sep  9 09:05:23 UTC 2025 | 2026-09-30T22:50:17.952015+00:00 | 29/29        | 0/29                 | build, --optimize, --max-threads=1                       | not recorded        |
+| OCaml 5              | 5.4.0                                                                              | 2026-09-30T23:16:31.761763+00:00 | 29/29        | 0/29                 | -O3                                                      | not recorded        |
+| Koka                 | Koka 3.2.9, 05:27:12 Sep 18 2026 (ghc release version)                             | 2026-09-30T23:07:50.973016+00:00 | 29/29        | 0/29                 | -O2, --compile, --target=c, --jobs=1                     | not recorded        |
+| Darklang interpreter | Darklang CLI alpha-0b3888d (unable to check for updates)                           | 2026-09-30T23:50:09.003682+00:00 | 29/29        | 0/29                 | not recorded                                             | not recorded        |
 
-Darklang interpreter provenance: Imported from baselines/diagnostic-arm64-full-cachegrind.json; original suite contract retained. Per-source hashes and build flags were not recorded.
+Haskell provenance: Upstream adaptations and shared reference ports; see IMPLEMENTATIONS.md. Output-validated; algorithm parity requires separate review.
+
+Roc provenance: Upstream adaptations and shared reference ports; see IMPLEMENTATIONS.md. Output-validated; algorithm parity requires separate review.
+
+Koka provenance: Upstream adaptations and shared reference ports; see IMPLEMENTATIONS.md. Output-validated; algorithm parity requires separate review.
+
+Darklang interpreter provenance: Shared Dark sources adapted for interpreter CLI arguments and compatibility syntax; private prepared rundir per workload.
 
 Audited means the implementation's algorithm and source have a current reviewed parity contract.
 Output validation alone does not establish algorithm parity.
 
 ## Absolute instructions
 
-| Benchmark | Darklang | Rust | Haskell | Python | Node | Roc | OCaml 5 | Koka | Darklang interpreter |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ackermann | 122,786,825 | 89,563,240 | missing implementation | 7,435,704,574 | 1,661,723,975 | missing implementation | 162,424,721 | missing implementation | 295,450,197,862 (stale workload contract) |
-| binary_trees | 10,522,518 | 63,998,051 | missing implementation | 341,126,991 | 579,774,945 | missing implementation | 2,708,104 | missing implementation | 10,539,988,398 (stale workload contract) |
-| collatz | 70,193,415 | 76,740,336 | missing implementation | 8,205,793,113 | 3,305,592,343 | missing implementation | 259,426,785 | missing implementation | 424,757,265,260 (stale workload contract) |
-| edigits | 48,970,108 | 690,647 | missing implementation | 59,381,256 | 571,031,817 | missing implementation | 1,713,937 | missing implementation | 9,579,126,978 (stale workload contract) |
-| factorial | 58,968 | 974,828 | missing implementation | 175,310,447 | 731,860,721 | missing implementation | 11,868,786 | missing implementation | 5,403,174,630 (stale workload contract) |
-| fannkuch | 221,209,585 | 1,718,612 | missing implementation | 121,459,169 | 592,000,703 | missing implementation | 3,336,015 | missing implementation | 12,839,313,429 (stale workload contract) |
-| fasta | 10,284,685 | 702,933 | missing implementation | 101,856,084 | 607,530,667 | missing implementation | 34,651,136 | missing implementation | 7,739,275,817 (stale workload contract) |
-| fft | 1,784,354 | 450,657 | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | 2,212,941,147 (stale workload contract) |
-| fib | 7,630,194 | 5,862,527 | missing implementation | 329,254,205 | 745,085,135 | missing implementation | 10,715,091 | missing implementation | 15,095,723,230 (stale workload contract) |
-| huffman | 400,353,974 | 2,654,673 | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | 9,087,251,458 (stale workload contract) |
-| leibniz | 17,006,289 | 14,263,492 | missing implementation | 2,143,378,778 | 1,449,516,939 | missing implementation | 50,795,726 | missing implementation | 151,080,303,976 (stale workload contract) |
-| mandelbrot | 15,142,868 | 12,561,718 | missing implementation | 1,379,592,067 | 1,598,795,677 | missing implementation | 27,495,155 | missing implementation | 76,696,314,807 (stale workload contract) |
-| matmul | 41,471,414 | 649,315 | missing implementation | 53,991,465 | 549,119,175 | missing implementation | 1,388,545 | missing implementation | 7,760,332,418 (stale workload contract) |
-| merkletrees | 3,871,138 | 2,525,684 | missing implementation | 2,037,739,708 | 1,564,950,434 | missing implementation | 21,267,006 | missing implementation | 51,421,932,780 (stale workload contract) |
-| myers_diff | 204,588,087 | 680,117 | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | 4,670,031,121 (stale workload contract) |
-| nbody | 10,805,793 | 4,254,050 | missing implementation | 894,052,104 | 1,304,099,402 | missing implementation | 12,868,135 | missing implementation | 27,005,569,055 (stale workload contract) |
-| nqueen | 6,924,920 | 5,917,376 | missing implementation | 497,150,720 | 668,329,410 | missing implementation | 11,933,225 | missing implementation | 19,342,874,779 (stale workload contract) |
-| nsieve | 130,174,724 | 384,968 | missing implementation | 41,551,604 | 539,634,556 | missing implementation | 805,596 | missing implementation | 1,938,134,698 (stale workload contract) |
-| pisum | 808,063 | 1,164,968 | missing implementation | 108,569,346 | 581,574,634 | missing implementation | 2,145,813 | missing implementation | 10,805,308,243 (stale workload contract) |
-| primes | 1,567,031 | 1,264,751 | missing implementation | 87,477,763 | 774,936,899 | missing implementation | 8,789,011 | missing implementation | 14,200,381,458 (stale workload contract) |
-| quicksort | 172,560,188 | 6,083,933 | missing implementation | 105,397,936 | 642,796,524 | missing implementation | 41,908,736 | missing implementation | 8,610,104,455 (stale workload contract) |
-| raytracer | 43,229,793 | 4,071,893 | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | 39,823,213,701 (stale workload contract) |
-| regex_lite | 64,751,641 | 417,377 | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | 652,648,435 (stale workload contract) |
-| spectral_norm | 215,931,384 | 4,910,603 | missing implementation | 749,209,899 | 969,228,137 | missing implementation | 22,765,301 | missing implementation | 60,452,108,981 (stale workload contract) |
-| string_equality | 1,174,023 | 1,481,825 | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | 2,287,266,006 (stale workload contract) |
-| sum_to_n | 57,970 | 264,898 | missing implementation | 942,410,530 | 900,216,037 | missing implementation | 9,548,341 | missing implementation | 29,651,727,831 (stale workload contract) |
-| tak | 48,004,622 | 391,113,990 | missing implementation | 10,869,264,660 | 5,832,873,760 | missing implementation | 499,215,818 | missing implementation | 472,304,535,056 (stale workload contract) |
-| tinytemplate | 305,936,131 | 421,512 | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | 5,054,772,489 (stale workload contract) |
-| warden | 44,133,565 | 274,892 | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | missing implementation | 29,400,568,988 (stale workload contract) |
+| Benchmark       |    Darklang |        Rust |     Haskell |         Python |          Node |         Roc |     OCaml 5 |        Koka | Darklang interpreter |
+| --------------- | ----------: | ----------: | ----------: | -------------: | ------------: | ----------: | ----------: | ----------: | -------------------: |
+| ackermann       | 122,786,825 |  89,563,151 | 233,400,994 |  7,435,668,667 | 1,516,835,463 | 106,273,515 | 162,424,125 | 212,597,040 |      289,145,313,294 |
+| binary_trees    |  10,522,518 |  63,997,960 |   8,898,851 |    341,105,822 |   582,470,517 |  65,691,242 |   2,707,513 |  12,819,368 |        5,814,696,606 |
+| collatz         |  70,193,415 |  76,740,243 | 128,727,727 |  8,205,848,631 |   833,796,066 | 102,247,557 | 259,426,181 | 335,589,458 |      425,260,861,507 |
+| edigits         |  48,970,108 |     690,554 | 265,141,921 |     59,378,989 |   562,343,833 |   2,700,297 |   1,713,357 |   7,796,510 |        1,522,774,854 |
+| factorial       |      58,968 |     974,735 | 125,292,326 |    175,304,082 |   730,737,936 |   4,801,889 |  11,868,178 |  19,634,045 |        5,357,225,486 |
+| fannkuch        | 221,209,585 |   1,718,504 |   1,718,122 |    121,496,519 |   591,338,572 |  21,343,464 |   3,335,411 |  33,097,145 |        6,033,536,974 |
+| fasta           |  10,284,685 |     702,823 |  57,213,413 |    101,857,934 |   609,808,280 |   3,609,682 |  34,650,553 |  21,762,398 |        6,014,617,633 |
+| fft             |   1,784,354 |     450,077 |     973,158 |     38,591,395 |   536,253,760 |     428,098 |     722,584 |   1,137,083 |          278,252,826 |
+| fib             |   7,630,194 |   5,862,444 |  11,719,410 |    329,222,938 |   748,863,281 |   7,209,452 |  10,714,525 |  13,857,117 |       14,454,720,917 |
+| huffman         | 400,353,974 |   2,654,580 |  51,915,841 |    268,278,666 |   677,109,249 | 129,947,983 |  19,822,679 |  33,179,408 |        8,317,129,570 |
+| leibniz         |  17,006,289 |  14,263,392 |  38,600,186 |  2,143,353,715 | 1,452,648,330 | 106,380,826 |  50,795,138 | 194,513,856 |      147,544,535,529 |
+| mandelbrot      |  15,142,868 |  12,561,627 | 152,762,299 |  1,379,594,763 | 1,603,591,927 |  14,595,366 |  27,494,555 |  24,805,233 |       75,903,469,772 |
+| matmul          |  41,471,414 |     649,218 |   2,291,323 |     53,970,927 |   553,659,724 |   3,526,241 |   1,387,961 |   4,612,594 |        2,849,175,849 |
+| merkletrees     |   3,871,138 |   2,525,594 |  16,803,531 |  2,037,712,038 | 1,598,893,490 |  79,254,154 |  21,266,422 | 111,489,582 |       46,987,635,452 |
+| myers_diff      | 204,588,087 |     680,030 |   2,015,809 |     43,307,251 |   541,452,321 |   5,086,274 |   1,886,025 |   4,607,829 |       49,678,067,699 |
+| nbody           |  10,805,793 |   4,253,933 |  10,853,927 |    893,988,107 | 1,303,265,830 |  30,085,462 |  12,867,536 | 195,226,396 |       24,304,253,249 |
+| nqueen          |   6,924,920 |   5,917,279 |   8,914,559 |    497,218,032 |   578,875,108 | 334,829,317 |  11,932,641 |   7,613,051 |       18,125,344,494 |
+| nsieve          | 130,174,724 |     384,875 |   1,044,317 |     41,579,651 |   536,073,290 |     467,068 |     805,016 |   2,374,896 |        1,356,945,184 |
+| pisum           |     808,063 |   1,164,875 |   2,029,711 |    108,606,163 |   576,664,517 |   5,651,904 |   2,145,234 |   8,619,235 |        4,600,202,460 |
+| primes          |   1,567,031 |   1,264,647 |   4,260,329 |     87,452,499 |   774,931,671 |   1,653,765 |   8,788,415 |  29,391,711 |        4,415,323,348 |
+| quicksort       | 172,560,188 |   6,083,846 |  12,134,973 |    105,361,021 |   640,449,577 |  17,954,163 |  41,908,136 |  15,403,032 |        3,248,091,566 |
+| raytracer       |  43,229,793 |   4,071,804 |  12,276,041 |  1,813,642,936 | 1,405,135,093 |  11,651,665 |  25,835,658 | 310,136,778 |       32,144,683,021 |
+| regex_lite      |  64,751,641 |     417,286 |     867,990 |     56,322,827 |   531,166,575 |     475,699 |     687,752 |     893,174 |          382,682,381 |
+| spectral_norm   | 215,931,384 |   4,910,505 |   9,857,137 |    749,241,105 |   924,402,353 |  37,999,116 |  22,764,705 | 111,068,677 |       49,626,407,032 |
+| string_equality |   1,174,023 |   1,481,761 | 194,765,556 |     66,991,847 |   543,387,761 |   6,803,761 |   2,981,067 |   5,951,367 |          769,239,043 |
+| sum_to_n        |      57,970 |     264,794 |  10,940,691 |    942,413,274 |   901,837,453 |   4,250,461 |   9,547,733 |   9,589,288 |       26,390,505,010 |
+| tak             |  48,004,622 | 391,113,710 | 431,125,109 | 10,869,237,783 | 2,843,356,975 | 359,863,181 | 499,215,239 | 692,436,379 |      474,568,017,657 |
+| tinytemplate    | 305,936,131 |     421,440 |   2,164,752 |     65,544,848 |   538,603,746 |   1,250,860 |   1,258,729 |   2,850,619 |        5,677,129,280 |
+| warden          |  44,133,565 |     274,791 |     737,195 |     58,390,299 |   530,637,964 |     248,878 |     645,878 |     583,637 |          292,693,946 |
 
 ## Instructions relative to Rust
 
 Ratios for unaudited implementations are informational comparisons of validated output.
 
-| Benchmark | Darklang | Rust | Haskell | Python | Node | Roc | OCaml 5 | Koka | Darklang interpreter |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| ackermann | 1.371× | 1.000× | unavailable | 83.022× | 18.554× | unavailable | 1.814× | unavailable | unavailable |
-| binary_trees | 0.164× | 1.000× | unavailable | 5.330× | 9.059× | unavailable | 0.042× | unavailable | unavailable |
-| collatz | 0.915× | 1.000× | unavailable | 106.929× | 43.075× | unavailable | 3.381× | unavailable | unavailable |
-| edigits | 70.905× | 1.000× | unavailable | 85.979× | 826.807× | unavailable | 2.482× | unavailable | unavailable |
-| factorial | 0.060× | 1.000× | unavailable | 179.837× | 750.759× | unavailable | 12.175× | unavailable | unavailable |
-| fannkuch | 128.714× | 1.000× | unavailable | 70.673× | 344.464× | unavailable | 1.941× | unavailable | unavailable |
-| fasta | 14.631× | 1.000× | unavailable | 144.902× | 864.280× | unavailable | 49.295× | unavailable | unavailable |
-| fft | 3.959× | 1.000× | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable |
-| fib | 1.302× | 1.000× | unavailable | 56.163× | 127.093× | unavailable | 1.828× | unavailable | unavailable |
-| huffman | 150.811× | 1.000× | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable |
-| leibniz | 1.192× | 1.000× | unavailable | 150.270× | 101.624× | unavailable | 3.561× | unavailable | unavailable |
-| mandelbrot | 1.205× | 1.000× | unavailable | 109.825× | 127.275× | unavailable | 2.189× | unavailable | unavailable |
-| matmul | 63.869× | 1.000× | unavailable | 83.151× | 845.690× | unavailable | 2.138× | unavailable | unavailable |
-| merkletrees | 1.533× | 1.000× | unavailable | 806.807× | 619.615× | unavailable | 8.420× | unavailable | unavailable |
-| myers_diff | 300.813× | 1.000× | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable |
-| nbody | 2.540× | 1.000× | unavailable | 210.165× | 306.555× | unavailable | 3.025× | unavailable | unavailable |
-| nqueen | 1.170× | 1.000× | unavailable | 84.015× | 112.944× | unavailable | 2.017× | unavailable | unavailable |
-| nsieve | 338.144× | 1.000× | unavailable | 107.935× | 1401.765× | unavailable | 2.093× | unavailable | unavailable |
-| pisum | 0.694× | 1.000× | unavailable | 93.195× | 499.219× | unavailable | 1.842× | unavailable | unavailable |
-| primes | 1.239× | 1.000× | unavailable | 69.166× | 612.719× | unavailable | 6.949× | unavailable | unavailable |
-| quicksort | 28.363× | 1.000× | unavailable | 17.324× | 105.655× | unavailable | 6.888× | unavailable | unavailable |
-| raytracer | 10.617× | 1.000× | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable |
-| regex_lite | 155.139× | 1.000× | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable |
-| spectral_norm | 43.972× | 1.000× | unavailable | 152.570× | 197.375× | unavailable | 4.636× | unavailable | unavailable |
-| string_equality | 0.792× | 1.000× | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable |
-| sum_to_n | 0.219× | 1.000× | unavailable | 3557.636× | 3398.350× | unavailable | 36.045× | unavailable | unavailable |
-| tak | 0.123× | 1.000× | unavailable | 27.791× | 14.913× | unavailable | 1.276× | unavailable | unavailable |
-| tinytemplate | 725.806× | 1.000× | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable |
-| warden | 160.549× | 1.000× | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable | unavailable |
+| Benchmark       | Darklang |   Rust |  Haskell |    Python |      Node |     Roc | OCaml 5 |    Koka | Darklang interpreter |
+| --------------- | -------: | -----: | -------: | --------: | --------: | ------: | ------: | ------: | -------------------: |
+| ackermann       |   1.371x | 1.000x |   2.606x |   83.022x |   16.936x |  1.187x |  1.814x |  2.374x |            3228.396x |
+| binary_trees    |   0.164x | 1.000x |   0.139x |    5.330x |    9.101x |  1.026x |  0.042x |  0.200x |              90.858x |
+| collatz         |   0.915x | 1.000x |   1.677x |  106.930x |   10.865x |  1.332x |  3.381x |  4.373x |            5541.563x |
+| edigits         |  70.914x | 1.000x | 383.955x |   85.987x |  814.337x |  3.910x |  2.481x | 11.290x |            2205.150x |
+| factorial       |   0.060x | 1.000x | 128.540x |  179.848x |  749.679x |  4.926x | 12.176x | 20.143x |            5496.084x |
+| fannkuch        | 128.722x | 1.000x |   1.000x |   70.699x |  344.101x | 12.420x |  1.941x | 19.259x |            3510.924x |
+| fasta           |  14.633x | 1.000x |  81.405x |  144.927x |  867.656x |  5.136x | 49.302x | 30.964x |            8557.799x |
+| fft             |   3.965x | 1.000x |   2.162x |   85.744x | 1191.471x |  0.951x |  1.605x |  2.526x |             618.234x |
+| fib             |   1.302x | 1.000x |   1.999x |   56.158x |  127.739x |  1.230x |  1.828x |  2.364x |            2465.648x |
+| huffman         | 150.816x | 1.000x |  19.557x |  101.063x |  255.072x | 48.952x |  7.467x | 12.499x |            3133.124x |
+| leibniz         |   1.192x | 1.000x |   2.706x |  150.270x |  101.845x |  7.458x |  3.561x | 13.637x |           10344.281x |
+| mandelbrot      |   1.205x | 1.000x |  12.161x |  109.826x |  127.658x |  1.162x |  2.189x |  1.975x |            6042.487x |
+| matmul          |  63.879x | 1.000x |   3.529x |   83.132x |  852.810x |  5.432x |  2.138x |  7.105x |            4388.627x |
+| merkletrees     |   1.533x | 1.000x |   6.653x |  806.825x |  633.076x | 31.380x |  8.420x | 44.144x |           18604.588x |
+| myers_diff      | 300.852x | 1.000x |   2.964x |   63.684x |  796.218x |  7.479x |  2.773x |  6.776x |           73052.759x |
+| nbody           |   2.540x | 1.000x |   2.552x |  210.156x |  306.367x |  7.072x |  3.025x | 45.893x |            5713.361x |
+| nqueen          |   1.170x | 1.000x |   1.507x |   84.028x |   97.828x | 56.585x |  2.017x |  1.287x |            3063.121x |
+| nsieve          | 338.226x | 1.000x |   2.713x |  108.034x | 1392.850x |  1.214x |  2.092x |  6.171x |            3525.678x |
+| pisum           |   0.694x | 1.000x |   1.742x |   93.234x |  495.044x |  4.852x |  1.842x |  7.399x |            3949.095x |
+| primes          |   1.239x | 1.000x |   3.369x |   69.152x |  612.765x |  1.308x |  6.949x | 23.241x |            3491.348x |
+| quicksort       |  28.364x | 1.000x |   1.995x |   17.318x |  105.271x |  2.951x |  6.888x |  2.532x |             533.888x |
+| raytracer       |  10.617x | 1.000x |   3.015x |  445.415x |  345.089x |  2.862x |  6.345x | 76.167x |            7894.457x |
+| regex_lite      | 155.173x | 1.000x |   2.080x |  134.974x | 1272.908x |  1.140x |  1.648x |  2.140x |             917.075x |
+| spectral_norm   |  43.973x | 1.000x |   2.007x |  152.579x |  188.250x |  7.738x |  4.636x | 22.619x |           10106.172x |
+| string_equality |   0.792x | 1.000x | 131.442x |   45.211x |  366.718x |  4.592x |  2.012x |  4.016x |             519.138x |
+| sum_to_n        |   0.219x | 1.000x |  41.318x | 3559.043x | 3405.808x | 16.052x | 36.057x | 36.214x |           99664.286x |
+| tak             |   0.123x | 1.000x |   1.102x |   27.790x |    7.270x |  0.920x |  1.276x |  1.770x |            1213.376x |
+| tinytemplate    | 725.930x | 1.000x |   5.137x |  155.526x | 1278.008x |  2.968x |  2.987x |  6.764x |           13470.789x |
+| warden          | 160.608x | 1.000x |   2.683x |  212.490x | 1931.060x |  0.906x |  2.350x |  2.124x |            1065.151x |
 
-## Common-workload aggregate
+## Aggregate comparisons
 
-All included languages use this exact workload set: `ackermann`, `binary_trees`, `collatz`, `edigits`, `factorial`, `fannkuch`, `fasta`, `fib`, `leibniz`, `mandelbrot`, `matmul`, `merkletrees`, `nbody`, `nqueen`, `nsieve`, `pisum`, `primes`, `quicksort`, `spectral_norm`, `sum_to_n`, `tak`.
+Fixed workload sets keep averages comparable as language coverage grows.
+Geometric means are informational unless every included row is audited.
 
-Geometric means below are informational unless every included row is audited.
+### Original 21 workloads
 
-| Language | Instructions / Rust | Parity |
-| --- | --- | --- |
-| Darklang | 2.976× | audited |
-| Rust | 1.000× | audited |
-| Python | 101.936× | unaudited |
-| Node | 221.607× | unaudited |
-| OCaml 5 | 3.220× | unaudited |
+`ackermann`, `binary_trees`, `collatz`, `edigits`, `factorial`, `fannkuch`, `fasta`, `fib`, `leibniz`, `mandelbrot`, `matmul`, `merkletrees`, `nbody`, `nqueen`, `nsieve`, `pisum`, `primes`, `quicksort`, `spectral_norm`, `sum_to_n`, `tak`.
 
-Excluded because no current measurements exist: Haskell, Roc, Koka, Darklang interpreter.
+| Language             | Instructions / Rust | Total instructions | Current rows | Parity    |
+| -------------------- | ------------------: | -----------------: | -----------: | --------- |
+| Darklang             |              2.976x |      1,155,982,702 |        21/21 | audited   |
+| Rust                 |              1.000x |        685,608,709 |        21/21 | audited   |
+| Haskell              |              4.454x |      1,533,730,856 |        21/21 | unaudited |
+| Python               |            101.944x |     36,679,612,660 |        21/21 | unaudited |
+| Node                 |            198.014x |     20,464,844,193 |        21/21 | unaudited |
+| Roc                  |              3.970x |      1,310,388,122 |        21/21 | unaudited |
+| OCaml 5              |              3.220x |      1,197,758,574 |        21/21 | unaudited |
+| Koka                 |              7.286x |      2,064,297,011 |        21/21 | unaudited |
+| Darklang interpreter |           3988.242x |  1,633,523,653,873 |        21/21 | unaudited |
+
+### All 29 workloads
+
+`ackermann`, `binary_trees`, `collatz`, `edigits`, `factorial`, `fannkuch`, `fasta`, `fft`, `fib`, `huffman`, `leibniz`, `mandelbrot`, `matmul`, `merkletrees`, `myers_diff`, `nbody`, `nqueen`, `nsieve`, `pisum`, `primes`, `quicksort`, `raytracer`, `regex_lite`, `spectral_norm`, `string_equality`, `sum_to_n`, `tak`, `tinytemplate`, `warden`.
+
+| Language             | Instructions / Rust | Total instructions | Current rows | Parity    |
+| -------------------- | ------------------: | -----------------: | -----------: | --------- |
+| Darklang             |              6.402x |      2,221,934,270 |        29/29 | audited   |
+| Rust                 |              1.000x |        696,060,478 |        29/29 | audited   |
+| Haskell              |              4.808x |      1,799,447,198 |        29/29 | unaudited |
+| Python               |            107.159x |     39,090,682,729 |        29/29 | unaudited |
+| Node                 |            285.527x |     25,768,590,662 |        29/29 | unaudited |
+| Roc                  |              3.773x |      1,466,281,340 |        29/29 | unaudited |
+| OCaml 5              |              3.126x |      1,251,598,946 |        29/29 | unaudited |
+| Koka                 |              6.949x |      2,423,636,906 |        29/29 | unaudited |
+| Darklang interpreter |           3706.217x |  1,731,063,531,639 |        29/29 | unaudited |

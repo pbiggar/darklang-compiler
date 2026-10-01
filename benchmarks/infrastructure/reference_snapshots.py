@@ -23,7 +23,7 @@ LANGUAGES = {
     "darklang-interpreter": "Darklang interpreter",
 }
 REFERENCE_LANGUAGES = tuple(language for language in LANGUAGES if language not in {
-    "dark", "darklang-interpreter",
+    "dark",
 })
 EXTENSIONS = {
     "dark": "dark", "rust": "rs", "haskell": "hs", "python": "py",
@@ -56,7 +56,13 @@ def source_digest(root: Path, name: str, language: str) -> str | None:
     source = source_path(root, name, language)
     if not source.is_file():
         return None
+    if language == "darklang-interpreter":
+        # Adaptation changes can alter measured work even when Dark sources stay identical.
+        adapter = root / "infrastructure" / "diagnostic_references.py"
+        return hashlib.sha256((source_hash(source) + source_hash(adapter)).encode()).hexdigest()
     if language == "rust" and (source.parent / "Cargo.toml").is_file():
+        return source_tree_hash(source.parent)
+    if language in {"haskell", "roc", "koka"}:
         return source_tree_hash(source.parent)
     return source_hash(source)
 

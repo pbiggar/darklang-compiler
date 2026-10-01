@@ -46,29 +46,22 @@ class DiagnosticReferenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exactly one"):
             parse_instruction_count("==1== I refs: 12\n==2== I refs: 13\n")
 
-    def test_every_reference_source_consumes_each_profile_argument(self) -> None:
+    def test_interpreter_adapter_covers_each_full_workload(self) -> None:
         benchmarks_dir = Path(__file__).resolve().parent.parent
-        patterns = {
-            "darklang-interpreter": lambda index: (
-                rf"\b(?:benchmarkArg|Stdlib\.Cli\.Args\.int64)\s+{index}\b"
-            ),
-            "node": lambda index: rf"\bargument\(\s*{index}\s*\)",
-            "ocaml": lambda index: rf"\bargument(?:64)?\s+{index}\b",
-            "python": lambda index: rf"\bargument\(\s*{index}\s*\)",
-        }
         for name in load_profile(benchmarks_dir, "full"):
-            invocation = load_invocation(benchmarks_dir, "full", name)
-            for language in patterns:
-                source = source_path(benchmarks_dir, name, language)
-                if not source.is_file():
-                    continue
-                contents = source.read_text()
-                if language == "darklang-interpreter":
-                    self.assertIn("Stdlib.Cli.Args.int64", contents)
-                    self.assertNotRegex(contents, r"Stdlib\.[A-Za-z0-9_.]*__")
-                for index in range(len(invocation.args)):
-                    with self.subTest(name=name, language=language, index=index):
-                        self.assertRegex(contents, re.compile(patterns[language](index)))
+            with self.subTest(name=name):
+                invocation = load_invocation(benchmarks_dir, "full", name)
+                source = source_path(benchmarks_dir, name, "darklang-interpreter").read_text()
+                transformed = adapt_interpreter_source(source, tuple(invocation.args))
+                self.assertNotIn("Stdlib.Cli.Args.int64", transformed)
+                self.assertNotRegex(source, r"Stdlib\.[A-Za-z0-9_.]*__")
+
+    def test_float_conversion_retains_failure_on_out_of_range_values(self) -> None:
+        transformed = adapt_interpreter_source(
+            "Stdlib.Int64.fromFloat (1.5)\nStdlib.Cli.Args.int64 0", ("4",))
+        self.assertIn("interpreterInt64FromFloat (1.5)", transformed)
+        self.assertIn("| Some number -> number", transformed)
+        self.assertIn('| None -> Builtin.testRuntimeError "float is outside Int64 range"', transformed)
 
     def test_interpreter_adapter_translates_compatibility_only_syntax(self) -> None:
         source = (

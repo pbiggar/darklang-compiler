@@ -24,8 +24,9 @@ def source_tree_hash(path: Path) -> str:
         candidate
         for candidate in path.rglob("*")
         if candidate.is_file()
-        and "target" not in candidate.relative_to(path).parts
-        and candidate.name not in {"main", "quick"}
+        and not {"target", "build", ".koka", ".git"}.intersection(candidate.relative_to(path).parts)
+        and candidate.name not in {"main", "quick", "benchmark"}
+        and candidate.suffix not in {".o", ".hi", ".dyn_o", ".dyn_hi"}
     )
     for candidate in files:
         relative = candidate.relative_to(path).as_posix().encode()

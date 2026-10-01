@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "language": "koka",
+  "track": {
+    "id": "arm64-full-cachegrind",
+    "architecture": "arm64",
+    "profile": "full",
+    "backend": "cachegrind",
+    "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
+  },
+  "version": "Koka 3.2.9, 05:27:12 Sep 18 2026 (ghc release version)",
+  "generated_at": "2026-09-30T23:07:50.973016+00:00",
+  "build_flags": [
+    "-O2",
+    "--compile",
+    "--target=c",
+    "--jobs=1"
+  ],
+  "runtime_flags": [],
+  "tools": {
+    "valgrind": "valgrind-3.26.0",
+    "machine": "Linux-7.0.14-aarch64-with-glibc2.43",
+    "executable": "/home/agent/.local/share/c4d-reference-toolchains/koka/bin/koka",
+    "gcc": "gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0"
+  },
+  "contract_sha256": "2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861",
+  "benchmarks": [
+    {
+      "name": "ackermann",
+      "instructions": 212597040,
+      "output_valid": true,
+      "workload_sha256": "8b184199406f4d6a10d090c94885447b5b6d5f0ee2b7afff9b5ce8d6e95a1bf8",
+      "source_sha256": "561a67cd390e4bccd1256c7f1ce18fab33cfad0494aa9f8d707ade2747987f34"
+    },
+    {
+      "name": "binary_trees",
+      "instructions": 12819368,
+      "output_valid": true,
+      "workload_sha256": "ad86ec16bb214060d2a10c9ed9b8e35e8a8306635d23736dee1aa2b70eaf3cd2",
+      "source_sha256": "79e43917e8e0172d103d7069e04973190c3443d7744a405852b678eb86693c99"
+    },
+    {
+      "name": "collatz",
+      "instructions": 335589458,
+      "output_valid": true,
+      "workload_sha256": "e8628fd5b72fbebd99988476fdde4f967f49b86259228d25532616caac55b01d",
+      "source_sha256": "cfa6262e3ba9f3821c3950703fc8a8cfa0ed7413217689bd0c39398f639ac7f5"
+    },
+    {
+      "name": "edigits",
+      "instructions": 7796510,
+      "output_valid": true,
+      "workload_sha256": "e6a45797198ec5152dec5dcbefee5702516a3528b2be69d851e16897c67652b5",
+      "source_sha256": "63c802c0a50bd13cccc3b9259d8beb43fecaaea4f0874a766715e1478b3444d2"
+    },
+    {
+      "name": "factorial",
+      "instructions": 19634045,
+      "output_valid": true,
+      "workload_sha256": "04301cfa8b92397aef638f29f35447ea220480db56e3fb8ec7982df049d33068",
+      "source_sha256": "0d2beb12d362bf1e16716fefa4270c97a3e61d121b2d5697882bb83237ad66f9"
+    },
+    {
+      "name": "fannkuch",
+      "instructions": 33097145,
+      "output_valid": true,
+      "workload_sha256": "e8c04a82cb4f42c4b9da9991a7ee9809eb9e9809015de4bc4a93095a09f9e363",
+      "source_sha256": "b1e6049ca5b645b94faeeee76333df1b9ffb3a8cb14083caa8e0a1071f6180ea"
+    },
+    {
+      "name": "fasta",
+      "instructions": 21762398,
+      "output_valid": true,
+      "workload_sha256": "1b67fa1ea35b61e966ae881ca5fedc7b8ee7c7b2558f573f63f9487a265d8e82",
+      "source_sha256": "04c4987778f66192b52708bb792c671f66e1129f516019c881040f9ceb104164"
+    },
+    {
+      "name": "fft",
+      "instructions": 1137083,
+      "output_valid": true,
+      "workload_sha256": "647fecdc96cad1bbde584c3a498654ab73b97a1502e9ef544b9b5c65410b8078",
+      "source_sha256": "e9f6f2d60c60b69ff799f569c239ea092a7537797bca4a3002cb13242db3fa82"
+    },
+    {
+      "name": "fib",
+      "instructions": 13857117,
+      "output_valid": true,
+      "workload_sha256": "b879244eaa8143f869d10a2fa6f104e18c0f1ae8d7f4f8f337a113ac2203d80b",
+      "source_sha256": "5e300f6b0e918c7c0ae974834c25bd5706c06fe585ef3232a3a8fd401200a76f"
+    },
+    {
+      "name": "huffman",
+      "instructions": 33179408,
+      "output_valid": true,
+      "workload_sha256": "eadfb54e1579ab5a09ce600993a3ed9e64d616b8b4b30db73fe579db3dc97055",
+      "source_sha256": "dc6e8ce3ea5f7ebd79ae56ab70a00b74235bd7005585c9d1cdde881342ec9316"
+    },
+    {
+      "name": "leibniz",
+      "instructions": 194513856,
+      "output_valid": true,
+      "workload_sha256": "66f479ce0c668f29324cccef5f67f6e2cc87895ebe6030408d9f1494636c6ee3",
+      "source_sha256": "57d5e523b3d29e044a8257c6dca2d6aadb601a19e5698cccc7273a2f1c040f9c"
+    },
+    {
+      "name": "mandelbrot",
+      "instructions": 24805233,
+      "output_valid": true,
+      "workload_sha256": "18a0845a6187e417874ec7c1662089c59a02e34bdbb50821b96534e481d7e516",
+      "source_sha256": "bb6ad9aaf0c0b9d648975ed27f183e82f77ad2158faffe4d6974d81c8f1d0871"
+    },
+    {
+      "name": "matmul",
+      "instructions": 4612594,
+      "output_valid": true,
+      "workload_sha256": "71d04ea5520a50a526186b11abc4047851f3650d0489cdb248045a1a78c69eb0",
+      "source_sha256": "27963df2c7c4ce6522bd521631a69486ef0099dcfc02b23262466582a21e9f5b"
+    },
+    {
+      "name": "merkletrees",
+      "instructions": 111489582,
+      "output_valid": true,
+      "workload_sha256": "f9f4b19982fa6c99cb500386b2034965bd1349b8df9ac96db6dc2d692a454b21",
+      "source_sha256": "a461ed1ee62962a3ca34cb0c00b4b16fc1e75de8dc66ccb49de89dcc1dbd177f"
+    },
+    {
+      "name": "myers_diff",
+      "instructions": 4607829,
+      "output_valid": true,
+      "workload_sha256": "dc95ca39f7aaeea2d9ba0c23109051302b21ed19c65087f70e262d358388714d",
+      "source_sha256": "f67c5ffc407b4a9e1538510667d1c9d4120dcd85057fdff9711e30e9f230cbc9"
+    },
+    {
+      "name": "nbody",
+      "instructions": 195226396,
+      "output_valid": true,
+      "workload_sha256": "20f891a9c78b63192162125c450062f3c03e352690e7190575d1f384caa9833b",
+      "source_sha256": "6af5227a7e8413cbc974ea3270cd750987696246a06a5ca7c7f3bc6f94ad1ad0"
+    },
+    {
+      "name": "nqueen",
+      "instructions": 7613051,
+      "output_valid": true,
+      "workload_sha256": "461ca8f117f4ee22f01e0b999c3cfe0d65c03471443c3adbf2c3cc483a8046ac",
+      "source_sha256": "144736d84b35cf459a82a1912bc74aaf85f56d8c03c2ced7b0c262db9fb178d4"
+    },
+    {
+      "name": "nsieve",
+      "instructions": 2374896,
+      "output_valid": true,
+      "workload_sha256": "971c8a73a6530e7fdb1b7b9260bb10b0e05934084a7357beccb297d0aeb67b78",
+      "source_sha256": "4c46ba02e1671dfa1ac20311b23bd41c462eb8454a43ba273952a4610b9cfacf"
+    },
+    {
+      "name": "pisum",
+      "instructions": 8619235,
+      "output_valid": true,
+      "workload_sha256": "56902902b6ea8cac19240511e100761acd6e11e0cae77a4a9113f49aa5320af6",
+      "source_sha256": "768ecb736f70f2d371761211b5e66a4d4289e4c428b4872d4bff6b9494737614"
+    },
+    {
+      "name": "primes",
+      "instructions": 29391711,
+      "output_valid": true,
+      "workload_sha256": "e4b8f4e31a4c34520e1575deed302c2d2fbded0cb769c1d37d06ed29f4ffe3a5",
+      "source_sha256": "a2c58747d50716b2dfa6e55640ca00a0f0a5d23753f9537b3cca67b75704eb22"
+    },
+    {
+      "name": "quicksort",
+      "instructions": 15403032,
+      "output_valid": true,
+      "workload_sha256": "052e12050a881fd1532c27eb27d66e25934520ccdf0cff4d4ce2905482f55a54",
+      "source_sha256": "074444bcbd9446cdda2dae5fa2912aebbe44e70dfad76615074e95ff08c4aceb"
+    },
+    {
+      "name": "raytracer",
+      "instructions": 310136778,
+      "output_valid": true,
+      "workload_sha256": "c59df9d1c6c4cb5c1122c14d41293b572aaf138aab6e1d345366178764443c31",
+      "source_sha256": "3dfbc60000d106459e12165bfb0f811e30bd53de673db32fc11c140488ff9225"
+    },
+    {
+      "name": "regex_lite",
+      "instructions": 893174,
+      "output_valid": true,
+      "workload_sha256": "865bd1fb460b8b3dd3fdc900036bb41034f3e92e905b2e091b036f0c58e9306d",
+      "source_sha256": "5461c274467f2a49662e23702a4710303a37e63696d708a813659e61a98a486b"
+    },
+    {
+      "name": "spectral_norm",
+      "instructions": 111068677,
+      "output_valid": true,
+      "workload_sha256": "59ecdaf80b39abc8571e97e0b5f3b71138c083db45b129882a34006835c6aae9",
+      "source_sha256": "674b4d567843456f8dc6befa67f6432464200e303c35053acb59fc3c3615dd19"
+    },
+    {
+      "name": "string_equality",
+      "instructions": 5951367,
+      "output_valid": true,
+      "workload_sha256": "39a71ae6adeb0313c764cc35c707c97ba7cdc47bdcad07d0ebfd994f6c866fce",
+      "source_sha256": "3e0d226161899789dfdbd7f35e1bd4f804a7138958d18436551fbba8b46027b8"
+    },
+    {
+      "name": "sum_to_n",
+      "instructions": 9589288,
+      "output_valid": true,
+      "workload_sha256": "0213547ce564b206815d83c209de178dbdcdc51eeb96fe740313aac35f5a4828",
+      "source_sha256": "8f12a962f4f4b780ee620060c47509d59d6130abdf4e117c4d11358b90096cf1"
+    },
+    {
+      "name": "tak",
+      "instructions": 692436379,
+      "output_valid": true,
+      "workload_sha256": "87295519d89551287bfc0f7e01505a371ff3f69c4a3493b9d6974e51376978b5",
+      "source_sha256": "5a0fe6ef05a5b6544a15e611180b971c821da6f1f3056c7c143520bdd44dff16"
+    },
+    {
+      "name": "tinytemplate",
+      "instructions": 2850619,
+      "output_valid": true,
+      "workload_sha256": "0bc95d1f0cd980b3c75c955ecb80d5866508409a7cb45a732fcf49139d58839b",
+      "source_sha256": "e9d5b77bfb6f069507a843dce05b3e74ed385e59cb675941807505455d213a6d"
+    },
+    {
+      "name": "warden",
+      "instructions": 583637,
+      "output_valid": true,
+      "workload_sha256": "1d2ca8b4322dfbe647b5c909c04ed122324030ee60a05788885ee9fef0d99d8c",
+      "source_sha256": "e4ba6c3aad935a8336d4f742744309a9c17488563a15f021b6530acc1395af5e"
+    }
+  ],
+  "missing_implementations": [],
+  "provenance": "Upstream adaptations and shared reference ports; see IMPLEMENTATIONS.md. Output-validated; algorithm parity requires separate review."
+}

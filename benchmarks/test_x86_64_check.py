@@ -169,8 +169,13 @@ class X86_64DecisionTests(unittest.TestCase):
         payload, markdown = render_results(dark, rust)
 
         self.assertAlmostEqual(payload["overall_dark_rust_ratio"], 2.8284271247461903)
-        self.assertIn("**Overall Dark/Rust:** `2.828427×`", markdown)
-        self.assertIn("| beta | 800 | 200 | 4.000× |", markdown)
+        self.assertIn("**Overall Dark/Rust:** `2.828427x`", markdown)
+        rows = [line for line in markdown.splitlines() if line.startswith("| ")]
+        beta = next(line for line in rows if line.startswith("| beta "))
+        self.assertEqual([cell.strip() for cell in beta.split("|")[1:-1]],
+                         ["beta", "800", "200", "4.000x"])
+        self.assertEqual(len({tuple(i for i, char in enumerate(row) if char == "|")
+                              for row in rows}), 1)
 
 
 if __name__ == "__main__":

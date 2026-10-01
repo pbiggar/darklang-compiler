@@ -9,156 +9,220 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "version": "Darklang CLI alpha-0b3888d (unable to check for updates)",
-  "generated_at": "2026-09-15T07:45:58.287134+00:00",
-  "contract_sha256": "4efd0c2330fbe360b4d9fb060515cd16222d400b0186e8ade17e98a04edc9f97",
+  "generated_at": "2026-09-30T23:50:09.003682+00:00",
   "build_flags": [],
   "runtime_flags": [],
+  "tools": {
+    "valgrind": "valgrind-3.26.0",
+    "machine": "Linux-7.0.14-aarch64-with-glibc2.43",
+    "executable": "/home/agent/.local/share/c4d-reference-toolchains/darklang-interpreter-v35"
+  },
+  "contract_sha256": "2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861",
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 295450197862,
-      "output_valid": true
+      "instructions": 289145313294,
+      "output_valid": true,
+      "workload_sha256": "8b184199406f4d6a10d090c94885447b5b6d5f0ee2b7afff9b5ce8d6e95a1bf8",
+      "source_sha256": "ca2238e953964b95043952d575eded2f3b8f53fe8e8778aa537ab15d988470e5"
     },
     {
       "name": "binary_trees",
-      "instructions": 10539988398,
-      "output_valid": true
+      "instructions": 5814696606,
+      "output_valid": true,
+      "workload_sha256": "ad86ec16bb214060d2a10c9ed9b8e35e8a8306635d23736dee1aa2b70eaf3cd2",
+      "source_sha256": "d9441a2ec1d8042cf573238c41c81afc4704ef0c00cab8112bf4323f850bf57a"
     },
     {
       "name": "collatz",
-      "instructions": 424757265260,
-      "output_valid": true
+      "instructions": 425260861507,
+      "output_valid": true,
+      "workload_sha256": "e8628fd5b72fbebd99988476fdde4f967f49b86259228d25532616caac55b01d",
+      "source_sha256": "7106078a108b7e7fe92491965665475d1107cf92f7fc03b07697e64110d82bb7"
     },
     {
       "name": "edigits",
-      "instructions": 9579126978,
-      "output_valid": true
+      "instructions": 1522774854,
+      "output_valid": true,
+      "workload_sha256": "e6a45797198ec5152dec5dcbefee5702516a3528b2be69d851e16897c67652b5",
+      "source_sha256": "93f2659fe30d47972f00d6a09b3cf25f1bde6792dbcbb81557182f94756ba0f5"
     },
     {
       "name": "factorial",
-      "instructions": 5403174630,
-      "output_valid": true
+      "instructions": 5357225486,
+      "output_valid": true,
+      "workload_sha256": "04301cfa8b92397aef638f29f35447ea220480db56e3fb8ec7982df049d33068",
+      "source_sha256": "cf228564d9cdbc6efe751a271ed0c8edb4caedaaa31cbfa79194a00fc8e71ce9"
     },
     {
       "name": "fannkuch",
-      "instructions": 12839313429,
-      "output_valid": true
+      "instructions": 6033536974,
+      "output_valid": true,
+      "workload_sha256": "e8c04a82cb4f42c4b9da9991a7ee9809eb9e9809015de4bc4a93095a09f9e363",
+      "source_sha256": "318dedb40254ecf203a0421bea23bb707108b7f9f316106213579cb09652ace2"
     },
     {
       "name": "fasta",
-      "instructions": 7739275817,
-      "output_valid": true
+      "instructions": 6014617633,
+      "output_valid": true,
+      "workload_sha256": "1b67fa1ea35b61e966ae881ca5fedc7b8ee7c7b2558f573f63f9487a265d8e82",
+      "source_sha256": "ce77e3d77898e997f4cce29d90ab220800bde32605af99a64a042a0bbc833979"
     },
     {
       "name": "fft",
-      "instructions": 2212941147,
-      "output_valid": true
+      "instructions": 278252826,
+      "output_valid": true,
+      "workload_sha256": "647fecdc96cad1bbde584c3a498654ab73b97a1502e9ef544b9b5c65410b8078",
+      "source_sha256": "753ee6ab89a3f9f25d72c005be069f209d1c63801487d7c652e650160a52b5c9"
     },
     {
       "name": "fib",
-      "instructions": 15095723230,
-      "output_valid": true
+      "instructions": 14454720917,
+      "output_valid": true,
+      "workload_sha256": "b879244eaa8143f869d10a2fa6f104e18c0f1ae8d7f4f8f337a113ac2203d80b",
+      "source_sha256": "f2e1e75a6b7ebdc57b684e80548e8f6afa200a2450ed452f39a17c4648210c1d"
     },
     {
       "name": "huffman",
-      "instructions": 9087251458,
-      "output_valid": true
+      "instructions": 8317129570,
+      "output_valid": true,
+      "workload_sha256": "eadfb54e1579ab5a09ce600993a3ed9e64d616b8b4b30db73fe579db3dc97055",
+      "source_sha256": "a8360d2cb1b2e37b92fb12017354c754cec94d9a3ef97afa50a7a3698795b73b"
     },
     {
       "name": "leibniz",
-      "instructions": 151080303976,
-      "output_valid": true
+      "instructions": 147544535529,
+      "output_valid": true,
+      "workload_sha256": "66f479ce0c668f29324cccef5f67f6e2cc87895ebe6030408d9f1494636c6ee3",
+      "source_sha256": "1352f992b4b8f2703e67d49f4476aeb953d069c3aa8693487decd91c2149ca0d"
     },
     {
       "name": "mandelbrot",
-      "instructions": 76696314807,
-      "output_valid": true
+      "instructions": 75903469772,
+      "output_valid": true,
+      "workload_sha256": "18a0845a6187e417874ec7c1662089c59a02e34bdbb50821b96534e481d7e516",
+      "source_sha256": "d2f3c5c01f63257dab519865c8d0d47d711c96eccd0f41bce5a4436fd98c4846"
     },
     {
       "name": "matmul",
-      "instructions": 7760332418,
-      "output_valid": true
+      "instructions": 2849175849,
+      "output_valid": true,
+      "workload_sha256": "71d04ea5520a50a526186b11abc4047851f3650d0489cdb248045a1a78c69eb0",
+      "source_sha256": "e4660e3b3e7cf2f2a36b5a4d707f896a0019feff03fbac0390a8a16ec957c995"
     },
     {
       "name": "merkletrees",
-      "instructions": 51421932780,
-      "output_valid": true
+      "instructions": 46987635452,
+      "output_valid": true,
+      "workload_sha256": "f9f4b19982fa6c99cb500386b2034965bd1349b8df9ac96db6dc2d692a454b21",
+      "source_sha256": "63c7e7c892f59a17fcce66f87833487e30c14b5bba6c2610cd664680946ed592"
     },
     {
       "name": "myers_diff",
-      "instructions": 4670031121,
-      "output_valid": true
+      "instructions": 49678067699,
+      "output_valid": true,
+      "workload_sha256": "dc95ca39f7aaeea2d9ba0c23109051302b21ed19c65087f70e262d358388714d",
+      "source_sha256": "772a0b61babe6fd4dce13f5e41549d6312e111ba475f849ed03f88f48c80dbfc"
     },
     {
       "name": "nbody",
-      "instructions": 27005569055,
-      "output_valid": true
+      "instructions": 24304253249,
+      "output_valid": true,
+      "workload_sha256": "20f891a9c78b63192162125c450062f3c03e352690e7190575d1f384caa9833b",
+      "source_sha256": "2cb1694570acdfaa5cf58bb1ebf64759e180a2cd12e067ca454a665114d9b164"
     },
     {
       "name": "nqueen",
-      "instructions": 19342874779,
-      "output_valid": true
+      "instructions": 18125344494,
+      "output_valid": true,
+      "workload_sha256": "461ca8f117f4ee22f01e0b999c3cfe0d65c03471443c3adbf2c3cc483a8046ac",
+      "source_sha256": "20672d5fe71e6db880d774a55be50563a43e1ac92e084f1c5445668f5d1c0dde"
     },
     {
       "name": "nsieve",
-      "instructions": 1938134698,
-      "output_valid": true
+      "instructions": 1356945184,
+      "output_valid": true,
+      "workload_sha256": "971c8a73a6530e7fdb1b7b9260bb10b0e05934084a7357beccb297d0aeb67b78",
+      "source_sha256": "76aa0c8d2e4524437d4b5535c1d7c1fd4223780bf25e68506116f8f101cf5bd6"
     },
     {
       "name": "pisum",
-      "instructions": 10805308243,
-      "output_valid": true
+      "instructions": 4600202460,
+      "output_valid": true,
+      "workload_sha256": "56902902b6ea8cac19240511e100761acd6e11e0cae77a4a9113f49aa5320af6",
+      "source_sha256": "0fa1d8239fd681bdc59bf25a0190d7351991f81dab05cdeda671ccaa68726a2a"
     },
     {
       "name": "primes",
-      "instructions": 14200381458,
-      "output_valid": true
+      "instructions": 4415323348,
+      "output_valid": true,
+      "workload_sha256": "e4b8f4e31a4c34520e1575deed302c2d2fbded0cb769c1d37d06ed29f4ffe3a5",
+      "source_sha256": "2fc656205c4821a72dd8bd517918508e361408163deebd2fd8154f405bcb961e"
     },
     {
       "name": "quicksort",
-      "instructions": 8610104455,
-      "output_valid": true
+      "instructions": 3248091566,
+      "output_valid": true,
+      "workload_sha256": "052e12050a881fd1532c27eb27d66e25934520ccdf0cff4d4ce2905482f55a54",
+      "source_sha256": "d310c8fab5a2c186cc4fe2935a3fa29e9ba3661881967fd0abca9962fc9dbc20"
     },
     {
       "name": "raytracer",
-      "instructions": 39823213701,
-      "output_valid": true
+      "instructions": 32144683021,
+      "output_valid": true,
+      "workload_sha256": "c59df9d1c6c4cb5c1122c14d41293b572aaf138aab6e1d345366178764443c31",
+      "source_sha256": "a5081434dfd5a685bb0598a2a7c6371db0ef3c1496015ac6c694b10c633fd3a5"
     },
     {
       "name": "regex_lite",
-      "instructions": 652648435,
-      "output_valid": true
+      "instructions": 382682381,
+      "output_valid": true,
+      "workload_sha256": "865bd1fb460b8b3dd3fdc900036bb41034f3e92e905b2e091b036f0c58e9306d",
+      "source_sha256": "5384510cbbe2df640fd3def78fbf533418678b52f4b71868e4acb41f15c4b0c9"
     },
     {
       "name": "spectral_norm",
-      "instructions": 60452108981,
-      "output_valid": true
+      "instructions": 49626407032,
+      "output_valid": true,
+      "workload_sha256": "59ecdaf80b39abc8571e97e0b5f3b71138c083db45b129882a34006835c6aae9",
+      "source_sha256": "1731a2b4920373eaa05b0db128d3dc61e7d19dd6b918931143c700c35dcde39b"
     },
     {
       "name": "string_equality",
-      "instructions": 2287266006,
-      "output_valid": true
+      "instructions": 769239043,
+      "output_valid": true,
+      "workload_sha256": "39a71ae6adeb0313c764cc35c707c97ba7cdc47bdcad07d0ebfd994f6c866fce",
+      "source_sha256": "84376ebc5f696668994b1216581f5def2df8e5c1eb026ebea22259903605fafa"
     },
     {
       "name": "sum_to_n",
-      "instructions": 29651727831,
-      "output_valid": true
+      "instructions": 26390505010,
+      "output_valid": true,
+      "workload_sha256": "0213547ce564b206815d83c209de178dbdcdc51eeb96fe740313aac35f5a4828",
+      "source_sha256": "4bc6f5458a6c1afa9bf87a15238aaf7af7d3399651e89d016eb1bfef890c7805"
     },
     {
       "name": "tak",
-      "instructions": 472304535056,
-      "output_valid": true
+      "instructions": 474568017657,
+      "output_valid": true,
+      "workload_sha256": "87295519d89551287bfc0f7e01505a371ff3f69c4a3493b9d6974e51376978b5",
+      "source_sha256": "7db4238d219b6fb9a33fc6f14013b9d3fca7d342f8297649c44c8256dad87f7a"
     },
     {
       "name": "tinytemplate",
-      "instructions": 5054772489,
-      "output_valid": true
+      "instructions": 5677129280,
+      "output_valid": true,
+      "workload_sha256": "0bc95d1f0cd980b3c75c955ecb80d5866508409a7cb45a732fcf49139d58839b",
+      "source_sha256": "6dc4b5c38de1c6013073a21f842ea93585823788c7c5af10e00422cf60dc2860"
     },
     {
       "name": "warden",
-      "instructions": 29400568988,
-      "output_valid": true
+      "instructions": 292693946,
+      "output_valid": true,
+      "workload_sha256": "1d2ca8b4322dfbe647b5c909c04ed122324030ee60a05788885ee9fef0d99d8c",
+      "source_sha256": "4d211ca75a0d7f2b5e4be9e60ddb8c9e672ec894aceeb8335a6c1331b167828f"
     }
   ],
-  "provenance": "Imported from baselines/diagnostic-arm64-full-cachegrind.json; original suite contract retained. Per-source hashes and build flags were not recorded."
+  "missing_implementations": [],
+  "provenance": "Shared Dark sources adapted for interpreter CLI arguments and compatibility syntax; private prepared rundir per workload."
 }

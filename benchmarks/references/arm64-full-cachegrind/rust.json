@@ -9,7 +9,7 @@
     "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
   },
   "version": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
-  "generated_at": "2026-09-30T18:18:10.032444+00:00",
+  "generated_at": "2026-09-30T22:49:24.673286+00:00",
   "build_flags": [
     "rustc -C opt-level=3; Cargo --release --locked --offline"
   ],
@@ -23,203 +23,203 @@
   "benchmarks": [
     {
       "name": "ackermann",
-      "instructions": 89563240,
+      "instructions": 89563151,
       "output_valid": true,
       "workload_sha256": "8b184199406f4d6a10d090c94885447b5b6d5f0ee2b7afff9b5ce8d6e95a1bf8",
       "source_sha256": "263a100788c60e4f77691579bb5915081d59681e2fca3c3d2eec863cd24e30c6"
     },
     {
       "name": "binary_trees",
-      "instructions": 63998051,
+      "instructions": 63997960,
       "output_valid": true,
       "workload_sha256": "ad86ec16bb214060d2a10c9ed9b8e35e8a8306635d23736dee1aa2b70eaf3cd2",
       "source_sha256": "c0be80a18cc15ec99dac12bacb7ffcac9674fdb3a36adbb5da1858c41881cf42"
     },
     {
       "name": "collatz",
-      "instructions": 76740336,
+      "instructions": 76740243,
       "output_valid": true,
       "workload_sha256": "e8628fd5b72fbebd99988476fdde4f967f49b86259228d25532616caac55b01d",
       "source_sha256": "3d238375a41723889555fd3ee35ffc151683d5546420fc8ba9b0dac66236b3b3"
     },
     {
       "name": "edigits",
-      "instructions": 690647,
+      "instructions": 690554,
       "output_valid": true,
       "workload_sha256": "e6a45797198ec5152dec5dcbefee5702516a3528b2be69d851e16897c67652b5",
       "source_sha256": "e02b38ee93dcaddca45ce3e1dde2e8eafed5c6e1adaa4dddf4c95f752945925e"
     },
     {
       "name": "factorial",
-      "instructions": 974828,
+      "instructions": 974735,
       "output_valid": true,
       "workload_sha256": "04301cfa8b92397aef638f29f35447ea220480db56e3fb8ec7982df049d33068",
       "source_sha256": "7c1a1e80a327ee034a11526f040fb16aee7092b9571cf7c60fcf2ddca0e9f3b0"
     },
     {
       "name": "fannkuch",
-      "instructions": 1718612,
+      "instructions": 1718504,
       "output_valid": true,
       "workload_sha256": "e8c04a82cb4f42c4b9da9991a7ee9809eb9e9809015de4bc4a93095a09f9e363",
       "source_sha256": "0daca8dcb4fce6b905442af1246a545d06a44d62a68aba3c9832dc4f778ae719"
     },
     {
       "name": "fasta",
-      "instructions": 702933,
+      "instructions": 702823,
       "output_valid": true,
       "workload_sha256": "1b67fa1ea35b61e966ae881ca5fedc7b8ee7c7b2558f573f63f9487a265d8e82",
       "source_sha256": "56e6ac8b3e14aee41e79ab03b775fa8a3fc7efdbe3b846d8d49a02b4cb33d8a1"
     },
     {
       "name": "fft",
-      "instructions": 450657,
+      "instructions": 450077,
       "output_valid": true,
       "workload_sha256": "647fecdc96cad1bbde584c3a498654ab73b97a1502e9ef544b9b5c65410b8078",
       "source_sha256": "441cf2180cb7a4aaf3431fb065468b8240586e0928022c153020c400ac27c737"
     },
     {
       "name": "fib",
-      "instructions": 5862527,
+      "instructions": 5862444,
       "output_valid": true,
       "workload_sha256": "b879244eaa8143f869d10a2fa6f104e18c0f1ae8d7f4f8f337a113ac2203d80b",
       "source_sha256": "efbd7a83db7d9823f5e38c7fe5a852a308bed423b9fb77fa30a6e0f8d5871e24"
     },
     {
       "name": "huffman",
-      "instructions": 2654673,
+      "instructions": 2654580,
       "output_valid": true,
       "workload_sha256": "eadfb54e1579ab5a09ce600993a3ed9e64d616b8b4b30db73fe579db3dc97055",
       "source_sha256": "835d1d3aacd307c5db4f2a5f9df603dbc64a247a9188ac63b37ffd910e749579"
     },
     {
       "name": "leibniz",
-      "instructions": 14263492,
+      "instructions": 14263392,
       "output_valid": true,
       "workload_sha256": "66f479ce0c668f29324cccef5f67f6e2cc87895ebe6030408d9f1494636c6ee3",
       "source_sha256": "23f6b5df2709a27cc07014f610158bfb89f65d69b9dab6bc1c1e0cc501928fdd"
     },
     {
       "name": "mandelbrot",
-      "instructions": 12561718,
+      "instructions": 12561627,
       "output_valid": true,
       "workload_sha256": "18a0845a6187e417874ec7c1662089c59a02e34bdbb50821b96534e481d7e516",
       "source_sha256": "c377f1396bc180b3cb54922251e20980e06ca045ae05f6c67329835b3e983b23"
     },
     {
       "name": "matmul",
-      "instructions": 649315,
+      "instructions": 649218,
       "output_valid": true,
       "workload_sha256": "71d04ea5520a50a526186b11abc4047851f3650d0489cdb248045a1a78c69eb0",
       "source_sha256": "2db882a7071252ac135c343830f65d17c5c0696a2822b3baebd8d769f31ceb0b"
     },
     {
       "name": "merkletrees",
-      "instructions": 2525684,
+      "instructions": 2525594,
       "output_valid": true,
       "workload_sha256": "f9f4b19982fa6c99cb500386b2034965bd1349b8df9ac96db6dc2d692a454b21",
       "source_sha256": "a007a4dbe2631ec85adf817fb8e762bca26194c33999bb72adbbd246dc44c1e6"
     },
     {
       "name": "myers_diff",
-      "instructions": 680117,
+      "instructions": 680030,
       "output_valid": true,
       "workload_sha256": "dc95ca39f7aaeea2d9ba0c23109051302b21ed19c65087f70e262d358388714d",
       "source_sha256": "ff84da7f1f6c0ef68513522bd306a6368ace18732a036de14bc33108d0651ec9"
     },
     {
       "name": "nbody",
-      "instructions": 4254050,
+      "instructions": 4253933,
       "output_valid": true,
       "workload_sha256": "20f891a9c78b63192162125c450062f3c03e352690e7190575d1f384caa9833b",
       "source_sha256": "7617edf531a3032122b065d13251bebd125ad4d111da4dcc1f4eeb517f36d17f"
     },
     {
       "name": "nqueen",
-      "instructions": 5917376,
+      "instructions": 5917279,
       "output_valid": true,
       "workload_sha256": "461ca8f117f4ee22f01e0b999c3cfe0d65c03471443c3adbf2c3cc483a8046ac",
       "source_sha256": "afe897bc7952d6a507d06c5d9b5b727cfd61a2ec34818a2ff7211acaacbfce0a"
     },
     {
       "name": "nsieve",
-      "instructions": 384968,
+      "instructions": 384875,
       "output_valid": true,
       "workload_sha256": "971c8a73a6530e7fdb1b7b9260bb10b0e05934084a7357beccb297d0aeb67b78",
       "source_sha256": "0e814db9a50f343e1ddef2f1a4dcd42f62e01ffbe894b4760723b1f389da4818"
     },
     {
       "name": "pisum",
-      "instructions": 1164968,
+      "instructions": 1164875,
       "output_valid": true,
       "workload_sha256": "56902902b6ea8cac19240511e100761acd6e11e0cae77a4a9113f49aa5320af6",
       "source_sha256": "9441ea5c5a6d504ac91faee4b8abaae659d724f48b4605d98536bbac2af6dea7"
     },
     {
       "name": "primes",
-      "instructions": 1264751,
+      "instructions": 1264647,
       "output_valid": true,
       "workload_sha256": "e4b8f4e31a4c34520e1575deed302c2d2fbded0cb769c1d37d06ed29f4ffe3a5",
       "source_sha256": "3cde8d167c6d2db46dd1eaaac9de7b956d6425fcbd25f7ca927b87b2b4badd94"
     },
     {
       "name": "quicksort",
-      "instructions": 6083933,
+      "instructions": 6083846,
       "output_valid": true,
       "workload_sha256": "052e12050a881fd1532c27eb27d66e25934520ccdf0cff4d4ce2905482f55a54",
       "source_sha256": "148f63961f9a8568d9f66ae2f49e3a4d097398b547cf316e3fcf20bce2af5452"
     },
     {
       "name": "raytracer",
-      "instructions": 4071893,
+      "instructions": 4071804,
       "output_valid": true,
       "workload_sha256": "c59df9d1c6c4cb5c1122c14d41293b572aaf138aab6e1d345366178764443c31",
       "source_sha256": "428dd5e7eed281bc549d9c5df6eed7a64d24edde90186b20f61986e1a7e5d6a0"
     },
     {
       "name": "regex_lite",
-      "instructions": 417377,
+      "instructions": 417286,
       "output_valid": true,
       "workload_sha256": "865bd1fb460b8b3dd3fdc900036bb41034f3e92e905b2e091b036f0c58e9306d",
       "source_sha256": "2e7bcf4ae3faa7702eb023d1c66c6cde07112c9d5cb038d14c270721b5aa4561"
     },
     {
       "name": "spectral_norm",
-      "instructions": 4910603,
+      "instructions": 4910505,
       "output_valid": true,
       "workload_sha256": "59ecdaf80b39abc8571e97e0b5f3b71138c083db45b129882a34006835c6aae9",
       "source_sha256": "f5ab4979dc98a314d736d87ae69d7d8cf564525466612c656ae2ec6acbf4c080"
     },
     {
       "name": "string_equality",
-      "instructions": 1481825,
+      "instructions": 1481761,
       "output_valid": true,
       "workload_sha256": "39a71ae6adeb0313c764cc35c707c97ba7cdc47bdcad07d0ebfd994f6c866fce",
       "source_sha256": "e3647206e0f75b0fe53877a841977aaad39cbc501eb55228e83dfde179b58c62"
     },
     {
       "name": "sum_to_n",
-      "instructions": 264898,
+      "instructions": 264794,
       "output_valid": true,
       "workload_sha256": "0213547ce564b206815d83c209de178dbdcdc51eeb96fe740313aac35f5a4828",
       "source_sha256": "15942169dfa957870e8efef8e9509de8526de8d7cf3e36650a63ff29d6750718"
     },
     {
       "name": "tak",
-      "instructions": 391113990,
+      "instructions": 391113710,
       "output_valid": true,
       "workload_sha256": "87295519d89551287bfc0f7e01505a371ff3f69c4a3493b9d6974e51376978b5",
       "source_sha256": "9eabfa8d2e2151e00483f8476f1c19db7f666adf16c36e22beaed2ef0add9922"
     },
     {
       "name": "tinytemplate",
-      "instructions": 421512,
+      "instructions": 421440,
       "output_valid": true,
       "workload_sha256": "0bc95d1f0cd980b3c75c955ecb80d5866508409a7cb45a732fcf49139d58839b",
       "source_sha256": "227382068ebda723333d617219a416f34759e29d47d5ce12f43fcd093e088c71"
     },
     {
       "name": "warden",
-      "instructions": 274892,
+      "instructions": 274791,
       "output_valid": true,
       "workload_sha256": "1d2ca8b4322dfbe647b5c909c04ed122324030ee60a05788885ee9fef0d99d8c",
       "source_sha256": "17ad09bfe10fdca67ff198740da76504f219d8c9b39bc0e0fc9fec8cad20f0fe"

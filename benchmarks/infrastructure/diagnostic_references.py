@@ -159,6 +159,15 @@ def adapt_interpreter_source(source: str, arguments: tuple[str, ...]) -> str:
         "(Stdlib.Tuple2.second (checksum data 0L 0L))",
     )
     transformed = transformed.replace("Stdlib.String.equals left right", "left == right")
+    if "Stdlib.Int64.fromFloat" in transformed:
+        transformed = transformed.replace("Stdlib.Int64.fromFloat", "interpreterInt64FromFloat")
+        transformed = (
+            "let interpreterInt64FromFloat (value: Float) : Int64 =\n"
+            "    match Stdlib.Int64.fromFloat value with\n"
+            "    | Some number -> number\n"
+            "    | None -> Builtin.testRuntimeError \"float is outside Int64 range\"\n\n"
+            + transformed
+        )
     needs_grapheme_adapter = "Stdlib.String.toGraphemes" in transformed
     if needs_grapheme_adapter:
         transformed = transformed.replace("Stdlib.String.toGraphemes", "interpreterToGraphemes")
