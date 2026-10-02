@@ -1,5 +1,12 @@
 (include_subdirs unqualified)
 (executable
  (name foundations_main)
+ (modules (:standard \ text_probe))
  (libraries dark_compiler)
+ (flags (:standard -w @a -warn-error @a)))
+
+(executable
+ (name text_probe)
+ (modules text_probe)
+ (libraries dark_compiler yojson)
  (flags (:standard -w @a -warn-error @a)))
