@@ -4,7 +4,7 @@ let () =
     Foundation_probe.run ()
   else begin
   let results =
-    List.map (fun (name, run) -> name, run ()) BitsetTests.tests
+    List.map (fun (name, run) -> name, run ()) (BitsetTests.tests @ PlatformTests.tests)
   in
   let failures = List.filter (fun (_, result) -> Result.is_error result) results in
   List.iter
