@@ -4,31 +4,33 @@ let cwd = Stdlib.Cli.FileSystem.currentDirectory () in Stdlib.String.startsWith 
 
 Stdlib.Cli.FileSystem.pathExists "/definitely/missing/dark-file" = false
 
-Stdlib.Cli.FileSystem.isDirectory "/tmp" = true
+Stdlib.Cli.FileSystem.isDirectory "." = true
 
-match Stdlib.Cli.FileSystem.readFile "/etc/hostname" with | Ok blob -> (match Stdlib.Blob.toString blob with | Ok text -> Stdlib.String.length text > 0 | Error _ -> false) | Error _ -> false = stdout="true\n" stderr="" isolated=true
+match Stdlib.Cli.FileSystem.readFile "README.md" with | Ok blob -> (match Stdlib.Blob.toString blob with | Ok text -> Stdlib.String.length text > 0 | Error _ -> false) | Error _ -> false = stdout="true\n" stderr="" isolated=true
 
-Stdlib.List.length (Stdlib.Cli.FileSystem.listDirectory "/tmp") > 0 = true isolated=true
+Stdlib.List.length (Stdlib.Cli.FileSystem.listDirectory ".") > 0 = true isolated=true
 
 Stdlib.Cli.FileSystem.listDirectory "/definitely/missing/dark-directory" = []
 
 Stdlib.Cli.FileSystem.readFile "/definitely/missing/dark-file" = Error Stdlib.Cli.FileSystem.FileError.NotFound
 
-Stdlib.Cli.FileSystem.readFile "/etc/shadow" = Error Stdlib.Cli.FileSystem.FileError.OsAccessDenied
+// Deleting a directory as a file deterministically exercises the access-error
+// mapping, including on root hosts and VMs without /etc/shadow.
+Stdlib.Cli.FileSystem.deleteFile "." = Error Stdlib.Cli.FileSystem.FileError.OsAccessDenied
 
 Stdlib.Cli.FileSystem.deleteFile "/definitely/missing/dark-file" = Error Stdlib.Cli.FileSystem.FileError.NotFound
 
 (Stdlib.Cli.FileSystem.FileError.toString Stdlib.Cli.FileSystem.FileError.NotFound, Stdlib.Cli.FileSystem.FileError.toString Stdlib.Cli.FileSystem.FileError.OsAccessDenied, Stdlib.Cli.FileSystem.FileError.toString (Stdlib.Cli.FileSystem.FileError.Other "custom")) = ("File not found", "Permission denied", "custom")
 
-let path = $"/tmp/dark-filesystem-roundtrip-{Stdlib.Int.toString (Stdlib.Cli.Sys.currentPid ())}" in let written = Stdlib.Cli.FileSystem.overwriteFile path (Stdlib.Blob.fromString "one") in let appended = Stdlib.Cli.FileSystem.appendToFile path "-two" in let read = Stdlib.Cli.FileSystem.readFile path in let content = match (written, appended, read) with | (Ok (()), Ok (()), Ok blob) -> Stdlib.Blob.toString blob | _ -> Error "file operation failed" in let deleted = Stdlib.Cli.FileSystem.deleteFile path in if Stdlib.Cli.FileSystem.pathExists path then Error "delete failed" else content = Ok "one-two" isolated=true
+let root = Stdlib.Cli.Env.getOr "TMPDIR" "." in let path = $"{root}/dark-filesystem-roundtrip-{Stdlib.Int.toString (Stdlib.Cli.Sys.currentPid ())}" in let written = Stdlib.Cli.FileSystem.overwriteFile path (Stdlib.Blob.fromString "one") in let appended = Stdlib.Cli.FileSystem.appendToFile path "-two" in let read = Stdlib.Cli.FileSystem.readFile path in let content = match (written, appended, read) with | (Ok (()), Ok (()), Ok blob) -> Stdlib.Blob.toString blob | _ -> Error "file operation failed" in let deleted = Stdlib.Cli.FileSystem.deleteFile path in if Stdlib.Cli.FileSystem.pathExists path then Error "delete failed" else content = Ok "one-two" isolated=true
 
-let path = $"/tmp/dark-filesystem-recursive-{Stdlib.Int.toString (Stdlib.Cli.Sys.currentPid ())}/nested/value" in Stdlib.Cli.FileSystem.writeFile path (Stdlib.Blob.fromString "recursive") = Ok (()) isolated=true
+let root = Stdlib.Cli.Env.getOr "TMPDIR" "." in let path = $"{root}/dark-filesystem-recursive-{Stdlib.Int.toString (Stdlib.Cli.Sys.currentPid ())}/nested/value" in Stdlib.Cli.FileSystem.writeFile path (Stdlib.Blob.fromString "recursive") = Ok (()) isolated=true
 
-let segment = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in let path = $"/tmp/dark-filesystem-long-{Stdlib.Int.toString (Stdlib.Cli.Sys.currentPid ())}/{segment}/{segment}/{segment}/value" in Stdlib.Cli.FileSystem.writeFile path (Stdlib.Blob.fromString "long") = Ok (()) isolated=true
+let root = Stdlib.Cli.Env.getOr "TMPDIR" "." in let segment = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in let path = $"{root}/dark-filesystem-long-{Stdlib.Int.toString (Stdlib.Cli.Sys.currentPid ())}/{segment}/{segment}/{segment}/value" in Stdlib.Cli.FileSystem.writeFile path (Stdlib.Blob.fromString "long") = Ok (()) isolated=true
 
-Stdlib.Cli.FileSystem.isDirectoryAtPath "/" "tmp" = true
+Stdlib.Cli.FileSystem.isDirectoryAtPath "." "src" = true
 
-Stdlib.List.member (Stdlib.Cli.FileSystem.getDirectoryContents "/") "tmp" = true
+Stdlib.List.member (Stdlib.Cli.FileSystem.getDirectoryContents ".") "src" = true
 
 Stdlib.Cli.Env.getOr "DARK_ENV_MISSING_VALUE" "fallback" = "fallback"
 

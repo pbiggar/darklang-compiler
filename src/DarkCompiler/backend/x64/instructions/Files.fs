@@ -243,8 +243,9 @@ let internal emitFileWriteBlob (ctx: FuncCtx) (instr: LIR.Instr) (dest: LIR.Reg)
                    X86_64.MOV_store (scratch, 8, X86_64.RCX)]      // payload = 0 (Unit)
                 @ loadImm64 X86_64.RCX 1L
                 @ [X86_64.MOV_store (scratch, 16, X86_64.RCX)      // refcount
-                   X86_64.MOV_reg (X86_64.RAX, scratch)
-                   X86_64.JMP cleanupLabel]
+                   X86_64.MOV_reg (X86_64.RAX, scratch)]
+                @ genLeakCounterInc ctx
+                @ [X86_64.JMP cleanupLabel]
                 // === Error path ===
                 @ [X86_64.Label errorLabel]
                 @ [X86_64.MOV_reg (X86_64.R10, heapPtr)
@@ -255,6 +256,7 @@ let internal emitFileWriteBlob (ctx: FuncCtx) (instr: LIR.Instr) (dest: LIR.Reg)
                 @ [X86_64.MOV_store (X86_64.R10, 8, scratch)]
                 @ loadImm64 scratch 0x726F727245L                    // "Error"
                 @ [X86_64.MOV_store (X86_64.R10, 16, scratch)]
+                @ genLeakCounterInc ctx
                 @ [X86_64.MOV_reg (scratch, heapPtr)
                    X86_64.ADD_imm (heapPtr, 24)]
                 @ loadImm64 X86_64.RCX 1L
@@ -263,6 +265,7 @@ let internal emitFileWriteBlob (ctx: FuncCtx) (instr: LIR.Instr) (dest: LIR.Reg)
                 @ loadImm64 X86_64.RCX 1L
                 @ [X86_64.MOV_store (scratch, 16, X86_64.RCX)
                    X86_64.MOV_reg (X86_64.RAX, scratch)]
+                @ genLeakCounterInc ctx
                 // === Cleanup ===
                 @ [X86_64.Label cleanupLabel
                    X86_64.ADD_imm (X86_64.RSP, 4096)]
