@@ -18,63 +18,93 @@ let namedArray (name: string) (values: JsonNode array) : JsonNode =
     node[name] <- JsonArray(values)
     node
 
-let rec encode (typ: Type) (value: obj) : JsonNode =
-    if typ = typeof<unit> then null
-    elif typ = typeof<string> then JsonValue.Create (unbox<string> value)
-    elif typ = typeof<bool> then JsonValue.Create (unbox<bool> value)
-    elif typ = typeof<float> then
-        scalar "float64" ((uint64 (BitConverter.DoubleToInt64Bits (unbox<float> value))).ToString("x16"))
-    elif typ = typeof<single> then
-        scalar "float32" ((uint32 (BitConverter.SingleToInt32Bits (unbox<single> value))).ToString("x8"))
-    elif typ = typeof<char> then scalar "utf16" ((int (unbox<char> value)).ToString("x4"))
-    elif typ = typeof<sbyte> then scalar "int8" (string value)
-    elif typ = typeof<int16> then scalar "int16" (string value)
-    elif typ = typeof<int> then scalar "int32" (string value)
-    elif typ = typeof<int64> then scalar "int64" (string value)
-    elif typ = typeof<Int128> then scalar "int128" (string value)
-    elif typ = typeof<byte> then scalar "uint8" (string value)
-    elif typ = typeof<uint16> then scalar "uint16" (string value)
-    elif typ = typeof<uint32> then scalar "uint32" (string value)
-    elif typ = typeof<uint64> then scalar "uint64" (string value)
-    elif typ = typeof<UInt128> then scalar "uint128" (string value)
-    elif typ = typeof<System.Numerics.BigInteger> then scalar "bigint" (string value)
-    elif typ.IsArray then
-        let elementType = typ.GetElementType()
-        let values = (value :?> System.Array) |> Seq.cast<obj> |> Seq.map (encode elementType) |> Seq.toArray
-        JsonArray(values)
-    elif typ.IsGenericType && typ.GetGenericTypeDefinition() = typedefof<list<_>> then
-        let elementType = typ.GetGenericArguments()[0]
-        let values = (value :?> System.Collections.IEnumerable) |> Seq.cast<obj> |> Seq.map (encode elementType) |> Seq.toArray
-        JsonArray(values)
-    elif typ.IsGenericType && typ.GetGenericTypeDefinition() = typedefof<Map<_, _>> then
-        let entries = value :?> System.Collections.IEnumerable
-        entries |> Seq.cast<obj> |> Seq.map (fun entry -> encode (entry.GetType()) entry) |> Seq.toArray |> namedArray "map"
-    elif FSharpType.IsTuple typ then
-        Array.map2 encode (FSharpType.GetTupleElements typ) (FSharpValue.GetTupleFields value) |> namedArray "tuple"
-    elif FSharpType.IsUnion typ then
-        let case, fields = FSharpValue.GetUnionFields(value, typ)
-        let node = JsonObject()
-        node["type"] <- JsonValue.Create (typ.Name.Split('`')[0])
-        node["case"] <- JsonValue.Create case.Name
-        node["fields"] <- JsonArray(Array.map2 (fun (field: Reflection.PropertyInfo) fieldValue -> encode field.PropertyType fieldValue) (case.GetFields()) fields)
-        node
-    elif FSharpType.IsRecord typ then
-        let node = JsonObject()
-        node["record"] <- JsonValue.Create (typ.Name.Split('`')[0])
-        node["fields"] <- JsonArray(Array.map2 (fun (field: Reflection.PropertyInfo) fieldValue ->
-            JsonArray([| JsonValue.Create(field.Name) :> JsonNode; encode field.PropertyType fieldValue |]) :> JsonNode)
-            (FSharpType.GetRecordFields typ) (FSharpValue.GetRecordFields value))
-        node
-    elif typ.IsGenericType && typ.GetGenericTypeDefinition() = typedefof<Collections.Generic.KeyValuePair<_, _>> then
-        let key = typ.GetProperty("Key")
-        let item = typ.GetProperty("Value")
-        namedArray "tuple" [| encode key.PropertyType (key.GetValue value); encode item.PropertyType (item.GetValue value) |]
-    else failwith $"Missing semantic comparison encoder for {typ.FullName}"
+let encodeString (text: string) : JsonNode =
+    let rec unpaired index =
+        if index >= text.Length then false
+        elif Char.IsHighSurrogate text[index] then
+            if index + 1 < text.Length && Char.IsLowSurrogate text[index + 1] then unpaired (index + 2)
+            else true
+        elif Char.IsLowSurrogate text[index] then true
+        else unpaired (index + 1)
+    if unpaired 0 then
+        text |> Seq.map (fun unit -> JsonValue.Create((int unit).ToString("x4")) :> JsonNode) |> Seq.toArray |> namedArray "utf16String"
+    else JsonValue.Create text
+
+// Cache reflection readers; complete observations of the source corpus contain
+// millions of repeated record/union values. Caching changes only instrumentation.
+let encoders = Collections.Generic.Dictionary<Type, obj -> JsonNode>()
+let rec encoder (typ: Type) : obj -> JsonNode =
+    match encoders.TryGetValue typ with
+    | true, fn -> fn
+    | _ ->
+        let fn : obj -> JsonNode =
+            if typ = typeof<unit> then fun _ -> null
+            elif typ = typeof<string> then fun value -> encodeString (unbox<string> value)
+            elif typ = typeof<bool> then fun value -> JsonValue.Create (unbox<bool> value)
+            elif typ = typeof<float> then fun value -> scalar "float64" ((uint64 (BitConverter.DoubleToInt64Bits (unbox<float> value))).ToString("x16"))
+            elif typ = typeof<single> then fun value -> scalar "float32" ((uint32 (BitConverter.SingleToInt32Bits (unbox<single> value))).ToString("x8"))
+            elif typ = typeof<char> then fun value -> scalar "utf16" ((int (unbox<char> value)).ToString("x4"))
+            elif typ = typeof<sbyte> then fun value -> scalar "int8" (string value)
+            elif typ = typeof<int16> then fun value -> scalar "int16" (string value)
+            elif typ = typeof<int> then fun value -> scalar "int32" (string value)
+            elif typ = typeof<int64> then fun value -> scalar "int64" (string value)
+            elif typ = typeof<Int128> then fun value -> scalar "int128" (string value)
+            elif typ = typeof<byte> then fun value -> scalar "uint8" (string value)
+            elif typ = typeof<uint16> then fun value -> scalar "uint16" (string value)
+            elif typ = typeof<uint32> then fun value -> scalar "uint32" (string value)
+            elif typ = typeof<uint64> then fun value -> scalar "uint64" (string value)
+            elif typ = typeof<UInt128> then fun value -> scalar "uint128" (string value)
+            elif typ = typeof<System.Numerics.BigInteger> then fun value -> scalar "bigint" (string value)
+            elif typ.IsArray then
+                let elementType = typ.GetElementType()
+                fun value -> JsonArray((value :?> System.Array) |> Seq.cast<obj> |> Seq.map (encode elementType) |> Seq.toArray)
+            elif typ.IsGenericType && typ.GetGenericTypeDefinition() = typedefof<list<_>> then
+                let elementType = typ.GetGenericArguments()[0]
+                fun value -> JsonArray((value :?> Collections.IEnumerable) |> Seq.cast<obj> |> Seq.map (encode elementType) |> Seq.toArray)
+            elif typ.IsGenericType && typ.GetGenericTypeDefinition() = typedefof<Map<_, _>> then
+                fun value ->
+                    (value :?> Collections.IEnumerable) |> Seq.cast<obj> |> Seq.map (fun entry -> encode (entry.GetType()) entry) |> Seq.toArray |> namedArray "map"
+            elif FSharpType.IsTuple typ then
+                let types = FSharpType.GetTupleElements typ
+                let reader = FSharpValue.PreComputeTupleReader typ
+                fun value -> Array.map2 encode types (reader value) |> namedArray "tuple"
+            elif FSharpType.IsUnion typ then
+                let tag = FSharpValue.PreComputeUnionTagReader typ
+                let cases = FSharpType.GetUnionCases typ |> Array.map (fun case ->
+                    case.Name, (case.GetFields() |> Array.map (fun field -> field.PropertyType)), FSharpValue.PreComputeUnionReader case)
+                fun value ->
+                    let name, types, reader = cases[tag value]
+                    let node = JsonObject()
+                    node["type"] <- JsonValue.Create (typ.Name.Split('`')[0])
+                    node["case"] <- JsonValue.Create name
+                    node["fields"] <- JsonArray(Array.map2 encode types (reader value))
+                    node
+            elif FSharpType.IsRecord typ then
+                let fields = FSharpType.GetRecordFields typ
+                let reader = FSharpValue.PreComputeRecordReader typ
+                fun value ->
+                    let node = JsonObject()
+                    node["record"] <- JsonValue.Create (typ.Name.Split('`')[0])
+                    node["fields"] <- JsonArray(Array.map2 (fun (field: Reflection.PropertyInfo) fieldValue ->
+                        JsonArray([| JsonValue.Create(field.Name) :> JsonNode; encode field.PropertyType fieldValue |]) :> JsonNode)
+                        fields (reader value))
+                    node
+            elif typ.IsGenericType && typ.GetGenericTypeDefinition() = typedefof<Collections.Generic.KeyValuePair<_, _>> then
+                let key, item = typ.GetProperty("Key"), typ.GetProperty("Value")
+                fun value -> namedArray "tuple" [| encode key.PropertyType (key.GetValue value); encode item.PropertyType (item.GetValue value) |]
+            else failwith $"Missing semantic comparison encoder for {typ.FullName}"
+        encoders[typ] <- fn
+        fn
+and encode (typ: Type) (value: obj) : JsonNode = (encoder typ) value
 
 CultureInfo.CurrentCulture <- CultureInfo.InvariantCulture
 CultureInfo.CurrentUICulture <- CultureInfo.InvariantCulture
+let reader : IO.TextReader =
+    match fsi.CommandLineArgs with
+    | [| _; path |] -> new IO.StreamReader(path)
+    | _ -> Console.In
 let rec requests () =
-    match Console.ReadLine() with
+    match reader.ReadLine() with
     | null -> ()
     | line ->
         let request = JsonNode.Parse line

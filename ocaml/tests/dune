@@ -1,7 +1,7 @@
 (include_subdirs unqualified)
 (executable
  (name foundations_main)
- (modules (:standard \ text_probe))
+ (modules (:standard \ text_probe semantic_probe))
  (libraries dark_compiler)
  (flags (:standard -w @a -warn-error @a)))
 
@@ -9,4 +9,10 @@
  (name text_probe)
  (modules text_probe)
  (libraries dark_compiler yojson)
+ (flags (:standard -w @a -warn-error @a)))
+
+(executable
+ (name semantic_probe)
+ (modules semantic_probe)
+ (libraries dark_compiler semantic_observation yojson)
  (flags (:standard -w @a -warn-error @a)))

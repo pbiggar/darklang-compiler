@@ -25,7 +25,7 @@ def main():
     if observations[0] != observations[1]:
         print(f"Host text mismatch; complete observations: {output}")
         return 1
-    print(f"Host text parity: all 1,112,064 Unicode scalars checked; {len(observations[0])} nonidentity/integer observations match")
+    print(f"Host text parity: all 1,112,064 Unicode scalars checked; {len(observations[0])} normalization/classification/grapheme/integer observations match")
     return 0
 
 if __name__ == "__main__":

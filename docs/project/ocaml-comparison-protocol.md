@@ -8,6 +8,9 @@ does not replace the compiler CLI or introduce a public compiler library API.
 Values preserve all fields and source order:
 
 - Strings, booleans, and unit/null use JSON strings, booleans, and null.
+  A string containing an isolated surrogate uses `utf16String` with every
+  UTF-16 unit as four hexadecimal digits. Ordinary JSON serializers replace
+  these units and would lose diagnostic evidence for non-BMP stray characters.
 - Integer scalars carry `kind` (their signed/unsigned width or `bigint`) and an
   exact decimal string `value`; machine JSON numbers are not used for literals.
 - Floating scalars carry `kind: float64` and the 16-digit lowercase hexadecimal

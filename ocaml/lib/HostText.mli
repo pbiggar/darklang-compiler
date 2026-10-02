@@ -6,3 +6,6 @@ val tryParseInt32 : string -> int32 option
 val utf16Units : string -> int array
 val ofUtf16Units : int array -> string
 val normalize : string -> string
+val isLetterUnit : int -> bool
+val isDigitUnit : int -> bool
+val graphemeClusters : string -> string list
