@@ -31,6 +31,11 @@ def inputs():
         bound = 2 ** (bits - int(signed))
         for value in [0, 1, bound-1, bound, bound+1, 2**256]:
             probes.extend([str(value)+suffix, "0"+str(value)+suffix, "-"+str(value)+suffix])
+    probes.extend([
+        "1, 2 | 3, 4", "a :: b :: tail", "Ok -128y", "Pair(a, b)", "Pair((a, b))", "Case()",
+        "Result.Ok value", "Case a b", "Case a\n  b", "Case a\nb", "(a | b)", "(a, b)", "()",
+        "[head, tail]", "[a; b]", "[a\nb]", "[a b]", "[a,", "(a,", "Case(a,", "...", "->", "'क्'", "'क्क'",
+    ])
     rng = random.Random(12864)
     atoms = ["let", "val", "___", "x'", "'a", "α", "é", "😀", "0L", "9223372036854775808L", "1e+", "12abc",
              "(", ")", "(*)", "(*", "*)", '"', '"""', '$"', "\\u0041", "\\U00110000", "'", "``", "//", "///", "\n", "\r", "\t", "{", "}", ";"]
@@ -53,7 +58,7 @@ def first_difference(expected, actual, path="value"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns"])
     parser.add_argument("--probes-only", action="store_true")
     args = parser.parse_args()
     corpus = list(inputs())

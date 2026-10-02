@@ -102,7 +102,7 @@ let classificationMethods =
     ["isIntLit"; "canStartAtom"; "canStartPattern"; "closesOrSeparates"; "isRecoveryBarrier"]
     |> List.map (fun name -> parserModule.GetMethod(name, Reflection.BindingFlags.Static ||| Reflection.BindingFlags.NonPublic))
 let infixMethod = parserModule.GetMethod("infixOf", Reflection.BindingFlags.Static ||| Reflection.BindingFlags.NonPublic)
-let parserSupport source =
+let parserSupport stage source =
     match LibParser.Lexer.tokenize source with
     | Error error -> encode typeof<Result<unit,string>> (box (Error error : Result<unit,string>))
     | Ok (tokens, _) ->
@@ -114,7 +114,15 @@ let parserSupport source =
             scopes = scopes; matchArms = []; pendingGt = 0
             pendingGtRange = LibParser.WrittenTypes.synthRange; declAnchor = -1
             depth = 0; abandoned = false; steps = 0; interpDepth = 0 }
-        let observations = tokens |> Array.mapi (fun index token ->
+        if stage = "patterns" then
+            let pattern, next = LibParser.Parser.parseMatchPattern state 0
+            let result = JsonObject()
+            result["pattern"] <- encode typeof<LibParser.WrittenTypes.MatchPattern> (box pattern)
+            result["next"] <- scalar "int32" (string next)
+            result["diagnostics"] <- encode typeof<LibParser.Parser.Diagnostic list> (box (List.ofSeq state.diagnostics))
+            result :> JsonNode
+        else
+          let observations = tokens |> Array.mapi (fun index token ->
             let node = JsonObject()
             node["index"] <- scalar "int32" (string index)
             node["found"] <- encodeString (LibParser.Parser.foundDesc state index)
@@ -136,11 +144,11 @@ let parserSupport source =
             node["gt"] <- encode typeof<Option<(LibParser.Tokenizer.TokenRange * int) * Option<LibParser.Tokenizer.TokenRange * int>>> (box gt)
             LibParser.Parser.checkBareMinMagnitude state index
             node :> JsonNode)
-        LibParser.Parser.validateLiterals state
-        let result = JsonObject()
-        result["tokens"] <- JsonArray observations
-        result["diagnostics"] <- encode typeof<LibParser.Parser.Diagnostic list> (box (List.ofSeq state.diagnostics))
-        result :> JsonNode
+          LibParser.Parser.validateLiterals state
+          let result = JsonObject()
+          result["tokens"] <- JsonArray observations
+          result["diagnostics"] <- encode typeof<LibParser.Parser.Diagnostic list> (box (List.ofSeq state.diagnostics))
+          result :> JsonNode
 
 CultureInfo.CurrentCulture <- CultureInfo.InvariantCulture
 CultureInfo.CurrentUICulture <- CultureInfo.InvariantCulture
@@ -160,7 +168,7 @@ let rec requests () =
             | "tokens" ->
                 let value = LibParser.Lexer.tokenize source
                 encode (typeof<Result<LibParser.Lexer.SpannedToken list * (LibParser.Tokenizer.TokenRange * string) list, string>>) (box value)
-            | "parser-support" -> parserSupport source
+            | "parser-support" | "patterns" -> parserSupport stage source
             | _ -> failwith $"Unsupported reference observation stage: {stage}"
         let response = JsonObject()
         response["schema"] <- JsonValue.Create 1

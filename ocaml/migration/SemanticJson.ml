@@ -93,6 +93,33 @@ let token value =
   | TEOF -> union "Token" "TEOF" []
 let pos (value : Tokenizer.pos) = record "Pos" ["row", int32 value.row; "column", int32 value.column]
 let range (value : Tokenizer.tokenRange) = record "TokenRange" ["start", pos value.start; "end_", pos value.end_]
+let rec matchPattern value =
+  let pair encoder (location, value) = tuple [range location; encoder value] in
+  match value with
+  | WrittenTypes.MPInt (location, integer) -> union "MatchPattern" "MPInt" [range location; pair (fun value -> scalar "bigint" (Z.to_string value)) integer]
+  | WrittenTypes.MPInt8 (location, integer, suffix) -> union "MatchPattern" "MPInt8" [range location; pair (fun value -> scalar "int8" (string_of_int value)) integer; range suffix]
+  | WrittenTypes.MPUInt8 (location, integer, suffix) -> union "MatchPattern" "MPUInt8" [range location; pair (fun value -> scalar "uint8" (string_of_int value)) integer; range suffix]
+  | WrittenTypes.MPInt16 (location, integer, suffix) -> union "MatchPattern" "MPInt16" [range location; pair (fun value -> scalar "int16" (string_of_int value)) integer; range suffix]
+  | WrittenTypes.MPUInt16 (location, integer, suffix) -> union "MatchPattern" "MPUInt16" [range location; pair (fun value -> scalar "uint16" (string_of_int value)) integer; range suffix]
+  | WrittenTypes.MPInt32 (location, integer, suffix) -> union "MatchPattern" "MPInt32" [range location; pair (fun value -> scalar "int32" (Int32.to_string value)) integer; range suffix]
+  | WrittenTypes.MPUInt32 (location, integer, suffix) -> union "MatchPattern" "MPUInt32" [range location; pair (fun value -> scalar "uint32" (Int64.to_string value)) integer; range suffix]
+  | WrittenTypes.MPInt64 (location, integer, suffix) -> union "MatchPattern" "MPInt64" [range location; pair (fun value -> scalar "int64" (Int64.to_string value)) integer; range suffix]
+  | WrittenTypes.MPUInt64 (location, integer, suffix) -> union "MatchPattern" "MPUInt64" [range location; pair (fun value -> scalar "uint64" (unsigned64 value)) integer; range suffix]
+  | WrittenTypes.MPInt128 (location, integer, suffix) -> union "MatchPattern" "MPInt128" [range location; pair (fun value -> scalar "int128" (Z.to_string value)) integer; range suffix]
+  | WrittenTypes.MPUInt128 (location, integer, suffix) -> union "MatchPattern" "MPUInt128" [range location; pair (fun value -> scalar "uint128" (Z.to_string value)) integer; range suffix]
+  | WrittenTypes.MPVariable (location, name) -> union "MatchPattern" "MPVariable" [range location; string name]
+  | WrittenTypes.MPFloat (location, negative, whole, fraction) -> union "MatchPattern" "MPFloat" [range location; `Bool negative; string whole; string fraction]
+  | WrittenTypes.MPBool (location, value) -> union "MatchPattern" "MPBool" [range location; `Bool value]
+  | WrittenTypes.MPString (location, contents, opening, closing) -> union "MatchPattern" "MPString" [range location; option (pair string) contents; range opening; range closing]
+  | WrittenTypes.MPChar (location, contents, opening, closing) -> union "MatchPattern" "MPChar" [range location; option (pair string) contents; range opening; range closing]
+  | WrittenTypes.MPUnit location -> union "MatchPattern" "MPUnit" [range location]
+  | WrittenTypes.MPEnum (location, case, fields) -> union "MatchPattern" "MPEnum" [range location; pair string case; `List (List.map matchPattern fields)]
+  | WrittenTypes.MPTuple (location, first, comma, second, rest, opening, closing) -> union "MatchPattern" "MPTuple" [range location; matchPattern first; range comma; matchPattern second; `List (List.map (pair matchPattern) rest); range opening; range closing]
+  | WrittenTypes.MPList (location, contents, opening, closing) -> union "MatchPattern" "MPList" [range location; `List (List.map (fun (pattern, separator) -> tuple [matchPattern pattern; option range separator]) contents); range opening; range closing]
+  | WrittenTypes.MPListCons (location, head, tail, cons) -> union "MatchPattern" "MPListCons" [range location; matchPattern head; matchPattern tail; range cons]
+  | WrittenTypes.MPOr (location, alternatives) -> union "MatchPattern" "MPOr" [range location; `List (List.map matchPattern alternatives)]
+  | WrittenTypes.MPError location -> union "MatchPattern" "MPError" [range location]
+
 let triviaKind = function Lexer.LineComment -> union "TriviaKind" "LineComment" [] | Lexer.DocComment -> union "TriviaKind" "DocComment" [] | Lexer.BlockComment -> union "TriviaKind" "BlockComment" []
 let trivia (value : Lexer.trivia) = record "Trivia" ["kind", triviaKind value.Lexer.kind; "text", string value.Lexer.text; "range", range value.Lexer.range]
 let spanned (value : Lexer.spannedToken) = record "SpannedToken" ["token", token value.Lexer.token; "text", string value.Lexer.text; "range", range value.Lexer.range; "docComment", option string value.Lexer.docComment; "leadingTrivia", `List (List.map trivia value.Lexer.leadingTrivia)]
@@ -160,3 +187,12 @@ let parserSupport source =
       `Assoc ["tokens", `List (Array.to_list observations);
         "diagnostics", `List (List.map diagnostic (List.rev !(state.ParserSupport.diagnostics)))]
   [@@warning "-4"]
+
+let patterns source =
+  match Lexer.tokenize source with
+  | Error error -> union "FSharpResult" "Error" [string error]
+  | Ok (tokens, _) ->
+      let state = ParserSupport.makeState 0 (Array.of_list tokens) in
+      let pattern, next = PatternParser.parseMatchPattern state 0 in
+      `Assoc ["pattern", matchPattern pattern; "next", int32 next;
+        "diagnostics", `List (List.map diagnostic (List.rev !(state.ParserSupport.diagnostics)))]

@@ -9,6 +9,7 @@ let rec requests () =
       let value = match stage with
         | "tokens" -> Semantic_observation.SemanticJson.tokens (Dark_compiler.Lexer.tokenize source)
         | "parser-support" -> Semantic_observation.SemanticJson.parserSupport source
+        | "patterns" -> Semantic_observation.SemanticJson.patterns source
         | stage -> failwith ("Unsupported native observation stage: " ^ stage)
       in
       print_endline (Yojson.Basic.to_string (`Assoc ["schema", `Int 1; "stage", `String stage; "value", value]));
