@@ -28,7 +28,7 @@ parentheses exercise those implementations successfully.
 
 | Surface | Remaining difference |
 | --- | --- |
-| HTTP client | The pure response/error types, content-type and authorization-header helpers are present. Operations that perform requests (`request`, `get`, `post`, `put`, `options`, `delete`, `head`, and `stream`) remain absent because there is no HTTP client host. |
+| HTTP client | Buffered HTTP/HTTPS `request`, `get`, `post`, `put`, `options`, `delete`, and `head`, plus response-body `stream`, are implemented in Dark. The [HTTP ledger](stdlib/html-and-http.md#additional-pure-http-surfaces) records the supported transport and TLS profile; the upstream external-network fixture remains disabled. |
 | HTTP server | Pure `getMethod`, `get`, and `post` route construction is present. `serve` remains absent because there is no HTTP server host. |
 | SQLite | The upstream `Stdlib.Sqlite` value, query, execution, column, and conversion API is absent. |
 | Language tooling | Parsed-file shape, semantic tokenization, builtin introspection, runtime-value pretty printing, and runtime-value promotion are incomplete or absent. The snapshot-backed `ValueSearch` subset does not provide the interpreter's live package service. |
@@ -67,8 +67,8 @@ HTTP-server cases are enabled while three fixture expressions whose response
 literals use the interpreter's former `Int64` status-code shape remain
 line-gated. Pretty and SSE remain whole-file gated because their shared fixture
 preambles trigger the application-grouping frontend gap; focused tests exercise
-the copied implementations. The HTTP-client fixture also calls the
-intentionally absent network host from its shared preamble. A disabled file
+the copied implementations. The HTTP-client fixture includes external-network
+calls and remains disabled; focused local tests cover the native client. A disabled file
 must not be treated as proof that its entire feature is missing.
 
 The authoritative live denysets remain in

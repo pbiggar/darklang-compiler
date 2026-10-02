@@ -273,6 +273,26 @@ let get (url: String) (headers: List<(String * String)>)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
   Stdlib.HttpClient.request "GET" url headers Stdlib.Blob.empty
 
+let post (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.request "POST" url headers body
+
+let put (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.request "PUT" url headers body
+
+let options (url: String)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.request "OPTIONS" url [] Stdlib.Blob.empty
+
+let delete (url: String)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.request "DELETE" url [] Stdlib.Blob.empty
+
+let head (url: String)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.request "HEAD" url [] Stdlib.Blob.empty
+
 type StreamTransport =
   | Plain
   | Secure of Stdlib.Tls13Client.ApplicationState
