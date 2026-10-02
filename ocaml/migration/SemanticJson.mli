@@ -5,3 +5,6 @@ val patterns : string -> Yojson.Basic.t
 val types : string -> Yojson.Basic.t
 val bindings : string -> Yojson.Basic.t
 val declarationSupport : string -> string -> Yojson.Basic.t
+val ast : string -> Yojson.Basic.t
+val validated : string -> Yojson.Basic.t
+val rendered : string -> Yojson.Basic.t

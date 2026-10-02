@@ -195,6 +195,14 @@ let rec requests () =
             | "tokens" ->
                 let value = LibParser.Lexer.tokenize source
                 encode (typeof<Result<LibParser.Lexer.SpannedToken list * (LibParser.Tokenizer.TokenRange * string) list, string>>) (box value)
+            | "validated" ->
+                [LibParser.Validation.Script; LibParser.Validation.Package; LibParser.Validation.Test]
+                |> List.map (fun mode -> LibParser.Parser.parseFor mode source |> Result.map LibParser.Validation.ValidatedSourceFile.toWrittenTypes)
+                |> box |> encode typeof<Result<LibParser.WrittenTypes.SourceFile, LibParser.Parser.Diagnostic list> list>
+            | "rendered" ->
+                (LibParser.Parser.parse source).diagnostics |> List.map (LibParser.Parser.renderDiagnostic source)
+                |> box |> encode typeof<string list>
+            | "ast" -> encode typeof<LibParser.Parser.ParseResult> (box (LibParser.Parser.parse source))
             | "parser-support" | "patterns" | "types" | "bindings" | "parameters" | "effects" -> parserSupport stage source
             | _ -> failwith $"Unsupported reference observation stage: {stage}"
         let response = JsonObject()

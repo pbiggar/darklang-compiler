@@ -10,6 +10,9 @@ let rec requests () =
         | "tokens" -> Semantic_observation.SemanticJson.tokens (Dark_compiler.Lexer.tokenize source)
         | "parser-support" -> Semantic_observation.SemanticJson.parserSupport source
         | "parameters" | "effects" -> Semantic_observation.SemanticJson.declarationSupport stage source
+        | "validated" -> Semantic_observation.SemanticJson.validated source
+        | "rendered" -> Semantic_observation.SemanticJson.rendered source
+        | "ast" -> Semantic_observation.SemanticJson.ast source
         | "bindings" -> Semantic_observation.SemanticJson.bindings source
         | "types" -> Semantic_observation.SemanticJson.types source
         | "patterns" -> Semantic_observation.SemanticJson.patterns source

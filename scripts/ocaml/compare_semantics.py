@@ -47,6 +47,19 @@ def inputs():
         "/// param docs\n(x: Int)", "(/// name docs\nx: Int)", "{}", "{Http, Clock}", "{Http,}",
         "{Imaginary}", "{Http Clock}", "{Http, Http}", "{", "{1}", "{Http", "{http}",
     ])
+    probes.extend([
+        "if x then y else z", "if a then\n  if b then c\nelse d", "if a then b elif c then d else e",
+        "let x = 1L in x", "let f (x: Int) = x in f 1", "let x: Int = 1 in x", "fun (a, b) _ -> a",
+        "match x with | A -> 1 | B when p -> 2", "match x, y with | a, b -> a", "match x with | a | b -> a",
+        "type X = | A of (Int * Bool) * named: String | B", "type R = { /// field\n x: Int; y: Bool }",
+        "module A =\n  val x = 1\n  let f () : Int = x\nval y = 2", "module A.B\nlet x = 1",
+        "let f (___: Int): Int = 1", "val f (): Int = 1", "[<DB>] type X = { x: Int }",
+        "[f a\nf b]", "(f a\nf b)", "Ctor((a, b))", "Ctor (a, b)", "f None (g)", "parse<Int> x",
+        "Type<Int>.Case(a, b)", "Mod.R<Int> {x = f a; y = g b}", "{r with x = f a; y = g b}", "{r with}",
+        "Dict {1: f a; 2: g b}", "a & b == c || d && e", "2 ** 3 ** 2", "a @ b @ c", "1L\n-8L", "1L\n -8L",
+        '$"é😀 {x + 1} text"', '$"{{{{ \\{\\{ {x} }}}}"', '$"{val x = 1}"', '$"{}"', '$"{1 2}"',
+        '$"""é {{raw}} {f x}\n😀"""', "match x with | (a, a) -> a", "fun a a -> a",
+    ])
     rng = random.Random(12864)
     atoms = ["let", "val", "___", "x'", "'a", "α", "é", "😀", "0L", "9223372036854775808L", "1e+", "12abc",
              "(", ")", "(*)", "(*", "*)", '"', '"""', '$"', "\\u0041", "\\U00110000", "'", "``", "//", "///", "\n", "\r", "\t", "{", "}", ";"]
@@ -69,7 +82,7 @@ def first_difference(expected, actual, path="value"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered"])
     parser.add_argument("--probes-only", action="store_true")
     args = parser.parse_args()
     corpus = list(inputs())

@@ -266,3 +266,152 @@ let declarationSupport stage source =
         else let value, next = DeclarationSupport.parseEffectRow state 0 in option (fun values -> `List (List.map identifier values)) value, next in
       `Assoc ["value", value; "next", int32 next;
         "diagnostics", `List (List.map diagnostic (List.rev !(state.ParserSupport.diagnostics)))]
+
+let rec expr (value : WrittenTypes.expr) = match value with
+  | WrittenTypes.EUnit field0 -> union "Expr" "EUnit" [range field0]
+  | WrittenTypes.EBool (field0, field1) -> union "Expr" "EBool" [range field0; (fun value -> `Bool value) field1]
+  | WrittenTypes.EInt (location, integer) -> union "Expr" "EInt" [range location; (fun (location, value) -> tuple [range location; (fun value -> scalar "bigint" (Z.to_string value)) value]) integer]
+  | WrittenTypes.EInt64 (location, integer, suffix) -> union "Expr" "EInt64" [range location; (fun (location, value) -> tuple [range location; (fun value -> scalar "int64" (Int64.to_string value)) value]) integer; range suffix]
+  | WrittenTypes.EInt8 (location, integer, suffix) -> union "Expr" "EInt8" [range location; (fun (location, value) -> tuple [range location; (fun value -> scalar "int8" (string_of_int value)) value]) integer; range suffix]
+  | WrittenTypes.EUInt8 (location, integer, suffix) -> union "Expr" "EUInt8" [range location; (fun (location, value) -> tuple [range location; (fun value -> scalar "uint8" (string_of_int value)) value]) integer; range suffix]
+  | WrittenTypes.EInt16 (location, integer, suffix) -> union "Expr" "EInt16" [range location; (fun (location, value) -> tuple [range location; (fun value -> scalar "int16" (string_of_int value)) value]) integer; range suffix]
+  | WrittenTypes.EUInt16 (location, integer, suffix) -> union "Expr" "EUInt16" [range location; (fun (location, value) -> tuple [range location; (fun value -> scalar "uint16" (string_of_int value)) value]) integer; range suffix]
+  | WrittenTypes.EInt32 (location, integer, suffix) -> union "Expr" "EInt32" [range location; (fun (location, value) -> tuple [range location; (fun value -> scalar "int32" (Int32.to_string value)) value]) integer; range suffix]
+  | WrittenTypes.EUInt32 (location, integer, suffix) -> union "Expr" "EUInt32" [range location; (fun (location, value) -> tuple [range location; (fun value -> scalar "uint32" (Int64.to_string value)) value]) integer; range suffix]
+  | WrittenTypes.EUInt64 (location, integer, suffix) -> union "Expr" "EUInt64" [range location; (fun (location, value) -> tuple [range location; (fun value -> scalar "uint64" (unsigned64 value)) value]) integer; range suffix]
+  | WrittenTypes.EInt128 (location, integer, suffix) -> union "Expr" "EInt128" [range location; (fun (location, value) -> tuple [range location; (fun value -> scalar "int128" (Z.to_string value)) value]) integer; range suffix]
+  | WrittenTypes.EUInt128 (location, integer, suffix) -> union "Expr" "EUInt128" [range location; (fun (location, value) -> tuple [range location; (fun value -> scalar "uint128" (Z.to_string value)) value]) integer; range suffix]
+  | WrittenTypes.EFloat (field0, field1, field2, field3) -> union "Expr" "EFloat" [range field0; (fun value -> `Bool value) field1; string field2; string field3]
+  | WrittenTypes.EChar (field0, field1, field2, field3) -> union "Expr" "EChar" [range field0; option (fun item -> (let part0, part1 = item in tuple [range part0; string part1])) field1; range field2; range field3]
+  | WrittenTypes.EString (field0, field1, field2, field3, field4) -> union "Expr" "EString" [range field0; option (fun item -> range item) field1; `List (List.map (fun item -> stringSegment item) field2); range field3; range field4]
+  | WrittenTypes.EVariable (field0, field1) -> union "Expr" "EVariable" [range field0; string field1]
+  | WrittenTypes.EFnName (field0, field1) -> union "Expr" "EFnName" [range field0; qualifiedFnIdentifier field1]
+  | WrittenTypes.EInfix (field0, field1, field2, field3) -> union "Expr" "EInfix" [range field0; (let part0, part1 = field1 in tuple [range part0; infix part1]); expr field2; expr field3]
+  | WrittenTypes.ELet (field0, field1, field2, field3, field4, field5) -> union "Expr" "ELet" [range field0; letPattern field1; expr field2; expr field3; range field4; range field5]
+  | WrittenTypes.EApply (field0, field1, field2, field3) -> union "Expr" "EApply" [range field0; expr field1; `List (List.map (fun item -> typeReference item) field2); `List (List.map (fun item -> expr item) field3)]
+  | WrittenTypes.EList (field0, field1, field2, field3) -> union "Expr" "EList" [range field0; `List (List.map (fun item -> (let part0, part1 = item in tuple [expr part0; option (fun item -> range item) part1])) field1); range field2; range field3]
+  | WrittenTypes.ETuple (field0, field1, field2, field3, field4, field5, field6) -> union "Expr" "ETuple" [range field0; expr field1; range field2; expr field3; `List (List.map (fun item -> (let part0, part1 = item in tuple [range part0; expr part1])) field4); range field5; range field6]
+  | WrittenTypes.EIf (field0, field1, field2, field3, field4, field5, field6) -> union "Expr" "EIf" [range field0; expr field1; expr field2; option (fun item -> expr item) field3; range field4; range field5; option (fun item -> range item) field6]
+  | WrittenTypes.ERecordFieldAccess (field0, field1, field2, field3) -> union "Expr" "ERecordFieldAccess" [range field0; expr field1; (let part0, part1 = field2 in tuple [range part0; string part1]); range field3]
+  | WrittenTypes.ELambda (field0, field1, field2, field3, field4) -> union "Expr" "ELambda" [range field0; `List (List.map (fun item -> letPattern item) field1); expr field2; range field3; range field4]
+  | WrittenTypes.ERecord (field0, field1, field2, field3, field4) -> union "Expr" "ERecord" [range field0; qualifiedTypeIdentifier field1; `List (List.map (fun item -> (let part0, part1, part2 = item in tuple [range part0; (let part0, part1 = part1 in tuple [range part0; string part1]); expr part2])) field2); range field3; range field4]
+  | WrittenTypes.EDict (field0, field1, field2, field3, field4) -> union "Expr" "EDict" [range field0; `List (List.map (fun item -> (let part0, part1, part2, part3 = item in tuple [range part0; expr part1; range part2; expr part3])) field1); range field2; range field3; range field4]
+  | WrittenTypes.ERecordUpdate (field0, field1, field2, field3, field4, field5) -> union "Expr" "ERecordUpdate" [range field0; expr field1; `List (List.map (fun item -> (let part0, part1, part2 = item in tuple [(let part0, part1 = part0 in tuple [range part0; string part1]); range part1; expr part2])) field2); range field3; range field4; range field5]
+  | WrittenTypes.EEnum (field0, field1, field2, field3, field4) -> union "Expr" "EEnum" [range field0; qualifiedTypeIdentifier field1; (let part0, part1 = field2 in tuple [range part0; string part1]); `List (List.map (fun item -> expr item) field3); range field4]
+  | WrittenTypes.EMatch (field0, field1, field2, field3, field4) -> union "Expr" "EMatch" [range field0; expr field1; `List (List.map (fun item -> matchCase item) field2); range field3; range field4]
+  | WrittenTypes.EPipe (field0, field1, field2) -> union "Expr" "EPipe" [range field0; expr field1; `List (List.map (fun item -> (let part0, part1 = item in tuple [range part0; pipeExpr part1])) field2)]
+  | WrittenTypes.EStatement (field0, field1, field2) -> union "Expr" "EStatement" [range field0; expr field1; expr field2]
+  | WrittenTypes.EError field0 -> union "Expr" "EError" [range field0]
+and stringSegment (value : WrittenTypes.stringSegment) = match value with
+  | WrittenTypes.StringText (field0, field1) -> union "StringSegment" "StringText" [range field0; string field1]
+  | WrittenTypes.StringInterpolation (field0, field1, field2, field3) -> union "StringSegment" "StringInterpolation" [range field0; expr field1; range field2; range field3]
+and matchCase (value : WrittenTypes.matchCase) = record "MatchCase" [
+  "barRange", range value.WrittenTypes.barRange;
+  "pat", matchPattern value.WrittenTypes.pat;
+  "arrowRange", range value.WrittenTypes.arrowRange;
+  "whenCondition", option (fun item -> (let part0, part1 = item in tuple [range part0; expr part1])) value.WrittenTypes.whenCondition;
+  "rhs", expr value.WrittenTypes.rhs]
+and pipeExpr (value : WrittenTypes.pipeExpr) = match value with
+  | WrittenTypes.EPipeInfix (field0, field1, field2) -> union "PipeExpr" "EPipeInfix" [range field0; (let part0, part1 = field1 in tuple [range part0; infix part1]); expr field2]
+  | WrittenTypes.EPipeLambda (field0, field1, field2, field3, field4) -> union "PipeExpr" "EPipeLambda" [range field0; `List (List.map (fun item -> letPattern item) field1); expr field2; range field3; range field4]
+  | WrittenTypes.EPipeEnum (field0, field1, field2, field3, field4) -> union "PipeExpr" "EPipeEnum" [range field0; qualifiedTypeIdentifier field1; (let part0, part1 = field2 in tuple [range part0; string part1]); `List (List.map (fun item -> expr item) field3); range field4]
+  | WrittenTypes.EPipeFnCall (field0, field1, field2, field3) -> union "PipeExpr" "EPipeFnCall" [range field0; qualifiedFnIdentifier field1; `List (List.map (fun item -> typeReference item) field2); `List (List.map (fun item -> expr item) field3)]
+  | WrittenTypes.EPipeVariableOrFnCall (field0, field1) -> union "PipeExpr" "EPipeVariableOrFnCall" [range field0; string field1]
+and qualifiedFnIdentifier (value : WrittenTypes.qualifiedFnIdentifier) = record "QualifiedFnIdentifier" [
+  "range", range value.WrittenTypes.range;
+  "modules", `List (List.map (fun item -> (let part0, part1 = item in tuple [identifier part0; range part1])) value.WrittenTypes.modules);
+  "fn", identifier value.WrittenTypes.fn]
+and qualifiedTypeIdentifier (value : WrittenTypes.qualifiedTypeIdentifier) = record "QualifiedTypeIdentifier" [
+  "range", range value.WrittenTypes.range;
+  "modules", `List (List.map (fun item -> (let part0, part1 = item in tuple [identifier part0; range part1])) value.WrittenTypes.modules);
+  "typ", identifier value.WrittenTypes.typ;
+  "typeArgs", `List (List.map (fun item -> typeReference item) value.WrittenTypes.typeArgs)]
+and fnDecl (value : WrittenTypes.fnDecl) = record "FnDecl" [
+  "range", range value.WrittenTypes.range;
+  "name", identifier value.WrittenTypes.name;
+  "typeParams", `List (List.map (fun item -> (let part0, part1 = item in tuple [string part0; range part1])) value.WrittenTypes.typeParams);
+  "parameters", `List (List.map (fun item -> fnParam item) value.WrittenTypes.parameters);
+  "effects", option (fun item -> `List (List.map (fun item -> identifier item) item)) value.WrittenTypes.effects;
+  "returnType", typeReference value.WrittenTypes.returnType;
+  "body", expr value.WrittenTypes.body;
+  "keywordLet", range value.WrittenTypes.keywordLet;
+  "symbolColon", range value.WrittenTypes.symbolColon;
+  "symbolEquals", range value.WrittenTypes.symbolEquals;
+  "description", string value.WrittenTypes.description]
+and valueDecl (value : WrittenTypes.valueDecl) = record "ValueDecl" [
+  "range", range value.WrittenTypes.range;
+  "name", identifier value.WrittenTypes.name;
+  "body", expr value.WrittenTypes.body;
+  "keywordVal", range value.WrittenTypes.keywordVal;
+  "symbolEquals", range value.WrittenTypes.symbolEquals;
+  "description", string value.WrittenTypes.description]
+and recordFieldSyntax (value : WrittenTypes.recordFieldSyntax) = record "RecordFieldSyntax" [
+  "range", range value.WrittenTypes.range;
+  "name", (let part0, part1 = value.WrittenTypes.name in tuple [range part0; string part1]);
+  "typ", typeReference value.WrittenTypes.typ;
+  "description", string value.WrittenTypes.description;
+  "symbolColon", range value.WrittenTypes.symbolColon]
+and enumFieldSyntax (value : WrittenTypes.enumFieldSyntax) = record "EnumFieldSyntax" [
+  "range", range value.WrittenTypes.range;
+  "typ", typeReference value.WrittenTypes.typ;
+  "label", option (fun item -> (let part0, part1 = item in tuple [range part0; string part1])) value.WrittenTypes.label;
+  "symbolColon", option (fun item -> range item) value.WrittenTypes.symbolColon]
+and enumCaseSyntax (value : WrittenTypes.enumCaseSyntax) = record "EnumCaseSyntax" [
+  "range", range value.WrittenTypes.range;
+  "name", (let part0, part1 = value.WrittenTypes.name in tuple [range part0; string part1]);
+  "fields", `List (List.map (fun item -> enumFieldSyntax item) value.WrittenTypes.fields);
+  "description", string value.WrittenTypes.description;
+  "keywordOf", option (fun item -> range item) value.WrittenTypes.keywordOf]
+and typeDefinition (value : WrittenTypes.typeDefinition) = match value with
+  | WrittenTypes.TDAlias field0 -> union "TypeDefinition" "TDAlias" [typeReference field0]
+  | WrittenTypes.TDRecord field0 -> union "TypeDefinition" "TDRecord" [`List (List.map (fun item -> (let part0, part1 = item in tuple [recordFieldSyntax part0; option (fun item -> range item) part1])) field0)]
+  | WrittenTypes.TDEnum field0 -> union "TypeDefinition" "TDEnum" [`List (List.map (fun item -> (let part0, part1 = item in tuple [range part0; enumCaseSyntax part1])) field0)]
+and typeDecl (value : WrittenTypes.typeDecl) = record "TypeDecl" [
+  "range", range value.WrittenTypes.range;
+  "name", identifier value.WrittenTypes.name;
+  "typeParams", `List (List.map (fun item -> (let part0, part1 = item in tuple [string part0; range part1])) value.WrittenTypes.typeParams);
+  "definition", typeDefinition value.WrittenTypes.definition;
+  "keywordType", range value.WrittenTypes.keywordType;
+  "symbolEquals", range value.WrittenTypes.symbolEquals;
+  "description", string value.WrittenTypes.description]
+and moduleDecl (value : WrittenTypes.moduleDecl) = record "ModuleDecl" [
+  "range", range value.WrittenTypes.range;
+  "name", (let part0, part1 = value.WrittenTypes.name in tuple [range part0; string part1]);
+  "declarations", `List (List.map (fun item -> declaration item) value.WrittenTypes.declarations);
+  "keywordModule", range value.WrittenTypes.keywordModule]
+and testExpected (value : WrittenTypes.testExpected) = match value with
+  | WrittenTypes.TEExpr field0 -> union "TestExpected" "TEExpr" [expr field0]
+  | WrittenTypes.TEError field0 -> union "TestExpected" "TEError" [string field0]
+  | WrittenTypes.TESqlError field0 -> union "TestExpected" "TESqlError" [string field0]
+and test (value : WrittenTypes.test) = record "Test" [
+  "range", range value.WrittenTypes.range;
+  "actual", expr value.WrittenTypes.actual;
+  "expected", testExpected value.WrittenTypes.expected]
+and declaration (value : WrittenTypes.declaration) = match value with
+  | WrittenTypes.DFunction field0 -> union "Declaration" "DFunction" [fnDecl field0]
+  | WrittenTypes.DValue field0 -> union "Declaration" "DValue" [valueDecl field0]
+  | WrittenTypes.DModule field0 -> union "Declaration" "DModule" [moduleDecl field0]
+  | WrittenTypes.DType field0 -> union "Declaration" "DType" [typeDecl field0]
+  | WrittenTypes.DExpr field0 -> union "Declaration" "DExpr" [expr field0]
+  | WrittenTypes.DTypeDB field0 -> union "Declaration" "DTypeDB" [typeDecl field0]
+  | WrittenTypes.DTest field0 -> union "Declaration" "DTest" [test field0]
+and sourceFile (value : WrittenTypes.sourceFile) = record "SourceFile" [
+  "range", range value.WrittenTypes.range;
+  "declarations", `List (List.map (fun item -> declaration item) value.WrittenTypes.declarations);
+  "exprsToEval", `List (List.map (fun item -> expr item) value.WrittenTypes.exprsToEval)]
+and parsedFile (value : WrittenTypes.parsedFile) = match value with
+  | WrittenTypes.SourceFile field0 -> union "ParsedFile" "SourceFile" [sourceFile field0]
+let ast source =
+  let result = Parser.parse source in
+  record "ParseResult" ["parsed", option parsedFile result.ParserSupport.parsed;
+    "diagnostics", `List (List.map diagnostic result.ParserSupport.diagnostics)]
+
+let validated source =
+  `List (List.map (fun mode ->
+    match Parser.parseFor mode source with
+    | Ok value -> union "FSharpResult" "Ok" [sourceFile (Validation.ValidatedSourceFile.toWrittenTypes value)]
+    | Error diagnostics -> union "FSharpResult" "Error" [`List (List.map diagnostic diagnostics)])
+    [Validation.Script; Validation.Package; Validation.Test])
+let rendered source =
+  let result = Parser.parse source in
+  `List (List.map (fun diagnostic -> string (Parser.renderDiagnostic source diagnostic)) result.ParserSupport.diagnostics)
