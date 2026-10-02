@@ -5,7 +5,7 @@ ARG QEMU_VERSION=11.1.1
 ARG QEMU_COMMIT=c3d48b7d1e89604920e5b81b91140c2ad39a1943
 ARG HERDR_VERSION=0.9.0
 ARG MERGETRAIN_VERSION=3.3.0
-ARG OCAML_VERSION=5.3.0
+ARG OCAML_VERSION=5.5.1
 FROM mcr.microsoft.com/dotnet/sdk:11.0.100-rc.1 AS dotnet11
 FROM node:26-bookworm-slim AS node
 FROM rust:1.98.0-slim-bookworm AS rust
@@ -28,7 +28,7 @@ WORKDIR /ocaml-build
 RUN curl --fail --location --retry 2 \
       "https://github.com/ocaml/ocaml/archive/refs/tags/${OCAML_VERSION}.tar.gz" \
       --output ocaml.tar.gz && \
-    echo 'eb9eab2f21758d3cfb1e78c7f83f0b4dd6302824316aba4abee047a5a4f85029  ocaml.tar.gz' | sha256sum --check && \
+    echo 'ae47728d0a876665ccc7b745e3a8d8c9ca5ba63c4f7a11d4db6cdbd1dbeef4bb  ocaml.tar.gz' | sha256sum --check && \
     tar --extract --gzip --file ocaml.tar.gz --strip-components=1 && \
     ./configure --prefix=/opt/ocaml && \
     make -j1 world.opt && make install
@@ -149,8 +149,8 @@ ENV PATH=/opt/ocaml/bin:/usr/share/dotnet:/home/agent/.dotnet/tools:/home/agent/
 
 # Fail the image build if either compiler is unavailable or the SDK pin drifts.
 RUN dotnet --version | grep -Fx '11.0.100-rc.1.26425.128' && \
-    ocamlc -version | grep -Fx '5.3.0' && \
-    ocamlopt -version | grep -Fx '5.3.0'
+    ocamlc -version | grep -Fx '5.5.1' && \
+    ocamlopt -version | grep -Fx '5.5.1'
 
 RUN --mount=type=bind,source=scripts/install-herdr.sh,target=/tmp/install-herdr.sh \
     bash /tmp/install-herdr.sh "$TARGETARCH" "$HERDR_VERSION"

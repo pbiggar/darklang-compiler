@@ -2,8 +2,9 @@
 
 This setup is for the restricted Linux x86-64 VM used to restart the OCaml
 port. It installs the exact .NET SDK pinned in `global.json` (including F#)
-and OCaml 5.3.0, with its source and compiler libraries. The OCaml version
-is provisional until the previous conversation export is available.
+and OCaml 5.5.1, with its source and compiler libraries. This is the upstream stable version selected for the accepted migration plan.
+Build OCaml and its C dependencies without the .NET compatibility preload;
+apply the preload only when executing the .NET oracle.
 
 ```bash
 bash scripts/vm/setup-port-toolchains /absolute/writable/toolchains

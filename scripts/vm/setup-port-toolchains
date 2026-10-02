@@ -5,7 +5,8 @@ repo=$(cd "$(dirname "$0")/../.." && pwd)
 root=${1:?Usage: scripts/vm/setup-port-toolchains ABSOLUTE_TOOLCHAIN_DIRECTORY}
 case "$root" in /*) ;; *) echo 'Use an absolute directory' >&2; exit 1;; esac
 sdk=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sdk"]["version"])' "$repo/global.json")
-ocaml_version=5.3.0
+ocaml_version=5.5.1
+ocaml_prefix="$root/ocaml-$ocaml_version-install"
 mkdir -p "$root"/{downloads,tmp,dotnet,dotnet-home,nuget,ocaml}
 if [[ ! -x "$root/dotnet/dotnet" ]]; then
   curl -fL --retry 2 -o "$root/downloads/dotnet.tar.gz" \
@@ -14,19 +15,20 @@ if [[ ! -x "$root/dotnet/dotnet" ]]; then
 fi
 python3 "$repo/scripts/vm/materialize-links.py" "$root/downloads/dotnet.tar.gz" "$root/dotnet"
 gcc -shared -fPIC "$repo/scripts/vm/compat.c" -ldl -pthread -o "$root/vm-compat.so"
-if [[ ! -x "$root/ocaml/bin/ocamlopt" ]]; then
+if [[ ! -x "$ocaml_prefix/bin/ocamlopt" ]]; then
   curl -fL --retry 2 -o "$root/downloads/ocaml.tar.gz" \
     "https://github.com/ocaml/ocaml/archive/refs/tags/$ocaml_version.tar.gz"
+  echo 'ae47728d0a876665ccc7b745e3a8d8c9ca5ba63c4f7a11d4db6cdbd1dbeef4bb  '"$root/downloads/ocaml.tar.gz" | sha256sum --check
   tar --no-same-owner -xzf "$root/downloads/ocaml.tar.gz" -C "$root"
   (
     cd "$root/ocaml-$ocaml_version"
     export TMPDIR="$root/tmp"
-    ./configure --prefix="$root/ocaml" > "$root/ocaml-configure.log" 2>&1
-    make -j1 world.opt > "$root/ocaml-build.log" 2>&1
-    make install > "$root/ocaml-install.log" 2>&1
+    env -u LD_PRELOAD ./configure --prefix="$ocaml_prefix" > "$root/ocaml-configure.log" 2>&1
+    env -u LD_PRELOAD make -j1 world.opt > "$root/ocaml-build.log" 2>&1
+    env -u LD_PRELOAD make install > "$root/ocaml-install.log" 2>&1
   )
 fi
-python3 - "$root" <<'PY'
+python3 - "$root" "$ocaml_prefix" <<'PY'
 import pathlib, shlex, sys
 root = pathlib.Path(sys.argv[1])
 values = {
@@ -41,7 +43,7 @@ values = {
     "LD_PRELOAD": root / "vm-compat.so",
 }
 lines = [f"export {key}={shlex.quote(str(value))}" for key, value in values.items()]
-lines += [f'export PATH={shlex.quote(str(root / "ocaml/bin"))}:{shlex.quote(str(root / "dotnet"))}:"$PATH"']
+lines += [f'export PATH={shlex.quote(str(pathlib.Path(sys.argv[2]) / "bin"))}:{shlex.quote(str(root / "dotnet"))}:"$PATH"']
 (root / "activate").write_text("# Source this file before building in the VM.\n" + "\n".join(lines) + "\n")
 PY
 source "$root/activate"

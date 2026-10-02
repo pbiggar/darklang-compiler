@@ -73,3 +73,7 @@ scripts/.unicode_cache/
 
 # Local merge-train state and integration worktrees
 .mergetrain/
+
+# OCaml migration local build and switch
+/ocaml/_build/
+/ocaml/_opam/

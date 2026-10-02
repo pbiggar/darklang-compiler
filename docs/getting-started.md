@@ -20,7 +20,7 @@ The repository pins the .NET 11 release-candidate SDK and targets `net11.0`;
 `allowPrerelease` is required until .NET 11 reaches general availability, when
 the repository can move to the stable .NET 11 feature band.
 
-The development image also builds OCaml 5.3.0 from a checksum-pinned source
+The development image also builds OCaml 5.5.1 from a checksum-pinned source
 archive, including its native compiler and compiler libraries, for the OCaml
 port. For a restricted VM without the development image, use
 [`scripts/vm/setup-port-toolchains`](../scripts/vm/README.md).
