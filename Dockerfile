@@ -5,12 +5,33 @@ ARG QEMU_VERSION=11.1.1
 ARG QEMU_COMMIT=c3d48b7d1e89604920e5b81b91140c2ad39a1943
 ARG HERDR_VERSION=0.9.0
 ARG MERGETRAIN_VERSION=3.3.0
+ARG OCAML_VERSION=5.3.0
 FROM mcr.microsoft.com/dotnet/sdk:11.0.100-rc.1 AS dotnet11
 FROM node:26-bookworm-slim AS node
 FROM rust:1.98.0-slim-bookworm AS rust
 RUN --mount=type=cache,target=/usr/local/rustup/downloads \
     rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu && \
     rm -rf /usr/local/rustup/tmp/*
+
+FROM ubuntu:noble AS ocaml-builder
+ARG OCAML_VERSION
+ARG PROXY_CA_CERT_B64
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+      build-essential ca-certificates curl
+RUN if [ -n "$PROXY_CA_CERT_B64" ]; then \
+      printf '%s' "$PROXY_CA_CERT_B64" | base64 --decode > /usr/local/share/ca-certificates/proxy-ca.crt; \
+      update-ca-certificates; \
+    fi
+WORKDIR /ocaml-build
+RUN curl --fail --location --retry 2 \
+      "https://github.com/ocaml/ocaml/archive/refs/tags/${OCAML_VERSION}.tar.gz" \
+      --output ocaml.tar.gz && \
+    echo 'eb9eab2f21758d3cfb1e78c7f83f0b4dd6302824316aba4abee047a5a4f85029  ocaml.tar.gz' | sha256sum --check && \
+    tar --extract --gzip --file ocaml.tar.gz --strip-components=1 && \
+    ./configure --prefix=/opt/ocaml && \
+    make -j1 world.opt && make install
 
 FROM ubuntu:noble AS qemu-builder
 ARG QEMU_VERSION
@@ -63,6 +84,7 @@ USER root
 
 # Install the .NET 11 SDK/runtime in the default host.
 COPY --from=dotnet11 /usr/share/dotnet /usr/share/dotnet
+COPY --from=ocaml-builder /opt/ocaml /opt/ocaml
 COPY --from=node /usr/local /usr/local
 COPY --from=rust /usr/local/cargo /usr/local/cargo
 COPY --from=rust /usr/local/rustup /usr/local/rustup
@@ -92,7 +114,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       libglib2.0-0t64 \
       libssl3t64 \
       libstdc++6 \
-      ocaml \
       python3 \
       python3-venv \
       shellcheck \
@@ -124,7 +145,12 @@ ENV DOTNET_CLI_HOME=/home/agent
 ENV DOTNET_MULTILEVEL_LOOKUP=0
 ENV CARGO_HOME=/usr/local/cargo
 ENV RUSTUP_HOME=/usr/local/rustup
-ENV PATH=/usr/share/dotnet:/home/agent/.dotnet/tools:/home/agent/.local/bin:/usr/local/cargo/bin:$PATH
+ENV PATH=/opt/ocaml/bin:/usr/share/dotnet:/home/agent/.dotnet/tools:/home/agent/.local/bin:/usr/local/cargo/bin:$PATH
+
+# Fail the image build if either compiler is unavailable or the SDK pin drifts.
+RUN dotnet --version | grep -Fx '11.0.100-rc.1.26425.128' && \
+    ocamlc -version | grep -Fx '5.3.0' && \
+    ocamlopt -version | grep -Fx '5.3.0'
 
 RUN --mount=type=bind,source=scripts/install-herdr.sh,target=/tmp/install-herdr.sh \
     bash /tmp/install-herdr.sh "$TARGETARCH" "$HERDR_VERSION"
