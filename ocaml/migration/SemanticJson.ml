@@ -489,3 +489,12 @@ let astHelpers source =
     "identityProjections", tuple [`Bool (AST.constructorIdOwner id = AST.typeId 1); string (AST.constructorIdValue id); int32 (AST.constructorRuntimeTag id);
       `Bool (AST.fieldIdOwner field = AST.typeId 2); int32 (AST.fieldRuntimeIndex field);
       option string (AST.bindingDisplayName (AST.bindingId 4)); option string (AST.bindingDisplayName (AST.namedBindingId 4 source)); option string (AST.bindingDisplayName (AST.topLevelValueId source))]]
+
+let formatter source =
+  result (fun validated ->
+    let parsed = Validation.ValidatedSourceFile.toWrittenTypes validated in
+    let printed = WrittenFormatter.format source parsed in
+    let reparsed = match WrittenParsing.parse Validation.Script printed with Ok value -> Some (Validation.ValidatedSourceFile.toWrittenTypes value) | Error _ -> None in
+    tuple [string (WrittenFormatter.syntaxKey parsed); string printed;
+      option (fun parsed -> tuple [string (WrittenFormatter.syntaxKey parsed); string (WrittenFormatter.format printed parsed)]) reparsed])
+    (WrittenParsing.parse Validation.Script source)

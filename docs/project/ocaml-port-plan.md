@@ -313,7 +313,13 @@ projections) match all 1,874 sources. Full AST and execution validation comparis
 also pass all 1,874 sources after the added ordering and binder probes.
 Host text checks cover every Unicode scalar and every
 UTF-16 unit, including NFC, classification, casing, and grapheme boundaries.
-All 24 translated unit tests pass, including every focused ParserTests case.
+WrittenFormatter is complete, including the reference fingerprint, NFC acceptance,
+and syntax-preserving parenthesis removal. All 1,874 complete formatter
+observations match F#, including idempotence. Shared fixture parsing, syntax
+fixture execution, and formatting-roundtrip execution are ported; DSL parser
+observations match all 1,890 corpus/probe sources plus the frozen syntax files.
+All 95 translated unit and fixture tests pass, including every focused ParserTests
+case, all syntax fixtures, and all formatting-roundtrip fixtures.
 Native executable bytes will be compared
 after real backend translation; the F# oracle remains available until then.
 

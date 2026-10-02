@@ -1,5 +1,6 @@
 // semantic_reference.fsx - Serialize complete reference semantic values for migration.
 #r "../../bin/DarkCompiler/Debug/net11.0/DarkCompiler.dll"
+#r "../../bin/Tests/Debug/net11.0/Tests.dll"
 
 open System
 open System.Globalization
@@ -102,6 +103,19 @@ let classificationMethods =
     ["isIntLit"; "canStartAtom"; "canStartPattern"; "closesOrSeparates"; "isRecoveryBarrier"]
     |> List.map (fun name -> parserModule.GetMethod(name, Reflection.BindingFlags.Static ||| Reflection.BindingFlags.NonPublic))
 let infixMethod = parserModule.GetMethod("infixOf", Reflection.BindingFlags.Static ||| Reflection.BindingFlags.NonPublic)
+let dsl source =
+    let node = JsonObject()
+    let file = TestDSL.Common.parseTestFile source
+    node["sections"] <- encode typeof<TestDSL.Common.Section list> (box (TestDSL.Common.parseSections source))
+    node["file"] <- encode typeof<(string * string) list> (box (Map.toList file.Sections))
+    node["required"] <- encode typeof<Result<string,string> list> (box (["NAME"; "SOURCE"; "EXPECTED"; "BODY"] |> List.map (fun name -> TestDSL.Common.getRequiredSection name file)))
+    node["optional"] <- encode typeof<string option list> (box (["NAME"; "SOURCE"; "EXPECTED"; "BODY"] |> List.map (fun name -> TestDSL.Common.getOptionalSection name file)))
+    node["stripped"] <- encode typeof<string list> (box (TestDSL.Common.stripCommentsAndEmpty source))
+    node["normalized"] <- encodeString (TestDSL.Common.normalizeLineEndings source)
+    node["escaped"] <- encode typeof<Result<string,string>> (box (TestDSL.Common.parseEscapedText source))
+    node["syntax"] <- encode typeof<Result<TestDSL.SyntaxFormat.SyntaxTest list,string>> (box (TestDSL.SyntaxFormat.parseSyntaxFileContent "probe" source))
+    node :> JsonNode
+
 let astHelpers (source:string) =
     let node = JsonObject()
     let spellings = [source; "a"; "z"; "\uE000"; "\U00010000"; "a"]
@@ -275,6 +289,16 @@ let rec requests () =
                 (LibParser.Parser.parse source).diagnostics |> List.map (LibParser.Parser.renderDiagnostic source)
                 |> box |> encode typeof<string list>
             | "ast-helpers" -> astHelpers source
+            | "dsl" -> dsl source
+            | "formatter" ->
+                let formatted = WrittenParsing.parse LibParser.Validation.Script source |> Result.map (fun validated ->
+                    let parsed = LibParser.Validation.ValidatedSourceFile.toWrittenTypes validated
+                    let printed = WrittenFormatter.format source parsed
+                    let reparsed = WrittenParsing.parse LibParser.Validation.Script printed |> Result.toOption |> Option.map (fun value ->
+                        let parsed = LibParser.Validation.ValidatedSourceFile.toWrittenTypes value
+                        WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
+                    WrittenFormatter.syntaxKey parsed, printed, reparsed)
+                encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
             | "names" -> names source
             | "written-source" -> writtenSource source
             | "ast" -> encode typeof<LibParser.Parser.ParseResult> (box (LibParser.Parser.parse source))

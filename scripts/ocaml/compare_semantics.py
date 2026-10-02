@@ -71,6 +71,15 @@ def inputs():
         "fun 𐀀 𐀀   -> 𐀀", "Darklang.Stdlib.Option.Option", "Darklang.Stdlib.Result.Result",
         "x", "_x", "", "x.x", "A.Case", "𝒜.漢字", "😀", "Case", "A.B", "A.B.C",
     ])
+    probes.extend([
+        "---NAME---\na\n---SOURCE---\n1L\n---ROUNDTRIP---\n",
+        "---NAME---\r\na\r\n---SOURCE---\r\n1L\r\n",
+        "---SOURCE---\n1L", "---NAME---\na", "---NAME---\na\n---OTHER---\nx\n---SOURCE---\n1L",
+        "prefix\n---NAME---\na\n---SOURCE---\n1L\n---EXPECT-ERROR---\nx\n---ROUNDTRIP---",
+        "---NAME---\na\n---SOURCE---\n1L\n---EXPECTED---\n1L", "---NAME---\na\n---SOURCE---\n1L\n---SOURCE---\n2L",
+        "---NAME---\na\n---SOURCE---\n1L\n---NAME---\nb\n---SOURCE---\n2L", "---NÄME---\nx", "---NAME--- \nx",
+        "foo // tail\n bar\r\n// comment", "\\n\\r\\t\\\\\\\"", "\\q", "x\\", "\\😀",
+    ])
     rng = random.Random(12864)
     atoms = ["let", "val", "___", "x'", "'a", "α", "é", "😀", "0L", "9223372036854775808L", "1e+", "12abc",
              "(", ")", "(*)", "(*", "*)", '"', '"""', '$"', "\\u0041", "\\U00110000", "'", "``", "//", "///", "\n", "\r", "\t", "{", "}", ";"]
@@ -93,10 +102,12 @@ def first_difference(expected, actual, path="value"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl"])
     parser.add_argument("--probes-only", action="store_true")
     args = parser.parse_args()
     corpus = list(inputs())
+    if args.stage == "dsl" and not args.probes_only:
+        corpus.extend((str(path.relative_to(ROOT)), path.read_text()) for path in sorted((ROOT / "src/Tests").rglob("*.syntax")))
     if args.probes_only:
         corpus = [(label, source) for label, source in corpus if label.startswith("probe-")]
     output = ROOT / "TestResults/ocaml-migration" / args.stage
@@ -107,7 +118,7 @@ def main():
     observations = []
     for name, command in [
         ("fsharp", ["dotnet", "fsi", "--exec", "scripts/ocaml/semantic_reference.fsx", str(request_file)]),
-        ("ocaml", ["ocaml/_build/default/tests/semantic_probe.exe"]),
+        ("ocaml", ["ocaml/_build/default/tests/foundations_main.exe", "--dsl-probe"] if args.stage == "dsl" else ["ocaml/_build/default/tests/semantic_probe.exe"]),
     ]:
         with request_file.open() as stdin, (output / f"{name}.jsonl").open("w") as stdout, (output / f"{name}.stderr").open("w") as stderr:
             run = subprocess.run(command, cwd=ROOT, stdin=stdin, text=True, stdout=stdout, stderr=stderr, timeout=1200)
