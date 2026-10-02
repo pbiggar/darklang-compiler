@@ -43,6 +43,7 @@ grouped by purpose; each subject has one canonical source.
 - [CLI compatibility](compatibility/cli.md)
 - [Known issues](project/known-issues.md)
 - [Roadmap](project/roadmap.md)
+- [OCaml replacement plan](project/ocaml-port-plan.md)
 - [Parsed and checked AST boundary plan](project/parsed-checked-ast-plan.md)
 - [Interpreter parser migration plan](project/parser-written-types-migration.md)
 - [AST correctness follow-up](project/ast-correctness-next.md)
