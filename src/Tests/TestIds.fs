@@ -214,6 +214,8 @@ let private names = [
     "wide"
     "x64_layout"
     "x64_mixed_sum_capture_fn"
+    "x64_preserved_closure_first"
+    "x64_preserved_closure_second"
     "User.owns"
     "User.Module.generated<Int64>"
     "resource"
