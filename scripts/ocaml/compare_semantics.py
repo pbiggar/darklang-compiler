@@ -53,9 +53,12 @@ def first_difference(expected, actual, path="value"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support"])
+    parser.add_argument("--probes-only", action="store_true")
     args = parser.parse_args()
     corpus = list(inputs())
+    if args.probes_only:
+        corpus = [(label, source) for label, source in corpus if label.startswith("probe-")]
     output = ROOT / "TestResults/ocaml-migration" / args.stage
     output.mkdir(parents=True, exist_ok=True)
     requests = "".join(json.dumps({"stage":args.stage,"source":source},ensure_ascii=True)+"\n" for _,source in corpus)

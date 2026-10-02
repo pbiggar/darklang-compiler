@@ -125,6 +125,12 @@ let isDigitUnit value =
   match Uucp.Age.age character with
   | `Version version when version <= (16, 0) -> Uucp.Gc.general_category character = `Nd
   | _ -> false
+let isUpperUnit value =
+  if not (Uchar.is_valid value) then false else
+  let character = Uchar.of_int value in
+  match Uucp.Age.age character with
+  | `Version version when version <= (16, 0) -> Uucp.Gc.general_category character = `Lu
+  | _ -> false
 let graphemeClusters text =
   (* StringInfo's frozen algorithm implements GB3..GB13 without the GB9c Indic
      conjunct rule added by newer uuseg releases. Keep those boundaries while

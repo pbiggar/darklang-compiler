@@ -1,7 +1,7 @@
 (include_subdirs unqualified)
 (library
  (name dark_compiler)
- (libraries uutf uucp uunf uunf.string uuseg uuseg.string zarith yojson)
+ (libraries uutf uucp uunf uuseg zarith yojson)
  (foreign_stubs (language c) (names host_identity))
  ; Shared field names are part of the frozen syntax schema. Warning 42 only
  ; concerns compatibility with OCaml before 4.01; this port pins 5.5.1.

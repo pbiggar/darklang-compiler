@@ -97,6 +97,51 @@ let rec encoder (typ: Type) : obj -> JsonNode =
         fn
 and encode (typ: Type) (value: obj) : JsonNode = (encoder typ) value
 
+let parserModule = typeof<LibParser.Parser.ParserState>.Assembly.GetType("LibParser.Parser")
+let classificationMethods =
+    ["isIntLit"; "canStartAtom"; "canStartPattern"; "closesOrSeparates"; "isRecoveryBarrier"]
+    |> List.map (fun name -> parserModule.GetMethod(name, Reflection.BindingFlags.Static ||| Reflection.BindingFlags.NonPublic))
+let infixMethod = parserModule.GetMethod("infixOf", Reflection.BindingFlags.Static ||| Reflection.BindingFlags.NonPublic)
+let parserSupport source =
+    match LibParser.Lexer.tokenize source with
+    | Error error -> encode typeof<Result<unit,string>> (box (Error error : Result<unit,string>))
+    | Ok (tokens, _) ->
+        let tokens = List.toArray tokens
+        let scopes = Collections.Generic.Stack<LibParser.Parser.OffsideScope>()
+        scopes.Push { stmtCol = -1; stmtExact = false }
+        let state : LibParser.Parser.ParserState = {
+            toks = tokens; tokenCount = tokens.Length; diagnostics = Collections.Generic.List<LibParser.Parser.Diagnostic>()
+            scopes = scopes; matchArms = []; pendingGt = 0
+            pendingGtRange = LibParser.WrittenTypes.synthRange; declAnchor = -1
+            depth = 0; abandoned = false; steps = 0; interpDepth = 0 }
+        let observations = tokens |> Array.mapi (fun index token ->
+            let node = JsonObject()
+            node["index"] <- scalar "int32" (string index)
+            node["found"] <- encodeString (LibParser.Parser.foundDesc state index)
+            node["flags"] <- JsonArray(classificationMethods |> List.map (fun method -> JsonValue.Create(unbox<bool> (method.Invoke(null, [|box token.token|]))) :> JsonNode) |> List.toArray)
+            node["infix"] <- encode infixMethod.ReturnType (infixMethod.Invoke(null, [|box token.token|]))
+            let parts = match token.token with LibParser.Tokenizer.TFloat value -> Some (LibParser.Parser.floatParts state index value) | _ -> None
+            node["floatParts"] <- encode typeof<Option<string * string>> (box parts)
+            let qualified = match token.token with LibParser.Tokenizer.TIdent _ -> Some (LibParser.Parser.parseQualified state index) | _ -> None
+            node["qualified"] <- encode typeof<Option<(LibParser.WrittenTypes.Identifier * LibParser.Tokenizer.TokenRange) list * LibParser.WrittenTypes.Identifier * int>> (box qualified)
+            let parameters = if token.token = LibParser.Tokenizer.TLt then Some (LibParser.Parser.parseTypeParams state index) else None
+            node["typeParams"] <- encode typeof<Option<(string * LibParser.Tokenizer.TokenRange) list * int>> (box parameters)
+            let gt =
+                if token.token = LibParser.Tokenizer.TGt || token.token = LibParser.Tokenizer.TShr then
+                    state.pendingGt <- 0
+                    let first = LibParser.Parser.expectGt state index
+                    let second = if state.pendingGt > 0 then Some (LibParser.Parser.expectGt state (snd first)) else None
+                    Some (first, second)
+                else None
+            node["gt"] <- encode typeof<Option<(LibParser.Tokenizer.TokenRange * int) * Option<LibParser.Tokenizer.TokenRange * int>>> (box gt)
+            LibParser.Parser.checkBareMinMagnitude state index
+            node :> JsonNode)
+        LibParser.Parser.validateLiterals state
+        let result = JsonObject()
+        result["tokens"] <- JsonArray observations
+        result["diagnostics"] <- encode typeof<LibParser.Parser.Diagnostic list> (box (List.ofSeq state.diagnostics))
+        result :> JsonNode
+
 CultureInfo.CurrentCulture <- CultureInfo.InvariantCulture
 CultureInfo.CurrentUICulture <- CultureInfo.InvariantCulture
 let reader : IO.TextReader =
@@ -115,6 +160,7 @@ let rec requests () =
             | "tokens" ->
                 let value = LibParser.Lexer.tokenize source
                 encode (typeof<Result<LibParser.Lexer.SpannedToken list * (LibParser.Tokenizer.TokenRange * string) list, string>>) (box value)
+            | "parser-support" -> parserSupport source
             | _ -> failwith $"Unsupported reference observation stage: {stage}"
         let response = JsonObject()
         response["schema"] <- JsonValue.Create 1

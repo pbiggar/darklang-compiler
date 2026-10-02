@@ -99,3 +99,64 @@ let spanned (value : Lexer.spannedToken) = record "SpannedToken" ["token", token
 let tokens = function
   | Error error -> union "FSharpResult" "Error" [string error]
   | Ok (tokens, diagnostics) -> union "FSharpResult" "Ok" [tuple [`List (List.map spanned tokens); `List (List.map (fun (location, message) -> tuple [range location; string message]) diagnostics)]]
+
+let diagnostic (value : ParserSupport.diagnostic) =
+  let severity = match value.ParserSupport.severity with
+    | ParserSupport.DiagError -> union "DiagnosticSeverity" "DiagError" []
+    | ParserSupport.DiagWarning -> union "DiagnosticSeverity" "DiagWarning" [] in
+  record "Diagnostic" ["code", string value.ParserSupport.code; "severity", severity;
+    "range", range value.ParserSupport.range; "message", string value.ParserSupport.message;
+    "related", `List (List.map (fun (location, message) -> tuple [range location; string message]) value.ParserSupport.related);
+    "hint", option string value.ParserSupport.hint]
+let identifier (value : WrittenTypes.identifier) = record "Identifier" ["range", range value.WrittenTypes.range; "name", string value.WrittenTypes.name]
+let infixName = function
+  | WrittenTypes.ArithmeticPlus -> "ArithmeticPlus" | WrittenTypes.ArithmeticMinus -> "ArithmeticMinus"
+  | WrittenTypes.ArithmeticMultiply -> "ArithmeticMultiply" | WrittenTypes.ArithmeticDivide -> "ArithmeticDivide"
+  | WrittenTypes.ArithmeticModulo -> "ArithmeticModulo" | WrittenTypes.ArithmeticPower -> "ArithmeticPower"
+  | WrittenTypes.BitwiseAnd -> "BitwiseAnd" | WrittenTypes.BitwiseOr -> "BitwiseOr" | WrittenTypes.BitwiseXor -> "BitwiseXor"
+  | WrittenTypes.ShiftLeft -> "ShiftLeft" | WrittenTypes.ShiftRight -> "ShiftRight"
+  | WrittenTypes.ComparisonGreaterThan -> "ComparisonGreaterThan" | WrittenTypes.ComparisonGreaterThanOrEqual -> "ComparisonGreaterThanOrEqual"
+  | WrittenTypes.ComparisonLessThan -> "ComparisonLessThan" | WrittenTypes.ComparisonLessThanOrEqual -> "ComparisonLessThanOrEqual"
+  | WrittenTypes.ComparisonEquals -> "ComparisonEquals" | WrittenTypes.ComparisonNotEquals -> "ComparisonNotEquals"
+  | WrittenTypes.StringConcat -> "StringConcat"
+let infix = function
+  | WrittenTypes.InfixFnCall name -> union "Infix" "InfixFnCall" [union "InfixFnName" (infixName name) []]
+  | WrittenTypes.BinOp operation ->
+      let case = match operation with WrittenTypes.BinOpAnd -> "BinOpAnd" | WrittenTypes.BinOpOr -> "BinOpOr" in
+      union "Infix" "BinOp" [union "BinaryOperation" case []]
+let parserSupport source =
+  match Lexer.tokenize source with
+  | Error error -> union "FSharpResult" "Error" [string error]
+  | Ok (tokens, _) ->
+      let tokens = Array.of_list tokens in
+      let state = ParserSupport.makeState 0 tokens in
+      let observations = Array.mapi (fun index (token : Lexer.spannedToken) ->
+        let found = string (ParserSupport.foundDesc state index) in
+        let flags = `List (List.map (fun classify -> `Bool (classify token.Lexer.token))
+          [ParserSupport.isIntLit; ParserSupport.canStartAtom; ParserSupport.canStartPattern;
+           ParserSupport.closesOrSeparates; ParserSupport.isRecoveryBarrier]) in
+        let parts = match token.Lexer.token with Tokenizer.TFloat value -> Some (ParserSupport.floatParts state index value) | _ -> None in
+        let qualified = match token.Lexer.token with Tokenizer.TIdent _ -> Some (ParserSupport.parseQualified state index) | _ -> None in
+        let parameters = if token.Lexer.token = Tokenizer.TLt then Some (ParserSupport.parseTypeParams state index) else None in
+        let gt = if token.Lexer.token = Tokenizer.TGt || token.Lexer.token = Tokenizer.TShr then begin
+          state.ParserSupport.pendingGt <- 0;
+          let first = ParserSupport.expectGt state index in
+          let second = if state.ParserSupport.pendingGt > 0 then Some (ParserSupport.expectGt state (snd first)) else None in
+          Some (first, second)
+        end else None in
+        ParserSupport.checkBareMinMagnitude state index;
+        `Assoc ["index", int32 index; "found", found; "flags", flags;
+          "infix", option infix (ParserSupport.infixOf token.Lexer.token);
+          "floatParts", option (fun (whole, fraction) -> tuple [string whole; string fraction]) parts;
+          "qualified", option (fun (modules, final, next) -> tuple [
+            `List (List.map (fun (name, dot) -> tuple [identifier name; range dot]) modules);
+            identifier final; int32 next]) qualified;
+          "typeParams", option (fun (names, next) -> tuple [
+            `List (List.map (fun (name, location) -> tuple [string name; range location]) names); int32 next]) parameters;
+          "gt", option (fun (first, second) ->
+            let encode (location, next) = tuple [range location; int32 next] in
+            tuple [encode first; option encode second]) gt]) tokens in
+      ParserSupport.validateLiterals state;
+      `Assoc ["tokens", `List (Array.to_list observations);
+        "diagnostics", `List (List.map diagnostic (List.rev !(state.ParserSupport.diagnostics)))]
+  [@@warning "-4"]

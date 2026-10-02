@@ -272,5 +272,31 @@ Oracle verification: 10,760/10,760 host tests and 58/58 compiled benchmark leak
 checks passed. Generated-program performance gates do not apply to this port.
 The VM has no Docker engine, Valgrind, or full x64 benchmark snapshot.
 
-The provisional OCaml 5.3.0 setup is being replaced with upstream stable 5.5.1,
-released 2026-09-05; dependency compatibility will be checked before locking.
+The VM now runs upstream stable OCaml 5.5.1, released 2026-09-05, and Dune
+3.24.2. `ocaml/dependencies.lock` pins every installed library/build dependency.
+Replay the VM setup with `scripts/vm/setup-port-toolchains`, followed by
+`scripts/vm/setup-ocaml-dependencies`, both invoked with `bash` and an absolute
+toolchain directory. Native builds must unset the CoreCLR compatibility preload.
+
+Unicode compatibility is explicit: the frozen SDK's managed character tables
+are Unicode 16, while invariant casing uses the VM's ICU 74 / Unicode 15.1.
+Uucp/Uunf/Uuseg are pinned to 16.0.0. The host adapter retains the reference's
+grapheme rules (without the newer Indic-conjunct rule), NFC rejection of U+FFFE,
+UTF-16 indexing, and isolated surrogate units in diagnostic strings.
+
+Completed native checkpoints: foundations, platform ABI selection, runner
+arguments, complete tokens/trivia/lexer recovery, written syntax definitions
+and normalization, validation, and parser state/range/recovery helpers.
+Validation is still awaiting the complete native parser corpus comparison;
+the native compiler entrypoint and remaining pipeline are not complete.
+
+Current comparisons: 360 foundation observations, 10,016 binary64 formatting
+observations, 1,713 complete tokenizer source observations, and 1,215 parser
+support probes match F#. Host text checks cover every Unicode scalar and every
+UTF-16 unit, including NFC, classification, casing, and grapheme boundaries.
+The 17 translated unit tests pass. Native executable bytes will be compared
+after real backend translation; the F# oracle remains available until then.
+
+`ocaml/inventory.json` records explicit filename mappings for F# namespaces
+whose source files share a basename, preventing collisions in Dune's module
+graph. These mappings do not change frozen source or fixture hashes.

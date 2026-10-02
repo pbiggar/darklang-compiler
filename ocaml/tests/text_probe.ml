@@ -12,6 +12,10 @@ let () =
       let normalized = try `String (HostText.normalize text) with Invalid_argument _ -> `Null in
       if lower <> text || whitespace || normalized <> `String text then
         output (`List [`Int scalar; `String lower; `Bool whitespace; normalized]);
+      let context = "a" ^ text ^ "a" in
+      let clusters = HostText.graphemeClusters context in
+      if clusters <> ["a"; text; "a"] then
+        output (`List [`String "scalarGrapheme"; `Int scalar; `List (List.map (fun text -> `String text) clusters)]);
       if HostText.ofUtf16Units (HostText.utf16Units text) <> text then
         failwith "UTF-16 roundtrip mismatch"
     end
@@ -27,7 +31,7 @@ let () =
     output (`List [`String "graphemes"; `String text; `List (List.map (fun segment -> `String segment) segments)])) scalars) scalars;
   for unit = 0 to 0xffff do
     let letter = HostText.isLetterUnit unit and digit = HostText.isDigitUnit unit in
-    if letter || digit then output (`List [`Int unit; `Bool letter; `Bool digit])
+    if letter || digit then output (`List [`Int unit; `Bool letter; `Bool digit; `Bool (HostText.isUpperUnit unit)])
   done;
   List.iter (fun text ->
     output (`List [`String text; match HostText.tryParseInt32 text with
