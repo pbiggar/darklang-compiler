@@ -102,6 +102,43 @@ let classificationMethods =
     ["isIntLit"; "canStartAtom"; "canStartPattern"; "closesOrSeparates"; "isRecoveryBarrier"]
     |> List.map (fun name -> parserModule.GetMethod(name, Reflection.BindingFlags.Static ||| Reflection.BindingFlags.NonPublic))
 let infixMethod = parserModule.GetMethod("infixOf", Reflection.BindingFlags.Static ||| Reflection.BindingFlags.NonPublic)
+let astHelpers (source:string) =
+    let node = JsonObject()
+    let spellings = [source; "a"; "z"; "\uE000"; "\U00010000"; "a"]
+    let allocated = [0UL; 1UL; 9223372036854775807UL; 9223372036854775808UL; 18446744073709551600UL]
+                    |> List.map (fun first -> AST.allocateFunctionIdsFromOrdinal first spellings |> Map.toList |> List.map (fun (name,id) -> name,AST.functionIdValue id))
+    node["allocated"] <- encode typeof<(string * uint64) list list> (box allocated)
+    let existing = AST.allocateFunctionIds [AST.functionId 0UL; AST.functionId 10UL; AST.functionId 9223372036854775807UL] spellings
+                   |> Map.toList |> List.map (fun (name,id) -> name,AST.functionIdValue id)
+    node["existing"] <- encode typeof<(string * uint64) list> (box existing)
+    let ordered = [0UL; 1UL; 9223372036854775807UL; 9223372036854775808UL; 18446744073709551615UL]
+                  |> List.map AST.functionId |> List.sort |> List.map AST.functionIdValue
+    node["ordered"] <- encode typeof<uint64 list> (box ordered)
+    node["hashes"] <- encode typeof<int list> (box (["Some"; "None"; "Ok"; "Error"; source] |> List.map (AST.constructorRuntimeIdentity source)))
+    let ref = AST.resolvedConstructorReferenceWithTypeArgs source [AST.TInt64; AST.TList AST.TString]
+    node["reference"] <- encode typeof<AST.ConstructorReference> (box ref)
+    node["typeName"] <- encode typeof<string option> (box (AST.constructorReferenceTypeName ref))
+    let letPattern = AST.LPTuple (AST.LPVariable source, AST.LPVariable "x", [AST.LPWildcard; AST.LPVariable "_ignored"])
+    node["bindings"] <- encode typeof<string list> (box (AST.letPatternBindings letPattern))
+    node["mapped"] <- encode typeof<AST.LetPattern> (box (AST.mapLetPatternBindings (fun name -> name + "!") letPattern))
+    let patterns = [AST.LetBinderPatterns [letPattern]; AST.LetBinderPatterns [AST.LPVariable source; AST.LPVariable source];
+                    AST.MatchBinderPattern (AST.POr (AST.NonEmptyList.fromList [AST.PVar source; AST.PVar "other"]));
+                    AST.MatchBinderPattern (AST.PListCons ([AST.PVar source; AST.PVar "x"], AST.PVar "tail"));
+                    AST.MatchBinderPattern (AST.PResolvedConstructor (source, "Case", 2, [AST.PVar source; AST.PVar "x"]))]
+    node["validated"] <- encode typeof<Result<string list,string> list> (box (List.map AST.validateBinders patterns))
+    let definitions : AST.TypeDef list = [AST.SumTypeDef ("A", [], [({Name=source; Fields=[]} : AST.Variant); ({Name="Case"; Fields=[]} : AST.Variant)]);
+                       AST.SumTypeDef ("B", [], [({Name=source; Fields=[]} : AST.Variant)]);
+                       AST.SumTypeDef ("A", [], [({Name="Case"; Fields=[]} : AST.Variant)])]
+    node["collisions"] <- encode typeof<string list> (box (AST.collidingConstructorCaseNames definitions |> Set.toList))
+    let id = AST.constructorId (AST.typeId 1) source 7
+    let field = AST.fieldId (AST.typeId 2) 3
+    node["identityProjections"] <- encode typeof<bool * string * int * bool * int * string option * string option * string option>
+        (box (AST.constructorIdOwner id = AST.typeId 1, AST.constructorIdValue id, AST.constructorRuntimeTag id,
+              AST.fieldIdOwner field = AST.typeId 2, AST.fieldRuntimeIndex field,
+              AST.bindingDisplayName (AST.bindingId 4), AST.bindingDisplayName (AST.namedBindingId 4 source),
+              AST.bindingDisplayName (AST.topLevelValueId source)))
+    node :> JsonNode
+
 let names source =
     let node = JsonObject()
     let identifier = NameSyntax.identifierFromText source
@@ -237,6 +274,7 @@ let rec requests () =
             | "rendered" ->
                 (LibParser.Parser.parse source).diagnostics |> List.map (LibParser.Parser.renderDiagnostic source)
                 |> box |> encode typeof<string list>
+            | "ast-helpers" -> astHelpers source
             | "names" -> names source
             | "written-source" -> writtenSource source
             | "ast" -> encode typeof<LibParser.Parser.ParseResult> (box (LibParser.Parser.parse source))

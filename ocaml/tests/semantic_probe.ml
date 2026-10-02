@@ -13,6 +13,7 @@ let rec requests () =
         | "validated" -> Semantic_observation.SemanticJson.validated source
         | "rendered" -> Semantic_observation.SemanticJson.rendered source
         | "written-source" -> Semantic_observation.SemanticJson.writtenSource source
+        | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
         | "names" -> Semantic_observation.SemanticJson.names source
         | "ast" -> Semantic_observation.SemanticJson.ast source
         | "bindings" -> Semantic_observation.SemanticJson.bindings source

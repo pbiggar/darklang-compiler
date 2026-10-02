@@ -66,6 +66,11 @@ def inputs():
         "module A.B\n  val x = 1", "// lead\nmodule A.B\nval x = 1", "module A =\n  val x = 1\n  val y = 2",
         "module A =\nval x = 1", "module ``a.b``\r\nval x = 1", "module A =\r\n\tval x = 1", "module A =", "module A. =\n  1",
     ])
+    probes.extend([
+        "fun z z aa aa -> z", "fun (z, z, aa, aa) -> z", "match x with | (z, z, aa, aa) -> z",
+        "fun 𐀀 𐀀   -> 𐀀", "Darklang.Stdlib.Option.Option", "Darklang.Stdlib.Result.Result",
+        "x", "_x", "", "x.x", "A.Case", "𝒜.漢字", "😀", "Case", "A.B", "A.B.C",
+    ])
     rng = random.Random(12864)
     atoms = ["let", "val", "___", "x'", "'a", "α", "é", "😀", "0L", "9223372036854775808L", "1e+", "12abc",
              "(", ")", "(*)", "(*", "*)", '"', '"""', '$"', "\\u0041", "\\U00110000", "'", "``", "//", "///", "\n", "\r", "\t", "{", "}", ";"]
@@ -88,7 +93,7 @@ def first_difference(expected, actual, path="value"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers"])
     parser.add_argument("--probes-only", action="store_true")
     args = parser.parse_args()
     corpus = list(inputs())

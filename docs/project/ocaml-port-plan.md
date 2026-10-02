@@ -291,6 +291,9 @@ patterns, binding patterns, source type parsing, typed parameters, effect rows,
 and the complete parser (expressions, interpolations, declarations, module
 scopes, assertions, post-syntax validation, and diagnostic rendering).
 Source-name syntax and validated source-unit/module-scope handling are ported.
+The complete semantic AST schema and its identity, constructor-tag, binder,
+and collection helpers are ported. Compiler map ordering explicitly compares
+UTF-16 units lexicographically; opaque function identities preserve uint64 order.
 The native compiler entrypoint and remaining pipeline are not complete.
 
 Current comparisons: 360 foundation observations, 10,016 binary64 formatting
@@ -305,6 +308,9 @@ Script/Package/Test validated results and rendered diagnostic text each match
 all 1,820 sources, including complete trees and diagnostic ordering.
 Complete source-name and source-scope observations each match all 1,858 sources,
 including entry ownership, declaration flattening, and qualified name ordering.
+AST helper observations (allocation, tags, binders, collisions, and identity
+projections) match all 1,874 sources. Full AST and execution validation comparisons
+also pass all 1,874 sources after the added ordering and binder probes.
 Host text checks cover every Unicode scalar and every
 UTF-16 unit, including NFC, classification, casing, and grapheme boundaries.
 All 24 translated unit tests pass, including every focused ParserTests case.

@@ -456,3 +456,36 @@ let names source =
     "sourceUnit", result (fun value -> string (NameSyntax.sourceUnitNameText value)) (NameSyntax.sourceUnitName source);
     "scan", option (fun (name, next) -> tuple [nameIdentifier name; int32 next]) scan;
     "quoted", option (result (fun (name, next) -> tuple [nameIdentifier name; int32 next])) quoted]
+let rec astLetPattern = function
+  | AST.LPUnit -> union "LetPattern" "LPUnit" []
+  | AST.LPWildcard -> union "LetPattern" "LPWildcard" []
+  | AST.LPVariable name -> union "LetPattern" "LPVariable" [string name]
+  | AST.LPTuple (first, second, rest) -> union "LetPattern" "LPTuple" [astLetPattern first; astLetPattern second; `List (List.map astLetPattern rest)]
+let astHelpers source =
+  let spellings = [source; "a"; "z"; "\u{E000}"; "\u{10000}"; "a"] in
+  let allocation values = `List (List.map (fun (name, id) -> tuple [string name; scalar "uint64" (unsigned64 (AST.functionIdValue id))]) (StringOrder.Map.bindings values)) in
+  let allocated = `List (List.map (fun first -> allocation (AST.allocateFunctionIdsFromOrdinal first (List.to_seq spellings))) [0L; 1L; Int64.max_int; Int64.min_int; -16L]) in
+  let existing = allocation (AST.allocateFunctionIds (List.to_seq (List.map AST.functionId [0L; 10L; Int64.max_int])) (List.to_seq spellings)) in
+  let ordered = `List (List.map (fun value -> scalar "uint64" (unsigned64 (AST.functionIdValue value))) (List.sort Stdlib.compare (List.map AST.functionId [0L; 1L; Int64.max_int; Int64.min_int; -1L]))) in
+  let reference = AST.resolvedConstructorReferenceWithTypeArgs source [AST.TInt64; AST.TList AST.TString] in
+  let referenceJson = match reference with
+    | AST.ResolvedConstructor (modules, name, _) -> union "ConstructorReference" "ResolvedConstructor" [`List (List.map string modules); string name;
+        `List [union "SemanticType" "TInt64" []; union "SemanticType" "TList" [union "SemanticType" "TString" []]]]
+    | AST.UnresolvedConstructor name -> union "ConstructorReference" "UnresolvedConstructor" [option string name] in
+  let pattern = AST.LPTuple (AST.LPVariable source, AST.LPVariable "x", [AST.LPWildcard; AST.LPVariable "_ignored"]) in
+  let patterns = [AST.LetBinderPatterns [pattern]; AST.LetBinderPatterns [AST.LPVariable source; AST.LPVariable source];
+    AST.MatchBinderPattern (AST.POr (NonEmptyList.fromList [AST.PVar source; AST.PVar "other"]));
+    AST.MatchBinderPattern (AST.PListCons ([AST.PVar source; AST.PVar "x"], AST.PVar "tail"));
+    AST.MatchBinderPattern (AST.PResolvedConstructor (source, "Case", 2, [AST.PVar source; AST.PVar "x"]))] in
+  let definitions = [AST.SumTypeDef ("A", [], [{AST.name = source; fields = []}; {AST.name = "Case"; fields = []}]);
+    AST.SumTypeDef ("B", [], [{AST.name = source; fields = []}]); AST.SumTypeDef ("A", [], [{AST.name = "Case"; fields = []}])] in
+  let id = AST.constructorId (AST.typeId 1) source 7 and field = AST.fieldId (AST.typeId 2) 3 in
+  `Assoc ["allocated", allocated; "existing", existing; "ordered", ordered;
+    "hashes", `List (List.map (fun name -> int32 (AST.constructorRuntimeIdentity source name)) ["Some"; "None"; "Ok"; "Error"; source]);
+    "reference", referenceJson; "typeName", option string (AST.constructorReferenceTypeName reference);
+    "bindings", `List (List.map string (AST.letPatternBindings pattern)); "mapped", astLetPattern (AST.mapLetPatternBindings (fun name -> name ^ "!") pattern);
+    "validated", `List (List.map (fun pattern -> result (fun values -> `List (List.map string values)) (AST.validateBinders pattern)) patterns);
+    "collisions", `List (List.map string (StringOrder.Set.elements (AST.collidingConstructorCaseNames definitions)));
+    "identityProjections", tuple [`Bool (AST.constructorIdOwner id = AST.typeId 1); string (AST.constructorIdValue id); int32 (AST.constructorRuntimeTag id);
+      `Bool (AST.fieldIdOwner field = AST.typeId 2); int32 (AST.fieldRuntimeIndex field);
+      option string (AST.bindingDisplayName (AST.bindingId 4)); option string (AST.bindingDisplayName (AST.namedBindingId 4 source)); option string (AST.bindingDisplayName (AST.topLevelValueId source))]]

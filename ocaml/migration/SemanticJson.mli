@@ -10,3 +10,4 @@ val validated : string -> Yojson.Basic.t
 val rendered : string -> Yojson.Basic.t
 val writtenSource : string -> Yojson.Basic.t
 val names : string -> Yojson.Basic.t
+val astHelpers : string -> Yojson.Basic.t
