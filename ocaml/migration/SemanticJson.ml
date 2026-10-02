@@ -251,3 +251,18 @@ let bindings source =
       let pattern, next = BindingPatternParser.parseLetPattern state 0 in
       `Assoc ["pattern", letPattern pattern; "next", int32 next;
         "diagnostics", `List (List.map diagnostic (List.rev !(state.ParserSupport.diagnostics)))]
+
+let fnParam = function
+  | WrittenTypes.FPUnit r -> union "FnParam" "FPUnit" [range r]
+  | WrittenTypes.FPNormal (r, name, typ, opening, colon, closing, description) ->
+      union "FnParam" "FPNormal" [range r; identifier name; typeReference typ; range opening; range colon; range closing; string description]
+let declarationSupport stage source =
+  match Lexer.tokenize source with
+  | Error error -> union "FSharpResult" "Error" [string error]
+  | Ok (tokens, _) ->
+      let state = ParserSupport.makeState 0 (Array.of_list tokens) in
+      let value, next = if stage = "parameters" then
+        let value, next = DeclarationSupport.parseParam state 0 in fnParam value, next
+        else let value, next = DeclarationSupport.parseEffectRow state 0 in option (fun values -> `List (List.map identifier values)) value, next in
+      `Assoc ["value", value; "next", int32 next;
+        "diagnostics", `List (List.map diagnostic (List.rev !(state.ParserSupport.diagnostics)))]

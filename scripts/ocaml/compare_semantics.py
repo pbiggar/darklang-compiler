@@ -42,6 +42,11 @@ def inputs():
         "List <Int>", "Mod.Type <Int>", "Dict<Int Bool>", "List<List<Int>>, Bool", "List<Int", "()", "Int ->",
         "Option<>", "Option<Int,>", "((Int * Bool) -> List<Int>)", "A<B<C<D>>> * E", "A<B<C>, D>",
     ])
+    probes.extend([
+        "()", "(x: Int)", "(_: Unit)", "(x: List<List<Int>>)", "(x Int)", "(x: Int", "(1: Int)",
+        "/// param docs\n(x: Int)", "(/// name docs\nx: Int)", "{}", "{Http, Clock}", "{Http,}",
+        "{Imaginary}", "{Http Clock}", "{Http, Http}", "{", "{1}", "{Http", "{http}",
+    ])
     rng = random.Random(12864)
     atoms = ["let", "val", "___", "x'", "'a", "α", "é", "😀", "0L", "9223372036854775808L", "1e+", "12abc",
              "(", ")", "(*)", "(*", "*)", '"', '"""', '$"', "\\u0041", "\\U00110000", "'", "``", "//", "///", "\n", "\r", "\t", "{", "}", ";"]
@@ -64,7 +69,7 @@ def first_difference(expected, actual, path="value"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects"])
     parser.add_argument("--probes-only", action="store_true")
     args = parser.parse_args()
     corpus = list(inputs())

@@ -9,6 +9,7 @@ let rec requests () =
       let value = match stage with
         | "tokens" -> Semantic_observation.SemanticJson.tokens (Dark_compiler.Lexer.tokenize source)
         | "parser-support" -> Semantic_observation.SemanticJson.parserSupport source
+        | "parameters" | "effects" -> Semantic_observation.SemanticJson.declarationSupport stage source
         | "bindings" -> Semantic_observation.SemanticJson.bindings source
         | "types" -> Semantic_observation.SemanticJson.types source
         | "patterns" -> Semantic_observation.SemanticJson.patterns source

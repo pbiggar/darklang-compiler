@@ -121,6 +121,19 @@ let parserSupport stage source =
             result["next"] <- scalar "int32" (string next)
             result["diagnostics"] <- encode typeof<LibParser.Parser.Diagnostic list> (box (List.ofSeq state.diagnostics))
             result :> JsonNode
+        elif stage = "parameters" || stage = "effects" then
+            let value, next =
+                if stage = "parameters" then
+                    let value, next = LibParser.Parser.parseParam state 0
+                    encode typeof<LibParser.WrittenTypes.FnParam> (box value), next
+                else
+                    let value, next = LibParser.Parser.parseEffectRow state 0
+                    encode typeof<LibParser.WrittenTypes.Identifier list option> (box value), next
+            let result = JsonObject()
+            result["value"] <- value
+            result["next"] <- scalar "int32" (string next)
+            result["diagnostics"] <- encode typeof<LibParser.Parser.Diagnostic list> (box (List.ofSeq state.diagnostics))
+            result :> JsonNode
         elif stage = "bindings" then
             let pattern, next = LibParser.Parser.parseLetPattern state 0
             let result = JsonObject()
@@ -182,7 +195,7 @@ let rec requests () =
             | "tokens" ->
                 let value = LibParser.Lexer.tokenize source
                 encode (typeof<Result<LibParser.Lexer.SpannedToken list * (LibParser.Tokenizer.TokenRange * string) list, string>>) (box value)
-            | "parser-support" | "patterns" | "types" | "bindings" -> parserSupport stage source
+            | "parser-support" | "patterns" | "types" | "bindings" | "parameters" | "effects" -> parserSupport stage source
             | _ -> failwith $"Unsupported reference observation stage: {stage}"
         let response = JsonObject()
         response["schema"] <- JsonValue.Create 1

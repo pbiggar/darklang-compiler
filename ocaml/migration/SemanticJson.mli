@@ -4,3 +4,4 @@ val parserSupport : string -> Yojson.Basic.t
 val patterns : string -> Yojson.Basic.t
 val types : string -> Yojson.Basic.t
 val bindings : string -> Yojson.Basic.t
+val declarationSupport : string -> string -> Yojson.Basic.t
