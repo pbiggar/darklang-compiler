@@ -102,6 +102,41 @@ let classificationMethods =
     ["isIntLit"; "canStartAtom"; "canStartPattern"; "closesOrSeparates"; "isRecoveryBarrier"]
     |> List.map (fun name -> parserModule.GetMethod(name, Reflection.BindingFlags.Static ||| Reflection.BindingFlags.NonPublic))
 let infixMethod = parserModule.GetMethod("infixOf", Reflection.BindingFlags.Static ||| Reflection.BindingFlags.NonPublic)
+let names source =
+    let node = JsonObject()
+    let identifier = NameSyntax.identifierFromText source
+    node["identifier"] <- encode typeof<NameSyntax.Identifier> (box identifier)
+    node["classify"] <- encode typeof<NameSyntax.IdentifierToken> (box (NameSyntax.classify source))
+    node["bare"] <- JsonValue.Create(NameSyntax.isBareIdentifier identifier)
+    node["format"] <- encodeString (NameSyntax.formatIdentifier identifier)
+    let qualified = NameSyntax.tryParseLegacySpelling source |> Option.map (fun name ->
+        NameSyntax.formatQualifiedName name, NameSyntax.segments name,
+        NameSyntax.trySplitLast name |> Option.map (fun (prefix, last) -> NameSyntax.formatQualifiedName prefix, last))
+    node["qualified"] <- encode typeof<(string * NameSyntax.Identifier list * (string * NameSyntax.Identifier) option) option> (box qualified)
+    let header = NameSyntax.tryExtractModuleHeader source |> Option.map (fun (name, body) -> NameSyntax.formatQualifiedName name, body)
+    node["header"] <- encode typeof<(string * string) option> (box header)
+    node["sourceUnit"] <- encode typeof<Result<string,string>> (box (NameSyntax.sourceUnitName source |> Result.map NameSyntax.sourceUnitNameText))
+    let scan = if source.Length = 0 then None else Some (NameSyntax.scanOrdinary source 0)
+    node["scan"] <- encode typeof<(NameSyntax.Identifier * int) option> (box scan)
+    let quoted = if source.StartsWith "``" then Some (NameSyntax.scanQuoted source 0) else None
+    node["quoted"] <- encode typeof<Result<NameSyntax.Identifier * int,string> option> (box quoted)
+    node :> JsonNode
+
+let writtenSource source =
+    match WrittenParsing.parse LibParser.Validation.Script source with
+    | Error error -> encode typeof<Result<unit,string>> (box (Error error : Result<unit,string>))
+    | Ok validated ->
+        let node = JsonObject()
+        node["items"] <- encode typeof<Result<WrittenSource.Item list,string>> (box (WrittenSource.items validated))
+        node["names"] <- encode typeof<Result<string list,string>> (box (WrittenSource.qualifiedNames [validated]))
+        let units = [false; true] |> List.collect (fun entryRequired ->
+            [NameSyntax.SourceUnitPurpose.Executable; NameSyntax.SourceUnitPurpose.Library; NameSyntax.SourceUnitPurpose.Package]
+            |> List.map (fun purpose ->
+                let checkedUnits = WrittenSource.validateSourceUnits entryRequired [("probe", purpose, validated)]
+                checkedUnits |> Result.map (List.map LibParser.Validation.ValidatedSourceFile.toWrittenTypes)))
+        node["units"] <- encode typeof<Result<LibParser.WrittenTypes.SourceFile list,string> list> (box units)
+        node :> JsonNode
+
 let parserSupport stage source =
     match LibParser.Lexer.tokenize source with
     | Error error -> encode typeof<Result<unit,string>> (box (Error error : Result<unit,string>))
@@ -202,6 +237,8 @@ let rec requests () =
             | "rendered" ->
                 (LibParser.Parser.parse source).diagnostics |> List.map (LibParser.Parser.renderDiagnostic source)
                 |> box |> encode typeof<string list>
+            | "names" -> names source
+            | "written-source" -> writtenSource source
             | "ast" -> encode typeof<LibParser.Parser.ParseResult> (box (LibParser.Parser.parse source))
             | "parser-support" | "patterns" | "types" | "bindings" | "parameters" | "effects" -> parserSupport stage source
             | _ -> failwith $"Unsupported reference observation stage: {stage}"

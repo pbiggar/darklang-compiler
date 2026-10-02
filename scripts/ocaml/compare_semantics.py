@@ -60,6 +60,12 @@ def inputs():
         '$"é😀 {x + 1} text"', '$"{{{{ \\{\\{ {x} }}}}"', '$"{val x = 1}"', '$"{}"', '$"{1 2}"',
         '$"""é {{raw}} {f x}\n😀"""', "match x with | (a, a) -> a", "fun a a -> a",
     ])
+    probes.extend([
+        "let", "val", "in", "if", "elif", "then", "else", "type", "of", "match", "with", "fun", "when", "true", "false", "_", "___",
+        "ordinary", "'a", "a'", "α.é", "𐐀", "A.B.C", "A.", ".A", "A..B", "``a.b``.C", "````", "``half", "``line\nend``",
+        "module A.B\n  val x = 1", "// lead\nmodule A.B\nval x = 1", "module A =\n  val x = 1\n  val y = 2",
+        "module A =\nval x = 1", "module ``a.b``\r\nval x = 1", "module A =\r\n\tval x = 1", "module A =", "module A. =\n  1",
+    ])
     rng = random.Random(12864)
     atoms = ["let", "val", "___", "x'", "'a", "α", "é", "😀", "0L", "9223372036854775808L", "1e+", "12abc",
              "(", ")", "(*)", "(*", "*)", '"', '"""', '$"', "\\u0041", "\\U00110000", "'", "``", "//", "///", "\n", "\r", "\t", "{", "}", ";"]
@@ -82,7 +88,7 @@ def first_difference(expected, actual, path="value"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names"])
     parser.add_argument("--probes-only", action="store_true")
     args = parser.parse_args()
     corpus = list(inputs())

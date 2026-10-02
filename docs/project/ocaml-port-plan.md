@@ -290,6 +290,7 @@ and normalization, validation, parser state/range/recovery helpers, match
 patterns, binding patterns, source type parsing, typed parameters, effect rows,
 and the complete parser (expressions, interpolations, declarations, module
 scopes, assertions, post-syntax validation, and diagnostic rendering).
+Source-name syntax and validated source-unit/module-scope handling are ported.
 The native compiler entrypoint and remaining pipeline are not complete.
 
 Current comparisons: 360 foundation observations, 10,016 binary64 formatting
@@ -302,9 +303,12 @@ parameter documentation and malformed or unknown effect names.
 Full parser observations match all 1,820 frozen corpus and probe sources.
 Script/Package/Test validated results and rendered diagnostic text each match
 all 1,820 sources, including complete trees and diagnostic ordering.
+Complete source-name and source-scope observations each match all 1,858 sources,
+including entry ownership, declaration flattening, and qualified name ordering.
 Host text checks cover every Unicode scalar and every
 UTF-16 unit, including NFC, classification, casing, and grapheme boundaries.
-The 17 translated unit tests pass. Native executable bytes will be compared
+All 24 translated unit tests pass, including every focused ParserTests case.
+Native executable bytes will be compared
 after real backend translation; the F# oracle remains available until then.
 
 `ocaml/inventory.json` records explicit filename mappings for F# namespaces

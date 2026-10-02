@@ -8,3 +8,5 @@ val declarationSupport : string -> string -> Yojson.Basic.t
 val ast : string -> Yojson.Basic.t
 val validated : string -> Yojson.Basic.t
 val rendered : string -> Yojson.Basic.t
+val writtenSource : string -> Yojson.Basic.t
+val names : string -> Yojson.Basic.t

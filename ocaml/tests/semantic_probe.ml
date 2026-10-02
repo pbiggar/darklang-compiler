@@ -12,6 +12,8 @@ let rec requests () =
         | "parameters" | "effects" -> Semantic_observation.SemanticJson.declarationSupport stage source
         | "validated" -> Semantic_observation.SemanticJson.validated source
         | "rendered" -> Semantic_observation.SemanticJson.rendered source
+        | "written-source" -> Semantic_observation.SemanticJson.writtenSource source
+        | "names" -> Semantic_observation.SemanticJson.names source
         | "ast" -> Semantic_observation.SemanticJson.ast source
         | "bindings" -> Semantic_observation.SemanticJson.bindings source
         | "types" -> Semantic_observation.SemanticJson.types source

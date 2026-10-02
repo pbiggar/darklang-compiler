@@ -415,3 +415,44 @@ let validated source =
 let rendered source =
   let result = Parser.parse source in
   `List (List.map (fun diagnostic -> string (Parser.renderDiagnostic source diagnostic)) result.ParserSupport.diagnostics)
+
+let sourceItem = function
+  | WrittenSource.Function (path, value) -> union "Item" "Function" [`List (List.map string path); fnDecl value]
+  | WrittenSource.Value (path, value) -> union "Item" "Value" [`List (List.map string path); valueDecl value]
+  | WrittenSource.Type (path, value) -> union "Item" "Type" [`List (List.map string path); typeDecl value]
+  | WrittenSource.Expression (path, value) -> union "Item" "Expression" [`List (List.map string path); expr value]
+let result encode = function Ok value -> union "FSharpResult" "Ok" [encode value] | Error error -> union "FSharpResult" "Error" [string error]
+let writtenSource source =
+  match WrittenParsing.parse Validation.Script source with
+  | Error error -> union "FSharpResult" "Error" [string error]
+  | Ok validated ->
+      let units = List.concat_map (fun require -> List.map (fun purpose ->
+        result (fun values -> `List (List.map (fun value -> sourceFile (Validation.ValidatedSourceFile.toWrittenTypes value)) values))
+          (WrittenSource.validateSourceUnits require ["probe", purpose, validated]))
+        [NameSyntax.SourceUnitPurpose.Executable; NameSyntax.SourceUnitPurpose.Library; NameSyntax.SourceUnitPurpose.Package]) [false; true] in
+      `Assoc ["items", result (fun values -> `List (List.map sourceItem values)) (WrittenSource.items validated);
+        "names", result (fun values -> `List (List.map string values)) (WrittenSource.qualifiedNames [validated]); "units", `List units]
+let nameIdentifier = function NameSyntax.OrdinaryIdentifier text -> union "Identifier" "OrdinaryIdentifier" [string text] | NameSyntax.BlankIdentifier -> union "Identifier" "BlankIdentifier" []
+let keywordName = function
+  | NameSyntax.Keyword.Let -> "Let" | NameSyntax.Keyword.Val -> "Val" | NameSyntax.Keyword.In -> "In"
+  | NameSyntax.Keyword.If -> "If" | NameSyntax.Keyword.Elif -> "Elif" | NameSyntax.Keyword.Then -> "Then"
+  | NameSyntax.Keyword.Else -> "Else" | NameSyntax.Keyword.Type -> "Type" | NameSyntax.Keyword.Of -> "Of"
+  | NameSyntax.Keyword.Match -> "Match" | NameSyntax.Keyword.With -> "With" | NameSyntax.Keyword.Fun -> "Fun"
+  | NameSyntax.Keyword.When -> "When" | NameSyntax.Keyword.True -> "True" | NameSyntax.Keyword.False -> "False" | NameSyntax.Keyword.Underscore -> "Underscore"
+let nameToken = function
+  | NameSyntax.IdentifierToken identifier -> union "IdentifierToken" "IdentifierToken" [nameIdentifier identifier]
+  | NameSyntax.KeywordToken keyword -> union "IdentifierToken" "KeywordToken" [union "Keyword" (keywordName keyword) []]
+let names source =
+  let identifier = NameSyntax.identifierFromText source in
+  let qualified = NameSyntax.tryParseLegacySpelling source in
+  let qualifiedValue name = tuple [string (NameSyntax.formatQualifiedName name); `List (List.map nameIdentifier (NameSyntax.segments name));
+    option (fun (prefix, last) -> tuple [string (NameSyntax.formatQualifiedName prefix); nameIdentifier last]) (NameSyntax.trySplitLast name)] in
+  let scan = if Array.length (HostText.utf16Units source) = 0 then None else Some (NameSyntax.scanOrdinary source 0) in
+  let quoted = if String.starts_with ~prefix:"``" source then Some (NameSyntax.scanQuoted source 0) else None in
+  `Assoc ["identifier", nameIdentifier identifier; "classify", nameToken (NameSyntax.classify source);
+    "bare", `Bool (NameSyntax.isBareIdentifier identifier); "format", string (NameSyntax.formatIdentifier identifier);
+    "qualified", option qualifiedValue qualified;
+    "header", option (fun (name, body) -> tuple [string (NameSyntax.formatQualifiedName name); string body]) (NameSyntax.tryExtractModuleHeader source);
+    "sourceUnit", result (fun value -> string (NameSyntax.sourceUnitNameText value)) (NameSyntax.sourceUnitName source);
+    "scan", option (fun (name, next) -> tuple [nameIdentifier name; int32 next]) scan;
+    "quoted", option (result (fun (name, next) -> tuple [nameIdentifier name; int32 next])) quoted]
