@@ -9,6 +9,8 @@ let rec requests () =
       let value = match stage with
         | "tokens" -> Semantic_observation.SemanticJson.tokens (Dark_compiler.Lexer.tokenize source)
         | "parser-support" -> Semantic_observation.SemanticJson.parserSupport source
+        | "bindings" -> Semantic_observation.SemanticJson.bindings source
+        | "types" -> Semantic_observation.SemanticJson.types source
         | "patterns" -> Semantic_observation.SemanticJson.patterns source
         | stage -> failwith ("Unsupported native observation stage: " ^ stage)
       in

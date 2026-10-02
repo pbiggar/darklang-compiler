@@ -196,3 +196,58 @@ let patterns source =
       let pattern, next = PatternParser.parseMatchPattern state 0 in
       `Assoc ["pattern", matchPattern pattern; "next", int32 next;
         "diagnostics", `List (List.map diagnostic (List.rev !(state.ParserSupport.diagnostics)))]
+
+let rec typeReference value =
+  let u name fields = union "TypeReference" name fields in
+  let pair encoder (location, value) = tuple [range location; encoder value] in
+  match value with
+  | WrittenTypes.TUnit location -> u "TUnit" [range location]
+  | WrittenTypes.TBool location -> u "TBool" [range location]
+  | WrittenTypes.TInt location -> u "TInt" [range location]
+  | WrittenTypes.TInt8 location -> u "TInt8" [range location]
+  | WrittenTypes.TUInt8 location -> u "TUInt8" [range location]
+  | WrittenTypes.TInt16 location -> u "TInt16" [range location]
+  | WrittenTypes.TUInt16 location -> u "TUInt16" [range location]
+  | WrittenTypes.TInt32 location -> u "TInt32" [range location]
+  | WrittenTypes.TUInt32 location -> u "TUInt32" [range location]
+  | WrittenTypes.TInt64 location -> u "TInt64" [range location]
+  | WrittenTypes.TUInt64 location -> u "TUInt64" [range location]
+  | WrittenTypes.TInt128 location -> u "TInt128" [range location]
+  | WrittenTypes.TUInt128 location -> u "TUInt128" [range location]
+  | WrittenTypes.TFloat location -> u "TFloat" [range location]
+  | WrittenTypes.TChar location -> u "TChar" [range location]
+  | WrittenTypes.TString location -> u "TString" [range location]
+  | WrittenTypes.TDateTime location -> u "TDateTime" [range location]
+  | WrittenTypes.TUuid location -> u "TUuid" [range location]
+  | WrittenTypes.TBlob location -> u "TBlob" [range location]
+  | WrittenTypes.TList (r, kw, opening, inner, closing) -> u "TList" [range r; range kw; range opening; typeReference inner; range closing]
+  | WrittenTypes.TDict (r, kw, opening, key, comma, value, closing) -> u "TDict" [range r; range kw; range opening; typeReference key; range comma; typeReference value; range closing]
+  | WrittenTypes.TVariable (r, tick, name) -> u "TVariable" [range r; range tick; pair string name]
+  | WrittenTypes.TTuple (r, first, star, second, rest, opening, closing) -> u "TTuple" [range r; typeReference first; range star; typeReference second; `List (List.map (pair typeReference) rest); range opening; range closing]
+  | WrittenTypes.TFn (r, args, result) -> u "TFn" [range r; `List (List.map (fun (arg, arrow) -> tuple [typeReference arg; range arrow]) args); typeReference result]
+  | WrittenTypes.TCustom name -> u "TCustom" [record "QualifiedTypeIdentifier" ["range", range name.WrittenTypes.range; "modules", `List (List.map (fun (name, dot) -> tuple [identifier name; range dot]) name.WrittenTypes.modules); "typ", identifier name.WrittenTypes.typ; "typeArgs", `List (List.map typeReference name.WrittenTypes.typeArgs)]]
+
+let types source =
+  match Lexer.tokenize source with
+  | Error error -> union "FSharpResult" "Error" [string error]
+  | Ok (tokens, _) ->
+      let state = ParserSupport.makeState 0 (Array.of_list tokens) in
+      let value, next = TypeParser.parseTypeRef state 0 in
+      `Assoc ["type", typeReference value; "next", int32 next;
+        "diagnostics", `List (List.map diagnostic (List.rev !(state.ParserSupport.diagnostics)))]
+
+let rec letPattern = function
+  | WrittenTypes.LPUnit r -> union "LetPattern" "LPUnit" [range r]
+  | WrittenTypes.LPVariable (r, name) -> union "LetPattern" "LPVariable" [range r; string name]
+  | WrittenTypes.LPWildcard r -> union "LetPattern" "LPWildcard" [range r]
+  | WrittenTypes.LPTuple (r, first, comma, second, rest, opening, closing) ->
+      union "LetPattern" "LPTuple" [range r; letPattern first; range comma; letPattern second;
+        `List (List.map (fun (comma, pattern) -> tuple [range comma; letPattern pattern]) rest); range opening; range closing]
+let bindings source =
+  match Lexer.tokenize source with
+  | Error error -> union "FSharpResult" "Error" [string error]
+  | Ok (tokens, _) ->
+      let state = ParserSupport.makeState 0 (Array.of_list tokens) in
+      let pattern, next = BindingPatternParser.parseLetPattern state 0 in
+      `Assoc ["pattern", letPattern pattern; "next", int32 next;
+        "diagnostics", `List (List.map diagnostic (List.rev !(state.ParserSupport.diagnostics)))]

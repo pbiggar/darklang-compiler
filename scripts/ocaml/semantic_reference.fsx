@@ -121,6 +121,20 @@ let parserSupport stage source =
             result["next"] <- scalar "int32" (string next)
             result["diagnostics"] <- encode typeof<LibParser.Parser.Diagnostic list> (box (List.ofSeq state.diagnostics))
             result :> JsonNode
+        elif stage = "bindings" then
+            let pattern, next = LibParser.Parser.parseLetPattern state 0
+            let result = JsonObject()
+            result["pattern"] <- encode typeof<LibParser.WrittenTypes.LetPattern> (box pattern)
+            result["next"] <- scalar "int32" (string next)
+            result["diagnostics"] <- encode typeof<LibParser.Parser.Diagnostic list> (box (List.ofSeq state.diagnostics))
+            result :> JsonNode
+        elif stage = "types" then
+            let value, next = LibParser.Parser.parseTypeRef state 0
+            let result = JsonObject()
+            result["type"] <- encode typeof<LibParser.WrittenTypes.TypeReference> (box value)
+            result["next"] <- scalar "int32" (string next)
+            result["diagnostics"] <- encode typeof<LibParser.Parser.Diagnostic list> (box (List.ofSeq state.diagnostics))
+            result :> JsonNode
         else
           let observations = tokens |> Array.mapi (fun index token ->
             let node = JsonObject()
@@ -168,7 +182,7 @@ let rec requests () =
             | "tokens" ->
                 let value = LibParser.Lexer.tokenize source
                 encode (typeof<Result<LibParser.Lexer.SpannedToken list * (LibParser.Tokenizer.TokenRange * string) list, string>>) (box value)
-            | "parser-support" | "patterns" -> parserSupport stage source
+            | "parser-support" | "patterns" | "types" | "bindings" -> parserSupport stage source
             | _ -> failwith $"Unsupported reference observation stage: {stage}"
         let response = JsonObject()
         response["schema"] <- JsonValue.Create 1

@@ -286,13 +286,17 @@ UTF-16 indexing, and isolated surrogate units in diagnostic strings.
 
 Completed native checkpoints: foundations, platform ABI selection, runner
 arguments, complete tokens/trivia/lexer recovery, written syntax definitions
-and normalization, validation, and parser state/range/recovery helpers.
+and normalization, validation, parser state/range/recovery helpers, match
+patterns, binding patterns, and source type parsing.
 Validation is still awaiting the complete native parser corpus comparison;
 the native compiler entrypoint and remaining pipeline are not complete.
 
 Current comparisons: 360 foundation observations, 10,016 binary64 formatting
 observations, 1,713 complete tokenizer source observations, and 1,215 parser
-support probes match F#. Host text checks cover every Unicode scalar and every
+support probes match F#. Complete match-pattern observations pass 1,239 probes;
+source types and binding patterns each pass 1,262 probes, including ordered
+diagnostics, literal widths, source ranges, generic closers, and recovery.
+Host text checks cover every Unicode scalar and every
 UTF-16 unit, including NFC, classification, casing, and grapheme boundaries.
 The 17 translated unit tests pass. Native executable bytes will be compared
 after real backend translation; the F# oracle remains available until then.
