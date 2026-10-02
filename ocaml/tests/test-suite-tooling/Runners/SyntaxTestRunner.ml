@@ -1,3 +1,6 @@
+(*
+   SyntaxTestRunner.fs - Runs canonical Dark syntax fixtures.
+*)
 (* SyntaxTestRunner.ml - Original syntax errors, formatting expectations, and roundtrip checks. *)
 open Dark_compiler
 open Common

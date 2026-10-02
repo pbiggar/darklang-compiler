@@ -1,3 +1,9 @@
+(*
+   NameSyntax.fs - Shared lexical and structural contract for source names.
+   This module is the single parser-facing authority for identifier characters,
+   reserved words, blank names, quoted identifiers, and qualified segments.
+   Stable caller-supplied identity for an independently parsed source unit.
+*)
 (* NameSyntax.ml - UTF-16 identifiers, quoted segments, and module-header extraction. *)
 [@@@warning "-4"]
 type identifier = OrdinaryIdentifier of string | BlankIdentifier
@@ -5,6 +11,10 @@ type qualifiedName = QualifiedName of identifier NonEmptyList.t
 module Keyword = struct
   type t = Let | Val | In | If | Elif | Then | Else | Type | Of | Match | With | Fun | When | True | False | Underscore
 end
+(*
+   Why a caller supplied a source unit. Only executable units may contribute
+   an entry expression; library and package units are declarations-only.
+*)
 type identifierToken = IdentifierToken of identifier | KeywordToken of Keyword.t
 module SourceUnitPurpose = struct type t = Executable | Library | Package end
 type sourceUnitName = SourceUnitName of string
@@ -34,6 +44,11 @@ let trySplitLast name = match List.rev (segments name) with
   | last :: prefix -> Option.map (fun prefix -> fromNonEmptySegments prefix, last) (NonEmptyList.tryFromList (List.rev prefix))
   | [] -> None
 let formatQualifiedName name = String.concat "." (List.map formatIdentifier (segments name))
+(*
+   The legacy compiler AST still consumes a string at the parse/resolution
+   boundary. Keep quoted segment delimiters in that string so embedded dots are
+   lossless; NameResolution parses this representation back into segments.
+*)
 let toLegacySpelling = formatQualifiedName
 let tryParseLegacySpelling spelling =
   let units = HostText.utf16Units spelling in let length = Array.length units in

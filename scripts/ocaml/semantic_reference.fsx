@@ -263,6 +263,121 @@ let parserSupport stage source =
           result["diagnostics"] <- encode typeof<LibParser.Parser.Diagnostic list> (box (List.ofSeq state.diagnostics))
           result :> JsonNode
 
+let resolution source =
+    let spellingsMethod = typeof<AST.SemanticType>.Assembly.GetType("NameResolution").GetMethod("candidateSpellings", Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static)
+    let candidateSpellings context scope query = spellingsMethod.Invoke(null,[|box context;box scope;box query|]) :?> string list
+    let namespaceKey = function
+        | NameResolution.RootNamespace -> ["RootNamespace"]
+        | NameResolution.ModuleNamespace path -> "ModuleNamespace" :: AST.NonEmptyList.toList path
+        | NameResolution.PackageNamespace (owner, modules) -> "PackageNamespace" :: owner :: modules
+        | NameResolution.BuiltinNamespace -> ["BuiltinNamespace"]
+    let identityKey = function
+        | NameResolution.LocalValue name -> ["LocalValue"; name]
+        | NameResolution.ModuleValue (ns, name) -> "ModuleValue" :: name :: namespaceKey ns
+        | NameResolution.PackageValue (ns, name) -> "PackageValue" :: name :: namespaceKey ns
+        | NameResolution.BuiltinValue (name, version) -> ["BuiltinValue"; name; string version]
+        | NameResolution.ModuleFunction (ns, name, id) -> "ModuleFunction" :: name :: id :: namespaceKey ns
+        | NameResolution.PackageFunction (ns, name, id) -> "PackageFunction" :: name :: id :: namespaceKey ns
+        | NameResolution.BuiltinFunction (name, version) -> ["BuiltinFunction"; name; string version]
+        | NameResolution.ConstructorSymbol (owner, caseName) -> ["ConstructorSymbol"; owner; caseName]
+        | NameResolution.UserType name -> ["UserType"; name]
+        | NameResolution.BuiltinType name -> ["BuiltinType"; name]
+    let provenanceKey = function
+        | NameResolution.LexicalBinding s -> ["LexicalBinding"; s]
+        | NameResolution.SourceDeclaration s -> ["SourceDeclaration"; s]
+        | NameResolution.ModuleDeclaration s -> ["ModuleDeclaration"; s]
+        | NameResolution.PackageDeclaration s -> ["PackageDeclaration"; s]
+        | NameResolution.BuiltinRegistration s -> ["BuiltinRegistration"; s]
+        | NameResolution.CompilerExtension s -> ["CompilerExtension"; s]
+    let candidateValue (c:NameResolution.Candidate) = NameResolution.qualifiedNameSegments c.VisibleName, identityKey c.Identity, provenanceKey c.Provenance
+    let identities = [NameResolution.LocalValue "x"; NameResolution.ModuleValue (NameResolution.RootNamespace,"x"); NameResolution.PackageValue (NameResolution.PackageNamespace ("Owner",["Module"]),"x"); NameResolution.BuiltinValue ("x",-1); NameResolution.ModuleFunction (NameResolution.ModuleNamespace (AST.NonEmptyList.fromList ["A";"B"]),"x",source); NameResolution.PackageFunction (NameResolution.RootNamespace,"x","decl2"); NameResolution.BuiltinFunction ("x",2); NameResolution.ConstructorSymbol ("First","x"); NameResolution.ConstructorSymbol ("Second","x"); NameResolution.UserType "X"; NameResolution.BuiltinType "X"]
+    let provenances = [NameResolution.LexicalBinding source; NameResolution.SourceDeclaration source; NameResolution.ModuleDeclaration source; NameResolution.PackageDeclaration source; NameResolution.BuiltinRegistration source; NameResolution.CompilerExtension source]
+    let spellings = ["x";"A.x";"A.B.x";source;"Darklang.Stdlib.Option.Option";"Darklang.Stdlib.Option.Option.Some"]
+    let all = spellings |> List.collect (fun spelling -> identities |> List.collect (fun identity -> provenances |> List.choose (NameResolution.candidate spelling identity)))
+    let baseEnv = NameResolution.addCandidates all NameResolution.empty
+    let overlay = NameResolution.addCandidates (all |> List.filter (fun c -> match c.Provenance with NameResolution.SourceDeclaration _ | NameResolution.ModuleDeclaration _ -> true | _ -> false)) NameResolution.empty
+    let environments = [NameResolution.empty; baseEnv; overlay; NameResolution.merge baseEnv overlay; NameResolution.filterCandidates (fun c -> c.Identity = NameResolution.ConstructorSymbol ("First","x")) baseEnv; NameResolution.filterCandidates (fun _ -> false) baseEnv; NameResolution.merge baseEnv NameResolution.empty]
+    let contexts = [NameResolution.ResolutionContext.Value;NameResolution.ResolutionContext.Callable;NameResolution.ResolutionContext.Constructor;NameResolution.ResolutionContext.Type]
+    let queries = [source;"x";"A.x";"A.B.x";"Option";"Option.Some";"Result.Ok";"Stdlib.Option.Option";"missing";"A..B"]
+    let scopes = [[];["A"];["A";"B"]]
+    let values = environments |> List.map (fun env ->
+        NameResolution.candidates env |> List.map candidateValue,
+        contexts |> List.collect (fun context -> scopes |> List.collect (fun scope -> queries |> List.map (fun query ->
+            candidateSpellings context scope query,
+            NameResolution.resolveInModule context scope query env
+            |> Result.map (fun r -> NameResolution.qualifiedNameSegments r.OriginalName, NameResolution.contextToString r.Context, identityKey r.Identity, provenanceKey r.Provenance, NameResolution.canonicalSpelling r.Identity)
+            |> Result.mapError NameResolution.errorToString))))
+    let value = NameResolution.tryQualifiedName source |> Option.map NameResolution.qualifiedNameSegments, values
+    encode (value.GetType()) (box value)
+
+let checkingCall<'a> name args : 'a =
+    let methodInfo = typeof<AST.SemanticType>.Assembly.GetType("CheckingDiagnostics").GetMethod(name, Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static)
+    methodInfo.Invoke(null,args) :?> 'a
+let checkingDiagnostics source =
+    let types = [AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TBool;AST.TFloat64;AST.TString;AST.TBlob;AST.TChar;AST.TDateTime;AST.TUnit;AST.TNever;AST.TInternalRawPtr;AST.TVar source;AST.TInferenceVar (source,"#infer:id:fixed");AST.TFunction ([AST.TInt64;AST.TVar source],AST.TDict (AST.TString,AST.TVar source));AST.TTuple [AST.TUnit;AST.TList AST.TString];AST.TRecord (source,[]);AST.TRecord (source,[AST.TDict (AST.TChar,AST.TStream AST.TInt64)]);AST.TSum (source,[]);AST.TSum (source,[AST.TVar source]);AST.TList (AST.TDict (AST.TInt64,AST.TString));AST.TStream AST.TFloat64;AST.TDict (AST.TBool,AST.TInt64)]
+    let expressions: AST.Expr list = [AST.UnitLiteral;AST.Int64Literal Int64.MinValue;AST.Int128Literal Int128.MinValue;AST.BigIntLiteral (Numerics.BigInteger.One <<< 256);AST.Int8Literal -128y;AST.Int16Literal -32768s;AST.Int32Literal Int32.MinValue;AST.UInt8Literal 255uy;AST.UInt16Literal 65535us;AST.UInt32Literal UInt32.MaxValue;AST.UInt64Literal UInt64.MaxValue;AST.UInt128Literal UInt128.MaxValue;AST.BoolLiteral true;AST.BoolLiteral false;AST.StringLiteral source;AST.CharLiteral source;AST.FloatLiteral -0.0;AST.FloatLiteral infinity;AST.FloatLiteral nan;AST.FloatLiteral 1e16;AST.FloatLiteral 1e-5;AST.TupleLiteral [AST.StringLiteral source;AST.FloatLiteral 1.0];AST.TupleLiteral [AST.Var source];AST.ListLiteral [];AST.ListLiteral [AST.FloatLiteral 1.0];AST.ListLiteral [AST.Var source;AST.TupleLiteral [AST.Int64Literal 1L;AST.StringLiteral source]];AST.Var source]
+    let patterns = [AST.LPUnit;AST.LPWildcard;AST.LPVariable source;AST.LPTuple (AST.LPVariable source,AST.LPUnit,[AST.LPTuple (AST.LPWildcard,AST.LPVariable "nested",[])])]
+    let errors = (types |> List.collect (fun typ -> [CheckingDiagnostics.TypeMismatch (AST.TBool,typ,source);CheckingDiagnostics.IfBranchTypeMismatch (AST.TBool,typ);CheckingDiagnostics.InvalidOperation (source,[typ;AST.TString]);CheckingDiagnostics.IncompatibleEqualityOperands (typ,AST.TString);CheckingDiagnostics.IncompatibleOrderingOperands (typ,AST.TInt64)])) @ [CheckingDiagnostics.UndefinedVariable source;CheckingDiagnostics.UndefinedCallTarget source;CheckingDiagnostics.MissingTypeAnnotation source;CheckingDiagnostics.PolymorphicRecursion source;CheckingDiagnostics.ResolutionFailure (NameResolution.InvalidQualifiedName (source,NameResolution.ResolutionContext.Callable));CheckingDiagnostics.GenericError source]
+    let bound : Map<string,AST.Expr> = Map.ofList [("message",AST.StringLiteral source)]
+    let calls : AST.Expr list = [AST.applyNamed "Builtin.unwrap" (AST.NonEmptyList.singleton (AST.Constructor (AST.UnresolvedConstructor None,"Option.None",[])));AST.applyNamed "Builtin.crash" (AST.NonEmptyList.singleton (AST.Var "message"));AST.Let (AST.LPVariable "message",AST.StringLiteral source,AST.applyNamed "Builtin.testRuntimeError" (AST.NonEmptyList.singleton (AST.Var "message")));AST.Var "absent"]
+    let names = [source;"Builtin.unwrap";"Builtin.testRuntimeError";"Builtin.crash";"Builtin.testNan";"Builtin.testInfinity";"Builtin.blobEmpty"]
+    let typeValues = types |> List.map (fun typ -> CheckingDiagnostics.typeToString typ,CheckingDiagnostics.typeToHelperIdentityString typ,checkingCall<bool> "isNeverType" [|box typ|])
+    let errorValues = List.map CheckingDiagnostics.typeErrorToString errors
+    let expressionValues = expressions |> List.map (fun expr ->
+        checkingCall<string option> "tryFormatLiteralValue" [|box expr|],
+        checkingCall<string option> "formatPatternMismatchValue" [|box expr|],
+        checkingCall<string> "formatListLiteralForNoMatch" [|box [expr]|],
+        types |> List.map (fun typ -> [checkingCall<string> "ifConditionTypeMismatchMessage" [|box expr;box typ|];checkingCall<string> "interpolationTypeMismatchMessage" [|box expr;box typ|];checkingCall<string> "formatPatternMismatchError" [|box expr;box typ;box AST.TString;box (None:string option)|];checkingCall<string> "formatPatternMismatchError" [|box expr;box typ;box AST.TUnit;box (Some source)|];checkingCall<string> "formatLegacyParamTypeError" [|box source;box 4;box "param";box AST.TString;box typ;box expr|]]))
+    let patternValues = patterns |> List.map (fun pattern ->
+        checkingCall<string> "formatLetDeconstructionPattern" [|box pattern|],
+        checkingCall<AST.SemanticType> "inferredLetPatternType" [|box source;box pattern|] |> CheckingDiagnostics.typeToHelperIdentityString,
+        types |> List.map (fun typ -> checkingCall<(string * AST.SemanticType) list option> "bindLetPatternTypes" [|box pattern;box typ|] |> Option.map (List.map (fun (name,typ) -> name,CheckingDiagnostics.typeToHelperIdentityString typ))))
+    let callValues = calls |> List.map (fun call -> checkingCall<bool> "isKnownFailureConstructorExpr" [|box call|],checkingCall<bool> "isKnownUnwrapFailureExpr" [|box bound;box call|],checkingCall<bool> "isKnownTestRuntimeErrorExpr" [|box bound;box call|],checkingCall<string option> "tryExtractKnownTestRuntimeErrorMessage" [|box bound;box call|])
+    let nameValues = names |> List.map (fun name -> checkingCall<string> "withIndefiniteArticle" [|box name|],["isBuiltinUnwrapName";"isBuiltinTestRuntimeErrorName";"isRuntimeFailureName";"isBuiltinTestNanName";"isBuiltinTestInfinityName";"isBuiltinBlobEmptyName"] |> List.map (fun test -> checkingCall<bool> test [|box name|]))
+    let freshValues = [None;Some source] |> List.map (fun scope ->
+        let fresh,subst = CheckingDiagnostics.freshenTypeParams scope [source;"a";source]
+        let keys = fresh |> List.map (fun key -> match CheckingDiagnostics.inferenceVarForKey key with AST.TInferenceVar (display,_) -> display | _ -> failwith "Freshened key is not an inference variable")
+        keys,List.distinct fresh |> List.length = 3,fresh |> List.forall (fun key -> let guid = key.Substring(key.Length - 32) in guid.Length = 32 && guid[12] = '4' && List.contains guid[16] ['8';'9';'a';'b']),subst |> Map.toList |> List.map (fun (name,key) -> name,CheckingDiagnostics.typeToString (CheckingDiagnostics.inferenceVarForKey key)))
+    let value = typeValues,errorValues,expressionValues,patternValues,callValues,nameValues,freshValues
+    encode (value.GetType()) (box value)
+
+let freeVariables source =
+    let x = AST.Var source
+    let y = AST.Var "y"
+    let field = AST.unresolvedRecordFieldReference "field"
+    let patterns = [AST.PUnit;AST.PWildcard;AST.PVar source;AST.PConstructor ("C",[AST.PVar source;AST.PVar "y"]);AST.PResolvedConstructor ("M.T","C",3,[AST.PVar source]);AST.PInt64 1L;AST.PBigInt 1I;AST.PInt128Literal (Int128.Parse "1");AST.PInt8Literal 1y;AST.PInt16Literal 1s;AST.PInt32Literal 1;AST.PUInt8Literal 1uy;AST.PUInt16Literal 1us;AST.PUInt32Literal 1ul;AST.PUInt64Literal 1UL;AST.PUInt128Literal (UInt128.Parse "1");AST.PBool true;AST.PString source;AST.PChar source;AST.PFloat 1.0;AST.PTuple [AST.PVar source;AST.PVar "y"];AST.PList [AST.PVar source];AST.PListCons ([AST.PVar source],AST.PVar "tail");AST.POr (AST.NonEmptyList.fromList [AST.PVar source;AST.PVar "other"])]
+    let literals: AST.Expr list = [AST.UnitLiteral;AST.Int64Literal 1L;AST.Int128Literal (Int128.Parse "1");AST.BigIntLiteral 1I;AST.Int8Literal 1y;AST.Int16Literal 1s;AST.Int32Literal 1;AST.UInt8Literal 1uy;AST.UInt16Literal 1us;AST.UInt32Literal 1ul;AST.UInt64Literal 1UL;AST.UInt128Literal (UInt128.Parse "1");AST.BoolLiteral true;AST.StringLiteral source;AST.CharLiteral source;AST.FloatLiteral 1.0;AST.RuntimeError source]
+    let expressions = literals @ [x;AST.Var "Builtin.testNan";AST.Var "Builtin.testInfinity";AST.BoundaryRender (source,x);AST.BinOp (AST.Add,x,y);AST.UnaryOp (AST.Neg,x);
+        AST.Let (AST.LPVariable source,x,AST.TupleLiteral [x;y]);AST.Let (AST.LPTuple (AST.LPVariable source,AST.LPVariable "y",[]),AST.Var "value",AST.TupleLiteral [x;y]);
+        AST.RecursiveLet (AST.RecursiveBindingCandidate {SourceName=source;Kind=AST.NamedLocalFunctionMember},AST.Apply (x,[],AST.NonEmptyList.singleton y),AST.TupleLiteral [x;y]);
+        AST.If (x,y,AST.Var "z");AST.Sequence (x,y);AST.Apply (x,[],AST.NonEmptyList.fromList [y;AST.Var "z"]);AST.TupleLiteral [x;y];AST.TupleAccess (x,1);
+        AST.DictLiteral (AST.TString,AST.TString,[(x,y)]);AST.RecordLiteral (AST.unresolvedRecordReference "R" [],[(field,x)]);AST.RecordUpdate (x,[(field,y)]);AST.RecordAccess (x,field);
+        AST.Constructor (AST.UnresolvedConstructor None,"C",[x;y]);AST.ListLiteral [x;y];AST.Lambda (AST.NonEmptyList.singleton (AST.lambdaParameter (AST.LPVariable source)),None,AST.TupleLiteral [x;y]);
+        AST.Apply (AST.TupleAccess (x,0),[],AST.NonEmptyList.singleton y);AST.IndirectApply (x,AST.NonEmptyList.singleton y);AST.Closure (source,[x;y]);
+        AST.InterpolatedString [AST.StringText source;AST.StringExpr x;AST.StringExpr y]] @ (patterns |> List.map (fun pattern -> AST.Match (AST.Var "scrutinee",[{Patterns=AST.NonEmptyList.singleton pattern;Guard=Some (AST.Var "guard");Body=AST.TupleLiteral [x;y;AST.Var "tail"]}])))
+    let scopes = [Set.empty;Set.singleton source;Set.ofList [source;"y";"guard"]]
+    let value = patterns |> List.map (CheckedFreeVariables.collectPatternBindings >> Set.toList), expressions |> List.map (fun expr -> scopes |> List.map (fun bound -> CheckedFreeVariables.collectFreeVars expr bound |> Set.toList))
+    encode (value.GetType()) (box value)
+
+let functionIdMap source =
+    let ids = [0UL;1UL;uint64 Int64.MaxValue;1UL <<< 63;UInt64.MaxValue;1UL] |> List.map AST.functionId
+    let entries = ids |> List.mapi (fun index id -> id,source + string index)
+    let table = FunctionIdMap.ofList entries
+    let overlay = FunctionIdMap.ofArray [|AST.functionId 1UL,"overlay";AST.functionId 2UL,source|]
+    let tables = [FunctionIdMap.empty;table;FunctionIdMap.ofSeq entries;FunctionIdMap.remove (AST.functionId 1UL) table;FunctionIdMap.change (AST.functionId 0UL) (fun _ -> None) table;FunctionIdMap.change (AST.functionId 3UL) (fun previous -> Some (Option.defaultValue source previous)) table;FunctionIdMap.merge table overlay;FunctionIdMap.map (fun id value -> string (AST.functionIdValue id) + value) table;FunctionIdMap.filter (fun id _ -> AST.functionIdValue id >= (1UL <<< 63)) table]
+    let ordinalEntries entries = entries |> List.map (fun (id,value) -> AST.functionIdValue id,value)
+    let values = tables |> List.map (fun table ->
+        let iterated = ResizeArray<_>()
+        FunctionIdMap.iter (fun id value -> iterated.Add (id,value)) table
+        ordinalEntries (FunctionIdMap.toList table),ordinalEntries (FunctionIdMap.toSeq table |> Seq.toList),
+        FunctionIdMap.keys table |> Seq.map AST.functionIdValue |> Seq.toList,FunctionIdMap.values table |> Seq.toList,
+        FunctionIdMap.count table,FunctionIdMap.isEmpty table,
+        ids |> List.map (fun id -> FunctionIdMap.tryFind id table,FunctionIdMap.containsKey id table),
+        ordinalEntries (FunctionIdMap.fold (fun state id value -> state @ [(id,value)]) [] table),ordinalEntries (List.ofSeq iterated),
+        FunctionIdMap.exists (fun id _ -> AST.functionIdValue id = UInt64.MaxValue) table,FunctionIdMap.forall (fun _ value -> value <> "") table,
+        if FunctionIdMap.isEmpty table then None else let id,value = FunctionIdMap.maxKeyValue table in Some (AST.functionIdValue id,value,FunctionIdMap.find id table))
+    encode (values.GetType()) (box values)
+
 CultureInfo.CurrentCulture <- CultureInfo.InvariantCulture
 CultureInfo.CurrentUICulture <- CultureInfo.InvariantCulture
 let reader : IO.TextReader =
@@ -299,6 +414,10 @@ let rec requests () =
                         WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+            | "function-map" -> functionIdMap source
+            | "free-variables" -> freeVariables source
+            | "checking-diagnostics" -> checkingDiagnostics source
+            | "resolution" -> resolution source
             | "names" -> names source
             | "written-source" -> writtenSource source
             | "ast" -> encode typeof<LibParser.Parser.ParseResult> (box (LibParser.Parser.parse source))

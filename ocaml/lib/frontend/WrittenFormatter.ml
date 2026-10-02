@@ -1,3 +1,8 @@
+(*
+   WrittenFormatter.fs - Conservative formatting for validated interpreter syntax.
+   A syntax fingerprint without source positions. Reparse checks use this
+   instead of comparing WrittenTypes ranges, which change when text is formatted.
+*)
 (* WrittenFormatter.ml - Typed range-free fingerprints and guarded conservative formatting. *)
 let union name fields = name ^ "(" ^ String.concat "," fields ^ ")"
 let record fields = "{" ^ String.concat ";" fields ^ "}"
@@ -246,6 +251,11 @@ let stripAtomicParens source =
       | _ -> Buffer.add_char buffer source.[index]; loop (index + 1)
     else begin Buffer.add_char buffer source.[index]; loop (index + 1) end in
   loop 0; Buffer.contents buffer
+(*
+   Preserve the interpreter's accepted layout while normalizing Unicode and
+   redundant parentheses around atomic application arguments. A candidate is
+   used only when the interpreter reparses it to the same range-free syntax tree.
+*)
 let format source parsed =
   let originalKey = syntaxKey parsed in
   let accept candidate fallback = match WrittenParsing.parse Validation.Script candidate with

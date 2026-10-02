@@ -9,7 +9,7 @@ let () =
       |> List.filter (fun path -> Filename.check_suffix path ".syntax")
       |> List.map (Filename.concat "src/Tests/syntax") |> Array.of_list in
     List.map (fun (name, run) -> name, run ())
-      (BitsetTests.tests @ PlatformTests.tests @ TestRunnerArgsTests.tests @ ParserTests.tests
+      (BitsetTests.tests @ PlatformTests.tests @ TestRunnerArgsTests.tests @ ParserTests.tests @ NameResolutionTests.tests
        @ SyntaxTestRunner.tests syntax @ FormattingRoundtripTests.tests [|"src/Tests/formatting-roundtrip/compiler.roundtrip"|])
   in
   let failures = List.filter (fun (_, result) -> Result.is_error result) results in

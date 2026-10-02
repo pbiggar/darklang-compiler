@@ -1,25 +1,52 @@
+(*
+   Platform.fs - Platform Detection and Configuration
+   Defines OS and CPU architecture types, detection helpers, and
+   per-(OS, Arch) syscall number tables.
+   Supports:
+   - macOS ARM64 (Mach-O binaries, BSD syscalls)
+   - Linux ARM64 (ELF binaries, Linux syscalls)
+   - Linux x86_64 (ELF binaries, Linux syscalls)
+   Supported target platforms
+   Supported compiler targets. Unsupported OS/architecture pairs cannot be
+   represented after host detection succeeds.
+*)
 (* Platform.ml - Validate native targets and select unchanged ABI constants. *)
 type os = MacOS | Linux
+(*
+   Supported CPU architectures
+*)
 type arch = ARM64 | X86_64
 type arm64Target = MacOSARM64 | LinuxARM64
 type target = ARM64Backend of arm64Target | LinuxX86_64
 external hostIdentity : unit -> string * string = "dark_compiler_host_identity"
+(*
+   Get the current operating system
+*)
 let detectOS () =
   match fst (hostIdentity ()) with
   | "Darwin" -> Ok MacOS
   | "Linux" -> Ok Linux
   | _ -> Error "Unsupported operating system. Only macOS and Linux are supported."
+(*
+   Get the current CPU architecture
+*)
 let detectArch () =
   match snd (hostIdentity ()) with
   | "aarch64" | "arm64" -> Ok ARM64
   | "x86_64" | "amd64" -> Ok X86_64
   | arch -> Error ("Unsupported architecture: " ^ arch ^ ". Only ARM64 and x86_64 are supported.")
+(*
+   Validate an OS/architecture pair as one of the compiler's supported targets.
+*)
 let targetFor os arch =
   match os, arch with
   | MacOS, ARM64 -> Ok (ARM64Backend MacOSARM64)
   | Linux, ARM64 -> Ok (ARM64Backend LinuxARM64)
   | Linux, X86_64 -> Ok LinuxX86_64
   | MacOS, X86_64 -> Error "Unsupported target: macOS x86_64"
+(*
+   Detect and validate the host target once at compiler initialization.
+*)
 let detectHostTarget () =
   let os = detectOS () in
   let arch = detectArch () in
@@ -28,6 +55,26 @@ let detectHostTarget () =
   | Ok os, Ok arch -> targetFor os arch
 let osFor = function ARM64Backend MacOSARM64 -> MacOS | ARM64Backend LinuxARM64 | LinuxX86_64 -> Linux
 let archFor = function ARM64Backend _ -> ARM64 | LinuxX86_64 -> X86_64
+(*
+   Syscall numbers for a specific (OS, Arch) pair.
+   On Linux, ARM64 and x86_64 use different numbering schemes.
+   Memory map syscall for heap allocation
+   Release an independently mapped buffer
+   File I/O syscalls
+   Open file (or openat on Linux with AT_FDCWD)
+   Read from file descriptor
+   Close file descriptor
+   Get file status (for file size)
+   Check file accessibility (for exists)
+   Delete file (or unlinkat on Linux with AT_FDCWD)
+   Change file mode (or fchmodat on Linux with AT_FDCWD)
+   Get random bytes (getentropy on macOS, getrandom on Linux)
+   Get current time (gettimeofday on macOS, clock_gettime on Linux)
+   Blocking sleep with a normalized timespec
+   Create a socket
+   Connect to a checked address
+   Set socket I/O timeouts
+*)
 type syscallNumbers = {
   write : int;
   exit : int;
@@ -85,6 +132,10 @@ let linuxARM64SyscallNumbers : syscallNumbers = {
   connect = 203;
   setSockOpt = 208;
 }
+(*
+   open (not openat)
+   clock_gettime
+*)
 let linuxX86_64SyscallNumbers : syscallNumbers = {
   write = 1;
   exit = 60;
@@ -104,6 +155,9 @@ let linuxX86_64SyscallNumbers : syscallNumbers = {
   connect = 42;
   setSockOpt = 54;
 }
+(*
+   Get syscall numbers for the given (OS, Arch) pair.
+*)
 let syscallNumbersFor = function
   | ARM64Backend MacOSARM64 -> macOSARM64SyscallNumbers
   | ARM64Backend LinuxARM64 -> linuxARM64SyscallNumbers
@@ -136,4 +190,7 @@ let socketConstantsFor = function
       receiveTimeout = 20;
       sendTimeout = 21;
     }
+(*
+   Check if code signing is required for this platform
+*)
 let requiresCodeSigning = function MacOS -> true | Linux -> false

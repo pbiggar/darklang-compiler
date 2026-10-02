@@ -1,3 +1,8 @@
+(*
+   PlatformTests.fs - Tests for validated compiler target classification.
+   These tests keep supported OS/architecture pairs explicit without depending
+   on the host running the test suite.
+*)
 (* PlatformTests.ml - Retain explicit supported target classifications. *)
 open Dark_compiler
 type testResult = (unit, string) result

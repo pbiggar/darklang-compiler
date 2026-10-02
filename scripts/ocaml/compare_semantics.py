@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Compare complete stage observations across frozen source inputs and probes."""
 import argparse
+import hashlib
+from contextlib import ExitStack
 import json
 import random
 import subprocess
@@ -102,7 +104,7 @@ def first_difference(expected, actual, path="value"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map"])
     parser.add_argument("--probes-only", action="store_true")
     args = parser.parse_args()
     corpus = list(inputs())
@@ -115,27 +117,58 @@ def main():
     requests = "".join(json.dumps({"stage":args.stage,"source":source},ensure_ascii=True)+"\n" for _,source in corpus)
     request_file = output / "requests.jsonl"
     request_file.write_text(requests)
-    observations = []
-    for name, command in [
+    commands = [
         ("fsharp", ["dotnet", "fsi", "--exec", "scripts/ocaml/semantic_reference.fsx", str(request_file)]),
         ("ocaml", ["ocaml/_build/default/tests/foundations_main.exe", "--dsl-probe"] if args.stage == "dsl" else ["ocaml/_build/default/tests/semantic_probe.exe"]),
-    ]:
-        with request_file.open() as stdin, (output / f"{name}.jsonl").open("w") as stdout, (output / f"{name}.stderr").open("w") as stderr:
-            run = subprocess.run(command, cwd=ROOT, stdin=stdin, text=True, stdout=stdout, stderr=stderr, timeout=1200)
-        if run.returncode:
-            print(f"{name} failed; see {output / (name + '.stderr')}")
-            return 1
-        observations.append(output / f"{name}.jsonl")
+    ]
+    # Compare complete rows immediately. Large resolver inventories repeat source
+    # evidence many times; retain canonical audit hashes rather than gigabytes of
+    # identical successful trees. A mismatch retains both complete observations.
+    processes = []
     count = 0
-    with observations[0].open() as left, observations[1].open() as right:
-        for (label, source), expected, actual in zip(corpus, left, right, strict=True):
-            expected, actual = json.loads(expected), json.loads(actual)
-            if expected != actual:
-                difference = first_difference(expected, actual)
-                (output / "mismatch.json").write_text(json.dumps({"input":label,"source":source,"difference":difference},ensure_ascii=True,indent=2))
-                print(f"{args.stage} mismatch in {label}: {difference[0]}; see {output / 'mismatch.json'}")
-                return 1
-            count += 1
+    with ExitStack() as stack:
+        audits = []
+        try:
+            for name, command in commands:
+                stdin = stack.enter_context(request_file.open())
+                stderr = stack.enter_context((output / f"{name}.stderr").open("w"))
+                audits.append(stack.enter_context((output / f"{name}.jsonl").open("w")))
+                processes.append(subprocess.Popen(command, cwd=ROOT, stdin=stdin, stdout=subprocess.PIPE, text=True, stderr=stderr))
+            for label, source in corpus:
+                rows = [process.stdout.readline() for process in processes]
+                for (name, _), row in zip(commands, rows, strict=True):
+                    if not row:
+                        print(f"{name} stopped before {label}; see {output / (name + '.stderr')}")
+                        return 1
+                expected, actual = [json.loads(row) for row in rows]
+                for audit, observation in zip(audits, [expected, actual], strict=True):
+                    canonical = json.dumps(observation, sort_keys=True, ensure_ascii=True, separators=(",", ":")).encode()
+                    audit.write(json.dumps({"input": label, "sha256": hashlib.sha256(canonical).hexdigest(), "bytes": len(canonical)}) + "\n")
+                if expected != actual:
+                    difference = first_difference(expected, actual)
+                    (output / "mismatch.json").write_text(json.dumps({"input":label,"source":source,"difference":difference},ensure_ascii=True,indent=2))
+                    (output / "expected.json").write_text(rows[0])
+                    (output / "actual.json").write_text(rows[1])
+                    print(f"{args.stage} mismatch in {label}: {difference[0]}; see {output / 'mismatch.json'}")
+                    return 1
+                count += 1
+            for (name, _), process in zip(commands, processes, strict=True):
+                if process.stdout.readline():
+                    print(f"{name} emitted extra observations")
+                    return 1
+                if process.wait(timeout=1200):
+                    print(f"{name} failed; see {output / (name + '.stderr')}")
+                    return 1
+        finally:
+            for process in processes:
+                if process.poll() is None:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                process.stdout.close()
     print(f"Complete {args.stage} parity: {count}/{len(corpus)} source observations match")
     return 0
 

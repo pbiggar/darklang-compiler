@@ -3,6 +3,14 @@
 open Tokenizer
 open ParserSupport
 module WT = WrittenTypes
+(*
+   a function parameter `(name: Type)` or `()`
+   `_` names a parameter you don't intend to use. It's also what `()` is stored as, so accepting it
+   here is what makes `(_: Unit)` and `()` both parse to the same thing and either form round-trip.
+   A `///` for a parameter attaches to whichever token follows it: the `(` when the comment is
+   written above the whole parameter, the NAME when it is written just inside the paren. Both
+   spellings occur, so both are read.
+*)
 let parseParam state index =
   let opening = rng state index in
   if tok state (index + 1) = TRParen then WT.FPUnit (span opening (rng state (index + 1))), index + 2
@@ -19,6 +27,14 @@ let parseParam state index =
     let atParen = docOf state index in
     let description = if atParen <> "" then atParen else docOf state (index + 1) in
     WT.FPNormal (span opening closing, name, typ, opening, colon, closing, description), after
+(*
+   A declaration-scope function (`let f (p: T) … : R = body`) or value
+   (`val x = body`). Legacy module-level `let x = body` also comes through here
+   to retain a recovery DValue beside its focused diagnostic.
+   `:{Http, Clock}` immediately after a declaration's return colon. Absent
+   means no ceiling; `{}` means effect-free. Unknown names are diagnostics,
+   not wildcards: the row fails closed.
+*)
 let parseEffectRow state index =
   if tok state index <> TLBrace then None, index else
   let names = RevBuffer.create () and stop = ref (index + 1) in

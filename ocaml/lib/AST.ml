@@ -1,10 +1,104 @@
+(*
+   AST.fs - Abstract Syntax Tree
+   Defines the abstract syntax tree data structures that represent the parsed
+   program structure. The AST is the output of parsing and the internal input
+   to name resolution and semantic checking. Successful checking constructs the
+   phase-safe CheckedAST consumed by compiler preparation and ANF lowering.
+   Keep this file as the structural source of truth for syntax-facing compiler
+   nodes; language support and compatibility boundaries belong in
+   docs/compatibility/overview.md.
+   A list guaranteed to have at least one element (makes invalid states unrepresentable)
+   Nominal identity carried by record construction from parsing onward.
+   SourceTypeName preserves an alias spelling for diagnostics, while
+   ResolvedTypeName is filled with the canonical declaration identity during
+   name/type resolution. TypeArgs always follows declaration parameter order,
+   including parameters that do not occur in any field.
+   A lambda binder is parsed without an annotation. Type checking fills in its
+   inferred type without changing the source-level binding pattern.
+   Part of an interpolated string: either a literal or an expression
+   Literal text: "Hello "
+   Interpolated expression: {name}
+   Expression nodes
+   Unit value: ()
+   64-bit signed (default): 42, 42L
+   42Q
+   8-bit signed: 42y
+   16-bit signed: 42s
+   32-bit signed: 42l
+   8-bit unsigned: 42uy
+   16-bit unsigned: 42us
+   32-bit unsigned: 42ul
+   64-bit unsigned: 42UL
+   42Z
+   Arbitrary-precision unsuffixed Int
+   Single Extended Grapheme Cluster stored as UTF-8 string
+   $"Hello {name}!"
+   Atomic non-recursive binding
+   Variable reference
+   If expression: if cond then thenBranch else elseBranch
+   Statement sequence: first must produce Unit; next supplies the value
+   A source-level call.  Resolution classifies the callee as a direct
+   function, intrinsic, or dynamic value at the checked-AST boundary.
+   Tuple literal: (1, 2, 3)
+   Tuple access: t.0, t.1, etc.
+   { record with x = 1, y = 2 }
+   p.x, p.y
+   match e with | p1 when g -> e1 | p2 -> e2
+   [1, 2, 3]
+   Compiler-generated call through a raw function pointer
+   Closure: function + captured values
+   Compiler-generated interpreter runtime error
+   Compiler-generated eval-result rendering
+   Match case with optional guard clause and pattern grouping
+   Syntax: | pat1 | pat2 when guard -> body
+   One or more patterns (pattern grouping via |)
+   Optional guard clause (when condition)
+   Body expression
+   Function definition
+   Type parameters for generics: ["T", "U", etc.], empty for non-generic
+   Parameter names with REQUIRED type annotations
+   REQUIRED return type annotation
+   Variant in a sum type with zero or more ordered constructor fields.
+   Type definition (record types, sum types, etc.)
+   type Point<T> = { x: T, y: T }
+   type Result<T, E> = Ok of T | Error of E
+   type Id = String
+   A source value before and after its body has been type checked.
+   Top-level program elements
+   Program is a list of top-level definitions (functions and/or expressions)
+*)
 (* AST.ml - Complete semantic syntax and deterministic compiler identity helpers. *)
 [@@@warning "-30"]
 type 'a nonEmptyList = 'a NonEmptyList.t
 
+(*
+   Compiler-wide warning settings passed from the driver into compiler passes.
+   Duplicate binders are language errors, not configurable warnings.
+*)
 type warningSettings = 
   | WarningSettings
 
+(*
+   Types used by semantic checking and the lowering pipeline.
+   Signed integers
+   Arbitrary-precision signed integer
+   Unsigned integers
+   Other primitives
+   Byte array: [refcount:8][length:8][data:N][padding]
+   Extended Grapheme Cluster (single visual character)
+   Opaque UTC instant stored as signed 100ns Unix ticks
+   Semantic bottom: expressions which do not return
+   parameter types * return type
+   tuple type: (Int, Bool, String)
+   record type by name with type args: Point<T>, Pair<A, B>, etc.
+   sum type by name with type args: Result<Int64, String>
+   List<T> - polymorphic list type
+   Stream<T> - opaque, lazy, single-consumer handle
+   type variable: T, A, B, etc. (for generics)
+   Raw pointer to unmanaged memory (internal, for HAMT)
+   Native HAMT machinery retains both components. Public source syntax is
+   String-keyed and renders only the value component as Dict<Value>.
+*)
 type semanticType = 
   | TInt8
   | TInt16
@@ -40,12 +134,39 @@ type 't recordReferenceNode = {sourceTypeName : string; resolvedTypeName : strin
 
 type recordReference = semanticType recordReferenceNode
 
+(*
+   A field spelling before or after the checker proves its declaring record.
+   The resolved owner is semantic evidence required to assign a declaration-
+   scoped FieldId at the checked-program boundary.
+*)
 type recordFieldReference = {sourceFieldName : string; resolvedTypeName : string option; resolvedFieldIndex : int option}
 
+(*
+   A source constructor reference before or after nominal resolution.
+   `None` is the genuinely unqualified form; no empty-name sentinel is used.
+*)
 type constructorReference = 
   | UnresolvedConstructor of string option
   | ResolvedConstructor of string list * string * semanticType list
 
+(*
+   Binary operators
+   Arithmetic
+   %
+   Bitwise operations
+   << (left shift)
+   >> (right shift)
+   & (bitwise and)
+   ||| (bitwise or)
+   ^ (bitwise xor)
+   String operations
+   ++
+   Comparisons (return bool)
+   !=
+   <=
+   Boolean operations
+   ||
+*)
 type binOp = 
   | Add
   | Sub
@@ -68,11 +189,42 @@ type binOp =
   | And
   | Or
 
+(*
+   Unary operators
+   Unary negation: -expr
+   Boolean not: !expr
+   Bitwise not: ~~~expr
+   NonEmptyList helper functions
+*)
 type unaryOp = 
   | Neg
   | Not
   | BitNot
 
+(*
+   Pattern matching patterns
+   () - matches unit value
+   x (binds value to variable)
+   Red, Some(x), Pair(a, b)
+   42 (Int64 literal)
+   42 (Int literal)
+   42Q
+   1y
+   1s
+   1uy
+   1us
+   1ul
+   1UL
+   42Z
+   true, false
+   "hello"
+   'x'
+   3.14
+   (a, b, c)
+   [a, b, c] - exact length match
+   a :: b :: t - head elements + rest
+   p1 | p2 - left-to-right alternatives
+*)
 type pattern = 
   | PUnit
   | PWildcard
@@ -99,6 +251,10 @@ type pattern =
   | PListCons of pattern list * pattern
   | POr of pattern nonEmptyList
 
+(*
+   The deliberately restricted pattern language shared by non-recursive lets
+   and lambda parameters. Match-only patterns cannot be represented here.
+*)
 type letPattern = 
   | LPUnit
   | LPWildcard
@@ -109,6 +265,10 @@ type 't lambdaParameterNode = {pattern : letPattern; sourceAnnotation : 't optio
 
 type lambdaParameter = semanticType lambdaParameterNode
 
+(*
+   Stable semantic identities assigned at the parsed-program boundary. The
+   representation is private so source spellings cannot be used as identities.
+*)
 type binderStructure = 
   | LetBinderPatterns of letPattern list
   | MatchBinderPattern of pattern
@@ -155,6 +315,10 @@ type recursiveDependencyKind =
   | EagerValueDependency
   | TypeAliasDependency
 
+(*
+   Parser-only evidence that a declaration is eligible for recursive
+   resolution.
+*)
 type recursiveCandidate = {sourceName : string; kind : recursiveMemberKind}
 
 type parsedRecursiveMember = {binding : bindingId; boundary : scopeBoundaryId; member : recursiveMemberId; sourceName : string; kind : recursiveMemberKind}
@@ -165,6 +329,9 @@ type typedRecursiveMember = {resolved : resolvedRecursiveMember; monomorphicType
 
 type loweredRecursiveMember = {typed : typedRecursiveMember; environmentIndex : int}
 
+(*
+   Every materialized group is nonempty by construction.
+*)
 type parsedRecursiveGroup = {boundary : scopeBoundaryId; members : parsedRecursiveMember nonEmptyList}
 
 type resolvedRecursiveGroup = {group : recursiveGroupId; members : resolvedRecursiveMember nonEmptyList}
@@ -266,10 +433,25 @@ type topLevel = semanticType topLevelNode
 
 type program = semanticType programNode
 
+(*
+   Module function definition - a function within a module
+   Function name (e.g., "add")
+   Type parameters (e.g., ["v"] for generic intrinsics)
+   Parameter types (may contain TVar references)
+   Return type (may contain TVar references)
+*)
 type moduleFunc = {name : string; typeParams : string list; paramTypes : semanticType list; returnType : semanticType}
 
+(*
+   Module definition - represents a namespace of functions
+   Full module path (e.g., "Darklang.Stdlib.Int64")
+   Functions in this module
+*)
 type moduleDef = {name : string; functions : moduleFunc list}
 
+(*
+   Module registry - maps full function paths to their definitions
+*)
 type moduleRegistry = moduleFunc StringOrder.Map.t
 module NonEmptyList = NonEmptyList
 let defaultWarningSettings = WarningSettings
@@ -285,6 +467,13 @@ let resolvedConstructorReference canonical = match List.rev (String.split_on_cha
 let resolvedConstructorReferenceWithTypeArgs canonical typeArgs = match resolvedConstructorReference canonical with
   | ResolvedConstructor (path, name, _) -> ResolvedConstructor (path, name, typeArgs)
   | UnresolvedConstructor _ -> Crash.crash "Resolved constructor helper returned an unresolved reference"
+(*
+   Canonical native identity for an enum case whose display name is shared by
+   multiple nominal declarations. The native backends encode case tags as
+   immediates, so declarations validate collisions in this bounded space.
+   Runtime I/O and string intrinsics construct these two foundational
+   stdlib types directly. Their ABI tags predate user-defined ADTs.
+*)
 let constructorRuntimeIdentity declaringType caseName =
   match declaringType, caseName with
   | "Darklang.Stdlib.Option.Option", "Some" | "Darklang.Stdlib.Result.Result", "Ok" -> 0
@@ -310,6 +499,9 @@ let bindingDisplayName = function LocalBindingId (_, name) -> name | TopLevelVal
 let functionId ordinal = FunctionId (Int64.logxor ordinal Int64.min_int)
 let functionIdValue (FunctionId ordinal) = Int64.logxor ordinal Int64.min_int
 let nextFunctionIdOrdinal ordinal = if ordinal = -1L then Crash.crash "Function identity allocation exhausted" else Int64.add ordinal 1L
+(*
+   Allocate deterministic identities from an already-maintained catalog cursor.
+*)
 let allocateFunctionIdsFromOrdinal first names =
   let sorted = Seq.fold_left (fun names name -> StringOrder.Set.add name names) StringOrder.Set.empty names in
   snd (StringOrder.Set.fold (fun name (next, ids) -> nextFunctionIdOrdinal next, StringOrder.Map.add name (functionId next) ids) sorted (first, StringOrder.Map.empty))
@@ -326,6 +518,10 @@ let fieldId owner index = FieldId (owner, index)
 let fieldIdOwner (FieldId (owner, _)) = owner
 let fieldRuntimeIndex (FieldId (_, index)) = index
 let scopeBoundaryId ordinal = ScopeBoundaryId ordinal
+(*
+   Group IDs share one compact namespace: declaration groups are even and
+   singleton local-recursion groups are odd.
+*)
 let topLevelRecursiveGroupId ordinal = RecursiveGroupId (Int32.to_int (Int32.mul (Int32.of_int ordinal) 2l))
 let recursiveMemberId ordinal = RecursiveMemberId ordinal
 let singletonRecursiveGroupId (RecursiveMemberId ordinal) = RecursiveGroupId (Int32.to_int (Int32.add (Int32.mul (Int32.of_int ordinal) 2l) 1l))
@@ -337,6 +533,10 @@ let recursiveBindingId = function ParsedRecursiveBinding parsed -> Some parsed.b
   | TypedRecursiveBinding typed -> Some typed.resolved.parsed.binding | RecursiveBindingCandidate _ -> None
 let recursiveBindingAvailability = function ResolvedRecursiveBinding resolved -> Some resolved.availability | TypedRecursiveBinding typed -> Some typed.resolved.availability
   | RecursiveBindingCandidate _ | ParsedRecursiveBinding _ -> None
+(*
+   Validate one complete binder structure before any of its names enter scope.
+   The returned list preserves source order and never contains ignored names.
+*)
 let validateBinders structure =
   let rec matchBindings = function
     | PVar name -> [name]
@@ -354,6 +554,10 @@ let applyNamed name args = Apply (Var name, [], args)
 let applyNamedWithTypes name typeArgs args = Apply (Var name, typeArgs, args)
 let valueDefName = function UncheckedValueDef (name, _) | CheckedValueDef (name, _, _) -> name
 let valueDefBody = function UncheckedValueDef (_, body) | CheckedValueDef (_, _, body) -> body
+(*
+   Case names that require a nominal native tag because they occur in more
+   than one declaring type in the same compilation unit.
+*)
 let collidingConstructorCaseNames definitions =
   let owners = List.fold_left (fun owners -> function
     | SumTypeDef (typeName, _, variants) -> List.fold_left (fun owners (variant : 't variantNode) ->

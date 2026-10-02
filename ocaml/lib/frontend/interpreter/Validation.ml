@@ -1,3 +1,11 @@
+(*
+   Validates a parsed WrittenTypes tree before it is lowered to ProgramTypes.
+   Parsing is shared by scripts, packages, and tests, and may produce recovery
+   nodes after syntax errors. This module applies the rules for each file mode
+   and checks structural invariants, such as unique binders and compatible
+   or-pattern bindings, that lowering relies on. It does not resolve names,
+   check types, or evaluate expressions.
+*)
 (* Validation.ml - Preserve ordered pre-lowering structural and purpose diagnostics. *)
 module WT = WrittenTypes
 open WrittenTypes
@@ -23,6 +31,11 @@ module IssueCode = struct
 end
 type issue = { range : WT.range; code : issueCode; message : string;
   related : (WT.range * string) list; hint : string option }
+(*
+   A source file that passed both structural and file-purpose validation.
+   The case is private so production parsing paths cannot create one without
+   calling `validate`.
+*)
 type validatedSourceFile = ValidatedSourceFile of mode * WT.sourceFile
 module ValidatedSourceFile = struct
   let mode (ValidatedSourceFile (mode, _)) = mode
@@ -36,6 +49,10 @@ let rec letBindings = function
   | WT.LPUnit _ | WT.LPWildcard _ -> []
   | WT.LPTuple (_, first, _, second, rest, _, _) ->
       letBindings first @ letBindings second @ List.concat_map (fun (_, pattern) -> letBindings pattern) rest
+(*
+   A valid or-pattern has one logical binding set. Use the first alternative
+   as its representative when checking an enclosing tuple/list pattern.
+*)
 let rec matchBindings = function
   | WT.MPVariable (range, name) -> [name, range]
   | WT.MPTuple (_, first, _, second, rest, _, _) ->
@@ -144,8 +161,16 @@ let rec declarationStructureIssues = function
       | WT.TDRecord _ | WT.TDEnum _ -> [issue typ.range DBShape "[<DB>] type must be a type alias"])
   | WT.DTest test -> exprIssues test.actual @ (match test.expected with
       | WT.TEExpr expr -> exprIssues expr | WT.TEError _ | WT.TESqlError _ -> [])
+(*
+   Check mode-independent invariants required by WrittenTypes lowering.
+*)
 let validateStructure (sourceFile : WT.sourceFile) =
   List.concat_map declarationStructureIssues sourceFile.declarations @ List.concat_map exprIssues sourceFile.exprsToEval
+(*
+   WrittenTypes does not distinguish a file module header (`module A.B`),
+   which may be empty, from a block module (`module X =`), which may not. The
+   parser validates the block form while it still has that syntax detail.
+*)
 let rec declarationPurposeIssues mode = function
   | WT.DFunction _ | WT.DValue _ | WT.DType _ -> []
   | WT.DModule modul -> List.concat_map (declarationPurposeIssues mode) modul.declarations
@@ -157,6 +182,10 @@ let rec declarationPurposeIssues mode = function
       | Test -> [] | Script | Package -> [issue typ.range DBMode "[<DB>] declarations are only allowed in test files"])
   | WT.DTest test -> (match mode with
       | Test -> [] | Script | Package -> [issue test.range TestMode "Test assertions are only allowed in test files"])
+(*
+   Check only the rules that depend on whether the source is a script, package,
+   or test file.
+*)
 let validatePurpose mode (sourceFile : WT.sourceFile) =
   let declarations = List.concat_map (declarationPurposeIssues mode) sourceFile.declarations in
   let trailing = List.concat_map (fun expr -> match mode with
@@ -164,6 +193,9 @@ let validatePurpose mode (sourceFile : WT.sourceFile) =
     | Test -> [issue (WT.exprRange expr) TestAssertion "Test expressions must use 'actual = expected'"]
     | Script -> []) sourceFile.exprsToEval in
   declarations @ trailing
+(*
+   Validate every pre-lowering rule and return an opaque wrapper on success.
+*)
 let validate mode sourceFile =
   match validateStructure sourceFile @ validatePurpose mode sourceFile with
   | [] -> Ok (ValidatedSourceFile (mode, sourceFile))

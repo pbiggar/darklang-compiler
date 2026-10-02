@@ -14,6 +14,14 @@ let requireAdjacent state index previous =
   let next = rng state index in
   if next.start.row <> previous.end_.row || next.start.column <> previous.end_.column then
     err state DiagnosticCode.expected index "Generic type arguments must be adjacent to the type name"
+(*
+   Type references. Precedence (loosest first): function `A -> B`, tuple
+   `A * B`, then atoms (prim / List / Dict / custom / `'a` / parenthesized).
+   Defensive: `state.pendingGt` is always 0 here in well-formed input (a `>>`-induced
+   pending is consumed by the enclosing generic before the next parseTypeRef).
+   Clearing it stops a malformed `>>` in a prior parse from leaking a phantom `>`
+   into this one.
+*)
 let rec parseTypeRef state index =
   if tooDeep state index || outOfFuel state index then WT.TUnit (rng state index), state.tokenCount - 1
   else begin
@@ -23,6 +31,9 @@ let rec parseTypeRef state index =
     state.depth <- state.depth - 1;
     result
   end
+(*
+   `A -> B -> C` (right-nested): arguments = [(A,->),(B,->)], ret = C
+*)
 and parseFnType state index =
   let first, next = parseTupleType state index in
   if tok state next <> TArrow then first, next else
@@ -33,6 +44,14 @@ and parseFnType state index =
     current := value; stop := if after > !stop then after else !stop + 1
   done;
   WT.TFn (span (WT.typeReferenceRange first) (WT.typeReferenceRange !current), RevBuffer.toList args, !current), !stop
+(*
+   `A * B * C` (bare tuple, e.g. inside `List<…>`); parenthesized tuples fill
+   in real paren ranges at the atom level.
+   a pending `>` (from splitting a `>>`) means we're still inside an enclosing
+   generic, so a following `*` belongs to an OUTER tuple — don't absorb it here
+   (otherwise `List<List<A>> * B` mis-parses as `List<List<A> * B>`).
+   bare tuple: no parens
+*)
 and parseTupleType state index =
   let first, next = parseAtomType state index in
   if tok state next <> TStar || state.pendingGt > 0 then first, next else
@@ -47,6 +66,14 @@ and parseTupleType state index =
   let final = match RevBuffer.last rest with Some (_, value) -> value | None -> second in
   let zero = zeroWidthAtEnd (WT.typeReferenceRange first) in
   WT.TTuple (span (WT.typeReferenceRange first) (WT.typeReferenceRange final), first, star, second, RevBuffer.toList rest, zero, zero), !stop
+(*
+   `<T1, T2, …>` generic type-args on a custom type; uses expectGt so a trailing
+   `>>` splits correctly. Returns the args, the real or recovered closing `>`
+   range, and the index after it.
+   stop taking args once a `>>` has left a `>` pending for THIS level, else a
+   nested `Option<Result<T,S>>` would swallow the enclosing type's next arg
+   (`Option<Result<T,S>, S>`). Mirrors the tuple loop's `state.pendingGt = 0` guard.
+*)
 and parseTypeArgs state index =
   if tok state index <> TLt then [], None, index else
   let args = RevBuffer.create () in
@@ -59,6 +86,15 @@ and parseTypeArgs state index =
   done;
   let close, after = expectGt state !stop in
   RevBuffer.toList args, Some close, after
+(*
+   `(T)` grouping or `(A * B)` parenthesized tuple
+   a tick-prefixed name is ALWAYS a type variable, even when uppercase
+   (`'TModel`) — the lexer drops the tick so the case-based check below would
+   otherwise mistake it for a custom type. The token text keeps the tick.
+   a lowercase ident in type position is a type variable: `'a` lexes to the
+   bare name "a" with the token range covering the apostrophe.
+   recovery: leave closing/separating/decl-start tokens for the enclosing construct
+*)
 and parseAtomType state index =
   match tok state index with
   | TLParen ->

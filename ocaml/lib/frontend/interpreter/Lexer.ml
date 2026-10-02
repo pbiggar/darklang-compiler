@@ -1,7 +1,30 @@
+(*
+   Lexer for the Darklang syntax this repo uses. Produces `Tokenizer.Token`s
+   with source ranges for the parser.
+   Regular string/char escapes are processed (`unescape`); triple-quoted strings
+   stay raw.
+   Pos, TokenRange, Token
+*)
 (* Lexer.ml - Preserve the oracle's UTF-16 scans, recovery, and literal domains. *)
 open Tokenizer
+(*
+   `// …` (and `////…`)
+   `/// …`
+   `( * … * )`
+*)
 type triviaKind = LineComment | DocComment | BlockComment
+(*
+   A comment between the previous token and the one carrying it. Whitespace is
+   not stored — blank lines are derivable from the token/trivia range gaps.
+*)
 type trivia = { kind : triviaKind; text : string; range : tokenRange }
+(*
+   accumulated `///` doc-comment text immediately preceding this token (the
+   declaration it documents), if any. Used to recover fn/type descriptions.
+   comments between the previous token and this one, in source order — kept
+   so tooling (formatter, lossless round-trip) can reproduce the source.
+   Trailing comments at EOF land on the TEOF token.
+*)
 type spannedToken = {
   token : token; text : string; range : tokenRange;
   docComment : string option; leadingTrivia : trivia list;
@@ -9,6 +32,25 @@ type spannedToken = {
 let units = HostText.utf16Units
 let substring source start length = HostText.ofUtf16Units (Array.sub source start length)
 let is source index character = source.(index) = Char.code character
+(*
+   Decode the escape starting at `source[escapeStartIndex]`, which must be `\`.
+   Returns `Some(charsConsumed, decodedText)`, or `None` for an invalid escape:
+   unknown escape letter, short/non-hex Unicode escape, surrogate, or codepoint
+   above `0x10FFFF`. `unescape` and the validators share this function so they
+   cannot drift.
+   a Unicode scalar value → its UTF-16 string (a surrogate pair above the BMP)
+   trailing backslash
+   bell
+   backspace
+   vertical tab
+   form feed
+   \xHH
+   \XHHHH and \uHHHH both denote a Unicode scalar, so both reject surrogates /
+   out-of-range codepoints via `scalar` (a lone `\XD800` is invalid, like `\uD800`)
+   \XHHHH
+   \uHHHH (BMP)
+   \UHHHHHHHH
+*)
 let decodeEscape source index =
   let length = Array.length source in
   let hex start count =
@@ -43,6 +85,13 @@ let decodeEscape source index =
   | 88 | 117 -> scalar 4
   | 85 -> scalar 8
   | _ -> None
+(*
+   Process escape sequences in regular string/char content. Triple-quoted
+   strings stay raw. Invalid escapes keep the backslash as-is.
+   Module-level so the parser can reuse it for interpolated-string literal parts.
+   The result is NFC-normalized so decomposed and composed graphemes have the
+   same stored form.
+*)
 let unescape text =
   let source = units text in
   let buffer = Buffer.create (String.length text) in
@@ -55,6 +104,9 @@ let unescape text =
                          index + 1 < Array.length source && source.(index + 1) >= 0xdc00 && source.(index + 1) <= 0xdfff then 2 else 1 in
           Buffer.add_string buffer (substring source index count); append (index + count)
   in append 0; HostText.normalize (Buffer.contents buffer)
+(*
+   Does the raw inner text of a regular string/char contain an invalid escape?
+*)
 let hasInvalidEscape text =
   let source = units text in
   let rec scan index =
@@ -103,7 +155,28 @@ let findClose source limit start =
     else if is source index '}' then if depth = 0 then index else scan (index + 1) (depth - 1)
     else scan (index + 1) depth
   in scan start 0
+(*
+   Find the `}` that closes an interpolation expression region.
+   `startIndex` is just past the opening `{`. The scan tracks nested braces and skips
+   embedded string and char literals, so braces inside them do not desync the
+   scan. Returns `-1` if unclosed. The tokenizer, escape validator, and parser
+   all use this scanner so they agree on where interpolation regions end.
+   Comments are code trivia, so braces inside them cannot close an
+   interpolation. Block comments nest just like top-level lexer comments.
+   A raw triple-quoted string may contain unescaped quotes and braces.
+   Skip char literals so braces inside them do not affect interpolation
+   depth. A leading `'` that is not a char literal, such as type var `'a` or
+   tick-ident tail `x'`, falls through harmlessly.
+   Start at the `\` so `'\''` skips the escape before looking for the
+   closing quote.
+*)
 let findInterpExprClose text limit start = findClose (units text) limit start
+(*
+   Like `hasInvalidEscape`, but for regular `$"…"` interpolated strings.
+   `{{`/`}}` are literal braces and `{ … }` regions are code, so only literal
+   string text is escape-checked.
+   skip the `{ … }` interpolation region
+*)
 let hasInvalidEscapeInterp text =
   let source = units text in
   let length = Array.length source in
@@ -116,6 +189,11 @@ let hasInvalidEscapeInterp text =
       match decodeEscape source index with None -> true | Some (count, _) -> scan (index + count)
     else scan (index + 1)
   in scan 0
+(*
+   Does interpolated-string literal text contain a single unescaped `}`?
+   Literal braces must be doubled (`}}`) or escaped (`\}` in regular strings).
+   Braces inside `{ expression }` regions are code and are skipped.
+*)
 let hasSingleCloseBraceInterp text raw =
   let source = units text in
   let length = Array.length source in
@@ -128,6 +206,12 @@ let hasSingleCloseBraceInterp text raw =
     else if not raw && is source index '\\' && index + 1 < length then scan (index + 2)
     else scan (index + 1)
   in scan 0
+(*
+   The parser parses each `{expr}` body recursively. Nested interpolated strings
+   therefore increase recursion depth. Cap it so pathological nesting cannot
+   overflow the process stack. The tokenizer itself does not recurse here;
+   `scanInterp` skips `{expr}` regions iteratively.
+*)
 let maxInterpNesting = 64
 let operators = [
   "...", TDotDotDot; "**", TStarStar; "++", TPlusPlus; "->", TArrow;
@@ -147,6 +231,69 @@ let keyword = function
 let letter = HostText.isLetterUnit
 let digit = HostText.isDigitUnit
 let letterOrDigit value = letter value || digit value
+(*
+   `///` doc comments lex as trivia, but their text also lands on the next
+   emitted token. `emit` consumes and clears this.
+   Comments scanned since the last emitted token. `emit` drains them into
+   `leadingTrivia`.
+   Lexical diagnostics collected during recovery. Defined before trivia
+   scanning so an unterminated block comment can report its own range.
+   `/// …` is a doc comment for the next declaration. `////` and plain
+   `//` are ordinary comments.
+   F#-style nestable block comment. `( * )` and `( ** )` are the multiply
+   and exponentiation operator sections, so they are excluded here.
+   longest-match operators (order matters)
+   `val x = e` is a value declaration. `let` is reserved for functions and
+   local/script bindings. The distinct token lets `parseItems` keep them apart.
+   `def` is not a keyword in the interpreter dialect. It remains a valid
+   identifier, for example `(def: Type)`.
+   `___` is the blank-name placeholder: an identifier with an empty name.
+   integer suffix → token; returns (token, charsConsumedAfterDigits)
+   bare literal (no suffix) → arbitrary-precision `Int` (the default).
+   Recovery for unterminated lexemes: scan to the current line end or EOF so a
+   half-typed string/char does not swallow the rest of the document.
+   Scan `$"text {expr} text"` or `$"""…"""`. The token carries no payload; the
+   parser re-reads the source text and scans `{expr}` bodies itself. This only
+   needs to find the token end while skipping escapes, literal braces, and
+   interpolation regions with `findInterpExprClose`.
+   triple-quoted `$'''…'''` (raw; a single `'` is literal text)
+   `{{` / `}}` are escaped literal braces, not an interpolation
+   Tolerate compiler-syntax `=>` by lexing `=` then `>`. The parser rejects
+   it later, but tokenization can continue.
+   backtick identifiers: ``name``
+   unterminated ``…`` — best-effort ident to end of line
+   identifiers / keywords
+   numbers
+   A number token must end at a non-identifier boundary. Glued suffix text
+   like `123abc` or `12l3` is a typo, not two tokens.
+   float?
+   Float glued to identifier chars (`1.5abc`): consume the run and
+   diagnose it as one malformed literal.
+   Emit a placeholder so malformed floats still highlight as numbers.
+   Int glued to identifier chars: consume the run and diagnose it as
+   one malformed literal.
+   Consume a recognized suffix even on range failure so it cannot
+   reappear as a separate identifier in the recovery tree.
+   triple-quoted string: """ ... """ (raw, may contain single/double quotes)
+   Triple-quoted strings are raw, so normalize here to match the regular
+   literal path through `unescape`.
+   Unterminated `'''…`: take the rest as string content.
+   strings / chars (escape processing deferred — raw content)
+   Unterminated `'…`: take to end of line for mid-typing recovery.
+   A leading `'` is a type variable (`'a`) in type context, decided by
+   the previous token. Otherwise it starts a char literal. Type variables
+   lex to the bare name as `TIdent`.
+   a closing quote right after the name means it was a char literal
+   Char literal: read one char, or one escape, then the closing quote.
+   `'''` is the apostrophe char, not an empty literal.
+   Escaped char: scan to the closing quote so multi-char escapes decode,
+   such as `'\x41'` or `'\U0001F600'`.
+   Unescaped char: one extended grapheme cluster, then the closing
+   quote. A grapheme may span multiple UTF-16 code units.
+   Unterminated/half-typed char: recover through the grapheme end.
+   Unterminated `$'…`: take to end of line.
+   Unknown character: record it, skip it, and keep lexing.
+*)
 let tokenize text =
   let source = units text in
   let length = Array.length source in

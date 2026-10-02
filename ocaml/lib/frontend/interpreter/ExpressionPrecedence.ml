@@ -7,6 +7,19 @@ type grammar = {
   parseExpr : parserState -> int -> WT.expr * int;
   parsePrimary : parserState -> int -> WT.expr * int;
 }
+(*
+   left-assoc binary level
+   --- infix expressions: one precedence-climbing loop ---
+   Binding powers, loosest → tightest (higher binds tighter); a right-assoc
+   op recurses at its own power so it nests to the right.
+   1 `||`   2 `&&`   3 `== != < > <= >=`   4 `|`   5 `^`   6 `&`
+   7 `<< >>`   8 `@` (right)   9 `+ - ++`   10 `* / %`   11 `**` (right)
+   The bitwise levels follow Python's order rather than C's: they bind TIGHTER
+   than the comparisons, so `a & b == c` is `(a & b) == c` and not C's
+   `a & (b == c)`. Every pre-existing operator keeps its relative position.
+   `@` desugars to `Stdlib.List.append` (there is no WT infix for it); `**` is
+   exponentiation and nests right: `2 ** 3 ** 2 = 2 ** (3 ** 2)`.
+*)
 let infixBindingPower = function
   | TOr -> Some (1, false) | TAnd -> Some (2, false)
   | TEqEq | TNeq | TLt | TGt | TLte | TGte -> Some (3, false)
@@ -18,6 +31,19 @@ let infixBindingPower = function
 let rec parseInfix grammar state index =
   let left, next = parseApp grammar state index in
   parseInfixRhs grammar state 1 left next
+(*
+   The operator must belong to THIS statement: same row as the left
+   operand's end, or inside parens, or an indented continuation. Otherwise
+   a following statement that starts with a prefix operator (`1L\n-8L …`)
+   would be wrongly glued on as `1L - 8L …`. On a new line, a pure infix
+   operator at the statement column continues (`x\n++ y` — `++` can't start
+   a statement), but `-` there begins a new statement (a negative literal),
+   so it must be indented PAST it. This rule is identical for every caller.
+   A `|` belonging to an enclosing match is that match's arm separator, not
+   bitwise-or; leave it for `parseMatch`.
+   climb: the RHS folds in everything binding tighter (or equally
+   tight, for a right-assoc op) before this level continues.
+*)
 and parseInfixRhs grammar state minimum first next =
   let left = ref first and stop = ref next and more = ref true in
   while !more do
@@ -61,6 +87,11 @@ and parseCtorParenFields grammar state index sink =
       else begin errUnclosed state !stop ")" "(" opening; !stop end in
     if RevBuffer.length sink = 0 then RevBuffer.add sink (WT.EUnit (span opening (rng state (after - 1))));
     after)
+(*
+   A prefix operator: `op operand` → `Builtin.<name> operand`, with the operand
+   parsed as a whole APPLICATION so `op f x` is `op (f x)`. Shared by `!`, `~`
+   and the non-literal case of unary `-`.
+*)
 and parsePrefixBuiltin grammar state index builtinName =
   let operand, after = parseApp grammar state (index + 1) in
   let range = rng state index in
@@ -93,6 +124,9 @@ and parseApp grammar state index =
 and parseAtom grammar state index =
   let value, next = grammar.parsePrimary state index in
   parsePostfix state value next
+(*
+   postfix `.field` record access (left-assoc, chains)
+*)
 and parsePostfix state value index =
   match tok state index, tok state (index + 1) with
   | TDot, TIdent name ->

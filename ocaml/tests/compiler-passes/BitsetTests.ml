@@ -1,3 +1,8 @@
+(*
+   BitsetTests.fs - Unit tests for low-level bitset utilities.
+   These tests cover invariants that compiler dataflow passes rely on when
+   mapping dense labels and virtual-register ids into bitset storage.
+*)
 (* BitsetTests.ml - Port the original bitset bounds and shape invariants. *)
 open Dark_compiler
 type testResult = (unit, string) result

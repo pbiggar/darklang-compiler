@@ -7,6 +7,14 @@ module WT = WrittenTypes
 let last buffer = match RevBuffer.last buffer with Some value -> value | None -> Crash.crash "Empty pattern collector"
 let upperName name =
   let units = HostText.utf16Units name in Array.length units > 0 && HostText.isUpperUnit units.(0)
+(*
+   or-level: `p1 | p2 | …` (stops at `->` / `when`)
+   top level: a bare tuple `a, b` (comma-separated, no parens); else an or-pattern
+   A full match-arm pattern. Precedence, matching F#: `|` (or) is LOOSEST, then
+   `,` (tuple), then `::` (cons). So `1, 2 | 3, 4` is `(1,2) | (3,4)` — an or of
+   two tuples, NOT a 3-tuple with an or in the middle. Hence `|` is the OUTER
+   level here, wrapping tuples (`parsePatternTuple`).
+*)
 let rec parseMatchPattern state index =
   let first, next = parsePatternTuple state index in
   if tok state next <> TBar then first, next else
@@ -17,6 +25,11 @@ let rec parseMatchPattern state index =
     RevBuffer.add patterns pattern; current := if stop > !current then stop else !current + 1
   done;
   WT.MPOr (span (WT.mpRange first) (WT.mpRange (last patterns)), RevBuffer.toList patterns), !current
+(*
+   tuple level: `p1, p2, …` (bare — no parens). Elements are cons-patterns; `|`
+   binds looser (handled above) so it can't appear as a bare tuple element.
+   bare tuple: no parens
+*)
 and parsePatternTuple state index =
   let first, next = parsePatternCons state index in
   if tok state next <> TComma then first, next else
@@ -32,6 +45,10 @@ and parsePatternTuple state index =
   let zero = zeroWidthAtEnd (WT.mpRange first) in
   let final = if RevBuffer.length rest > 0 then snd (last rest) else second in
   WT.MPTuple (span (WT.mpRange first) (WT.mpRange final), first, comma, second, RevBuffer.toList rest, zero, zero), !current
+(*
+   or of cons-patterns, NO tuple — used for enum-ctor fields, where a bare `,`
+   separates FIELDS (`Case(a, b)` = two fields), not tuple elements.
+*)
 and parsePatternOr state index =
   let first, next = parsePatternCons state index in
   if tok state next <> TBar then first, next else
@@ -42,6 +59,9 @@ and parsePatternOr state index =
     RevBuffer.add patterns pattern; current := if stop > !current then stop else !current + 1
   done;
   WT.MPOr (span (WT.mpRange first) (WT.mpRange (last patterns)), RevBuffer.toList patterns), !current
+(*
+   cons-level: `h :: t` (right-assoc)
+*)
 and parsePatternCons state index =
   let head, next = parsePatternBase state index in
   if tok state next <> TCons then head, next else
@@ -51,6 +71,26 @@ and parsePatternCons state index =
 and parsePatternBase state index =
   if tooDeep state index || outOfFuel state index then WT.MPError (rng state index), state.tokenCount - 1
   else begin state.depth <- state.depth + 1; let result = parsePatternBaseInner state index in state.depth <- state.depth - 1; result end
+(*
+   `128y` etc. — only valid negated
+   unary minus on a numeric literal pattern: `-5L`, `-1y`, `-2.0` (unsigned
+   types can't be negative, so only the signed literals + float are handled).
+   parens hold a full pattern (or > tuple > cons). Parse it, then attach the
+   real paren ranges when it's a bare tuple; otherwise the parens are just
+   grouping (`(a | b)`, `(p)`) and drop away.
+   enum pattern: `[Mod.]Case [fieldPats…]` — last segment is the case
+   A qualified path (`Result.Ok`, `Stdlib.Result.Result.Ok`) is not a valid enum
+   pattern — patterns use the unqualified case name. Reject rather than silently
+   building a truncated pattern from just the last segment.
+   `Case(p1, p2, …)` is a parenthesized arg list: commas separate FIELDS, so
+   `Pair(a, b)` is two fields — NOT one tuple `Pair((a, b))`. This holds
+   whether or not there's a space before the `(` (matching F#).
+   `Case()` is one unit field (`Case` applied to unit)
+   TODO: Support `...` list rest patterns once WrittenTypes and ProgramTypes
+   represent their binding and matching semantics.
+   recovery: an explicit error-hole node; leave closing/separating/decl-start
+   tokens for the enclosing construct
+*)
 and parsePatternBaseInner state index =
   checkBareMinMagnitude state index;
   match tok state index with

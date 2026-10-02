@@ -1,3 +1,8 @@
+(*
+   Bitset.fs - Low-level bitset utilities for compiler passes
+   Provides allocation-friendly bitset operations used by register allocation
+   and dominance analysis. The representation is a raw uint64 array.
+*)
 (* Bitset.ml - Allocation-conscious bitsets for allocation and dominance. *)
 type bitset = int64 array
 let wordCount bitCount = (bitCount + 63) / 64

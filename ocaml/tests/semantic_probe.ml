@@ -15,6 +15,10 @@ let rec requests () =
         | "written-source" -> Semantic_observation.SemanticJson.writtenSource source
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
+        | "function-map" -> Semantic_observation.SemanticJson.functionIdMap source
+        | "free-variables" -> Semantic_observation.SemanticJson.freeVariables source
+        | "checking-diagnostics" -> Semantic_observation.SemanticJson.checkingDiagnostics source
+        | "resolution" -> Semantic_observation.SemanticJson.resolution source
         | "names" -> Semantic_observation.SemanticJson.names source
         | "ast" -> Semantic_observation.SemanticJson.ast source
         | "bindings" -> Semantic_observation.SemanticJson.bindings source

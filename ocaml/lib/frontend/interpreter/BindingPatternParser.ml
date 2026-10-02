@@ -3,6 +3,12 @@
 open Tokenizer
 open ParserSupport
 module WT = WrittenTypes
+(*
+   a simple binding pattern: variable / wildcard / `()` unit
+   tuple pattern `(a, b, …)` or a parenthesized pattern `(a)`
+   recovery: keep a benign binder (LetPattern has no error case yet);
+   leave closing/separating/decl-start tokens for the enclosing construct
+*)
 let rec parseLetPattern state index =
   match tok state index with
   | TUnderscore -> WT.LPWildcard (rng state index), index + 1

@@ -7,6 +7,17 @@ type parseExpr = parserState -> int -> WT.expr * int
 let close state index token closing openingText opening =
   if tok state index = token then rng state index, index + 1
   else begin errUnclosed state index closing openingText opening; zeroWidthAtEnd (rng state index), index end
+(*
+   `()` unit / `( e )` group / `( a, b, … )` tuple
+   operator section `(op)` → `fun a b -> a op b` (a 2-arg fn value)
+   Anchor arg-offside at the inner column instead of blanket-suspending
+   it, so a wrapped arg (indented past its callee or the statement)
+   still continues but a sibling statement at the inner column is a NEW
+   statement. This lets a paren-wrapped body be a newline-separated
+   statement BLOCK — `(stmt1 \n stmt2)` — folded into EStatement, not
+   one over-grabbing application.
+   group or statement block: fold newline-separated statements
+*)
 let parseParen parseExpr state index =
   let opening = rng state index in
   if tok state (index + 1) = TRParen then WT.EUnit (span opening (rng state (index + 1))), index + 2
@@ -47,6 +58,15 @@ let parseParen parseExpr state index =
         | [] -> Crash.crash "Empty grouped statements" in
       if tok state !stop = TRParen then folded, !stop + 1
       else begin errUnclosed state !stop ")" "(" opening; folded, !stop end)
+(*
+   `[ e , e , … ]` (or newline separators); each element keeps its
+   trailing-separator range
+   list elements are offside-delimited in their own scope
+   (else an element swallows the next one as an application, e.g. inside `( … )`:
+   `[ [a]\n (f x) ]` must not read as `[a] (f x)`). Mirrors parseRecord.
+   each element is its own offside statement, so a wrapped element's args
+   don't grab the NEXT element (`[ f a\n f b ]` stays two elements)
+*)
 let parseList parseExpr state index =
   let opening = rng state index in
   withElementScope state (fun () ->
@@ -66,6 +86,12 @@ let parseList parseExpr state index =
     done;
     let closing, after = close state !stop TRBracket "]" "[" opening in
     WT.EList (span opening closing, RevBuffer.toList elements, opening, closing), after)
+(*
+   `Type { name = value ; … }`. `i` is the `{`.
+   record fields are offside-delimited in their own scope
+   (else a field value swallows the next field name, e.g. inside `( … )`)
+   each field is its own offside statement (value args don't grab the next field)
+*)
 let parseRecord parseExpr state typeName nameRange index =
   let opening = rng state index in
   withElementScope state (fun () ->
@@ -108,6 +134,13 @@ let parseDict parseExpr state keyword index =
     done;
     let closing, after = close state !stop TRBrace "}" "{" opening in
     WT.EDict (span keyword closing, RevBuffer.toList entries, keyword, opening, closing), after)
+(*
+   record update `{ expr with name = value ; … }`. `i` is the `{`.
+   fields are offside-delimited, same as parseRecord — suspend paren relaxation
+   and anchor each field value at its own column so it can't grab the next field.
+   `{ r with }` updates nothing — reject it rather than lower a degenerate
+   update (both lowerings otherwise have to special-case the empty list).
+*)
 let parseRecordUpdate parseExpr state index =
   let opening = rng state index in
   withElementScope state (fun () ->

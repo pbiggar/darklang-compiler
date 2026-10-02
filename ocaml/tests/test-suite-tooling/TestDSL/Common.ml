@@ -1,7 +1,21 @@
+(*
+   Common.fs - Common utilities for parsing DSL-based test files
+   Provides section-delimited test file parsing, comment stripping,
+   and other shared utilities for test DSLs.
+*)
 (* Common.ml - Preserve section boundaries, repeated keys, and the explicit escape alphabet. *)
 open Dark_compiler
+(*
+   Section name and content
+*)
 type section = string * string
+(*
+   Test file with parsed sections
+*)
 type testFile = {sections : string StringOrder.Map.t}
+(*
+   Split content into sections using ---SECTION-NAME--- delimiters
+*)
 let parseSections content =
   let length = String.length content in
   let rec lines start matches =
@@ -20,21 +34,40 @@ let parseSections content =
         let ending = match rest with (_, start, _) :: _ -> start | [] -> length in
         (name, String.sub content beginning (ending - beginning)) :: sections rest in
   sections (lines 0 [])
+(*
+   Parse test file into sections
+*)
 let parseTestFile content = {sections = List.fold_left (fun sections (name, value) -> StringOrder.Map.add name value sections) StringOrder.Map.empty (parseSections content)}
+(*
+   Get required section or return error
+*)
 let getRequiredSection name file = match StringOrder.Map.find_opt name file.sections with Some value -> Ok (HostText.trim value) | None -> Error ("Missing required section: " ^ name)
+(*
+   Get optional section
+*)
 let getOptionalSection name file = Option.map HostText.trim (StringOrder.Map.find_opt name file.sections)
+(*
+   Strip comments (starting with //) and empty lines from text
+   Remove comments starting with //
+*)
 let stripCommentsAndEmpty text =
   String.split_on_char '\n' text |> List.concat_map (String.split_on_char '\r')
   |> List.map (fun line ->
     let rec comment index = if index + 1 >= String.length line then None else if line.[index] = '/' && line.[index + 1] = '/' then Some index else comment (index + 1) in
     HostText.trim (match comment 0 with None -> line | Some index -> String.sub line 0 index))
   |> List.filter (fun line -> line <> "")
+(*
+   Normalize line endings for comparison
+*)
 let normalizeLineEndings text =
   let buffer = Buffer.create (String.length text) in
   let rec loop index = if index < String.length text then
     if text.[index] = '\r' then begin Buffer.add_char buffer '\n'; loop (index + if index + 1 < String.length text && text.[index + 1] = '\n' then 2 else 1) end
     else begin Buffer.add_char buffer text.[index]; loop (index + 1) end in
   loop 0; Buffer.contents buffer
+(*
+   Decode the small, explicit escape alphabet used by text-bearing test DSLs.
+*)
 let parseEscapedText text =
   let units = HostText.utf16Units text in
   let rec loop index reversed =

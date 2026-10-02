@@ -19,6 +19,13 @@ let rec parseExpr grammar state index =
     state.depth <- state.depth - 1;
     result
   end
+(*
+   pipe is the lowest precedence: `expr |> seg |> seg …`
+   `x |> (op) y` desugars to `x op y` (the piped value is the LEFT operand),
+   so an operator section directly after `|>` with an argument becomes a
+   pipe-infix — not the section lambda applied (which would flip the order).
+   → diagnostic
+*)
 and parsePipe grammar state index =
   let expression, next = grammar.parseInfix state index in
   if tok state next <> TPipe then expression, next else
@@ -40,6 +47,11 @@ and parsePipe grammar state index =
   done;
   let endRange = if !current > 0 then rng state (!current - 1) else rng state next in
   WT.EPipe (span (WT.exprRange expression) endRange, expression, RevBuffer.toList parts), !current
+(*
+   convert a parsed pipe RHS expression into a structured pipe segment
+   keep the callee's type args — `x |> parse<T>` needs `T` (dropping it left the
+   piped fn call with no type args, so `parse` had no target type: "type 'a")
+*)
 and toPipeExpr = function
   | WT.EApply (range, WT.EFnName (_, name), typeArgs, args) -> Some (WT.EPipeFnCall (range, name, typeArgs, args))
   | WT.EFnName (range, name) -> Some (WT.EPipeFnCall (range, name, [], []))
@@ -51,6 +63,11 @@ and toPipeExpr = function
   | _ -> None
 and parseBlock grammar state index =
   withStmtScope state (rng state index).start.column (fun () -> parseBlockAt grammar state (rng state index).start.column index)
+(*
+   iterative (a 10k-statement body must not recurse 10k deep); statements
+   fold right-nested into EStatement afterwards
+   no progress — stop (avoids a spin)
+*)
 and parseBlockAt grammar state column index =
   let statements = RevBuffer.create () and current = ref index and scanning = ref true in
   while !scanning do
@@ -67,6 +84,15 @@ and parseBlockAt grammar state column index =
   folded, !current
 and hasNextStmt state column index =
   tok state index <> TEOF && (rng state index).start.column = column && tok state index <> TBar && not (closesOrSeparates (tok state index))
+(*
+   bare tuple expr: `match a, b with`
+   arms align on the first `|`'s column; a `|` LESS indented than that belongs
+   to an enclosing match (so a nested match doesn't swallow the outer's arms).
+   While the arm BODIES are parsed, a `|` on this match's arm row or at its
+   arm column is an arm separator, not the bitwise-or operator. The subject
+   expression above is parsed outside the anchor, where `|` is still an
+   operator (`match a | b with …`).
+*)
 and parseMatch grammar state index =
   let keywordMatch = rng state index in
   let first, next = grammar.parseExpr state (index + 1) in
@@ -107,6 +133,18 @@ and parseMatch grammar state index =
   if RevBuffer.length cases = 0 then errExpected state afterWith "at least one match case starting with '|'";
   let endRange = if RevBuffer.length cases > 0 then WT.exprRange (last cases).WT.rhs else keywordWith in
   WT.EMatch (span keywordMatch endRange, expression, RevBuffer.toList cases, keywordMatch, keywordWith), !current
+(*
+   `else`/`elif` binds to the `if` at `minCol` or to the left; a less-indented
+   `else` belongs to an ENCLOSING `if`, so a nested inner `if` in the THEN block
+   must not greedily grab it (`if… then (if… then c) else b` → the `else` is the
+   OUTER's). `minCol` is the column of the FIRST `if` in a chain — so `else if …`
+   chains still bind at the chain's column even though each nested `if` sits
+   further right (after `else `). Same-row `else` always binds (col > minCol).
+   same-line `else if …` continues the chain → the nested `if` inherits this
+   chain's `minCol`; any other else-body is a normal block at its own indent.
+   `elif` is `else (if …)` — the nested EIf is the else branch (its own
+   `if`-keyword range colors the `elif`, so no separate else-keyword range).
+*)
 and parseIf grammar state minColumn index =
   let keywordIf = rng state index in
   let condition, next = grammar.parseExpr state (index + 1) in
@@ -125,6 +163,17 @@ and parseIf grammar state minColumn index =
     let elseExpr, after = parseIf grammar state minColumn next in
     WT.EIf (span keywordIf (WT.exprRange elseExpr), condition, thenExpr, Some elseExpr, keywordIf, keywordThen, None), after
   else WT.EIf (span keywordIf (WT.exprRange thenExpr), condition, thenExpr, None, keywordIf, keywordThen, None), next
+(*
+   nested function definition: `let f (x: T) (y) [: R] = body` — bind a lambda
+   to the name (params lowered to untyped lambda patterns, types discarded)
+   no real `fun`/`->` tokens in this sugar
+   Value annotations are not part of Dark. Consume the type for recovery,
+   but reject the source instead of silently discarding it.
+   the value is an offside block, not a single expr, so a multi-statement
+   binding (`let x =\n  doThing ()\n  result`) sequences instead of gluing
+   the following statement onto the first as an application argument.
+   `in` is optional
+*)
 and parseLet grammar state index =
   let keywordLet = rng state index in
   let pattern, next = BindingPatternParser.parseLetPattern state (index + 1) in

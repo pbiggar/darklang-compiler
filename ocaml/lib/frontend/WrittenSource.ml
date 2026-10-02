@@ -1,6 +1,13 @@
+(*
+   WrittenSource.fs - Preserve interpreter declarations and module scopes for direct source checking.
+*)
 (* WrittenSource.ml - Flatten module-scoped declarations and retain source name references. *)
 [@@@warning "-4"]
 module WT = WrittenTypes
+(*
+   The checker receives source syntax with its scope, without constructing a
+   separate untyped semantic program.
+*)
 type item = Function of string list * WT.fnDecl | Value of string list * WT.valueDecl
   | Type of string list * WT.typeDecl | Expression of string list * WT.expr
 let moduleSegments name = match NameSyntax.tryParseLegacySpelling name with
@@ -21,6 +28,9 @@ let items validated =
   let source = Validation.ValidatedSourceFile.toWrittenTypes validated in
   Result.map (fun declarations -> declarations @ List.map (fun expression -> Expression ([], expression)) source.WT.exprsToEval)
     (flattenDeclarations [] source.WT.declarations)
+(*
+   Enforce source-unit entry ownership before composing declarations for checking.
+*)
 let validateSourceUnits requireEntry units =
   Result.bind (ResultList.traverse (fun (name, purpose, source) ->
     Result.bind (items source) (fun declarations ->
@@ -69,6 +79,9 @@ let rec expressionNames expression =
       | WT.EPipeVariableOrFnCall (_, name) -> [name]) segments
   | WT.EString (_, _, segments, _, _) -> List.concat_map (function WT.StringText _ -> [] | WT.StringInterpolation (_, value, _, _) -> expressionNames value) segments
   | _ -> []
+(*
+   Package lookup needs qualified references from source, not a lowered AST.
+*)
 let qualifiedNames units =
   Result.map (fun groups ->
     let names = List.concat_map (function

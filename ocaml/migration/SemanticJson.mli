@@ -12,3 +12,7 @@ val writtenSource : string -> Yojson.Basic.t
 val names : string -> Yojson.Basic.t
 val astHelpers : string -> Yojson.Basic.t
 val formatter : string -> Yojson.Basic.t
+val resolution : string -> Yojson.Basic.t
+val checkingDiagnostics : string -> Yojson.Basic.t
+val freeVariables : string -> Yojson.Basic.t
+val functionIdMap : string -> Yojson.Basic.t

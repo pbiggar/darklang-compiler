@@ -318,7 +318,7 @@ and syntax-preserving parenthesis removal. All 1,874 complete formatter
 observations match F#, including idempotence. Shared fixture parsing, syntax
 fixture execution, and formatting-roundtrip execution are ported; DSL parser
 observations match all 1,890 corpus/probe sources plus the frozen syntax files.
-All 95 translated unit and fixture tests pass, including every focused ParserTests
+All 96 translated unit and fixture tests pass, including every focused ParserTests
 case, all syntax fixtures, and all formatting-roundtrip fixtures.
 Native executable bytes will be compared
 after real backend translation; the F# oracle remains available until then.
@@ -326,3 +326,21 @@ after real backend translation; the F# oracle remains available until then.
 `ocaml/inventory.json` records explicit filename mappings for F# namespaces
 whose source files share a basename, preventing collisions in Dune's module
 graph. These mappings do not change frozen source or fixture hashes.
+
+Semantic resolution, checker diagnostics, closure free-variable analysis, and
+sparse function identity maps are now ported. Resolver observations match all
+1,392 probes; diagnostic observations also match all 1,392 probes, including
+literal widths, UTF-16 initial-character handling, runtime-failure detection,
+and normalized fresh UUID identities. Free-variable observations match all
+1,890 corpus and probe inputs, covering every expression/pattern case and three
+lexical scopes. Function-table observations match all 1,890 inputs, including
+uint64 boundaries, duplicate-key replacement, updates, folds, and overlays.
+The full resolver corpus comparison is still running.
+
+Original source comments are retained alongside translated declarations.
+`scripts/ocaml/port_comments.py --check` audits reference line-comment coverage
+for every completed source owner, including the parser's split modules.
+Large semantic comparisons now compare complete JSON observations as streams;
+successful observations retain canonical SHA-256 audit rows, while a mismatch
+retains both complete trees and the first differing field. This avoids exhausting
+the VM's disk with repeated source evidence and does not weaken the comparison.

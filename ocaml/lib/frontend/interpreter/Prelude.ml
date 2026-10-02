@@ -1,3 +1,6 @@
+(*
+   Prelude.fs - Type alias required by the copied interpreter syntax modules.
+*)
 (* Prelude.ml - Preserve shared frontend definitions. *)
 type 'a neList = 'a ParserDependencies.neList
 module Map = struct

@@ -1,3 +1,9 @@
+(*
+   FormattingRoundtripFormat.fs - Parser for focused parser/pretty roundtrip test files.
+   Format:
+   <dark expression> // optional display name
+   One expression per non-empty, non-comment line.
+*)
 (* FormattingRoundtripFormat.ml - Preserve string-aware comments and fixture line names. *)
 open Dark_compiler
 type formattingRoundtripCase = {name : string; source : string; sourceFile : string}

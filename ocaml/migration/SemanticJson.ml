@@ -498,3 +498,100 @@ let formatter source =
     tuple [string (WrittenFormatter.syntaxKey parsed); string printed;
       option (fun parsed -> tuple [string (WrittenFormatter.syntaxKey parsed); string (WrittenFormatter.format printed parsed)]) reparsed])
     (WrittenParsing.parse Validation.Script source)
+
+let resolution source =
+  let open NameResolution in
+  let namespaceKey = function RootNamespace -> ["RootNamespace"] | ModuleNamespace path -> "ModuleNamespace" :: NonEmptyList.toList path | PackageNamespace (owner, modules) -> "PackageNamespace" :: owner :: modules | BuiltinNamespace -> ["BuiltinNamespace"] in
+  let identityKey = function
+    | LocalValue name -> ["LocalValue"; name]
+    | ModuleValue (ns, name) -> "ModuleValue" :: name :: namespaceKey ns
+    | PackageValue (ns, name) -> "PackageValue" :: name :: namespaceKey ns
+    | BuiltinValue (name, version) -> ["BuiltinValue"; name; string_of_int version]
+    | ModuleFunction (ns, name, id) -> "ModuleFunction" :: name :: id :: namespaceKey ns
+    | PackageFunction (ns, name, id) -> "PackageFunction" :: name :: id :: namespaceKey ns
+    | BuiltinFunction (name, version) -> ["BuiltinFunction"; name; string_of_int version]
+    | ConstructorSymbol (owner, caseName) -> ["ConstructorSymbol"; owner; caseName]
+    | UserType name -> ["UserType"; name] | BuiltinType name -> ["BuiltinType"; name] in
+  let provenanceKey = function LexicalBinding s -> ["LexicalBinding"; s] | SourceDeclaration s -> ["SourceDeclaration"; s] | ModuleDeclaration s -> ["ModuleDeclaration"; s] | PackageDeclaration s -> ["PackageDeclaration"; s] | BuiltinRegistration s -> ["BuiltinRegistration"; s] | CompilerExtension s -> ["CompilerExtension"; s] in
+  let encodeStrings xs = `List (List.map string xs) in
+  let candidateValue (c : candidate) = tuple [encodeStrings (qualifiedNameSegments c.visibleName); encodeStrings (identityKey c.identity); encodeStrings (provenanceKey c.provenance)] in
+  let identities = [LocalValue "x"; ModuleValue (RootNamespace, "x"); PackageValue (PackageNamespace ("Owner", ["Module"]), "x"); BuiltinValue ("x", -1); ModuleFunction (ModuleNamespace (NonEmptyList.fromList ["A"; "B"]), "x", source); PackageFunction (RootNamespace, "x", "decl2"); BuiltinFunction ("x", 2); ConstructorSymbol ("First", "x"); ConstructorSymbol ("Second", "x"); UserType "X"; BuiltinType "X"] in
+  let provenances = [LexicalBinding source; SourceDeclaration source; ModuleDeclaration source; PackageDeclaration source; BuiltinRegistration source; CompilerExtension source] in
+  let spellings = ["x"; "A.x"; "A.B.x"; source; "Darklang.Stdlib.Option.Option"; "Darklang.Stdlib.Option.Option.Some"] in
+  let all = List.concat_map (fun spelling -> List.concat_map (fun identity -> List.filter_map (fun provenance -> candidate spelling identity provenance) provenances) identities) spellings in
+  let base = addCandidates all empty in
+  let overlay = addCandidates (List.filter (fun (c : candidate) -> match c.provenance with SourceDeclaration _ | ModuleDeclaration _ -> true | LexicalBinding _ | PackageDeclaration _ | BuiltinRegistration _ | CompilerExtension _ -> false) all) empty in
+  let environments = [empty; base; overlay; merge base overlay; filterCandidates (fun (c : candidate) -> c.identity = ConstructorSymbol ("First", "x")) base; filterCandidates (fun _ -> false) base; merge base empty] in
+  let contexts = [Value; Callable; Constructor; Type] in
+  let queries = [source; "x"; "A.x"; "A.B.x"; "Option"; "Option.Some"; "Result.Ok"; "Stdlib.Option.Option"; "missing"; "A..B"] in
+  let scopes = [[]; ["A"]; ["A"; "B"]] in
+  let resolutionValue = function
+    | Error error -> union "FSharpResult" "Error" [string (errorToString error)]
+    | Ok value -> union "FSharpResult" "Ok" [tuple [encodeStrings (qualifiedNameSegments value.originalName); string (contextToString value.context); encodeStrings (identityKey value.identity); encodeStrings (provenanceKey value.provenance); string (canonicalSpelling value.identity)]] in
+  tuple [option (fun name -> encodeStrings (qualifiedNameSegments name)) (tryQualifiedName source);
+    `List (List.map (fun environment -> tuple [`List (List.map candidateValue (candidates environment));
+      `List (List.concat_map (fun context -> List.concat_map (fun scope -> List.map (fun query -> tuple [encodeStrings (candidateSpellings context scope query); resolutionValue (resolveInModule context scope query environment)]) queries) scopes) contexts)]) environments)]
+
+let checkingDiagnostics source =
+  let open! AST in
+  let open CheckingDiagnostics in
+  let types : AST.semanticType list = [TInt8; TInt16; TInt32; TInt64; TInt128; TInt; TUInt8; TUInt16; TUInt32; TUInt64; TUInt128; TBool; TFloat64; TString; TBlob; TChar; TDateTime; TUnit; TNever; TInternalRawPtr; TVar source; TInferenceVar (source, "#infer:id:fixed"); TFunction ([TInt64; TVar source], TDict (TString, TVar source)); TTuple [TUnit; TList TString]; TRecord (source, []); TRecord (source, [TDict (TChar, TStream TInt64)]); TSum (source, []); TSum (source, [TVar source]); TList (TDict (TInt64, TString)); TStream TFloat64; TDict (TBool, TInt64)] in
+  let expressions : AST.expr list = [UnitLiteral; Int64Literal Int64.min_int; Int128Literal (Z.neg (Z.shift_left Z.one 127)); BigIntLiteral (Z.shift_left Z.one 256); Int8Literal (-128); Int16Literal (-32768); Int32Literal Int32.min_int; UInt8Literal 255; UInt16Literal 65535; UInt32Literal 4294967295L; UInt64Literal (-1L); UInt128Literal (Z.pred (Z.shift_left Z.one 128)); BoolLiteral true; BoolLiteral false; StringLiteral source; CharLiteral source; FloatLiteral (-0.); FloatLiteral infinity; FloatLiteral nan; FloatLiteral 1e16; FloatLiteral 1e-5; TupleLiteral [StringLiteral source; FloatLiteral 1.]; TupleLiteral [Var source]; ListLiteral []; ListLiteral [FloatLiteral 1.]; ListLiteral [Var source; TupleLiteral [Int64Literal 1L; StringLiteral source]]; Var source] in
+  let patterns = [LPUnit; LPWildcard; LPVariable source; LPTuple (LPVariable source, LPUnit, [LPTuple (LPWildcard, LPVariable "nested", [])])] in
+  let errorValues = List.concat_map (fun typ -> [TypeMismatch (TBool, typ, source); IfBranchTypeMismatch (TBool, typ); InvalidOperation (source, [typ; TString]); IncompatibleEqualityOperands (typ, TString); IncompatibleOrderingOperands (typ, TInt64)]) types @ [UndefinedVariable source; UndefinedCallTarget source; MissingTypeAnnotation source; PolymorphicRecursion source; ResolutionFailure (NameResolution.InvalidQualifiedName (source, NameResolution.Callable)); GenericError source] in
+  let encodeStrings xs = `List (List.map string xs) in
+  let bound = StringOrder.Map.singleton "message" (StringLiteral source) in
+  let calls = [applyNamed "Builtin.unwrap" (NonEmptyList.singleton (Constructor (UnresolvedConstructor None, "Option.None", []))); applyNamed "Builtin.crash" (NonEmptyList.singleton (Var "message")); Let (LPVariable "message", StringLiteral source, applyNamed "Builtin.testRuntimeError" (NonEmptyList.singleton (Var "message"))); Var "absent"] in
+  let names = [source; "Builtin.unwrap"; "Builtin.testRuntimeError"; "Builtin.crash"; "Builtin.testNan"; "Builtin.testInfinity"; "Builtin.blobEmpty"] in
+  tuple [
+    `List (List.map (fun typ -> tuple [string (typeToString typ); string (typeToHelperIdentityString typ); `Bool (isNeverType typ)]) types);
+    encodeStrings (List.map typeErrorToString errorValues);
+    `List (List.map (fun expr -> tuple [option string (tryFormatLiteralValue expr); option string (formatPatternMismatchValue expr); string (formatListLiteralForNoMatch [expr]);
+      `List (List.map (fun typ -> encodeStrings [ifConditionTypeMismatchMessage expr typ; interpolationTypeMismatchMessage expr typ; formatPatternMismatchError expr typ TString None; formatPatternMismatchError expr typ TUnit (Some source); formatLegacyParamTypeError source 4 "param" TString typ expr]) types)]) expressions);
+    `List (List.map (fun pattern -> tuple [string (formatLetDeconstructionPattern pattern); string (typeToHelperIdentityString (inferredLetPatternType source pattern));
+      `List (List.map (fun typ -> option (fun bindings -> `List (List.map (fun (name, typ) -> tuple [string name; string (typeToHelperIdentityString typ)]) bindings)) (bindLetPatternTypes pattern typ)) types)]) patterns);
+    `List (List.map (fun call -> tuple [`Bool (isKnownFailureConstructorExpr call); `Bool (isKnownUnwrapFailureExpr bound call); `Bool (isKnownTestRuntimeErrorExpr bound call); option string (tryExtractKnownTestRuntimeErrorMessage bound call)]) calls);
+    `List (List.map (fun name -> tuple [string (withIndefiniteArticle name); `List (List.map (fun test -> `Bool (test name)) [isBuiltinUnwrapName; isBuiltinTestRuntimeErrorName; isRuntimeFailureName; isBuiltinTestNanName; isBuiltinTestInfinityName; isBuiltinBlobEmptyName])]) names);
+    `List (List.map (fun scope ->
+      let fresh, subst = freshenTypeParams scope [source; "a"; source] in
+      let keys = List.map (fun key -> typeToString (inferenceVarForKey key)) fresh in
+      tuple [encodeStrings keys; `Bool (List.sort_uniq String.compare fresh |> List.length = 3); `Bool (List.for_all (fun key -> let guid = String.sub key (String.length key - 32) 32 in String.length guid = 32 && guid.[12] = '4' && List.mem guid.[16] ['8';'9';'a';'b']) fresh);
+        `List (List.map (fun (name, key) -> tuple [string name; string (typeToString (inferenceVarForKey key))]) (StringOrder.Map.bindings subst))]) [None; Some source])]
+
+let freeVariables source =
+  let open! AST in
+  let x = Var source and y = Var "y" in
+  let field = unresolvedRecordFieldReference "field" in
+  let patterns = [PUnit; PWildcard; PVar source; PConstructor ("C", [PVar source; PVar "y"]); PResolvedConstructor ("M.T", "C", 3, [PVar source]); PInt64 1L; PBigInt Z.one; PInt128Literal Z.one; PInt8Literal 1; PInt16Literal 1; PInt32Literal 1l; PUInt8Literal 1; PUInt16Literal 1; PUInt32Literal 1L; PUInt64Literal 1L; PUInt128Literal Z.one; PBool true; PString source; PChar source; PFloat 1.; PTuple [PVar source; PVar "y"]; PList [PVar source]; PListCons ([PVar source], PVar "tail"); POr (NonEmptyList.fromList [PVar source; PVar "other"])] in
+  let literalExpressions : AST.expr list = [UnitLiteral; Int64Literal 1L; Int128Literal Z.one; BigIntLiteral Z.one; Int8Literal 1; Int16Literal 1; Int32Literal 1l; UInt8Literal 1; UInt16Literal 1; UInt32Literal 1L; UInt64Literal 1L; UInt128Literal Z.one; BoolLiteral true; StringLiteral source; CharLiteral source; FloatLiteral 1.; RuntimeError source] in
+  let expressions = literalExpressions @ [x; Var "Builtin.testNan"; Var "Builtin.testInfinity"; BoundaryRender (source, x); BinOp (Add, x, y); UnaryOp (Neg, x);
+    Let (LPVariable source, x, TupleLiteral [x; y]); Let (LPTuple (LPVariable source, LPVariable "y", []), Var "value", TupleLiteral [x; y]);
+    RecursiveLet (RecursiveBindingCandidate {sourceName = source; kind = NamedLocalFunctionMember}, Apply (x, [], NonEmptyList.singleton y), TupleLiteral [x; y]);
+    If (x, y, Var "z"); Sequence (x, y); Apply (x, [], NonEmptyList.fromList [y; Var "z"]); TupleLiteral [x; y]; TupleAccess (x, 1);
+    DictLiteral (TString, TString, [x, y]); RecordLiteral (unresolvedRecordReference "R" [], [field, x]); RecordUpdate (x, [field, y]); RecordAccess (x, field);
+    Constructor (UnresolvedConstructor None, "C", [x; y]); ListLiteral [x; y]; Lambda (NonEmptyList.singleton (lambdaParameter (LPVariable source)), None, TupleLiteral [x; y]);
+    Apply (TupleAccess (x, 0), [], NonEmptyList.singleton y); IndirectApply (x, NonEmptyList.singleton y); Closure (source, [x; y]);
+    InterpolatedString [StringText source; StringExpr x; StringExpr y]] @ List.map (fun pattern -> Match (Var "scrutinee", [{patterns = NonEmptyList.singleton pattern; guard = Some (Var "guard"); body = TupleLiteral [x; y; Var "tail"]}])) patterns in
+  let scopes = [StringOrder.Set.empty; StringOrder.Set.singleton source; StringOrder.Set.of_list [source; "y"; "guard"]] in
+  let encodeSet values = `List (List.map string (StringOrder.Set.elements values)) in
+  tuple [`List (List.map (fun pattern -> encodeSet (FreeVariables.collectPatternBindings pattern)) patterns);
+    `List (List.map (fun expr -> `List (List.map (fun bound -> encodeSet (FreeVariables.collectFreeVars expr bound)) scopes)) expressions)]
+
+let functionIdMap source =
+  let ids = List.map AST.functionId [0L; 1L; Int64.max_int; Int64.min_int; -1L; 1L] in
+  let entries = List.mapi (fun index id -> id, source ^ string_of_int index) ids in
+  let table = FunctionIdMap.ofList entries in
+  let overlay = FunctionIdMap.ofArray [|AST.functionId 1L, "overlay"; AST.functionId 2L, source|] in
+  let tables = [FunctionIdMap.empty; table; FunctionIdMap.ofSeq (List.to_seq entries); FunctionIdMap.remove (AST.functionId 1L) table; FunctionIdMap.change (AST.functionId 0L) (fun _ -> None) table; FunctionIdMap.change (AST.functionId 3L) (fun previous -> Some (Option.value previous ~default:source)) table; FunctionIdMap.merge table overlay; FunctionIdMap.map (fun id value -> unsigned64 (AST.functionIdValue id) ^ value) table; FunctionIdMap.filter (fun id _ -> Int64.unsigned_compare (AST.functionIdValue id) Int64.min_int >= 0) table] in
+  let encodeId id = scalar "uint64" (unsigned64 (AST.functionIdValue id)) in
+  let encodeEntries entries = `List (List.map (fun (id, value) -> tuple [encodeId id; string value]) entries) in
+  `List (List.map (fun table ->
+    let iterated = ref [] in
+    FunctionIdMap.iter (fun id value -> iterated := !iterated @ [id, value]) table;
+    tuple [encodeEntries (FunctionIdMap.toList table); encodeEntries (List.of_seq (FunctionIdMap.toSeq table));
+      `List (List.of_seq (Seq.map encodeId (FunctionIdMap.keys table))); `List (List.of_seq (Seq.map string (FunctionIdMap.values table)));
+      int32 (FunctionIdMap.count table); `Bool (FunctionIdMap.isEmpty table);
+      `List (List.map (fun id -> tuple [option string (FunctionIdMap.tryFind id table); `Bool (FunctionIdMap.containsKey id table)]) ids);
+      encodeEntries (FunctionIdMap.fold (fun state id value -> state @ [id, value]) [] table); encodeEntries !iterated;
+      `Bool (FunctionIdMap.exists (fun id _ -> AST.functionIdValue id = -1L) table); `Bool (FunctionIdMap.forall (fun _ value -> value <> "") table);
+      option (fun (id, value) -> tuple [encodeId id; string value; string (FunctionIdMap.find id table)]) (if FunctionIdMap.isEmpty table then None else Some (FunctionIdMap.maxKeyValue table))]) tables)

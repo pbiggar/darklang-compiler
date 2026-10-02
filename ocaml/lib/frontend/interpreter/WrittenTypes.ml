@@ -1,12 +1,36 @@
+(*
+   The types that the user writes. Think of this as the Syntax Tree.
+   This is the range-complete syntax tree produced by the hand-written
+   parser. Every node carries the exact source ranges (whole-node plus the
+   fine-grained keyword/symbol ranges) that the editor tooling needs: the
+   semantic-token highlighter, the LSP (hover / diagnostics), and the formatter.
+   The tree is converted 1:1 into the Dark `LanguageTools.WrittenTypes` (as Dvals) by
+   `WrittenTypesToDarkTypes` in `Builtins.Language/Libs/Parser.fs`.
+   Execution lowering (`WrittenTypesToProgramTypes`) consumes the same tree,
+   ignoring the ranges and minting fresh node ids as it lowers to ProgramTypes.
+   (Node ids are ephemeral — a `gid()` counter, not source-derived — so they are
+   created at lowering time rather than stored on every node; the Dark WrittenTypes
+   keys on ranges, not ids.)
+   Pos, TokenRange
+*)
 (* WrittenTypes.ml - Retain every syntax node, range, and normalization field. *)
 (* Mutually recursive syntax records retain the reference's shared field names. *)
 [@@@warning "-30"]
 type range = Tokenizer.tokenRange
 
+(*
+   Used when a syntactic construct turns into a function, such as some operators.
+   Most names are unresolved here and are resolved during WT2PT lowering.
+*)
 type name =
   | KnownBuiltin of string * int
   | Unresolved of (string) Prelude.neList
 
+(*
+   Enum type names are a plain `List<string>`. An empty list is valid, e.g. an
+   unqualified `Ok`, where only the case name is written. See the long note in git
+   history for why EEnum doesn't reuse `Name`.
+*)
 type unresolvedEnumTypeName = (string) list
 
 type infix =
@@ -37,12 +61,33 @@ and binaryOperation =
   | BinOpAnd
   | BinOpOr
 
+(*
+   A simple `{ range; name }` identifier. The parent field gives it meaning:
+   variable name, function name, type name, etc.
+*)
 type identifier = { range : range; name : string }
 
+(*
+   `Module.Path.fn`; each module segment carries its own range.
+   (module ident, trailing-dot range)
+*)
 type qualifiedFnIdentifier = { range : range; modules : (identifier * range) list; fn : identifier }
 
+(*
+   `Module.Path.TypeName<args>`; used by record literals, enum constructors, and
+   custom type references.
+   `<…>` generic args (e.g. `Option<String>`)
+*)
 type qualifiedTypeIdentifier = { range : range; modules : (identifier * range) list; typ : identifier; typeArgs : (typeReference) list }
 
+(*
+   Type references on parameters and return types. Each primitive/built-in type
+   has its own case carrying just its range, so WT2PT and the serializer match
+   them exhaustively.
+   `'a`
+   each item is (`*` range, type)
+   each arg: (type, `->` range)
+*)
 and typeReference =
   | TUnit of range
   | TBool of range
@@ -70,12 +115,23 @@ and typeReference =
   | TTuple of range * typeReference * range * typeReference * (range * typeReference) list * range * range
   | TFn of range * (typeReference * range) list * typeReference
 
+(*
+   each item is (`,` range, pattern)
+*)
 type letPattern =
   | LPUnit of range
   | LPVariable of range * string
   | LPWildcard of range
   | LPTuple of range * letPattern * range * letPattern * (range * letPattern) list * range * range
 
+(*
+   Match patterns.
+   also `_` (as "_")
+   arbitrary-precision `Int`
+   Recovery hole where a pattern was expected but could not be parsed. The
+   parse has a diagnostic at this range, and execution paths reject files with
+   diagnostics before lowering.
+*)
 type matchPattern =
   | MPVariable of range * string
   | MPInt of range * (range * Z.t)
@@ -105,6 +161,19 @@ type stringSegment =
   | StringText of range * string
   | StringInterpolation of range * expr * range * range
 
+(*
+   bare arbitrary-precision `Int`
+   each list element carries its trailing-separator (`;`/`,`) range, if any
+   `Dict { k = v; … }`: a dict literal. Syntactically like a record, but `Dict`
+   is a keyword (its own range), not a type name, so it's a distinct node.
+   (entry, key, `:` range, value)
+   (field name, `=` range, value)
+   each item is (`|>` range, segment)
+   `e1 ⏎ e2` (sequence)
+   Recovery hole where an expression was expected but could not be parsed. The
+   parse has a diagnostic at this range, and execution paths reject files with
+   diagnostics before lowering.
+*)
 and expr =
   | EUnit of range
   | EBool of range * bool
@@ -150,36 +219,90 @@ and pipeExpr =
   | EPipeFnCall of range * qualifiedFnIdentifier * (typeReference) list * (expr) list
   | EPipeVariableOrFnCall of range * string
 
+(*
+   A function parameter: `(name: Type)` or a `()` unit parameter.
+   `description` is the `///` written above it. A parameter's doc is not part of the item's identity
+   hash, so it needs an `UpdateDoc` to travel -- but it has to be READ first, and until this field
+   existed the lexer's doc comment was attached to the `(` token and then dropped on the floor.
+*)
 type fnParam =
   | FPUnit of range
   | FPNormal of range * identifier * typeReference * range * range * range * string
 
+(*
+   `let name (p: T) … :{Effect, …} Ret = body`
+   `<'a, 'b>` (name tick-stripped, with range)
+   An optional effect row after the return colon, such as
+   `:{Http, Clock} Ret`, sets the function's permission ceiling. It limits
+   the effects used by the body and its calls; it never grants access.
+   Effect names are resolved, and unknown names reported, by
+   `WrittenTypesToProgramTypes`.
+   `: Ret` means no ceiling; `:{}` requires a pure body; a non-empty row
+   allows only the listed effects.
+   `: String`              None       no row, no promise
+   `:{} String`            Some []    effect-free: every host effect inside is denied
+   `:{Http, Clock} String` Some [...] only these; anything else inside is denied
+   preceding `///` doc comments
+*)
 type fnDecl = { range : range; name : identifier; typeParams : (string * range) list; parameters : (fnParam) list; effects : ((identifier) list) option; returnType : typeReference; body : expr; keywordLet : range; symbolColon : range; symbolEquals : range; description : string }
 
+(*
+   `let name = body` (no params)
+*)
 type valueDecl = { range : range; name : identifier; body : expr; keywordVal : range; symbolEquals : range; description : string }
 
+(*
+   --- type declarations ---
+   The `///` written above the field. See `FnParam` for why it is kept.
+*)
 type recordFieldSyntax = { range : range; name : range * string; typ : typeReference; description : string; symbolColon : range }
 
 type enumFieldSyntax = { range : range; typ : typeReference; label : (range * string) option; symbolColon : (range) option }
 
+(*
+   The `///` written above the case. See `FnParam` for why it is kept.
+*)
 type enumCaseSyntax = { range : range; name : range * string; fields : (enumFieldSyntax) list; description : string; keywordOf : (range) option }
 
+(*
+   (field, trailing-separator)
+   (leading `|` range, case)
+*)
 type typeDefinition =
   | TDAlias of typeReference
   | TDRecord of (recordFieldSyntax * (range) option) list
   | TDEnum of (range * enumCaseSyntax) list
 
+(*
+   `type Name [<'a>] = Definition`
+   `<'a, 'b>` (name tick-stripped, with range)
+*)
 type typeDecl = { range : range; name : identifier; typeParams : (string * range) list; definition : typeDefinition; keywordType : range; symbolEquals : range; description : string }
 
+(*
+   A `module Name.Path` header.
+*)
 type moduleDecl = { range : range; name : range * string; declarations : (declaration) list; keywordModule : range }
 
+(*
+   A test assertion's expected side: a value expression, or an expected
+   runtime / SQL error message. Validation restricts it to Test source.
+*)
 and testExpected =
   | TEExpr of expr
   | TEError of string
   | TESqlError of string
 
+(*
+   A test assertion `actual = expected`; post-parse validation restricts it to Test source.
+*)
 and test = { range : range; actual : expr; expected : testExpected }
 
+(*
+   A trailing expression inside a module body (`module M = … \n expr`).
+   `[<DB>] type Name = AliasedType` — a Test-only user DB.
+   `actual = expected` assertion accepted only by Test validation.
+*)
 and declaration =
   | DFunction of fnDecl
   | DValue of valueDecl
@@ -189,6 +312,9 @@ and declaration =
   | DTypeDB of typeDecl
   | DTest of test
 
+(*
+   The whole file: top-level declarations + trailing expressions to eval.
+*)
 type sourceFile = { range : range; declarations : (declaration) list; exprsToEval : (expr) list }
 
 type parsedFile = SourceFile of sourceFile
@@ -247,6 +373,9 @@ let mpRange (p : matchPattern) =
   | MPOr(r, _)
   | MPError r -> r
 
+(*
+   Source range covering a whole expression node.
+*)
 let exprRange (e : expr) =
   match e with
   | EUnit r -> r
@@ -284,6 +413,14 @@ let exprRange (e : expr) =
   | EStatement(r, _, _)
   | EError r -> r
 
+(*
+   Normalized package IR + declaration normalization
+   The layers below are execution-only (Cli / Package / TestModule -> WT2PT -> PT).
+   They are never serialized for highlighting, so synthesized nodes may use
+   `synthRange`. They normalize the raw parser tree (rich decls above) into the
+   module-qualified package shapes the lowering consumes.
+   The declared permission ceiling (effect case names); see `FnDecl`.
+*)
 let typeReferenceRange (t : typeReference) =
   match t with
   | TUnit r
@@ -312,7 +449,17 @@ let typeReferenceRange (t : typeReference) =
   | TFn(r, _, _) -> r
   | TCustom q -> q.range
 
+(*
+   A synthetic (zero-width) range for nodes the lowering synthesizes with no
+   source counterpart, such as an implicit unit parameter. Never serialized for
+   highlighting; the package/decl normalization layer is execution-only.
+*)
 let synthRange = { Tokenizer.start = { Tokenizer.row = 0; column = 0 }; end_ = { Tokenizer.row = 0; column = 0 } }
+(*
+   Mapping between primitive type names and their `TypeReference` case
+   constructors. The parser resolves names through this list; WT2PT and the
+   serializer then match the primitive cases exhaustively.
+*)
 let primTypes = [
   "Unit", (fun range -> TUnit range);
   "Bool", (fun range -> TBool range);
@@ -336,6 +483,14 @@ let primTypes = [
 ]
 let primTypeFromName name = List.find_map (fun (candidate, constructor) -> if name = candidate then Some constructor else None) primTypes
 
+(*
+   --- normalization: raw parser syntax → package IR ---
+   The parser produces one range-complete syntax tree. The package form is the
+   shape execution wants: names pulled out of `(range, name)` pairs, no ranges.
+   Field descriptions default to ""; declaration descriptions keep their `///`
+   doc comments.
+   A unit parameter is named "_".
+*)
 let fnParamNorm (parameter : fnParam) : PackageFn.parameter =
   match parameter with
   | FPUnit _ -> { PackageFn.name = "_"; typ = TUnit synthRange; description = "" }
@@ -356,6 +511,12 @@ let typeDefinitionNorm = function
       let normalized = List.map (fun (_, case) -> enumCaseNorm case) cases in
       let fallback : TypeDeclaration.enumCase = { TypeDeclaration.name = "_"; fields = []; description = "" } in
       TypeDeclaration.Enum (ParserDependencies.ofListWithDefault fallback normalized)
+(*
+   --- build owner-qualified package items from declarations ---
+   A fn `map` inside `module Darklang.Stdlib.List` becomes `Darklang.Stdlib.List.map`:
+   the accumulated path's first segment is the owner, the rest the modules.
+   The dotted `module A.B.C` header split into its path segments.
+*)
 let moduleNameParts (moduleDecl : moduleDecl) =
   String.split_on_char '.' (snd moduleDecl.name) |> List.filter (fun segment -> segment <> "")
 let packageFn owner modules (fn : fnDecl) : PackageFn.packageFn =

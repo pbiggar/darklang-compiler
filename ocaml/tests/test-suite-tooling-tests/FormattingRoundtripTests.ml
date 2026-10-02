@@ -1,3 +1,8 @@
+(*
+   FormattingRoundtripTests.fs - Focused parser/pretty roundtrip regression tests.
+   Loads minimal expressions from data files so new regression cases do not
+   require recompiling tests.
+*)
 (* FormattingRoundtripTests.ml - Preserve reparse, syntax equivalence, and idempotence assertions. *)
 open Dark_compiler
 module F = FormattingRoundtripFormat
