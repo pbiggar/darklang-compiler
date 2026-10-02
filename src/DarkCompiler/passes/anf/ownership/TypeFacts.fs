@@ -254,6 +254,14 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.SemanticType option =
         | SocketSend | SocketReceive | SocketReceiveTimeout | SocketSendTimeout | SocketClose
         | SecureRandomFill -> Some AST.TInt64
     | IfValue (_, thenAtom, _) -> inferAtomType ctx thenAtom
+    // The erased list-pattern helper returns Int64 at the ABI boundary, but
+    // ownership follows the concrete element type of its list argument.
+    | BorrowedCall (funcName, [listAtom])
+        when FunctionIdMap.tryFind funcName ctx.FuncReg
+             |> Option.exists (fun (name, _) -> name.StartsWith("Darklang.Stdlib.List.__headUnsafe")) ->
+        match inferAtomType ctx listAtom with
+        | Some (AST.TList elementType) -> Some elementType
+        | _ -> tryGetFuncReturnTypeFromReg ctx funcName
     | Call (funcName, args)
     | BorrowedCall (funcName, args) ->
         // Return type from function registry (with special-case inference for stdlib list/tuple helpers)

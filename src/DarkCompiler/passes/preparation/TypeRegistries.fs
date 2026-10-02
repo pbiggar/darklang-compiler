@@ -119,7 +119,8 @@ let private listHeadUnsafeFunction
         Map.tryFind name functionIds
         |> Option.defaultWith (fun () ->
             Crash.crash $"List pattern helper '{name}' is absent from the function registry")
-    let valueViewType = AST.TString
+    // Json.InternalValueView is an Int64 offset pair, not a managed string.
+    let valueViewType = AST.TInt64
     let jsonAccessor =
         match elementType with
         | typ when typ = valueViewType -> Some "Darklang.Stdlib.Json.__viewListHead"
