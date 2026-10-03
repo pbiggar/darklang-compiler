@@ -104,8 +104,12 @@ def first_difference(expected, actual, path="value"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies"])
     parser.add_argument("--probes-only", action="store_true")
+    parser.add_argument("--batch-size", type=int, default=0,
+                        help="Compare restartable batches; reuse only matching source snapshots")
+    parser.add_argument("--offset", type=int, default=0)
+    parser.add_argument("--limit", type=int, default=0)
     args = parser.parse_args()
     corpus = list(inputs())
     if args.stage == "dsl" and not args.probes_only:
@@ -114,6 +118,55 @@ def main():
         corpus = [(label, source) for label, source in corpus if label.startswith("probe-")]
     output = ROOT / "TestResults/ocaml-migration" / args.stage
     output.mkdir(parents=True, exist_ok=True)
+    if args.batch_size:
+        # A completed batch is reusable only for the exact corpus and code. This
+        # includes the frozen reference, native implementation and observers.
+        snapshot = hashlib.sha256(json.dumps(corpus, ensure_ascii=True).encode())
+        paths = sorted((ROOT / "ocaml").rglob("*.ml")) + sorted((ROOT / "ocaml").rglob("*.mli"))
+        paths = [path for path in paths if "_build" not in path.parts]
+        paths += sorted((ROOT / "scripts/ocaml").glob("*"))
+        for path in paths:
+            if path.is_file():
+                snapshot.update(str(path.relative_to(ROOT)).encode())
+                snapshot.update(path.read_bytes())
+        identity = snapshot.hexdigest()
+        completed = 0
+        combined = {name: [] for name in ("fsharp", "ocaml")}
+        for offset in range(0, len(corpus), args.batch_size):
+            limit = min(args.batch_size, len(corpus) - offset)
+            directory = output / "batches" / f"{offset}-{limit}"
+            marker = directory / "complete.json"
+            expected = {"snapshot": identity, "offset": offset, "limit": limit}
+            valid = marker.exists() and json.loads(marker.read_text()) == expected
+            if valid:
+                try:
+                    rows = {name: [json.loads(row) for row in (directory / f"{name}.jsonl").read_text().splitlines()] for name in combined}
+                    valid = (rows["fsharp"] == rows["ocaml"] and len(rows["fsharp"]) == limit
+                             and [row["input"] for row in rows["fsharp"]] == [label for label, _ in corpus[offset:offset+limit]])
+                except (OSError, ValueError, KeyError):
+                    valid = False
+            if not valid:
+                command = ["python3", str(Path(__file__)), "--stage", args.stage,
+                           "--offset", str(offset), "--limit", str(limit)]
+                if args.probes_only:
+                    command.append("--probes-only")
+                result = subprocess.run(command, cwd=ROOT)
+                if result.returncode:
+                    return result.returncode
+                marker.write_text(json.dumps(expected))
+                rows = {name: [json.loads(row) for row in (directory / f"{name}.jsonl").read_text().splitlines()] for name in combined}
+            for name in combined:
+                combined[name].extend(rows[name])
+            completed += limit
+            print(f"Verified {args.stage}: {completed}/{len(corpus)}", flush=True)
+        for name, rows in combined.items():
+            (output / f"{name}.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
+        print(f"Complete {args.stage} parity: {completed}/{len(corpus)} source observations match", flush=True)
+        return 0
+    if args.limit:
+        corpus = corpus[args.offset:args.offset + args.limit]
+        output = output / "batches" / f"{args.offset}-{args.limit}"
+        output.mkdir(parents=True, exist_ok=True)
     requests = "".join(json.dumps({"stage":args.stage,"source":source},ensure_ascii=True)+"\n" for _,source in corpus)
     request_file = output / "requests.jsonl"
     request_file.write_text(requests)
@@ -151,6 +204,8 @@ def main():
                     (output / "actual.json").write_text(rows[1])
                     print(f"{args.stage} mismatch in {label}: {difference[0]}; see {output / 'mismatch.json'}")
                     return 1
+                for audit in audits:
+                    audit.flush()
                 count += 1
             for (name, _), process in zip(commands, processes, strict=True):
                 if process.stdout.readline():

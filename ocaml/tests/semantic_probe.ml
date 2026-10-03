@@ -15,6 +15,10 @@ let rec requests () =
         | "written-source" -> Semantic_observation.SemanticJson.writtenSource source
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
+        | "helper-dependencies" -> Semantic_observation.ComparisonObservation.observeDependencies source
+        | "structural-helpers" -> Semantic_observation.ComparisonObservation.observeHelpers source
+        | "comparison-planning" -> Semantic_observation.ComparisonObservation.observe source
+        | "structural-format" -> Semantic_observation.StructuralFormatObservation.observe source
         | "unification" -> Semantic_observation.UnificationObservation.observe source
         | "checking-types" -> Semantic_observation.CheckingTypesObservation.observe source
         | "checked-ast" -> Semantic_observation.InstrumentedCheckedAST.observe source

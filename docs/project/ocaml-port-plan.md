@@ -363,3 +363,14 @@ every type pair, bidirectional reconciliation, inference conflicts, freshened
 variables, ordered inferred arguments, and parameter-name diagnostics at int32
 boundaries. Original comments remain audited; full semantic AST encoders retain
 all typed evidence instead of reducing observations to pretty-printed types.
+
+Comparison planning, equality expansion, ordering expansion, transitive helper
+generation, and helper insertion are translated with complete interfaces and
+original comments. Typed structural formatting preserves the F# layout used to
+compute stable helper identities; its MIT provenance is recorded in the third
+party notice. Structural formatting, comparison planning, and structural helper
+expansion each match all 1,890 complete source observations. The build and all
+96 currently translated unit tests pass; comment coverage has no missing lines.
+Dependency graph and helper insertion parity remain in progress at this
+checkpoint. Semantic comparisons now support restartable batches tied to an
+exact corpus and source snapshot, retaining full row comparisons and audit hashes.

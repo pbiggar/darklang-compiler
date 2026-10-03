@@ -65,6 +65,9 @@ let rec encoder (typ: Type) : obj -> JsonNode =
             elif typ.IsGenericType && typ.GetGenericTypeDefinition() = typedefof<Map<_, _>> then
                 fun value ->
                     (value :?> Collections.IEnumerable) |> Seq.cast<obj> |> Seq.map (fun entry -> encode (entry.GetType()) entry) |> Seq.toArray |> namedArray "map"
+            elif typ.IsGenericType && typ.GetGenericTypeDefinition() = typedefof<Set<_>> then
+                let elementType = typ.GetGenericArguments()[0]
+                fun value -> (value :?> Collections.IEnumerable) |> Seq.cast<obj> |> Seq.map (encode elementType) |> Seq.toArray |> namedArray "set"
             elif FSharpType.IsTuple typ then
                 let types = FSharpType.GetTupleElements typ
                 let reader = FSharpValue.PreComputeTupleReader typ
@@ -496,7 +499,7 @@ let unification source =
         AST.TRecord ("R",[AST.TVar "a"]); AST.TSum ("R",[AST.TVar "a"]); AST.TList (AST.TVar "a"); AST.TStream (AST.TVar "a"); AST.TDict (AST.TVar "a",AST.TVar "b");
         AST.TFunction ([AST.TInt64],AST.TBool); AST.TTuple [AST.TList (AST.TVar "t$empty");AST.TInt]; AST.TTuple [AST.TList (AST.TVar "a");AST.TInt]; AST.TList AST.TInt64; AST.TStream AST.TInt64;
         AST.TRecord ("R",[]); AST.TSum ("S",[]); AST.TFunction ([],AST.TUnit)]
-    let aliases = Map.ofList ["Alias",([],AST.TRecord ("R",[]))]
+    let aliases : CheckingTypes.AliasRegistry = Map.ofList ["Alias",([],AST.TRecord ("R",[]))]
     let pairs = samples |> List.collect (fun left -> samples |> List.map (fun right ->
         TypeUnification.matchConcrete left right,TypeUnification.matchTypes left right,
         TypeUnification.unifyTypes left right,TypeUnification.typesCompatible left right,TypeUnification.typesCompatibleWithAliases aliases left right,
@@ -517,6 +520,139 @@ let unification source =
                     let methodInfo = typeof<AST.SemanticType>.Assembly.GetType("CheckExpressionSupport").GetMethod("paramNameForLegacyError", Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static)
                     methodInfo.Invoke(null,[|box (Map.ofList [source,["first";"second"]]);box source;box index|]) :?> string))
     encode (value.GetType()) (box value)
+
+let structuralFormat source =
+    let scalar = [AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TInt; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128; AST.TBool; AST.TFloat64; AST.TString; AST.TBlob; AST.TChar; AST.TDateTime; AST.TUnit; AST.TNever; AST.TInternalRawPtr]
+    let rec nested depth value = if depth = 0 then value else nested (depth - 1) (AST.TList value)
+    let samples =
+        scalar @ [AST.TVar source; AST.TInferenceVar (source,"fixed"); AST.TFunction ([AST.TVar source;AST.TInt64],AST.TList AST.TString);
+        AST.TTuple scalar; AST.TRecord (source,scalar); AST.TSum (source,scalar); AST.TList (AST.TVar source); AST.TStream (AST.TVar source);
+        AST.TDict (AST.TRecord (source,[]),AST.TSum (source,[AST.TVar source]));
+        AST.TTuple (List.init 100 (fun _ -> AST.TUnit)); AST.TTuple (List.init 101 (fun _ -> AST.TUnit));
+        nested 99 AST.TUnit; nested 100 AST.TUnit; nested 101 AST.TUnit] @
+        (if source = "" then [AST.TTuple (List.init 100 (fun _ -> AST.TTuple (List.init 100 (fun _ -> AST.TUnit))))] else []) @
+        ([60;61;62;63;64;65;70;75;79;80;81] |> List.collect (fun length -> [AST.TRecord (String('x',length),[AST.TUnit;AST.TList AST.TInt64]); AST.TFunction ([AST.TVar (String('x',length))],AST.TString)]))
+    samples |> List.map (sprintf "%A") |> box |> encode typeof<string list>
+
+let comparisonCall name args =
+    let methodInfo = typeof<AST.SemanticType>.Assembly.GetType("ComparisonPlanning").GetMethod(name, Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static)
+    encode methodInfo.ReturnType (methodInfo.Invoke(null,args))
+let comparison source =
+    let samples = [AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TInt; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128; AST.TBool; AST.TFloat64; AST.TString; AST.TBlob; AST.TChar; AST.TDateTime; AST.TUnit; AST.TNever; AST.TInternalRawPtr;
+        AST.TVar source; AST.TInferenceVar (source,"fixed"); AST.TFunction ([AST.TInt64],AST.TString); AST.TFunction ([AST.TBlob],AST.TNever); AST.TTuple [AST.TInt64;AST.TString];
+        AST.TRecord ("R",[]); AST.TRecord ("R",[AST.TUnit]); AST.TRecord ("Recursive",[]); AST.TRecord ("Opaque",[]); AST.TRecord ("Missing",[]); AST.TRecord ("S",[]);
+        AST.TSum ("S",[]); AST.TSum ("BadSum",[]); AST.TSum ("Generic",[AST.TString]); AST.TSum ("Generic",[]); AST.TSum ("Uuid",[]);
+        AST.TList AST.TInt64; AST.TStream AST.TNever; AST.TDict (AST.TString,AST.TInt64); AST.TDict (AST.TInt64,AST.TString); AST.TDict (AST.TBlob,AST.TString)]
+    let lookup : CheckingTypes.VariantLookup = Map.ofList ["S.C",("S",[],0,[AST.TInt64]); "BadSum.C",("BadSum",[],0,[AST.TInternalRawPtr]); "Generic.C",("Generic",["a"],0,[AST.TVar "a"])]
+    let raw = Map.ofList ["R",["field",AST.TInt64]; "Recursive",["next",AST.TRecord ("Recursive",[])]; "Opaque",["field",AST.TStream AST.TInt64]]
+    let registry = CheckingTypes.indexTypeRegistry lookup (Map.ofList ["R",[];"Recursive",[];"Opaque",[]]) raw
+    let sums : CheckingTypes.IndexedSumTypeRegistry = typesCall "indexSumTypeRegistry" [|box lookup|]
+    let aliases : CheckingTypes.AliasRegistry = Map.ofList ["Alias",([],AST.TRecord ("R",[]))]
+    let left : AST.Expr = AST.Var source
+    let right : AST.Expr = AST.UnitLiteral
+    let baseArgs = [|box aliases;box registry;box sums|]
+    let array values = JsonArray(Array.ofList values) :> JsonNode
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let encodeExpr value = encode typeof<AST.Expr> (box value)
+    let planType = typeof<AST.SemanticType>.Assembly.GetType("ComparisonPlanning+InternalTypeApp")
+    let case = FSharpType.GetUnionCases(planType,Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)[0]
+    let perType = samples |> List.map (fun typ ->
+        let dispatch = FSharpValue.MakeUnion(case,[|box typ;box left;box right|],Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+        let methodInfo = typeof<AST.SemanticType>.Assembly.GetType("ComparisonPlanning").GetMethod("makeInternalTypeApp",Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static)
+        let internalExpr = methodInfo.Invoke(null,[|dispatch|]) :?> AST.Expr
+        tuple [comparisonCall "canonicalEqualityType" [|box lookup;box typ|]; comparisonCall "needsEqHelperForResolvedType" [|box lookup;box typ|];
+            encodeString (ComparisonPlanning.eqHelperName typ); encodeString (ComparisonPlanning.compareHelperName typ); encodeExpr internalExpr;
+            comparisonCall "tryDecodeInternalTypeApp" [|box internalExpr|]; comparisonCall "buildEqExprForType" [|box aliases;box lookup;box typ;box left;box right|];
+            comparisonCall "canonicalSortableType" (Array.append baseArgs [|box typ|]); comparisonCall "dictKeyAdmissibleType" (Array.append baseArgs [|box typ|]);
+            comparisonCall "validateJsonTargetType" [|box aliases;box registry;box lookup;box sums;box typ|];
+            [source;"Dict.set";"Dict.__internal";"Darklang.Stdlib.Dict.set";"Darklang.Stdlib.Dict.__internal"] |> List.map (fun name -> comparisonCall "validateDictKeyCall" (Array.append baseArgs [|box name;box [typ]|])) |> array;
+            [source;"__compare";"Darklang.Stdlib.List.sort";"Darklang.Stdlib.List.unique"] |> List.map (fun name -> comparisonCall "validateCanonicalSortableCall" (Array.append baseArgs [|box name;box [typ]|])) |> array;
+            [AST.Lt;AST.Gt;AST.Lte;AST.Gte] |> List.map (fun op -> comparisonCall "buildOrderingExprForType" [|box op;box typ;box left;box right|]) |> array])
+    let varying = [AST.TVar source; AST.TInferenceVar (source,"fixed")]
+    let pairs = if source = "" then samples |> List.collect (fun left -> samples |> List.map (fun right -> left,right))
+                else varying |> List.collect (fun left -> samples |> List.collect (fun right -> [left,right;right,left]))
+    let comparisons = pairs |> List.map (fun (left,right) ->
+        [AST.Eq;AST.Neq;AST.Lt;AST.Gt;AST.Lte;AST.Gte] |> List.map (fun op -> comparisonCall "classifyComparison" [|box aliases;box registry;box lookup;box sums;box op;box left;box right|]) |> array)
+    tuple [array perType;array comparisons;comparisonCall "chainAndExpr" [|box ([]:AST.Expr list)|];comparisonCall "chainAndExpr" [|box [left;right;left]|];
+        comparisonCall "sumTypeHasPayload" [|box lookup;box "S"|];comparisonCall "sumTypeHasPayload" [|box lookup;box "Absent"|];comparisonCall "tryDecodeInternalTypeApp" [|box left|];
+        comparisonCall "validateCanonicalSortableCall" (Array.append baseArgs [|box "Darklang.Stdlib.List.sortBy";box [AST.TInt64;AST.TBlob]|]);
+        comparisonCall "validateCanonicalSortableCall" (Array.append baseArgs [|box "Darklang.Stdlib.List.uniqueBy";box [AST.TInt64;AST.TBlob]|])]
+
+let structuralHelpers source =
+    let samples = [AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TInt; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128; AST.TBool; AST.TFloat64; AST.TString; AST.TBlob; AST.TChar; AST.TDateTime; AST.TUnit; AST.TNever; AST.TInternalRawPtr;
+        AST.TVar source; AST.TInferenceVar (source,"fixed"); AST.TFunction ([AST.TInt64],AST.TString); AST.TFunction ([AST.TBlob],AST.TNever); AST.TTuple [AST.TInt64;AST.TString];
+        AST.TRecord ("R",[]); AST.TRecord ("R",[AST.TUnit]); AST.TRecord ("Recursive",[]); AST.TRecord ("Opaque",[]); AST.TRecord ("Missing",[]); AST.TRecord ("S",[]);
+        AST.TSum ("S",[]); AST.TSum ("BadSum",[]); AST.TSum ("Generic",[AST.TString]); AST.TSum ("Generic",[]); AST.TSum ("Uuid",[]);
+        AST.TList AST.TInt64; AST.TStream AST.TNever; AST.TDict (AST.TString,AST.TInt64); AST.TDict (AST.TInt64,AST.TString); AST.TDict (AST.TBlob,AST.TString)]
+    let lookup : CheckingTypes.VariantLookup = Map.ofList ["S.C",("S",[],0,[AST.TInt64]); "BadSum.C",("BadSum",[],0,[AST.TInternalRawPtr]); "Generic.C",("Generic",["a"],0,[AST.TVar "a"])]
+    let raw = Map.ofList ["R",["field",AST.TInt64]; "Recursive",["next",AST.TRecord ("Recursive",[])]; "Opaque",["field",AST.TStream AST.TInt64]]
+    let aliases : CheckingTypes.AliasRegistry = Map.ofList ["Alias",([],AST.TRecord ("R",[]))]
+    let left : AST.Expr = AST.Var source
+    let right : AST.Expr = AST.UnitLiteral
+    let samples = samples @ [AST.TRecord ("GenericRecord",[AST.TInt64;AST.TString]); AST.TRecord ("GenericRecord",[]); AST.TSum ("Multiple",[AST.TInt64])]
+    let raw = Map.add "GenericRecord" ["z",AST.TVar "a"; "aa",AST.TVar "b"; source,AST.TList (AST.TVar "a")] raw
+    let registry = CheckingTypes.indexTypeRegistry lookup (Map.ofList ["R",[];"Recursive",[];"Opaque",[];"GenericRecord",["a";"b"]]) raw
+    let lookup = lookup |> Map.add ("Multiple." + source) ("Multiple",["a"],7,[AST.TVar "a";AST.TList AST.TString])
+                        |> Map.add "Multiple.z" ("Multiple",["a"],3,[]) |> Map.add "Multiple.aa" ("Multiple",["a"],1,[AST.TString])
+    let sums : CheckingTypes.IndexedSumTypeRegistry = typesCall "indexSumTypeRegistry" [|box lookup|]
+    let assembly = typeof<AST.SemanticType>.Assembly
+    let modeType = assembly.GetType("EqualityHelpers+EqHelperExprMode")
+    let modes = FSharpType.GetUnionCases(modeType,Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+                |> Array.map (fun case -> FSharpValue.MakeUnion(case,[||],Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic))
+    samples |> List.map (fun typ ->
+        modes |> Array.map (fun mode ->
+            [|"EqualityHelpers","buildEqHelperExpr"; "OrderingHelpers","buildCompareHelperExpr"|]
+            |> Array.map (fun (moduleName,methodName) ->
+                let methodInfo = assembly.GetType(moduleName).GetMethod(methodName,Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static)
+                encode methodInfo.ReturnType (methodInfo.Invoke(null,[|box aliases;box registry;box lookup;box sums;mode;box typ;box left;box right|])))
+            |> namedArray "tuple") |> fun values -> JsonArray(values) :> JsonNode)
+    |> Array.ofList |> fun values -> JsonArray(values) :> JsonNode
+
+let helperDependencies source =
+    let samples = [AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TInt; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128; AST.TBool; AST.TFloat64; AST.TString; AST.TBlob; AST.TChar; AST.TDateTime; AST.TUnit; AST.TNever; AST.TInternalRawPtr;
+        AST.TVar source; AST.TInferenceVar (source,"fixed"); AST.TFunction ([AST.TInt64],AST.TString); AST.TFunction ([AST.TBlob],AST.TNever); AST.TTuple [AST.TInt64;AST.TString];
+        AST.TRecord ("R",[]); AST.TRecord ("R",[AST.TUnit]); AST.TRecord ("Recursive",[]); AST.TRecord ("Opaque",[]); AST.TRecord ("Missing",[]); AST.TRecord ("S",[]);
+        AST.TSum ("S",[]); AST.TSum ("BadSum",[]); AST.TSum ("Generic",[AST.TString]); AST.TSum ("Generic",[]); AST.TSum ("Uuid",[]);
+        AST.TList AST.TInt64; AST.TStream AST.TNever; AST.TDict (AST.TString,AST.TInt64); AST.TDict (AST.TInt64,AST.TString); AST.TDict (AST.TBlob,AST.TString)]
+    let lookup : CheckingTypes.VariantLookup = Map.ofList ["S.C",("S",[],0,[AST.TInt64]); "BadSum.C",("BadSum",[],0,[AST.TInternalRawPtr]); "Generic.C",("Generic",["a"],0,[AST.TVar "a"])]
+    let raw = Map.ofList ["R",["field",AST.TInt64]; "Recursive",["next",AST.TRecord ("Recursive",[])]; "Opaque",["field",AST.TStream AST.TInt64]]
+    let aliases : CheckingTypes.AliasRegistry = Map.ofList ["Alias",([],AST.TRecord ("R",[]))]
+    let left : AST.Expr = AST.Var source
+    let right : AST.Expr = AST.UnitLiteral
+    let samples = samples @ [AST.TRecord ("GenericRecord",[AST.TInt64;AST.TString]); AST.TRecord ("GenericRecord",[]); AST.TSum ("Multiple",[AST.TInt64])]
+    let raw = Map.add "GenericRecord" ["z",AST.TVar "a"; "aa",AST.TVar "b"; source,AST.TList (AST.TVar "a")] raw
+    let registry = CheckingTypes.indexTypeRegistry lookup (Map.ofList ["R",[];"Recursive",[];"Opaque",[];"GenericRecord",["a";"b"]]) raw
+    let lookup = lookup |> Map.add ("Multiple." + source) ("Multiple",["a"],7,[AST.TVar "a";AST.TList AST.TString])
+                        |> Map.add "Multiple.z" ("Multiple",["a"],3,[]) |> Map.add "Multiple.aa" ("Multiple",["a"],1,[AST.TString])
+    let sums : CheckingTypes.IndexedSumTypeRegistry = typesCall "indexSumTypeRegistry" [|box lookup|]
+    let assembly = typeof<AST.SemanticType>.Assembly
+    let dependencyModule = assembly.GetType("HelperDependencies")
+    let eqType = assembly.GetType("HelperDependencies+EqHelperGenerationState")
+    let compareType = assembly.GetType("HelperDependencies+CompareHelperGenerationState")
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+    let empty typ = FSharpValue.MakeRecord(typ,[|box (Set.empty<string>);box (Map.empty<string,AST.FunctionDef>)|],flags)
+    let ensure name value state = dependencyModule.GetMethod(name,flags ||| Reflection.BindingFlags.Static).Invoke(null,[|box aliases;box registry;box lookup;box sums;box value;state|])
+    let eq value state = ensure "ensureEqHelperForType" value state
+    let compare value state = ensure "ensureCompareHelperForType" value state
+    let perType = samples |> List.map (fun value -> namedArray "tuple" [|encode eqType (eq value (empty eqType));encode compareType (compare value (empty compareType))|])
+    let call name args : AST.Expr = AST.applyNamedWithTypes name args (AST.NonEmptyList.fromList [left;right])
+    let modeType = assembly.GetType("ComparisonPlanning+InternalTypeApp")
+    let case = FSharpType.GetUnionCases(modeType,flags)[0]
+    let dispatch = FSharpValue.MakeUnion(case,[|box (AST.TVar source);box left;box right|],flags)
+    let internalExpr = assembly.GetType("ComparisonPlanning").GetMethod("makeInternalTypeApp",flags ||| Reflection.BindingFlags.Static).Invoke(null,[|dispatch|]) :?> AST.Expr
+    let expressions = [internalExpr;call "__compare" [AST.TInt64];call "__compare" [AST.TVar source];call "Darklang.Stdlib.List.sort" [AST.TString];
+        call "Darklang.Stdlib.List.unique" [AST.TString];call "Darklang.Stdlib.List.uniqueBy" [AST.TInt64;AST.TVar source];
+        call "Darklang.Stdlib.List.sortBy" [AST.TString;AST.TInt64];call source [AST.TString;AST.TVar source]]
+    let expressions = expressions @ [AST.TupleLiteral expressions;AST.If (left,AST.TupleLiteral expressions,right);
+        AST.Match (left,[{Patterns = AST.NonEmptyList.singleton AST.PWildcard;Guard = Some (List.head expressions);Body = AST.TupleLiteral expressions}]);
+        AST.InterpolatedString (expressions |> List.map AST.StringExpr)]
+    let collect expression =
+        [|"collectEqHelperTypesFromExpr";"collectCompareHelperTypesFromExpr"|] |> Array.map (fun name ->
+            let value = dependencyModule.GetMethod(name,flags ||| Reflection.BindingFlags.Static).Invoke(null,[|box aliases;box expression|]) :?> Set<AST.SemanticType>
+            encode typeof<AST.SemanticType list> (box (Set.toList value))) |> namedArray "tuple"
+    namedArray "tuple" [|JsonArray(Array.ofList perType) :> JsonNode;encode eqType (List.fold (fun state value -> eq value state) (empty eqType) samples);
+        encode compareType (List.fold (fun state value -> compare value state) (empty compareType) samples);
+        JsonArray(expressions |> List.map collect |> Array.ofList) :> JsonNode|]
 
 CultureInfo.CurrentCulture <- CultureInfo.InvariantCulture
 CultureInfo.CurrentUICulture <- CultureInfo.InvariantCulture
@@ -554,6 +690,10 @@ let rec requests () =
                         WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+            | "helper-dependencies" -> helperDependencies source
+            | "structural-helpers" -> structuralHelpers source
+            | "comparison-planning" -> comparison source
+            | "structural-format" -> structuralFormat source
             | "unification" -> unification source
             | "checking-types" -> checkingTypes source
             | "checked-ast" -> checkedAst source
