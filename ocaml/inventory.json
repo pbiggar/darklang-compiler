@@ -1302,7 +1302,7 @@
       "source": "src/DarkCompiler/passes/hir/ConstructFunctions.fs",
       "kind": "compiler",
       "sha256": "a583569f8ba0f11634f0c230fc22227d42fb3b686c469170fb8af906bee8883b",
-      "owner": "ocaml/lib/passes/hir/ConstructFunctions.ml"
+      "owner": "ocaml/lib/passes/hir/ConstructHIRFunctions.ml"
     },
     {
       "source": "src/DarkCompiler/passes/hir/ExtractListRegions.fs",

@@ -605,3 +605,19 @@ unpaired UTF-16 replacement. The warning-free build used a fresh absolute Dune
 build directory because this VM's reused build directory missed new modules.
 Batched parity audits now honor an explicitly supplied native executable when
 creating their immutable snapshot. Full compiler and byte parity remain pending.
+
+After the VM reset, the branch was cloned again and the pinned OCaml 5.5.1,
+Dune dependencies, and .NET reference toolchains were rebuilt using the committed
+setup scripts. The frozen F# host suite passes 10,760/10,760 tests. The code
+recorded in the previous chat was replayed for ANF inlining utilities, ownership
+variant scheduling and ANF materialization, ownership list-call fusion, HIR
+construction, and the function ownership analysis coordinator. All components
+have complete interfaces and preserved source comments.
+
+The six original scheduling tests and ten original HIR construction tests are
+translated and pass. A fresh native build compiled each recovered module;
+265/265 translated native units and 29/29 independent SHA-256 vectors pass.
+Coverage is 121/391 complete implementation/interface pairs, with zero missing
+reference comment lines. The interrupted closure-comparison batch outputs were
+lost with the VM; the full corpus gate must restart. The remaining compiler
+passes and final executable-byte acceptance remain outstanding.
