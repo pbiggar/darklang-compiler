@@ -8,7 +8,7 @@ import re
 import sys
 from pathlib import Path
 
-MODULES = ["WrittenCallSupport", "WrittenChecking", "WrittenExpressions", "WrittenApplicationSupport", "WrittenCollectionSupport", "WrittenRecordSupport", "WrittenConstructorSupport", "WrittenLetSupport", "WrittenOperatorSupport", "WrittenDeclarations", "WrittenEnvironment", "SpecializationIdentity", "WrittenTypeSupport", "WrittenPatternSupport", "WrittenLambdaSupport", "NameResolution", "CheckingDiagnostics", "CheckedAST", "Types", "Unification", "ExpressionSupport", "ComparisonPlanning", "EqualityHelpers", "OrderingHelpers", "HelperDependencies", "MaterializeHelpers", "ResolveDeclarations", "Declarations", "CheckRecordLiterals", "CheckBinaryOperations", "CheckLambdas", "CheckCalls", "CheckMatches", "ContextInference", "ExplicitCalls", "CheckExpressions", "CheckFunctions", "ResolvedProgram", "TypeChecking"]
+MODULES = ["TypeRegistries", "ANF", "CheckedMaterializeHelpers", "WrittenCallSupport", "WrittenChecking", "WrittenExpressions", "WrittenApplicationSupport", "WrittenCollectionSupport", "WrittenRecordSupport", "WrittenConstructorSupport", "WrittenLetSupport", "WrittenOperatorSupport", "WrittenDeclarations", "WrittenEnvironment", "SpecializationIdentity", "WrittenTypeSupport", "WrittenPatternSupport", "WrittenLambdaSupport", "NameResolution", "CheckingDiagnostics", "CheckedAST", "Types", "Unification", "ExpressionSupport", "ComparisonPlanning", "EqualityHelpers", "OrderingHelpers", "HelperDependencies", "MaterializeHelpers", "ResolveDeclarations", "Declarations", "CheckRecordLiterals", "CheckBinaryOperations", "CheckLambdas", "CheckCalls", "CheckMatches", "ContextInference", "ExplicitCalls", "CheckExpressions", "CheckFunctions", "ResolvedProgram", "TypeChecking"]
 pattern = re.compile(r'"(?:[^"\\]|\\.)*"|\b(' + '|'.join(MODULES) + r')\b')
 source = Path(sys.argv[1]).read_text()
 if not Path(sys.argv[1]).name.startswith("SemanticDiagnostics."):
@@ -29,3 +29,8 @@ elif Path(sys.argv[1]).name == "WrittenDeclarations.ml":
     print("\nlet observationParts (Environment (globals, symbols)) = globals, symbols")
 elif Path(sys.argv[1]).name == "WrittenDeclarations.mli":
     print("\nval observationParts : environment -> InstrumentedWrittenTypeSupport.globals * InstrumentedCheckedAST.symbols")
+
+if Path(sys.argv[1]).name == "ANF.ml":
+    print("\nlet observationParts value = value.firstId, value.types")
+elif Path(sys.argv[1]).name == "ANF.mli":
+    print("\nval observationParts : typeMap -> int * Dark_compiler.AST.semanticType option array")

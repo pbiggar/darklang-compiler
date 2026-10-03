@@ -452,3 +452,27 @@ allocating parsed trees, retaining full-field comparison and identity validation
 for other rows. Observation JSON permits ordinary Unicode escaping, with UTF-16
 unit encodings retained for unpaired surrogates. Audit names permit independent
 runs without overwriting earlier proof logs. These are migration tools only.
+
+The direct WrittenTypes checker, written patterns/exhaustiveness, and checked
+helper preparation now pass all 1,890 complete corpus observations. Checked
+preparation also proves specialization identities, dependency summaries,
+cross-catalog imports, and synthetic nullary normalization.
+
+The complete MemoryModel and ANF data schemas and APIs are translated. Typed
+migration encoders cover every record field and union constructor, checked
+against frozen reflection case names and arities. Numeric boundaries, dense
+type-table gaps/overlays, and wrapping 32-bit fresh identifiers are exercised.
+All 1,890 ANF observations pass.
+
+Preparation registries and memory planning each pass all 1,890 observations.
+Registry comparisons cover aliases, sum case ordering, retained semantic
+identities, borrowed list-head selection, and variable environments. Memory
+planning comparisons cover recursive records/sums, transparent/nullable/spare
+payload representations, root/storage classifications, and complete recursive
+release plans. Interfaces remain complete and opaque where the reference is.
+
+All 61 original type-checking fixture cases are now run as translated native
+tests, bringing passing native units to 161/161. This checkpoint contains 66/391
+complete source implementation/interface pairs, with zero missing reference
+line comments. Whole-compiler executable parity and the remaining compiler
+passes/backend/tests are still required; no final acceptance is claimed.

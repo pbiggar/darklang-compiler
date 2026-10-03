@@ -15,6 +15,10 @@ let rec requests () =
         | "written-source" -> Semantic_observation.SemanticJson.writtenSource source
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
+        | "memory-planning" -> Semantic_observation.MemoryPlanningObservation.observe source
+        | "preparation-registries" -> Semantic_observation.PreparationRegistryObservation.observe source
+        | "anf" -> Semantic_observation.ANFObservation.observe source
+        | "checked-preparation" -> Semantic_observation.CheckedPreparationObservation.observe source
         | "written-checking" -> Semantic_observation.WrittenCheckingObservation.observe source
         | "written-patterns" -> Semantic_observation.WrittenPatternObservation.observe source
         | "written-types" -> Semantic_observation.WrittenTypeObservation.observe source

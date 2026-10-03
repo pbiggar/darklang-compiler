@@ -23,7 +23,7 @@
    (progn
     (echo "open Dark_compiler")
     (cat %{dep:../lib/CheckedAST.mli})
-    (echo "val observe : string -> Yojson.Basic.t\nval observationProgram : program -> Yojson.Basic.t\nval observationTypeCatalog : typeCatalog -> Yojson.Basic.t\nval observationFunctionCatalog : functionCatalog -> Yojson.Basic.t\nval observationPattern : pattern -> Yojson.Basic.t\nval observationLetPattern : letPattern -> Yojson.Basic.t\nval observationExpr : expr -> Yojson.Basic.t\nval observationGlobalCatalog : symbols -> Yojson.Basic.t\nval observationBinding : AST.bindingId -> Yojson.Basic.t\n")))))
+    (echo "val observe : string -> Yojson.Basic.t\nval observationProgram : program -> Yojson.Basic.t\nval observationTypeCatalog : typeCatalog -> Yojson.Basic.t\nval observationFunctionCatalog : functionCatalog -> Yojson.Basic.t\nval observationPattern : pattern -> Yojson.Basic.t\nval observationLetPattern : letPattern -> Yojson.Basic.t\nval observationExpr : expr -> Yojson.Basic.t\nval observationGlobalCatalog : symbols -> Yojson.Basic.t\nval observationBinding : AST.bindingId -> Yojson.Basic.t\nval observationFunctionDef : functionDef -> Yojson.Basic.t\nval observationTopLevel : topLevel -> Yojson.Basic.t\nval observationSemanticMetadata : semanticMetadata -> Yojson.Basic.t\n")))))
 
 (rule
  (targets InstrumentedTypes.ml)
@@ -492,3 +492,39 @@
  (deps ../lib/frontend/WrittenCallSupport.mli instrument_checking.py)
  (action (with-stdout-to %{targets}
   (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenCallSupport.mli}))))
+
+(rule
+ (targets InstrumentedCheckedMaterializeHelpers.ml)
+ (deps ../lib/passes/preparation/CheckedMaterializeHelpers.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/CheckedMaterializeHelpers.ml}))))
+
+(rule
+ (targets InstrumentedCheckedMaterializeHelpers.mli)
+ (deps ../lib/passes/preparation/CheckedMaterializeHelpers.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/CheckedMaterializeHelpers.mli}))))
+
+(rule
+ (targets InstrumentedANF.ml)
+ (deps ../lib/ir/anf/ANF.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/ir/anf/ANF.ml}))))
+
+(rule
+ (targets InstrumentedANF.mli)
+ (deps ../lib/ir/anf/ANF.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/ir/anf/ANF.mli}))))
+
+(rule
+ (targets InstrumentedTypeRegistries.ml)
+ (deps ../lib/passes/preparation/TypeRegistries.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/TypeRegistries.ml}))))
+
+(rule
+ (targets InstrumentedTypeRegistries.mli)
+ (deps ../lib/passes/preparation/TypeRegistries.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/TypeRegistries.mli}))))

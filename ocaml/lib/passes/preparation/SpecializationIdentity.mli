@@ -23,6 +23,6 @@ val lambdaParameterBindings : CheckedAST.lambdaParameter -> (AST.bindingId * AST
 val lowerLambdaParameters : CheckedAST.symbols -> CheckedAST.lambdaParameter NonEmptyList.t -> CheckedAST.expr -> (AST.bindingId * AST.semanticType) list * CheckedAST.expr * CheckedAST.symbols
 val paramsFromList : string -> (AST.bindingId * AST.semanticType) list -> (AST.bindingId * AST.semanticType) NonEmptyList.t
 val normalizeSyntheticNullaryParams : CheckedAST.symbols -> (AST.bindingId * AST.semanticType) list -> (AST.bindingId * AST.semanticType) list
-val normalizeSyntheticNullaryArgAtoms : AST.semanticType list -> CheckedAST.expr list -> 'atom list -> 'atom list
+val normalizeSyntheticNullaryArgAtoms : AST.semanticType list -> CheckedAST.expr list -> ANF.atom list -> ANF.atom list
 val unresolvedKeyIntrinsicTypeArgErrorExpr : AST.functionId -> string -> CheckedAST.expr
 val wrapWithIgnoredArgEvaluations : CheckedAST.expr list -> CheckedAST.expr -> CheckedAST.expr

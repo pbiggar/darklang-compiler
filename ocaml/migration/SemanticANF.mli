@@ -1,0 +1,34 @@
+(* Exhaustive typed memory/ANF migration encoders. *)
+open Dark_compiler
+val memoryModel_canonicalBufferKind : MemoryModel.canonicalBufferKind -> Yojson.Basic.t
+val memoryModel_rcKind : MemoryModel.rcKind -> Yojson.Basic.t
+val memoryModel_rcShape : MemoryModel.rcShape -> Yojson.Basic.t
+val memoryModel_rcBoxedSumVariantShape : MemoryModel.rcBoxedSumVariantShape -> Yojson.Basic.t
+val memoryModel_rcSumShapeInfo : MemoryModel.rcSumShapeInfo -> Yojson.Basic.t
+val memoryModel_rcSumShapeRegistry : MemoryModel.rcSumShapeRegistry -> Yojson.Basic.t
+val memoryModel_rcOperation : MemoryModel.rcOperation -> Yojson.Basic.t
+val memoryModel_rcStorageClass : MemoryModel.rcStorageClass -> Yojson.Basic.t
+val memoryModel_rcReleasePlan : MemoryModel.rcReleasePlan -> Yojson.Basic.t
+val memoryModel_rcPayloadReleasePlan : MemoryModel.rcPayloadReleasePlan -> Yojson.Basic.t
+val memoryModel_rcFieldRelease : MemoryModel.rcFieldRelease -> Yojson.Basic.t
+val memoryModel_rcBoxedSumVariantRelease : MemoryModel.rcBoxedSumVariantRelease -> Yojson.Basic.t
+val memoryModel_rcMetadata : MemoryModel.rcMetadata -> Yojson.Basic.t
+val aNF_tempId : InstrumentedANF.tempId -> Yojson.Basic.t
+val aNF_typedParam : InstrumentedANF.typedParam -> Yojson.Basic.t
+val aNF_sizedInt : InstrumentedANF.sizedInt -> Yojson.Basic.t
+val aNF_atom : InstrumentedANF.atom -> Yojson.Basic.t
+val aNF_binOp : InstrumentedANF.binOp -> Yojson.Basic.t
+val aNF_unaryOp : InstrumentedANF.unaryOp -> Yojson.Basic.t
+val aNF_returnOwnership : InstrumentedANF.returnOwnership -> Yojson.Basic.t
+val aNF_cliOperation : InstrumentedANF.cliOperation -> Yojson.Basic.t
+val aNF_recordDescriptor : InstrumentedANF.recordDescriptor -> Yojson.Basic.t
+val aNF_cExpr : InstrumentedANF.cExpr -> Yojson.Basic.t
+val aNF_aExpr : InstrumentedANF.aExpr -> Yojson.Basic.t
+val aNF_functionDef : InstrumentedANF.functionDef -> Yojson.Basic.t
+val aNF_program : InstrumentedANF.program -> Yojson.Basic.t
+val aNF_varGen : InstrumentedANF.varGen -> Yojson.Basic.t
+val aNF_typeMap : InstrumentedANF.typeMap -> Yojson.Basic.t
+val aNF_typedProgram : InstrumentedANF.typedProgram -> Yojson.Basic.t
+val aNF_exprId : InstrumentedANF.exprId -> Yojson.Basic.t
+val aNF_exprIdGen : InstrumentedANF.exprIdGen -> Yojson.Basic.t
+val aNF_coverageMapping : InstrumentedANF.coverageMapping -> Yojson.Basic.t
