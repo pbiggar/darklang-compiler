@@ -132,7 +132,7 @@ let expandTypeRegWithAliases registry aliases =
  M.fold (fun alias (params, target) acc -> match params, target with
  | [], AST.TRecord (target, _) -> (match M.find_opt (resolveRecordTypeName aliases target) resolved with Some info -> M.add alias {info with typeParams = params} acc | None -> acc)
  | _ -> acc) aliases resolved
-module BindingMap = Map.Make(struct type t = AST.bindingId let compare = AST.compareBindingId end)
+module BindingMap = CheckedAST.BindingIdMap
 (*
    Variable environment - maps variable names to their TempIds and types
    The type information is used for type-directed field lookup in record access

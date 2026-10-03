@@ -1200,7 +1200,7 @@
       "source": "src/DarkCompiler/passes/anf/lowering/Operators.fs",
       "kind": "compiler",
       "sha256": "79e974693347de4bf9035bc43e3cc83e2a2508ac772eb09e061563585fad58b1",
-      "owner": "ocaml/lib/passes/anf/lowering/Operators.ml"
+      "owner": "ocaml/lib/passes/anf/lowering/LoweringOperators.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/lowering/PatternLowering.fs",
@@ -1218,7 +1218,7 @@
       "source": "src/DarkCompiler/passes/anf/lowering/TypeInference.fs",
       "kind": "compiler",
       "sha256": "77e3b6fa631b20cda70fbdc54ebf6c0e2a25822ce711d0dbe35e12d8026fd1b0",
-      "owner": "ocaml/lib/passes/anf/lowering/TypeInference.ml"
+      "owner": "ocaml/lib/passes/anf/lowering/LoweringTypeInference.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/optimization/Accumulators.fs",

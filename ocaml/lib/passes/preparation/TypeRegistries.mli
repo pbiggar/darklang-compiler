@@ -20,6 +20,6 @@ val canonicalizeBareSumTypeRefs : Types.variantLookup -> AST.semanticType -> AST
 val canonicalizeNamedTypeRefs : StringOrder.Set.t -> StringOrder.Set.t -> AST.semanticType -> AST.semanticType
 val resolveRecordTypeName : aliasRegistry -> string -> string
 val expandTypeRegWithAliases : typeRegistry -> aliasRegistry -> typeRegistry
-module BindingMap : Map.S with type key = AST.bindingId
+module BindingMap = CheckedAST.BindingIdMap
 type varEnv = (ANF.tempId * AST.semanticType) BindingMap.t
 val typeEnvFromVarEnv : varEnv -> AST.semanticType BindingMap.t

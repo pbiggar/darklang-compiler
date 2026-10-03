@@ -1277,6 +1277,55 @@ let closureComparisons = closureAnalysisWith "closure-comparisons"
 let liftExpressions = closureAnalysisWith "lift-expressions"
 let liftFunctions = closureAnalysisWith "lift-functions"
 
+let monomorphizationCall<'a> name args : 'a =
+    let flags=Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    unbox (typeof<AST.SemanticType>.Assembly.GetType("Monomorphization").GetMethod(name,flags).Invoke(null,args))
+
+let checkedProgramFromParts symbols tops : CheckedAST.Program =
+    let flags=Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    unbox (typeof<AST.SemanticType>.Assembly.GetType("CheckedAST").GetMethod("programFromCheckedParts",flags).Invoke(null,[|box symbols;box tops|]))
+
+let monomorphization (source:string) =
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let enc value=closureAnalysisEncode value
+    let outcome encoder value =
+        match value with
+        | Error error -> enc (Error error : Result<unit,string>)
+        | Ok value ->
+            let node=JsonObject()
+            node["type"]<-JsonValue.Create "FSharpResult"
+            node["case"]<-JsonValue.Create "Ok"
+            node["fields"]<-JsonArray([|encoder value|])
+            node :> JsonNode
+    let attempt encoder action=outcome encoder (try Ok (action ()) with error -> Error (if error :? Reflection.TargetInvocationException && not (isNull error.InnerException) then error.InnerException.Message else error.Message))
+    let types=[[];[AST.TInt64];[AST.TList AST.TInt64];[AST.TVar "a"];[AST.TStream (AST.TVar "a")];[AST.TFunction ([AST.TInt64],AST.TBool)];[AST.TRecord ("R",[])];[AST.TString;AST.TInt64]]
+    let names=["__dark_internal_eq_helper_dispatch";"__compare";"__hash";"__key_eq";"Dict.fromList";"Darklang.Stdlib.Dict.fromList";"Darklang.Stdlib.Dict.empty";"__raw_get";"Builtin.pmEvaluateValue";source.Substring(0,min 32 source.Length);"identity"]
+    let program program =
+        let original=CheckedAST.programSymbols program
+        let additional=names @ ["Builtin.testRuntimeError";"Darklang.Stdlib.Dict.__setOverwriting"] @ (names |> List.collect (fun name -> types |> List.map (SpecializationIdentity.specName name))) @ (types |> List.collect (List.collect (fun typ -> [ComparisonPlanning.eqHelperName typ;ComparisonPlanning.compareHelperName typ])))
+        let symbols=additional |> List.fold (fun symbols name -> CheckedAST.internFunction name symbols |> snd) original
+        let targets=names |> List.map (fun name -> CheckedAST.tryFindFunctionId name symbols |> Option.get)
+        let bodies=CheckedAST.programTopLevels program |> List.choose (function CheckedAST.FunctionDef func -> Some func.Body | CheckedAST.ValueDef value -> Some value.Body | CheckedAST.Expression expr -> Some expr | _ -> None)
+        let arguments=[AST.NonEmptyList.singleton CheckedAST.UnitLiteral;AST.NonEmptyList.fromList [CheckedAST.Int64Literal 1L;CheckedAST.Int64Literal 2L];AST.NonEmptyList.singleton (CheckedAST.ListLiteral [])]
+        let synthetic=targets |> List.collect (fun target -> types |> List.collect (fun types -> arguments |> List.map (fun args -> CheckedAST.TypeApp (target,CheckedAST.checkedTypeArgs types,args))))
+        let registry=names |> List.collect (fun name -> types |> List.map (fun types -> (name,types),SpecializationIdentity.specName name types)) |> Map.ofList
+        let registries=[Map.empty;registry]
+        let expression expr=tuple [attempt enc (fun () -> Monomorphization.collectTypeApps symbols expr);enc (Monomorphization.collectCalledFunctions expr);attempt enc (fun () -> Monomorphization.replaceTypeApps symbols expr);registries |> List.map (fun registry -> attempt enc (fun () -> Monomorphization.replaceTypeAppsWithRegistry symbols registry expr)) |> list]
+        let functions=CheckedAST.programTopLevels program |> List.choose (function CheckedAST.FunctionDef func -> Some func | _ -> None)
+        let func func=tuple [attempt enc (fun () -> Monomorphization.collectTypeAppsFromFunc symbols func);attempt enc (fun () -> Monomorphization.replaceTypeAppsInFunc symbols func);registries |> List.map (fun registry -> attempt enc (fun () -> Monomorphization.replaceTypeAppsInFuncWithRegistry symbols registry func)) |> list]
+        let definitions=SpecializationIdentity.extractGenericFuncDefs program
+        let initial=Set.ofList ["identity",[AST.TInt64];"external",[AST.TVar "a"];"__hash",[AST.TString]]
+        let initials=[Set.empty;initial;Set.union initial (bodies |> List.fold (fun specs expr -> try Set.union specs (Monomorphization.collectTypeApps symbols expr) with _ -> specs) Set.empty)]
+        let programWithSymbols=checkedProgramFromParts symbols (CheckedAST.programTopLevels program)
+        tuple [(bodies @ synthetic) |> List.map expression |> list;functions |> List.map func |> list;initials |> List.map (fun specs -> attempt enc (fun () -> Monomorphization.specializeFromSpecs symbols definitions specs)) |> list;
+            registries |> List.map (fun registry -> attempt enc (fun () -> Monomorphization.replaceTypeAppsInProgramWithRegistry registry programWithSymbols)) |> list;
+            attempt enc (fun () -> monomorphizationCall<CheckedAST.Program> "monomorphizeWithGenericFuncDefs" [|box definitions;box programWithSymbols|]);attempt enc (fun () -> PrepareFunctions.monomorphize programWithSymbols);attempt enc (fun () -> PrepareFunctions.monomorphizeWithExternalDefs definitions programWithSymbols);
+            [Set.empty;Set.ofList names] |> List.map (fun known -> enc (Monomorphization.programNeedsLambdaLowering known program)) |> list]
+    let sourceProgram source=WrittenParsing.parse LibParser.Validation.Script source |> Result.bind (fun unit -> WrittenChecking.checkSourceUnitsWithBase None false false [unit]) |> Result.map (fun (_,value,_) -> value) |> outcome program
+    tuple [checkedAstFixtures source |> List.map (outcome program) |> list;sourceProgram source;
+        if source="" then ["let identity (x: 'a) : 'a = x\nidentity 1";"let eq (x: 'a) (y: 'a) : Bool = x == y\neq [1] [2]";"let f = fun (x: Int64) -> x\nf 1";"let a (x: 'a) : 'a = x\nlet b (x: 'a) : 'a = a x\nb 1";"Stdlib.Dict.fromList []"] |> List.map sourceProgram |> list else list []]
+
 let checkedFormatWithDisplay display source =
     let tuple values = namedArray "tuple" (Array.ofList values)
     let list values = JsonArray(Array.ofList values) :> JsonNode
@@ -1734,6 +1783,7 @@ let rec requests () =
                         WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+            | "monomorphization" -> monomorphization source
             | "lift-functions" -> liftFunctions source
             | "lift-expressions" -> liftExpressions source
             | "closure-comparisons" -> closureComparisons source

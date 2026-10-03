@@ -624,3 +624,27 @@
  (deps ../lib/passes/preparation/LiftFunctions.mli instrument_checking.py)
  (action (with-stdout-to %{targets}
   (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/LiftFunctions.mli}))))
+
+(rule
+ (targets InstrumentedMonomorphization.ml)
+ (deps ../lib/passes/preparation/Monomorphization.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/Monomorphization.ml}))))
+
+(rule
+ (targets InstrumentedMonomorphization.mli)
+ (deps ../lib/passes/preparation/Monomorphization.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/Monomorphization.mli}))))
+
+(rule
+ (targets InstrumentedPrepareFunctions.ml)
+ (deps ../lib/passes/preparation/PrepareFunctions.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/PrepareFunctions.ml}))))
+
+(rule
+ (targets InstrumentedPrepareFunctions.mli)
+ (deps ../lib/passes/preparation/PrepareFunctions.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/PrepareFunctions.mli}))))

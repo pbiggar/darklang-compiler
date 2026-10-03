@@ -499,3 +499,18 @@ closure analysis, comparison planning, expression lifting, and function lifting
 (2/2 each); full corpus audits are running. The lifted state, checked catalogs,
 wrappers, comparisons, and invariant failures are included in comparisons.
 Native units remain 161/161, with zero missing reference line comments.
+
+Monomorphization and generic preparation entry points are translated, including
+reachable specialization iteration, artifact catalog import, concrete and
+polymorphic comparison/key intrinsics, empty dictionaries, registry errors,
+and complete checked-expression rewrites. Initial complete observations pass
+2/2, including all synthetic checked fixtures and intrinsic/type-argument
+matrices. Full corpus proof remains required.
+
+ANF lowering callbacks, representation-directed type inference, and structural
+equality/operator lowering are translated with full interfaces and source
+comments. The variable registry now aliases the checked binding map, matching
+the shared F# Map type without changing ordering or keys. This build passes
+161/161 native units; inventory coverage is 77/391 full pairs and the comment
+audit reports zero missing reference lines. The new lowering passes' runtime
+reference comparisons are next; this checkpoint is not final acceptance.
