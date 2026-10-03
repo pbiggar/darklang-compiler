@@ -835,11 +835,11 @@ let lambdaChecking source =
     let modules = Stdlib.buildModuleRegistry ()
     let generic : CheckingTypes.GenericFuncRegistry = {Functions=Map.empty;RequireExplicitTypeArgsForBareCalls=false}
     let bodies = expressions @ [AST.applyNamed "f" (AST.NonEmptyList.singleton x);AST.applyNamed "Darklang.Stdlib.Int64.toFloat" (AST.NonEmptyList.singleton x)]
-    let cases = if source = "" then groups |> List.collect (fun params -> expectations |> List.collect (fun expected -> annotations |> List.collect (fun annotation -> bodies |> List.map (fun body -> params,expected,annotation,body))))
+    let cases = if source = "" then groups |> List.collect (fun parameters -> expectations |> List.collect (fun expected -> annotations |> List.collect (fun annotation -> bodies |> List.map (fun body -> parameters,expected,annotation,body))))
                 else bodies |> List.mapi (fun index body -> groups[index % groups.Length],expectations[index % expectations.Length],annotations[index % annotations.Length],body)
     let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
     let method = typeof<AST.SemanticType>.Assembly.GetType("CheckLambdas").GetMethod("check",flags)
-    cases |> List.map (fun (params,expected,annotation,body) ->
+    cases |> List.map (fun (parameters,expected,annotation,body) ->
         let trace = ResizeArray<AST.Expr * CheckingTypes.TypeEnv * AST.SemanticType option>()
         let callback (args:obj list) =
             let value = args[0] :?> AST.Expr
@@ -850,7 +850,7 @@ let lambdaChecking source =
             box (Ok (typ,value):Result<AST.SemanticType * AST.Expr,CheckingDiagnostics.TypeError>)
         let rec curry (typ:Type) args = FSharpValue.MakeFunction(typ,fun arg -> let args = args @ [arg] in if args.Length = 9 then callback args else curry (typ.GetGenericArguments().[1]) args)
         let checker = curry (method.GetParameters().[0].ParameterType) []
-        let result = method.Invoke(null,[|checker;box env;box (Map.empty<string,CheckingTypes.RecordTypeInfo>);box (Map.empty<string,string * string list * int * AST.SemanticType list>);box generic;box AST.defaultWarningSettings;box modules;box (Map.empty<string,string list * AST.SemanticType>);box expected;box params;box annotation;box body|])
+        let result = method.Invoke(null,[|checker;box env;box (Map.empty<string,CheckingTypes.RecordTypeInfo>);box (Map.empty<string,string * string list * int * AST.SemanticType list>);box generic;box AST.defaultWarningSettings;box modules;box (Map.empty<string,string list * AST.SemanticType>);box expected;box parameters;box annotation;box body|])
         namedArray "tuple" [|encode method.ReturnType result;encode typeof<(AST.Expr * CheckingTypes.TypeEnv * AST.SemanticType option) list> (box (List.ofSeq trace))|]) |> List.toArray |> fun values -> JsonArray(values) :> JsonNode
 
 let callChecking source =
@@ -2093,6 +2093,9 @@ let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
     let operand = LIR.StringSymbol source
+    let reg = LIR.Virtual 3
+    let freg = LIR.FVirtual (-1)
+    let typ = AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])
     tuple [tuple [enc ([LIR.X0;
 LIR.X1;
 LIR.X2;
@@ -2145,7 +2148,7 @@ enc ([LIR.FPhysical (LIR.D0);
 LIR.FVirtual ((3))] : LIR.FReg list);
 enc ([LIR.Imm ((-3L));
 LIR.FloatImm ((-0.0));
-LIR.Reg ((LIR.Virtual 3));
+LIR.Reg ((reg));
 LIR.StackSlot ((3));
 LIR.StringSymbol ((source));
 LIR.FloatSymbol ((-0.0));
@@ -2199,131 +2202,131 @@ LIR.SocketSendTimeout;
 LIR.SocketClose;
 LIR.SecureRandomFill] : LIR.CliOperation list);
 enc ([LIR.Label ((source))] : LIR.Label list);
-enc ([LIR.Mov ((LIR.Virtual 3), (operand));
-LIR.Phi ((LIR.Virtual 3), [((operand), (LIR.Label source)); ((operand), (LIR.Label source))], (Some ((AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])))));
-LIR.Store ((3), (LIR.Virtual 3));
-LIR.Add ((LIR.Virtual 3), (LIR.Virtual 3), (operand));
-LIR.Sub ((LIR.Virtual 3), (LIR.Virtual 3), (operand));
-LIR.Mul ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Sdiv ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Udiv ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Msub ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Madd ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Cmp ((LIR.Virtual 3), (operand));
-LIR.Cset ((LIR.Virtual 3), LIR.EQ);
-LIR.Select ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3), LIR.EQ);
-LIR.And ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.And_imm ((LIR.Virtual 3), (LIR.Virtual 3), (-3L));
-LIR.Orr ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Eor ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Lsl ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Lsr ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Asr ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Lsl_imm ((LIR.Virtual 3), (LIR.Virtual 3), (3));
-LIR.Lsr_imm ((LIR.Virtual 3), (LIR.Virtual 3), (3));
-LIR.Asr_imm ((LIR.Virtual 3), (LIR.Virtual 3), (3));
-LIR.Neg ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Mvn ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Sxtb ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Sxth ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Sxtw ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Uxtb ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Uxth ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Uxtw ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Call ((LIR.Virtual 3), (AST.functionId System.UInt64.MaxValue), [(operand); (operand)]);
+enc ([LIR.Mov ((reg), (operand));
+LIR.Phi ((reg), [((operand), (LIR.Label source)); ((operand), (LIR.Label source))], (Some ((typ))));
+LIR.Store ((3), (reg));
+LIR.Add ((reg), (reg), (operand));
+LIR.Sub ((reg), (reg), (operand));
+LIR.Mul ((reg), (reg), (reg));
+LIR.Sdiv ((reg), (reg), (reg));
+LIR.Udiv ((reg), (reg), (reg));
+LIR.Msub ((reg), (reg), (reg), (reg));
+LIR.Madd ((reg), (reg), (reg), (reg));
+LIR.Cmp ((reg), (operand));
+LIR.Cset ((reg), LIR.EQ);
+LIR.Select ((reg), (reg), (reg), LIR.EQ);
+LIR.And ((reg), (reg), (reg));
+LIR.And_imm ((reg), (reg), (-3L));
+LIR.Orr ((reg), (reg), (reg));
+LIR.Eor ((reg), (reg), (reg));
+LIR.Lsl ((reg), (reg), (reg));
+LIR.Lsr ((reg), (reg), (reg));
+LIR.Asr ((reg), (reg), (reg));
+LIR.Lsl_imm ((reg), (reg), (3));
+LIR.Lsr_imm ((reg), (reg), (3));
+LIR.Asr_imm ((reg), (reg), (3));
+LIR.Neg ((reg), (reg));
+LIR.Mvn ((reg), (reg));
+LIR.Sxtb ((reg), (reg));
+LIR.Sxth ((reg), (reg));
+LIR.Sxtw ((reg), (reg));
+LIR.Uxtb ((reg), (reg));
+LIR.Uxth ((reg), (reg));
+LIR.Uxtw ((reg), (reg));
+LIR.Call ((reg), (AST.functionId System.UInt64.MaxValue), [(operand); (operand)]);
 LIR.TailCall ((AST.functionId System.UInt64.MaxValue), [(operand); (operand)]);
-LIR.IndirectCall ((LIR.Virtual 3), (LIR.Virtual 3), [(operand); (operand)]);
-LIR.IndirectTailCall ((LIR.Virtual 3), [(operand); (operand)]);
-LIR.ClosureAlloc ((LIR.Virtual 3), (AST.functionId System.UInt64.MaxValue), [(operand); (operand)]);
-LIR.ClosureCall ((LIR.Virtual 3), (LIR.Virtual 3), [(operand); (operand)]);
-LIR.ClosureTailCall ((LIR.Virtual 3), [(operand); (operand)]);
+LIR.IndirectCall ((reg), (reg), [(operand); (operand)]);
+LIR.IndirectTailCall ((reg), [(operand); (operand)]);
+LIR.ClosureAlloc ((reg), (AST.functionId System.UInt64.MaxValue), [(operand); (operand)]);
+LIR.ClosureCall ((reg), (reg), [(operand); (operand)]);
+LIR.ClosureTailCall ((reg), [(operand); (operand)]);
 LIR.SaveRegs ([LIR.X0; LIR.X0], [LIR.D0; LIR.D0]);
 LIR.RestoreRegs ([LIR.X0; LIR.X0], [LIR.D0; LIR.D0]);
 LIR.ArgMoves ([(LIR.X0, (operand)); (LIR.X0, (operand))]);
 LIR.TailArgMoves ([(LIR.X0, (operand)); (LIR.X0, (operand))]);
-LIR.FArgMoves ([(LIR.D0, (LIR.FVirtual (-1))); (LIR.D0, (LIR.FVirtual (-1)))]);
-LIR.PrintInt64 ((LIR.Virtual 3));
-LIR.PrintUInt64 ((LIR.Virtual 3));
-LIR.PrintBool ((LIR.Virtual 3));
-LIR.PrintInt64NoNewline ((LIR.Virtual 3));
-LIR.PrintUInt64NoNewline ((LIR.Virtual 3));
-LIR.PrintBoolNoNewline ((LIR.Virtual 3));
-LIR.PrintFloat ((LIR.FVirtual (-1)));
-LIR.PrintFloatNoNewline ((LIR.FVirtual (-1)));
+LIR.FArgMoves ([(LIR.D0, (freg)); (LIR.D0, (freg))]);
+LIR.PrintInt64 ((reg));
+LIR.PrintUInt64 ((reg));
+LIR.PrintBool ((reg));
+LIR.PrintInt64NoNewline ((reg));
+LIR.PrintUInt64NoNewline ((reg));
+LIR.PrintBoolNoNewline ((reg));
+LIR.PrintFloat ((freg));
+LIR.PrintFloatNoNewline ((freg));
 LIR.PrintString ((source));
 LIR.StdoutWrite ((3), (operand), (true));
-LIR.StdinReadLine ((3), (LIR.Virtual 3));
+LIR.StdinReadLine ((3), (reg));
 LIR.RuntimeError ((source));
-LIR.RuntimeErrorString ((LIR.Virtual 3));
-LIR.PrintHeapStringNoNewline ((LIR.Virtual 3));
+LIR.RuntimeErrorString ((reg));
+LIR.PrintHeapStringNoNewline ((reg));
 LIR.PrintChars ([0uy;127uy;255uy]);
-LIR.PrintBlob ((LIR.Virtual 3));
-LIR.PrintList ((LIR.Virtual 3), (AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])));
-LIR.PrintSum ((LIR.Virtual 3), [((source), (3), (Some ((AST.TRecord (source,[AST.TInt64;AST.TList AST.TString]))))); ((source), (3), (Some ((AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])))))], (true));
-LIR.PrintRecord ((LIR.Virtual 3), (source), [((source), (AST.TRecord (source,[AST.TInt64;AST.TList AST.TString]))); ((source), (AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])))]);
+LIR.PrintBlob ((reg));
+LIR.PrintList ((reg), (typ));
+LIR.PrintSum ((reg), [((source), (3), (Some ((typ)))); ((source), (3), (Some ((typ))))], (true));
+LIR.PrintRecord ((reg), (source), [((source), (typ)); ((source), (typ))]);
 LIR.Exit;
-LIR.FPhi ((LIR.FVirtual (-1)), [((LIR.FVirtual (-1)), (LIR.Label source)); ((LIR.FVirtual (-1)), (LIR.Label source))]);
-LIR.FMov ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FLoad ((LIR.FVirtual (-1)), (-0.0));
-LIR.FSpillLoad ((LIR.FVirtual (-1)), (3));
-LIR.FSpillStore ((3), (LIR.FVirtual (-1)));
-LIR.FAdd ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FSub ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FMul ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FMadd ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)), (LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FDiv ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FNeg ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FAbs ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FSqrt ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FCmp ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.Int64ToFloat ((LIR.FVirtual (-1)), (LIR.Virtual 3));
-LIR.FloatToInt64 ((LIR.Virtual 3), (LIR.FVirtual (-1)));
-LIR.FloatToBits ((LIR.Virtual 3), (LIR.FVirtual (-1)));
-LIR.GpToFp ((LIR.FVirtual (-1)), (LIR.Virtual 3));
-LIR.FpToGp ((LIR.Virtual 3), (LIR.FVirtual (-1)));
-LIR.HeapAlloc ((LIR.Virtual 3), (3));
-LIR.HeapStore ((LIR.Virtual 3), (3), (operand), (Some ((AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])))));
-LIR.HeapLoad ((LIR.Virtual 3), (LIR.Virtual 3), (3));
-LIR.RefCountInc ((LIR.Virtual 3), (3), LIR.GenericHeap, (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey=Some source;ReleasePlan=Some (MemoryModel.RecursiveRelease (AST.TList AST.TString));SourceType=Some AST.TString}))));
-LIR.RefCountDec ((LIR.Virtual 3), (3), LIR.GenericHeap, (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey=Some source;ReleasePlan=Some (MemoryModel.RecursiveRelease (AST.TList AST.TString));SourceType=Some AST.TString}))));
-LIR.StringConcat ((LIR.Virtual 3), (operand), (operand), [(operand); (operand)]);
-LIR.CanonicalBufferEq ((LIR.Virtual 3), (MemoryModel.NullableGraphemeCluster), (operand), (operand));
-LIR.PrintHeapString ((LIR.Virtual 3));
-LIR.LoadFuncAddr ((LIR.Virtual 3), (AST.functionId System.UInt64.MaxValue));
-LIR.FileReadBlob ((LIR.Virtual 3), (operand));
-LIR.FileExists ((LIR.Virtual 3), (operand));
-LIR.FileWriteBlob ((LIR.Virtual 3), (operand), (operand));
-LIR.FileAppendText ((LIR.Virtual 3), (operand), (operand));
-LIR.FileDelete ((LIR.Virtual 3), (operand));
-LIR.FileCreateDirectory ((LIR.Virtual 3), (operand));
-LIR.FileSetExecutable ((LIR.Virtual 3), (operand));
-LIR.FileWriteFromPtr ((LIR.Virtual 3), (operand), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.RawAlloc ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.MappedAlloc ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.RawFree ((LIR.Virtual 3));
-LIR.MappedFree ((LIR.Virtual 3));
-LIR.RawGet ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.RawGetByte ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.RawWriteWord ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.RawWriteByte ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.RawSlotInit ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3), (AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])));
+LIR.FPhi ((freg), [((freg), (LIR.Label source)); ((freg), (LIR.Label source))]);
+LIR.FMov ((freg), (freg));
+LIR.FLoad ((freg), (-0.0));
+LIR.FSpillLoad ((freg), (3));
+LIR.FSpillStore ((3), (freg));
+LIR.FAdd ((freg), (freg), (freg));
+LIR.FSub ((freg), (freg), (freg));
+LIR.FMul ((freg), (freg), (freg));
+LIR.FMadd ((freg), (freg), (freg), (freg));
+LIR.FDiv ((freg), (freg), (freg));
+LIR.FNeg ((freg), (freg));
+LIR.FAbs ((freg), (freg));
+LIR.FSqrt ((freg), (freg));
+LIR.FCmp ((freg), (freg));
+LIR.Int64ToFloat ((freg), (reg));
+LIR.FloatToInt64 ((reg), (freg));
+LIR.FloatToBits ((reg), (freg));
+LIR.GpToFp ((freg), (reg));
+LIR.FpToGp ((reg), (freg));
+LIR.HeapAlloc ((reg), (3));
+LIR.HeapStore ((reg), (3), (operand), (Some ((typ))));
+LIR.HeapLoad ((reg), (reg), (3));
+LIR.RefCountInc ((reg), (3), LIR.GenericHeap, (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey=Some source;ReleasePlan=Some (MemoryModel.RecursiveRelease (AST.TList AST.TString));SourceType=Some AST.TString}))));
+LIR.RefCountDec ((reg), (3), LIR.GenericHeap, (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey=Some source;ReleasePlan=Some (MemoryModel.RecursiveRelease (AST.TList AST.TString));SourceType=Some AST.TString}))));
+LIR.StringConcat ((reg), (operand), (operand), [(operand); (operand)]);
+LIR.CanonicalBufferEq ((reg), (MemoryModel.NullableGraphemeCluster), (operand), (operand));
+LIR.PrintHeapString ((reg));
+LIR.LoadFuncAddr ((reg), (AST.functionId System.UInt64.MaxValue));
+LIR.FileReadBlob ((reg), (operand));
+LIR.FileExists ((reg), (operand));
+LIR.FileWriteBlob ((reg), (operand), (operand));
+LIR.FileAppendText ((reg), (operand), (operand));
+LIR.FileDelete ((reg), (operand));
+LIR.FileCreateDirectory ((reg), (operand));
+LIR.FileSetExecutable ((reg), (operand));
+LIR.FileWriteFromPtr ((reg), (operand), (reg), (reg));
+LIR.RawAlloc ((reg), (reg));
+LIR.MappedAlloc ((reg), (reg));
+LIR.RawFree ((reg));
+LIR.MappedFree ((reg));
+LIR.RawGet ((reg), (reg), (reg));
+LIR.RawGetByte ((reg), (reg), (reg));
+LIR.RawWriteWord ((reg), (reg), (reg));
+LIR.RawWriteByte ((reg), (reg), (reg));
+LIR.RawSlotInit ((reg), (reg), (reg), (typ));
 LIR.RefCountIncString ((operand));
 LIR.RefCountDecString ((operand));
 LIR.RefCountIncBlob ((operand));
 LIR.RefCountDecBlob ((operand));
 LIR.RefCountIncInt ((operand));
 LIR.RefCountDecInt ((operand));
-LIR.RandomInt64 ((LIR.Virtual 3));
-LIR.DateTimeNow ((LIR.Virtual 3));
-LIR.Sleep ((3), (LIR.FVirtual (-1)));
-LIR.CliNative ((LIR.Virtual 3), LIR.Execute, [(operand); (operand)]);
-LIR.FloatToString ((LIR.Virtual 3), (LIR.FVirtual (-1)));
+LIR.RandomInt64 ((reg));
+LIR.DateTimeNow ((reg));
+LIR.Sleep ((3), (freg));
+LIR.CliNative ((reg), LIR.Execute, [(operand); (operand)]);
+LIR.FloatToString ((reg), (freg));
 LIR.CoverageHit ((3))] : LIR.Instr list);
 enc ([LIR.Ret;
-LIR.Branch ((LIR.Virtual 3), (LIR.Label source), (LIR.Label source));
-LIR.BranchZero ((LIR.Virtual 3), (LIR.Label source), (LIR.Label source));
-LIR.BranchBitZero ((LIR.Virtual 3), (3), (LIR.Label source), (LIR.Label source));
-LIR.BranchBitNonZero ((LIR.Virtual 3), (3), (LIR.Label source), (LIR.Label source));
+LIR.Branch ((reg), (LIR.Label source), (LIR.Label source));
+LIR.BranchZero ((reg), (LIR.Label source), (LIR.Label source));
+LIR.BranchBitZero ((reg), (3), (LIR.Label source), (LIR.Label source));
+LIR.BranchBitNonZero ((reg), (3), (LIR.Label source), (LIR.Label source));
 LIR.CondBranch (LIR.EQ, (LIR.Label source), (LIR.Label source));
 LIR.Jump ((LIR.Label source))] : LIR.Terminator list);
 enc ([LIR.FingerprintedReleasePlan ((source));
@@ -2345,127 +2348,228 @@ enc (FSharpType.GetUnionCases(typeof<LIR.Instr>) |> Array.map (fun case -> case.
 enc (FSharpType.GetUnionCases(typeof<LIR.Terminator>) |> Array.map (fun case -> case.Name,case.GetFields().Length) |> Array.toList);
 enc (FSharpType.GetUnionCases(typeof<LIR.RcReleasePlanMemoKey>) |> Array.map (fun case -> case.Name,case.GetFields().Length) |> Array.toList);
 enc (FSharpType.GetUnionCases(typeof<LIR.Arm64SlotInitRootRetainTarget>) |> Array.map (fun case -> case.Name,case.GetFields().Length) |> Array.toList)]]
-let lirInstructionFixturesWithOperand (source:string) operand : LIR.Instr list = [LIR.Mov ((LIR.Virtual 3), (operand));
-LIR.Phi ((LIR.Virtual 3), [((operand), (LIR.Label source)); ((operand), (LIR.Label source))], (Some ((AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])))));
-LIR.Store ((3), (LIR.Virtual 3));
-LIR.Add ((LIR.Virtual 3), (LIR.Virtual 3), (operand));
-LIR.Sub ((LIR.Virtual 3), (LIR.Virtual 3), (operand));
-LIR.Mul ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Sdiv ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Udiv ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Msub ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Madd ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Cmp ((LIR.Virtual 3), (operand));
-LIR.Cset ((LIR.Virtual 3), LIR.EQ);
-LIR.Select ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3), LIR.EQ);
-LIR.And ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.And_imm ((LIR.Virtual 3), (LIR.Virtual 3), (-3L));
-LIR.Orr ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Eor ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Lsl ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Lsr ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Asr ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Lsl_imm ((LIR.Virtual 3), (LIR.Virtual 3), (3));
-LIR.Lsr_imm ((LIR.Virtual 3), (LIR.Virtual 3), (3));
-LIR.Asr_imm ((LIR.Virtual 3), (LIR.Virtual 3), (3));
-LIR.Neg ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Mvn ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Sxtb ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Sxth ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Sxtw ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Uxtb ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Uxth ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Uxtw ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.Call ((LIR.Virtual 3), (AST.functionId System.UInt64.MaxValue), [(operand); (operand)]);
+let lirInstructionFixturesWithRegisters (source:string) reg freg operand typ : LIR.Instr list = [LIR.Mov ((reg), (operand));
+LIR.Phi ((reg), [((operand), (LIR.Label source)); ((operand), (LIR.Label source))], (Some ((typ))));
+LIR.Store ((3), (reg));
+LIR.Add ((reg), (reg), (operand));
+LIR.Sub ((reg), (reg), (operand));
+LIR.Mul ((reg), (reg), (reg));
+LIR.Sdiv ((reg), (reg), (reg));
+LIR.Udiv ((reg), (reg), (reg));
+LIR.Msub ((reg), (reg), (reg), (reg));
+LIR.Madd ((reg), (reg), (reg), (reg));
+LIR.Cmp ((reg), (operand));
+LIR.Cset ((reg), LIR.EQ);
+LIR.Select ((reg), (reg), (reg), LIR.EQ);
+LIR.And ((reg), (reg), (reg));
+LIR.And_imm ((reg), (reg), (-3L));
+LIR.Orr ((reg), (reg), (reg));
+LIR.Eor ((reg), (reg), (reg));
+LIR.Lsl ((reg), (reg), (reg));
+LIR.Lsr ((reg), (reg), (reg));
+LIR.Asr ((reg), (reg), (reg));
+LIR.Lsl_imm ((reg), (reg), (3));
+LIR.Lsr_imm ((reg), (reg), (3));
+LIR.Asr_imm ((reg), (reg), (3));
+LIR.Neg ((reg), (reg));
+LIR.Mvn ((reg), (reg));
+LIR.Sxtb ((reg), (reg));
+LIR.Sxth ((reg), (reg));
+LIR.Sxtw ((reg), (reg));
+LIR.Uxtb ((reg), (reg));
+LIR.Uxth ((reg), (reg));
+LIR.Uxtw ((reg), (reg));
+LIR.Call ((reg), (AST.functionId System.UInt64.MaxValue), [(operand); (operand)]);
 LIR.TailCall ((AST.functionId System.UInt64.MaxValue), [(operand); (operand)]);
-LIR.IndirectCall ((LIR.Virtual 3), (LIR.Virtual 3), [(operand); (operand)]);
-LIR.IndirectTailCall ((LIR.Virtual 3), [(operand); (operand)]);
-LIR.ClosureAlloc ((LIR.Virtual 3), (AST.functionId System.UInt64.MaxValue), [(operand); (operand)]);
-LIR.ClosureCall ((LIR.Virtual 3), (LIR.Virtual 3), [(operand); (operand)]);
-LIR.ClosureTailCall ((LIR.Virtual 3), [(operand); (operand)]);
+LIR.IndirectCall ((reg), (reg), [(operand); (operand)]);
+LIR.IndirectTailCall ((reg), [(operand); (operand)]);
+LIR.ClosureAlloc ((reg), (AST.functionId System.UInt64.MaxValue), [(operand); (operand)]);
+LIR.ClosureCall ((reg), (reg), [(operand); (operand)]);
+LIR.ClosureTailCall ((reg), [(operand); (operand)]);
 LIR.SaveRegs ([LIR.X0; LIR.X0], [LIR.D0; LIR.D0]);
 LIR.RestoreRegs ([LIR.X0; LIR.X0], [LIR.D0; LIR.D0]);
 LIR.ArgMoves ([(LIR.X0, (operand)); (LIR.X0, (operand))]);
 LIR.TailArgMoves ([(LIR.X0, (operand)); (LIR.X0, (operand))]);
-LIR.FArgMoves ([(LIR.D0, (LIR.FVirtual (-1))); (LIR.D0, (LIR.FVirtual (-1)))]);
-LIR.PrintInt64 ((LIR.Virtual 3));
-LIR.PrintUInt64 ((LIR.Virtual 3));
-LIR.PrintBool ((LIR.Virtual 3));
-LIR.PrintInt64NoNewline ((LIR.Virtual 3));
-LIR.PrintUInt64NoNewline ((LIR.Virtual 3));
-LIR.PrintBoolNoNewline ((LIR.Virtual 3));
-LIR.PrintFloat ((LIR.FVirtual (-1)));
-LIR.PrintFloatNoNewline ((LIR.FVirtual (-1)));
+LIR.FArgMoves ([(LIR.D0, (freg)); (LIR.D0, (freg))]);
+LIR.PrintInt64 ((reg));
+LIR.PrintUInt64 ((reg));
+LIR.PrintBool ((reg));
+LIR.PrintInt64NoNewline ((reg));
+LIR.PrintUInt64NoNewline ((reg));
+LIR.PrintBoolNoNewline ((reg));
+LIR.PrintFloat ((freg));
+LIR.PrintFloatNoNewline ((freg));
 LIR.PrintString ((source));
 LIR.StdoutWrite ((3), (operand), (true));
-LIR.StdinReadLine ((3), (LIR.Virtual 3));
+LIR.StdinReadLine ((3), (reg));
 LIR.RuntimeError ((source));
-LIR.RuntimeErrorString ((LIR.Virtual 3));
-LIR.PrintHeapStringNoNewline ((LIR.Virtual 3));
+LIR.RuntimeErrorString ((reg));
+LIR.PrintHeapStringNoNewline ((reg));
 LIR.PrintChars ([0uy;127uy;255uy]);
-LIR.PrintBlob ((LIR.Virtual 3));
-LIR.PrintList ((LIR.Virtual 3), (AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])));
-LIR.PrintSum ((LIR.Virtual 3), [((source), (3), (Some ((AST.TRecord (source,[AST.TInt64;AST.TList AST.TString]))))); ((source), (3), (Some ((AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])))))], (true));
-LIR.PrintRecord ((LIR.Virtual 3), (source), [((source), (AST.TRecord (source,[AST.TInt64;AST.TList AST.TString]))); ((source), (AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])))]);
+LIR.PrintBlob ((reg));
+LIR.PrintList ((reg), (typ));
+LIR.PrintSum ((reg), [((source), (3), (Some ((typ)))); ((source), (3), (Some ((typ))))], (true));
+LIR.PrintRecord ((reg), (source), [((source), (typ)); ((source), (typ))]);
 LIR.Exit;
-LIR.FPhi ((LIR.FVirtual (-1)), [((LIR.FVirtual (-1)), (LIR.Label source)); ((LIR.FVirtual (-1)), (LIR.Label source))]);
-LIR.FMov ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FLoad ((LIR.FVirtual (-1)), (-0.0));
-LIR.FSpillLoad ((LIR.FVirtual (-1)), (3));
-LIR.FSpillStore ((3), (LIR.FVirtual (-1)));
-LIR.FAdd ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FSub ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FMul ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FMadd ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)), (LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FDiv ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FNeg ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FAbs ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FSqrt ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.FCmp ((LIR.FVirtual (-1)), (LIR.FVirtual (-1)));
-LIR.Int64ToFloat ((LIR.FVirtual (-1)), (LIR.Virtual 3));
-LIR.FloatToInt64 ((LIR.Virtual 3), (LIR.FVirtual (-1)));
-LIR.FloatToBits ((LIR.Virtual 3), (LIR.FVirtual (-1)));
-LIR.GpToFp ((LIR.FVirtual (-1)), (LIR.Virtual 3));
-LIR.FpToGp ((LIR.Virtual 3), (LIR.FVirtual (-1)));
-LIR.HeapAlloc ((LIR.Virtual 3), (3));
-LIR.HeapStore ((LIR.Virtual 3), (3), (operand), (Some ((AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])))));
-LIR.HeapLoad ((LIR.Virtual 3), (LIR.Virtual 3), (3));
-LIR.RefCountInc ((LIR.Virtual 3), (3), LIR.GenericHeap, (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey=Some source;ReleasePlan=Some (MemoryModel.RecursiveRelease (AST.TList AST.TString));SourceType=Some AST.TString}))));
-LIR.RefCountDec ((LIR.Virtual 3), (3), LIR.GenericHeap, (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey=Some source;ReleasePlan=Some (MemoryModel.RecursiveRelease (AST.TList AST.TString));SourceType=Some AST.TString}))));
-LIR.StringConcat ((LIR.Virtual 3), (operand), (operand), [(operand); (operand)]);
-LIR.CanonicalBufferEq ((LIR.Virtual 3), (MemoryModel.NullableGraphemeCluster), (operand), (operand));
-LIR.PrintHeapString ((LIR.Virtual 3));
-LIR.LoadFuncAddr ((LIR.Virtual 3), (AST.functionId System.UInt64.MaxValue));
-LIR.FileReadBlob ((LIR.Virtual 3), (operand));
-LIR.FileExists ((LIR.Virtual 3), (operand));
-LIR.FileWriteBlob ((LIR.Virtual 3), (operand), (operand));
-LIR.FileAppendText ((LIR.Virtual 3), (operand), (operand));
-LIR.FileDelete ((LIR.Virtual 3), (operand));
-LIR.FileCreateDirectory ((LIR.Virtual 3), (operand));
-LIR.FileSetExecutable ((LIR.Virtual 3), (operand));
-LIR.FileWriteFromPtr ((LIR.Virtual 3), (operand), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.RawAlloc ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.MappedAlloc ((LIR.Virtual 3), (LIR.Virtual 3));
-LIR.RawFree ((LIR.Virtual 3));
-LIR.MappedFree ((LIR.Virtual 3));
-LIR.RawGet ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.RawGetByte ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.RawWriteWord ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.RawWriteByte ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3));
-LIR.RawSlotInit ((LIR.Virtual 3), (LIR.Virtual 3), (LIR.Virtual 3), (AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])));
+LIR.FPhi ((freg), [((freg), (LIR.Label source)); ((freg), (LIR.Label source))]);
+LIR.FMov ((freg), (freg));
+LIR.FLoad ((freg), (-0.0));
+LIR.FSpillLoad ((freg), (3));
+LIR.FSpillStore ((3), (freg));
+LIR.FAdd ((freg), (freg), (freg));
+LIR.FSub ((freg), (freg), (freg));
+LIR.FMul ((freg), (freg), (freg));
+LIR.FMadd ((freg), (freg), (freg), (freg));
+LIR.FDiv ((freg), (freg), (freg));
+LIR.FNeg ((freg), (freg));
+LIR.FAbs ((freg), (freg));
+LIR.FSqrt ((freg), (freg));
+LIR.FCmp ((freg), (freg));
+LIR.Int64ToFloat ((freg), (reg));
+LIR.FloatToInt64 ((reg), (freg));
+LIR.FloatToBits ((reg), (freg));
+LIR.GpToFp ((freg), (reg));
+LIR.FpToGp ((reg), (freg));
+LIR.HeapAlloc ((reg), (3));
+LIR.HeapStore ((reg), (3), (operand), (Some ((typ))));
+LIR.HeapLoad ((reg), (reg), (3));
+LIR.RefCountInc ((reg), (3), LIR.GenericHeap, (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey=Some source;ReleasePlan=Some (MemoryModel.RecursiveRelease (AST.TList AST.TString));SourceType=Some AST.TString}))));
+LIR.RefCountDec ((reg), (3), LIR.GenericHeap, (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey=Some source;ReleasePlan=Some (MemoryModel.RecursiveRelease (AST.TList AST.TString));SourceType=Some AST.TString}))));
+LIR.StringConcat ((reg), (operand), (operand), [(operand); (operand)]);
+LIR.CanonicalBufferEq ((reg), (MemoryModel.NullableGraphemeCluster), (operand), (operand));
+LIR.PrintHeapString ((reg));
+LIR.LoadFuncAddr ((reg), (AST.functionId System.UInt64.MaxValue));
+LIR.FileReadBlob ((reg), (operand));
+LIR.FileExists ((reg), (operand));
+LIR.FileWriteBlob ((reg), (operand), (operand));
+LIR.FileAppendText ((reg), (operand), (operand));
+LIR.FileDelete ((reg), (operand));
+LIR.FileCreateDirectory ((reg), (operand));
+LIR.FileSetExecutable ((reg), (operand));
+LIR.FileWriteFromPtr ((reg), (operand), (reg), (reg));
+LIR.RawAlloc ((reg), (reg));
+LIR.MappedAlloc ((reg), (reg));
+LIR.RawFree ((reg));
+LIR.MappedFree ((reg));
+LIR.RawGet ((reg), (reg), (reg));
+LIR.RawGetByte ((reg), (reg), (reg));
+LIR.RawWriteWord ((reg), (reg), (reg));
+LIR.RawWriteByte ((reg), (reg), (reg));
+LIR.RawSlotInit ((reg), (reg), (reg), (typ));
 LIR.RefCountIncString ((operand));
 LIR.RefCountDecString ((operand));
 LIR.RefCountIncBlob ((operand));
 LIR.RefCountDecBlob ((operand));
 LIR.RefCountIncInt ((operand));
 LIR.RefCountDecInt ((operand));
-LIR.RandomInt64 ((LIR.Virtual 3));
-LIR.DateTimeNow ((LIR.Virtual 3));
-LIR.Sleep ((3), (LIR.FVirtual (-1)));
-LIR.CliNative ((LIR.Virtual 3), LIR.Execute, [(operand); (operand)]);
-LIR.FloatToString ((LIR.Virtual 3), (LIR.FVirtual (-1)));
+LIR.RandomInt64 ((reg));
+LIR.DateTimeNow ((reg));
+LIR.Sleep ((3), (freg));
+LIR.CliNative ((reg), LIR.Execute, [(operand); (operand)]);
+LIR.FloatToString ((reg), (freg));
 LIR.CoverageHit ((3))]
+let lirInstructionFixturesWithOperand source operand = lirInstructionFixturesWithRegisters source (LIR.Virtual 3) (LIR.FVirtual (-1)) operand (AST.TRecord (source,[AST.TInt64;AST.TList AST.TString]))
 let lirInstructionFixtures source = lirInstructionFixturesWithOperand source (LIR.StringSymbol source)
+let allocationObservation (source:string) =
+    let enc (value:'a) = encode typeof<'a> (box value)
+    let raw (value:obj) = encode (value.GetType()) value
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let call name args : 'a = rcInternalCall<'a> "AllocationModel" name args
+    let liveness name args : 'a = rcInternalCall<'a> "RegisterLiveness" name args
+    let facts name args : 'a = rcInternalCall<'a> "RegisterFacts" name args
+    let interference name args : 'a = rcInternalCall<'a> "RegisterInterference" name args
+    let attempt action =
+        let node=JsonObject()
+        node["type"] <- JsonValue.Create "FSharpResult"
+        try
+            node["case"] <- JsonValue.Create "Ok"
+            node["fields"] <- JsonArray([|action ()|])
+        with ex ->
+            node["case"] <- JsonValue.Create "Error"
+            node["fields"] <- JsonArray([|enc ex.Message|])
+        node :> JsonNode
+    let block label instructions terminator : LIR.BasicBlock = {Label=label;Instrs=instructions;Terminator=terminator}
+    let cfg entry blocks : LIR.CFG = {Entry=entry;Blocks=blocks |> List.map (fun (b:LIR.BasicBlock) -> b.Label,b) |> Map.ofList}
+    let label=LIR.Label source
+    let other=LIR.Label "other"
+    let missing=LIR.Label "missing"
+    let regs=[LIR.Virtual 3;LIR.Virtual (-9);LIR.Physical LIR.X0]
+    let fregs=[LIR.FVirtual (-1);LIR.FVirtual 7;LIR.FVirtual (-1000);LIR.FVirtual (-1001);LIR.FVirtual (-1002);LIR.FVirtual (-2000);LIR.FPhysical LIR.D0]
+    let instructionCases=regs |> List.collect (fun reg -> fregs |> List.collect (fun freg -> [LIR.Reg reg;LIR.Imm 0L;LIR.FuncAddr (AST.functionId UInt64.MaxValue)] |> List.collect (fun operand -> [AST.TInt64;AST.TFloat64] |> List.collect (fun typ ->
+        lirInstructionFixturesWithRegisters source reg freg operand typ |> List.map (fun instr ->
+            let b=block label [instr] LIR.Ret
+            tuple [enc instr;enc (facts "getUsedVRegs" [|box instr|] : int list);enc (facts "getDefinedVReg" [|box instr|] : int option);enc (facts "getUsedFVRegs" [|box instr|] : int list);enc (facts "getDefinedFVReg" [|box instr|] : int option);raw (facts "classifyBlocks" [|box [|b|]|] : obj)])))))
+    let terminatorCases=regs |> List.collect (fun reg -> [LIR.Ret;LIR.Jump other;LIR.Branch (reg,label,other);LIR.BranchZero (reg,label,other);LIR.BranchBitZero (reg,3,label,other);LIR.BranchBitNonZero (reg,3,label,other);LIR.CondBranch (LIR.EQ,label,other)] |> List.map (fun term ->
+        tuple [enc term;enc (facts "getTerminatorUsedVRegs" [|box term|] : int list);enc (RegisterLiveness.getSuccessors term)]))
+    let idCases=[[];[3];[-9;0;3;3;-9];List.init 63 id;List.init 64 id;List.init 65 id;List.init 129 (fun n -> n*2-129)]
+    let domains=idCases |> List.map (fun ids ->
+        let d:AllocationModel.VRegDomain=call "buildVRegDomain" [|box ids|]
+        let selected=ids |> List.indexed |> List.choose (fun (n,value) -> if n%2=0 then Some value else None)
+        let b:AllocationModel.BitSet=call "vregBitsFromList" [|box d;box selected|]
+        let before=enc b
+        let lookups=(ids @ [Int32.MinValue;Int32.MaxValue;987]) |> List.map (fun value -> tuple [enc value;enc (call "tryIndexOf" [|box d;box value|] : int option);enc (call "vregBitsContains" [|box d;box b;box value|] : bool)])
+        let mutations=(ids @ [987]) |> List.map (fun value ->
+            let bits=Array.copy b
+            let add=attempt (fun () -> call "vregBitsAddInPlace" [|box d;box value;box bits|] |> fun (value:unit) -> enc value)
+            let afterAdd=enc bits
+            let remove=attempt (fun () -> call "vregBitsRemoveInPlace" [|box d;box value;box bits|] |> fun (value:unit) -> enc value)
+            tuple [add;afterAdd;remove;enc bits])
+        tuple [enc d;before;list lookups;list mutations;attempt (fun () -> enc (call "vregBitsFromList" [|box d;box [987]|] : AllocationModel.BitSet))])
+    let accumulatorType=typeof<AllocationModel.VRegDomain>.Assembly.GetType("AllocationModel+BitSetUnionAccumulator")
+    let accumulatorCases=FSharpType.GetUnionCases(accumulatorType,Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+    let unions=[0;1;2;3] |> List.map (fun size ->
+        let empty=Bitset.empty size
+        let a=Bitset.empty size
+        let b=Bitset.empty size
+        if size>0 then
+            Bitset.addIndexInPlace 0 a
+            Bitset.addIndexInPlace (size*64-1) b
+        let mutable current=FSharpValue.MakeUnion(accumulatorCases |> Array.find (fun c -> c.Name="NoUnionBits"),[||],Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+        let steps=[empty;a;empty;b;a] |> List.map (fun input ->
+            current <- call "bitsetAccumulateUnion" [|current;box input|]
+            let finished:AllocationModel.BitSet=call "bitsetFinishUnion" [|box empty;current|]
+            tuple [encode accumulatorType current;enc finished;enc (size>0 && obj.ReferenceEquals(finished,empty));enc (size>0 && obj.ReferenceEquals(finished,a));enc (size>0 && obj.ReferenceEquals(finished,b))])
+        tuple [list steps;enc empty;enc a;enc b])
+    let graphs=[[];[-9;0;3];List.init 65 id;List.init 129 id] |> List.collect (fun ids ->
+        let pairs=List.zip ids (match ids with [] -> [] | first::rest -> rest @ [first])
+        [[];pairs;pairs @ pairs;ids |> List.collect (fun a -> ids |> List.map (fun b -> a,b));[987,987];[987,3]] |> List.map (fun edges -> attempt (fun () ->
+            let g=AllocationModel.buildInterferenceGraphFromEdges ids edges
+            let d=g.Domain
+            let count=d.Ids.Length
+            let spillIds=d.Ids |> Array.indexed |> Array.choose (fun (n,value) -> if n%3=0 then Some value else None) |> Array.toList
+            let result:AllocationModel.ColoringResult={Domain=d;Colors=Array.init count (fun n -> if n%3=0 then None else Some (n%4));Spills=call "vregBitsFromList" [|box d;box spillIds|];ChromaticNumber=4}
+            tuple [enc g;ids @ [987] |> List.map (fun value -> tuple [enc value;enc (AllocationModel.graphHasVertex g value);enc (AllocationModel.graphNeighbors g value);enc (AllocationModel.colorOf result value);enc (AllocationModel.isSpill result value)]) |> list;enc result;enc (AllocationModel.spillCount result);enc (AllocationModel.coloredCount result)])))
+    let instructionCFGs=lirInstructionFixtures source |> List.map (fun instr -> cfg label [block label [instr] (LIR.Jump other);block other [LIR.Add (LIR.Virtual 9,LIR.Virtual 3,LIR.Reg (LIR.Virtual (-9)));LIR.FAdd (LIR.FVirtual 9,LIR.FVirtual 7,LIR.FVirtual (-1))] LIR.Ret])
+    let patterns=[cfg label [block label [] LIR.Ret];cfg label [block label [] (LIR.Jump missing)];cfg missing [block label [] LIR.Ret];
+        cfg label [block label [LIR.Mov (LIR.Virtual 1,LIR.Reg (LIR.Virtual 2))] (LIR.BranchZero (LIR.Virtual 1,label,other));block other [LIR.Phi (LIR.Virtual 3,[LIR.Reg (LIR.Virtual 1),label;LIR.Reg (LIR.Virtual 2),missing],None);LIR.FPhi (LIR.FVirtual 7,[LIR.FVirtual (-1),label;LIR.FVirtual 8,missing])] (LIR.Jump label)];
+        cfg label [block label [] (LIR.CondBranch (LIR.EQ,other,other));block other [LIR.Phi (LIR.Virtual 3,[LIR.Reg (LIR.Virtual 1),label;LIR.Reg (LIR.Virtual 2),label],None);LIR.FPhi (LIR.FVirtual 7,[LIR.FVirtual (-1000),label])] LIR.Ret];
+        cfg label [block label (List.init 129 (fun n -> LIR.Mov (LIR.Virtual (n*2-129),LIR.Reg (LIR.Virtual (n*2-127))))) (LIR.Jump other);block other (List.init 65 (fun n -> LIR.FMov (LIR.FVirtual n,LIR.FVirtual (n+1)))) (LIR.BranchZero (LIR.Virtual 1,label,other))]]
+    let cfgCases=instructionCFGs @ patterns |> List.collect (fun cfg -> [[];[-9;3;7;129]] |> List.map (fun extra -> attempt (fun () ->
+        let idx,blocks:AllocationModel.BlockIndex * LIR.BasicBlock array=call "buildBlockIndex" [|box cfg|]
+        let classified:obj=facts "classifyBlocks" [|box blocks|]
+        let id,il,fd,fl:AllocationModel.VRegDomain * AllocationModel.BlockLiveness array * AllocationModel.VRegDomain * AllocationModel.BlockLiveness array=liveness "computeCombinedLivenessBitsFromFacts" [|box idx;classified;box extra;box extra|]
+        tuple [enc idx;enc blocks;raw classified;
+            enc (call "blocksToMap" [|box idx;box blocks|] : Map<LIR.Label,LIR.BasicBlock>);
+            enc (id,il,fd,fl);
+            enc (liveness "computeLivenessBitsFromFacts" [|box idx;classified;box extra|] : AllocationModel.VRegDomain * AllocationModel.BlockLiveness array);
+            enc (liveness "computeFloatLivenessBitsFromFacts" [|box idx;classified;box extra|] : AllocationModel.VRegDomain * AllocationModel.BlockLiveness array);
+            enc (RegisterLiveness.computeLivenessBits cfg);
+            enc (RegisterLiveness.computeFloatLivenessBits cfg);
+            (blocks |> Array.map (fun b -> enc (RegisterLiveness.computeGenKill id b,RegisterLiveness.computeFloatGenKill fd b)) |> fun values -> JsonArray(values) :> JsonNode);
+            enc (interference "buildInterferenceGraphBitsetWithLiveness" [|box idx;classified;box id;box il;box (call "vregBitsFromList" [|box id;box extra|] : AllocationModel.BitSet)|] : AllocationModel.InterferenceGraph);
+            enc (interference "buildFloatInterferenceGraphBitsetWithLiveness" [|box idx;classified;box fd;box fl;box (call "vregBitsFromList" [|box fd;box extra|] : AllocationModel.BitSet)|] : AllocationModel.InterferenceGraph);
+            enc (RegisterInterference.buildInterferenceGraphBitsetFast cfg extra);enc (RegisterInterference.buildInterferenceGraphBitset cfg extra);
+            [label;other;missing] |> List.map (fun label -> enc ((call "tryBlockIndex" [|box idx;box label|] : int option),(call "blockIndexOfLabel" [|box idx;box label|] : int option),(call "blockLivenessForLabel" [|box idx;box il;box label|] : AllocationModel.BlockLiveness option))) |> list])))
+    let saveCases=[[];[LIR.SaveRegs ([],[]);LIR.Mov (LIR.Virtual 1,LIR.Reg (LIR.Virtual 3));LIR.RestoreRegs ([],[]);LIR.FAdd (LIR.FVirtual 9,LIR.FVirtual 7,LIR.FVirtual (-1))];[LIR.SaveRegs ([],[]);LIR.SaveRegs ([],[]);LIR.RestoreRegs ([],[]);LIR.RestoreRegs ([],[])];[LIR.SaveRegs ([LIR.X0],[LIR.D0]);LIR.RestoreRegs ([LIR.X0],[LIR.D0])];[LIR.SaveRegs ([],[])];[LIR.RestoreRegs ([],[])]] |> List.map (fun instructions ->
+        let b=block label instructions (LIR.BranchZero (LIR.Virtual 3,label,other))
+        let classified:System.Array=facts "classifyBlocks" [|box [|b|]|]
+        let id,il,fd,fl:AllocationModel.VRegDomain * AllocationModel.BlockLiveness array * AllocationModel.VRegDomain * AllocationModel.BlockLiveness array=liveness "computeCombinedLivenessBitsFromFacts" [|box ({Labels=[|label|];EntryIndex=0}:AllocationModel.BlockIndex);box classified;box [1;3;9];box [-1;7;9]|]
+        let first=classified.GetValue 0
+        let instrFacts=first.GetType().GetProperty("InstrFacts",Reflection.BindingFlags.Instance ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic).GetValue(first)
+        tuple [enc instructions;instructions |> List.map (fun instr -> enc (liveness "isEmptySaveRegs" [|box instr|] : bool)) |> list;attempt (fun () -> enc (liveness "computeSaveRegsPreparation" [|box id;box fd;box b;instrFacts;box il[0].LiveOut;box fl[0].LiveOut|] : (AllocationModel.BitSet * AllocationModel.BitSet) list))])
+    tuple [list instructionCases;list terminatorCases;list domains;list unions;list graphs;list cfgCases;list saveCases]
+
 let lirTreeObservation (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -3349,6 +3453,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "allocation-foundations" -> allocationObservation source
         | "lir-tree" -> lirTreeObservation source
         | "lir-foundations" -> lirObservation source
         | "ir-printers" -> irPrinterObservation source

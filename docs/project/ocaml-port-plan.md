@@ -840,3 +840,17 @@ graphs, all filtering entry modes, and ANF-derived stdlib roots. The clean
 build passes 396/396 units. Coverage is 196/391 pairs; allocator models and
 algorithms, lowering/backend emission, remaining ownership tests, full corpus
 checks, and final native acceptance remain outstanding.
+
+Allocator domains, register facts, combined integer/float liveness, caller-save
+preparation, and interference construction are fully translated with complete
+interfaces and original comments. Complete output matches F# for 15,120
+instruction/register/operand/type combinations, all terminators, sparse and
+multiword domains, union accumulator ownership, graph construction and coloring
+queries, 252 CFG/entry-definition combinations, phi edges, loops, missing labels,
+and nested/unmatched save/restore pairs. Empty-array physical identity is excluded
+from the migration observation because OCaml represents empty arrays with a
+shared atom; mutable-word aliasing and all accumulator cases are compared.
+The warning-free native build passes 396/396 units, both prior LIR observations
+still match, and the rebuilt F# host suite passes 10,760/10,760 tests. Coverage is
+200/391 pairs. Coalescing/coloring, remaining allocation, lowering/emission,
+remaining ownership tests, full corpus checks, and final acceptance remain open.

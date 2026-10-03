@@ -1374,19 +1374,19 @@
       "source": "src/DarkCompiler/passes/lir/allocation/Interference.fs",
       "kind": "compiler",
       "sha256": "670a189e9e9f77617ecbd4b73ca67821050a358752997817d54f6bb7c0aef217",
-      "owner": "ocaml/lib/passes/lir/allocation/Interference.ml"
+      "owner": "ocaml/lib/passes/lir/allocation/RegisterInterference.ml"
     },
     {
       "source": "src/DarkCompiler/passes/lir/allocation/Liveness.fs",
       "kind": "compiler",
       "sha256": "562fdc5eee50ce2978bd742447ec153ed53c03bc6afefebf1a5211356f2023df",
-      "owner": "ocaml/lib/passes/lir/allocation/Liveness.ml"
+      "owner": "ocaml/lib/passes/lir/allocation/RegisterLiveness.ml"
     },
     {
       "source": "src/DarkCompiler/passes/lir/allocation/Model.fs",
       "kind": "compiler",
       "sha256": "4be6dcdddf3d0a120012b628b49e221b04d9e6c82738ce4f246cbb60665ad1f0",
-      "owner": "ocaml/lib/passes/lir/allocation/Model.ml"
+      "owner": "ocaml/lib/passes/lir/allocation/AllocationModel.ml"
     },
     {
       "source": "src/DarkCompiler/passes/lir/allocation/PhiResolution.fs",
