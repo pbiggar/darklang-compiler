@@ -2951,6 +2951,58 @@ let instructionAllocationObservation (source:string) =
         [Platform.ARM64;Platform.X86_64] |> List.collect (fun arch -> registerRoles |> List.collect (fun roles -> operands |> List.collect (fun operand -> [AST.TInt64;AST.TFloat64] |> List.map (fun typ -> lirAllocationFixtures source roles fregs operand typ |> List.map (row arch mapping) |> list)))))
     tuple [list allClasses;list varied]
 
+let blockAllocationObservation (source:string) =
+    let enc (value:'a) = encode typeof<'a> (box value)
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let attempt action = enc (try Ok (action ()) with ex -> Error ex.Message)
+    let label=LIR.Label source
+    let other=LIR.Label "other"
+    let d:AllocationModel.VRegDomain=rcInternalCall "AllocationModel" "buildVRegDomain" [|box [0..15]|]
+    let integer mode : AllocationModel.AllocationResult =
+        {Domain=d;Allocations=Array.init 16 (fun n ->
+            match mode with
+            | 0 -> Some (AllocationModel.PhysReg (List.item (n%7) [LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7]))
+            | 1 -> Some (AllocationModel.StackSlot (-(n+1)*8))
+            | 2 -> (match n%3 with 0 -> None | 1 -> Some (AllocationModel.PhysReg LIR.X19) | _ -> Some (AllocationModel.StackSlot (-24)))
+            | _ -> Some (AllocationModel.PhysReg (List.item n [LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26])));StackSize=128;UsedCalleeSaved=[]}
+    let floating mode : FloatAllocation.FAllocationResult =
+        {Domain=d;Allocations=Array.init 16 (fun n ->
+            match mode with
+            | 0 -> Some (FloatAllocation.FPhysReg (List.item n FloatAllocation.allocatableFloatRegs))
+            | 1 -> Some (FloatAllocation.FStackSlot (-(n+1)*8))
+            | 2 -> (match n%3 with 0 -> Some (FloatAllocation.FPhysReg LIR.D15) | 1 -> Some (FloatAllocation.FRematerialized (-0.0)) | _ -> None)
+            | _ -> None);StackSize=256;UsedCalleeSavedF=[];SpillScratchLeft=LIR.FVirtual (-1000);SpillScratchRight=LIR.FVirtual (-1001);SpillScratchThird=LIR.FVirtual (-1002)}
+    let live mask : AllocationModel.BitSet = [|uint64 mask|]
+    let block label instrs term : LIR.BasicBlock = {Label=label;Instrs=instrs;Terminator=term}
+    let fixtures=lirAllocationFixtures source [|LIR.Virtual 0;LIR.Virtual 1;LIR.Virtual 2;LIR.Virtual 3|] [|LIR.FVirtual 0;LIR.FVirtual 1;LIR.FVirtual 2;LIR.FVirtual 3|] (LIR.Reg (LIR.Virtual 3)) AST.TFloat64
+    let instructions=(fixtures |> List.collect (fun instr -> [[instr];[LIR.SaveRegs ([],[]);instr;LIR.RestoreRegs ([],[]);LIR.Add (LIR.Virtual 5,LIR.Virtual 0,LIR.Reg (LIR.Virtual 1));LIR.FAdd (LIR.FVirtual 5,LIR.FVirtual 0,LIR.FVirtual 1)]])) @ [[];[LIR.SaveRegs ([],[]);LIR.SaveRegs ([],[]);LIR.Call (LIR.Virtual 0,AST.functionId 3UL,[]);LIR.RestoreRegs ([],[]);LIR.RestoreRegs ([],[]);LIR.PrintInt64 (LIR.Virtual 1);LIR.PrintFloat (LIR.FVirtual 1)];[LIR.SaveRegs ([],[])];[LIR.RestoreRegs ([],[])];[LIR.SaveRegs ([LIR.X3],[LIR.D3]);LIR.RestoreRegs ([],[])];[LIR.SaveRegs ([LIR.X3],[LIR.D3]);LIR.RestoreRegs ([LIR.X3],[LIR.D3])]]
+    let arches=[Platform.ARM64;Platform.X86_64]
+    let blockCases=[0..3] |> List.collect (fun im -> [0..3] |> List.collect (fun fm -> arches |> List.collect (fun arch -> [0;85;65535] |> List.map (fun mask -> instructions |> List.map (fun instrs -> attempt (fun () -> ApplyBlockAllocation.applyToBlockWithLiveness arch (integer im) (floating fm) (live mask) (live (mask ^^^ 65535)) (block label instrs (LIR.BranchZero (LIR.Virtual 3,label,other))))) |> list))))
+    let terms=[LIR.Virtual 0;LIR.Virtual 3;LIR.Virtual 987;LIR.Physical LIR.X0;LIR.Physical LIR.X12;LIR.Physical LIR.SP] |> List.collect (fun reg -> [LIR.Ret;LIR.Jump other;LIR.Branch (reg,label,other);LIR.BranchZero (reg,label,other);LIR.BranchBitZero (reg,63,label,other);LIR.BranchBitNonZero (reg,63,label,other);LIR.CondBranch (LIR.NE,label,other)])
+    let terminators=[0..3] |> List.map (fun mode -> terms |> List.map (fun term -> let loads,allocated=ApplyBlockAllocation.applyToTerminator (integer mode) term in tuple [enc term;enc loads;enc allocated]) |> list)
+    let cfgCases=[0..3] |> List.collect (fun im -> [0..3] |> List.collect (fun fm -> [0;1;2] |> List.map (fun floatCount ->
+        let blocks=[|block label [LIR.SaveRegs ([],[]);LIR.Call (LIR.Virtual 0,AST.functionId 3UL,[]);LIR.RestoreRegs ([],[]);LIR.PrintInt64 (LIR.Virtual 1);LIR.PrintFloat (LIR.FVirtual 1)] (LIR.Jump other);block other [LIR.FLoad (LIR.FVirtual 2,-0.0);LIR.SaveRegs ([],[]);LIR.RestoreRegs ([],[])] LIR.Ret|]
+        let facts:obj=rcInternalCall "RegisterFacts" "classifyBlocks" [|box blocks|]
+        let liveness:AllocationModel.BlockLiveness array=[|{LiveIn=live 85;LiveOut=live 65535};{LiveIn=live 170;LiveOut=live 85}|]
+        let floatLiveness:AllocationModel.BlockLiveness array=Array.init floatCount (fun n -> {LiveIn=live 170;LiveOut=live (if n=0 then 43690 else 65535)})
+        try
+            let prep:obj=rcInternalCall "ApplyBlockAllocation" "prepareCFGAllocation" [|box blocks;box (integer im);box (floating fm);box liveness;box floatLiveness;facts|]
+            let output=tuple [encode (prep.GetType()) prep;arches |> List.map (fun arch -> tuple [attempt (fun () -> rcInternalCall<LIR.BasicBlock array> "ApplyBlockAllocation" "applyPreparedCFGAllocation" [|box arch;box blocks;box (integer im);box (floating fm);prep|]);attempt (fun () -> ApplyBlockAllocation.applyToCFGWithLiveness arch blocks (integer im) (floating fm) liveness floatLiveness)]) |> list]
+            let node=JsonObject()
+            node["type"] <- JsonValue.Create "FSharpResult"
+            node["case"] <- JsonValue.Create "Ok"
+            node["fields"] <- JsonArray(output)
+            node :> JsonNode
+        with ex -> enc (Error ex.Message : Result<unit,string>))))
+    let prepType=typeof<AST.SemanticType>.Assembly.GetType("ApplyBlockAllocation+BlockAllocationPreparation")
+    let preparedCases=[[];[LIR.SaveRegs ([],[])];[LIR.RestoreRegs ([],[])];[LIR.SaveRegs ([],[]);LIR.RestoreRegs ([],[])];[LIR.SaveRegs ([],[]);LIR.SaveRegs ([],[]);LIR.RestoreRegs ([],[]);LIR.RestoreRegs ([],[])]] |> List.collect (fun instrs -> [0..3] |> List.collect (fun count -> arches |> List.map (fun arch ->
+        let prep=FSharpValue.MakeRecord(prepType,[|box (List.init count (fun _ -> live 65535,live 65535))|],Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+        let preparations=System.Array.CreateInstance(prepType,1)
+        preparations.SetValue(prep,0)
+        attempt (fun () -> rcInternalCall<LIR.BasicBlock array> "ApplyBlockAllocation" "applyPreparedCFGAllocation" [|box arch;box [|block label instrs LIR.Ret|];box (integer 0);box (floating 0);box preparations|]))))
+    tuple [list blockCases;list terminators;list cfgCases;list preparedCases]
+
 let lirTreeObservation (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -3834,6 +3886,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "block-allocation" -> blockAllocationObservation source
         | "instruction-allocation" -> instructionAllocationObservation source
         | "phi-resolution" -> phiObservation source
         | "spill-operands" -> spillObservation source

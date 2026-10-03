@@ -908,3 +908,13 @@ argument/tail-argument moves. The warning-free build passes 396/396 native units
 Coverage is 206/391 pairs. Block/caller-save allocation, orchestration and callee
 clobber summaries, lowering/emission, remaining ownership tests, full corpus
 checks and final acceptance remain open.
+
+Block allocation is fully translated with original comments and complete interfaces.
+Complete output matches F# for 23,616 block rewrites, 168 terminator rewrites,
+48 CFG preparation/allocation combinations, and 40 precomputed save-snapshot
+combinations. Coverage includes both targets, nested caller saves, all instruction
+constructors, integer/float spills and rematerialization, missing allocations,
+branch loads, truncated float liveness, and exact invalid-save diagnostics.
+The warning-free build passes 396/396 native units. Coverage is 207/391 pairs.
+Callee-write summaries and allocator orchestration are next; lowering/emission,
+remaining ownership tests, full corpus checks and final acceptance remain open.

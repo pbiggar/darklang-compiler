@@ -1344,7 +1344,7 @@
       "source": "src/DarkCompiler/passes/lir/allocation/ApplyBlocks.fs",
       "kind": "compiler",
       "sha256": "f9a4dffbee0c559f873b5b3eefd99ac1d52ab4bcab95d09f89b7fbdb222b352e",
-      "owner": "ocaml/lib/passes/lir/allocation/ApplyBlocks.ml"
+      "owner": "ocaml/lib/passes/lir/allocation/ApplyBlockAllocation.ml"
     },
     {
       "source": "src/DarkCompiler/passes/lir/allocation/ApplyInstructions.fs",
