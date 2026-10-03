@@ -756,3 +756,16 @@ return-phi joins. The comparison includes complete per-phase SSA results, verifi
 errors, loop sets, and transformed CFGs, rather than only final return values.
 Further MIR optimizers, original RC/MIR test groups, backend passes, full corpus
 checks, and final executable-byte/Valgrind acceptance remain outstanding.
+
+
+Common-expression elimination and partial redundancy elimination are fully
+translated, including exact structural keys, UTF-16 operand ordering, unsigned
+function IDs, dominated-block availability, unreachable-block local CSE, safe
+join-edge insertion, ownership and memory barriers, and bounded effect-free call
+reuse. Coverage is 181/391 pairs. The warning-free build passes 349/349 native
+units. Complete output matches F# for 1,800 normalized operand/key combinations
+and 7,548 CFG/configuration combinations, each optimized twice. The matrix covers
+all 66 instruction barriers, 17 scalar/managed/aggregate type families, local and
+dominated reuse, path-complete joins, critical edges, join-local dependencies,
+and unreachable paths. Remaining loop/SCCP passes, original RC/MIR fixture groups,
+backend stages, full corpus checks, and final native acceptance are outstanding.

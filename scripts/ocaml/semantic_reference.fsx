@@ -2089,6 +2089,101 @@ let anfScalarOptimization source =
 let rcInternalCall<'a> moduleName name args : 'a =
     let method = typeof<AST.SemanticType>.Assembly.GetType(moduleName).GetMethod(name, Reflection.BindingFlags.Static ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
     try unbox<'a> (method.Invoke(null,args)) with :? Reflection.TargetInvocationException as error -> raise error.InnerException
+let mirCSEObservation (source:string) =
+    let enc value=closureAnalysisEncode value
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let attempt action=enc (try Ok (action ()) with error -> Error error.Message)
+    let fid index=AST.functionId (uint64 index)
+    let reg n=MIR.VReg n
+    let v n=MIR.Register (reg n)
+    let label text=MIR.Label text
+    let block name instrs terminator : MIR.BasicBlock={Label=label name;Instrs=instrs;Terminator=terminator}
+    let graph entry (blocks:MIR.BasicBlock list) : MIR.CFG={Entry=label entry;Blocks=blocks |> List.map (fun block -> block.Label,block) |> Map.ofList}
+    let operations typ operand=[
+            MIR.Mov (MIR.VReg 1, operand, Some typ);
+            MIR.BinOp (MIR.VReg 1, MIR.Div, operand, operand, typ);
+            MIR.UnaryOp (MIR.VReg 1, MIR.Not, operand);
+            MIR.Call (MIR.VReg 1, fid 200, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.TailCall (fid 200, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.IndirectCall (MIR.VReg 1, operand, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.IndirectTailCall (operand, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.ClosureAlloc (MIR.VReg 1, fid 200, [operand; MIR.Register (MIR.VReg 3)]);
+            MIR.ClosureCall (MIR.VReg 1, operand, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.ClosureTailCall (operand, [operand; MIR.Register (MIR.VReg 3)], [typ; typ]);
+            MIR.HeapAlloc (MIR.VReg 1, 3);
+            MIR.HeapStore (MIR.VReg 1, 3, operand, Some typ);
+            MIR.HeapLoad (MIR.VReg 1, MIR.VReg 2, 3, Some typ);
+            MIR.StringConcat (MIR.VReg 1, operand, operand, [operand; MIR.Register (MIR.VReg 3)]);
+            MIR.CanonicalBufferEq (MIR.VReg 1, MemoryModel.Utf8String, operand, operand);
+            MIR.RefCountInc (MIR.VReg 1, 3, MIR.GenericHeap, None);
+            MIR.RefCountDec (MIR.VReg 1, 3, MIR.GenericHeap, None);
+            MIR.Print (operand, typ);
+            MIR.StdoutWrite (3, operand, true);
+            MIR.StdinReadLine (MIR.VReg 1);
+            MIR.RuntimeError (source);
+            MIR.RuntimeErrorString (operand);
+            MIR.FileReadBlob (MIR.VReg 1, operand);
+            MIR.FileExists (MIR.VReg 1, operand);
+            MIR.FileWriteBlob (MIR.VReg 1, operand, operand);
+            MIR.FileAppendText (MIR.VReg 1, operand, operand);
+            MIR.FileDelete (MIR.VReg 1, operand);
+            MIR.FileCreateDirectory (MIR.VReg 1, operand);
+            MIR.FileSetExecutable (MIR.VReg 1, operand);
+            MIR.FileWriteFromPtr (MIR.VReg 1, operand, operand, operand);
+            MIR.FloatSqrt (MIR.VReg 1, operand);
+            MIR.FloatAbs (MIR.VReg 1, operand);
+            MIR.FloatNeg (MIR.VReg 1, operand);
+            MIR.Int64ToFloat (MIR.VReg 1, operand);
+            MIR.FloatToInt64 (MIR.VReg 1, operand);
+            MIR.FloatToBits (MIR.VReg 1, operand);
+            MIR.RawAlloc (MIR.VReg 1, operand);
+            MIR.MappedAlloc (MIR.VReg 1, operand);
+            MIR.RawFree (operand);
+            MIR.MappedFree (operand);
+            MIR.RawGet (MIR.VReg 1, operand, operand, Some typ);
+            MIR.RawGetByte (MIR.VReg 1, operand, operand);
+            MIR.RawWriteWord (operand, operand, operand);
+            MIR.RawWriteByte (operand, operand, operand);
+            MIR.RawSlotInit (operand, operand, operand, typ);
+            MIR.StringToRawPtr (MIR.VReg 1, operand);
+            MIR.RawPtrToString (MIR.VReg 1, operand);
+            MIR.BlobToRawPtr (MIR.VReg 1, operand);
+            MIR.RawPtrToBlob (MIR.VReg 1, operand);
+            MIR.DictToRawPtr (MIR.VReg 1, operand);
+            MIR.RawPtrToDict (MIR.VReg 1, operand, operand);
+            MIR.ListToRawPtr (MIR.VReg 1, operand);
+            MIR.RawPtrToList (MIR.VReg 1, operand, operand);
+            MIR.RefCountIncString (operand);
+            MIR.RefCountDecString (operand);
+            MIR.RefCountIncBlob (operand);
+            MIR.RefCountDecBlob (operand);
+            MIR.RefCountIncInt (operand);
+            MIR.RefCountDecInt (operand);
+            MIR.RandomInt64 (MIR.VReg 1);
+            MIR.DateTimeNow (MIR.VReg 1);
+            MIR.Sleep (3, MIR.VReg 2, operand);
+            MIR.CliNative (MIR.VReg 1, MIR.HostOS, [operand; MIR.Register (MIR.VReg 3)]);
+            MIR.FloatToString (MIR.VReg 1, operand);
+            MIR.Phi (MIR.VReg 1, [operand,MIR.Label source;MIR.Register (MIR.VReg 3),MIR.Label "other"], Some typ);
+            MIR.CoverageHit (3)        ]
+    let types=[AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TFloat64;AST.TBool;AST.TChar;AST.TDateTime;AST.TString;AST.TUnit;AST.TInt128;AST.TUInt128;AST.TTuple [AST.TInt64]]
+    let binary=[MIR.Add;MIR.Sub;MIR.Mul;MIR.Div;MIR.Mod;MIR.Shl;MIR.Shr;MIR.BitAnd;MIR.BitOr;MIR.BitXor;MIR.Eq;MIR.Neq;MIR.Lt;MIR.Gt;MIR.Lte;MIR.Gte;MIR.And;MIR.Or]
+    let operands=[v 2;MIR.Int64Const -1L;MIR.BoolConst true;MIR.FloatSymbol -0.;MIR.FloatSymbol 0.;MIR.FloatSymbol (BitConverter.Int64BitsToDouble 0x7ff8000000000001L);MIR.StringSymbol "😀";MIR.StringSymbol "";MIR.FuncAddr (AST.functionId 0x8000000000000000UL);MIR.FuncAddr (AST.functionId 1UL)]
+    let keys=binary |> List.map (fun op -> operands |> List.map (fun a -> operands |> List.map (fun b -> let a',b'=MIRCommonExpressions.normalizeOperands op a b in tuple [enc (MIRCommonExpressions.isCommutative op);enc a';enc b';enc (MIRCommonExpressions.makeBinExprKey op a b AST.TInt64)]) |> list) |> list) |> list
+    let optimize graph=[Set.empty;Set.singleton (fid 200)] |> List.map (fun functions -> attempt (fun () -> let once,changed=MIRCommonExpressions.applyCSEWithEffectFreeCalls functions graph in let twice,changedAgain=MIRCommonExpressions.applyCSEWithEffectFreeCalls functions once in once,changed,twice,changedAgain)) |> list
+    let barriers=types |> List.map (fun typ -> operations typ (v 2) |> List.map (fun instruction ->
+        let expressions dest=[MIR.BinOp (reg dest,MIR.Add,v 2,v 3,typ);MIR.UnaryOp (reg (dest+1),MIR.Not,v 2);MIR.HeapLoad (reg (dest+2),reg 2,3,Some typ);MIR.Call (reg (dest+3),fid 200,[v 2],[typ],typ)]
+        [graph source [block source (expressions 10 @ [instruction] @ expressions 20) (MIR.Ret (v 20))];graph source [block source (expressions 10 @ [instruction]) (MIR.Jump (label "child"));block "child" (expressions 20) (MIR.Ret (v 20))]] |> List.map optimize |> list) |> list) |> list
+    let joins=types |> List.map (fun typ -> binary |> List.map (fun op ->
+        let expression dest=MIR.BinOp (reg dest,op,v 2,v 3,typ)
+        let join=block "join" [expression 20;MIR.UnaryOp (reg 21,MIR.Not,v 2)] (MIR.Ret (v 20))
+        let entry=block source [] (MIR.Branch (v 2,label "left",label "right"))
+        let left=block "left" [expression 10;MIR.UnaryOp (reg 11,MIR.Not,v 2)] (MIR.Jump (label "join"))
+        let right=block "right" [] (MIR.Jump (label "join"))
+        [graph source [entry;left;right;join];graph source [entry;left;{right with Terminator=MIR.Branch (v 2,label "join",label "exit")};join;block "exit" [] (MIR.Ret (v 2))];graph source [entry;left;right;{join with Instrs=[MIR.Mov (reg 2,v 3,Some typ);expression 20]}];graph source [entry;left;{right with Instrs=[expression 12]};join];graph source [block source [] (MIR.Ret (v 2));left;right;join]] |> List.map optimize |> list) |> list) |> list
+    tuple [keys;barriers;joins]
+
 let mirSSAObservation (source:string) =
     let enc value=closureAnalysisEncode value
     let tuple values=namedArray "tuple" (Array.ofList values)
@@ -2539,6 +2634,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "mir-cse" -> mirCSEObservation source
         | "mir-ssa" -> mirSSAObservation source
         | "mir-foundations" -> mirFoundationsObservation source
         | "ssa-inlining" -> inliningObservation source
