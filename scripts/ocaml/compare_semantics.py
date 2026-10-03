@@ -199,7 +199,7 @@ def main():
         native = output / "snapshots" / identity / "native.exe"
         native.parent.mkdir(parents=True, exist_ok=True)
         if not native.exists():
-            original = ROOT / ("ocaml/_build/default/tests/foundations_main.exe" if args.stage == "dsl" else "ocaml/_build/default/tests/semantic_probe.exe")
+            original = args.native_executable or ROOT / ("ocaml/_build/default/tests/foundations_main.exe" if args.stage == "dsl" else "ocaml/_build/default/tests/semantic_probe.exe")
             shutil.copyfile(original, native)
             native.chmod(0o755)
         reference = native.parent / "reference.fsx"

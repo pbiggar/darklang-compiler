@@ -593,3 +593,15 @@ The isolated Crypto.dark closure comparison now passes: its complete 750,240,244
 byte JSON observation is identical between the frozen F# compiler and OCaml.
 The full closure-comparison corpus audit has restarted with channel-based native
 emission and bounded comparison; its completed gate is still pending.
+
+Ownership variant materialization is complete. It clones whole verified recursive
+candidates, preserves independent HIR contracts, validates source call sites and
+boundaries, rejects symbol collisions, and re-verifies the resulting program.
+All nineteen original materialization tests pass; the native suite is 249/249,
+with 113/391 complete source pairs and no missing reference comment lines.
+The clone-name SHA-256 helper passes 29 independent hashlib vectors covering
+padding boundaries, binary input, a million-byte input, Unicode pairs, and
+unpaired UTF-16 replacement. The warning-free build used a fresh absolute Dune
+build directory because this VM's reused build directory missed new modules.
+Batched parity audits now honor an explicitly supplied native executable when
+creating their immutable snapshot. Full compiler and byte parity remain pending.
