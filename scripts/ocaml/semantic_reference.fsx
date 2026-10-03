@@ -3003,6 +3003,49 @@ let blockAllocationObservation (source:string) =
         attempt (fun () -> rcInternalCall<LIR.BasicBlock array> "ApplyBlockAllocation" "applyPreparedCFGAllocation" [|box arch;box [|block label instrs LIR.Ret|];box (integer 0);box (floating 0);box preparations|]))))
     tuple [list blockCases;list terminators;list cfgCases;list preparedCases]
 
+let calleeClobberObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let label=LIR.Label source
+    let fid n=AST.functionId (uint64 n)
+    let block instrs : LIR.BasicBlock={Label=label;Instrs=instrs;Terminator=LIR.Ret}
+    let fn id instrs : LIR.Function={Id=fid id;Name=source;TypedParams=[];CFG={Entry=label;Blocks=Map.ofList [label,block instrs]};StackSize=32;UsedCalleeSaved=[LIR.X19];CodegenFacts=None}
+    let known mode : FunctionIdMap<ARM64CalleeClobbers.Writes>=
+        match mode with
+        | 0 -> FunctionIdMap.empty
+        | 1 -> FunctionIdMap.ofList [fid 3,{Ints=ARM64CalleeClobbers.ofInts [LIR.X2];Floats=ARM64CalleeClobbers.ofFloats [LIR.D2]};fid 7,{Ints=ARM64CalleeClobbers.ofInts [LIR.X0;LIR.X7];Floats=ARM64CalleeClobbers.ofFloats [LIR.D0;LIR.D15]}]
+        | _ -> FunctionIdMap.ofList [fid 3,{Ints=UInt64.MaxValue;Floats=UInt64.MaxValue};fid 7,ARM64CalleeClobbers.all]
+    let gp=([LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP] |> List.map LIR.Physical) @ [LIR.Virtual 3;LIR.Virtual (-1)]
+    let fp=(FloatAllocation.allocatableFloatRegs |> List.map LIR.FPhysical) @ [LIR.FVirtual (-1);LIR.FVirtual 3]
+    let operands=[LIR.Reg (LIR.Physical LIR.X2);LIR.Imm (-1L);LIR.Imm 0L;LIR.Imm 4095L;LIR.Imm 4096L;LIR.StackSlot (-257);LIR.StackSlot (-256);LIR.StackSlot 255;LIR.StackSlot 256;LIR.StringSymbol source;LIR.FloatImm (-0.0);LIR.FuncAddr (fid 3)]
+    let instructions=(gp |> List.mapi (fun index reg -> operands |> List.collect (fun operand -> lirAllocationFixtures source (Array.create 4 reg) (Array.create 4 (List.item (index%fp.Length) fp)) operand AST.TFloat64)) |> List.concat) @ ([-257;-256;255;256;Int32.MinValue;Int32.MaxValue] |> List.collect (fun offset -> [LIR.Store (offset,LIR.Physical LIR.X2);LIR.Mov (LIR.Physical LIR.X2,LIR.StackSlot offset)])) @ (fp |> List.collect (fun freg -> [LIR.FLoad (freg,-0.0);LIR.FMov (freg,LIR.FPhysical LIR.D0);LIR.FSpillLoad (freg,-24)])) @ ([3;7;9] |> List.collect (fun id -> [LIR.Call (LIR.Physical LIR.X2,fid id,[]);LIR.TailCall (fid id,[])]))
+    let instructionCases=[0;1;2] |> List.map (fun mode ->
+        let lookup id=FunctionIdMap.tryFind id (known mode)
+        instructions |> List.map (fun instr -> tuple [enc (rcInternalCall<ARM64CalleeClobbers.Writes> "ARM64CalleeClobbers" "instructionWrites" [|box lookup;box instr|]);enc (rcInternalCall<X64CalleeClobbers.Writes> "X64CalleeClobbers" "instructionWrites" [|box lookup;box instr|])]) |> list) |> list
+    let catalogs=[[];[fn 0 []];[fn 3 [LIR.Mov (LIR.Physical LIR.X5,LIR.Imm 0L)];fn 0 [LIR.Call (LIR.Physical LIR.X2,fid 3,[])]];
+        [fn 0 [LIR.Call (LIR.Physical LIR.X2,fid 1,[])];fn 1 [LIR.Call (LIR.Physical LIR.X3,fid 0,[]);LIR.FMov (LIR.FPhysical LIR.D5,LIR.FPhysical LIR.D0)]];
+        [fn 0 [LIR.Call (LIR.Physical LIR.X2,fid 3,[])];fn 3 [];fn 3 [LIR.Mov (LIR.Physical LIR.X7,LIR.Imm 0L)]];
+        [fn 0 [LIR.Call (LIR.Physical LIR.X2,fid 987,[])]];
+        List.init 65 (fun id -> fn id (if id=64 then [LIR.Mov (LIR.Physical LIR.X27,LIR.Imm 0L)] else [LIR.Call (LIR.Physical LIR.X2,fid (id+1),[])]))]
+    let summaryCases=[0;1;2] |> List.map (fun mode -> catalogs |> List.map (fun funcs -> tuple [enc (ARM64CalleeClobbers.summariesWithKnown (known mode) funcs);enc (X64CalleeClobbers.summariesWithKnown (known mode) funcs);enc (ARM64CalleeClobbers.summaries funcs)]) |> list) |> list
+    let envelopes=[[];[LIR.Call (LIR.Physical LIR.X2,fid 3,[])];[LIR.Call (LIR.Physical LIR.X2,fid 7,[])];[LIR.Call (LIR.Physical LIR.X2,fid 9,[])];[LIR.Call (LIR.Physical LIR.X2,fid 3,[LIR.Imm 0L])];[LIR.ArgMoves [LIR.X0,LIR.Imm 0L];LIR.Call (LIR.Physical LIR.X2,fid 3,[])];[LIR.FArgMoves [LIR.D0,LIR.FPhysical LIR.D2];LIR.Call (LIR.Physical LIR.X2,fid 3,[])];[LIR.Call (LIR.Physical LIR.X2,fid 3,[]);LIR.FMov (LIR.FVirtual (-1),LIR.FPhysical LIR.D0)];[LIR.Call (LIR.Physical LIR.X2,fid 3,[]);LIR.Call (LIR.Physical LIR.X2,fid 7,[])];[LIR.ArgMoves [LIR.X0,LIR.StringSymbol source];LIR.Call (LIR.Physical LIR.X2,fid 3,[])];[LIR.SaveRegs ([],[]);LIR.Call (LIR.Physical LIR.X2,fid 3,[]);LIR.RestoreRegs ([],[])];[LIR.Mov (LIR.Physical LIR.X3,LIR.Imm 1L);LIR.Call (LIR.Physical LIR.X2,fid 3,[])]]
+    let selected mask regs=regs |> List.indexed |> List.choose (fun (index,reg) -> if mask &&& (1 <<< index) <> 0 then Some reg else None)
+    let saveCases=[0;1;2] |> List.map (fun mode -> [0..255] |> List.map (fun mask ->
+        let ints=selected (mask &&& 15) [LIR.X0;LIR.X1;LIR.X2;LIR.X3]
+        let floats=selected (mask >>> 4) [LIR.D0;LIR.D1;LIR.D2;LIR.D3]
+        envelopes |> List.map (fun envelope -> [[LIR.RestoreRegs (ints,floats)];[];[LIR.RestoreRegs ([],[])]] |> List.map (fun ending ->
+            let instrs=LIR.SaveRegs (ints,floats)::envelope @ ending
+            let func=fn 0 instrs
+            tuple [enc (ARM64CalleeClobbers.callWritesForSaves (known mode) (block instrs));enc (X64CalleeClobbers.callWritesForSaves (known mode) (block instrs));enc (ARM64CalleeClobbers.refineWithCache None (Some (known mode)) [func]);enc (X64CalleeClobbers.pruneFunction (known mode) func)]) |> list) |> list) |> list) |> list
+    let cacheCases=[-1;0;1;2] |> List.map (fun knownMode ->
+        let calls=ResizeArray<_>()
+        let cache (func:LIR.Function) relevant generate=calls.Add (func.Id, relevant);generate ()
+        let functions=[fn 0 [LIR.SaveRegs ([LIR.X2;LIR.X3],[LIR.D2]);LIR.Call (LIR.Physical LIR.X2,fid 3,[]);LIR.RestoreRegs ([LIR.X2;LIR.X3],[LIR.D2])];fn 3 [LIR.Mov (LIR.Physical LIR.X5,LIR.Imm 0L)];fn 7 []]
+        let outputs=ARM64CalleeClobbers.refineWithCache (Some cache) (if knownMode<0 then None else Some (known knownMode)) functions
+        tuple [enc outputs;enc (Seq.toList calls);enc (ARM64CalleeClobbers.refine functions)]) |> list
+    tuple [instructionCases;summaryCases;saveCases;cacheCases]
+
 let lirTreeObservation (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -3886,6 +3929,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "callee-clobbers" -> calleeClobberObservation source
         | "block-allocation" -> blockAllocationObservation source
         | "instruction-allocation" -> instructionAllocationObservation source
         | "phi-resolution" -> phiObservation source

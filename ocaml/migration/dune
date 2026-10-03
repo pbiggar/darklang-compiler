@@ -804,3 +804,27 @@
  (deps ../lib/passes/anf/PrintInsertion.mli instrument_checking.py)
  (action (with-stdout-to %{targets}
   (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/PrintInsertion.mli}))))
+
+(rule
+ (targets InstrumentedARM64CalleeClobbers.mli)
+ (deps ../lib/backend/arm64/ARM64CalleeClobbers.mli)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler") (cat %{dep:../lib/backend/arm64/ARM64CalleeClobbers.mli}) (echo "val instructionWrites : (AST.functionId -> writes option) -> LIR.instr -> writes\n")))))
+
+(rule
+ (targets InstrumentedARM64CalleeClobbers.ml)
+ (deps ../lib/backend/arm64/ARM64CalleeClobbers.ml)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler") (cat %{dep:../lib/backend/arm64/ARM64CalleeClobbers.ml})))))
+
+(rule
+ (targets InstrumentedX64CalleeClobbers.mli)
+ (deps ../lib/backend/x64/X64CalleeClobbers.mli)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler") (cat %{dep:../lib/backend/x64/X64CalleeClobbers.mli}) (echo "val instructionWrites : (AST.functionId -> writes option) -> LIR.instr -> writes\n")))))
+
+(rule
+ (targets InstrumentedX64CalleeClobbers.ml)
+ (deps ../lib/backend/x64/X64CalleeClobbers.ml)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler") (cat %{dep:../lib/backend/x64/X64CalleeClobbers.ml})))))

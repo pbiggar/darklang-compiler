@@ -918,3 +918,15 @@ branch loads, truncated float liveness, and exact invalid-save diagnostics.
 The warning-free build passes 396/396 native units. Coverage is 207/391 pairs.
 Callee-write summaries and allocator orchestration are next; lowering/emission,
 remaining ownership tests, full corpus checks and final acceptance remain open.
+
+ARM64 and x64 callee-write summaries are fully translated with original comments
+and interfaces. Complete output matches F# for 138,456 instruction summaries,
+21 function catalogs (including duplicate IDs, mutual recursion, unresolved
+callees and a 65-function propagation chain), 27,648 save-envelope/pruning
+combinations, and four cache/known-summary configurations. Coverage includes
+all physical destinations, virtual/return shuttles, immediate/offset boundaries,
+argument setup, every GP/FP save subset, unmatched restores, full clobbers, x64
+stack parity and relevant cache keys. The warning-free build passes 396/396
+native units. Coverage is 209/391 pairs. Allocator orchestration also requires
+the remaining LIR peephole pass, which is next; lowering/emission, ownership
+tests, full corpus checks and final acceptance remain open.
