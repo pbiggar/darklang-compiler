@@ -23,4 +23,292 @@
    (progn
     (echo "open Dark_compiler")
     (cat %{dep:../lib/CheckedAST.mli})
-    (echo "val observe : string -> Yojson.Basic.t")))))
+    (echo "val observe : string -> Yojson.Basic.t\nval observationProgram : program -> Yojson.Basic.t\nval observationTypeCatalog : typeCatalog -> Yojson.Basic.t\nval observationFunctionCatalog : functionCatalog -> Yojson.Basic.t\n")))))
+
+(rule
+ (targets InstrumentedTypes.ml)
+ (deps ../lib/frontend/checking/Types.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/Types.ml}))))
+
+(rule
+ (targets InstrumentedTypes.mli)
+ (deps ../lib/frontend/checking/Types.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/Types.mli}))))
+
+(rule
+ (targets InstrumentedUnification.ml)
+ (deps ../lib/frontend/checking/Unification.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/Unification.ml}))))
+
+(rule
+ (targets InstrumentedUnification.mli)
+ (deps ../lib/frontend/checking/Unification.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/Unification.mli}))))
+
+(rule
+ (targets InstrumentedExpressionSupport.ml)
+ (deps ../lib/frontend/checking/ExpressionSupport.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/ExpressionSupport.ml}))))
+
+(rule
+ (targets InstrumentedExpressionSupport.mli)
+ (deps ../lib/frontend/checking/ExpressionSupport.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/ExpressionSupport.mli}))))
+
+(rule
+ (targets InstrumentedComparisonPlanning.ml)
+ (deps ../lib/frontend/checking/ComparisonPlanning.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/ComparisonPlanning.ml}))))
+
+(rule
+ (targets InstrumentedComparisonPlanning.mli)
+ (deps ../lib/frontend/checking/ComparisonPlanning.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/ComparisonPlanning.mli}))))
+
+(rule
+ (targets InstrumentedEqualityHelpers.ml)
+ (deps ../lib/frontend/checking/EqualityHelpers.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/EqualityHelpers.ml}))))
+
+(rule
+ (targets InstrumentedEqualityHelpers.mli)
+ (deps ../lib/frontend/checking/EqualityHelpers.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/EqualityHelpers.mli}))))
+
+(rule
+ (targets InstrumentedOrderingHelpers.ml)
+ (deps ../lib/frontend/checking/OrderingHelpers.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/OrderingHelpers.ml}))))
+
+(rule
+ (targets InstrumentedOrderingHelpers.mli)
+ (deps ../lib/frontend/checking/OrderingHelpers.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/OrderingHelpers.mli}))))
+
+(rule
+ (targets InstrumentedHelperDependencies.ml)
+ (deps ../lib/frontend/checking/HelperDependencies.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/HelperDependencies.ml}))))
+
+(rule
+ (targets InstrumentedHelperDependencies.mli)
+ (deps ../lib/frontend/checking/HelperDependencies.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/HelperDependencies.mli}))))
+
+(rule
+ (targets InstrumentedMaterializeHelpers.ml)
+ (deps ../lib/frontend/checking/MaterializeHelpers.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/MaterializeHelpers.ml}))))
+
+(rule
+ (targets InstrumentedMaterializeHelpers.mli)
+ (deps ../lib/frontend/checking/MaterializeHelpers.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/MaterializeHelpers.mli}))))
+
+(rule
+ (targets InstrumentedResolveDeclarations.ml)
+ (deps ../lib/frontend/checking/ResolveDeclarations.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/ResolveDeclarations.ml}))))
+
+(rule
+ (targets InstrumentedResolveDeclarations.mli)
+ (deps ../lib/frontend/checking/ResolveDeclarations.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/ResolveDeclarations.mli}))))
+
+(rule
+ (targets InstrumentedDeclarations.ml)
+ (deps ../lib/frontend/checking/Declarations.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/Declarations.ml}))))
+
+(rule
+ (targets InstrumentedDeclarations.mli)
+ (deps ../lib/frontend/checking/Declarations.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/Declarations.mli}))))
+
+(rule
+ (targets InstrumentedCheckRecordLiterals.ml)
+ (deps ../lib/frontend/checking/CheckRecordLiterals.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckRecordLiterals.ml}))))
+
+(rule
+ (targets InstrumentedCheckRecordLiterals.mli)
+ (deps ../lib/frontend/checking/CheckRecordLiterals.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckRecordLiterals.mli}))))
+
+(rule
+ (targets InstrumentedCheckBinaryOperations.ml)
+ (deps ../lib/frontend/checking/CheckBinaryOperations.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckBinaryOperations.ml}))))
+
+(rule
+ (targets InstrumentedCheckBinaryOperations.mli)
+ (deps ../lib/frontend/checking/CheckBinaryOperations.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckBinaryOperations.mli}))))
+
+(rule
+ (targets InstrumentedCheckLambdas.ml)
+ (deps ../lib/frontend/checking/CheckLambdas.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckLambdas.ml}))))
+
+(rule
+ (targets InstrumentedCheckLambdas.mli)
+ (deps ../lib/frontend/checking/CheckLambdas.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckLambdas.mli}))))
+
+(rule
+ (targets InstrumentedCheckCalls.ml)
+ (deps ../lib/frontend/checking/CheckCalls.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckCalls.ml}))))
+
+(rule
+ (targets InstrumentedCheckCalls.mli)
+ (deps ../lib/frontend/checking/CheckCalls.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckCalls.mli}))))
+
+(rule
+ (targets InstrumentedCheckMatches.ml)
+ (deps ../lib/frontend/checking/CheckMatches.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckMatches.ml}))))
+
+(rule
+ (targets InstrumentedCheckMatches.mli)
+ (deps ../lib/frontend/checking/CheckMatches.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckMatches.mli}))))
+
+(rule
+ (targets InstrumentedContextInference.ml)
+ (deps ../lib/frontend/checking/ContextInference.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/ContextInference.ml}))))
+
+(rule
+ (targets InstrumentedContextInference.mli)
+ (deps ../lib/frontend/checking/ContextInference.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/ContextInference.mli}))))
+
+(rule
+ (targets InstrumentedExplicitCalls.ml)
+ (deps ../lib/frontend/checking/ExplicitCalls.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/ExplicitCalls.ml}))))
+
+(rule
+ (targets InstrumentedExplicitCalls.mli)
+ (deps ../lib/frontend/checking/ExplicitCalls.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/ExplicitCalls.mli}))))
+
+(rule
+ (targets InstrumentedCheckExpressions.ml)
+ (deps ../lib/frontend/checking/CheckExpressions.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckExpressions.ml}))))
+
+(rule
+ (targets InstrumentedCheckExpressions.mli)
+ (deps ../lib/frontend/checking/CheckExpressions.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckExpressions.mli}))))
+
+(rule
+ (targets InstrumentedCheckFunctions.ml)
+ (deps ../lib/frontend/checking/CheckFunctions.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckFunctions.ml}))))
+
+(rule
+ (targets InstrumentedCheckFunctions.mli)
+ (deps ../lib/frontend/checking/CheckFunctions.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckFunctions.mli}))))
+
+(rule
+ (targets InstrumentedResolvedProgram.ml)
+ (deps ../lib/frontend/checking/ResolvedProgram.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/ResolvedProgram.ml}))))
+
+(rule
+ (targets InstrumentedResolvedProgram.mli)
+ (deps ../lib/frontend/checking/ResolvedProgram.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/ResolvedProgram.mli}))))
+
+(rule
+ (targets InstrumentedTypeChecking.ml)
+ (deps ../lib/frontend/TypeChecking.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/TypeChecking.ml}))))
+
+(rule
+ (targets InstrumentedTypeChecking.mli)
+ (deps ../lib/frontend/TypeChecking.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/TypeChecking.mli}))))
+
+(rule
+ (targets InstrumentedNameResolution.ml)
+ (deps ../lib/NameResolution.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/NameResolution.ml}))))
+
+(rule
+ (targets InstrumentedNameResolution.mli)
+ (deps ../lib/NameResolution.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/NameResolution.mli}))))
+
+(rule
+ (targets InstrumentedCheckingDiagnostics.ml)
+ (deps ../lib/frontend/checking/CheckingDiagnostics.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckingDiagnostics.ml}))))
+
+(rule
+ (targets InstrumentedCheckingDiagnostics.mli)
+ (deps ../lib/frontend/checking/CheckingDiagnostics.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/checking/CheckingDiagnostics.mli}))))
+
+(rule
+ (targets InstrumentedSemanticDiagnostics.ml)
+ (deps SemanticDiagnostics.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:SemanticDiagnostics.ml}))))
+
+(rule
+ (targets InstrumentedSemanticDiagnostics.mli)
+ (deps SemanticDiagnostics.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:SemanticDiagnostics.mli}))))

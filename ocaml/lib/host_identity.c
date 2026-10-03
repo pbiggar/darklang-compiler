@@ -47,3 +47,14 @@ CAMLprim value dark_random_uuid_bytes(value unit) {
   bytes = caml_alloc_initialized_string(sizeof(raw), (const char *)raw);
   CAMLreturn(bytes);
 }
+
+/* Stopwatch measures elapsed monotonic time, including time spent blocked. */
+#include <time.h>
+CAMLprim value dark_monotonic_milliseconds(value unit) {
+  CAMLparam1(unit);
+  struct timespec timestamp;
+  if (clock_gettime(CLOCK_MONOTONIC, &timestamp) != 0)
+    caml_failwith("Unable to read monotonic clock");
+  CAMLreturn(caml_copy_double((double)timestamp.tv_sec * 1000.0 +
+                             (double)timestamp.tv_nsec / 1000000.0));
+}

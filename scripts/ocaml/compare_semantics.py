@@ -129,7 +129,7 @@ def normalize_fresh_identities(observation):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies", "materialize-helpers", "declarations", "record-checking", "binary-checking", "stdlib-catalog", "lambda-checking", "call-checking", "match-checking"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies", "materialize-helpers", "declarations", "record-checking", "binary-checking", "stdlib-catalog", "lambda-checking", "call-checking", "match-checking", "expression-checking", "function-checking", "program-checking"])
     parser.add_argument("--probes-only", action="store_true")
     parser.add_argument("--batch-size", type=int, default=0,
                         help="Compare restartable batches; reuse only matching source snapshots")
@@ -149,7 +149,7 @@ def main():
         # A completed batch is reusable only for the exact corpus and code. This
         # includes the frozen reference, native implementation and observers.
         snapshot = hashlib.sha256(json.dumps(corpus, ensure_ascii=True).encode())
-        paths = sorted((ROOT / "ocaml").rglob("*.ml")) + sorted((ROOT / "ocaml").rglob("*.mli"))
+        paths = sorted(path for path in (ROOT / "ocaml").rglob("*") if path.suffix in {".ml", ".mli", ".inc", ".c", ".py"} or path.name == "dune")
         paths = [path for path in paths if "_build" not in path.parts]
         paths += sorted((ROOT / "scripts/ocaml").glob("*"))
         for path in paths:
@@ -240,7 +240,7 @@ def main():
                         print(f"{name} stopped before {label}; see {output / (name + '.stderr')}")
                         return 1
                 expected, actual = [json.loads(row) for row in rows]
-                if args.stage == "call-checking":
+                if args.stage in {"call-checking", "expression-checking", "function-checking", "program-checking"}:
                     expected, actual = map(normalize_fresh_identities, [expected, actual])
                 for audit, observation in zip(audits, [expected, actual], strict=True):
                     canonical = json.dumps(observation, sort_keys=True, ensure_ascii=True, separators=(",", ":")).encode()

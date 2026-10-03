@@ -935,6 +935,151 @@ let matchChecking source =
     let special = special |> List.collect (fun (typ,value,cases) -> [None;Some AST.TInt64;Some (AST.TVar source)] |> List.map (fun expected -> run typ value cases expected))
     JsonArray(Array.ofList (ordinary @ special)) :> JsonNode
 
+let additionalExpressions source =
+    let x = AST.Var source
+    let y = AST.Var "y"
+    let field = AST.unresolvedRecordFieldReference "field"
+    let patterns = [AST.PUnit;AST.PWildcard;AST.PVar source;AST.PConstructor ("C",[AST.PVar source;AST.PVar "y"]);AST.PResolvedConstructor ("M.T","C",3,[AST.PVar source]);AST.PInt64 1L;AST.PBigInt 1I;AST.PInt128Literal (Int128.Parse "1");AST.PInt8Literal 1y;AST.PInt16Literal 1s;AST.PInt32Literal 1;AST.PUInt8Literal 1uy;AST.PUInt16Literal 1us;AST.PUInt32Literal 1ul;AST.PUInt64Literal 1UL;AST.PUInt128Literal (UInt128.Parse "1");AST.PBool true;AST.PString source;AST.PChar source;AST.PFloat 1.0;AST.PTuple [AST.PVar source;AST.PVar "y"];AST.PList [AST.PVar source];AST.PListCons ([AST.PVar source],AST.PVar "tail");AST.POr (AST.NonEmptyList.fromList [AST.PVar source;AST.PVar "other"])]
+    let literals: AST.Expr list = [AST.UnitLiteral;AST.Int64Literal 1L;AST.Int128Literal (Int128.Parse "1");AST.BigIntLiteral 1I;AST.Int8Literal 1y;AST.Int16Literal 1s;AST.Int32Literal 1;AST.UInt8Literal 1uy;AST.UInt16Literal 1us;AST.UInt32Literal 1ul;AST.UInt64Literal 1UL;AST.UInt128Literal (UInt128.Parse "1");AST.BoolLiteral true;AST.StringLiteral source;AST.CharLiteral source;AST.FloatLiteral 1.0;AST.RuntimeError source]
+    let expressions = literals @ [x;AST.Var "Builtin.testNan";AST.Var "Builtin.testInfinity";AST.BoundaryRender (source,x);AST.BinOp (AST.Add,x,y);AST.UnaryOp (AST.Neg,x);
+        AST.Let (AST.LPVariable source,x,AST.TupleLiteral [x;y]);AST.Let (AST.LPTuple (AST.LPVariable source,AST.LPVariable "y",[]),AST.Var "value",AST.TupleLiteral [x;y]);
+        AST.RecursiveLet (AST.RecursiveBindingCandidate {SourceName=source;Kind=AST.NamedLocalFunctionMember},AST.Apply (x,[],AST.NonEmptyList.singleton y),AST.TupleLiteral [x;y]);
+        AST.If (x,y,AST.Var "z");AST.Sequence (x,y);AST.Apply (x,[],AST.NonEmptyList.fromList [y;AST.Var "z"]);AST.TupleLiteral [x;y];AST.TupleAccess (x,1);
+        AST.DictLiteral (AST.TString,AST.TString,[(x,y)]);AST.RecordLiteral (AST.unresolvedRecordReference "R" [],[(field,x)]);AST.RecordUpdate (x,[(field,y)]);AST.RecordAccess (x,field);
+        AST.Constructor (AST.UnresolvedConstructor None,"C",[x;y]);AST.ListLiteral [x;y];AST.Lambda (AST.NonEmptyList.singleton (AST.lambdaParameter (AST.LPVariable source)),None,AST.TupleLiteral [x;y]);
+        AST.Apply (AST.TupleAccess (x,0),[],AST.NonEmptyList.singleton y);AST.IndirectApply (x,AST.NonEmptyList.singleton y);AST.Closure (source,[x;y]);
+        AST.InterpolatedString [AST.StringText source;AST.StringExpr x;AST.StringExpr y]] @ (patterns |> List.map (fun pattern -> AST.Match (AST.Var "scrutinee",[{Patterns=AST.NonEmptyList.singleton pattern;Guard=Some (AST.Var "guard");Body=AST.TupleLiteral [x;y;AST.Var "tail"]}])))
+    expressions
+
+let expressionChecking source =
+    let lookup : CheckingTypes.VariantLookup = Map.ofList ["C",("S",[],0,[AST.TInt64]);"S.C",("S",[],0,[AST.TInt64]);"D",("S",[],1,[]);"S.D",("S",[],1,[]);
+        "None",("Darklang.Stdlib.Option.Option",["a"],0,[]);"Darklang.Stdlib.Option.Option.None",("Darklang.Stdlib.Option.Option",["a"],0,[]);
+        "Some",("Darklang.Stdlib.Option.Option",["a"],1,[AST.TVar "a"]);"Darklang.Stdlib.Option.Option.Some",("Darklang.Stdlib.Option.Option",["a"],1,[AST.TVar "a"])]
+    let names = Set.ofList ["S";"Darklang.Stdlib.Option.Option"]
+    let sums : CheckingTypes.IndexedSumTypeRegistry = typesCall "indexSumTypeRegistry" [|box lookup|]
+    let registry = CheckingTypes.indexTypeRegistry lookup (Map.ofList ["R",[];"Generic",["a"]]) (Map.ofList ["R",["field",AST.TInt64;"field",AST.TString];"Generic",["field",AST.TVar "a"]])
+    let aliases : CheckingTypes.AliasRegistry = Map.ofList ["AliasInt",([],AST.TInt64);"AliasString",([],AST.TString);"AliasRecord",([],AST.TRecord ("R",[]));"Pair",(["a"],AST.TTuple [AST.TVar "a";AST.TVar "a"])]
+    let env : CheckingTypes.TypeEnv = Map.ofList [source,AST.TInt64;"y",AST.TString;"z",AST.TBool;"value",AST.TTuple [AST.TInt64;AST.TString];"scrutinee",AST.TSum ("S",[]);"guard",AST.TBool;"tail",AST.TString;
+        "record",AST.TRecord ("R",[]);"g",AST.TFunction ([AST.TVar "a";AST.TVar "a"],AST.TVar "a");"f",AST.TFunction ([AST.TInt64;AST.TString],AST.TBool);
+        "Dict.fn",AST.TFunction ([AST.TVar "k";AST.TVar "v"],AST.TVar "v");"closure",AST.TFunction ([AST.TUnit;AST.TInt64],AST.TString)]
+    let generic : CheckingTypes.GenericFuncRegistry = {Functions=Map.ofList ["g",["a"];"Dict.fn",["k";"v"]];RequireExplicitTypeArgsForBareCalls=true}
+    let parsed : AST.ParsedRecursiveMember = {Binding=AST.bindingId 1;Boundary=AST.scopeBoundaryId 2;Member=AST.recursiveMemberId 3;SourceName="recursive";Kind=AST.NamedLocalFunctionMember}
+    let recursive = AST.ResolvedRecursiveBinding {Parsed=parsed;Group=AST.singletonRecursiveGroupId parsed.Member;GroupIndex=0;Availability=AST.SelfRecursiveMember}
+    let variable name = AST.lambdaParameter (AST.LPVariable name)
+    let field value = AST.unresolvedRecordFieldReference "field",value
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let internalApp =
+        let planType = typeof<AST.SemanticType>.Assembly.GetType("ComparisonPlanning+InternalTypeApp")
+        let case = FSharpType.GetUnionCases(planType,flags)[0]
+        let dispatch = FSharpValue.MakeUnion(case,[|box AST.TInt64;box (AST.Int64Literal 1L : AST.Expr);box (AST.Int64Literal 2L : AST.Expr)|],flags)
+        typeof<AST.SemanticType>.Assembly.GetType("ComparisonPlanning").GetMethod("makeInternalTypeApp",flags).Invoke(null,[|dispatch|]) :?> AST.Expr
+    let ops = [AST.Add; AST.Sub; AST.Mul; AST.Div; AST.Mod; AST.Eq; AST.Neq; AST.Lt; AST.Gt; AST.Lte; AST.Gte; AST.And; AST.Or; AST.Pow; AST.Shl; AST.Shr; AST.BitAnd; AST.BitOr; AST.BitXor; AST.StringConcat]
+    let extra : AST.Expr list =
+        (ops |> List.collect (fun op -> [AST.BinOp (op, AST.Int64Literal 1L, AST.Int64Literal 2L); AST.BinOp (op, AST.BoolLiteral true, AST.BoolLiteral false)]))
+        @ [AST.ListLiteral []; AST.ListLiteral [AST.Int64Literal 1L; AST.Int64Literal 2L]; AST.ListLiteral [AST.Int64Literal 1L; AST.StringLiteral source];
+          AST.Let (AST.LPVariable "n", AST.Int64Literal 1L, AST.InterpolatedString [AST.StringExpr (AST.Var "n")]);
+          AST.Let (AST.LPTuple (AST.LPVariable "a", AST.LPVariable "b", []), AST.Int64Literal 1L, AST.Var "missing");
+          AST.Let (AST.LPVariable "fn", AST.Lambda (AST.NonEmptyList.singleton (variable "x"), None, AST.BinOp (AST.Add, AST.Var "x", AST.Int64Literal 1L)), AST.applyNamed "fn" (AST.NonEmptyList.singleton (AST.Int64Literal 2L)));
+          AST.RecursiveLet (recursive, AST.Lambda (AST.NonEmptyList.singleton {Pattern = AST.LPVariable "x"; SourceAnnotation = Some AST.TString; InferredType = Some AST.TInt64}, Some AST.TInt64, AST.Var "x"), AST.applyNamed "recursive" (AST.NonEmptyList.singleton (AST.Int64Literal 2L)));
+          AST.Apply (AST.Var "g", [AST.TInt64], AST.NonEmptyList.fromList [AST.Int64Literal 1L; AST.Int64Literal 2L]); AST.Apply (AST.Var "g", [AST.TString], AST.NonEmptyList.singleton (AST.StringLiteral source));
+          AST.Apply (AST.Var "Dict.fn", [AST.TInt64], AST.NonEmptyList.fromList [AST.StringLiteral source; AST.Int64Literal 1L]);
+          AST.Apply (AST.Var "__raw_get", [AST.TInt64], AST.NonEmptyList.fromList [AST.RuntimeError source; AST.Int64Literal 0L]);
+          internalApp;
+          AST.RecordLiteral (AST.unresolvedRecordReference "R" [], [field (AST.Int64Literal 1L)]); AST.RecordUpdate (AST.Var "record", [field (AST.Int64Literal 1L); field (AST.Int64Literal 2L)]);
+          AST.RecordAccess (AST.Var "record", AST.unresolvedRecordFieldReference "field"); AST.RecordAccess (AST.Var "record", AST.unresolvedRecordFieldReference "___");
+          AST.Constructor (AST.UnresolvedConstructor None, "C", [AST.Int64Literal 1L]); AST.Constructor (AST.UnresolvedConstructor None, "None", []);
+          AST.applyNamed "Builtin.unwrap" (AST.NonEmptyList.singleton (AST.Constructor (AST.UnresolvedConstructor None, "None", [])));
+          AST.If (AST.BoolLiteral true, AST.ListLiteral [], AST.ListLiteral [AST.Int64Literal 1L]); AST.If (AST.Int64Literal 1L, AST.UnitLiteral, AST.UnitLiteral);
+          AST.TupleLiteral [AST.applyNamed "Builtin.testRuntimeError" (AST.NonEmptyList.singleton (AST.StringLiteral source)); AST.Int64Literal 1L];
+          AST.DictLiteral (AST.TUnit, AST.TUnit, [AST.StringLiteral source, AST.Int64Literal 1L; AST.StringLiteral source, AST.Int64Literal 2L]);
+          AST.DictLiteral (AST.TUnit, AST.TUnit, [AST.FloatLiteral (BitConverter.Int64BitsToDouble (int64 0xfff8000000000000UL)), AST.UnitLiteral; AST.FloatLiteral (BitConverter.Int64BitsToDouble 0x7ff8000000000001L), AST.UnitLiteral]);
+          AST.DictLiteral (AST.TUnit, AST.TUnit, []); AST.DictLiteral (AST.TUnit, AST.TUnit, [AST.StringLiteral source, AST.UnitLiteral]);
+          AST.Apply (AST.Lambda (AST.NonEmptyList.fromList [variable "x"; variable "y"], None, AST.Var "x"), [], AST.NonEmptyList.singleton (AST.Int64Literal 1L)); AST.Closure ("closure", [AST.UnitLiteral]);
+          AST.Match (AST.BoolLiteral true, [{Patterns = AST.NonEmptyList.singleton (AST.PBool true); Guard = None; Body = AST.Int64Literal 1L}; {Patterns = AST.NonEmptyList.singleton (AST.PBool false); Guard = None; Body = AST.Int64Literal 2L}])]
+   
+    let expressions = additionalExpressions source @ extra
+    let expectations = [None; Some AST.TUnit; Some AST.TInt64; Some AST.TInt128; Some AST.TInt; Some AST.TBool; Some AST.TString; Some AST.TChar; Some AST.TFloat64; Some (AST.TVar source);
+        Some (AST.TRecord ("AliasInt", [])); Some (AST.TRecord ("AliasString", [])); Some (AST.TRecord ("R", [])); Some (AST.TSum ("S", [])); Some (AST.TList AST.TInt64); Some (AST.TTuple [AST.TInt64; AST.TString]); Some (AST.TFunction ([AST.TInt64], AST.TInt64)); Some (AST.TDict (AST.TString, AST.TInt64))]
+    let cases = if source = "" then expressions |> List.collect (fun value -> expectations |> List.map (fun expected -> value,expected)) else expressions |> List.mapi (fun index value -> value,expectations[index % expectations.Length])
+    let method = typeof<AST.SemanticType>.Assembly.GetType("CheckExpressions").GetMethod("checkExprWithParamNamesAndSumTypeNames",flags)
+    cases |> List.map (fun (value,expected) ->
+        try
+            let result = method.Invoke(null,[|box (Map.ofList ["f",["first";"second"]]);box names;box sums;box value;box env;box registry;box lookup;box generic;box AST.defaultWarningSettings;box (Stdlib.buildModuleRegistry ());box aliases;box expected|])
+            let node = JsonObject()
+            node["result"] <- encode method.ReturnType result
+            node :> JsonNode
+        with :? Reflection.TargetInvocationException as error ->
+            let node = JsonObject()
+            node["crash"] <- encodeString error.InnerException.Message
+            node :> JsonNode) |> List.toArray |> fun values -> JsonArray(values) :> JsonNode
+
+let functionChecking source =
+    let lookup : CheckingTypes.VariantLookup = Map.ofList ["C",("S",[],0,[AST.TInt64]);"S.C",("S",[],0,[AST.TInt64]);"D",("S",[],1,[]);"S.D",("S",[],1,[]);
+        "None",("Darklang.Stdlib.Option.Option",["a"],0,[]);"Darklang.Stdlib.Option.Option.None",("Darklang.Stdlib.Option.Option",["a"],0,[]);
+        "Some",("Darklang.Stdlib.Option.Option",["a"],1,[AST.TVar "a"]);"Darklang.Stdlib.Option.Option.Some",("Darklang.Stdlib.Option.Option",["a"],1,[AST.TVar "a"])]
+    let names = Set.ofList ["S";"Darklang.Stdlib.Option.Option"]
+    let sums : CheckingTypes.IndexedSumTypeRegistry = typesCall "indexSumTypeRegistry" [|box lookup|]
+    let registry = CheckingTypes.indexTypeRegistry lookup (Map.ofList ["R",[];"Generic",["a"]]) (Map.ofList ["R",["field",AST.TInt64;"field",AST.TString];"Generic",["field",AST.TVar "a"]])
+    let aliases : CheckingTypes.AliasRegistry = Map.ofList ["AliasInt",([],AST.TInt64);"AliasString",([],AST.TString);"AliasRecord",([],AST.TRecord ("R",[]));"Pair",(["a"],AST.TTuple [AST.TVar "a";AST.TVar "a"])]
+    let env : CheckingTypes.TypeEnv = Map.ofList [source,AST.TInt64;"y",AST.TString;"z",AST.TBool;"value",AST.TTuple [AST.TInt64;AST.TString];"scrutinee",AST.TSum ("S",[]);"guard",AST.TBool;"tail",AST.TString;
+        "record",AST.TRecord ("R",[]);"g",AST.TFunction ([AST.TVar "a";AST.TVar "a"],AST.TVar "a");"f",AST.TFunction ([AST.TInt64;AST.TString],AST.TBool);
+        "Dict.fn",AST.TFunction ([AST.TVar "k";AST.TVar "v"],AST.TVar "v");"closure",AST.TFunction ([AST.TUnit;AST.TInt64],AST.TString)]
+    let generic : CheckingTypes.GenericFuncRegistry = {Functions=Map.ofList ["g",["a"];"Dict.fn",["k";"v"]];RequireExplicitTypeArgsForBareCalls=true}
+    let parsed : AST.ParsedRecursiveMember = {Binding=AST.bindingId 1;Boundary=AST.scopeBoundaryId 2;Member=AST.recursiveMemberId 3;SourceName="recursive";Kind=AST.NamedLocalFunctionMember}
+    let recursive = AST.ResolvedRecursiveBinding {Parsed=parsed;Group=AST.singletonRecursiveGroupId parsed.Member;GroupIndex=0;Availability=AST.SelfRecursiveMember}
+    let functions : AST.FunctionDef list = [
+        {Name=source;TypeParams=[];Params=AST.NonEmptyList.singleton ("x",AST.TInt64);ReturnType=AST.TInt64;Body=AST.Var "x";Recursion=None};
+        {Name=source;TypeParams=[];Params=AST.NonEmptyList.singleton ("x",AST.TInt64);ReturnType=AST.TString;Body=AST.Int64Literal 1L;Recursion=None};
+        {Name=source;TypeParams=["a"];Params=AST.NonEmptyList.singleton ("x",AST.TVar "a");ReturnType=AST.TVar "a";Body=AST.Var "x";Recursion=None};
+        {Name=source;TypeParams=["a"];Params=AST.NonEmptyList.singleton ("x",AST.TVar "a");ReturnType=AST.TVar "a";Body=AST.StringLiteral source;Recursion=None};
+        {Name=source;TypeParams=[];Params=AST.NonEmptyList.singleton ("x",AST.TRecord ("AliasInt",[]));ReturnType=AST.TRecord ("AliasInt",[]);Body=AST.Var "x";Recursion=Some recursive};
+        {Name=source;TypeParams=[];Params=AST.NonEmptyList.singleton ("x",AST.TRecord ("S",[]));ReturnType=AST.TSum ("S",[]);Body=AST.Var "x";Recursion=Some (AST.TypedRecursiveBinding {Resolved=(match recursive with AST.ResolvedRecursiveBinding value -> value | _ -> failwith "fixture");MonomorphicType=AST.TUnit})};
+        {Name=source;TypeParams=[];Params=AST.NonEmptyList.singleton ("x",AST.TUnit);ReturnType=AST.TList AST.TInt64;Body=AST.ListLiteral [];Recursion=None};
+        {Name=source;TypeParams=[];Params=AST.NonEmptyList.singleton ("x",AST.TUnit);ReturnType=AST.TString;Body=AST.RuntimeError source;Recursion=None}]
+    let specs = [[];[AST.TInt64];[AST.TString];[AST.TVar source];[AST.TInt64;AST.TString]]
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let moduleType = typeof<AST.SemanticType>.Assembly.GetType("CheckFunctions")
+    let checkMethod = moduleType.GetMethod("checkFunctionDefWithSumTypeNames",flags)
+    let specializeMethod = moduleType.GetMethod("specializeFunctionForTypeCheck",flags)
+    let collectMethod = moduleType.GetMethod("collectTypeAppSpecs",flags)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    tuple [
+        functions |> List.map (fun func -> tuple [
+            [false;true] |> List.map (fun explicit -> let result = checkMethod.Invoke(null,[|box (Map.ofList ["f",["first";"second"]]);box names;box sums;box func;box env;box registry;box lookup;box {generic with RequireExplicitTypeArgsForBareCalls=explicit};box AST.defaultWarningSettings;box (Stdlib.buildModuleRegistry ());box aliases|]) in encode checkMethod.ReturnType result) |> list;
+            specs |> List.map (fun args -> encode specializeMethod.ReturnType (specializeMethod.Invoke(null,[|box func;box args|]))) |> list]) |> list;
+        (additionalExpressions source @ [AST.Apply (AST.Var source,[AST.TInt64;AST.TVar "a"],AST.NonEmptyList.singleton (AST.Apply (AST.Var "g",[AST.TString],AST.NonEmptyList.singleton AST.UnitLiteral)));AST.Closure ("f",[AST.Apply (AST.Var "g",[AST.TInt64],AST.NonEmptyList.singleton AST.UnitLiteral)])])
+        |> List.map (fun expr -> let specs = collectMethod.Invoke(null,[|box expr|]) :?> Set<string * AST.SemanticType list> in encode typeof<(string * AST.SemanticType list) list> (box (Set.toList specs))) |> list]
+
+let programChecking source =
+    let func name parameters ret body : AST.FunctionDef = {Name=name;TypeParams=[];Params=AST.NonEmptyList.fromList parameters;ReturnType=ret;Body=body;Recursion=None}
+    let generic = {func "identity" ["x",AST.TVar "a"] (AST.TVar "a") (AST.Var "x") with TypeParams=["a"]}
+    let declarations : AST.TopLevel list = [AST.TypeDef (AST.RecordDef ("R",[],["field",AST.TInt64]));AST.TypeDef (AST.SumTypeDef ("S",[],[{Name="C";Fields=[AST.TInt64]};{Name="D";Fields=[]}]));
+        AST.TypeDef (AST.TypeAlias ("Alias",[],AST.TInt64));AST.FunctionDef generic;AST.FunctionDef (func "constant" ["x",AST.TUnit] AST.TString (AST.StringLiteral source));
+        AST.ValueDef (AST.UncheckedValueDef ("value",AST.Int64Literal 1L))]
+    let programs : AST.Program list = [AST.Program [];AST.Program [AST.Expression ([],AST.UnitLiteral)];AST.Program declarations;AST.Program (declarations @ [AST.Expression ([],AST.applyNamed "identity" (AST.NonEmptyList.singleton (AST.Int64Literal 1L)))]);
+        AST.Program (declarations @ [AST.Expression ([],AST.Apply (AST.Var "identity",[AST.TString],AST.NonEmptyList.singleton (AST.StringLiteral source)))]);
+        AST.Program (declarations @ [AST.Expression ([],AST.RecordLiteral (AST.unresolvedRecordReference "R" [],[AST.unresolvedRecordFieldReference "field",AST.Int64Literal 1L]))]);
+        AST.Program (declarations @ [AST.Expression ([],AST.BinOp (AST.Eq,AST.Var "value",AST.Int64Literal 1L))]);
+        AST.Program [AST.Expression ([],AST.StringLiteral source);AST.Expression ([],AST.UnitLiteral)];
+        AST.Program [AST.FunctionDef (func "broken" ["x",AST.TUnit] AST.TString (AST.Int64Literal 1L));AST.Expression ([],AST.UnitLiteral)];
+        AST.Program [AST.ValueDef (AST.UncheckedValueDef ("first",AST.Int64Literal 1L));AST.ValueDef (AST.UncheckedValueDef ("second",AST.Var "first"));AST.Expression ([],AST.Var "second")]]
+    let baseResult = TypeChecking.checkDeclarationProgramWithEnv (AST.Program declarations)
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let method = typeof<AST.SemanticType>.Assembly.GetType("CheckResolvedProgram").GetMethod("checkResolvedProgramInternal",flags)
+    let fullType = typeof<Result<AST.SemanticType * CheckedAST.Program * CheckingTypes.TypeCheckEnv,CheckingDiagnostics.TypeError>>
+    let full value = encode fullType (box value)
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let perProgram program =
+        let result = baseResult |> Result.map (fun (_,_,baseEnv) ->
+            TypeChecking.checkProgramWithBaseEnv baseEnv program,TypeChecking.checkDeclarationProgramWithBaseEnv baseEnv program,
+            TypeChecking.checkPublicProgramWithBaseEnvAndSettings baseEnv true AST.defaultWarningSettings program,TypeChecking.checkSyntheticPreambleWithBaseEnvAndSettings baseEnv false AST.defaultWarningSettings program)
+        tuple [full (TypeChecking.checkProgramWithEnv program);full (TypeChecking.checkDeclarationProgramWithEnv program);
+        encode typeof<Result<AST.SemanticType * CheckedAST.Program,CheckingDiagnostics.TypeError>> (box (TypeChecking.checkPublicProgram program));
+        encode method.ReturnType (method.Invoke(null,[|box (None:CheckingTypes.TypeCheckEnv option);box false;box AST.defaultWarningSettings;box true;box program|]));
+        encode typeof<Result<(Result<AST.SemanticType * CheckedAST.Program * CheckingTypes.TypeCheckEnv,CheckingDiagnostics.TypeError> * Result<AST.SemanticType * CheckedAST.Program * CheckingTypes.TypeCheckEnv,CheckingDiagnostics.TypeError> * Result<AST.SemanticType * CheckedAST.Program * CheckingTypes.TypeCheckEnv,CheckingDiagnostics.TypeError> * Result<AST.SemanticType * CheckedAST.Program * CheckingTypes.TypeCheckEnv,CheckingDiagnostics.TypeError>),CheckingDiagnostics.TypeError>> (box result)]
+    tuple [full baseResult;JsonArray(programs |> List.map perProgram |> List.toArray) :> JsonNode]
+
 CultureInfo.CurrentCulture <- CultureInfo.InvariantCulture
 CultureInfo.CurrentUICulture <- CultureInfo.InvariantCulture
 let reader : IO.TextReader =
@@ -971,6 +1116,9 @@ let rec requests () =
                         WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+            | "program-checking" -> programChecking source
+            | "function-checking" -> functionChecking source
+            | "expression-checking" -> expressionChecking source
             | "match-checking" -> matchChecking source
             | "call-checking" -> callChecking source
             | "lambda-checking" -> lambdaChecking source

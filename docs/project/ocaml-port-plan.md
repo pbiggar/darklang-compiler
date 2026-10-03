@@ -410,3 +410,19 @@ all pattern forms and literal widths, resolved-constructor reopening, first-patt
 bindings and alternative validation, guard normalization, body retries, generic
 rechecking, and complete nested constructor/tuple/list exhaustiveness proofs.
 Original comments remain audited. The full expression dispatcher is next.
+
+Expression checking is fully ported, including context inference, explicit generic
+calls, recursive lets, ordered literal checks, and every source-expression case.
+Its complete typed results and diagnostics pass all 1,890 observations, including
+the expanded empty-source expectation matrix. Function-body checking,
+specialization, and ordered type-application collection also pass all 1,890.
+
+The complete resolved-program checker and TypeChecking API now build. Initial
+program-level parity passes 2/2 corpus rows, comparing entire checked programs,
+type/function catalogs, checking registries, and all name-resolution indexes.
+The full program-level corpus run remains pending at this checkpoint. Private
+catalogs stay opaque in production: migration-only module aliases append typed
+encoders to unchanged source. Snapshot identities now include C files, generation
+scripts, Dune rules, and observation includes. Monotonic host timing replaces
+Stopwatch for phase recording. Translated units remain 96/96; comment audit finds
+zero missing reference comment lines; inventory coverage is 55/391 pairs.
