@@ -887,3 +887,13 @@ mask, every float caller-save register, and all 2,048 preserved-temporary
 exclusion subsets. x64 R11 aliases, temporary order, and failure diagnostics
 match exactly. The warning-free build passes 396/396 native units. Committed
 coverage is 204/391 pairs; phi resolution and subsequent stages remain open.
+
+Phi resolution is fully translated with original comments and complete interfaces.
+Complete output matches F# for 540 float location/move cases, 800 CFG/allocation
+combinations, and 2/65/129-value transitive phi chains. Coverage includes register,
+stack and mixed cycles, rematerialized values, fixed/missing locations, unused
+integer phis, physical phi roots, missing predecessor labels, all operand families,
+tail-call predecessors, move order and failure order. The warning-free build
+passes 396/396 native units. Coverage is 205/391 pairs. Instruction/block allocation
+application, allocation orchestration, lowering/emission, remaining ownership
+tests, full corpus checks and final acceptance remain open.

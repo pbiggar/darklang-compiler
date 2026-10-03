@@ -15,6 +15,7 @@ let rec requests () =
         | "written-source" -> Semantic_observation.SemanticJson.writtenSource source
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
+        | "phi-resolution" -> Semantic_observation.PhiObservation.observe source
         | "spill-operands" -> Semantic_observation.SpillObservation.observe source
         | "float-allocation" -> Semantic_observation.FloatAllocationObservation.observe source
         | "register-coloring" -> Semantic_observation.ColoringObservation.observe source

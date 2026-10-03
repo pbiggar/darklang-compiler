@@ -2746,6 +2746,57 @@ let spillObservation (source:string) =
             [Platform.ARM64;Platform.X86_64] |> List.map (fun arch -> enc (SpillOperands.getLiveCallerSavedFloatRegs arch bits allocation)) |> list))
     tuple [list mappings;phys |> List.map (fun reg -> enc (internalCall "aliasesX86ScratchReg" [|box reg|] : bool)) |> list;list exclusion;list floatSaved;[Platform.ARM64;Platform.X86_64] |> List.map (fun arch -> enc (internalCall "isX86_64" [|box arch|] : bool)) |> list]
 
+let phiObservation (source:string) =
+    let enc (value:'a) = encode typeof<'a> (box value)
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let attempt action = enc (try Ok (action ()) with ex -> Error ex.Message)
+    let block label instrs terminator : LIR.BasicBlock = {Label=label;Instrs=instrs;Terminator=terminator}
+    let cfg entry blocks : LIR.CFG = {Entry=entry;Blocks=blocks |> List.map (fun (b:LIR.BasicBlock) -> b.Label,b) |> Map.ofList}
+    let left=LIR.Label "left"
+    let right=LIR.Label "right"
+    let merge=LIR.Label source
+    let missing=LIR.Label "missing"
+    let vr id=LIR.Reg (LIR.Virtual id)
+    let intMapping (domain:AllocationModel.VRegDomain) mode : AllocationModel.AllocationResult =
+        let allocations=domain.Ids |> Array.mapi (fun n _ -> match mode with 0 -> Some (AllocationModel.PhysReg (List.item (n%8) [LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7])) | 1 -> Some (AllocationModel.StackSlot (-(n+1)*8)) | 2 -> Some (if n%2=0 then AllocationModel.PhysReg LIR.X3 else AllocationModel.StackSlot (-(n+1)*8)) | _ -> None)
+        {Domain=domain;Allocations=allocations;StackSize=64;UsedCalleeSaved=[]}
+    let floatMapping (domain:AllocationModel.VRegDomain) mode scratch : FloatAllocation.FAllocationResult =
+        let allocations=domain.Ids |> Array.mapi (fun n _ -> match mode with 0 -> Some (FloatAllocation.FPhysReg (List.item (n%16) FloatAllocation.allocatableFloatRegs)) | 1 -> Some (FloatAllocation.FStackSlot (-(n+1)*8)) | 2 -> Some (FloatAllocation.FRematerialized (BitConverter.Int64BitsToDouble (if n%2=0 then Int64.MinValue else 0x7ff8000000000001L))) | 3 -> (match n%3 with 0 -> Some (FloatAllocation.FPhysReg LIR.D0) | 1 -> Some (FloatAllocation.FStackSlot (-24)) | _ -> None) | _ -> None)
+        {Domain=domain;Allocations=allocations;StackSize=64;UsedCalleeSavedF=[];SpillScratchLeft=(if scratch=0 then LIR.FVirtual (-1000) else LIR.FPhysical LIR.D14);SpillScratchRight=(if scratch=0 then LIR.FVirtual (-1001) else LIR.FPhysical LIR.D15);SpillScratchThird=LIR.FVirtual (-1002)}
+    let domain:AllocationModel.VRegDomain=rcInternalCall "AllocationModel" "buildVRegDomain" [|box [-9;0;1;2;3;4;5;7]|]
+    let fregs=[LIR.FVirtual 1;LIR.FVirtual 2;LIR.FVirtual 7;LIR.FVirtual (-1);LIR.FVirtual 987;LIR.FPhysical LIR.D0;LIR.FPhysical LIR.D1]
+    let moveLists=(fregs |> List.collect (fun dest -> fregs |> List.map (fun src -> [dest,src]))) @ [[];[LIR.FVirtual 1,LIR.FVirtual 2;LIR.FVirtual 2,LIR.FVirtual 1];[LIR.FVirtual 1,LIR.FVirtual 2;LIR.FVirtual 2,LIR.FVirtual 3;LIR.FVirtual 3,LIR.FVirtual 1];[LIR.FPhysical LIR.D0,LIR.FPhysical LIR.D1;LIR.FPhysical LIR.D1,LIR.FPhysical LIR.D0];[LIR.FVirtual 1,LIR.FVirtual 2;LIR.FVirtual 2,LIR.FVirtual 7]]
+    let moves=[0;1;2;3;4] |> List.collect (fun mode -> [0;1] |> List.map (fun scratch ->
+        let allocation=floatMapping domain mode scratch
+        moveLists |> List.map (fun moves -> tuple [enc moves;attempt (fun () -> PhiResolution.generateFloatMoveInstrsWithAllocation moves allocation)]) |> list))
+    let make instructions term = cfg left [block left [] (LIR.Jump merge);block right [] (LIR.Jump merge);block merge instructions term]
+    let operands=[vr 2;LIR.Reg (LIR.Physical LIR.X0);LIR.Imm Int64.MinValue;LIR.StackSlot (-24);LIR.StringSymbol source;LIR.FloatImm (-0.);LIR.FloatSymbol (BitConverter.Int64BitsToDouble 0x7ff8000000000001L);LIR.FuncAddr (AST.functionId UInt64.MaxValue)]
+    let operandCFGs=operands |> List.map (fun op -> make [LIR.Phi (LIR.Virtual 1,[op,left;vr 1,right;vr 7,missing],Some AST.TInt64);LIR.PrintInt64 (LIR.Virtual 1)] LIR.Ret)
+    let patterns=[make [] LIR.Ret;
+        make [LIR.Phi (LIR.Virtual 1,[vr 2,left;vr 1,right],None);LIR.Phi (LIR.Virtual 2,[vr 1,left;vr 2,right],None);LIR.PrintInt64 (LIR.Virtual 1)] LIR.Ret;
+        make [LIR.Phi (LIR.Virtual 987,[vr 7,left],None)] LIR.Ret;
+        make [LIR.Phi (LIR.Virtual 987,[vr 7,left],None)] (LIR.BranchZero (LIR.Virtual 987,left,right));
+        make [LIR.Phi (LIR.Physical LIR.X0,[vr 1,left;vr 7,right],None);LIR.Phi (LIR.Virtual 1,[vr 2,left],None);LIR.Phi (LIR.Virtual 2,[vr 3,right],None)] LIR.Ret;
+        make [LIR.Phi (LIR.Virtual 1,[vr 2,missing],None)] (LIR.BranchZero (LIR.Virtual 1,left,right));
+        make [LIR.Phi (LIR.Virtual 1,[vr 2,left],None);LIR.Phi (LIR.Virtual 2,[vr 1,right],None)] LIR.Ret;
+        make [LIR.FPhi (LIR.FVirtual 1,[LIR.FVirtual 2,left;LIR.FVirtual 1,right]);LIR.FPhi (LIR.FVirtual 2,[LIR.FVirtual 1,left;LIR.FVirtual 2,right])] LIR.Ret;
+        make [LIR.FPhi (LIR.FPhysical LIR.D0,[LIR.FVirtual 7,left;LIR.FPhysical LIR.D1,right])] LIR.Ret;
+        make [LIR.FPhi (LIR.FVirtual 987,[LIR.FVirtual 7,missing])] LIR.Ret;
+        make [LIR.FPhi (LIR.FVirtual 987,[LIR.FVirtual 7,left])] LIR.Ret;
+        cfg left [block left [LIR.FArgMoves [LIR.D0,LIR.FVirtual 1];LIR.TailCall (AST.functionId 3UL,[])] (LIR.Jump merge);block merge [LIR.FPhi (LIR.FVirtual 2,[LIR.FVirtual 1,left])] LIR.Ret]]
+    let cfgCases=operandCFGs @ patterns |> List.map (fun graph ->
+        let idx,blocks:AllocationModel.BlockIndex * LIR.BasicBlock array=rcInternalCall "AllocationModel" "buildBlockIndex" [|box graph|]
+        let results=[0;1;2;3] |> List.collect (fun intMode -> [0;1;2;3;4] |> List.collect (fun floatMode -> [0;1] |> List.map (fun scratch -> attempt (fun () -> PhiResolution.resolvePhiNodes idx blocks (intMapping domain intMode) (floatMapping domain floatMode scratch)))))
+        tuple [enc graph;list results])
+    let chains=[2;65;129] |> List.map (fun count ->
+        let domain:AllocationModel.VRegDomain=rcInternalCall "AllocationModel" "buildVRegDomain" [|box (List.init count id)|]
+        let phis=List.init (count-1) (fun n -> LIR.Phi (LIR.Virtual n,[vr (n+1),left],None))
+        let graph=make (phis @ [LIR.PrintInt64 (LIR.Virtual 0)]) LIR.Ret
+        let idx,blocks:AllocationModel.BlockIndex * LIR.BasicBlock array=rcInternalCall "AllocationModel" "buildBlockIndex" [|box graph|]
+        [0;1;2;3] |> List.map (fun mode -> attempt (fun () -> PhiResolution.resolvePhiNodes idx blocks (intMapping domain mode) (floatMapping domain 0 0))) |> list)
+    tuple [list moves;list cfgCases;list chains]
+
 let lirTreeObservation (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -3629,6 +3680,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "phi-resolution" -> phiObservation source
         | "spill-operands" -> spillObservation source
         | "float-allocation" -> floatAllocationObservation source
         | "register-coloring" -> coloringObservation source
