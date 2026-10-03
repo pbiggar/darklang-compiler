@@ -15,6 +15,7 @@ let rec requests () =
         | "written-source" -> Semantic_observation.SemanticJson.writtenSource source
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
+        | "lir-peephole" -> Semantic_observation.PeepholeObservation.observe source
         | "callee-clobbers" -> Semantic_observation.CalleeClobberObservation.observe source
         | "block-allocation" -> Semantic_observation.BlockAllocationObservation.observe source
         | "instruction-allocation" -> Semantic_observation.InstructionAllocationObservation.observe source

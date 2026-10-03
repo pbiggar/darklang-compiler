@@ -930,3 +930,17 @@ stack parity and relevant cache keys. The warning-free build passes 396/396
 native units. Coverage is 209/391 pairs. Allocator orchestration also requires
 the remaining LIR peephole pass, which is next; lowering/emission, ownership
 tests, full corpus checks and final acceptance remain open.
+
+The entire LIR peephole pass and all 30 original cleanup unit tests are ported
+with original comments and explicit interfaces. Full output matches F# for all
+120 constructors, 10,272 cleanup/arithmetic sequences, 1,920 branch-fold cases,
+5,145 CFGs, 4,896 scalar/invalid diamonds, 2/65/129-block loop graphs, malformed
+CFG diagnostics, and 324 numeric cases including every positive Int64 power
+of two. All 11 unchanged lir-peepholes.liropt inputs/expectations also match
+through typed fixture projections; the complete native DSL parser/runner remains
+a separate pending inventory component. Float rounding policies, live-temp
+restrictions, copy identities, last-use counts, hoisting order, select types and
+iteration limits are preserved. The warning-free build passes 437/437 native
+unit/DSL checks. Coverage is 211/391 pairs. Register-allocation orchestration
+is next; lowering/emission, remaining tooling/ownership tests, full corpus
+checks and final acceptance remain open.

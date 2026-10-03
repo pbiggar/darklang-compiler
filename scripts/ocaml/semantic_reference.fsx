@@ -3046,6 +3046,78 @@ let calleeClobberObservation (source:string) =
         tuple [enc outputs;enc (Seq.toList calls);enc (ARM64CalleeClobbers.refine functions)]) |> list
     tuple [instructionCases;summaryCases;saveCases;cacheCases]
 
+let peepholeObservation (source:string)=
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let attempt action=enc (try Ok (action ()) with ex -> Error ex.Message)
+    let label=LIR.Label source
+    let yes=LIR.Label "yes"
+    let no=LIR.Label "no"
+    let block label instrs term : LIR.BasicBlock={Label=label;Instrs=instrs;Terminator=term}
+    let cfg label blocks : LIR.CFG={Entry=label;Blocks=blocks |> List.map (fun (b:LIR.BasicBlock) -> b.Label,b) |> Map.ofList}
+    let fn (b:LIR.BasicBlock) : LIR.Function={Id=AST.functionId 0UL;Name=source;TypedParams=[];CFG=cfg label [b];StackSize=32;UsedCalleeSaved=[LIR.X19];CodegenFacts=None}
+    let roles mask=Array.init 4 (fun n -> LIR.Virtual ((mask >>> (n*2)) &&& 3))
+    let floats physical roles=roles |> Array.map (function LIR.Virtual id -> (if physical then LIR.FPhysical (List.item id FloatAllocation.allocatableFloatRegs) else LIR.FVirtual id) | LIR.Physical _ -> failwith "Fixture requires virtual roles")
+    let sequences (roles:LIR.Reg array) (fregs:LIR.FReg array) suffix=
+        let r n=roles[n]
+        let f n=fregs[n]
+        [[LIR.FAdd (f 0,f 1,f 2);suffix;LIR.FMov (f 3,f 0)];[LIR.FMul (f 0,f 1,f 2);LIR.FAdd (f 3,f 0,f 2);suffix];[LIR.Mov (r 0,LIR.Imm 3L);LIR.Mul (r 1,r 2,r 0);suffix];[LIR.Mul (r 0,r 1,r 2);LIR.Add (r 3,r 0,LIR.Reg (r 2));suffix];[LIR.Sub (r 0,r 1,LIR.Imm 1L);suffix;LIR.Mov (r 1,LIR.Reg (r 0))];[LIR.FMov (f 0,f 1);suffix;LIR.FMov (f 1,f 0)]]
+    let observeSequence instrs=
+        let b=block label instrs (LIR.Branch (LIR.Virtual 0,yes,no))
+        let func=fn b
+        tuple [enc (LIR_Peephole.optimizeInstrs instrs);enc (LIR_Peephole.removeSelfMovesFromInstrs instrs);enc (LIR_Peephole.sinkSeparatedAllocatedFAdds instrs);enc (LIR_Peephole.retargetSeparatedDeadFAdds instrs);enc (LIR_Peephole.removeRedundantFloatingCopyBackMoves instrs);enc (LIR_Peephole.sinkImmediateCounterUpdate instrs);enc (LIR_Peephole.tryMulByConstant instrs);enc (LIR_Peephole.tryFuseMulAdd instrs);enc (LIR_Peephole.tryFuseMulSub instrs);enc (LIR_Peephole.tryFuseFloatMultiplyAdd instrs);enc (LIR_Peephole.optimizeBlock b);enc (LIR_Peephole.removePostAllocationMovesFromFunction func);enc (LIR_Peephole.optimizeAllocatedCounterUpdates func)]
+    let singles=lirAllocationFixtures source (roles 228) (floats false (roles 228)) (LIR.Reg (LIR.Virtual 3)) AST.TFloat64 |> List.map (fun instr -> tuple [enc (LIR_Peephole.optimizeInstr instr);enc (LIR_Peephole.isCallInstr instr);enc (LIR_Peephole.isPureLoopInstr instr);enc ([LIR.Virtual 0;LIR.Virtual 1;LIR.Virtual 2;LIR.Virtual 3] |> List.map (fun reg -> LIR_Peephole.isRegUsedInInstrs reg [instr]))]) |> list
+    let sequenceCases=[0;228;27;85;170] |> List.map (fun mask -> [false;true] |> List.map (fun physical -> let regs=roles mask in let fregs=floats physical regs in lirAllocationFixtures source regs fregs (LIR.Reg regs[3]) AST.TFloat64 |> List.map (fun suffix -> sequences regs fregs suffix |> List.map observeSequence |> list) |> list) |> list) |> list
+    let arithmeticCases=[0..255] |> List.map (fun mask -> [false;true] |> List.map (fun physical -> let regs=roles mask in sequences regs (floats physical regs) (LIR.PrintFloat (if physical then LIR.FPhysical LIR.D0 else LIR.FVirtual 0)) |> List.map observeSequence |> list) |> list) |> list
+    let terms=[LIR.Ret;LIR.Jump yes;LIR.Branch (LIR.Virtual 0,yes,no);LIR.BranchZero (LIR.Virtual 0,yes,no);LIR.BranchBitZero (LIR.Virtual 0,3,yes,no);LIR.BranchBitNonZero (LIR.Virtual 0,3,yes,no)] @ ([LIR.EQ;LIR.NE;LIR.LT;LIR.GT;LIR.LE;LIR.GE;LIR.ULT;LIR.UGT;LIR.ULE;LIR.UGE] |> List.map (fun c -> LIR.CondBranch (c,yes,no)))
+    let branchCases=[0;228;27;85;170] |> List.map (fun mask ->
+        let regs=roles mask
+        let r n=regs[n]
+        let patterns=[[];[LIR.Cmp (r 1,LIR.Imm 0L);LIR.Cset (r 0,LIR.LT)];[LIR.Mov (r 0,LIR.Imm 1L);LIR.Sub (r 0,r 0,LIR.Reg (r 1))];[LIR.And_imm (r 0,r 1,8L)];[LIR.PrintInt64 (r 0);LIR.And_imm (r 0,r 1,8L)];[LIR.Cmp (r 1,LIR.Imm 1L)]]
+        patterns |> List.map (fun instrs -> terms |> List.map (fun term -> [0;1;2;3] |> List.map (fun count ->
+            let counts=Map.ofList [LIR.Virtual 0,count]
+            tuple [enc (LIR_Peephole.tryFuseCondBranch counts instrs term);enc (LIR_Peephole.tryFuseBooleanNotBranch counts instrs term);enc (LIR_Peephole.tryFuseAndBitBranch instrs term);enc (LIR_Peephole.tryFuseCmpZeroBranch instrs term);enc (LIR_Peephole.applyAndBitBranchFusion instrs term)]) |> list) |> list) |> list) |> list
+    let labels=[|LIR.Label "a";LIR.Label "b";LIR.Label "c"|]
+    let successors=[[];[0];[1];[2];[0;1];[0;2];[1;2]]
+    let graphCases=[0;1;2] |> List.map (fun entry -> [0;1;2;3;4] |> List.map (fun style -> [0..342] |> List.map (fun code ->
+        let blocks=List.init 3 (fun n ->
+            let succs=List.item ((code / (if n=0 then 1 else if n=1 then 7 else 49))%7) successors
+            let term=match succs with [] -> LIR.Ret | [target] -> LIR.Jump labels[target] | [a;b] -> LIR.Branch (LIR.Virtual 0,labels[a],labels[b]) | _ -> failwith "Invalid fixture successors"
+            let instrs=match style with 0 -> [] | 1 -> [LIR.Mov (LIR.Virtual 0,LIR.Imm 7L);LIR.FLoad (LIR.FVirtual 0,-0.0)] | 2 -> [LIR.Mov (LIR.Virtual 0,LIR.Imm 7L);LIR.Mov (LIR.Virtual 0,LIR.Imm 9L);LIR.FLoad (LIR.FVirtual 0,-0.0)] | 3 -> [LIR.Call (LIR.Virtual 0,AST.functionId 3UL,[])] | _ -> [LIR.PrintInt64 (LIR.Virtual 0)]
+            block labels[n] instrs term)
+        let graph=cfg labels[entry] blocks
+        tuple [attempt (fun () -> LIR_Peephole.optimizeCFG graph);enc (LIR_Peephole.formSelectDiamonds graph)]) |> list) |> list) |> list
+    let types=None::([AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TBool;AST.TUnit;AST.TChar;AST.TDateTime;AST.TInternalRawPtr;AST.TFloat64;AST.TString;AST.TList AST.TInt64] |> List.map Some)
+    let diamond typ term shape arm =
+        let join=LIR.Label "join"
+        let phi=LIR.Phi (LIR.Virtual 3,[LIR.Reg (LIR.Virtual 1),yes;LIR.Reg (LIR.Virtual 2),no],typ)
+        let joinInstrs=match shape with 0 -> [phi] | 1 -> [phi;LIR.Phi (LIR.Virtual 4,[LIR.Reg (LIR.Virtual 2),yes;LIR.Reg (LIR.Virtual 1),no],typ)] | 2 -> [LIR.Phi (LIR.Virtual 3,[LIR.Imm 1L,yes;LIR.Reg (LIR.Virtual 2),no],typ)] | 3 -> [LIR.FPhi (LIR.FVirtual 3,[LIR.FVirtual 1,yes;LIR.FVirtual 2,no])] | 4 -> [LIR.PrintInt64 (LIR.Virtual 0);phi] | _ -> [phi;LIR.PrintInt64 (LIR.Virtual 3)]
+        let graph=cfg label [block label [LIR.Cmp (LIR.Virtual 0,LIR.Imm 0L)] term;block yes (if arm=1 then [LIR.Mov (LIR.Virtual 0,LIR.Imm 1L)] else []) (LIR.Jump join);block no [] (if arm=2 then LIR.Ret else LIR.Jump join);block join joinInstrs LIR.Ret]
+        let graph=if arm=3 then {graph with Blocks=Map.add (LIR.Label "other") (block (LIR.Label "other") [] (LIR.Jump yes)) graph.Blocks} else graph
+        tuple [enc (LIR_Peephole.formSelectDiamonds graph);attempt (fun () -> LIR_Peephole.optimizeCFG graph)]
+    let mapNodes action values=values |> List.map action |> list
+    let diamondTerms=terms |> List.filter (function LIR.Branch _ | LIR.BranchZero _ | LIR.CondBranch _ -> true | _ -> false)
+    let diamonds=types |> mapNodes (fun typ -> diamondTerms |> mapNodes (fun term -> [0;1;2;3;4;5] |> mapNodes (fun shape -> [0;1;2;3] |> mapNodes (diamond typ term shape))))
+    let large=[2;65;129] |> List.map (fun count ->
+        let blocks=List.init count (fun n -> let label=LIR.Label (string n) in block label [LIR.Mov (LIR.Virtual n,LIR.Imm (int64 n))] (if n=count-1 then LIR.Jump (LIR.Label "1") else LIR.Jump (LIR.Label (string (n+1)))))
+        attempt (fun () -> LIR_Peephole.optimizeCFG (cfg (LIR.Label "0") blocks))) |> list
+    let emptyGraph:LIR.CFG={Entry=label;Blocks=Map.empty}
+    let malformed=[emptyGraph;cfg label [block label [] (LIR.Jump yes)]] |> List.map (fun graph -> attempt (fun () -> LIR_Peephole.optimizeCFG graph)) |> list
+    let numeric=[-128..128] |> List.map (fun n -> tuple [enc n;enc (LIR_Peephole.tryMulConstantPattern (int64 n));enc (LIR_Peephole.isPowerOf2 (int64 n))]) |> list
+    let numeric64=([Int64.MinValue;Int64.MaxValue;-1L;0L] @ List.init 63 (fun n -> 1L <<< n)) |> List.map (fun n -> tuple [enc n;enc (LIR_Peephole.isPowerOf2 n);enc (if LIR_Peephole.isPowerOf2 n then Some (LIR_Peephole.bitPosition n) else None)]) |> list
+    let rec dslCases (remaining:(string*string) list) =
+        match remaining with
+        | ("NAME",name)::("INPUT",input)::("EXPECTED",expected)::rest ->
+            let input=TestDSL.LIRParser.parseLIR input |> Result.toOption |> Option.get
+            let expected=TestDSL.LIRParser.parseLIR expected |> Result.toOption |> Option.get
+            let actual=LIR_Peephole.optimizeProgram input
+            tuple [enc (name.Trim());enc input;enc expected;enc actual;enc (actual=expected)]::dslCases rest
+        | [] -> []
+        | _ -> failwith "Invalid existing LIR DSL fixture sections"
+    let dsl=IO.File.ReadAllText("src/Tests/optimization/lir-peepholes.liropt") |> TestDSL.Common.parseSections |> dslCases |> list
+    tuple [singles;sequenceCases;arithmeticCases;branchCases;graphCases;diamonds;large;malformed;numeric;numeric64;dsl]
+
 let lirTreeObservation (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -3929,6 +4001,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "lir-peephole" -> peepholeObservation source
         | "callee-clobbers" -> calleeClobberObservation source
         | "block-allocation" -> blockAllocationObservation source
         | "instruction-allocation" -> instructionAllocationObservation source
