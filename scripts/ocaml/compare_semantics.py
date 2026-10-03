@@ -8,6 +8,7 @@ import random
 import subprocess
 import shutil
 import re
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -131,6 +132,39 @@ def normalize_fresh_identities(observation):
     visit(observation)
     return observation
 
+def read_observation_pair(processes, directory):
+    # A single complete closure observation can exceed 100 MB. Compare and
+    # hash its entire wire representation in bounded chunks; spill the rows
+    # to disk so a real difference still retains the complete field trees.
+    with ExitStack() as stack:
+        saved = [stack.enter_context(tempfile.TemporaryFile(mode="w+", encoding="utf-8", dir=directory)) for _ in processes]
+        finished = [False, False]
+        present = [False, False]
+        equal = True
+        digest = hashlib.sha256()
+        size = 0
+        while not all(finished):
+            chunks = []
+            for index, process in enumerate(processes):
+                chunk = "" if finished[index] else process.stdout.readline(65536)
+                chunks.append(chunk)
+                if chunk:
+                    present[index] = True
+                    saved[index].write(chunk)
+                if not chunk or chunk.endswith("\n"):
+                    finished[index] = True
+            equal = equal and chunks[0] == chunks[1]
+            payload = chunks[0].removesuffix("\n").encode()
+            digest.update(payload)
+            size += len(payload)
+        if not all(present):
+            return present, None, None
+        if equal:
+            return present, {"sha256": digest.hexdigest(), "bytes": size, "format": "identical-json"}, None
+        for row in saved:
+            row.seek(0)
+        return present, None, [row.read() for row in saved]
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--audit-name", help="Separate audit directory for an independent verification run")
@@ -245,16 +279,15 @@ def main():
                 audits.append(stack.enter_context((output / f"{name}.jsonl").open("w")))
                 processes.append(subprocess.Popen(command, cwd=ROOT, stdin=stdin, stdout=subprocess.PIPE, text=True, stderr=stderr))
             for label, source in corpus:
-                rows = [process.stdout.readline() for process in processes]
-                for (name, _), row in zip(commands, rows, strict=True):
-                    if not row:
+                present, identical, rows = read_observation_pair(processes, output)
+                for (name, _), available in zip(commands, present, strict=True):
+                    if not available:
                         print(f"{name} stopped before {label}; see {output / (name + '.stderr')}")
                         return 1
-                if rows[0] == rows[1]:
+                if identical is not None:
                     # Identical complete JSON proves every field equal. Avoid
                     # allocating two enormous, duplicate trees in this case.
-                    payload = rows[0].removesuffix("\n").encode()
-                    entry = {"input": label, "sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload), "format": "identical-json"}
+                    entry = {"input": label, **identical}
                     for audit in audits:
                         audit.write(json.dumps(entry) + "\n")
                         audit.flush()

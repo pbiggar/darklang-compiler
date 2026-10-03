@@ -1,4 +1,367 @@
 (*
+   Stable diagnostic codes — documented in GRAMMAR.md; editors/tests key on
+   these, never on the message text.
+   expected X, found Y
+   missing closing delimiter (opener in `related`)
+   invalid escape/codepoint in a literal
+   integer literal out of range
+   nesting beyond the recursion cap
+   stray token inside a construct
+   pipe RHS isn't a valid segment
+   invalid match pattern shape
+   unknown effect name in a `:{…}` row
+   malformed interpolation body/braces
+   parser step budget exhausted (parser bug)
+   tokenizer-level recovery (unterminated literal, …)
+   one of DiagnosticCode — stable across releases
+   secondary locations, e.g. the opening delimiter of an unclosed pair
+   One offside scope: the current statement's anchor column (`stmtCol`; -1 = none)
+   and `stmtExact`, a flag marking a parenthesized body — there the closing `)`
+   is the real delimiter, so only a token at EXACTLY the anchor column starts a
+   new statement; dedented continuations (`|> (fn\n  args-below-callee)`) stay
+   part of the current one. Constructs enter scopes only through the `with*`
+   helpers in `parseTokens`, so prior state is restored by construction.
+   The one definition of "an integer-literal token" — `canStartAtom` and
+   `canStartPattern` both build on it so the lists can't drift from each other.
+   Matched EXHAUSTIVELY (no `_`): a new `Token` case won't compile until it's
+   classified here, so a new integer type can't silently fall through to `false`
+   — the drift that once made `| Ok 5y ->` unparseable while `Ok 5y` worked.
+   a record/anonymous-record/update `{ … }` can be a function argument, e.g.
+   `parseArgs tail { acc with port = p }`
+   prefix `!`/`~`: `f !x` is `f (!x)`. Unambiguous — neither token has an
+   infix reading, and `!=` lexes as one token, so `a != b` is untouched.
+   `TMinus` is included so a negative-literal enum-pattern field (`| Ok -4y ->`)
+   parses; parsePatternBase's TMinus case handles it.
+   tokens that close/separate a block — another statement can't start with these
+   tokens hole-recovery must never consume: closing/separating tokens (the enclosing
+   construct needs them to close cleanly) and declaration starters (the next
+   declaration must survive a broken one before it)
+   All parser state, threaded explicitly through every parse function (no
+   closure): the token stream, the diagnostics sink, and the offside/recovery
+   registers. One value per parse; `parseTokens` constructs it.
+   the token stream being parsed
+   = toks.Length, cached (read on every bounds check)
+   parse errors collected during recovery
+   offside anchor stack (a frame per let/if/match/paren body)
+   `|` is both bitwise-or and the match-arm separator. Each anchor records an
+   enclosing match's arm row and column so `barStartsArm` leaves arm-position
+   bars for `parseMatch`. Regions where an arm cannot start clear the anchors.
+   Closing a nested generic like `Dict<List<Int>>` ends in `>>`, which the
+   lexer produces as ONE token but which must close TWO levels. Closing the
+   inner `List<Int>` uses only the first `>`, so the second is "left over"
+   for the outer `Dict<…>` to close. `pendingGt` counts those left-over `>`s;
+   `pendingGtRange` is the source range of the next one to spend.
+   start column of the declaration being parsed (-1 = none); a token at-or-left ends the construct
+   current recursion depth — stack-overflow guard (see `maxDepth`)
+   a guard aborted the parse; silences the unwind's cascade of secondary diagnostics
+   parseExpr/pattern/type entry count — the no-progress backstop (see
+   `outOfFuel`); any runaway loop exhausts it and abandons with a
+   diagnostic instead of hanging
+   How deeply string interpolations are nested. Each `{expr}` body is parsed
+   by a FRESH recursive `parseTokens`, whose own `depth` guard restarts at 0 —
+   so `depth` can't see an interpolation bomb like `$"{$"{$"…"}"}"`, where the
+   nesting is in the chain of recursive parses, not one deep expression.
+   Threaded as parent + 1 and capped at `maxInterpNesting` to stay stack-safe.
+   raw source text of the token (e.g. a type variable `'a` lexes to an
+   ident "a" but its text keeps the leading tick)
+   `///` doc comment attached to the token at `i` (a declaration keyword), if any
+   Zero-width range at `r`'s end: the range for a synthetic/missing node (an
+   absent `>`, a bare tuple's missing parens, an unsplit int suffix) — points at
+   "where it should be" without claiming any real source characters.
+   set when a guard abandons the parse: suppresses the cascade of secondary
+   diagnostics from the unwinding frames
+   what the parser is looking at, for "expected X, found Y" messages
+   a missing closing delimiter: point back at its opener
+   --- recursion-depth guard ---
+   parseExpr/parseTypeRef/parsePatternBase recurse per nesting level, so a
+   pathological `((((…` would overflow the stack — and a .NET StackOverflow is
+   UNCATCHABLE (it kills the process). At the cap we diagnose once and skip to
+   EOF. Generated E2E batches can contain several hundred nested `let`
+   bindings, so the cap must permit those while still guarding against a
+   runaway recursive parse.
+   No-progress backstop: each parseExpr/parsePatternBase/parseTypeRef entry
+   spends one step. A real parse of n tokens uses ≪ 300·n (corpus-measured); a
+   loop that stops consuming tokens spends them forever — so exhaustion means a
+   parser bug, and we abandon with a diagnostic instead of hanging the host.
+   A sized-int literal whose magnitude is the type's |MinValue| lexes to
+   MinValue (so the NEGATED literal can exist: `-128y`); consumed WITHOUT the
+   minus, the written magnitude is out of range — diagnose instead of silently
+   wrapping (`128y` is NOT -128). Only the negating TMinus branches consume
+   these tokens without passing through here.
+   whole/fraction decimal strings of a float literal at token `i`. The
+   double's shortest round-trip form is used when it's a plain decimal (the
+   usual case); when it needs an exponent (`1e300`, `0.00000001`) or isn't
+   finite-decimal at all, the SOURCE text is decimal-shifted instead — the
+   PT float representation is exponent-free strings, and an exponent leaking
+   into the whole part crashes `makeFloat` downstream.
+   decimal-shift the literal text `mant[.frac][eE][+-]exp` (exact, no
+   floating-point re-derivation)
+   Reject invalid escapes / codepoints in string, char, and interpolated-string
+   literals (triple-quoted forms are raw, so skipped). A diagnostic here becomes a
+   `ParseError.Message` — the escape is otherwise silently error-recovered.
+   qualified name: ident (. ident)*  → (modules, finalIdent, nextIndex)
+   only step into `.seg` as a module path when the CURRENT segment is
+   uppercase (a module); a lowercase ident's `.field` is postfix access,
+   left for parsePostfix to handle.
+   previous segment becomes a module, with the dot range
+   Matches a written type name against the primitive types.
+   `>>` lexes as one TShr token but closes two generic levels. `state.pendingGt`
+   carries the leftover `>` to the enclosing type so `List<List<T>>` parses.
+   Close one generic level (`>`), splitting a `>>` (TShr) into one consumed `>`
+   and one pending. Returns (close-`>` range, next index).
+   Skip a `< … >` type-argument list (not modelled yet); a trailing `>>` leaves
+   one `>` pending for the enclosing generic.
+   declaration type parameters `<'a, 'b>` — collect the (tick-stripped) names
+   so generic types/fns keep their params (needed for runtime type unification).
+   --- offside scope stack ---
+   One scope = `stmtCol` (the current statement's anchor column; -1 = none) +
+   `stmtExact` (a parenthesized body: only a token at EXACTLY the anchor column
+   starts a new statement — the `)` is the real delimiter). let/if/match push a
+   fresh scope so their sub-expressions keep normal offside (a let value must
+   not swallow the next statement). All state transitions go through the
+   `with*` helpers below, which restore the prior scope by construction — a
+   leftover flag can't leak into what follows.
+   anchor the current scope's statement column (per statement / element)
+   fresh sub-statement scope, statement anchored at `col`
+   Would a `|` at `i` start a match arm rather than continue an expression?
+   True when it sits on the arm row or at the arm column of ANY enclosing
+   match -- a `|` less indented than the innermost match belongs to an outer
+   one, and must not be eaten as an operator either.
+   Run `f` without enclosing match-arm anchors, where `|` can only be an operator.
+   fresh scope; statement anchor inherited (managed per-element by `f`)
+   re-anchor the statement column within the CURRENT scope as a
+   parenthesized (exact-column) anchor, restoring both after
+   Column of the DECLARATION currently being parsed (set per item by
+   parseItems), or -1. Recovery only: a decl-start keyword at or left of this
+   column can never belong to a construct inside the declaration, so an
+   unclosed delimiter above must stop instead of swallowing the next
+   declaration (`let broken = [1L;` must not eat the `let fine …` below it).
+   Offside: a trailing operand (application arg, enum-constructor/pattern field)
+   at `k` continues the construct started at `headIdx` only if it's on the same
+   line as the head, or indented further (or we're inside parens). A token on a
+   new line at the same-or-lower indent starts a new statement.
+   A `-` GLUED to a following number, with a space before it, is a negative-literal
+   ARGUMENT (`f a -1`), not subtraction (`f a - 1` = `(f a) - 1`). The application
+   arg loop accepts it so `Float.multiply a -1.0` / `add 5L -1L` parse correctly
+   (matches F#'s high-precedence-application rule).
+   no space after `-`
+   space before `-`
+   `;` used to separate list elements and list-pattern elements; `,` is the only
+   separator now. Report it precisely and keep parsing as if it had been a `,`, so
+   a file written in the old style yields one diagnostic per `;` instead of a
+   cascade of recovery noise from the elements after it.
+   The effect names a `:{…}` row may use: the `Effects.Effect` case names.
+   pipe is the lowest precedence: `expr |> seg |> seg …`
+   `x |> (op) y` desugars to `x op y` (the piped value is the LEFT operand),
+   so an operator section directly after `|>` with an argument becomes a
+   pipe-infix — not the section lambda applied (which would flip the order).
+   → diagnostic
+   convert a parsed pipe RHS expression into a structured pipe segment
+   keep the callee's type args — `x |> parse<T>` needs `T` (dropping it left the
+   piped fn call with no type args, so `parse` had no target type: "type 'a")
+   iterative (a 10k-statement body must not recurse 10k deep); statements
+   fold right-nested into EStatement afterwards
+   no progress — stop (avoids a spin)
+   bare tuple expr: `match a, b with`
+   arms align on the first `|`'s column; a `|` LESS indented than that belongs
+   to an enclosing match (so a nested match doesn't swallow the outer's arms).
+   While the arm BODIES are parsed, a `|` on this match's arm row or at its
+   arm column is an arm separator, not the bitwise-or operator. The subject
+   expression above is parsed outside the anchor, where `|` is still an
+   operator (`match a | b with …`).
+   or-level: `p1 | p2 | …` (stops at `->` / `when`)
+   top level: a bare tuple `a, b` (comma-separated, no parens); else an or-pattern
+   A full match-arm pattern. Precedence, matching F#: `|` (or) is LOOSEST, then
+   `,` (tuple), then `::` (cons). So `1, 2 | 3, 4` is `(1,2) | (3,4)` — an or of
+   two tuples, NOT a 3-tuple with an or in the middle. Hence `|` is the OUTER
+   level here, wrapping tuples (`parsePatternTuple`).
+   tuple level: `p1, p2, …` (bare — no parens). Elements are cons-patterns; `|`
+   binds looser (handled above) so it can't appear as a bare tuple element.
+   bare tuple: no parens
+   or of cons-patterns, NO tuple — used for enum-ctor fields, where a bare `,`
+   separates FIELDS (`Case(a, b)` = two fields), not tuple elements.
+   cons-level: `h :: t` (right-assoc)
+   unary minus on a numeric literal pattern: `-5L`, `-1y`, `-2.0` (unsigned
+   types can't be negative, so only the signed literals + float are handled).
+   parens hold a full pattern (or > tuple > cons). Parse it, then attach the
+   real paren ranges when it's a bare tuple; otherwise the parens are just
+   grouping (`(a | b)`, `(p)`) and drop away.
+   enum pattern: `[Mod.]Case [fieldPats…]` — last segment is the case
+   A qualified path (`Result.Ok`, `Stdlib.Result.Result.Ok`) is not a valid enum
+   pattern — patterns use the unqualified case name. Reject rather than silently
+   building a truncated pattern from just the last segment.
+   `Case(p1, p2, …)` is a parenthesized arg list: commas separate FIELDS, so
+   `Pair(a, b)` is two fields — NOT one tuple `Pair((a, b))`. This holds
+   whether or not there's a space before the `(` (matching F#).
+   `Case()` is one unit field (`Case` applied to unit)
+   TODO: Support `...` list rest patterns once WrittenTypes and ProgramTypes
+   represent their binding and matching semantics.
+   `else`/`elif` binds to the `if` at `minCol` or to the left; a less-indented
+   `else` belongs to an ENCLOSING `if`, so a nested inner `if` in the THEN block
+   must not greedily grab it (`if… then (if… then c) else b` → the `else` is the
+   OUTER's). `minCol` is the column of the FIRST `if` in a chain — so `else if …`
+   chains still bind at the chain's column even though each nested `if` sits
+   further right (after `else `). Same-row `else` always binds (col > minCol).
+   same-line `else if …` continues the chain → the nested `if` inherits this
+   chain's `minCol`; any other else-body is a normal block at its own indent.
+   `elif` is `else (if …)` — the nested EIf is the else branch (its own
+   `if`-keyword range colors the `elif`, so no separate else-keyword range).
+   a simple binding pattern: variable / wildcard / `()` unit
+   tuple pattern `(a, b, …)` or a parenthesized pattern `(a)`
+   recovery: keep a benign binder (LetPattern has no error case yet);
+   nested function definition: `let f (x: T) (y) [: R] = body` — bind a lambda
+   to the name (params lowered to untyped lambda patterns, types discarded)
+   no real `fun`/`->` tokens in this sugar
+   Value annotations are not part of Dark. Consume the type for recovery,
+   but reject the source instead of silently discarding it.
+   the value is an offside block, not a single expr, so a multi-statement
+   binding (`let x =\n  doThing ()\n  result`) sequences instead of gluing
+   the following statement onto the first as an application argument.
+   `in` is optional
+   left-assoc binary level
+   --- infix expressions: one precedence-climbing loop ---
+   Binding powers, loosest → tightest (higher binds tighter); a right-assoc
+   op recurses at its own power so it nests to the right.
+   1 `||`   2 `&&`   3 `== != < > <= >=`   4 `|`   5 `^`   6 `&`
+   7 `<< >>`   8 `@` (right)   9 `+ - ++`   10 `* / %`   11 `**` (right)
+   The bitwise levels follow Python's order rather than C's: they bind TIGHTER
+   than the comparisons, so `a & b == c` is `(a & b) == c` and not C's
+   `a & (b == c)`. Every pre-existing operator keeps its relative position.
+   `@` desugars to `Stdlib.List.append` (there is no WT infix for it); `**` is
+   exponentiation and nests right: `2 ** 3 ** 2 = 2 ** (3 ** 2)`.
+   The operator must belong to THIS statement: same row as the left
+   operand's end, or inside parens, or an indented continuation. Otherwise
+   a following statement that starts with a prefix operator (`1L\n-8L …`)
+   would be wrongly glued on as `1L - 8L …`. On a new line, a pure infix
+   operator at the statement column continues (`x\n++ y` — `++` can't start
+   a statement), but `-` there begins a new statement (a negative literal),
+   so it must be indented PAST it. This rule is identical for every caller.
+   A `|` belonging to an enclosing match is that match's arm separator, not
+   bitwise-or; leave it for `parseMatch`.
+   climb: the RHS folds in everything binding tighter (or equally
+   tight, for a right-assoc op) before this level continues.
+   A prefix operator: `op operand` → `Builtin.<name> operand`, with the operand
+   parsed as a whole APPLICATION so `op f x` is `op (f x)`. Shared by `!`, `~`
+   and the non-literal case of unary `-`.
+   postfix `.field` record access (left-assoc, chains)
+   `()` unit / `( e )` group / `( a, b, … )` tuple
+   operator section `(op)` → `fun a b -> a op b` (a 2-arg fn value)
+   Anchor arg-offside at the inner column instead of blanket-suspending
+   it, so a wrapped arg (indented past its callee or the statement)
+   still continues but a sibling statement at the inner column is a NEW
+   statement. This lets a paren-wrapped body be a newline-separated
+   statement BLOCK — `(stmt1 \n stmt2)` — folded into EStatement, not
+   one over-grabbing application.
+   group or statement block: fold newline-separated statements
+   `[ e , e , … ]` (or newline separators); each element keeps its
+   trailing-separator range
+   list elements are offside-delimited in their own scope
+   (else an element swallows the next one as an application, e.g. inside `( … )`:
+   `[ [a]\n (f x) ]` must not read as `[a] (f x)`). Mirrors parseRecord.
+   each element is its own offside statement, so a wrapped element's args
+   don't grab the NEXT element (`[ f a\n f b ]` stays two elements)
+   `Type { name = value ; … }`. `i` is the `{`.
+   record fields are offside-delimited in their own scope
+   (else a field value swallows the next field name, e.g. inside `( … )`)
+   each field is its own offside statement (value args don't grab the next field)
+   record update `{ expr with name = value ; … }`. `i` is the `{`.
+   fields are offside-delimited, same as parseRecord — suspend paren relaxation
+   and anchor each field value at its own column so it can't grab the next field.
+   `{ r with }` updates nothing — reject it rather than lower a degenerate
+   update (both lowerings otherwise have to special-case the empty list).
+   Type references. Precedence (loosest first): function `A -> B`, tuple
+   `A * B`, then atoms (prim / List / Dict / custom / `'a` / parenthesized).
+   Defensive: `state.pendingGt` is always 0 here in well-formed input (a `>>`-induced
+   pending is consumed by the enclosing generic before the next parseTypeRef).
+   Clearing it stops a malformed `>>` in a prior parse from leaking a phantom `>`
+   into this one.
+   `A -> B -> C` (right-nested): arguments = [(A,->),(B,->)], ret = C
+   `A * B * C` (bare tuple, e.g. inside `List<…>`); parenthesized tuples fill
+   in real paren ranges at the atom level.
+   a pending `>` (from splitting a `>>`) means we're still inside an enclosing
+   generic, so a following `*` belongs to an OUTER tuple — don't absorb it here
+   (otherwise `List<List<A>> * B` mis-parses as `List<List<A> * B>`).
+   `<T1, T2, …>` generic type-args on a custom type; uses expectGt so a trailing
+   `>>` splits correctly. Returns the args, the real or recovered closing `>`
+   range, and the index after it.
+   stop taking args once a `>>` has left a `>` pending for THIS level, else a
+   nested `Option<Result<T,S>>` would swallow the enclosing type's next arg
+   (`Option<Result<T,S>, S>`). Mirrors the tuple loop's `state.pendingGt = 0` guard.
+   `(T)` grouping or `(A * B)` parenthesized tuple
+   a tick-prefixed name is ALWAYS a type variable, even when uppercase
+   (`'TModel`) — the lexer drops the tick so the case-based check below would
+   otherwise mistake it for a custom type. The token text keeps the tick.
+   a lowercase ident in type position is a type variable: `'a` lexes to the
+   bare name "a" with the token range covering the apostrophe.
+   recovery: leave closing/separating/decl-start tokens for the enclosing construct
+   a function parameter `(name: Type)` or `()`
+   `_` names a parameter you don't intend to use. It's also what `()` is stored as, so accepting it
+   here is what makes `(_: Unit)` and `()` both parse to the same thing and either form round-trip.
+   A `///` for a parameter attaches to whichever token follows it: the `(` when the comment is
+   written above the whole parameter, the NAME when it is written just inside the paren. Both
+   spellings occur, so both are read.
+   A declaration-scope function (`let f (p: T) … : R = body`) or value
+   (`val x = body`). Legacy module-level `let x = body` also comes through here
+   to retain a recovery DValue beside its focused diagnostic.
+   `:{Http, Clock}` immediately after a declaration's return colon. Absent
+   means no ceiling; `{}` means effect-free. Unknown names are diagnostics,
+   not wildcards: the row fails closed.
+   `type Name [<'a>] = Definition`
+   `type X = {}` — an empty record isn't valid. Diagnose so the `"_"` placeholder
+   the normalizer inserts (records need ≥1 field) is honest recovery, not a
+   silently-accepted phantom field. (A `{ garbage }` already errored in the loop
+   and won't be at `}` here, so this only fires for a genuinely empty record.)
+   an enum case's fields are separated by `*` (`Case of A * B` = two fields), so
+   the field type is parsed at ATOM level — a bare `*` is the separator, not a
+   tuple. A tuple field must be parenthesized (`(A * B)`), which parseAtomType handles.
+   Only the first case may omit the leading `|` (`type X = A | B`); every case
+   after it REQUIRES a `|`. Otherwise the following statement — which often
+   starts with an uppercase name (`type X = | A | B | C` then `Foo.bar = …`) —
+   would be swallowed as another case, orphaning the rest of that line.
+   A `///` above a case attaches to whichever token starts it: the leading `|` usually, or the
+   case name itself when the first case omits its bar (`type X = A | B`).
+   `type X = |` with no case — diagnose so the `"_"` placeholder the normalizer
+   inserts (enums need ≥1 case) is honest recovery, not a silent phantom case.
+   Test-mode only: the expected side of an assertion `actual = expected`. Either
+   an `error="msg"` / `sqlerror="msg"` marker (also the bare `error "msg"` shape)
+   or a plain value expression. The message string is kept raw (the tokenizer has
+   already unescaped it); normalization happens in the lowering.
+   `[<DB>]` attribute prefix on a type decl: 5 tokens. Parsing represents it;
+   post-parse validation restricts it to Test source.
+   `[` `<` `DB` `>` `]`.
+   Parse declarations/expressions whose start column is >= minCol (offside): a
+   less-indented item ends the scope. Used for the file body and, recursively,
+   for nested `module X =` blocks, so module nesting is preserved (FQN paths).
+   `itemScope` distinguishes module declaration rules (values require `val`)
+   from script rules (a no-param `let x = …` is an expression that sequences
+   with what follows).
+   Test assertions and `[<DB>]` declarations are represented in every parse.
+   Validation later decides whether Script, Package, or Test source may contain
+   them. `itemScope` only distinguishes declaration-scope `let` from a script
+   binding.
+   each item is its own offside statement (anchored per item in the body);
+   the enclosing scope's anchor + decl anchor are restored on exit
+   `[<DB>] type Name = AliasedType` — a user DB declaration
+   `val x = …` is ALWAYS a value DECLARATION (the explicit value-decl
+   keyword), in a module or at file top level alike.
+   the decl parse below is speculative (a top-level no-param `let` is
+   reparsed as an expression) — drop its diagnostics on reparse so
+   errors aren't reported twice
+   A no-param `let x = …` is a script EXPRESSION at file top level and
+   with explicit `in`. At module declaration scope it is retained as a
+   DValue recovery node with a diagnostic requiring `val`; `let f (p) …`
+   is a DFunction and is never reparsed.
+   `module X =`: body is offside-indented under the keyword.
+   `module Darklang.X` (no `=`): file-level header wrapping the rest.
+   A module's trailing expressions belong to the module (as `DExpr`
+   declarations), not the enclosing scope — so they pretty-print nested.
+   span the whole module (header through last child), like other decls —
+   a header-only range makes range-gated walkers (hover) skip the body
+   file header consumed the rest
+   A source-level `actual = expected` is represented as a test node.
+   Its validity for this caller is decided after parsing.
+*)
+(*
    The hand-written parser: source → range-complete `WrittenTypes` tree, capturing
    fine-grained keyword/symbol/operator ranges (not just node spans) for the highlighter /
    LSP. Recovers from errors, returning diagnostics alongside a best-effort tree.

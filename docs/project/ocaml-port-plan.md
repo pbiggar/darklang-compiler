@@ -554,3 +554,18 @@ in the native runner. The clean warning-free build passes 187/187 translated
 units. Coverage is 99/391 complete pairs with zero missing reference comment
 lines. Closure-comparison full corpus proof is running; whole-compiler byte
 parity and final replacement have not yet been accepted.
+
+Uniqueness boundary inference, recursive-group inference, and deterministic owned
+function SCC discovery are now complete native components. The twelve original
+uniqueness and recursive inference tests pass, bringing the native suite to
+199/199 and coverage to 104/391 complete pairs. The build is warning-free and
+reference comment coverage has no gaps. Comment placement now recognizes generic
+and functor-local declarations and retains each explanation in its owning
+component, rather than matching an unrelated declaration with the same name.
+
+The full closure-comparison audit matched its first 44 observations before its
+process was killed while handling large wire rows. The audit now compares and
+hashes the entire JSON in bounded chunks and spills rows to disk; differing rows
+still undergo the complete structural comparison. Large Unicode rows, exact
+hashes, late differences, successive rows, and EOF handling have been checked.
+The full streamed audit is running; this is not yet a completed parity gate.

@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DECL = re.compile(r"^(?:let(?: rec)?(?: internal| private| inline| mutable)*|and|type(?: internal| private)?)\s+([A-Za-z][A-Za-z0-9_']*)")
-NATIVE = re.compile(r"^(?:let(?: rec)?|and|type)\s+([A-Za-z][A-Za-z0-9_']*)", re.M)
+NATIVE = re.compile(r"^[ \t]*(?:let(?: rec)?|and|type)\s+(?:(?:\([^\n)]+\)|'[A-Za-z0-9_]+)\s+)?([A-Za-z][A-Za-z0-9_']*)", re.M)
 
 
 def line_comments(text):
@@ -131,9 +131,8 @@ def main():
             local = [target for target in targets if target[0] == owner]
             if local:
                 target = local[0]
-            elif len(targets) == 1:
-                target = targets[0]
             else:
+                # A common name in another component is not this declaration.
                 target = owner, 0
             path, position = target
             if compact(safe(comment)) in compact(comment_text[path]):

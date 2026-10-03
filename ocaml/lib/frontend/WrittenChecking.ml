@@ -1,4 +1,13 @@
 (*
+   Function annotations may introduce type parameters without listing them
+   after the function name. Keep their first-seen order for positional calls.
+   The success payload does not exist for these constructors.
+   TNever keeps the type precise while the runtime reports the failed unwrap.
+   Check annotated, nongeneric functions and sequential values directly from
+   WrittenTypes. The production entry point is switched only after declaration
+   catalogs, recursion, matches, and generic checking are included.
+*)
+(*
    Resolve the type syntax while retaining the compiler's nominal registry as
    the authority for custom names. No source AST type is constructed here.
    Equality and dictionary keys use the field layout, even when source record
