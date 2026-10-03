@@ -651,3 +651,12 @@ A fresh warning-free build passes 309/309 translated native units. Coverage is
 audit uses bounded batches, iterative reference requests, explicit collection,
 and a sufficiently deep JSON encoder; its full corpus gate remains in progress.
 Whole-compiler and executable-byte acceptance remain outstanding.
+
+The shared escape-analysis destruction proof, list display lookup, and print
+insertion pass are fully translated. The destruction proof preserves exact
+recursive-cycle checks, type-argument substitution, and conservative rejection
+of type-growing recursion. Print insertion preserves helper reachability,
+branch/continuation allocation order, and both root-word probe modes. A fresh
+warning-free build passes the existing 309 native units; coverage is now 138/391
+complete pairs, with no missing reference comment lines. The semantic output
+comparisons for these additional passes remain due.
