@@ -654,6 +654,124 @@ let helperDependencies source =
         encode compareType (List.fold (fun state value -> compare value state) (empty compareType) samples);
         JsonArray(expressions |> List.map collect |> Array.ofList) :> JsonNode|]
 
+let materializeHelpers source =
+    let samples = [AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TInt; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128; AST.TBool; AST.TFloat64; AST.TString; AST.TBlob; AST.TChar; AST.TDateTime; AST.TUnit; AST.TNever; AST.TInternalRawPtr;
+        AST.TVar source; AST.TInferenceVar (source,"fixed"); AST.TFunction ([AST.TInt64],AST.TString); AST.TFunction ([AST.TBlob],AST.TNever); AST.TTuple [AST.TInt64;AST.TString];
+        AST.TRecord ("R",[]); AST.TRecord ("R",[AST.TUnit]); AST.TRecord ("Recursive",[]); AST.TRecord ("Opaque",[]); AST.TRecord ("Missing",[]); AST.TRecord ("S",[]);
+        AST.TSum ("S",[]); AST.TSum ("BadSum",[]); AST.TSum ("Generic",[AST.TString]); AST.TSum ("Generic",[]); AST.TSum ("Uuid",[]);
+        AST.TList AST.TInt64; AST.TStream AST.TNever; AST.TDict (AST.TString,AST.TInt64); AST.TDict (AST.TInt64,AST.TString); AST.TDict (AST.TBlob,AST.TString)]
+    let lookup : CheckingTypes.VariantLookup = Map.ofList ["S.C",("S",[],0,[AST.TInt64]); "BadSum.C",("BadSum",[],0,[AST.TInternalRawPtr]); "Generic.C",("Generic",["a"],0,[AST.TVar "a"])]
+    let raw = Map.ofList ["R",["field",AST.TInt64]; "Recursive",["next",AST.TRecord ("Recursive",[])]; "Opaque",["field",AST.TStream AST.TInt64]]
+    let aliases : CheckingTypes.AliasRegistry = Map.ofList ["Alias",([],AST.TRecord ("R",[]))]
+    let left : AST.Expr = AST.Var source
+    let right : AST.Expr = AST.UnitLiteral
+    let samples = samples @ [AST.TRecord ("GenericRecord",[AST.TInt64;AST.TString]); AST.TRecord ("GenericRecord",[]); AST.TSum ("Multiple",[AST.TInt64])]
+    let raw = Map.add "GenericRecord" ["z",AST.TVar "a"; "aa",AST.TVar "b"; source,AST.TList (AST.TVar "a")] raw
+    let registry = CheckingTypes.indexTypeRegistry lookup (Map.ofList ["R",[];"Recursive",[];"Opaque",[];"GenericRecord",["a";"b"]]) raw
+    let lookup = lookup |> Map.add ("Multiple." + source) ("Multiple",["a"],7,[AST.TVar "a";AST.TList AST.TString])
+                        |> Map.add "Multiple.z" ("Multiple",["a"],3,[]) |> Map.add "Multiple.aa" ("Multiple",["a"],1,[AST.TString])
+    let sums : CheckingTypes.IndexedSumTypeRegistry = typesCall "indexSumTypeRegistry" [|box lookup|]
+    let assembly = typeof<AST.SemanticType>.Assembly
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let planning = assembly.GetType("ComparisonPlanning")
+    let internalType = assembly.GetType("ComparisonPlanning+InternalTypeApp")
+    let case = FSharpType.GetUnionCases(internalType, flags)[0]
+    let dispatch value = planning.GetMethod("makeInternalTypeApp",flags).Invoke(null,[|FSharpValue.MakeUnion(case,[|box value;box left;box right|],flags)|]) :?> AST.Expr
+    let compare value = AST.applyNamedWithTypes "__compare" [value] (AST.NonEmptyList.fromList [left;right])
+    let bodies = samples |> List.map (fun value -> AST.TupleLiteral [dispatch value;compare value])
+    let definition name typeParams body : AST.FunctionDef = {Name=name;TypeParams=typeParams;Params=AST.NonEmptyList.singleton ("arg",AST.TUnit);ReturnType=AST.TUnit;Body=body;Recursion=None}
+    let helperName = planning.GetMethod("eqHelperName",flags).Invoke(null,[|box (AST.TList AST.TInt64)|]) :?> string
+    let topLevels : AST.TopLevel list = [AST.FunctionDef (definition source [] (AST.TupleLiteral bodies));
+        AST.FunctionDef (definition "template" ["a"] (AST.TupleLiteral bodies));AST.FunctionDef (definition helperName [] AST.UnitLiteral);
+        AST.ValueDef (AST.UncheckedValueDef ("unchecked",AST.TupleLiteral bodies));AST.ValueDef (AST.CheckedValueDef ("checked",AST.TUnit,AST.TupleLiteral bodies));
+        AST.TypeDef (AST.RecordDef ("R",[],["field",AST.TInt64]));AST.Expression ([source],AST.TupleLiteral bodies)]
+    let moduleType = assembly.GetType("MaterializeHelpers")
+    let call name parameters =
+        let method = moduleType.GetMethod(name,flags)
+        encode method.ReturnType (method.Invoke(null,parameters))
+    namedArray "tuple" [|call "materializeEqHelpersInTopLevelsWithIndexedSums" [|box aliases;box registry;box lookup;box sums;box topLevels|];
+        call "materializeEqHelpersInTopLevels" [|box aliases;box registry;box lookup;box topLevels|];
+        call "materializeCompareHelpersInTopLevels" [|box aliases;box registry;box lookup;box topLevels|]|]
+
+let declarations source =
+    let x = AST.Var source
+    let y = AST.Var "y"
+    let field = AST.unresolvedRecordFieldReference "field"
+    let patterns = [AST.PUnit;AST.PWildcard;AST.PVar source;AST.PConstructor ("C",[AST.PVar source;AST.PVar "y"]);AST.PResolvedConstructor ("M.T","C",3,[AST.PVar source]);AST.PInt64 1L;AST.PBigInt 1I;AST.PInt128Literal (Int128.Parse "1");AST.PInt8Literal 1y;AST.PInt16Literal 1s;AST.PInt32Literal 1;AST.PUInt8Literal 1uy;AST.PUInt16Literal 1us;AST.PUInt32Literal 1ul;AST.PUInt64Literal 1UL;AST.PUInt128Literal (UInt128.Parse "1");AST.PBool true;AST.PString source;AST.PChar source;AST.PFloat 1.0;AST.PTuple [AST.PVar source;AST.PVar "y"];AST.PList [AST.PVar source];AST.PListCons ([AST.PVar source],AST.PVar "tail");AST.POr (AST.NonEmptyList.fromList [AST.PVar source;AST.PVar "other"])]
+    let literals: AST.Expr list = [AST.UnitLiteral;AST.Int64Literal 1L;AST.Int128Literal (Int128.Parse "1");AST.BigIntLiteral 1I;AST.Int8Literal 1y;AST.Int16Literal 1s;AST.Int32Literal 1;AST.UInt8Literal 1uy;AST.UInt16Literal 1us;AST.UInt32Literal 1ul;AST.UInt64Literal 1UL;AST.UInt128Literal (UInt128.Parse "1");AST.BoolLiteral true;AST.StringLiteral source;AST.CharLiteral source;AST.FloatLiteral 1.0;AST.RuntimeError source]
+    let expressions = literals @ [x;AST.Var "Builtin.testNan";AST.Var "Builtin.testInfinity";AST.BoundaryRender (source,x);AST.BinOp (AST.Add,x,y);AST.UnaryOp (AST.Neg,x);
+        AST.Let (AST.LPVariable source,x,AST.TupleLiteral [x;y]);AST.Let (AST.LPTuple (AST.LPVariable source,AST.LPVariable "y",[]),AST.Var "value",AST.TupleLiteral [x;y]);
+        AST.RecursiveLet (AST.ParsedRecursiveBinding {Binding=AST.bindingId 1;Boundary=AST.scopeBoundaryId 2;Member=AST.recursiveMemberId 3;SourceName=source;Kind=AST.NamedLocalFunctionMember},AST.Apply (x,[],AST.NonEmptyList.singleton y),AST.TupleLiteral [x;y]);
+        AST.If (x,y,AST.Var "z");AST.Sequence (x,y);AST.Apply (x,[],AST.NonEmptyList.fromList [y;AST.Var "z"]);AST.TupleLiteral [x;y];AST.TupleAccess (x,1);
+        AST.DictLiteral (AST.TString,AST.TString,[(x,y)]);AST.RecordLiteral (AST.unresolvedRecordReference "R" [],[(field,x)]);AST.RecordUpdate (x,[(field,y)]);AST.RecordAccess (x,field);
+        AST.Constructor (AST.UnresolvedConstructor None,"C",[x;y]);AST.ListLiteral [x;y];AST.Lambda (AST.NonEmptyList.singleton (AST.lambdaParameter (AST.LPVariable source)),None,AST.TupleLiteral [x;y]);
+        AST.Apply (AST.TupleAccess (x,0),[],AST.NonEmptyList.singleton y);AST.IndirectApply (x,AST.NonEmptyList.singleton y);AST.Closure (source,[x;y]);
+        AST.InterpolatedString [AST.StringText source;AST.StringExpr x;AST.StringExpr y]] @ (patterns |> List.map (fun pattern -> AST.Match (AST.Var "scrutinee",[{Patterns=AST.NonEmptyList.singleton pattern;Guard=Some (AST.Var "guard");Body=AST.TupleLiteral [x;y;AST.Var "tail"]}])))
+    let parsed name ordinal : AST.ParsedRecursiveMember = {Binding=AST.bindingId ordinal;Boundary=AST.scopeBoundaryId 0;Member=AST.recursiveMemberId ordinal;SourceName=name;Kind=AST.TopLevelFunctionMember}
+    let definition name ordinal body : AST.FunctionDef = {Name=name;TypeParams=[];Params=AST.NonEmptyList.fromList ([source;"y";"z";"value";"scrutinee";"guard";"tail"] |> List.map (fun name -> name,AST.TUnit));ReturnType=AST.TUnit;Body=body;Recursion=Some (AST.ParsedRecursiveBinding (parsed name ordinal))}
+    let declarations : AST.TopLevel list = [AST.TypeDef (AST.RecordDef ("R",[],["field",AST.TInt64]));AST.TypeDef (AST.SumTypeDef ("S",[],[{Name="C";Fields=[AST.TInt64]}]));
+        AST.TypeDef (AST.TypeAlias ("Alias",[],AST.TRecord ("R",[])));AST.TypeDef (AST.RecordDef ("M.T",[],["field",AST.TList AST.TInt64]));
+        AST.FunctionDef (definition "M.f" 0 (AST.applyNamed "g" (AST.NonEmptyList.singleton AST.UnitLiteral)));AST.FunctionDef (definition "M.g" 1 (AST.applyNamed "f" (AST.NonEmptyList.singleton AST.UnitLiteral)));
+        AST.FunctionDef (definition "loop" 2 (AST.applyNamed "loop" (AST.NonEmptyList.singleton AST.UnitLiteral)));AST.FunctionDef (definition "ordinary" 3 AST.UnitLiteral);AST.ValueDef (AST.UncheckedValueDef ("M.value",AST.StringLiteral source))]
+    let registry : AST.ModuleRegistry = Map.ofList ["Intrinsic.fn",{Name="Intrinsic.fn";TypeParams=[];ParamTypes=[AST.TUnit];ReturnType=AST.TUnit};"M.f",{Name="M.f";TypeParams=[];ParamTypes=[AST.TUnit];ReturnType=AST.TUnit}]
+    let aliases : CheckingTypes.AliasRegistry = Map.ofList ["Alias",([],AST.TRecord ("R",[]))]
+    let assembly = typeof<AST.SemanticType>.Assembly
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let resolver = assembly.GetType("ResolveDeclarations")
+    let checking = assembly.GetType("CheckDeclarations")
+    let environment includeIntrinsic = resolver.GetMethod("declarationResolutionEnvironment",flags).Invoke(null,[|box declarations;box registry;box includeIntrinsic|]) :?> NameResolution.ResolutionEnvironment
+    let env = environment true
+    let call (moduleType:Type) name args = let method = moduleType.GetMethod(name,flags) in encode method.ReturnType (method.Invoke(null,args))
+    let resolve (topLevels:AST.TopLevel list) = call resolver "resolveProgramNames" [|box env;box aliases;box (Set.ofList ["R";"M.T"]);box (AST.Program topLevels)|]
+    let validationCases : AST.TopLevel list list = [declarations;[];[AST.TypeDef (AST.RecordDef ("Empty",[],[]))];[AST.TypeDef (AST.SumTypeDef ("Empty",[],[]))];
+        [AST.TypeDef (AST.RecordDef ("Unknown",[],["field",AST.TRecord (source,[])]))];[AST.TypeDef (AST.RecordDef ("Undeclared",[],["field",AST.TVar source]))];
+        [AST.TypeDef (AST.RecordDef ("Duplicate",[source;source],["field",AST.TVar source]))];[AST.TypeDef (AST.SumTypeDef ("Duplicate",[],[{Name=source;Fields=[]};{Name=source;Fields=[]}]))];
+        [AST.TypeDef (AST.TypeAlias ("Cycle",[],AST.TRecord ("Cycle",[])))];[AST.TypeDef (AST.TypeAlias ("A",[],AST.TRecord ("B",[])));AST.TypeDef (AST.TypeAlias ("B",[],AST.TRecord ("A",[])))];
+        [AST.TypeDef (AST.RecordDef ("R",["a"],["field",AST.TVar "a"]));AST.TypeDef (AST.RecordDef ("Owner",[],["field",AST.TRecord ("R",[])]))];
+        [AST.TypeDef (AST.RecordDef ("R",[],["field",AST.TInt64]));AST.TypeDef (AST.RecordDef ("R",[],["other",AST.TString]))];
+        [AST.TypeDef (AST.SumTypeDef ("A",[],[{Name="C";Fields=[]}]));AST.TypeDef (AST.SumTypeDef ("B",[],[{Name="C";Fields=[]}]))]]
+    namedArray "tuple" [|encode typeof<NameResolution.Candidate list> (box (NameResolution.candidates env));encode typeof<NameResolution.Candidate list> (box (NameResolution.candidates (environment false)));
+        call resolver "resolveRecursiveDeclarationGroups" [|box declarations|];resolve declarations;
+        JsonArray(expressions |> List.map (fun expression -> resolve [AST.FunctionDef (definition "probe" 4 expression)]) |> Array.ofList) :> JsonNode;
+        JsonArray(validationCases |> List.map (fun values -> namedArray "tuple" [|call checking "validateTopLevelTypeDeclarations" [|box (None:CheckingTypes.TypeCheckEnv option);box values|];call checking "summarizeTopLevelDeclarations" [|box values|]|]) |> Array.ofList) :> JsonNode|]
+
+let recordChecking source =
+    let registry = CheckingTypes.indexTypeRegistry Map.empty (Map.ofList ["R",[];"Generic",["a"]]) (Map.ofList ["R",["first",AST.TInt64;"second",AST.TString];"Generic",["first",AST.TVar "a";"second",AST.TVar "a"]])
+    let aliases : CheckingTypes.AliasRegistry = Map.ofList ["Alias",([],AST.TRecord ("R",[]));"GAlias",(["a"],AST.TRecord ("Generic",[AST.TVar "a"]))]
+    let generic : CheckingTypes.GenericFuncRegistry = {Functions=Map.empty;RequireExplicitTypeArgsForBareCalls=false}
+    let trace = ResizeArray<AST.Expr * AST.SemanticType option>()
+    let callback (args:obj list) : obj =
+        let value = args[0] :?> AST.Expr
+        let expected = args[8] :?> AST.SemanticType option
+        trace.Add (value,expected)
+        let result : Result<AST.SemanticType * AST.Expr,CheckingDiagnostics.TypeError> =
+            match value with
+            | AST.RuntimeError message -> Error (CheckingDiagnostics.GenericError message)
+            | AST.Var "mismatch" -> Error (CheckingDiagnostics.TypeMismatch (AST.TString,AST.TInt64,"callback"))
+            | AST.Int64Literal _ -> Ok (AST.TInt64,AST.BoundaryRender ("checked",value))
+            | AST.StringLiteral _ -> Ok (AST.TString,AST.BoundaryRender ("checked",value))
+            | AST.Var "generic" -> Ok (AST.TVar source,AST.BoundaryRender ("checked",value))
+            | _ -> Ok (AST.TUnit,AST.BoundaryRender ("checked",value))
+        box result
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let method = typeof<AST.SemanticType>.Assembly.GetType("CheckRecordLiterals").GetMethod("check",flags)
+    let rec curry (typ:Type) args = FSharpValue.MakeFunction(typ,fun arg -> let args = args @ [arg] in if args.Length = 9 then callback args else curry (typ.GetGenericArguments().[1]) args)
+    let checker = curry (method.GetParameters().[0].ParameterType) []
+    let field name value = AST.unresolvedRecordFieldReference name,value
+    let fields : (AST.RecordFieldReference * AST.Expr) list list = [[field "first" (AST.Int64Literal 1L);field "second" (AST.StringLiteral source)];
+        [field "second" (AST.StringLiteral source);field "first" (AST.Int64Literal 1L)];[];[field "first" AST.UnitLiteral];[field "first" (AST.Int64Literal 1L);field "first" AST.UnitLiteral];
+        [field "___" AST.UnitLiteral];[field "" AST.UnitLiteral];[field "first" (AST.Int64Literal 1L);field "second" (AST.StringLiteral source);field source AST.UnitLiteral];
+        [field "first" (AST.RuntimeError source);field "second" (AST.RuntimeError "second")];[field "second" (AST.RuntimeError "second");field "first" (AST.RuntimeError source)];
+        [field "first" (AST.Var "mismatch");field "second" (AST.StringLiteral source)];[field "first" (AST.Var "generic");field "second" (AST.Var "generic")];[field "first" (AST.Int64Literal 1L);field "second" (AST.Int64Literal 2L)]]
+    let references = ["",[];"Unknown",[];"R",[];"R",[AST.TUnit];"Generic",[];"Generic",[AST.TString];"Generic",[AST.TString;AST.TInt64];"Alias",[];"GAlias",[AST.TInt64]] |> List.map (fun (name,args) -> AST.unresolvedRecordReference name args)
+    let expected = [None;Some AST.TUnit;Some (AST.TRecord ("R",[]));Some (AST.TRecord ("Generic",[AST.TInt64]));Some (AST.TRecord ("Generic",[AST.TString]))]
+    let cases = if source = "" then references |> List.collect (fun reference -> fields |> List.collect (fun fields -> expected |> List.map (fun expected -> reference,fields,expected)))
+                else fields |> List.collect (fun fields -> [AST.unresolvedRecordReference "R" [],fields,None;AST.unresolvedRecordReference "Generic" [],fields,Some (AST.TRecord ("Generic",[AST.TInt64]))])
+    cases |> List.map (fun (reference,fields,expected) ->
+        trace.Clear()
+        let result = method.Invoke(null,[|checker;box (Map.empty<string,AST.SemanticType>);box registry;box (Map.empty<string,string * string list * int * AST.SemanticType list>);box generic;box AST.defaultWarningSettings;box (Map.empty<string,AST.ModuleFunc>);box aliases;box expected;box reference;box fields|])
+        namedArray "tuple" [|encode method.ReturnType result;encode typeof<(AST.Expr * AST.SemanticType option) list> (box (List.ofSeq trace))|]) |> List.toArray |> fun values -> JsonArray(values) :> JsonNode
+
 CultureInfo.CurrentCulture <- CultureInfo.InvariantCulture
 CultureInfo.CurrentUICulture <- CultureInfo.InvariantCulture
 let reader : IO.TextReader =
@@ -690,6 +808,9 @@ let rec requests () =
                         WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+            | "record-checking" -> recordChecking source
+            | "declarations" -> declarations source
+            | "materialize-helpers" -> materializeHelpers source
             | "helper-dependencies" -> helperDependencies source
             | "structural-helpers" -> structuralHelpers source
             | "comparison-planning" -> comparison source

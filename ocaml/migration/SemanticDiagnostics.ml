@@ -38,3 +38,10 @@ let typeError = function
  | CheckingDiagnostics.PolymorphicRecursion name -> union "TypeError" "PolymorphicRecursion" [str name]
  | CheckingDiagnostics.ResolutionFailure error -> union "TypeError" "ResolutionFailure" [resolution error]
  | CheckingDiagnostics.GenericError error -> union "TypeError" "GenericError" [str error]
+let provenance = function
+ | NameResolution.LexicalBinding value -> union "CandidateProvenance" "LexicalBinding" [str value]
+ | NameResolution.SourceDeclaration value -> union "CandidateProvenance" "SourceDeclaration" [str value]
+ | NameResolution.ModuleDeclaration value -> union "CandidateProvenance" "ModuleDeclaration" [str value]
+ | NameResolution.PackageDeclaration value -> union "CandidateProvenance" "PackageDeclaration" [str value]
+ | NameResolution.BuiltinRegistration value -> union "CandidateProvenance" "BuiltinRegistration" [str value]
+ | NameResolution.CompilerExtension value -> union "CandidateProvenance" "CompilerExtension" [str value]

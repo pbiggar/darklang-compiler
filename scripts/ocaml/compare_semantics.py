@@ -6,6 +6,7 @@ from contextlib import ExitStack
 import json
 import random
 import subprocess
+import shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -104,12 +105,14 @@ def first_difference(expected, actual, path="value"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies", "materialize-helpers", "declarations", "record-checking"])
     parser.add_argument("--probes-only", action="store_true")
     parser.add_argument("--batch-size", type=int, default=0,
                         help="Compare restartable batches; reuse only matching source snapshots")
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--native-executable", type=Path)
+    parser.add_argument("--reference-script", type=Path)
     args = parser.parse_args()
     corpus = list(inputs())
     if args.stage == "dsl" and not args.probes_only:
@@ -130,6 +133,21 @@ def main():
                 snapshot.update(str(path.relative_to(ROOT)).encode())
                 snapshot.update(path.read_bytes())
         identity = snapshot.hexdigest()
+        native = output / "snapshots" / identity / "native.exe"
+        native.parent.mkdir(parents=True, exist_ok=True)
+        if not native.exists():
+            original = ROOT / ("ocaml/_build/default/tests/foundations_main.exe" if args.stage == "dsl" else "ocaml/_build/default/tests/semantic_probe.exe")
+            shutil.copyfile(original, native)
+            native.chmod(0o755)
+        reference = native.parent / "reference.fsx"
+        if not reference.exists():
+            original = ROOT / "scripts/ocaml/semantic_reference.fsx"
+            content = original.read_text()
+            for line in content.splitlines():
+                if line.startswith('#r "'):
+                    relative = line[4:-1]
+                    content = content.replace(line, '#r "' + str((original.parent / relative).resolve()) + '"')
+            reference.write_text(content)
         completed = 0
         combined = {name: [] for name in ("fsharp", "ocaml")}
         for offset in range(0, len(corpus), args.batch_size):
@@ -147,7 +165,7 @@ def main():
                     valid = False
             if not valid:
                 command = ["python3", str(Path(__file__)), "--stage", args.stage,
-                           "--offset", str(offset), "--limit", str(limit)]
+                           "--offset", str(offset), "--limit", str(limit), "--native-executable", str(native), "--reference-script", str(reference)]
                 if args.probes_only:
                     command.append("--probes-only")
                 result = subprocess.run(command, cwd=ROOT)
@@ -174,6 +192,10 @@ def main():
         ("fsharp", ["dotnet", "fsi", "--exec", "scripts/ocaml/semantic_reference.fsx", str(request_file)]),
         ("ocaml", ["ocaml/_build/default/tests/foundations_main.exe", "--dsl-probe"] if args.stage == "dsl" else ["ocaml/_build/default/tests/semantic_probe.exe"]),
     ]
+    if args.reference_script:
+        commands[0] = ("fsharp", ["dotnet", "fsi", "--exec", str(args.reference_script), str(request_file)])
+    if args.native_executable:
+        commands[1] = ("ocaml", [str(args.native_executable)] + (["--dsl-probe"] if args.stage == "dsl" else []))
     # Compare complete rows immediately. Large resolver inventories repeat source
     # evidence many times; retain canonical audit hashes rather than gigabytes of
     # identical successful trees. A mismatch retains both complete observations.

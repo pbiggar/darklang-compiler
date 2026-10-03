@@ -374,3 +374,15 @@ expansion each match all 1,890 complete source observations. The build and all
 Dependency graph and helper insertion parity remain in progress at this
 checkpoint. Semantic comparisons now support restartable batches tied to an
 exact corpus and source snapshot, retaining full row comparisons and audit hashes.
+
+Declaration name resolution, deterministic recursive declaration grouping,
+nominal declaration validation, registry summaries, and record literal checking
+are completely translated. Interfaces precede implementations and original
+comments are audited. Declaration observations cover every expression form,
+recursive evidence, intrinsic visibility, alias cycles, duplicate declarations,
+and full registries. Record observations include recursive checker call order,
+source field order, generic inference, and legacy diagnostics. Initial full
+observations pass; complete corpus comparisons remain in progress. Coverage is
+46/391 source implementation/interface pairs, with 96/96 translated unit tests
+passing. Restartable comparisons now copy both native executables and F# reference
+scripts into immutable run snapshots so rebuilds do not interrupt comparisons.
