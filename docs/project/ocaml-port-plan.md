@@ -3,7 +3,8 @@
 Purpose: specify the accepted migration requirements, comparison strategy,
 delivery sequence, and task-specific workflow.
 
-Status: revised following user review, 2026-10-01. No OCaml implementation has started.
+Status: revised following user review, 2026-10-01. Implementation is in progress;
+see the recorded migration checkpoints below.
 
 ## Scope and baseline
 
@@ -529,3 +530,27 @@ environments, incompatible patterns, and acceptance predicates. The clean
 native build and 161/161 translated units pass; coverage is 78/391 complete
 pairs with zero missing source comment lines. Whole-compiler acceptance and
 remaining full corpus proofs are still outstanding.
+
+Whole-program function lifting now passes all 1,890 complete corpus
+observations. Atom lowering is fully translated, including source-local
+legacy tree builders, and passes 2/2 initial complete observations. These
+cover checked fixtures and source programs, full ANF atoms/binding prefixes,
+recursive callback expressions/environments/order, wide integers, UTF-16
+normalization, record field evaluation/layout order, sum representations,
+closure application, concatenation, list construction, and identifier overflow.
+
+HIR, OwnedIR, ListRegion, continuation substitution, value liveness, HIR and
+ownership verification, list storage selection/elaboration/verification,
+allocation accounting, native list-region lowering, call-graph reachability,
+destruction contracts, and list-region extraction are fully translated.
+Generic identity sets use OCaml functors with explicit comparators and typed
+sets; function identity ordering remains unsigned. Source comments and
+allocation/release distinctions remain intact, including the 256-byte runtime
+small-array class. Full IR/reference proofs for these new passes remain due.
+
+All original HIRVerificationTests (21) and OwnedHIRVerificationTests (5), plus
+the complete TestIds fixture identity allocator, are translated and integrated
+in the native runner. The clean warning-free build passes 187/187 translated
+units. Coverage is 99/391 complete pairs with zero missing reference comment
+lines. Closure-comparison full corpus proof is running; whole-compiler byte
+parity and final replacement have not yet been accepted.

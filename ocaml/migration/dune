@@ -696,3 +696,15 @@
  (deps ../lib/passes/anf/lowering/LoweringAggregates.ml instrument_checking.py)
  (action (with-stdout-to %{targets}
   (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/LoweringAggregates.ml}))))
+
+(rule
+ (targets InstrumentedAtomLowering.mli)
+ (deps ../lib/passes/anf/lowering/AtomLowering.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/AtomLowering.mli}))))
+
+(rule
+ (targets InstrumentedAtomLowering.ml)
+ (deps ../lib/passes/anf/lowering/AtomLowering.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/AtomLowering.ml}))))

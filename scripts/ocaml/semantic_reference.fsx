@@ -1406,6 +1406,56 @@ let loweringAggregates source =
     tuple [patterns |> List.map (fun pattern -> patternTypes |> List.map (fun typ -> tuple [enc (loweringAggregateCall<bool> "letPatternAcceptsType" [|box pattern;box typ|]);[0;Int32.MinValue;Int32.MaxValue] |> List.map (fun gen -> enc (loweringAggregateCall<Result<TypeRegistries.VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen,string>> "lowerLetPatternBindings" [|box pattern;box (ANF.Var (ANF.TempId -1));box typ;box env;box initial;box (ANF.VarGen gen)|])) |> list]) |> list) |> list;
         (if source="" then loweringAnalysisTypes |> List.map (fun typ -> [0;1;2;3;6;7;14;15;31;32;64] |> List.map (fun count -> [0;Int32.MinValue;Int32.MaxValue] |> List.map (fun gen -> let elements=List.init count (fun index -> ANF.IntLiteral (ANF.Int64 (int64 index)),typ) in enc (loweringAggregateCall<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen> "buildSkewListLiteral" [|box (AST.TList typ);box elements;box (ANF.VarGen gen);box initial|])) |> list) |> list) |> list else list [])]
 
+let atomLowering source =
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let enc value=closureAnalysisEncode value
+    let outcome encoder value =
+        match value with
+        | Error error -> enc (Error error : Result<unit,string>)
+        | Ok value ->
+            let node=JsonObject()
+            node["type"]<-JsonValue.Create "FSharpResult"
+            node["case"]<-JsonValue.Create "Ok"
+            node["fields"]<-JsonArray([|encoder value|])
+            node :> JsonNode
+    let attempt action=enc (try Ok (action ()) with error -> Error error.Message)
+    let program program =
+        let symbols=CheckedAST.programSymbols program
+        let tops=CheckedAST.programTopLevels program
+        let types=WrittenChecking.typeCheckEnvironment program
+        let registry : TypeRegistries.TypeRegistry = types.IndexedTypeReg |> Map.map (fun _ (info:CheckingTypes.RecordTypeInfo) -> {TypeParams=info.TypeParams;Fields=info.Fields})
+        let variants=types.VariantLookup
+        let sums=LoweringPrimitives.sumMetadataFromVariantLookup variants
+        let typeNames=TypeRegistries.typeNamesFromSymbols symbols
+        let funcs=tops |> List.choose (function CheckedAST.FunctionDef func -> Some func | _ -> None)
+        let functions=funcs |> List.map (fun func -> func.Id,(func.Name,AST.TFunction (CheckedAST.functionParameterTypes func |> AST.NonEmptyList.toList |> List.map snd,CheckedAST.functionReturnType func))) |> FunctionIdMap.ofList
+        let names=CheckedAST.functionNames symbols
+        let extras=["Darklang.Stdlib.Int.__value";"Darklang.Stdlib.Int.__equals";"Darklang.Stdlib.Int.bitwiseNot";"Darklang.Stdlib.Int128.__value";"Darklang.Stdlib.UInt128.__value";"Darklang.Stdlib.Int128.__equals";"Darklang.Stdlib.UInt128.__equals";"Darklang.Stdlib.Int128.bitwiseNot";"Darklang.Stdlib.UInt128.bitwiseNot";"Darklang.Stdlib.String.__normalizeAfterConcat"]
+        let ids=AST.allocateFunctionIds (names |> FunctionIdMap.toList |> Seq.map fst) (extras |> Seq.filter (fun name -> not (Map.containsKey name (CheckedAST.functionIds symbols))))
+        let names=ids |> Map.fold (fun names name id -> FunctionIdMap.add id name names) names
+        let ids=TypeRegistries.functionIdsFromNames names
+        let globals : TypeRegistries.VarEnv = CheckedAST.programValues program |> Map.toList |> List.mapi (fun index (name,(typ,_)) -> AST.topLevelValueId name,(ANF.TempId (-100-index),typ)) |> Map.ofList
+        let environments=[globals;[AST.bindingId 0,(ANF.TempId -2,AST.TInt64);AST.bindingId 1,(ANF.TempId -3,AST.TString);AST.namedBindingId 0 "x",(ANF.TempId -4,AST.TInt64);AST.namedBindingId 1 "x",(ANF.TempId -5,AST.TList AST.TString)] |> List.fold (fun env (id,value) -> Map.add id value env) globals]
+        let bodies=tops |> List.choose (function CheckedAST.FunctionDef func -> Some func.Body | CheckedAST.ValueDef value -> Some value.Body | CheckedAST.Expression value -> Some value | _ -> None)
+        let expression expr =
+            let inEnvironment env =
+                let atGenerator gen =
+                    let requests=ResizeArray<JsonNode>()
+                    let rec atom : LoweringCallbacks.AtomLowerer = fun sums types inert expr gen env registry variants functions names modules ->
+                        requests.Add (tuple [enc expr;enc gen;enc env])
+                        AtomLowering.lowerAtom anf atom bound ids sums types inert expr gen env registry variants functions names modules
+                    and anf : LoweringCallbacks.ExpressionLowerer = fun _ _ _ _ _ _ _ _ _ _ _ -> Error "observation expression callback"
+                    and bound : LoweringCallbacks.BoundAtomLowerer = fun _ _ _ _ _ _ _ _ _ _ _ -> Error "observation bound-atom callback"
+                    let value=attempt (fun () -> AtomLowering.lowerAtom anf atom bound ids sums typeNames Set.empty expr (ANF.VarGen gen) env registry variants functions names (Stdlib.buildModuleRegistry ()))
+                    tuple [value;list (List.ofSeq requests)]
+                (if source="" then [0;Int32.MaxValue] else [0]) |> List.map atGenerator |> list
+            environments |> List.map inEnvironment |> list
+        let extra=if source<>"" then [] else [CheckedAST.StringLiteral "e\u0301";CheckedAST.CharLiteral "e\u0301";CheckedAST.BigIntLiteral (-(1I <<< 62));CheckedAST.BigIntLiteral (1I <<< 62);CheckedAST.Int128Literal Int128.MinValue;CheckedAST.UInt128Literal UInt128.MaxValue;CheckedAST.UnaryOp (AST.Neg,CheckedAST.Int64Literal Int64.MinValue);CheckedAST.ListLiteral (List.init 32 (fun index -> CheckedAST.Int64Literal (int64 index)));CheckedAST.BinOp (AST.StringConcat,CheckedAST.StringLiteral "",CheckedAST.BinOp (AST.StringConcat,CheckedAST.StringLiteral "a",CheckedAST.StringLiteral ""));CheckedAST.If (CheckedAST.BoolLiteral true,CheckedAST.TupleLiteral (CheckedAST.tupleElementsOfList [CheckedAST.UnitLiteral;CheckedAST.UnitLiteral]),CheckedAST.UnitLiteral)]
+        bodies @ extra |> List.map expression |> list
+    let sourceProgram source=WrittenParsing.parse LibParser.Validation.Script source |> Result.bind (fun unit -> WrittenChecking.checkSourceUnitsWithBase None false false [unit]) |> Result.map (fun (_,value,_) -> value) |> outcome program
+    tuple [checkedAstFixtures source |> List.map (outcome program) |> list;sourceProgram source;(if source="" then ["type R = { a: Int64; b: String }\nR { b = \"é\"; a = 1 }";"type S = A of Int64 | B\nS.A 1";"let f = fun (x: Int64) -> x\nf 1";"let (x, y) = (1, 2)\nx + y"] |> List.map sourceProgram |> list else list [])]
+
 let checkedFormatWithDisplay display source =
     let tuple values = namedArray "tuple" (Array.ofList values)
     let list values = JsonArray(Array.ofList values) :> JsonNode
@@ -1864,6 +1914,7 @@ let rec requests () =
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
             | "lowering-aggregates" -> loweringAggregates source
+            | "atom-lowering" -> atomLowering source
             | "lowering-types" -> loweringTypes source
             | "lowering-operators" -> loweringOperators source
             | "monomorphization" -> monomorphization source
