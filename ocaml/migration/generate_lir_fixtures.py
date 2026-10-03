@@ -18,7 +18,7 @@ def sample(typ, fs):
     if typ.endswith(' option'): return '(Some ('+sample(typ[:-7],fs)+'))'
     aliases = {'int':'3','int64':'-3L','float':'-0.0','bool':'true','string':'source',
                'reg':'LIR.Virtual 3','fReg':'LIR.FVirtual (-1)','label':'LIR.Label source',
-               'operand':'LIR.StringSymbol source','AST.semanticType':'AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])',
+               'operand':'operand','AST.semanticType':'AST.TRecord (source,[AST.TInt64;AST.TList AST.TString])',
                'AST.functionId':'AST.functionId System.UInt64.MaxValue' if fs else 'AST.functionId (-1L)',
                'MemoryModel.rcReleasePlan':'MemoryModel.RootRelease (16,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (16,[MemoryModel.FieldRelease (8,MemoryModel.RecursiveRelease (AST.TRecord (source,[])))]))',
                'MemoryModel.rcMetadata':'{MemoryModel.RcMetadata.ReleasePlanCacheKey=Some source;ReleasePlan=Some (MemoryModel.RecursiveRelease (AST.TList AST.TString));SourceType=Some AST.TString}' if fs else '{MemoryModel.releasePlanCacheKey=Some source;releasePlan=Some (MemoryModel.RecursiveRelease (AST.TList AST.TString));sourceType=Some AST.TString}',
@@ -48,15 +48,15 @@ def emit():
                 values.append('list ProductionLIR.'+name+' '+samples)
                 shapes.append('list (fun (name,fields) -> tuple [SemanticJson.string name; SemanticJson.int32 fields]) ['+'; '.join('("'+c.partition(' of ')[0]+'",'+str(len(product_parts(c.partition(' of ')[2])) if ' of ' in c else 0)+')' for c in cases)+']')
         if fs:
-            code='let lirConstructorFixtures (source:string) =\n    let enc (value:\'a) = encode typeof<\'a> (box value)\n    let tuple values = namedArray "tuple" (Array.ofList values)\n    tuple [tuple ['+';\n'.join(values)+'];tuple ['+';\n'.join(shapes)+']]\nlet lirInstructionFixtures (source:string) : LIR.Instr list = '+instructions+'\n'
+            code='let lirConstructorFixtures (source:string) =\n    let enc (value:\'a) = encode typeof<\'a> (box value)\n    let tuple values = namedArray "tuple" (Array.ofList values)\n    let operand = LIR.StringSymbol source\n    tuple [tuple ['+';\n'.join(values)+'];tuple ['+';\n'.join(shapes)+']]\nlet lirInstructionFixturesWithOperand (source:string) operand : LIR.Instr list = '+instructions+'\nlet lirInstructionFixtures source = lirInstructionFixturesWithOperand source (LIR.StringSymbol source)\n'
         else:
             code='''(* Complete symbolic LIR constructors and reflected schema parity. *)
 open Dark_compiler
 let tuple values = `Assoc ["tuple", `List values]
 let list encode values = `List (List.map encode values)
-let observe source = tuple [tuple [
-'''+ ';\n'.join(values)+'];tuple ['+';\n'.join(shapes)+']]\nlet instructions source = '+instructions+'\n'
+let observe source = let operand = LIR.StringSymbol source in tuple [tuple [
+'''+ ';\n'.join(values)+'];tuple ['+';\n'.join(shapes)+']]\nlet instructionsWithOperand source operand = '+instructions+'\nlet instructions source = instructionsWithOperand source (LIR.StringSymbol source)\n'
         destination.write_text(code)
-    (ROOT/'migration/LIRFixtures.mli').write_text('val observe : string -> Yojson.Basic.t\nval instructions : string -> Dark_compiler.LIR.instr list\n')
+    (ROOT/'migration/LIRFixtures.mli').write_text('val observe : string -> Yojson.Basic.t\nval instructions : string -> Dark_compiler.LIR.instr list\nval instructionsWithOperand : string -> Dark_compiler.LIR.operand -> Dark_compiler.LIR.instr list\n')
 
 if __name__=='__main__': emit()

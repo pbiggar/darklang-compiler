@@ -828,3 +828,15 @@ their ordered memo-key set, whole-program attachment/coverage counting, and
 their comments and assertions. The warning-free build passes 396/396 units;
 coverage is 193/391 pairs. LIR tree shaking, allocation/lowering/backend stages,
 remaining ownership groups, full corpus checks, and final acceptance remain open.
+
+LIR dead-code elimination, user/stdlib function tree shaking, and target
+register policy are fully translated with original comments and interfaces.
+Complete source output matches for 1,360 instruction/helper/policy cases:
+every instruction with five operand forms, all list-display type families,
+both allocated and missing helper identities, and ARM64/x64 register orders.
+Six call-graph shapes additionally cover recursive SCCs, unknown targets,
+unsigned maximum identities, duplicate entry names, incomplete precomputed
+graphs, all filtering entry modes, and ANF-derived stdlib roots. The clean
+build passes 396/396 units. Coverage is 196/391 pairs; allocator models and
+algorithms, lowering/backend emission, remaining ownership tests, full corpus
+checks, and final native acceptance remain outstanding.
