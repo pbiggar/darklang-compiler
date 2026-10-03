@@ -1356,13 +1356,13 @@
       "source": "src/DarkCompiler/passes/lir/allocation/Coalescing.fs",
       "kind": "compiler",
       "sha256": "a0cabafc4e5336e74fdbd886deb8bc55426e8a36ca473bf4ec95f8632c1996f0",
-      "owner": "ocaml/lib/passes/lir/allocation/Coalescing.ml"
+      "owner": "ocaml/lib/passes/lir/allocation/RegisterCoalescing.ml"
     },
     {
       "source": "src/DarkCompiler/passes/lir/allocation/Coloring.fs",
       "kind": "compiler",
       "sha256": "b0eca97bfbc40eb60921caba5a3a44da3b30784c04f735a8e09094c8abb1711d",
-      "owner": "ocaml/lib/passes/lir/allocation/Coloring.ml"
+      "owner": "ocaml/lib/passes/lir/allocation/RegisterColoring.ml"
     },
     {
       "source": "src/DarkCompiler/passes/lir/allocation/FloatAllocation.fs",

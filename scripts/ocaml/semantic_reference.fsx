@@ -2570,6 +2570,72 @@ let allocationObservation (source:string) =
         tuple [enc instructions;instructions |> List.map (fun instr -> enc (liveness "isEmptySaveRegs" [|box instr|] : bool)) |> list;attempt (fun () -> enc (liveness "computeSaveRegsPreparation" [|box id;box fd;box b;instrFacts;box il[0].LiveOut;box fl[0].LiveOut|] : (AllocationModel.BitSet * AllocationModel.BitSet) list))])
     tuple [list instructionCases;list terminatorCases;list domains;list unions;list graphs;list cfgCases;list saveCases]
 
+let coloringObservation (source:string) =
+    let enc (value:'a) = encode typeof<'a> (box value)
+    let raw (value:obj) = encode (value.GetType()) value
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let coalesce name args : 'a = rcInternalCall<'a> "RegisterCoalescing" name args
+    let color name args : 'a = rcInternalCall<'a> "RegisterColoring" name args
+    let field name (value:obj) = value.GetType().GetProperty(name,Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Instance).GetValue(value)
+    let attempt action =
+        let node=JsonObject()
+        node["type"] <- JsonValue.Create "FSharpResult"
+        try
+            node["case"] <- JsonValue.Create "Ok"
+            node["fields"] <- JsonArray([|action ()|])
+        with ex ->
+            node["case"] <- JsonValue.Create "Error"
+            node["fields"] <- JsonArray([|enc ex.Message|])
+        node :> JsonNode
+    let regs=[LIR.Virtual 3;LIR.Virtual (-9);LIR.Physical LIR.X0]
+    let fregs=[LIR.FVirtual 7;LIR.FPhysical LIR.D0]
+    let collectors=regs |> List.collect (fun reg -> fregs |> List.collect (fun freg ->
+        lirInstructionFixturesWithRegisters source reg freg (LIR.Reg reg) AST.TFloat64 |> List.map (fun instr ->
+            let blocks=[|({Label=LIR.Label source;Instrs=[instr];Terminator=LIR.Ret}:LIR.BasicBlock)|]
+            tuple [enc instr;enc (RegisterCoalescing.collectMovePairs blocks);enc (RegisterCoalescing.collectPhiPairs blocks);enc (RegisterCoalescing.collectFPhiPairs blocks);enc (RegisterCoalescing.collectFPhiSourceMovePairs blocks);enc (RegisterCoalescing.collectPhiPreferences blocks)])))
+    let chain=[|({Label=LIR.Label source;Instrs=[LIR.FMov (LIR.FVirtual 1,LIR.FVirtual 2);LIR.FMov (LIR.FVirtual 2,LIR.FVirtual 3);LIR.FPhi (LIR.FVirtual 7,[LIR.FVirtual 1,LIR.Label source;LIR.FVirtual 2,LIR.Label source]);LIR.Mov (LIR.Virtual 1,LIR.Reg (LIR.Virtual 1));LIR.Phi (LIR.Virtual 7,[LIR.Reg (LIR.Virtual 1),LIR.Label source;LIR.Reg (LIR.Virtual 7),LIR.Label source;LIR.Imm 3L,LIR.Label source],None)];Terminator=LIR.Ret}:LIR.BasicBlock)|]
+    let chains=tuple [enc (RegisterCoalescing.collectMovePairs chain);enc (RegisterCoalescing.collectPhiPairs chain);enc (RegisterCoalescing.collectFPhiPairs chain);enc (RegisterCoalescing.collectFPhiSourceMovePairs chain);enc (RegisterCoalescing.collectPhiPreferences chain);enc (coalesce "dedupePairs" [|box [3,1;1,3;0,0;-9,3;3,-9;7,1]|] : (int*int) list)]
+    let ids=[-9;0;3;7]
+    let allEdges=[-9,0;-9,3;-9,7;0,3;0,7;3,7]
+    let smallGraphs=List.init 64 (fun mask -> AllocationModel.buildInterferenceGraphFromEdges ids (allEdges |> List.indexed |> List.choose (fun (n,edge) -> if mask &&& (1 <<< n)<>0 then Some edge else None)))
+    let largeGraphs=[65;129] |> List.collect (fun size ->
+        let ids=List.init size (fun n -> n*2-129)
+        let edges=List.zip (ids |> List.take (size-1)) (List.tail ids) |> List.indexed |> List.choose (fun (n,edge) -> if n%4<>0 then Some edge else None)
+        let graph=AllocationModel.buildInterferenceGraphFromEdges ids edges
+        let vertices=Bitset.empty graph.Domain.WordCount
+        graph.Domain.Ids |> Array.iteri (fun n _ -> if n%2=0 then Bitset.addIndexInPlace n vertices)
+        [graph;{graph with Vertices=vertices}])
+    let inactive={List.head smallGraphs with Vertices=Bitset.empty 1}
+    let graphs=AllocationModel.buildInterferenceGraphFromEdges [] [] :: inactive :: smallGraphs @ largeGraphs
+    let cases=graphs |> List.map (fun g ->
+        let order,p=RegisterCoalescing.maximumCardinalitySearchWithProfile g
+        let variants=[[];[-9,0;7,1];[-9,0;0,1;3,0;987,2];[-9,3;0,0;3,2;7,1];[-9,-1;3,Int32.MaxValue]] |> List.collect (fun precolors -> [[];[-9,3;0,7];[-9,0;0,3;3,7;987,0]] |> List.collect (fun movePairs -> [[];[-9,3;0,7];[-9,0;0,3;3,7;987,0]] |> List.collect (fun prefs -> [0;1;2;4] |> List.map (fun colors ->
+            let c:obj=coalesce "coalesceGraphFast" [|box g;box precolors;box movePairs;box prefs|]
+            let repGraph=field "Graph" c :?> AllocationModel.InterferenceGraph
+            let members=field "RepMembers" c :?> AllocationModel.BitSet array
+            let synthetic:AllocationModel.ColoringResult={Domain=g.Domain;Colors=Array.init g.Domain.Ids.Length (fun n -> if n%3=0 then None else Some (n%4));Spills=Array.copy repGraph.Vertices;ChromaticNumber=4}
+            let result=RegisterColoring.chordalGraphColor g precolors colors prefs movePairs
+            let sw=Diagnostics.Stopwatch.StartNew()
+            let timed:obj=color "chordalGraphColorWithTiming" [|box sw;box g;box precolors;box colors;box prefs;box movePairs|]
+            let fields=FSharpValue.GetTupleFields timed
+            let timing=fields[1]
+            let coalesceMs=field "CoalesceMs" timing :?> float
+            let mcsMs=field "McsMs" timing :?> float
+            let greedyMs=field "GreedyMs" timing :?> float
+            let expandMs=field "ExpandMs" timing :?> float
+            let timing=tuple [enc (fields[0] :?> AllocationModel.ColoringResult);enc (coalesceMs>=0. && mcsMs>=0. && greedyMs>=0. && expandMs>=0.);enc (if Bitset.isEmpty g.Vertices then coalesceMs=0. && mcsMs=0. && greedyMs=0. && expandMs=0. else true);enc (if List.isEmpty movePairs && List.isEmpty prefs then expandMs=0. else true)]
+            tuple [raw c;enc (coalesce "expandColoring" [|box synthetic;box members|] : AllocationModel.ColoringResult);enc result;timing;
+                [[];[LIR.X0];[LIR.X19;LIR.X20;LIR.X0];[LIR.X26;LIR.X25;LIR.X24;LIR.X23;LIR.X22;LIR.X21;LIR.X20;LIR.X19]] |> List.map (fun registers -> attempt (fun () -> enc (RegisterColoring.coloringToAllocation result registers))) |> list]))))
+        let precolored=Array.init g.Domain.Ids.Length (fun n -> if n%3=0 then Some (n%4) else None)
+        let preferences=Array.init g.Domain.Ids.Length (fun n ->
+            let bits=Bitset.empty g.Domain.WordCount
+            if n>0 then Bitset.addIndexInPlace (n-1) bits
+            bits)
+        let greedy=[order;List.rev order;order @ order;987::order] |> List.collect (fun ordering -> [0;1;2;4] |> List.map (fun colors -> attempt (fun () -> enc (RegisterColoring.greedyColorReverse g ordering precolored colors preferences))))
+        tuple [enc g;enc order;enc p;enc (RegisterCoalescing.maximumCardinalitySearch g);list variants;list greedy])
+    tuple [list collectors;chains;list cases]
+
 let lirTreeObservation (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -3453,6 +3519,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "register-coloring" -> coloringObservation source
         | "allocation-foundations" -> allocationObservation source
         | "lir-tree" -> lirTreeObservation source
         | "lir-foundations" -> lirObservation source

@@ -854,3 +854,15 @@ The warning-free native build passes 396/396 units, both prior LIR observations
 still match, and the rebuilt F# host suite passes 10,760/10,760 tests. Coverage is
 200/391 pairs. Coalescing/coloring, remaining allocation, lowering/emission,
 remaining ownership tests, full corpus checks, and final acceptance remain open.
+
+Register coalescing and graph coloring are fully translated with interfaces and
+original comments. The full 235,861,843-byte observation matches F# exactly:
+720 instruction collectors, copy chains, all 64 undirected graph shapes on four
+vertices, empty/inactive domains, 65/129-vertex multiword graphs, 12,600 complete
+coalescing/coloring/allocation combinations, MCS orders and profiles, synthetic
+color expansion, explicit greedy orders, conflicting and missing precolors,
+integer overflow, missing-vertex diagnostics, and timing phase invariants.
+Stack slots, alignment and callee-save ordering match. The warning-free build
+passes 396/396 native units; coverage is 202/391 pairs. Float allocation,
+remaining allocation/lowering/emission, remaining ownership tests, full corpus
+checks and final acceptance remain open.
