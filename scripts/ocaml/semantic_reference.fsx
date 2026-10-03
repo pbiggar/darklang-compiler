@@ -853,6 +853,88 @@ let lambdaChecking source =
         let result = method.Invoke(null,[|checker;box env;box (Map.empty<string,CheckingTypes.RecordTypeInfo>);box (Map.empty<string,string * string list * int * AST.SemanticType list>);box generic;box AST.defaultWarningSettings;box modules;box (Map.empty<string,string list * AST.SemanticType>);box expected;box params;box annotation;box body|])
         namedArray "tuple" [|encode method.ReturnType result;encode typeof<(AST.Expr * CheckingTypes.TypeEnv * AST.SemanticType option) list> (box (List.ofSeq trace))|]) |> List.toArray |> fun values -> JsonArray(values) :> JsonNode
 
+let callChecking source =
+    let env : CheckingTypes.TypeEnv = Map.ofList ["f",AST.TFunction ([AST.TInt64;AST.TString],AST.TBool);"g",AST.TFunction ([AST.TVar "a";AST.TVar "a"],AST.TVar "a");"higher",AST.TVar "a";"inferred",AST.TInferenceVar ("a","fixed");"nonfunction",AST.TInt64;"nullary",AST.TFunction ([],AST.TUnit);"Darklang.Stdlib.List.sort",AST.TFunction ([AST.TList (AST.TVar "a")],AST.TList (AST.TVar "a"))]
+    let generic : CheckingTypes.GenericFuncRegistry = {Functions=Map.ofList ["g",["a"];"Darklang.Stdlib.List.sort",["a"]];RequireExplicitTypeArgsForBareCalls=true}
+    let modules = Stdlib.buildModuleRegistry () |> Map.add "module.generic" {Name="module.generic";TypeParams=["a"];ParamTypes=[AST.TVar "a";AST.TVar "a"];ReturnType=AST.TVar "a"}
+                                             |> Map.add "module.concrete" {Name="module.concrete";TypeParams=[];ParamTypes=[AST.TInt64;AST.TString];ReturnType=AST.TBool}
+    let names = ["f";"g";"higher";"inferred";"nonfunction";"nullary";"missing";"module.generic";"module.concrete";"Builtin.unwrap";"Builtin.crash";"Builtin.testRuntimeError";"Darklang.Stdlib.List.sort";"__compare";"__empty_dict"]
+    let argLists : AST.Expr list list = [[AST.UnitLiteral];[AST.Int64Literal 1L];[AST.StringLiteral source];[AST.Int64Literal 1L;AST.StringLiteral source];[AST.Int64Literal 1L;AST.Int64Literal 2L];[AST.StringLiteral source;AST.StringLiteral source];[AST.Int64Literal 1L;AST.StringLiteral source;AST.UnitLiteral];[AST.Var "generic"];[AST.Var "error"];[AST.Var "option"];[AST.Var "result"];[AST.Var "list"]]
+    let expectations = [None;Some AST.TUnit;Some AST.TBool;Some AST.TInt64;Some AST.TString;Some (AST.TFunction ([AST.TString],AST.TBool));Some (AST.TVar source)]
+    let cases = if source = "" then names |> List.collect (fun name -> argLists |> List.collect (fun args -> expectations |> List.map (fun expected -> name,args,expected)))
+                else names |> List.collect (fun name -> argLists |> List.mapi (fun index args -> name,args,expectations[index % expectations.Length]))
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let method = typeof<AST.SemanticType>.Assembly.GetType("CheckCalls").GetMethod("check",flags)
+    cases |> List.map (fun (name,args,expected) ->
+        let trace = ResizeArray<AST.Expr * AST.SemanticType option>()
+        let callback (parameters:obj list) =
+            let value = parameters[0] :?> AST.Expr
+            let expected = parameters[8] :?> AST.SemanticType option
+            trace.Add (value,expected)
+            let typ = match value with AST.UnitLiteral -> AST.TUnit | AST.Int64Literal _ -> AST.TInt64 | AST.StringLiteral _ -> AST.TString
+                                       | AST.Var "option" -> AST.TSum ("Darklang.Stdlib.Option.Option",[AST.TInt64]) | AST.Var "result" -> AST.TSum ("Darklang.Stdlib.Result.Result",[AST.TInt64;AST.TString])
+                                       | AST.Var "list" -> AST.TList AST.TInt64 | AST.Var "generic" -> Option.defaultValue (AST.TVar source) expected | _ -> AST.TUnit
+            let result : Result<AST.SemanticType * AST.Expr,CheckingDiagnostics.TypeError> = match value with AST.Var "error" -> Error (CheckingDiagnostics.TypeMismatch (Option.defaultValue AST.TString expected,AST.TInt64,"callback")) | _ -> Ok (typ,value)
+            box result
+        let rec curry (typ:Type) args = FSharpValue.MakeFunction(typ,fun arg -> let args = args @ [arg] in if args.Length = 9 then callback args else curry (typ.GetGenericArguments().[1]) args)
+        let checker = curry (method.GetParameters().[0].ParameterType) []
+        let result = method.Invoke(null,[|checker;box (Map.ofList ["f",["first";"second"]]);box (Map.empty<string,CheckingTypes.SumTypeInfo>);box env;box (Map.empty<string,CheckingTypes.RecordTypeInfo>);box (Map.empty<string,string * string list * int * AST.SemanticType list>);box generic;box AST.defaultWarningSettings;box modules;box (Map.empty<string,string list * AST.SemanticType>);box expected;box name;box (AST.NonEmptyList.fromList args)|])
+        namedArray "tuple" [|encode method.ReturnType result;encode typeof<(AST.Expr * AST.SemanticType option) list> (box (List.ofSeq trace))|]) |> List.toArray |> fun values -> JsonArray(values) :> JsonNode
+
+let matchChecking source =
+    let patterns = [AST.PUnit;AST.PWildcard;AST.PVar source;AST.PConstructor ("C",[AST.PVar source;AST.PVar "y"]);AST.PResolvedConstructor ("M.T","C",3,[AST.PVar source]);AST.PInt64 1L;AST.PBigInt 1I;AST.PInt128Literal (Int128.Parse "1");AST.PInt8Literal 1y;AST.PInt16Literal 1s;AST.PInt32Literal 1;AST.PUInt8Literal 1uy;AST.PUInt16Literal 1us;AST.PUInt32Literal 1ul;AST.PUInt64Literal 1UL;AST.PUInt128Literal (UInt128.Parse "1");AST.PBool true;AST.PString source;AST.PChar source;AST.PFloat 1.0;AST.PTuple [AST.PVar source;AST.PVar "y"];AST.PList [AST.PVar source];AST.PListCons ([AST.PVar source],AST.PVar "tail");AST.POr (AST.NonEmptyList.fromList [AST.PVar source;AST.PVar "other"])]
+    let lookup : CheckingTypes.VariantLookup = Map.ofList ["C",("S",[],0,[AST.TInt64]);"S.C",("S",[],0,[AST.TInt64]);"D",("S",[],1,[]);"S.D",("S",[],1,[]);
+        "Ok",("Outer",[],0,[AST.TSum ("Inner",[])]);"Outer.Ok",("Outer",[],0,[AST.TSum ("Inner",[])]);"I1",("Inner",[],0,[]);"Inner.I1",("Inner",[],0,[]);"I2",("Inner",[],1,[]);"Inner.I2",("Inner",[],1,[])]
+    let sums : CheckingTypes.IndexedSumTypeRegistry = typesCall "indexSumTypeRegistry" [|box lookup|]
+    let names = Set.ofList ["S";"Outer";"Inner"]
+    let generic : CheckingTypes.GenericFuncRegistry = {Functions=Map.empty;RequireExplicitTypeArgsForBareCalls=false}
+    let scrutinees : (AST.SemanticType * AST.Expr) list = [AST.TUnit,AST.UnitLiteral;AST.TInt64,AST.Int64Literal 1L;AST.TInt64,AST.Var "scrutinee";AST.TInt128,AST.Int128Literal (Int128.Parse "1");AST.TInt,AST.BigIntLiteral 1I;
+        AST.TInt8,AST.Int8Literal 1y;AST.TInt16,AST.Int16Literal 1s;AST.TInt32,AST.Int32Literal 1;AST.TUInt8,AST.UInt8Literal 1uy;AST.TUInt16,AST.UInt16Literal 1us;AST.TUInt32,AST.UInt32Literal 1ul;AST.TUInt64,AST.UInt64Literal 1UL;AST.TUInt128,AST.UInt128Literal (UInt128.Parse "1");
+        AST.TBool,AST.BoolLiteral false;AST.TBool,AST.Var "scrutinee";AST.TString,AST.StringLiteral source;AST.TChar,AST.CharLiteral source;AST.TFloat64,AST.FloatLiteral 1.0;
+        AST.TTuple [AST.TInt64;AST.TString],AST.TupleLiteral [AST.Int64Literal 1L;AST.StringLiteral source];AST.TTuple [AST.TBool;AST.TBool],AST.Var "scrutinee";
+        AST.TList AST.TInt64,AST.ListLiteral [];AST.TList AST.TInt64,AST.ListLiteral [AST.Int64Literal 1L;AST.Int64Literal 1L];AST.TList AST.TString,AST.ListLiteral [AST.StringLiteral source];
+        AST.TSum ("S",[]),AST.Constructor (AST.UnresolvedConstructor None,"C",[AST.Int64Literal 1L]);AST.TSum ("S",[]),AST.Var "scrutinee";AST.TSum ("Outer",[]),AST.Var "scrutinee";
+        AST.TNever,AST.RuntimeError source;AST.TVar source,AST.Var "scrutinee";AST.TInferenceVar (source,"fixed"),AST.Var "scrutinee"]
+    let case patterns guard body : AST.MatchCase = {Patterns=AST.NonEmptyList.fromList patterns;Guard=guard;Body=body}
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let method = typeof<AST.SemanticType>.Assembly.GetType("CheckMatches").GetMethod("check",flags)
+    let run typ (scrutinee:AST.Expr) (cases:AST.MatchCase list) (expected:AST.SemanticType option) =
+        let trace = ResizeArray<AST.Expr * CheckingTypes.TypeEnv * AST.SemanticType option>()
+        let callback (args:obj list) =
+            let value = args[0] :?> AST.Expr
+            let env = args[1] :?> CheckingTypes.TypeEnv
+            let expected = args[8] :?> AST.SemanticType option
+            let first = trace.Count = 0
+            trace.Add (value,env,expected)
+            let result : Result<AST.SemanticType * AST.Expr,CheckingDiagnostics.TypeError> =
+                if first then Ok (typ,value) else
+                match value with
+                | AST.Var "undefined" -> Error (CheckingDiagnostics.UndefinedVariable "undefined")
+                | AST.BoolLiteral _ -> match expected with Some expected when expected <> AST.TBool -> Error (CheckingDiagnostics.TypeMismatch (expected,AST.TBool,"boolean literal")) | _ -> Ok (AST.TBool,value)
+                | AST.Var "genericBody" -> Ok (Option.defaultValue (AST.TVar source) expected,value)
+                | AST.Var name -> Ok (Map.tryFind name env |> Option.defaultValue AST.TUnit,value)
+                | AST.UnitLiteral -> Ok (AST.TUnit,value) | AST.Int64Literal _ -> Ok (AST.TInt64,value) | AST.StringLiteral _ -> Ok (AST.TString,value) | AST.RuntimeError _ -> Ok (AST.TNever,value)
+                | _ -> Ok (Option.defaultValue AST.TUnit expected,value)
+            box result
+        let rec curry (typ:Type) args = FSharpValue.MakeFunction(typ,fun arg -> let args = args @ [arg] in if args.Length = 9 then callback args else curry (typ.GetGenericArguments().[1]) args)
+        let checker = curry (method.GetParameters().[0].ParameterType) []
+        let result = method.Invoke(null,[|checker;box names;box sums;box (Map.empty<string,AST.SemanticType>);box (Map.empty<string,CheckingTypes.RecordTypeInfo>);box lookup;box generic;box AST.defaultWarningSettings;box (Map.empty<string,AST.ModuleFunc>);box (Map.empty<string,string list * AST.SemanticType>);box expected;box scrutinee;box cases|])
+        namedArray "tuple" [|encode method.ReturnType result;encode typeof<(AST.Expr * CheckingTypes.TypeEnv * AST.SemanticType option) list> (box (List.ofSeq trace))|]
+    let configurations pattern = [[case [pattern] None AST.UnitLiteral];[case [pattern] None AST.UnitLiteral;case [AST.PWildcard] None AST.UnitLiteral];
+        [case [pattern] (Some (AST.BoolLiteral true)) AST.UnitLiteral;case [AST.PWildcard] None AST.UnitLiteral];[case [pattern;AST.PWildcard] None AST.UnitLiteral];
+        [case [pattern] (Some (AST.Var "undefined")) AST.UnitLiteral];[case [pattern] None (AST.Var "genericBody");case [AST.PWildcard] None (AST.Int64Literal 1L)];
+        [case [pattern] None (AST.Int64Literal 1L);case [AST.PWildcard] None (AST.BoolLiteral true)]]
+    let ordinary = if source = "" then scrutinees |> List.collect (fun (typ,value) -> patterns |> List.collect (fun pattern -> configurations pattern |> List.map (fun cases -> run typ value cases None)))
+                   else patterns |> List.mapi (fun index pattern -> let typ,value = scrutinees[index % scrutinees.Length] in run typ value ((configurations pattern).[index % 7]) None)
+    let special : (AST.SemanticType * AST.Expr * AST.MatchCase list) list = [AST.TBool,AST.Var "scrutinee",[case [AST.PBool true] None AST.UnitLiteral;case [AST.PBool false] None AST.UnitLiteral];
+        AST.TList AST.TInt64,AST.Var "scrutinee",[case [AST.PList []] None AST.UnitLiteral;case [AST.PListCons ([AST.PWildcard],AST.PWildcard)] None AST.UnitLiteral];
+        AST.TTuple [AST.TBool;AST.TBool],AST.Var "scrutinee",[case [AST.PTuple [AST.PBool true;AST.PWildcard]] None AST.UnitLiteral;case [AST.PTuple [AST.PBool false;AST.PBool true]] None AST.UnitLiteral;case [AST.PTuple [AST.PBool false;AST.PBool false]] None AST.UnitLiteral];
+        AST.TSum ("Outer",[]),AST.Var "scrutinee",[case [AST.PConstructor ("Ok",[AST.PConstructor ("I1",[])])] None AST.UnitLiteral;case [AST.PConstructor ("Ok",[AST.PConstructor ("I2",[])])] None AST.UnitLiteral];
+        AST.TSum ("S",[]),AST.Var "scrutinee",[case [AST.PConstructor ("C",[AST.PWildcard])] None AST.UnitLiteral;case [AST.PConstructor ("D",[])] None AST.UnitLiteral];
+        AST.TUnit,AST.UnitLiteral,[];AST.TUnit,AST.UnitLiteral,[case [AST.PWildcard] None AST.UnitLiteral]]
+    let special = special |> List.collect (fun (typ,value,cases) -> [None;Some AST.TInt64;Some (AST.TVar source)] |> List.map (fun expected -> run typ value cases expected))
+    JsonArray(Array.ofList (ordinary @ special)) :> JsonNode
+
 CultureInfo.CurrentCulture <- CultureInfo.InvariantCulture
 CultureInfo.CurrentUICulture <- CultureInfo.InvariantCulture
 let reader : IO.TextReader =
@@ -889,6 +971,8 @@ let rec requests () =
                         WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+            | "match-checking" -> matchChecking source
+            | "call-checking" -> callChecking source
             | "lambda-checking" -> lambdaChecking source
             | "stdlib-catalog" -> stdlibCatalog source
             | "binary-checking" -> binaryChecking source

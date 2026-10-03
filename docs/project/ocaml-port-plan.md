@@ -397,3 +397,16 @@ checking are fully translated with complete interfaces and preserved comments;
 lambda initial observations pass, with full lambda and call comparisons pending.
 The build and 96 translated unit tests pass. Coverage is 50/391 source components;
 whole-compiler and full translated test acceptance remain outstanding.
+
+Lambda checking and helper insertion pass all 1,890 complete observations.
+Call checking passes all 1,890 observations, including builtins, declared and
+intrinsic generics, partial applications, contextual propagation, legacy errors,
+and ordered recursive checker requests. Generated inference identities are
+validated as UUID v4 and compared under alpha renaming, preserving display names
+and all shared/distinct identity relationships.
+
+Match checking is fully ported and passes all 1,890 observations. Coverage includes
+all pattern forms and literal widths, resolved-constructor reopening, first-pattern
+bindings and alternative validation, guard normalization, body retries, generic
+rechecking, and complete nested constructor/tuple/list exhaustiveness proofs.
+Original comments remain audited. The full expression dispatcher is next.

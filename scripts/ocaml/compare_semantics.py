@@ -7,6 +7,7 @@ import json
 import random
 import subprocess
 import shutil
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -103,9 +104,32 @@ def first_difference(expected, actual, path="value"):
             if left != right: return first_difference(left, right, f"{path}[{index}]")
     return path, expected, actual
 
+def normalize_fresh_identities(observation):
+    # UUID bytes intentionally differ. Validate their version/variant and retain
+    # every display name and reference-sharing relationship under alpha renaming.
+    identities = {}
+    def visit(value):
+        if isinstance(value, dict):
+            if value.get("case") == "TInferenceVar":
+                identity = value["fields"][1]
+                if isinstance(identity, str) and identity.startswith("#infer:"):
+                    prefix, guid = identity.rsplit(":", 1)
+                    if not re.fullmatch(r"[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}", guid):
+                        raise ValueError("Generated inference identity is not a UUID v4")
+                    if guid not in identities:
+                        identities[guid] = len(identities)
+                    value["fields"][1] = prefix + ":<uuid-" + str(identities[guid]) + ">"
+            for key in sorted(value):
+                visit(value[key])
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+    visit(observation)
+    return observation
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies", "materialize-helpers", "declarations", "record-checking", "binary-checking", "stdlib-catalog", "lambda-checking"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies", "materialize-helpers", "declarations", "record-checking", "binary-checking", "stdlib-catalog", "lambda-checking", "call-checking", "match-checking"])
     parser.add_argument("--probes-only", action="store_true")
     parser.add_argument("--batch-size", type=int, default=0,
                         help="Compare restartable batches; reuse only matching source snapshots")
@@ -216,6 +240,8 @@ def main():
                         print(f"{name} stopped before {label}; see {output / (name + '.stderr')}")
                         return 1
                 expected, actual = [json.loads(row) for row in rows]
+                if args.stage == "call-checking":
+                    expected, actual = map(normalize_fresh_identities, [expected, actual])
                 for audit, observation in zip(audits, [expected, actual], strict=True):
                     canonical = json.dumps(observation, sort_keys=True, ensure_ascii=True, separators=(",", ":")).encode()
                     audit.write(json.dumps({"input": label, "sha256": hashlib.sha256(canonical).hexdigest(), "bytes": len(canonical)}) + "\n")
