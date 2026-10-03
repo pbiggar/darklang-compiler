@@ -2636,6 +2636,68 @@ let coloringObservation (source:string) =
         tuple [enc g;enc order;enc p;enc (RegisterCoalescing.maximumCardinalitySearch g);list variants;list greedy])
     tuple [list collectors;chains;list cases]
 
+let floatAllocationObservation (source:string) =
+    let enc (value:'a) = encode typeof<'a> (box value)
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let attempt action = enc (try Ok (action ()) with ex -> Error ex.Message)
+    let block label instrs terminator : LIR.BasicBlock = {Label=label;Instrs=instrs;Terminator=terminator}
+    let cfg entry blocks : LIR.CFG = {Entry=entry;Blocks=blocks |> List.map (fun (b:LIR.BasicBlock) -> b.Label,b) |> Map.ofList}
+    let label=LIR.Label source
+    let other=LIR.Label "other"
+    let values=[Int64.MinValue;0x7ff8000000000001L;0x7ff0000000000000L;0xfff0000000000000L;0x3ff0000000000000L] |> List.map BitConverter.Int64BitsToDouble
+    let ids=[-2000;-1002;-1001;-1000;-1;0;1;2;3;4;7;9;19]
+    let d:AllocationModel.VRegDomain=rcInternalCall "AllocationModel" "buildVRegDomain" [|box ids|]
+    let fregs=[LIR.FVirtual (-1);LIR.FVirtual 7;LIR.FVirtual (-1000);LIR.FVirtual (-1001);LIR.FVirtual (-1002);LIR.FVirtual (-2000);LIR.FVirtual 987;LIR.FPhysical LIR.D4]
+    let repairCases=[0;1;2;3;4] |> List.collect (fun mode -> [0;1] |> List.map (fun scratch ->
+        let allocations=d.Ids |> Array.mapi (fun n _ ->
+            match mode with
+            | 0 -> Some (FloatAllocation.FPhysReg (List.item (n%16) FloatAllocation.allocatableFloatRegs))
+            | 1 -> Some (FloatAllocation.FStackSlot (-(n+1)*8))
+            | 2 -> Some (FloatAllocation.FRematerialized (List.item (n%5) values))
+            | 3 -> (match n%4 with 0 -> None | 1 -> Some (FloatAllocation.FPhysReg LIR.D0) | 2 -> Some (FloatAllocation.FStackSlot (-24)) | _ -> Some (FloatAllocation.FRematerialized (-0.)))
+            | _ -> None)
+        let allocation:FloatAllocation.FAllocationResult={Domain=d;Allocations=allocations;StackSize=48;UsedCalleeSavedF=[LIR.D8;LIR.D15];SpillScratchLeft=(if scratch=0 then LIR.FVirtual (-1000) else LIR.FPhysical LIR.D14);SpillScratchRight=(if scratch=0 then LIR.FVirtual (-1001) else LIR.FPhysical LIR.D15);SpillScratchThird=LIR.FVirtual (-1002)}
+        let repairs=fregs |> List.collect (fun freg -> [AST.TInt64;AST.TFloat64] |> List.collect (fun typ ->
+            lirInstructionFixturesWithRegisters source (LIR.Virtual 3) freg (LIR.Reg (LIR.Virtual 3)) typ |> List.map (fun instr ->
+                let b=block label [instr] LIR.Ret
+                let graph=cfg label [b]
+                tuple [enc instr;attempt (fun () -> FloatAllocation.applyFloatAllocationToInstrs allocation instr);attempt (fun () -> FloatAllocation.applyFloatAllocationToBlock allocation b);attempt (fun () -> FloatAllocation.applyFloatAllocationToBlocks allocation [|b|]);attempt (fun () -> FloatAllocation.applyFloatAllocationToCFG allocation graph)])))
+        let moves=[LIR.FArgMoves [LIR.D0,LIR.FPhysical LIR.D1;LIR.D1,LIR.FPhysical LIR.D0];LIR.FArgMoves [LIR.D0,LIR.FVirtual 1;LIR.D1,LIR.FVirtual 2;LIR.D2,LIR.FVirtual 3];LIR.FArgMoves [LIR.D0,LIR.FPhysical LIR.D1;LIR.D1,LIR.FVirtual 3];LIR.FArgMoves [];LIR.FPhi (LIR.FVirtual 987,[LIR.FVirtual 7,label])] |> List.map (fun instr -> tuple [enc instr;attempt (fun () -> FloatAllocation.applyFloatAllocationToInstrs allocation instr)])
+        tuple [enc allocation;ids @ [987] |> List.map (fun value -> enc (value,FloatAllocation.tryFloatAllocation allocation value)) |> list;fregs |> List.map (fun freg -> attempt (fun () -> FloatAllocation.applyFloatAllocationToFReg allocation freg)) |> list;list repairs;list moves]))
+    let schedules=[[];[LIR.FLoad (LIR.FVirtual 1,-0.);LIR.Mov (LIR.Virtual 3,LIR.Imm 1L);LIR.FLoad (LIR.FVirtual 2,1.);LIR.FAdd (LIR.FVirtual 3,LIR.FVirtual 2,LIR.FVirtual 1)];[LIR.FLoad (LIR.FVirtual 1,1.);LIR.FLoad (LIR.FVirtual 1,2.);LIR.PrintFloat (LIR.FVirtual 1)];[LIR.PrintFloat (LIR.FVirtual 1);LIR.FLoad (LIR.FVirtual 1,1.)];[LIR.FLoad (LIR.FVirtual 1,1.);LIR.FPhi (LIR.FVirtual 2,[LIR.FVirtual 1,label])];[LIR.FLoad (LIR.FVirtual 2,2.);LIR.FLoad (LIR.FVirtual 1,1.);LIR.FAdd (LIR.FVirtual 3,LIR.FVirtual 1,LIR.FVirtual 2)]]
+    let scheduling=schedules |> List.map (fun instructions ->
+        let b=block label instructions (LIR.Jump other)
+        let graph=cfg label [b;block other [LIR.FPhi (LIR.FVirtual 7,[LIR.FVirtual 1,label])] LIR.Ret]
+        enc (FloatAllocation.scheduleFloatLoadsInBlock b,FloatAllocation.scheduleFloatLoadsInCFG graph))
+    let pressure literal count =
+        let loads=List.init count (fun n -> if literal then LIR.FLoad (LIR.FVirtual n,List.item (n%5) values) else LIR.Int64ToFloat (LIR.FVirtual n,LIR.Virtual 3))
+        let uses=List.init count (fun n -> LIR.PrintFloat (LIR.FVirtual n))
+        cfg label [block label (loads @ uses) LIR.Ret]
+    let fixtureCFGs=lirInstructionFixtures source |> List.map (fun instr -> cfg label [block label [instr] LIR.Ret])
+    let cfgs=fixtureCFGs @ (schedules |> List.map (fun instructions -> cfg label [block label instructions LIR.Ret])) @ [pressure true 33;pressure false 33;pressure false 65;cfg label [block label [LIR.FLoad (LIR.FVirtual 1,1.);LIR.FMov (LIR.FVirtual 2,LIR.FVirtual 1)] (LIR.Jump other);block other [LIR.FPhi (LIR.FVirtual 3,[LIR.FVirtual 2,label;LIR.FVirtual 7,other]);LIR.PrintFloat (LIR.FVirtual 3)] (LIR.Jump label)]]
+    let allocations=cfgs |> List.map (fun graph ->
+        let scheduled=FloatAllocation.scheduleFloatLoadsInCFG graph
+        let idx,blocks:AllocationModel.BlockIndex * LIR.BasicBlock array=rcInternalCall "AllocationModel" "buildBlockIndex" [|box scheduled|]
+        let facts:obj=rcInternalCall "RegisterFacts" "classifyBlocks" [|box blocks|]
+        let variants=[[];[1;3;7]] |> List.collect (fun extras ->
+            let domain,liveness:AllocationModel.VRegDomain * AllocationModel.BlockLiveness array=rcInternalCall "RegisterLiveness" "computeFloatLivenessBitsFromFacts" [|box idx;facts;box extras|]
+            [[];[LIR.D0];[LIR.D0;LIR.D1];FloatAllocation.allocatableFloatRegs;FloatAllocation.allocatableFloatRegsFor Platform.X86_64] |> List.collect (fun registers -> [0;8;24] |> List.collect (fun initial -> [[];[1,0;3,1;7,0];[1,1;3,0;7,1]] |> List.map (fun precolors ->
+                let node=JsonObject()
+                node["type"] <- JsonValue.Create "FSharpResult"
+                try
+                    let entryBits:AllocationModel.BitSet=rcInternalCall "AllocationModel" "vregBitsFromList" [|box domain;box extras|]
+                    let allocation:FloatAllocation.FAllocationResult=rcInternalCall "FloatAllocation" "chordalFloatAllocationWithLiveness" [|box registers;box initial;box idx;box blocks;facts;box entryBits;box precolors;box domain;box liveness|]
+                    node["case"] <- JsonValue.Create "Ok"
+                    node["fields"] <- JsonArray([|tuple [enc allocation;attempt (fun () -> FloatAllocation.applyFloatAllocationToCFG allocation scheduled)]|])
+                with ex ->
+                    node["case"] <- JsonValue.Create "Error"
+                    node["fields"] <- JsonArray([|enc ex.Message|])
+                node :> JsonNode))))
+        tuple [enc scheduled;list variants;attempt (fun () -> FloatAllocation.chordalFloatAllocation graph []);attempt (fun () -> FloatAllocation.chordalFloatAllocation graph [1;3;7])])
+    tuple [enc FloatAllocation.floatCallerSavedRegs;enc FloatAllocation.floatCalleeSavedRegs;enc FloatAllocation.allocatableFloatRegs;
+        [Platform.ARM64;Platform.X86_64] |> List.map (fun arch -> enc (FloatAllocation.allocatableFloatRegsFor arch,FloatAllocation.floatCallerSavedRegsFor arch)) |> list;enc (FloatAllocation.allocatableFloatRegs |> List.map FloatAllocation.physFPRegToInt);list repairCases;list scheduling;list allocations]
+
 let lirTreeObservation (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -3519,6 +3581,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "float-allocation" -> floatAllocationObservation source
         | "register-coloring" -> coloringObservation source
         | "allocation-foundations" -> allocationObservation source
         | "lir-tree" -> lirTreeObservation source

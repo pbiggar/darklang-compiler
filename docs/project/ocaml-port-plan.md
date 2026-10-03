@@ -866,3 +866,15 @@ Stack slots, alignment and callee-save ordering match. The warning-free build
 passes 396/396 native units; coverage is 202/391 pairs. Float allocation,
 remaining allocation/lowering/emission, remaining ownership tests, full corpus
 checks and final acceptance remain open.
+
+Float allocation is fully translated, including target register lists, literal
+load scheduling, phi/copy coalescing, spill-slot reuse, rematerialization, exact
+float bits, scratch selection, argument move cycles, and every instruction/block/
+CFG repair path. Complete output matches F# for 19,200 constructor repairs across
+physical, spilled, rematerialized, missing, fixed and physical float registers,
+11,700 allocation combinations over 130 CFGs, both target register capacities,
+three initial stack sizes, phi parameter precolors, 33/65-value register pressure,
+and scheduling with duplicate loads and edge-only uses. The warning-free build
+passes 396/396 native units. Coverage is 203/391 pairs. Integer spill helpers,
+phi resolution, remaining allocation/lowering/emission, ownership tests, full
+corpus checks and final acceptance remain open.
