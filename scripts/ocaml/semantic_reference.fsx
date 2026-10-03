@@ -3118,6 +3118,84 @@ let peepholeObservation (source:string)=
     let dsl=IO.File.ReadAllText("src/Tests/optimization/lir-peepholes.liropt") |> TestDSL.Common.parseSections |> dslCases |> list
     tuple [singles;sequenceCases;arithmeticCases;branchCases;graphCases;diamonds;large;malformed;numeric;numeric64;dsl]
 
+let registerAllocationObservation (source:string)=
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let mapNodes action values=values |> List.map action |> list
+    let attempt action=enc (try Ok (action ()) with ex -> Error ex.Message)
+    let label=LIR.Label source
+    let other=LIR.Label "other"
+    let back=LIR.Label "back"
+    let exit=LIR.Label "exit"
+    let block label instrs term : LIR.BasicBlock={Label=label;Instrs=instrs;Terminator=term}
+    let cfg entry blocks : LIR.CFG={Entry=entry;Blocks=blocks |> List.map (fun (b:LIR.BasicBlock) -> b.Label,b) |> Map.ofList}
+    let known mode : FunctionIdMap<ARM64CalleeClobbers.Writes>=
+        match mode with
+        | 0 -> FunctionIdMap.empty
+        | 1 -> FunctionIdMap.ofList [AST.functionId 3UL,{Ints=ARM64CalleeClobbers.ofInts [LIR.X2];Floats=ARM64CalleeClobbers.ofFloats [LIR.D2]};AST.functionId 7UL,{Ints=ARM64CalleeClobbers.ofInts [LIR.X1;LIR.X3];Floats=ARM64CalleeClobbers.ofFloats [LIR.D0]}]
+        | _ -> FunctionIdMap.ofList [AST.functionId 3UL,ARM64CalleeClobbers.all;AST.functionId 7UL,{Ints=UInt64.MaxValue;Floats=UInt64.MaxValue}]
+    let param n typ : LIR.TypedLIRParam={Reg=LIR.Virtual n;Type=typ}
+    let parameters=[[];[param 0 AST.TInt64;param 1 AST.TFloat64;param 2 AST.TInt64;param 3 AST.TFloat64];List.init 8 (fun n -> param n AST.TInt64);List.init 8 (fun n -> param n AST.TFloat64)]
+    let make parameters cfg : LIR.Function={Id=AST.functionId 0UL;Name=source;TypedParams=parameters;CFG=cfg;StackSize=32;UsedCalleeSaved=[LIR.X19];CodegenFacts=None}
+    let observeFunction func=[Platform.ARM64;Platform.X86_64] |> mapNodes (fun arch -> [-1;0;1;2] |> mapNodes (fun style ->
+        let allocated=attempt (fun () -> if style<0 then RegisterAllocation.allocateRegisters arch func else RegisterAllocation.allocateRegistersWithCallSummaries arch (known style) func)
+        let timed=
+            if style<0 then
+                try
+                    let value,timings=RegisterAllocation.allocateRegistersWithTiming arch func
+                    let output=tuple [enc value;timings |> mapNodes (fun t -> tuple [enc t.Phase;enc (Double.IsFinite t.ElapsedMs && t.ElapsedMs>=0.0)])]
+                    let node=JsonObject()
+                    node["type"] <- JsonValue.Create "FSharpResult"
+                    node["case"] <- JsonValue.Create "Ok"
+                    node["fields"] <- JsonArray(output)
+                    node :> JsonNode
+                with ex -> enc (Error ex.Message : Result<unit,string>)
+            else null
+        tuple [allocated;timed]))
+    let instructions=lirAllocationFixtures source [|LIR.Virtual 0;LIR.Virtual 1;LIR.Virtual 2;LIR.Virtual 3|] [|LIR.FVirtual 0;LIR.FVirtual 1;LIR.FVirtual 2;LIR.FVirtual 3|] (LIR.Reg (LIR.Virtual 3)) AST.TFloat64
+    let constructorCases=parameters |> mapNodes (fun parameters -> instructions |> mapNodes (fun instr -> observeFunction (make parameters (cfg label [block label [instr] LIR.Ret]))))
+    let bodies=[cfg label [block label [] LIR.Ret];cfg label [block label [LIR.SaveRegs ([],[]);LIR.ArgMoves [LIR.X0,LIR.Reg (LIR.Virtual 0)];LIR.Call (LIR.Virtual 4,AST.functionId 3UL,[]);LIR.FMov (LIR.FVirtual (-1),LIR.FPhysical LIR.D0);LIR.RestoreRegs ([],[]);LIR.Add (LIR.Virtual 5,LIR.Virtual 0,LIR.Reg (LIR.Virtual 4));LIR.FAdd (LIR.FVirtual 5,LIR.FVirtual 1,LIR.FVirtual 3)] LIR.Ret];
+        cfg label [block label [LIR.SaveRegs ([],[]);LIR.SaveRegs ([],[]);LIR.Call (LIR.Virtual 4,AST.functionId 3UL,[]);LIR.RestoreRegs ([],[]);LIR.Call (LIR.Virtual 5,AST.functionId 7UL,[]);LIR.RestoreRegs ([],[]);LIR.PrintInt64 (LIR.Virtual 0);LIR.PrintFloat (LIR.FVirtual 1)] LIR.Ret];
+        cfg label [block label [LIR.Mov (LIR.Virtual 4,LIR.Imm 0L);LIR.FLoad (LIR.FVirtual 4,-0.0)] (LIR.Jump other);block other [LIR.Phi (LIR.Virtual 0,[LIR.Reg (LIR.Virtual 4),label;LIR.Reg (LIR.Virtual 5),back],Some AST.TInt64);LIR.FPhi (LIR.FVirtual 0,[LIR.FVirtual 4,label;LIR.FVirtual 5,back]);LIR.Cmp (LIR.Virtual 0,LIR.Imm 10L)] (LIR.CondBranch (LIR.LT,back,exit));block back [LIR.Add (LIR.Virtual 5,LIR.Virtual 0,LIR.Imm 1L);LIR.FAdd (LIR.FVirtual 5,LIR.FVirtual 0,LIR.FVirtual 1)] (LIR.Jump other);block exit [LIR.PrintInt64 (LIR.Virtual 0);LIR.PrintFloat (LIR.FVirtual 0)] LIR.Ret];
+        cfg label [block label [LIR.FPhi (LIR.FVirtual 4,[LIR.FVirtual 1,LIR.Label "entry-edge";LIR.FVirtual 5,other]);LIR.FAdd (LIR.FVirtual 5,LIR.FVirtual 4,LIR.FVirtual 3)] (LIR.Jump other);block other [] (LIR.Branch (LIR.Virtual 0,label,exit));block exit [LIR.PrintFloat (LIR.FVirtual 4)] LIR.Ret]]
+    let bodyCases=parameters |> mapNodes (fun parameters -> bodies |> mapNodes (fun body -> [false;true] |> mapNodes (fun facts -> let func=make parameters body in observeFunction (if facts then LIR.attachFunctionCodegenFacts func else func))))
+    let pressureCases=[0;1;7;8;10;15;16;17;65] |> mapNodes (fun count ->
+        let ints=List.init count (fun n -> LIR.Mov (LIR.Virtual n,LIR.Imm (int64 n))) @ List.init count (fun n -> LIR.PrintInt64 (LIR.Virtual n))
+        let floats=List.init count (fun n -> LIR.FLoad (LIR.FVirtual n,BitConverter.Int64BitsToDouble (if n%2=0 then Int64.MinValue else int64 n))) @ List.init count (fun n -> LIR.PrintFloat (LIR.FVirtual n))
+        [ints;floats;ints @ floats] |> mapNodes (fun instrs -> observeFunction (make [] (cfg label [block label instrs LIR.Ret]))))
+    let invalidCases=[make (List.init 9 (fun n -> param n AST.TInt64)) (cfg label [block label [] LIR.Ret]);make (List.init 9 (fun n -> param n AST.TFloat64)) (cfg label [block label [] LIR.Ret])] |> mapNodes observeFunction
+    let d:AllocationModel.VRegDomain=rcInternalCall "AllocationModel" "buildVRegDomain" [|box [0..15]|]
+    let intAllocation arch mode : AllocationModel.AllocationResult=
+        let regs=RegisterPolicy.callerSavedRegs @ RegisterPolicy.calleeSavedRegsFor arch
+        {Domain=d;Allocations=Array.init 16 (fun n ->
+            match mode with
+            | 0 -> Some (AllocationModel.PhysReg (List.item (n%7) RegisterPolicy.callerSavedRegs))
+            | 1 -> Some (AllocationModel.PhysReg (List.item (n%regs.Length) regs))
+            | 2 -> (match n%3 with 0 -> Some (AllocationModel.PhysReg LIR.X19) | 1 -> Some (AllocationModel.StackSlot (-24)) | _ -> None)
+            | 3 -> Some (AllocationModel.StackSlot (-(n+1)*8))
+            | _ -> None);StackSize=128;UsedCalleeSaved=[LIR.X19]}
+    let floatAllocation mode : FloatAllocation.FAllocationResult=
+        {Domain=d;Allocations=Array.init 16 (fun n ->
+            match mode with
+            | 0 -> Some (FloatAllocation.FPhysReg (List.item n FloatAllocation.allocatableFloatRegs))
+            | 1 -> (match n%3 with 0 -> Some (FloatAllocation.FPhysReg LIR.D15) | 1 -> Some (FloatAllocation.FRematerialized (-0.0)) | _ -> None)
+            | 2 -> Some (FloatAllocation.FStackSlot (-(n+1)*8))
+            | _ -> None);StackSize=256;UsedCalleeSavedF=[LIR.D8];SpillScratchLeft=LIR.FVirtual (-1000);SpillScratchRight=LIR.FVirtual (-1001);SpillScratchThird=LIR.FVirtual (-1002)}
+    let envelopes=[[];[LIR.Call (LIR.Virtual 0,AST.functionId 3UL,[])];[LIR.ArgMoves [LIR.X0,LIR.Reg (LIR.Virtual 2)];LIR.Call (LIR.Virtual 0,AST.functionId 3UL,[])];[LIR.Call (LIR.Virtual 0,AST.functionId 7UL,[]);LIR.FMov (LIR.FVirtual (-1),LIR.FPhysical LIR.D0)];[LIR.SaveRegs ([],[]);LIR.Call (LIR.Virtual 0,AST.functionId 3UL,[]);LIR.RestoreRegs ([],[])];[LIR.PrintInt64 (LIR.Virtual 1);LIR.Call (LIR.Virtual 0,AST.functionId 3UL,[])]]
+    let callPermutation arch im fm mask envelope mode=
+        let blocks=[|block label (LIR.SaveRegs ([],[])::envelope @ [LIR.RestoreRegs ([],[]);LIR.PrintInt64 (LIR.Virtual 1);LIR.PrintFloat (LIR.FVirtual 2)]) LIR.Ret|]
+        let facts:obj=rcInternalCall "RegisterFacts" "classifyBlocks" [|box blocks|]
+        let liveness:AllocationModel.BlockLiveness array=[|{LiveIn=[|uint64 mask|];LiveOut=[|uint64 mask|]}|]
+        let floatLiveness:AllocationModel.BlockLiveness array=[|{LiveIn=[|uint64 (mask ^^^ 65535)|];LiveOut=[|uint64 (mask ^^^ 65535)|]}|]
+        let callees=if mode<0 then None else Some (known mode)
+        let ints=attempt (fun () -> rcInternalCall<AllocationModel.AllocationResult> "RegisterAllocation" "chooseRegistersForCalls" [|box arch;box callees;box blocks;facts;box d;box d;box liveness;box floatLiveness;box (intAllocation arch im)|])
+        let floats=if mode<0 then null else attempt (fun () -> rcInternalCall<FloatAllocation.FAllocationResult> "RegisterAllocation" "chooseArm64FloatRegistersForCalls" [|box (known mode);box blocks;facts;box d;box d;box liveness;box floatLiveness;box (floatAllocation fm)|])
+        tuple [ints;floats]
+    let callPermutationCases=[Platform.ARM64;Platform.X86_64] |> mapNodes (fun arch -> [0;1;2;3;4] |> mapNodes (fun im -> [0;1;2;3] |> mapNodes (fun fm -> [0;85;65535] |> mapNodes (fun mask -> envelopes |> mapNodes (fun envelope -> [-1;0;1;2] |> mapNodes (callPermutation arch im fm mask envelope))))))
+    let gaps=[[];[1];[3;1];[2;2;4];[Int32.MaxValue;Int32.MinValue;0]] |> mapNodes (fun costs -> attempt (fun () -> rcInternalCall<int> "RegisterAllocation" "bestCostGap" [|box costs|]))
+    tuple [constructorCases;bodyCases;pressureCases;invalidCases;callPermutationCases;gaps]
+
 let lirTreeObservation (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -4001,6 +4079,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "register-allocation" -> registerAllocationObservation source
         | "lir-peephole" -> peepholeObservation source
         | "callee-clobbers" -> calleeClobberObservation source
         | "block-allocation" -> blockAllocationObservation source

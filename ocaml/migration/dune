@@ -828,3 +828,15 @@
  (deps ../lib/backend/x64/X64CalleeClobbers.ml)
  (action (with-stdout-to %{targets}
   (progn (echo "open Dark_compiler") (cat %{dep:../lib/backend/x64/X64CalleeClobbers.ml})))))
+
+(rule
+ (targets InstrumentedRegisterAllocation.mli)
+ (deps ../lib/passes/lir/RegisterAllocation.mli)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler") (cat %{dep:../lib/passes/lir/RegisterAllocation.mli}) (echo "val bestCostGap : int list -> int\nval chooseRegistersForCalls : Platform.arch -> ARM64CalleeClobbers.writes FunctionIdMap.t option -> LIR.basicBlock array -> AllocationModel.classifiedBlock array -> AllocationModel.vRegDomain -> AllocationModel.vRegDomain -> AllocationModel.blockLiveness array -> AllocationModel.blockLiveness array -> AllocationModel.allocationResult -> AllocationModel.allocationResult\nval chooseArm64FloatRegistersForCalls : ARM64CalleeClobbers.writes FunctionIdMap.t -> LIR.basicBlock array -> AllocationModel.classifiedBlock array -> AllocationModel.vRegDomain -> AllocationModel.vRegDomain -> AllocationModel.blockLiveness array -> AllocationModel.blockLiveness array -> FloatAllocation.fAllocationResult -> FloatAllocation.fAllocationResult\n")))))
+
+(rule
+ (targets InstrumentedRegisterAllocation.ml)
+ (deps ../lib/passes/lir/RegisterAllocation.ml)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler") (cat %{dep:../lib/passes/lir/RegisterAllocation.ml})))))

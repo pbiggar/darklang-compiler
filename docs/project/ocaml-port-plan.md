@@ -867,6 +867,19 @@ passes 396/396 native units; coverage is 202/391 pairs. Float allocation,
 remaining allocation/lowering/emission, remaining ownership tests, full corpus
 checks and final acceptance remain open.
 
+Register-allocation orchestration and all 10 original phi/caller-save tests are
+fully translated with interfaces and original comments. Complete output matches
+F# for 4,392 public allocations across ARM64/x64, all instruction constructors,
+mixed and invalid parameters, call-summary configurations, phi/loop graphs,
+codegen facts and integer/float pressure through 65 values; another 1,098 timed
+runs match function output and phase order with valid durations. The private
+call-aware paths match 2,880 GP and 2,160 FP register permutations, including
+save envelopes, missing allocations and clobber costs. Int32 cost-gap overflow
+and exact failure diagnostics are preserved. The warning-free build passes
+447/447 native unit/DSL checks. Coverage is 213/391 pairs. ANF-to-MIR and
+MIR-to-LIR lowering are next; emission, remaining tooling/ownership tests,
+full corpus checks and final acceptance remain open.
+
 Float allocation is fully translated, including target register lists, literal
 load scheduling, phi/copy coalescing, spill-slot reuse, rematerialization, exact
 float bits, scratch selection, argument move cycles, and every instruction/block/
