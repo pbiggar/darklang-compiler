@@ -582,3 +582,14 @@ the native observer stopped before Crypto.dark. Its JSON emitter now writes the
 complete observation directly to its output channel, avoiding a second buffer
 proportional to row size, and collects between requests. An isolated Crypto.dark
 comparison is running. Full closure-comparison parity remains outstanding.
+
+Ownership variant selection is complete, including canonical positional group
+identities, stable preference ordering, exact borrowed-result sources, fallback
+boundaries, and invalid-call diagnostics. All eleven original selection tests
+pass. The native suite is now 230/230, coverage is 111/391 complete pairs, and the
+warning-free build and comment checks pass.
+
+The isolated Crypto.dark closure comparison now passes: its complete 750,240,244
+byte JSON observation is identical between the frozen F# compiler and OCaml.
+The full closure-comparison corpus audit has restarted with channel-based native
+emission and bounded comparison; its completed gate is still pending.

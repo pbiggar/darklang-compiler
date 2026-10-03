@@ -6,3 +6,4 @@ val block : ('leaf -> Dark_compiler.StructuralValue.value) -> ('id -> Dark_compi
 val steps : ('leaf -> Dark_compiler.StructuralValue.value) -> ('id -> Dark_compiler.StructuralValue.value) -> ('leaf, 'id) Dark_compiler.OwnedIR.step list -> Dark_compiler.StructuralValue.value
 val functionDef : ('leaf -> Dark_compiler.StructuralValue.value) -> ('id -> Dark_compiler.StructuralValue.value) -> ('leaf, 'id) Dark_compiler.OwnedIR.functionDef -> Dark_compiler.StructuralValue.value
 val option : ('value -> Dark_compiler.StructuralValue.value) -> 'value option -> Dark_compiler.StructuralValue.value
+val callSignature : Dark_compiler.OwnedIR.callSignature -> Dark_compiler.StructuralValue.value

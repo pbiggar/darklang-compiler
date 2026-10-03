@@ -23,3 +23,7 @@ and operation leaf id = function
 and steps leaf id values = Sequence (List.map (function O.Evaluate input -> Union ("Evaluate", [operation leaf id input]) | O.Dup input -> Union ("Dup", [id input]) | O.Drop input -> Union ("Drop", [id input])) values)
 let functionDef leaf id (definition : ('leaf, 'id) O.functionDef) = Record ["Definition", Record ["Id", AST.DiagnosticFormatting.func definition.O.definition.H.id; "Name", Text definition.O.definition.H.name; "Body", block leaf id definition.O.definition.H.body]; "Ownership", signature id definition.O.ownership]
 let option encode = function None -> Union ("None", []) | Some value -> Union ("Some", [encode value])
+let callSignature (signature : O.callSignature) =
+ let parameter = function O.UnmanagedCallParameter -> Union ("UnmanagedCallParameter", []) | O.BorrowedCallParameter -> Union ("BorrowedCallParameter", []) | O.ConsumedCallParameter -> Union ("ConsumedCallParameter", []) | O.UniqueCallParameter -> Union ("UniqueCallParameter", []) in
+ let result = match signature.O.result with O.UnmanagedCallResult -> Union ("UnmanagedCallResult", []) | O.BorrowedCallResult index -> Union ("BorrowedCallResult", [Scalar (string_of_int index)]) | O.ProducedCallResult -> Union ("ProducedCallResult", []) | O.UniqueProducedCallResult -> Union ("UniqueProducedCallResult", []) in
+ Record ["Parameters", Sequence (List.map parameter signature.O.parameters); "Result", result]
