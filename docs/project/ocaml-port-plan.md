@@ -426,3 +426,29 @@ encoders to unchanged source. Snapshot identities now include C files, generatio
 scripts, Dune rules, and observation includes. Monotonic host timing replaces
 Stopwatch for phase recording. Translated units remain 96/96; comment audit finds
 zero missing reference comment lines; inventory coverage is 55/391 pairs.
+
+The complete direct WrittenTypes checker now builds: contextual lambdas, builtin
+and declared/indirect calls, constructors, records, ordered collections, guards,
+exhaustiveness, continuation inference, recursive lets, declarations, recursive
+groups, source batches, opaque retained environments, and later-pass registries.
+All seven public entry points are implemented. Its migration observer compares
+whole checked programs and retained private environments, including checking
+against an earlier declaration batch. Initial complete corpus parity passes
+450/1,890 rows; the empty-source 25-program matrix passes after correcting unknown
+named-call dispatch. Full direct-checker and program-checker runs remain active.
+The resolved-program checker has passed 900 rows at this checkpoint.
+
+Written type-reference helpers pass all 1,890 observations. Pattern checking and
+exhaustiveness have passed 300 rows, with their full run active. Specialization
+identity and checked dependency collection are implemented; complete separate
+specialization parity remains outstanding. The original type-checking fixture
+parser, runner, and four tooling unit tests are translated. Native translated
+units pass 100/100; inventory coverage is 61/391 complete implementation/interface
+pairs, and the comment audit finds zero missing reference line comments.
+
+Parity batches now freeze their Python driver alongside the native executable
+and F# observer. Identical complete JSON wire rows are compared directly before
+allocating parsed trees, retaining full-field comparison and identity validation
+for other rows. Observation JSON permits ordinary Unicode escaping, with UTF-16
+unit encodings retained for unpaired surrogates. Audit names permit independent
+runs without overwriting earlier proof logs. These are migration tools only.

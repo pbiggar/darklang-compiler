@@ -112,13 +112,17 @@ def normalize_fresh_identities(observation):
         if isinstance(value, dict):
             if value.get("case") == "TInferenceVar":
                 identity = value["fields"][1]
+                encoded_units = isinstance(identity, dict) and "utf16String" in identity
+                if encoded_units:
+                    identity = "".join(chr(int(unit, 16)) for unit in identity["utf16String"])
                 if isinstance(identity, str) and identity.startswith("#infer:"):
                     prefix, guid = identity.rsplit(":", 1)
                     if not re.fullmatch(r"[0-9a-f]{12}4[0-9a-f]{3}[89ab][0-9a-f]{15}", guid):
                         raise ValueError("Generated inference identity is not a UUID v4")
                     if guid not in identities:
                         identities[guid] = len(identities)
-                    value["fields"][1] = prefix + ":<uuid-" + str(identities[guid]) + ">"
+                    normalized = prefix + ":<uuid-" + str(identities[guid]) + ">"
+                    value["fields"][1] = {"utf16String": [format(ord(unit), "04x") for unit in normalized]} if encoded_units else normalized
             for key in sorted(value):
                 visit(value[key])
         elif isinstance(value, list):
@@ -129,7 +133,8 @@ def normalize_fresh_identities(observation):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies", "materialize-helpers", "declarations", "record-checking", "binary-checking", "stdlib-catalog", "lambda-checking", "call-checking", "match-checking", "expression-checking", "function-checking", "program-checking"])
+    parser.add_argument("--audit-name", help="Separate audit directory for an independent verification run")
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies", "materialize-helpers", "declarations", "record-checking", "binary-checking", "stdlib-catalog", "lambda-checking", "call-checking", "match-checking", "expression-checking", "function-checking", "program-checking", "written-types", "written-patterns", "written-checking"])
     parser.add_argument("--probes-only", action="store_true")
     parser.add_argument("--batch-size", type=int, default=0,
                         help="Compare restartable batches; reuse only matching source snapshots")
@@ -143,7 +148,7 @@ def main():
         corpus.extend((str(path.relative_to(ROOT)), path.read_text()) for path in sorted((ROOT / "src/Tests").rglob("*.syntax")))
     if args.probes_only:
         corpus = [(label, source) for label, source in corpus if label.startswith("probe-")]
-    output = ROOT / "TestResults/ocaml-migration" / args.stage
+    output = ROOT / "TestResults/ocaml-migration" / (args.audit_name or args.stage)
     output.mkdir(parents=True, exist_ok=True)
     if args.batch_size:
         # A completed batch is reusable only for the exact corpus and code. This
@@ -172,6 +177,10 @@ def main():
                     relative = line[4:-1]
                     content = content.replace(line, '#r "' + str((original.parent / relative).resolve()) + '"')
             reference.write_text(content)
+        runner = native.parent / "compare_semantics.py"
+        if not runner.exists():
+            content = Path(__file__).read_text().replace("ROOT = Path(__file__).resolve().parents[2]", "ROOT = Path(" + repr(str(ROOT)) + ")", 1)
+            runner.write_text(content)
         completed = 0
         combined = {name: [] for name in ("fsharp", "ocaml")}
         for offset in range(0, len(corpus), args.batch_size):
@@ -188,8 +197,10 @@ def main():
                 except (OSError, ValueError, KeyError):
                     valid = False
             if not valid:
-                command = ["python3", str(Path(__file__)), "--stage", args.stage,
+                command = ["python3", str(runner), "--stage", args.stage,
                            "--offset", str(offset), "--limit", str(limit), "--native-executable", str(native), "--reference-script", str(reference)]
+                if args.audit_name:
+                    command.extend(["--audit-name", args.audit_name])
                 if args.probes_only:
                     command.append("--probes-only")
                 result = subprocess.run(command, cwd=ROOT)
@@ -239,8 +250,18 @@ def main():
                     if not row:
                         print(f"{name} stopped before {label}; see {output / (name + '.stderr')}")
                         return 1
+                if rows[0] == rows[1]:
+                    # Identical complete JSON proves every field equal. Avoid
+                    # allocating two enormous, duplicate trees in this case.
+                    payload = rows[0].removesuffix("\n").encode()
+                    entry = {"input": label, "sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload), "format": "identical-json"}
+                    for audit in audits:
+                        audit.write(json.dumps(entry) + "\n")
+                        audit.flush()
+                    count += 1
+                    continue
                 expected, actual = [json.loads(row) for row in rows]
-                if args.stage in {"call-checking", "expression-checking", "function-checking", "program-checking"}:
+                if args.stage in {"call-checking", "expression-checking", "function-checking", "program-checking", "written-checking"} and any("#infer:" in row or '"utf16String"' in row for row in rows):
                     expected, actual = map(normalize_fresh_identities, [expected, actual])
                 for audit, observation in zip(audits, [expected, actual], strict=True):
                     canonical = json.dumps(observation, sort_keys=True, ensure_ascii=True, separators=(",", ":")).encode()

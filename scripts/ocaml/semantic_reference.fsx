@@ -1080,12 +1080,148 @@ let programChecking source =
         encode typeof<Result<(Result<AST.SemanticType * CheckedAST.Program * CheckingTypes.TypeCheckEnv,CheckingDiagnostics.TypeError> * Result<AST.SemanticType * CheckedAST.Program * CheckingTypes.TypeCheckEnv,CheckingDiagnostics.TypeError> * Result<AST.SemanticType * CheckedAST.Program * CheckingTypes.TypeCheckEnv,CheckingDiagnostics.TypeError> * Result<AST.SemanticType * CheckedAST.Program * CheckingTypes.TypeCheckEnv,CheckingDiagnostics.TypeError>),CheckingDiagnostics.TypeError>> (box result)]
     tuple [full baseResult;JsonArray(programs |> List.map perProgram |> List.toArray) :> JsonNode]
 
+let writtenChecking source =
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let fullType = typeof<Result<AST.SemanticType * CheckedAST.Program * WrittenChecking.Environment,string>>
+    let programType = typeof<Result<AST.SemanticType * CheckedAST.Program,string>>
+    let full value = encode fullType (box value)
+    let program value = encode programType (box value)
+    let parse = WrittenParsing.parse LibParser.Validation.Script
+    let baseText = "type R = { field: Int64 }\nlet id (x: 'a) : 'a = x\nval value = 1\n"
+    let baseResult = parse baseText |> Result.bind (fun unit -> WrittenChecking.checkSourceUnitsWithBase None false false [unit])
+    let perSource text =
+        match parse text with
+        | Error error -> encode typeof<Result<unit,string>> (box (Error error : Result<unit,string>))
+        | Ok validated ->
+            let cases = [false,false;false,true;true,false;true,true]
+            let baseUse =
+                match baseResult with
+                | Error error -> encode typeof<Result<unit,string>> (box (Error error : Result<unit,string>))
+                | Ok (_,_,env) ->
+                    let values = cases |> List.map (fun (internal_,require) -> full (WrittenChecking.checkSourceUnitsWithBase (Some env) internal_ require [validated])) |> List.toArray
+                    let payload = JsonArray(values) :> JsonNode
+                    let node = JsonObject()
+                    node["type"] <- JsonValue.Create "FSharpResult"
+                    node["case"] <- JsonValue.Create "Ok"
+                    node["fields"] <- JsonArray([|payload|])
+                    node :> JsonNode
+            let result = tuple [program (WrittenChecking.checkClosedProgram validated);
+                                JsonArray([false;true] |> List.map (fun require -> program (WrittenChecking.checkSimpleProgram require validated)) |> List.toArray) :> JsonNode;
+                                JsonArray(cases |> List.map (fun (internal_,require) -> full (WrittenChecking.checkSourceUnitsWithBase None internal_ require [validated])) |> List.toArray) :> JsonNode;
+                                baseUse;
+                                encode typeof<Result<CheckingTypes.TypeCheckEnv,string>> (box (WrittenChecking.checkSourceUnitsWithBase None false false [validated] |> Result.map (fun (_,program,_) -> WrittenChecking.typeCheckEnvironment program)))]
+            let node = JsonObject()
+            node["type"] <- JsonValue.Create "FSharpResult"
+            node["case"] <- JsonValue.Create "Ok"
+            node["fields"] <- JsonArray([|result|])
+            node :> JsonNode
+    let fixtures = if source <> "" then [] else ["()"; "1"; "true"; "fun x -> x"; "(fun x -> x) 1"; "let x = 1 in x + 2"; "if true then 1 else 2"; "[1; 2]"; "Dict { \"x\" = 1; \"x\" = 2 }"; "(1, true)"; "match true with | true -> 1 | false -> 2"; "type R = { field: Int64 }\nR { field = 1 }"; "type S = C of Int64 | D\nS.C 1"; "type Box<'a> = { value: 'a }\nBox { value = 1 }"; "let id (x: 'a) : 'a = x\nid 1"; "let fact (n: Int64) : Int64 = if n == 0 then 1 else n * fact (n - 1)\nfact 5"; "val x = 1\nval y = x\ny"; "Builtin.boolNot true"; "Builtin.bitwiseNot 1uy"; "Builtin.testNan"; "1 ++ 'a'"; "let x = [1] in x"; "fun __x -> __x"; "id 1"; "R { field = value }"]
+    tuple [full baseResult; perSource source; JsonArray(fixtures |> List.map perSource |> List.toArray) :> JsonNode]
+
+let writtenTypes source =
+    let r = LibParser.WrittenTypes.synthRange
+    let custom modules name args = LibParser.WrittenTypes.TCustom {range=r;modules=modules |> List.map (fun name -> ({range=r;name=name}:LibParser.WrittenTypes.Identifier),r);typ={range=r;name=name};typeArgs=args}
+    let references = [LibParser.WrittenTypes.TUnit r;LibParser.WrittenTypes.TBool r;LibParser.WrittenTypes.TInt r;LibParser.WrittenTypes.TInt8 r;LibParser.WrittenTypes.TUInt8 r;LibParser.WrittenTypes.TInt16 r;LibParser.WrittenTypes.TUInt16 r;LibParser.WrittenTypes.TInt32 r;LibParser.WrittenTypes.TUInt32 r;LibParser.WrittenTypes.TInt64 r;LibParser.WrittenTypes.TUInt64 r;LibParser.WrittenTypes.TInt128 r;LibParser.WrittenTypes.TUInt128 r;LibParser.WrittenTypes.TFloat r;LibParser.WrittenTypes.TChar r;LibParser.WrittenTypes.TString r;LibParser.WrittenTypes.TDateTime r;LibParser.WrittenTypes.TUuid r;LibParser.WrittenTypes.TBlob r;
+        LibParser.WrittenTypes.TVariable (r,r,(r,source));LibParser.WrittenTypes.TVariable (r,r,(r,"a"));LibParser.WrittenTypes.TList (r,r,r,LibParser.WrittenTypes.TVariable (r,r,(r,"a")),r);
+        LibParser.WrittenTypes.TDict (r,r,r,LibParser.WrittenTypes.TString r,r,LibParser.WrittenTypes.TVariable (r,r,(r,source)),r);
+        LibParser.WrittenTypes.TTuple (r,LibParser.WrittenTypes.TVariable (r,r,(r,"a")),r,LibParser.WrittenTypes.TString r,[r,LibParser.WrittenTypes.TVariable (r,r,(r,source))],r,r);
+        LibParser.WrittenTypes.TFn (r,[LibParser.WrittenTypes.TVariable (r,r,(r,"a")),r;LibParser.WrittenTypes.TInt64 r,r],custom ["M"] source [LibParser.WrittenTypes.TVariable (r,r,(r,source))]);
+        custom [] "RawPtr" [];custom [] "Stream" [LibParser.WrittenTypes.TInt64 r];custom [] "Stream" [];custom ["M"] source [LibParser.WrittenTypes.TString r];custom [] "R" [];custom [] "Alias" [];custom [] "S" [];custom [] "Generic" [LibParser.WrittenTypes.TString r];custom [] "Generic" [];custom [] "Cycle" []]
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let moduleType = typeof<AST.SemanticType>.Assembly.GetType("WrittenChecking")
+    let entryType = typeof<AST.SemanticType>.Assembly.GetType("WrittenChecking+TypeEntry")
+    let kindType = typeof<AST.SemanticType>.Assembly.GetType("WrittenChecking+TypeKind")
+    let kind name = FSharpType.GetUnionCases(kindType,flags) |> Array.find (fun case -> case.Name=name) |> fun case -> FSharpValue.MakeUnion(case,[||],flags)
+    let entry name parameters path definition = FSharpValue.MakeRecord(entryType,[|kind name;box parameters;box path;box definition|],flags)
+    let field name typ : LibParser.WrittenTypes.RecordFieldSyntax = {range=r;name=r,name;typ=typ;description="";symbolColon=r}
+    let enum name : LibParser.WrittenTypes.EnumCaseSyntax = {range=r;name=r,name;fields=[];description="";keywordOf=None}
+    let entries = ["R",entry "RecordKind" ([]:string list) ([]:string list) (LibParser.WrittenTypes.TDRecord [field source (LibParser.WrittenTypes.TInt64 r),None]);
+        "Alias",entry "AliasKind" ([]:string list) ([]:string list) (LibParser.WrittenTypes.TDAlias (LibParser.WrittenTypes.TInt64 r));"S",entry "SumKind" ([]:string list) ([]:string list) (LibParser.WrittenTypes.TDEnum [r,enum "C"]);
+        "Other",entry "SumKind" ([]:string list) ([]:string list) (LibParser.WrittenTypes.TDEnum [r,enum "C"]);"Generic",entry "RecordKind" ["a"] ([]:string list) (LibParser.WrittenTypes.TDRecord [field "value" (LibParser.WrittenTypes.TVariable (r,r,(r,"a"))),None]);
+        "Cycle",entry "AliasKind" ([]:string list) ([]:string list) (LibParser.WrittenTypes.TDAlias (custom [] "Cycle" []));"M.R",entry "RecordKind" ([]:string list) ["M"] (LibParser.WrittenTypes.TDRecord [])]
+    let mapType = typedefof<Map<_,_>>.MakeGenericType [|typeof<string>;entryType|]
+    let emptyEntries = Array.CreateInstance(FSharpType.MakeTupleType [|typeof<string>;entryType|],0)
+    let empty = Activator.CreateInstance(mapType,[|box emptyEntries|])
+    let inventory = entries |> List.fold (fun state (name,value) -> mapType.GetMethod("Add").Invoke(state,[|box name;value|])) empty
+    let scopes = [Set.empty;Set.ofList [source;"a"]]
+    let customResolver modules name args = if name="reject" then Error "custom rejected" else Ok (AST.TRecord (String.concat "." (modules @ [name]),args))
+    let convertMethod = moduleType.GetMethod("resolveWrittenType",flags)
+    let collectMethod = moduleType.GetMethod("collectWrittenTypeParams",flags)
+    let conversions = references |> List.map (fun reference ->
+        let simple = scopes |> List.map (fun scope -> WrittenChecking.typeReference customResolver scope reference)
+        let resolved = scopes |> List.map (fun scope -> [false;true] |> List.map (fun allowInternal -> convertMethod.Invoke(null,[|box allowInternal;inventory;box ["M"];box scope;box reference|]) :?> Result<AST.SemanticType,string>))
+        let variables = collectMethod.Invoke(null,[|box ["existing"];box reference|]) :?> string list
+        simple,resolved,variables)
+    let semTypes = [AST.TUnit;AST.TInt64;AST.TString;AST.TChar;AST.TNever;AST.TVar source;AST.TList (AST.TVar "a");AST.TList AST.TInt64;AST.TRecord ("R",[]);AST.TRecord ("Generic",[AST.TString]);AST.TSum ("S",[])]
+    let require = moduleType.GetMethod("requireType",flags)
+    let requirements = semTypes |> List.map (fun left -> semTypes |> List.map (fun right -> require.Invoke(null,[|box (Some left);box right|]) :?> Result<unit,string>))
+    let collisions = moduleType.GetMethod("collidingCaseNames",flags).Invoke(null,[|inventory|]) :?> Set<string> |> Set.toList
+    let floats = [false,"1","0";true,"0","0";false,"1_2","0";false,"1","5e309";false," 1","5 ";false,"NaN","";false,"1","2e-5000";false,source,"0";false,"Infinity","";false,"1","2e+3"]
+    let floats = floats |> List.map (fun (negative,whole,fraction) -> let text=(if negative then "-" else "")+whole+"."+fraction in match Double.TryParse(text,Globalization.NumberStyles.Float,CultureInfo.InvariantCulture) with true,value -> Some value | _ -> None)
+    let value = conversions,requirements,collisions,floats
+    encode (value.GetType()) (box value)
+
+let writtenPatterns source =
+    let r = LibParser.WrittenTypes.synthRange
+    let custom modules name args = LibParser.WrittenTypes.TCustom {range=r;modules=modules |> List.map (fun name -> ({range=r;name=name}:LibParser.WrittenTypes.Identifier),r);typ={range=r;name=name};typeArgs=args}
+    let references = [LibParser.WrittenTypes.TUnit r;LibParser.WrittenTypes.TBool r;LibParser.WrittenTypes.TInt r;LibParser.WrittenTypes.TInt8 r;LibParser.WrittenTypes.TUInt8 r;LibParser.WrittenTypes.TInt16 r;LibParser.WrittenTypes.TUInt16 r;LibParser.WrittenTypes.TInt32 r;LibParser.WrittenTypes.TUInt32 r;LibParser.WrittenTypes.TInt64 r;LibParser.WrittenTypes.TUInt64 r;LibParser.WrittenTypes.TInt128 r;LibParser.WrittenTypes.TUInt128 r;LibParser.WrittenTypes.TFloat r;LibParser.WrittenTypes.TChar r;LibParser.WrittenTypes.TString r;LibParser.WrittenTypes.TDateTime r;LibParser.WrittenTypes.TUuid r;LibParser.WrittenTypes.TBlob r;
+        LibParser.WrittenTypes.TVariable (r,r,(r,source));LibParser.WrittenTypes.TVariable (r,r,(r,"a"));LibParser.WrittenTypes.TList (r,r,r,LibParser.WrittenTypes.TVariable (r,r,(r,"a")),r);
+        LibParser.WrittenTypes.TDict (r,r,r,LibParser.WrittenTypes.TString r,r,LibParser.WrittenTypes.TVariable (r,r,(r,source)),r);
+        LibParser.WrittenTypes.TTuple (r,LibParser.WrittenTypes.TVariable (r,r,(r,"a")),r,LibParser.WrittenTypes.TString r,[r,LibParser.WrittenTypes.TVariable (r,r,(r,source))],r,r);
+        LibParser.WrittenTypes.TFn (r,[LibParser.WrittenTypes.TVariable (r,r,(r,"a")),r;LibParser.WrittenTypes.TInt64 r,r],custom ["M"] source [LibParser.WrittenTypes.TVariable (r,r,(r,source))]);
+        custom [] "RawPtr" [];custom [] "Stream" [LibParser.WrittenTypes.TInt64 r];custom [] "Stream" [];custom ["M"] source [LibParser.WrittenTypes.TString r];custom [] "R" [];custom [] "Alias" [];custom [] "S" [];custom [] "Generic" [LibParser.WrittenTypes.TString r];custom [] "Generic" [];custom [] "Cycle" []]
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let moduleType = typeof<AST.SemanticType>.Assembly.GetType("WrittenChecking")
+    let entryType = typeof<AST.SemanticType>.Assembly.GetType("WrittenChecking+TypeEntry")
+    let kindType = typeof<AST.SemanticType>.Assembly.GetType("WrittenChecking+TypeKind")
+    let kind name = FSharpType.GetUnionCases(kindType,flags) |> Array.find (fun case -> case.Name=name) |> fun case -> FSharpValue.MakeUnion(case,[||],flags)
+    let entry name parameters path definition = FSharpValue.MakeRecord(entryType,[|kind name;box parameters;box path;box definition|],flags)
+    let field name typ : LibParser.WrittenTypes.RecordFieldSyntax = {range=r;name=r,name;typ=typ;description="";symbolColon=r}
+    let enum name : LibParser.WrittenTypes.EnumCaseSyntax = {range=r;name=r,name;fields=[];description="";keywordOf=None}
+    let entries = ["R",entry "RecordKind" ([]:string list) ([]:string list) (LibParser.WrittenTypes.TDRecord [field source (LibParser.WrittenTypes.TInt64 r),None]);
+        "Alias",entry "AliasKind" ([]:string list) ([]:string list) (LibParser.WrittenTypes.TDAlias (LibParser.WrittenTypes.TInt64 r));"S",entry "SumKind" ([]:string list) ([]:string list) (LibParser.WrittenTypes.TDEnum [r,enum "C"]);
+        "Other",entry "SumKind" ([]:string list) ([]:string list) (LibParser.WrittenTypes.TDEnum [r,enum "C"]);"Generic",entry "RecordKind" ["a"] ([]:string list) (LibParser.WrittenTypes.TDRecord [field "value" (LibParser.WrittenTypes.TVariable (r,r,(r,"a"))),None]);
+        "Cycle",entry "AliasKind" ([]:string list) ([]:string list) (LibParser.WrittenTypes.TDAlias (custom [] "Cycle" []));"M.R",entry "RecordKind" ([]:string list) ["M"] (LibParser.WrittenTypes.TDRecord [])]
+    let mapType = typedefof<Map<_,_>>.MakeGenericType [|typeof<string>;entryType|]
+    let emptyEntries = Array.CreateInstance(FSharpType.MakeTupleType [|typeof<string>;entryType|],0)
+    let empty = Activator.CreateInstance(mapType,[|box emptyEntries|])
+    let inventory = entries |> List.fold (fun state (name,value) -> mapType.GetMethod("Add").Invoke(state,[|box name;value|])) empty
+    let globalsType = typeof<AST.SemanticType>.Assembly.GetType("WrittenChecking+Globals")
+    let emptyMap (typ:Type) = let args=typ.GetGenericArguments() in let entries=Array.CreateInstance(FSharpType.MakeTupleType args,0) in Activator.CreateInstance(typ,[|box entries|])
+    let colliding = moduleType.GetMethod("collidingCaseNames",flags).Invoke(null,[|inventory|])
+    let globals = FSharpValue.MakeRecord(globalsType,FSharpType.GetRecordFields(globalsType,flags) |> Array.map (fun field ->
+        match field.Name with "Types" -> inventory | "CollidingCases" -> colliding | "AllowInternal" -> box false | "TypeParams" -> box (Set.empty<string>) | "ModulePath" -> box ["M"] | "CurrentFunction" -> null | _ -> emptyMap field.PropertyType),flags)
+    let symbols = CheckedAST.emptySymbols ()
+    let patterns = [LibParser.WrittenTypes.MPVariable (r,"_");LibParser.WrittenTypes.MPVariable (r,source);LibParser.WrittenTypes.MPUnit r;LibParser.WrittenTypes.MPBool (r,true);LibParser.WrittenTypes.MPInt (r,(r,1I));LibParser.WrittenTypes.MPInt64 (r,(r,1L),r);
+        LibParser.WrittenTypes.MPInt8 (r,(r,1y),r);LibParser.WrittenTypes.MPUInt8 (r,(r,1uy),r);LibParser.WrittenTypes.MPInt16 (r,(r,1s),r);LibParser.WrittenTypes.MPUInt16 (r,(r,1us),r);LibParser.WrittenTypes.MPInt32 (r,(r,1),r);LibParser.WrittenTypes.MPUInt32 (r,(r,1ul),r);LibParser.WrittenTypes.MPUInt64 (r,(r,1UL),r);LibParser.WrittenTypes.MPInt128 (r,(r,Int128.Parse "1"),r);LibParser.WrittenTypes.MPUInt128 (r,(r,UInt128.Parse "1"),r);
+        LibParser.WrittenTypes.MPString (r,Some (r,source),r,r);LibParser.WrittenTypes.MPChar (r,Some (r,source),r,r);LibParser.WrittenTypes.MPString (r,None,r,r);LibParser.WrittenTypes.MPFloat (r,false,"1","0");LibParser.WrittenTypes.MPFloat (r,false,"1_2","0");
+        LibParser.WrittenTypes.MPTuple (r,LibParser.WrittenTypes.MPVariable (r,source),r,LibParser.WrittenTypes.MPVariable (r,"y"),[],r,r);LibParser.WrittenTypes.MPList (r,[LibParser.WrittenTypes.MPVariable (r,source),None],r,r);LibParser.WrittenTypes.MPListCons (r,LibParser.WrittenTypes.MPVariable (r,source),LibParser.WrittenTypes.MPVariable (r,"tail"),r);
+        LibParser.WrittenTypes.MPEnum (r,(r,"C"),[]);LibParser.WrittenTypes.MPEnum (r,(r,"Missing"),[]);LibParser.WrittenTypes.MPOr (r,[]);LibParser.WrittenTypes.MPOr (r,[LibParser.WrittenTypes.MPVariable (r,source);LibParser.WrittenTypes.MPVariable (r,source)]);
+        LibParser.WrittenTypes.MPOr (r,[LibParser.WrittenTypes.MPVariable (r,source);LibParser.WrittenTypes.MPVariable (r,"other")]);LibParser.WrittenTypes.MPError r]
+    let types = [AST.TUnit;AST.TInt64;AST.TInt;AST.TBool;AST.TString;AST.TChar;AST.TFloat64;AST.TNever;AST.TVar source;AST.TInferenceVar (source,"fixed");AST.TTuple [AST.TInt64;AST.TString];AST.TList AST.TInt64;AST.TSum ("S",[])]
+    let cases = if source="" then patterns |> List.collect (fun pattern -> types |> List.map (fun typ -> pattern,typ)) else patterns |> List.mapi (fun index pattern -> pattern,types[index % types.Length])
+    let method = moduleType.GetMethod("checkMatchPattern",flags)
+    let results = cases |> List.map (fun (pattern,expected) -> encode method.ReturnType (method.Invoke(null,[|globals;box symbols;box (None:Map<string,AST.SemanticType * AST.BindingId> option);box expected;box pattern|])))
+    let letPatterns = [LibParser.WrittenTypes.LPUnit r;LibParser.WrittenTypes.LPWildcard r;LibParser.WrittenTypes.LPVariable (r,source);LibParser.WrittenTypes.LPTuple (r,LibParser.WrittenTypes.LPVariable (r,source),r,LibParser.WrittenTypes.LPVariable (r,"y"),[],r,r);LibParser.WrittenTypes.LPTuple (r,LibParser.WrittenTypes.LPVariable (r,source),r,LibParser.WrittenTypes.LPVariable (r,source),[],r,r)]
+    let letMethod = moduleType.GetMethod("checkLetPattern",flags)
+    let letResults = letPatterns |> List.map (fun pattern -> JsonArray(types |> List.map (fun typ -> encode letMethod.ReturnType (letMethod.Invoke(null,[|box pattern;box typ;box symbols|]))) |> List.toArray) :> JsonNode)
+    let boolCase pattern guard : CheckedAST.MatchCase = {Patterns=AST.NonEmptyList.singleton pattern;Guard=guard;Body=CheckedAST.UnitLiteral}
+    let witnesses : (AST.SemanticType * CheckedAST.Expr * CheckedAST.MatchCase list) list = [AST.TBool,CheckedAST.BoolLiteral true,[boolCase (CheckedAST.PBool true) None];AST.TBool,CheckedAST.Local (AST.topLevelValueId "value"),[boolCase (CheckedAST.PBool true) None];
+        AST.TBool,CheckedAST.Local (AST.topLevelValueId "value"),[boolCase (CheckedAST.PBool true) None;boolCase (CheckedAST.PBool false) None];
+        AST.TBool,CheckedAST.BoolLiteral true,[boolCase CheckedAST.PWildcard (Some (CheckedAST.BoolLiteral true))];
+        AST.TList AST.TInt64,CheckedAST.Local (AST.topLevelValueId "value"),[boolCase (CheckedAST.PList []) None;boolCase (CheckedAST.PListCons ([CheckedAST.PWildcard],CheckedAST.PWildcard)) None];
+        AST.TTuple [AST.TBool;AST.TBool],CheckedAST.Local (AST.topLevelValueId "value"),[boolCase (CheckedAST.PTuple [CheckedAST.PBool true;CheckedAST.PWildcard]) None;boolCase (CheckedAST.PTuple [CheckedAST.PBool false;CheckedAST.PBool true]) None;boolCase (CheckedAST.PTuple [CheckedAST.PBool false;CheckedAST.PBool false]) None]]
+    let exhaustiveMethod = moduleType.GetMethod("matchIsExhaustive",flags)
+    let exhaustive = witnesses |> List.map (fun (typ,value,cases) -> unbox<bool> (exhaustiveMethod.Invoke(null,[|globals;box symbols;box typ;box value;box cases|])))
+    namedArray "tuple" [|JsonArray(Array.ofList results) :> JsonNode;JsonArray(Array.ofList letResults) :> JsonNode;encode typeof<bool list> (box exhaustive)|]
+
 CultureInfo.CurrentCulture <- CultureInfo.InvariantCulture
 CultureInfo.CurrentUICulture <- CultureInfo.InvariantCulture
 let reader : IO.TextReader =
     match fsi.CommandLineArgs with
     | [| _; path |] -> new IO.StreamReader(path)
     | _ -> Console.In
+let jsonOutputOptions = System.Text.Json.JsonSerializerOptions(Encoder=System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
 let rec requests () =
     match reader.ReadLine() with
     | null -> ()
@@ -1116,6 +1252,9 @@ let rec requests () =
                         WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+            | "written-checking" -> writtenChecking source
+            | "written-patterns" -> writtenPatterns source
+            | "written-types" -> writtenTypes source
             | "program-checking" -> programChecking source
             | "function-checking" -> functionChecking source
             | "expression-checking" -> expressionChecking source
@@ -1147,6 +1286,6 @@ let rec requests () =
         response["schema"] <- JsonValue.Create 1
         response["stage"] <- JsonValue.Create stage
         response["value"] <- result
-        Console.WriteLine(response.ToJsonString())
+        Console.WriteLine(response.ToJsonString(jsonOutputOptions))
         requests ()
 requests ()

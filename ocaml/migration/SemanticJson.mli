@@ -21,3 +21,5 @@ val string : string -> Yojson.Basic.t
 val int32 : int -> Yojson.Basic.t
 val union : string -> string -> Yojson.Basic.t list -> Yojson.Basic.t
 val record : string -> (string * Yojson.Basic.t) list -> Yojson.Basic.t
+
+val typeDefinition : Dark_compiler.WrittenTypes.typeDefinition -> Yojson.Basic.t

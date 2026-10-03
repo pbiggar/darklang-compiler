@@ -23,7 +23,7 @@
    (progn
     (echo "open Dark_compiler")
     (cat %{dep:../lib/CheckedAST.mli})
-    (echo "val observe : string -> Yojson.Basic.t\nval observationProgram : program -> Yojson.Basic.t\nval observationTypeCatalog : typeCatalog -> Yojson.Basic.t\nval observationFunctionCatalog : functionCatalog -> Yojson.Basic.t\n")))))
+    (echo "val observe : string -> Yojson.Basic.t\nval observationProgram : program -> Yojson.Basic.t\nval observationTypeCatalog : typeCatalog -> Yojson.Basic.t\nval observationFunctionCatalog : functionCatalog -> Yojson.Basic.t\nval observationPattern : pattern -> Yojson.Basic.t\nval observationLetPattern : letPattern -> Yojson.Basic.t\nval observationExpr : expr -> Yojson.Basic.t\nval observationGlobalCatalog : symbols -> Yojson.Basic.t\nval observationBinding : AST.bindingId -> Yojson.Basic.t\n")))))
 
 (rule
  (targets InstrumentedTypes.ml)
@@ -312,3 +312,183 @@
  (deps SemanticDiagnostics.mli instrument_checking.py)
  (action (with-stdout-to %{targets}
   (run python3 %{dep:instrument_checking.py} %{dep:SemanticDiagnostics.mli}))))
+
+(rule
+ (targets InstrumentedWrittenTypeSupport.ml)
+ (deps ../lib/frontend/WrittenTypeSupport.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenTypeSupport.ml}))))
+
+(rule
+ (targets InstrumentedWrittenTypeSupport.mli)
+ (deps ../lib/frontend/WrittenTypeSupport.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenTypeSupport.mli}))))
+
+(rule
+ (targets InstrumentedWrittenPatternSupport.ml)
+ (deps ../lib/frontend/WrittenPatternSupport.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenPatternSupport.ml}))))
+
+(rule
+ (targets InstrumentedWrittenPatternSupport.mli)
+ (deps ../lib/frontend/WrittenPatternSupport.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenPatternSupport.mli}))))
+
+(rule
+ (targets InstrumentedWrittenLambdaSupport.ml)
+ (deps ../lib/frontend/WrittenLambdaSupport.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenLambdaSupport.ml}))))
+
+(rule
+ (targets InstrumentedWrittenLambdaSupport.mli)
+ (deps ../lib/frontend/WrittenLambdaSupport.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenLambdaSupport.mli}))))
+
+(rule
+ (targets InstrumentedWrittenChecking.ml)
+ (deps ../lib/frontend/WrittenChecking.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenChecking.ml}))))
+
+(rule
+ (targets InstrumentedWrittenChecking.mli)
+ (deps ../lib/frontend/WrittenChecking.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenChecking.mli}))))
+
+(rule
+ (targets InstrumentedWrittenExpressions.ml)
+ (deps ../lib/frontend/WrittenExpressions.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenExpressions.ml}))))
+
+(rule
+ (targets InstrumentedWrittenExpressions.mli)
+ (deps ../lib/frontend/WrittenExpressions.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenExpressions.mli}))))
+
+(rule
+ (targets InstrumentedWrittenApplicationSupport.ml)
+ (deps ../lib/frontend/WrittenApplicationSupport.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenApplicationSupport.ml}))))
+
+(rule
+ (targets InstrumentedWrittenApplicationSupport.mli)
+ (deps ../lib/frontend/WrittenApplicationSupport.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenApplicationSupport.mli}))))
+
+(rule
+ (targets InstrumentedWrittenCollectionSupport.ml)
+ (deps ../lib/frontend/WrittenCollectionSupport.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenCollectionSupport.ml}))))
+
+(rule
+ (targets InstrumentedWrittenCollectionSupport.mli)
+ (deps ../lib/frontend/WrittenCollectionSupport.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenCollectionSupport.mli}))))
+
+(rule
+ (targets InstrumentedWrittenRecordSupport.ml)
+ (deps ../lib/frontend/WrittenRecordSupport.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenRecordSupport.ml}))))
+
+(rule
+ (targets InstrumentedWrittenRecordSupport.mli)
+ (deps ../lib/frontend/WrittenRecordSupport.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenRecordSupport.mli}))))
+
+(rule
+ (targets InstrumentedWrittenConstructorSupport.ml)
+ (deps ../lib/frontend/WrittenConstructorSupport.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenConstructorSupport.ml}))))
+
+(rule
+ (targets InstrumentedWrittenConstructorSupport.mli)
+ (deps ../lib/frontend/WrittenConstructorSupport.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenConstructorSupport.mli}))))
+
+(rule
+ (targets InstrumentedWrittenLetSupport.ml)
+ (deps ../lib/frontend/WrittenLetSupport.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenLetSupport.ml}))))
+
+(rule
+ (targets InstrumentedWrittenLetSupport.mli)
+ (deps ../lib/frontend/WrittenLetSupport.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenLetSupport.mli}))))
+
+(rule
+ (targets InstrumentedWrittenOperatorSupport.ml)
+ (deps ../lib/frontend/WrittenOperatorSupport.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenOperatorSupport.ml}))))
+
+(rule
+ (targets InstrumentedWrittenOperatorSupport.mli)
+ (deps ../lib/frontend/WrittenOperatorSupport.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenOperatorSupport.mli}))))
+
+(rule
+ (targets InstrumentedWrittenDeclarations.ml)
+ (deps ../lib/frontend/WrittenDeclarations.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenDeclarations.ml}))))
+
+(rule
+ (targets InstrumentedWrittenDeclarations.mli)
+ (deps ../lib/frontend/WrittenDeclarations.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenDeclarations.mli}))))
+
+(rule
+ (targets InstrumentedWrittenEnvironment.ml)
+ (deps ../lib/frontend/WrittenEnvironment.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenEnvironment.ml}))))
+
+(rule
+ (targets InstrumentedWrittenEnvironment.mli)
+ (deps ../lib/frontend/WrittenEnvironment.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenEnvironment.mli}))))
+
+(rule
+ (targets InstrumentedSpecializationIdentity.ml)
+ (deps ../lib/passes/preparation/SpecializationIdentity.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/SpecializationIdentity.ml}))))
+
+(rule
+ (targets InstrumentedSpecializationIdentity.mli)
+ (deps ../lib/passes/preparation/SpecializationIdentity.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/SpecializationIdentity.mli}))))
+
+(rule
+ (targets InstrumentedWrittenCallSupport.ml)
+ (deps ../lib/frontend/WrittenCallSupport.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenCallSupport.ml}))))
+
+(rule
+ (targets InstrumentedWrittenCallSupport.mli)
+ (deps ../lib/frontend/WrittenCallSupport.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/WrittenCallSupport.mli}))))
