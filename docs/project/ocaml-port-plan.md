@@ -664,3 +664,11 @@ and aggregate types, missing and invalid registry metadata, recursive and
 type-growing record/sum cycles, both sum eligibility modes, descriptor field
 proofs, full printed control flow and fresh identities, unsupported display
 failures, duplicate/missing entry functions, and both root-word probe modes.
+
+Pattern lowering, expression lowering, and the recursive expression/list-region
+coordinator are fully translated, including typed projections, representation
+checks before payload access, guarded alternatives, shared staged joins, and
+the original allocation order. A fresh warning-free build passes all 309 existing
+native units; coverage is 141/391 complete pairs. These newly translated handlers
+still require direct lowering parity checks. The bounded closure-comparison
+corpus run stopped after 250 matching inputs and remains incomplete.

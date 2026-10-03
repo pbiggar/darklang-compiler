@@ -373,3 +373,4 @@ and observationMatchCase (value : matchCase) = observationRecord "MatchCase" [
 let value = observationExpr
 let expr expression = HostStructuralFormat.format (value expression)
 let toString expression = HostStructuralFormat.format (privateExpr expression)
+let pattern value = HostStructuralFormat.format (privatePattern value)
