@@ -35,6 +35,13 @@ def fixture(path):
 
 # Preserve F# namespace distinctions in Dune's unqualified module graph.
 OWNER_OVERRIDES = {
+    "src/Tests/compiler-passes/ownership/JoinTests.fs": "ocaml/tests/compiler-passes/ownership/RcJoinTests.ml",
+    "src/Tests/compiler-passes/ownership/TypeFactTests.fs": "ocaml/tests/compiler-passes/ownership/RcTypeFactTests.ml",
+    "src/DarkCompiler/passes/anf/ownership/InsertExpression.fs": "ocaml/lib/passes/anf/ownership/RcInsertExpression.ml",
+    "src/DarkCompiler/passes/anf/ownership/Cleanup.fs": "ocaml/lib/passes/anf/ownership/RcCleanup.ml",
+    "src/DarkCompiler/passes/anf/ownership/ShapePlanning.fs": "ocaml/lib/passes/anf/ownership/RcShapePlanning.ml",
+    "src/DarkCompiler/passes/anf/ownership/TypeFacts.fs": "ocaml/lib/passes/anf/ownership/RcTypeFacts.ml",
+    "src/DarkCompiler/passes/anf/ownership/ReturnAnalysis.fs": "ocaml/lib/passes/anf/ownership/RcReturnAnalysis.ml",
     "src/DarkCompiler/passes/anf/optimization/Accumulators.fs": "ocaml/lib/passes/anf/optimization/ANFAccumulatorOptimization.ml",
     "src/DarkCompiler/passes/anf/optimization/Substitution.fs": "ocaml/lib/passes/anf/optimization/ANFSubstitution.ml",
     "src/DarkCompiler/passes/hir/ConstructFunctions.fs": "ocaml/lib/passes/hir/ConstructHIRFunctions.ml",

@@ -1254,19 +1254,19 @@
       "source": "src/DarkCompiler/passes/anf/ownership/Cleanup.fs",
       "kind": "compiler",
       "sha256": "2b817f1895d9fcbf2a9d9bf1cbee9d9c1a83008bff3ed769d8a26fd7fac13a7d",
-      "owner": "ocaml/lib/passes/anf/ownership/Cleanup.ml"
+      "owner": "ocaml/lib/passes/anf/ownership/RcCleanup.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/ownership/InsertExpression.fs",
       "kind": "compiler",
       "sha256": "c9587b29cc093445cfe8a84b1e01dfe689ff3c9402d4e87b5c1690c6a438f839",
-      "owner": "ocaml/lib/passes/anf/ownership/InsertExpression.ml"
+      "owner": "ocaml/lib/passes/anf/ownership/RcInsertExpression.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/ownership/ReturnAnalysis.fs",
       "kind": "compiler",
       "sha256": "6ee32b36e7c0f792c1e8fe07ce1aa5c6b97c971742d59fa1f980cecedc25a165",
-      "owner": "ocaml/lib/passes/anf/ownership/ReturnAnalysis.ml"
+      "owner": "ocaml/lib/passes/anf/ownership/RcReturnAnalysis.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/ownership/SSARefCountInsertion.fs",
@@ -1290,13 +1290,13 @@
       "source": "src/DarkCompiler/passes/anf/ownership/ShapePlanning.fs",
       "kind": "compiler",
       "sha256": "1fa64b879e550338ff57333cadab9f4e53a3506c35cb9e236dfe6069de19905b",
-      "owner": "ocaml/lib/passes/anf/ownership/ShapePlanning.ml"
+      "owner": "ocaml/lib/passes/anf/ownership/RcShapePlanning.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/ownership/TypeFacts.fs",
       "kind": "compiler",
       "sha256": "0ead24c4bc42ced537f17ba705a59404392124ece8a7c9d65f003c28c71af777",
-      "owner": "ocaml/lib/passes/anf/ownership/TypeFacts.ml"
+      "owner": "ocaml/lib/passes/anf/ownership/RcTypeFacts.ml"
     },
     {
       "source": "src/DarkCompiler/passes/hir/ConstructFunctions.fs",
@@ -2736,7 +2736,7 @@
       "source": "src/Tests/compiler-passes/ownership/JoinTests.fs",
       "kind": "test-source",
       "sha256": "e3dad85d37c7e120f519215c9e0df47d595f75aae7222ed4bd8312d4b6fe6df2",
-      "owner": "ocaml/tests/compiler-passes/ownership/JoinTests.ml"
+      "owner": "ocaml/tests/compiler-passes/ownership/RcJoinTests.ml"
     },
     {
       "source": "src/Tests/compiler-passes/ownership/MemoryShapeTests.fs",
@@ -2814,7 +2814,7 @@
       "source": "src/Tests/compiler-passes/ownership/TypeFactTests.fs",
       "kind": "test-source",
       "sha256": "908a882a7c9cce4a74395cc1ead01832bb601fb31861786e48499a102361cbe8",
-      "owner": "ocaml/tests/compiler-passes/ownership/TypeFactTests.ml"
+      "owner": "ocaml/tests/compiler-passes/ownership/RcTypeFactTests.ml"
     },
     {
       "source": "src/Tests/compiler-passes/ownership/WholeFunctionOwnershipTests.fs",

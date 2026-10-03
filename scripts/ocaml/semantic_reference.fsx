@@ -2086,6 +2086,68 @@ let anfScalarOptimization source =
         encode typeof<ANF.Function list> (box (ANFDeadCodeElimination.filterReachableFunctions (Set.singleton (AST.functionId 1UL)) functions))
         encode typeof<AST.FunctionId list> (box (ANFDeadCodeElimination.getReachableStdlib (ANFDeadCodeElimination.buildCallGraph functions) [List.head functions] |> Set.toList))]
 
+let rcInternalCall<'a> moduleName name args : 'a =
+    let method = typeof<AST.SemanticType>.Assembly.GetType(moduleName).GetMethod(name, Reflection.BindingFlags.Static ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+    try unbox<'a> (method.Invoke(null,args)) with :? Reflection.TargetInvocationException as error -> raise error.InnerException
+let rcInsertion (source:string) =
+    let enc value = closureAnalysisEncode value
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let attempt action = enc (try Ok (action ()) with error -> Error error.Message)
+    let id index = ANF.TempId index
+    let v index = ANF.Var (id index)
+    let fid index = AST.functionId (uint64 index)
+    let scalar = [AST.TUnit; AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TBool; AST.TChar; AST.TFloat64; AST.TInt; AST.TInt128; AST.TUInt128; AST.TString; AST.TBlob; AST.TDateTime; AST.TInternalRawPtr; AST.TNever; AST.TVar source]
+    let managed = [AST.TList AST.TString; AST.TList AST.TInt64; AST.TList (AST.TFunction ([AST.TUnit],AST.TString)); AST.TTuple [AST.TString;AST.TInt64]; AST.TDict (AST.TString,AST.TList AST.TString); AST.TStream AST.TString; AST.TFunction ([AST.TUnit],AST.TString); AST.TRecord ("R",[]); AST.TSum ("S",[]); AST.TRecord ("S",[])]
+    let record : TypeRegistries.RecordTypeInfo = {TypeParams=[]; Fields=[source,AST.TString;"next",AST.TList AST.TString]}
+    let sum : MemoryModel.RcSumShapeInfo = {TypeParams=[]; Payloads=[0,None;1,Some AST.TString]; UnaryPayloadTags=Set.singleton 1}
+    let descriptor : ANF.RecordDescriptor = {SourceTypeName="R"; RuntimeTypeName="R"; TypeArgs=[]; Fields=record.Fields; ValueType=AST.TRecord ("R",[])}
+    let cases typ =
+        let bind operation body = ANF.Let (id 20,operation,body)
+        let make = ANF.Call (fid 200,[])
+        let ret=ANF.Return (v 20)
+        let unit=ANF.Return ANF.UnitLiteral
+        [ANF.Return (v 10); bind (ANF.TypedAtom (v 10,typ)) ret; bind (ANF.Atom (v 10)) ret;
+         bind make unit; bind make ret; bind make (ANF.Let (id 21,ANF.TypedAtom (v 20,typ),ANF.Return (v 21)));
+         bind make (ANF.Let (id 21,ANF.TupleAlloc [v 20],ANF.Return (v 21)));
+         bind make (ANF.Let (id 21,ANF.TupleAlloc [v 20;v 20],ANF.Return (v 21)));
+         bind make (ANF.Let (id 21,ANF.RawSlotInit (v 12,ANF.IntLiteral (ANF.Int64 8L),v 20,typ),unit));
+         bind make (ANF.Let (id 21,ANF.RawSlotInit (v 12,ANF.IntLiteral (ANF.Int64 8L),v 20,typ),ret));
+         bind make (ANF.Let (id 21,ANF.TypedAtom (v 20,typ),ANF.Let (id 22,ANF.TupleAlloc [v 21],ANF.Return (v 22))));
+         bind make (ANF.If (v 11,ret,unit));
+         bind make (ANF.Join ({Id=id 30;Type=AST.TInt64},ANF.If (v 11,ret,ANF.Return (v 10)),ANF.Let (id 21,make,ANF.Jump (id 30,ANF.IntLiteral (ANF.Int64 7L)))));
+         bind make (ANF.Let (id 21,ANF.Print (v 20,typ),ret));
+         bind (ANF.BorrowedCall (fid 200,[])) unit; bind (ANF.BorrowedCall (fid 200,[])) ret;
+         bind (ANF.IfValue (v 11,v 10,v 13)) ret;
+         bind (ANF.RawGet (v 12,ANF.IntLiteral (ANF.Int64 8L),None)) (ANF.Let (id 21,ANF.TypedAtom (v 20,typ),ANF.Return (v 21)));
+         bind (ANF.RawGet (v 12,ANF.IntLiteral (ANF.Int64 8L),None)) (ANF.Let (id 21,ANF.Atom (v 20),ANF.Let (id 22,ANF.RawSlotInit (v 12,ANF.IntLiteral (ANF.Int64 8L),v 21,typ),unit)));
+         bind (ANF.TupleGet (v 14,0)) ret; bind (ANF.RecordGet (descriptor,v 15,0)) ret;
+         bind (ANF.RecordAlloc (descriptor,[v 10;v 13])) unit;
+         bind (ANF.RecordClone (descriptor,v 15,[v 10;v 13])) ret;
+         bind (ANF.RecordReuse (descriptor,descriptor,v 15,[v 10;v 13])) ret;
+         bind (ANF.ClosureAlloc (fid 203,[v 10])) (ANF.Let (id 21,ANF.ClosureCall (v 20,[ANF.UnitLiteral]),ANF.Return (v 21)));
+         bind make (ANF.Let (id 21,ANF.TailCall (fid 100,[v 20;v 11]),ANF.Return (v 21)));
+         bind make (ANF.Let (id 21,ANF.TailCall (fid 200,[]),ANF.Return (v 21)));
+         bind make (ANF.Let (id 21,ANF.Call (fid 202,[v 13;v 20]),ANF.Return (v 21)))]
+    let observeType typ =
+        let functions = FunctionIdMap.ofList [fid 100,("loop",AST.TFunction ([typ;AST.TBool],typ)); fid 200,("make",AST.TFunction ([],typ)); fid 201,("observe",AST.TFunction ([AST.TInt64],AST.TUnit)); fid 202,("Darklang.Stdlib.List.__push_i64",AST.TFunction ([AST.TList typ;typ],AST.TList typ)); fid 203,("closure",AST.TFunction ([AST.TUnit],typ))]
+        let initial=Map.ofList [id 10,typ;id 11,AST.TBool;id 12,AST.TInternalRawPtr;id 13,typ;id 14,AST.TTuple [typ];id 15,AST.TRecord ("R",[])]
+        let ctx : RcTypeFacts.TypeContext = {TypeReg=Map.ofList ["R",record];VariantLookup=Map.empty;SumShapeReg=Map.ofList ["S",sum];FuncReg=functions;FuncParams=Map.empty;TempTypes=initial;ClosureFuncs=Map.empty;TypePlanning=RcTypeFacts.createRcTypePlanningContext ()}
+        tuple [attempt (fun () -> rcInternalCall<MemoryModel.RcShape> "RcShapePlanning" "rcShapeForType" [|box ctx;box typ|]);
+          cases typ |> List.map (fun body ->
+            let analyzed=RcReturnAnalysis.analyzeReturns Map.empty Map.empty body
+            let bindings=match analyzed with RcReturnAnalysis.RLet (id,operation,rest,_) -> attempt (fun () -> rcInternalCall<AST.SemanticType> "RcInsertExpression" "inferBindingType" [|box ctx;box id;box operation;box rest|]) | _ -> enc (Ok typ : Result<AST.SemanticType,string>)
+            tuple [bindings; [100;2147483647] |> List.map (fun first -> attempt (fun () -> rcInternalCall<ANF.AExpr * ANF.VarGen * Map<ANF.TempId,AST.SemanticType>> "RcInsertExpression" "insertRCInternal" [|box ctx;box body;box (ANF.VarGen first);box initial|])) |> list;
+              ["loop";"Darklang.Stdlib.List.__mapHelper_case"] |> List.map (fun name ->
+                let definition : ANF.Function = {Id=fid 100;Name=name;TypedParams=initial |> Map.toList |> List.map (fun (id,typ) -> {ANF.Id=id;Type=typ});ReturnType=typ;ReturnOwnership=ANF.OwnedReturn;Body=body}
+                tuple [attempt (fun () -> RefCountInsertion.insertRCInFunction ctx definition (ANF.VarGen 100));
+                  enc (SSAANF.convertFunctionBeforeRC 30 ctx definition);
+                  enc (SSAANF.convertFunction 30 (ANF.TypeMap.ofSeq (Map.toSeq initial)) definition);
+                  [OwnedIR.UnmanagedCallParameter;OwnedIR.BorrowedCallParameter;OwnedIR.ConsumedCallParameter;OwnedIR.UniqueCallParameter] |> List.map (fun ownership ->
+                    let contract : OwnedIR.CallSignature = {Parameters=definition.TypedParams |> List.map (fun _ -> ownership);Result=OwnedIR.ProducedCallResult}
+                    enc (rcInternalCall<Result<unit,string>> "RefCountInsertion" "verifyOwnershipContracts" [|box ctx;box (FunctionIdMap.ofList [fid 100,contract]);box (ANF.Program ([definition],ANF.Return ANF.UnitLiteral))|])) |> list]) |> list]) |> list]
+    scalar @ managed |> List.map observeType |> list
+
 let expressionLowering source =
     let tuple values=namedArray "tuple" (Array.ofList values)
     let list values=JsonArray(Array.ofList values) :> JsonNode
@@ -2216,6 +2278,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "rc-insertion" -> rcInsertion source
         | "expression-lowering" -> expressionLowering source
         | "atom-lowering" -> atomLowering source
         | "lowering-types" -> loweringTypes source

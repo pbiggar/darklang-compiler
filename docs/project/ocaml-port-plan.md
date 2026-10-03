@@ -680,5 +680,21 @@ failure diagnostics retain complete structural layouts. Coverage is 142/391
 complete pairs. The native build remains warning-free and passes 309/309 units.
 The expression-lowering boundary matrix now matches F# for complete expression,
 atom, and bound-atom results, including list/constructor guards and Int32 generator
-overflow. Broader expression-lowering corpus verification is still running;
-declaration-conversion parity and executable-byte acceptance remain outstanding.
+overflow. All 1,392 expression-lowering probes now match the F# oracle. Declaration-
+conversion parity and executable-byte acceptance remain outstanding.
+
+
+Reference-count type facts, return analysis, shape planning, cleanup, expression
+insertion, and function/program orchestration are fully translated. SSA ANF
+construction preserves definition-site type recovery, sibling-definition
+freshening, reserved backend IDs, and lexical joins. Coverage is 151/391 complete
+implementation/interface pairs. The warning-free native build passes 321/321
+translated units, including the original type-fact and join cleanup/interface
+checks. A complete differential matrix matches F# for 31 type families × 28
+expression/control-flow cases, two fresh-variable starting points (including
+Int32 overflow), two function names, four ownership-contract parameter modes,
+and both pre-RC and post-RC SSA construction. The matrix compares complete
+expressions/functions, fresh IDs, type tables, SSA blocks, and diagnostics.
+Full original RC test groups, SSA optimizers/elaboration, remaining backend
+passes, native DSL/end-to-end integration, and executable-byte/Valgrind acceptance
+remain outstanding; this checkpoint does not claim the port is complete.

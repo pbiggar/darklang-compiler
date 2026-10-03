@@ -1,3 +1,4 @@
+[@@@warning "-42"]
 (* foundations_main.ml - Execute foundation tests before runner integration. *)
 let () =
   if Array.to_list Sys.argv = [Sys.argv.(0); "--dsl-probe"] then DSL_probe.run ()
@@ -14,12 +15,29 @@ let () =
           path ^ ": " ^ test.TypeCheckingFormat.name, (fun () ->
             let result = TypeCheckingTestRunner.runTypeCheckingTest test in
             if result.TypeCheckingTestRunner.success then Ok () else Error result.TypeCheckingTestRunner.message)) tests) in
+  let rcTests =
+    let open Dark_compiler in
+    let open ANF in
+    let open RcJoinTests in [
+      "Join cleanup releases locals at transfer and enclosing owners after continuation", testJoinCleanupPaths;
+      "Join verifier accepts enclosing captures and nested outward transfers", (fun () -> verifyJoin (Let (TempId 2, Atom joinValue, Join (joinParameter, Return (Var (TempId 2)), Join ({id=TempId 3; typ=AST.TBool}, Jump (TempId 1, joinValue), Jump (TempId 3, BoolLiteral true))))));
+      "Join verifier accepts immediate scalar block arguments", (fun () -> verifyJoin (Join ({id=TempId 3; typ=AST.TInt8}, Return joinValue, Jump (TempId 3, IntLiteral (Int8 1)))));
+      "Join verifier rejects branch-local continuation capture", rejectsJoin "outside lexical scope" (Join (joinParameter, Return (Var (TempId 2)), Let (TempId 2, Atom joinValue, Jump (TempId 1, joinValue))));
+      "Join verifier rejects parameter use in entry", rejectsJoin "outside lexical scope" (Join (joinParameter, Return (Var (TempId 1)), Jump (TempId 1, Var (TempId 1))));
+      "Join verifier rejects recursive target", rejectsJoin "target" (Join (joinParameter, Jump (TempId 1, joinValue), Jump (TempId 1, joinValue)));
+      "Join verifier rejects mismatched argument", rejectsJoin "expects" (Join (joinParameter, Return joinValue, Jump (TempId 1, BoolLiteral true)));
+      "Join verifier rejects managed parameter", rejectsJoin "unsupported block argument" (Join ({joinParameter with typ=AST.TString}, Return joinValue, Jump (TempId 1, StringLiteral "value")));
+      "Join verifier rejects returning entry", rejectsJoin "instead of transferring" (Join (joinParameter, Return joinValue, Return joinValue));
+      "Join verifier rejects target shadowing", rejectsJoin "shadows" (Let (TempId 1, Atom joinValue, Join (joinParameter, Return joinValue, Jump (TempId 1, joinValue))));
+      "inferCExprType Call returns function return type", RcTypeFactTests.testInferCallReturnsFunctionReturnType;
+      "malformed __raw_get_ intrinsic does not infer Int64", RcTypeFactTests.testMalformedRawGetIntrinsicDoesNotInferInt64
+    ] in
   let results =
     let syntax = Sys.readdir "src/Tests/syntax" |> Array.to_list
       |> List.filter (fun path -> Filename.check_suffix path ".syntax")
       |> List.map (Filename.concat "src/Tests/syntax") |> Array.of_list in
     List.map (fun (name, run) -> name, run ())
-      (MemoryShapeTests.tests @ ANFOptimizeTests.tests @ TailCallDetectionTests.tests @ HIRConstructionTests.tests @ OwnershipVariantSchedulingTests.tests @ OwnershipVariantMaterializationTests.tests @ OwnershipVariantSelectionTests.tests @ OwnedFunctionGroupInferenceTests.tests @ OwnedFunctionGroupTests.tests @ WholeFunctionOwnershipTests.tests @ RecursiveOwnershipInferenceTests.tests @ OwnershipUniquenessInferenceTests.tests @ OwnedHIRVerificationTests.tests @ HIRVerificationTests.tests @ BitsetTests.tests @ PlatformTests.tests @ TestRunnerArgsTests.tests @ ParserTests.tests @ NameResolutionTests.tests
+      (rcTests @ MemoryShapeTests.tests @ ANFOptimizeTests.tests @ TailCallDetectionTests.tests @ HIRConstructionTests.tests @ OwnershipVariantSchedulingTests.tests @ OwnershipVariantMaterializationTests.tests @ OwnershipVariantSelectionTests.tests @ OwnedFunctionGroupInferenceTests.tests @ OwnedFunctionGroupTests.tests @ WholeFunctionOwnershipTests.tests @ RecursiveOwnershipInferenceTests.tests @ OwnershipUniquenessInferenceTests.tests @ OwnedHIRVerificationTests.tests @ HIRVerificationTests.tests @ BitsetTests.tests @ PlatformTests.tests @ TestRunnerArgsTests.tests @ ParserTests.tests @ NameResolutionTests.tests
        @ typing @ TypeCheckingFormatTests.tests @ TypeCheckingTestRunnerTests.tests
        @ SyntaxTestRunner.tests syntax @ FormattingRoundtripTests.tests [|"src/Tests/formatting-roundtrip/compiler.roundtrip"|])
   in
