@@ -157,6 +157,17 @@ type CliOperation =
     | SocketReceiveTimeout
     | SocketSendTimeout
     | SocketClose
+    | SocketBind4
+    | SocketListen
+    | SocketAccept
+    | SocketCloexec
+    | SocketReuseAddress
+    | SocketPoll
+    | SignalBlock
+    | SignalRestore
+    | SignalPending
+    | SignalWait
+    | MonotonicTime
     | SecureRandomFill
 
 /// Immutable nominal metadata carried through fixed-block lowering for field

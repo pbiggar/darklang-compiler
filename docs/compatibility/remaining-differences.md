@@ -29,7 +29,7 @@ parentheses exercise those implementations successfully.
 | Surface | Remaining difference |
 | --- | --- |
 | HTTP client | Buffered HTTP/HTTPS `request`, `get`, `post`, `put`, `options`, `delete`, and `head`, plus response-body `stream`, are implemented in Dark. The [HTTP ledger](stdlib/html-and-http.md#additional-pure-http-surfaces) records the supported transport and TLS profile; the upstream external-network fixture remains disabled. |
-| HTTP server | Pure `getMethod`, `get`, and `post` route construction is present. `serve` remains absent because there is no HTTP server host. |
+| HTTP server | `serve`, configuration, and the pure routing helpers are implemented with bounded sequential native IPv4 HTTP/1.1 service on Linux ARM64. The [HTTP ledger](stdlib/html-and-http.md#additional-pure-http-surfaces) records lifecycle behavior and remaining platform, concurrency, compression, and TLS work. |
 | SQLite | The upstream `Stdlib.Sqlite` value, query, execution, column, and conversion API is absent. |
 | Language tooling | Parsed-file shape, semantic tokenization, builtin introspection, runtime-value pretty printing, and runtime-value promotion are incomplete or absent. The snapshot-backed `ValueSearch` subset does not provide the interpreter's live package service. |
 | Host APIs | The documented CLI filesystem/environment and POSIX subsets are implemented. Broader descriptor, download, watch, lock, and daemon surfaces have no parity claim. |

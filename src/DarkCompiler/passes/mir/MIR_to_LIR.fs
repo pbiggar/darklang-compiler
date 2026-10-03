@@ -48,6 +48,17 @@ let convertCliOperation (operation: MIR.CliOperation) : LIR.CliOperation =
     | MIR.SocketReceiveTimeout -> LIR.SocketReceiveTimeout
     | MIR.SocketSendTimeout -> LIR.SocketSendTimeout
     | MIR.SocketClose -> LIR.SocketClose
+    | MIR.SocketBind4 -> LIR.SocketBind4
+    | MIR.SocketListen -> LIR.SocketListen
+    | MIR.SocketAccept -> LIR.SocketAccept
+    | MIR.SocketCloexec -> LIR.SocketCloexec
+    | MIR.SocketReuseAddress -> LIR.SocketReuseAddress
+    | MIR.SocketPoll -> LIR.SocketPoll
+    | MIR.SignalBlock -> LIR.SignalBlock
+    | MIR.SignalRestore -> LIR.SignalRestore
+    | MIR.SignalPending -> LIR.SignalPending
+    | MIR.SignalWait -> LIR.SignalWait
+    | MIR.MonotonicTime -> LIR.MonotonicTime
     | MIR.SecureRandomFill -> LIR.SecureRandomFill
 
 open ResultList

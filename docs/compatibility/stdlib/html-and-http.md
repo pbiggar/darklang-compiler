@@ -79,8 +79,40 @@ invalid URLs, forwarded header errors, and guest private-address restrictions.
 
 `Stdlib.Http.Request.header` performs the upstream case-insensitive lookup.
 `Stdlib.HttpServer.get` and `post` construct handler records and `getMethod`
-reads that header with the upstream GET default. Starting a server remains a
-host boundary, so `serve` is not present.
+reads that header with the upstream GET default. The remaining pure routing
+helpers are ported too: route parsing and matching, handler selection, path and
+path-parameter lookup, and `routeRequest`. The pinned upstream matcher requires
+equal segment counts even for wildcards: `/files/*path` matches `/files/a`, but
+does not match `/files/a/b`.
+
+`Stdlib.HttpServer.Config.defaults port` supplies the upstream 30 MiB request
+body cap and the three enabled policy flags. `HttpServer.serve config handler
+onListening` now binds a native IPv4 listener, calls `onListening` after a
+successful bind, and serves HTTP/1.1 sequentially until SIGINT or SIGTERM.
+Request URLs retain their raw path and query bytes; actual request methods are
+prepended as `x-http-method`. Forwarded HTTPS canonicalization, optional
+standard Server/HSTS headers, ordered duplicate response headers, HEAD body
+suppression, and stdout request logging are implemented in Dark. An oversized
+declared or chunked body receives 413 before the missing body bytes are read.
+`Expect: 100-continue` is acknowledged only after framing and body-limit checks.
+
+This initial server is developed and verified on Linux ARM64. Linux native
+lowering also exists for x86_64, without a cross-target verification claim.
+macOS serving returns an explicit clock-unavailable error until the monotonic
+clock boundary is implemented there. The listener owns and closes accepted
+connections, and each response closes its connection. Reads and writes have
+10-second monotonic deadlines; headers retain the existing wire parser's line,
+count, and size caps. Configured body limits range from zero through 100 MiB,
+and request wire buffering is capped at the body limit plus 1 MiB for framing.
+Concurrency, IPv6 listeners, persistent connections, response compression,
+interpreter telemetry integration, and server-side TLS remain follow-up work.
+
+`src/Tests/e2e/http_server.e2e` covers routing, configuration, framing limits,
+and listener ownership. `python3 scripts/test_http_server_peer.py` exercises
+the compiled server against local TCP clients, including fragmented and binary
+bodies, 413/400/408/417/500 responses, HEAD, duplicate headers, bind failure,
+reset clients, signal shutdown during a stalled request, rebinding, and
+compiled leak accounting. Its artifacts remain in `TestResults/ai/`.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the

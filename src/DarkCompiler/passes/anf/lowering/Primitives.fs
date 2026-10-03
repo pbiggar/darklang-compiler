@@ -431,6 +431,17 @@ let tryCliIntrinsic (funcName: string) (args: ANF.Atom list) : ANF.CExpr option 
             | "Darklang.Stdlib.Network.__receiveTimeout" -> Some ANF.SocketReceiveTimeout
             | "Darklang.Stdlib.Network.__sendTimeout" -> Some ANF.SocketSendTimeout
             | "Darklang.Stdlib.Network.__close" -> Some ANF.SocketClose
+            | "Darklang.Stdlib.Network.__bind4" -> Some ANF.SocketBind4
+            | "Darklang.Stdlib.Network.__listen" -> Some ANF.SocketListen
+            | "Darklang.Stdlib.Network.__accept" -> Some ANF.SocketAccept
+            | "Darklang.Stdlib.Network.__cloexec" -> Some ANF.SocketCloexec
+            | "Darklang.Stdlib.Network.__reuseAddress" -> Some ANF.SocketReuseAddress
+            | "Darklang.Stdlib.Network.__poll" -> Some ANF.SocketPoll
+            | "Darklang.Stdlib.Network.__signalBlock" -> Some ANF.SignalBlock
+            | "Darklang.Stdlib.Network.__signalRestore" -> Some ANF.SignalRestore
+            | "Darklang.Stdlib.Network.__signalPending" -> Some ANF.SignalPending
+            | "Darklang.Stdlib.Network.__signalWait" -> Some ANF.SignalWait
+            | "Darklang.Stdlib.Network.__monotonic" -> Some ANF.MonotonicTime
             | "Darklang.Stdlib.Crypto.__secureRandomFill" -> Some ANF.SecureRandomFill
             | _ -> None
         operation |> Option.map (fun op -> ANF.CliNative (op, args))

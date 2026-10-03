@@ -256,7 +256,9 @@ let internal emitCliNative (ctx: FuncCtx) (dest: LIR.Reg) (operation: LIR.CliOpe
                         loads @
                         [X86_64.MOV_load (X86_64.RDX, X86_64.RSI, 8)
                          X86_64.ADD_imm (X86_64.RSI, 16)] @
-                        loadImm64 X86_64.RAX (int64 syscalls.Write) @ [X86_64.SYSCALL] @ finish)
+                        loadImm64 X86_64.R10 (Platform.socketConstantsFor Platform.Linux).NoSignal @
+                        loadImm64 X86_64.R8 0L @ loadImm64 X86_64.R9 0L @
+                        loadImm64 X86_64.RAX (int64 syscalls.SendTo) @ [X86_64.SYSCALL] @ finish)
             | LIR.SocketReceive, [descriptor; buffer; length] ->
                 loadSocketArgs [descriptor; buffer; length] [X86_64.RDI; X86_64.RSI; X86_64.RDX]
                 |> Result.map (fun loads ->
@@ -274,6 +276,43 @@ let internal emitCliNative (ctx: FuncCtx) (dest: LIR.Reg) (operation: LIR.CliOpe
                         loadImm64 X86_64.RAX (int64 syscalls.SetSockOpt) @
                         [X86_64.SYSCALL] @ finish)
             | _ -> Error "Invalid socket operation arguments"
+        | LIR.SocketBind4 | LIR.SocketListen | LIR.SocketAccept | LIR.SocketCloexec
+        | LIR.SocketReuseAddress | LIR.SocketPoll | LIR.SignalBlock | LIR.SignalRestore
+        | LIR.SignalPending | LIR.SignalWait | LIR.MonotonicTime ->
+            let constants = Platform.socketConstantsFor Platform.Linux
+            let finish = if destReg = X86_64.RAX then [] else [X86_64.MOV_reg (destReg, X86_64.RAX)]
+            let emit operands registers setup number =
+                loadSocketArgs operands registers
+                |> Result.map (fun loads -> loads @ setup @ loadImm64 X86_64.RAX (int64 number) @ [X86_64.SYSCALL] @ finish)
+            match operation, args with
+            | LIR.SocketBind4, [descriptor; address] ->
+                emit [descriptor; address] [X86_64.RDI; X86_64.RSI] (loadImm64 X86_64.RDX 16L) syscalls.Bind
+            | LIR.SocketListen, [descriptor] ->
+                emit [descriptor] [X86_64.RDI] (loadImm64 X86_64.RSI 128L) syscalls.Listen
+            | LIR.SocketAccept, [descriptor] ->
+                emit [descriptor] [X86_64.RDI] (loadImm64 X86_64.RSI 0L @ loadImm64 X86_64.RDX 0L) syscalls.Accept
+            | LIR.SocketCloexec, [descriptor] ->
+                emit [descriptor] [X86_64.RDI] (loadImm64 X86_64.RSI 2L @ loadImm64 X86_64.RDX 1L) syscalls.Fcntl
+            | LIR.SocketReuseAddress, [descriptor; enabled] ->
+                emit [descriptor; enabled] [X86_64.RDI; X86_64.R10]
+                    (loadImm64 X86_64.RSI (int64 constants.SocketLevel) @ loadImm64 X86_64.RDX (int64 constants.ReuseAddress) @ loadImm64 X86_64.R8 4L) syscalls.SetSockOpt
+            | LIR.SocketPoll, [pollfd; timeout] ->
+                emit [pollfd; timeout] [X86_64.RDI; X86_64.RDX]
+                    (loadImm64 X86_64.RSI 1L @ loadImm64 X86_64.R10 0L @ loadImm64 X86_64.R8 8L) syscalls.Poll
+            | LIR.SignalBlock, [mask; previous] ->
+                emit [mask; previous] [X86_64.RSI; X86_64.RDX]
+                    (loadImm64 X86_64.RDI (int64 constants.BlockSignal) @ loadImm64 X86_64.R10 8L) syscalls.SignalMask
+            | LIR.SignalRestore, [previous] ->
+                emit [previous] [X86_64.RSI]
+                    (loadImm64 X86_64.RDI (int64 constants.RestoreSignal) @ loadImm64 X86_64.RDX 0L @ loadImm64 X86_64.R10 8L) syscalls.SignalMask
+            | LIR.SignalPending, [mask] ->
+                emit [mask] [X86_64.RDI] (loadImm64 X86_64.RSI 8L) syscalls.SignalPending
+            | LIR.SignalWait, [mask; info] ->
+                emit [mask; info] [X86_64.RDI; X86_64.RSI]
+                    (loadImm64 X86_64.RDX 0L @ loadImm64 X86_64.R10 8L) syscalls.SignalWait
+            | LIR.MonotonicTime, [time] ->
+                emit [time] [X86_64.RSI] (loadImm64 X86_64.RDI 1L) syscalls.Gettimeofday
+            | _ -> Error "Invalid listener or signal operation arguments"
         | LIR.SocketClose ->
             match args with
             | [descriptor] ->

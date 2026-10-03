@@ -252,6 +252,17 @@ let inferCExprType (ctx: TypeContext) (cexpr: CExpr) : AST.SemanticType option =
         | HostOS | HostArchitecture | GetPid | GetUid | CpuCount | SpawnProcess | FileCreateExclusive
         | SocketTcp4 | SocketTcp6 | SocketUdp4 | SocketUdp6 | SocketConnect4 | SocketConnect6
         | SocketSend | SocketReceive | SocketReceiveTimeout | SocketSendTimeout | SocketClose
+        | SocketBind4
+        | SocketListen
+        | SocketAccept
+        | SocketCloexec
+        | SocketReuseAddress
+        | SocketPoll
+        | SignalBlock
+        | SignalRestore
+        | SignalPending
+        | SignalWait
+        | MonotonicTime
         | SecureRandomFill -> Some AST.TInt64
     | IfValue (_, thenAtom, _) -> inferAtomType ctx thenAtom
     | Call (funcName, args)

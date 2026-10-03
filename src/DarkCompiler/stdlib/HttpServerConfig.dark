@@ -1,0 +1,22 @@
+// HttpServerConfig.dark - Upstream HTTP serving configuration and defaults.
+
+module Darklang.Stdlib.HttpServer.Config
+
+type Config = {
+    port: Int,
+    maxBodyBytes: Int,
+    injectStandardHeaders: Bool,
+    canonicalizeFromForwardedProto: Bool,
+    logRequests: Bool
+}
+
+val defaultMaxBodyBytes = 31457280
+
+let defaults (port: Int) : Stdlib.HttpServer.Config.Config =
+    Stdlib.HttpServer.Config.Config {
+        port = port,
+        maxBodyBytes = Stdlib.HttpServer.Config.defaultMaxBodyBytes,
+        injectStandardHeaders = true,
+        canonicalizeFromForwardedProto = true,
+        logRequests = true
+    }

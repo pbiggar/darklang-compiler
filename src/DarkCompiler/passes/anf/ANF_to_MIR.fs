@@ -159,6 +159,17 @@ let convertCliOperation (operation: ANF.CliOperation) : MIR.CliOperation =
     | ANF.SocketReceiveTimeout -> MIR.SocketReceiveTimeout
     | ANF.SocketSendTimeout -> MIR.SocketSendTimeout
     | ANF.SocketClose -> MIR.SocketClose
+    | ANF.SocketBind4 -> MIR.SocketBind4
+    | ANF.SocketListen -> MIR.SocketListen
+    | ANF.SocketAccept -> MIR.SocketAccept
+    | ANF.SocketCloexec -> MIR.SocketCloexec
+    | ANF.SocketReuseAddress -> MIR.SocketReuseAddress
+    | ANF.SocketPoll -> MIR.SocketPoll
+    | ANF.SignalBlock -> MIR.SignalBlock
+    | ANF.SignalRestore -> MIR.SignalRestore
+    | ANF.SignalPending -> MIR.SignalPending
+    | ANF.SignalWait -> MIR.SignalWait
+    | ANF.MonotonicTime -> MIR.MonotonicTime
     | ANF.SecureRandomFill -> MIR.SecureRandomFill
 
 /// Precomputed descriptions for primitive ops (avoids formatting on hot path)

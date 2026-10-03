@@ -317,7 +317,7 @@ let __chunkSize (line: String) : Stdlib.Result.Result<Int64, Stdlib.HttpWire.Par
     if digits == "" then Error (Stdlib.HttpWire.ParseError.Invalid "Invalid chunk size")
     else Stdlib.HttpWire.__chunkSizeDigits digits 0L (Stdlib.String.__byteLength digits) 0L
 
-let __chunks (blob: Blob) (offset: Int64) (total: Int64) (count: Int64) (acc: List<Blob>) : Stdlib.Result.Result<(Blob * Int64), Stdlib.HttpWire.ParseError> =
+let __chunksWithLimit (limit: Int64) (blob: Blob) (offset: Int64) (total: Int64) (count: Int64) (acc: List<Blob>) : Stdlib.Result.Result<(Blob * Int64), Stdlib.HttpWire.ParseError> =
     if count > 100000L then Error (Stdlib.HttpWire.ParseError.Invalid "Too many HTTP chunks")
     else
         match Stdlib.HttpWire.__line blob offset with
@@ -330,7 +330,7 @@ let __chunks (blob: Blob) (offset: Int64) (total: Int64) (count: Int64) (acc: Li
                     match Stdlib.HttpWire.__headers blob dataStart 0L dataStart [] with
                     | Error error -> Error error
                     | Ok ((_, next)) -> Ok ((Stdlib.Blob.concat (Stdlib.List.reverse acc), next))
-                else if total + size > 104857600L then
+                else if total + size > limit then
                     Error (Stdlib.HttpWire.ParseError.Invalid "HTTP body too large")
                 else
                     let length = Stdlib.Blob.__byteLength blob in
@@ -340,8 +340,11 @@ let __chunks (blob: Blob) (offset: Int64) (total: Int64) (count: Int64) (acc: Li
                         Error (Stdlib.HttpWire.ParseError.Invalid "Malformed HTTP chunk")
                     else
                         let chunk = Stdlib.Blob.slice blob (Stdlib.Int.fromInt64 dataStart) (Stdlib.Int.fromInt64 size) in
-                        Stdlib.HttpWire.__chunks blob (dataStart + size + 2L) (total + size) (count + 1L)
+                        Stdlib.HttpWire.__chunksWithLimit limit blob (dataStart + size + 2L) (total + size) (count + 1L)
                             (Stdlib.List.push acc chunk)
+
+let __chunks (blob: Blob) (offset: Int64) (total: Int64) (count: Int64) (acc: List<Blob>) : Stdlib.Result.Result<(Blob * Int64), Stdlib.HttpWire.ParseError> =
+    Stdlib.HttpWire.__chunksWithLimit 104857600L blob offset total count acc
 
 let __responseAt (status: Int64) (headers: List<(String * String)>) (body: Blob) (blob: Blob) (next: Int64) : Stdlib.HttpWire.ParsedResponse =
     let length = Stdlib.Blob.__byteLength blob in
@@ -477,7 +480,7 @@ let __parsedRequest (method: String) (target: String) (version: String) (headers
         remaining = Stdlib.Blob.slice wire (Stdlib.Int.fromInt64 next) (Stdlib.Int.fromInt64 (length - next))
     }
 
-let parseRequest (blob: Blob) : Stdlib.Result.Result<Stdlib.HttpWire.ParsedRequest, Stdlib.HttpWire.ParseError> =
+let parseRequestWithLimit (limit: Int64) (blob: Blob) : Stdlib.Result.Result<Stdlib.HttpWire.ParsedRequest, Stdlib.HttpWire.ParseError> =
     match Stdlib.HttpWire.__line blob 0L with
     | Error error -> Error error
     | Ok ((requestLine, afterLine)) ->
@@ -505,7 +508,7 @@ let parseRequest (blob: Blob) : Stdlib.Result.Result<Stdlib.HttpWire.ParsedReque
                                 match maybeLength with
                                 | Some _ -> Error (Stdlib.HttpWire.ParseError.Invalid "Ambiguous body framing")
                                 | None ->
-                                    match Stdlib.HttpWire.__chunks blob bodyStart 0L 0L [] with
+                                    match Stdlib.HttpWire.__chunksWithLimit limit blob bodyStart 0L 0L [] with
                                     | Error error -> Error error
                                     | Ok ((body, next)) ->
                                         Ok (Stdlib.HttpWire.__parsedRequest method target version headers body blob next)
@@ -514,11 +517,16 @@ let parseRequest (blob: Blob) : Stdlib.Result.Result<Stdlib.HttpWire.ParsedReque
                                 | None ->
                                     Ok (Stdlib.HttpWire.__parsedRequest method target version headers Stdlib.Blob.empty blob bodyStart)
                                 | Some size ->
-                                    if Stdlib.Blob.__byteLength blob - bodyStart < size then
+                                    if size > limit then
+                                        Error (Stdlib.HttpWire.ParseError.Invalid "HTTP body too large")
+                                    else if Stdlib.Blob.__byteLength blob - bodyStart < size then
                                         Error Stdlib.HttpWire.ParseError.Incomplete
                                     else
                                         let body = Stdlib.Blob.slice blob (Stdlib.Int.fromInt64 bodyStart) (Stdlib.Int.fromInt64 size) in
                                         Ok (Stdlib.HttpWire.__parsedRequest method target version headers body blob (bodyStart + size))
+
+let parseRequest (blob: Blob) : Stdlib.Result.Result<Stdlib.HttpWire.ParsedRequest, Stdlib.HttpWire.ParseError> =
+    Stdlib.HttpWire.parseRequestWithLimit 104857600L blob
 
 let __headerValueValid (value: String) (index: Int64) (length: Int64) : Bool =
     if index >= length then true

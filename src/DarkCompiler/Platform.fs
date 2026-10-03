@@ -92,6 +92,15 @@ type SyscallNumbers = {
     Socket: uint16 // Create a socket
     Connect: uint16 // Connect to a checked address
     SetSockOpt: uint16 // Set socket I/O timeouts
+    Bind: uint16
+    Listen: uint16
+    Accept: uint16
+    Fcntl: uint16
+    Poll: uint16
+    SignalMask: uint16
+    SignalPending: uint16
+    SignalWait: uint16
+    SendTo: uint16
 }
 
 let macOSARM64SyscallNumbers : SyscallNumbers = {
@@ -112,6 +121,15 @@ let macOSARM64SyscallNumbers : SyscallNumbers = {
     Socket = 97us
     Connect = 98us
     SetSockOpt = 105us
+    Bind = 104us
+    Listen = 106us
+    Accept = 30us
+    Fcntl = 92us
+    Poll = 230us
+    SignalMask = 48us
+    SignalPending = 52us
+    SignalWait = 330us
+    SendTo = 133us
 }
 
 let linuxARM64SyscallNumbers : SyscallNumbers = {
@@ -132,6 +150,15 @@ let linuxARM64SyscallNumbers : SyscallNumbers = {
     Socket = 198us
     Connect = 203us
     SetSockOpt = 208us
+    Bind = 200us
+    Listen = 201us
+    Accept = 202us
+    Fcntl = 25us
+    Poll = 73us
+    SignalMask = 135us
+    SignalPending = 136us
+    SignalWait = 137us
+    SendTo = 206us
 }
 
 let linuxX86_64SyscallNumbers : SyscallNumbers = {
@@ -152,6 +179,15 @@ let linuxX86_64SyscallNumbers : SyscallNumbers = {
     Socket = 41us
     Connect = 42us
     SetSockOpt = 54us
+    Bind = 49us
+    Listen = 50us
+    Accept = 43us
+    Fcntl = 72us
+    Poll = 271us
+    SignalMask = 14us
+    SignalPending = 127us
+    SignalWait = 128us
+    SendTo = 44us
 }
 
 /// Get syscall numbers for the given (OS, Arch) pair.
@@ -169,6 +205,10 @@ type SocketConstants = {
     SocketLevel: uint16
     ReceiveTimeout: uint16
     SendTimeout: uint16
+    ReuseAddress: uint16
+    NoSignal: int64
+    BlockSignal: uint16
+    RestoreSignal: uint16
 }
 
 let socketConstantsFor (os: OS) : SocketConstants =
@@ -180,7 +220,11 @@ let socketConstantsFor (os: OS) : SocketConstants =
           DatagramCloexec = 268435458L
           SocketLevel = 65535us
           ReceiveTimeout = 4102us
-          SendTimeout = 4101us }
+          SendTimeout = 4101us
+          ReuseAddress = 4us
+          NoSignal = 524288L
+          BlockSignal = 1us
+          RestoreSignal = 3us }
     | Linux ->
         { AddressFamily4 = 2us
           AddressFamily6 = 10us
@@ -188,7 +232,11 @@ let socketConstantsFor (os: OS) : SocketConstants =
           DatagramCloexec = 524290L
           SocketLevel = 1us
           ReceiveTimeout = 20us
-          SendTimeout = 21us }
+          SendTimeout = 21us
+          ReuseAddress = 2us
+          NoSignal = 16384L
+          BlockSignal = 0us
+          RestoreSignal = 2us }
 
 /// Check if code signing is required for this platform
 let requiresCodeSigning (os: OS) : bool =
