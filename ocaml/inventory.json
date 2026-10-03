@@ -1458,7 +1458,7 @@
       "source": "src/DarkCompiler/passes/mir/optimization/ControlFlow.fs",
       "kind": "compiler",
       "sha256": "b385640486351c9cd54d5415cf198998e354fe0b38e9ab26b70c6d5e51cd5b7c",
-      "owner": "ocaml/lib/passes/mir/optimization/ControlFlow.ml"
+      "owner": "ocaml/lib/passes/mir/optimization/MIRControlFlow.ml"
     },
     {
       "source": "src/DarkCompiler/passes/mir/optimization/CopyPropagation.fs",
@@ -1494,7 +1494,7 @@
       "source": "src/DarkCompiler/passes/mir/optimization/LoopTopology.fs",
       "kind": "compiler",
       "sha256": "2be01d589f1532fecfbc6eec34b7830643ead0ae21c3d0e0a37dc2688d291430",
-      "owner": "ocaml/lib/passes/mir/optimization/LoopTopology.ml"
+      "owner": "ocaml/lib/passes/mir/optimization/MIRLoopTopology.ml"
     },
     {
       "source": "src/DarkCompiler/passes/mir/optimization/SparseConditionalConstants.fs",

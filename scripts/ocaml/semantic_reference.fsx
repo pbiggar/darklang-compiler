@@ -2089,6 +2089,67 @@ let anfScalarOptimization source =
 let rcInternalCall<'a> moduleName name args : 'a =
     let method = typeof<AST.SemanticType>.Assembly.GetType(moduleName).GetMethod(name, Reflection.BindingFlags.Static ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
     try unbox<'a> (method.Invoke(null,args)) with :? Reflection.TargetInvocationException as error -> raise error.InnerException
+let mirSSAObservation (source:string) =
+    let enc value=closureAnalysisEncode value
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let attempt action=enc (try Ok (action ()) with error -> Error error.Message)
+    let id value=MIR.VReg value
+    let v value=MIR.Register (id value)
+    let label text=MIR.Label text
+    let block name instructions terminator : MIR.BasicBlock={Label=label name;Instrs=instructions;Terminator=terminator}
+    let graph entry (blocks:MIR.BasicBlock list) : MIR.CFG={Entry=label entry;Blocks=blocks |> List.map (fun block -> block.Label,block) |> Map.ofList}
+    let graphs typ=
+        let move value=MIR.Mov (id 1,value,Some typ)
+        let left=block "left" [move (v 2)] (MIR.Jump (label "join"))
+        let right=block "right" [move (MIR.Int64Const 0L)] (MIR.Jump (label "join"))
+        let join=block "join" [] (MIR.Ret (v 1))
+        let entry=block source [] (MIR.Branch (v 2,label "left",label "right"))
+        let header=block "header" [] (MIR.Branch (v 2,label "body",label "exit"))
+        let body=block "body" [move (v 1)] (MIR.Jump (label "header"))
+        let exit=block "exit" [] (MIR.Ret (v 1))
+        [graph source [block source [MIR.Mov (id 1,v 1,Some typ)] (MIR.Ret (v 1))];
+         graph source [entry;left;right;join];
+         graph source [entry;left;{right with Instrs=[MIR.Mov (id 1,v 2,Some AST.TBool)]};join];
+         graph source [entry;left;right;join;block "unreachable" [move (v 1)] (MIR.Ret (v 1))];
+         graph source [block source [move (v 2)] (MIR.Jump (label "header"));header;body;exit];
+         graph source [block source [move (v 2)] (MIR.Branch (v 2,label "join",label "join"));join];
+         graph source [block source [MIR.RuntimeErrorString (v 1)] (MIR.Ret (v 2))];
+         graph source [block source [MIR.Mov (id 2147474000,v 2,Some typ);MIR.Mov (id 1,MIR.Register (id 2147474000),Some typ)] (MIR.Ret (v 1))];
+         graph source [block source [] (MIR.Jump (label "missing"))];graph source [];
+         graph source [block source [MIR.Phi (id 1,[v 2,label source;v 1,label "unreachable"],Some typ)] (MIR.Ret (v 1));block "unreachable" [] (MIR.Jump (label source))];
+   graph source [block source [MIR.Mov (id 3, v 2, Some typ)] (MIR.Jump (label "middle")); block "middle" [MIR.Phi (id 4, [v 3, label source], Some typ)] (MIR.Jump (label "exit")); block "exit" [MIR.Phi (id 5, [v 4, label "middle"], Some typ)] (MIR.Ret (v 5))];
+   graph source [entry; {left with Instrs = []}; {right with Instrs = []}; block "join" [MIR.Phi (id 3, [v 2, label "left"; MIR.Int64Const 0L, label "right"], Some typ); MIR.Mov (id 4, v 3, Some typ)] (MIR.Ret (v 4))];
+   graph source [block source [] (MIR.Jump (label "empty")); block "empty" [] (MIR.Jump (label "join")); block "join" [MIR.Phi (id 3, [v 2, label "empty"], Some typ)] (MIR.Ret (v 3))];
+   graph source [block source [] (MIR.Jump (label "a")); block "a" [] (MIR.Jump (label "b")); block "b" [] (MIR.Jump (label "a"))];
+   graph source [entry; {left with Instrs = [MIR.Mov (id 3, v 2, Some typ)]}; {right with Instrs = []}; block "join" [] (MIR.Ret (v 3))];
+   graph source [block source [MIR.Mov (id 2, v 2, Some typ)] (MIR.Ret (v 2))];
+   graph source [block source [MIR.Mov (id 3, v 4, Some typ); MIR.Mov (id 4, v 2, Some typ)] (MIR.Ret (v 3))];
+   graph source [entry; {left with Instrs = []}; {right with Instrs = []}; block "join" [MIR.Phi (id 3, [v 2, label "left"; v 2, label "left"], Some typ)] (MIR.Ret (v 3))];
+   graph source [entry; {left with Instrs = []}; {right with Instrs = []}; block "join" [MIR.Phi (id 3, [v 2, label "left"; v 2, label "right"], Some typ); MIR.RuntimeErrorString (v 3)] (MIR.Ret (v 3))]]
+    let observe typ (cfg:MIR.CFG)=
+        let parameters=[id 2]
+        let floats=if typ=AST.TFloat64 then Set.ofList [1;2] else Set.empty
+        let func : MIR.Function={Id=AST.functionId 200UL;Name=source;TypedParams=[{MIR.TypedMIRParam.Reg=id 2;Type=typ}];ReturnType=typ;CFG=cfg;FloatRegs=floats}
+        let predecessors=SSA_Construction.buildPredecessors cfg
+        let dominators=SSA_Construction.computeDominators cfg predecessors
+        let frontier=SSA_Construction.computeDominanceFrontier cfg predecessors dominators
+        tuple [enc predecessors;enc dominators;enc frontier;
+               cfg.Blocks |> Map.toList |> List.map (fun (_,block) -> SSA_Construction.getBlockDefs block,SSA_Construction.getBlockUses block,SSA_Construction.getSuccessors block) |> enc;
+               SSA_Construction.getAllDefs cfg |> enc;
+               attempt (fun () -> SSA_Construction.computeLiveness cfg);
+               attempt (fun () -> let input,_=SSA_Construction.computeLiveness cfg in SSA_Construction.insertPhiNodes cfg frontier predecessors input parameters [typ]);
+               attempt (fun () -> SSA_Construction.convertFunctionToSSA func);
+               attempt (fun () -> SSA_Construction.renameCFG cfg dominators floats parameters);
+               SSA_Construction.buildDomTree dominators |> enc;
+               attempt (fun () -> MIR_SSA_Verify.verifyFunction func);
+               attempt (fun () -> MIR_SSA_Verify.verifyFunction (SSA_Construction.convertFunctionToSSA func));
+               MIRLoopTopology.cfgHasReachableCycle cfg |> enc;
+               attempt (fun () -> MIRLoopTopology.findNaturalLoops cfg);
+               [MIRControlFlow.mergeLinearBlocks;MIRControlFlow.simplifyEmptyBlocks;MIRControlFlow.simplifyRetPhiJoins] |> List.map (fun transform -> attempt (fun () -> transform cfg)) |> list;
+               attempt (fun () -> let func,timings=SSA_Construction.convertFunctionToSSAWithTiming func in func,timings |> List.map (fun timing -> timing.Phase,timing.ElapsedMs>=0.))]
+    [AST.TInt64;AST.TFloat64;AST.TString] |> List.map (fun typ -> graphs typ |> List.map (observe typ) |> list) |> list
+
 let mirFoundationsObservation (source:string) =
     let enc value=closureAnalysisEncode value
     let list values=JsonArray(Array.ofList values) :> JsonNode
@@ -2478,6 +2539,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "mir-ssa" -> mirSSAObservation source
         | "mir-foundations" -> mirFoundationsObservation source
         | "ssa-inlining" -> inliningObservation source
         | "ssa-specialization" -> specializationObservation source

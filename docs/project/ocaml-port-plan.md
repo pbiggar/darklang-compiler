@@ -734,9 +734,25 @@ with full interfaces and comments. The preparation wrapper was already fully
 translated; its inventory owner mapping now points at that actual component.
 Coverage is 175/391 pairs, with zero missing source comment lines. The warning-free
 native build still passes 344/344 units. Complete MIR observations match F# for
-all 70 instruction constructors with integer/float typing and register/literal
+all 66 instruction constructors with integer/float typing and register/literal
 operands, 36,288 folding combinations, copy cycles/phi prefixes/typed sentinels,
 DCE roots and dead phi cycles, scheduling with repeated IDs and recursion, purity
 hazards, parallel moves, and UTF-16/string-byte and exact-float-bit literal pools.
 MIR SSA and subsequent backend passes, full original RC/MIR test groups, complete
 corpus checks, and final executable-byte/Valgrind acceptance remain outstanding.
+
+
+MIR SSA construction is fully translated, including predecessor/dominator/frontier
+analysis, bitset liveness, typed phi insertion, deferred phi updates, renaming,
+float-register tracking, fresh-ID overflow, contextual diagnostics, and all six
+timing phases. The five original SSA construction tests and their complete MIR
+failure formatting are translated. SSA verification, natural-loop topology, and
+all three CFG simplifications are also translated with full interfaces and
+comments. Coverage is 180/391 pairs. The warning-free build passes 349/349 native
+units. Complete differential observations match F# across 60 typed CFGs, including
+unreachable blocks, duplicate edges, typed joins, loops, missing targets/entry,
+invalid definitions and phi sources, chained merges, empty-block cycles, and
+return-phi joins. The comparison includes complete per-phase SSA results, verifier
+errors, loop sets, and transformed CFGs, rather than only final return values.
+Further MIR optimizers, original RC/MIR test groups, backend passes, full corpus
+checks, and final executable-byte/Valgrind acceptance remain outstanding.
