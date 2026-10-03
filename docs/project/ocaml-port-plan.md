@@ -492,3 +492,10 @@ failures. Their complete corpus proof and expression/function lifting remain
 in progress. The native build passes 161/161 translated unit tests; coverage
 is 71/391 complete pairs with zero missing reference line comments. This is a
 migration checkpoint, not whole-compiler acceptance.
+
+Expression-local lifting and whole-program wrapper generation are translated,
+bringing coverage to 73/391 full pairs. Initial complete observations pass for
+closure analysis, comparison planning, expression lifting, and function lifting
+(2/2 each); full corpus audits are running. The lifted state, checked catalogs,
+wrappers, comparisons, and invariant failures are included in comparisons.
+Native units remain 161/161, with zero missing reference line comments.

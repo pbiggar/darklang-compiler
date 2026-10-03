@@ -1192,7 +1192,10 @@ let closureAnalysisCall<'a> name args : 'a =
 
 let closureAnalysisEncode<'a> (value:'a) = encode typeof<'a> (box value)
 
-let closureAnalysis source =
+let closureComparisonMethod name = typeof<AST.SemanticType>.Assembly.GetType("ClosureComparisons").GetMethod(name,Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static)
+let closureComparisonCall<'a> name args : 'a = unbox ((closureComparisonMethod name).Invoke(null,args))
+
+let closureAnalysisWith mode source =
     let tuple values = namedArray "tuple" (Array.ofList values)
     let list values = JsonArray(Array.ofList values) :> JsonNode
     let enc value = closureAnalysisEncode value
@@ -1224,20 +1227,55 @@ let closureAnalysis source =
         let extra=[CheckedAST.Local (AST.namedBindingId 0 "x");CheckedAST.Closure (AST.functionId 9UL,[CheckedAST.Local (AST.namedBindingId 0 "x")]);CheckedAST.Call (AST.functionId 9UL,AST.NonEmptyList.singleton CheckedAST.UnitLiteral);CheckedAST.TypeApp (AST.functionId 9UL,CheckedAST.checkedTypeArgs [AST.TString],AST.NonEmptyList.singleton CheckedAST.UnitLiteral);CheckedAST.Lambda (parameters,Some (CheckedAST.checkedType AST.TString),CheckedAST.Local (AST.namedBindingId 0 "x"));CheckedAST.If (CheckedAST.BoolLiteral true,CheckedAST.ListLiteral [],CheckedAST.ListLiteral [CheckedAST.Int64Literal 1L])]
         let states=[initial;{initial with TypeEnv=ids |> List.map (fun id -> id,AST.TInt64) |> Map.ofList;FuncParams=FunctionIdMap.add (AST.functionId 9UL) [AST.TInt64;AST.TBool] initial.FuncParams;FuncReturnTypes=FunctionIdMap.add (AST.functionId 9UL) AST.TNever initial.FuncReturnTypes;GenericFuncDefs=FunctionIdMap.add (AST.functionId 9UL) (["a"],AST.TList (AST.TVar "a")) initial.GenericFuncDefs}]
         let infer (state:ClosureAnalysis.LiftState) expr=ClosureAnalysis.simpleInferType expr state.TypeEnv state.FuncParams state.FuncReturnTypes state.GenericFuncDefs state.TypeReg state.VariantLookup (TypeRegistries.typeNamesFromSymbols state.Symbols)
-        let attempt encoder action = outcome encoder (try Ok (action ()) with error -> Error error.Message)
+        let attempt encoder action = outcome encoder (try Ok (action ()) with error -> Error (if error :? Reflection.TargetInvocationException && not (isNull error.InnerException) then error.InnerException.Message else error.Message))
         let expression expr=tuple [bounds |> List.map (fun bound -> enc (ClosureAnalysis.freeVars expr bound)) |> list;states |> List.map (fun state -> tuple [attempt enc (fun () -> infer state expr);attempt enc (fun () -> ClosureAnalysis.inferLambdaReturnType expr state)]) |> list]
         let cases=bodies |> List.collect (function CheckedAST.Match (_,cases) -> AST.NonEmptyList.toList cases |> List.collect (fun case -> AST.NonEmptyList.toList case.Patterns) | _ -> [])
         let functionId,symbols=CheckedAST.internFunction "__lift0" symbols
         let fake : CheckedAST.FunctionDef = {Id=functionId;Name="__lift1";TypeParams=[];Params=AST.NonEmptyList.singleton (AST.bindingId 0,CheckedAST.checkedType AST.TInt64);ReturnType=CheckedAST.checkedType AST.TInt64;Body=CheckedAST.UnitLiteral;Recursion=None}
         let collision={initial with Symbols=symbols;FuncParams=FunctionIdMap.add functionId [] initial.FuncParams;LiftedFunctions=fake::initial.LiftedFunctions}
         let fresh state prefix=let name,next=closureAnalysisCall<string * ClosureAnalysis.LiftState> "freshLiftedName" [|box state;box prefix|] in tuple [encodeString name;enc next]
-        tuple [enc initial;(bodies @ extra) |> List.map expression |> list;
-            cases |> List.map (fun pattern -> types |> List.map (fun typ -> enc (closureAnalysisCall<Map<AST.BindingId,AST.SemanticType>> "matchPatternBindingTypes" [|box records;box env.VariantLookup;box (TypeRegistries.typeNamesFromSymbols initial.Symbols);box pattern;box typ|])) |> list) |> list;
-            states |> List.map (fun state -> enc (closureAnalysisCall<bool> "lambdaNeedsComparison" [|box parameters;box state|])) |> list;
-            [initial;collision;{initial with Counter=Int32.MaxValue}] |> List.map (fun state -> ["__lift";source] |> List.map (fresh state) |> list) |> list]
+        let lifted expr state=attempt (outcome (fun (expr,next) -> tuple [enc expr;enc next])) (fun () -> LiftExpressions.liftLambdasInExpr expr state)
+        let comparisons (state:ClosureAnalysis.LiftState) =
+            let names=[None;Some (AST.functionId 9UL);Some (AST.functionId UInt64.MaxValue)] |> List.map (fun identity -> [[];[AST.TInt64];[AST.TVar "a"]] |> List.map (fun args -> let name,add,next=closureComparisonCall<string*bool*ClosureAnalysis.LiftState> "comparisonNameForIdentity" [|box identity;box args;box state|] in tuple [encodeString name;enc add;enc next]) |> list) |> list
+            let captureTypes=[[];[AST.TInt64];[AST.TString];[AST.TInt];[AST.TList AST.TInt64];[AST.TFunction ([AST.TInt64],AST.TBool)];[AST.TTuple [AST.TInt64;AST.TString]]]
+            let symbols=("Darklang.Stdlib.Int.__equals" :: (captureTypes |> List.collect (List.map ComparisonPlanning.eqHelperName))) |> List.fold (fun symbols name -> CheckedAST.internFunction name symbols |> snd) state.Symbols
+            let comparator=[state.Symbols;symbols] |> List.map (fun symbols -> captureTypes |> List.map (fun captures -> [false;true] |> List.map (fun compare -> attempt enc (fun () -> closureComparisonCall<CheckedAST.FunctionDef*CheckedAST.Symbols> "makeClosureComparator" [|box "__comparator";box captures;box compare;box state.VariantLookup;box symbols|])) |> list) |> list) |> list
+            let partial,symbols=CheckedAST.allocateBinding "__partial_0" state.Symbols
+            let partialParameters : AST.NonEmptyList<CheckedAST.LambdaParameter> = AST.NonEmptyList.singleton {Pattern=CheckedAST.LPVariable partial;Type=CheckedAST.checkedType AST.TBool}
+            let partialState={state with Symbols=symbols;FuncParams=FunctionIdMap.add (AST.functionId 9UL) [AST.TInt64;AST.TBool] state.FuncParams}
+            let partialBodies=[CheckedAST.Call (AST.functionId 9UL,AST.NonEmptyList.fromList [CheckedAST.Int64Literal 1L;CheckedAST.Local partial]);CheckedAST.TypeApp (AST.functionId 9UL,CheckedAST.checkedTypeArgs [AST.TString],AST.NonEmptyList.fromList [CheckedAST.Int64Literal 1L;CheckedAST.Local partial])]
+            let plans parameters state expr=attempt (fun value -> encode (closureComparisonMethod "planLambdaComparison").ReturnType value) (fun () -> (closureComparisonMethod "planLambdaComparison").Invoke(null,[|box parameters;box expr;box state|]))
+            tuple [names;comparator;(bodies @ extra) |> List.map (plans parameters state) |> list;partialBodies |> List.map (plans partialParameters partialState) |> list]
+        let wrappers=[FunctionIdMap.empty;FunctionIdMap.ofList [AST.functionId 9UL,(AST.functionId 10UL,AST.functionId 11UL);AST.functionId 0UL,(AST.functionId 12UL,AST.functionId 13UL)]]
+        let functionsReport (state:ClosureAnalysis.LiftState) =
+            let withFuncs : LiftFunctions.LiftStateWithFuncs = {State=state;FuncParams=state.FuncParams;GeneratedWrappers=List.item 1 wrappers}
+            let lifted=functions |> List.map (fun func -> attempt enc (fun () -> LiftFunctions.liftLambdasInFunc func state)) |> list
+            let wrapped=[AST.functionId 9UL;AST.functionId 0UL;AST.functionId UInt64.MaxValue] |> List.map (fun id -> attempt enc (fun () -> LiftFunctions.generateFuncWrapper id state.FuncParams state.FuncReturnTypes withFuncs)) |> list
+            let expressions=(bodies @ extra) |> List.map (fun expr -> tuple [enc (LiftFunctions.collectFuncRefsInExpr expr state.FuncParams);wrappers |> List.map (fun wrappers -> enc (LiftFunctions.replaceInExpr wrappers expr)) |> list]) |> list
+            let tops=wrappers |> List.map (fun wrappers -> enc (tops |> List.map (LiftFunctions.replaceFuncRefsWithWrappers wrappers))) |> list
+            let registry,variants=LiftFunctions.prepareLambdaLiftBaseTypes state.TypeReg state.VariantLookup
+            let prepared=enc {state with TypeReg=registry;VariantLookup=variants}
+            let catalog : LiftFunctions.FunctionCatalog = {Params=state.FuncParams;ReturnTypes=state.FuncReturnTypes;GenericDefs=state.GenericFuncDefs}
+            let programs=[Map.empty,Map.empty;state.TypeReg,state.VariantLookup] |> List.map (fun (registry,variants) -> attempt enc (fun () -> LiftFunctions.liftLambdasInProgram registry variants catalog program)) |> list
+            tuple [lifted;wrapped;expressions;tops;prepared;programs]
+        let report =
+            if mode="lift-functions" then tuple [enc initial;states |> List.map functionsReport |> list]
+            elif mode="lift-expressions" then tuple [enc initial;(bodies @ extra) |> List.map (fun expr -> states |> List.map (lifted expr) |> list) |> list;states |> List.map (fun state -> attempt (outcome (fun (args,next) -> tuple [enc (AST.NonEmptyList.toList args);enc next])) (fun () -> LiftExpressions.liftLambdasInArgs (AST.NonEmptyList.fromList (bodies @ extra)) state)) |> list]
+            elif mode="closure-comparisons" then tuple [enc initial;states |> List.map comparisons |> list;(bodies @ extra) |> List.map (fun expr -> ids |> List.map (fun self -> tuple [enc (closureComparisonCall<CheckedAST.Expr> "rewriteRecursiveSelfReferences" [|box self;box (AST.bindingId 1);box expr|]);enc (closureComparisonCall<CheckedAST.Expr> "rewriteLiftedSelfCalls" [|box (AST.functionId 9UL);box self;box expr|])]) |> list) |> list]
+            else
+                 tuple [enc initial;(bodies @ extra) |> List.map expression |> list;
+                cases |> List.map (fun pattern -> types |> List.map (fun typ -> enc (closureAnalysisCall<Map<AST.BindingId,AST.SemanticType>> "matchPatternBindingTypes" [|box records;box env.VariantLookup;box (TypeRegistries.typeNamesFromSymbols initial.Symbols);box pattern;box typ|])) |> list) |> list;
+                states |> List.map (fun state -> enc (closureAnalysisCall<bool> "lambdaNeedsComparison" [|box parameters;box state|])) |> list;
+                [initial;collision;{initial with Counter=Int32.MaxValue}] |> List.map (fun state -> ["__lift";source] |> List.map (fresh state) |> list) |> list]
+        report
     let sourceProgram source=WrittenParsing.parse LibParser.Validation.Script source |> Result.bind (fun unit -> WrittenChecking.checkSourceUnitsWithBase None false false [unit]) |> Result.map (fun (_,value,_) -> value) |> outcome program
     tuple [types |> List.map (fun left -> types |> List.map (fun right -> enc (ClosureAnalysis.reconcileBranchTypes left right)) |> list) |> list;checkedAstFixtures source |> List.map (outcome program) |> list;sourceProgram source;
         if source="" then ["let id (x: 'a) : 'a = x\nid 1";"type S<'a> = A of 'a | B\nlet f (x: S<Int64>) : Int64 = match x with | S.A value -> value | S.B -> 0\nf (S.A 1)";"let recur (x: Int64) : Int64 = if x == 0 then x else recur (x - 1)\nrecur 1"] |> List.map sourceProgram |> list else list []]
+
+let closureAnalysis = closureAnalysisWith "closure-analysis"
+let closureComparisons = closureAnalysisWith "closure-comparisons"
+let liftExpressions = closureAnalysisWith "lift-expressions"
+let liftFunctions = closureAnalysisWith "lift-functions"
 
 let checkedFormatWithDisplay display source =
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -1696,6 +1734,9 @@ let rec requests () =
                         WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+            | "lift-functions" -> liftFunctions source
+            | "lift-expressions" -> liftExpressions source
+            | "closure-comparisons" -> closureComparisons source
             | "closure-analysis" -> closureAnalysis source
             | "checked-display" -> checkedDisplay source
             | "checked-structural-format" -> checkedFormat source

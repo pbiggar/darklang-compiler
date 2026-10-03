@@ -588,3 +588,39 @@
  (deps ../lib/passes/preparation/ClosureAnalysis.mli instrument_checking.py)
  (action (with-stdout-to %{targets}
   (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/ClosureAnalysis.mli}))))
+
+(rule
+ (targets InstrumentedLiftExpressions.ml)
+ (deps ../lib/passes/preparation/LiftExpressions.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/LiftExpressions.ml}))))
+
+(rule
+ (targets InstrumentedLiftExpressions.mli)
+ (deps ../lib/passes/preparation/LiftExpressions.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/LiftExpressions.mli}))))
+
+(rule
+ (targets InstrumentedClosureComparisons.ml)
+ (deps ../lib/passes/preparation/ClosureComparisons.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/ClosureComparisons.ml}))))
+
+(rule
+ (targets InstrumentedClosureComparisons.mli)
+ (deps ../lib/passes/preparation/ClosureComparisons.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/ClosureComparisons.mli}))))
+
+(rule
+ (targets InstrumentedLiftFunctions.ml)
+ (deps ../lib/passes/preparation/LiftFunctions.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/LiftFunctions.ml}))))
+
+(rule
+ (targets InstrumentedLiftFunctions.mli)
+ (deps ../lib/passes/preparation/LiftFunctions.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/LiftFunctions.mli}))))
