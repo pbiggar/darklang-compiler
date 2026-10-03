@@ -353,3 +353,13 @@ rejected conversions, and 0/1/2/64/65-field record layouts. Instrumentation
 appends typed observers to the exact production implementation in a separate
 migration build; production catalogs remain opaque. Original comments are
 preserved and audited against actual OCaml comment bodies.
+
+CheckingTypes, TypeUnification, and the recursive expression-checking contract
+are translated completely. Full type-resolution observations match 1,890 inputs,
+including cyclic versus simultaneous substitution, every expression form, alias
+arity and partial targets, nominal canonicalization, first-declared field indexes,
+and exact legacy diagnostic text. Unification matches all 1,890 inputs across
+every type pair, bidirectional reconciliation, inference conflicts, freshened
+variables, ordered inferred arguments, and parameter-name diagnostics at int32
+boundaries. Original comments remain audited; full semantic AST encoders retain
+all typed evidence instead of reducing observations to pretty-printed types.

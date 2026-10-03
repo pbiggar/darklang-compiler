@@ -435,6 +435,89 @@ let checkedAst source =
     let value = ordering,CheckedAST.semanticMetadata (CheckedAST.emptySymbols()),catalog,converted,declarations,convert [AST.ValueDef (AST.UncheckedValueDef (source,unit))],recordCases
     encode (value.GetType()) (box value)
 
+let typesCall<'a> name args : 'a =
+    let methodInfo = typeof<AST.SemanticType>.Assembly.GetType("CheckingTypes").GetMethod(name, Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static)
+    methodInfo.Invoke(null,args) :?> 'a
+let additionalTypedExpressions source =
+    let x = AST.Var source
+    let y = AST.Var "y"
+    let field = AST.unresolvedRecordFieldReference "field"
+    let patterns = [AST.PUnit;AST.PWildcard;AST.PVar source;AST.PConstructor ("C",[AST.PVar source;AST.PVar "y"]);AST.PResolvedConstructor ("M.T","C",3,[AST.PVar source]);AST.PInt64 1L;AST.PBigInt 1I;AST.PInt128Literal (Int128.Parse "1");AST.PInt8Literal 1y;AST.PInt16Literal 1s;AST.PInt32Literal 1;AST.PUInt8Literal 1uy;AST.PUInt16Literal 1us;AST.PUInt32Literal 1ul;AST.PUInt64Literal 1UL;AST.PUInt128Literal (UInt128.Parse "1");AST.PBool true;AST.PString source;AST.PChar source;AST.PFloat 1.0;AST.PTuple [AST.PVar source;AST.PVar "y"];AST.PList [AST.PVar source];AST.PListCons ([AST.PVar source],AST.PVar "tail");AST.POr (AST.NonEmptyList.fromList [AST.PVar source;AST.PVar "other"])]
+    let literals: AST.Expr list = [AST.UnitLiteral;AST.Int64Literal 1L;AST.Int128Literal (Int128.Parse "1");AST.BigIntLiteral 1I;AST.Int8Literal 1y;AST.Int16Literal 1s;AST.Int32Literal 1;AST.UInt8Literal 1uy;AST.UInt16Literal 1us;AST.UInt32Literal 1ul;AST.UInt64Literal 1UL;AST.UInt128Literal (UInt128.Parse "1");AST.BoolLiteral true;AST.StringLiteral source;AST.CharLiteral source;AST.FloatLiteral 1.0;AST.RuntimeError source]
+    let expressions = literals @ [x;AST.Var "Builtin.testNan";AST.Var "Builtin.testInfinity";AST.BoundaryRender (source,x);AST.BinOp (AST.Add,x,y);AST.UnaryOp (AST.Neg,x);
+        AST.Let (AST.LPVariable source,x,AST.TupleLiteral [x;y]);AST.Let (AST.LPTuple (AST.LPVariable source,AST.LPVariable "y",[]),AST.Var "value",AST.TupleLiteral [x;y]);
+        AST.RecursiveLet (AST.RecursiveBindingCandidate {SourceName=source;Kind=AST.NamedLocalFunctionMember},AST.Apply (x,[],AST.NonEmptyList.singleton y),AST.TupleLiteral [x;y]);
+        AST.If (x,y,AST.Var "z");AST.Sequence (x,y);AST.Apply (x,[],AST.NonEmptyList.fromList [y;AST.Var "z"]);AST.TupleLiteral [x;y];AST.TupleAccess (x,1);
+        AST.DictLiteral (AST.TString,AST.TString,[(x,y)]);AST.RecordLiteral (AST.unresolvedRecordReference "R" [],[(field,x)]);AST.RecordUpdate (x,[(field,y)]);AST.RecordAccess (x,field);
+        AST.Constructor (AST.UnresolvedConstructor None,"C",[x;y]);AST.ListLiteral [x;y];AST.Lambda (AST.NonEmptyList.singleton (AST.lambdaParameter (AST.LPVariable source)),None,AST.TupleLiteral [x;y]);
+        AST.Apply (AST.TupleAccess (x,0),[],AST.NonEmptyList.singleton y);AST.IndirectApply (x,AST.NonEmptyList.singleton y);AST.Closure (source,[x;y]);
+        AST.InterpolatedString [AST.StringText source;AST.StringExpr x;AST.StringExpr y]] @ (patterns |> List.map (fun pattern -> AST.Match (AST.Var "scrutinee",[{Patterns=AST.NonEmptyList.singleton pattern;Guard=Some (AST.Var "guard");Body=AST.TupleLiteral [x;y;AST.Var "tail"]}])))
+    expressions
+let checkingTypes source =
+    let samples = [AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TInt; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128; AST.TBool; AST.TFloat64; AST.TString; AST.TBlob; AST.TChar; AST.TDateTime; AST.TUnit; AST.TNever; AST.TInternalRawPtr;
+        AST.TVar source; AST.TVar "a"; AST.TInferenceVar (source,"a"); AST.TFunction ([AST.TVar "a"],AST.TVar "b"); AST.TTuple [AST.TVar "b";AST.TVar "a"];
+        AST.TRecord ("Outer",[AST.TVar "b"]); AST.TSum ("Outer",[AST.TVar "b"]); AST.TRecord ("Outer",[]); AST.TSum ("Outer",[]);
+        AST.TRecord ("Outer",[AST.TUnit;AST.TBool]); AST.TSum ("Outer",[AST.TUnit;AST.TBool]); AST.TList (AST.TVar "a"); AST.TStream (AST.TVar "a"); AST.TDict (AST.TVar "a",AST.TVar "b"); AST.TRecord ("S",[]); AST.TSum ("R",[AST.TVar "a"])]
+    let substitutions = [Map.empty; Map.ofList ["a",AST.TVar "b";"b",AST.TInt64]; Map.ofList ["a",AST.TVar "b";"b",AST.TVar "a"]; Map.ofList ["a",AST.TList (AST.TVar "a")]]
+    let aliases = Map.ofList ["Outer",(["a"],AST.TRecord ("Inner",[AST.TString;AST.TVar "a"])); "Inner",(["a";"b"],AST.TRecord ("R",[AST.TVar "a";AST.TVar "b"])); "Plain",([],AST.TRecord ("R",[])); "Number",([],AST.TInt64)]
+    let lookup : CheckingTypes.VariantLookup = Map.ofList ["S.Second",("S",[],2,[AST.TString]); "S.First",("S",[],0,[]); "S.FirstAlias",("S",[],0,[AST.TBool]); "First",("S",[],0,[]); "T.First",("T",[],0,[AST.TInt64])]
+    let registry = Map.ofList ["R",["x",AST.TSum ("R",[AST.TVar "a"]); "x",AST.TBool; "y",AST.TRecord ("S",[AST.TVar "b"])]]
+    let indexed = CheckingTypes.indexTypeRegistry lookup (Map.ofList ["R",["a";"b"]]) registry
+    let perType = samples |> List.map (fun typ ->
+        (substitutions |> List.map (fun subst -> CheckingTypes.applySubst subst typ,typesCall<AST.SemanticType> "applyTypeArguments" [|box subst;box typ|])),
+        CheckingTypes.collectTypeVarsInType typ ["existing"],typesCall<AST.SemanticType> "resolveAliasTargetType" [|box aliases;box typ|],
+        CheckingTypes.resolveType aliases typ,typesCall<AST.SemanticType> "canonicalizeBareSumTypeRefsWithNames" [|box (Set.singleton "S");box typ|],
+        (let methodInfo = typeof<AST.SemanticType>.Assembly.GetType("CheckingTypes").GetMethod("canonicalizeDeclaredTypeRefsWithSumTypeNames", Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static)
+         methodInfo.MakeGenericMethod([|typeof<(string * AST.SemanticType) list>|]).Invoke(null,[|box registry;box (Set.singleton "S");box typ|]) :?> AST.SemanticType),
+        (samples |> List.map (fun other -> CheckingTypes.typesEqual aliases typ other)))
+    let exprs : AST.Expr list = additionalTypedExpressions source @ [AST.Apply (AST.Var source,[AST.TVar "a"],AST.NonEmptyList.singleton (AST.Var "x"));
+        AST.Lambda (AST.NonEmptyList.singleton {Pattern = AST.LPVariable "x";SourceAnnotation = Some (AST.TVar "a");InferredType = Some (AST.TVar "b")},Some (AST.TVar "a"),AST.Var "x");
+        AST.RecordLiteral ({SourceTypeName = "Outer";ResolvedTypeName = "R";TypeArgs = [AST.TVar "a"]},[]);
+        AST.DictLiteral (AST.TVar "a",AST.TVar "b",[AST.Var source,AST.UnitLiteral]);
+        AST.Constructor (AST.ResolvedConstructor ([],"S",[AST.TVar "a"]),"First",[])]
+    let arities = [0;1;2;3] |> List.collect (fun expected -> [0;1;2;3] |> List.map (fun actual ->
+        let parameters = List.init expected (fun index -> "a" + string index)
+        let args = List.init actual (fun _ -> AST.TInt64)
+        typesCall<Result<CheckingTypes.Substitution,string>> "buildRecordFieldSubstitutionFromParams" [|box parameters;box args|],CheckingTypes.buildSubstitution parameters args,
+        typesCall<string> "formatTypeArgumentArityError" [|box source;box expected;box actual|],typesCall<string> "formatValueArgumentArityError" [|box source;box expected;box actual|]))
+    let reference : AST.RecordReference = {SourceTypeName = "Outer";ResolvedTypeName = "ignored";TypeArgs = [AST.TInt64]}
+    let legacyExprs : AST.Expr list = [AST.StringLiteral source;AST.Var source;AST.FloatLiteral -0.0]
+    let value = perType,indexed,typesCall<CheckingTypes.IndexedSumTypeRegistry> "indexSumTypeRegistry" [|box lookup|],
+                CheckingTypes.resolveAliasesInTypeRegistry aliases registry,arities,(exprs |> List.map (CheckingTypes.applySubstToExpr (List.item 1 substitutions))),
+                typesCall<(string * (string * AST.SemanticType) list) option> "tryResolveGenericRecordAliasFields" [|box aliases;box indexed;box "Outer"|],
+                typesCall<(string * AST.SemanticType list * CheckingTypes.RecordTypeInfo) option> "tryResolveRecordLiteralInfo" [|box aliases;box indexed;box reference|],
+                CheckingTypes.resolveTypeName aliases "Plain",typesCall<int> "unqualifiedVariantOwnerCount" [|box "First";box lookup|],
+                (legacyExprs |> List.map (fun expr -> typesCall<string> "formatLegacyRecordFieldTypeError" [|box aliases;box source;box AST.TString;box (AST.TRecord ("Number",[]));box expr|]))
+    encode (value.GetType()) (box value)
+
+let unification source =
+    let samples = [AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TInt; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128; AST.TBool; AST.TFloat64; AST.TString; AST.TBlob; AST.TChar; AST.TDateTime; AST.TUnit; AST.TNever; AST.TInternalRawPtr;
+        AST.TVar source; AST.TInferenceVar (source,"fixed"); AST.TVar "t$empty"; AST.TFunction ([AST.TVar "a"],AST.TVar "b"); AST.TTuple [AST.TVar "a";AST.TInt64];
+        AST.TRecord ("R",[AST.TVar "a"]); AST.TSum ("R",[AST.TVar "a"]); AST.TList (AST.TVar "a"); AST.TStream (AST.TVar "a"); AST.TDict (AST.TVar "a",AST.TVar "b");
+        AST.TFunction ([AST.TInt64],AST.TBool); AST.TTuple [AST.TList (AST.TVar "t$empty");AST.TInt]; AST.TTuple [AST.TList (AST.TVar "a");AST.TInt]; AST.TList AST.TInt64; AST.TStream AST.TInt64;
+        AST.TRecord ("R",[]); AST.TSum ("S",[]); AST.TFunction ([],AST.TUnit)]
+    let aliases = Map.ofList ["Alias",([],AST.TRecord ("R",[]))]
+    let pairs = samples |> List.collect (fun left -> samples |> List.map (fun right ->
+        TypeUnification.matchConcrete left right,TypeUnification.matchTypes left right,
+        TypeUnification.unifyTypes left right,TypeUnification.typesCompatible left right,TypeUnification.typesCompatibleWithAliases aliases left right,
+        TypeUnification.reconcileTypes None left right,TypeUnification.reconcileTypes (Some aliases) left right))
+    let cases = (List.zip samples (List.rev samples) |> List.map (fun (left,right) -> [source,left;source,right;"tail",AST.TInt64])) @
+                [["a",AST.TList (AST.TVar "b$0");"a",AST.TList (AST.TVar "b")];
+                 ["a",AST.TList (AST.TVar "b");"a",AST.TList (AST.TVar "b$0")];
+                 ["a",AST.TRecord ("R",[AST.TVar "b$0"]);"a",AST.TRecord ("R",[AST.TVar "b"])];
+                 ["a",AST.TInt64;"a",AST.TString]]
+    let inference = (samples |> List.map (fun actual -> TypeUnification.inferTypeArgs ["a";"b";source] [AST.TVar "a"] [actual] (Some (AST.TVar "b")) (Some AST.TString))) @
+                    [TypeUnification.inferTypeArgs ["a"] [AST.TVar "a"] [] None None;
+                     TypeUnification.inferTypeArgs ["a"] [AST.TVar "a";AST.TVar "a"] [AST.TInt64;AST.TString] None None]
+    let value = TypeUnification.emptyListElementVar,([source;"#infer:fixed";"t$empty";"binding_x";"__x";"recursiveParameter0";"a"] |> List.map TypeUnification.isInferenceVar),
+                (samples |> List.map (fun typ -> (match typ with TypeUnification.UnificationVar name -> Some name | _ -> None),TypeUnification.containsTVar typ)),
+                pairs,(cases |> List.map TypeUnification.consolidateBindings),inference,
+                TypeUnification.tryLookupResolved source (Map.ofList [source,AST.TInt64]),TypeUnification.tryLookupResolved source (Map.empty<string,AST.SemanticType>),
+                ([-2147483648; -1; 0; 1; 2; 3; 2147483647] |> List.map (fun index ->
+                    let methodInfo = typeof<AST.SemanticType>.Assembly.GetType("CheckExpressionSupport").GetMethod("paramNameForLegacyError", Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static)
+                    methodInfo.Invoke(null,[|box (Map.ofList [source,["first";"second"]]);box source;box index|]) :?> string))
+    encode (value.GetType()) (box value)
+
 CultureInfo.CurrentCulture <- CultureInfo.InvariantCulture
 CultureInfo.CurrentUICulture <- CultureInfo.InvariantCulture
 let reader : IO.TextReader =
@@ -471,6 +554,8 @@ let rec requests () =
                         WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+            | "unification" -> unification source
+            | "checking-types" -> checkingTypes source
             | "checked-ast" -> checkedAst source
             | "function-map" -> functionIdMap source
             | "free-variables" -> freeVariables source
