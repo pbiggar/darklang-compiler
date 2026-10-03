@@ -333,3 +333,43 @@ let observe source =
     observationResult observationProgram declarations;
     observationResult observationProgram (convert [AST.ValueDef (AST.UncheckedValueDef (source, unit))]);
     `List (List.map (observationResult (observationRecordFields observationInt)) recordCases)]
+
+let observationFixtures source =
+  let one value = NonEmptyList.singleton value in
+  let var = AST.Var "x" and unit = AST.UnitLiteral in
+  let field index = AST.resolvedRecordFieldReference "R" ("field" ^ string_of_int index) index in
+  let record = {AST.sourceTypeName = "R"; resolvedTypeName = "R"; typeArgs = [AST.TInferenceVar (source, "fixed")]} in
+  let parameter = AST.inferredLambdaVariable "x" AST.TInt64 in
+  let patterns = [AST.PUnit; AST.PWildcard; AST.PVar "x";
+    AST.PResolvedConstructor ("S", "Choice", 17, [AST.PVar "x"]); AST.PInt64 Int64.min_int;
+    AST.PBigInt (Z.shift_left Z.one 256); AST.PInt128Literal (Z.neg (Z.shift_left Z.one 127));
+    AST.PInt8Literal (-128); AST.PInt16Literal (-32768); AST.PInt32Literal Int32.min_int;
+    AST.PUInt8Literal 255; AST.PUInt16Literal 65535; AST.PUInt32Literal 4294967295L;
+    AST.PUInt64Literal (-1L); AST.PUInt128Literal (Z.pred (Z.shift_left Z.one 128));
+    AST.PBool true; AST.PString source; AST.PChar source; AST.PFloat (-0.);
+    AST.PTuple [AST.PVar "x"; AST.PWildcard]; AST.PList [AST.PVar "x"];
+    AST.PListCons ([AST.PWildcard], AST.PVar "x"); AST.POr (one (AST.PVar "x"))] in
+  let expressions : AST.expr list = [unit; AST.Int64Literal Int64.min_int; AST.Int128Literal (Z.neg (Z.shift_left Z.one 127));
+    AST.Int8Literal (-128); AST.Int16Literal (-32768); AST.Int32Literal Int32.min_int; AST.UInt8Literal 255;
+    AST.UInt16Literal 65535; AST.UInt32Literal 4294967295L; AST.UInt64Literal (-1L); AST.UInt128Literal (Z.pred (Z.shift_left Z.one 128));
+    AST.BigIntLiteral (Z.shift_left Z.one 256); AST.BoolLiteral true; AST.StringLiteral source; AST.CharLiteral source; AST.FloatLiteral (-0.);
+    AST.InterpolatedString [AST.StringText source; AST.StringExpr var]; AST.BinOp (AST.Add, var, unit); AST.UnaryOp (AST.Not, var);
+    AST.Let (AST.LPTuple (AST.LPVariable "x", AST.LPWildcard, [AST.LPUnit]), unit, var);
+    AST.Var source; AST.Var "Builtin.testNan"; AST.Var "Builtin.testInfinity"; AST.Var "Builtin.blobEmpty";
+    AST.If (var, unit, var); AST.Sequence (unit, var); AST.Apply (var, [], one unit); AST.Apply (var, [AST.TInt64], one unit);
+    AST.TupleLiteral [unit; var; unit]; AST.TupleAccess (var, 2); AST.DictLiteral (AST.TString, AST.TInt64, [AST.StringLiteral source, var]);
+    AST.RecordLiteral (record, [field 1, var; field 0, unit]); AST.RecordUpdate (var, [field 1, unit]); AST.RecordAccess (var, field 1);
+    AST.Constructor (AST.ResolvedConstructor (["a"], "S", [AST.TInt64]), "Choice", [var]);
+    AST.ListLiteral [var; unit]; AST.Lambda (one parameter, Some AST.TInt64, var);
+    AST.Apply (AST.Lambda (one parameter, None, var), [], one unit); AST.IndirectApply (var, one unit);
+    AST.Closure (source, [var]); AST.RuntimeError source; AST.BoundaryRender (source, var);
+    AST.TupleLiteral []; AST.TupleLiteral [unit]; AST.Match (unit, []);
+    AST.RecordLiteral (record, []); AST.RecordAccess (var, AST.unresolvedRecordFieldReference "field");
+    AST.Constructor (AST.UnresolvedConstructor None, "Absent", []); AST.Lambda (one (AST.lambdaParameter (AST.LPVariable "x")), None, var);
+    AST.Apply (unit, [AST.TUnit], one unit)] @
+    List.map (fun pattern -> AST.Match (var, [{AST.patterns = one pattern; guard = Some var; body = var}])) patterns in
+  let lookup = StringOrder.Map.singleton "S.Choice" ("S", [], 17, []) in
+  let catalog = includeFunctionNames (List.to_seq [source; "z"; "aa"; "z"]) emptyFunctionCatalog in
+  let convert topLevels = ofTypedProgram lookup (StringOrder.Set.singleton "external") emptyTypeCatalog catalog (fun name -> if name = "R" then Some 2 else None) (AST.Program (AST.TypeDef (AST.RecordDef ("R", [], ["field0", AST.TUnit; "field1", AST.TInt64])) :: AST.TypeDef (AST.SumTypeDef ("S", [], [{AST.name = "Choice"; fields = []}])) :: topLevels)) in
+  let converted = List.map (fun expr -> convert [AST.Expression ([], expr)]) expressions in
+  converted

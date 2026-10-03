@@ -3,7 +3,7 @@
    e97978f46154b95fa87612bc655b54189cbd441d. Copyright (c) Microsoft Corporation.
    MIT license: ocaml/THIRD_PARTY_NOTICES.md. Reflection is replaced by typed
    values; fitting, precedence, limits, UTF-16 widths, and raw quotes are retained. *)
-type value = Scalar of string | Text of string | Union of string * value list | Sequence of value list | Tuple of value list | Record of (string * value) list
+type value = StructuralValue.value = Scalar of string | Text of string | Union of string * value list | Sequence of value list | Tuple of value list | Record of (string * value) list
 (* A joint is unbreakable, breakable, or already broken at its indentation. *)
 type joint = Unbreakable | Breakable of int | Broken of int
 (* Either juxtaposition flag suppresses a space between neighboring leaves. *)

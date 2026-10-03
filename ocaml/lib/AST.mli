@@ -320,3 +320,15 @@ module MigrationObservation : sig
   val groupOrdinal : recursiveGroupId -> int
   val memberOrdinal : recursiveMemberId -> int
 end
+
+(* Display descriptions retain F# diagnostic spelling without exposing constructors. *)
+module DiagnosticFormatting : sig
+ val binding : bindingId -> StructuralValue.value
+ val func : functionId -> StructuralValue.value
+ val typ : typeId -> StructuralValue.value
+ val constructor : constructorId -> StructuralValue.value
+ val field : fieldId -> StructuralValue.value
+ val scope : scopeBoundaryId -> StructuralValue.value
+ val group : recursiveGroupId -> StructuralValue.value
+ val memberId : recursiveMemberId -> StructuralValue.value
+end

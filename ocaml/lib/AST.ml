@@ -621,3 +621,20 @@ module MigrationObservation = struct
   let groupOrdinal (RecursiveGroupId ordinal) = ordinal
   let memberOrdinal (RecursiveMemberId ordinal) = ordinal
 end
+
+module DiagnosticFormatting = struct
+ open StructuralValue
+ let integer value = Scalar (string_of_int value)
+ let optional = function None -> Union ("None", []) | Some value -> Union ("Some", [Text value])
+ let binding = function LocalBindingId (ordinal, name) -> Union ("LocalBindingId", [integer ordinal; optional name]) | TopLevelValueId name -> Union ("TopLevelValueId", [Text name])
+ let func identity =
+  let value = functionIdValue identity in
+  let unsigned = if value < 0L then Z.add (Z.of_int64 value) (Z.shift_left Z.one 64) else Z.of_int64 value in
+  Union ("FunctionId", [Scalar (Z.to_string unsigned ^ "UL")])
+ let typ (TypeId ordinal) = Union ("TypeId", [integer ordinal])
+ let constructor (ConstructorId (owner, name, tag)) = Union ("ConstructorId", [typ owner; Text name; integer tag])
+ let field (FieldId (owner, index)) = Union ("FieldId", [typ owner; integer index])
+ let scope (ScopeBoundaryId ordinal) = Union ("ScopeBoundaryId", [integer ordinal])
+ let group (RecursiveGroupId ordinal) = Union ("RecursiveGroupId", [integer ordinal])
+ let memberId (RecursiveMemberId ordinal) = Union ("RecursiveMemberId", [integer ordinal])
+end

@@ -1138,6 +1138,286 @@ let irFixtures source =
 
 
 
+
+let checkedAstFixtures source =
+    let one value = AST.NonEmptyList.singleton value
+    let var : AST.Expr = AST.Var "x"
+    let unit : AST.Expr = AST.UnitLiteral
+    let field index = AST.resolvedRecordFieldReference "R" ("field" + string index) index
+    let record : AST.RecordReference = {SourceTypeName = "R"; ResolvedTypeName = "R"; TypeArgs = [AST.TInferenceVar (source,"fixed")]}
+    let parameter = AST.inferredLambdaVariable "x" AST.TInt64
+    let patterns = [AST.PUnit; AST.PWildcard; AST.PVar "x";
+        AST.PResolvedConstructor ("S", "Choice", 17, [AST.PVar "x"]); AST.PInt64 Int64.MinValue;
+        AST.PBigInt (Numerics.BigInteger.One <<< 256); AST.PInt128Literal Int128.MinValue;
+        AST.PInt8Literal -128y; AST.PInt16Literal -32768s; AST.PInt32Literal Int32.MinValue;
+        AST.PUInt8Literal 255uy; AST.PUInt16Literal 65535us; AST.PUInt32Literal UInt32.MaxValue;
+        AST.PUInt64Literal UInt64.MaxValue; AST.PUInt128Literal UInt128.MaxValue;
+        AST.PBool true; AST.PString source; AST.PChar source; AST.PFloat -0.0;
+        AST.PTuple [AST.PVar "x"; AST.PWildcard]; AST.PList [AST.PVar "x"];
+        AST.PListCons ([AST.PWildcard], AST.PVar "x"); AST.POr (one (AST.PVar "x"))]
+    let expressions : AST.Expr list =
+        [unit; AST.Int64Literal Int64.MinValue; AST.Int128Literal Int128.MinValue;
+        AST.Int8Literal -128y; AST.Int16Literal -32768s; AST.Int32Literal Int32.MinValue; AST.UInt8Literal 255uy;
+        AST.UInt16Literal 65535us; AST.UInt32Literal UInt32.MaxValue; AST.UInt64Literal UInt64.MaxValue; AST.UInt128Literal UInt128.MaxValue;
+        AST.BigIntLiteral (Numerics.BigInteger.One <<< 256); AST.BoolLiteral true; AST.StringLiteral source; AST.CharLiteral source; AST.FloatLiteral -0.0;
+        AST.InterpolatedString [AST.StringText source; AST.StringExpr var]; AST.BinOp (AST.Add, var, unit); AST.UnaryOp (AST.Not, var);
+        AST.Let (AST.LPTuple (AST.LPVariable "x", AST.LPWildcard, [AST.LPUnit]), unit, var);
+        AST.Var source; AST.Var "Builtin.testNan"; AST.Var "Builtin.testInfinity"; AST.Var "Builtin.blobEmpty";
+        AST.If (var, unit, var); AST.Sequence (unit, var); AST.Apply (var, [], one unit); AST.Apply (var, [AST.TInt64], one unit);
+        AST.TupleLiteral [unit; var; unit]; AST.TupleAccess (var, 2); AST.DictLiteral (AST.TString, AST.TInt64, [AST.StringLiteral source, var]);
+        AST.RecordLiteral (record, [field 1, var; field 0, unit]); AST.RecordUpdate (var, [field 1, unit]); AST.RecordAccess (var, field 1);
+        AST.Constructor (AST.ResolvedConstructor (["a"], "S", [AST.TInt64]), "Choice", [var]);
+        AST.ListLiteral [var; unit]; AST.Lambda (one parameter, Some AST.TInt64, var);
+        AST.Apply (AST.Lambda (one parameter, None, var), [], one unit); AST.IndirectApply (var, one unit);
+        AST.Closure (source, [var]); AST.RuntimeError source; AST.BoundaryRender (source, var);
+        AST.TupleLiteral []; AST.TupleLiteral [unit]; AST.Match (unit, []);
+        AST.RecordLiteral (record, []); AST.RecordAccess (var, AST.unresolvedRecordFieldReference "field");
+        AST.Constructor (AST.UnresolvedConstructor None, "Absent", []); AST.Lambda (one (AST.lambdaParameter (AST.LPVariable "x")), None, var);
+        AST.Apply (unit, [AST.TUnit], one unit)] @
+        (patterns |> List.map (fun pattern -> AST.Match (var, [{Patterns = one pattern; Guard = Some var; Body = var}])))
+    let lookup : Map<string,string * string list * int * AST.SemanticType list> = Map.ofList ["S.Choice", ("S", [], 17, [])]
+    let catalog = CheckedAST.includeFunctionNames [source; "z"; "aa"; "z"] CheckedAST.emptyFunctionCatalog
+    let methodInfo = typeof<AST.SemanticType>.Assembly.GetType("CheckedAST").GetMethod("ofTypedProgram", Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static)
+    let convert (topLevels : AST.TopLevel list) : Result<CheckedAST.Program,string> =
+        methodInfo.Invoke(null,[|box lookup; box (Set.singleton "external"); box CheckedAST.emptyTypeCatalog; box catalog; box (fun name -> if name = "R" then Some 2 else None); box (AST.Program (AST.TypeDef (AST.RecordDef ("R",[],["field0",AST.TUnit; "field1",AST.TInt64])) :: AST.TypeDef (AST.SumTypeDef ("S",[],[{Name = "Choice"; Fields = []}])) :: topLevels))|]) :?> Result<CheckedAST.Program,string>
+    let converted = expressions |> List.map (fun expr -> convert [AST.Expression ([],expr)])
+    converted
+
+
+
+
+let closureAnalysisCall<'a> name args : 'a =
+    let flags=Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    unbox (typeof<AST.SemanticType>.Assembly.GetType("ClosureAnalysis").GetMethod(name,flags).Invoke(null,args))
+
+let closureAnalysisEncode<'a> (value:'a) = encode typeof<'a> (box value)
+
+let closureAnalysis source =
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let enc value = closureAnalysisEncode value
+    let outcome encoder value =
+        match value with
+        | Error error -> enc (Error error : Result<unit,string>)
+        | Ok value ->
+            let node=JsonObject()
+            node["type"]<-JsonValue.Create "FSharpResult"
+            node["case"]<-JsonValue.Create "Ok"
+            node["fields"]<-JsonArray([|encoder value|])
+            node :> JsonNode
+    let types=[AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TInt; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128; AST.TBool; AST.TFloat64; AST.TString; AST.TBlob; AST.TChar; AST.TDateTime; AST.TUnit; AST.TNever; AST.TInternalRawPtr; AST.TVar "a"; AST.TVar "b"; AST.TInferenceVar (source,"fixed"); AST.TRecord ("R",[]); AST.TRecord ("R",[AST.TVar "a"]); AST.TSum ("S",[AST.TVar "a"]); AST.TSum ("S",[]); AST.TTuple [AST.TVar "a";AST.TString]; AST.TList (AST.TVar "a"); AST.TStream (AST.TVar "a"); AST.TDict (AST.TVar "a",AST.TString); AST.TFunction ([AST.TVar "a"],AST.TString)]
+    let ids=[AST.bindingId 0;AST.namedBindingId 0 "x";AST.namedBindingId 1 "x";AST.topLevelValueId source]
+    let bounds=[Set.empty;Set.ofList ids]
+    let program program =
+        let symbols=CheckedAST.programSymbols program
+        let tops=CheckedAST.programTopLevels program
+        let functions=tops |> List.choose (function CheckedAST.FunctionDef value -> Some value | _ -> None)
+        let bodies=tops |> List.choose (function CheckedAST.FunctionDef value -> Some value.Body | CheckedAST.ValueDef value -> Some value.Body | CheckedAST.Expression value -> Some value | _ -> None)
+        let env=WrittenChecking.typeCheckEnvironment program
+        let records : TypeRegistries.TypeRegistry = env.IndexedTypeReg |> Map.map (fun _ (info:CheckingTypes.RecordTypeInfo) -> {TypeParams=info.TypeParams;Fields=info.Fields})
+        let typeEnv=CheckedAST.programValues program |> Map.toList |> List.map (fun (name,(typ,_)) -> AST.topLevelValueId name,typ) |> Map.ofList
+        let parameters=functions |> List.map (fun func -> func.Id,CheckedAST.functionParameterTypes func |> AST.NonEmptyList.toList |> List.map snd) |> FunctionIdMap.ofList
+        let returns=functions |> List.map (fun func -> func.Id,CheckedAST.functionReturnType func) |> FunctionIdMap.ofList
+        let generic=functions |> List.map (fun func -> func.Id,(func.TypeParams,CheckedAST.functionReturnType func)) |> FunctionIdMap.ofList
+        let initial : ClosureAnalysis.LiftState = {Symbols=symbols;Counter=0;LiftedFunctions=functions;ComparisonFuncs=Map.ofList [(AST.functionId 9UL,[AST.TVar "a"]),source;(AST.functionId UInt64.MaxValue,[AST.TInt64]),"other"];ComparableFunctionParams=Set.ofList [[];[AST.TInt64];[AST.TVar "a"]];TypeEnv=typeEnv;FuncParams=parameters;FuncReturnTypes=returns;GenericFuncDefs=generic;TypeReg=records;VariantLookup=env.VariantLookup;RecursiveSelf=None}
+        let parameters : AST.NonEmptyList<CheckedAST.LambdaParameter> = AST.NonEmptyList.singleton {Pattern=CheckedAST.LPVariable (AST.namedBindingId 0 "x");Type=CheckedAST.checkedType AST.TInt64}
+        let extra=[CheckedAST.Local (AST.namedBindingId 0 "x");CheckedAST.Closure (AST.functionId 9UL,[CheckedAST.Local (AST.namedBindingId 0 "x")]);CheckedAST.Call (AST.functionId 9UL,AST.NonEmptyList.singleton CheckedAST.UnitLiteral);CheckedAST.TypeApp (AST.functionId 9UL,CheckedAST.checkedTypeArgs [AST.TString],AST.NonEmptyList.singleton CheckedAST.UnitLiteral);CheckedAST.Lambda (parameters,Some (CheckedAST.checkedType AST.TString),CheckedAST.Local (AST.namedBindingId 0 "x"));CheckedAST.If (CheckedAST.BoolLiteral true,CheckedAST.ListLiteral [],CheckedAST.ListLiteral [CheckedAST.Int64Literal 1L])]
+        let states=[initial;{initial with TypeEnv=ids |> List.map (fun id -> id,AST.TInt64) |> Map.ofList;FuncParams=FunctionIdMap.add (AST.functionId 9UL) [AST.TInt64;AST.TBool] initial.FuncParams;FuncReturnTypes=FunctionIdMap.add (AST.functionId 9UL) AST.TNever initial.FuncReturnTypes;GenericFuncDefs=FunctionIdMap.add (AST.functionId 9UL) (["a"],AST.TList (AST.TVar "a")) initial.GenericFuncDefs}]
+        let infer (state:ClosureAnalysis.LiftState) expr=ClosureAnalysis.simpleInferType expr state.TypeEnv state.FuncParams state.FuncReturnTypes state.GenericFuncDefs state.TypeReg state.VariantLookup (TypeRegistries.typeNamesFromSymbols state.Symbols)
+        let attempt encoder action = outcome encoder (try Ok (action ()) with error -> Error error.Message)
+        let expression expr=tuple [bounds |> List.map (fun bound -> enc (ClosureAnalysis.freeVars expr bound)) |> list;states |> List.map (fun state -> tuple [attempt enc (fun () -> infer state expr);attempt enc (fun () -> ClosureAnalysis.inferLambdaReturnType expr state)]) |> list]
+        let cases=bodies |> List.collect (function CheckedAST.Match (_,cases) -> AST.NonEmptyList.toList cases |> List.collect (fun case -> AST.NonEmptyList.toList case.Patterns) | _ -> [])
+        let functionId,symbols=CheckedAST.internFunction "__lift0" symbols
+        let fake : CheckedAST.FunctionDef = {Id=functionId;Name="__lift1";TypeParams=[];Params=AST.NonEmptyList.singleton (AST.bindingId 0,CheckedAST.checkedType AST.TInt64);ReturnType=CheckedAST.checkedType AST.TInt64;Body=CheckedAST.UnitLiteral;Recursion=None}
+        let collision={initial with Symbols=symbols;FuncParams=FunctionIdMap.add functionId [] initial.FuncParams;LiftedFunctions=fake::initial.LiftedFunctions}
+        let fresh state prefix=let name,next=closureAnalysisCall<string * ClosureAnalysis.LiftState> "freshLiftedName" [|box state;box prefix|] in tuple [encodeString name;enc next]
+        tuple [enc initial;(bodies @ extra) |> List.map expression |> list;
+            cases |> List.map (fun pattern -> types |> List.map (fun typ -> enc (closureAnalysisCall<Map<AST.BindingId,AST.SemanticType>> "matchPatternBindingTypes" [|box records;box env.VariantLookup;box (TypeRegistries.typeNamesFromSymbols initial.Symbols);box pattern;box typ|])) |> list) |> list;
+            states |> List.map (fun state -> enc (closureAnalysisCall<bool> "lambdaNeedsComparison" [|box parameters;box state|])) |> list;
+            [initial;collision;{initial with Counter=Int32.MaxValue}] |> List.map (fun state -> ["__lift";source] |> List.map (fresh state) |> list) |> list]
+    let sourceProgram source=WrittenParsing.parse LibParser.Validation.Script source |> Result.bind (fun unit -> WrittenChecking.checkSourceUnitsWithBase None false false [unit]) |> Result.map (fun (_,value,_) -> value) |> outcome program
+    tuple [types |> List.map (fun left -> types |> List.map (fun right -> enc (ClosureAnalysis.reconcileBranchTypes left right)) |> list) |> list;checkedAstFixtures source |> List.map (outcome program) |> list;sourceProgram source;
+        if source="" then ["let id (x: 'a) : 'a = x\nid 1";"type S<'a> = A of 'a | B\nlet f (x: S<Int64>) : Int64 = match x with | S.A value -> value | S.B -> 0\nf (S.A 1)";"let recur (x: Int64) : Int64 = if x == 0 then x else recur (x - 1)\nrecur 1"] |> List.map sourceProgram |> list else list []]
+
+let checkedFormatWithDisplay display source =
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let outcome encoder value =
+        match value with
+        | Error error -> encode typeof<Result<unit,string>> (box (Error error : Result<unit,string>))
+        | Ok value ->
+            let node=JsonObject()
+            node["type"]<-JsonValue.Create "FSharpResult"
+            node["case"]<-JsonValue.Create "Ok"
+            node["fields"]<-JsonArray([|encoder value|])
+            node :> JsonNode
+    let program value = CheckedAST.programTopLevels value |> List.choose (function CheckedAST.FunctionDef value -> Some value.Body | CheckedAST.ValueDef value -> Some value.Body | CheckedAST.Expression value -> Some value | CheckedAST.TypeDef _ -> None) |> List.map (fun value -> if display then value.ToString() else sprintf "%A" value) |> List.map encodeString |> list
+    let sourceProgram source = WrittenParsing.parse LibParser.Validation.Script source |> Result.bind (fun unit -> WrittenChecking.checkSourceUnitsWithBase None false false [unit]) |> Result.map (fun (_,value,_) -> value) |> outcome program
+    let seed=source |> Seq.fold (fun seed value -> (seed ^^^ uint64 value) * 1099511628211UL) 14695981039346656037UL
+    let mutable bits=seed
+    let values=List.init (if source="" then 10016 else 64) (fun _ ->
+        bits <- bits ^^^ (bits <<< 13)
+        bits <- bits ^^^ (bits >>> 7)
+        bits <- bits ^^^ (bits <<< 17)
+        BitConverter.Int64BitsToDouble (int64 bits))
+    let values=[0.0;-0.0;nan;infinity;-infinity;1.0;1e-5;1e16;1.2345678901234567;1234567890.5;2.2250738585072014e-308;Double.Epsilon] @ values
+    tuple [checkedAstFixtures source |> List.map (outcome program) |> list;sourceProgram source;encode typeof<string list> (box (values |> List.map (sprintf "%A")));
+           if source="" then ["let recur (x: Int64) : Int64 = if x == 0 then x else recur (x - 1)\nrecur 1";"let f (x: 'a) : 'a = (fun (y: 'a) -> y) x\nf 1"] |> List.map sourceProgram |> list else list []]
+
+let checkedFormat = checkedFormatWithDisplay false
+let checkedDisplay = checkedFormatWithDisplay true
+
+let inlineLambdas source =
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let outcome encoder value =
+        match value with
+        | Error error -> encode typeof<Result<unit,string>> (box (Error error : Result<unit,string>))
+        | Ok value ->
+            let node=JsonObject()
+            node["type"]<-JsonValue.Create "FSharpResult"
+            node["case"]<-JsonValue.Create "Ok"
+            node["fields"]<-JsonArray([|encoder value|])
+            node :> JsonNode
+    let ids = [AST.bindingId 0; AST.bindingId 1; AST.namedBindingId 0 "x"; AST.namedBindingId 1 "x"; AST.namedBindingId 0 source; AST.topLevelValueId source]
+    let lambda = CheckedAST.Lambda (AST.NonEmptyList.singleton {CheckedAST.Pattern=CheckedAST.LPVariable (AST.namedBindingId 0 "x");Type=CheckedAST.checkedType AST.TInt64},Some (CheckedAST.checkedType AST.TInt64),CheckedAST.Local (AST.namedBindingId 0 "x"))
+    let environments = [Map.empty;ids |> List.map (fun id -> id,lambda) |> Map.ofList]
+    let expression expr = tuple [encode typeof<bool list> (box (ids |> List.map (fun id -> InlineLambdas.varOccursInExpr id expr)));encode typeof<CheckedAST.Expr list> (box (environments |> List.map (InlineLambdas.inlineLambdas expr)))]
+    let program program =
+        let tops=CheckedAST.programTopLevels program
+        let bodies=tops |> List.choose (function CheckedAST.FunctionDef value -> Some value.Body | CheckedAST.ValueDef value -> Some value.Body | CheckedAST.Expression value -> Some value | CheckedAST.TypeDef _ -> None)
+        let functions=tops |> List.choose (function CheckedAST.FunctionDef value -> Some value | _ -> None)
+        tuple [encode typeof<CheckedAST.Program> (box (InlineLambdas.inlineLambdasInProgram program));bodies |> List.map expression |> list;encode typeof<CheckedAST.FunctionDef list> (box (functions |> List.map InlineLambdas.inlineLambdasInFunc))]
+    let sourceProgram source = WrittenParsing.parse LibParser.Validation.Script source |> Result.bind (fun unit -> WrittenChecking.checkSourceUnitsWithBase None false false [unit]) |> Result.map (fun (_,value,_) -> value) |> outcome program
+    let extra = [lambda;CheckedAST.Let (CheckedAST.LPVariable (AST.namedBindingId 0 "x"),CheckedAST.Local (AST.namedBindingId 0 "x"),lambda);
+        CheckedAST.Closure (AST.functionId 9UL,[CheckedAST.TypeApp (AST.functionId 8UL,CheckedAST.checkedTypeArgs [AST.TVar "a"],AST.NonEmptyList.singleton (CheckedAST.Local (AST.namedBindingId 0 "x")))]);
+        CheckedAST.Match (CheckedAST.UnitLiteral,AST.NonEmptyList.singleton {CheckedAST.Patterns=AST.NonEmptyList.singleton (CheckedAST.PVariable (AST.namedBindingId 0 "x"));Guard=Some (CheckedAST.Local (AST.namedBindingId 0 "x"));Body=CheckedAST.Local (AST.namedBindingId 0 "x")})]
+    tuple [checkedAstFixtures source |> List.map (outcome program) |> list;extra |> List.map expression |> list;sourceProgram source;if source="" then ["let f = fun (x: Int64) -> x\nf 1";"let recur (x: Int64) : Int64 = if x == 0 then x else recur (x - 1)\nrecur 1"] |> List.map sourceProgram |> list else list []]
+
+let typeSubstitutionCall<'a> name args : 'a =
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    unbox (typeof<AST.SemanticType>.Assembly.GetType("TypeSubstitution").GetMethod(name,flags).Invoke(null,args))
+
+let typeSubstitution source =
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let outcome encoder value =
+        match value with
+        | Error error -> encode typeof<Result<unit,string>> (box (Error error : Result<unit,string>))
+        | Ok value ->
+            let node=JsonObject()
+            node["type"]<-JsonValue.Create "FSharpResult"
+            node["case"]<-JsonValue.Create "Ok"
+            node["fields"]<-JsonArray([|encoder value|])
+            node :> JsonNode
+    let types = [AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TInt; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128; AST.TBool; AST.TFloat64; AST.TString; AST.TBlob; AST.TChar; AST.TDateTime; AST.TUnit; AST.TNever; AST.TInternalRawPtr; AST.TVar "a"; AST.TInferenceVar (source, "fixed"); AST.TRecord ("Alias", []); AST.TRecord ("G", [AST.TVar "a"]); AST.TSum ("Alias", []); AST.TSum ("G", [AST.TVar "a"]); AST.TTuple [AST.TVar "a"; AST.TString]; AST.TList (AST.TVar "a"); AST.TStream (AST.TVar "a"); AST.TDict (AST.TVar "a", AST.TInferenceVar (source,"fixed")); AST.TFunction ([AST.TVar "a"], AST.TInferenceVar (source,"fixed"))]
+    let substitutions = [Map.empty; Map.ofList ["a", AST.TInt64; "fixed", AST.TString]; Map.ofList ["a", AST.TVar "fixed"; "fixed", AST.TInt64]]
+    let aliases = Map.ofList ["Alias", ([], AST.TList AST.TString); "G", (["a"], AST.TTuple [AST.TVar "a"; AST.TRecord ("Alias", [])])]
+    let records : TypeRegistries.TypeRegistry = Map.ofList ["R", {TypeRegistries.TypeParams = ["a"; "phantom"]; Fields = [source, AST.TVar "a"; source, AST.TBool; "alias", AST.TRecord ("Alias", [])]}; "Empty", {TypeRegistries.TypeParams = []; Fields = []}]
+    let observeProgram program =
+        let tops=CheckedAST.programTopLevels program
+        let bodies=tops |> List.choose (function CheckedAST.FunctionDef value -> Some value.Body | CheckedAST.ValueDef value -> Some value.Body | CheckedAST.Expression value -> Some value | CheckedAST.TypeDef _ -> None)
+        let functions=tops |> List.choose (function CheckedAST.FunctionDef value -> Some value | _ -> None)
+        let specialized func args =
+            let value = try Ok (TypeSubstitution.specializeFunction (AST.functionId 9UL) func args) with error -> Error error.Message
+            encode typeof<Result<CheckedAST.FunctionDef,string>> (box value)
+        tuple [encode typeof<CheckedAST.Program> (box program);
+               encode typeof<CheckedAST.Expr list list> (box (substitutions |> List.map (fun subst -> bodies |> List.map (TypeSubstitution.applySubstToExpr subst))));
+               functions |> List.map (fun func -> tuple [encode typeof<CheckedAST.FunctionDef> (box (TypeSubstitution.resolveAliasesInFunction aliases func));[[];[AST.TInt64];[AST.TString;AST.TBool]] |> List.map (specialized func) |> list]) |> list]
+    let sourceProgram source = WrittenParsing.parse LibParser.Validation.Script source |> Result.bind (fun unit -> WrittenChecking.checkSourceUnitsWithBase None false false [unit]) |> Result.map (fun (_,program,_) -> program) |> outcome observeProgram
+    let fixtures = if source="" then ["let id (x: 'a) : 'a = x\nid 1"; "type Alias = String\nlet f (x: Alias) : Alias = x\nf \"a\""; "let recur (x: Int64) : Int64 = if x == 0 then x else recur (x - 1)\nrecur 1"; "let f (x: 'a) : 'a = (fun (y: 'a) -> y) x\nf 1"] else []
+    let bindings = types |> List.collect (fun value -> [["a", AST.TVar "a"; "a", value]; ["a", value; "a", AST.TVar "a"]; ["a", AST.TInt64; "a", value]; ["a", AST.TStream (AST.TVar "a"); "a", value]; ["a", AST.TInferenceVar (source, "first"); "a", AST.TVar "b"; "z", value]])
+    tuple [
+        encode typeof<AST.SemanticType list list> (box (substitutions |> List.map (fun subst -> types |> List.map (TypeSubstitution.applySubstToType subst))))
+        encode typeof<Result<(string * AST.SemanticType) list,string> list list> (box (types |> List.map (fun pattern -> types |> List.map (TypeSubstitution.matchTypePattern pattern))))
+        encode typeof<Result<Map<string,AST.SemanticType>,string> list> (box (bindings |> List.map TypeSubstitution.consolidateTypeBindings))
+        encode typeof<AST.SemanticType list> (box (types |> List.map (TypeSubstitution.resolveAliasType aliases)))
+        encode typeof<TypeRegistries.TypeRegistry> (box (TypeSubstitution.resolveAliasesInTypeRegistry aliases records))
+        records |> Map.map (fun _ info -> tuple [
+            encode typeof<(string * AST.SemanticType) list> (box (typeSubstitutionCall<(string * AST.SemanticType) list> "firstDeclaredRecordFields" [|box info.Fields|]))
+            [[];[AST.TInt64];[AST.TInt64;AST.TBool]] |> List.map (fun args -> tuple [
+                encode typeof<Map<string,AST.SemanticType> option> (box (typeSubstitutionCall<Map<string,AST.SemanticType> option> "buildDeclaredRecordFieldSubst" [|box info;box args|]))
+                encode typeof<ANF.RecordDescriptor> (box (typeSubstitutionCall<ANF.RecordDescriptor> "recordDescriptor" [|box source;box args;box info|]))
+                encode typeof<Result<ANF.RecordDescriptor,string>> (box (typeSubstitutionCall<Result<ANF.RecordDescriptor,string>> "boxedSumDescriptor" [|box source;box info.TypeParams;box args;box (List.map snd info.Fields)|]))]) |> list]) |> Map.toList |> List.map (fun (name,value) -> tuple [encodeString name;value]) |> List.toArray |> namedArray "map"
+        checkedAstFixtures source |> List.map (outcome observeProgram) |> list
+        sourceProgram source
+        fixtures |> List.map sourceProgram |> list]
+
+let loweringPrimitiveCall<'a> name args : 'a =
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let moduleType = typeof<AST.SemanticType>.Assembly.GetType("LoweringPrimitives")
+    unbox (moduleType.GetMethod(name,flags).Invoke(null,args))
+
+let loweringPrimitives source =
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let calls = ResizeArray<string>()
+    let resolve name = calls.Add name; AST.functionId 9UL
+    let capture (encodeValue : _ -> JsonNode) work =
+        calls.Clear()
+        try
+            let value = work ()
+            tuple [encode typeof<string list> (box (List.ofSeq calls)); encodeValue value |> fun value ->
+                let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|value|]);node :> JsonNode]
+        with error ->
+            let rec unwrap (error:exn) = match error with :? Reflection.TargetInvocationException when not (isNull error.InnerException) -> unwrap error.InnerException | _ -> error.Message
+            tuple [encode typeof<string list> (box (List.ofSeq calls));encode typeof<Result<string,string>> (box (Error (unwrap error) : Result<string,string>))]
+    let types = [AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TInt; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128; AST.TBool; AST.TFloat64; AST.TString; AST.TBlob; AST.TChar; AST.TDateTime; AST.TUnit; AST.TNever; AST.TInternalRawPtr; AST.TVar source; AST.TInferenceVar (source,"fixed"); AST.TRecord ("R", []); AST.TSum ("S", []); AST.TTuple [AST.TInt64; AST.TString]; AST.TList AST.TString; AST.TStream AST.TString; AST.TDict (AST.TString, AST.TInt64); AST.TFunction ([AST.TInt64], AST.TString)]
+    let variants = Map.ofList ["One.C", ("One", ["a"], 5, [AST.TVar "a"]); "Null.A", ("Null", ["a"], 2, []); "Null.Z", ("Null", ["a"], 7, [AST.TVar "a"]); "Bad.B", ("Bad", [], 3, [AST.TString; AST.TInt64]); "plain", ("Lost", [], 4, [])]
+    let sums = LoweringPrimitives.sumRepresentationIndex variants
+    let more = Map.ofList ["One.D", ("One", [], 8, []); "Null.Z", ("Null", [], 0, [AST.TBool])]
+    let args = [ []; [ANF.UnitLiteral]; [ANF.StringLiteral source]; [ANF.StringLiteral source; ANF.IntLiteral (ANF.Int64 -1L)]; [ANF.StringLiteral source; ANF.IntLiteral (ANF.Int64 0L); ANF.UnitLiteral]; [ANF.UnitLiteral; ANF.UnitLiteral]; [ANF.StringLiteral source; ANF.UnitLiteral; ANF.UnitLiteral; ANF.UnitLiteral]]
+    let names = ["Builtin.crash"; "Builtin.print"; "Builtin.printLine"; "Builtin.stdinReadLine"; "Builtin.testRuntimeError"; "Builtin.unwrap"; "Darklang.Stdlib.Bool.not"; "Darklang.Stdlib.Cli.__argv"; "Darklang.Stdlib.Cli.__cpuCount"; "Darklang.Stdlib.Cli.__createExclusive"; "Darklang.Stdlib.Cli.__environmentPacked"; "Darklang.Stdlib.Cli.__execute"; "Darklang.Stdlib.Cli.__getenv"; "Darklang.Stdlib.Cli.__getpid"; "Darklang.Stdlib.Cli.__getuid"; "Darklang.Stdlib.Cli.__hostArchitectureCode"; "Darklang.Stdlib.Cli.__hostOSCode"; "Darklang.Stdlib.Cli.__hostname"; "Darklang.Stdlib.Cli.__kill"; "Darklang.Stdlib.Cli.__processIO"; "Darklang.Stdlib.Cli.__runProcess"; "Darklang.Stdlib.Cli.__setenv"; "Darklang.Stdlib.Cli.__sleep"; "Darklang.Stdlib.Cli.__spawnProcess"; "Darklang.Stdlib.Cli.__terminateProcess"; "Darklang.Stdlib.Cli.__unsetenv"; "Darklang.Stdlib.Crypto.__secureRandomFill"; "Darklang.Stdlib.DateTime.__fromUnixTimeTicks"; "Darklang.Stdlib.DateTime.__now"; "Darklang.Stdlib.DateTime.__toUnixTimeTicks"; "Darklang.Stdlib.File.appendText"; "Darklang.Stdlib.File.createDirectory"; "Darklang.Stdlib.File.currentDirectory"; "Darklang.Stdlib.File.delete"; "Darklang.Stdlib.File.exists"; "Darklang.Stdlib.File.isDirectory"; "Darklang.Stdlib.File.listDirectoryPacked"; "Darklang.Stdlib.File.readBlob"; "Darklang.Stdlib.File.setExecutable"; "Darklang.Stdlib.File.writeBlob"; "Darklang.Stdlib.File.writeFromPtr"; "Darklang.Stdlib.Float.__toBits"; "Darklang.Stdlib.Float.__toInt64Unchecked"; "Darklang.Stdlib.Float.negate"; "Darklang.Stdlib.Float.sqrt"; "Darklang.Stdlib.Int.__equals"; "Darklang.Stdlib.Int.__randomInt64Word"; "Darklang.Stdlib.Int128.__equalsWords"; "Darklang.Stdlib.Int128.__fromInt"; "Darklang.Stdlib.Int128.__fromWords"; "Darklang.Stdlib.Int128.__toInt"; "Darklang.Stdlib.Int16"; "Darklang.Stdlib.Int32"; "Darklang.Stdlib.Int64"; "Darklang.Stdlib.Int64.toFloat"; "Darklang.Stdlib.Int8"; "Darklang.Stdlib.Network.__close"; "Darklang.Stdlib.Network.__connect4"; "Darklang.Stdlib.Network.__connect6"; "Darklang.Stdlib.Network.__receive"; "Darklang.Stdlib.Network.__receiveTimeout"; "Darklang.Stdlib.Network.__send"; "Darklang.Stdlib.Network.__sendTimeout"; "Darklang.Stdlib.Network.__tcp4Socket"; "Darklang.Stdlib.Network.__tcp6Socket"; "Darklang.Stdlib.Network.__udp4Socket"; "Darklang.Stdlib.Network.__udp6Socket"; "Darklang.Stdlib.UInt128.__equalsWords"; "Darklang.Stdlib.UInt128.__fromInt"; "Darklang.Stdlib.UInt128.__fromWords"; "Darklang.Stdlib.UInt128.__toInt"; "Darklang.Stdlib.UInt16"; "Darklang.Stdlib.UInt32"; "Darklang.Stdlib.UInt64"; "Darklang.Stdlib.UInt8"; "__blob_to_rawptr"; "__dark_internal_eq_helper_dispatch"; "__dict_get_tag"; "__dict_is_null"; "__dict_to_rawptr"; "__empty_dict"; "__int128_to_int"; "__int128_to_rawptr"; "__int64_to_int16"; "__int64_to_int32"; "__int64_to_int8"; "__int64_to_uint16"; "__int64_to_uint32"; "__int64_to_uint64_bits"; "__int64_to_uint8"; "__int_to_int128"; "__int_to_rawptr"; "__int_to_uint128"; "__int_to_word"; "__list_array_release_small"; "__list_empty"; "__list_get_tag"; "__list_is_null"; "__list_to_rawptr"; "__mapped_alloc"; "__mapped_free"; "__raw_alloc"; "__raw_free"; "__raw_get"; "__raw_get_byte"; "__raw_slot_init"; "__raw_slot_init requires a concrete slot type"; "__raw_take"; "__raw_write_byte"; "__raw_write_word"; "__rawptr_to_blob"; "__rawptr_to_dict"; "__rawptr_to_int"; "__rawptr_to_int128"; "__rawptr_to_list"; "__rawptr_to_stream"; "__rawptr_to_string"; "__rawptr_to_uint128"; "__refcount_dec_string"; "__refcount_inc_string"; "__stream_to_rawptr"; "__string_concat_raw"; "__string_to_rawptr"; "__uint128_to_int"; "__uint128_to_rawptr"; "__uint16_to_int64"; "__uint32_to_int64"; "__uint64_to_int64_bits"; "__uint8_to_int64"; "__word_to_int"; "missing"; "Darklang.Stdlib.Int64.shiftLeft"; "Darklang.Stdlib.UInt64.bitwiseNot"; "__raw_get_byte_i64"; "__raw_get_str"; "__raw_take_str"; "__raw_slot_init_str"; "__raw_slot_init_fn_i64_to_str"; "__rawptr_to_dict_str_i64"; "__rawptr_to_list_str"; "__rawptr_to_stream_str"; "__raw_get_bad_type"] @ [source]
+    let intrinsic name args = capture (fun value -> encode typeof<ANF.CExpr option list> (box value)) (fun () ->
+        let file=LoweringPrimitives.tryFileIntrinsic name args
+        let cli=LoweringPrimitives.tryCliIntrinsic name args
+        let presentation=LoweringPrimitives.tryPresentationIntrinsic name args
+        let float=LoweringPrimitives.tryFloatIntrinsic name args
+        let canonical=LoweringPrimitives.tryCanonicalPrimitiveIntrinsic name args
+        let raw=LoweringPrimitives.tryRawMemoryIntrinsic resolve (Set.singleton "S") name args
+        let random=LoweringPrimitives.tryRandomIntrinsic name args
+        let date=LoweringPrimitives.tryDateTimeIntrinsic name args
+        [file;cli;presentation;float;canonical;raw;random;date])
+    let sourceToken = if source.Length <= 64 && source.Split('_').Length <= 5 then source else "source"
+    let mangled = sourceToken :: [""; "i64"; "runtime_error"; "rawptr"; "R"; "S"; "S_i64"; "R_i64_str"; "a"; "λ"; "𐐨"; "ᲊ"; "tup"; "tup0"; "tup2_i64_str"; "tup_i64_str"; "tup3_i64"; "fn_i64_to_str"; "fn_to_str"; "fn_i64_to_fn_str_to_bool"; "dict_str_list_i64"; "stream_R_i64"; "a$b"; "R__i64"; "tup2147483648_i64"; "tup+1_i64"]
+    let integers = [-(1I <<< 127); -1I; 0I; 1I; (1I <<< 127)-1I; (1I <<< 128)-1I]
+    let patterns = [CheckedAST.PInt64 -1L; CheckedAST.PInt8Literal -128y; CheckedAST.PInt16Literal -32768s; CheckedAST.PInt32Literal Int32.MinValue; CheckedAST.PUInt8Literal 255uy; CheckedAST.PUInt16Literal 65535us; CheckedAST.PUInt32Literal UInt32.MaxValue; CheckedAST.PUInt64Literal UInt64.MaxValue; CheckedAST.PWildcard; CheckedAST.PBool true; CheckedAST.PString source]
+    let expressions = [CheckedAST.UnitLiteral; CheckedAST.Int64Literal -1L; CheckedAST.Int128Literal Int128.MinValue; CheckedAST.UInt128Literal UInt128.MaxValue; CheckedAST.Int8Literal -128y; CheckedAST.Int16Literal -32768s; CheckedAST.Int32Literal Int32.MinValue; CheckedAST.UInt8Literal 255uy; CheckedAST.UInt16Literal 65535us; CheckedAST.UInt32Literal UInt32.MaxValue; CheckedAST.UInt64Literal UInt64.MaxValue; CheckedAST.BoolLiteral true; CheckedAST.BoolLiteral false; CheckedAST.FloatLiteral -0.0; CheckedAST.FloatLiteral infinity; CheckedAST.StringLiteral source; CheckedAST.CharLiteral source; CheckedAST.RuntimeError source]
+    let constructor,symbols = CheckedAST.internConstructor "Null" "Z" 7 (CheckedAST.emptySymbols())
+    let owner = AST.constructorIdOwner constructor
+    let reference : CheckedAST.ConstructorReference = {TypeId=owner;ConstructorId=constructor;TypeArgs=[]}
+    let typeNames = CheckedAST.semanticMetadata symbols
+    let variant = encode typeof<(string * string list * int * AST.SemanticType list) option>
+    tuple [
+        encodeString "__dark_internal_eq_helper_dispatch"
+        types |> List.map (fun typ -> encode typeof<AST.SemanticType * string * MemoryModel.CanonicalBufferKind option * bool * bool> (box (typ,LoweringPrimitives.typeToString typ,loweringPrimitiveCall<MemoryModel.CanonicalBufferKind option> "canonicalBufferKindForType" [|box typ|],MemoryPlanning.canUseTransparentSumPayload typ,loweringPrimitiveCall<bool> "canUseNullaryZeroForPayload" [|box typ|]))) |> list
+        encode typeof<LoweringPrimitives.SumRepresentationIndex> (box sums)
+        encode typeof<LoweringPrimitives.SumMetadata> (box (LoweringPrimitives.mergeSumMetadata (LoweringPrimitives.sumMetadataFromVariantLookup variants) (LoweringPrimitives.sumMetadataFromVariantLookup more)))
+        types |> List.map (fun typ -> ["One";"Null";"Bad";"Missing"] |> List.map (fun owner -> capture (fun value -> encode typeof<AST.SemanticType option * AST.SemanticType option * int64 option * ANF.CExpr> (box value)) (fun () ->
+            loweringPrimitiveCall<AST.SemanticType option> "transparentSumPayloadType" [|box owner;box [typ];box sums|],loweringPrimitiveCall<AST.SemanticType option> "nullablePointerSumPayloadType" [|box owner;box [typ];box sums|],loweringPrimitiveCall<int64 option> "spareImmediateSumSentinel" [|box owner;box [typ];box sums|],loweringPrimitiveCall<ANF.CExpr> "sumPayloadExpr" [|box (AST.TSum (owner,[typ]));box (ANF.StringLiteral source);box sums|])) |> list) |> list
+        names |> List.map (fun name -> tuple [encodeString name;args |> List.map (intrinsic name) |> list;encode typeof<bool> (box (LoweringPrimitives.isBuiltinUnwrapName name));encode typeof<bool> (box (LoweringPrimitives.isRuntimeFailureName name));encode typeof<bool> (box (LoweringPrimitives.isSourceCrashName name));encode typeof<bool> (box (LoweringPrimitives.isBuiltinTestRuntimeErrorName name))]) |> list
+        encode typeof<(string * Result<AST.SemanticType,string>) list> (box (mangled |> List.map (fun value -> value,LoweringPrimitives.tryParseMangledType variants value)))
+        integers |> List.map (fun value -> capture (fun value -> encode typeof<ANF.CExpr list> (box value)) (fun () ->
+            let unsigned = (value + (1I <<< 128)) % (1I <<< 128)
+            let signed = if unsigned >= (1I <<< 127) then unsigned-(1I <<< 128) else unsigned
+            let signed=Int128.Parse (string signed)
+            let unsigned=UInt128.Parse (string unsigned)
+            let a=loweringPrimitiveCall<ANF.CExpr> "int128Construction" [|box resolve;box signed|]
+            let b=loweringPrimitiveCall<ANF.CExpr> "uint128Construction" [|box resolve;box unsigned|]
+            let c=loweringPrimitiveCall<ANF.CExpr> "int128LiteralComparison" [|box resolve;box (ANF.StringLiteral source);box signed|]
+            let d=loweringPrimitiveCall<ANF.CExpr> "uint128LiteralComparison" [|box resolve;box (ANF.StringLiteral source);box unsigned|]
+            [a;b;c;d])) |> list
+        encode typeof<ANF.SizedInt option list> (box (patterns |> List.map LoweringPrimitives.patternLiteralToSizedInt))
+        encode typeof<string option list> (box (expressions |> List.map (fun expression -> loweringPrimitiveCall<string option> "unwrapErrorPayloadToString" [|box expression|])))
+        [[];[CheckedAST.StringLiteral source];[CheckedAST.StringLiteral source;CheckedAST.UnitLiteral]] |> List.map (fun args -> types |> List.map (fun typ -> capture (fun value -> encode typeof<CheckedAST.Expr> (box value)) (fun () -> loweringPrimitiveCall<CheckedAST.Expr> "materializeComparisonPlan" [|box resolve;box typ;box args|])) |> list) |> list
+        [[];[CheckedAST.UnitLiteral];[CheckedAST.StringLiteral source;CheckedAST.UnitLiteral]] |> List.map (fun args -> capture (fun value -> encode typeof<CheckedAST.Expr> (box value)) (fun () -> loweringPrimitiveCall<CheckedAST.Expr> "materializeFunctionComparisonPlan" [|box (AST.bindingId 0);box (AST.bindingId 1);box args|])) |> list
+        tuple [encode typeof<string option> (box (loweringPrimitiveCall<string option> "tryFindRecordTypeNameById" [|box owner;box typeNames|]));encode typeof<string option> (box (loweringPrimitiveCall<string option> "tryFindSumTypeNameById" [|box owner;box typeNames|]));
+               variant (box (loweringPrimitiveCall<(string * string list * int * AST.SemanticType list) option> "tryFindVariantForType" [|box "Z";box (AST.TSum ("Null",[]));box variants|]));
+               variant (box (loweringPrimitiveCall<(string * string list * int * AST.SemanticType list) option> "tryFindVariantByTag" [|box "Null";box 7;box sums|]));
+               variant (box (loweringPrimitiveCall<(string * string list * int * AST.SemanticType list) option> "tryFindVariantByConstructorId" [|box owner;box "Null";box constructor;box variants|]));
+               variant (box (loweringPrimitiveCall<(string * string list * int * AST.SemanticType list) option> "tryFindVariantForTypeById" [|box constructor;box (AST.TSum ("Null",[]));box typeNames;box variants|]));
+               encode typeof<bool> (box (loweringPrimitiveCall<bool> "constructorReferenceMatches" [|box "Null";box "Null.Z";box reference;box typeNames;box variants|]))]]
+
 let memoryPlanning source =
     let tuple values = namedArray "tuple" (Array.ofList values)
     let records = Map.ofList ["R",[source,AST.TString;"next",AST.TRecord ("R",[])];"G",["value",AST.TVar "a";"next",AST.TList (AST.TRecord ("G",[AST.TVar "a"]))]]
@@ -1416,6 +1696,12 @@ let rec requests () =
                         WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+            | "closure-analysis" -> closureAnalysis source
+            | "checked-display" -> checkedDisplay source
+            | "checked-structural-format" -> checkedFormat source
+            | "inline-lambdas" -> inlineLambdas source
+            | "type-substitution" -> typeSubstitution source
+            | "lowering-primitives" -> loweringPrimitives source
             | "memory-planning" -> memoryPlanning source
             | "preparation-registries" -> preparationRegistries source
             | "anf" -> anfObservation source

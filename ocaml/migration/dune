@@ -23,7 +23,7 @@
    (progn
     (echo "open Dark_compiler")
     (cat %{dep:../lib/CheckedAST.mli})
-    (echo "val observe : string -> Yojson.Basic.t\nval observationProgram : program -> Yojson.Basic.t\nval observationTypeCatalog : typeCatalog -> Yojson.Basic.t\nval observationFunctionCatalog : functionCatalog -> Yojson.Basic.t\nval observationPattern : pattern -> Yojson.Basic.t\nval observationLetPattern : letPattern -> Yojson.Basic.t\nval observationExpr : expr -> Yojson.Basic.t\nval observationGlobalCatalog : symbols -> Yojson.Basic.t\nval observationBinding : AST.bindingId -> Yojson.Basic.t\nval observationFunctionDef : functionDef -> Yojson.Basic.t\nval observationTopLevel : topLevel -> Yojson.Basic.t\nval observationSemanticMetadata : semanticMetadata -> Yojson.Basic.t\n")))))
+    (echo "val observe : string -> Yojson.Basic.t\nval observationProgram : program -> Yojson.Basic.t\nval observationTypeCatalog : typeCatalog -> Yojson.Basic.t\nval observationFunctionCatalog : functionCatalog -> Yojson.Basic.t\nval observationPattern : pattern -> Yojson.Basic.t\nval observationLetPattern : letPattern -> Yojson.Basic.t\nval observationExpr : expr -> Yojson.Basic.t\nval observationGlobalCatalog : symbols -> Yojson.Basic.t\nval observationBinding : AST.bindingId -> Yojson.Basic.t\nval observationFunctionDef : functionDef -> Yojson.Basic.t\nval observationTopLevel : topLevel -> Yojson.Basic.t\nval observationSemanticMetadata : semanticMetadata -> Yojson.Basic.t\nval observationFixtures : string -> (program, string) result list\nval observationRecursiveMember : recursiveMember -> Yojson.Basic.t\n")))))
 
 (rule
  (targets InstrumentedTypes.ml)
@@ -528,3 +528,63 @@
  (deps ../lib/passes/preparation/TypeRegistries.mli instrument_checking.py)
  (action (with-stdout-to %{targets}
   (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/TypeRegistries.mli}))))
+
+(rule
+ (targets InstrumentedLoweringPrimitives.ml)
+ (deps ../lib/passes/anf/lowering/LoweringPrimitives.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/LoweringPrimitives.ml}))))
+
+(rule
+ (targets InstrumentedLoweringPrimitives.mli)
+ (deps ../lib/passes/anf/lowering/LoweringPrimitives.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/LoweringPrimitives.mli}))))
+
+(rule
+ (targets InstrumentedTypeSubstitution.ml)
+ (deps ../lib/passes/preparation/TypeSubstitution.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/TypeSubstitution.ml}))))
+
+(rule
+ (targets InstrumentedTypeSubstitution.mli)
+ (deps ../lib/passes/preparation/TypeSubstitution.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/TypeSubstitution.mli}))))
+
+(rule
+ (targets InstrumentedInlineLambdas.ml)
+ (deps ../lib/passes/preparation/InlineLambdas.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/InlineLambdas.ml}))))
+
+(rule
+ (targets InstrumentedInlineLambdas.mli)
+ (deps ../lib/passes/preparation/InlineLambdas.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/InlineLambdas.mli}))))
+
+(rule
+ (targets InstrumentedCheckedStructuralFormat.ml)
+ (deps ../lib/CheckedStructuralFormat.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/CheckedStructuralFormat.ml}))))
+
+(rule
+ (targets InstrumentedCheckedStructuralFormat.mli)
+ (deps ../lib/CheckedStructuralFormat.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/CheckedStructuralFormat.mli}))))
+
+(rule
+ (targets InstrumentedClosureAnalysis.ml)
+ (deps ../lib/passes/preparation/ClosureAnalysis.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/ClosureAnalysis.ml}))))
+
+(rule
+ (targets InstrumentedClosureAnalysis.mli)
+ (deps ../lib/passes/preparation/ClosureAnalysis.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/ClosureAnalysis.mli}))))

@@ -1212,7 +1212,7 @@
       "source": "src/DarkCompiler/passes/anf/lowering/Primitives.fs",
       "kind": "compiler",
       "sha256": "9cafe1876090c4f5da59479a2d18366d969b007247d5a114be77abe04e19fb0d",
-      "owner": "ocaml/lib/passes/anf/lowering/Primitives.ml"
+      "owner": "ocaml/lib/passes/anf/lowering/LoweringPrimitives.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/lowering/TypeInference.fs",

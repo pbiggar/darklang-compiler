@@ -134,7 +134,7 @@ def normalize_fresh_identities(observation):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--audit-name", help="Separate audit directory for an independent verification run")
-    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies", "materialize-helpers", "declarations", "record-checking", "binary-checking", "stdlib-catalog", "lambda-checking", "call-checking", "match-checking", "expression-checking", "function-checking", "program-checking", "written-types", "written-patterns", "written-checking", "checked-preparation", "anf", "preparation-registries", "memory-planning"])
+    parser.add_argument("--stage", default="tokens", choices=["tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies", "materialize-helpers", "declarations", "record-checking", "binary-checking", "stdlib-catalog", "lambda-checking", "call-checking", "match-checking", "expression-checking", "function-checking", "program-checking", "written-types", "written-patterns", "written-checking", "checked-preparation", "anf", "preparation-registries", "memory-planning", "lowering-primitives", "type-substitution", "inline-lambdas", "checked-structural-format", "checked-display", "closure-analysis"])
     parser.add_argument("--probes-only", action="store_true")
     parser.add_argument("--batch-size", type=int, default=0,
                         help="Compare restartable batches; reuse only matching source snapshots")
@@ -261,7 +261,7 @@ def main():
                     count += 1
                     continue
                 expected, actual = [json.loads(row) for row in rows]
-                if args.stage in {"call-checking", "expression-checking", "function-checking", "program-checking", "written-checking", "checked-preparation"} and any("#infer:" in row or '"utf16String"' in row for row in rows):
+                if args.stage in {"call-checking", "expression-checking", "function-checking", "program-checking", "written-checking", "checked-preparation", "type-substitution", "inline-lambdas", "checked-structural-format", "checked-display", "closure-analysis"} and any("#infer:" in row or '"utf16String"' in row for row in rows):
                     expected, actual = map(normalize_fresh_identities, [expected, actual])
                 for audit, observation in zip(audits, [expected, actual], strict=True):
                     canonical = json.dumps(observation, sort_keys=True, ensure_ascii=True, separators=(",", ":")).encode()

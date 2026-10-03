@@ -476,3 +476,19 @@ tests, bringing passing native units to 161/161. This checkpoint contains 66/391
 complete source implementation/interface pairs, with zero missing reference
 line comments. Whole-compiler executable parity and the remaining compiler
 passes/backend/tests are still required; no final acceptance is claimed.
+
+Lowering primitives, type substitution, lambda inlining, and both checked
+expression diagnostic formats now pass all 1,890 complete corpus observations.
+These comparisons include mangled type parsing, sum payload/layout selection,
+intrinsic routing, simultaneous substitutions, lexical binding identities,
+and private DU `ToString()` versus public `%A` output. Structural float output
+also checks boundary values and randomized IEEE-754 bit patterns.
+
+Closure analysis and closure comparison planning are translated with full
+interfaces and source comments. Closure analysis observations cover free
+variables, pattern binding types, branch reconciliation, complete lifted state,
+name collisions/counter overflow, and return inference including invariant
+failures. Their complete corpus proof and expression/function lifting remain
+in progress. The native build passes 161/161 translated unit tests; coverage
+is 71/391 complete pairs with zero missing reference line comments. This is a
+migration checkpoint, not whole-compiler acceptance.

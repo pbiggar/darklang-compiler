@@ -38,3 +38,12 @@ let roundTrip value =
           else if point >= String.length digits then digits ^ String.make (point - String.length digits) '0'
           else String.sub digits 0 point ^ "." ^ String.sub digits point (String.length digits - point)
       in (if negative then "-" else "") ^ result
+
+(* FSharp.Core sformat.fs uses invariant g10 and appends .0 to integral output. *)
+let structural value =
+ match Float.classify_float value with
+ | FP_nan -> "nan"
+ | FP_infinite -> if value < 0. then "-infinity" else "infinity"
+ | FP_zero | FP_normal | FP_subnormal ->
+   let text = Printf.sprintf "%.10g" value in
+   if String.for_all (fun character -> character >= '0' && character <= '9' || character = '-') text then text ^ ".0" else text
