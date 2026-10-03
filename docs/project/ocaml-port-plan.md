@@ -658,5 +658,9 @@ recursive-cycle checks, type-argument substitution, and conservative rejection
 of type-growing recursion. Print insertion preserves helper reachability,
 branch/continuation allocation order, and both root-word probe modes. A fresh
 warning-free build passes the existing 309 native units; coverage is now 138/391
-complete pairs, with no missing reference comment lines. The semantic output
-comparisons for these additional passes remain due.
+complete pairs, with no missing reference comment lines. Complete output-planning
+observations now match F# for five probe inputs. The fixed matrix checks primitive
+and aggregate types, missing and invalid registry metadata, recursive and
+type-growing record/sum cycles, both sum eligibility modes, descriptor field
+proofs, full printed control flow and fresh identities, unsupported display
+failures, duplicate/missing entry functions, and both root-word probe modes.

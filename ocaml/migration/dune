@@ -780,3 +780,27 @@
  (deps ../lib/CallGraphReachability.ml instrument_checking.py)
  (action (with-stdout-to %{targets}
   (run python3 %{dep:instrument_checking.py} %{dep:../lib/CallGraphReachability.ml}))))
+
+(rule
+ (targets InstrumentedEscapeAnalysisFacts.ml)
+ (deps ../lib/passes/anf/EscapeAnalysisFacts.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/EscapeAnalysisFacts.ml}))))
+
+(rule
+ (targets InstrumentedEscapeAnalysisFacts.mli)
+ (deps ../lib/passes/anf/EscapeAnalysisFacts.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/EscapeAnalysisFacts.mli}))))
+
+(rule
+ (targets InstrumentedPrintInsertion.ml)
+ (deps ../lib/passes/anf/PrintInsertion.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/PrintInsertion.ml}))))
+
+(rule
+ (targets InstrumentedPrintInsertion.mli)
+ (deps ../lib/passes/anf/PrintInsertion.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/PrintInsertion.mli}))))

@@ -2086,6 +2086,60 @@ let anfScalarOptimization source =
         encode typeof<ANF.Function list> (box (ANFDeadCodeElimination.filterReachableFunctions (Set.singleton (AST.functionId 1UL)) functions))
         encode typeof<AST.FunctionId list> (box (ANFDeadCodeElimination.getReachableStdlib (ANFDeadCodeElimination.buildCallGraph functions) [List.head functions] |> Set.toList))]
 
+let anfOutputPlanning source =
+    let primitives = [AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TBool;AST.TFloat64;AST.TString;AST.TBlob;AST.TChar;AST.TDateTime;AST.TUnit;AST.TNever;AST.TInternalRawPtr;AST.TVar source;AST.TInferenceVar (source,"fixed");AST.TFunction ([AST.TInt64],AST.TString);AST.TStream AST.TString]
+    let record parameters fields : TypeRegistries.RecordTypeInfo = {TypeParams=parameters;Fields=fields}
+    let records = Map.ofList [
+        "Regular",record [] [source,AST.TString;"next",AST.TRecord ("Regular",[])];
+        "Generic",record ["a"] [source,AST.TVar "a";"next",AST.TRecord ("Generic",[AST.TVar "a"])];
+        "Growing",record ["a"] ["next",AST.TRecord ("Growing",[AST.TList (AST.TVar "a")])];
+        "Closure",record [] ["value",AST.TFunction ([AST.TInt64],AST.TString)];
+        "Mixed",record [] ["value",AST.TSum ("Sum",[])];
+        "Alias",record [] ["value",AST.TRecord ("Sum",[])]]
+    let sum parameters payloads : MemoryModel.RcSumShapeInfo = {TypeParams=parameters;Payloads=payloads;UnaryPayloadTags=Set.empty}
+    let sums = Map.ofList [
+        "Sum",sum [] [0,None;1,Some (AST.TTuple [AST.TString;AST.TSum ("Sum",[])])];
+        "GenericSum",sum ["a"] [0,None;1,Some (AST.TTuple [AST.TVar "a";AST.TSum ("GenericSum",[AST.TVar "a"])])];
+        "GrowingSum",sum ["a"] [0,None;1,Some (AST.TSum ("GrowingSum",[AST.TList (AST.TVar "a")]))];
+        "ClosureSum",sum [] [1,Some (AST.TFunction ([AST.TInt64],AST.TString))];
+        "EmptySum",sum [] []]
+    let types = primitives @ List.map AST.TList primitives @ List.map (fun typ -> AST.TTuple [AST.TString;typ]) primitives @ [
+        AST.TRecord ("Missing",[]);AST.TRecord ("Regular",[]);AST.TRecord ("Regular",[AST.TInt64]);
+        AST.TRecord ("Generic",[AST.TString]);AST.TRecord ("Generic",[AST.TFunction ([AST.TInt64],AST.TString)]);
+        AST.TRecord ("Growing",[AST.TInt64]);AST.TRecord ("Closure",[]);AST.TRecord ("Mixed",[]);AST.TRecord ("Alias",[]);
+        AST.TSum ("Sum",[]);AST.TRecord ("Sum",[]);AST.TSum ("GenericSum",[AST.TInt64]);AST.TSum ("GenericSum",[AST.TStream AST.TString]);
+        AST.TSum ("GrowingSum",[AST.TInt64]);AST.TSum ("ClosureSum",[]);AST.TSum ("EmptySum",[]);AST.TSum ("Sum",[AST.TString]);
+        AST.TDict (AST.TString,AST.TList (AST.TRecord ("Regular",[])));AST.TDict (AST.TString,AST.TFunction ([AST.TInt64],AST.TString))]
+    let destruction = [Map.empty;records] |> List.collect (fun typeReg -> [Map.empty;sums] |> List.collect (fun sumReg -> [false;true] |> List.map (fun allow -> types |> List.map (EscapeAnalysisFacts.hasNonObservableDestruction typeReg sumReg allow))))
+    let descriptors = types |> List.collect (fun typ -> [AST.TRecord (source,[]);AST.TSum (source,[])] |> List.map (fun valueType ->
+        let descriptor : ANF.RecordDescriptor = {SourceTypeName=source;RuntimeTypeName=source;TypeArgs=[];Fields=[source,typ;"next",AST.TString];ValueType=valueType}
+        EscapeAnalysisFacts.descriptorHasNonObservableDestruction records sums descriptor))
+    let supported = [AST.TInt64;AST.TInt;AST.TBool;AST.TString;AST.TChar;AST.TFloat64;AST.TList AST.TInt64]
+    let printTypes = primitives @ List.map AST.TList supported @ List.map (fun typ -> AST.TSum ("Darklang.Stdlib.Option.Option",[AST.TList typ])) supported @ [AST.TSum ("Uuid",[]);AST.TList AST.TBlob;AST.TSum ("Darklang.Stdlib.Option.Option",[AST.TList AST.TBlob])]
+    let helperNames = ["Darklang.Stdlib.List.__toDisplayString_i64";"Darklang.Stdlib.List.__toDisplayString_int";"Darklang.Stdlib.List.__toDisplayString_bool";"Darklang.Stdlib.List.__toDisplayString_str";"Darklang.Stdlib.List.__toDisplayString_char";"Darklang.Stdlib.List.__toDisplayString_f64";"Darklang.Stdlib.List.__toDisplayString_list_i64";"Darklang.Stdlib.Float.toString";"Darklang.Stdlib.DateTime.toString";"Darklang.Stdlib.Uuid.toString"]
+    let ids = helperNames |> List.mapi (fun index name -> name,AST.functionId (uint64 (index+1))) |> Map.ofList
+    let resolve name = match Map.tryFind name ids with Some id -> id | None -> Crash.crash ("Missing observation helper: " + name)
+    let render = AST.functionId 11UL
+    let functionNames = FunctionIdMap.ofList [render,"__dark_render_value_" + source;AST.functionId 12UL,"ordinary"]
+    let bodies = [
+        ANF.Return ANF.UnitLiteral;ANF.Return (ANF.Var (ANF.TempId 3));ANF.Return (ANF.StringLiteral source);ANF.Return (ANF.FloatLiteral (-0.));
+        ANF.Return (ANF.IntLiteral (ANF.Int64 Int64.MinValue));
+        ANF.Join ({Id=ANF.TempId 50;Type=AST.TInt64},ANF.Return (ANF.Var (ANF.TempId 50)),ANF.If (ANF.BoolLiteral true,ANF.Return (ANF.Var (ANF.TempId 3)),ANF.Jump (ANF.TempId 50,ANF.Var (ANF.TempId 4))));
+        ANF.Let (ANF.TempId 10,ANF.RuntimeError source,ANF.Return ANF.UnitLiteral);
+        ANF.Let (ANF.TempId 10,ANF.Call (render,[ANF.Var (ANF.TempId 3)]),ANF.Return (ANF.Var (ANF.TempId 10)));
+        ANF.Let (ANF.TempId 10,ANF.Call (AST.functionId 12UL,[ANF.Var (ANF.TempId 3)]),ANF.Jump (ANF.TempId 50,ANF.Var (ANF.TempId 10)))]
+    let fn name body id : ANF.Function = {Id=AST.functionId id;Name=name;TypedParams=[];ReturnType=AST.TString;ReturnOwnership=ANF.OwnedReturn;Body=body}
+    let functions = [fn "entry" bodies[7] 11UL;fn "ordinary" bodies[8] 12UL;fn "entry" bodies[5] 13UL]
+    let capture f = try Ok (f ()) with exn -> Error exn.Message
+    namedArray "tuple" [|
+        encode typeof<(bool * string option) list> (box (types |> List.map (fun typ -> EscapeAnalysisFacts.isScalarType typ,ListDisplay.getDisplayStringFunc typ)))
+        encode typeof<bool list list> (box destruction)
+        encode typeof<bool list> (box descriptors)
+        encode typeof<Result<ANF.AExpr * ANF.VarGen,string> list list> (box (printTypes |> List.map (fun typ -> bodies |> List.map (fun body -> capture (fun () -> PrintInsertion.wrapReturnWithPrint resolve typ (ANF.VarGen 100) body)))))
+        encode typeof<Result<ANF.Program,string> list> (box (printTypes |> List.map (fun typ -> capture (fun () -> PrintInsertion.insertPrint ids functions bodies[5] typ))))
+        encode typeof<Result<ANF.Function list,string> list list> (box (["entry";"ordinary";"missing"] |> List.map (fun entry -> [AST.TString;AST.TList AST.TInt64] |> List.map (fun typ -> PrintInsertion.insertPrintInEntry ids entry typ functions))))
+        encode typeof<Result<ANF.Function list,string> list list> (box (["entry";"ordinary";"missing"] |> List.map (fun entry -> [false;true] |> List.map (fun tupleWords -> PrintInsertion.insertRootWordProbeInEntry functionNames entry tupleWords functions))))|]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -2129,6 +2183,7 @@ let processRequest (line: string) =
         | "lowering-primitives" -> loweringPrimitives source
         | "memory-planning" -> memoryPlanning source
         | "preparation-registries" -> preparationRegistries source
+        | "anf-output-planning" -> anfOutputPlanning source
         | "anf-scalar-optimization" -> anfScalarOptimization source
         | "anf" -> anfObservation source
         | "checked-preparation" -> checkedPreparation source
