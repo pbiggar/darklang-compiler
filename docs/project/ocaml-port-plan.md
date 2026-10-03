@@ -878,3 +878,12 @@ and scheduling with duplicate loads and edge-only uses. The warning-free build
 passes 396/396 native units. Coverage is 203/391 pairs. Integer spill helpers,
 phi resolution, remaining allocation/lowering/emission, ownership tests, full
 corpus checks and final acceptance remain open.
+
+Integer spill operands and caller-save selection are fully translated with
+interfaces and original comments. Complete output matches F# for 46,080
+two-operand spill repairs across both targets, all physical registers, five
+allocation families, missing and overflowed virtual IDs, every integer live
+mask, every float caller-save register, and all 2,048 preserved-temporary
+exclusion subsets. x64 R11 aliases, temporary order, and failure diagnostics
+match exactly. The warning-free build passes 396/396 native units. Committed
+coverage is 204/391 pairs; phi resolution and subsequent stages remain open.

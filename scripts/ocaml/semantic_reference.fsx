@@ -2698,6 +2698,54 @@ let floatAllocationObservation (source:string) =
     tuple [enc FloatAllocation.floatCallerSavedRegs;enc FloatAllocation.floatCalleeSavedRegs;enc FloatAllocation.allocatableFloatRegs;
         [Platform.ARM64;Platform.X86_64] |> List.map (fun arch -> enc (FloatAllocation.allocatableFloatRegsFor arch,FloatAllocation.floatCallerSavedRegsFor arch)) |> list;enc (FloatAllocation.allocatableFloatRegs |> List.map FloatAllocation.physFPRegToInt);list repairCases;list scheduling;list allocations]
 
+let spillObservation (source:string) =
+    let enc (value:'a) = encode typeof<'a> (box value)
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let attempt action = enc (try Ok (action ()) with ex -> Error ex.Message)
+    let internalCall name args : 'a = rcInternalCall<'a> "SpillOperands" name args
+    let phys=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let ids=[-9;0;1;2;3;7;29]
+    let d:AllocationModel.VRegDomain=rcInternalCall "AllocationModel" "buildVRegDomain" [|box ids|]
+    let regs=(phys |> List.map LIR.Physical) @ ((ids @ [987;Int32.MinValue;Int32.MaxValue]) |> List.map LIR.Virtual)
+    let pairRegs=((ids @ [987]) |> List.map LIR.Virtual) @ [LIR.Physical LIR.X0;LIR.Physical LIR.X8;LIR.Physical LIR.X12;LIR.Physical LIR.X19]
+    let mappings=[0;1;2;3;4] |> List.map (fun mode ->
+        let allocations=d.Ids |> Array.mapi (fun n _ ->
+            match mode with
+            | 0 -> Some (AllocationModel.PhysReg (List.item n [LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7]))
+            | 1 -> Some (AllocationModel.StackSlot (-(n+1)*8))
+            | 2 -> Some (if n%2=0 then AllocationModel.PhysReg LIR.X12 else AllocationModel.StackSlot (-24))
+            | 3 -> (match n%3 with 0 -> None | 1 -> Some (AllocationModel.PhysReg (List.item (n*4) phys)) | _ -> Some (AllocationModel.StackSlot (-8)))
+            | _ -> None)
+        let mapping:AllocationModel.AllocationResult={Domain=d;Allocations=allocations;StackSize=64;UsedCalleeSaved=[]}
+        let scalar=regs |> List.map (fun reg ->
+            let operand=LIR.Reg reg
+            tuple [enc reg;(match reg with LIR.Virtual id -> enc (internalCall "tryAllocation" [|box mapping;box id|] : AllocationModel.Allocation option) | LIR.Physical _ -> null);
+                enc (SpillOperands.applyToReg mapping reg);enc (SpillOperands.applyToOperandNoLoad mapping operand);
+                [LIR.X0;LIR.X12;LIR.X19] |> List.map (fun temp -> let op,loads=SpillOperands.applyToOperand mapping operand temp in enc (op,loads,SpillOperands.loadSpilled mapping reg temp)) |> list])
+        let operands=[LIR.Imm Int64.MinValue;LIR.FloatImm (-0.);LIR.StringSymbol source;LIR.FloatSymbol (BitConverter.Int64BitsToDouble 0x7ff8000000000001L);LIR.StackSlot (-24);LIR.FuncAddr (AST.functionId UInt64.MaxValue)] |> List.map (fun op -> let allocated,loads=SpillOperands.applyToOperand mapping op LIR.X12 in enc (op,allocated,loads,SpillOperands.applyToOperandNoLoad mapping op))
+        let live=List.init 128 (fun mask ->
+            let bits=Bitset.empty d.WordCount
+            for n in 0..6 do
+                if mask &&& (1 <<< n)<>0 then Bitset.addIndexInPlace n bits
+            enc (SpillOperands.getLiveCallerSavedRegs mapping bits))
+        let pairs=[Platform.ARM64;Platform.X86_64] |> List.collect (fun arch -> pairRegs |> List.collect (fun left -> pairRegs |> List.collect (fun right -> ((phys |> List.map LIR.Physical) @ [LIR.Virtual 3;LIR.Virtual 987]) |> List.map (fun dest -> attempt (fun () -> internalCall "loadSpilledPair" [|box arch;box mapping;box left;box right;box dest|] : (LIR.Reg*LIR.Instr list)*(LIR.Reg*LIR.Instr list))))))
+        tuple [list scalar;list operands;list live;list pairs])
+    let candidates=[LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X19;LIR.X20;LIR.X21;LIR.X0;LIR.X1;LIR.X2]
+    let exclusion=List.init 2048 (fun mask ->
+        let excluded=candidates |> List.indexed |> List.choose (fun (n,reg) -> if mask &&& (1 <<< n)<>0 then Some (LIR.Physical reg) else None)
+        attempt (fun () -> internalCall "x86SpillTempExcluding" [|box (LIR.Virtual 3 :: excluded @ excluded)|] : LIR.PhysReg))
+    let fd:AllocationModel.VRegDomain=rcInternalCall "AllocationModel" "buildVRegDomain" [|box (List.init 16 id)|]
+    let floatSaved=[0;1;2;3;4] |> List.collect (fun mode ->
+        let allocations=Array.init 16 (fun n -> match mode with 0 -> Some (FloatAllocation.FPhysReg (List.item n FloatAllocation.allocatableFloatRegs)) | 1 -> Some (FloatAllocation.FStackSlot (-8)) | 2 -> Some (FloatAllocation.FRematerialized (-0.)) | 3 -> (if n%2=0 then Some (FloatAllocation.FPhysReg (List.item (15-n) FloatAllocation.allocatableFloatRegs)) else None) | _ -> None)
+        let allocation:FloatAllocation.FAllocationResult={Domain=fd;Allocations=allocations;StackSize=0;UsedCalleeSavedF=[];SpillScratchLeft=LIR.FVirtual (-1000);SpillScratchRight=LIR.FVirtual (-1001);SpillScratchThird=LIR.FVirtual (-1002)}
+        0::65535::21845::43690::List.init 16 (fun n -> 1 <<< n) |> List.map (fun mask ->
+            let bits=Bitset.empty 1
+            for n in 0..15 do
+                if mask &&& (1 <<< n)<>0 then Bitset.addIndexInPlace n bits
+            [Platform.ARM64;Platform.X86_64] |> List.map (fun arch -> enc (SpillOperands.getLiveCallerSavedFloatRegs arch bits allocation)) |> list))
+    tuple [list mappings;phys |> List.map (fun reg -> enc (internalCall "aliasesX86ScratchReg" [|box reg|] : bool)) |> list;list exclusion;list floatSaved;[Platform.ARM64;Platform.X86_64] |> List.map (fun arch -> enc (internalCall "isX86_64" [|box arch|] : bool)) |> list]
+
 let lirTreeObservation (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -3581,6 +3629,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "spill-operands" -> spillObservation source
         | "float-allocation" -> floatAllocationObservation source
         | "register-coloring" -> coloringObservation source
         | "allocation-foundations" -> allocationObservation source
