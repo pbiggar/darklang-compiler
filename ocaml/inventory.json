@@ -1224,7 +1224,7 @@
       "source": "src/DarkCompiler/passes/anf/optimization/Accumulators.fs",
       "kind": "compiler",
       "sha256": "8c706a45279464fd1299abfa4deca0469a3439d54f539924d999575d7ebaf804",
-      "owner": "ocaml/lib/passes/anf/optimization/Accumulators.ml"
+      "owner": "ocaml/lib/passes/anf/optimization/ANFAccumulatorOptimization.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/optimization/Constants.fs",
@@ -1248,7 +1248,7 @@
       "source": "src/DarkCompiler/passes/anf/optimization/Substitution.fs",
       "kind": "compiler",
       "sha256": "54af88c1fde0556d9a87a1ef50cbd1c955cb3b2b6bd59f8086508021e092ef5d",
-      "owner": "ocaml/lib/passes/anf/optimization/Substitution.ml"
+      "owner": "ocaml/lib/passes/anf/optimization/ANFSubstitution.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/ownership/Cleanup.fs",

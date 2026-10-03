@@ -31,6 +31,7 @@ let rec requests () =
         | "lowering-primitives" -> Semantic_observation.LoweringPrimitivesObservation.observe source
         | "memory-planning" -> Semantic_observation.MemoryPlanningObservation.observe source
         | "preparation-registries" -> Semantic_observation.PreparationRegistryObservation.observe source
+        | "anf-scalar-optimization" -> Semantic_observation.ANFScalarObservation.observe source
         | "anf" -> Semantic_observation.ANFObservation.observe source
         | "checked-preparation" -> Semantic_observation.CheckedPreparationObservation.observe source
         | "written-checking" -> Semantic_observation.WrittenCheckingObservation.observe source

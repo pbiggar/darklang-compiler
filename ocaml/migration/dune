@@ -708,3 +708,75 @@
  (deps ../lib/passes/anf/lowering/AtomLowering.ml instrument_checking.py)
  (action (with-stdout-to %{targets}
   (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/AtomLowering.ml}))))
+
+(rule
+ (targets InstrumentedInliningCommon.mli)
+ (deps ../lib/passes/anf/InliningCommon.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/InliningCommon.mli}))))
+
+(rule
+ (targets InstrumentedInliningCommon.ml)
+ (deps ../lib/passes/anf/InliningCommon.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/InliningCommon.ml}))))
+
+(rule
+ (targets InstrumentedANFConstants.mli)
+ (deps ../lib/passes/anf/optimization/ANFConstants.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/optimization/ANFConstants.mli}))))
+
+(rule
+ (targets InstrumentedANFConstants.ml)
+ (deps ../lib/passes/anf/optimization/ANFConstants.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/optimization/ANFConstants.ml}))))
+
+(rule
+ (targets InstrumentedANFSubstitution.mli)
+ (deps ../lib/passes/anf/optimization/ANFSubstitution.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/optimization/ANFSubstitution.mli}))))
+
+(rule
+ (targets InstrumentedANFSubstitution.ml)
+ (deps ../lib/passes/anf/optimization/ANFSubstitution.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/optimization/ANFSubstitution.ml}))))
+
+(rule
+ (targets InstrumentedANFEffects.mli)
+ (deps ../lib/passes/anf/optimization/ANFEffects.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/optimization/ANFEffects.mli}))))
+
+(rule
+ (targets InstrumentedANFEffects.ml)
+ (deps ../lib/passes/anf/optimization/ANFEffects.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/optimization/ANFEffects.ml}))))
+
+(rule
+ (targets InstrumentedANFDeadCodeElimination.mli)
+ (deps ../lib/passes/anf/ANFDeadCodeElimination.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/ANFDeadCodeElimination.mli}))))
+
+(rule
+ (targets InstrumentedANFDeadCodeElimination.ml)
+ (deps ../lib/passes/anf/ANFDeadCodeElimination.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/ANFDeadCodeElimination.ml}))))
+
+(rule
+ (targets InstrumentedCallGraphReachability.mli)
+ (deps ../lib/CallGraphReachability.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/CallGraphReachability.mli}))))
+
+(rule
+ (targets InstrumentedCallGraphReachability.ml)
+ (deps ../lib/CallGraphReachability.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/CallGraphReachability.ml}))))

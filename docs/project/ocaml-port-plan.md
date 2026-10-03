@@ -621,3 +621,33 @@ Coverage is 121/391 complete implementation/interface pairs, with zero missing
 reference comment lines. The interrupted closure-comparison batch outputs were
 lost with the VM; the full corpus gate must restart. The remaining compiler
 passes and final executable-byte acceptance remain outstanding.
+
+Typed ANF constant folding, scalar strength reduction, operand substitution,
+effect/use tracking, function reachability, and tail-call detection are translated
+with full interfaces and original comments. The release-plan fingerprint helper
+now preserves the original UTF-16 hashing, compositional child order, and bounded
+node traversal. All seven original tail-call tests pass, including cleanup motion,
+closure calls, arity rejection, one-to-one owned transfer, and retained projections.
+Native test diagnostics retain complete typed ANF descriptions.
+
+A fresh warning-free build compiled the new production modules, translated tests,
+and migration-only scalar observer; 272/272 native units pass. Coverage is 128/391
+full source pairs and source-comment coverage has no missing lines. The observer
+covers every ANF CExpr constructor with literal and temporary operands, scalar
+boundary cases, option combinations, lexical renaming, SCCs, and reachability;
+its reference comparison is pending while the restarted full closure-comparison
+audit runs. Whole-compiler and executable-byte acceptance remain outstanding.
+
+The scalar observer now matches the frozen F# reference across its complete
+54,219,518-byte constructor and boundary-value observation. The lexical ANF
+optimizer, intrinsic lowering, five accumulator transformations, optimization
+coordinator, and accumulator-lowering coordinator are fully translated. Guarded
+alternative patterns are split where OCaml and F# select alternatives differently.
+All ten original ANF optimizer tests and all 27 original memory-shape tests pass,
+including recursive release plans, fingerprint distinctions, and cache thresholds.
+
+A fresh warning-free build passes 309/309 translated native units. Coverage is
+135/391 complete implementation/interface pairs. The full closure-comparison
+audit uses bounded batches, iterative reference requests, explicit collection,
+and a sufficiently deep JSON encoder; its full corpus gate remains in progress.
+Whole-compiler and executable-byte acceptance remain outstanding.

@@ -1882,89 +1882,295 @@ let reader : IO.TextReader =
     match fsi.CommandLineArgs with
     | [| _; path |] -> new IO.StreamReader(path)
     | _ -> Console.In
-let jsonOutputOptions = System.Text.Json.JsonSerializerOptions(Encoder=System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
-let rec requests () =
-    match reader.ReadLine() with
-    | null -> ()
-    | line ->
-        let request = JsonNode.Parse line
-        let stage = request["stage"].GetValue<string>()
-        let source = request["source"].GetValue<string>()
-        let result =
-            match stage with
-            | "tokens" ->
-                let value = LibParser.Lexer.tokenize source
-                encode (typeof<Result<LibParser.Lexer.SpannedToken list * (LibParser.Tokenizer.TokenRange * string) list, string>>) (box value)
-            | "validated" ->
-                [LibParser.Validation.Script; LibParser.Validation.Package; LibParser.Validation.Test]
-                |> List.map (fun mode -> LibParser.Parser.parseFor mode source |> Result.map LibParser.Validation.ValidatedSourceFile.toWrittenTypes)
-                |> box |> encode typeof<Result<LibParser.WrittenTypes.SourceFile, LibParser.Parser.Diagnostic list> list>
-            | "rendered" ->
-                (LibParser.Parser.parse source).diagnostics |> List.map (LibParser.Parser.renderDiagnostic source)
-                |> box |> encode typeof<string list>
-            | "ast-helpers" -> astHelpers source
-            | "dsl" -> dsl source
-            | "formatter" ->
-                let formatted = WrittenParsing.parse LibParser.Validation.Script source |> Result.map (fun validated ->
-                    let parsed = LibParser.Validation.ValidatedSourceFile.toWrittenTypes validated
-                    let printed = WrittenFormatter.format source parsed
-                    let reparsed = WrittenParsing.parse LibParser.Validation.Script printed |> Result.toOption |> Option.map (fun value ->
-                        let parsed = LibParser.Validation.ValidatedSourceFile.toWrittenTypes value
-                        WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
-                    WrittenFormatter.syntaxKey parsed, printed, reparsed)
-                encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
-            | "lowering-aggregates" -> loweringAggregates source
-            | "atom-lowering" -> atomLowering source
-            | "lowering-types" -> loweringTypes source
-            | "lowering-operators" -> loweringOperators source
-            | "monomorphization" -> monomorphization source
-            | "lift-functions" -> liftFunctions source
-            | "lift-expressions" -> liftExpressions source
-            | "closure-comparisons" -> closureComparisons source
-            | "closure-analysis" -> closureAnalysis source
-            | "checked-display" -> checkedDisplay source
-            | "checked-structural-format" -> checkedFormat source
-            | "inline-lambdas" -> inlineLambdas source
-            | "type-substitution" -> typeSubstitution source
-            | "lowering-primitives" -> loweringPrimitives source
-            | "memory-planning" -> memoryPlanning source
-            | "preparation-registries" -> preparationRegistries source
-            | "anf" -> anfObservation source
-            | "checked-preparation" -> checkedPreparation source
-            | "written-checking" -> writtenChecking source
-            | "written-patterns" -> writtenPatterns source
-            | "written-types" -> writtenTypes source
-            | "program-checking" -> programChecking source
-            | "function-checking" -> functionChecking source
-            | "expression-checking" -> expressionChecking source
-            | "match-checking" -> matchChecking source
-            | "call-checking" -> callChecking source
-            | "lambda-checking" -> lambdaChecking source
-            | "stdlib-catalog" -> stdlibCatalog source
-            | "binary-checking" -> binaryChecking source
-            | "record-checking" -> recordChecking source
-            | "declarations" -> declarations source
-            | "materialize-helpers" -> materializeHelpers source
-            | "helper-dependencies" -> helperDependencies source
-            | "structural-helpers" -> structuralHelpers source
-            | "comparison-planning" -> comparison source
-            | "structural-format" -> structuralFormat source
-            | "unification" -> unification source
-            | "checking-types" -> checkingTypes source
-            | "checked-ast" -> checkedAst source
-            | "function-map" -> functionIdMap source
-            | "free-variables" -> freeVariables source
-            | "checking-diagnostics" -> checkingDiagnostics source
-            | "resolution" -> resolution source
-            | "names" -> names source
-            | "written-source" -> writtenSource source
-            | "ast" -> encode typeof<LibParser.Parser.ParseResult> (box (LibParser.Parser.parse source))
-            | "parser-support" | "patterns" | "types" | "bindings" | "parameters" | "effects" -> parserSupport stage source
-            | _ -> failwith $"Unsupported reference observation stage: {stage}"
-        let response = JsonObject()
-        response["schema"] <- JsonValue.Create 1
-        response["stage"] <- JsonValue.Create stage
-        response["value"] <- result
-        Console.WriteLine(response.ToJsonString(jsonOutputOptions))
-        requests ()
-requests ()
+let jsonOutputOptions = System.Text.Json.JsonSerializerOptions(MaxDepth=65536,Encoder=System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
+let anfScalarOptimization source =
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let fixtures : ANF.CExpr list = [(ANF.Atom ((ANF.StringLiteral source)));
+        (ANF.TypedAtom ((ANF.StringLiteral source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))));
+        (ANF.Prim ((ANF.Add), (ANF.StringLiteral source), (ANF.StringLiteral source)));
+        (ANF.UnaryPrim ((ANF.Neg), (ANF.StringLiteral source)));
+        (ANF.IfValue ((ANF.StringLiteral source), (ANF.StringLiteral source), (ANF.StringLiteral source)));
+        (ANF.Call ((AST.functionId System.UInt64.MaxValue), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.BorrowedCall ((AST.functionId System.UInt64.MaxValue), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.TailCall ((AST.functionId System.UInt64.MaxValue), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.IndirectCall ((ANF.StringLiteral source), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.IndirectTailCall ((ANF.StringLiteral source), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.ClosureAlloc ((AST.functionId System.UInt64.MaxValue), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.ClosureCall ((ANF.StringLiteral source), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.ClosureTailCall ((ANF.StringLiteral source), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.TupleAlloc ([(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.TupleGet ((ANF.StringLiteral source), (3)));
+        (ANF.RecordAlloc (({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])); (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))]; ANF.RecordDescriptor.Fields = [((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))); ((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])))]; ANF.RecordDescriptor.ValueType = (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))} : ANF.RecordDescriptor), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.RecordGet (({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])); (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))]; ANF.RecordDescriptor.Fields = [((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))); ((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])))]; ANF.RecordDescriptor.ValueType = (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))} : ANF.RecordDescriptor), (ANF.StringLiteral source), (3)));
+        (ANF.RecordClone (({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])); (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))]; ANF.RecordDescriptor.Fields = [((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))); ((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])))]; ANF.RecordDescriptor.ValueType = (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))} : ANF.RecordDescriptor), (ANF.StringLiteral source), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.RecordReuse (({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])); (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))]; ANF.RecordDescriptor.Fields = [((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))); ((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])))]; ANF.RecordDescriptor.ValueType = (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))} : ANF.RecordDescriptor), ({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])); (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))]; ANF.RecordDescriptor.Fields = [((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))); ((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])))]; ANF.RecordDescriptor.ValueType = (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))} : ANF.RecordDescriptor), (ANF.StringLiteral source), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.StringConcat ((ANF.StringLiteral source), (ANF.StringLiteral source), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.CanonicalBufferEq ((MemoryModel.Utf8String), (ANF.StringLiteral source), (ANF.StringLiteral source)));
+        (ANF.RefCountInc ((ANF.StringLiteral source), (3), (MemoryModel.GenericHeap), (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey = (Some ((source))); MemoryModel.RcMetadata.ReleasePlan = (Some ((MemoryModel.NoReleasePlan))); MemoryModel.RcMetadata.SourceType = (Some ((AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))))} : MemoryModel.RcMetadata)))));
+        (ANF.RefCountDec ((ANF.StringLiteral source), (3), (MemoryModel.GenericHeap), (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey = (Some ((source))); MemoryModel.RcMetadata.ReleasePlan = (Some ((MemoryModel.NoReleasePlan))); MemoryModel.RcMetadata.SourceType = (Some ((AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))))} : MemoryModel.RcMetadata)))));
+        (ANF.Print ((ANF.StringLiteral source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))));
+        (ANF.StdoutWrite ((ANF.StringLiteral source), (true)));
+        (ANF.StdinReadLine);
+        (ANF.RuntimeError ((source)));
+        (ANF.RuntimeErrorString ((ANF.StringLiteral source)));
+        (ANF.FileReadBlob ((ANF.StringLiteral source)));
+        (ANF.FileExists ((ANF.StringLiteral source)));
+        (ANF.FileWriteBlob ((ANF.StringLiteral source), (ANF.StringLiteral source)));
+        (ANF.FileAppendText ((ANF.StringLiteral source), (ANF.StringLiteral source)));
+        (ANF.FileDelete ((ANF.StringLiteral source)));
+        (ANF.FileCreateDirectory ((ANF.StringLiteral source)));
+        (ANF.FileSetExecutable ((ANF.StringLiteral source)));
+        (ANF.FileWriteFromPtr ((ANF.StringLiteral source), (ANF.StringLiteral source), (ANF.StringLiteral source)));
+        (ANF.FloatSqrt ((ANF.StringLiteral source)));
+        (ANF.FloatAbs ((ANF.StringLiteral source)));
+        (ANF.FloatNeg ((ANF.StringLiteral source)));
+        (ANF.Int64ToFloat ((ANF.StringLiteral source)));
+        (ANF.FloatToInt64 ((ANF.StringLiteral source)));
+        (ANF.FloatToBits ((ANF.StringLiteral source)));
+        (ANF.RawAlloc ((ANF.StringLiteral source)));
+        (ANF.MappedAlloc ((ANF.StringLiteral source)));
+        (ANF.RawFree ((ANF.StringLiteral source)));
+        (ANF.MappedFree ((ANF.StringLiteral source)));
+        (ANF.RawGet ((ANF.StringLiteral source), (ANF.StringLiteral source), (Some ((AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))))));
+        (ANF.RawTake ((ANF.StringLiteral source), (ANF.StringLiteral source), (Some ((AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))))));
+        (ANF.RawGetByte ((ANF.StringLiteral source), (ANF.StringLiteral source)));
+        (ANF.RawWriteWord ((ANF.StringLiteral source), (ANF.StringLiteral source), (ANF.StringLiteral source)));
+        (ANF.RawWriteByte ((ANF.StringLiteral source), (ANF.StringLiteral source), (ANF.StringLiteral source)));
+        (ANF.RawSlotInit ((ANF.StringLiteral source), (ANF.StringLiteral source), (ANF.StringLiteral source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))));
+        (ANF.StringToRawPtr ((ANF.StringLiteral source)));
+        (ANF.RawPtrToString ((ANF.StringLiteral source)));
+        (ANF.BlobToRawPtr ((ANF.StringLiteral source)));
+        (ANF.RawPtrToBlob ((ANF.StringLiteral source)));
+        (ANF.RawPtrToInt128 ((ANF.StringLiteral source)));
+        (ANF.RawPtrToUInt128 ((ANF.StringLiteral source)));
+        (ANF.DictToRawPtr ((ANF.StringLiteral source)));
+        (ANF.RawPtrToDict ((ANF.StringLiteral source), (ANF.StringLiteral source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))));
+        (ANF.ListToRawPtr ((ANF.StringLiteral source)));
+        (ANF.FixedBlockToRawPtr ((ANF.StringLiteral source)));
+        (ANF.RawPtrToList ((ANF.StringLiteral source), (ANF.StringLiteral source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))));
+        (ANF.RefCountIncString ((ANF.StringLiteral source)));
+        (ANF.RefCountDecString ((ANF.StringLiteral source)));
+        (ANF.RefCountIncBlob ((ANF.StringLiteral source)));
+        (ANF.RefCountDecBlob ((ANF.StringLiteral source)));
+        (ANF.RefCountIncInt ((ANF.StringLiteral source)));
+        (ANF.RefCountDecInt ((ANF.StringLiteral source)));
+        (ANF.RandomInt64);
+        (ANF.DateTimeNow);
+        (ANF.Sleep ((ANF.StringLiteral source)));
+        (ANF.CliNative ((ANF.Execute), [(ANF.StringLiteral source); (ANF.StringLiteral source)]));
+        (ANF.FloatToString ((ANF.StringLiteral source)));
+        (ANF.Atom ((ANF.Var (ANF.TempId 3))));
+        (ANF.TypedAtom ((ANF.Var (ANF.TempId 3)), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))));
+        (ANF.Prim ((ANF.Add), (ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3))));
+        (ANF.UnaryPrim ((ANF.Neg), (ANF.Var (ANF.TempId 3))));
+        (ANF.IfValue ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3))));
+        (ANF.Call ((AST.functionId System.UInt64.MaxValue), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.BorrowedCall ((AST.functionId System.UInt64.MaxValue), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.TailCall ((AST.functionId System.UInt64.MaxValue), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.IndirectCall ((ANF.Var (ANF.TempId 3)), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.IndirectTailCall ((ANF.Var (ANF.TempId 3)), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.ClosureAlloc ((AST.functionId System.UInt64.MaxValue), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.ClosureCall ((ANF.Var (ANF.TempId 3)), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.ClosureTailCall ((ANF.Var (ANF.TempId 3)), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.TupleAlloc ([(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.TupleGet ((ANF.Var (ANF.TempId 3)), (3)));
+        (ANF.RecordAlloc (({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])); (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))]; ANF.RecordDescriptor.Fields = [((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))); ((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])))]; ANF.RecordDescriptor.ValueType = (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))} : ANF.RecordDescriptor), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.RecordGet (({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])); (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))]; ANF.RecordDescriptor.Fields = [((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))); ((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])))]; ANF.RecordDescriptor.ValueType = (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))} : ANF.RecordDescriptor), (ANF.Var (ANF.TempId 3)), (3)));
+        (ANF.RecordClone (({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])); (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))]; ANF.RecordDescriptor.Fields = [((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))); ((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])))]; ANF.RecordDescriptor.ValueType = (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))} : ANF.RecordDescriptor), (ANF.Var (ANF.TempId 3)), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.RecordReuse (({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])); (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))]; ANF.RecordDescriptor.Fields = [((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))); ((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])))]; ANF.RecordDescriptor.ValueType = (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))} : ANF.RecordDescriptor), ({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])); (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))]; ANF.RecordDescriptor.Fields = [((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))); ((source), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString])))]; ANF.RecordDescriptor.ValueType = (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))} : ANF.RecordDescriptor), (ANF.Var (ANF.TempId 3)), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.StringConcat ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3)), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.CanonicalBufferEq ((MemoryModel.Utf8String), (ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3))));
+        (ANF.RefCountInc ((ANF.Var (ANF.TempId 3)), (3), (MemoryModel.GenericHeap), (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey = (Some ((source))); MemoryModel.RcMetadata.ReleasePlan = (Some ((MemoryModel.NoReleasePlan))); MemoryModel.RcMetadata.SourceType = (Some ((AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))))} : MemoryModel.RcMetadata)))));
+        (ANF.RefCountDec ((ANF.Var (ANF.TempId 3)), (3), (MemoryModel.GenericHeap), (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey = (Some ((source))); MemoryModel.RcMetadata.ReleasePlan = (Some ((MemoryModel.NoReleasePlan))); MemoryModel.RcMetadata.SourceType = (Some ((AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))))} : MemoryModel.RcMetadata)))));
+        (ANF.Print ((ANF.Var (ANF.TempId 3)), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))));
+        (ANF.StdoutWrite ((ANF.Var (ANF.TempId 3)), (true)));
+        (ANF.StdinReadLine);
+        (ANF.RuntimeError ((source)));
+        (ANF.RuntimeErrorString ((ANF.Var (ANF.TempId 3))));
+        (ANF.FileReadBlob ((ANF.Var (ANF.TempId 3))));
+        (ANF.FileExists ((ANF.Var (ANF.TempId 3))));
+        (ANF.FileWriteBlob ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3))));
+        (ANF.FileAppendText ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3))));
+        (ANF.FileDelete ((ANF.Var (ANF.TempId 3))));
+        (ANF.FileCreateDirectory ((ANF.Var (ANF.TempId 3))));
+        (ANF.FileSetExecutable ((ANF.Var (ANF.TempId 3))));
+        (ANF.FileWriteFromPtr ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3))));
+        (ANF.FloatSqrt ((ANF.Var (ANF.TempId 3))));
+        (ANF.FloatAbs ((ANF.Var (ANF.TempId 3))));
+        (ANF.FloatNeg ((ANF.Var (ANF.TempId 3))));
+        (ANF.Int64ToFloat ((ANF.Var (ANF.TempId 3))));
+        (ANF.FloatToInt64 ((ANF.Var (ANF.TempId 3))));
+        (ANF.FloatToBits ((ANF.Var (ANF.TempId 3))));
+        (ANF.RawAlloc ((ANF.Var (ANF.TempId 3))));
+        (ANF.MappedAlloc ((ANF.Var (ANF.TempId 3))));
+        (ANF.RawFree ((ANF.Var (ANF.TempId 3))));
+        (ANF.MappedFree ((ANF.Var (ANF.TempId 3))));
+        (ANF.RawGet ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3)), (Some ((AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))))));
+        (ANF.RawTake ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3)), (Some ((AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))))));
+        (ANF.RawGetByte ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3))));
+        (ANF.RawWriteWord ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3))));
+        (ANF.RawWriteByte ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3))));
+        (ANF.RawSlotInit ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3)), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))));
+        (ANF.StringToRawPtr ((ANF.Var (ANF.TempId 3))));
+        (ANF.RawPtrToString ((ANF.Var (ANF.TempId 3))));
+        (ANF.BlobToRawPtr ((ANF.Var (ANF.TempId 3))));
+        (ANF.RawPtrToBlob ((ANF.Var (ANF.TempId 3))));
+        (ANF.RawPtrToInt128 ((ANF.Var (ANF.TempId 3))));
+        (ANF.RawPtrToUInt128 ((ANF.Var (ANF.TempId 3))));
+        (ANF.DictToRawPtr ((ANF.Var (ANF.TempId 3))));
+        (ANF.RawPtrToDict ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3)), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))));
+        (ANF.ListToRawPtr ((ANF.Var (ANF.TempId 3))));
+        (ANF.FixedBlockToRawPtr ((ANF.Var (ANF.TempId 3))));
+        (ANF.RawPtrToList ((ANF.Var (ANF.TempId 3)), (ANF.Var (ANF.TempId 3)), (AST.TRecord (source, [AST.TInt64; AST.TList AST.TString]))));
+        (ANF.RefCountIncString ((ANF.Var (ANF.TempId 3))));
+        (ANF.RefCountDecString ((ANF.Var (ANF.TempId 3))));
+        (ANF.RefCountIncBlob ((ANF.Var (ANF.TempId 3))));
+        (ANF.RefCountDecBlob ((ANF.Var (ANF.TempId 3))));
+        (ANF.RefCountIncInt ((ANF.Var (ANF.TempId 3))));
+        (ANF.RefCountDecInt ((ANF.Var (ANF.TempId 3))));
+        (ANF.RandomInt64);
+        (ANF.DateTimeNow);
+        (ANF.Sleep ((ANF.Var (ANF.TempId 3))));
+        (ANF.CliNative ((ANF.Execute), [(ANF.Var (ANF.TempId 3)); (ANF.Var (ANF.TempId 3))]));
+        (ANF.FloatToString ((ANF.Var (ANF.TempId 3))))]
+    let ints = [Int64.MinValue;Int64.MaxValue;-2L;-1L;0L;1L;2L;3L;4L;63L;64L;65L]
+    let floats = [Double.NegativeInfinity;-3.75;-2.0;-1.0;-0.0;0.0;0.5;1.0;2.0;3.75;Double.PositiveInfinity;BitConverter.Int64BitsToDouble 0x7ff8000000001234L]
+    let atoms = [ANF.UnitLiteral;ANF.IntLiteral (ANF.Int8 -128y);ANF.IntLiteral (ANF.Int16 -32768s);ANF.IntLiteral (ANF.Int32 Int32.MinValue);ANF.IntLiteral (ANF.UInt8 255uy);ANF.IntLiteral (ANF.UInt16 65535us);ANF.IntLiteral (ANF.UInt32 UInt32.MaxValue);ANF.BoolLiteral true;ANF.BoolLiteral false;ANF.StringLiteral source;ANF.StringLiteral "";ANF.StringLiteral "e";ANF.StringLiteral "\u0301";ANF.Var (ANF.TempId 3);ANF.Var (ANF.TempId 4);ANF.FuncRef (AST.functionId UInt64.MaxValue)] @ (ints |> List.collect (fun n -> [ANF.IntLiteral (ANF.Int64 n);ANF.IntLiteral (ANF.UInt64 (uint64 n))])) @ (floats |> List.map ANF.FloatLiteral)
+    let ops = [ANF.Add;ANF.Sub;ANF.Mul;ANF.Div;ANF.Mod;ANF.Shl;ANF.Shr;ANF.BitAnd;ANF.BitOr;ANF.BitXor;ANF.Eq;ANF.Neq;ANF.Lt;ANF.Gt;ANF.Lte;ANF.Gte;ANF.And;ANF.Or]
+    let types = [AST.TUnit;AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TBool;AST.TFloat64;AST.TString;AST.TBlob;AST.TList AST.TInt64;AST.TTuple [AST.TString;AST.TInt64]]
+    let typeEnvs = Map.empty :: (types |> List.map (fun typ -> Map.ofList [ANF.TempId 3,typ]))
+    let envs = [Map.empty;Map.ofList [ANF.TempId 3,ANF.Var (ANF.TempId 3)];Map.ofList [ANF.TempId 3,ANF.IntLiteral (ANF.Int64 7L);ANF.TempId 4,ANF.StringLiteral source]]
+    let context : ANFConstants.OptimizeContext = {TypeReg=Map.ofList [source,[("value",AST.TVar "a");("nested",AST.TVar "b")]];RecordTypeParams=Map.ofList [source,["a";"b"]];SumShapeReg=Map.empty;FunctionNames=FunctionIdMap.ofList [AST.functionId 1UL,"Darklang.Stdlib.String.__appendNormalized";AST.functionId 2UL,"Darklang.Stdlib.String.__normalizeAfterConcat"];FunctionIds=Map.empty}
+    let options = [ANFConstants.defaultOptimizeOptions;{ANFConstants.defaultOptimizeOptions with EnableConstFolding=false};{ANFConstants.defaultOptimizeOptions with EnableStrengthReduction=false};{ANFConstants.defaultOptimizeOptions with EnableConstFolding=false;EnableStrengthReduction=false}]
+    let extra = [ANF.Call (AST.functionId 1UL,[ANF.StringLiteral "e";ANF.StringLiteral "\u0301"]);ANF.Call (AST.functionId 2UL,[ANF.StringLiteral "e\u0301"]);ANF.Call (AST.functionId 1UL,[ANF.Var (ANF.TempId 3);ANF.StringLiteral ""]);ANF.Call (AST.functionId 1UL,[ANF.StringLiteral "";ANF.Var (ANF.TempId 3)]);ANF.TupleGet (ANF.Var (ANF.TempId 3),1);ANF.TupleGet (ANF.Var (ANF.TempId 3),2);ANF.StringConcat (ANF.StringLiteral "",ANF.Var (ANF.TempId 4),[ANF.StringLiteral ""])]
+    let all = fixtures @ extra @ (types |> List.map (fun typ -> ANF.TypedAtom (ANF.Var (ANF.TempId 3),typ)))
+    let tupleEnv = Map.ofList [ANF.TempId 3,Map.ofList [0,ANF.IntLiteral (ANF.Int64 7L);1,ANF.StringLiteral source]]
+    let bodies = [ANF.Return (ANF.Var (ANF.TempId 3));ANF.Let (ANF.TempId 3,ANF.Atom (ANF.Var (ANF.TempId 3)),ANF.Let (ANF.TempId 4,ANF.Prim (ANF.Add,ANF.Var (ANF.TempId 3),ANF.Var (ANF.TempId 4)),ANF.Return (ANF.Var (ANF.TempId 4))));ANF.Join ({ANF.TypedParam.Id=ANF.TempId 3;ANF.TypedParam.Type=AST.TInt64},ANF.Let (ANF.TempId 4,ANF.Atom (ANF.Var (ANF.TempId 3)),ANF.Return (ANF.Var (ANF.TempId 4))),ANF.If (ANF.Var (ANF.TempId 3),ANF.Jump (ANF.TempId 3,ANF.Var (ANF.TempId 4)),ANF.Let (ANF.TempId 4,ANF.Atom (ANF.Var (ANF.TempId 3)),ANF.Jump (ANF.TempId 3,ANF.Var (ANF.TempId 4)))))]
+    let function_ id name body : ANF.Function = {Id=AST.functionId id;Name=name;TypedParams=[{ANF.TypedParam.Id=ANF.TempId 3;ANF.TypedParam.Type=AST.TInt64}];ReturnType=AST.TInt64;ReturnOwnership=ANF.OwnedReturn;Body=body}
+    let functions = [function_ 0UL source (List.foldBack (fun c body -> ANF.Let (ANF.TempId 4,c,body)) fixtures (ANF.Return (ANF.Var (ANF.TempId 4))));function_ 1UL "one" (ANF.Let (ANF.TempId 4,ANF.Call (AST.functionId 2UL,[]),ANF.Return (ANF.Var (ANF.TempId 4))));function_ 2UL "two" (ANF.Let (ANF.TempId 4,ANF.Call (AST.functionId 1UL,[]),ANF.Return (ANF.Var (ANF.TempId 4))));function_ 3UL "self" (ANF.Let (ANF.TempId 4,ANF.Call (AST.functionId 3UL,[]),ANF.Return (ANF.Var (ANF.TempId 4))));function_ UInt64.MaxValue "Darklang.Stdlib.Json.__test" (ANF.Return ANF.UnitLiteral)]
+    let graph = InliningCommon.buildFunctionInfoMap functions |> FunctionIdMap.map (fun _ info -> info.Calls)
+    let ids = functions |> List.map (fun f -> f.Id) |> Set.ofList
+    let flags = Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let effectMethod name = typeof<AST.SemanticType>.Assembly.GetType("ANFEffects").GetMethod(name,flags)
+    let preserve = effectMethod "mustPreserveEvaluation"
+    let uses = effectMethod "cexprTempUses"
+    let fold = (effectMethod "foldCExprTempIds").MakeGenericMethod [|typeof<ANF.TempId list>|]
+    let usesTemp = effectMethod "cexprUsesTemp"
+    let forward = effectMethod "canForwardTupleElement"
+    let effect expr =
+        let add : ANF.TempId -> ANF.TempId list -> ANF.TempId list = fun tid xs -> tid::xs
+        unbox<bool> (preserve.Invoke(null,[|box context;box expr|])),
+        (unbox<Set<ANF.TempId>> (uses.Invoke(null,[|box expr|])) |> Set.toList),
+        (unbox<ANF.TempId list> (fold.Invoke(null,[|box add;box expr;box ([] : ANF.TempId list)|])) |> List.rev),
+        ([0;3;4] |> List.map (fun tid -> unbox<bool> (usesTemp.Invoke(null,[|box (ANF.TempId tid);box expr|]))))
+    let graphJson value = encode typeof<(AST.FunctionId * AST.FunctionId list) list> (box (value |> FunctionIdMap.toList |> List.map (fun (id,calls) -> id,Set.toList calls)))
+    let infoJson (info: InliningCommon.FunctionInfo) = encode typeof<ANF.Function * AST.FunctionId list * int * bool * bool * bool * bool * bool list> (box (info.Func,Set.toList info.Calls,info.Size,info.IsRecursive,info.HasClosures,info.HasTailCalls,info.IsExternal,[-1;0;2;3;4] |> List.map (InliningCommon.shouldInline info InliningCommon.defaultConfig)))
+    tuple [
+        encode typeof<(int64 option * int64 option) list> (box (ints |> List.map (fun n -> ANFConstants.tryLog2 n,ANFConstants.tryLog2UInt64 (uint64 n))))
+        encode typeof<int64 option list> (box (floats |> List.map ANFConstants.tryTruncateFloatToInt64))
+        encode typeof<ANF.CExpr option list list list> (box (ops |> List.map (fun op -> atoms |> List.map (fun left -> atoms |> List.map (ANFConstants.foldBinOp op left)))))
+        encode typeof<ANF.CExpr option list list list list> (box (typeEnvs |> List.map (fun env -> ops |> List.map (fun op -> atoms |> List.map (fun left -> atoms |> List.map (ANFConstants.tryStrengthReduce env op left))))))
+        encode typeof<ANF.CExpr option list list> (box ([ANF.Neg;ANF.Not;ANF.BitNot] |> List.map (fun op -> atoms |> List.map (ANFConstants.foldUnaryOp op))))
+        encode typeof<(bool * ANF.TempId list * ANF.TempId list * bool list) list> (box (all |> List.map effect))
+        encode typeof<ANF.CExpr list list> (box (envs |> List.map (fun env -> all |> List.map (ANFSubstitution.substCExpr env))))
+        encode typeof<(ANF.CExpr * bool) list list list> (box (options |> List.map (fun options -> envs |> List.map (fun env -> all |> List.map (ANFSubstitution.optimizeCExpr context options env Map.empty tupleEnv)))))
+        encode typeof<bool list list> (box (typeEnvs |> List.map (fun env -> atoms |> List.map (fun atom -> unbox<bool> (forward.Invoke(null,[|box context;box env;box atom|]))))))
+        encode typeof<(ANF.AExpr * ANF.VarGen) list> (box (bodies |> List.map (InliningCommon.renameExpr (Map.ofList [ANF.TempId 3,ANF.TempId 30;ANF.TempId 4,ANF.TempId 40]) (ANF.VarGen 100))))
+        encode typeof<ANF.CExpr list> (box (fixtures |> List.map (InliningCommon.renameCExpr (Map.ofList [ANF.TempId 3,ANF.TempId 30]))))
+        graphJson graph
+        graphJson (InliningCommon.buildReverseCallGraph graph)
+        encode typeof<AST.FunctionId list list> (box (InliningCommon.findSCCs ids graph |> List.map Set.toList))
+        JsonArray(InliningCommon.buildFunctionInfoMap functions |> FunctionIdMap.toList |> List.map (snd >> infoJson) |> List.toArray) :> JsonNode
+        JsonArray(InliningCommon.buildExternalCandidateInfoMap InliningCommon.defaultConfig functions |> FunctionIdMap.toList |> List.map (snd >> infoJson) |> List.toArray) :> JsonNode
+        graphJson (ANFDeadCodeElimination.buildCallGraph functions)
+        encode typeof<ANF.Function list> (box (ANFDeadCodeElimination.filterReachableFunctions (Set.singleton (AST.functionId 1UL)) functions))
+        encode typeof<AST.FunctionId list> (box (ANFDeadCodeElimination.getReachableStdlib (ANFDeadCodeElimination.buildCallGraph functions) [List.head functions] |> Set.toList))]
+
+let processRequest (line: string) =
+    let request = JsonNode.Parse line
+    let stage = request["stage"].GetValue<string>()
+    let source = request["source"].GetValue<string>()
+    let result =
+        match stage with
+        | "tokens" ->
+            let value = LibParser.Lexer.tokenize source
+            encode (typeof<Result<LibParser.Lexer.SpannedToken list * (LibParser.Tokenizer.TokenRange * string) list, string>>) (box value)
+        | "validated" ->
+            [LibParser.Validation.Script; LibParser.Validation.Package; LibParser.Validation.Test]
+            |> List.map (fun mode -> LibParser.Parser.parseFor mode source |> Result.map LibParser.Validation.ValidatedSourceFile.toWrittenTypes)
+            |> box |> encode typeof<Result<LibParser.WrittenTypes.SourceFile, LibParser.Parser.Diagnostic list> list>
+        | "rendered" ->
+            (LibParser.Parser.parse source).diagnostics |> List.map (LibParser.Parser.renderDiagnostic source)
+            |> box |> encode typeof<string list>
+        | "ast-helpers" -> astHelpers source
+        | "dsl" -> dsl source
+        | "formatter" ->
+            let formatted = WrittenParsing.parse LibParser.Validation.Script source |> Result.map (fun validated ->
+                let parsed = LibParser.Validation.ValidatedSourceFile.toWrittenTypes validated
+                let printed = WrittenFormatter.format source parsed
+                let reparsed = WrittenParsing.parse LibParser.Validation.Script printed |> Result.toOption |> Option.map (fun value ->
+                    let parsed = LibParser.Validation.ValidatedSourceFile.toWrittenTypes value
+                    WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
+                WrittenFormatter.syntaxKey parsed, printed, reparsed)
+            encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+        | "lowering-aggregates" -> loweringAggregates source
+        | "atom-lowering" -> atomLowering source
+        | "lowering-types" -> loweringTypes source
+        | "lowering-operators" -> loweringOperators source
+        | "monomorphization" -> monomorphization source
+        | "lift-functions" -> liftFunctions source
+        | "lift-expressions" -> liftExpressions source
+        | "closure-comparisons" -> closureComparisons source
+        | "closure-analysis" -> closureAnalysis source
+        | "checked-display" -> checkedDisplay source
+        | "checked-structural-format" -> checkedFormat source
+        | "inline-lambdas" -> inlineLambdas source
+        | "type-substitution" -> typeSubstitution source
+        | "lowering-primitives" -> loweringPrimitives source
+        | "memory-planning" -> memoryPlanning source
+        | "preparation-registries" -> preparationRegistries source
+        | "anf-scalar-optimization" -> anfScalarOptimization source
+        | "anf" -> anfObservation source
+        | "checked-preparation" -> checkedPreparation source
+        | "written-checking" -> writtenChecking source
+        | "written-patterns" -> writtenPatterns source
+        | "written-types" -> writtenTypes source
+        | "program-checking" -> programChecking source
+        | "function-checking" -> functionChecking source
+        | "expression-checking" -> expressionChecking source
+        | "match-checking" -> matchChecking source
+        | "call-checking" -> callChecking source
+        | "lambda-checking" -> lambdaChecking source
+        | "stdlib-catalog" -> stdlibCatalog source
+        | "binary-checking" -> binaryChecking source
+        | "record-checking" -> recordChecking source
+        | "declarations" -> declarations source
+        | "materialize-helpers" -> materializeHelpers source
+        | "helper-dependencies" -> helperDependencies source
+        | "structural-helpers" -> structuralHelpers source
+        | "comparison-planning" -> comparison source
+        | "structural-format" -> structuralFormat source
+        | "unification" -> unification source
+        | "checking-types" -> checkingTypes source
+        | "checked-ast" -> checkedAst source
+        | "function-map" -> functionIdMap source
+        | "free-variables" -> freeVariables source
+        | "checking-diagnostics" -> checkingDiagnostics source
+        | "resolution" -> resolution source
+        | "names" -> names source
+        | "written-source" -> writtenSource source
+        | "ast" -> encode typeof<LibParser.Parser.ParseResult> (box (LibParser.Parser.parse source))
+        | "parser-support" | "patterns" | "types" | "bindings" | "parameters" | "effects" -> parserSupport stage source
+        | _ -> failwith $"Unsupported reference observation stage: {stage}"
+    let response = JsonObject()
+    response["schema"] <- JsonValue.Create 1
+    response["stage"] <- JsonValue.Create stage
+    response["value"] <- result
+    Console.WriteLine(response.ToJsonString(jsonOutputOptions))
+
+let mutable requestLine = reader.ReadLine()
+while not (isNull requestLine) do
+    processRequest requestLine
+    GC.Collect()
+    GC.WaitForPendingFinalizers()
+    requestLine <- reader.ReadLine()
