@@ -813,3 +813,18 @@ tests are translated and registered with their original assertions and failure
 messages. The warning-free build passes 392/392 native units. Coverage is now
 190/391 pairs. Remaining ownership test groups, LIR and downstream backend
 stages, full corpus checks, and final native acceptance remain outstanding.
+
+Symbolic LIR is fully translated: its 120 instruction constructors, register
+and operand types, carried backend helper requirements, deterministic block
+layout, compact code-generation facts, RC memo keys, and complete printer.
+Ordered structural release plans use explicit source-compatible union/type
+comparisons; labels and fingerprint strings retain UTF-16 ordering. Printer
+collection interpolation retains runtime tuple/option/list formatting,
+including three-element truncation, raw tuple strings, and empty None text.
+Complete output matches F# for every constructor and reflected case schema,
+38 layouts/diagnostics, 3,144 fact/attachment cases, 66 metadata values and
+their ordered memo-key set, whole-program attachment/coverage counting, and
+924 printer/filter/summary cases. Original layout tests are translated with
+their comments and assertions. The warning-free build passes 396/396 units;
+coverage is 193/391 pairs. LIR tree shaking, allocation/lowering/backend stages,
+remaining ownership groups, full corpus checks, and final acceptance remain open.
