@@ -35,6 +35,9 @@ def fixture(path):
 
 # Preserve F# namespace distinctions in Dune's unqualified module graph.
 OWNER_OVERRIDES = {
+    "src/DarkCompiler/passes/anf/ownership/SSARefCountInsertion.fs": "ocaml/lib/passes/anf/ownership/RcSSARefCountInsertion.ml",
+    "src/DarkCompiler/passes/anf/ownership/SSAValueLiveness.fs": "ocaml/lib/passes/anf/ownership/RcSSAValueLiveness.ml",
+    "src/DarkCompiler/passes/anf/ownership/SSAReturnAnalysis.fs": "ocaml/lib/passes/anf/ownership/RcSSAReturnAnalysis.ml",
     "src/Tests/compiler-passes/ownership/JoinTests.fs": "ocaml/tests/compiler-passes/ownership/RcJoinTests.ml",
     "src/Tests/compiler-passes/ownership/TypeFactTests.fs": "ocaml/tests/compiler-passes/ownership/RcTypeFactTests.ml",
     "src/DarkCompiler/passes/anf/ownership/InsertExpression.fs": "ocaml/lib/passes/anf/ownership/RcInsertExpression.ml",

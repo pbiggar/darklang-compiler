@@ -698,3 +698,14 @@ expressions/functions, fresh IDs, type tables, SSA blocks, and diagnostics.
 Full original RC test groups, SSA optimizers/elaboration, remaining backend
 passes, native DSL/end-to-end integration, and executable-byte/Valgrind acceptance
 remain outstanding; this checkpoint does not claim the port is complete.
+
+
+SSA value liveness, SSA return-flow analysis, scalar replacement/block reuse,
+ownership-safe tail-call detection, direct SSA RC insertion, and SSA simplification
+are fully translated with their comments and source traversal/allocation order.
+Coverage is 157/391 complete pairs. All 321 native units still pass. The differential
+matrix also matches complete liveness/return facts, scalar replacement, tail calls
+before and after RC elaboration, inserted ownership operations, and SSA optimization
+with both default options and all optimization flags disabled. Direct-call and
+higher-order specialization, SSA inlining, full original RC test groups, downstream
+backend passes, and full native acceptance gates remain outstanding.

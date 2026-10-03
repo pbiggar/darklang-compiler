@@ -22,6 +22,22 @@ let ssaTerminator = function
  | SSAANF.Branch (cond, yes, no) -> SemanticJson.union "Terminator" "Branch" [J.aNF_atom cond; ssaLabel yes; ssaLabel no]
 let ssaBlock (block : SSAANF.block) = SemanticJson.record "Block" ["Label", ssaLabel block.SSAANF.label; "Parameters", list J.aNF_typedParam block.SSAANF.parameters; "Operations", list (fun (id, operation) -> tuple [J.aNF_tempId id; J.aNF_cExpr operation]) block.SSAANF.operations; "Terminator", ssaTerminator block.SSAANF.terminator]
 let ssaFunction (func : SSAANF.functionDef) = SemanticJson.record "Function" ["Id", (let value = AST.functionIdValue func.SSAANF.id in let value = if value < 0L then Z.to_string (Z.add (Z.of_int64 value) (Z.shift_left Z.one 64)) else Int64.to_string value in SemanticJson.union "FunctionId" "FunctionId" [`Assoc ["kind", `String "uint64"; "value", `String value]]); "Name", SemanticJson.string func.SSAANF.name; "TypedParams", list J.aNF_typedParam func.SSAANF.typedParams; "ReturnType", SemanticAST.semanticType func.SSAANF.returnType; "ReturnOwnership", J.aNF_returnOwnership func.SSAANF.returnOwnership; "Entry", ssaLabel func.SSAANF.entry; "Blocks", `Assoc ["map", list (fun (label, block) -> tuple [ssaLabel label; ssaBlock block]) (SSAANF.LabelMap.bindings func.SSAANF.blocks)]; "FreshValueTypes", types func.SSAANF.freshValueTypes]
+let ssaSets values = SemanticJson.record "Facts" ["AtEntry", `Assoc ["map", list (fun (label, ids) -> tuple [ssaLabel label; `Assoc ["set", list J.aNF_tempId (R.TempSet.elements ids)]]) (SSAANF.LabelMap.bindings (let a, _, _ = values in a))]; "AtTerminator", `Assoc ["map", list (fun (label, ids) -> tuple [ssaLabel label; `Assoc ["set", list J.aNF_tempId (R.TempSet.elements ids)]]) (SSAANF.LabelMap.bindings (let _, a, _ = values in a))]; "AfterDefinition", `Assoc ["map", list (fun (id, ids) -> tuple [J.aNF_tempId id; `Assoc ["set", list J.aNF_tempId (R.TempSet.elements ids)]]) (M.bindings (let _, _, a = values in a))]]
+let ssaPipeline ctx definition =
+ match SSAANF.convertFunctionBeforeRC 30 ctx definition with
+ | Error error -> result (fun value -> value) (Error error)
+ | Ok value -> attempt (fun value -> value) (fun () ->
+   let live = RcSSAValueLiveness.analyze value in let returned = RcSSAReturnAnalysis.analyze value in
+   let escaped = SSAEscapeAnalysis.optimizeFunction ctx.F.typeReg ctx.F.sumShapeReg value in
+   let cleaned = RcSSARefCountInsertion.insertBlockLocal ctx R.TempSet.empty value in
+   let names = FunctionIdMap.map (fun _ (name, _) -> name) ctx.F.funcReg in
+   let context : ANFConstants.optimizeContext = {ANFConstants.typeReg = TypeRegistries.recordFieldsRegistry ctx.F.typeReg; recordTypeParams = TypeRegistries.recordTypeParamsRegistry ctx.F.typeReg; sumShapeReg = ctx.F.sumShapeReg; functionNames = names; functionIds = TypeRegistries.functionIdsFromNames names} in
+   let optimized = SSAOptimization.optimizeFunction context ANFConstants.defaultOptimizeOptions value in
+   let disabled : ANFConstants.optimizeOptions = {ANFConstants.enableConstFolding = false; enableConstProp = false; enableCopyProp = false; enableDCE = false; enableCSE = false; enableStrengthReduction = false; enableTailRecursionModuloOperation = false} in
+   tuple [ssaSets (live.RcSSAValueLiveness.atEntry, live.RcSSAValueLiveness.atTerminator, live.RcSSAValueLiveness.afterDefinition);
+    ssaSets (returned.RcSSAReturnAnalysis.atEntry, returned.RcSSAReturnAnalysis.atTerminator, returned.RcSSAReturnAnalysis.afterDefinition);
+    ssaFunction escaped; ssaFunction (SSATailCallDetection.detect FunctionIdMap.empty value);
+    ssaFunction cleaned; ssaFunction (SSATailCallDetection.detect FunctionIdMap.empty cleaned); ssaFunction optimized; ssaFunction (SSAOptimization.optimizeFunction context disabled value)])
 let id index = A.TempId index
 let v index = A.Var (id index)
 let fid index = AST.functionId (Int64.of_int index)
@@ -69,6 +85,7 @@ let observe source =
      list (fun name -> let definition : A.functionDef = {A.id = fid 100; name; typedParams = List.map (fun (id, typ) -> {A.id; typ}) (M.bindings initial); returnType = typ; returnOwnership = A.OwnedReturn; body} in
       tuple [attempt func (fun () -> P.insertRCInFunction ctx definition (A.VarGen 100));
        result ssaFunction (SSAANF.convertFunctionBeforeRC 30 ctx definition);
+       ssaPipeline ctx definition;
        result ssaFunction (SSAANF.convertFunction 30 (A.TypeMap.ofSeq (M.to_seq initial)) definition);
        list (fun ownership -> let contract : OwnedIR.callSignature = {OwnedIR.parameters = List.map (fun _ -> ownership) definition.A.typedParams; result = OwnedIR.ProducedCallResult} in result (fun () -> `Null) (P.verifyOwnershipContracts ctx (FunctionIdMap.ofList [fid 100, contract]) (A.Program ([definition], A.Return A.UnitLiteral)))) [OwnedIR.UnmanagedCallParameter; OwnedIR.BorrowedCallParameter; OwnedIR.ConsumedCallParameter; OwnedIR.UniqueCallParameter]]) ["loop"; "Darklang.Stdlib.List.__mapHelper_case"]]) (cases typ)] in
  list observeType (scalar @ managed)

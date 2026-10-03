@@ -1272,19 +1272,19 @@
       "source": "src/DarkCompiler/passes/anf/ownership/SSARefCountInsertion.fs",
       "kind": "compiler",
       "sha256": "ca5dbfa0d10487a310933dc6879e040932a5c511fe56c0b7060526db6a22c928",
-      "owner": "ocaml/lib/passes/anf/ownership/SSARefCountInsertion.ml"
+      "owner": "ocaml/lib/passes/anf/ownership/RcSSARefCountInsertion.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/ownership/SSAReturnAnalysis.fs",
       "kind": "compiler",
       "sha256": "0f36678220e09ad78bb4dabf85afaf0f7bfbed4ba3fde4ceee31c0f8ae940ae7",
-      "owner": "ocaml/lib/passes/anf/ownership/SSAReturnAnalysis.ml"
+      "owner": "ocaml/lib/passes/anf/ownership/RcSSAReturnAnalysis.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/ownership/SSAValueLiveness.fs",
       "kind": "compiler",
       "sha256": "14e39e21283fdc026e2da3f4ad3c80ab8dd78ae201f2306cf4b0184863cf2997",
-      "owner": "ocaml/lib/passes/anf/ownership/SSAValueLiveness.ml"
+      "owner": "ocaml/lib/passes/anf/ownership/RcSSAValueLiveness.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/ownership/ShapePlanning.fs",

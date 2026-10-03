@@ -2142,6 +2142,18 @@ let rcInsertion (source:string) =
                 let definition : ANF.Function = {Id=fid 100;Name=name;TypedParams=initial |> Map.toList |> List.map (fun (id,typ) -> {ANF.Id=id;Type=typ});ReturnType=typ;ReturnOwnership=ANF.OwnedReturn;Body=body}
                 tuple [attempt (fun () -> RefCountInsertion.insertRCInFunction ctx definition (ANF.VarGen 100));
                   enc (SSAANF.convertFunctionBeforeRC 30 ctx definition);
+                  (match SSAANF.convertFunctionBeforeRC 30 ctx definition with
+                   | Error error -> enc (Error error : Result<unit,string>)
+                   | Ok value -> attempt (fun () ->
+                       let live=RcSSAValueLiveness.analyze value
+                       let returned=RcSSAReturnAnalysis.analyze value
+                       let escaped=SSAEscapeAnalysis.optimizeFunction ctx.TypeReg ctx.SumShapeReg value
+                       let cleaned=RcSSARefCountInsertion.insertBlockLocal ctx Set.empty value
+                       let names=ctx.FuncReg |> FunctionIdMap.map (fun _ (name,_) -> name)
+                       let context : ANFConstants.OptimizeContext = {TypeReg=TypeRegistries.recordFieldsRegistry ctx.TypeReg;RecordTypeParams=TypeRegistries.recordTypeParamsRegistry ctx.TypeReg;SumShapeReg=ctx.SumShapeReg;FunctionNames=names;FunctionIds=TypeRegistries.functionIdsFromNames names}
+                       let disabled : ANFConstants.OptimizeOptions = {EnableConstFolding=false;EnableConstProp=false;EnableCopyProp=false;EnableDCE=false;EnableCSE=false;EnableStrengthReduction=false;EnableTailRecursionModuloOperation=false}
+                       (live,returned,escaped,SSATailCallDetection.detect FunctionIdMap.empty value,cleaned,SSATailCallDetection.detect FunctionIdMap.empty cleaned,SSAOptimization.optimizeFunction context ANFConstants.defaultOptimizeOptions value,SSAOptimization.optimizeFunction context disabled value)));
+
                   enc (SSAANF.convertFunction 30 (ANF.TypeMap.ofSeq (Map.toSeq initial)) definition);
                   [OwnedIR.UnmanagedCallParameter;OwnedIR.BorrowedCallParameter;OwnedIR.ConsumedCallParameter;OwnedIR.UniqueCallParameter] |> List.map (fun ownership ->
                     let contract : OwnedIR.CallSignature = {Parameters=definition.TypedParams |> List.map (fun _ -> ownership);Result=OwnedIR.ProducedCallResult}
