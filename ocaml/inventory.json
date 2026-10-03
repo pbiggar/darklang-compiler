@@ -1350,7 +1350,7 @@
       "source": "src/DarkCompiler/passes/lir/allocation/ApplyInstructions.fs",
       "kind": "compiler",
       "sha256": "d201101df4a247d4b36a19eb52a23612f7088f13f0ab8dcfbb671bab51cbe75a",
-      "owner": "ocaml/lib/passes/lir/allocation/ApplyInstructions.ml"
+      "owner": "ocaml/lib/passes/lir/allocation/ApplyRegisterAllocation.ml"
     },
     {
       "source": "src/DarkCompiler/passes/lir/allocation/Coalescing.fs",

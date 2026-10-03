@@ -897,3 +897,14 @@ tail-call predecessors, move order and failure order. The warning-free build
 passes 396/396 native units. Coverage is 205/391 pairs. Instruction/block allocation
 application, allocation orchestration, lowering/emission, remaining ownership
 tests, full corpus checks and final acceptance remain open.
+
+The complete instruction allocation pass is translated with all original cases,
+interfaces and comments. Full output matches F# for 181,248 instruction rewrites:
+all 120 constructors, all 256 destination/source allocation class combinations,
+ARM64/x64, physical and R11-alias register roles, missing/overflowed IDs, six
+operand families, integer/float types, ternary spill repair, variadic/binary
+concat, distinct buffer-comparison operands, four-argument native calls, and
+argument/tail-argument moves. The warning-free build passes 396/396 native units.
+Coverage is 206/391 pairs. Block/caller-save allocation, orchestration and callee
+clobber summaries, lowering/emission, remaining ownership tests, full corpus
+checks and final acceptance remain open.
