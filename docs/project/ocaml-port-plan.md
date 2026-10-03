@@ -569,3 +569,16 @@ hashes the entire JSON in bounded chunks and spills rows to disk; differing rows
 still undergo the complete structural comparison. Large Unicode rows, exact
 hashes, late differences, successive rows, and EOF handling have been checked.
 The full streamed audit is running; this is not yet a completed parity gate.
+
+Whole-function ownership elaboration and owned-function-group inference are fully
+translated, along with all original whole-function, grouping, and group-inference
+units. The native suite passes 219/219 tests, including the 256-function graph and
+ownership chains, branch-edge cleanup, live-result duplication, atomic recursive
+convergence, missing contracts, and candidate tradeoffs. Coverage is 109/391
+complete pairs; the warning-free build and comment audit pass.
+
+The streamed full closure-comparison audit matched the same first 44 rows, then
+the native observer stopped before Crypto.dark. Its JSON emitter now writes the
+complete observation directly to its output channel, avoiding a second buffer
+proportional to row size, and collects between requests. An isolated Crypto.dark
+comparison is running. Full closure-comparison parity remains outstanding.

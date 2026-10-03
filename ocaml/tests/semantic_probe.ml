@@ -65,7 +65,8 @@ let rec requests () =
         | "patterns" -> Semantic_observation.SemanticJson.patterns source
         | stage -> failwith ("Unsupported native observation stage: " ^ stage)
       in
-      print_endline (Yojson.Basic.to_string (`Assoc ["schema", `Int 1; "stage", `String stage; "value", value]));
+      Semantic_observation.StreamingJson.to_channel stdout (`Assoc ["schema", `Int 1; "stage", `String stage; "value", value]);
+      output_char stdout '\n'; flush stdout; Gc.full_major ();
       requests ()
   | exception End_of_file -> ()
 let () = requests ()
