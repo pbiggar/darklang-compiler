@@ -1,0 +1,2 @@
+(* CheckBinaryOperations.mli - Check operators with ordered recursive checking. *)
+val check : ExpressionSupport.expressionChecker -> Types.indexedSumTypeRegistry -> Types.typeEnv -> Types.indexedTypeRegistry -> Types.variantLookup -> Types.genericFuncRegistry -> AST.warningSettings -> AST.moduleRegistry -> Types.aliasRegistry -> AST.semanticType option -> AST.binOp -> AST.expr -> AST.expr -> (AST.semanticType * AST.expr, CheckingDiagnostics.typeError) result

@@ -1,0 +1,2 @@
+(* CheckCalls.mli - Check canonical call identities, inference, and partial application. *)
+val check : ExpressionSupport.expressionChecker -> Types.funcParamNameRegistry -> Types.indexedSumTypeRegistry -> Types.typeEnv -> Types.indexedTypeRegistry -> Types.variantLookup -> Types.genericFuncRegistry -> AST.warningSettings -> AST.moduleRegistry -> Types.aliasRegistry -> AST.semanticType option -> string -> AST.expr NonEmptyList.t -> (AST.semanticType * AST.expr, CheckingDiagnostics.typeError) result

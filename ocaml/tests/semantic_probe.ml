@@ -15,6 +15,9 @@ let rec requests () =
         | "written-source" -> Semantic_observation.SemanticJson.writtenSource source
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
+        | "lambda-checking" -> Semantic_observation.LambdaObservation.observe source
+        | "stdlib-catalog" -> Semantic_observation.StdlibObservation.observe source
+        | "binary-checking" -> Semantic_observation.BinaryObservation.observe source
         | "record-checking" -> Semantic_observation.RecordObservation.observe source
         | "declarations" -> Semantic_observation.DeclarationObservation.observe source
         | "materialize-helpers" -> Semantic_observation.ComparisonObservation.observeMaterialization source

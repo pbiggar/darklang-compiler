@@ -386,3 +386,14 @@ observations pass; complete corpus comparisons remain in progress. Coverage is
 46/391 source implementation/interface pairs, with 96/96 translated unit tests
 passing. Restartable comparisons now copy both native executables and F# reference
 scripts into immutable run snapshots so rebuilds do not interrupt comparisons.
+
+Complete declaration resolution/validation, record literal checking, and helper
+dependency generation each pass all 1,890 observations. Binary operation checking
+also passes all 1,890 observations, including every operator, operand widths,
+contextual retries, runtime errors, and recursive checker call order. The complete
+intrinsic stdlib catalog passes all 1,890 observations: module ordering, 109 source
+signature records, registration, exact lookup, and function types. Lambda and call
+checking are fully translated with complete interfaces and preserved comments;
+lambda initial observations pass, with full lambda and call comparisons pending.
+The build and 96 translated unit tests pass. Coverage is 50/391 source components;
+whole-compiler and full translated test acceptance remain outstanding.
