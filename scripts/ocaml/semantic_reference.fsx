@@ -2089,6 +2089,118 @@ let anfScalarOptimization source =
 let rcInternalCall<'a> moduleName name args : 'a =
     let method = typeof<AST.SemanticType>.Assembly.GetType(moduleName).GetMethod(name, Reflection.BindingFlags.Static ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
     try unbox<'a> (method.Invoke(null,args)) with :? Reflection.TargetInvocationException as error -> raise error.InnerException
+let mirSCCPObservation (source:string) =
+    let enc value=closureAnalysisEncode value
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let attempt action=enc (try Ok (action ()) with error -> Error error.Message)
+    let reg n=MIR.VReg n
+    let v n=MIR.Register (reg n)
+    let fid n=AST.functionId (uint64 n)
+    let label text=MIR.Label text
+    let block name instrs terminator : MIR.BasicBlock={Label=label name;Instrs=instrs;Terminator=terminator}
+    let graph entry (blocks:MIR.BasicBlock list) : MIR.CFG={Entry=label entry;Blocks=blocks |> List.map (fun block -> block.Label,block) |> Map.ofList}
+    let operations typ operand=[
+            MIR.Mov (MIR.VReg 1, operand, Some typ);
+            MIR.BinOp (MIR.VReg 1, MIR.Div, operand, operand, typ);
+            MIR.UnaryOp (MIR.VReg 1, MIR.Not, operand);
+            MIR.Call (MIR.VReg 1, fid 200, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.TailCall (fid 200, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.IndirectCall (MIR.VReg 1, operand, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.IndirectTailCall (operand, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.ClosureAlloc (MIR.VReg 1, fid 200, [operand; MIR.Register (MIR.VReg 3)]);
+            MIR.ClosureCall (MIR.VReg 1, operand, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.ClosureTailCall (operand, [operand; MIR.Register (MIR.VReg 3)], [typ; typ]);
+            MIR.HeapAlloc (MIR.VReg 1, 3);
+            MIR.HeapStore (MIR.VReg 1, 3, operand, Some typ);
+            MIR.HeapLoad (MIR.VReg 1, MIR.VReg 2, 3, Some typ);
+            MIR.StringConcat (MIR.VReg 1, operand, operand, [operand; MIR.Register (MIR.VReg 3)]);
+            MIR.CanonicalBufferEq (MIR.VReg 1, MemoryModel.Utf8String, operand, operand);
+            MIR.RefCountInc (MIR.VReg 1, 3, MIR.GenericHeap, None);
+            MIR.RefCountDec (MIR.VReg 1, 3, MIR.GenericHeap, None);
+            MIR.Print (operand, typ);
+            MIR.StdoutWrite (3, operand, true);
+            MIR.StdinReadLine (MIR.VReg 1);
+            MIR.RuntimeError (source);
+            MIR.RuntimeErrorString (operand);
+            MIR.FileReadBlob (MIR.VReg 1, operand);
+            MIR.FileExists (MIR.VReg 1, operand);
+            MIR.FileWriteBlob (MIR.VReg 1, operand, operand);
+            MIR.FileAppendText (MIR.VReg 1, operand, operand);
+            MIR.FileDelete (MIR.VReg 1, operand);
+            MIR.FileCreateDirectory (MIR.VReg 1, operand);
+            MIR.FileSetExecutable (MIR.VReg 1, operand);
+            MIR.FileWriteFromPtr (MIR.VReg 1, operand, operand, operand);
+            MIR.FloatSqrt (MIR.VReg 1, operand);
+            MIR.FloatAbs (MIR.VReg 1, operand);
+            MIR.FloatNeg (MIR.VReg 1, operand);
+            MIR.Int64ToFloat (MIR.VReg 1, operand);
+            MIR.FloatToInt64 (MIR.VReg 1, operand);
+            MIR.FloatToBits (MIR.VReg 1, operand);
+            MIR.RawAlloc (MIR.VReg 1, operand);
+            MIR.MappedAlloc (MIR.VReg 1, operand);
+            MIR.RawFree (operand);
+            MIR.MappedFree (operand);
+            MIR.RawGet (MIR.VReg 1, operand, operand, Some typ);
+            MIR.RawGetByte (MIR.VReg 1, operand, operand);
+            MIR.RawWriteWord (operand, operand, operand);
+            MIR.RawWriteByte (operand, operand, operand);
+            MIR.RawSlotInit (operand, operand, operand, typ);
+            MIR.StringToRawPtr (MIR.VReg 1, operand);
+            MIR.RawPtrToString (MIR.VReg 1, operand);
+            MIR.BlobToRawPtr (MIR.VReg 1, operand);
+            MIR.RawPtrToBlob (MIR.VReg 1, operand);
+            MIR.DictToRawPtr (MIR.VReg 1, operand);
+            MIR.RawPtrToDict (MIR.VReg 1, operand, operand);
+            MIR.ListToRawPtr (MIR.VReg 1, operand);
+            MIR.RawPtrToList (MIR.VReg 1, operand, operand);
+            MIR.RefCountIncString (operand);
+            MIR.RefCountDecString (operand);
+            MIR.RefCountIncBlob (operand);
+            MIR.RefCountDecBlob (operand);
+            MIR.RefCountIncInt (operand);
+            MIR.RefCountDecInt (operand);
+            MIR.RandomInt64 (MIR.VReg 1);
+            MIR.DateTimeNow (MIR.VReg 1);
+            MIR.Sleep (3, MIR.VReg 2, operand);
+            MIR.CliNative (MIR.VReg 1, MIR.HostOS, [operand; MIR.Register (MIR.VReg 3)]);
+            MIR.FloatToString (MIR.VReg 1, operand);
+            MIR.Phi (MIR.VReg 1, [operand,MIR.Label source;MIR.Register (MIR.VReg 3),MIR.Label "other"], Some typ);
+            MIR.CoverageHit (3)        ]
+    let transforms=[MIRSparseConditionalConstants.applySparseConditionalConstantPropagation;MIRSparseConditionalConstants.applySparseConditionalConstantPropagationWithCallResults (fun fn -> if fn=fid 200 then Some (MIR.BoolConst true) else None);MIRSparseConditionalConstants.applySparseConditionalSimplification]
+    let observe cfg=transforms |> List.map (fun transform -> attempt (fun () -> transform cfg)) |> list
+    let types=[AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TFloat64;AST.TBool;AST.TString;AST.TChar;AST.TDateTime;AST.TUnit;AST.TInt128;AST.TSum ("Option",[AST.TInt64]);AST.TList AST.TInt64;AST.TDict (AST.TInt64,AST.TInt64);AST.TTuple [AST.TInt64]]
+    let instructionGraphs typ operand instr =
+        let instructions=[MIR.Mov (reg 2,operand,Some typ);MIR.Mov (reg 3,v 2,Some typ);instr]
+        let straight=graph source [block source instructions (MIR.Ret (v 1))]
+        let conditional=graph source [block source instructions (MIR.Branch (MIR.BoolConst true,label "child",label "dead"));block "child" [] (MIR.Ret (v 1));block "dead" [] (MIR.Ret (v 2))]
+        [straight;conditional] |> List.map observe |> list
+    let instructionCases=[AST.TInt64;AST.TInt8;AST.TUInt32;AST.TFloat64;AST.TString;AST.TBool] |> List.map (fun typ -> [MIR.Int64Const 0L;MIR.FloatSymbol (BitConverter.Int64BitsToDouble 0x7ff8000000000001L);MIR.StringSymbol source;v 4] |> List.map (fun operand -> operations typ (v 3) |> List.map (instructionGraphs typ operand) |> list) |> list) |> list
+    let comparisons=[MIR.Eq;MIR.Neq;MIR.Lt;MIR.Gt;MIR.Lte;MIR.Gte]
+    let paths=types |> List.map (fun typ -> comparisons |> List.map (fun op -> [Int64.MinValue;-1L;0L;255L;Int64.MaxValue] |> List.map (fun bound ->
+        let entry=block source [MIR.BinOp (reg 1,op,v 4,MIR.Int64Const bound,typ);MIR.UnaryOp (reg 2,MIR.Not,v 1);MIR.Mov (reg 3,v 2,Some AST.TBool)] (MIR.Branch (v 3,label "yes",label "no"))
+        let yes=block "yes" [MIR.BinOp (reg 5,op,v 4,MIR.Int64Const bound,typ);MIR.BinOp (reg 6,MIR.And,v 5,v 1,AST.TBool)] (MIR.Branch (v 6,label "a",label "b"))
+        let no=block "no" [MIR.BinOp (reg 7,MIR.Or,v 1,MIR.BoolConst false,AST.TBool)] (MIR.Branch (v 7,label "a",label "b"))
+        observe (graph source [entry;yes;no;block "a" [] (MIR.Ret (MIR.Int64Const 1L));block "b" [] (MIR.Ret (MIR.Int64Const 2L))])) |> list) |> list) |> list
+    let heaps=[AST.TTuple [AST.TInt64];AST.TSum ("Option",[AST.TInt64]);AST.TList AST.TInt64;AST.TDict (AST.TInt64,AST.TInt64)] |> List.map (fun typ -> [1;2;16;17] |> List.map (fun count ->
+        let arms=List.init count (fun i -> let name="arm"+string i in block name [MIR.HeapAlloc (reg (10+i),16);MIR.HeapStore (reg (10+i),8,MIR.Int64Const (if i=count-1 && count>1 then 1L else 0L),Some AST.TInt64)] (MIR.Jump (label "join")))
+        let branches=List.init (max 0 (count-1)) (fun i -> block (if i=0 then source else "branch"+string i) [] (MIR.Branch (v 4,label ("arm"+string i),label (if i=count-2 then "arm"+string (count-1) else "branch"+string (i+1)))))
+        let sources=arms |> List.mapi (fun i block -> v (10+i),block.Label)
+        let entry=if count=1 then [block source [] (MIR.Jump (label "arm0"))] else branches
+        observe (graph source (entry @ arms @ [block "join" [MIR.Phi (reg 1,sources,Some typ);MIR.HeapLoad (reg 2,reg 1,8,Some AST.TInt64);MIR.BinOp (reg 3,MIR.Eq,v 2,MIR.Int64Const 0L,AST.TInt64)] (MIR.Branch (v 3,label "yes",label "no"));block "yes" [] (MIR.Ret (v 2));block "no" [] (MIR.Ret (v 2))]))) |> list) |> list
+    let floats=[0.;-0.;1.;-1.;Double.PositiveInfinity;Double.NegativeInfinity;BitConverter.Int64BitsToDouble 0x7ff8000000000001L;BitConverter.Int64BitsToDouble 0xfff8000000000002L]
+    let arithmetic=[MIR.Add;MIR.Sub;MIR.Mul;MIR.Div;MIR.Mod;MIR.Eq;MIR.Neq;MIR.Lt;MIR.Gt;MIR.Lte;MIR.Gte] |> List.map (fun op -> floats |> List.map (fun a -> floats |> List.map (fun b -> observe (graph source [block source [MIR.Mov (reg 2,MIR.FloatSymbol a,Some AST.TFloat64);MIR.Mov (reg 3,MIR.FloatSymbol b,Some AST.TFloat64);MIR.BinOp (reg 1,op,v 2,v 3,AST.TFloat64);MIR.FloatAbs (reg 5,v 1);MIR.FloatToInt64 (reg 6,v 5);MIR.FloatToBits (reg 7,v 5)] (MIR.Branch (v 1,label "yes",label "no"));block "yes" [] (MIR.Ret (v 7));block "no" [] (MIR.Ret (v 6))])) |> list) |> list) |> list
+    let cfgs=[graph source [block source [MIR.Mov (reg 1,MIR.Int64Const 0L,Some AST.TInt64);MIR.Mov (reg 2,v 1,Some AST.TInt64)] (MIR.Ret (v 2))];graph source [block source [MIR.Call (reg 1,fid 200,[],[],AST.TBool)] (MIR.Branch (v 1,label "yes",label "no"));block "yes" [] (MIR.Ret (MIR.Int64Const 1L));block "no" [] (MIR.Ret (MIR.Int64Const 2L))];graph source [block source [] (MIR.Jump (label "missing"))];graph source []]
+    let functionDef id name cfg : MIR.Function={Id=fid id;Name=name;TypedParams=[];ReturnType=AST.TInt64;CFG=cfg;FloatRegs=Set.empty}
+    let leaf=functionDef 200 "leaf" (graph "leaf" [block "leaf" [] (MIR.Ret (MIR.BoolConst true))])
+    let programs=cfgs |> List.map (fun cfg -> [0..15] |> List.map (fun bits ->
+        let options : MIROptimizationFacts.OptimizeOptions={EnableSCCP=bits &&& 1<>0;EnableCSE=bits &&& 2<>0;EnableDCE=bits &&& 4<>0;EnableLICM=bits &&& 8<>0}
+        let func=functionDef 400 source cfg
+        let program=MIR.Program ([leaf;func],Map.empty,Map.empty)
+        tuple [attempt (fun () -> MIR_Optimize.optimizeCFGOnce options cfg);attempt (fun () -> MIR_Optimize.optimizeCFGWithOptions options cfg);attempt (fun () -> MIR_Optimize.optimizeFunctionWithOptions options func);enc (MIR_Optimize.constantReturnOperand func);attempt (fun () -> MIR_Optimize.optimizeProgramWithOptions options program);
+               attempt (fun () -> let timings=ResizeArray<string*bool>() in let program=MIR_Optimize.optimizeProgramWithOptionsAndTrace (Some (fun name elapsed -> timings.Add(name,elapsed>=0.))) options program in program,List.ofSeq timings)]) |> list) |> list
+    tuple [instructionCases;paths;heaps;arithmetic;cfgs |> List.map observe |> list;programs]
+
 let mirLoopObservation (source:string) =
     let enc value=closureAnalysisEncode value
     let tuple values=namedArray "tuple" (Array.ofList values)
@@ -2690,6 +2802,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "mir-sccp" -> mirSCCPObservation source
         | "mir-loops" -> mirLoopObservation source
         | "mir-cse" -> mirCSEObservation source
         | "mir-ssa" -> mirSSAObservation source

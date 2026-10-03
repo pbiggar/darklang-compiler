@@ -784,3 +784,21 @@ extra scale uses, non-invariant bounds, non-unit steps, float instructions,
 generated-label collisions, and fresh-ID overflow are included. SCCP and the
 fixed-point optimizer scheduler, original RC/MIR tests, downstream backend stages,
 full corpus checks, and final native acceptance remain outstanding.
+
+
+SCCP and the full MIR optimization scheduler are translated with complete
+interfaces and source comments. The lattice preserves exact float bits, typed
+integer ranges, bounded aggregate identities and fields, derived Boolean and
+comparison facts on edges, immutable worklist order, copy-aware rewrites, and
+contextual missing-block errors. The scheduler preserves pass order, topology
+reuse/invalidation, ten-iteration limit, effect analysis, constant-call-result
+propagation, float-register bookkeeping, and traced phase order. Coverage is
+186/391 pairs. The warning-free build passes 349/349 units. Full output matches
+F# for 13,386 SCCP/simplification runs across 4,462 CFGs, including all 66 MIR
+constructors, 19 type families, nested Boolean/range branches, 16/17-allocation
+aggregate merges, signed zero and NaN payloads, IEEE arithmetic/conversions,
+straight-line bypasses, and diagnostics. The scheduler additionally matches
+64 CFG/options combinations covering all 16 flag combinations, complete
+functions/programs, constant returns, and traced phase labels/nonnegative times.
+Original MIR optimizer tests, printers, remaining RC groups, backend stages,
+full corpus checks, and final executable-byte/Valgrind acceptance remain open.
