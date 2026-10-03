@@ -514,3 +514,18 @@ the shared F# Map type without changing ordering or keys. This build passes
 161/161 native units; inventory coverage is 77/391 full pairs and the comment
 audit reports zero missing reference lines. The new lowering passes' runtime
 reference comparisons are next; this checkpoint is not final acceptance.
+
+Closure analysis now passes all 1,890 complete corpus observations. The initial
+representation-directed inference and operator proofs pass 2/2 observations
+each, including all numeric/operator combinations and structural equality
+layouts. The inference observer explicitly groups its conditional matrix
+entries so every numeric case is included in the frozen F# comparison.
+
+Aggregate lowering is translated with its complete interface and comments.
+Its 2/2 initial observations compare skew-list forest/digit layouts at length
+boundaries, all 34 semantic element types, retained binding prefixes, fresh
+identifier overflow, tuple projections, duplicate bindings, complete variable
+environments, incompatible patterns, and acceptance predicates. The clean
+native build and 161/161 translated units pass; coverage is 78/391 complete
+pairs with zero missing source comment lines. Whole-compiler acceptance and
+remaining full corpus proofs are still outstanding.

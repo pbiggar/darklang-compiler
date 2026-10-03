@@ -15,6 +15,9 @@ let rec requests () =
         | "written-source" -> Semantic_observation.SemanticJson.writtenSource source
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
+        | "lowering-types" -> Semantic_observation.LoweringAnalysisObservation.observeTypes source
+        | "lowering-aggregates" -> Semantic_observation.LoweringAnalysisObservation.observeAggregates source
+        | "lowering-operators" -> Semantic_observation.LoweringAnalysisObservation.observeOperators source
         | "monomorphization" -> Semantic_observation.MonomorphizationObservation.observe source
         | "lift-functions" -> Semantic_observation.ClosureAnalysisObservation.observeLiftFunctions source
         | "lift-expressions" -> Semantic_observation.ClosureAnalysisObservation.observeLiftExpressions source

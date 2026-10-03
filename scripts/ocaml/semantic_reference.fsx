@@ -1326,6 +1326,86 @@ let monomorphization (source:string) =
     tuple [checkedAstFixtures source |> List.map (outcome program) |> list;sourceProgram source;
         if source="" then ["let identity (x: 'a) : 'a = x\nidentity 1";"let eq (x: 'a) (y: 'a) : Bool = x == y\neq [1] [2]";"let f = fun (x: Int64) -> x\nf 1";"let a (x: 'a) : 'a = x\nlet b (x: 'a) : 'a = a x\nb 1";"Stdlib.Dict.fromList []"] |> List.map sourceProgram |> list else list []]
 
+let loweringAnalysisTypes=[AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TInt; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128; AST.TBool; AST.TFloat64; AST.TString; AST.TBlob; AST.TChar; AST.TDateTime; AST.TUnit; AST.TNever; AST.TInternalRawPtr; AST.TVar "a"; AST.TInferenceVar ("scope","fixed"); AST.TRecord ("R",[]); AST.TRecord ("Generic",[AST.TString]); AST.TSum ("S",[]); AST.TSum ("Nullable",[]); AST.TSum ("Transparent",[]); AST.TSum ("Uuid",[]); AST.TTuple []; AST.TTuple [AST.TInt64;AST.TTuple [AST.TString;AST.TInt128]]; AST.TList AST.TInt64; AST.TStream AST.TInt64; AST.TDict (AST.TString,AST.TInt64); AST.TFunction ([AST.TInt64],AST.TBool)]
+let loweringAnalysisOps=[AST.Add;AST.Sub;AST.Mul;AST.Div;AST.Mod;AST.Pow;AST.Shl;AST.Shr;AST.BitAnd;AST.BitOr;AST.BitXor;AST.Eq;AST.Neq;AST.Lt;AST.Gt;AST.Lte;AST.Gte;AST.And;AST.Or;AST.StringConcat]
+let loweringOperatorCall<'a> name args : 'a =
+    let flags=Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    unbox (typeof<AST.SemanticType>.Assembly.GetType("LoweringOperators").GetMethod(name,flags).Invoke(null,args))
+let loweringTypes source =
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let enc value=closureAnalysisEncode value
+    let outcome encoder value =
+        match value with
+        | Error error -> enc (Error error : Result<unit,string>)
+        | Ok value ->
+            let node=JsonObject()
+            node["type"]<-JsonValue.Create "FSharpResult"
+            node["case"]<-JsonValue.Create "Ok"
+            node["fields"]<-JsonArray([|encoder value|])
+            node :> JsonNode
+    let attempt action=enc (try Ok (action ()) with error -> Error error.Message)
+    let intrinsics=["Builtin.unwrap"; "Builtin.testRuntimeError"; "Builtin.crash"; "Builtin.pmEvaluateValue_i64"; "__raw_get_i64"; "__raw_get_list_i64"; "__raw_take_str"; "__stream_to_rawptr_a"; "__rawptr_to_stream_i64"; "__raw_slot_init_i64"; "__hash_i64"; "__key_eq_str"; "__empty_dict_str_i64"; "__dict_is_null_str_i64"; "__dict_get_tag_str_i64"; "__dict_to_rawptr_str_i64"; "__rawptr_to_dict_str_i64"; "__list_is_null_i64"; "__list_get_tag_i64"; "__list_to_rawptr_i64"; "__rawptr_to_list_i64"; "__list_empty_i64"; "__raw_get_invalid__"; "Darklang.Stdlib.File.exists"; "unknown"]
+    let program program =
+        let symbols=CheckedAST.programSymbols program
+        let tops=CheckedAST.programTopLevels program
+        let env=WrittenChecking.typeCheckEnvironment program
+        let registry : TypeRegistries.TypeRegistry = env.IndexedTypeReg |> Map.map (fun _ (info:CheckingTypes.RecordTypeInfo) -> {TypeParams=info.TypeParams;Fields=info.Fields})
+        let variants=env.VariantLookup
+        let sums=LoweringPrimitives.sumMetadataFromVariantLookup variants
+        let typeNames=TypeRegistries.typeNamesFromSymbols symbols
+        let funcs=tops |> List.choose (function CheckedAST.FunctionDef func -> Some func | _ -> None)
+        let functions=funcs |> List.map (fun func -> func.Id,(func.Name,AST.TFunction (CheckedAST.functionParameterTypes func |> AST.NonEmptyList.toList |> List.map snd,CheckedAST.functionReturnType func))) |> FunctionIdMap.ofList
+        let names=functions |> FunctionIdMap.map (fun _ (name,_) -> name)
+        let environment=CheckedAST.programValues program |> Map.toList |> List.map (fun (name,(typ,_)) -> AST.topLevelValueId name,typ) |> Map.ofList
+        let environments=[environment;[AST.bindingId 0,AST.TInt64;AST.bindingId 1,AST.TString;AST.namedBindingId 0 "x",AST.TInt64;AST.namedBindingId 1 "x",AST.TList AST.TString] |> List.fold (fun env (id,typ) -> Map.add id typ env) environment]
+        let bodies=tops |> List.choose (function CheckedAST.FunctionDef func -> Some func.Body | CheckedAST.ValueDef value -> Some value.Body | CheckedAST.Expression expr -> Some expr | _ -> None)
+        let expression expr=environments |> List.map (fun environment -> [Map.empty;Stdlib.buildModuleRegistry ()] |> List.map (fun modules -> attempt (fun () -> LoweringTypeInference.inferTypeCore sums typeNames expr environment registry variants functions names modules)) |> list) |> list
+        let intrinsic name=
+            let names=FunctionIdMap.add (AST.functionId 9UL) name names
+            [AST.NonEmptyList.singleton CheckedAST.UnitLiteral;AST.NonEmptyList.singleton (CheckedAST.Int64Literal 1L);AST.NonEmptyList.fromList [CheckedAST.Int64Literal 1L;CheckedAST.Int64Literal 2L]] |> List.map (fun args -> [FunctionIdMap.empty;FunctionIdMap.add (AST.functionId 9UL) ("other",AST.TInt64) functions;FunctionIdMap.add (AST.functionId 9UL) (name,AST.TFunction ([AST.TUnit],AST.TBool)) functions] |> List.map (fun functionRegistry -> attempt (fun () -> LoweringTypeInference.inferTypeCore sums typeNames (CheckedAST.Call (AST.functionId 9UL,args)) environment registry variants functionRegistry names (Stdlib.buildModuleRegistry ()))) |> list) |> list
+        let numeric typ=
+            let environment=environment |> Map.add (AST.bindingId 1) typ |> Map.add (AST.bindingId 0) typ
+            let infer expr=attempt (fun () -> LoweringTypeInference.inferTypeCore sums typeNames expr environment registry variants functions names (Stdlib.buildModuleRegistry ()))
+            tuple [loweringAnalysisOps |> List.map (fun op -> infer (CheckedAST.BinOp (op,CheckedAST.Local (AST.bindingId 0),CheckedAST.Local (AST.bindingId 1)))) |> list;[AST.Neg;AST.Not;AST.BitNot] |> List.map (fun op -> infer (CheckedAST.UnaryOp (op,CheckedAST.Local (AST.bindingId 0)))) |> list]
+        tuple [bodies |> List.map expression |> list;(if source="" then intrinsics |> List.map intrinsic |> list else list []);(if source="" then loweringAnalysisTypes |> List.map numeric |> list else list [])]
+    let sourceProgram source=WrittenParsing.parse LibParser.Validation.Script source |> Result.bind (fun unit -> WrittenChecking.checkSourceUnitsWithBase None false false [unit]) |> Result.map (fun (_,value,_) -> value) |> outcome program
+    tuple [checkedAstFixtures source |> List.map (outcome program) |> list;sourceProgram source;if source="" then ["type R<'a> = { value: 'a }\nR { value = 1 }";"type S<'a> = A of 'a | B\nmatch S.A 1 with | S.A x -> x | S.B -> 0";"if true then [] else [1]";"let f = fun (x: Int64) -> x\nf 1"] |> List.map sourceProgram |> list else list []]
+
+let loweringOperators source =
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let enc value=closureAnalysisEncode value
+    let attempt action=enc (try Ok (action ()) with error -> Error (if error :? Reflection.TargetInvocationException && not (isNull error.InnerException) then error.InnerException.Message else error.Message))
+    if source<>"" then list [] else
+    let registry : TypeRegistries.TypeRegistry = Map.ofList ["R",{TypeParams=[];Fields=["a",AST.TInt64;"b",AST.TTuple [AST.TString;AST.TInt128]]};"Generic",{TypeParams=["a"];Fields=["value",AST.TVar "a"]}]
+    let variants=Map.ofList ["S.A",("S",[],0,[AST.TInt64;AST.TBool]);"S.B",("S",[],1,[]);"Nullable.None",("Nullable",[],0,[]);"Nullable.Some",("Nullable",[],1,[AST.TString]);"Transparent.A",("Transparent",[],0,[AST.TChar]);"Uuid.Uuid",("Uuid",[],0,[AST.TUInt128])]
+    let cases=LoweringPrimitives.sumRepresentationIndex variants
+    let resolved action=
+        let requests=ResizeArray<string>()
+        let resolve name=requests.Add name;AST.functionId 9UL
+        let value=attempt (fun () -> action resolve)
+        tuple [value;enc (List.ofSeq requests)]
+    tuple [loweringAnalysisOps |> List.map (fun op -> attempt (fun () -> LoweringOperators.convertBinOp op)) |> list;
+        loweringAnalysisTypes |> List.map (fun typ -> loweringAnalysisOps |> List.map (fun op -> resolved (fun resolve -> loweringOperatorCall<AST.FunctionId option> "integerFunctionForBinOp" [|box resolve;box typ;box op|])) |> list) |> list;
+        enc ([AST.Neg;AST.Not;AST.BitNot] |> List.map LoweringOperators.convertUnaryOp);enc (loweringAnalysisTypes |> List.map LoweringOperators.isCompoundType);
+        loweringAnalysisTypes |> List.map (fun typ -> [0;Int32.MinValue;Int32.MaxValue] |> List.map (fun gen -> resolved (fun resolve -> LoweringOperators.generateStructuralEquality resolve (ANF.Var (ANF.TempId 0)) (ANF.Var (ANF.TempId 1)) typ (ANF.VarGen gen) registry variants cases)) |> list) |> list]
+
+let loweringAggregateCall<'a> name args : 'a =
+    let flags=Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    unbox (typeof<AST.SemanticType>.Assembly.GetType("LoweringAggregates").GetMethod(name,flags).Invoke(null,args))
+let loweringAggregates source =
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let enc value=closureAnalysisEncode value
+    let initial=[ANF.TempId -7,ANF.Atom (ANF.StringLiteral source);ANF.TempId -6,ANF.TypedAtom (ANF.UnitLiteral,AST.TUnit)]
+    let ids=[AST.bindingId 0;AST.namedBindingId 0 "x";AST.namedBindingId 1 "x";AST.topLevelValueId source]
+    let patterns=[CheckedAST.LPUnit;CheckedAST.LPWildcard] @ (ids |> List.map CheckedAST.LPVariable) @ [CheckedAST.LPTuple (CheckedAST.LPVariable ids.Head,CheckedAST.LPVariable ids.Head,[]);CheckedAST.LPTuple (CheckedAST.LPUnit,CheckedAST.LPWildcard,[]);CheckedAST.LPTuple (CheckedAST.LPTuple (CheckedAST.LPVariable ids.Head,CheckedAST.LPWildcard,[]),CheckedAST.LPVariable ids[1],[CheckedAST.LPUnit])]
+    let patternTypes=[AST.TUnit;AST.TInt64;AST.TTuple [];AST.TTuple [AST.TInt64;AST.TString];AST.TTuple [AST.TUnit;AST.TString];AST.TTuple [AST.TTuple [AST.TBool;AST.TString];AST.TInt64;AST.TUnit];AST.TTuple [AST.TInt64]]
+    let env : TypeRegistries.VarEnv = Map.ofList [ids.Head,(ANF.TempId -2,AST.TBool);ids[1],(ANF.TempId -3,AST.TString)]
+    tuple [patterns |> List.map (fun pattern -> patternTypes |> List.map (fun typ -> tuple [enc (loweringAggregateCall<bool> "letPatternAcceptsType" [|box pattern;box typ|]);[0;Int32.MinValue;Int32.MaxValue] |> List.map (fun gen -> enc (loweringAggregateCall<Result<TypeRegistries.VarEnv * (ANF.TempId * ANF.CExpr) list * ANF.VarGen,string>> "lowerLetPatternBindings" [|box pattern;box (ANF.Var (ANF.TempId -1));box typ;box env;box initial;box (ANF.VarGen gen)|])) |> list]) |> list) |> list;
+        (if source="" then loweringAnalysisTypes |> List.map (fun typ -> [0;1;2;3;6;7;14;15;31;32;64] |> List.map (fun count -> [0;Int32.MinValue;Int32.MaxValue] |> List.map (fun gen -> let elements=List.init count (fun index -> ANF.IntLiteral (ANF.Int64 (int64 index)),typ) in enc (loweringAggregateCall<ANF.Atom * (ANF.TempId * ANF.CExpr) list * ANF.VarGen> "buildSkewListLiteral" [|box (AST.TList typ);box elements;box (ANF.VarGen gen);box initial|])) |> list) |> list) |> list else list [])]
+
 let checkedFormatWithDisplay display source =
     let tuple values = namedArray "tuple" (Array.ofList values)
     let list values = JsonArray(Array.ofList values) :> JsonNode
@@ -1783,6 +1863,9 @@ let rec requests () =
                         WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+            | "lowering-aggregates" -> loweringAggregates source
+            | "lowering-types" -> loweringTypes source
+            | "lowering-operators" -> loweringOperators source
             | "monomorphization" -> monomorphization source
             | "lift-functions" -> liftFunctions source
             | "lift-expressions" -> liftExpressions source

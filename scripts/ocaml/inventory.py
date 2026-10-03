@@ -35,6 +35,7 @@ def fixture(path):
 
 # Preserve F# namespace distinctions in Dune's unqualified module graph.
 OWNER_OVERRIDES = {
+    'src/DarkCompiler/passes/anf/lowering/Aggregates.fs': 'ocaml/lib/passes/anf/lowering/LoweringAggregates.ml',
     'src/DarkCompiler/passes/anf/lowering/Operators.fs': 'ocaml/lib/passes/anf/lowering/LoweringOperators.ml',
     'src/DarkCompiler/passes/anf/lowering/TypeInference.fs': 'ocaml/lib/passes/anf/lowering/LoweringTypeInference.ml',
 

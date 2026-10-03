@@ -1170,7 +1170,7 @@
       "source": "src/DarkCompiler/passes/anf/lowering/Aggregates.fs",
       "kind": "compiler",
       "sha256": "5344c0310a55c673fc2b2fa51833129166583d4ca5a7cf7c7401fef285088391",
-      "owner": "ocaml/lib/passes/anf/lowering/Aggregates.ml"
+      "owner": "ocaml/lib/passes/anf/lowering/LoweringAggregates.ml"
     },
     {
       "source": "src/DarkCompiler/passes/anf/lowering/AtomLowering.fs",

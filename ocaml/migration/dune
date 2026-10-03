@@ -648,3 +648,51 @@
  (deps ../lib/passes/preparation/PrepareFunctions.mli instrument_checking.py)
  (action (with-stdout-to %{targets}
   (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/preparation/PrepareFunctions.mli}))))
+
+(rule
+ (targets InstrumentedLoweringOperators.ml)
+ (deps ../lib/passes/anf/lowering/LoweringOperators.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/LoweringOperators.ml}))))
+
+(rule
+ (targets InstrumentedLoweringOperators.mli)
+ (deps ../lib/passes/anf/lowering/LoweringOperators.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/LoweringOperators.mli}))))
+
+(rule
+ (targets InstrumentedLoweringTypeInference.ml)
+ (deps ../lib/passes/anf/lowering/LoweringTypeInference.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/LoweringTypeInference.ml}))))
+
+(rule
+ (targets InstrumentedLoweringTypeInference.mli)
+ (deps ../lib/passes/anf/lowering/LoweringTypeInference.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/LoweringTypeInference.mli}))))
+
+(rule
+ (targets InstrumentedLoweringCallbacks.ml)
+ (deps ../lib/passes/anf/lowering/LoweringCallbacks.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/LoweringCallbacks.ml}))))
+
+(rule
+ (targets InstrumentedLoweringCallbacks.mli)
+ (deps ../lib/passes/anf/lowering/LoweringCallbacks.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/LoweringCallbacks.mli}))))
+
+(rule
+ (targets InstrumentedLoweringAggregates.mli)
+ (deps ../lib/passes/anf/lowering/LoweringAggregates.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/LoweringAggregates.mli}))))
+
+(rule
+ (targets InstrumentedLoweringAggregates.ml)
+ (deps ../lib/passes/anf/lowering/LoweringAggregates.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/passes/anf/lowering/LoweringAggregates.ml}))))
