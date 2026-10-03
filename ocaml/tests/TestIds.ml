@@ -247,7 +247,7 @@ let names = [
  "sink";
  "discardScalar";
  "recursiveFirst";
- "recursiveSecond"
+ "recursiveSecond";
 ] @ List.init 256 (Printf.sprintf "chain%04i") @ List.init 256 (Printf.sprintf "ownershipChain%04i")
 let ids = AST.allocateFunctionIds (List.to_seq [AST.functionId 0L; AST.functionId 1L]) (List.to_seq names)
 let functionIdForName name = match name with

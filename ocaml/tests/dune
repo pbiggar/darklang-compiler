@@ -2,7 +2,7 @@
 (executable
  (name foundations_main)
  (modules (:standard \ text_probe semantic_probe float_probe))
- (libraries dark_compiler yojson)
+ (libraries dark_compiler yojson str)
  (flags (:standard -w @a -warn-error @a)))
 
 (executable

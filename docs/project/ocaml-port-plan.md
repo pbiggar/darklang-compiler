@@ -709,3 +709,16 @@ before and after RC elaboration, inserted ownership operations, and SSA optimiza
 with both default options and all optimization flags disabled. Direct-call and
 higher-order specialization, SSA inlining, full original RC test groups, downstream
 backend passes, and full native acceptance gates remain outstanding.
+
+
+Direct-call facts, direct-call specialization, higher-order specialization, and
+SSA inlining are fully translated with complete interfaces and original comments.
+The original SSA fixture DSL and both fixture test groups are translated, and the
+shared fixture identity table now includes all original names. A warning-free
+native build passes 344/344 units, including all 23 original SSA inlining and
+optimization fixtures. Coverage is 164/391 complete pairs. Full specialization
+observations match F# for five probe inputs, covering literal/tuple clones,
+indirect exposure, float-bit distinctions, captured/static/returned callbacks,
+and generated-name collisions. Full-output inlining comparison, remaining RC
+test groups, downstream backend passes, and final native acceptance remain
+outstanding; the port is not yet complete.

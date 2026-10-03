@@ -2089,6 +2089,48 @@ let anfScalarOptimization source =
 let rcInternalCall<'a> moduleName name args : 'a =
     let method = typeof<AST.SemanticType>.Assembly.GetType(moduleName).GetMethod(name, Reflection.BindingFlags.Static ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
     try unbox<'a> (method.Invoke(null,args)) with :? Reflection.TargetInvocationException as error -> raise error.InnerException
+let specializationObservation (source:string) =
+    let enc value=closureAnalysisEncode value
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let attempt action=enc (try Ok (action ()) with error -> Error error.Message)
+    let fid index=AST.functionId (uint64 index)
+    let id index=ANF.TempId index
+    let v index=ANF.Var (id index)
+    let int value=ANF.IntLiteral (ANF.Int64 value)
+    let fn index name parameters ret operations terminator extraTypes : SSAANF.Function =
+        let parameters=parameters |> List.map (fun (index,typ) -> {ANF.TypedParam.Id=id index;ANF.TypedParam.Type=typ})
+        let label=SSAANF.Label 0
+        {Id=fid index;Name=name;TypedParams=parameters;ReturnType=ret;ReturnOwnership=ANF.OwnedReturn;Entry=label;Blocks=Map.ofList [label,{Label=label;Parameters=[];Operations=operations;Terminator=terminator}];FreshValueTypes=parameters |> List.fold (fun types parameter -> Map.add parameter.Id parameter.Type types) (extraTypes |> List.map (fun (index,typ) -> id index,typ) |> Map.ofList)}
+    let literalCases=[AST.TInt64,[int 1L;int 2L;int 1L];AST.TUInt64,[ANF.IntLiteral (ANF.UInt64 0x8000000000000000UL);ANF.IntLiteral (ANF.UInt64 UInt64.MaxValue);ANF.IntLiteral (ANF.UInt64 0UL)];AST.TFloat64,[ANF.FloatLiteral 0.;ANF.FloatLiteral (-0.);ANF.FloatLiteral (BitConverter.Int64BitsToDouble 0x7ff8000000000001L)];AST.TString,[ANF.StringLiteral source;ANF.StringLiteral "😀";ANF.StringLiteral "é"];AST.TInt64,[int 1L;int 1L]]
+    let directCases=literalCases |> List.map (fun (typ,args) ->
+        let helper=fn 200 ("helper"+source) [1,typ] typ [] (SSAANF.Return (v 1)) []
+        let caller=fn 400 "caller" [] typ (args |> List.mapi (fun index arg -> id (20+index),ANF.Call (fid 200,[arg]))) (SSAANF.Return (v (19+List.length args))) (args |> List.mapi (fun index _ -> 20+index,typ))
+        [false;true] |> List.map (fun indirect ->
+            let block=Map.find (SSAANF.Label 0) caller.Blocks
+            let caller=if indirect then {caller with Blocks=Map.ofList [SSAANF.Label 0,{block with Operations=(id 90,ANF.Atom (ANF.FuncRef (fid 200)))::block.Operations}]} else caller
+            attempt (fun () -> SSADirectCallSpecialization.specializeProgramWithFunctionNames FunctionIdMap.empty [helper;caller])) |> list) |> list
+    let tupleType=AST.TTuple [AST.TInt64;AST.TBool]
+    let helper=fn 210 "tupleHelper" [1,tupleType] AST.TInt64 [id 2,ANF.TupleGet (v 1,0)] (SSAANF.Return (v 2)) [2,AST.TInt64]
+    let caller=fn 410 "tupleCaller" [] AST.TInt64 [id 10,ANF.TupleAlloc [int 1L;ANF.BoolLiteral false];id 11,ANF.TupleAlloc [int 2L;ANF.BoolLiteral true];id 20,ANF.Call (fid 210,[v 10]);id 21,ANF.Call (fid 210,[v 11])] (SSAANF.Return (v 21)) [10,tupleType;11,tupleType;20,AST.TInt64;21,AST.TInt64]
+    let tupleClones=attempt (fun () -> SSADirectCallSpecialization.specializeProgramWithFunctionNames FunctionIdMap.empty [helper;caller])
+    let closureType=AST.TTuple [AST.TInt64;AST.TInt64]
+    let callbackType=AST.TFunction ([AST.TInt64],AST.TInt64)
+    let target=fn 500 ("target"+source) [0,closureType;1,AST.TInt64] AST.TInt64 [id 2,ANF.TupleGet (v 0,1);id 3,ANF.Prim (ANF.Add,v 2,v 1)] (SSAANF.Return (v 3)) [2,AST.TInt64;3,AST.TInt64]
+    let staticFunction=fn 501 ("static"+source) [1,AST.TInt64] AST.TInt64 [id 2,ANF.Prim (ANF.Add,v 1,int 1L)] (SSAANF.Return (v 2)) [2,AST.TInt64]
+    let helper=fn 502 ("apply"+source) [10,callbackType;11,AST.TInt64] AST.TInt64 [id 20,ANF.ClosureCall (v 10,[v 11])] (SSAANF.Return (v 20)) [20,AST.TInt64]
+    let factory=fn 504 "factory" [1,AST.TInt64] callbackType [id 2,ANF.ClosureAlloc (fid 500,[v 1])] (SSAANF.Return (v 2)) [2,callbackType]
+    let caller kind=
+        let operations=match kind with
+                       | 0 -> [id 13,ANF.ClosureAlloc (fid 500,[v 12]);id 20,ANF.Call (fid 502,[v 13;int 3L])]
+                       | 1 -> [id 20,ANF.Call (fid 502,[ANF.FuncRef (fid 501);int 3L])]
+                       | _ -> [id 13,ANF.Call (fid 504,[v 12]);id 20,ANF.BorrowedCall (fid 502,[v 13;int 3L])]
+        fn 503 "caller" [12,AST.TInt64] AST.TInt64 operations (SSAANF.Return (v 20)) [13,callbackType;20,AST.TInt64]
+    let higherCases=[0;1;2] |> List.map (fun kind -> [false;true] |> List.map (fun collision ->
+        let reserved=if collision then Map.ofList ["apply"+source+"__known_target"+source+"_0",fid 900] else Map.empty
+        attempt (fun () -> SSAHigherOrderSpecialization.specializeProgramWithExternalFunctionsAndNames reserved 1000UL [] [target;staticFunction;helper;factory;caller kind])) |> list) |> list
+    tuple [directCases;tupleClones;higherCases]
+
 let rcInsertion (source:string) =
     let enc value = closureAnalysisEncode value
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -2290,6 +2332,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "ssa-specialization" -> specializationObservation source
         | "rc-insertion" -> rcInsertion source
         | "expression-lowering" -> expressionLowering source
         | "atom-lowering" -> atomLowering source
