@@ -5,4 +5,5 @@ val verify : ('leaf, 'block) dialect -> 'block -> (unit, verificationError) resu
 val functionSignature : ('leaf, 'block) dialect -> 'block HIR.functionDef -> HIR.functionSignature
 val verifyFunction : ('leaf, 'block) dialect -> 'block HIR.functionDef -> (unit, verificationError) result
 val verifyFunctions : ('leaf, 'block) dialect -> 'block HIR.functionDef list -> (unit, verificationError) result
+val errorValue : verificationError -> StructuralValue.value
 val errorToString : verificationError -> string

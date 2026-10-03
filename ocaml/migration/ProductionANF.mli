@@ -1,0 +1,32 @@
+(* Exhaustive typed memory/ANF migration encoders. *)
+open Dark_compiler
+val memoryModel_canonicalBufferKind : MemoryModel.canonicalBufferKind -> Yojson.Basic.t
+val memoryModel_rcKind : MemoryModel.rcKind -> Yojson.Basic.t
+val memoryModel_rcShape : MemoryModel.rcShape -> Yojson.Basic.t
+val memoryModel_rcBoxedSumVariantShape : MemoryModel.rcBoxedSumVariantShape -> Yojson.Basic.t
+val memoryModel_rcSumShapeInfo : MemoryModel.rcSumShapeInfo -> Yojson.Basic.t
+val memoryModel_rcSumShapeRegistry : MemoryModel.rcSumShapeRegistry -> Yojson.Basic.t
+val memoryModel_rcOperation : MemoryModel.rcOperation -> Yojson.Basic.t
+val memoryModel_rcStorageClass : MemoryModel.rcStorageClass -> Yojson.Basic.t
+val memoryModel_rcReleasePlan : MemoryModel.rcReleasePlan -> Yojson.Basic.t
+val memoryModel_rcPayloadReleasePlan : MemoryModel.rcPayloadReleasePlan -> Yojson.Basic.t
+val memoryModel_rcFieldRelease : MemoryModel.rcFieldRelease -> Yojson.Basic.t
+val memoryModel_rcBoxedSumVariantRelease : MemoryModel.rcBoxedSumVariantRelease -> Yojson.Basic.t
+val memoryModel_rcMetadata : MemoryModel.rcMetadata -> Yojson.Basic.t
+val aNF_tempId : ANF.tempId -> Yojson.Basic.t
+val aNF_typedParam : ANF.typedParam -> Yojson.Basic.t
+val aNF_sizedInt : ANF.sizedInt -> Yojson.Basic.t
+val aNF_atom : ANF.atom -> Yojson.Basic.t
+val aNF_binOp : ANF.binOp -> Yojson.Basic.t
+val aNF_unaryOp : ANF.unaryOp -> Yojson.Basic.t
+val aNF_returnOwnership : ANF.returnOwnership -> Yojson.Basic.t
+val aNF_cliOperation : ANF.cliOperation -> Yojson.Basic.t
+val aNF_recordDescriptor : ANF.recordDescriptor -> Yojson.Basic.t
+val aNF_cExpr : ANF.cExpr -> Yojson.Basic.t
+val aNF_aExpr : ANF.aExpr -> Yojson.Basic.t
+val aNF_functionDef : ANF.functionDef -> Yojson.Basic.t
+val aNF_program : ANF.program -> Yojson.Basic.t
+val aNF_varGen : ANF.varGen -> Yojson.Basic.t
+val aNF_exprId : ANF.exprId -> Yojson.Basic.t
+val aNF_exprIdGen : ANF.exprIdGen -> Yojson.Basic.t
+val aNF_coverageMapping : ANF.coverageMapping -> Yojson.Basic.t

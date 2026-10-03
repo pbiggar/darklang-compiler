@@ -61,7 +61,7 @@ let verifyFunctions dialect (definitions : 'block H.functionDef list) =
  match inconsistent with Some error -> Error error | None ->
  let dialect = {dialect with callSignature = fun target -> match FunctionIdMap.tryFind target signatures with Some signature -> Some signature | None -> dialect.callSignature target} in
  List.fold_left (fun result definition -> let* () = result in verifyFunction dialect definition) (Ok ()) definitions
-let errorToString error =
+let errorValue error =
  let open StructuralValue in
  let value (H.ValueId id) = Union ("ValueId", [Scalar (string_of_int id)]) in
  let unary name value = Union (name, [value]) in
@@ -87,4 +87,5 @@ let errorToString error =
  | InvalidCallResultType id -> unary "InvalidCallResultType" (func id)
  | InconsistentCallContract id -> unary "InconsistentCallContract" (func id)
  | InconsistentRegisteredFunctionSignature id -> unary "InconsistentRegisteredFunctionSignature" (func id) in
- HostStructuralFormat.format description
+ description
+let errorToString error = HostStructuralFormat.format (errorValue error)

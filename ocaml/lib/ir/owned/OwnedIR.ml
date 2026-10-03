@@ -60,7 +60,7 @@ module Make (Identity : Identity) = struct
  type uniquenessContract = {requiredInputs : Identity.Set.t; uniqueOutputs : Identity.Set.t}
  type 'leaf semantics = {leaf : 'leaf -> Identity.t contract; leafUniqueness : 'leaf -> uniquenessContract; callOwnership : HIR.functionCall -> callSignature option; scalarUses : HIR.operand -> Identity.Set.t; scalarEscapes : HIR.operand -> Identity.Set.t; blockArgument : HIR.value -> Identity.t blockArgument}
  type verificationError = InvalidUse of Identity.t | InvalidDrop of Identity.t | NonUniqueUse of Identity.t | InvalidUniquenessContract of Identity.t | DuplicateDefinition of Identity.t | DuplicateParameter of Identity.t | InconsistentFunctionParameters | InconsistentFunctionResult | InvalidBorrowedResult of Identity.t | InvalidProducedResult of Identity.t | UnknownCallOwnership of AST.functionId | InconsistentCallOwnershipParameters of AST.functionId | InconsistentCallOwnershipArgument of AST.functionId * int | InconsistentCallOwnershipResult of AST.functionId | InvalidBorrowedCallResult of AST.functionId * int | DuplicateFunctionName of AST.functionId | InconsistentRegisteredCallOwnership of AST.functionId | InconsistentJoin | InconsistentBlockArgument | UndroppedValues of Identity.Set.t
- let errorToString identity error =
+ let errorValue identity error =
   let open StructuralValue in let unary name value = Union (name, [value]) in
   let func = AST.DiagnosticFormatting.func in let index value = Scalar (string_of_int value) in
   let two name id value = Union (name, [func id; index value]) in
@@ -85,6 +85,7 @@ module Make (Identity : Identity) = struct
   | InconsistentJoin -> Union ("InconsistentJoin", [])
   | InconsistentBlockArgument -> Union ("InconsistentBlockArgument", [])
   | UndroppedValues ids -> unary "UndroppedValues" (Union ("set", [Sequence (List.map identity (Identity.Set.elements ids))])) in
-  HostStructuralFormat.format description
+  description
+ let errorToString identity error = HostStructuralFormat.format (errorValue identity error)
 
 end

@@ -2086,6 +2086,54 @@ let anfScalarOptimization source =
         encode typeof<ANF.Function list> (box (ANFDeadCodeElimination.filterReachableFunctions (Set.singleton (AST.functionId 1UL)) functions))
         encode typeof<AST.FunctionId list> (box (ANFDeadCodeElimination.getReachableStdlib (ANFDeadCodeElimination.buildCallGraph functions) [List.head functions] |> Set.toList))]
 
+let expressionLowering source =
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let enc value=closureAnalysisEncode value
+    let outcome encoder value =
+        match value with
+        | Error error -> enc (Error error : Result<unit,string>)
+        | Ok value ->
+            let node=JsonObject()
+            node["type"]<-JsonValue.Create "FSharpResult"
+            node["case"]<-JsonValue.Create "Ok"
+            node["fields"]<-JsonArray([|encoder value|])
+            node :> JsonNode
+    let attempt action=enc (try Ok (action ()) with error -> Error error.Message)
+    let helpers=["Darklang.Stdlib.Int.__value";"Darklang.Stdlib.Int.__equals";"Darklang.Stdlib.Int.bitwiseNot";"Darklang.Stdlib.Int128.__value";"Darklang.Stdlib.UInt128.__value";"Darklang.Stdlib.Int128.__equals";"Darklang.Stdlib.UInt128.__equals";"Darklang.Stdlib.Int128.bitwiseNot";"Darklang.Stdlib.UInt128.bitwiseNot";"Darklang.Stdlib.String.__normalizeAfterConcat";"Darklang.Stdlib.List.__headUnsafe_i64";"Darklang.Stdlib.List.__headUnsafeFloat";"Darklang.Stdlib.List.__tail_i64";"Darklang.Stdlib.List.__length_i64";"Darklang.Stdlib.List.__lengthFloat";"Darklang.Stdlib.List.__getAtInt64";"Darklang.Stdlib.List.__getAtFloat"]
+    let examples=["1L + 2L";"if true then 1L else 2L";"let (x, y) = (1L, 2L) in x + y";"\"é\" ++ \"😀\"";"match 0.0 with | -0.0 -> 1L | 0.0 -> 2L | _ -> 3L";"match 1L with | 1L when false -> 2L | x -> x";"match [1L] with | [] -> 0L | [x] -> x | _ -> 2L";"match [1L, 2L] with | [1L, x] -> x | _ -> 0L";"match [1L, 2L] with | x :: tail -> x | _ -> 0L";"match [1L, 2L] with | x :: y :: tail -> x + y | _ -> 0L";"match [1L, 2L] with | 1L :: [x] -> x | _ -> 0L";"match [1.0, 2.0] with | [x, y] -> x + y | _ -> 0.0";"match [(1L, 2L)] with | [(1L, x)] -> x | _ -> 0L";"match [(1L, 2L)] with | (1L, x) :: tail -> x | _ -> 0L";"match [\"é\"] with | [\"é\"] -> 1L | _ -> 0L";"match ([\"abc\"], 1L) with | (\"abc\" :: _, x) -> x | _ -> 0L";"match [[1L], [2L]] with | [x] :: rest -> x | _ -> 0L";"type S = A of String | B\nmatch S.A \"é\" with | A \"é\" -> 1L | A x when false -> 2L | B -> 3L | _ -> 0L";"type S = A of Int64 | B\nmatch S.A 1L with | A x -> x | B -> 0L";"type S = A of (Int64 * String) | B of Int64\nmatch S.A (1L, \"a\") with | A (1L, x) when true -> x | _ -> \"b\"";"type S = A of Int64\nmatch S.A 1L with | A x -> x";"type S = A | B\nmatch S.A with | A -> 1L | B -> 2L";"type R = { a: Int64; b: String }\nR { b = \"é\"; a = 1L }";"type R = { a: Int64; b: String }\nlet r = R { a = 1L; b = \"x\" } in { r with a = 2L }";"let f (x: Int64): Int64 = x + 1L\nf 2L";"let f (x: List<Int64>): Int64 = match x with | h :: t when h == 1L -> h | _ -> 0L\nf [1L]";"let x = match [1L] with | [h] -> h | _ -> 0L in x + 1L";"match 1L with | 0L | 1L -> 2L | _ -> 3L";"match (1L, 2L) with | (x, _) when x == 1L -> x | _ -> 0L";"match [] with | [] -> 1L | _ -> 0L";"match [1L] with | [x] when x == 1L -> x | _ -> 0L";"match [1L] with | x :: tail when x == 1L -> x | _ -> 0L"]
+    let program program =
+        let symbols=CheckedAST.programSymbols program
+        let tops=CheckedAST.programTopLevels program
+        let types=WrittenChecking.typeCheckEnvironment program
+        let registry : TypeRegistries.TypeRegistry = types.IndexedTypeReg |> Map.map (fun _ (info:CheckingTypes.RecordTypeInfo) -> {TypeParams=info.TypeParams;Fields=info.Fields})
+        let variants=types.VariantLookup
+        let sums=LoweringPrimitives.sumMetadataFromVariantLookup variants
+        let typeNames=TypeRegistries.typeNamesFromSymbols symbols
+        let funcs=tops |> List.choose (function CheckedAST.FunctionDef func -> Some func | _ -> None)
+        let functions=funcs |> List.map (fun func -> func.Id,(func.Name,AST.TFunction (CheckedAST.functionParameterTypes func |> AST.NonEmptyList.toList |> List.map snd,CheckedAST.functionReturnType func))) |> FunctionIdMap.ofList
+        let names=CheckedAST.functionNames symbols
+        let ids=AST.allocateFunctionIds (names |> FunctionIdMap.toList |> Seq.map fst) (helpers |> Seq.filter (fun name -> not (Map.containsKey name (CheckedAST.functionIds symbols))))
+        let names=ids |> Map.fold (fun names name id -> FunctionIdMap.add id name names) names
+        let ids=TypeRegistries.functionIdsFromNames names
+        let globals : TypeRegistries.VarEnv = CheckedAST.programValues program |> Map.toList |> List.mapi (fun index (name,(typ,_)) -> AST.topLevelValueId name,(ANF.TempId (-100-index),typ)) |> Map.ofList
+        let bodies=tops |> List.choose (function
+            | CheckedAST.FunctionDef func ->
+                let env=CheckedAST.functionParameterTypes func |> AST.NonEmptyList.toList |> List.mapi (fun index (id,typ) -> id,(ANF.TempId (-1000-index),typ)) |> List.fold (fun env (id,value) -> Map.add id value env) globals
+                Some (func.Body,env)
+            | CheckedAST.ValueDef value -> Some (value.Body,globals)
+            | CheckedAST.Expression value -> Some (value,globals)
+            | _ -> None)
+        bodies |> List.map (fun (expr,env) ->
+            (if source="" then [0;Int32.MaxValue] else [0]) |> List.map (fun first ->
+                let gen=ANF.VarGen first
+                let modules=Stdlib.buildModuleRegistry ()
+                tuple [attempt (fun () -> LoweringExpressions.toANFCore ids sums typeNames Set.empty expr gen env registry variants functions names modules)
+                       attempt (fun () -> LoweringExpressions.toAtomCore ids sums typeNames Set.empty expr gen env registry variants functions names modules)
+                       attempt (fun () -> LoweringExpressions.toANFBoundAtomCore ids sums typeNames Set.empty expr gen env registry variants functions names modules)]) |> list) |> list
+    let sourceProgram source=WrittenParsing.parse LibParser.Validation.Script source |> Result.bind (fun unit -> WrittenChecking.checkSourceUnitsWithBase None false false [unit]) |> Result.map (fun (_,value,_) -> value) |> outcome program
+    tuple [sourceProgram source;(if source="" then examples |> List.map sourceProgram |> list else list [])]
+
 let anfOutputPlanning source =
     let primitives = [AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TBool;AST.TFloat64;AST.TString;AST.TBlob;AST.TChar;AST.TDateTime;AST.TUnit;AST.TNever;AST.TInternalRawPtr;AST.TVar source;AST.TInferenceVar (source,"fixed");AST.TFunction ([AST.TInt64],AST.TString);AST.TStream AST.TString]
     let record parameters fields : TypeRegistries.RecordTypeInfo = {TypeParams=parameters;Fields=fields}
@@ -2168,6 +2216,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "expression-lowering" -> expressionLowering source
         | "atom-lowering" -> atomLowering source
         | "lowering-types" -> loweringTypes source
         | "lowering-operators" -> loweringOperators source

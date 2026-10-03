@@ -672,3 +672,13 @@ the original allocation order. A fresh warning-free build passes all 309 existin
 native units; coverage is 141/391 complete pairs. These newly translated handlers
 still require direct lowering parity checks. The bounded closure-comparison
 corpus run stopped after 250 matching inputs and remains incomplete.
+
+The declaration-to-ANF conversion layer is fully translated, including complete
+registry construction and overlay merging, recursive-member metadata, and
+whole-function ownership scheduling/fusion/lowering. Its nested ownership
+failure diagnostics retain complete structural layouts. Coverage is 142/391
+complete pairs. The native build remains warning-free and passes 309/309 units.
+The expression-lowering boundary matrix now matches F# for complete expression,
+atom, and bound-atom results, including list/constructor guards and Int32 generator
+overflow. Broader expression-lowering corpus verification is still running;
+declaration-conversion parity and executable-byte acceptance remain outstanding.
