@@ -15,6 +15,8 @@ let rec requests () =
         | "written-source" -> Semantic_observation.SemanticJson.writtenSource source
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
+        | "mir-foundations" -> Semantic_observation.MIRObservation.observe source
+        | "ssa-inlining" -> Semantic_observation.InliningObservation.observe source
         | "ssa-specialization" -> Semantic_observation.SpecializationObservation.observe source
         | "rc-insertion" -> Semantic_observation.RcObservation.observe source
         | "expression-lowering" -> Semantic_observation.ExpressionLoweringObservation.observe source

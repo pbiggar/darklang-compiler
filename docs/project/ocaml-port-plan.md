@@ -722,3 +722,21 @@ indirect exposure, float-bit distinctions, captured/static/returned callbacks,
 and generated-name collisions. Full-output inlining comparison, remaining RC
 test groups, downstream backend passes, and final native acceptance remain
 outstanding; the port is not yet complete.
+
+
+The full-output SSA inlining matrix now matches F# across 672 combinations of
+callee/control-flow shape, literal/variable arguments, local/external candidates,
+exclusions, and seven option configurations. Complete CFGs and fresh type tables
+are compared. MIR representation and scalar folding, parallel-move resolution,
+MIR effect/purity analysis, direct-call graph scheduling, copy propagation,
+root-reachable DCE, literal pools, and Mach-O/ELF container schemas are translated
+with full interfaces and comments. The preparation wrapper was already fully
+translated; its inventory owner mapping now points at that actual component.
+Coverage is 175/391 pairs, with zero missing source comment lines. The warning-free
+native build still passes 344/344 units. Complete MIR observations match F# for
+all 70 instruction constructors with integer/float typing and register/literal
+operands, 36,288 folding combinations, copy cycles/phi prefixes/typed sentinels,
+DCE roots and dead phi cycles, scheduling with repeated IDs and recursion, purity
+hazards, parallel moves, and UTF-16/string-byte and exact-float-bit literal pools.
+MIR SSA and subsequent backend passes, full original RC/MIR test groups, complete
+corpus checks, and final executable-byte/Valgrind acceptance remain outstanding.

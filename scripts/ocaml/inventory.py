@@ -35,6 +35,9 @@ def fixture(path):
 
 # Preserve F# namespace distinctions in Dune's unqualified module graph.
 OWNER_OVERRIDES = {
+    "src/DarkCompiler/passes/mir/optimization/CopyPropagation.fs": "ocaml/lib/passes/mir/optimization/MIRCopyPropagation.ml",
+    "src/DarkCompiler/passes/mir/optimization/Facts.fs": "ocaml/lib/passes/mir/optimization/MIROptimizationFacts.ml",
+    "src/DarkCompiler/passes/mir/optimization/DeadCode.fs": "ocaml/lib/passes/mir/optimization/MIRDeadCode.ml",
     "src/DarkCompiler/passes/anf/ownership/SSARefCountInsertion.fs": "ocaml/lib/passes/anf/ownership/RcSSARefCountInsertion.ml",
     "src/DarkCompiler/passes/anf/ownership/SSAValueLiveness.fs": "ocaml/lib/passes/anf/ownership/RcSSAValueLiveness.ml",
     "src/DarkCompiler/passes/anf/ownership/SSAReturnAnalysis.fs": "ocaml/lib/passes/anf/ownership/RcSSAReturnAnalysis.ml",
@@ -81,7 +84,7 @@ OWNER_OVERRIDES = {
     "src/DarkCompiler/backend/arm64/Operands.fs": "ocaml/lib/backend/arm64/ARM64Operands.ml",
     "src/DarkCompiler/backend/x64/Operands.fs": "ocaml/lib/backend/x64/X64Operands.ml",
     "src/DarkCompiler/backend/arm64/PrepareFunctions.fs": "ocaml/lib/backend/arm64/ARM64PrepareFunctions.ml",
-    "src/DarkCompiler/passes/preparation/PrepareFunctions.fs": "ocaml/lib/passes/preparation/Passes_Preparation_PrepareFunctions.ml",
+    "src/DarkCompiler/passes/preparation/PrepareFunctions.fs": "ocaml/lib/passes/preparation/PrepareFunctions.ml",
     "src/DarkCompiler/backend/arm64/Resolve.fs": "ocaml/lib/backend/arm64/ARM64_Resolve.ml",
     "src/DarkCompiler/backend/x64/Resolve.fs": "ocaml/lib/backend/x64/X86_64_Resolve.ml",
     "src/DarkCompiler/backend/arm64/instructions/Buffers.fs": "ocaml/lib/backend/arm64/instructions/ARM64EmitBuffers.ml",

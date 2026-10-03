@@ -1,0 +1,23 @@
+(* Exhaustive typed MIR encoders for migration observations. *)
+val vReg : Dark_compiler.MIR.vReg -> Yojson.Basic.t
+val typedMIRParam : Dark_compiler.MIR.typedMIRParam -> Yojson.Basic.t
+val operand : Dark_compiler.MIR.operand -> Yojson.Basic.t
+val binOp : Dark_compiler.MIR.binOp -> Yojson.Basic.t
+val unaryOp : Dark_compiler.MIR.unaryOp -> Yojson.Basic.t
+val rcKind : Dark_compiler.MIR.rcKind -> Yojson.Basic.t
+val cliOperation : Dark_compiler.MIR.cliOperation -> Yojson.Basic.t
+val label : Dark_compiler.MIR.label -> Yojson.Basic.t
+val instr : Dark_compiler.MIR.instr -> Yojson.Basic.t
+val terminator : Dark_compiler.MIR.terminator -> Yojson.Basic.t
+val basicBlock : Dark_compiler.MIR.basicBlock -> Yojson.Basic.t
+val cfg : Dark_compiler.MIR.cfg -> Yojson.Basic.t
+val functionDef : Dark_compiler.MIR.functionDef -> Yojson.Basic.t
+val variantInfo : Dark_compiler.MIR.variantInfo -> Yojson.Basic.t
+val typeVariants : Dark_compiler.MIR.typeVariants -> Yojson.Basic.t
+val recordField : Dark_compiler.MIR.recordField -> Yojson.Basic.t
+val program : Dark_compiler.MIR.program -> Yojson.Basic.t
+val regGen : Dark_compiler.MIR.regGen -> Yojson.Basic.t
+val labelGen : Dark_compiler.MIR.labelGen -> Yojson.Basic.t
+val variantRegistry : Dark_compiler.MIR.variantRegistry -> Yojson.Basic.t
+val recordRegistry : Dark_compiler.MIR.recordRegistry -> Yojson.Basic.t
+val functionId : Dark_compiler.AST.functionId -> Yojson.Basic.t

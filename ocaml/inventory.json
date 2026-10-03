@@ -1464,19 +1464,19 @@
       "source": "src/DarkCompiler/passes/mir/optimization/CopyPropagation.fs",
       "kind": "compiler",
       "sha256": "ecdfb29995b777075a84514e5af11ea5b2076b800454d6e1e39556614b2ab812",
-      "owner": "ocaml/lib/passes/mir/optimization/CopyPropagation.ml"
+      "owner": "ocaml/lib/passes/mir/optimization/MIRCopyPropagation.ml"
     },
     {
       "source": "src/DarkCompiler/passes/mir/optimization/DeadCode.fs",
       "kind": "compiler",
       "sha256": "f32c4c1d64befa84aff8e44d292ad9bf662bb0a82945924a333fa24416f74e7b",
-      "owner": "ocaml/lib/passes/mir/optimization/DeadCode.ml"
+      "owner": "ocaml/lib/passes/mir/optimization/MIRDeadCode.ml"
     },
     {
       "source": "src/DarkCompiler/passes/mir/optimization/Facts.fs",
       "kind": "compiler",
       "sha256": "f41abfbb4febf19eea642abd54436251dc8e273d7e2fe4ff01a5bb9fd729d4dd",
-      "owner": "ocaml/lib/passes/mir/optimization/Facts.ml"
+      "owner": "ocaml/lib/passes/mir/optimization/MIROptimizationFacts.ml"
     },
     {
       "source": "src/DarkCompiler/passes/mir/optimization/Induction.fs",
@@ -1644,7 +1644,7 @@
       "source": "src/DarkCompiler/passes/preparation/PrepareFunctions.fs",
       "kind": "compiler",
       "sha256": "fc277a1bd0e908923d25f985205a51bf4cb3187caacd44e3f5a6398afa4ce508",
-      "owner": "ocaml/lib/passes/preparation/Passes_Preparation_PrepareFunctions.ml"
+      "owner": "ocaml/lib/passes/preparation/PrepareFunctions.ml"
     },
     {
       "source": "src/DarkCompiler/passes/preparation/SpecializationIdentity.fs",
