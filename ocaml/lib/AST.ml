@@ -167,6 +167,9 @@ type constructorReference =
    Boolean operations
    ||
 *)
+(*
+   &&
+*)
 type binOp = 
   | Add
   | Sub
@@ -224,6 +227,10 @@ type unaryOp =
    [a, b, c] - exact length match
    a :: b :: t - head elements + rest
    p1 | p2 - left-to-right alternatives
+*)
+(*
+   _
+   1l
 *)
 type pattern = 
   | PUnit
@@ -565,3 +572,52 @@ let collidingConstructorCaseNames definitions =
         StringOrder.Map.add variant.name (StringOrder.Set.add typeName previous) owners) owners variants
     | RecordDef _ | TypeAlias _ -> owners) StringOrder.Map.empty definitions in
   StringOrder.Map.fold (fun case owners collisions -> if StringOrder.Set.cardinal owners > 1 then StringOrder.Set.add case collisions else collisions) owners StringOrder.Set.empty
+(* Preserve F# structural comparison at typed map boundaries. OCaml orders
+   constant and payload constructors separately, and its strings use UTF-8. *)
+let compareTypeId (TypeId left) (TypeId right) = Int.compare left right
+let compareBindingId left right = match left, right with
+  | LocalBindingId (left, leftName), LocalBindingId (right, rightName) ->
+    let ordinal = Int.compare left right in if ordinal <> 0 then ordinal else Option.compare StringOrder.compare leftName rightName
+  | LocalBindingId _, TopLevelValueId _ -> -1 | TopLevelValueId _, LocalBindingId _ -> 1
+  | TopLevelValueId left, TopLevelValueId right -> StringOrder.compare left right
+let compareConstructorId (ConstructorId (owner, name, tag)) (ConstructorId (otherOwner, otherName, otherTag)) =
+  let ownerOrder = compareTypeId owner otherOwner in if ownerOrder <> 0 then ownerOrder else
+  let nameOrder = StringOrder.compare name otherName in if nameOrder <> 0 then nameOrder else Int.compare tag otherTag
+let compareFieldId (FieldId (owner, index)) (FieldId (otherOwner, otherIndex)) =
+  let ownerOrder = compareTypeId owner otherOwner in if ownerOrder <> 0 then ownerOrder else Int.compare index otherIndex
+let semanticTypeRank = function
+  | TInt8 -> 0 | TInt16 -> 1 | TInt32 -> 2 | TInt64 -> 3 | TInt128 -> 4 | TInt -> 5
+  | TUInt8 -> 6 | TUInt16 -> 7 | TUInt32 -> 8 | TUInt64 -> 9 | TUInt128 -> 10
+  | TBool -> 11 | TFloat64 -> 12 | TString -> 13 | TBlob -> 14 | TChar -> 15 | TDateTime -> 16 | TUnit -> 17 | TNever -> 18
+  | TFunction _ -> 19 | TTuple _ -> 20 | TRecord _ -> 21 | TSum _ -> 22 | TList _ -> 23 | TStream _ -> 24
+  | TVar _ -> 25 | TInferenceVar _ -> 26 | TInternalRawPtr -> 27 | TDict _ -> 28
+let rec compareSemanticType left right =
+  let rank = Int.compare (semanticTypeRank left) (semanticTypeRank right) in
+  if rank <> 0 then rank else compareSameSemanticType left right
+and compareSameSemanticType left right = (match left, right with
+  | TFunction (leftParams, leftRet), TFunction (rightParams, rightRet) ->
+    let params = compareSemanticTypeList leftParams rightParams in if params <> 0 then params else compareSemanticType leftRet rightRet
+  | TTuple left, TTuple right -> compareSemanticTypeList left right
+  | TRecord (leftName, leftArgs), TRecord (rightName, rightArgs) | TSum (leftName, leftArgs), TSum (rightName, rightArgs) ->
+    let name = StringOrder.compare leftName rightName in if name <> 0 then name else compareSemanticTypeList leftArgs rightArgs
+  | TList left, TList right | TStream left, TStream right -> compareSemanticType left right
+  | TVar left, TVar right -> StringOrder.compare left right
+  | TInferenceVar (leftName, leftKey), TInferenceVar (rightName, rightKey) ->
+    let name = StringOrder.compare leftName rightName in if name <> 0 then name else StringOrder.compare leftKey rightKey
+  | TDict (leftKey, leftValue), TDict (rightKey, rightValue) ->
+    let key = compareSemanticType leftKey rightKey in if key <> 0 then key else compareSemanticType leftValue rightValue
+  | (TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr), _ -> 0
+  | (TFunction _ | TTuple _ | TRecord _ | TSum _ | TList _ | TStream _ | TVar _ | TInferenceVar _ | TDict _), _ -> Crash.crash "Semantic type comparison rank was inconsistent") [@warning "-4"]
+and compareSemanticTypeList left right = match left, right with
+  | [], [] -> 0 | [], _ :: _ -> -1 | _ :: _, [] -> 1
+  | left :: leftRest, right :: rightRest -> let order = compareSemanticType left right in if order <> 0 then order else compareSemanticTypeList leftRest rightRest
+(* Temporary migration instrumentation reads opaque identity payloads without
+   exposing their constructors or allowing semantic state to be rewritten. *)
+module MigrationObservation = struct
+  let bindingOrdinal = function LocalBindingId (ordinal, _) -> Some ordinal | TopLevelValueId _ -> None
+  let typeOrdinal (TypeId ordinal) = ordinal
+  let scopeOrdinal (ScopeBoundaryId ordinal) = ordinal
+  let groupOrdinal (RecursiveGroupId ordinal) = ordinal
+  let memberOrdinal (RecursiveMemberId ordinal) = ordinal
+end

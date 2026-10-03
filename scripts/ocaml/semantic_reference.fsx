@@ -69,10 +69,10 @@ let rec encoder (typ: Type) : obj -> JsonNode =
                 let types = FSharpType.GetTupleElements typ
                 let reader = FSharpValue.PreComputeTupleReader typ
                 fun value -> Array.map2 encode types (reader value) |> namedArray "tuple"
-            elif FSharpType.IsUnion typ then
-                let tag = FSharpValue.PreComputeUnionTagReader typ
-                let cases = FSharpType.GetUnionCases typ |> Array.map (fun case ->
-                    case.Name, (case.GetFields() |> Array.map (fun field -> field.PropertyType)), FSharpValue.PreComputeUnionReader case)
+            elif FSharpType.IsUnion(typ, Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic) then
+                let tag = FSharpValue.PreComputeUnionTagReader(typ, Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+                let cases = FSharpType.GetUnionCases(typ, Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic) |> Array.map (fun case ->
+                    case.Name, (case.GetFields() |> Array.map (fun field -> field.PropertyType)), FSharpValue.PreComputeUnionReader(case, Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic))
                 fun value ->
                     let name, types, reader = cases[tag value]
                     let node = JsonObject()
@@ -80,9 +80,9 @@ let rec encoder (typ: Type) : obj -> JsonNode =
                     node["case"] <- JsonValue.Create name
                     node["fields"] <- JsonArray(Array.map2 encode types (reader value))
                     node
-            elif FSharpType.IsRecord typ then
-                let fields = FSharpType.GetRecordFields typ
-                let reader = FSharpValue.PreComputeRecordReader typ
+            elif FSharpType.IsRecord(typ, Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic) then
+                let fields = FSharpType.GetRecordFields(typ, Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+                let reader = FSharpValue.PreComputeRecordReader(typ, Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
                 fun value ->
                     let node = JsonObject()
                     node["record"] <- JsonValue.Create (typ.Name.Split('`')[0])
@@ -378,6 +378,63 @@ let functionIdMap source =
         if FunctionIdMap.isEmpty table then None else let id,value = FunctionIdMap.maxKeyValue table in Some (AST.functionIdValue id,value,FunctionIdMap.find id table))
     encode (values.GetType()) (box values)
 
+let checkedAst source =
+    let one value = AST.NonEmptyList.singleton value
+    let var : AST.Expr = AST.Var "x"
+    let unit : AST.Expr = AST.UnitLiteral
+    let field index = AST.resolvedRecordFieldReference "R" ("field" + string index) index
+    let record : AST.RecordReference = {SourceTypeName = "R"; ResolvedTypeName = "R"; TypeArgs = [AST.TInferenceVar (source,"fixed")]}
+    let parameter = AST.inferredLambdaVariable "x" AST.TInt64
+    let patterns = [AST.PUnit; AST.PWildcard; AST.PVar "x";
+        AST.PResolvedConstructor ("S", "Choice", 17, [AST.PVar "x"]); AST.PInt64 Int64.MinValue;
+        AST.PBigInt (Numerics.BigInteger.One <<< 256); AST.PInt128Literal Int128.MinValue;
+        AST.PInt8Literal -128y; AST.PInt16Literal -32768s; AST.PInt32Literal Int32.MinValue;
+        AST.PUInt8Literal 255uy; AST.PUInt16Literal 65535us; AST.PUInt32Literal UInt32.MaxValue;
+        AST.PUInt64Literal UInt64.MaxValue; AST.PUInt128Literal UInt128.MaxValue;
+        AST.PBool true; AST.PString source; AST.PChar source; AST.PFloat -0.0;
+        AST.PTuple [AST.PVar "x"; AST.PWildcard]; AST.PList [AST.PVar "x"];
+        AST.PListCons ([AST.PWildcard], AST.PVar "x"); AST.POr (one (AST.PVar "x"))]
+    let expressions : AST.Expr list =
+        [unit; AST.Int64Literal Int64.MinValue; AST.Int128Literal Int128.MinValue;
+        AST.Int8Literal -128y; AST.Int16Literal -32768s; AST.Int32Literal Int32.MinValue; AST.UInt8Literal 255uy;
+        AST.UInt16Literal 65535us; AST.UInt32Literal UInt32.MaxValue; AST.UInt64Literal UInt64.MaxValue; AST.UInt128Literal UInt128.MaxValue;
+        AST.BigIntLiteral (Numerics.BigInteger.One <<< 256); AST.BoolLiteral true; AST.StringLiteral source; AST.CharLiteral source; AST.FloatLiteral -0.0;
+        AST.InterpolatedString [AST.StringText source; AST.StringExpr var]; AST.BinOp (AST.Add, var, unit); AST.UnaryOp (AST.Not, var);
+        AST.Let (AST.LPTuple (AST.LPVariable "x", AST.LPWildcard, [AST.LPUnit]), unit, var);
+        AST.Var source; AST.Var "Builtin.testNan"; AST.Var "Builtin.testInfinity"; AST.Var "Builtin.blobEmpty";
+        AST.If (var, unit, var); AST.Sequence (unit, var); AST.Apply (var, [], one unit); AST.Apply (var, [AST.TInt64], one unit);
+        AST.TupleLiteral [unit; var; unit]; AST.TupleAccess (var, 2); AST.DictLiteral (AST.TString, AST.TInt64, [AST.StringLiteral source, var]);
+        AST.RecordLiteral (record, [field 1, var; field 0, unit]); AST.RecordUpdate (var, [field 1, unit]); AST.RecordAccess (var, field 1);
+        AST.Constructor (AST.ResolvedConstructor (["a"], "S", [AST.TInt64]), "Choice", [var]);
+        AST.ListLiteral [var; unit]; AST.Lambda (one parameter, Some AST.TInt64, var);
+        AST.Apply (AST.Lambda (one parameter, None, var), [], one unit); AST.IndirectApply (var, one unit);
+        AST.Closure (source, [var]); AST.RuntimeError source; AST.BoundaryRender (source, var);
+        AST.TupleLiteral []; AST.TupleLiteral [unit]; AST.Match (unit, []);
+        AST.RecordLiteral (record, []); AST.RecordAccess (var, AST.unresolvedRecordFieldReference "field");
+        AST.Constructor (AST.UnresolvedConstructor None, "Absent", []); AST.Lambda (one (AST.lambdaParameter (AST.LPVariable "x")), None, var);
+        AST.Apply (unit, [AST.TUnit], one unit)] @
+        (patterns |> List.map (fun pattern -> AST.Match (var, [{Patterns = one pattern; Guard = Some var; Body = var}])))
+    let lookup : Map<string,string * string list * int * AST.SemanticType list> = Map.ofList ["S.Choice", ("S", [], 17, [])]
+    let catalog = CheckedAST.includeFunctionNames [source; "z"; "aa"; "z"] CheckedAST.emptyFunctionCatalog
+    let methodInfo = typeof<AST.SemanticType>.Assembly.GetType("CheckedAST").GetMethod("ofTypedProgram", Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static)
+    let convert (topLevels : AST.TopLevel list) : Result<CheckedAST.Program,string> =
+        methodInfo.Invoke(null,[|box lookup; box (Set.singleton "external"); box CheckedAST.emptyTypeCatalog; box catalog; box (fun name -> if name = "R" then Some 2 else None); box (AST.Program (AST.TypeDef (AST.RecordDef ("R",[],["field0",AST.TUnit; "field1",AST.TInt64])) :: AST.TypeDef (AST.SumTypeDef ("S",[],[{Name = "Choice"; Fields = []}])) :: topLevels))|]) :?> Result<CheckedAST.Program,string>
+    let converted = expressions |> List.map (fun expr -> convert [AST.Expression ([],expr)])
+    let definition : AST.FunctionDef = {Name = source; TypeParams = ["a"]; Params = one ("x",AST.TInferenceVar (source,"fixed")); ReturnType = AST.TInt64; Body = AST.Let (AST.LPVariable "local",unit,var); Recursion = None}
+    let declarations = convert [AST.TypeDef (AST.RecordDef ("R",["a"],["field0",AST.TVar "a"; "field1",AST.TInt64]));
+        AST.TypeDef (AST.SumTypeDef ("S",[],[{Name = "Choice"; Fields = []}])); AST.TypeDef (AST.TypeAlias ("A",[],AST.TInferenceVar (source,"fixed")));
+        AST.FunctionDef definition; AST.ValueDef (AST.CheckedValueDef ("v",AST.TInt64,AST.Var source)); AST.Expression ([],AST.Var "v")]
+    let owner = AST.typeId 5
+    let recordCases = [0;1;2;64;65] |> List.collect (fun count ->
+        let entries = List.init count (fun index -> AST.fieldId owner index,index)
+        [CheckedAST.completeRecordFields owner count entries; CheckedAST.completeRecordFields owner count (List.rev entries);
+         CheckedAST.completeRecordFields owner count ((AST.fieldId owner 0,99)::entries);
+         CheckedAST.completeRecordFields owner count [AST.fieldId (AST.typeId 6) 0,99]])
+    let orderingTypes = [AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TInt; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128; AST.TBool; AST.TFloat64; AST.TString; AST.TBlob; AST.TChar; AST.TDateTime; AST.TUnit; AST.TNever; AST.TFunction ([AST.TVar source], AST.TInt64); AST.TTuple []; AST.TRecord (source, []); AST.TSum (source, []); AST.TList AST.TInt64; AST.TStream AST.TInt64; AST.TVar source; AST.TInferenceVar (source, "fixed"); AST.TInternalRawPtr; AST.TDict (AST.TString, AST.TInt64); AST.TRecord ("aa", []); AST.TRecord ("z", []); AST.TTuple [AST.TInt64]]
+    let ordering = orderingTypes |> List.collect (fun left -> orderingTypes |> List.map (fun right -> sign (compare left right)))
+    let value = ordering,CheckedAST.semanticMetadata (CheckedAST.emptySymbols()),catalog,converted,declarations,convert [AST.ValueDef (AST.UncheckedValueDef (source,unit))],recordCases
+    encode (value.GetType()) (box value)
+
 CultureInfo.CurrentCulture <- CultureInfo.InvariantCulture
 CultureInfo.CurrentUICulture <- CultureInfo.InvariantCulture
 let reader : IO.TextReader =
@@ -414,6 +471,7 @@ let rec requests () =
                         WrittenFormatter.syntaxKey parsed, WrittenFormatter.format printed parsed)
                     WrittenFormatter.syntaxKey parsed, printed, reparsed)
                 encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
+            | "checked-ast" -> checkedAst source
             | "function-map" -> functionIdMap source
             | "free-variables" -> freeVariables source
             | "checking-diagnostics" -> checkingDiagnostics source

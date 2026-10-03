@@ -329,13 +329,13 @@ graph. These mappings do not change frozen source or fixture hashes.
 
 Semantic resolution, checker diagnostics, closure free-variable analysis, and
 sparse function identity maps are now ported. Resolver observations match all
-1,392 probes; diagnostic observations also match all 1,392 probes, including
+1,890 corpus and probe inputs; diagnostic observations also match all 1,392 probes, including
 literal widths, UTF-16 initial-character handling, runtime-failure detection,
 and normalized fresh UUID identities. Free-variable observations match all
 1,890 corpus and probe inputs, covering every expression/pattern case and three
 lexical scopes. Function-table observations match all 1,890 inputs, including
 uint64 boundaries, duplicate-key replacement, updates, folds, and overlays.
-The full resolver corpus comparison is still running.
+The full resolver corpus comparison passes.
 
 Original source comments are retained alongside translated declarations.
 `scripts/ocaml/port_comments.py --check` audits reference line-comment coverage
@@ -344,3 +344,12 @@ Large semantic comparisons now compare complete JSON observations as streams;
 successful observations retain canonical SHA-256 audit rows, while a mismatch
 retains both complete trees and the first differing field. This avoids exhausting
 the VM's disk with repeated source evidence and does not weaken the comparison.
+
+CheckedAST is fully translated with phase-safe private types and catalogs,
+certified record completeness, explicit identity ordering, and all conversion
+paths. Complete checked trees and private catalogs match all 1,890 corpus and
+probe inputs; comparisons include every semantic type pair, literal widths,
+rejected conversions, and 0/1/2/64/65-field record layouts. Instrumentation
+appends typed observers to the exact production implementation in a separate
+migration build; production catalogs remain opaque. Original comments are
+preserved and audited against actual OCaml comment bodies.

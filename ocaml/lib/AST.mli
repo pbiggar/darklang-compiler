@@ -306,3 +306,17 @@ val applyNamedWithTypes : string -> 't list -> 't exprNode nonEmptyList -> 't ex
 val valueDefName : 't valueDefNode -> string
 val valueDefBody : 't valueDefNode -> 't exprNode
 val collidingConstructorCaseNames : 't typeDefNode list -> StringOrder.Set.t
+(* F# structural ordering uses declaration-order cases and UTF-16 string keys. *)
+val compareBindingId : bindingId -> bindingId -> int
+val compareTypeId : typeId -> typeId -> int
+val compareConstructorId : constructorId -> constructorId -> int
+val compareFieldId : fieldId -> fieldId -> int
+val compareSemanticType : semanticType -> semanticType -> int
+(* Temporary typed access for complete migration observations; no identity construction. *)
+module MigrationObservation : sig
+  val bindingOrdinal : bindingId -> int option
+  val typeOrdinal : typeId -> int
+  val scopeOrdinal : scopeBoundaryId -> int
+  val groupOrdinal : recursiveGroupId -> int
+  val memberOrdinal : recursiveMemberId -> int
+end

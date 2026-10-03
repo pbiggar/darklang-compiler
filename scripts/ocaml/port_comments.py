@@ -69,6 +69,21 @@ def line_comments(text):
             i += 1
 
 
+def ocaml_comments(text):
+    """Read actual comment bodies; code strings are not comment coverage."""
+    token = re.compile(r'"(?:\\.|[^"\\])*"|\{(?P<raw>[a-z_]*)\|.*?\|(?P=raw)\}|\(\*|\*\)', re.S)
+    depth, start = 0, 0
+    for match in token.finditer(text):
+        if match[0] == '(*':
+            if depth == 0:
+                start = match.end()
+            depth += 1
+        elif match[0] == '*)' and depth:
+            depth -= 1
+            if depth == 0:
+                yield text[start:match.start()]
+
+
 def safe(text):
     # OCaml parses string literals inside comments. Balance unmatched quotes;
     # separate nested delimiters used as examples rather than comment syntax.
@@ -86,6 +101,7 @@ def main():
     args = parser.parse_args()
     manifest = json.loads((ROOT / 'ocaml/inventory.json').read_text())
     contents = {p: p.read_text() for folder in ['ocaml/lib', 'ocaml/tests'] for p in (ROOT / folder).rglob('*.ml')}
+    comment_text = {path: '\n'.join(ocaml_comments(text)) for path, text in contents.items()}
     definitions = defaultdict(list)
     for path, text in contents.items():
         for match in NATIVE.finditer(text):
@@ -120,7 +136,7 @@ def main():
             else:
                 target = owner, 0
             path, position = target
-            if compact(safe(comment)) in compact(contents[path]):
+            if compact(safe(comment)) in compact(comment_text[path]):
                 continue
             if comment not in insertions[path][position]:
                 insertions[path][position].append(comment)

@@ -2,3 +2,25 @@
  (name semantic_observation)
  (libraries dark_compiler yojson zarith)
  (flags (:standard -w @a-42 -warn-error +a-42)))
+
+; Instrument the complete production implementation from the same source.
+; Private catalogs remain private in the production library; only this migration
+; build appends typed encoders after the real implementation's definitions.
+(rule
+ (targets InstrumentedCheckedAST.ml)
+ (deps ../lib/CheckedAST.ml checked_ast_observation.inc)
+ (action
+  (with-stdout-to %{targets}
+   (progn
+    (echo "open Dark_compiler")
+    (cat %{dep:../lib/CheckedAST.ml})
+    (cat %{dep:checked_ast_observation.inc})))))
+(rule
+ (targets InstrumentedCheckedAST.mli)
+ (deps ../lib/CheckedAST.mli)
+ (action
+  (with-stdout-to %{targets}
+   (progn
+    (echo "open Dark_compiler")
+    (cat %{dep:../lib/CheckedAST.mli})
+    (echo "val observe : string -> Yojson.Basic.t")))))
