@@ -802,3 +802,14 @@ straight-line bypasses, and diagnostics. The scheduler additionally matches
 functions/programs, constant returns, and traced phase labels/nonnegative times.
 Original MIR optimizer tests, printers, remaining RC groups, backend stages,
 full corpus checks, and final executable-byte/Valgrind acceptance remain open.
+
+The shared IR printing helpers and complete ANF/MIR printers are translated,
+including original comments, every constructor, source diagnostics, structural
+type formatting, float formatting, and .NET ordinal Unicode filtering. Complete
+output matches the F# reference for 792 MIR programs, the full ANF constructor
+fixture, summaries and external function names, all 1,470 pinned-runtime ordinal
+casing mappings, and partial-surrogate searches. All 43 original MIR optimizer
+tests are translated and registered with their original assertions and failure
+messages. The warning-free build passes 392/392 native units. Coverage is now
+190/391 pairs. Remaining ownership test groups, LIR and downstream backend
+stages, full corpus checks, and final native acceptance remain outstanding.
