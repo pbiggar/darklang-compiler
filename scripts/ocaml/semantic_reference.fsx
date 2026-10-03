@@ -2089,6 +2089,62 @@ let anfScalarOptimization source =
 let rcInternalCall<'a> moduleName name args : 'a =
     let method = typeof<AST.SemanticType>.Assembly.GetType(moduleName).GetMethod(name, Reflection.BindingFlags.Static ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
     try unbox<'a> (method.Invoke(null,args)) with :? Reflection.TargetInvocationException as error -> raise error.InnerException
+let mirLoopObservation (source:string) =
+    let enc value=closureAnalysisEncode value
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let attempt action=enc (try Ok (action ()) with error -> Error error.Message)
+    let reg n=MIR.VReg n
+    let v n=MIR.Register (reg n)
+    let label text=MIR.Label text
+    let block name instrs terminator : MIR.BasicBlock={Label=label name;Instrs=instrs;Terminator=terminator}
+    let graph entry (blocks:MIR.BasicBlock list) : MIR.CFG={Entry=label entry;Blocks=blocks |> List.map (fun block -> block.Label,block) |> Map.ofList}
+    let types=[AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TFloat64;AST.TBool;AST.TChar;AST.TDateTime;AST.TString;AST.TUnit;AST.TInt128;AST.TUInt128;AST.TTuple [AST.TInt64]]
+    let make typ scale offset variant=
+        let scaleInstr=match scale with 0 -> MIR.BinOp (reg 6,MIR.Mul,v 1,v 4,typ) | 1 -> MIR.BinOp (reg 6,MIR.Mul,v 4,v 1,typ) | _ -> MIR.BinOp (reg 6,MIR.Shl,v 1,MIR.Int64Const 1L,typ)
+        let affine=match offset with 0 -> MIR.BinOp (reg 7,MIR.Add,v 6,v 5,typ) | 1 -> MIR.BinOp (reg 7,MIR.Add,v 5,v 6,typ) | _ -> MIR.BinOp (reg 7,MIR.Sub,v 6,v 5,typ)
+        let outside=if variant=2 then [MIR.Int64Const 0L,label "left";MIR.Int64Const 2L,label "right"] else [MIR.Int64Const 0L,label source]
+        let phis=[MIR.Phi (reg 1,outside @ [v 10,label "latch"],Some typ);MIR.Phi (reg 3,outside @ [v 11,label "latch"],Some typ)]
+        let invariantPhi=if variant=1 then [MIR.Phi (reg 30,[v 4,label source;v 30,label "latch"],Some typ)] else []
+        let bound=if variant=4 then v 1 else if variant=5 then MIR.Int64Const 4L else v 2
+        let header=block "header" (phis @ invariantPhi @ [MIR.BinOp (reg 12,MIR.Gte,v 1,bound,AST.TInt64)]) (MIR.Branch (v 12,label "exit",label "latch"))
+        let extra=match variant with
+                  | 1 -> [MIR.BinOp (reg 40,MIR.Add,v 4,MIR.Int64Const 1L,typ);MIR.BinOp (reg 41,MIR.Mul,v 40,MIR.Int64Const 2L,typ);MIR.FloatAbs (reg 42,v 30)]
+                  | 2 | 3 -> [MIR.BinOp (reg 40,MIR.Add,v 4,MIR.Int64Const 1L,typ)]
+                  | 6 -> [MIR.UnaryOp (reg 40,MIR.Neg,v 6)]
+                  | 8 -> [MIR.Call (reg 40,AST.functionId 200UL,[v 4],[typ],typ)]
+                  | 9 -> [MIR.FloatNeg (reg 40,v 4);MIR.FloatToBits (reg 41,v 40)]
+                  | _ -> []
+        let step=if variant=7 then 2L else 1L
+        let latch=block "latch" ([scaleInstr;affine;MIR.BinOp (reg 11,MIR.Add,v 3,v 7,typ);MIR.BinOp (reg 10,MIR.Add,v 1,MIR.Int64Const step,typ)] @ extra) (MIR.Jump (label "header"))
+        let exit=block "exit" [MIR.Mov (reg 13,v 3,Some typ)] (MIR.Ret (v 13))
+        let entry=if variant=2 then [block source [] (MIR.Branch (v 2,label "left",label "right"));block "left" [] (MIR.Jump (label "header"));block "right" [] (MIR.Jump (label "header"))] else [block source [] (if variant=3 then MIR.Branch (v 2,label "header",label "exit") else MIR.Jump (label "header"))]
+        let collision=if variant=5 then [block "latch_unroll_second" [] (MIR.Ret (v 2));block "exit_unroll_remainder" [MIR.Mov (reg 2147483646,v 4,Some typ)] (MIR.Ret (v 2));block "header_preheader" [] (MIR.Ret (v 2))] else []
+        graph source (entry @ [header;latch;exit] @ collision)
+    let union (typ:string) (case:string) (fields:JsonNode list) : JsonNode =
+        let node=JsonObject()
+        node["type"] <- JsonValue.Create typ
+        node["case"] <- JsonValue.Create case
+        node["fields"] <- JsonArray(Array.ofList fields)
+        node
+    let known cfg (functions:Set<AST.FunctionId>) =
+        try
+            let option=rcInternalCall<obj> "MIRLoopTopology" "tryBuildLoopTopology" [|box cfg|]
+            let value=
+                if isNull option then union "FSharpOption" "None" []
+                else
+                    let _,fields=FSharpValue.GetUnionFields(option,option.GetType())
+                    let result=rcInternalCall<obj> "MIRLoopInvariantMotion" "applyLoopInvariantCodeMotionWithEffectFreeCalls" [|box functions;fields[0];box cfg|]
+                    union "FSharpOption" "Some" [encode (result.GetType()) result]
+            union "FSharpResult" "Ok" [value]
+        with error -> union "FSharpResult" "Error" [encodeString error.Message]
+    let observe typ scale offset variant =
+        let cfg=make typ scale offset variant
+        let publicResults=[MIRInduction.applyAffineInductionStrengthReduction;MIRUnrolling.applyCountedLoopUnrolling;MIRLoopInvariantMotion.applyLoopInvariantCodeMotion] |> List.map (fun transform -> attempt (fun () -> transform cfg)) |> list
+        let knownResults=[Set.empty;Set.singleton (AST.functionId 200UL)] |> List.map (known cfg) |> list
+        tuple [enc cfg;enc (rcInternalCall<int> "MIRInduction" "nextRegisterId" [|box cfg|]);publicResults;knownResults]
+    types |> List.map (fun typ -> [0;1;2] |> List.map (fun scale -> [0;1;2] |> List.map (fun offset -> [0;1;2;3;4;5;6;7;8;9] |> List.map (observe typ scale offset) |> list) |> list) |> list) |> list
+
 let mirCSEObservation (source:string) =
     let enc value=closureAnalysisEncode value
     let tuple values=namedArray "tuple" (Array.ofList values)
@@ -2634,6 +2690,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "mir-loops" -> mirLoopObservation source
         | "mir-cse" -> mirCSEObservation source
         | "mir-ssa" -> mirSSAObservation source
         | "mir-foundations" -> mirFoundationsObservation source

@@ -1482,13 +1482,13 @@
       "source": "src/DarkCompiler/passes/mir/optimization/Induction.fs",
       "kind": "compiler",
       "sha256": "7e8e2146404cc35095efea4dc00cefc6fcc9cd856f4a23068839582e5db89124",
-      "owner": "ocaml/lib/passes/mir/optimization/Induction.ml"
+      "owner": "ocaml/lib/passes/mir/optimization/MIRInduction.ml"
     },
     {
       "source": "src/DarkCompiler/passes/mir/optimization/LoopInvariantMotion.fs",
       "kind": "compiler",
       "sha256": "a9c97a14a7141378113d5dd83fb88f27209a3ae7af78ff088303c048ed31c877",
-      "owner": "ocaml/lib/passes/mir/optimization/LoopInvariantMotion.ml"
+      "owner": "ocaml/lib/passes/mir/optimization/MIRLoopInvariantMotion.ml"
     },
     {
       "source": "src/DarkCompiler/passes/mir/optimization/LoopTopology.fs",
@@ -1500,13 +1500,13 @@
       "source": "src/DarkCompiler/passes/mir/optimization/SparseConditionalConstants.fs",
       "kind": "compiler",
       "sha256": "a8efce2621a1ba512c15b268ba72241021c04dc28868d1cf24c1c7db1323ed74",
-      "owner": "ocaml/lib/passes/mir/optimization/SparseConditionalConstants.ml"
+      "owner": "ocaml/lib/passes/mir/optimization/MIRSparseConditionalConstants.ml"
     },
     {
       "source": "src/DarkCompiler/passes/mir/optimization/Unrolling.fs",
       "kind": "compiler",
       "sha256": "ac2e6761d75e29bb5c27bb92955612f549db391bf0f92bc093e7d9a28cbcd377",
-      "owner": "ocaml/lib/passes/mir/optimization/Unrolling.ml"
+      "owner": "ocaml/lib/passes/mir/optimization/MIRUnrolling.ml"
     },
     {
       "source": "src/DarkCompiler/passes/ownership/AnalyzeFunctionOwnership.fs",

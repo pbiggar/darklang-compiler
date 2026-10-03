@@ -35,6 +35,10 @@ def fixture(path):
 
 # Preserve F# namespace distinctions in Dune's unqualified module graph.
 OWNER_OVERRIDES = {
+    "src/DarkCompiler/passes/mir/optimization/SparseConditionalConstants.fs": "ocaml/lib/passes/mir/optimization/MIRSparseConditionalConstants.ml",
+    "src/DarkCompiler/passes/mir/optimization/Induction.fs": "ocaml/lib/passes/mir/optimization/MIRInduction.ml",
+    "src/DarkCompiler/passes/mir/optimization/Unrolling.fs": "ocaml/lib/passes/mir/optimization/MIRUnrolling.ml",
+    "src/DarkCompiler/passes/mir/optimization/LoopInvariantMotion.fs": "ocaml/lib/passes/mir/optimization/MIRLoopInvariantMotion.ml",
     "src/DarkCompiler/passes/mir/optimization/CommonExpressions.fs": "ocaml/lib/passes/mir/optimization/MIRCommonExpressions.ml",
     "src/DarkCompiler/passes/mir/optimization/ControlFlow.fs": "ocaml/lib/passes/mir/optimization/MIRControlFlow.ml",
     "src/DarkCompiler/passes/mir/optimization/LoopTopology.fs": "ocaml/lib/passes/mir/optimization/MIRLoopTopology.ml",

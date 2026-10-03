@@ -769,3 +769,18 @@ all 66 instruction barriers, 17 scalar/managed/aggregate type families, local an
 dominated reuse, path-complete joins, critical edges, join-local dependencies,
 and unreachable paths. Remaining loop/SCCP passes, original RC/MIR fixture groups,
 backend stages, full corpus checks, and final native acceptance are outstanding.
+
+
+Induction strength reduction, counted-loop unrolling, and loop-invariant motion
+are fully translated with complete interfaces, original line and block comments,
+Int32 fresh-ID arithmetic, original discovery/clone order, canonical preheader
+construction, and effect-free call rules. This checkpoint contains 184/391 pairs.
+The warning-free build passes 349/349 native units. Complete differential output
+matches F# for 1,530 typed loop shapes: three scale forms, three offset forms, 17
+type families, and ten control-flow/dependency variants. It compares all three
+passes, fresh IDs, and LICM with both empty and known effect-free function sets,
+including the returned loop topology. Multiple entry edges, invariant phis,
+extra scale uses, non-invariant bounds, non-unit steps, float instructions,
+generated-label collisions, and fresh-ID overflow are included. SCCP and the
+fixed-point optimizer scheduler, original RC/MIR tests, downstream backend stages,
+full corpus checks, and final native acceptance remain outstanding.
