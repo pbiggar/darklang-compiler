@@ -3378,6 +3378,34 @@ let armClosureReferenceObservation (source:string) =
     let metadata:MemoryModel.RcMetadata option list=[None;Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=None;ReleasePlan=None;SourceType=None}]@List.choose (fun typ -> try match closure_tryRcReleasePlanOfType records sums typ with None -> None | Some releasePlan -> Some (Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=Some source;ReleasePlan=Some releasePlan;SourceType=Some typ}) with _ -> None) types in
     tuple [contexts;typed;mapNodes (fun meta -> tuple [call (option plan) (fun () -> closure_rcMetadataReleasePlan meta);call plan (fun () -> closure_requiredRcMetadataReleasePlan source meta)]) metadata]
 
+let armReleaseSelectionObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call encode f=try tuple [enc false;encode (f ())] with _ -> tuple [enc true]
+    let boolean (value:bool)=enc value
+    let selection_releasePlanRootKindAt (arg0:int) (arg1:MemoryModel.RcKind) (arg2:MemoryModel.RcFieldRelease list) = rcInternalCall<bool> "ARM64ReleaseSelection" "releasePlanRootKindAt" [|box arg0;box arg1;box arg2|]
+    let selection_releasePlanDynamicOperationAt (arg0:int) (arg1:MemoryModel.RcOperation) (arg2:MemoryModel.RcFieldRelease list) = rcInternalCall<bool> "ARM64ReleaseSelection" "releasePlanDynamicOperationAt" [|box arg0;box arg1;box arg2|]
+    let selection_listDecHelperForElementRelease (arg0:string) (arg1:MemoryModel.RcReleasePlan) = rcInternalCall<string> "ARM64ReleaseSelection" "listDecHelperForElementRelease" [|box arg0;box arg1|]
+    let selection_listDecHelperForReleasePlan (arg0:MemoryModel.RcReleasePlan) = rcInternalCall<string> "ARM64ReleaseSelection" "listDecHelperForReleasePlan" [|box arg0|]
+    let selection_dictPayloadReleaseNeedsPlannedHelper (arg0:MemoryModel.RcReleasePlan) (arg1:MemoryModel.RcReleasePlan) = rcInternalCall<bool> "ARM64ReleaseSelection" "dictPayloadReleaseNeedsPlannedHelper" [|box arg0;box arg1|]
+    let selection_dictDecHelperForReleasePlanWithFingerprint (arg0:string) (arg1:MemoryModel.RcReleasePlan) = rcInternalCall<string> "ARM64ReleaseSelection" "dictDecHelperForReleasePlanWithFingerprint" [|box arg0;box arg1|]
+    let selection_dictDecHelperForReleasePlan (arg0:MemoryModel.RcReleasePlan) = rcInternalCall<string> "ARM64ReleaseSelection" "dictDecHelperForReleasePlan" [|box arg0|]
+    let kinds=[MemoryModel.GenericHeap;MemoryModel.StreamHeap;MemoryModel.TaggedList;MemoryModel.DictHeap;MemoryModel.ClosureHeap] in
+    let operations=[MemoryModel.DynamicStringBuffer;MemoryModel.DynamicBlobBuffer;MemoryModel.DynamicIntBuffer]@List.collect (fun kind -> List.map (fun size -> MemoryModel.FixedSizeRoot (size,kind)) [-2147483648;-1;0;8;2147483647]) kinds in
+    let simple=[MemoryModel.NoReleasePlan;MemoryModel.RecursiveRelease (AST.TRecord (source,[]))]@List.map (fun operation -> MemoryModel.DynamicBufferRelease operation) operations@List.collect (fun kind -> [MemoryModel.RootRelease (8,kind,MemoryModel.NoPayloadRelease);MemoryModel.RootRelease (8,kind,MemoryModel.FixedBlockPayloadRelease (8,[]));MemoryModel.RootRelease (8,kind,MemoryModel.BoxedSumPayloadRelease (8,[],[]));MemoryModel.RootRelease (8,kind,MemoryModel.ClosurePayloadRelease [])]) kinds in
+    let listPlans=List.map (fun plan -> MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease plan)) simple in
+    let dictPlans=List.collect (fun value -> [MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,value));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer,value));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (value,MemoryModel.NoReleasePlan))]) (simple@listPlans) in
+    let fields=[MemoryModel.FieldRelease (0,MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer);MemoryModel.FieldRelease (8,MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease MemoryModel.NoReleasePlan));MemoryModel.FieldRelease (16,MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,MemoryModel.NoReleasePlan)))] in
+    let rich=List.collect (fun size -> List.collect (fun fields -> [MemoryModel.RootRelease (size,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (size,fields));MemoryModel.RootRelease (size,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (size,fields,[{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=fields}]))]) [fields;List.rev fields;[MemoryModel.FieldRelease (8,MemoryModel.NoReleasePlan)]@fields;fields@[MemoryModel.FieldRelease (8,MemoryModel.NoReleasePlan)];[MemoryModel.FieldRelease (8,MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer)];[]]) [8;16;24;256] in
+    let plans=simple@listPlans@dictPlans@rich in
+    let fingerprints=["";source;"hé😀";"a\000b";String [|char 0xd800;char 97;char 0xdc00|]] in
+    let selected=mapNodes (fun plan -> tuple [call enc (fun () -> selection_listDecHelperForReleasePlan plan);call enc (fun () -> selection_dictDecHelperForReleasePlan plan);mapNodes (fun fingerprint -> tuple [call enc (fun () -> selection_listDecHelperForElementRelease fingerprint plan);call enc (fun () -> selection_dictDecHelperForReleasePlanWithFingerprint fingerprint plan)]) fingerprints]) plans in
+    let paired=mapNodes (fun key -> mapNodes (fun value -> call boolean (fun () -> selection_dictPayloadReleaseNeedsPlannedHelper key value)) plans) plans in
+    let fieldPlans=List.collect (fun offset -> List.map (fun plan -> [MemoryModel.FieldRelease (offset,plan)]) simple) [-2147483648;-1;0;8;16;2147483647]@[fields;List.rev fields;[MemoryModel.FieldRelease (8,MemoryModel.NoReleasePlan)]@fields;fields@[MemoryModel.FieldRelease (8,MemoryModel.NoReleasePlan)];[]] in
+    let fieldSelections=mapNodes (fun fields -> mapNodes (fun offset -> tuple [mapNodes (fun kind -> call boolean (fun () -> selection_releasePlanRootKindAt offset kind fields)) kinds;mapNodes (fun operation -> call boolean (fun () -> selection_releasePlanDynamicOperationAt offset operation fields)) operations]) [-2147483648;-1;0;8;16;2147483647]) fieldPlans in
+    tuple [selected;paired;fieldSelections]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -5626,6 +5654,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-release-selection" -> armReleaseSelectionObservation source
         | "arm64-closure-reference" -> armClosureReferenceObservation source
         | "arm64-list-reference" -> armListReferenceObservation source
         | "arm64-native-effects" -> armNativeEffectObservation source

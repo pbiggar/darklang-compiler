@@ -1321,3 +1321,15 @@ stream close callbacks, already-closed/shared streams and root/capture release.
 The warning-free build and complete source comment coverage are verified.
 Coverage is 265/391 pairs. Release selection and HAMT lifetime helpers are next;
 complete instruction dispatch, runners/corpus and final acceptance remain open.
+
+Complete release-helper selection is translated with its interface and original
+comment, including every private representation predicate. Full boolean/string
+results and internal failures match F# across 6,548,065 canonical JSON bytes.
+Fixtures cover all root/dynamic/recursive release families, nested dict/list
+payloads, fixed and boxed layouts, caller-supplied fingerprints (including
+UTF-16 edge cases), planned-helper dispatch and first matching duplicate fields
+across signed offset boundaries. All 508 translated tests pass; the preceding
+273 native executions remain the verified lifetime checkpoint. The build is
+warning-free and source comment coverage is complete. Coverage is 266/391 pairs.
+HAMT lifetime emission is next; remaining dispatch, runners/corpus and final
+acceptance remain open.
