@@ -1721,3 +1721,19 @@ The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
 6080/6080 x64 executions. Coverage is 300/391 pairs; source comment coverage
 is complete. Compilation sessions, driver/library, runners/corpus and final
 acceptance remain open.
+
+The complete compilation session now owns bounded ANF/compiled dependency,
+MIR optimization, allocation, call-aware allocation/refinement, stdlib
+reachability, registry projection, ARM64 metadata/function/helper/release and
+emission caches, with source key identity, coverage bypass and disposal behavior.
+Full results, ownership contracts, summaries, cache counts/hits/misses, repeated
+cached errors, physical clones, target/options segregation, duplicate stdlib
+identities, metric order/counts and all disposal paths match F#. Retained opcode
+recorders preserve source lifetime behavior and exact controlled durations and
+integer overflow; elapsed generation times are checked as variable durations.
+Empty and Unicode observations match; the empty case compares 805,618 identical
+JSON bytes (SHA256
+9310a74ca7613e55a6027bfd4b1c67ed75df80e2512230c920c94ae02d4fe280).
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+6080/6080 x64 executions. Coverage is 301/391 pairs; source comment coverage
+is complete. Driver/library, runners/corpus and final acceptance remain open.

@@ -6689,6 +6689,176 @@ let jsonPlanningObservation (source:string) =
     let unchanged=attempt (fun ()->JsonPlanning.rewriteProgram env (rcInternalCall<CheckedAST.Program> "CheckedAST" "programFromCheckedParts" [|box symbols;box [CheckedAST.Expression (CheckedAST.StringLiteral source)]|]))
     tuple [observations;cachedAll;repeated;changedCases;disposed;unchanged;nested]
 
+let sessionCall<'a> (session:CompilationSession.CompilationSession) name args : 'a =
+    let method=typeof<CompilationSession.CompilationSession>.GetMethod(name,Reflection.BindingFlags.Instance ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+    try unbox<'a> (method.Invoke(session,args)) with :? Reflection.TargetInvocationException as error->raise error.InnerException
+let sessionSnapshot (session:CompilationSession.CompilationSession) =
+    let names=["CachedArm64FunctionCount";"CachedArm64HelperCount";"CachedAnfDependencyCount";"CachedCompiledDependencyCount";"CachedMirOptimizationCount";"CachedAllocatedLirFunctionCount";"CachedStdlibReachabilityCount";"CachedMirRegistryProjectionCount";"CachedArm64MetadataGroupCount";"CachedArm64FunctionGroupCount";"CachedArm64EmissionChunkCount";"CachedArm64ReleasePlanSummaryCount";"CachedJsonPlanCount";"JsonPlanHitCount";"JsonPlanMissCount";"AnfDependencyHitCount";"AnfDependencyMissCount";"CompiledDependencyHitCount";"CompiledDependencyMissCount";"MirOptimizationHitCount";"MirOptimizationMissCount";"AllocatedLirFunctionHitCount";"AllocatedLirFunctionMissCount";"StdlibReachabilityHitCount";"StdlibReachabilityMissCount";"MirRegistryProjectionHitCount";"MirRegistryProjectionMissCount";"Arm64CodegenHitCount";"Arm64CodegenMissCount";"Arm64StartCodegenHitCount";"Arm64MetadataGroupHitCount";"Arm64MetadataGroupMissCount";"Arm64FunctionGroupHitCount";"Arm64FunctionGroupMissCount";"Arm64HelperHitCount";"Arm64HelperMissCount";"Arm64ReleasePlanSummaryHitCount";"Arm64ReleasePlanSummaryMissCount"]
+    names |> List.map (fun name->encode typeof<int> (typeof<CompilationSession.CompilationSession>.GetProperty(name).GetValue session)) |> List.toArray |> namedArray "tuple"
+let sessionObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let fid n=AST.functionId (uint64 n)
+    let make id name instructions:LIR.Function=
+        let label=LIR.Label (name+"_entry")
+        {Id=fid id;Name=name;TypedParams=[];CFG={Entry=label;Blocks=Map.ofList [label,{Label=label;Instrs=instructions;Terminator=LIR.Ret}]};StackSize=32;UsedCalleeSaved=[LIR.X19];CodegenFacts=None}
+    let baseFunction=make 1 source [LIR.PrintString source]
+    let clone={baseFunction with StackSize=32}
+    let functions=[baseFunction;clone;{baseFunction with StackSize=16};make 0 "_start" [];make 0 "__dark_compiler_program_entry" [];LIR.attachFunctionCodegenFacts baseFunction]
+    let mirLabel=MIR.Label "entry"
+    let mir:MIR.Function={Id=fid 1;Name=source;TypedParams=[];ReturnType=AST.TInt64;CFG={Entry=mirLabel;Blocks=Map.ofList [mirLabel,{Label=mirLabel;Instrs=[];Terminator=MIR.Ret (MIR.Int64Const 1L)}]};FloatRegs=Set.empty}
+    let contexts=[obj();obj()]
+    let targets=[ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64]
+    let options=[ARM64CodeGenTypes.defaultOptions;{ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=true};{ARM64CodeGenTypes.defaultOptions with EnableCoverage=true}]
+    let conversion:AST_to_ANF.FunctionConversion={Functions=[];VarGen=ANF.VarGen 7;OwnershipContracts=FunctionIdMap.ofList [fid 1,{OwnedIR.CallSignature.Parameters=[OwnedIR.UnmanagedCallParameter;OwnedIR.BorrowedCallParameter;OwnedIR.ConsumedCallParameter;OwnedIR.UniqueCallParameter];Result=OwnedIR.BorrowedCallResult 2}]}
+    let registries=AST_to_ANF.buildRegistries (CheckedAST.emptySymbols ()) Map.empty [] Map.empty []
+    let anfKeys=[Set.empty;Set.singleton (fid 1)] |> List.map (fun names->cacheIdentityRecord "AnfDependencyKey" [|box ([]:CheckedAST.FunctionDef list);box registries;box names|])
+    let configs=[CompilerOptions.defaultOptions;{CompilerOptions.defaultOptions with EnableCoverage=true}] |> List.map (fun options->cacheIdentityRecord "CompiledDependencyConfig" [|box Platform.LinuxX86_64;box options;box (Set.empty<AST.FunctionId>);box (FunctionIdMap.empty:FunctionIdMap<CompilationCacheIdentity.FunctionSummaryFacts>)|])
+    let dynamic=MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer
+    let plans=[MemoryModel.NoReleasePlan;dynamic;MemoryModel.RootRelease (8,MemoryModel.GenericHeap,MemoryModel.NoPayloadRelease);MemoryModel.RecursiveRelease AST.TString]
+    let releaseSummary:LIR.Arm64ReleasePlanSummary={ListDecHelperLabels=Set.singleton source;PlannedListDecHelpers=Map.empty;ExpensiveGenericDecHelper=None;DictDecHelperLabels=Set.empty;PlannedDictDecHelpers=Map.empty;NeedsClosureRcDecHelper=false;NeedsStreamRcDecHelper=false}
+    let requirements:LIR.Arm64RcHelperRequirements={ListDecHelperLabels=Set.empty;PlannedListDecHelpers=Map.empty;PlannedGenericDecHelpers=Map.empty;PlannedDictDecHelpers=Map.empty;DictDecHelperLabels=Set.empty;NeedsListRcIncHelper=false;NeedsDictRcIncHelper=false;NeedsClosureRcIncHelper=false;NeedsClosureRcDecHelper=false;NeedsStreamRcDecHelper=false;ReleasePlanSummaries=Map.empty}
+    let metadata:ARM64CodeGenTypes.Arm64ProgramMetadata={Facts={ClosurePayloadSizesFromParams=Map.empty;ClosurePayloadSizesFromAllocs=FunctionIdMap.empty;ClosureCaptureTypes=Map.empty;RecursiveReleaseTypes=Set.empty;CliArgvHelperLabels=Set.empty;NeedsCliExecuteHelper=false;NeedsCliRunProcessHelper=false;NeedsCliProcessLifecycleHelpers=false;NeedsRuntimeErrorHelper=false};RcHelperRequirements=requirements}
+    let helper:CodeGen.HelperCacheKey={ClosurePayloadSizesFromParams=[];ClosurePayloadSizesFromAllocs=[];ClosureCaptureTypes=[];RecursiveReleaseTypes=[];CliArgvHelperLabels=[];NeedsCliExecuteHelper=false;NeedsCliRunProcessHelper=false;NeedsCliProcessLifecycleHelpers=false;NeedsRuntimeErrorHelper=false;ListDecHelperLabels=[];PlannedListDecHelpers=[];PlannedGenericDecHelperLabels=[];PlannedDictDecHelperLabels=[];DictDecHelperLabels=[];NeedsListRcIncHelper=false;NeedsDictRcIncHelper=false;NeedsClosureRcIncHelper=false;NeedsClosureRcDecHelper=false;NeedsStreamRcDecHelper=false}
+    let helpers=[helper;{helper with RecursiveReleaseTypes=[AST.TString]};{helper with ClosureCaptureTypes=[source,[AST.TString]]}]
+    let instructions=[ARM64Symbolic.Label source]
+    let chunks=[instructions;instructions;List.map id instructions;[]]
+    let parts=[instructions;instructions]
+    let chunkGroups=[parts;parts;List.map id parts;[]]
+    use session=new CompilationSession.CompilationSession(true)
+    let events=ResizeArray<JsonNode>()
+    let mutable calls=0
+    let generate label value ()=calls<-calls+1;events.Add(tuple [enc "generate";enc label;enc calls]);value
+    let emit label value=events.Add(tuple [enc label;value;sessionSnapshot session])
+    emit "initial" (sessionSnapshot session)
+    let mutable firstIdentity:obj option=None
+    let converted value=
+        match value with
+        | Error message->encode typeof<Result<unit,string>> (box (Error message:Result<unit,string>))
+        | Ok ((value:AST_to_ANF.FunctionConversion),identity)->
+            let same=match firstIdentity with None->firstIdentity<-Some identity;false|Some first->Object.ReferenceEquals(identity,first)
+            let node=JsonObject()
+            node["type"]<-JsonValue.Create "FSharpResult"
+            node["case"]<-JsonValue.Create "Ok"
+            node["fields"]<-JsonArray([|tuple [enc value.Functions;enc value.VarGen;mapNodes (fun (id,value)->tuple [enc id;enc value]) (FunctionIdMap.toList value.OwnershipContracts);enc same]|])
+            node :> JsonNode
+    for _ in [0;1] do
+        for context in contexts do
+            for key in anfKeys do
+                let value=sessionCall<Result<AST_to_ANF.FunctionConversion*obj,string>> session "ConvertAnfDependencies" [|context;key;box (generate "anf" (Ok conversion:Result<AST_to_ANF.FunctionConversion,string>))|]
+                emit "anf" (converted value)
+    let compiled value=
+        match value with
+        | Error message->encode typeof<Result<unit,string>> (box (Error message:Result<unit,string>))
+        | Ok (functions,summaries)->
+            let node=JsonObject()
+            node["type"]<-JsonValue.Create "FSharpResult"
+            node["case"]<-JsonValue.Create "Ok"
+            node["fields"]<-JsonArray([|tuple [enc functions;mapNodes (fun (id,(value:CompilationCacheIdentity.FunctionSummary))->tuple [enc id;tuple [enc value.Version;enc (CompilationCacheIdentity.summaryFacts value)]]) (FunctionIdMap.toList summaries)]|])
+            node :> JsonNode
+    for _ in [0;1] do
+        for context in contexts do
+            for config in configs do
+                let value=sessionCall<Result<LIR.Function list*FunctionIdMap<CompilationCacheIdentity.FunctionSummary>,string>> session "CompileDependencies" [|context;config;box (generate "compiled" (Ok ([baseFunction],(FunctionIdMap.ofList [fid 1,CompilationCacheIdentity.unknownSummary]:FunctionIdMap<CompilationCacheIdentity.FunctionSummary>)):Result<LIR.Function list*FunctionIdMap<CompilationCacheIdentity.FunctionSummary>,string>))|]
+                emit "compiled" (compiled value)
+    for _ in [0;1] do
+        for options in [MIROptimizationFacts.defaultOptimizeOptions;{MIROptimizationFacts.defaultOptimizeOptions with EnableLICM=false}] do
+            let key:CompilationCacheIdentity.MirOptimizationKey={Function=mir;Options=options;EffectFreeCalls=Set.empty}
+            emit "mir" (enc (session.OptimizeMirFunction key (generate "mir" mir)))
+    for _ in [0;1] do
+        for arch in [Platform.ARM64;Platform.X86_64] do
+            for func in functions do emit "allocate" (enc (session.AllocateLirFunction arch func (generate "allocate" func)))
+    let callees=[FunctionIdMap.empty;FunctionIdMap.ofList [fid 1,ARM64CalleeClobbers.all]]
+    for _ in [0;1] do
+        for func in functions do
+            for callees in callees do
+                emit "call-aware" (enc (session.AllocateCallAwareLirFunction func callees (generate "call-aware" func)))
+                emit "refine" (enc (session.RefineArm64LirFunction func callees (generate "refine" func)))
+    let graph=FunctionIdMap.ofList [fid 2,Set.singleton (fid 3);fid 3,Set.singleton (fid 2);fid 4,Set.empty]
+    let stdlib=[make 3 "third" [];make 2 "second" [];make 4 "fourth" [];make 3 "third-last" []]
+    for _ in [0;1] do
+        for context in contexts do
+            for roots in [[fid 2];[fid 3];[fid 2;fid 3];[fid 4];[]] do
+                let userGraph=FunctionIdMap.ofList [baseFunction.Id,Set.ofList (fid 99::roots)]
+                emit "reachable" (enc (sessionCall<LIR.Function list> session "ReachableStdlibFunctions" [|context;box userGraph;box [baseFunction];box graph;box stdlib|]))
+    for _ in [0;1] do
+        for context in contexts do
+            for fields in [Map.ofList [source,["x",AST.TString]];Map.ofList [source,["y",AST.TBool]]] do
+                let value=sessionCall<MIR.VariantRegistry*MIR.RecordRegistry> session "ProjectMirRegistries" [|context;box ((Map.empty:MIR.VariantRegistry),(Map.empty:MIR.RecordRegistry));box (Map.empty:LoweringPrimitives.VariantLookup);box fields|]
+                emit "registries" (enc value)
+    for _ in [0;1] do
+        for context in contexts do
+            for funcs in [[baseFunction];List.map id [baseFunction];[clone];[]] do
+                emit "metadata" (enc (sessionCall<ARM64CodeGenTypes.Arm64ProgramMetadata> session "Arm64MetadataGroup" [|context;box funcs;box (generate "metadata" metadata)|]))
+                for target in targets do
+                    for options in options do
+                        let generated:Result<CodeGen.GeneratedChunk list,string>=Ok [{InstructionParts=[instructions];ReusableAcrossCompilations=true}]
+                        emit "group" (enc (sessionCall<Result<CodeGen.GeneratedChunk list,string>> session "CodegenFunctionGroup" [|context;box target;box options;box funcs;box (generate "group" generated)|]))
+    for _ in [0;1] do
+        for includeStatic in [false;true] do
+            for plan in plans do emit "release" (enc (session.Arm64ReleasePlanSummary includeStatic source plan (generate "release" releaseSummary)))
+    for _ in [0;1] do
+        for context in contexts do
+            for target in targets do
+                for options in options do
+                    for func in functions do emit "codegen" (enc (session.CodegenFunction context target options func (generate "codegen" (Ok instructions))))
+    for _ in [0;1] do
+        for context in contexts do
+            for target in targets do
+                for options in options do
+                    for helper in helpers do emit "helpers" (enc (session.Arm64Helpers context target options helper (generate "helpers" instructions)))
+    for _ in [0;1] do
+        for chunk in chunks do emit "chunk" (enc (session.PrepareArm64EmissionChunk chunk (generate "chunk" (ARM64_Encoding.prepareSymbolicChunk chunk))))
+        for parts in chunkGroups do emit "chunks" (enc (session.PrepareArm64EmissionChunkGroup parts (generate "chunks" (ARM64_Encoding.combinePreparedChunks (List.map ARM64_Encoding.prepareSymbolicChunk parts)))))
+    let errorContext=obj()
+    let failAnf ()=emit "anf-error" (enc (sessionCall<Result<AST_to_ANF.FunctionConversion*obj,string>> session "ConvertAnfDependencies" [|errorContext;List.head anfKeys;box (generate "anf-error" (Error source:Result<AST_to_ANF.FunctionConversion,string>))|]))
+    let failCompiled ()=emit "compiled-error" (enc (sessionCall<Result<LIR.Function list*FunctionIdMap<CompilationCacheIdentity.FunctionSummary>,string>> session "CompileDependencies" [|errorContext;List.head configs;box (generate "compiled-error" (Error source:Result<LIR.Function list*FunctionIdMap<CompilationCacheIdentity.FunctionSummary>,string>))|]))
+    let failGroup ()=emit "group-error" (enc (sessionCall<Result<CodeGen.GeneratedChunk list,string>> session "CodegenFunctionGroup" [|errorContext;box (List.head targets);box (List.head options);box [baseFunction];box (generate "group-error" (Error source:Result<CodeGen.GeneratedChunk list,string>))|]))
+    let failCodegen ()=emit "codegen-error" (enc (session.CodegenFunction errorContext (List.head targets) (List.head options) baseFunction (generate "codegen-error" (Error source))))
+    for _ in [0;1] do
+        failAnf ();failCompiled ();failGroup ();failCodegen ()
+    let flags=Reflection.BindingFlags.Instance ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+    let recorder=unbox<ARM64CodeGenTypes.LirOpExpansionRecorder option> (typeof<CompilationSession.CompilationSession>.GetProperty("Arm64LirOpExpansionRecorder",flags).GetValue session) |> Option.get
+    recorder source "op" "detail" 3 1250L
+    recorder source "op" "detail" 4 2550L
+    recorder "second" "op" "" Int32.MaxValue 1L
+    recorder "second" "op" "" 1 -1L
+    let opMetrics ()=session.Arm64LirOpMetrics |> mapNodes (fun m->tuple [enc m.FunctionName;enc m.Opcode;enc m.Detail;enc m.Occurrences;enc m.SymbolicInstructionCount;enc m.Elapsed.Ticks])
+    emit "op-metrics" (opMetrics ())
+    emit "function-metrics" (session.Arm64CodegenMetrics |> mapNodes (fun m->tuple [enc m.FunctionName;enc (m.Elapsed.Ticks>=0L);enc m.LirInstructionCount;enc m.SymbolicInstructionCount]))
+    session.JsonPlanning.Store(source,[])
+    session.JsonPlanning.TryFind source |> ignore
+    session.JsonPlanning.TryFind "missing" |> ignore
+    emit "json" (sessionSnapshot session)
+    (session:>IDisposable).Dispose()
+    let hasRecorder ()=unbox<ARM64CodeGenTypes.LirOpExpansionRecorder option> (typeof<CompilationSession.CompilationSession>.GetProperty("Arm64LirOpExpansionRecorder",flags).GetValue session) |> Option.isSome
+    emit "disposed" (tuple [enc (not (hasRecorder ()));enc (session.Arm64CodegenMetrics=[]);opMetrics ()])
+    recorder source "after-dispose" "" 2 100L
+    emit "retained-recorder" (opMetrics ())
+    emit "uncached-codegen" (enc (session.CodegenFunction (List.head contexts) (List.head targets) (List.head options) baseFunction (generate "uncached-codegen" (Error source))))
+    for _ in [0;1] do
+        failAnf ();failCompiled ();failGroup ();failCodegen ()
+        let key:CompilationCacheIdentity.MirOptimizationKey={Function=mir;Options=MIROptimizationFacts.defaultOptimizeOptions;EffectFreeCalls=Set.empty}
+        emit "disposed-mir" (enc (session.OptimizeMirFunction key (generate "disposed-mir" mir)))
+        emit "disposed-allocation" (enc (session.AllocateLirFunction Platform.ARM64 baseFunction (generate "disposed-allocation" baseFunction)))
+        emit "disposed-call-aware" (enc (session.AllocateCallAwareLirFunction baseFunction FunctionIdMap.empty (generate "disposed-call-aware" baseFunction)))
+        emit "disposed-refine" (enc (session.RefineArm64LirFunction baseFunction FunctionIdMap.empty (generate "disposed-refine" baseFunction)))
+        emit "disposed-reachable" (enc (sessionCall<LIR.Function list> session "ReachableStdlibFunctions" [|errorContext;box (FunctionIdMap.ofList [baseFunction.Id,Set.singleton (fid 3)]);box [baseFunction];box graph;box stdlib|]))
+        emit "disposed-registries" (enc (sessionCall<MIR.VariantRegistry*MIR.RecordRegistry> session "ProjectMirRegistries" [|errorContext;box ((Map.empty:MIR.VariantRegistry),(Map.empty:MIR.RecordRegistry));box (Map.empty:LoweringPrimitives.VariantLookup);box (Map.ofList [source,["z",AST.TUnit]])|]))
+        emit "disposed-metadata" (enc (sessionCall<ARM64CodeGenTypes.Arm64ProgramMetadata> session "Arm64MetadataGroup" [|errorContext;box [baseFunction];box (generate "disposed-metadata" metadata)|]))
+        emit "disposed-release" (enc (session.Arm64ReleasePlanSummary false source dynamic (generate "disposed-release" releaseSummary)))
+        emit "disposed-helpers" (enc (session.Arm64Helpers errorContext (List.head targets) (List.head options) helper (generate "disposed-helpers" instructions)))
+        emit "disposed-chunk" (enc (session.PrepareArm64EmissionChunk instructions (generate "disposed-chunk" (ARM64_Encoding.prepareSymbolicChunk instructions))))
+        emit "disposed-chunks" (enc (session.PrepareArm64EmissionChunkGroup parts (generate "disposed-chunks" (ARM64_Encoding.combinePreparedChunks (List.map ARM64_Encoding.prepareSymbolicChunk parts)))))
+    (session:>IDisposable).Dispose()
+    emit "disposed-again" (opMetrics ())
+    use unmeasured=new CompilationSession.CompilationSession()
+    let hasUnmeasured=unbox<ARM64CodeGenTypes.LirOpExpansionRecorder option> (typeof<CompilationSession.CompilationSession>.GetProperty("Arm64LirOpExpansionRecorder",flags).GetValue unmeasured) |> Option.isSome
+    let value=unmeasured.CodegenFunction (List.head contexts) (List.head targets) (List.head options) baseFunction (generate "unmeasured" (Ok instructions))
+    emit "unmeasured" (tuple [enc (not hasUnmeasured);enc value;enc (unmeasured.Arm64CodegenMetrics=[])])
+    JsonArray(Array.ofSeq events) :> JsonNode
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -6718,6 +6888,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "compilation-session" -> sessionObservation source
         | "json-planning" -> jsonPlanningObservation source
         | "cache-identity" -> cacheIdentityObservation source
         | "driver-diagnostics" -> driverDiagnosticsObservation source
