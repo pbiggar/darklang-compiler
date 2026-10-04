@@ -1890,3 +1890,17 @@ typed instruction formatting. The warning-free build passes 508/508 unit checks,
 committed pairs; all comments in these components are preserved. Full integrated
 Mach-O compiler output remains part of final acceptance. Remaining driver/library,
 runners/corpus and final acceptance remain open.
+
+Complete captured/attached execution now writes and flushes native binaries,
+preserves executable permissions, passes positional arguments and environment
+overrides, supplies finite stdin, consumes both output streams without blocking,
+retries busy executable starts, converts host signals to exit codes and removes
+temporary files. All 16 probes match F# for progress/timing format, wrappers,
+stdout/stderr, BOM decoding, large streams, failed starts and SIGTERM. A malformed
+UTF-8 fixture exposed over-grouped replacement fallback; the shared host decoder
+now matches .NET across every one/two-byte input and 25,600 boundary combinations
+for three/four-byte sequences. All package-manager comparisons still match.
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+6080/6080 x64 executions. Coverage is 312/391 pairs and reference comment coverage
+is complete. macOS code-signing execution requires its target host during final
+acceptance; remaining driver/library, runners/corpus and acceptance remain open.

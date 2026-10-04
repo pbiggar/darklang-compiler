@@ -33,9 +33,6 @@ let decodeContent contentType bytes=
  |Some name->let encoding=encodingName name in let preamble=match encoding with "UTF-8"->"\239\187\191"|"UTF-16LE"->"\255\254"|"UTF-16BE"->"\254\255"|"UTF-32LE"->"\255\254\000\000"|"UTF-32BE"->"\000\000\254\255"|_->"" in encoding,strip preamble
  |None->if String.starts_with ~prefix:"\255\254\000\000" bytes then "UTF-32LE",strip "\255\254\000\000" else if String.starts_with ~prefix:"\239\187\191" bytes then "UTF-8",strip "\239\187\191" else if String.starts_with ~prefix:"\255\254" bytes then "UTF-16LE",strip "\255\254" else if String.starts_with ~prefix:"\254\255" bytes then "UTF-16BE",strip "\254\255" else "UTF-8",bytes in
  if charset="ASCII" then String.map (fun c->if Char.code c>=128 then '?' else c) bytes
- else if charset="UTF-8" then (
-  (* HttpClient's default content reader replaces malformed UTF-8 bytes. *)
-  let decoder=Uutf.decoder ~encoding:`UTF_8 (`String bytes) in let decoded=Buffer.create (String.length bytes) in
-  let rec loop ()=match Uutf.decode decoder with `Uchar character->Uutf.Buffer.add_utf_8 decoded character;loop ()|`Malformed _->Uutf.Buffer.add_utf_8 decoded Uutf.u_rep;loop ()|`End->()|`Await->assert false in loop ();Buffer.contents decoded)
+ else if charset="UTF-8" then HostEncoding.utf8 bytes
  else try decode charset bytes with Invalid_argument _->invalid_arg "The character set provided in ContentType is invalid. Cannot read content as string using an invalid character set."
 let get client url=let status,body,contentType=getBytes client url in status,decodeContent contentType body

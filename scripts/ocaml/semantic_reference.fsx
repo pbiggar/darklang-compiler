@@ -7352,6 +7352,38 @@ let binaryOutputObservation (input:string) =
             tuple [enc program;first;list (fun node->node) firstPhases;second;list (fun node->node) secondPhases])))
     tuple [list (fun functions->list (fun target->list (fun options->list (fun cached->list (fun node->node) (select (fun ()->run functions target options cached))) [false;true]) options) [Platform.LinuxX86_64;Platform.ARM64Backend Platform.LinuxARM64]) fixtures]
 
+let executionObservation (source:string) =
+    let enc value=closureAnalysisEncode value
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let list f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let clean text=Text.RegularExpressions.Regex.Replace(text,"[0-9a-f]{32}","<temporary-id>")
+    let capture action=
+        let previous=Console.Out
+        use writer=new IO.StringWriter()
+        try
+            Console.SetOut writer
+            let result=action()
+            let text=Text.RegularExpressions.Regex.Replace(writer.ToString(),"[0-9]+(?:\\.[0-9]+)?ms","<duration>ms")
+            result,text
+        finally Console.SetOut previous
+    let script text=Text.Encoding.UTF8.GetBytes("#!/bin/sh\n"+text+"\n")
+    let fixtures=[script "exit 0";script "printf '%s\\n' \"$PORT_VALUE\"; printf '%s\\n' 'error' >&2; for arg do printf '<%s>\\n' \"$arg\"; done; exit 17";script "cat";script "head -c 131072 /dev/zero; head -c 131073 /dev/zero >&2";script "printf '\\357\\273\\277hello'; printf '\\377\\376h\\000i\\000' >&2";script "printf '\\000\\000\\376\\377\\000\\000\\000h\\000\\000\\000i'";script "printf '\\300\\257\\355\\240\\200\\342\\202'";script "kill -TERM $$";Array.empty<byte>;Text.Encoding.UTF8.GetBytes "invalid executable"]
+    let describe (out:CompilerOptions.ExecutionOutput)=tuple [enc out.ExitCode;enc out.Stdout;enc (clean out.Stderr);enc (out.RuntimeTime.Ticks>=0L)]
+    let inputs=[CompilerOptions.Closed;CompilerOptions.Bytes(Text.Encoding.UTF8.GetBytes(source+"\nhello\n"))]
+    let captured=list (fun binary->list (fun input->list (fun verbosity->let out,text=capture (fun ()->CompilerExecution.executeCapturedWithArgumentsAndEnvironment Platform.LinuxX86_64 verbosity [source;"two words";"";"hé😀"] ["PORT_VALUE",source] input binary) in tuple [describe out;enc text]) [0;3]) (if binary=script "cat" then inputs else [CompilerOptions.Closed])) fixtures
+    let wrappers=list (fun call->let out,text=capture call in tuple [describe out;enc text]) [(fun ()->CompilerExecution.execute Platform.LinuxX86_64 1 (script "exit 3"));(fun ()->CompilerExecution.executeCaptured Platform.LinuxX86_64 1 CompilerOptions.Closed (script "exit 5"));(fun ()->CompilerExecution.executeCapturedWithArguments Platform.LinuxX86_64 1 [] CompilerOptions.Closed (script "exit 7"));(fun ()->CompilerExecution.executeAttached Platform.LinuxX86_64 1 (script "exit 11"))]
+    let raw=ResizeArray<byte>()
+    for first in 0..255 do raw.Add(byte first);raw.Add(byte '|')
+    for first in 0..255 do for second in 0..255 do raw.Add(byte first);raw.Add(byte second);raw.Add(byte '|')
+    let edges=[0;0x7f;0x80;0x8f;0x90;0x9f;0xa0;0xbf;0xc0;0xff]
+    for first in [0xe0;0xed;0xf0;0xf4] do
+        for second in 0x80..0xbf do
+            for third in edges do
+                for fourth in edges do
+                    for code in [first;second;third;fourth] do raw.Add(byte code)
+                    raw.Add(byte '|')
+    tuple [captured;wrappers;enc (Text.Encoding.UTF8.GetString(raw.ToArray()))]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7381,6 +7413,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "execution" -> executionObservation source
         | "binary-output" -> binaryOutputObservation source
         | "package-catalog" -> packageCatalogObservation source
         | "preamble-analysis" -> preambleAnalysisObservation source
