@@ -1289,3 +1289,19 @@ errors, secure entropy reads and TCP/UDP socket creation/close. The build is
 warning-free and comment coverage is complete. Coverage is 263/391 pairs.
 Ownership runtime helpers are next; remaining instruction dispatch, full
 runners/corpus and final acceptance remain open.
+
+Complete ARM64 tagged-list lifetime helpers are translated with their interface
+and all 27 source comment lines. Full instructions, helper specifications and
+internal-failure selections match F# across 130,783,922 canonical JSON bytes.
+The fixtures cover all 128 static-helper subsets, both OS/leak configurations,
+all release-plan families, nested lists/dicts/closures/recursive/fixed and boxed
+payloads, boundary payload/field offsets, empty variant selections, required/
+unneeded planned helpers and UTF-16 ordinal plan ordering. Offset boundary
+fixtures use representative fixed/boxed payloads to bound reference memory.
+
+All 508 translated tests and 234 real ARM64 process executions pass. Twenty-seven
+new lifetime checks execute retain/decrement, shared/null/foreign/invalid-tag
+inputs, structural child traversal, size-class free-list recycling and string/
+blob leaf destruction. The build is warning-free and comment coverage is
+complete. Coverage is 264/391 pairs. Closure/stream lifetime helpers are next;
+remaining dispatch, complete runners/corpus and final acceptance remain open.

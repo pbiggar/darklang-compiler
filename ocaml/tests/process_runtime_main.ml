@@ -197,10 +197,44 @@ let nativeEffectChecks ()=
  check "8" (ARM64Operands.loadImmediate S.X20 8L @ instructions (ARM64EmitMemory.emitRawAlloc ctx (LIR.Physical LIR.X21) (LIR.Physical LIR.X20)) @ emit LIR.SecureRandomFill [LIR.Reg (LIR.Physical LIR.X21);LIR.Imm 8L] @ print);
  List.iter (fun operation -> check "0" (emit operation [] @ emit LIR.SocketClose [LIR.Reg (LIR.Physical LIR.X19)] @ print)) [LIR.SocketTcp4;LIR.SocketUdp4];
  !total
+let listReferenceChecks ()=
+ let target=ARM64.targetConfigFor Platform.LinuxARM64 in
+ let ctx=Semantic_observation.ARMPrintingObservation.context "list-rc-check" target false in
+ let total=ref 0 in
+ let allocate reg size=instructions (ARM64EmitMemory.emitHeapAlloc ctx (LIR.Physical reg) size) in
+ let literal reg value=ARM64Operands.loadImmediate reg value in
+ let print=S.ofARM64List (PrintValues.generatePrintInt64NoNewline target) in
+ let check label expected body=
+  let helpers=ARM64ListReferenceCounts.generateListRefCountIncHelper () @ ARM64ListReferenceCounts.generateNeededListRefCountDecHelpers ctx (StringOrder.Set.singleton label) StringOrder.Map.empty in
+  let program=ProcessLifecycle.generateHeapInit target @ body @ print @ instructions (ARM64EmitInteger.emitExit ctx) @ helpers @ HeapAllocation.generateHeapOverflowTrapBlock (HeapAllocation.preparedHeapOverflowTrapBody target) ctx.ARM64CodeGenTypes.heapOverflowLabel @ HeapAllocation.generateRuntimeErrorHelper target in
+  let actual=runImage (image program) [] "" in
+  if actual<>expected then failwith (Printf.sprintf "list lifetime: expected %S, got %S" expected actual);
+  incr total
+ in
+ let dec=ARM64CodeGenTypes.listRefCountDecHelperLabel in
+ List.iter (fun (size,tag) ->
+  let base=allocate LIR.X19 size @ literal S.X9 42L @ [S.STR (S.X9,S.X19,0)] in
+  check dec "2" (base @ [S.ADD_imm (S.X0,S.X19,tag);S.BL ARM64CodeGenTypes.listRefCountIncHelperLabel;S.LDR (S.X0,S.X19,size)]);
+  check dec "1" (base @ [S.ADD_imm (S.X0,S.X19,tag);S.BL ARM64CodeGenTypes.listRefCountIncHelperLabel;S.ADD_imm (S.X0,S.X19,tag);S.BL dec;S.LDR (S.X0,S.X19,size)]);
+  check dec "1" (base @ [S.ADD_imm (S.X0,S.X19,tag);S.BL dec;S.LDR (S.X0,S.X27,size);S.CMP_reg (S.X0,S.X19);S.CSET (S.X0,S.EQ)]);
+  check dec "0" (base @ [S.ADD_imm (S.X0,S.X19,tag);S.BL dec;S.LDR (S.X0,S.X19,size)])) [8,2;24,3;32,1];
+ List.iter (fun tag -> check dec "1" (allocate LIR.X19 8 @ literal S.X9 42L @ [S.STR (S.X9,S.X19,0)] @ (if tag=0 then [S.MOV_reg (S.X0,S.X19)] else [S.ADD_imm (S.X0,S.X19,tag)]) @ [S.BL ARM64CodeGenTypes.listRefCountIncHelperLabel;S.LDR (S.X0,S.X19,8)])) [0;4;5;6;7];
+ check dec "0" (literal S.X0 0L @ [S.BL dec;S.LDR (S.X0,S.X27,8)]);
+ check dec "0" (literal S.X0 2L @ [S.BL dec;S.LDR (S.X0,S.X27,8)]);
+ let children=allocate LIR.X20 8 @ allocate LIR.X21 8 @ literal S.X9 42L @ [S.STR (S.X9,S.X20,0);S.STR (S.X9,S.X21,0)] in
+ List.iter (fun (size,tag,left,right) ->
+  let body=allocate LIR.X19 size @ children @ [S.ADD_imm (S.X9,S.X20,2);S.STR (S.X9,S.X19,left);S.ADD_imm (S.X9,S.X21,2);S.STR (S.X9,S.X19,right);S.ADD_imm (S.X0,S.X19,tag);S.BL dec] in
+  check dec "0" (body @ [S.LDR (S.X0,S.X19,size);S.LDR (S.X9,S.X20,8);S.ADD_reg (S.X0,S.X0,S.X9);S.LDR (S.X9,S.X21,8);S.ADD_reg (S.X0,S.X0,S.X9)]);
+  check dec "1" (body @ [S.LDR (S.X0,S.X27,size);S.CMP_reg (S.X0,S.X19);S.CSET (S.X0,S.EQ)])) [24,3,8,16;32,1,16,24];
+ List.iter (fun label ->
+  let body=allocate LIR.X19 8 @ allocate LIR.X20 16 @ literal S.X9 1L @ [S.STR (S.X9,S.X20,0);S.STR (S.X20,S.X19,0);S.ADD_imm (S.X0,S.X19,2);S.BL label] in
+  check label "0" (body @ [S.LDR (S.X0,S.X20,0)]);
+  check label "1" (body @ [S.LDR (S.X0,S.X27,8);S.CMP_reg (S.X0,S.X19);S.CSET (S.X0,S.EQ)])) [ARM64CodeGenTypes.listRefCountDecStringHelperLabel;ARM64CodeGenTypes.listRefCountDecBlobHelperLabel];
+ !total
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
  let effects=[Some "hé😀",false,0,"","hé😀";Some "",true,0,"","\n";None,false,1,"hello\nignored","hello";None,true,1,"hé😀\r\n","hé😀\n";None,false,1,"tail","tail";None,true,1,"","\n";None,true,2,"first\nsecond\n","first\nsecond\n";None,false,1,"a\000b\n","a\000b";None,false,1,"\n","";None,false,1,"a\rb\r\n","a\rb"] in
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
- let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks () in
+ let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count

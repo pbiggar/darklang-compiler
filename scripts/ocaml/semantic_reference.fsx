@@ -3306,6 +3306,39 @@ let armNativeEffectObservation (source:string) =
     in
     mapNodes (fun target -> mapNodes (observeContext target) [false;true]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64]
 
+let armListReferenceObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let context source target enabled : ARM64CodeGenTypes.CodeGenContext={Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled};SumShapeRegistry=Map.empty;RecordRegistry=Map.empty;RawSlotInitRetainTargets=None;ClosurePayloadSizes=Map.empty;ClosureCaptureTypes=Map.empty;FunctionNames=FunctionIdMap.empty;FunctionName=source;InstructionSite=source;StackSize=0;UsedCalleeSaved=[];UsedCalleeSavedF=[];HeapOverflowLabel=source;RecordLirOpExpansion=None}
+    let listRC_generateListRefCountIncHelper () = rcInternalCall<ARM64Symbolic.Instr list> "ARM64ListReferenceCounts" "generateListRefCountIncHelper" [||]
+    let listRC_generateNeededListRefCountDecHelpers (ctx:ARM64CodeGenTypes.CodeGenContext) (needed:Set<string>) (planned:Map<string,int*MemoryModel.RcReleasePlan>) = rcInternalCall<ARM64Symbolic.Instr list> "ARM64ListReferenceCounts" "generateNeededListRefCountDecHelpers" [|box ctx;box needed;box planned|]
+    let specsValue = typeof<ARM64CodeGenTypes.CodeGenContext>.Assembly.GetType("ARM64ListReferenceCounts").GetProperty("listRefCountDecHelperSpecs",System.Reflection.BindingFlags.Static ||| System.Reflection.BindingFlags.Public ||| System.Reflection.BindingFlags.NonPublic).GetValue(null) :?> System.Collections.IEnumerable |> Seq.cast<obj> |> Seq.toList
+    let labelValue name =
+     let typ=typeof<ARM64CodeGenTypes.CodeGenContext>.Assembly.GetType("ARM64CodeGenTypes")
+     let flags=System.Reflection.BindingFlags.Static ||| System.Reflection.BindingFlags.Public ||| System.Reflection.BindingFlags.NonPublic
+     match typ.GetProperty(name,flags) with
+     | null -> typ.GetField(name,flags).GetValue(null) :?> string
+     | prop -> prop.GetValue(null) :?> string
+    let mapSingleton key value=Map.ofList [key,value]
+    let labels=[(labelValue "listRefCountDecHelperLabel");(labelValue "listRefCountDecListHelperLabel");(labelValue "listRefCountDecDictHelperLabel");(labelValue "listRefCountDecDictListHelperLabel");(labelValue "listRefCountDecClosureHelperLabel");(labelValue "listRefCountDecStringHelperLabel");(labelValue "listRefCountDecBlobHelperLabel")] in
+    let plans=[MemoryModel.NoReleasePlan;MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer;MemoryModel.DynamicBufferRelease MemoryModel.DynamicBlobBuffer;MemoryModel.DynamicBufferRelease MemoryModel.DynamicIntBuffer;MemoryModel.DynamicBufferRelease (MemoryModel.FixedSizeRoot (8,MemoryModel.GenericHeap));MemoryModel.RecursiveRelease (AST.TRecord (source,[]))]@List.collect (fun kind -> [MemoryModel.RootRelease (8,kind,MemoryModel.NoPayloadRelease);MemoryModel.RootRelease (8,kind,MemoryModel.TaggedListPayloadRelease MemoryModel.NoReleasePlan);MemoryModel.RootRelease (8,kind,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,MemoryModel.NoReleasePlan));MemoryModel.RootRelease (8,kind,MemoryModel.ClosurePayloadRelease [])]) [MemoryModel.GenericHeap;MemoryModel.StreamHeap;MemoryModel.TaggedList;MemoryModel.DictHeap;MemoryModel.ClosureHeap] in
+    let roots=List.map (fun plan -> MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease plan)) plans@List.collect (fun plan -> [MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (plan,MemoryModel.NoReleasePlan));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,plan))]) plans in
+    let child=MemoryModel.RootRelease (16,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (16,[MemoryModel.FieldRelease (0,MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer);MemoryModel.FieldRelease (8,MemoryModel.RecursiveRelease (AST.TRecord (source,[])))])) in
+    let fields=List.mapi (fun index plan -> MemoryModel.FieldRelease (index*8,plan)) (plans@roots@[child]) in
+    let variants:MemoryModel.RcBoxedSumVariantRelease list=[{MemoryModel.RcBoxedSumVariantRelease.Tag=0;FieldReleases=[]};{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=fields};{MemoryModel.RcBoxedSumVariantRelease.Tag=(-1);FieldReleases=[MemoryModel.FieldRelease (-32769,child)]};{MemoryModel.RcBoxedSumVariantRelease.Tag=65536;FieldReleases=[MemoryModel.FieldRelease (32768,MemoryModel.DynamicBufferRelease MemoryModel.DynamicBlobBuffer)]}] in
+    let rich=[MemoryModel.RootRelease (32,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (32,fields));MemoryModel.RootRelease (32,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (32,fields,variants));MemoryModel.RootRelease (8,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (8,[],[]));MemoryModel.RootRelease (8,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (8,[]))] in
+    let plans=plans@roots@rich in
+    let specs=mapNodes (fun (spec:obj) -> let field name=spec.GetType().GetProperty(name,System.Reflection.BindingFlags.Instance ||| System.Reflection.BindingFlags.Public ||| System.Reflection.BindingFlags.NonPublic).GetValue(spec) in tuple [enc (field "Label" :?> string);enc (field "ReleaseLeafListPayload" :?> bool);enc (field "ReleaseLeafDictPayload" :?> bool);enc (field "ReleaseLeafClosurePayload" :?> bool)]) specsValue in
+    let contexts=mapNodes (fun target -> mapNodes (fun enabled ->
+     let ctx=context source target enabled in
+     let staticHelpers=mapNodes (fun mask -> let needed=List.mapi (fun index label -> index,label) labels |> List.choose (fun (index,label) -> if mask &&& (1 <<< index)=0 then None else Some label) |> Set.ofList in call (fun () -> listRC_generateNeededListRefCountDecHelpers ctx needed Map.empty)) (List.init 128 id) in
+     let planned=mapNodes (fun (plan,sizes) -> mapNodes (fun size -> let name=source+"_planned" in let map=mapSingleton name (size,plan) in tuple [call (fun () -> listRC_generateNeededListRefCountDecHelpers ctx Set.empty map);call (fun () -> listRC_generateNeededListRefCountDecHelpers ctx (Set.singleton name) map)]) sizes) (List.map (fun plan -> plan,[16]) plans@List.map (fun plan -> plan,[-2147483648;-65536;-32769;-32768;-1;0;8;248;255;256;32767;32768;65535;65536;2147483647]) rich) in
+     let ordered=let entries=List.mapi (fun index plan -> (if index % 2=0 then "😀" else "")+string index,(16,plan)) rich in let map=Map.ofList entries in call (fun () -> listRC_generateNeededListRefCountDecHelpers ctx (Set.ofList (labels@List.map fst entries@["unknown"])) map) in
+     tuple [staticHelpers;planned;ordered]) [false;true]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64] in
+    tuple [call (fun () -> listRC_generateListRefCountIncHelper ());specs;contexts]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -5554,6 +5587,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-list-reference" -> armListReferenceObservation source
         | "arm64-native-effects" -> armNativeEffectObservation source
         | "arm64-print-emission" -> armPrintingEmissionObservation source
         | "arm64-memory-emission" -> armMemoryEmissionObservation source
