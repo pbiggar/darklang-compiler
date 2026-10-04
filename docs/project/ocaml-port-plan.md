@@ -1083,3 +1083,17 @@ LD_PRELOAD=<toolchains>/qemu-deps/exec-path.so. The warning-free build and froze
 comment check pass. Coverage is 231/391 pairs. Instruction lowering and runtime
 emission are next; remaining tooling/ownership tests, full corpus checks and
 final acceptance remain open.
+
+Complete x64 operand materialization, code-generation context/leak reporting,
+frame generation and instruction context are translated with interfaces and
+original comments. All complete observations match F# across 122,327,868 bytes
+of canonical JSON: GP/FP/virtual register mappings and diagnostics, immediate
+boundaries, every one of 65,536 GP exclusion sets and 65,536 FP exclusion sets,
+9,472 byte-copy selections, literal pointers, stack-buffer printing, aligned
+frames and spill offsets, sum registries, unsigned function identities and
+stateful leak-report labels. Full instructions and encoded bytes are compared.
+The warning-free build passes 508/508 native checks (including both ELF
+execution tests), and comment coverage has zero missing lines. Coverage is
+235/391 pairs. Corresponding ARM64 code-generation helpers are next; remaining
+instruction/runtime emission, tooling/ownership tests, full corpus checks and
+final acceptance remain open.

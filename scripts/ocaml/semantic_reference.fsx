@@ -2653,6 +2653,64 @@ let anfScalarOptimization source =
 let rcInternalCall<'a> moduleName name args : 'a =
     let method = typeof<AST.SemanticType>.Assembly.GetType(moduleName).GetMethod(name, Reflection.BindingFlags.Static ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
     try unbox<'a> (method.Invoke(null,args)) with :? Reflection.TargetInvocationException as error -> raise error.InnerException
+let x64OperandsObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let mapNodes action values=JsonArray(values |> List.map action |> List.toArray) :> JsonNode
+    let call name args=rcInternalCall "X64Operands" name args
+    let instructions (value:X86_64.Instr list) = tuple [enc value;enc (value |> List.map X86_64_Encoding.encodeInstruction |> List.toArray |> Array.concat)]
+    let attempt action =
+        let node=JsonObject()
+        node["type"] <- JsonValue.Create "FSharpResult"
+        let case,fields=try "Ok",[|action ()|] with ex -> "Error",[|enc ex.Message|]
+        node["case"] <- JsonValue.Create case
+        node["fields"] <- JsonArray(fields)
+        node :> JsonNode
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let fps=[LIR.D0;LIR.D1;LIR.D2;LIR.D3;LIR.D4;LIR.D5;LIR.D6;LIR.D7;LIR.D8;LIR.D9;LIR.D10;LIR.D11;LIR.D12;LIR.D13;LIR.D14;LIR.D15]
+    let regs=[X86_64.RAX;X86_64.RBX;X86_64.RCX;X86_64.RDX;X86_64.RSI;X86_64.RDI;X86_64.RBP;X86_64.RSP;X86_64.R8;X86_64.R9;X86_64.R10;X86_64.R11;X86_64.R12;X86_64.R13;X86_64.R14;X86_64.R15]
+    let fregs=[X86_64.XMM0;X86_64.XMM1;X86_64.XMM2;X86_64.XMM3;X86_64.XMM4;X86_64.XMM5;X86_64.XMM6;X86_64.XMM7;X86_64.XMM8;X86_64.XMM9;X86_64.XMM10;X86_64.XMM11;X86_64.XMM12;X86_64.XMM13;X86_64.XMM14;X86_64.XMM15]
+    let physicalObservation phys =
+        let mapped=attempt (fun () -> enc (X86_64.PUSH (X64Operands.lirRegToX86 phys)))
+        let resolved=X64Operands.resolveReg (LIR.Physical phys) |> Result.map X86_64.PUSH |> enc
+        tuple [mapped;resolved]
+    let floatObservation fp =
+        let reg=X64Operands.lirFRegToX86 fp
+        let resolved : Result<X86_64.FReg,string>=call "resolveFreg" [|box (LIR.FPhysical fp)|]
+        tuple [enc (X86_64.MOVSD_reg (reg,reg));enc (resolved |> Result.map (fun r -> X86_64.MOVSD_reg (r,r)))]
+    let virtualObservation id =
+        let resolved : Result<X86_64.FReg,string>=call "resolveFreg" [|box (LIR.FVirtual id)|]
+        tuple [enc (X64Operands.resolveReg (LIR.Virtual id) |> Result.map X86_64.PUSH);enc (resolved |> Result.map (fun r -> X86_64.MOVSD_reg (r,r)))]
+    let mappings=tuple [mapNodes physicalObservation physical;mapNodes floatObservation fps;mapNodes virtualObservation [-1;0;1;Int32.MinValue;Int32.MaxValue]]
+    let immediates=mapNodes (fun dest -> mapNodes (fun value -> instructions (call "loadImm64" [|box dest;box value|])) [0L;1L;-1L;-2147483649L;-2147483648L;2147483647L;2147483648L;0x1122334455667788L;Int64.MinValue;Int64.MaxValue]) regs
+    let subset values mask=values |> List.indexed |> List.choose (fun (n,value) -> if mask &&& (1 <<< n) <> 0 then Some value else None)
+    let arithmetic=mapNodes (fun mask -> let excluded=subset regs mask in tuple [attempt (fun () -> enc (X86_64.PUSH (call "arithmeticTempExcluding" [|box excluded|])))]) [0..65535]
+    let floatScratch=mapNodes (fun mask -> let excluded=subset fregs mask in attempt (fun () -> instructions (call "withPreservedFloatScratch" [|box excluded;box (fun temp -> [X86_64.XORPD (temp,temp)])|]))) [0..65535]
+    let strings=mapNodes (fun reg -> mapNodes (fun value -> tuple [instructions (call "emitStringLiteral" [|box reg;box value|]);instructions (call "emitStringLiteralNoRefCount" [|box reg;box value|])]) [source;"";"é";"😀"]) regs
+    let copyLength valueReg destReg length =
+        let bytes=Array.init length (fun n -> byte ((n*73+255) &&& 255))
+        instructions (call "emitStringByteCopy" [|box valueReg;box destReg;box bytes|])
+    let copies=mapNodes (fun valueReg -> mapNodes (fun destReg -> mapNodes (copyLength valueReg destReg) ([0..33]@[63;64;65])) regs) regs
+    let printChars=mapNodes (fun length -> let bytes=List.init length (fun n -> byte ((n*73+255) &&& 255)) in instructions (call "genPrintChars" [|box bytes|])) [0..65]
+    let savedSets=[]::(physical |> List.map (fun p -> [p]))@[[LIR.X19;LIR.X20;LIR.X21];[LIR.X21;LIR.X19;LIR.X20];[LIR.X19;LIR.X19]]
+    let frame stack saved =
+        tuple [attempt (fun () -> instructions (rcInternalCall "X64Frames" "genPrologue" [|box stack;box saved|]));attempt (fun () -> instructions (rcInternalCall "X64Frames" "genEpilogue" [|box stack;box saved|]))]
+    let frames=mapNodes (fun stack -> mapNodes (frame stack) savedSets) [-16;-1;0;1;7;8;9;15;16;24;32;512;Int32.MinValue;Int32.MaxValue]
+    let variants : LIR.TypeVariants={TypeParams=[source];Variants=[{Name="c";Tag=3;Payload=Some AST.TInt64;FieldCount=1};{Name="a";Tag=1;Payload=Some AST.TFloat64;FieldCount=2};{Name="b";Tag=1;Payload=None;FieldCount=0};{Name="z";Tag=(-1);Payload=Some AST.TBool;FieldCount=1}]}
+    let sumRegistries=mapNodes (fun registry -> enc (rcInternalCall<MemoryModel.RcSumShapeRegistry> "X64CodeGenTypes" "rcSumShapeRegistryFromVariantRegistry" [|box registry|])) [Map.empty;Map.ofList [source,variants];Map.ofList [source,variants;"A",variants]]
+    let ctxType=typeof<LIR.Instr>.Assembly.GetType("X64CodeGenTypes+FuncCtx")
+    let contextWithSaved enabled saved=FSharpValue.MakeRecord(ctxType,[|box source;box 32;box saved;box enabled;box (Map.empty:LIR.RecordRegistry);box (Map.empty:MemoryModel.RcSumShapeRegistry);box (FunctionIdMap.ofList [AST.functionId 0UL,source;AST.functionId UInt64.MaxValue,"largest"])|],Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+    let context enabled=contextWithSaved enabled [LIR.X19]
+    let offsets=mapNodes (fun offset -> mapNodes (fun saved -> enc (rcInternalCall<int> "X64InstructionContext" "adjustStackOffset" [|contextWithSaved false saved;box offset|])) savedSets) [-16;-1;0;1;7;8;9;15;16;24;32;512;Int32.MinValue;Int32.MaxValue]
+    let names=mapNodes (fun id -> attempt (fun () -> enc (rcInternalCall<string> "X64CodeGenTypes" "functionName" [|context false;box (AST.functionId (uint64 id))|]))) [0L;1L;Int64.MinValue;Int64.MaxValue;-1L]
+    let leaks=mapNodes (fun enabled -> let ctx=context enabled in tuple [instructions (rcInternalCall "X64CodeGenTypes" "genLeakCounterInc" [|ctx|]);instructions (rcInternalCall "X64CodeGenTypes" "genLeakCounterDec" [|ctx|])]) [false;true]
+    let report1 : X86_64.Instr list=rcInternalCall "X64CodeGenTypes" "genLeakCheckReport" [||]
+    let report2 : X86_64.Instr list=rcInternalCall "X64CodeGenTypes" "genLeakCheckReport" [||]
+    let fresh1 : string=call "freshLabel" [|box source|]
+    let fresh2 : string=call "freshLabel" [|box "again"|]
+    let runtime=tuple [instructions (call "get_genWriteSyscall" [||]);instructions (call "get_genExitSyscall" [||]);instructions (call "genOomJump" [||]);instructions (call "genOomHandler" [||]);instructions (call "genRuntimeErrorHandler" [||]);instructions report1;instructions report2;enc fresh1;enc fresh2]
+    tuple [mappings;immediates;arithmetic;floatScratch;strings;copies;printChars;frames;sumRegistries;names;leaks;runtime;offsets]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -4901,6 +4959,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "x64-operands" -> x64OperandsObservation source
         | "elf-images" -> elfObservation source
         | "x64-resolve" -> x64ResolveObservation source
         | "arm64-encoding" -> armEncodingObservation source
