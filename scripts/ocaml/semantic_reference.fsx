@@ -3130,6 +3130,37 @@ let armIntegerEmissionObservation (source:string) =
     let conversions=mapNodes (fun dest -> mapNodes (fun src -> tuple [call (fun () -> int_emitInt64ToFloat ctx dest src);call (fun () -> int_emitGpToFp ctx dest src)]) gps) fps in
     tuple [call (fun () -> int_emitPhi ctx);unary;moves;arithmetic;comparisons;binary;fused;immediate;selection;stores;allocations;arguments;effects;errors;conversions]
 
+let armFileEmissionObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let fid value=AST.functionId (uint64 value)
+    let context source target enabled : ARM64CodeGenTypes.CodeGenContext={Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled};SumShapeRegistry=Map.empty;RecordRegistry=Map.empty;RawSlotInitRetainTargets=None;ClosurePayloadSizes=Map.empty;ClosureCaptureTypes=Map.empty;FunctionNames=FunctionIdMap.empty;FunctionName=source;InstructionSite=source;StackSize=0;UsedCalleeSaved=[];UsedCalleeSavedF=[];HeapOverflowLabel=source;RecordLirOpExpansion=None}
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let file_emitFileReadBlob arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitFiles" "emitFileReadBlob" [|box arg0;box arg1;box arg2|]
+    let file_emitFileExists arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitFiles" "emitFileExists" [|box arg0;box arg1;box arg2|]
+    let file_emitFileWriteBlob arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitFiles" "emitFileWriteBlob" [|box arg0;box arg1;box arg2;box arg3|]
+    let file_emitFileAppendText arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitFiles" "emitFileAppendText" [|box arg0;box arg1;box arg2;box arg3|]
+    let file_emitFileDelete arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitFiles" "emitFileDelete" [|box arg0;box arg1;box arg2|]
+    let file_emitFileCreateDirectory arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitFiles" "emitFileCreateDirectory" [|box arg0;box arg1;box arg2|]
+    let file_emitFileSetExecutable arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitFiles" "emitFileSetExecutable" [|box arg0;box arg1;box arg2|]
+    let file_emitFileWriteFromPtr arg0 arg1 arg2 arg3 arg4 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitFiles" "emitFileWriteFromPtr" [|box arg0;box arg1;box arg2;box arg3;box arg4|]
+    let gps=List.map (fun p -> LIR.Physical p) physical@List.map (fun n -> LIR.Virtual n) [-1;0;2147483647] in
+    let offsets=[-2147483648;-4096;-4095;-257;-256;-1;0;255;256;4095;4096;2147483647] in
+    let operands=List.map (fun reg -> LIR.Reg reg) gps@List.map (fun n -> LIR.StackSlot n) offsets@[LIR.Imm Int64.MinValue;LIR.FloatImm (-0.);LIR.FloatSymbol nan;LIR.FuncAddr (fid (-1L));LIR.StringSymbol source;LIR.StringSymbol "";LIR.StringSymbol "hé😀";LIR.StringSymbol "a\000b";LIR.StringSymbol (String [|char 0xd800;char 97;char 0xdc00|])] in
+    let selected=List.map (fun p -> LIR.Physical p) [LIR.X0;LIR.X9;LIR.X14;LIR.X15;LIR.X19;LIR.SP]@[LIR.Virtual (-1)] in
+    let observeContext target enabled=
+     let ctx=context source target enabled in
+     let fullPaths=mapNodes (fun dest -> mapNodes (fun path -> mapNodes (fun f -> call (fun () -> f ctx dest path)) [file_emitFileReadBlob;file_emitFileExists;file_emitFileDelete;file_emitFileCreateDirectory;file_emitFileSetExecutable]) operands) selected in
+     let fullDestinations=mapNodes (fun dest -> mapNodes (fun path -> mapNodes (fun f -> call (fun () -> f ctx dest path)) [file_emitFileReadBlob;file_emitFileExists;file_emitFileDelete;file_emitFileCreateDirectory;file_emitFileSetExecutable]) [LIR.Reg dest;LIR.Reg (LIR.Physical LIR.X15);LIR.StringSymbol source;LIR.StackSlot 0]) gps in
+     let writing=mapNodes (fun dest -> mapNodes (fun path -> mapNodes (fun content -> tuple [call (fun () -> file_emitFileWriteBlob ctx dest path content);call (fun () -> file_emitFileAppendText ctx dest path content)]) [LIR.Reg dest;path;LIR.Reg (LIR.Physical LIR.X15);LIR.Reg (LIR.Physical LIR.X14);LIR.Reg (LIR.Physical LIR.X0);LIR.StringSymbol source;LIR.StackSlot 4096;LIR.FloatImm 0.]) [LIR.Reg dest;LIR.Reg (LIR.Physical LIR.X15);LIR.Reg (LIR.Physical LIR.X14);LIR.StringSymbol source;LIR.StackSlot (-4095);LIR.Imm 0L]) selected in
+     let writingPaths=mapNodes (fun operand -> tuple [call (fun () -> file_emitFileWriteBlob ctx (LIR.Physical LIR.X19) operand (LIR.StringSymbol source));call (fun () -> file_emitFileAppendText ctx (LIR.Physical LIR.X19) (LIR.StringSymbol source) operand)]) operands in
+     let pointers=mapNodes (fun dest -> mapNodes (fun ptr -> mapNodes (fun length -> mapNodes (fun path -> call (fun () -> file_emitFileWriteFromPtr ctx dest path ptr length)) [LIR.Reg dest;LIR.Reg ptr;LIR.Reg length;LIR.Reg (LIR.Physical LIR.X15);LIR.StringSymbol source;LIR.StackSlot 0;LIR.Imm 1L]) [dest;ptr;LIR.Physical LIR.X14;LIR.Virtual 0]) selected) selected in
+     let pointerRoles=mapNodes (fun reg -> tuple [call (fun () -> file_emitFileWriteFromPtr ctx reg (LIR.Reg reg) reg reg);call (fun () -> file_emitFileWriteFromPtr ctx (LIR.Physical LIR.X19) (LIR.StringSymbol source) reg (LIR.Physical LIR.X20));call (fun () -> file_emitFileWriteFromPtr ctx (LIR.Physical LIR.X19) (LIR.StringSymbol source) (LIR.Physical LIR.X20) reg)]) gps in
+     tuple [fullPaths;fullDestinations;writing;writingPaths;pointers;pointerRoles]
+    in mapNodes (fun target -> mapNodes (fun enabled -> observeContext target enabled) [false;true]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -5378,6 +5409,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-file-emission" -> armFileEmissionObservation source
         | "arm64-integer-emission" -> armIntegerEmissionObservation source
         | "arm64-emission-basics" -> armBasicEmissionObservation source
         | "arm64-process" -> armProcessObservation source

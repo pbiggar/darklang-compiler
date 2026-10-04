@@ -1204,3 +1204,16 @@ comparison runner now respects requested batch offsets/limits and its saved
 Mach-O reference loader is verified. Comment coverage is complete. Coverage
 is 258/391 pairs. File emission is next; remaining instruction families,
 ownership runtime, complete runners/corpus and final acceptance remain open.
+
+Complete ARM64 file-operation lowering is translated with its interface and
+all 22 source comment lines. Full results, instructions and recoverable errors
+match F# across 128,471,090 canonical JSON bytes for both OS targets and leak
+modes: register/path aliases, stack and literal operands, isolated surrogates,
+read/exists/write/append/delete/mkdir/chmod and raw-pointer writes. All 508
+translated tests pass. Twenty-nine real ARM64 process executions pass, including
+11 filesystem checks that verify written/appended bytes, Unicode/NUL payloads,
+read results, directory creation and existing-directory errors, executable bits,
+pointer writes, deletion and missing-file results. The build is warning-free
+and comment coverage is complete. Coverage is 259/391 pairs. Buffer lowering
+is next; remaining ownership/dispatch, full runners/corpus and final acceptance
+remain open.
