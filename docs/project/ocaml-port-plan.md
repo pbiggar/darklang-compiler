@@ -1505,3 +1505,18 @@ null/shared/unique roots, free-list boundaries, increment wraparound, boxed
 variant release and stream close callback ordering/idempotence. Coverage is
 282/391 pairs; source comment coverage is complete. Remaining x64 modules,
 driver/library, runners/corpus and final acceptance remain open.
+
+Complete x64 closure reference counting and capture layout discovery are
+translated with full interfaces and all source comments. Full instruction
+lists, capture metadata maps, unsigned function-keyed allocation sizes and
+error text match F# across 7,609,197 canonical JSON bytes (SHA256
+342d1103c0bdf2adae84c47a26d3a5c06b7cf762de8a31c15b5625f8808a0b68).
+Function-keyed maps compare every ordered key/value through their public
+interfaces. Cases cover duplicate identities/names, UTF-16 name ordering,
+all capture types, recursive shapes, large capture counts, leak settings,
+shared helpers and payload-size boundaries. The warning-free build passes
+508/508 unit checks, 519/519 ARM64 executions and 674/674 x64 executions.
+The 51 new x64 cases exercise closure retains, refcount wraparound, null roots,
+shared/unique closures, static/tagged/dynamic captures, nested fixed blocks
+and free-list boundaries. Coverage is 283/391 pairs; comment coverage is complete.
+Remaining x64 modules, driver/library, runners/corpus and final acceptance remain.

@@ -586,6 +586,38 @@ let x64FieldReferenceChecks ()=
   check (initial@E.genRefCountDecStream ctx X.RAX None@compare X.R12 expected@[X.MOV_load (X.RAX,X.RBP,24l)]@compare X.RAX (Int64.pred count)@[X.ADD_imm (X.RSP,1024l)]) [X.Label "close_callback";X.ADD_imm (X.R12,1l);X.MOV_imm32 (X.RDX,123l);X.RET]) [1L;2L]) [0;5];
  !total
 [@@warning "-42"]
+let x64ClosureReferenceChecks ()=
+ let module X=X86_64 in
+ let total=ref 0 in
+ let checked=function Ok value->value|Error error->failwith error in
+ let check body helpers=
+  let code=[X.Label "_start"]@body@X64Operands.genPrintChars ['P']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@[X.Label "failed"]@X64Operands.genPrintChars ['F']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@helpers@[X.Label "closed_fn";X.RET] in
+  let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0 in
+  let actual=runImageOn "/opt/dcb/qemu/qemu-x86_64" binary [] "" in
+  if actual<>"P" then failwith (Printf.sprintf "x64 closure release failed at case %d" !total);
+  incr total in
+ let compare reg expected=X64Operands.loadImm64 X.RCX expected@[X.CMP_reg (reg,X.RCX);X.Jcc (X.NE,"failed")] in
+ let helpers size types=
+  let sizes=StringOrder.Map.singleton "closed_fn" size in
+  let inc=X64ClosureReferenceCounts.generateClosureRefCountIncHelper sizes in
+  let dec=X64ClosureReferenceCounts.generateClosureRefCountDecHelper false StringOrder.Map.empty StringOrder.Map.empty sizes (StringOrder.Map.singleton "closed_fn" types) in
+  inc@dec in
+ let setup size count=[X.SUB_imm (X.RSP,1024l);X.LEA (X.RBP,X.RSP,64l);X.LEA (X.R15,X.RSP,512l);X.LEA_rip (X.RCX,"closed_fn");X.MOV_store (X.RBP,0l,X.RCX)]@X64Operands.loadImm64 X.RCX count@[X.MOV_store (X.RBP,Int32.of_int size,X.RCX);X.XOR_reg (X.RCX,X.RCX);X.MOV_store (X.R15,Int32.of_int size,X.RCX)] in
+ List.iter (fun (size,types)->List.iter (fun count->
+  check (setup size count@[X.XOR_reg (X.RCX,X.RCX)]@List.init (size/8-1) (fun index->X.MOV_store (X.RBP,Int32.of_int ((index+1)*8),X.RCX))@[X.MOV_reg (X.RAX,X.RBP);X.CALL X64ReleaseSelection.closureRefCountIncHelperLabel;X.MOV_load (X.RAX,X.RBP,Int32.of_int size)]@compare X.RAX (Int64.succ count)@[X.ADD_imm (X.RSP,1024l)]) (helpers size types)) [0L;1L;Int64.max_int]) [8,[];16,[AST.TString];24,[AST.TString;AST.TBlob];256,List.init 31 (fun _->AST.TInt64)];
+ List.iter (fun typ->List.iter (fun rootCount->List.iter (fun (childCount,kind)->
+  let initial=setup 16 rootCount@[X.LEA (X.RAX,X.RSP,400l)]@X64Operands.loadImm64 X.RCX childCount@[X.MOV_store (X.RAX,0l,X.RCX)]@(match kind with 0->[X.XOR_reg (X.RCX,X.RCX)] | 1->[X.MOV_imm32 (X.RCX,1l)] | _->[X.MOV_reg (X.RCX,X.RAX)])@[X.MOV_store (X.RBP,8l,X.RCX);X.MOV_reg (X.RAX,X.RBP)] in
+  let expected=if rootCount=1L && kind=2 && childCount<>Int64.max_int then Int64.pred childCount else childCount in
+  let freeCheck=[X.MOV_load (X.RAX,X.R15,16l)]@(if rootCount=1L then [X.CMP_reg (X.RAX,X.RBP);X.Jcc (X.NE,"failed")] else compare X.RAX 0L) in
+  check (initial@[X.CALL X64ReleaseSelection.closureRefCountDecHelperLabel;X.MOV_load (X.RAX,X.RSP,400l)]@compare X.RAX expected@[X.MOV_load (X.RAX,X.RBP,16l)]@compare X.RAX (Int64.pred rootCount)@freeCheck@[X.ADD_imm (X.RSP,1024l)]) (helpers 16 [typ])) ([1L,0;1L,2;3L,2;Int64.max_int,2]@(if typ=AST.TInt then [3L,1] else []))) [1L;2L]) [AST.TString;AST.TChar;AST.TBlob;AST.TInt];
+ let typ=AST.TTuple [AST.TInt64;AST.TInt64] in
+ List.iter (fun rootCount->List.iter (fun childCount->
+  let initial=setup 16 rootCount@[X.LEA (X.RAX,X.RSP,400l);X.MOV_store (X.RBP,8l,X.RAX);X.XOR_reg (X.RCX,X.RCX);X.MOV_store (X.R15,16l,X.RCX)]@X64Operands.loadImm64 X.RCX childCount@[X.MOV_store (X.RAX,16l,X.RCX);X.MOV_reg (X.RAX,X.RBP)] in
+  check (initial@[X.CALL X64ReleaseSelection.closureRefCountDecHelperLabel;X.MOV_load (X.RAX,X.RSP,416l)]@compare X.RAX (if rootCount=1L then Int64.pred childCount else childCount)@[X.ADD_imm (X.RSP,1024l)]) (helpers 16 [typ])) [1L;2L]) [1L;2L];
+ check ([X.XOR_reg (X.RAX,X.RAX);X.CALL X64ReleaseSelection.closureRefCountIncHelperLabel;X.XOR_reg (X.RAX,X.RAX);X.CALL X64ReleaseSelection.closureRefCountDecHelperLabel]) (helpers 8 []);
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -593,4 +625,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count

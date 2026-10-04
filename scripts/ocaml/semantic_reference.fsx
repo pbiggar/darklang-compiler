@@ -3928,6 +3928,36 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let x64ClosureReferenceObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call encoder f=try tuple [enc false;encoder (f ())] with ex -> tuple [enc true;enc ex.Message]
+    let idMap (values:FunctionIdMap<int>)=namedArray "map" (FunctionIdMap.toList values |> List.map (fun (id,value)->tuple [enc id;enc value]) |> List.toArray)
+    let invoke name args=rcInternalCall "X64ClosureReferenceCounts" name args
+    let records=Map.ofList ["R",["a",AST.TString;"b",AST.TList AST.TBlob;"c",AST.TDict (AST.TInt64,AST.TInt64)];"Rec",["next",AST.TRecord ("Rec",[])];"Child",["x",AST.TTuple [AST.TString;AST.TList AST.TString]];"Large",List.init 35 (fun index -> string index,AST.TString)] in
+    let info payloads unary:MemoryModel.RcSumShapeInfo={TypeParams=[];Payloads=payloads;UnaryPayloadTags=Set.ofList unary} in
+    let sums=Map.ofList ["None",info [] [];"Nullable",info [0,None;1,Some AST.TString] [1];"S",info [0,None;1,Some (AST.TTuple [AST.TString;AST.TList AST.TString]);65536,Some (AST.TRecord ("Child",[]))] [];"RecSum",info [0,None;1,Some (AST.TTuple [AST.TString;AST.TSum ("RecSum",[])] )] []] in
+    let primitives=[AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TBool;AST.TFloat64;AST.TString;AST.TBlob;AST.TChar;AST.TDateTime;AST.TUnit;AST.TNever;AST.TInternalRawPtr;AST.TVar source;AST.TInferenceVar (source,source);AST.TFunction ([AST.TString],AST.TBool);AST.TRecord ("missing",[]);AST.TRecord ("R",[]);AST.TRecord ("Rec",[]);AST.TRecord ("Child",[]);AST.TRecord ("Large",[]);AST.TSum ("missing",[]);AST.TSum ("None",[]);AST.TSum ("Nullable",[]);AST.TSum ("S",[]);AST.TSum ("RecSum",[]);AST.TTuple [];AST.TTuple [AST.TString;AST.TList AST.TString]] in
+    let types=primitives@List.collect (fun typ -> [AST.TList typ;AST.TList (AST.TList typ);AST.TStream typ;AST.TDict (AST.TInt64,typ);AST.TDict (AST.TString,typ);AST.TTuple [typ;AST.TString];AST.TTuple [AST.TTuple [typ;AST.TBlob];AST.TTuple [AST.TList typ;AST.TDict (AST.TString,typ)]]]) primitives in
+
+    let sizes=Map.ofList [source,24;"😀",8;"",16;"a",256]
+    let captures=Map.ofList [source,[AST.TString;AST.TInt];"😀",[];"",[AST.TTuple [AST.TString]]]
+    let contexts=mapNodes (fun enabled->
+        let baseCases=mapNodes (call enc) [(fun ()->invoke "generateClosureRefCountIncHelper" [|box sizes|] : X86_64.Instr list);(fun ()->invoke "generateClosureRefCountDecHelper" [|box enabled;box records;box sums;box sizes;box captures|])]
+        let sizeCases=mapNodes (fun size->let sizes=Map.ofList [source,size;"😀",8;"",16;"a",size] in mapNodes (call enc) [(fun ()->invoke "generateClosureRefCountIncHelper" [|box sizes|] : X86_64.Instr list);(fun ()->invoke "generateClosureRefCountDecHelper" [|box enabled;box records;box sums;box sizes;box captures|])]) [-2147483648;-1;0;8;16;248;255;256;2147483647]
+        let captureCases=mapNodes (fun ts->call enc (fun ()->invoke "generateClosureRefCountDecHelper" [|box enabled;box records;box sums;box sizes;box (Map.ofList [source,ts])|] : X86_64.Instr list)) ([]::types::(List.map (fun typ->[typ]) types)@(List.map (fun count->List.init count (fun _->AST.TString)) [31;32;64;129]))
+        tuple [baseCases;sizeCases;captureCases]) [false;true]
+    let make id name parameters instructions : LIR.Function =
+        let label=LIR.Label "entry"
+        let block:LIR.BasicBlock={Label=label;Instrs=instructions;Terminator=LIR.Ret}
+        let before={block with Label=LIR.Label "😀";Instrs=[LIR.ClosureAlloc (LIR.Virtual 0,AST.functionId 1UL,[LIR.Imm 1L])]}
+        {Id=AST.functionId id;Name=name;TypedParams=parameters;CFG=({Entry=label;Blocks=Map.ofList [before.Label,before;block.Label,block]}:LIR.CFG);StackSize=0;UsedCalleeSaved=[];CodegenFacts=None}
+    let funcs=List.mapi (fun index typ->make (uint64 index) (if index%2=0 then source else "😀") [{LIR.TypedLIRParam.Reg=LIR.Virtual index;Type=typ};{LIR.TypedLIRParam.Reg=LIR.Virtual (-1);Type=AST.TTuple [AST.TString]}] [LIR.ClosureAlloc (LIR.Virtual index,AST.functionId 1UL,List.init (index%4) (fun _->LIR.Imm 1L));LIR.ClosureAlloc (LIR.Virtual index,AST.functionId UInt64.MaxValue,[])]) (primitives@[AST.TTuple [];AST.TTuple [AST.TInternalRawPtr];AST.TTuple [AST.TInternalRawPtr;AST.TString;AST.TInt]])
+    let batches=[[];[make 0UL source [] []];funcs;List.rev funcs;funcs@funcs]
+    let layouts=mapNodes (fun fs->tuple [call idMap (fun ()->invoke "closurePayloadSizesFromAllocs" [|box fs|] : FunctionIdMap<int>);call enc (fun ()->invoke "closureCaptureTypesFromParams" [|box fs|] : Map<string,AST.SemanticType list>);call enc (fun ()->invoke "closurePayloadSizesFromParams" [|box fs|] : Map<string,int>)]) batches
+    tuple [contexts;layouts]
+
 let x64FieldReferenceObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -6102,6 +6132,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "x64-closure-reference" -> x64ClosureReferenceObservation source
         | "x64-field-reference" -> x64FieldReferenceObservation source
         | "x64-release-selection" -> x64ReleaseSelectionObservation source
         | "x64-printing" -> x64PrintingObservation source
