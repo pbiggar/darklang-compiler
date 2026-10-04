@@ -1,6 +1,6 @@
 (library
  (name semantic_observation)
- (libraries dark_compiler yojson zarith)
+ (libraries dark_compiler yojson zarith str)
  (flags (:standard -w @a-42 -warn-error +a-42)))
 
 (rule

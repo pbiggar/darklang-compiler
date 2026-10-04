@@ -1875,3 +1875,18 @@ The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
 6080/6080 x64 executions. Coverage is 310/391 pairs; all reference comments are
 preserved. Remaining driver/library, runners/corpus and final acceptance remain
 open.
+
+Complete binary output now selects both production backends, finalizes ARM64
+generic helper identities and physical function groups, supplies session
+codegen/emission caches, resolves static data relocations and constructs
+complete executable images. All 256 bounded groups across 16 probes match F#
+for full Linux ARM64/x64 ELF bytes, allocated LIR, successful and missing-entry
+outputs, enabled/disabled/warm session caches, leak/free-list/coverage options,
+assembly diagnostics, machine-code hex and timing pass order. The comparison
+contains 1,795,867,001 complete raw/canonical observation bytes; numerical
+durations are excluded from log equality. Machine diagnostics retain complete
+typed instruction formatting. The warning-free build passes 508/508 unit checks,
+519/519 ARM64 executions and 6080/6080 x64 executions. Coverage is 311/391
+committed pairs; all comments in these components are preserved. Full integrated
+Mach-O compiler output remains part of final acceptance. Remaining driver/library,
+runners/corpus and final acceptance remain open.

@@ -7271,7 +7271,7 @@ let packageCatalogObservation (source:string) =
     let hashType=AST.TSum(hashName,[])
     let runtimeType=AST.TSum(runtimeName,[])
     let optionType typ=AST.TSum(optionName,[typ])
-    let fn name typeParams params returnType body=AST.FunctionDef {Name=name;TypeParams=typeParams;Params=AST.NonEmptyList.fromList params;ReturnType=returnType;Body=body;Recursion=None}
+    let fn name typeParams parameters returnType body=AST.FunctionDef {Name=name;TypeParams=typeParams;Params=AST.NonEmptyList.fromList parameters;ReturnType=returnType;Body=body;Recursion=None}
     let call name args=AST.applyNamed name (AST.NonEmptyList.fromList args)
     let typedCall name typ args=AST.applyNamedWithTypes name [typ] (AST.NonEmptyList.fromList args)
     let constructor name case fields=AST.Constructor(AST.UnresolvedConstructor(Some name),case,fields)
@@ -7294,10 +7294,63 @@ let packageCatalogObservation (source:string) =
         let evalInt=typedCall "Builtin.pmEvaluateValue" AST.TInt64 [hash "a"]
         let evalString=typedCall "Builtin.pmEvaluateValue" AST.TString [hash "c"]
         let inputs=[AST.UnitLiteral;call "Builtin.pmFindValuesByValueType" [valueType];call "Builtin.pmGetLocationsByValue" [AST.StringLiteral "branch";hash "a"];evalInt;evalString;AST.Let(AST.LPVariable "first",evalInt,evalString);AST.Let(AST.LPVariable "found",call "Builtin.pmFindValuesByValueType" [valueType],evalInt);AST.Let(AST.LPVariable "locations",call "Builtin.pmGetLocationsByValue" [AST.StringLiteral "branch";hash "a"],evalInt);typedCall "wrap" AST.TInt64 [hash "a"]]
-        list (fun expr->let checked=TypeChecking.checkProgramWithBaseEnv env (AST.Program[AST.Expression([],expr)]) |> Result.mapError CheckingDiagnostics.typeErrorToString in outcome (fun (_,program,_)->tuple [driverProgram program;list (fun catalog->attempt driverProgram (fun ()->rcInternalCall<Result<CheckedAST.Program,string>> "PackageCatalog" "materializePackageValueCatalog" [|box context;box AST.defaultWarningSettings;box catalog;box program|])) catalogs]) checked) inputs))
+        list (fun expr->let checkedResult=TypeChecking.checkProgramWithBaseEnv env (AST.Program[AST.Expression([],expr)]) |> Result.mapError CheckingDiagnostics.typeErrorToString in outcome (fun (_,program,_)->tuple [driverProgram program;list (fun catalog->attempt driverProgram (fun ()->rcInternalCall<Result<CheckedAST.Program,string>> "PackageCatalog" "materializePackageValueCatalog" [|box context;box AST.defaultWarningSettings;box catalog;box program|])) catalogs]) checkedResult) inputs))
     let unit name purpose text:CompilationContexts.SourceUnit={Name=name;Purpose=purpose;Source=text}
     let parseOutputs=list (fun allowInternal->list (fun requireEntry->list (fun units->outcome (fun parsed->outcome (fun (_,program,_)->driverProgram program) (WrittenChecking.checkSourceUnitsWithBase None allowInternal requireEntry parsed)) (PackageCatalog.parseWrittenSourceProgram allowInternal requireEntry (AST.NonEmptyList.fromList units))) [[unit "input.dark" NameSyntax.SourceUnitPurpose.Executable source];[unit "library.dark" NameSyntax.SourceUnitPurpose.Library "let f (x: Int64) : Int64 = x";unit "main.dark" NameSyntax.SourceUnitPurpose.Executable "f 1L"];[unit "a.dark" NameSyntax.SourceUnitPurpose.Executable "()";unit "b.dark" NameSyntax.SourceUnitPurpose.Executable "()"];[unit "bad name" NameSyntax.SourceUnitPurpose.Executable "()"];[unit "library.dark" NameSyntax.SourceUnitPurpose.Library "1L"]]) [false;true]) [false;true]
     tuple [catalogOutputs;parseOutputs]
+
+let binaryOutputObservation (input:string) =
+    let request=JsonNode.Parse input
+    let source=request["text"].GetValue<string>()
+    let bucket=request["bucket"].GetValue<int>()
+    let enc value=closureAnalysisEncode value
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let list f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let outcome f value=match value with Error error->enc (Error error:Result<unit,string>)|Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|f value|]);node :> JsonNode
+    let attempt f action=outcome f (try action () with ex->Error ex.Message)
+    let mutable caseIndex=0
+    let select action=let index=caseIndex in caseIndex<-caseIndex+1;if index % 16=bucket then [tuple [enc index;action()]] else []
+    let fid n=AST.functionId(uint64 n)
+    let tid n=ANF.TempId n
+    let int n=ANF.IntLiteral(ANF.Int64 n)
+    let fn n name returnType body:ANF.Function={Id=fid n;Name=name;TypedParams=[];ReturnType=returnType;ReturnOwnership=ANF.OwnedReturn;Body=body}
+    let entry typ atom=fn 10 "_start" typ (ANF.Return atom)
+    let callee=fn 20 "callee" AST.TInt64 (ANF.Return(int 17L))
+    let caller=fn 10 "_start" AST.TInt64 (ANF.Let(tid 1,ANF.Call(fid 20,[]),ANF.Return(ANF.Var(tid 1))))
+    let fixtures=[[];[entry AST.TUnit ANF.UnitLiteral];[entry AST.TInt64 (int 42L)];[entry AST.TBool (ANF.BoolLiteral true)];[entry AST.TFloat64 (ANF.FloatLiteral 1.5)];[entry AST.TString (ANF.StringLiteral source)];[caller;callee];[callee]]
+    let baseOptions={CompilerOptions.defaultOptions with DisableInlining=true}
+    let options=[baseOptions;{baseOptions with EnableLeakCheck=true};{baseOptions with DisableFreeList=true};{baseOptions with EnableCoverage=true}]
+    let empty=rcInternalCall<AST_to_ANF.Registries> "SourcePreparation" "emptyRegistries" [|box (Map.empty:AST.ModuleRegistry)|]
+    let run (functions:ANF.Function list) target options cached=
+        let signatures=functions |> List.map (fun func->func.Id,(func.Name,AST.TFunction([],func.ReturnType))) |> FunctionIdMap.ofList
+        let names=FunctionIdMap.map (fun _ (name,_)->name) signatures
+        let registries={empty with FuncReg=signatures;FunctionNames=names;FunctionIds=FunctionIdMap.toList names |> List.map (fun (id,name)->name,id) |> Map.ofList}
+        let sw=System.Diagnostics.Stopwatch.StartNew()
+        attempt id (fun ()->rcInternalCall<Result<ANF.Function list*SSAANF.Function list*ANF.TypeMap,string>> "ANFPipeline" "buildAnf" [|box 0;box options;box sw;box registries;box 100UL;box InliningCommon.defaultConfig;box (FunctionIdMap.empty:FunctionIdMap<InliningCommon.FunctionInfo>);box (Map.empty:Map<string,ANF.Function>);box (Set.empty<AST.FunctionId>);box functions;box (FunctionIdMap.empty:FunctionIdMap<OwnedIR.CallSignature>);box false;box (None:CompilerOptions.PassTimingRecorder option)|] |> Result.bind (fun (_,ssa,typeMap)->rcInternalCall<Result<LIR.Function list*FunctionIdMap<CompilationCacheIdentity.FunctionSummary>,string>> "NativePipeline" "lowerToAllocatedLirWithKnown" [|box (FunctionIdMap.empty:FunctionIdMap<CompilationCacheIdentity.FunctionSummary>);box target;box 0;box options;box sw;null;null;null;box source;box ssa;box typeMap;box registries;null;box (rcInternalCall<FunctionIdMap<string*AST.SemanticType>> "SourcePreparation" "extractReturnTypes" [|box signatures|])|] |> Result.map (fun (functions,summaries)->
+            let program=LIR.Program(functions,Map.empty,Map.empty)
+            let identity=obj()
+            let groups:CodeGen.FunctionGroup list=[{ContextIdentity=identity;ReusableAcrossCompilations=true;Functions=functions}]
+            let metadata:CodeGen.MetadataGroup list=[{ContextIdentity=identity;Functions=functions}]
+            let session=if cached then Some (new CompilationSession.CompilationSession()) else None
+            let mutable phases=[]
+            let record (value:CompilerOptions.PassTiming)=phases<-tuple [enc value.Pass;enc (value.Elapsed.Ticks>=0L)]::phases
+            let verbosity=if not cached && options=baseOptions then 3 else 0
+            let generate()=
+                let previous=Console.Out
+                use writer=new IO.StringWriter()
+                try
+                    Console.SetOut writer
+                    let result=outcome enc (rcInternalCall<Result<byte array,string>> "BinaryOutput" "generateBinary" [|box target;box verbosity;box options;box sw;box (Some record);box "codegen";box "emit {format}";box true;box true;box session;identity;box groups;box metadata;box registries.RcSumShapeReg;box (FunctionIdMap.toList summaries |> List.choose (fun (id,(summary:CompilationCacheIdentity.FunctionSummary))->summary.Arm64Writes |> Option.map (fun writes->id,writes)) |> FunctionIdMap.ofList);box program|])
+                    let text=Text.RegularExpressions.Regex.Replace(writer.ToString(),"[0-9]+(?:\\.[0-9]+)?ms","<duration>ms")
+                    tuple [result;enc text]
+                finally Console.SetOut previous
+            let first=generate()
+            let firstPhases=List.rev phases
+            phases<-[]
+            let second=generate()
+            let secondPhases=List.rev phases
+            tuple [enc program;first;list (fun node->node) firstPhases;second;list (fun node->node) secondPhases])))
+    tuple [list (fun functions->list (fun target->list (fun options->list (fun cached->list (fun node->node) (select (fun ()->run functions target options cached))) [false;true]) options) [Platform.LinuxX86_64;Platform.ARM64Backend Platform.LinuxARM64]) fixtures]
 
 let processRequest (line: string) =
     let request = JsonNode.Parse line
@@ -7328,6 +7381,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "binary-output" -> binaryOutputObservation source
         | "package-catalog" -> packageCatalogObservation source
         | "preamble-analysis" -> preambleAnalysisObservation source
         | "native-pipeline" -> nativePipelineObservation source
