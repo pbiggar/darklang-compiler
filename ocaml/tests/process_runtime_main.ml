@@ -994,6 +994,112 @@ let x64NativeEffectChecks ()=
  check "P" (checked (E.emitCliNative ctx (LIR.Physical LIR.X19) LIR.Kill [LIR.Imm 2147483647L;LIR.Imm 0L])@[X.MOV_load (X.RAX,X.RBX,0l)]@compare X.RAX 1L@pass);
  !total
 [@@warning "-42"]
+let x64ProcessChecks ()=
+ let module X=X86_64 in let module P=X64Process in let total=ref 0 in
+ let ctx={X64CodeGenTypes.functionName="process-execution";stackSize=0;usedCalleeSaved=[];enableLeakCheck=false;recordRegistry=StringOrder.Map.empty;sumShapeRegistry=StringOrder.Map.empty;functionNames=FunctionIdMap.empty} in
+ let checked=function Ok xs->xs|Error e->failwith e in
+ let dest=LIR.Physical LIR.X19 in
+ let emit op args=checked (X64EmitNativeEffects.emitCliNative ctx dest op args) in
+ let literal=X64Operands.emitStringLiteral and imm=X64Operands.loadImm64 in
+ let compare reg value=[X.MOV_reg (X.RAX,reg)]@imm X.RDX value@[X.CMP_reg (X.RAX,X.RDX);X.Jcc (X.NE,"failed")] in
+ let text reg=checked (X64EmitInteger.emitStdoutWrite ctx (LIR.Reg reg) false) in
+ let textX reg=text (LIR.Physical reg) in
+ let printField offset=[X.MOV_load (X.R12,X.RBX,Int32.of_int offset)]@textX LIR.X20 in
+ let pass=X64Operands.genPrintChars ['P'] in
+ let helpers=P.generateCliArgvHelper ()@P.generateCliEnvironmentPackedHelper false@P.generateCliDirectoryCurrentHelper false@P.generateCliSetEnvHelper false@P.generateCliUnsetEnvHelper false@P.generateCliDirectoryListHelper false@P.generateCliGetEnvHelper false@P.generateLinuxCliSpawnProcessHelper ()@P.generateLinuxCliProcessLifecycleHelpers false@P.generateLinuxCliRunProcessHelper false@P.generateLinuxCliExecuteHelper false@X64Operands.genOomHandler ()@X64Operands.genRuntimeErrorHandler () in
+ let checkWith validate args body=
+  let root=[X.XOR_reg (X.RBP,X.RBP);X.PUSH X.RBP;X.MOV_reg (X.RBP,X.RSP)] in
+  let code=[X.Label "_start"]@root@X64Printing.genHeapInit ()@body@[X.CALL "__dark_cli_cleanup_processes";X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@[X.Label "failed"]@X64Operands.genPrintChars ['F']@[X.CALL "__dark_cli_cleanup_processes";X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@helpers in
+  let pool=X86_64_Resolve.collectStringPool code in let r=checked (X86_64_Resolve.resolveAndEncode code) in
+  let r=checked (X86_64_Resolve.patchDataLabels r (X86_64_Resolve.dataLabelOffsets 120 (Bytes.length r.X86_64_Resolve.machineCode) pool) 120) in
+  let bytes=Binary_Generation_ELF_X86_64.createExecutableWithPools r.X86_64_Resolve.machineCode pool LiteralPool.emptyFloatPool false 0 in
+  let actual=try runImageOn "/opt/dcb/qemu/qemu-x86_64" bytes args "" with Failure e->failwith (Printf.sprintf "x64 process case %d: %s" !total e) in
+  if not (validate actual) then failwith (Printf.sprintf "x64 process case %d: unexpected output %S" !total actual);
+  incr total in
+ let check expected args body=checkWith ((=) expected) args body in
+ List.iter (fun (index,args,expected)->check expected args (emit LIR.GetArgv [LIR.Imm (Int64.of_int index)]@(match expected with "N"->[X.CMP_imm (X.RBX,0l);X.Jcc (X.NE,"failed")]@X64Operands.genPrintChars ['N']|_->text dest)))
+  [(-1),["first"],"N";0,[],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"];
+ check "nested" ["nested"] ([X.PUSH X.RBP;X.MOV_reg (X.RBP,X.RSP)]@emit LIR.GetArgv [LIR.Imm 0L]@text dest@[X.POP X.RBP]);
+ let env="PORT_X64_PROCESS_FIXTURE" in Unix.putenv env "hé😀";
+ check "hé😀" [] (emit LIR.GetEnv [LIR.StringSymbol env]@text dest);
+ check "P" [] (emit LIR.GetEnv [LIR.StringSymbol (env^"_MISSING")]@compare X.RBX 0L@pass);
+ List.iter (fun value->check value [] (emit LIR.SetEnv [LIR.StringSymbol env;LIR.StringSymbol value]@[X.MOV_load (X.RAX,X.RBX,0l)]@compare X.RAX 0L@emit LIR.GetEnv [LIR.StringSymbol env]@text dest)) ["";"changed";"hé😀"];
+ check "new" [] (emit LIR.SetEnv [LIR.StringSymbol (env^"_NEW");LIR.StringSymbol "new"]@emit LIR.GetEnv [LIR.StringSymbol (env^"_NEW")]@text dest);
+ List.iter (fun name->check "P" [] (emit LIR.UnsetEnv [LIR.StringSymbol name]@emit LIR.GetEnv [LIR.StringSymbol name]@compare X.RBX 0L@pass)) [env;env^"_MISSING"];
+ checkWith (fun output->List.mem (env^"=hé😀") (String.split_on_char '\000' output)) [] (emit LIR.GetEnvironmentPacked []@text dest);
+ check (Sys.getcwd ()) [] (emit LIR.DirectoryCurrent []@text dest);
+ let path=Filename.temp_file "port-x64-directory-" ".tmp" in Sys.remove path;Unix.mkdir path 0o700;
+ Fun.protect ~finally:(fun ()->Array.iter (fun name->Sys.remove (Filename.concat path name)) (Sys.readdir path);Unix.rmdir path) (fun ()->
+  List.iter (fun name->let c=open_out_bin (Filename.concat path name) in close_out c) ["first";"hé😀"];
+  let paths=List.map (Filename.concat path) ["first";"hé😀"] |> List.sort String.compare in
+  checkWith (fun output->String.split_on_char '\000' output |> List.filter ((<>) "") |> List.sort String.compare = paths) [] (emit LIR.DirectoryListPacked [LIR.StringSymbol path]@text dest);
+  check "" [] (emit LIR.DirectoryListPacked [LIR.StringSymbol (path^".missing")]@text dest));
+ List.iter (fun (command,status,out,err)->check (out^err^"P") [] (emit LIR.Execute [LIR.StringSymbol command]@[X.MOV_load (X.RAX,X.RBX,0l)]@compare X.RAX status@printField 8@printField 16@pass))
+  ["true",0L,"","";"printf 'hé😀'; printf 'error' >&2; exit 7",7L,"hé😀","error";"printf 'a\\0b'",0L,"a\000b","";"exit 255",255L,"","";"printf '%8192s' x",0L,String.make 8191 ' '^"x",""];
+ let request kind argv cwd env timeout pipeline=
+  [X.MOV_reg (X.R12,X64Operands.heapPtr);X.ADD_imm (X64Operands.heapPtr,48l)]@imm X.RAX kind@[X.MOV_store (X.R12,0l,X.RAX)]@
+  List.concat_map (fun (offset,value)->literal X.RAX value@[X.MOV_store (X.R12,Int32.of_int offset,X.RAX)]) [8,argv;16,cwd;24,env;40,pipeline]@imm X.RAX timeout@[X.MOV_store (X.R12,32l,X.RAX)] in
+ let run kind argv cwd env timeout pipeline status errno out err timed=
+  check (out^err^"P") [] (request kind argv cwd env timeout pipeline@emit LIR.RunProcess [LIR.Reg (LIR.Physical LIR.X20)]@[X.MOV_load (X.RAX,X.RBX,0l)]@compare X.RAX errno@[X.MOV_load (X.RAX,X.RBX,8l)]@compare X.RAX status@[X.MOV_load (X.RAX,X.RBX,32l)]@compare X.RAX timed@printField 16@printField 24@pass) in
+ run 0L "/bin/printf\000hé😀" "" "" 0L "" 0L 0L "hé😀" "" 0L;
+ run 0L "/bin/bash\000-c\000printf out; printf err >&2; exit 7" "" "" 0L "" 7L 0L "out" "err" 0L;
+ run 0L "/definitely/missing/port-command" "" "" 0L "" 127L 2L "" "" 0L;
+ run 1L "/bin/pwd" (Sys.getcwd ()) "" 0L "" 0L 0L (Sys.getcwd ()^"\n") "" 0L;
+ run 1L "/bin/true" "/definitely/missing/port-cwd" "" 0L "" 127L 2L "" "" 0L;
+ run 0L ("/bin/bash\000-c\000printf \"$"^env^"\"") "" (env^"=override") 0L "" 0L 0L "hé😀" "" 0L;
+ run 0L ("/bin/bash\000-c\000printf \"$"^env^"_EXTRA\"") "" (env^"_EXTRA=provided") 0L "" 0L 0L "provided" "" 0L;
+ run 4L "/bin/printf\000hello" "" "" 0L "/bin/cat" 0L 0L "hello" "" 0L;
+ run 3L "/bin/sleep\00010" "" "" 1L "" 137L 0L "" "" 1L;
+ List.iter (fun handle->List.iter (fun op->check "Process not foundP" [] (emit op (if op=LIR.ProcessIO then [LIR.Imm handle;LIR.StringSymbol ""] else [LIR.Imm handle])@[X.MOV_load (X.RAX,X.RBX,0l)]@compare X.RAX (-1L)@printField 16@pass)) [LIR.ProcessIO;LIR.TerminateProcess]) [-1L;0L;1L;63L;64L];
+ let waitFinished=[X.Label "process_poll"]@emit LIR.ProcessIO [LIR.Reg (LIR.Physical LIR.X20);LIR.StringSymbol ""]@[X.MOV_reg (X.R13,X.R12);X.SHL_imm (X.R13,6);X.ADD_reg (X.R13,X.R15);X.MOV_load (X.RAX,X.R13,Int32.of_int X64Operands.processTableOffset);X.CMP_imm (X.RAX,2l);X.Jcc (X.EQ,"process_finished")]@imm X.RAX (Int64.bits_of_float 1.)@[X.MOVQ_from_gp (X.XMM0,X.RAX)]@checked (X64EmitNativeEffects.emitSleep ctx 0 (LIR.FPhysical LIR.D0))@[X.JMP "process_poll";X.Label "process_finished"] in
+ check "outputerrorP" [] (emit LIR.SpawnProcess [LIR.StringSymbol "printf output; printf error >&2; exit 7"]@[X.MOV_reg (X.R12,X.RBX);X.CMP_imm (X.R12,1l);X.Jcc (X.LT,"failed")]@waitFinished@emit LIR.TerminateProcess [LIR.Reg (LIR.Physical LIR.X20)]@[X.MOV_load (X.RAX,X.RBX,0l)]@compare X.RAX 7L@printField 8@printField 16@pass);
+ check "hé😀P" [] (emit LIR.SpawnProcess [LIR.StringSymbol "IFS= read -r line; printf '%s' \"$line\""]@[X.MOV_reg (X.R12,X.RBX)]@emit LIR.ProcessIO [LIR.Reg (LIR.Physical LIR.X20);LIR.StringSymbol "hé😀"]@waitFinished@emit LIR.TerminateProcess [LIR.Reg (LIR.Physical LIR.X20)]@[X.MOV_load (X.RAX,X.RBX,0l)]@compare X.RAX 0L@printField 8@pass);
+ check "P" [] (emit LIR.SpawnProcess [LIR.StringSymbol "exec /bin/sleep 10"]@[X.MOV_reg (X.R12,X.RBX)]@emit LIR.TerminateProcess [LIR.Reg (LIR.Physical LIR.X20)]@[X.MOV_load (X.RAX,X.RBX,0l)]@compare X.RAX 143L@pass);
+ check "P" [] (emit LIR.SpawnProcess [LIR.StringSymbol "exec /bin/sleep 10"]@[X.CALL "__dark_cli_cleanup_processes";X.MOV_load (X.RAX,X.R15,Int32.of_int (X64Operands.processTableOffset+64))]@compare X.RAX 0L@pass);
+ !total
+[@@warning "-42"]
+let x64FunctionChecks ()=
+ let module L=LIR in let total=ref 0 in
+ let r p=L.Physical p and f p=L.FPhysical p in
+ let a=r L.X0 and b=r L.X1 in
+ let label name=L.Label name in
+ let block name instrs terminator={L.label=label name;instrs;terminator} in
+ let cfg entry blocks={L.entry=label entry;blocks=L.LabelMap.of_list (List.map (fun (b:L.basicBlock)->b.L.label,b) blocks)} in
+ let func id name stack saved cfg={L.id=AST.functionId id;name;typedParams=[];cfg;stackSize=stack;usedCalleeSaved=saved;codegenFacts=None} in
+ let checked=function Ok xs->xs|Error e->failwith e in
+ let check ?(args=[]) ?(extra=[]) expected stack saved blocks=
+  let start=func 0L "_start" 0 [] (cfg "start" [block "start" [L.Call (r L.X19,AST.functionId 1L,[]);L.PrintInt64NoNewline (r L.X19)] L.Ret]) in
+  let worker=func 1L "worker" stack saved (cfg "entry" blocks) in
+  let names=FunctionIdMap.ofList [AST.functionId 0L,"_start";AST.functionId 1L,"worker"] in
+  let lower f=checked (X64Functions.translateFunction false StringOrder.Map.empty StringOrder.Map.empty names f) in
+  let entry=lower start in let body=lower worker in
+  let code=entry@body@extra@X64Operands.genOomHandler ()@X64Operands.genRuntimeErrorHandler () in
+  let pool=X86_64_Resolve.collectStringPool code in let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let resolved=checked (X86_64_Resolve.patchDataLabels resolved (X86_64_Resolve.dataLabelOffsets 120 (Bytes.length resolved.X86_64_Resolve.machineCode) pool) 120) in
+  let image=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode pool LiteralPool.emptyFloatPool false 0 in
+  let actual=try runImageOn "/opt/dcb/qemu/qemu-x86_64" image args "" with Failure e->failwith (Printf.sprintf "x64 function case %d: %s" !total e) in
+  if actual<>expected then failwith (Printf.sprintf "x64 function case %d: expected %S, got %S" !total expected actual);
+  incr total in
+ List.iter (fun stack->List.iter (fun saved->check "42" stack saved [block "entry" [L.Mov (a,L.Imm 42L)] L.Ret]) [[];[L.X19];[L.X19;L.X20];[L.X19;L.X20;L.X21]]) [0;8;16;24;32;32768];
+ check "42" 32 [L.X19;L.X20] [block "entry" [L.Mov (a,L.Imm 0L)] (L.Jump (label "next"));block "next" [L.Add (a,a,L.Imm 42L)] L.Ret;block "unreachable" [L.RuntimeError "unreachable"] L.Ret];
+ let branch term expected prefix=check expected 16 [L.X19;L.X20;L.X21] [block "entry" prefix term;block "yes" [L.Mov (a,L.Imm 1L)] L.Ret;block "no" [L.Mov (a,L.Imm 0L)] L.Ret] in
+ List.iter (fun physical->let reg=r physical in List.iter (fun value->
+  let prefix=[L.Mov (reg,L.Imm value)] in
+  let nonzero=value<>0L in
+  branch (L.Branch (reg,label "yes",label "no")) (if nonzero then "1" else "0") prefix;
+  branch (L.BranchZero (reg,label "yes",label "no")) (if nonzero then "0" else "1") prefix;
+  List.iter (fun bit->let set=Int64.logand value (Int64.shift_left 1L (bit land 63))<>0L in
+   branch (L.BranchBitZero (reg,bit,label "yes",label "no")) (if set then "0" else "1") prefix;
+   branch (L.BranchBitNonZero (reg,bit,label "yes",label "no")) (if set then "1" else "0") prefix) [-1;0;31;32;63;64;255]) [Int64.min_int;-1L;0L;1L;Int64.max_int]) [L.X0;L.X1;L.X2;L.X3;L.X4;L.X5;L.X6;L.X7;L.X19;L.X20;L.X21];
+ let conditions=[L.EQ;L.NE;L.LT;L.GT;L.LE;L.GE;L.ULT;L.UGT;L.ULE;L.UGE] in
+ let integer cond x y=let s=Int64.compare x y and u=Int64.unsigned_compare x y in match cond with L.EQ->s=0|L.NE->s<>0|L.LT->s<0|L.GT->s>0|L.LE->s<=0|L.GE->s>=0|L.ULT->u<0|L.UGT->u>0|L.ULE->u<=0|L.UGE->u>=0 in
+ List.iter (fun x->List.iter (fun y->List.iter (fun cond->branch (L.CondBranch (cond,label "yes",label "no")) (if integer cond x y then "1" else "0") [L.Mov (a,L.Imm x);L.Mov (b,L.Imm y);L.Cmp (a,L.Reg b)]) conditions) [Int64.min_int;-1L;0L;1L;Int64.max_int]) [Int64.min_int;-1L;0L;1L;Int64.max_int];
+ let float cond x y=match cond with L.EQ->x=y|L.NE->x<>y|L.LT|L.ULT->x<y|L.GT|L.UGT->x>y|L.LE|L.ULE->x<=y|L.GE|L.UGE->x>=y in
+ let floats=[neg_infinity;-1.;-0.;0.;1.;infinity;Int64.float_of_bits 0xfff8000000000000L] in
+ List.iter (fun x->List.iter (fun y->List.iter (fun cond->branch (L.CondBranch (cond,label "yes",label "no")) (if float cond x y then "1" else "0") [L.FLoad (f L.D0,x);L.FLoad (f L.D1,y);L.FCmp (f L.D0,f L.D1)]) conditions) floats) floats;
+ check ~args:["nested"] ~extra:(X64Process.generateCliArgvHelper ()) "6" 32 [L.X19;L.X20] [block "entry" [L.CliNative (r L.X19,L.GetArgv,[L.Imm 0L]);L.HeapLoad (a,r L.X19,8)] L.Ret];
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -1001,4 +1107,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks ()+x64MemoryChecks ()+x64BufferChecks ()+x64FileChecks ()+x64IntegerChecks ()+x64NativeEffectChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks ()+x64MemoryChecks ()+x64BufferChecks ()+x64FileChecks ()+x64IntegerChecks ()+x64NativeEffectChecks ()+x64ProcessChecks ()+x64FunctionChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count

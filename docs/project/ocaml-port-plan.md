@@ -1640,3 +1640,26 @@ hostname and signal-zero error probes. Process helper execution follows with
 the complete process owner. Coverage is 291/391 pairs; source comment coverage
 is complete. Remaining x64 process/runtime assembly, driver/library,
 runners/corpus and final acceptance remain open.
+
+Complete x64 process/environment helpers, exhaustive instruction dispatch,
+comparison-aware terminators, basic blocks and function frames are translated
+with full interfaces and source comments. The process helper instructions,
+string pools, resolved code and ELF bytes match F# exactly across 3,109,812
+JSON bytes (SHA256
+16408b1c95e2aab9b5d4066a2eaca349d411f6c4251f069dbfae9c396f686696).
+Dispatch, blocks and functions match exactly across 64,583,714 JSON bytes
+(SHA256 34d6d9bcdd3906f2bf13d3b87c6f2a236d270831f4d05b1628cff89ed22d9a13).
+Cases cover every instruction variant, GP/FP register, virtual errors,
+comparison context, return/fallthrough, missing/cyclic/unreachable blocks,
+metadata, type, leak setting and frame boundaries. The warning-free build
+passes 508/508 unit checks, 519/519 ARM64 executions and 6068/6068 x64 executions.
+The 49 new process cases execute nested argv/environment traversal, mutation,
+packed environment/directory entries, shell/direct argv commands, UTF-8/NUL
+output, stdout/stderr capture, missing commands/cwd, supplied environments,
+pipelines, timeouts, invalid handles, interactive input, termination and cleanup.
+The inherited-value behavior for duplicate environment entries in bash is
+preserved from the source. The 1646 function cases execute stack/callee-save
+frames, calls, graph fallthrough, integer/bit/float branches (including NaNs),
+unreachable blocks and nested argv access. Coverage is 295/391 pairs; source
+comment coverage is complete. Program assembly, driver/library, runners/corpus
+and final acceptance remain open.

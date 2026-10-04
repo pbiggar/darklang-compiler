@@ -3928,6 +3928,81 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let x64FunctionObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f () : Result<X86_64.Instr list,string>)] with ex -> tuple [enc true;enc ex.Message]
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let fps=[LIR.D0;LIR.D1;LIR.D2;LIR.D3;LIR.D4;LIR.D5;LIR.D6;LIR.D7;LIR.D8;LIR.D9;LIR.D10;LIR.D11;LIR.D12;LIR.D13;LIR.D14;LIR.D15]
+    let types=[AST.TInt64;AST.TFloat64;AST.TString;AST.TBlob;AST.TInt;AST.TBool;AST.TChar;AST.TUnit;AST.TNever;AST.TInternalRawPtr;AST.TTuple [AST.TString;AST.TList AST.TInt64];AST.TList AST.TString;AST.TDict (AST.TString,AST.TList AST.TString);AST.TFunction ([AST.TInt64],AST.TString);AST.TStream AST.TString;AST.TRecord ("R",[]);AST.TSum ("S",[])]
+    let reg=LIR.Physical LIR.X19
+    let freg=LIR.FPhysical LIR.D0
+    let fixtures=List.collect (fun reg -> lirInstructionFixturesWithRegisters source reg freg (LIR.Imm 1L) AST.TInt64) (List.map LIR.Physical physical@[LIR.Virtual (-1);LIR.Virtual 0])@List.collect (fun fp -> lirInstructionFixturesWithRegisters source reg fp (LIR.Reg reg) AST.TFloat64) (List.map LIR.FPhysical fps@[LIR.FVirtual (-2000);LIR.FVirtual (-1000);LIR.FVirtual (-1);LIR.FVirtual 0])@List.collect (fun operand -> lirInstructionFixturesWithRegisters source reg freg operand AST.TString) [LIR.Imm Int64.MinValue;LIR.Imm Int64.MaxValue;LIR.Imm 0L;LIR.StringSymbol source;LIR.StringSymbol "";LIR.Reg reg;LIR.StackSlot (-32769);LIR.StackSlot 0;LIR.StackSlot 32768]@List.collect (fun typ -> lirInstructionFixturesWithRegisters source reg freg (LIR.Reg reg) typ) types
+
+    let names=FunctionIdMap.ofList [AST.functionId 0UL,source;AST.functionId 1UL,"fn";AST.functionId UInt64.MaxValue,"largest"]
+    let records=Map.ofList ["R",["field",AST.TString]]
+    let sums:MemoryModel.RcSumShapeRegistry=Map.ofList ["S",{MemoryModel.RcSumShapeInfo.TypeParams=[];Payloads=[0,None;1,Some AST.TString];UnaryPayloadTags=Set.singleton 1}]
+    let flags=Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+    let assembly=typeof<LIR.Instr>.Assembly
+    let ctxType=assembly.GetType("X64CodeGenTypes+FuncCtx")
+    let ctx enabled=FSharpValue.MakeRecord(ctxType,[|box source;box 32;box [LIR.X19;LIR.X20];box enabled;box records;box sums;box names|],flags)
+    let comparisonType=assembly.GetType("X64InstructionContext+ComparisonContext")
+    let optionType=typedefof<option<_>>.MakeGenericType [|comparisonType|]
+    let someCase=FSharpType.GetUnionCases(optionType,flags) |> Array.find (fun c->c.Name="Some")
+    let comparison name=let case=FSharpType.GetUnionCases(comparisonType,flags) |> Array.find (fun c->c.Name=name) in FSharpValue.MakeUnion(someCase,[|FSharpValue.MakeUnion(case,[||],flags)|],flags)
+    let comparisons=[null;comparison "IntegerComparison";comparison "FloatComparison"]
+    let dispatch=mapNodes (fun enabled->mapNodes (fun comparison->mapNodes (fun instruction->call (fun ()->rcInternalCall<Result<X86_64.Instr list,string>> "X64Instructions" "translateInstr" [|comparison;ctx enabled;box instruction|])) fixtures) comparisons) [false;true]
+    let label name=LIR.Label name
+    let block name instructions terminator : LIR.BasicBlock={Label=label name;Instrs=instructions;Terminator=terminator}
+    let cfg entry (blocks:LIR.BasicBlock list) : LIR.CFG={Entry=label entry;Blocks=Map.ofList (blocks |> List.map (fun block -> block.Label,block))}
+    let func name cfg stack saved : LIR.Function={Id=AST.functionId 0UL;Name=name;TypedParams=[];CFG=cfg;StackSize=stack;UsedCalleeSaved=saved;CodegenFacts=None}
+    let regs=[LIR.Physical LIR.X0;LIR.Physical LIR.X19;LIR.Physical LIR.X30;LIR.Physical LIR.SP;LIR.Virtual (-1);LIR.Virtual 0]
+    let conditions=[LIR.EQ;LIR.NE;LIR.LT;LIR.GT;LIR.LE;LIR.GE;LIR.ULT;LIR.UGT;LIR.ULE;LIR.UGE]
+    let terminators=[LIR.Ret;LIR.Jump (label "a");LIR.Jump (label "missing")]@List.collect (fun reg -> [LIR.Branch (reg,label "a",label "b");LIR.BranchZero (reg,label "a",label "b")]@List.collect (fun bit -> [LIR.BranchBitZero (reg,bit,label "a",label "b");LIR.BranchBitNonZero (reg,bit,label "a",label "b")]) [-1;0;31;32;63;64;255]) regs@List.map (fun condition -> LIR.CondBranch (condition,label "a",label "b")) conditions
+    let instructions=lirInstructionFixturesWithRegisters source (LIR.Physical LIR.X19) (LIR.FPhysical LIR.D0) (LIR.Imm 1L) AST.TInt64
+    let blocks=List.map (fun instruction -> block source [instruction] LIR.Ret) instructions@[block source [] LIR.Ret;block source [LIR.Mov (LIR.Virtual 0,LIR.Imm 1L);LIR.RefCountInc (LIR.Physical LIR.X19,8,LIR.GenericHeap,Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=None;MemoryModel.RcMetadata.ReleasePlan=None;MemoryModel.RcMetadata.SourceType=Some AST.TString});LIR.Exit] LIR.Ret]
+    let graphs=List.map (fun terminator -> cfg source [block source [] terminator;block "a" [] LIR.Ret;block "b" [] LIR.Ret]) terminators@[cfg "missing" [];cfg source [];cfg source [block source [] (LIR.Jump (label "missing"))];cfg source [block source [] (LIR.Jump (label "a"));block "a" [] (LIR.Jump (label source))];cfg source [block source [] LIR.Ret;block "unreachable" [LIR.HeapAlloc (LIR.Physical LIR.X19,8)] LIR.Ret]]
+
+    let termCase comparison term next=call (fun ()->rcInternalCall<Result<X86_64.Instr list,string>> "X64Blocks" "translateTerminator" [|comparison;box "epilogue";box next;box term|])
+    let terms=mapNodes (fun comparison->mapNodes (fun term->mapNodes (termCase comparison term) [None;Some "a";Some "b";Some "epilogue"]) terminators) comparisons
+    let conditioned=List.collect (fun condition->List.map (fun instructions->block source instructions (LIR.CondBranch (condition,label "a",label "b"))) [[];[LIR.Cmp (reg,LIR.Imm 0L)];[LIR.FCmp (freg,freg)];[LIR.FCmp (freg,freg);LIR.Mov (reg,LIR.Imm 0L)];[LIR.FCmp (freg,freg);LIR.Cmp (reg,LIR.Imm 0L)];[LIR.Cmp (reg,LIR.Imm 0L);LIR.FCmp (freg,freg)]]) conditions
+    let enabledCase enabled=
+        let c=ctx enabled
+        let blockCase currentBlock next=call (fun ()->rcInternalCall<Result<X86_64.Instr list,string>> "X64Blocks" "translateBlock" [|c;box "epilogue";box next;box currentBlock|])
+        let blockCases=mapNodes (fun currentBlock->mapNodes (blockCase currentBlock) [None;Some (block "a" [] LIR.Ret);Some (block "b" [] LIR.Ret)]) (blocks@conditioned)
+        let functions=mapNodes (fun graph->call (fun ()->X64Functions.translateFunction enabled records sums names (func source graph 32 [LIR.X19;LIR.X20]))) graphs
+        let individual=mapNodes (fun currentBlock->call (fun ()->X64Functions.translateFunction enabled records sums names (func source (cfg source [currentBlock]) 0 []))) blocks
+        let frameCase name stack saved=call (fun ()->X64Functions.translateFunction enabled records sums names (func name (cfg source [block source [] LIR.Ret]) stack saved))
+        let frames=mapNodes (fun name->mapNodes (fun stack->mapNodes (frameCase name stack) [[];[LIR.X19;LIR.X20];[LIR.X0;LIR.SP]]) [-1;0;8;16;32;32768]) [source;"_start";"Darklang.Stdlib.List.fn"]
+        tuple [blockCases;functions;individual;frames]
+    let lowered=mapNodes enabledCase [false;true]
+    tuple [dispatch;terms;lowered]
+
+let x64ProcessObservation (_source:string) =
+    let namedUnion (typ:string) (case:string) (fields:JsonNode array) : JsonNode =
+        let node=JsonObject()
+        node["type"] <- JsonValue.Create typ
+        node["case"] <- JsonValue.Create case
+        node["fields"] <- JsonArray(fields)
+        node
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let code xs=
+        let pool=X86_64_Resolve.collectStringPool xs
+        let encoded=X86_64_Resolve.resolveAndEncode (xs@[X86_64.Label "__heap_oom";X86_64.RET;X86_64.Label "_leak_count";X86_64.RET])
+        let image=encoded |> Result.map (fun resolved ->
+            let patched=X86_64_Resolve.patchDataLabels resolved (X86_64_Resolve.dataLabelOffsets 120 resolved.MachineCode.Length pool) 120
+            patched |> Result.map (fun r->tuple [enc r.MachineCode;enc (Binary_Generation_ELF_X86_64.createExecutableWithPools r.MachineCode pool LiteralPool.emptyFloatPool false 0)]))
+        let result f value=match value with Ok v->namedUnion "FSharpResult" "Ok" [|f v|] | Error e->namedUnion "FSharpResult" "Error" [|enc e|]
+        tuple [enc xs;enc pool;result (result id) image]
+    let enabledCase enabled=
+        let actions=[(fun ()->rcInternalCall<X86_64.Instr list> "X64Process" "generateCliArgvHelper" [||]);(fun ()->rcInternalCall<X86_64.Instr list> "X64Process" "generateCliEnvironmentPackedHelper" [|box enabled|]);(fun ()->rcInternalCall<X86_64.Instr list> "X64Process" "generateCliDirectoryCurrentHelper" [|box enabled|]);(fun ()->rcInternalCall<X86_64.Instr list> "X64Process" "generateCliSetEnvHelper" [|box enabled|]);(fun ()->rcInternalCall<X86_64.Instr list> "X64Process" "generateCliUnsetEnvHelper" [|box enabled|]);(fun ()->rcInternalCall<X86_64.Instr list> "X64Process" "generateCliDirectoryListHelper" [|box enabled|]);(fun ()->rcInternalCall<X86_64.Instr list> "X64Process" "generateCliGetEnvHelper" [|box enabled|]);(fun ()->rcInternalCall<X86_64.Instr list> "X64Process" "generateLinuxCliSpawnProcessHelper" [||]);(fun ()->rcInternalCall<X86_64.Instr list> "X64Process" "generateLinuxCliProcessLifecycleHelpers" [|box enabled|]);(fun ()->rcInternalCall<X86_64.Instr list> "X64Process" "generateLinuxCliRunProcessHelper" [|box enabled|]);(fun ()->rcInternalCall<X86_64.Instr list> "X64Process" "generateLinuxCliExecuteHelper" [|box enabled|])]
+        let groups=List.map (fun f->f ()) actions
+        tuple [mapNodes code groups;code (List.concat groups)]
+    mapNodes enabledCase [false;true]
+
 let x64NativeEffectObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -6410,6 +6485,8 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "x64-functions" -> x64FunctionObservation source
+        | "x64-process" -> x64ProcessObservation source
         | "x64-native-effects" -> x64NativeEffectObservation source
         | "x64-integer-emission" -> x64IntegerEmissionObservation source
         | "x64-file-emission" -> x64FileEmissionObservation source

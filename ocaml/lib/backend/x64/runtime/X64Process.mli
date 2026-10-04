@@ -1,0 +1,11 @@
+val generateCliArgvHelper : unit -> X86_64.instr list
+val generateCliEnvironmentPackedHelper : bool -> X86_64.instr list
+val generateCliDirectoryCurrentHelper : bool -> X86_64.instr list
+val generateCliSetEnvHelper : bool -> X86_64.instr list
+val generateCliUnsetEnvHelper : bool -> X86_64.instr list
+val generateCliDirectoryListHelper : bool -> X86_64.instr list
+val generateCliGetEnvHelper : bool -> X86_64.instr list
+val generateLinuxCliSpawnProcessHelper : unit -> X86_64.instr list
+val generateLinuxCliProcessLifecycleHelpers : bool -> X86_64.instr list
+val generateLinuxCliRunProcessHelper : bool -> X86_64.instr list
+val generateLinuxCliExecuteHelper : bool -> X86_64.instr list
