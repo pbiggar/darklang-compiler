@@ -7681,6 +7681,21 @@ let testFrameworkObservation (source:string) =
         tuple [number state.Passed;number state.Failed;array details state.FailedTests;array (fun (timing:TestFramework.TestTiming)->str timing.Name) state.Timings;array number completed;str(normalize stdout);str stderr])
     tuple [formatted;stateRows;columns;progress;expected;unitSuites;fileSuites;array str [Colors.reset;Colors.green;Colors.red;Colors.yellow;Colors.white;Colors.cyan;Colors.gray;Colors.bold]]
 
+let graphColorObservation (source:string) =
+    let tuple values=namedArray "tuple" (List.toArray values)
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let array fn xs=JsonArray(Seq.map fn xs |> Seq.toArray) :> JsonNode
+    let result fn=function Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|fn value|]);node :> JsonNode|Error error->enc (Error error:Result<unit,string>)
+    let run (test:TestDSL.GraphColorFormat.GraphColorTest)=
+        let variants=[test;{test with ExpectedChromatic=Some(TestDSL.GraphColorFormat.Exactly 999)};{test with ExpectedChromatic=None;ExpectedSpills=Some(TestDSL.GraphColorFormat.Exactly 999)};{test with ExpectedChromatic=None;ExpectedSpills=None;ExpectedColored=Some(TestDSL.GraphColorFormat.AtLeast 999)};{test with ExpectedChromatic=None;ExpectedSpills=None;ExpectedColored=None;ExpectedColors=[0,999]};{test with ExpectedChromatic=None;ExpectedSpills=None;ExpectedColored=None;ExpectedColors=[];ExpectedSame=[0,999]};{test with ExpectedChromatic=None;ExpectedSpills=None;ExpectedColored=None;ExpectedColors=[];ExpectedSame=[];ExpectedDifferent=[0,0]};{test with ExpectedChromatic=None;ExpectedSpills=None;ExpectedColored=None;ExpectedColors=[];ExpectedSame=[];ExpectedDifferent=[];ExpectMcsCoversAll=true;ExpectedSelectionChecks=Some 999}]
+        variants |> array (fun value->tuple [enc value;enc(TestDSL.GraphColorTestRunner.runGraphColorTest value)])
+    let fixtures=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/graphcolor_fixtures.json").AsArray() |> Seq.map (fun node->node.GetValue<string>())
+    let observed=fixtures |> array (fun content->TestDSL.GraphColorFormat.parseGraphColorFileContent source content |> result (array (fun test->tuple [enc test;run test])))
+    let corpus=TestDSL.GraphColorTestRunner.loadGraphColorTests "src/Tests/algorithms/graph-color/coloring.graphcolor" |> result (array (fun test->tuple [enc test;run test]))
+    let loads=["missing.graphcolor";"src/Tests/algorithms/graph-color";"src/Tests/algorithms/graph-color/coloring.graphcolor"] |> array (fun path->TestDSL.GraphColorTestRunner.loadGraphColorTests path |> enc)
+    let tests=TestDSL.GraphColorTestRunner.tests [|"missing.graphcolor";"src/Tests/algorithms/graph-color/coloring.graphcolor"|] |> array (fun (name,run)->let actual=run () in tuple [enc name;enc actual])
+    tuple [observed;corpus;loads;tests]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7710,6 +7725,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "graphcolor-fixtures" -> graphColorObservation source
         | "test-framework" -> testFrameworkObservation source
         | "cli" -> cliObservation source
         | "core-contexts" -> coreContextsObservation source

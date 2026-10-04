@@ -1945,9 +1945,21 @@ suite execution helpers. All 16 comparison requests match F# for progress
 bytes, callback order, stored failures/timings, pass aggregation and filtering,
 thresholded timing columns, stable time ordering, expected/actual details,
 empty suites and mixed success/failure presentation. Duration formatting matches
-the frozen custom decimal formatter across 620 tick-boundary inputs, including
+the frozen custom decimal formatter across 623 tick-boundary inputs, including
 negative values rounding to zero and half-rounding. Numerical running durations
 are excluded only from their known presentation fields. The warning-free build
 passes 523/523 translated unit tests, including both original progress tests.
 Coverage is 323/391 pairs; source comments remain complete. The remaining unit
 and test-tooling pairs, full corpus and final acceptance remain open.
+
+The complete graph-color fixture parser and runner now retain typed topology,
+preferences, precoloring, count bounds, explicit colors, MCS coverage and
+selection-check expectations. All 16 comparison groups match F# across the
+unchanged 16-case corpus and 95 parser-boundary fixtures, including complete
+parsed records and eight original/forced-failure outcomes per accepted case.
+Section validation and duplicate precedence, malformed/unknown vertices,
+count diagnostics, optional-value formatting and test registration also match.
+The warning-free build passes 541/541 translated unit/fixture checks, including
+both original graph DSL unit tests. Coverage is 326/391 pairs, with complete
+reference comments. Remaining unit/test-tooling pairs, full corpus and final
+acceptance remain open.
