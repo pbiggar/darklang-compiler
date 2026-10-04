@@ -1882,6 +1882,214 @@ let reader : IO.TextReader =
     match fsi.CommandLineArgs with
     | [| _; path |] -> new IO.StreamReader(path)
     | _ -> Console.In
+let machineISAObservation (source:string) : JsonNode =
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let enc (value:'a) = encode typeof<'a> (box value)
+    let mapNodes action values = values |> List.map action |> list
+    let armRegValues=[|ARM64.X0;ARM64.X1;ARM64.X2;ARM64.X3;ARM64.X4;ARM64.X5;ARM64.X6;ARM64.X7;ARM64.X8;ARM64.X9;ARM64.X10;ARM64.X11;ARM64.X12;ARM64.X13;ARM64.X14;ARM64.X15;ARM64.X16;ARM64.X17;ARM64.X18;ARM64.X19;ARM64.X20;ARM64.X21;ARM64.X22;ARM64.X23;ARM64.X24;ARM64.X25;ARM64.X26;ARM64.X27;ARM64.X28;ARM64.X29;ARM64.X30;ARM64.SP|]
+    let armFRegValues=[|ARM64.D0;ARM64.D1;ARM64.D2;ARM64.D3;ARM64.D4;ARM64.D5;ARM64.D6;ARM64.D7;ARM64.D8;ARM64.D9;ARM64.D10;ARM64.D11;ARM64.D12;ARM64.D13;ARM64.D14;ARM64.D15;ARM64.D16;ARM64.D17;ARM64.D18;ARM64.D19;ARM64.D20;ARM64.D21;ARM64.D22;ARM64.D23;ARM64.D24;ARM64.D25;ARM64.D26;ARM64.D27;ARM64.D28;ARM64.D29;ARM64.D30;ARM64.D31|]
+    let armConditionValues=[|ARM64.EQ;ARM64.NE;ARM64.LT;ARM64.GT;ARM64.LE;ARM64.GE;ARM64.LO;ARM64.HI;ARM64.LS;ARM64.HS|]
+    let armExtendValues=[|ARM64.ExtendUXTB;ARM64.ExtendUXTH;ARM64.ExtendUXTW;ARM64.ExtendSXTB;ARM64.ExtendSXTH;ARM64.ExtendSXTW|]
+    let armInstructions role boundary =
+        [ARM64.MOVZ ((armRegValues[(role+0) % Array.length armRegValues]),(uint16 (boundary &&& 65535)),(boundary));
+         ARM64.MOVN ((armRegValues[(role+0) % Array.length armRegValues]),(uint16 (boundary &&& 65535)),(boundary));
+         ARM64.MOVK ((armRegValues[(role+0) % Array.length armRegValues]),(uint16 (boundary &&& 65535)),(boundary));
+         ARM64.ADD_imm ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(uint16 (boundary &&& 65535)));
+         ARM64.ADD_reg ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.ADD_shifted ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(boundary));
+         ARM64.ADD_extended ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(armExtendValues[(role+3) % Array.length armExtendValues]));
+         ARM64.SUB_imm ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(uint16 (boundary &&& 65535)));
+         ARM64.SUB_imm12 ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(uint16 (boundary &&& 65535)));
+         ARM64.SUB_reg ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.SUB_shifted ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(boundary));
+         ARM64.SUB_extended ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(armExtendValues[(role+3) % Array.length armExtendValues]));
+         ARM64.SUBS_imm ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(uint16 (boundary &&& 65535)));
+         ARM64.MUL ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.SDIV ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.UDIV ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.MSUB ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(armRegValues[(role+3) % Array.length armRegValues]));
+         ARM64.MADD ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(armRegValues[(role+3) % Array.length armRegValues]));
+         ARM64.CMP_imm ((armRegValues[(role+0) % Array.length armRegValues]),(uint16 (boundary &&& 65535)));
+         ARM64.CMP_reg ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ARM64.CSET ((armRegValues[(role+0) % Array.length armRegValues]),(armConditionValues[(role+1) % Array.length armConditionValues]));
+         ARM64.CSEL ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(armConditionValues[(role+3) % Array.length armConditionValues]));
+         ARM64.AND_reg ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.BIC_reg ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.AND_imm ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(uint64 (int64 boundary)));
+         ARM64.ORR_reg ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.EOR_reg ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.LSL_reg ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.LSR_reg ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.ASR_reg ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.LSL_imm ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(boundary));
+         ARM64.LSR_imm ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(boundary));
+         ARM64.ASR_imm ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(boundary));
+         ARM64.MVN ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ARM64.MOV_reg ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ARM64.STRB ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(boundary));
+         ARM64.LDRB ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]));
+         ARM64.LDRB_imm ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(boundary));
+         ARM64.STRB_reg ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ARM64.STP ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(int16 boundary));
+         ARM64.STP_pre ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(int16 boundary));
+         ARM64.LDP ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(int16 boundary));
+         ARM64.LDP_post ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(int16 boundary));
+         ARM64.STR ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(int16 boundary));
+         ARM64.LDR ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(int16 boundary));
+         ARM64.STUR ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(int16 boundary));
+         ARM64.LDUR ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(int16 boundary));
+         ARM64.BL ((source));
+         ARM64.BLR ((armRegValues[(role+0) % Array.length armRegValues]));
+         ARM64.BR ((armRegValues[(role+0) % Array.length armRegValues]));
+         ARM64.CBZ ((armRegValues[(role+0) % Array.length armRegValues]),(source));
+         ARM64.CBNZ ((armRegValues[(role+0) % Array.length armRegValues]),(source));
+         ARM64.B_label ((source));
+         ARM64.B_cond_label ((armConditionValues[(role+0) % Array.length armConditionValues]),(source));
+         ARM64.CBZ_offset ((armRegValues[(role+0) % Array.length armRegValues]),(boundary));
+         ARM64.CBNZ_offset ((armRegValues[(role+0) % Array.length armRegValues]),(boundary));
+         ARM64.TBZ ((armRegValues[(role+0) % Array.length armRegValues]),(boundary),(boundary));
+         ARM64.TBNZ ((armRegValues[(role+0) % Array.length armRegValues]),(boundary),(boundary));
+         ARM64.TBZ_label ((armRegValues[(role+0) % Array.length armRegValues]),(boundary),(source));
+         ARM64.TBNZ_label ((armRegValues[(role+0) % Array.length armRegValues]),(boundary),(source));
+         ARM64.B ((boundary));
+         ARM64.B_cond ((armConditionValues[(role+0) % Array.length armConditionValues]),(boundary));
+         ARM64.NEG ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ARM64.RET;
+         ARM64.SVC ((uint16 (boundary &&& 65535)));
+         ARM64.Label ((source));
+         ARM64.ADRP ((armRegValues[(role+0) % Array.length armRegValues]),(source));
+         ARM64.ADD_label ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(source));
+         ARM64.ADR ((armRegValues[(role+0) % Array.length armRegValues]),(source));
+         ARM64.LDR_fp ((armFRegValues[(role+0) % Array.length armFRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(int16 boundary));
+         ARM64.STR_fp ((armFRegValues[(role+0) % Array.length armFRegValues]),(armRegValues[(role+1) % Array.length armRegValues]),(int16 boundary));
+         ARM64.STP_fp ((armFRegValues[(role+0) % Array.length armFRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(int16 boundary));
+         ARM64.LDP_fp ((armFRegValues[(role+0) % Array.length armFRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]),(armRegValues[(role+2) % Array.length armRegValues]),(int16 boundary));
+         ARM64.FADD ((armFRegValues[(role+0) % Array.length armFRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]),(armFRegValues[(role+2) % Array.length armFRegValues]));
+         ARM64.FSUB ((armFRegValues[(role+0) % Array.length armFRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]),(armFRegValues[(role+2) % Array.length armFRegValues]));
+         ARM64.FMUL ((armFRegValues[(role+0) % Array.length armFRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]),(armFRegValues[(role+2) % Array.length armFRegValues]));
+         ARM64.FMADD ((armFRegValues[(role+0) % Array.length armFRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]),(armFRegValues[(role+2) % Array.length armFRegValues]),(armFRegValues[(role+3) % Array.length armFRegValues]));
+         ARM64.FDIV ((armFRegValues[(role+0) % Array.length armFRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]),(armFRegValues[(role+2) % Array.length armFRegValues]));
+         ARM64.FNEG ((armFRegValues[(role+0) % Array.length armFRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]));
+         ARM64.FABS ((armFRegValues[(role+0) % Array.length armFRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]));
+         ARM64.FSQRT ((armFRegValues[(role+0) % Array.length armFRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]));
+         ARM64.FCMP ((armFRegValues[(role+0) % Array.length armFRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]));
+         ARM64.FMOV_reg ((armFRegValues[(role+0) % Array.length armFRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]));
+         ARM64.FMOV_imm ((armFRegValues[(role+0) % Array.length armFRegValues]),(float boundary));
+         ARM64.FMOV_to_gp ((armRegValues[(role+0) % Array.length armRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]));
+         ARM64.FMOV_from_gp ((armFRegValues[(role+0) % Array.length armFRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ARM64.SCVTF ((armFRegValues[(role+0) % Array.length armFRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ARM64.FCVTZS ((armRegValues[(role+0) % Array.length armRegValues]),(armFRegValues[(role+1) % Array.length armFRegValues]));
+         ARM64.SXTB ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ARM64.SXTH ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ARM64.SXTW ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ARM64.UXTB ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ARM64.UXTH ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ARM64.UXTW ((armRegValues[(role+0) % Array.length armRegValues]),(armRegValues[(role+1) % Array.length armRegValues]));
+         ]
+    let x64RegValues=[|X86_64.RAX;X86_64.RBX;X86_64.RCX;X86_64.RDX;X86_64.RSI;X86_64.RDI;X86_64.RBP;X86_64.RSP;X86_64.R8;X86_64.R9;X86_64.R10;X86_64.R11;X86_64.R12;X86_64.R13;X86_64.R14;X86_64.R15|]
+    let x64FRegValues=[|X86_64.XMM0;X86_64.XMM1;X86_64.XMM2;X86_64.XMM3;X86_64.XMM4;X86_64.XMM5;X86_64.XMM6;X86_64.XMM7;X86_64.XMM8;X86_64.XMM9;X86_64.XMM10;X86_64.XMM11;X86_64.XMM12;X86_64.XMM13;X86_64.XMM14;X86_64.XMM15|]
+    let x64ConditionValues=[|X86_64.EQ;X86_64.NE;X86_64.LT;X86_64.GT;X86_64.LE;X86_64.GE;X86_64.B;X86_64.A;X86_64.BE;X86_64.AE;X86_64.P;X86_64.NP|]
+    let x64SizeValues=[|X86_64.Byte;X86_64.Word;X86_64.DWord;X86_64.QWord|]
+    let x64Instructions role boundary =
+        [X86_64.MOV_imm ((x64RegValues[(role+0) % Array.length x64RegValues]),(int64 boundary));
+         X86_64.MOV_imm32 ((x64RegValues[(role+0) % Array.length x64RegValues]),(int32 boundary));
+         X86_64.MOV_reg ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.MOV_load ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]),(int32 boundary));
+         X86_64.MOV_store ((x64RegValues[(role+0) % Array.length x64RegValues]),(int32 boundary),(x64RegValues[(role+2) % Array.length x64RegValues]));
+         X86_64.MOV_reg32 ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.MOVZX_byte ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.MOVZX_word ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.MOVSX_byte ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.MOVSX_word ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.MOVSXD ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.LEA ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]),(int32 boundary));
+         X86_64.LEA_index ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]),(x64RegValues[(role+2) % Array.length x64RegValues]),(boundary),(int32 boundary));
+         X86_64.LEA_rip ((x64RegValues[(role+0) % Array.length x64RegValues]),(source));
+         X86_64.PUSH ((x64RegValues[(role+0) % Array.length x64RegValues]));
+         X86_64.POP ((x64RegValues[(role+0) % Array.length x64RegValues]));
+         X86_64.ADD_imm ((x64RegValues[(role+0) % Array.length x64RegValues]),(int32 boundary));
+         X86_64.ADD_reg ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.ADD_load ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]),(int32 boundary));
+         X86_64.SUB_imm ((x64RegValues[(role+0) % Array.length x64RegValues]),(int32 boundary));
+         X86_64.SUB_reg ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.SUB_load ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]),(int32 boundary));
+         X86_64.IMUL_reg ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.IMUL_imm ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]),(int32 boundary));
+         X86_64.IDIV ((x64RegValues[(role+0) % Array.length x64RegValues]));
+         X86_64.DIV ((x64RegValues[(role+0) % Array.length x64RegValues]));
+         X86_64.NEG ((x64RegValues[(role+0) % Array.length x64RegValues]));
+         X86_64.NOT ((x64RegValues[(role+0) % Array.length x64RegValues]));
+         X86_64.CQO;
+         X86_64.XOR_reg ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.CMP_imm ((x64RegValues[(role+0) % Array.length x64RegValues]),(int32 boundary));
+         X86_64.CMP_reg ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.TEST_reg ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.SETcc ((x64ConditionValues[(role+0) % Array.length x64ConditionValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.CMOVcc ((x64ConditionValues[(role+0) % Array.length x64ConditionValues]),(x64RegValues[(role+1) % Array.length x64RegValues]),(x64RegValues[(role+2) % Array.length x64RegValues]));
+         X86_64.AND_imm ((x64RegValues[(role+0) % Array.length x64RegValues]),(int32 boundary));
+         X86_64.AND_reg ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.OR_reg ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.SHL_imm ((x64RegValues[(role+0) % Array.length x64RegValues]),(boundary));
+         X86_64.SHR_imm ((x64RegValues[(role+0) % Array.length x64RegValues]),(boundary));
+         X86_64.SAR_imm ((x64RegValues[(role+0) % Array.length x64RegValues]),(boundary));
+         X86_64.SHL_cl ((x64RegValues[(role+0) % Array.length x64RegValues]));
+         X86_64.SHR_cl ((x64RegValues[(role+0) % Array.length x64RegValues]));
+         X86_64.SAR_cl ((x64RegValues[(role+0) % Array.length x64RegValues]));
+         X86_64.MOV_store_byte ((x64RegValues[(role+0) % Array.length x64RegValues]),(int32 boundary),(x64RegValues[(role+2) % Array.length x64RegValues]));
+         X86_64.MOV_load_byte ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]),(int32 boundary));
+         X86_64.CALL ((source));
+         X86_64.CALL_reg ((x64RegValues[(role+0) % Array.length x64RegValues]));
+         X86_64.JMP ((source));
+         X86_64.JMP_reg ((x64RegValues[(role+0) % Array.length x64RegValues]));
+         X86_64.Jcc ((x64ConditionValues[(role+0) % Array.length x64ConditionValues]),(source));
+         X86_64.RET;
+         X86_64.SYSCALL;
+         X86_64.Label ((source));
+         X86_64.MOVSD_load ((x64FRegValues[(role+0) % Array.length x64FRegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]),(int32 boundary));
+         X86_64.MOVSD_store ((x64RegValues[(role+0) % Array.length x64RegValues]),(int32 boundary),(x64FRegValues[(role+2) % Array.length x64FRegValues]));
+         X86_64.MOVSD_reg ((x64FRegValues[(role+0) % Array.length x64FRegValues]),(x64FRegValues[(role+1) % Array.length x64FRegValues]));
+         X86_64.ADDSD ((x64FRegValues[(role+0) % Array.length x64FRegValues]),(x64FRegValues[(role+1) % Array.length x64FRegValues]));
+         X86_64.SUBSD ((x64FRegValues[(role+0) % Array.length x64FRegValues]),(x64FRegValues[(role+1) % Array.length x64FRegValues]));
+         X86_64.MULSD ((x64FRegValues[(role+0) % Array.length x64FRegValues]),(x64FRegValues[(role+1) % Array.length x64FRegValues]));
+         X86_64.DIVSD ((x64FRegValues[(role+0) % Array.length x64FRegValues]),(x64FRegValues[(role+1) % Array.length x64FRegValues]));
+         X86_64.XORPD ((x64FRegValues[(role+0) % Array.length x64FRegValues]),(x64FRegValues[(role+1) % Array.length x64FRegValues]));
+         X86_64.SQRTSD ((x64FRegValues[(role+0) % Array.length x64FRegValues]),(x64FRegValues[(role+1) % Array.length x64FRegValues]));
+         X86_64.UCOMISD ((x64FRegValues[(role+0) % Array.length x64FRegValues]),(x64FRegValues[(role+1) % Array.length x64FRegValues]));
+         X86_64.CVTSI2SD ((x64FRegValues[(role+0) % Array.length x64FRegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         X86_64.CVTTSD2SI ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64FRegValues[(role+1) % Array.length x64FRegValues]));
+         X86_64.MOVQ_to_gp ((x64RegValues[(role+0) % Array.length x64RegValues]),(x64FRegValues[(role+1) % Array.length x64FRegValues]));
+         X86_64.MOVQ_from_gp ((x64FRegValues[(role+0) % Array.length x64FRegValues]),(x64RegValues[(role+1) % Array.length x64RegValues]));
+         ]
+    let syscalls (s:ARM64.SyscallConfig)=tuple [enc [s.Numbers.Write;s.Numbers.Exit;s.Numbers.Mmap;s.Numbers.Munmap;s.Numbers.Open;s.Numbers.Read;s.Numbers.Close;s.Numbers.Fstat;s.Numbers.Access;s.Numbers.Unlink;s.Numbers.Chmod;s.Numbers.Getrandom;s.Numbers.Gettimeofday;s.Numbers.Nanosleep;s.Numbers.Socket;s.Numbers.Connect;s.Numbers.SetSockOpt];enc s.SvcImmediate;enc s.SyscallRegister]
+    let labels=[source;"";ARM64Symbolic.coverageDataLabelName;ARM64Symbolic.leakCounterLabelName;"__dark_string_literal_data:"+source;"other"]
+    let boundaries=[-32768;-512;-1;0;1;63;255;4095;32760;65535;Int32.MinValue;Int32.MaxValue]
+    let armCases=mapNodes (fun label -> mapNodes (fun boundary -> mapNodes (fun role ->
+        // The label is a fixture parameter, including the two named data keys.
+        let instructions=armInstructions role boundary |> List.map (fun instr ->
+            match instr with
+            | ARM64.BL _ -> ARM64.BL label | ARM64.CBZ (reg,_) -> ARM64.CBZ (reg,label) | ARM64.CBNZ (reg,_) -> ARM64.CBNZ (reg,label)
+            | ARM64.B_label _ -> ARM64.B_label label | ARM64.B_cond_label (cond,_) -> ARM64.B_cond_label (cond,label)
+            | ARM64.TBZ_label (reg,bit,_) -> ARM64.TBZ_label (reg,bit,label) | ARM64.TBNZ_label (reg,bit,_) -> ARM64.TBNZ_label (reg,bit,label)
+            | ARM64.Label _ -> ARM64.Label label | ARM64.ADRP (reg,_) -> ARM64.ADRP (reg,label)
+            | ARM64.ADD_label (dest,src,_) -> ARM64.ADD_label (dest,src,label) | ARM64.ADR (reg,_) -> ARM64.ADR (reg,label) | other -> other)
+        tuple [enc instructions;enc (ARM64Symbolic.ofARM64List instructions);enc (instructions |> List.map ARM64Symbolic.ofARM64)]) [0..31]) boundaries) labels
+    let x64Cases=mapNodes (fun label -> mapNodes (fun boundary -> mapNodes (fun role ->
+        x64Instructions role boundary |> List.map (fun instr ->
+            match instr with
+            | X86_64.LEA_rip (reg,_) -> X86_64.LEA_rip (reg,label) | X86_64.CALL _ -> X86_64.CALL label
+            | X86_64.JMP _ -> X86_64.JMP label | X86_64.Jcc (cond,_) -> X86_64.Jcc (cond,label) | X86_64.Label _ -> X86_64.Label label | other -> other) |> enc) [0..15]) boundaries) labels
+    let candidates=[0..255] |> List.map (fun encoded ->
+        let sign=if encoded &&& 128=0 then 1.0 else -1.0
+        let exponent=(encoded >>> 4) &&& 7
+        let exp=if exponent>=4 then exponent-7 else exponent+1
+        sign*(1.0+(float (encoded &&& 15)/16.0))*(pown 2.0 exp))
+    let floats=[0.0;-0.0;Double.PositiveInfinity;Double.NegativeInfinity;BitConverter.Int64BitsToDouble 0x7ff8000000000001L;Double.Epsilon;Double.MaxValue] @ (candidates |> List.collect (fun candidate -> let bits=BitConverter.DoubleToInt64Bits candidate in [candidate;BitConverter.Int64BitsToDouble (bits-1L);BitConverter.Int64BitsToDouble (bits+1L)]))
+    let floatCases=mapNodes (fun value -> enc (value,ARM64.tryEncodeFmovFloatImmediate value)) floats
+    let platformCases=mapNodes (fun target -> let config=ARM64.targetConfigFor target in tuple [enc (ARM64.targetOS config);syscalls (ARM64.targetSyscalls config);syscalls (ARM64.syscallConfigFor (ARM64.targetOS config))]) [Platform.MacOSARM64;Platform.LinuxARM64]
+    let labelCases=mapNodes (fun label -> enc (X86_64.stringLiteralLabel label,X86_64.tryStringLiteralValue label,X86_64.tryStringLiteralValue (X86_64.stringLiteralLabel label))) labels
+    tuple [armCases;x64Cases;floatCases;platformCases;labelCases;enc (Array.toList x64SizeValues)]
+
 let jsonOutputOptions = System.Text.Json.JsonSerializerOptions(MaxDepth=65536,Encoder=System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
 let anfScalarOptimization source =
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -4336,6 +4544,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "machine-isa" -> machineISAObservation source
         | "mir-lir" -> mirLIRObservation source
         | "anf-mir" -> anfMIRObservation source
         | "register-allocation" -> registerAllocationObservation source

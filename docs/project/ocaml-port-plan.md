@@ -983,3 +983,15 @@ diagnostics and trace phase semantics are preserved. The warning-free build
 passes 456/456 native unit/DSL checks. Coverage is 216/391 pairs. Machine backend
 types and emission are next; remaining tooling/ownership tests, full corpus
 checks and final acceptance remain open.
+
+Both machine instruction type modules and ARM64 symbolic instruction conversion
+are complete with explicit interfaces and original comments. Full observations
+match F# for all 94 ARM64 and 68 x64 constructors: 216,576 concrete ARM64
+instructions with both individual/list symbolic conversions, 78,336 x64
+instructions, all GP/FP registers, conditions and extensions, integer boundaries
+and six label families. All 256 encodable ARM64 float immediates and adjacent
+IEEE values (775 cases total), validated platform/syscall configurations and
+x64 literal-label round trips also match. The warning-free build passes
+456/456 native checks. Coverage is 219/391 pairs. Machine encoding is next;
+remaining backend/tooling/ownership tests, full corpus checks and final
+acceptance remain open.
