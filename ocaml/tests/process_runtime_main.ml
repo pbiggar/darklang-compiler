@@ -126,10 +126,37 @@ let memoryChecks ()=
  List.iter (fun typ -> check false "1" (fun ctx -> instructions (ARM64EmitMemory.emitHeapAlloc ctx (LIR.Physical LIR.X19) 8) @ ARM64Operands.loadImmediate S.X21 1L @ ARM64Operands.loadImmediate S.X20 0L @ instructions (ARM64EmitMemory.emitRawSlotInit ctx (LIR.Physical LIR.X19) (LIR.Physical LIR.X20) (LIR.Physical LIR.X21) typ) @ [S.LDR (S.X0,S.X19,0)] @ print)) [AST.TInt;AST.TUnit];
  check false "1" (fun ctx -> let ctx={ctx with ARM64CodeGenTypes.rawSlotInitRetainTargets=Some (LIR.SemanticTypeMap.singleton AST.TString None)} in instructions (ARM64EmitMemory.emitHeapAlloc ctx (LIR.Physical LIR.X19) 8) @ instructions (ARM64EmitBuffers.emitStringConcat ctx (LIR.Physical LIR.X21) (LIR.StringSymbol "a") (LIR.StringSymbol "b") []) @ ARM64Operands.loadImmediate S.X20 0L @ instructions (ARM64EmitMemory.emitRawSlotInit ctx (LIR.Physical LIR.X19) (LIR.Physical LIR.X20) (LIR.Physical LIR.X21) AST.TString) @ [S.LDR (S.X0,S.X21,0)] @ print);
  !count
+(* The reference signed nonterminating printer overwrites its newline byte.
+   Preserve that source behavior; unsigned and aggregate printers retain theirs. *)
+let printingChecks ()=
+ let target=ARM64.targetConfigFor Platform.LinuxARM64 in
+ let ctx=Semantic_observation.ARMPrintingObservation.context "printing-check" target false in
+ let total=ref 0 in
+ let check expected body=
+  let actual=runImage (image (ProcessLifecycle.generateHeapInit target @ body @ instructions (ARM64EmitInteger.emitExit ctx))) [] "" in
+  if actual<>expected then failwith (Printf.sprintf "printing execution: expected %S, got %S" expected actual);
+  incr total
+ in
+ List.iter (fun p -> List.iter (fun (value,expected) -> check expected (ARM64Operands.loadImmediate (ARM64Operands.lirPhysRegToARM64Reg p) value @ instructions (ARM64EmitPrinting.emitPrintInt64 ctx (LIR.Physical p)))) [Int64.min_int,"-9223372036854775808";0L,"0";42L,"42"]) [LIR.X0;LIR.X19];
+ check "18446744073709551615\n" (ARM64Operands.loadImmediate S.X19 (-1L) @ instructions (ARM64EmitPrinting.emitPrintUInt64 ctx (LIR.Physical LIR.X19)));
+ List.iter (fun (value,expected) -> check expected (ARM64Operands.loadImmediate S.X19 value @ instructions (ARM64EmitPrinting.emitPrintBool ctx (LIR.Physical LIR.X19)))) [0L,"false\n";1L,"true\n"];
+ List.iter (fun p -> check "hé😀\n" (HeapAllocation.loadStringLiteralPointer (ARM64Operands.lirPhysRegToARM64Reg p) "hé😀" @ instructions (ARM64EmitPrinting.emitPrintHeapString ctx (LIR.Physical p)))) [LIR.X0;LIR.X1;LIR.X2;LIR.X8;LIR.X9;LIR.X19];
+ check "hé😀\n" (instructions (ARM64EmitPrinting.emitPrintString ctx "hé😀"));
+ check "a\000b" (instructions (ARM64EmitPrinting.emitPrintChars ctx [97;0;98]));
+ check "1.5" (instructions (ARM64EmitFloatingPoint.emitFLoad ctx (LIR.FPhysical LIR.D1) 1.5) @ instructions (ARM64EmitPrinting.emitPrintFloatNoNewline ctx (LIR.FPhysical LIR.D1)));
+ check "1.5\n" (instructions (ARM64EmitFloatingPoint.emitFLoad ctx (LIR.FPhysical LIR.D1) 1.5) @ instructions (ARM64EmitPrinting.emitPrintFloat ctx (LIR.FPhysical LIR.D1)));
+ check "[]\n" (ARM64Operands.loadImmediate S.X19 0L @ instructions (ARM64EmitPrinting.emitPrintList ctx (LIR.Physical LIR.X19) AST.TInt64));
+ let convert _ _=Error "Unexpected display release callback in scalar fixture" in
+ check "None\n" (ARM64Operands.loadImmediate S.X19 0L @ instructions (ARM64EmitPrinting.emitPrintSum ctx convert (LIR.Physical LIR.X19) ["None",0,None;"Some",1,Some AST.TString] false));
+ check "Some(hé😀)\n" (HeapAllocation.loadStringLiteralPointer S.X19 "hé😀" @ instructions (ARM64EmitPrinting.emitPrintSum ctx convert (LIR.Physical LIR.X19) ["None",0,None;"Some",1,Some AST.TString] false));
+ check "Wrapped(42)\n" (ARM64Operands.loadImmediate S.X19 42L @ instructions (ARM64EmitPrinting.emitPrintSum ctx convert (LIR.Physical LIR.X19) ["Wrapped",0,Some AST.TInt64] true));
+ check "Nullary\n" (ARM64Operands.loadImmediate S.X19 7L @ instructions (ARM64EmitPrinting.emitPrintSum ctx convert (LIR.Physical LIR.X19) ["Other",0,None;"Nullary",7,None] false));
+ check "Point { x = 42, name = hé😀 }\n" (instructions (ARM64EmitMemory.emitHeapAlloc ctx (LIR.Physical LIR.X19) 16) @ instructions (ARM64EmitMemory.emitHeapStore ctx (LIR.Physical LIR.X19) 0 (LIR.Imm 42L) None) @ HeapAllocation.loadStringLiteralPointer S.X20 "hé😀" @ instructions (ARM64EmitMemory.emitHeapStore ctx (LIR.Physical LIR.X19) 8 (LIR.Reg (LIR.Physical LIR.X20)) (Some AST.TString)) @ instructions (ARM64EmitPrinting.emitPrintRecord ctx (LIR.Physical LIR.X19) "Point" ["x",AST.TInt64;"name",AST.TString]) @ instructions (ARM64EmitInteger.emitExit ctx) @ HeapAllocation.generateHeapOverflowTrapBlock (HeapAllocation.preparedHeapOverflowTrapBody target) ctx.ARM64CodeGenTypes.heapOverflowLabel @ HeapAllocation.generateRuntimeErrorHelper target);
+ !total
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
  let effects=[Some "hé😀",false,0,"","hé😀";Some "",true,0,"","\n";None,false,1,"hello\nignored","hello";None,true,1,"hé😀\r\n","hé😀\n";None,false,1,"tail","tail";None,true,1,"","\n";None,true,2,"first\nsecond\n","first\nsecond\n";None,false,1,"a\000b\n","a\000b";None,false,1,"\n","";None,false,1,"a\rb\r\n","a\rb"] in
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
- let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks () in
+ let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count

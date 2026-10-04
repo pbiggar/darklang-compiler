@@ -3224,6 +3224,55 @@ let armMemoryEmissionObservation (source:string) =
     let missing=let ctx={ctx with RawSlotInitRetainTargets=Some Map.empty} in mapNodes (fun typ -> call (fun () -> memory_emitRawSlotInit ctx (LIR.Physical LIR.X19) (LIR.Physical LIR.X20) (LIR.Physical LIR.X21) typ)) types in
     tuple [allocations;mapped;heap;raw;cold;cached;missing]
 
+let armPrintingEmissionObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let context source target enabled : ARM64CodeGenTypes.CodeGenContext={Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled};SumShapeRegistry=Map.empty;RecordRegistry=Map.empty;RawSlotInitRetainTargets=None;ClosurePayloadSizes=Map.empty;ClosureCaptureTypes=Map.empty;FunctionNames=FunctionIdMap.empty;FunctionName=source;InstructionSite=source;StackSize=0;UsedCalleeSaved=[];UsedCalleeSavedF=[];HeapOverflowLabel=source;RecordLirOpExpansion=None}
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let fpPhysical=[LIR.D0;LIR.D1;LIR.D2;LIR.D3;LIR.D4;LIR.D5;LIR.D6;LIR.D7;LIR.D8;LIR.D9;LIR.D10;LIR.D11;LIR.D12;LIR.D13;LIR.D14;LIR.D15]
+    let print_emitPrintBool (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintBool" [|box arg0;box arg1|]
+    let print_emitPrintChars (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:int list) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintChars" [|box arg0;box (List.map byte arg1)|]
+    let print_emitPrintBlob (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintBlob" [|box arg0;box arg1|]
+    let print_emitPrintInt64NoNewline (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintInt64NoNewline" [|box arg0;box arg1|]
+    let print_emitPrintUInt64NoNewline (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintUInt64NoNewline" [|box arg0;box arg1|]
+    let print_emitPrintBoolNoNewline (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintBoolNoNewline" [|box arg0;box arg1|]
+    let print_emitPrintFloatNoNewline (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.FReg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintFloatNoNewline" [|box arg0;box arg1|]
+    let print_emitPrintHeapStringNoNewline (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintHeapStringNoNewline" [|box arg0;box arg1|]
+    let print_emitPrintList (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) (arg2:AST.SemanticType) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintList" [|box arg0;box arg1;box arg2|]
+    let print_emitPrintSum (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:(ARM64CodeGenTypes.CodeGenContext -> LIR.Instr -> Result<ARM64Symbolic.Instr list,string>)) (arg2:LIR.Reg) (arg3:(string * int * AST.SemanticType option) list) (arg4:bool) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintSum" [|box arg0;box arg1;box arg2;box arg3;box arg4|]
+    let print_emitPrintRecord (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) (arg2:string) (arg3:(string * AST.SemanticType) list) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintRecord" [|box arg0;box arg1;box arg2;box arg3|]
+    let print_emitPrintInt64 (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintInt64" [|box arg0;box arg1|]
+    let print_emitPrintUInt64 (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintUInt64" [|box arg0;box arg1|]
+    let print_emitPrintFloat (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.FReg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintFloat" [|box arg0;box arg1|]
+    let print_emitPrintString (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:string) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintString" [|box arg0;box arg1|]
+    let print_emitPrintHeapString (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitPrinting" "emitPrintHeapString" [|box arg0;box arg1|]
+    let gps=List.map (fun p -> LIR.Physical p) physical@List.map (fun n -> LIR.Virtual n) [-1;0;2147483647] in
+    let fps=List.map (fun p -> LIR.FPhysical p) fpPhysical@List.map (fun n -> LIR.FVirtual n) [-2147483648;-2001;-2000;-1003;-1002;-1001;-1000;-2;-1;0;7;8;9999;10000;2147483647] in
+    let types=[AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TBool;AST.TFloat64;AST.TString;AST.TBlob;AST.TChar;AST.TDateTime;AST.TUnit;AST.TNever;AST.TInternalRawPtr;AST.TVar source;AST.TInferenceVar (source,source);AST.TList AST.TString;AST.TList AST.TInt64;AST.TList AST.TBool;AST.TList AST.TUnit;AST.TStream AST.TString;AST.TDict (AST.TString,AST.TInt64);AST.TFunction ([AST.TInt64],AST.TBool);AST.TRecord (source,[]);AST.TSum (source,[]);AST.TTuple [];AST.TTuple [AST.TInt64;AST.TString]] in
+    let variants=[[];[source,0,None];[source,-1,None;"",65536,None];["none",0,None;source,1,Some AST.TString];[source,65535,Some AST.TString;"none",-65536,None];["first",1,Some AST.TString;source,1,Some AST.TString];["none",0,None;"none2",1,None;source,2,Some AST.TString]]@List.collect (fun typ -> [[source,0,Some typ];[source,-2147483648,Some typ;"other",2147483647,None];[source,1,Some typ;"other",2,Some typ]]) types in
+    let observingSum (ctx:ARM64CodeGenTypes.CodeGenContext) reg cases transparent failing =
+     let recorded=ResizeArray<string*string*LIR.Instr>()
+     let mutable count=0
+     let convert (supplied:ARM64CodeGenTypes.CodeGenContext) instr =
+      recorded.Add(supplied.FunctionName,supplied.InstructionSite,instr)
+      count <- count+1
+      if failing then Error "release-check" else Ok [ARM64Symbolic.MOVZ (ARM64Symbolic.X26,uint16 count,0);ARM64Symbolic.Label ("release-"+string count)]
+     let result=call (fun () -> print_emitPrintSum ctx convert reg cases transparent)
+     tuple [result;mapNodes (fun (name,site,instr) -> tuple [enc name;enc site;enc instr]) (List.ofSeq recorded)]
+    in
+    mapNodes (fun target -> let ctx=context source target false in tuple [
+     mapNodes (fun reg -> mapNodes (fun f -> call (fun () -> f ctx reg)) [print_emitPrintBool;print_emitPrintBlob;print_emitPrintInt64NoNewline;print_emitPrintUInt64NoNewline;print_emitPrintBoolNoNewline;print_emitPrintHeapStringNoNewline;print_emitPrintInt64;print_emitPrintUInt64;print_emitPrintHeapString]) gps;
+     mapNodes (fun freg -> tuple [call (fun () -> print_emitPrintFloatNoNewline ctx freg);call (fun () -> print_emitPrintFloat ctx freg)]) fps;
+     mapNodes (fun chars -> call (fun () -> print_emitPrintChars ctx chars)) [[];[0];List.init 256 id;List.init 257 (fun n -> n &&& 255)];
+     mapNodes (fun text -> call (fun () -> print_emitPrintString ctx text)) [source;"";"hé😀";"a\000b";String [|char 0xd800;char 97;char 0xdc00|]];
+     mapNodes (fun reg -> mapNodes (fun typ -> call (fun () -> print_emitPrintList ctx reg typ)) types) gps;
+     mapNodes (fun reg -> mapNodes (fun cases -> mapNodes (fun transparent -> mapNodes (fun failing -> observingSum ctx reg cases transparent failing) [false;true]) [false;true]) variants) [LIR.Physical LIR.X0;LIR.Physical LIR.X19;LIR.SP |> (fun p -> LIR.Physical p);LIR.Virtual (-1)];
+     mapNodes (fun reg -> mapNodes (fun fields -> call (fun () -> print_emitPrintRecord ctx reg source fields)) ([]::List.map (fun typ -> [source,typ]) types@[["a",AST.TInt64;"b",AST.TUInt64;"c",AST.TBool;"d",AST.TFloat64;"e",AST.TString;"f",AST.TChar;"g",AST.TInt128;"h",AST.TUInt128]])) gps;
+     observingSum ctx (LIR.Physical LIR.X19) ["a",0,Some (AST.TList AST.TInt64);"b",1,Some (AST.TList AST.TString)] false false
+    ]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -5472,6 +5521,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-print-emission" -> armPrintingEmissionObservation source
         | "arm64-memory-emission" -> armMemoryEmissionObservation source
         | "arm64-buffer-emission" -> armBufferEmissionObservation source
         | "arm64-file-emission" -> armFileEmissionObservation source

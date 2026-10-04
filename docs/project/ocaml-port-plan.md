@@ -1254,3 +1254,20 @@ and runtime-error helper so all emitted branches resolve. Comment coverage is
 complete. Coverage is 261/391 pairs. Aggregate/value printing lowering is next;
 remaining ownership/dispatch, complete runners/corpus and final acceptance
 remain open.
+
+Complete ARM64 scalar, list, sum and record printing lowering is translated
+with its interface and all 78 source comment lines. Whole results, instructions,
+recoverable diagnostics, internal failures and ordered display-release callback
+observations match F# across 36,596,053 canonical JSON bytes. Fixtures cover all
+register roles, invalid FP virtual IDs, all AST payload families, transparent
+and nullable-string representations, nullary/duplicate/boundary tags, callback
+errors and UTF-8/NUL/surrogate literal output. The source signed nonterminating
+integer printer overwrites its newline byte; this behavior is retained and
+explicitly checked, without changing the frozen compiler.
+
+All 508 translated tests and 186 real ARM64 process executions pass. Twenty-five
+new printer checks execute signed/unsigned/boolean/float output, syscall-clobbered
+string inputs, literal bytes, empty lists, nullable/transparent/nullary sums and
+record fields. The build is warning-free and comment coverage is complete.
+Coverage is 262/391 pairs. Native-effect lowering is next; remaining ownership/
+dispatch, complete runners/corpus and final acceptance remain open.
