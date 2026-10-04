@@ -1992,3 +1992,12 @@ stack regression. All 16 complete registration/result observations match F#.
 The warning-free native build passes 593/593 translated unit/fixture checks.
 Coverage is 336/391 pairs; reference comments remain complete. Remaining unit
 and test-tooling pairs, full corpus and final acceptance remain open.
+
+The original register-allocation graph and SSA liveness integration suites now
+run natively, retaining all five graph and six liveness tests. They cover
+interfering parameters, branch-local phi operands, coalescing preferences,
+integer and float predecessor-exit liveness, multiple phis and loop edges.
+All 16 complete registration/result observations match F#. The warning-free
+build passes 604/604 translated unit/fixture checks. Coverage is 338/391 pairs;
+reference comments remain complete. Remaining unit/test-tooling pairs, full
+corpus and final acceptance remain open.
