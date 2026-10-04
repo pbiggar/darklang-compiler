@@ -3928,6 +3928,77 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let x64IntegerEmissionObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f () : Result<X86_64.Instr list,string>)] with ex -> tuple [enc true;enc ex.Message]
+    let invoke ctx name args=rcInternalCall<Result<X86_64.Instr list,string>> "X64EmitInteger" name (Array.append [|ctx|] args)
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let gps=List.map LIR.Physical physical@[LIR.Virtual (-1);LIR.Virtual 0;LIR.Virtual 2147483647]
+    let selected=List.map LIR.Physical [LIR.X0;LIR.X3;LIR.X7;LIR.X8;LIR.X19]@[LIR.Virtual (-1)]
+    let sizes=[-2147483648;-32769;-1;0;8;32768;2147483647]
+    let imms=[Int64.MinValue;-2147483649L;-2147483648L;-1L;0L;1L;2147483647L;2147483648L;Int64.MaxValue]
+    let operands=List.map LIR.Reg gps@List.map LIR.StackSlot sizes@List.map LIR.Imm imms@[LIR.FloatImm (-0.);LIR.FloatImm nan;LIR.FloatSymbol 0.1;LIR.FloatSymbol (BitConverter.Int64BitsToDouble (int64 0x7ff8000000000001UL));LIR.FloatSymbol (BitConverter.Int64BitsToDouble (int64 0x7ff0000000000001UL));LIR.StringSymbol source;LIR.StringSymbol "hé😀";LIR.StringSymbol (String [|char 0xd800;char 97;char 0xdc00|]);LIR.FuncAddr (AST.functionId 0UL);LIR.FuncAddr (AST.functionId 2UL);LIR.FuncAddr (AST.functionId UInt64.MaxValue)]
+    let flags=Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+    let assembly=typeof<LIR.Instr>.Assembly
+    let ctxType=assembly.GetType("X64CodeGenTypes+FuncCtx")
+    let ctx enabled=FSharpValue.MakeRecord(ctxType,[|box source;box 32;box [LIR.X19;LIR.X20];box enabled;box (Map.empty:LIR.RecordRegistry);box (Map.empty:MemoryModel.RcSumShapeRegistry);box (FunctionIdMap.ofList [AST.functionId 0UL,source;AST.functionId UInt64.MaxValue,"largest"])|],flags)
+    let c=ctx false
+    let comparisonType=assembly.GetType("X64InstructionContext+ComparisonContext")
+    let optionType=typedefof<option<_>>.MakeGenericType [|comparisonType|]
+    let someCase=FSharpType.GetUnionCases(optionType,flags) |> Array.find (fun c->c.Name="Some")
+    let comparison name=let case=FSharpType.GetUnionCases(comparisonType,flags) |> Array.find (fun c->c.Name=name) in FSharpValue.MakeUnion(someCase,[|FSharpValue.MakeUnion(case,[||],flags)|],flags)
+    let contexts=[null;comparison "IntegerComparison";comparison "FloatComparison"]
+    let conditions=[LIR.EQ;LIR.NE;LIR.LT;LIR.GT;LIR.LE;LIR.GE;LIR.ULT;LIR.UGT;LIR.ULE;LIR.UGE]
+    let movs=mapNodes (fun dest->mapNodes (fun operand->call (fun ()->invoke c "emitMov" [|box dest;box operand|])) operands) gps
+    let stores=mapNodes (fun offset->mapNodes (fun reg->call (fun ()->invoke c "emitStore" [|box offset;box reg|])) gps) sizes
+    let arithmeticCase dest left right =
+        let adds=mapNodes (fun comparison->call (fun ()->invoke c "emitAdd" [|comparison;box dest;box left;box right|])) contexts
+        let sub=call (fun ()->invoke c "emitSub" [|box dest;box left;box right|])
+        let cmp=call (fun ()->invoke c "emitCmp" [|box left;box right|])
+        tuple [adds;sub;cmp]
+    let arithmetic=mapNodes (fun dest->mapNodes (fun left->mapNodes (arithmeticCase dest left) operands) selected) gps
+    let binaryCase dest left right =
+        let operations=mapNodes (fun name->call (fun ()->invoke c name [|box dest;box left;box right|])) ["emitMul";"emitSdiv";"emitUdiv";"emitAnd";"emitOrr";"emitEor";"emitLsl";"emitLsr";"emitAsr"]
+        let fused=mapNodes (fun acc->mapNodes (fun name->call (fun ()->invoke c name [|box dest;box left;box right;box acc|])) ["emitMsub";"emitMadd"]) [dest;left;LIR.Physical LIR.X3]
+        tuple [operations;fused]
+    let binaries=mapNodes (fun dest->mapNodes (fun left->mapNodes (binaryCase dest left) [dest;left;LIR.Physical LIR.X3;LIR.Physical LIR.X8;LIR.Virtual (-1)]) selected) gps
+    let compareCase comparison dest condition =
+        let cset=call (fun ()->invoke c "emitCset" [|comparison;box dest;box condition|])
+        let selects=mapNodes (fun left->mapNodes (fun right->call (fun ()->invoke c "emitSelect" [|comparison;box dest;box left;box right;box condition|])) [left;dest;LIR.Physical LIR.X8]) selected
+        tuple [cset;selects]
+    let compares=mapNodes (fun comparison->mapNodes (fun dest->mapNodes (compareCase comparison dest) conditions) gps) contexts
+    let unaryCase dest src =
+        let operations=mapNodes (fun name->call (fun ()->invoke c name [|box dest;box src|])) ["emitNeg";"emitMvn";"emitSxtb";"emitSxth";"emitSxtw";"emitUxtb";"emitUxth";"emitUxtw"]
+        let masks=mapNodes (fun imm->call (fun ()->invoke c "emitAnd_imm" [|box dest;box src;box imm|])) imms
+        let shifts=mapNodes (fun shift->mapNodes (fun name->call (fun ()->invoke c name [|box dest;box src;box shift|])) ["emitLsl_imm";"emitLsr_imm";"emitAsr_imm"]) [-2147483648;-1;0;1;31;32;63;64;255;256;2147483647]
+        tuple [operations;masks;shifts]
+    let unary=mapNodes (fun dest->mapNodes (unaryCase dest) [dest;LIR.Physical LIR.X3;LIR.Physical LIR.X8;LIR.Virtual (-1)]) gps
+    let floats=List.map LIR.FPhysical [LIR.D0;LIR.D1;LIR.D2;LIR.D3;LIR.D4;LIR.D5;LIR.D6;LIR.D7;LIR.D8;LIR.D9;LIR.D10;LIR.D11;LIR.D12;LIR.D13;LIR.D14;LIR.D15]@[LIR.FVirtual (-1);LIR.FVirtual 0;LIR.FVirtual 2147483647]
+    let conversions=mapNodes (fun dest->mapNodes (fun src->mapNodes (fun name->call (fun ()->invoke c name [|box dest;box src|])) ["emitInt64ToFloat";"emitGpToFp"]) gps) floats
+    let ioCase enabled =
+        let c=ctx enabled
+        let stdout=mapNodes (fun operand->mapNodes (fun newline->call (fun ()->invoke c "emitStdoutWrite" [|box operand;box newline|])) [false;true]) operands
+        let stdinCase reg =
+            let input=call (fun ()->invoke c "emitStdinReadLine" [|box reg|])
+            let error=call (fun ()->invoke c "emitRuntimeErrorString" [|box reg|])
+            let phi=call (fun ()->invoke c "emitPhi" [|box reg|])
+            tuple [input;error;phi]
+        let stdin=mapNodes stdinCase gps
+        let errors=mapNodes (fun text->call (fun ()->invoke c "emitRuntimeError" [|box text|])) [source;"hé😀";"a\000b"]
+        let exit=call (fun ()->invoke c "emitExit" [||])
+        tuple [stdout;stdin;errors;exit]
+    let io=mapNodes ioCase [false;true]
+    let moveCase (items:(LIR.PhysReg*LIR.Operand) list) =
+        let args=call (fun ()->invoke c "emitArgMoves" [|box items|])
+        let tails=call (fun ()->invoke c "emitTailArgMoves" [|box items|])
+        tuple [args;tails]
+    let moves=mapNodes (fun dest->mapNodes (fun operand->mapNodes moveCase [[dest,operand];[dest,operand;LIR.X3,LIR.Reg (LIR.Physical dest);dest,LIR.Reg (LIR.Physical LIR.X3)]]) operands) physical
+    let cycles=mapNodes moveCase [[];List.map (fun p->p,LIR.Reg (LIR.Physical p)) physical;List.map2 (fun d s->d,LIR.Reg (LIR.Physical s)) physical (List.rev physical)]
+    let closures=mapNodes (fun enabled->mapNodes (fun dest->mapNodes (fun id->mapNodes (fun captures->call (fun ()->invoke (ctx enabled) "emitClosureAlloc" [|box dest;box id;box captures|])) ([]::List.map (fun operand->[operand]) operands@[[LIR.Imm 1L;LIR.Reg dest;LIR.StackSlot (-1)];List.init 40 (fun index->LIR.Imm (int64 index))])) [AST.functionId 0UL;AST.functionId 2UL;AST.functionId UInt64.MaxValue]) gps) [false;true]
+    tuple [movs;stores;arithmetic;binaries;compares;unary;conversions;io;moves;cycles;closures]
+
 let x64FileEmissionObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -6314,6 +6385,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "x64-integer-emission" -> x64IntegerEmissionObservation source
         | "x64-file-emission" -> x64FileEmissionObservation source
         | "x64-buffer-emission" -> x64BufferEmissionObservation source
         | "x64-memory-emission" -> x64MemoryEmissionObservation source

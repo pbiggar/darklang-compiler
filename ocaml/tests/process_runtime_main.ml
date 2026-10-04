@@ -14,7 +14,7 @@ let binary index=
  S.ofARM64List (PrintValues.generatePrintStringNoNewline target) @ S.ofARM64List (PrintAndExit.generateExit target) @
  [S.Label "missing"] @ S.ofARM64List (PrintValues.generatePrintChars target [78]) @ S.ofARM64List (PrintAndExit.generateExit target) @
  ProcessLifecycle.generateCliArgvHelper ctx "argv-check")
-let runImageOn emulator bytes arguments input=
+let runImageOn ?(exitCode=0) ?(expectedErrors="") emulator bytes arguments input=
  let path=Filename.temp_file "port-process-" ".elf" in
  let inputPath=Filename.temp_file "port-input-" ".txt" in
  Fun.protect ~finally:(fun () -> Sys.remove path;Sys.remove inputPath) (fun () ->
@@ -28,7 +28,7 @@ let runImageOn emulator bytes arguments input=
   let read descriptor=let channel=Unix.in_channel_of_descr descriptor in let output=In_channel.input_all channel in close_in channel;output in
   let output=read outRead in let errors=read errRead in
   match snd (Unix.waitpid [] pid) with
-  | Unix.WEXITED 0 when errors="" -> output
+  | Unix.WEXITED code when code=exitCode && errors=expectedErrors -> output
   | (Unix.WEXITED _ | Unix.WSIGNALED _ | Unix.WSTOPPED _) as status -> failwith (Printf.sprintf "Process execution failed (%s): %s" (match status with Unix.WEXITED code -> string_of_int code | Unix.WSIGNALED signal -> "signal "^string_of_int signal | Unix.WSTOPPED signal -> "stop "^string_of_int signal) errors))
 let runImage bytes arguments input=runImageOn "/opt/dcb/qemu/qemu-aarch64" bytes arguments input
 let instructions=function Ok xs -> xs | Error message -> failwith message
@@ -878,6 +878,74 @@ let x64FileChecks ()=
    execute physical None None (checked (E.emitFileWriteFromPtr ctx dest))) [LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X19];
   !total)
 [@@warning "-42"]
+let x64IntegerChecks ()=
+ let module X=X86_64 in let module E=X64EmitInteger in let total=ref 0 in
+ let ctx={X64CodeGenTypes.functionName="x64-integer-execution";stackSize=0;usedCalleeSaved=[];enableLeakCheck=false;recordRegistry=StringOrder.Map.empty;sumShapeRegistry=StringOrder.Map.empty;functionNames=FunctionIdMap.ofList [AST.functionId 0L,"closure_fn"]} in
+ let checked=function Ok value->value|Error error->failwith error in
+ let setup=[X.SUB_imm (X.RSP,32768l);X.MOV_reg (X.RBP,X.RSP);X.MOV_reg (X.R15,X.RBP);X.LEA (X.R14,X.RBP,8192l)] in
+ let comparison reg expected=[X.MOV_reg (X.RAX,reg)]@X64Operands.loadImm64 X.RDX expected@[X.CMP_reg (X.RAX,X.RDX);X.Jcc (X.NE,"failed")] in
+ let result physical expected=comparison (X64Operands.lirRegToX86 physical) expected in
+ let check ?(input="") ?(exitCode=0) ?(errors="") expected body=
+  let code=[X.Label "_start"]@setup@body@[X.ADD_imm (X.RSP,32768l);X.MOV_imm32 (X.RDI,0l)]@checked (E.emitExit ctx)@[X.Label "failed"]@X64Operands.genPrintChars ['F']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@X64Operands.genRuntimeErrorHandler ()@[X.Label "closure_fn";X.RET] in
+  let pool=X86_64_Resolve.collectStringPool code in
+  let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let resolved=checked (X86_64_Resolve.patchDataLabels resolved (X86_64_Resolve.dataLabelOffsets 120 (Bytes.length resolved.X86_64_Resolve.machineCode) pool) 120) in
+  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode pool LiteralPool.emptyFloatPool false 0 in
+  let actual=try runImageOn ~exitCode ~expectedErrors:errors "/opt/dcb/qemu/qemu-x86_64" binary [] input with Failure e->failwith (Printf.sprintf "x64 integer case %d: %s" !total e) in
+  if actual<>expected then failwith (Printf.sprintf "x64 integer case %d: expected %S, got %S" !total expected actual);
+  incr total in
+ let pass=X64Operands.genPrintChars ['P'] in
+ let gps=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X19] in
+ List.iter (fun physical->let reg=X64Operands.lirRegToX86 physical in let dest=LIR.Physical physical in List.iter (fun value->
+  check "P" (checked (E.emitMov ctx dest (LIR.Imm value))@result physical value@pass);
+  check "P" (X64Operands.loadImm64 reg value@checked (E.emitAdd ctx None dest dest (LIR.Imm 42L))@result physical (Int64.add value 42L)@pass);
+  check "P" (X64Operands.loadImm64 reg value@checked (E.emitSub ctx dest dest (LIR.Imm (-42L)))@result physical (Int64.add value 42L)@pass);
+  check "P" (X64Operands.loadImm64 reg value@checked (E.emitNeg ctx dest dest)@result physical (Int64.neg value)@pass);
+  check "P" (X64Operands.loadImm64 reg value@checked (E.emitMvn ctx dest dest)@result physical (Int64.lognot value)@pass);
+  List.iter (fun (emit,expected)->check "P" (X64Operands.loadImm64 reg value@checked (emit ctx dest dest)@result physical expected@pass))
+   [E.emitSxtb,Int64.shift_right (Int64.shift_left value 56) 56;E.emitSxth,Int64.shift_right (Int64.shift_left value 48) 48;E.emitSxtw,Int64.shift_right (Int64.shift_left value 32) 32;E.emitUxtb,Int64.logand value 255L;E.emitUxth,Int64.logand value 65535L;E.emitUxtw,Int64.logand value 0xffffffffL]) [Int64.min_int;-129L;-1L;0L;255L;Int64.max_int];
+  List.iter (fun imm->check "P" (X64Operands.loadImm64 reg 0xfedcba9876543210L@checked (E.emitAnd_imm ctx dest dest imm)@result physical (Int64.logand 0xfedcba9876543210L imm)@pass)) [-1L;255L;2147483648L;Int64.max_int];
+  List.iter (fun shift->List.iter (fun (emit,expected)->check "P" (X64Operands.loadImm64 reg 0xfedcba9876543210L@checked (emit ctx dest dest shift)@result physical expected@pass)) [E.emitLsl_imm,Int64.shift_left 0xfedcba9876543210L shift;E.emitLsr_imm,Int64.shift_right_logical 0xfedcba9876543210L shift;E.emitAsr_imm,Int64.shift_right 0xfedcba9876543210L shift]) [0;1;31;32;63];
+  check "P" (X64Operands.loadImm64 reg 42L@checked (E.emitPhi ctx dest)@result physical 42L@pass)) gps;
+ List.iter (fun physical->let dest=LIR.Physical physical in List.iter (fun (leftValue,rightValue)->
+  let init=X64Operands.loadImm64 X.RBX leftValue@X64Operands.loadImm64 X.RSI rightValue in
+  List.iter (fun (emit,expected)->check "P" (init@checked (emit ctx dest (LIR.Physical LIR.X19) (LIR.Physical LIR.X2))@result physical expected@pass)) [E.emitMul,Int64.mul leftValue rightValue;E.emitAnd,Int64.logand leftValue rightValue;E.emitOrr,Int64.logor leftValue rightValue;E.emitEor,Int64.logxor leftValue rightValue];
+  check "P" (init@checked (E.emitAdd ctx None dest (LIR.Physical LIR.X19) (LIR.Reg (LIR.Physical LIR.X2)))@result physical (Int64.add leftValue rightValue)@pass);
+  check "P" (init@checked (E.emitSub ctx dest (LIR.Physical LIR.X19) (LIR.Reg (LIR.Physical LIR.X2)))@result physical (Int64.sub leftValue rightValue)@pass);
+  List.iter (fun (emit,expected)-> check "P" (init@checked (emit ctx dest (LIR.Physical LIR.X19) (LIR.Physical LIR.X2) (LIR.Physical LIR.X19))@result physical expected@pass)) [E.emitMsub,Int64.sub leftValue (Int64.mul leftValue rightValue);E.emitMadd,Int64.add leftValue (Int64.mul leftValue rightValue)]) [42L,7L;Int64.min_int,-1L;0L,Int64.max_int]) gps;
+ List.iter (fun physical->let dest=LIR.Physical physical in List.iter (fun (left,right)->let init=X64Operands.loadImm64 X.RBX left@X64Operands.loadImm64 X.RSI right in
+  check "P" (init@checked (E.emitSdiv ctx dest (LIR.Physical LIR.X19) (LIR.Physical LIR.X2))@result physical (if left=Int64.min_int && right=(-1L) then Int64.min_int else Int64.div left right)@pass);
+  check "P" (init@checked (E.emitUdiv ctx dest (LIR.Physical LIR.X19) (LIR.Physical LIR.X2))@result physical (Int64.unsigned_div left right)@pass)) [42L,7L;-42L,7L;42L,-7L;Int64.min_int,-1L;Int64.max_int,1L]) gps;
+ List.iter (fun physical->let dest=LIR.Physical physical in List.iter (fun shift->let init=X64Operands.loadImm64 X.RBX 0xfedcba9876543210L@X64Operands.loadImm64 X.RDI (Int64.of_int shift) in
+  List.iter (fun (emit,expected)->check "P" (init@checked (emit ctx dest (LIR.Physical LIR.X19) (LIR.Physical LIR.X1))@result physical expected@pass)) [E.emitLsl,Int64.shift_left 0xfedcba9876543210L (shift land 63);E.emitLsr,Int64.shift_right_logical 0xfedcba9876543210L (shift land 63);E.emitAsr,Int64.shift_right 0xfedcba9876543210L (shift land 63)]) [0;1;31;32;63;64]) gps;
+ List.iter (fun physical->let dest=LIR.Physical physical in List.iter (fun (condition,expected)->let init=X64Operands.loadImm64 X.RBX (-1L)@checked (E.emitCmp ctx (LIR.Physical LIR.X19) (LIR.Imm 0L)) in
+  check "P" (init@checked (E.emitCset ctx (Some X64InstructionContext.IntegerComparison) dest condition)@result physical (if expected then 1L else 0L)@pass);
+  let values=X64Operands.loadImm64 X.RDI 42L@X64Operands.loadImm64 X.RSI 7L in
+  check "P" (values@init@checked (E.emitSelect ctx (Some X64InstructionContext.IntegerComparison) dest (LIR.Physical LIR.X1) (LIR.Physical LIR.X2) condition)@result physical (if expected then 42L else 7L)@pass)) [LIR.EQ,false;LIR.NE,true;LIR.LT,true;LIR.GT,false;LIR.LE,true;LIR.GE,false;LIR.ULT,false;LIR.UGT,true;LIR.ULE,false;LIR.UGE,true]) gps;
+ List.iter (fun mode->let regs=[LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6] in
+  let init=List.concat (List.mapi (fun index reg->X64Operands.loadImm64 (X64Operands.lirRegToX86 reg) (Int64.of_int (index+1))) regs) in
+  let moves=List.map2 (fun d s->d,LIR.Reg (LIR.Physical s)) regs (List.rev regs) in
+  let emit=if mode then E.emitArgMoves else E.emitTailArgMoves in
+  let checks=List.concat (List.mapi (fun index reg->result reg (Int64.of_int (6-index))) regs) in
+  check "P" (init@checked (emit ctx moves)@checks@pass)) [false;true];
+ List.iter (fun physical->let dest=LIR.Physical physical in
+  check "P" (X64Operands.loadImm64 X.RAX (-42L)@[X.MOV_store (X.RBP,8l,X.RAX)]@checked (E.emitMov ctx dest (LIR.StackSlot 8))@result physical (-42L)@pass);
+  check "P" (X64Operands.loadImm64 (X64Operands.lirRegToX86 physical) 42L@checked (E.emitStore ctx 8 dest)@[X.MOV_load (X.RAX,X.RBP,8l)]@comparison X.RAX 42L@pass)) gps;
+ List.iter (fun fReg->let dest=LIR.FPhysical fReg in let xreg=X64Operands.lirFRegToX86 fReg in
+  check "P" (X64Operands.loadImm64 X.RBX (-42L)@checked (E.emitInt64ToFloat ctx dest (LIR.Physical LIR.X19))@[X.MOVQ_to_gp (X.RAX,xreg)]@comparison X.RAX (Int64.bits_of_float (-42.))@pass);
+  check "P" (X64Operands.loadImm64 X.RBX 0xfff8000000000001L@checked (E.emitGpToFp ctx dest (LIR.Physical LIR.X19))@[X.MOVQ_to_gp (X.RAX,xreg)]@comparison X.RAX 0xfff8000000000001L@pass)) [LIR.D0;LIR.D5;LIR.D15];
+ List.iter (fun physical->let dest=LIR.Physical physical and reg=X64Operands.lirRegToX86 physical in
+  let init=X64Operands.loadImm64 X.RDX 99L@X64Operands.loadImm64 X.RAX (-42L)@[X.MOV_store (X.RBP,8l,X.RAX)] in
+  let captures=[LIR.Imm 42L;LIR.Reg (LIR.Physical LIR.X7);LIR.StackSlot 8] in
+  let emitted=checked (E.emitClosureAlloc ctx dest (AST.functionId 0L) captures) in
+  let checks=[X.MOV_reg (X.RBX,reg);X.MOV_load (X.RAX,X.RBX,0l);X.LEA_rip (X.RDX,"closure_fn");X.CMP_reg (X.RAX,X.RDX);X.Jcc (X.NE,"failed")]@List.concat_map (fun (offset,expected)->[X.MOV_load (X.RAX,X.RBX,offset)]@comparison X.RAX expected) [8l,42L;16l,99L;24l,-42L;32l,1L] in
+  check "P" (init@emitted@checks@pass)) [LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X19];
+ List.iter (fun text->List.iter (fun newline->List.iter (fun style->let input,operand=if style=0 then [],LIR.StringSymbol text else if style=1 then X64Operands.emitStringLiteral X.R11 text,LIR.Reg (LIR.Physical LIR.X8) else X64Operands.emitStringLiteral X.RAX text@[X.MOV_store (X.RBP,8l,X.RAX)],LIR.StackSlot 8 in
+  check (text^(if newline then "\n" else "")) (input@checked (E.emitStdoutWrite ctx operand newline))) [0;1;2]) [false;true]) ["";"hé😀";"a\000b"];
+ List.iter (fun physical->List.iter (fun (input,expected)->check ~input expected (checked (E.emitStdinReadLine ctx (LIR.Physical physical))@checked (E.emitStdoutWrite ctx (LIR.Reg (LIR.Physical physical)) false))) ["first\nsecond","first";"hé😀\r\n","hé😀";"tail","tail";"","";"a\000b\n","a\000b"]) gps;
+ List.iter (fun text->check ~exitCode:1 ~errors:text "" (checked (E.emitRuntimeError ctx text));check ~exitCode:1 ~errors:text "" (X64Operands.emitStringLiteral X.R11 text@checked (E.emitRuntimeErrorString ctx (LIR.Physical LIR.X8)))) ["";"hé😀";"a\000b"];
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -885,4 +953,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks ()+x64MemoryChecks ()+x64BufferChecks ()+x64FileChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks ()+x64MemoryChecks ()+x64BufferChecks ()+x64FileChecks ()+x64IntegerChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count

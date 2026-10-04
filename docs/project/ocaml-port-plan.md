@@ -1607,3 +1607,20 @@ contents, append/read, literal/register/stack paths, missing paths, open
 errors, mkdir/repeated mkdir, delete/repeated delete and source return values.
 Coverage is 289/391 pairs; comment coverage is complete. Remaining x64 modules,
 driver/library, runners/corpus and final acceptance remain open.
+
+All 41 x64 integer-emission entry points are translated with their full
+interfaces and source comments, including arithmetic, comparisons, selects,
+shifts, conversions, parallel/tail argument moves, presentation, error paths
+and closure allocation. Full instructions, fresh-label order and error text
+match F# across 36,981,053 canonical JSON bytes (SHA256
+1fdf9a594a507d519be2140ca13d4d5269fde2e7451879ce3f64b9fc7e8972ab).
+Cases cover all GP/FP registers, virtual errors, signed/unsigned/immediate
+boundaries, comparison contexts, register overlaps/cycles, stack offsets,
+NaN payloads, strings, capture forms and leak settings. The warning-free
+build passes 508/508 unit checks, 519/519 ARM64 executions and 4156/4156 x64
+executions. The 1690 new x64 cases exercise wraparound, extension, masked
+shifts, signed division overflow, unsigned division, conditions/selects,
+cycles, closure headers/captures, UTF-8/NUL/EOF/CRLF input/output, conversions
+and exact error exit codes/stderr. Coverage is 290/391 pairs; source comment
+coverage is complete. Remaining x64 native effects/process/runtime assembly,
+driver/library, runners/corpus and final acceptance remain open.
