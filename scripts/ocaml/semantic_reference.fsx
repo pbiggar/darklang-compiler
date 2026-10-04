@@ -6986,7 +6986,7 @@ let contextsObservation (source:string) =
         let artifact:SpecializationIdentity.GenericFunctionArtifact={Symbols=symbols;Function=func;DirectDependencies=Set.ofList (List.map fid dependencies)}
         name,artifact
     let generic=Map.ofList [mkGeneric "wrapper" [6];mkGeneric "middle" [9];mkGeneric "cycle" [7];mkGeneric "other" [7;99]]
-    let checked input=attempt (fun ()->
+    let observeCheckedInput input=attempt (fun ()->
         match WrittenParsing.parse LibParser.Validation.Script input |> Result.bind (fun parsed->WrittenChecking.checkSourceUnitsWithBase None true false [parsed]) with
         | Error message -> failwith message
         | Ok (_,program,written) ->
@@ -7008,7 +7008,56 @@ let contextsObservation (source:string) =
     let merged=rcInternalCall<FunctionIdMap<string*AST.SemanticType>> "CompilationContexts" "mergeReturnTypes" [|box returnTypes;box (FunctionIdMap.ofList [fid 1,(source,AST.TString);fid 8,("new",AST.TBool)])|] |> enc
     let intrinsicNames=rcInternalCall<Set<string>> "CompilationContexts" "get_packageCatalogFunctionNames" [||] |> enc
     let callers=list (fun defs->rcInternalCall<Set<string>> "CompilationContexts" "buildPackageCatalogGenericCallers" [|box defs|] |> enc) [Map.empty;generic;Map.remove "middle" generic;Map.add "cycle" (mkGeneric "cycle" [7;5] |> snd) generic]
-    tuple [baseTests;catalogs;merged;intrinsicNames;callers;checked source;list checked ["()";"val a = 1L\nval b = \"é😀\"\na";"type R = { x: Int64 }\nval r = R { x = 1L }\nr";"val a = [1L,2L]\na"]]
+    tuple [baseTests;catalogs;merged;intrinsicNames;callers;observeCheckedInput source;list observeCheckedInput ["()";"val a = 1L\nval b = \"é😀\"\na";"type R = { x: Int64 }\nval r = R { x = 1L }\nr";"val a = [1L,2L]\na"]]
+
+let anfPipelineObservation (input:string) =
+    use request=JsonDocument.Parse input
+    let source=request.RootElement.GetProperty("text").GetString()
+    let bucket=request.RootElement.GetProperty("bucket").GetInt32()
+    let enc value=closureAnalysisEncode value
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let list f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let outcome f value=match value with Error error->enc (Error error:Result<unit,string>)|Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|f value|]);node :> JsonNode
+    let attempt f action=outcome f (try action () with ex->Error ex.Message)
+    let mutable caseIndex=0
+    let select action=let index=caseIndex in caseIndex<-caseIndex+1; if index % 64=bucket then [tuple [enc index;action ()]] else []
+    let fid n=AST.functionId (uint64 n)
+    let id n=ANF.TempId n
+    let v n=ANF.Var (id n)
+    let int n=ANF.IntLiteral (ANF.Int64 n)
+    let func n name parameters returnType body:ANF.Function={Id=fid n;Name=name;TypedParams=parameters |> List.map (fun (n,typ)->{ANF.TypedParam.Id=id n;Type=typ});ReturnType=returnType;ReturnOwnership=ANF.OwnedReturn;Body=body}
+    let helper=func 200 "external" [30,AST.TInt64] AST.TInt64 (ANF.Let (id 31,ANF.Call (fid 300,[v 30]),ANF.Return (v 31)))
+    let deeper=func 300 "deeper" [40,AST.TInt64] AST.TInt64 (ANF.Let (id 41,ANF.Prim (ANF.Add,v 40,int 1L),ANF.Return (v 41)))
+    let bad=func 400 "unreachable_bad" [] AST.TInt64 (ANF.Return (v 99))
+    let empty=AST_to_ANF.buildRegistries (CheckedAST.emptySymbols ()) Map.empty [] Map.empty []
+    let config=rcInternalCall<InliningCommon.InliningConfig> "ANFPipeline" "get_stdlibInliningConfig" [||]
+    let options=[CompilerOptions.defaultOptions;{CompilerOptions.defaultOptions with DisableANFOpt=true};{CompilerOptions.defaultOptions with DisableInlining=true};{CompilerOptions.defaultOptions with DisableANFOpt=true;DisableInlining=true};{CompilerOptions.defaultOptions with DisableANFConstFolding=true};{CompilerOptions.defaultOptions with DisableANFConstProp=true};{CompilerOptions.defaultOptions with DisableANFCopyProp=true};{CompilerOptions.defaultOptions with DisableANFDCE=true};{CompilerOptions.defaultOptions with DisableTCO=true};{CompilerOptions.defaultOptions with DisableANFStrengthReduction=true};{CompilerOptions.defaultOptions with EnableCoverage=true}]
+    let run (functions:ANF.Function list) (externals:ANF.Function list) (config:InliningCommon.InliningConfig) (options:CompilerOptions.CompilerOptions) specialize (excluded:Set<AST.FunctionId>) (contracts:FunctionIdMap<OwnedIR.CallSignature>) =
+        let signatures=functions@externals |> List.map (fun func->func.Id,(func.Name,AST.TFunction (func.TypedParams |> List.map (fun param->param.Type),func.ReturnType))) |> FunctionIdMap.ofList
+        let names=signatures |> FunctionIdMap.map (fun _ (name,_)->name)
+        let registries={empty with FuncReg=signatures;FunctionNames=names;FunctionIds=TypeRegistries.functionIdsFromNames names;RecordFieldsReg=Map.ofList ["R",[source,AST.TString]];RecordTypeParamsReg=Map.ofList ["R",[]]}
+        let program=ANF.Program (functions,ANF.Return ANF.UnitLiteral)
+        let converted=rcInternalCall<AST_to_ANF.ConversionResult> "ANFPipeline" "buildConversionResult" [|box program;box registries;box contracts|]
+        let conversion=tuple [enc converted.Program;enc (converted.FuncReg |> FunctionIdMap.toList |> List.map (fun (key,(name,typ))->key,name,typ));enc (converted.OwnershipContracts=contracts);enc (converted.RecursiveMembers=registries.RecursiveMembers);enc (converted.TypeReg=registries.TypeReg);enc (converted.RecordFieldsReg=registries.RecordFieldsReg);enc (converted.RecordTypeParamsReg=registries.RecordTypeParamsReg);enc (converted.VariantLookup=registries.VariantLookup);enc (converted.RcSumShapeReg=registries.RcSumShapeReg);enc (converted.FuncParams=registries.FuncParams);enc (converted.ModuleRegistry=registries.ModuleRegistry)]
+        let phases=ResizeArray<JsonNode>()
+        let record (value:CompilerOptions.PassTiming)=phases.Add(tuple [enc value.Pass;enc (value.Elapsed.Ticks>=0L)])
+        let output=attempt (fun (pre,ssa,typeMap)->
+            let highest=ssa |> List.fold (fun highest (func:SSAANF.Function)->func.FreshValueTypes |> Map.fold (fun highest (ANF.TempId n) _->max n highest) highest) 0
+            let lookups=[-3..highest+3]@[Int32.MinValue;Int32.MaxValue]
+            tuple [enc pre;enc ssa;enc (lookups |> List.map (fun n->n,ANF.TypeMap.tryFind (id n) typeMap))]) (fun ()->rcInternalCall<Result<ANF.Function list*SSAANF.Function list*ANF.TypeMap,string>> "ANFPipeline" "buildAnf" [|box 0;box options;box (Diagnostics.Stopwatch.StartNew());box registries;box 1000UL;box config;box (InliningCommon.buildExternalCandidateInfoMap config externals);box (Map.empty:Map<string,ANF.Function>);box excluded;box functions;box contracts;box specialize;box (Some record:CompilerOptions.PassTimingRecorder option)|])
+        tuple [conversion;output;JsonArray(phases.ToArray()) :> JsonNode]
+    let cases typ =
+        let make=ANF.Call (fid 500,[])
+        let bodies=[ANF.Return (v 10);ANF.Let (id 20,ANF.TypedAtom (v 10,typ),ANF.Return (v 20));ANF.Let (id 20,make,ANF.Return (v 20));ANF.Let (id 20,make,ANF.Return (v 10));ANF.If (v 11,ANF.Return (v 10),ANF.Return (v 10));ANF.Join ({ANF.TypedParam.Id=id 30;Type=typ},ANF.Return (v 30),ANF.Jump (id 30,v 10))]
+        bodies |> List.map (func 100 ("caller_"+source) [10,typ;11,AST.TBool] typ)
+    let observed=list (fun typ->
+        let body=match typ with AST.TInt64->ANF.Return (int 42L)|AST.TString->ANF.Return (ANF.StringLiteral source)|AST.TTuple _->ANF.Let (id 900,ANF.TupleAlloc [ANF.StringLiteral source;int 42L],ANF.Return (v 900))|AST.TList _->ANF.Let (id 900,ANF.RawPtrToList (int 0L,int 0L,typ),ANF.Return (v 900))|AST.TDict _->ANF.Let (id 900,ANF.RawPtrToDict (int 0L,int 0L,typ),ANF.Return (v 900))|_->failwith "Unknown fixture type"
+        let make=func 500 "make" [] typ body
+        list (fun main->list (fun options->list (fun specialize->list (fun node->node) (select (fun ()->run [main] [make] config options specialize Set.empty FunctionIdMap.empty))) [false;true]) options) (cases typ)) [AST.TInt64;AST.TString;AST.TList AST.TString;AST.TTuple [AST.TString;AST.TInt64];AST.TDict (AST.TString,AST.TString)]
+    let caller=func 100 "caller" [10,AST.TInt64] AST.TInt64 (ANF.Let (id 20,ANF.Call (fid 200,[v 10]),ANF.Return (v 20)))
+    let externalCases=list (fun external->list (fun excluded->list (fun config->list (fun options->list (fun specialize->list (fun node->node) (select (fun ()->run (if external then [caller] else [helper;deeper;caller]) (if external then [helper;deeper;bad] else []) config options specialize (if excluded then Set.singleton (fid 200) else Set.empty) FunctionIdMap.empty))) [false;true]) options) [config;InliningCommon.defaultConfig]) [false;true]) [false;true]
+    let ownershipCases=list (fun parameter->let main=cases AST.TString |> List.head in let contract:OwnedIR.CallSignature={Parameters=[parameter;OwnedIR.UnmanagedCallParameter];Result=OwnedIR.ProducedCallResult} in list (fun node->node) (select (fun ()->run [main] [] config CompilerOptions.defaultOptions true Set.empty (FunctionIdMap.ofList [main.Id,contract])))) [OwnedIR.UnmanagedCallParameter;OwnedIR.BorrowedCallParameter;OwnedIR.ConsumedCallParameter;OwnedIR.UniqueCallParameter]
+    tuple [enc config;run [] [] config CompilerOptions.defaultOptions true Set.empty FunctionIdMap.empty;observed;externalCases;ownershipCases]
 
 let processRequest (line: string) =
     let request = JsonNode.Parse line
@@ -7039,6 +7088,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "anf-pipeline" -> anfPipelineObservation source
         | "compilation-contexts" -> contextsObservation source
         | "package-manager" -> packageObservation source
         | "ast-pretty" -> astPrettyObservation source

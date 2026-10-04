@@ -1781,3 +1781,23 @@ The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
 6080/6080 x64 executions. Coverage is 304/391 pairs; source comment coverage
 is complete. Remaining driver/library, runners/corpus and final acceptance
 remain open.
+
+The complete ANF pipeline now canonicalizes intrinsic calls, lowers recursive
+accumulators, constructs typed SSA, performs scoped optimization and local/
+external inlining, specializes higher-order/direct calls, analyzes escapes,
+projects clone origins and dictionary frontiers, and inserts ownership operations.
+Full ANF/SSA results, all populated and absent type-map lookups, conversion
+registries, recoverable ownership failures and timing pass order match F#.
+The first six full text observations match raw JSON; the empty case compares
+207,497,266 identical bytes (SHA256
+43f3ba93ddbeedc232c0fcd5b3dff7557d1e27c38860421352e7f67ac1712aca).
+The same exhaustive fixture combinations are also split into 64 bounded groups
+per text input to keep comparison within VM memory limits. All 1024 groups for
+16 text probes pass, covering 3,327,598,214 raw/canonical observation bytes;
+the complete audit has SHA256
+9e7eb789849331e51cd3b1d9f7c99e5bc16d7dd8a70fcd1709ea9ce9ac2e5bee.
+A caller-owned elapsed callback retains timing order/meaning; duration values
+remain variable under the acceptance contract. The warning-free build passes
+508/508 unit checks, 519/519 ARM64 executions and 6080/6080 x64 executions.
+Committed coverage is 305/391 pairs; source comment coverage is complete.
+Remaining driver/library, runners/corpus and final acceptance remain open.
