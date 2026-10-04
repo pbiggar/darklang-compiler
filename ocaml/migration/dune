@@ -954,3 +954,15 @@
  (action (with-stdout-to %{targets}
   (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/x64/instructions/X64EmitReferenceCounts.mli})
    (echo "val emitRefCountIncBuffer : X64CodeGenTypes.funcCtx -> bool -> LIR.operand -> (X86_64.instr list,string) result\nval emitRefCountDecBuffer : X64CodeGenTypes.funcCtx -> bool -> LIR.operand -> (X86_64.instr list,string) result\n")))))
+
+; Observe complete generated rendering programs without exposing private catalogs.
+(rule
+ (targets InstrumentedValueRendering.ml)
+ (deps ../lib/frontend/ValueRendering.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/ValueRendering.ml}))))
+(rule
+ (targets InstrumentedValueRendering.mli)
+ (deps ../lib/frontend/ValueRendering.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/ValueRendering.mli}))))

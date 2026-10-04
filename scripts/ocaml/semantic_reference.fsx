@@ -7059,6 +7059,42 @@ let anfPipelineObservation (input:string) =
     let ownershipCases=list (fun parameter->let main=cases AST.TString |> List.head in let contract:OwnedIR.CallSignature={Parameters=[parameter;OwnedIR.UnmanagedCallParameter];Result=OwnedIR.ProducedCallResult} in list (fun node->node) (select (fun ()->run [main] [] config CompilerOptions.defaultOptions true Set.empty (FunctionIdMap.ofList [main.Id,contract])))) [OwnedIR.UnmanagedCallParameter;OwnedIR.BorrowedCallParameter;OwnedIR.ConsumedCallParameter;OwnedIR.UniqueCallParameter]
     tuple [enc config;run [] [] config CompilerOptions.defaultOptions true Set.empty FunctionIdMap.empty;observed;externalCases;ownershipCases]
 
+let valueRenderingObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let list f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let attempt action=try enc (Ok (action ()):Result<CheckedAST.Program,string>) with ex->enc (Error ex.Message:Result<CheckedAST.Program,string>)
+    let records=Map.ofList ["R",([],["z",AST.TInt64;source,AST.TString;"a",AST.TBool]);"Box",(["a"],["value",AST.TVar "a"]);"Fallback",([],["value",AST.TVar "a"]);"StreamField",([],["value",AST.TStream (AST.TVar "a")]);"Node",([],["value",AST.TInt64;"children",AST.TList (AST.TRecord ("Node",[]))]);"Empty",([],[])]
+    let sums=Map.ofList ["Choice",([],["Many",2,[AST.TString;AST.TInt64];"Zero",0,[];"One",1,[AST.TBool]]);"GSum",(["a"],["Pair",3,[AST.TVar "a";AST.TList (AST.TVar "a")]]);"Tree",([],["Empty",0,[];"Branch",1,[AST.TInt64;AST.TList (AST.TSum ("Tree",[]))]]);"Single",([],["S",0,[]])]
+    let recordMetadata:CheckingTypes.IndexedTypeRegistry=records |> Map.map (fun _ (typeParams,fields)->{Fields=fields;FieldTypes=Map.ofList fields;TypeParams=typeParams})
+    let sumMetadata:CheckingTypes.IndexedSumTypeRegistry=sums |> Map.map (fun _ (typeParams,variants)->{TypeParams=typeParams;Variants=variants |> List.map (fun (name,tag,fields)->{Name=name;Tag=tag;Fields=fields})})
+    let namedId,symbols=CheckedAST.internFunction ("named_"+source) (CheckedAST.emptySymbols ())
+    let symbols=sums |> Map.fold (fun symbols owner (_,variants)->variants |> List.fold (fun symbols (name,tag,_)->CheckedAST.internConstructor owner name tag symbols |> snd) symbols) symbols
+    let valueId,symbols=CheckedAST.allocateBinding "value" symbols
+    let parameter,symbols=CheckedAST.allocateBinding "__partial_0" symbols
+    let other,symbols=CheckedAST.allocateBinding "ordinary" symbols
+    let capture,symbols=CheckedAST.allocateBinding "__partial_capture_0" symbols
+    let types=[AST.TUnit;AST.TBool;AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TFloat64;AST.TString;AST.TChar;AST.TDateTime;AST.TBlob;AST.TInternalRawPtr;AST.TNever;AST.TTuple [];AST.TTuple [AST.TString;AST.TList AST.TBool];AST.TList AST.TString;AST.TList (AST.TList AST.TInt64);AST.TStream (AST.TVar source);AST.TDict (AST.TString,AST.TInt64);AST.TDict (AST.TInt64,AST.TList AST.TString);AST.TDict (AST.TVar "a",AST.TVar "b");AST.TDict (AST.TInferenceVar ("s","a"),AST.TVar "b");AST.TDict (AST.TVar "a",AST.TInferenceVar ("s","b"));AST.TDict (AST.TInferenceVar ("s","a"),AST.TInferenceVar ("s","b"));AST.TRecord ("R",[]);AST.TRecord ("Box",[AST.TString]);AST.TRecord ("Fallback",[AST.TInt64]);AST.TRecord ("StreamField",[]);AST.TRecord ("Node",[]);AST.TRecord ("Empty",[]);AST.TSum ("Uuid",[]);AST.TSum ("Choice",[]);AST.TRecord ("Choice",[]);AST.TSum ("GSum",[AST.TString]);AST.TSum ("Tree",[]);AST.TFunction ([AST.TInt64],AST.TString);AST.TRecord ("Box",[]);AST.TSum ("GSum",[]);AST.TRecord ("missing",[]);AST.TSum ("missing",[]);AST.TVar source;AST.TInferenceVar (source,"id")]
+    let program expressions=checkedProgramFromParts symbols (expressions |> List.map CheckedAST.Expression)
+    let rewrite records sums typ program=rcInternalCall<CheckedAST.Program> "ValueRendering" "rewriteProgram" [|box records;box sums;box typ;box program|]
+    let render typ=rewrite recordMetadata sumMetadata typ (program [CheckedAST.Local valueId;CheckedAST.Local valueId])
+    let rendered=list (fun typ->attempt (fun ()->render typ)) types
+    let primitive=attempt (fun ()->rewrite (Map.empty:CheckingTypes.IndexedTypeRegistry) (Map.empty:CheckingTypes.IndexedSumTypeRegistry) AST.TString (program [CheckedAST.StringLiteral source]))
+    let reused=list (fun typ->attempt (fun ()->rewrite recordMetadata sumMetadata typ (render typ))) [AST.TString;AST.TRecord ("Node",[]);AST.TSum ("Tree",[])]
+    let lambda binding body=CheckedAST.Lambda (AST.NonEmptyList.singleton {CheckedAST.LambdaParameter.Pattern=CheckedAST.LPVariable binding;Type=CheckedAST.checkedType AST.TInt64},None,body)
+    let namedCall=CheckedAST.Call (namedId,AST.NonEmptyList.fromList [CheckedAST.StringLiteral source;CheckedAST.Local parameter])
+    let partial=lambda parameter namedCall
+    let expressions=[CheckedAST.FuncRef namedId;CheckedAST.Local valueId;lambda other (CheckedAST.Local other);partial;CheckedAST.Let (CheckedAST.LPVariable capture,CheckedAST.StringLiteral source,partial);lambda parameter (CheckedAST.TypeApp (namedId,[CheckedAST.checkedType AST.TInt64],AST.NonEmptyList.fromList [CheckedAST.StringLiteral source;CheckedAST.Local parameter]));lambda parameter (CheckedAST.Call (namedId,AST.NonEmptyList.singleton (CheckedAST.Local parameter)));lambda parameter (CheckedAST.Call (namedId,AST.NonEmptyList.fromList [CheckedAST.Local parameter;CheckedAST.StringLiteral source]));lambda other (CheckedAST.Call (namedId,AST.NonEmptyList.fromList [CheckedAST.StringLiteral source;CheckedAST.Local other]))]
+    let boundaries=list (fun typ->attempt (fun ()->rewrite recordMetadata sumMetadata typ (program expressions))) [AST.TFunction ([AST.TInt64],AST.TString);AST.TDateTime]
+    let dictionaryKeys=list (fun typ->attempt (fun ()->
+        let key,symbols=CheckedAST.allocateBinding "key" symbols
+        let id,symbols=CheckedAST.internFunction ("Darklang.Stdlib.Dict.__renderGenericKey_"+source) symbols
+        let fn:CheckedAST.FunctionDef={Id=id;Name="Darklang.Stdlib.Dict.__renderGenericKey_"+source;TypeParams=[];Params=CheckedAST.checkedParams (AST.NonEmptyList.singleton (key,typ));ReturnType=CheckedAST.checkedType AST.TString;Body=CheckedAST.StringLiteral "original";Recursion=None}
+        let program=checkedProgramFromParts symbols [CheckedAST.FunctionDef fn;CheckedAST.Expression (CheckedAST.StringLiteral source)]
+        let rewrite program=rcInternalCall<CheckedAST.Program> "ValueRendering" "rewriteDictionaryKeyRenderers" [|box recordMetadata;box sumMetadata;box program|]
+        rewrite (rewrite program))) types
+    tuple [rendered;primitive;reused;boundaries;dictionaryKeys]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7088,6 +7124,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "value-rendering" -> valueRenderingObservation source
         | "anf-pipeline" -> anfPipelineObservation source
         | "compilation-contexts" -> contextsObservation source
         | "package-manager" -> packageObservation source

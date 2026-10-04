@@ -1801,3 +1801,19 @@ remain variable under the acceptance contract. The warning-free build passes
 508/508 unit checks, 519/519 ARM64 executions and 6080/6080 x64 executions.
 Committed coverage is 305/391 pairs; source comment coverage is complete.
 Remaining driver/library, runners/corpus and final acceptance remain open.
+
+Complete value rendering now generates monomorphic Dark renderers for every
+scalar width, strings/chars, tuples, lists, dictionaries, streams, recursive
+records/sums, UUID/date values, opaque blobs and callable boundaries. It preserves
+UTF-16 renderer hashes, raw concat joins, declaration/substitution order, record
+field order and the 80-character short/long boundary. Named functions, generated
+partial applications and lambdas retain their source presentation; dictionary
+key specializations share the same renderer catalog. Full generated programs,
+symbol catalogs, repeated renderer reuse and unsupported metadata/type failures
+match F# for all 16 text probes. The empty observation compares 1,724,432 raw
+identical JSON bytes (SHA256
+3811c2e6ede074eeb78cd8bf225bcb8123399725afe780fce996df1b70de4b78).
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+6080/6080 x64 executions. Coverage is 306/391 pairs; source comment coverage
+is complete. Remaining driver/library, runners/corpus and final acceptance
+remain open.
