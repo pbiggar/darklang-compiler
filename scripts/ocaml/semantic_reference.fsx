@@ -3406,6 +3406,82 @@ let armReleaseSelectionObservation (source:string) =
     let fieldSelections=mapNodes (fun fields -> mapNodes (fun offset -> tuple [mapNodes (fun kind -> call boolean (fun () -> selection_releasePlanRootKindAt offset kind fields)) kinds;mapNodes (fun operation -> call boolean (fun () -> selection_releasePlanDynamicOperationAt offset operation fields)) operations]) [-2147483648;-1;0;8;16;2147483647]) fieldPlans in
     tuple [selected;paired;fieldSelections]
 
+let armDictReferenceObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let dynamic=MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer
+    let simple=[MemoryModel.NoReleasePlan;dynamic;MemoryModel.DynamicBufferRelease MemoryModel.DynamicBlobBuffer;MemoryModel.DynamicBufferRelease MemoryModel.DynamicIntBuffer;MemoryModel.DynamicBufferRelease (MemoryModel.FixedSizeRoot (8,MemoryModel.GenericHeap));MemoryModel.RecursiveRelease (AST.TRecord (source,[]))]@List.collect (fun kind -> [MemoryModel.RootRelease (8,kind,MemoryModel.NoPayloadRelease);MemoryModel.RootRelease (8,kind,MemoryModel.TaggedListPayloadRelease MemoryModel.NoReleasePlan);MemoryModel.RootRelease (8,kind,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,MemoryModel.NoReleasePlan));MemoryModel.RootRelease (8,kind,MemoryModel.ClosurePayloadRelease [])]) [MemoryModel.GenericHeap;MemoryModel.StreamHeap;MemoryModel.TaggedList;MemoryModel.DictHeap;MemoryModel.ClosureHeap]
+    let nested=List.map (fun plan -> MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease plan)) simple@List.collect (fun plan -> [MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,plan));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (dynamic,plan))]) simple
+    let child=MemoryModel.RootRelease (16,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (16,[MemoryModel.FieldRelease (0,dynamic);MemoryModel.FieldRelease (8,MemoryModel.RecursiveRelease (AST.TRecord (source,[])))]))
+    let fields=List.mapi (fun index plan -> MemoryModel.FieldRelease (index*8,plan)) (simple@nested@[child])
+    let variants:MemoryModel.RcBoxedSumVariantRelease list=[{MemoryModel.RcBoxedSumVariantRelease.Tag=0;FieldReleases=[]};{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=fields};{MemoryModel.RcBoxedSumVariantRelease.Tag=65536;FieldReleases=[MemoryModel.FieldRelease (-32769,child)]}]
+    let rich=[MemoryModel.RootRelease (32,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (32,fields));MemoryModel.RootRelease (32,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (32,fields,variants));MemoryModel.RootRelease (16,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (16,[MemoryModel.FieldRelease (0,dynamic);MemoryModel.FieldRelease (8,MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease MemoryModel.NoReleasePlan))]));MemoryModel.RootRelease (24,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (24,[MemoryModel.FieldRelease (0,dynamic);MemoryModel.FieldRelease (8,MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease MemoryModel.NoReleasePlan));MemoryModel.FieldRelease (16,MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,MemoryModel.NoReleasePlan)))]));MemoryModel.RootRelease (16,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (16,[MemoryModel.FieldRelease (8,dynamic)],[]));MemoryModel.RootRelease (8,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (8,[],[]))]
+    let plans=simple@nested@rich
+    let context target enabled : ARM64CodeGenTypes.CodeGenContext={Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled};SumShapeRegistry=Map.empty;RecordRegistry=Map.empty;RawSlotInitRetainTargets=None;ClosurePayloadSizes=Map.empty;ClosureCaptureTypes=Map.empty;FunctionNames=FunctionIdMap.empty;FunctionName=source;InstructionSite=source;StackSize=0;UsedCalleeSaved=[];UsedCalleeSavedF=[];HeapOverflowLabel=source;RecordLirOpExpansion=None}
+    let contexts=mapNodes (fun target -> mapNodes (fun enabled ->
+        let ctx=context target enabled
+        let generate (key:MemoryModel.RcReleasePlan) (flags:int) (dict:string option) (fixedValue:(int*MemoryModel.RcReleasePlan) option) =
+            let flag bit=flags &&& (1 <<< bit)<>0
+            rcInternalCall<ARM64Symbolic.Instr list> "ARM64DictReferenceCounts" "generateDictRefCountDecHelper" [|box source;box key;box (flag 0);box (flag 1);box dict;box (flag 2);box (flag 3);box fixedValue;box (flag 4);box (flag 5);box (flag 6);box ctx|]
+        let plannedHelper plan=rcInternalCall<ARM64Symbolic.Instr list> "ARM64DictReferenceCounts" "generatePlannedDictRefCountDecHelper" [|box source;box plan;box ctx|]
+        let flags=mapNodes (fun mask -> call (fun () -> generate MemoryModel.NoReleasePlan mask (Some "dict-target") None)) (List.init 128 id)
+        let keys=mapNodes (fun key -> mapNodes (fun mask -> call (fun () -> generate key mask None None)) [0;1]) plans
+        let fixedValue=mapNodes (fun (plan,sizes) -> mapNodes (fun size -> call (fun () -> generate MemoryModel.NoReleasePlan 0 None (Some (size,plan)))) sizes) (List.map (fun plan -> plan,[16]) plans@List.map (fun plan -> plan,[-2147483648;-65536;-32769;-32768;-1;0;248;255;256;32767;32768;65535;65536;2147483647]) rich)
+        let labels=mapNodes (fun label -> call (fun () -> generate dynamic 0 label None)) [None;Some "";Some source;Some "hé😀";Some (String [|char 0xd800;'a';char 0xdc00|])]
+        let planned=mapNodes (fun key -> mapNodes (fun value -> call (fun () -> plannedHelper (MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (key,value))))) plans) [MemoryModel.NoReleasePlan;dynamic;child]
+        let invalid=mapNodes (fun plan -> call (fun () -> plannedHelper plan)) simple
+        tuple [flags;keys;fixedValue;labels;planned;invalid]) [false;true]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64]
+    tuple [call (fun () -> rcInternalCall<ARM64Symbolic.Instr list> "ARM64DictReferenceCounts" "generateDictRefCountIncHelper" [||]);contexts]
+
+let armReleaseSummaryObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let flags=Reflection.BindingFlags.Static ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+    let moduleType=typeof<LIR.Arm64RcHelperRequirements>.Assembly.GetType("ARM64ReleasePlanSummary")
+    let empty=moduleType.GetProperty("precomputedEmptyRcHelperRequirements",flags).GetValue(null) :?> LIR.Arm64RcHelperRequirements
+    let summarize (staticDeps:bool) (plan:MemoryModel.RcReleasePlan)=rcInternalCall<LIR.Arm64ReleasePlanSummary> "ARM64ReleasePlanSummary" "summarizePrecomputedReleasePlan" [|box staticDeps;box plan|]
+    let add (summary:LIR.Arm64ReleasePlanSummary) (requirements:LIR.Arm64RcHelperRequirements)=rcInternalCall<LIR.Arm64RcHelperRequirements> "ARM64ReleasePlanSummary" "addPrecomputedReleasePlanRequirements" [|box summary;box requirements|]
+    let merge (left:LIR.Arm64RcHelperRequirements) (right:LIR.Arm64RcHelperRequirements)=rcInternalCall<LIR.Arm64RcHelperRequirements> "ARM64ReleasePlanSummary" "mergePrecomputedRcHelperRequirements" [|box left;box right|]
+    let precomputed=moduleType.GetProperty("precomputedReleasePlanSummary",flags).GetValue(null) :?> (bool -> LIR.RcReleasePlanMemoKey -> MemoryModel.RcReleasePlan -> LIR.Arm64RcHelperRequirements -> LIR.Arm64ReleasePlanSummary*LIR.Arm64RcHelperRequirements)
+    let dynamic=MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer
+    let simple=[MemoryModel.NoReleasePlan;dynamic;MemoryModel.DynamicBufferRelease MemoryModel.DynamicBlobBuffer;MemoryModel.DynamicBufferRelease MemoryModel.DynamicIntBuffer;MemoryModel.RecursiveRelease (AST.TRecord (source,[]))]@List.collect (fun kind -> [MemoryModel.RootRelease (8,kind,MemoryModel.NoPayloadRelease);MemoryModel.RootRelease (8,kind,MemoryModel.TaggedListPayloadRelease dynamic);MemoryModel.RootRelease (8,kind,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,dynamic));MemoryModel.RootRelease (8,kind,MemoryModel.ClosurePayloadRelease [MemoryModel.FieldRelease (0,dynamic)])]) [MemoryModel.GenericHeap;MemoryModel.StreamHeap;MemoryModel.TaggedList;MemoryModel.DictHeap;MemoryModel.ClosureHeap]
+    let fields=List.mapi (fun index plan -> MemoryModel.FieldRelease (index*8,plan)) simple
+    let rich=[MemoryModel.RootRelease (256,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (256,fields));MemoryModel.RootRelease (256,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (256,fields,[{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=fields}]));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (dynamic,MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease dynamic)));MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease (MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (dynamic,dynamic))));MemoryModel.RootRelease (8,MemoryModel.ClosureHeap,MemoryModel.ClosurePayloadRelease fields)]
+    let validFields=List.init 25 (fun index -> MemoryModel.FieldRelease (index*8,dynamic))
+    let rich=rich@[MemoryModel.RootRelease (200,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (200,validFields));MemoryModel.RootRelease (200,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (200,validFields,[{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=validFields}]))]
+    let plans=simple@rich
+    let summaries=mapNodes (fun plan -> mapNodes (fun staticDeps -> call (fun () -> summarize staticDeps plan)) [false;true]) plans
+    let metadata=None::Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=None;MemoryModel.RcMetadata.ReleasePlan=None;MemoryModel.RcMetadata.SourceType=None}::List.collect (fun plan -> List.map (fun key -> Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=key;MemoryModel.RcMetadata.ReleasePlan=Some plan;MemoryModel.RcMetadata.SourceType=Some AST.TString}) [None;Some source]) plans
+    let block:LIR.BasicBlock={Label=LIR.Label "entry";Instrs=[];Terminator=LIR.Ret}
+    let func:LIR.Function={Id=AST.functionId 0UL;Name=source;TypedParams=[];CFG=({Entry=block.Label;Blocks=Map.ofList [block.Label,block]}:LIR.CFG);StackSize=0;UsedCalleeSaved=[];CodegenFacts=None}
+    let baseFacts=LIR.analyzeFunctionCodegenFacts func
+    let kinds=[LIR.GenericHeap;LIR.StreamHeap;LIR.TaggedList;LIR.DictHeap;LIR.ClosureHeap]
+    let cases=mapNodes (fun meta -> mapNodes (fun kind ->
+        let key=LIR.rcReleasePlanMemoKey meta
+        let facts={baseFacts with RefCountDecRequirements=Map.ofList [(kind,key),meta];RefCountIncRequirements=Set.ofList kinds}
+        mapNodes (fun name ->
+            let trace=ref []
+            let cache (staticDeps:bool) (key:string) (plan:MemoryModel.RcReleasePlan) (generate:unit->LIR.Arm64ReleasePlanSummary)=trace.Value<-(staticDeps,key,plan)::trace.Value;generate ()
+            let result=call (fun () -> rcInternalCall<LIR.Arm64RcHelperRequirements> "ARM64ReleasePlanSummary" "planFunctionArm64RcRequirements" [|box (Some cache);box (Map.empty:Map<bool*LIR.RcReleasePlanMemoKey,LIR.Arm64ReleasePlanSummary>);box name;box facts|])
+            tuple [result;enc (List.rev trace.Value)]) [source;"Darklang.Stdlib.List.foo";"Darklang.Stdlib.Dict.foo"]) kinds) metadata
+    let memoized=mapNodes (fun plan -> mapNodes (fun staticDeps -> mapNodes (fun key -> call (fun () -> let _,requirements=precomputed staticDeps key plan empty in precomputed staticDeps key MemoryModel.NoReleasePlan requirements)) [LIR.StructuralReleasePlan (Some plan);LIR.FingerprintedReleasePlan source]) [false;true]) plans
+    let successful=plans |> List.choose (fun plan -> try Some (add (summarize false plan) empty) with _ -> None)
+    let merged=mapNodes (fun left -> mapNodes (fun right -> call (fun () -> merge left right)) successful) successful
+    let conflict plan={empty with PlannedListDecHelpers=Map.ofList [source,(8,plan)];PlannedDictDecHelpers=Map.ofList [source,plan]}
+    let conflicts=mapNodes (fun plan -> call (fun () -> merge (conflict MemoryModel.NoReleasePlan) (conflict plan))) plans
+    let specs=List.collect (fun size -> List.collect (fun plan -> List.map (fun owns -> {LIR.Arm64PlannedGenericDecHelper.ReleasePlanMemoKeys=Set.ofList [LIR.FingerprintedReleasePlan source;LIR.StructuralReleasePlan (Some plan)];LIR.Arm64PlannedGenericDecHelper.PayloadSize=size;LIR.Arm64PlannedGenericDecHelper.ReleasePlan=plan;LIR.Arm64PlannedGenericDecHelper.OwnsSinglePayloadSum=owns}) [false;true]) [MemoryModel.NoReleasePlan;dynamic]) [8;16]
+    let genericMerges=mapNodes (fun left -> mapNodes (fun right -> call (fun () -> merge {empty with PlannedGenericDecHelpers=Map.ofList [source,left]} {empty with PlannedGenericDecHelpers=Map.ofList [source,right]})) specs) specs
+    let summaryRequirements plan={empty with ReleasePlanSummaries=Map.ofList [(false,LIR.FingerprintedReleasePlan source),summarize false plan]}
+    let summaryConflictPlans=[MemoryModel.NoReleasePlan;MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease dynamic);MemoryModel.RootRelease (8,MemoryModel.ClosureHeap,MemoryModel.NoPayloadRelease)]
+    let summaryConflicts=mapNodes (fun left -> mapNodes (fun right -> call (fun () -> merge (summaryRequirements left) (summaryRequirements right))) summaryConflictPlans) summaryConflictPlans
+    let types=[AST.TInt64;AST.TString;AST.TBlob;AST.TInt;AST.TList AST.TString;AST.TDict (AST.TString,AST.TString);AST.TFunction ([AST.TInt64],AST.TString);AST.TStream AST.TString;AST.TTuple [AST.TString];AST.TRecord ("R",[]);AST.TRecord ("missing",[]);AST.TSum ("missing",[])]
+    let raw=mapNodes (fun typ -> let facts={baseFacts with RawSlotInitTypes=Set.singleton typ} in call (fun () -> rcInternalCall<LIR.FunctionCodegenFacts> "ARM64ReleasePlanSummary" "planRawSlotInitRetainTargets" [|box (Map.ofList ["R",["field",AST.TString]]);box (Map.empty:MemoryModel.RcSumShapeRegistry);box facts|])) types
+    tuple [enc empty;summaries;cases;memoized;merged;conflicts;genericMerges;summaryConflicts;raw]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -5654,6 +5730,8 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-release-summary" -> armReleaseSummaryObservation source
+        | "arm64-dict-reference" -> armDictReferenceObservation source
         | "arm64-release-selection" -> armReleaseSelectionObservation source
         | "arm64-closure-reference" -> armClosureReferenceObservation source
         | "arm64-list-reference" -> armListReferenceObservation source

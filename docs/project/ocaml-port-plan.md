@@ -1333,3 +1333,25 @@ across signed offset boundaries. All 508 translated tests pass; the preceding
 warning-free and source comment coverage is complete. Coverage is 266/391 pairs.
 HAMT lifetime emission is next; remaining dispatch, runners/corpus and final
 acceptance remain open.
+
+Complete ARM64 HAMT ownership helpers and release-plan summaries are translated
+with full interfaces and original comments. Dictionary emission matches F#
+across 96,303,107 bytes of canonical observations (SHA256
+1458b6c279683d564b44731e9e311b5daf8cf037a79494cf0115e23c4867ce09): all
+128 leaf-release flag combinations, both targets/leak settings, key and value
+plans, recursive/fixed/boxed payloads, collision helpers, label text edge cases
+and signed-size boundaries. Full instruction lists are compared. Release-summary
+observations match across 2,810,179 identical JSON bytes (SHA256
+c1fb76fa7d6bb630d2a4e613f253e01b6da201098e8548811515d1f6ea38f45d), including
+static dependency selection, expensive generic plans, memoized reuse, cache
+callback traces, caller ownership, list/dict/generic/summary merge conflicts and
+raw-slot retain planning. Map and set equality preserves F# semantic equality.
+
+The warning-free native build passes 508/508 translated unit checks and 324/324
+real ARM64 executions through pinned QEMU. The 51 new HAMT execution cases cover
+retain/decrement/shared roots, internal child traversal, leaf/collision node
+sizes including the free-list cutoff, invalid/foreign/boundary pointers, dynamic
+key/value buffers, shared/static buffers, repeated collision entries, generic
+payloads, nested list/dict/closure/stream values and specialized tuple/sum values.
+Frozen comment coverage is complete. Coverage is 268/391 pairs. Instruction-level
+RC emission, remaining dispatch/runners/corpus and final acceptance remain open.
