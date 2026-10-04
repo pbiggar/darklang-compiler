@@ -3273,6 +3273,39 @@ let armPrintingEmissionObservation (source:string) =
      observingSum ctx (LIR.Physical LIR.X19) ["a",0,Some (AST.TList AST.TInt64);"b",1,Some (AST.TList AST.TString)] false false
     ]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64]
 
+let armNativeEffectObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let bitsFloat value=System.BitConverter.Int64BitsToDouble value
+    let fid value=AST.functionId (uint64 value)
+    let context source target enabled : ARM64CodeGenTypes.CodeGenContext={Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled};SumShapeRegistry=Map.empty;RecordRegistry=Map.empty;RawSlotInitRetainTargets=None;ClosurePayloadSizes=Map.empty;ClosureCaptureTypes=Map.empty;FunctionNames=FunctionIdMap.empty;FunctionName=source;InstructionSite=source;StackSize=0;UsedCalleeSaved=[];UsedCalleeSavedF=[];HeapOverflowLabel=source;RecordLirOpExpansion=None}
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let fpPhysical=[LIR.D0;LIR.D1;LIR.D2;LIR.D3;LIR.D4;LIR.D5;LIR.D6;LIR.D7;LIR.D8;LIR.D9;LIR.D10;LIR.D11;LIR.D12;LIR.D13;LIR.D14;LIR.D15]
+    let operations=[LIR.Execute;LIR.RunProcess;LIR.HostOS;LIR.HostArchitecture;LIR.Hostname;LIR.GetEnv;LIR.GetEnvironmentPacked;LIR.SetEnv;LIR.UnsetEnv;LIR.DirectoryCurrent;LIR.DirectoryListPacked;LIR.FileIsDirectory;LIR.FileCreateExclusive;LIR.GetArgv;LIR.Kill;LIR.GetPid;LIR.GetUid;LIR.CpuCount;LIR.SpawnProcess;LIR.ProcessIO;LIR.TerminateProcess;LIR.SocketTcp4;LIR.SocketTcp6;LIR.SocketUdp4;LIR.SocketUdp6;LIR.SocketConnect4;LIR.SocketConnect6;LIR.SocketSend;LIR.SocketReceive;LIR.SocketReceiveTimeout;LIR.SocketSendTimeout;LIR.SocketClose;LIR.SecureRandomFill]
+    let native_emitRandomInt64 (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitNativeEffects" "emitRandomInt64" [|box arg0;box arg1|]
+    let native_emitDateTimeNow (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitNativeEffects" "emitDateTimeNow" [|box arg0;box arg1|]
+    let native_emitSleep (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:int) (arg2:LIR.FReg) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitNativeEffects" "emitSleep" [|box arg0;box arg1;box arg2|]
+    let native_emitCliNative (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) (arg2:LIR.CliOperation) (arg3:LIR.Operand list) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitNativeEffects" "emitCliNative" [|box arg0;box arg1;box arg2;box arg3|]
+    let native_emitCoverageHit (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:int) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitNativeEffects" "emitCoverageHit" [|box arg0;box arg1|]
+    let gps=List.map (fun p -> LIR.Physical p) physical@List.map (fun n -> LIR.Virtual n) [-1;0;2147483647] in
+    let selected=List.map (fun p -> LIR.Physical p) [LIR.X0;LIR.X1;LIR.X2;LIR.X14;LIR.X15;LIR.X19;LIR.SP]@[LIR.Virtual (-1)] in
+    let fps=List.map (fun p -> LIR.FPhysical p) fpPhysical@List.map (fun n -> LIR.FVirtual n) [-2147483648;-2001;-2000;-1003;-1002;-1001;-1000;-2;-1;0;7;8;9999;10000;2147483647] in
+    let values=[LIR.Imm Int64.MinValue;LIR.Imm Int64.MaxValue;LIR.Imm (-1L);LIR.Imm 0L;LIR.Imm 4096L;LIR.FloatImm (-0.);LIR.FloatSymbol (bitsFloat 0xfff8000000000000L);LIR.FuncAddr (fid (-1L));LIR.StringSymbol source;LIR.StringSymbol "hé😀";LIR.StringSymbol "a\000b";LIR.StringSymbol (String [|char 0xd800;char 97;char 0xdc00|])]@List.map (fun n -> LIR.StackSlot n) [-2147483648;-4096;-4095;-257;-256;-1;0;255;256;4095;4096;2147483647]@List.map (fun reg -> LIR.Reg reg) gps in
+    let observeContext target enabled =
+     let ctx=context source target enabled in
+     tuple [
+     mapNodes (fun reg -> tuple [call (fun () -> native_emitRandomInt64 ctx reg);call (fun () -> native_emitDateTimeNow ctx reg)]) gps;
+     mapNodes (fun freg -> mapNodes (fun effectId -> call (fun () -> native_emitSleep ctx effectId freg)) [-2147483648;-1;0;2147483647]) fps;
+     mapNodes (fun operation -> mapNodes (fun dest -> mapNodes (fun args -> call (fun () -> native_emitCliNative ctx dest operation args)) [[];[LIR.StringSymbol source];[LIR.StringSymbol source;LIR.Imm 1L];[LIR.StringSymbol source;LIR.Reg (LIR.Physical LIR.X15);LIR.Imm 8L];[LIR.Imm 0L;LIR.Imm 1L;LIR.Imm 2L;LIR.Imm 3L]]) gps) operations;
+     mapNodes (fun operation -> mapNodes (fun operand -> mapNodes (fun args -> call (fun () -> native_emitCliNative ctx (LIR.Physical LIR.X19) operation args)) [[operand];[operand;LIR.Imm 1L];[LIR.StringSymbol source;operand];[operand;LIR.Imm 0L;LIR.Imm 1L];[LIR.Imm 0L;operand;LIR.Imm 1L];[LIR.Imm 0L;LIR.Imm 1L;operand]]) values) operations;
+     mapNodes (fun operation -> mapNodes (fun dest -> mapNodes (fun operand -> mapNodes (fun args -> call (fun () -> native_emitCliNative ctx dest operation args)) [[operand];[operand;LIR.Reg dest];[LIR.Reg dest;operand];[operand;operand;LIR.Reg dest]]) [LIR.Reg dest;LIR.Reg (LIR.Physical LIR.X0);LIR.Reg (LIR.Physical LIR.X1);LIR.Reg (LIR.Physical LIR.X14);LIR.Reg (LIR.Physical LIR.X15)]) selected) [LIR.GetEnv;LIR.SetEnv;LIR.Kill;LIR.SecureRandomFill;LIR.SocketConnect4;LIR.SocketSend;LIR.SocketReceive;LIR.ProcessIO];
+     mapNodes (fun id -> call (fun () -> native_emitCoverageHit ctx id)) [-2147483648;-65536;-513;-512;-511;-1;0;1;511;512;513;8191;8192;268435455;268435456;536870912;2147483647]
+     ]
+    in
+    mapNodes (fun target -> mapNodes (observeContext target) [false;true]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -5521,6 +5554,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-native-effects" -> armNativeEffectObservation source
         | "arm64-print-emission" -> armPrintingEmissionObservation source
         | "arm64-memory-emission" -> armMemoryEmissionObservation source
         | "arm64-buffer-emission" -> armBufferEmissionObservation source

@@ -153,10 +153,54 @@ let printingChecks ()=
  check "Nullary\n" (ARM64Operands.loadImmediate S.X19 7L @ instructions (ARM64EmitPrinting.emitPrintSum ctx convert (LIR.Physical LIR.X19) ["Other",0,None;"Nullary",7,None] false));
  check "Point { x = 42, name = hé😀 }\n" (instructions (ARM64EmitMemory.emitHeapAlloc ctx (LIR.Physical LIR.X19) 16) @ instructions (ARM64EmitMemory.emitHeapStore ctx (LIR.Physical LIR.X19) 0 (LIR.Imm 42L) None) @ HeapAllocation.loadStringLiteralPointer S.X20 "hé😀" @ instructions (ARM64EmitMemory.emitHeapStore ctx (LIR.Physical LIR.X19) 8 (LIR.Reg (LIR.Physical LIR.X20)) (Some AST.TString)) @ instructions (ARM64EmitPrinting.emitPrintRecord ctx (LIR.Physical LIR.X19) "Point" ["x",AST.TInt64;"name",AST.TString]) @ instructions (ARM64EmitInteger.emitExit ctx) @ HeapAllocation.generateHeapOverflowTrapBlock (HeapAllocation.preparedHeapOverflowTrapBody target) ctx.ARM64CodeGenTypes.heapOverflowLabel @ HeapAllocation.generateRuntimeErrorHelper target);
  !total
+let nativeEffectChecks ()=
+ let target=ARM64.targetConfigFor Platform.LinuxARM64 in
+ let ctx=Semantic_observation.ARMPrintingObservation.context "effect-check" target false in
+ let number=ref 0 and total=ref 0 in
+ let emit operation args=
+  incr number;
+  let ctx={ctx with ARM64CodeGenTypes.instructionSite=string_of_int !number} in
+  instructions (ARM64EmitNativeEffects.emitCliNative ctx (LIR.Physical LIR.X19) operation args)
+ in
+ let print=[S.MOV_reg (S.X0,S.X19)] @ S.ofARM64List (PrintValues.generatePrintInt64NoNewline target) in
+ let printPositive=[S.CMP_imm (S.X19,0);S.CSET (S.X0,S.GT)] @ S.ofARM64List (PrintValues.generatePrintInt64NoNewline target) in
+ let text= instructions (ARM64EmitInteger.emitStdoutWrite ctx 0 (LIR.Reg (LIR.Physical LIR.X19)) false) in
+ let check expected body=
+  let root=[S.STP_pre (S.X29,S.X30,S.SP,-16);S.MOV_reg (S.X29,S.SP);S.MOVZ (S.X9,0,0);S.STR (S.X9,S.X29,0)] in
+  let helperLabel="__dark_cli_argv_effect-check" in
+  let program=root @ ProcessLifecycle.generateHeapInit target @ body @ instructions (ARM64EmitInteger.emitExit ctx) @ ProcessLifecycle.generateCliArgvHelper ctx helperLabel @ HeapAllocation.generateHeapOverflowTrapBlock (HeapAllocation.preparedHeapOverflowTrapBody target) ctx.ARM64CodeGenTypes.heapOverflowLabel @ HeapAllocation.generateRuntimeErrorHelper target in
+  let actual=runImage (image program) ["argument"] "" in
+  if actual<>expected then failwith (Printf.sprintf "native effect execution: expected %S, got %S" expected actual);
+  incr total
+ in
+ check "1" (emit LIR.HostOS [] @ print);
+ check "2" (emit LIR.HostArchitecture [] @ print);
+ check "1" (emit LIR.GetPid [] @ printPositive);
+ check (string_of_int (Unix.getuid ())) (emit LIR.GetUid [] @ print);
+ check "1" (emit LIR.CpuCount [] @ printPositive);
+ check (Sys.getcwd ()) (emit LIR.DirectoryCurrent [] @ text);
+ check (Unix.gethostname ()) (emit LIR.Hostname [] @ [S.LDR (S.X19,S.X19,8)] @ text);
+ check "1" (instructions (ARM64EmitNativeEffects.emitDateTimeNow ctx (LIR.Physical LIR.X19)) @ printPositive);
+ List.iter (fun delay -> check "slept" (instructions (ARM64EmitFloatingPoint.emitFLoad ctx (LIR.FPhysical LIR.D0) delay) @ instructions (ARM64EmitNativeEffects.emitSleep ctx 0 (LIR.FPhysical LIR.D0)) @ instructions (ARM64EmitInteger.emitStdoutWrite ctx 0 (LIR.StringSymbol "slept") false))) [-1.;0.;0.25];
+ check "argument" (emit LIR.GetArgv [LIR.Imm 0L] @ text);
+ Unix.putenv "PORT_NATIVE_EFFECT_FIXTURE" "hé😀";
+ check "hé😀" (emit LIR.GetEnv [LIR.StringSymbol "PORT_NATIVE_EFFECT_FIXTURE"] @ text);
+ check "changed" (emit LIR.SetEnv [LIR.StringSymbol "PORT_NATIVE_EFFECT_FIXTURE";LIR.StringSymbol "changed"] @ emit LIR.GetEnv [LIR.StringSymbol "PORT_NATIVE_EFFECT_FIXTURE"] @ text);
+ check "0" (emit LIR.UnsetEnv [LIR.StringSymbol "PORT_NATIVE_EFFECT_FIXTURE"] @ emit LIR.GetEnv [LIR.StringSymbol "PORT_NATIVE_EFFECT_FIXTURE"] @ print);
+ check "1" (emit LIR.FileIsDirectory [LIR.StringSymbol (Sys.getcwd ())] @ print);
+ let path=Filename.temp_file "port-exclusive-" ".file" in
+ Sys.remove path;
+ Fun.protect ~finally:(fun () -> if Sys.file_exists path then Sys.remove path) (fun () ->
+  check "0" (emit LIR.FileCreateExclusive [LIR.StringSymbol path] @ print);
+  if not (Sys.file_exists path) then failwith "FileCreateExclusive did not create file";
+  check "17" (emit LIR.FileCreateExclusive [LIR.StringSymbol path] @ print));
+ check "8" (ARM64Operands.loadImmediate S.X20 8L @ instructions (ARM64EmitMemory.emitRawAlloc ctx (LIR.Physical LIR.X21) (LIR.Physical LIR.X20)) @ emit LIR.SecureRandomFill [LIR.Reg (LIR.Physical LIR.X21);LIR.Imm 8L] @ print);
+ List.iter (fun operation -> check "0" (emit operation [] @ emit LIR.SocketClose [LIR.Reg (LIR.Physical LIR.X19)] @ print)) [LIR.SocketTcp4;LIR.SocketUdp4];
+ !total
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
  let effects=[Some "hé😀",false,0,"","hé😀";Some "",true,0,"","\n";None,false,1,"hello\nignored","hello";None,true,1,"hé😀\r\n","hé😀\n";None,false,1,"tail","tail";None,true,1,"","\n";None,true,2,"first\nsecond\n","first\nsecond\n";None,false,1,"a\000b\n","a\000b";None,false,1,"\n","";None,false,1,"a\rb\r\n","a\rb"] in
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
- let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks () in
+ let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count

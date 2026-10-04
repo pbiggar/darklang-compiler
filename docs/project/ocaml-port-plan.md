@@ -1271,3 +1271,21 @@ string inputs, literal bytes, empty lists, nullable/transparent/nullary sums and
 record fields. The build is warning-free and comment coverage is complete.
 Coverage is 262/391 pairs. Native-effect lowering is next; remaining ownership/
 dispatch, complete runners/corpus and final acceptance remain open.
+
+Complete ARM64 native-effect lowering is translated with its interface, all
+private helpers and all 11 original comment lines. Full result/instruction
+observations and exact recoverable errors match F# across 116,243,697 canonical
+JSON bytes: all 33 CLI operations, every destination/register alias role,
+operand forms and argument-count failures, both OS/leak configurations,
+sleep/clock/random emission and signed coverage-counter offset overflow.
+Directory/environment mutation, syscall normalization, sockets, process calls
+and unsupported-target result layouts retain the source behavior.
+
+All 508 translated tests and 207 real ARM64 process executions pass. Twenty-one
+new native-effect checks execute host OS/architecture/hostname/UID/PID/CPU count,
+current directory, time, negative/zero/fractional sleep, argv, environment read/
+set/unset, directory classification, exclusive file creation and existing-file
+errors, secure entropy reads and TCP/UDP socket creation/close. The build is
+warning-free and comment coverage is complete. Coverage is 263/391 pairs.
+Ownership runtime helpers are next; remaining instruction dispatch, full
+runners/corpus and final acceptance remain open.
