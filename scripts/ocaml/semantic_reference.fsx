@@ -6859,6 +6859,38 @@ let sessionObservation (source:string) =
     emit "unmeasured" (tuple [enc (not hasUnmeasured);enc value;enc (unmeasured.Arm64CodegenMetrics=[])])
     JsonArray(Array.ofSeq events) :> JsonNode
 
+let astPrettyObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let ne=AST.NonEmptyList.fromList
+    let print items=enc (ASTPrettyPrinter.formatProgram (AST.Program items))
+    let expr value=print [AST.Expression ([],value)]
+    let operations=[AST.Add;AST.Sub;AST.Mul;AST.Div;AST.Mod;AST.Pow;AST.Shl;AST.Shr;AST.BitAnd;AST.BitOr;AST.BitXor;AST.StringConcat;AST.Eq;AST.Neq;AST.Lt;AST.Gt;AST.Lte;AST.Gte;AST.And;AST.Or]
+    let field:AST.RecordFieldReference={SourceFieldName=source;ResolvedTypeName=None;ResolvedFieldIndex=None}
+    let reference:AST.RecordReference={SourceTypeName="M.R";ResolvedTypeName="M.R";TypeArgs=[AST.TString]}
+    let literal=AST.StringLiteral source
+    let constructor=AST.UnresolvedConstructor (Some "M.Choice")
+    let negative=AST.Int64Literal -1L
+    let fn=AST.Var "Module.function"
+    let patterns=[AST.PUnit;AST.PWildcard;AST.PVar source;AST.PConstructor ("M.C",[]);AST.PConstructor ("M.C",[AST.PVar source]);AST.PConstructor ("M.C",[AST.PTuple [AST.PVar "x";AST.PUnit]]);AST.PConstructor ("M.C",[AST.PUnit;AST.PWildcard]);AST.PResolvedConstructor ("M.Choice","M.C",1,[]);AST.PResolvedConstructor ("M.Choice","M.C",1,[AST.PTuple []]);AST.PResolvedConstructor ("M.Choice","M.C",1,[AST.PUnit;AST.PWildcard]);AST.POr (ne [AST.PWildcard;AST.PUnit]);AST.PInt64 Int64.MinValue;AST.PBigInt (1I <<< 128);AST.PInt128Literal Int128.MinValue;AST.PInt8Literal -128y;AST.PInt16Literal -32768s;AST.PInt32Literal Int32.MinValue;AST.PUInt8Literal 255uy;AST.PUInt16Literal 65535us;AST.PUInt32Literal UInt32.MaxValue;AST.PUInt64Literal UInt64.MaxValue;AST.PUInt128Literal UInt128.MaxValue;AST.PBool true;AST.PBool false;AST.PString source;AST.PChar source;AST.PFloat (-0.);AST.PFloat 1.5;AST.PTuple [AST.PUnit;AST.PVar source];AST.PList [AST.PUnit;AST.PVar source];AST.PListCons ([AST.PListCons ([AST.PVar "a"],AST.PVar "b");AST.PConstructor ("M.C",[AST.PVar "x"])],AST.PVar "tail");AST.PListCons ([],AST.PVar "tail")]
+    let letPatterns=[AST.LPUnit;AST.LPWildcard;AST.LPVariable source;AST.LPTuple (AST.LPVariable source,AST.LPWildcard,[AST.LPUnit;AST.LPTuple (AST.LPVariable "a",AST.LPVariable "b",[])])]
+    let types=[AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TBool;AST.TFloat64;AST.TString;AST.TBlob;AST.TChar;AST.TDateTime;AST.TUnit;AST.TNever;AST.TInternalRawPtr;AST.TVar source;AST.TInferenceVar (source,"identity");AST.TList AST.TString;AST.TStream AST.TBool;AST.TDict (AST.TList AST.TString,AST.TFunction ([AST.TInt64],AST.TBool));AST.TTuple [AST.TFunction ([AST.TInt64],AST.TBool);AST.TString];AST.TTuple [];AST.TRecord (source,[]);AST.TRecord ("M.R",[AST.TList AST.TString]);AST.TSum (source,[]);AST.TSum ("M.S",[AST.TString;AST.TInt64]);AST.TFunction ([AST.TString;AST.TFunction ([AST.TInt64],AST.TBool)],AST.TFunction ([AST.TUnit],AST.TString));AST.TFunction ([],AST.TString)]
+    let numbers=[AST.UnitLiteral;AST.Int64Literal Int64.MinValue;AST.Int64Literal Int64.MaxValue;AST.Int128Literal Int128.MinValue;AST.BigIntLiteral (1I <<< 180);AST.Int8Literal -128y;AST.Int16Literal -32768s;AST.Int32Literal Int32.MinValue;AST.UInt8Literal 255uy;AST.UInt16Literal 65535us;AST.UInt32Literal UInt32.MaxValue;AST.UInt64Literal UInt64.MaxValue;AST.UInt128Literal UInt128.MaxValue;AST.BoolLiteral true;AST.BoolLiteral false;literal;AST.CharLiteral source]@(List.map AST.FloatLiteral [0.;-0.;1.;1.5;1e-6;1e-7;1e20;1e21;Double.MaxValue;BitConverter.Int64BitsToDouble 0x0010000000000000L;Double.Epsilon;nan;infinity;-infinity])
+    let parameter pattern annotation inferred:AST.LambdaParameter={Pattern=pattern;SourceAnnotation=annotation;InferredType=inferred}
+    let recursion:AST.RecursiveCandidate={SourceName=source;Kind=AST.NamedLocalFunctionMember}
+    let recur=AST.RecursiveBindingCandidate recursion
+    let simpleLambda=AST.Lambda (ne [parameter (AST.LPVariable "x") (Some AST.TString) None],Some AST.TString,literal)
+    let wrappers value=[value;AST.BoundaryRender ("renderer",value);AST.RuntimeError source;AST.InterpolatedString [AST.StringText source;AST.StringExpr value;AST.StringText "{}\\\"\n\r\t\000"];AST.UnaryOp (AST.Neg,value);AST.UnaryOp (AST.Not,value);AST.UnaryOp (AST.BitNot,value);AST.Let (AST.LPVariable source,simpleLambda,value);AST.RecursiveLet (recur,simpleLambda,value);AST.RecursiveLet (AST.RecursiveBindingCandidate {recursion with Kind=AST.DirectLambdaValueMember},value,literal);AST.If (value,literal,negative);AST.Sequence (value,literal);AST.Apply (fn,[],ne [value]);AST.Apply (value,[AST.TList AST.TString],ne [negative;AST.UnitLiteral;AST.TupleLiteral [literal;negative]]);AST.TupleLiteral [value;literal];AST.TupleAccess (value,2);AST.TupleAccess (AST.TupleAccess (value,0),1);AST.DictLiteral (AST.TString,AST.TInt64,[value,negative]);AST.RecordLiteral (reference,[field,value]);AST.RecordUpdate (value,[field,literal]);AST.RecordAccess (value,field);AST.Constructor (constructor,source,[]);AST.Constructor (constructor,source,[value]);AST.Constructor (constructor,source,[value;literal]);AST.Constructor (AST.UnresolvedConstructor None,source,[value]);AST.Match (value,[{Patterns=ne [AST.PWildcard];Guard=Some value;Body=AST.Match (value,[{Patterns=ne [AST.PUnit];Guard=None;Body=AST.Let (AST.LPVariable "x",value,literal)}])}]);AST.ListLiteral [value;negative];AST.Lambda (ne [parameter AST.LPUnit None None],None,value);AST.Lambda (ne [parameter (AST.LPVariable source) None None;parameter AST.LPWildcard None None],Some AST.TString,value);AST.Lambda (ne [parameter (AST.LPVariable "$pipe_arg") None (Some AST.TBool)],None,AST.BinOp (AST.And,AST.Var "$pipe_arg",value));AST.Lambda (ne [parameter (AST.LPVariable "$pipe_arg") None (Some AST.TBool)],None,AST.BinOp (AST.Or,AST.Var "$pipe_arg",value));AST.IndirectApply (AST.Constructor (constructor,"Case",[]),ne [value]);AST.IndirectApply (value,ne [AST.UnitLiteral]);AST.IndirectApply (value,ne [value;AST.TupleLiteral []]);AST.Closure (source,[value;negative])]
+    let precedence=mapNodes (fun parent->mapNodes (fun child->mapNodes (fun isLeft->let child=AST.BinOp (child,AST.Var "a",AST.Var "b") in expr (if isLeft then AST.BinOp (parent,child,AST.Var "c") else AST.BinOp (parent,AST.Var "c",child))) [false;true]) operations) operations
+    let caseTexts=mapNodes (fun pattern->expr (AST.Match (literal,[{Patterns=ne [pattern;AST.PWildcard];Guard=None;Body=literal}]))) patterns
+    let letTexts=mapNodes (fun pattern->expr (AST.Let (pattern,simpleLambda,literal))) letPatterns
+    let expressionTexts=mapNodes (fun value->mapNodes expr (wrappers value)) (numbers@[AST.Var source;AST.Var "Module.function";AST.Apply (fn,[],ne [literal]);AST.BinOp (AST.Add,literal,negative);AST.Let (AST.LPWildcard,literal,negative);AST.TupleLiteral [literal;negative]])
+    let typeTexts=mapNodes (fun typ->print [AST.TypeDef (AST.RecordDef (source,["a"],[source,typ]));AST.TypeDef (AST.SumTypeDef (source,["a"],[{Name=source;Fields=[]};{Name="Case";Fields=[typ;AST.TString]}]));AST.TypeDef (AST.TypeAlias (source,["a"],typ));AST.FunctionDef {Name=source;TypeParams=["a";"b"];Params=ne [source,typ;"x",AST.TString];ReturnType=typ;Body=literal;Recursion=None}]) types
+    let definition name=AST.FunctionDef {Name=name;TypeParams=[];Params=ne ["$unit0",AST.TUnit];ReturnType=AST.TString;Body=literal;Recursion=None}
+    let declarations=mapNodes print [ [];[definition "A.f"];[definition "A.f";AST.ValueDef (AST.UncheckedValueDef ("A.v",literal));AST.ValueDef (AST.CheckedValueDef ("A.checked",AST.TString,literal));AST.TypeDef (AST.RecordDef ("A.R",[],[]));AST.TypeDef (AST.SumTypeDef ("A.S",[],[]));AST.TypeDef (AST.TypeAlias ("A.T",[],AST.TUnit))];[definition "A.f";definition "B.g"];[definition "A.f";AST.Expression ([],literal)];[definition source];[AST.ValueDef (AST.CheckedValueDef (source,AST.TString,literal))] ]
+    tuple [precedence;caseTexts;letTexts;expressionTexts;typeTexts;declarations]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -6888,6 +6920,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "ast-pretty" -> astPrettyObservation source
         | "compilation-session" -> sessionObservation source
         | "json-planning" -> jsonPlanningObservation source
         | "cache-identity" -> cacheIdentityObservation source

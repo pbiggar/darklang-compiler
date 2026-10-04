@@ -1737,3 +1737,15 @@ JSON bytes (SHA256
 The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
 6080/6080 x64 executions. Coverage is 301/391 pairs; source comment coverage
 is complete. Driver/library, runners/corpus and final acceptance remain open.
+
+The complete canonical semantic AST printer now preserves literal escaping and
+all numeric widths, shortest float syntax/negative zero, identifier formatting,
+operator precedence/associativity, application grouping, every expression and
+pattern form, type/function/value declarations and shared-module restoration.
+Sixteen text probes cover empty, multiline, Unicode and syntax-bearing names.
+Full observations match F#; the empty probe compares 60,308 identical JSON bytes
+(SHA256 af2e251d80a84d3e9384949effebead5eeef69d48888c0ccbb358cd812aec122).
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+6080/6080 x64 executions. Coverage is 302/391 pairs; source comment coverage
+is complete. Package resolution, driver/library, runners/corpus and final
+acceptance remain open.
