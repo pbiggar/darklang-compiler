@@ -2906,6 +2906,42 @@ let armPeepholeObservation (source:string) =
     let inverse=mapNodes (fun condition -> enc (ARM64Symbolic.B_cond_label (rcInternalCall<ARM64.Condition> "ARM64Peephole" "invertCondition" [|box condition|],source))) conditions
     tuple [classifications;rewrites;untouched;inverse]
 
+let armRuntimeObservation (_source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let armRegValues=[|ARM64.X0;ARM64.X1;ARM64.X2;ARM64.X3;ARM64.X4;ARM64.X5;ARM64.X6;ARM64.X7;ARM64.X8;ARM64.X9;ARM64.X10;ARM64.X11;ARM64.X12;ARM64.X13;ARM64.X14;ARM64.X15;ARM64.X16;ARM64.X17;ARM64.X18;ARM64.X19;ARM64.X20;ARM64.X21;ARM64.X22;ARM64.X23;ARM64.X24;ARM64.X25;ARM64.X26;ARM64.X27;ARM64.X28;ARM64.X29;ARM64.X30;ARM64.SP|]
+    let armFRegValues=[|ARM64.D0;ARM64.D1;ARM64.D2;ARM64.D3;ARM64.D4;ARM64.D5;ARM64.D6;ARM64.D7;ARM64.D8;ARM64.D9;ARM64.D10;ARM64.D11;ARM64.D12;ARM64.D13;ARM64.D14;ARM64.D15;ARM64.D16;ARM64.D17;ARM64.D18;ARM64.D19;ARM64.D20;ARM64.D21;ARM64.D22;ARM64.D23;ARM64.D24;ARM64.D25;ARM64.D26;ARM64.D27;ARM64.D28;ARM64.D29;ARM64.D30;ARM64.D31|]
+    let regs=armRegValues
+    let fps=armFRegValues
+    let words xs=xs |> List.mapi (fun idx instr -> ARM64_Encoding.encodeWithLabels instr (idx*4) Map.empty Map.empty Map.empty (Map.ofList [ARM64Symbolic.coverageDataLabelName,16384])) |> List.toArray |> enc
+    let code xs=tuple [enc xs;words xs]
+    let internalCode f=try tuple [enc false;code (f ())] with _ -> tuple [enc true]
+    let regsList=Array.toList regs
+    let chunks=[0;1;0x7fff;0x8000;0xfffe;0xffff]
+    let values=[for a in chunks do for b in chunks do for c in chunks do for d in chunks do yield ((uint64 a <<< 48) ||| (uint64 b <<< 32) ||| (uint64 c <<< 16) ||| uint64 d)]
+    let immediate reg value=code (rcInternalCall<ARM64.Instr list> "ARM64RuntimeImmediates" "generateLoadUInt64Immediate" [|box reg;box value|])
+    let immediates=mapNodes (fun reg -> mapNodes (immediate reg) values) regsList
+    let signed=mapNodes (fun reg -> mapNodes (fun value -> internalCode (fun () -> rcInternalCall<ARM64.Instr list> "ARM64RuntimeImmediates" "generateLoadNonNegativeIntImmediate" [|box reg;box value|])) [-2147483648;-1;0;1;65535;65536;2147483647]) regsList
+    let floats=mapNodes (fun reg -> mapNodes (fun fp -> code (ARM64FloatFormatting.generateFloatToString reg fp)) (Array.toList fps)) regsList
+    let targetObservation target =
+        let coverage=mapNodes (fun count -> internalCode (fun () -> ARM64Coverage.generateCoverageFlush target count)) [-2147483648;-536870912;-268435456;-1;0;1;2;511;512;8191;8192;65535;65536;268435455;268435456;536870911;536870912;2147483647]
+        let hosts=mapNodes (fun reg -> tuple [code (ARM64HostValues.generateRandomInt64 target reg);code (ARM64HostValues.generateDateTimeNow target reg)]) regsList
+        let filePair dest path=tuple [code (ARM64FileRead.generateFileReadBlob target dest path);code (ARM64FileMetadata.generateFileExists target dest path);code (ARM64FileMetadata.generateFileDelete target dest path);code (ARM64FileMetadata.generateFileSetExecutable target dest path)]
+        let files=mapNodes (fun dest -> mapNodes (filePair dest) regsList) regsList
+        let multiRole role =
+            let dest=regs[role]
+            let choices=[dest;regs[(role+1)%32];ARM64.X19;ARM64.X22]
+            let write path content append=code (ARM64FileWrite.generateFileWriteBlob target dest path content append)
+            let writes=mapNodes (fun path -> mapNodes (fun content -> mapNodes (write path content) [false;true]) choices) choices
+            let pointer path ptr len=code (ARM64WriteFromPointer.generateFileWriteFromPtr target dest path ptr len)
+            let pointers=mapNodes (fun path -> mapNodes (fun ptr -> mapNodes (pointer path ptr) choices) choices) choices
+            tuple [writes;pointers]
+        let multi=mapNodes multiRole [0..31]
+        tuple [coverage;hosts;files;multi]
+    let targets=mapNodes targetObservation [ARM64.targetConfigFor Platform.MacOSARM64;ARM64.targetConfigFor Platform.LinuxARM64]
+    tuple [immediates;signed;floats;targets]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -5154,6 +5190,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-runtime" -> armRuntimeObservation source
         | "arm64-peephole" -> armPeepholeObservation source
         | "arm64-operands" -> armOperandsObservation source
         | "x64-operands" -> x64OperandsObservation source

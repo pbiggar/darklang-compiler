@@ -1135,3 +1135,15 @@ the warning-free native build passes 508/508 translated tests. Comment coverage
 has zero missing lines. Coverage is 240/391 pairs. ARM64 runtime instruction
 generators are next; instruction dispatch, ownership runtime, complete test
 runners and corpus/final acceptance remain open.
+
+Complete ARM64 runtime constant materialization, coverage output, native float
+formatting, clocks/randomness, file reads/writes/metadata and pointer-range
+writes are translated with interfaces and all 546 original comment lines.
+Whole instruction selections and every encoded machine word match F# for both
+OS targets: 41,472 unsigned constant selections, signed/coverage overflow
+boundaries, all 1,024 GP/FP formatting pairs, every destination/path register
+pair for read/exists/delete/set-executable, append/truncate modes and aliased
+three/four-register writes. The warning-free build passes 508/508 translated
+checks, and comment coverage is complete. Coverage is 248/391 pairs. Printing
+and allocation accounting are next; remaining dispatch/ownership runtime,
+complete test tooling, corpus checks and final acceptance remain open.
