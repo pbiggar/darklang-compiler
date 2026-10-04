@@ -16,6 +16,7 @@ let rec requests () =
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
         | "macho-images" -> Semantic_observation.MachOObservation.observe source
+        | "x64-file-emission" -> Semantic_observation.X64FileEmissionObservation.observe source
         | "x64-buffer-emission" -> Semantic_observation.X64BufferEmissionObservation.observe source
         | "x64-memory-emission" -> Semantic_observation.X64MemoryEmissionObservation.observe source
         | "x64-rc-emission" -> Semantic_observation.X64RcEmissionObservation.observe source

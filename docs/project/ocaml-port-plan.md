@@ -1592,3 +1592,18 @@ null guards, binary/many copies, embedded NUL/Unicode/empty strings, stack
 operands and overlapping caller/callee/scratch registers. Coverage is 288/391
 pairs; comment coverage is complete. Remaining x64 modules, driver/library,
 runners/corpus and final acceptance remain open.
+
+Complete x64 file read/write/append, existence, deletion, directory creation
+and the original set-executable/write-from-pointer return behavior are
+translated with full interfaces and source comments. Full instructions,
+syscall setup, fresh-label order and errors match F# across 37,325,487 canonical
+JSON bytes (SHA256
+b7b68f1eb812d796f69fb62d9cb541c60a96b745c3d93add6ac0c08a1bd375cd).
+Cases cover all GP registers, virtual errors, every operand family, stack
+boundaries, register overlaps, write/append selection and leak settings.
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions
+and 2466/2466 x64 executions. The 150 new x64 cases verify Unicode/NUL file
+contents, append/read, literal/register/stack paths, missing paths, open
+errors, mkdir/repeated mkdir, delete/repeated delete and source return values.
+Coverage is 289/391 pairs; comment coverage is complete. Remaining x64 modules,
+driver/library, runners/corpus and final acceptance remain open.

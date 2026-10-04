@@ -829,6 +829,55 @@ let x64BufferChecks ()=
   check "firstsecond" (init@checked (E.emitStringConcat ctx (LIR.Physical dest) (LIR.StackSlot 8) (LIR.Reg (LIR.Physical LIR.X7)) [])@print dest)) gps;
  !total
 [@@warning "-42"]
+let x64FileChecks ()=
+ let module X=X86_64 in let module E=X64EmitFiles in let total=ref 0 in
+ let ctx={X64CodeGenTypes.functionName="x64-file-execution";stackSize=0;usedCalleeSaved=[];enableLeakCheck=false;recordRegistry=StringOrder.Map.empty;sumShapeRegistry=StringOrder.Map.empty;functionNames=FunctionIdMap.empty} in
+ let checked=function Ok value->value|Error error->failwith error in
+ let path=Filename.temp_file "port-x64-files-hé-" ".bin" in
+ let directory=path^".dir" and missing=path^".missing" in
+ let readFile ()=In_channel.with_open_bin path In_channel.input_all in
+ let execute ?(scalar=0L) physical tag payload operation =
+  let reg=X64Operands.lirRegToX86 physical in
+  let setup=[X.SUB_imm (X.RSP,32768l);X.MOV_reg (X.RBP,X.RSP);X.MOV_reg (X.R15,X.RBP);X.LEA (X.R14,X.RBP,8192l)] in
+  let output=if tag=None then [X.MOV_reg (X.RAX,reg)] else [X.MOV_reg (X.RBX,reg);X.MOV_load (X.RAX,X.RBX,0l)] in
+  let output=output@X64Operands.loadImm64 X.RDX (Option.value ~default:scalar tag)@[X.CMP_reg (X.RAX,X.RDX);X.Jcc (X.NE,"failed")]@X64Operands.genPrintChars ['P']@(match payload with None->[] | Some _->[X.MOV_load (X.RAX,X.RBX,8l)]@checked (X64EmitPrinting.emitPrintHeapStringNoNewline ctx (LIR.Physical LIR.X0))) in
+  let code=[X.Label "_start"]@setup@operation@output@[X.ADD_imm (X.RSP,32768l);X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@[X.Label "failed"]@X64Operands.genPrintChars ['F']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall in
+  let pool=X86_64_Resolve.collectStringPool code in
+  let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let resolved=checked (X86_64_Resolve.patchDataLabels resolved (X86_64_Resolve.dataLabelOffsets 120 (Bytes.length resolved.X86_64_Resolve.machineCode) pool) 120) in
+  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode pool LiteralPool.emptyFloatPool false 0 in
+  let actual=try runImageOn "/opt/dcb/qemu/qemu-x86_64" binary [] "" with Failure e->failwith (Printf.sprintf "x64 file case %d: %s" !total e) in
+  let expected="P"^Option.value ~default:"" payload in
+  if actual<>expected then failwith (Printf.sprintf "x64 file case %d: expected %S, got %S" !total expected actual);
+  incr total in
+ Fun.protect ~finally:(fun ()->if Sys.file_exists path then Sys.remove path;if Sys.file_exists directory then Unix.rmdir directory) (fun ()->
+  List.iter (fun physical->let dest=LIR.Physical physical in
+   Out_channel.with_open_bin path (fun ch->output_string ch "");
+   execute physical None None (checked (E.emitFileExists ctx dest (LIR.StringSymbol missing)));
+   execute ~scalar:1L physical None None (checked (E.emitFileExists ctx dest (LIR.StringSymbol path)));
+   let content="hé😀\000blob" in
+   let pathOp=LIR.StringSymbol path and contentOp=LIR.StringSymbol content in
+   execute physical (Some 0L) None (checked (E.emitFileWriteBlob ctx (LIR.FileWriteBlob (dest,pathOp,contentOp)) dest pathOp contentOp));
+   if readFile ()<>content then failwith "x64 write contents differ";
+   let tail=LIR.StringSymbol "tail" in
+   execute physical (Some 0L) None (checked (E.emitFileWriteBlob ctx (LIR.FileAppendText (dest,pathOp,tail)) dest pathOp tail));
+   if readFile ()<>content^"tail" then failwith "x64 append contents differ";
+   List.iter (fun style->let setup,pathOp=if style=0 then [],LIR.StringSymbol path else if style=1 then X64Operands.emitStringLiteral X.R11 path,LIR.Reg (LIR.Physical LIR.X8) else X64Operands.emitStringLiteral X.RAX path@[X.MOV_store (X.RBP,8l,X.RAX)],LIR.StackSlot 8 in
+    execute physical (Some 0L) (Some (content^"tail")) (setup@checked (E.emitFileReadBlob ctx dest pathOp))) [0;1;2];
+   execute physical (Some 1L) (Some "File not found") (checked (E.emitFileReadBlob ctx dest (LIR.StringSymbol missing)));
+   let bad=LIR.StringSymbol (missing^"/leaf") in
+   execute physical (Some 1L) (Some "Error") (checked (E.emitFileWriteBlob ctx (LIR.FileWriteBlob (dest,bad,contentOp)) dest bad contentOp));
+   execute physical (Some 0L) None (checked (E.emitFileCreateDirectory ctx dest (LIR.StringSymbol directory)));
+   if (Unix.stat directory).Unix.st_kind<>Unix.S_DIR then failwith "x64 mkdir did not create directory";
+   execute physical (Some 1L) (Some "Error") (checked (E.emitFileCreateDirectory ctx dest (LIR.StringSymbol directory)));
+   Unix.rmdir directory;
+   execute physical (Some 0L) None (checked (E.emitFileDelete ctx dest pathOp));
+   if Sys.file_exists path then failwith "x64 delete did not remove file";
+   execute physical (Some 1L) (Some "Error") (checked (E.emitFileDelete ctx dest pathOp));
+   execute physical None None (checked (E.emitFileSetExecutable ctx dest));
+   execute physical None None (checked (E.emitFileWriteFromPtr ctx dest))) [LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X19];
+  !total)
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -836,4 +885,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks ()+x64MemoryChecks ()+x64BufferChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks ()+x64MemoryChecks ()+x64BufferChecks ()+x64FileChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
