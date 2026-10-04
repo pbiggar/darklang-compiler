@@ -3928,6 +3928,41 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let driverDiagnosticsCall<'a> name args=rcInternalCall<'a> "PipelineDiagnostics" name args
+let driverDiagnosticsObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let defaults=tuple [enc CompilerOptions.defaultOptions;enc (CompilerOptions.defaultWarningSettings=AST.defaultWarningSettings)]
+    let selection mask=
+        let bit n=mask &&& (1 <<< n)<>0
+        let o={CompilerOptions.defaultOptions with DisableANFOpt=bit 0;DisableANFConstFolding=bit 1;DisableANFConstProp=bit 2;DisableANFCopyProp=bit 3;DisableANFDCE=bit 4;DisableANFStrengthReduction=bit 5;DisableTCO=bit 6;DisableMIROpt=bit 7;DisableMIRSCCP=bit 8;DisableMIRCSE=bit 9;DisableMIRDCE=bit 10;DisableMIRLICM=bit 11}
+        let a=driverDiagnosticsCall<ANFConstants.OptimizeOptions> "buildANFOptimizeOptions" [|box o|]
+        let m=driverDiagnosticsCall<MIROptimizationFacts.OptimizeOptions> "buildMIROptimizeOptions" [|box o|]
+        tuple [enc a;enc (driverDiagnosticsCall<bool> "shouldRunANFOptimize" [|box a|]);enc m;enc (driverDiagnosticsCall<bool> "shouldRunMIROptimize" [|box m|])]
+    let selections=mapNodes selection [0..4095]
+    let flags=mapNodes (fun verbosity->mapNodes (fun enabled->enc (driverDiagnosticsCall<bool> "shouldDumpIR" [|box verbosity;box enabled|])) [false;true]) [-2147483648;-1;0;1;2;3;4;2147483647]
+    let groups=mapNodes (fun label->mapNodes (fun flags->enc (driverDiagnosticsCall<string> "formatPassGroup" [|box label;box flags|])) [[];[source,false];[source,true];["a",true;"b",false;"c",true];["",true;"",true]]) [source;"";"hé😀";"nul\000"]
+    let values=[0.;-0.;0.00001;0.00005;0.00009;0.0001;0.00015;0.00019;-0.00005;-0.00015;0.1;1.5;123.456789;nan;infinity;-infinity;922337203685477.5;922337203685477.6;-922337203685477.6;922337203685478.]
+    let timing enabled value=
+        let events=ResizeArray<string*int64>()
+        let recorder:CompilerOptions.PassTimingRecorder option=if enabled then Some (fun p->events.Add(p.Pass,p.Elapsed.Ticks)) else None
+        try driverDiagnosticsCall<unit> "recordPassTiming" [|box recorder;box source;box value|];tuple [enc false;mapNodes (fun (name,ticks)->tuple [enc name;enc ticks]) (List.ofSeq events)]
+        with ex->tuple [enc true;enc ex.Message]
+    let timings=mapNodes (fun enabled->mapNodes (timing enabled) values) [false;true]
+    let schemas=tuple [mapNodes (fun probe->enc {CompilerOptions.defaultOptions with NativeLayoutProbe=probe}) [CompilerOptions.NoNativeLayoutProbe;CompilerOptions.RootWord;CompilerOptions.TupleWords];mapNodes (fun name->enc {CompilerOptions.defaultOptions with DumpFunction=name;DumpIRSummary=true}) [None;Some "";Some source];mapNodes enc [CompilerOptions.FullProgram;CompilerOptions.TestExpression];mapNodes enc [CompilerOptions.Closed;CompilerOptions.Bytes [||];CompilerOptions.Bytes [|0uy..255uy|]]]
+    let capture action=
+        let saved=Console.Out
+        use writer=new IO.StringWriter()
+        try Console.SetOut writer;action ();enc (writer.ToString())
+        finally Console.SetOut saved
+    let printedCase summary filter=
+        let o={CompilerOptions.defaultOptions with DumpIRSummary=summary;DumpFunction=filter}
+        let actions=[(fun ()->driverDiagnosticsCall<unit> "printANFProgram" [|box o;box source;box (ANF.Program ([],ANF.Return ANF.UnitLiteral))|]);(fun ()->driverDiagnosticsCall<unit> "printMIRProgram" [|box o;box source;box (MIR.Program ([],Map.empty,Map.empty))|]);(fun ()->driverDiagnosticsCall<unit> "printLIRProgram" [|box o;box source;box (LIR.Program ([],Map.empty,Map.empty))|])]
+        mapNodes capture actions
+    let printed=mapNodes (fun summary->mapNodes (printedCase summary) [None;Some "";Some source]) [false;true]
+    tuple [defaults;selections;flags;groups;timings;schemas;printed]
+
 let x64ProgramObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -6538,6 +6573,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "driver-diagnostics" -> driverDiagnosticsObservation source
         | "x64-program" -> x64ProgramObservation source
         | "x64-functions" -> x64FunctionObservation source
         | "x64-process" -> x64ProcessObservation source

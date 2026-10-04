@@ -1682,3 +1682,15 @@ and automatic child cleanup. Float presentation awaits the stdlib formatter
 through the driver; emitted formatter calls are fully compared. Coverage is
 296/391 pairs; source comment coverage is complete. Driver/library,
 runners/corpus and final acceptance remain open.
+
+Compiler options and pipeline diagnostics now preserve the full option/report
+schema, defaults, compile modes, layout probes and execution inputs. All 4096
+ANF/MIR flag combinations, pass-group formatting, verbosity boundaries, exact
+TimeSpan conversion and callback behavior, and captured ANF/MIR/LIR output match
+the source. Sixteen text probes include empty, multiline and Unicode input;
+the empty probe compares 1,577,757 complete canonical JSON bytes (SHA256
+3ff695d50caa9585508f203ca9ce16e70186969ad1259a0477b900e70555acba).
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+6080/6080 x64 executions. Coverage is 298/391 pairs; source comment coverage
+is complete. Cache/session, driver/library, runners/corpus and final acceptance
+remain open.

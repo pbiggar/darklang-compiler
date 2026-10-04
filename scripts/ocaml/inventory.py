@@ -35,6 +35,7 @@ def fixture(path):
 
 # Preserve F# namespace distinctions in Dune's unqualified module graph.
 OWNER_OVERRIDES = {
+    "src/DarkCompiler/driver/Options.fs": "ocaml/lib/driver/CompilerOptions.ml",
     "src/DarkCompiler/backend/x64/runtime/Process.fs": "ocaml/lib/backend/x64/runtime/X64Process.ml",
     "src/DarkCompiler/passes/lir/allocation/ApplyBlocks.fs": "ocaml/lib/passes/lir/allocation/ApplyBlockAllocation.ml",
     "src/DarkCompiler/passes/lir/allocation/ApplyInstructions.fs": "ocaml/lib/passes/lir/allocation/ApplyRegisterAllocation.ml",
