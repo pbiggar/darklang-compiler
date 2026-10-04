@@ -1984,3 +1984,11 @@ without reflection or JSON conversion. The warning-free build passes 572/572
 translated unit/fixture checks. Coverage is 335/391 pairs; reference comments
 remain complete. Remaining unit/test-tooling pairs, full corpus and final
 acceptance remain open.
+
+The complete type-checking unit suite now preserves all 22 original tests,
+including sum-equality pair matching, declaration validation, nominal overlays,
+recursive group identities, import precedence and the 373-function/let-chain
+stack regression. All 16 complete registration/result observations match F#.
+The warning-free native build passes 593/593 translated unit/fixture checks.
+Coverage is 336/391 pairs; reference comments remain complete. Remaining unit
+and test-tooling pairs, full corpus and final acceptance remain open.
