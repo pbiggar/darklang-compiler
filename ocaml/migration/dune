@@ -896,3 +896,15 @@
  (deps ../lib/backend/x64/runtime/X64Printing.mli)
  (action (with-stdout-to %{targets}
   (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/x64/runtime/X64Printing.mli}) (echo "val genPrintInt64AndExit : X86_64.reg -> X86_64.instr list\nval genPrintBoolAndExit : X86_64.reg -> X86_64.instr list\n")))))
+
+(rule
+ (targets InstrumentedX64ReleaseSelection.ml)
+ (deps ../lib/backend/x64/runtime/X64ReleaseSelection.ml)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/x64/runtime/X64ReleaseSelection.ml})))))
+(rule
+ (targets InstrumentedX64ReleaseSelection.mli)
+ (deps ../lib/backend/x64/runtime/X64ReleaseSelection.mli)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/x64/runtime/X64ReleaseSelection.mli})
+   (echo "val releasePlanIsTaggedListWithElementRelease : (MemoryModel.rcReleasePlan -> bool) -> MemoryModel.rcReleasePlan -> bool\nval releasePlanIsDynamicBufferRelease : MemoryModel.rcReleasePlan -> bool\nval plannedDictDecHelperLabelForReleasePlan : MemoryModel.rcReleasePlan -> string\nval typeReleasePlanContains : (MemoryModel.rcReleasePlan -> bool) -> LIR.recordRegistry -> MemoryModel.rcSumShapeRegistry -> AST.semanticType -> bool\nval releasePlanFieldReleaseAt : int -> MemoryModel.rcFieldRelease list -> MemoryModel.rcReleasePlan option\nval releasePlanIsDynamicBufferAt : int -> MemoryModel.rcFieldRelease list -> bool\nval releasePlanIsRootKindAt : int -> MemoryModel.rcKind -> MemoryModel.rcFieldRelease list -> bool\nval releasePlanIsDictWithValueAt : int -> (MemoryModel.rcReleasePlan -> bool) -> MemoryModel.rcFieldRelease list -> bool\n")))))

@@ -531,6 +531,26 @@ let x64PrintingChecks ()=
  check "heap" (X64Printing.genHeapInit ()@X64Operands.genPrintChars ['h';'e';'a';'p']);
  !total
 [@@warning "-42"]
+let x64ReleaseSelectionChecks ()=
+ let module X=X86_64 in
+ let ctx={X64CodeGenTypes.functionName="x64-release-execution";stackSize=0;usedCalleeSaved=[];enableLeakCheck=false;recordRegistry=StringOrder.Map.empty;sumShapeRegistry=StringOrder.Map.empty;functionNames=FunctionIdMap.empty} in
+ let checked=function Ok value->value|Error error->failwith error in
+ let total=ref 0 in
+ let check body=let code=[X.Label "_start"]@body@X64Operands.genPrintChars ['P']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@[X.Label "failed"]@X64Operands.genPrintChars ['F']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall in
+  let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0 in
+  let actual=runImageOn "/opt/dcb/qemu/qemu-x86_64" binary [] "" in
+  if actual<>"P" then failwith (Printf.sprintf "x64 field release failed at case %d" !total);
+  incr total in
+ List.iter (fun offset->List.iter (fun tagged->List.iter (fun (count,kind)->
+  let field=Int32.of_int (32+offset) in
+  let setup=[X.SUB_imm (X.RSP,128l);X.MOV_reg (X.RDX,X.RSP);X.ADD_imm (X.RDX,32l);X.LEA (X.RAX,X.RSP,96l)]@X64Operands.loadImm64 X.RCX count@[X.MOV_store (X.RAX,0l,X.RCX)] in
+  let pointer=match kind with 0->[X.XOR_reg (X.RCX,X.RCX)] | 1->[X.MOV_imm32 (X.RCX,1l)] | _->[X.MOV_reg (X.RCX,X.RAX)] in
+  let expected=if kind<2 || count=Int64.max_int then count else Int64.pred count in
+  let body=setup@pointer@[X.MOV_store (X.RSP,field,X.RCX)]@X64ReleaseSelection.genDynamicBufferFieldRelease ctx tagged offset@[X.MOV_load (X.RAX,X.RSP,96l)]@X64Operands.loadImm64 X.RCX expected@[X.CMP_reg (X.RAX,X.RCX);X.Jcc (X.NE,"failed");X.MOV_reg (X.RCX,X.RSP);X.ADD_imm (X.RCX,32l);X.CMP_reg (X.RDX,X.RCX);X.Jcc (X.NE,"failed");X.ADD_imm (X.RSP,128l)] in
+  check body) ([1L,0;Int64.max_int,2;1L,2;2L,2;17L,2]@(if tagged then [17L,1] else []))) [false;true]) [-16;0;8;24];
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -538,4 +558,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks ()+x64PrintingChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count

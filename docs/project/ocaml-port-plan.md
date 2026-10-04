@@ -1478,3 +1478,15 @@ and RDX aliases, and real mmap heap startup. Integer fixtures respect the
 printer's RCX stack-cursor reservation. Coverage is 280/391 pairs; source comment
 coverage is complete. Remaining x64 runtime/instructions, driver/library,
 runners/corpus and final acceptance remain open.
+
+Complete x64 release selection is translated with its full interface and all
+source comments. Helper selection, recursive fingerprints, retain targets,
+metadata requirements, first-match field offsets, nested-plan predicates and
+full emitted instruction lists match F# across 12,272,255 identical JSON bytes
+(SHA256 13eb1566f8da63b2291ba8a00f7b49f5985944cdecedab1618771cb1734580eb).
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+457/457 x64 executions. The 44 new x64 cases execute null, tagged, static and
+shared/unique dynamic buffer fields at positive, zero and negative offsets,
+checking refcounts and parent preservation. Coverage is 281/391 pairs; source
+comment coverage is complete. Remaining x64 runtime/instructions, driver/library,
+runners/corpus and final acceptance remain open.
