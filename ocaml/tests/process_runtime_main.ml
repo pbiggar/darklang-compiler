@@ -14,7 +14,7 @@ let binary index=
  S.ofARM64List (PrintValues.generatePrintStringNoNewline target) @ S.ofARM64List (PrintAndExit.generateExit target) @
  [S.Label "missing"] @ S.ofARM64List (PrintValues.generatePrintChars target [78]) @ S.ofARM64List (PrintAndExit.generateExit target) @
  ProcessLifecycle.generateCliArgvHelper ctx "argv-check")
-let runImage bytes arguments input=
+let runImageOn emulator bytes arguments input=
  let path=Filename.temp_file "port-process-" ".elf" in
  let inputPath=Filename.temp_file "port-input-" ".txt" in
  Fun.protect ~finally:(fun () -> Sys.remove path;Sys.remove inputPath) (fun () ->
@@ -22,14 +22,15 @@ let runImage bytes arguments input=
   let channel=open_out_bin inputPath in output_string channel input;close_out channel;
   let inputFd=Unix.openfile inputPath [Unix.O_RDONLY] 0 in
   let outRead,outWrite=Unix.pipe () and errRead,errWrite=Unix.pipe () in
-  let args=Array.of_list ("/opt/dcb/qemu/qemu-aarch64"::path::arguments) in
+  let args=Array.of_list (emulator::path::arguments) in
   let pid=Unix.create_process args.(0) args inputFd outWrite errWrite in
   Unix.close inputFd;Unix.close outWrite;Unix.close errWrite;
   let read descriptor=let channel=Unix.in_channel_of_descr descriptor in let output=In_channel.input_all channel in close_in channel;output in
   let output=read outRead in let errors=read errRead in
   match snd (Unix.waitpid [] pid) with
   | Unix.WEXITED 0 when errors="" -> output
-  | (Unix.WEXITED _ | Unix.WSIGNALED _ | Unix.WSTOPPED _) as status -> failwith (Printf.sprintf "ARM64 process execution failed (%s): %s" (match status with Unix.WEXITED code -> string_of_int code | Unix.WSIGNALED signal -> "signal "^string_of_int signal | Unix.WSTOPPED signal -> "stop "^string_of_int signal) errors))
+  | (Unix.WEXITED _ | Unix.WSIGNALED _ | Unix.WSTOPPED _) as status -> failwith (Printf.sprintf "Process execution failed (%s): %s" (match status with Unix.WEXITED code -> string_of_int code | Unix.WSIGNALED signal -> "signal "^string_of_int signal | Unix.WSTOPPED signal -> "stop "^string_of_int signal) errors))
+let runImage bytes arguments input=runImageOn "/opt/dcb/qemu/qemu-aarch64" bytes arguments input
 let instructions=function Ok xs -> xs | Error message -> failwith message
 let presentationBinary literal newline reads=
  let target=ARM64.targetConfigFor Platform.LinuxARM64 in
@@ -461,10 +462,47 @@ let programPipelineChecks ()=
   incr total) cases) [0;1;2];
  !total
 [@@warning "-42"]
+let x64CallFloatChecks ()=
+ let module X=X86_64 in
+ let module F=X64EmitFloatingPoint in
+ let ctx={X64CodeGenTypes.functionName="x64-execution";stackSize=32;usedCalleeSaved=[LIR.X19];enableLeakCheck=false;recordRegistry=StringOrder.Map.empty;sumShapeRegistry=StringOrder.Map.empty;functionNames=FunctionIdMap.ofList [AST.functionId 1L,"callee"]} in
+ let checked=function Ok value->value|Error error->failwith error in
+ let total=ref 0 in
+ let check body resultReg expected extra=
+  let comparison=X64Operands.loadImm64 X.RCX expected@[X.CMP_reg (resultReg,X.RCX);X.Jcc (X.NE,"failed")] in
+  let code=[X.Label "_start"]@X64Frames.genPrologue 32 [LIR.X19]@body@comparison@X64Operands.genPrintChars ['P']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@[X.Label "failed"]@X64Operands.genPrintChars ['F']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@extra in
+  let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode (LiteralPool.createStringPool Seq.empty) (LiteralPool.createFloatPool Seq.empty) false 0 in
+  let actual=runImageOn "/opt/dcb/qemu/qemu-x86_64" binary [] "" in
+  if actual<>"P" then failwith (Printf.sprintf "x64 call/float execution failed at case %d" !total);
+  incr total in
+ let fps=[LIR.D0;LIR.D1;LIR.D2;LIR.D3;LIR.D4;LIR.D5;LIR.D6;LIR.D7;LIR.D8;LIR.D9;LIR.D10;LIR.D11;LIR.D12;LIR.D13;LIR.D14;LIR.D15] in
+ let load reg value=checked (F.emitFLoad ctx (LIR.FPhysical reg) value) in
+ List.iter (fun dest ->
+  List.iter (fun (emit,expected) ->
+   let body=load LIR.D0 8. @ load LIR.D15 2. @ checked (emit ctx (LIR.FPhysical dest) (LIR.FPhysical LIR.D0) (LIR.FPhysical LIR.D15)) @ [X.MOVQ_to_gp (X.RAX,X64Operands.lirFRegToX86 dest)] in
+   check body X.RAX (Int64.bits_of_float expected) []) [F.emitFAdd,10.;F.emitFSub,6.;F.emitFMul,16.;F.emitFDiv,4.];
+  List.iter (fun src -> List.iter (fun (emit,input,expected) ->
+   let body=load src input @ checked (emit ctx (LIR.FPhysical dest) (LIR.FPhysical src)) @ [X.MOVQ_to_gp (X.RAX,X64Operands.lirFRegToX86 dest)] in
+   check body X.RAX (Int64.bits_of_float expected) []) [F.emitFNeg,-3.,3.;F.emitFAbs,-3.,3.;F.emitFSqrt,9.,3.]) [dest;LIR.D0;LIR.D15]) fps;
+ List.iter (fun dest ->
+  let physical=LIR.Physical dest in let result=X64Operands.lirRegToX86 dest in
+  let leaf=[X.Label "callee"]@X64Operands.loadImm64 X.RAX 42L@[X.RET] in
+  check (checked (X64EmitCalls.emitCall ctx physical (AST.functionId 1L) [])) result 42L leaf;
+  List.iter (fun pointer -> let source=LIR.Physical pointer in
+   let setup=checked (X64EmitCalls.emitLoadFuncAddr ctx source (AST.functionId 1L)) in
+   check (setup@checked (X64EmitCalls.emitIndirectCall ctx physical source [])) result 42L leaf;
+   check (setup@checked (X64EmitCalls.emitClosureCall ctx physical source [])) result 42L leaf) [LIR.X6;LIR.X7;LIR.X19]) [LIR.X0;LIR.X6;LIR.X7;LIR.X19];
+ List.iter (fun moves ->
+  let body=load LIR.D0 1. @ load LIR.D1 2. @ load LIR.D2 3. @ checked (F.emitFArgMoves ctx moves) @ [X.MOVQ_to_gp (X.RAX,X.XMM0)] in
+  check body X.RAX (Int64.bits_of_float 2.) []) [[LIR.D0,LIR.FPhysical LIR.D1;LIR.D1,LIR.FPhysical LIR.D0];[LIR.D0,LIR.FPhysical LIR.D1;LIR.D1,LIR.FPhysical LIR.D2;LIR.D2,LIR.FPhysical LIR.D0]];
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
  let effects=[Some "hé😀",false,0,"","hé😀";Some "",true,0,"","\n";None,false,1,"hello\nignored","hello";None,true,1,"hé😀\r\n","hé😀\n";None,false,1,"tail","tail";None,true,1,"","\n";None,true,2,"first\nsecond\n","first\nsecond\n";None,false,1,"a\000b\n","a\000b";None,false,1,"\n","";None,false,1,"a\rb\r\n","a\rb"] in
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
- Printf.printf "%d/%d native ARM64 process executions passed\n" count count
+ Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
+ let x64Count=x64CallFloatChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count

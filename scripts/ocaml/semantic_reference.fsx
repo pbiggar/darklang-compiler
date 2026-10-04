@@ -3928,6 +3928,40 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let x64CallFloatObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let fps=[LIR.D0;LIR.D1;LIR.D2;LIR.D3;LIR.D4;LIR.D5;LIR.D6;LIR.D7;LIR.D8;LIR.D9;LIR.D10;LIR.D11;LIR.D12;LIR.D13;LIR.D14;LIR.D15]
+    let regs=List.map LIR.Physical physical@[LIR.Virtual (-1);LIR.Virtual 0]
+    let fregs=List.map LIR.FPhysical fps@[LIR.FVirtual (-1);LIR.FVirtual (-2000);LIR.FVirtual 0]
+    let ctxType=typeof<LIR.Instr>.Assembly.GetType("X64CodeGenTypes+FuncCtx")
+    let context stack saved=FSharpValue.MakeRecord(ctxType,[|box source;box stack;box saved;box false;box (Map.empty:LIR.RecordRegistry);box (Map.empty:MemoryModel.RcSumShapeRegistry);box (FunctionIdMap.ofList [AST.functionId 0UL,source;AST.functionId 1UL,"fn";AST.functionId UInt64.MaxValue,"largest"])|],Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+    let ctx=context 32 [LIR.X19;LIR.X20]
+    let emit ctx name args=rcInternalCall<Result<X86_64.Instr list,string>> "X64EmitCalls" name (Array.append [|box ctx|] args)
+    let fp ctx name args=rcInternalCall<Result<X86_64.Instr list,string>> "X64EmitFloatingPoint" name (Array.append [|box ctx|] args)
+    let noArgs: LIR.Operand list=[]
+    let calls=mapNodes (fun stack ->
+        let ctx=context stack [LIR.X19;LIR.X20]
+        tuple [mapNodes (fun dest -> mapNodes (fun func -> tuple [call (fun () -> emit ctx "emitIndirectCall" [|box dest;box func;box noArgs|]);call (fun () -> emit ctx "emitClosureCall" [|box dest;box func;box noArgs|]);call (fun () -> emit ctx "emitIndirectTailCall" [|box func;box noArgs|]);call (fun () -> emit ctx "emitClosureTailCall" [|box func;box noArgs|])]) regs) regs;
+               mapNodes (fun id -> mapNodes (fun dest -> tuple [call (fun () -> emit ctx "emitCall" [|box dest;box (AST.functionId id);box noArgs|]);call (fun () -> emit ctx "emitTailCall" [|box (AST.functionId id);box noArgs|]);call (fun () -> emit ctx "emitLoadFuncAddr" [|box dest;box (AST.functionId id)|])]) regs) [0UL;1UL;2UL;0x8000000000000000UL;UInt64.MaxValue]]) [-1;0;32;Int32.MaxValue]
+    let saves=mapNodes (fun mask ->
+        let ints=[LIR.X0;LIR.X19;LIR.X20;LIR.SP] |> List.indexed |> List.choose (fun (index,reg) -> if mask &&& (1 <<< index)<>0 then Some reg else None)
+        let floats=[LIR.D0;LIR.D14;LIR.D15] |> List.indexed |> List.choose (fun (index,reg) -> if mask &&& (1 <<< (index+4))<>0 then Some reg else None)
+        tuple [call (fun () -> emit ctx "emitSaveRegs" [|box ints;box floats|]);call (fun () -> emit ctx "emitRestoreRegs" [|box ints;box floats|])]) [0..127]
+    let binary=mapNodes (fun dest -> mapNodes (fun left -> mapNodes (fun right -> ["emitFAdd";"emitFSub";"emitFMul";"emitFDiv"] |> List.map (fun name -> call (fun () -> fp ctx name [|box dest;box left;box right|])) |> tuple) fregs) fregs) fregs
+    let unary=mapNodes (fun dest -> mapNodes (fun src -> ["emitFMov";"emitFNeg";"emitFAbs";"emitFSqrt";"emitFCmp"] |> List.map (fun name -> call (fun () -> fp ctx name [|box dest;box src|])) |> tuple) fregs) fregs
+    let floats=[0.0;-0.0;1.0;-1.0;1.5;BitConverter.Int64BitsToDouble 1L;BitConverter.Int64BitsToDouble 0x7ff8000000000001L;Double.PositiveInfinity;Double.NegativeInfinity;BitConverter.Int64BitsToDouble 0x7fefffffffffffffL;BitConverter.Int64BitsToDouble 0x0010000000000000L]
+    let loads=mapNodes (fun dest -> mapNodes (fun value -> call (fun () -> fp ctx "emitFLoad" [|box dest;box value|])) floats) fregs
+    let casts=mapNodes (fun dest -> mapNodes (fun src -> ["emitFloatToInt64";"emitFpToGp";"emitFloatToBits";"emitFloatToString"] |> List.map (fun name -> call (fun () -> fp ctx name [|box dest;box src|])) |> tuple) fregs) regs
+    let spills=mapNodes (fun saved -> mapNodes (fun offset -> mapNodes (fun reg ->
+        let ctx=context 32 saved
+        tuple [call (fun () -> fp ctx "emitFSpillLoad" [|box reg;box offset|]);call (fun () -> fp ctx "emitFSpillStore" [|box offset;box reg|])]) fregs) [Int32.MinValue;-32769;-1;0;8;32768;Int32.MaxValue]) [[];[LIR.X19];[LIR.X19;LIR.X19;LIR.X20]]
+    let moves=[[];[LIR.D0,LIR.FPhysical LIR.D0];[LIR.D0,LIR.FPhysical LIR.D1;LIR.D1,LIR.FPhysical LIR.D0];[LIR.D0,LIR.FPhysical LIR.D1;LIR.D1,LIR.FPhysical LIR.D2;LIR.D2,LIR.FPhysical LIR.D0];[LIR.D15,LIR.FPhysical LIR.D14;LIR.D14,LIR.FPhysical LIR.D15];[LIR.D0,LIR.FVirtual (-1)];[LIR.D0,LIR.FVirtual (-2000)];[LIR.D0,LIR.FPhysical LIR.D1;LIR.D0,LIR.FPhysical LIR.D2]]
+    tuple [calls;saves;binary;unary;loads;casts;spills;mapNodes (fun moves -> call (fun () -> fp ctx "emitFArgMoves" [|box moves|])) moves;call (fun () -> fp ctx "emitFPhi" [||])]
+
 let armProgramObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -5951,6 +5985,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "x64-call-float" -> x64CallFloatObservation source
         | "arm64-program" -> armProgramObservation source
         | "arm64-emit" -> armEmitObservation source
         | "arm64-prepare" -> armPrepareObservation source

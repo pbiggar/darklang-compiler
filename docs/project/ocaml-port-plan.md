@@ -1446,3 +1446,19 @@ UTF-8 strings/floats, heap load/store, string concatenation, outlined destructio
 and nullable list/dict roots. Comment coverage is complete. Coverage is 276/391
 pairs. X64 emission, driver/library entry points, remaining runners/corpus and
 final acceptance remain open.
+
+Complete x64 call and floating-point emission is translated with full interfaces
+and source comments. Full instructions and diagnostic results match F# across
+13,586,048 identical JSON bytes (SHA256
+db5547116076560aa9cc0a2af4f9e4b0ecc9f5890c2c72c85e6ac119830b59e5). Cases
+cover every GP/FP register and virtual diagnostic, all binary destination/source
+alias combinations, cycle temporaries, special float bit patterns, spills and
+saved-frame offset overflow, direct/indirect/closure calls, tail calls, function
+identity boundaries, parallel moves and caller-save subsets.
+The warning-free build passes 508/508 translated unit checks, 519/519 ARM64
+executions and 238/238 new x64 executions through pinned QEMU. X64 executions
+cover all 16 float destinations, overlapping arithmetic/unary sources, parallel
+move cycles and direct/indirect/closure return destinations and scratch aliases.
+The execution harness supplies RDI=0 before the source exit syscall helper.
+Comment coverage is complete. Coverage is 278/391 pairs. Remaining x64 runtime
+and instruction families, driver/library, runners/corpus and acceptance remain.
