@@ -2090,6 +2090,94 @@ let machineISAObservation (source:string) : JsonNode =
     let labelCases=mapNodes (fun label -> enc (X86_64.stringLiteralLabel label,X86_64.tryStringLiteralValue label,X86_64.tryStringLiteralValue (X86_64.stringLiteralLabel label))) labels
     tuple [armCases;x64Cases;floatCases;platformCases;labelCases;enc (Array.toList x64SizeValues)]
 
+let x64EncodingObservation (source:string) =
+    let enc (value:'a) = encode typeof<'a> (box value)
+    let tuple values = namedArray "tuple" (Array.ofList values)
+    let list values = JsonArray(Array.ofList values) :> JsonNode
+    let mapNodes action values=values |> List.map action |> list
+    let attempt instr = try enc (Ok (X86_64_Encoding.encodeInstruction instr) : Result<byte array,string>) with ex -> enc (Error ex.Message : Result<byte array,string>)
+    let regValues=[|X86_64.RAX;X86_64.RBX;X86_64.RCX;X86_64.RDX;X86_64.RSI;X86_64.RDI;X86_64.RBP;X86_64.RSP;X86_64.R8;X86_64.R9;X86_64.R10;X86_64.R11;X86_64.R12;X86_64.R13;X86_64.R14;X86_64.R15|]
+    let fRegValues=[|X86_64.XMM0;X86_64.XMM1;X86_64.XMM2;X86_64.XMM3;X86_64.XMM4;X86_64.XMM5;X86_64.XMM6;X86_64.XMM7;X86_64.XMM8;X86_64.XMM9;X86_64.XMM10;X86_64.XMM11;X86_64.XMM12;X86_64.XMM13;X86_64.XMM14;X86_64.XMM15|]
+    let conditionValues=[|X86_64.EQ;X86_64.NE;X86_64.LT;X86_64.GT;X86_64.LE;X86_64.GE;X86_64.B;X86_64.A;X86_64.BE;X86_64.AE;X86_64.P;X86_64.NP|]
+    let instructions left right boundary =
+        [X86_64.MOV_imm ((regValues[(left) % 16]),(int64 boundary));
+         X86_64.MOV_imm32 ((regValues[(left) % 16]),(int32 boundary));
+         X86_64.MOV_reg ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.MOV_load ((regValues[(left) % 16]),(regValues[(right) % 16]),(int32 boundary));
+         X86_64.MOV_store ((regValues[(left) % 16]),(int32 boundary),(regValues[((right+1)) % 16]));
+         X86_64.MOV_reg32 ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.MOVZX_byte ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.MOVZX_word ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.MOVSX_byte ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.MOVSX_word ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.MOVSXD ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.LEA ((regValues[(left) % 16]),(regValues[(right) % 16]),(int32 boundary));
+         X86_64.LEA_index ((regValues[(left) % 16]),(regValues[(right) % 16]),(regValues[((right+1)) % 16]),(boundary),(int32 boundary));
+         X86_64.LEA_rip ((regValues[(left) % 16]),(source));
+         X86_64.PUSH ((regValues[(left) % 16]));
+         X86_64.POP ((regValues[(left) % 16]));
+         X86_64.ADD_imm ((regValues[(left) % 16]),(int32 boundary));
+         X86_64.ADD_reg ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.ADD_load ((regValues[(left) % 16]),(regValues[(right) % 16]),(int32 boundary));
+         X86_64.SUB_imm ((regValues[(left) % 16]),(int32 boundary));
+         X86_64.SUB_reg ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.SUB_load ((regValues[(left) % 16]),(regValues[(right) % 16]),(int32 boundary));
+         X86_64.IMUL_reg ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.IMUL_imm ((regValues[(left) % 16]),(regValues[(right) % 16]),(int32 boundary));
+         X86_64.IDIV ((regValues[(left) % 16]));
+         X86_64.DIV ((regValues[(left) % 16]));
+         X86_64.NEG ((regValues[(left) % 16]));
+         X86_64.NOT ((regValues[(left) % 16]));
+         X86_64.CQO;
+         X86_64.XOR_reg ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.CMP_imm ((regValues[(left) % 16]),(int32 boundary));
+         X86_64.CMP_reg ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.TEST_reg ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.SETcc ((conditionValues[(left+right) % 12]),(regValues[(right) % 16]));
+         X86_64.CMOVcc ((conditionValues[(left+right) % 12]),(regValues[(right) % 16]),(regValues[((right+1)) % 16]));
+         X86_64.AND_imm ((regValues[(left) % 16]),(int32 boundary));
+         X86_64.AND_reg ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.OR_reg ((regValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.SHL_imm ((regValues[(left) % 16]),(boundary));
+         X86_64.SHR_imm ((regValues[(left) % 16]),(boundary));
+         X86_64.SAR_imm ((regValues[(left) % 16]),(boundary));
+         X86_64.SHL_cl ((regValues[(left) % 16]));
+         X86_64.SHR_cl ((regValues[(left) % 16]));
+         X86_64.SAR_cl ((regValues[(left) % 16]));
+         X86_64.MOV_store_byte ((regValues[(left) % 16]),(int32 boundary),(regValues[((right+1)) % 16]));
+         X86_64.MOV_load_byte ((regValues[(left) % 16]),(regValues[(right) % 16]),(int32 boundary));
+         X86_64.CALL ((source));
+         X86_64.CALL_reg ((regValues[(left) % 16]));
+         X86_64.JMP ((source));
+         X86_64.JMP_reg ((regValues[(left) % 16]));
+         X86_64.Jcc ((conditionValues[(left+right) % 12]),(source));
+         X86_64.RET;
+         X86_64.SYSCALL;
+         X86_64.Label ((source));
+         X86_64.MOVSD_load ((fRegValues[(left) % 16]),(regValues[(right) % 16]),(int32 boundary));
+         X86_64.MOVSD_store ((regValues[(left) % 16]),(int32 boundary),(fRegValues[((right+1)) % 16]));
+         X86_64.MOVSD_reg ((fRegValues[(left) % 16]),(fRegValues[(right) % 16]));
+         X86_64.ADDSD ((fRegValues[(left) % 16]),(fRegValues[(right) % 16]));
+         X86_64.SUBSD ((fRegValues[(left) % 16]),(fRegValues[(right) % 16]));
+         X86_64.MULSD ((fRegValues[(left) % 16]),(fRegValues[(right) % 16]));
+         X86_64.DIVSD ((fRegValues[(left) % 16]),(fRegValues[(right) % 16]));
+         X86_64.XORPD ((fRegValues[(left) % 16]),(fRegValues[(right) % 16]));
+         X86_64.SQRTSD ((fRegValues[(left) % 16]),(fRegValues[(right) % 16]));
+         X86_64.UCOMISD ((fRegValues[(left) % 16]),(fRegValues[(right) % 16]));
+         X86_64.CVTSI2SD ((fRegValues[(left) % 16]),(regValues[(right) % 16]));
+         X86_64.CVTTSD2SI ((regValues[(left) % 16]),(fRegValues[(right) % 16]));
+         X86_64.MOVQ_to_gp ((regValues[(left) % 16]),(fRegValues[(right) % 16]));
+         X86_64.MOVQ_from_gp ((fRegValues[(left) % 16]),(regValues[(right) % 16]));
+         ]
+    let observation instr=tuple [enc instr;attempt instr]
+    let boundaries=[Int32.MinValue;-129;-128;-127;-1;0;1;2;4;8;127;128;255;256;Int32.MaxValue]
+    let instructions=mapNodes (fun left -> mapNodes (fun right -> mapNodes (fun boundary -> mapNodes observation (instructions left right boundary)) boundaries) [0..15]) [0..15]
+    let indexes=mapNodes (fun dest -> mapNodes (fun baseReg -> mapNodes (fun index -> mapNodes (fun scale -> mapNodes (fun offset -> observation (X86_64.LEA_index (dest,baseReg,index,scale,int32 offset))) [-129;-128;-1;0;1;127;128;Int32.MinValue;Int32.MaxValue]) [-1;0;1;2;3;4;8;16]) (Array.toList regValues)) (Array.toList regValues)) (Array.toList regValues)
+    let wide=mapNodes (fun reg -> mapNodes (fun value -> observation (X86_64.MOV_imm (reg,value))) [Int64.MinValue;-2147483649L;-2147483648L;-1L;0L;2147483647L;2147483648L;Int64.MaxValue]) (Array.toList regValues)
+    let conditions=mapNodes (fun cond -> mapNodes (fun dest -> mapNodes (fun src -> mapNodes observation [X86_64.SETcc (cond,dest);X86_64.CMOVcc (cond,dest,src);X86_64.Jcc (cond,source)]) (Array.toList regValues)) (Array.toList regValues)) (Array.toList conditionValues)
+    let fpMixed=mapNodes (fun dest -> mapNodes (fun src -> mapNodes observation [X86_64.CVTSI2SD (dest,src);X86_64.CVTTSD2SI (src,dest);X86_64.MOVQ_to_gp (src,dest);X86_64.MOVQ_from_gp (dest,src)]) (Array.toList regValues)) (Array.toList fRegValues)
+    tuple [instructions;indexes;wide;conditions;fpMixed]
+
 let jsonOutputOptions = System.Text.Json.JsonSerializerOptions(MaxDepth=65536,Encoder=System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
 let anfScalarOptimization source =
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -4544,6 +4632,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "x64-encoding" -> x64EncodingObservation source
         | "machine-isa" -> machineISAObservation source
         | "mir-lir" -> mirLIRObservation source
         | "anf-mir" -> anfMIRObservation source

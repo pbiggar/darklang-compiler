@@ -995,3 +995,15 @@ x64 literal-label round trips also match. The warning-free build passes
 456/456 native checks. Coverage is 219/391 pairs. Machine encoding is next;
 remaining backend/tooling/ownership tests, full corpus checks and final
 acceptance remain open.
+
+The entire x64 instruction encoder is translated with its explicit interface
+and original comments. Full typed instructions, bytes and diagnostics match F#
+for 261,120 selections spanning all 68 constructors and every register pair,
+294,912 indexed-address selections spanning all destination/base/index registers,
+eight scale choices and displacement boundaries, 128 full-width immediates,
+9,216 condition selections and 1,024 mixed GP/FP conversions. REX ordering,
+SIB fields, compact displacement/immediate choices, invalid index/scale errors
+and unresolved branch templates are preserved. The warning-free build passes
+456/456 native checks. Coverage is 220/391 pairs. ARM64 encoding and backend
+resolution/emission are next; remaining tooling/ownership tests, full corpus
+checks and final acceptance remain open.
