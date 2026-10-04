@@ -709,6 +709,42 @@ let x64DictReferenceChecks ()=
  List.iter (fun where->let addr=if where=0 then [X.LEA (X.RAX,X.R15,-8l)] else [X.MOV_reg (X.RAX,X.R14)] in check (setup@addr@[X.ADD_imm (X.RAX,2l);X.CALL "dict_helper"]@finish) plain) [0;1];
  !total
 [@@warning "-42"]
+let x64RcEmissionChecks ()=
+ let module X=X86_64 in let total=ref 0 in
+ let ctx={X64CodeGenTypes.functionName="x64-rc-execution";stackSize=0;usedCalleeSaved=[];enableLeakCheck=false;recordRegistry=StringOrder.Map.empty;sumShapeRegistry=StringOrder.Map.empty;functionNames=FunctionIdMap.empty} in
+ let checked=function Ok value->value|Error error->failwith error in
+ let check body helpers=
+  let code=[X.Label "_start"]@body@X64Operands.genPrintChars ['P']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@[X.Label "failed"]@X64Operands.genPrintChars ['F']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@helpers@[X.Label "closed_fn";X.RET] in
+  let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0 in
+  let actual=runImageOn "/opt/dcb/qemu/qemu-x86_64" binary [] "" in
+  if actual<>"P" then failwith (Printf.sprintf "x64 RC emission failed at case %d" !total);
+  incr total in
+ let compare reg expected=X64Operands.loadImm64 X.RCX expected@[X.CMP_reg (reg,X.RCX);X.Jcc (X.NE,"failed")] in
+ let setup=[X.SUB_imm (X.RSP,4096l);X.MOV_reg (X.RBP,X.RSP);X.MOV_reg (X.R15,X.RSP);X.LEA (X.R14,X.RSP,4096l);X.XOR_reg (X.RCX,X.RCX)]@List.init 32 (fun index->X.MOV_store (X.RBP,Int32.of_int (index*8),X.RCX)) in
+ let finish=[X.ADD_imm (X.RSP,4096l)] in
+ let regCases=[LIR.X0;LIR.X3;LIR.X6;LIR.X7;LIR.X8;LIR.X19] in
+ List.iter (fun physical->let reg=X64Operands.lirRegToX86 physical in List.iter (fun count->List.iter (fun (isInt,inc)->List.iter (fun pointerKind->
+  let expected=if pointerKind<2 || count=Int64.max_int then count else if inc then Int64.succ count else Int64.pred count in
+  let input=if pointerKind=0 then [X.XOR_reg (reg,reg)] else if pointerKind=1 then [X.MOV_imm32 (reg,1l)] else [X.LEA (reg,X.RBP,400l)] in
+  let emit=if isInt then (if inc then X64EmitReferenceCounts.emitRefCountIncInt else X64EmitReferenceCounts.emitRefCountDecInt) else (if inc then X64EmitReferenceCounts.emitRefCountIncString else X64EmitReferenceCounts.emitRefCountDecString) in
+  check (setup@X64Operands.loadImm64 X.RCX count@[X.MOV_store (X.RBP,400l,X.RCX)]@input@checked (emit ctx (LIR.Reg (LIR.Physical physical)))@[X.MOV_load (X.RAX,X.RBP,400l)]@compare X.RAX expected@finish) []) (if isInt then [0;1;2] else [0;2])) [false,false;false,true;true,false;true,true]) [1L;3L;Int64.max_int]) regCases;
+ let listPlan=MemoryModel.RootRelease (0,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease MemoryModel.NoReleasePlan) in
+ let dictPlan=MemoryModel.RootRelease (0,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,MemoryModel.NoReleasePlan)) in
+ let metadata p=Some {MemoryModel.releasePlanCacheKey=None;releasePlan=Some p;sourceType=None} in
+ let listHelpers=X64ListReferenceCounts.generateListRefCountIncHelper ()@X64ListReferenceCounts.generateNeededListRefCountDecHelpers (StringOrder.Set.singleton X64ReleaseSelection.listRefCountDecHelperLabel) StringOrder.Map.empty false StringOrder.Map.empty StringOrder.Map.empty in
+ let dictHelpers=X64DictReferenceCounts.generateDictRefCountIncHelper ()@X64DictReferenceCounts.generatePlannedDictRefCountDecHelper X64ReleaseSelection.dictRefCountDecHelperLabel dictPlan false StringOrder.Map.empty StringOrder.Map.empty in
+ let closureSizes=StringOrder.Map.singleton "closed_fn" 8 in
+ let closureHelpers=X64ClosureReferenceCounts.generateClosureRefCountIncHelper closureSizes@X64ClosureReferenceCounts.generateClosureRefCountDecHelper false StringOrder.Map.empty StringOrder.Map.empty closureSizes StringOrder.Map.empty in
+ let streamHelpers=FieldReferenceCounts.generateStreamRefCountDecHelper ctx@closureHelpers in
+ List.iter (fun physical->let reg=X64Operands.lirRegToX86 physical in List.iter (fun (kind,size,tag,word,meta,helpers)->List.iter (fun initialCount->List.iter (fun inc->
+  let zeros=[X.XOR_reg (X.RCX,X.RCX)]@(if kind=LIR.StreamHeap then [X.MOV_store (X.RBP,408l,X.RCX);X.MOV_store (X.RBP,416l,X.RCX)] else []) in
+  let initWord=if kind=LIR.ClosureHeap then [X.LEA_rip (X.RCX,"closed_fn")] else X64Operands.loadImm64 X.RCX word in
+  let initial=setup@zeros@initWord@[X.MOV_store (X.RBP,400l,X.RCX)]@X64Operands.loadImm64 X.RCX initialCount@[X.MOV_store (X.RBP,Int32.of_int (400+size),X.RCX);X.LEA (reg,X.RBP,400l)]@(if tag<>0 then [X.ADD_imm (reg,Int32.of_int tag)] else []) in
+  let emission=if inc then X64EmitReferenceCounts.emitRefCountInc ctx (LIR.Physical physical) size kind else X64EmitReferenceCounts.emitRefCountDec ctx (LIR.Physical physical) size kind meta in
+  check (initial@checked emission@[X.MOV_load (X.RAX,X.RBP,Int32.of_int (400+size))]@compare X.RAX (if inc then Int64.succ initialCount else Int64.pred initialCount)@finish) helpers) [false;true]) [1L;2L]) [LIR.GenericHeap,16,0,0L,None,[];LIR.TaggedList,8,2,0L,metadata listPlan,listHelpers;LIR.DictHeap,16,2,0L,metadata dictPlan,dictHelpers;LIR.ClosureHeap,8,0,0L,None,closureHelpers;LIR.StreamHeap,24,0,5L,None,streamHelpers]) regCases;
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -716,4 +752,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count

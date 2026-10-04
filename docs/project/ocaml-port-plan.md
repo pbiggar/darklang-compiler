@@ -1550,3 +1550,17 @@ static/tagged/dynamic key/value buffers, child traversal, free-list boundaries
 and heap bounds. Coverage is 285/391 pairs; source comment coverage is complete.
 Remaining x64 instructions/process runtime/program assembly, driver/library,
 runners/corpus and final acceptance remain open.
+
+Complete x64 reference-count instruction emission is translated with its full
+interface and all source comments. Full emitted instructions, missing/selected
+metadata, error text and fresh-label order match F# across 22,552,382 identical
+JSON bytes (SHA256 f27d39c5a7c6e78b43064bb8587c53c311bddb2b2d16d17c69d34e841343f054).
+Cases cover every GP register, virtual-register errors, all ownership kinds,
+payload boundaries, release plans, both leak settings and buffer operand forms.
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+1199/1199 x64 executions. The 300 new x64 cases execute null/tagged/static and
+shared/unique buffers plus generic, list, dictionary, closure and stream roots,
+checking count changes, helper calls and register aliases. Coverage is 286/391
+pairs; source comment coverage is complete. Remaining x64 instructions/process
+runtime/program assembly, driver/library, runners/corpus and final acceptance
+remain open.
