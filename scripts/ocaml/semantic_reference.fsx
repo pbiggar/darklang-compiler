@@ -6544,6 +6544,95 @@ let mirLIRObservation (source:string)=
     let printCases=mapNodes (fun typ -> mapNodes (fun operand -> attempt (fun () -> MIR_to_LIR.selectInstr Platform.ARM64 (MIR.Print (operand,typ)) variants records ctx Set.empty initial)) operands) [AST.TTuple [];AST.TTuple [AST.TUInt64;AST.TBool;AST.TChar;AST.TInt128;AST.TUInt128];AST.TTuple [AST.TList AST.TInt64];AST.TTuple [AST.TUnit];AST.TList AST.TInt128;AST.TList AST.TUInt128;AST.TSum ("missing",[]);AST.TRecord ("missing",[]);AST.TRecord (source,[AST.TInt64]);AST.TSum (source,[AST.TInt64])]
     tuple [instructionCases;arithmetic;helperCases;terminators;typeHelpers;cfgCases;programCases;callCases;floatArgCases;printCases]
 
+let cacheIdentityRecord name values =
+    let flags=Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+    let typ=typeof<AST.SemanticType>.Assembly.GetType("CompilationCacheIdentity+"+name)
+    FSharpValue.MakeRecord(typ,values,flags)
+let cacheIdentityComparer name =
+    let typ=typeof<AST.SemanticType>.Assembly.GetType("CompilationCacheIdentity+"+name)
+    let comparer=Activator.CreateInstance typ
+    let iface=typ.GetInterfaces() |> Array.find (fun t->t.IsGenericType && t.GetGenericTypeDefinition()=typedefof<Collections.Generic.IEqualityComparer<_>>)
+    let equals left right=unbox<bool> (iface.GetMethod("Equals").Invoke(comparer,[|left;right|]))
+    let hash value=unbox<int> (iface.GetMethod("GetHashCode").Invoke(comparer,[|value|]))
+    equals,hash
+let cacheIdentityObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let matrix (equals,hash) values=mapNodes (fun left->mapNodes (fun right->let equal=equals left right in tuple [enc equal;enc (not equal || hash left=hash right);enc (hash left=hash left)]) values) values
+    let fid n=AST.functionId (uint64 n)
+    let blocks=["a";"b";"c"] |> List.map (fun name->let label=LIR.Label name in label,({Label=label;Instrs=[LIR.PrintString source];Terminator=LIR.Ret}:LIR.BasicBlock))
+    let baseFunction:LIR.Function={Id=fid 1;Name=source;TypedParams=[];CFG={Entry=LIR.Label "a";Blocks=Map.ofList blocks};StackSize=32;UsedCalleeSaved=[LIR.X19];CodegenFacts=None}
+    let clone={baseFunction with StackSize=32}
+    let reversed={baseFunction with CFG={baseFunction.CFG with Blocks=Map.ofList (List.rev blocks)}}
+    let functions=[baseFunction;baseFunction;clone;reversed;{baseFunction with StackSize=16};{baseFunction with Id=fid 2};{baseFunction with Name=source+"_other"};LIR.attachFunctionCodegenFacts baseFunction]
+    let references=matrix (cacheIdentityComparer "LirFunctionReferenceComparer") (List.map box functions)
+    let allocatedKeys=[Platform.ARM64;Platform.X86_64] |> List.collect (fun arch->functions |> List.map (fun func->cacheIdentityRecord "AllocatedLirFunctionKey" [|box arch;box func|]))
+    let allocated=matrix (cacheIdentityComparer "AllocatedLirFunctionKeyNameHashComparer") allocatedKeys
+    let versions=functions |> List.map (fun body->CompilationCacheIdentity.FunctionVersion(source,fid 1,Platform.LinuxX86_64,CompilerOptions.defaultOptions,body))
+    let versions=versions@[CompilationCacheIdentity.FunctionVersion(source+"_unit",fid 1,Platform.LinuxX86_64,CompilerOptions.defaultOptions,baseFunction);CompilationCacheIdentity.FunctionVersion(source,fid 2,Platform.LinuxX86_64,CompilerOptions.defaultOptions,baseFunction);CompilationCacheIdentity.FunctionVersion(source,fid 1,Platform.ARM64Backend Platform.LinuxARM64,CompilerOptions.defaultOptions,baseFunction);CompilationCacheIdentity.FunctionVersion(source,fid 1,Platform.LinuxX86_64,{CompilerOptions.defaultOptions with EnableLeakCheck=true},baseFunction)]
+    let versionMatrix=matrix ((fun (left:CompilationCacheIdentity.FunctionVersion) right->left.Equals right),(fun value->value.GetHashCode())) versions
+    let p:MIROptimizationFacts.PuritySummary={ObservableEffects=false;ReadsMutableState=false;MayTrap=false;MayDiverge=false}
+    let first:CompilationCacheIdentity.FunctionSummary={Version=Some (List.head versions);Purity=p;ConstantReturn=Some (AST.TInt64,MIR.Int64Const 7L);Arm64Writes=Some {Ints=1UL;Floats=2UL};X64Writes=Some X64CalleeClobbers.all}
+    let summaries=
+        (versions |> List.map (fun version->{first with Version=Some version}))
+        @[CompilationCacheIdentity.unknownSummary;{first with Version=None};{first with ConstantReturn=None};{first with Arm64Writes=None};{first with X64Writes=None}]
+        @(List.map (fun operand->{first with ConstantReturn=Some (AST.TFloat64,operand)}) [MIR.FloatSymbol 1.5;MIR.FloatSymbol (-0.);MIR.FloatSymbol nan])
+        @(List.init 16 (fun mask->{first with Purity={ObservableEffects=mask &&& 1<>0;ReadsMutableState=mask &&& 2<>0;MayTrap=mask &&& 4<>0;MayDiverge=mask &&& 8<>0}}))
+    let summary (value:CompilationCacheIdentity.FunctionSummary)=
+        let version=match value.Version with
+                    | None->encode typeof<int option> (box None)
+                    | Some version->
+                        let node=JsonObject()
+                        node["type"]<-JsonValue.Create "FSharpOption"
+                        node["case"]<-JsonValue.Create "Some"
+                        node["fields"]<-JsonArray([|tuple [enc version.Unit;enc version.Function;enc version.Target;enc version.Options;enc version.Body]|])
+                        node :> JsonNode
+        tuple [version;enc (CompilationCacheIdentity.summaryFacts value)]
+    let summaryMatrix=mapNodes (fun left->mapNodes (fun right->enc (left=right)) summaries) summaries
+    let merged=mapNodes (fun left->mapNodes (fun right->let table=CompilationCacheIdentity.mergeFunctionSummaries (FunctionIdMap.ofList [fid 1,left;AST.functionId UInt64.MaxValue,first]) (FunctionIdMap.ofList [fid 1,right;fid 2,right]) in tuple [mapNodes (fun (id,value)->tuple [enc id;summary value]) (FunctionIdMap.toList table);enc (Object.ReferenceEquals(FunctionIdMap.find (fid 1) table,left))]) summaries) summaries
+    let callees=[FunctionIdMap.empty;FunctionIdMap.ofList [fid 1,ARM64CalleeClobbers.all;fid 2,{ARM64CalleeClobbers.Writes.Ints=1UL;Floats=0UL}];FunctionIdMap.ofList [fid 2,{ARM64CalleeClobbers.Writes.Ints=1UL;Floats=0UL};fid 1,ARM64CalleeClobbers.all];FunctionIdMap.ofList [fid 1,{ARM64CalleeClobbers.Writes.Ints=1UL;Floats=0UL}]]
+    let callAwareKeys=functions |> List.collect (fun body->callees |> List.map (fun calls->cacheIdentityRecord "CallAwareLirFunctionKey" [|box body;box calls|]))
+    let callAware=matrix (cacheIdentityComparer "CallAwareLirFunctionKeyComparer") callAwareKeys
+    let groups=[[];[baseFunction];List.map id [baseFunction];[clone];[baseFunction;baseFunction];[baseFunction;clone];[baseFunction;List.item 4 functions];[List.item 4 functions;baseFunction]]
+    let groupMatrix=matrix (cacheIdentityComparer "Arm64MetadataGroupKeyComparer") (groups |> List.map (fun functions->cacheIdentityRecord "Arm64MetadataGroupKey" [|box functions|]))
+    let armGroups=[ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64] |> List.collect (fun target->[ARM64CodeGenTypes.defaultOptions;{ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=true}] |> List.collect (fun options->groups |> List.map (fun functions->cacheIdentityRecord "Arm64FunctionGroupKey" [|box functions;box target;box options|])))
+    let armGroupMatrix=matrix (cacheIdentityComparer "Arm64FunctionGroupKeyComparer") armGroups
+    let instructions=[ARM64Symbolic.Label source]
+    let copied=List.map id instructions
+    let chunks=[[];instructions;instructions;copied;[ARM64Symbolic.Label (source+"_other")]]
+    let chunkMatrix=matrix (cacheIdentityComparer "Arm64InstructionChunkReferenceComparer") (List.map box chunks)
+    let parts=[instructions;copied]
+    let chunkGroups=[[];parts;parts;List.map id parts;[instructions];[copied]]
+    let chunkGroupMatrix=matrix (cacheIdentityComparer "Arm64InstructionChunkGroupReferenceComparer") (List.map box chunkGroups)
+    let objectValue=box (ref 1)
+    let objectMatrix=matrix (cacheIdentityComparer "ObjectReferenceComparer") [objectValue;objectValue;box (ref 1);box (ref 2)]
+    let mirBlocks=["a";"b";"c"] |> List.map (fun name->let label=MIR.Label name in label,({Label=label;Instrs=[MIR.Mov (MIR.VReg 0,MIR.Int64Const 7L,None)];Terminator=MIR.Ret (MIR.Int64Const 7L)}:MIR.BasicBlock))
+    let mir:MIR.Function={Id=fid 1;Name=source;TypedParams=[];ReturnType=AST.TInt64;CFG={Entry=MIR.Label "a";Blocks=Map.ofList mirBlocks};FloatRegs=Set.ofList [1;2;3]}
+    let mirFunctions=[mir;{mir with CFG={mir.CFG with Blocks=Map.ofList (List.rev mirBlocks)};FloatRegs=Set.ofList [3;2;1]};{mir with ReturnType=AST.TBool};{mir with Name=source+"_other"}]
+    let mirKeys=mirFunctions |> List.collect (fun func->[MIROptimizationFacts.defaultOptimizeOptions;{MIROptimizationFacts.defaultOptimizeOptions with EnableLICM=false}] |> List.collect (fun options->[Set.empty;Set.ofList [fid 1;fid 2];Set.ofList [fid 2;fid 1]] |> List.map (fun effectFreeCalls->cacheIdentityRecord "MirOptimizationKey" [|box func;box options;box effectFreeCalls|])))
+    let mirMatrix=matrix (cacheIdentityComparer "MirOptimizationKeyNameHashComparer") mirKeys
+    let symbols=CheckedAST.emptySymbols ()
+    let registries=AST_to_ANF.buildRegistries symbols Map.empty [] Map.empty []
+    let maps=[Map.ofList ["a",["x",AST.TString];"b",["y",AST.TInt64];"c",[]];Map.ofList ["c",[];"b",["y",AST.TInt64];"a",["x",AST.TString]];Map.empty]
+    let checked:CheckedAST.FunctionDef={Id=fid 1;Name=source;TypeParams=[];Params=CheckedAST.checkedParams (AST.NonEmptyList.singleton (AST.bindingId 0,AST.TUnit));ReturnType=CheckedAST.checkedType AST.TInt64;Body=CheckedAST.Int64Literal 7L;Recursion=None}
+    let checkedFunctions=[[];[checked];[{checked with Name=source}];[{checked with Id=fid 2}];[checked;{checked with Id=fid 2}]]
+    let keys=checkedFunctions |> List.collect (fun functions->maps |> List.collect (fun fields->[Set.empty;Set.ofList [fid 1;fid 2;fid 3];Set.ofList [fid 3;fid 2;fid 1]] |> List.map (fun names->cacheIdentityRecord "AnfDependencyKey" [|box functions;box {registries with RecordFieldsReg=fields};box names|])))
+    let anfMatrix=matrix (cacheIdentityComparer "AnfDependencyKeyNameHashComparer") keys
+    let known=summaries |> List.map CompilationCacheIdentity.summaryFacts
+    let configs=known |> List.collect (fun knownSummary->[Set.empty;Set.ofList [fid 1;fid 2];Set.ofList [fid 2;fid 1]] |> List.map (fun names->cacheIdentityRecord "CompiledDependencyConfig" [|box Platform.LinuxX86_64;box CompilerOptions.defaultOptions;box names;box (FunctionIdMap.ofList [fid 1,knownSummary])|]))
+    let configMatrix=matrix ((fun left right->Unchecked.equals left right),(fun value->LanguagePrimitives.GenericHash value)) configs
+    let helper:CodeGen.HelperCacheKey={ClosurePayloadSizesFromParams=[];ClosurePayloadSizesFromAllocs=[];ClosureCaptureTypes=[];RecursiveReleaseTypes=[];CliArgvHelperLabels=[];NeedsCliExecuteHelper=false;NeedsCliRunProcessHelper=false;NeedsCliProcessLifecycleHelpers=false;NeedsRuntimeErrorHelper=false;ListDecHelperLabels=[];PlannedListDecHelpers=[];PlannedGenericDecHelperLabels=[];PlannedDictDecHelperLabels=[];DictDecHelperLabels=[];NeedsListRcIncHelper=false;NeedsDictRcIncHelper=false;NeedsClosureRcIncHelper=false;NeedsClosureRcDecHelper=false;NeedsStreamRcDecHelper=false}
+    let helperValues=[helper;{helper with ClosurePayloadSizesFromParams=[source,8]};{helper with ClosurePayloadSizesFromAllocs=[fid 1,16]};{helper with ClosureCaptureTypes=[source,[AST.TString;AST.TInt64]]};{helper with RecursiveReleaseTypes=[AST.TList AST.TString]};{helper with CliArgvHelperLabels=[source]};{helper with NeedsCliExecuteHelper=true};{helper with NeedsCliRunProcessHelper=true};{helper with NeedsCliProcessLifecycleHelpers=true};{helper with NeedsRuntimeErrorHelper=true};{helper with ListDecHelperLabels=[source]};{helper with PlannedListDecHelpers=[source,8]};{helper with PlannedGenericDecHelperLabels=[source]};{helper with PlannedDictDecHelperLabels=[source]};{helper with DictDecHelperLabels=[source]};{helper with NeedsListRcIncHelper=true};{helper with NeedsDictRcIncHelper=true};{helper with NeedsClosureRcIncHelper=true};{helper with NeedsClosureRcDecHelper=true};{helper with NeedsStreamRcDecHelper=true}]
+    let helperKeys=[ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64] |> List.collect (fun target->[ARM64CodeGenTypes.defaultOptions;{ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=true}] |> List.collect (fun options->helperValues |> List.map (fun helper->cacheIdentityRecord "Arm64HelperCacheKey" [|box target;box options;box helper|])))
+    let helperMatrix=matrix ((fun left right->Unchecked.equals left right),(fun value->LanguagePrimitives.GenericHash value)) helperKeys
+    let variants:LoweringPrimitives.VariantLookup=Map.ofList ["Option",("Option",[],1,[AST.TString])]
+    let localRecords=Map.ofList [source,["local",AST.TInt64];"local",["name",AST.TString]]
+    let baseRecords=ANF_to_MIR.buildRecordRegistry (Map.ofList [source,["base",AST.TBool];"base",[]])
+    let baseVariants=ANF_to_MIR.buildVariantRegistry (Map.ofList ["Base",("Base",[],0,[]);"Old",("Option",[],0,[])])
+    let overlays=rcInternalCall<MIR.VariantRegistry*MIR.RecordRegistry> "CompilationCacheIdentity" "projectMirRegistryOverlay" [|box baseVariants;box baseRecords;box variants;box localRecords|]
+    tuple [references;allocated;versionMatrix;mapNodes summary summaries;summaryMatrix;merged;callAware;groupMatrix;armGroupMatrix;chunkMatrix;chunkGroupMatrix;objectMatrix;mirMatrix;anfMatrix;configMatrix;helperMatrix;enc overlays]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -6573,6 +6662,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "cache-identity" -> cacheIdentityObservation source
         | "driver-diagnostics" -> driverDiagnosticsObservation source
         | "x64-program" -> x64ProgramObservation source
         | "x64-functions" -> x64FunctionObservation source

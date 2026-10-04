@@ -1694,3 +1694,16 @@ The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
 6080/6080 x64 executions. Coverage is 298/391 pairs; source comment coverage
 is complete. Cache/session, driver/library, runners/corpus and final acceptance
 remain open.
+
+Compilation cache identities now preserve immutable LIR producer tokens, full
+summary facts, pessimistic collision merging, structural allocation/MIR/ANF
+keys, reference-based chunks/call-aware/group keys, all helper-key fields and
+MIR registry overlays. Ordered map/set equality ignores insertion history,
+while producer comparisons retain object identity. Full observations match F#
+for empty and Unicode inputs; the empty case compares 9,786,008 identical
+JSON bytes (SHA256 315f302750f5e7fe86880d815c9cdad259c5c1c4ec058968cedcf7562e23728f). Equality and stable/equal-key hash
+contracts are checked; runtime-local object and salted hash values are not
+portable output. The warning-free build passes 508/508 unit checks, 519/519
+ARM64 executions and 6080/6080 x64 executions. Coverage is 299/391 pairs; source
+comment coverage is complete. JSON planning, cache/session integration,
+driver/library, runners/corpus and final acceptance remain open.
