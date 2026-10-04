@@ -4175,6 +4175,139 @@ let anfMIRObservation (source:string)=
     let operatorCases=types |> List.map (fun typ -> atoms |> List.map (operatorCase typ) |> list) |> list
     tuple [operations;flows;helpers;ownership;registries;programs;ssaGraphs;intrinsics;operatorCases;enc (List.map ANF_to_MIR.convertBinOp binOps);enc (List.map ANF_to_MIR.convertUnaryOp unaryOps);enc (List.map ANF_to_MIR.convertCliOperation cliOps)]
 
+let mirInstructionFixtures (source:string) typ operand : MIR.Instr list =
+    let fid n=AST.functionId (uint64 n)
+    [
+            MIR.Mov (MIR.VReg 1, operand, Some typ);
+            MIR.BinOp (MIR.VReg 1, MIR.Div, operand, operand, typ);
+            MIR.UnaryOp (MIR.VReg 1, MIR.Not, operand);
+            MIR.Call (MIR.VReg 1, fid 200, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.TailCall (fid 200, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.IndirectCall (MIR.VReg 1, operand, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.IndirectTailCall (operand, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.ClosureAlloc (MIR.VReg 1, fid 200, [operand; MIR.Register (MIR.VReg 3)]);
+            MIR.ClosureCall (MIR.VReg 1, operand, [operand; MIR.Register (MIR.VReg 3)], [typ; typ], typ);
+            MIR.ClosureTailCall (operand, [operand; MIR.Register (MIR.VReg 3)], [typ; typ]);
+            MIR.HeapAlloc (MIR.VReg 1, 3);
+            MIR.HeapStore (MIR.VReg 1, 3, operand, Some typ);
+            MIR.HeapLoad (MIR.VReg 1, MIR.VReg 2, 3, Some typ);
+            MIR.StringConcat (MIR.VReg 1, operand, operand, [operand; MIR.Register (MIR.VReg 3)]);
+            MIR.CanonicalBufferEq (MIR.VReg 1, MemoryModel.Utf8String, operand, operand);
+            MIR.RefCountInc (MIR.VReg 1, 3, MIR.GenericHeap, None);
+            MIR.RefCountDec (MIR.VReg 1, 3, MIR.GenericHeap, None);
+            MIR.Print (operand, typ);
+            MIR.StdoutWrite (3, operand, true);
+            MIR.StdinReadLine (MIR.VReg 1);
+            MIR.RuntimeError (source);
+            MIR.RuntimeErrorString (operand);
+            MIR.FileReadBlob (MIR.VReg 1, operand);
+            MIR.FileExists (MIR.VReg 1, operand);
+            MIR.FileWriteBlob (MIR.VReg 1, operand, operand);
+            MIR.FileAppendText (MIR.VReg 1, operand, operand);
+            MIR.FileDelete (MIR.VReg 1, operand);
+            MIR.FileCreateDirectory (MIR.VReg 1, operand);
+            MIR.FileSetExecutable (MIR.VReg 1, operand);
+            MIR.FileWriteFromPtr (MIR.VReg 1, operand, operand, operand);
+            MIR.FloatSqrt (MIR.VReg 1, operand);
+            MIR.FloatAbs (MIR.VReg 1, operand);
+            MIR.FloatNeg (MIR.VReg 1, operand);
+            MIR.Int64ToFloat (MIR.VReg 1, operand);
+            MIR.FloatToInt64 (MIR.VReg 1, operand);
+            MIR.FloatToBits (MIR.VReg 1, operand);
+            MIR.RawAlloc (MIR.VReg 1, operand);
+            MIR.MappedAlloc (MIR.VReg 1, operand);
+            MIR.RawFree (operand);
+            MIR.MappedFree (operand);
+            MIR.RawGet (MIR.VReg 1, operand, operand, Some typ);
+            MIR.RawGetByte (MIR.VReg 1, operand, operand);
+            MIR.RawWriteWord (operand, operand, operand);
+            MIR.RawWriteByte (operand, operand, operand);
+            MIR.RawSlotInit (operand, operand, operand, typ);
+            MIR.StringToRawPtr (MIR.VReg 1, operand);
+            MIR.RawPtrToString (MIR.VReg 1, operand);
+            MIR.BlobToRawPtr (MIR.VReg 1, operand);
+            MIR.RawPtrToBlob (MIR.VReg 1, operand);
+            MIR.DictToRawPtr (MIR.VReg 1, operand);
+            MIR.RawPtrToDict (MIR.VReg 1, operand, operand);
+            MIR.ListToRawPtr (MIR.VReg 1, operand);
+            MIR.RawPtrToList (MIR.VReg 1, operand, operand);
+            MIR.RefCountIncString (operand);
+            MIR.RefCountDecString (operand);
+            MIR.RefCountIncBlob (operand);
+            MIR.RefCountDecBlob (operand);
+            MIR.RefCountIncInt (operand);
+            MIR.RefCountDecInt (operand);
+            MIR.RandomInt64 (MIR.VReg 1);
+            MIR.DateTimeNow (MIR.VReg 1);
+            MIR.Sleep (3, MIR.VReg 2, operand);
+            MIR.CliNative (MIR.VReg 1, MIR.HostOS, [operand; MIR.Register (MIR.VReg 3)]);
+            MIR.FloatToString (MIR.VReg 1, operand);
+            MIR.Phi (MIR.VReg 1, [operand,MIR.Label source;MIR.Register (MIR.VReg 3),MIR.Label "other"], Some typ);
+            MIR.CoverageHit (3)        ]
+
+let mirLIRObservation (source:string)=
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let mapNodes action values=values |> List.map action |> list
+    let attempt action=enc (try Ok (action ()) with error -> Error error.Message)
+    let reg n=MIR.VReg n
+    let v n=MIR.Register (reg n)
+    let fid n=AST.functionId (uint64 n)
+    let types=[AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TBool;AST.TFloat64;AST.TString;AST.TChar;AST.TBlob;AST.TUnit;AST.TNever;AST.TInternalRawPtr;AST.TTuple [AST.TInt64;AST.TFloat64;AST.TString];AST.TList AST.TInt64;AST.TDict (AST.TInt64,AST.TString);AST.TRecord (source,[]);AST.TSum (source,[]);AST.TVar "a";AST.TInferenceVar ("1","a");AST.TDateTime;AST.TFunction ([AST.TInt64],AST.TFloat64);AST.TStream AST.TString]
+    let operands=[v 2;v 3;MIR.Int64Const 0L;MIR.Int64Const -1L;MIR.Int64Const Int64.MaxValue;MIR.BoolConst false;MIR.FloatSymbol (-0.);MIR.FloatSymbol (BitConverter.Int64BitsToDouble 0x7ff8000000000001L);MIR.StringSymbol source;MIR.FuncAddr (fid 200)]
+    let variants=Map.ofList [source,({MIR.TypeVariants.TypeParams=[];Variants=[{MIR.VariantInfo.Name="Only";Tag=0;Payload=Some AST.TInt64;FieldCount=1}]} : MIR.TypeVariants)]
+    let records : MIR.RecordRegistry=Map.ofList [source,[{MIR.RecordField.Name="first";MIR.RecordField.Type=AST.TInt64};{MIR.RecordField.Name="second";MIR.RecordField.Type=AST.TFloat64}]]
+    let sums=Map.ofList [source,({MemoryModel.RcSumShapeInfo.TypeParams=[];Payloads=[0,Some AST.TInt64];UnaryPayloadTags=Set.singleton 0} : MemoryModel.RcSumShapeInfo)]
+    let ctx : MIR_to_LIR.PrintRcContext={RecordFields=Map.ofList [source,["first",AST.TInt64;"second",AST.TFloat64]];RecordTypeParams=Map.ofList [source,[]];SumShapes=sums}
+    let initial : MIR_to_LIR.TempState={NextRegId=4000;NextFRegId=5000}
+    let architectures=[Platform.ARM64;Platform.X86_64]
+    let floats=[Set.empty;Set.ofList [1;2;3]]
+    let instructionCases=mapNodes (fun typ -> mapNodes (fun operand -> mapNodes (fun instr -> tuple [enc (MIR_to_LIR.maxVRegIdFromInstr instr -1);mapNodes (fun arch -> mapNodes (fun floatRegs -> attempt (fun () -> MIR_to_LIR.selectInstr arch instr variants records ctx floatRegs initial)) floats) architectures]) (mirInstructionFixtures source typ operand)) operands) types
+    let binOps=[MIR.Add;MIR.Sub;MIR.Mul;MIR.Div;MIR.Mod;MIR.Shl;MIR.Shr;MIR.BitAnd;MIR.BitOr;MIR.BitXor;MIR.Eq;MIR.Neq;MIR.Lt;MIR.Gt;MIR.Lte;MIR.Gte;MIR.And;MIR.Or]
+    let arithmeticOperands=[v 2;MIR.Int64Const Int64.MinValue;MIR.Int64Const 0L;MIR.Int64Const 7L;MIR.Int64Const 64L;MIR.Int64Const Int64.MaxValue;MIR.BoolConst true;MIR.FloatSymbol (-0.);MIR.StringSymbol source]
+    let arithmetic=mapNodes (fun typ -> mapNodes (fun op -> mapNodes (fun left -> mapNodes (fun right -> mapNodes (fun arch -> attempt (fun () -> MIR_to_LIR.selectInstr arch (MIR.BinOp (reg 1,op,left,right,typ)) variants records ctx Set.empty initial)) architectures) arithmeticOperands) arithmeticOperands) binOps) [AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TFloat64;AST.TBool;AST.TBlob]
+    let helperCases=mapNodes (fun s -> tuple [mapNodes (fun operand -> tuple [enc (MIR_to_LIR.convertOperand operand);enc (MIR_to_LIR.ensureInRegister operand s);enc (MIR_to_LIR.ensureBlobInRegister operand s);enc (MIR_to_LIR.ensureInFRegister operand s)]) operands;enc (MIR_to_LIR.freshTempReg s);enc (MIR_to_LIR.freshTempFReg s)]) [initial;{MIR_to_LIR.TempState.NextRegId=Int32.MaxValue;NextFRegId=Int32.MaxValue};{MIR_to_LIR.TempState.NextRegId = -1;NextFRegId = -2}]
+    let terminators=mapNodes (fun typ -> mapNodes (fun operand -> mapNodes (fun term -> tuple [enc (MIR_to_LIR.maxVRegIdFromTerminator term -1);enc (MIR_to_LIR.selectTerminator term typ initial)]) [MIR.Ret operand;MIR.Branch (operand,MIR.Label "yes",MIR.Label "no");MIR.Jump (MIR.Label source)]) operands) types
+    let typeHelpers=mapNodes (fun typ -> tuple [enc (MIR_to_LIR.truncateForType (LIR.Virtual 1) typ);enc (MIR_to_LIR.shouldCheckNegativeDivisor typ);enc (MIR_to_LIR.isUnsignedIntegerType typ);enc (MIR_to_LIR.shiftCountMask typ);enc (MIR_to_LIR.usesNativeVariableShiftMask typ);mapNodes (fun op -> attempt (fun () -> MIR_to_LIR.comparisonCondition typ op)) binOps;mapNodes (fun (parameters,args) -> attempt (fun () -> MIR_to_LIR.applyTypeSubst parameters args typ)) [[],[];["a"],[AST.TFloat64];["a";"a"],[AST.TInt64;AST.TString];["a"],[]]]) (types@[AST.TFunction ([AST.TVar "a"],AST.TList (AST.TVar "a"));AST.TRecord (source,[AST.TVar "a"]);AST.TSum (source,[AST.TVar "a"])])
+    let errors : MIR_to_LIR.IntegerErrorLabels={DivideByZero=LIR.Label "division-error";ModuloByZero=LIR.Label "modulo-zero";ModuloNegativeDivisor=LIR.Label "modulo-negative"}
+    let block label instrs terminator : MIR.BasicBlock={Label=MIR.Label label;Instrs=instrs;Terminator=terminator}
+    let graph entry blocks : MIR.CFG={Entry=MIR.Label entry;Blocks=blocks |> List.map (fun (b:MIR.BasicBlock) -> b.Label,b) |> Map.ofList}
+    let moduloGraphs typ=
+        let operation op left right=MIR.BinOp (reg 1,op,left,right,typ)
+        let b instrs term=block source instrs term
+        [graph source [b [] (MIR.Ret (v 2))];graph source [b [operation MIR.Div (v 2) (MIR.Int64Const 0L)] (MIR.Ret (v 1))];
+            graph source [b [operation MIR.Div (MIR.Int64Const 11L) (v 3)] (MIR.Ret (v 1))];graph source [b [operation MIR.Mod (v 2) (MIR.Int64Const -3L)] (MIR.Ret (v 1))];
+            graph source [b [operation MIR.Mod (v 2) (MIR.Int64Const Int64.MaxValue)] (MIR.Ret (v 1))];graph source [b [operation MIR.Div (v 2) (v 3);operation MIR.Mod (v 1) (v 2);operation MIR.Mod (v 3) (MIR.Int64Const 0L)] (MIR.Ret (v 1))];
+            graph source [b [MIR.RuntimeError source;MIR.Print (v 2,AST.TInt128)] (MIR.Ret (v 2))];graph source [b [] (MIR.Branch (v 2,MIR.Label "left",MIR.Label "right"));block "left" [operation MIR.Div (v 2) (v 3)] (MIR.Jump (MIR.Label "join"));block "right" [operation MIR.Mod (v 2) (v 3)] (MIR.Jump (MIR.Label "join"));block "join" [MIR.Phi (reg 4,[v 1,MIR.Label "left";v 1,MIR.Label "right"],Some typ)] (MIR.Ret (v 4))];
+            graph source [b [] (MIR.Jump (MIR.Label "division-error"));block "division-error" [] (MIR.Ret (v 2))];graph source [];graph source [b [MIR.Phi (reg 1,[MIR.FloatSymbol (-0.),MIR.Label source],Some AST.TFloat64)] (MIR.Ret (v 1))]]
+    let cfgCases=mapNodes (fun typ -> mapNodes (fun cfg -> mapNodes (fun arch -> tuple [attempt (fun () -> MIR_to_LIR.selectCFG arch source cfg variants records ctx typ Set.empty errors initial);mapNodes (fun (_,b) -> attempt (fun () -> MIR_to_LIR.selectBlocksWithModuloChecks arch source b variants records ctx typ Set.empty errors initial)) (Map.toList cfg.Blocks)]) architectures) (moduloGraphs typ)) [AST.TInt8;AST.TInt64;AST.TUInt64;AST.TFloat64;AST.TBool]
+    let make parameters typ cfg : MIR.Function={Id=fid 1;Name=source;TypedParams=parameters;ReturnType=typ;CFG=cfg;FloatRegs=(if typ=AST.TFloat64 then Set.ofList [1;2;3;4] else Set.empty)}
+    let parameter n typ : MIR.TypedMIRParam={Reg=reg n;Type=typ}
+    let parameters=[[];List.init 9 (fun n -> parameter n AST.TInt64);List.init 9 (fun n -> parameter n AST.TFloat64);List.init 16 (fun n -> parameter n (if n<8 then AST.TInt64 else AST.TFloat64))]
+    let observeProgram arch (func:MIR.Function)=
+        let phases=ResizeArray<JsonNode>()
+        let recorder name duration=phases.Add(tuple [enc name;enc (Double.IsFinite duration && duration>=0.)])
+        let program=MIR.Program ([func],variants,records)
+        let full=attempt (fun () -> MIR_to_LIR.toLIRForWithTrace (Some recorder) arch program)
+        let onlyPhases=ResizeArray<JsonNode>()
+        let onlyRecord name duration=onlyPhases.Add(tuple [enc name;enc (Double.IsFinite duration && duration>=0.)])
+        let only=attempt (fun () -> MIR_to_LIR.toLIRFunctionsForWithTrace (Some onlyRecord) arch program)
+        let rcPhases=ResizeArray<JsonNode>()
+        let rcRecord name duration=rcPhases.Add(tuple [enc name;enc (Double.IsFinite duration && duration>=0.)])
+        let rc=attempt (fun () -> MIR_to_LIR.toLIRFunctionsForWithTraceAndRcRegistries (Some rcRecord) arch ctx.RecordFields ctx.RecordTypeParams ctx.SumShapes program)
+        tuple [enc (MIR_to_LIR.initTempState func);full;list (List.ofSeq phases);only;list (List.ofSeq onlyPhases);rc;list (List.ofSeq rcPhases);attempt (fun () -> MIR_to_LIR.toLIRFor arch program);attempt (fun () -> MIR_to_LIR.toLIR program)]
+    let programCases=mapNodes (fun typ -> mapNodes (fun cfg -> mapNodes (fun parameters -> mapNodes (fun arch -> observeProgram arch (make parameters typ cfg)) architectures) parameters) (moduloGraphs typ)) [AST.TInt64;AST.TUInt64;AST.TFloat64]
+    let callCase intCount floatCount=
+        let argTypes=(List.init intCount (fun _ -> AST.TInt64))@(List.init floatCount (fun _ -> AST.TFloat64))
+        let args=argTypes |> List.mapi (fun n typ -> if typ=AST.TFloat64 then MIR.FloatSymbol (-0.) else MIR.Register (reg n))
+        let calls=[MIR.Call (reg 1,fid 200,args,argTypes,AST.TFloat64);MIR.TailCall (fid 200,args,argTypes,AST.TFloat64);MIR.IndirectCall (reg 1,v 2,args,argTypes,AST.TFloat64);MIR.IndirectTailCall (v 2,args,argTypes,AST.TFloat64);MIR.ClosureCall (reg 1,v 2,args,argTypes,AST.TFloat64);MIR.ClosureTailCall (v 2,args,argTypes)]
+        mapNodes (fun instr -> mapNodes (fun arch -> observeProgram arch (make [] AST.TFloat64 (graph source [block source [instr] (MIR.Ret (v 1))]))) architectures) calls
+    let callCases=mapNodes (fun ints -> mapNodes (callCase ints) [0;8;9]) [0;7;8;9]
+    let floatArgCases=mapNodes (fun count -> mapNodes (fun available -> mapNodes (fun operand -> enc (MIR_to_LIR.buildFloatArgMoves (List.init count (fun _ -> operand)) (List.init available (fun n -> List.item (n%8) [LIR.D0;LIR.D1;LIR.D2;LIR.D3;LIR.D4;LIR.D5;LIR.D6;LIR.D7])) initial)) operands) [0;1;7;8;9]) [0;1;7;8;9]
+    let printCases=mapNodes (fun typ -> mapNodes (fun operand -> attempt (fun () -> MIR_to_LIR.selectInstr Platform.ARM64 (MIR.Print (operand,typ)) variants records ctx Set.empty initial)) operands) [AST.TTuple [];AST.TTuple [AST.TUInt64;AST.TBool;AST.TChar;AST.TInt128;AST.TUInt128];AST.TTuple [AST.TList AST.TInt64];AST.TTuple [AST.TUnit];AST.TList AST.TInt128;AST.TList AST.TUInt128;AST.TSum ("missing",[]);AST.TRecord ("missing",[]);AST.TRecord (source,[AST.TInt64]);AST.TSum (source,[AST.TInt64])]
+    tuple [instructionCases;arithmetic;helperCases;terminators;typeHelpers;cfgCases;programCases;callCases;floatArgCases;printCases]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -4203,6 +4336,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "mir-lir" -> mirLIRObservation source
         | "anf-mir" -> anfMIRObservation source
         | "register-allocation" -> registerAllocationObservation source
         | "lir-peephole" -> peepholeObservation source

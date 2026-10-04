@@ -971,3 +971,15 @@ registry projection and trace phase semantics match. The warning-free build
 passes 456/456 native unit/DSL checks. Coverage is 215/391 pairs. MIR-to-LIR
 instruction selection is next; emission, remaining tooling/ownership tests,
 full corpus checks and final acceptance remain open.
+
+MIR-to-LIR instruction selection is fully translated with explicit interfaces
+and all original comments. Full observations match F# across both targets for
+76,560 instruction selections covering every MIR constructor, 32,076 arithmetic
+selections, temporary-counter overflow, type substitutions, all terminators,
+110 CFG selections, division/modulo guards and phi predecessor remapping,
+2,040 whole-program/functions-only/trace calls, mixed argument register banks,
+250 float-argument selections and 100 nested/error printing cases. Exact error
+diagnostics and trace phase semantics are preserved. The warning-free build
+passes 456/456 native unit/DSL checks. Coverage is 216/391 pairs. Machine backend
+types and emission are next; remaining tooling/ownership tests, full corpus
+checks and final acceptance remain open.
