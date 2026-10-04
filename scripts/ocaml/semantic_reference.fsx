@@ -7141,7 +7141,7 @@ let sourcePreparationObservation (source:string) =
     let parse input=WrittenParsing.parse LibParser.Validation.Script input |> Result.bind (fun parsed->WrittenChecking.checkSourceUnitsWithBase None true false [parsed])
     let observeInput input=attempt id (fun ()->parse input |> Result.map (fun (_,program,_)->
         let env=WrittenChecking.typeCheckEnvironment program
-        let moduleRegistry=Stdlib.buildModuleRegistry ()
+        let moduleRegistry:AST.ModuleRegistry=Map.empty
         let empty=unbox<AST_to_ANF.Registries> (invoke "emptyRegistries" [|box moduleRegistry|])
         let symbols=CheckedAST.programSymbols program
         let generic=SpecializationIdentity.extractGenericFuncDefs program
@@ -7150,13 +7150,13 @@ let sourcePreparationObservation (source:string) =
         let modes=[mode "Monomorphize" [|box (None:SpecializationIdentity.GenericFuncDefs option)|];mode "Monomorphize" [|box (Some generic)|];mode "ReplaceTypeApps" [|box specialization.SpecRegistry|];mode "SpecializeLocalAndReplace" [|box (Map.empty:SpecializationIdentity.SpecRegistry)|]]
         let baseNames=rcInternalCall<Set<string>> "CompilationContexts" "buildBaseFuncNames" [|box empty|]
         let catalog=rcInternalCall<LiftFunctions.FunctionCatalog> "CompilationContexts" "buildLambdaLiftFunctionCatalog" [|box empty;box baseNames;box (FunctionIdMap.empty:FunctionIdMap<string*AST.SemanticType>)|]
+        let context=rcInternalCall<CompilationContexts.PipelineContext> "CompilationContexts" "buildContext" [|box Platform.LinuxX86_64;box (CheckedAST.emptySymbols ());box env;box (Map.empty:Map<string,CompilationContexts.CheckedValueArtifact>);box (Map.empty:SpecializationIdentity.GenericFuncDefs);box (Map.empty:SpecializationIdentity.SpecRegistry);box empty;box baseNames;box (FunctionIdMap.empty:FunctionIdMap<string*AST.SemanticType>)|]
         let preparations=list (fun mode->
             let phases=ResizeArray<JsonNode>()
             let record (value:CompilerOptions.PassTiming)=phases.Add(tuple [enc value.Pass;enc (value.Elapsed.Ticks>=0L)])
             let output=attemptObj (fun value->driverProgram (unbox value)) (fun ()->invoke "prepareProgramForAnf" [|mode;box (Map.empty:TypeRegistries.TypeRegistry);box (Map.empty:LoweringPrimitives.VariantLookup);box baseNames;box catalog;box (Map.empty:Map<string,CompilationContexts.CheckedValueArtifact>);box (Some record:CompilerOptions.PassTimingRecorder option);box program|])
             let phases=JsonArray(phases.ToArray()) :> JsonNode
-            tuple [output;phases;attemptObj declaration (fun ()->invoke "convertTypedDeclarations" [|box (None:CompilationContexts.PipelineContext option);mode;box program|])]) modes
-        let context=rcInternalCall<CompilationContexts.PipelineContext> "CompilationContexts" "buildContext" [|box Platform.LinuxX86_64;box (CheckedAST.emptySymbols ());box env;box (Map.empty:Map<string,CompilationContexts.CheckedValueArtifact>);box (Map.empty:SpecializationIdentity.GenericFuncDefs);box (Map.empty:SpecializationIdentity.SpecRegistry);box empty;box baseNames;box (FunctionIdMap.empty:FunctionIdMap<string*AST.SemanticType>)|]
+            tuple [output;phases;attemptObj declaration (fun ()->invoke "convertTypedDeclarations" [|box (Some context:CompilationContexts.PipelineContext option);mode;box program|])]) modes
         use session=new CompilationSession.CompilationSession()
         let run ()=unbox<Result<AST_to_ANF.UserOnlyResult*obj,string>> (invoke "convertTypedProgramToUserOnlyWithMode" [|box context;mode "Monomorphize" [|box (Some generic)|];box env;box (Some session);box (None:CompilerOptions.PassTimingRecorder option);box program|])
         let first=run ()

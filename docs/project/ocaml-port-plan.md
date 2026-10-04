@@ -1817,3 +1817,20 @@ The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
 6080/6080 x64 executions. Coverage is 306/391 pairs; source comment coverage
 is complete. Remaining driver/library, runners/corpus and final acceptance
 remain open.
+
+Complete source preparation now imports inherited checked values, materializes
+value dependency closures, outlines expensive bodies, specializes local/external
+generics, lowers lambdas, assembles declaration registries and caches ANF
+dependencies while converting each entry expression independently. Sixteen text
+probes each exercise all 16 checked source fixtures with full ANF conversion
+results, every registry field, checked bodies/declarations/public symbol catalogs,
+timing pass order and session identity reuse. Fixtures cover lexical values,
+cycles, generic declarations, records/sums, recursive functions and captured/
+partial lambdas. The initial fixture catalog lacked builtin identities and
+aborted before conversion; the corrected base context reaches every fixture.
+All corrected observations match F#; the empty case compares 5,790,783 raw
+identical JSON bytes (SHA256 acce677b9d89cba05a04c2c75938099f41b8a13f7b257d057669d7fb87087df0). The warning-free build passes 508/508 unit checks,
+519/519 ARM64 executions and 6080/6080 x64 executions. Coverage is 307/391
+pairs; source comment coverage is complete. Process spawning uses explicit
+native descriptors; its full host-boundary audit follows with execution.
+Remaining driver/library, runners/corpus and final acceptance remain open.

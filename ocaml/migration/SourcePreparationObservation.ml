@@ -15,17 +15,17 @@ let observe source=
  let fixtures=[source;"()";"1L";"let f (x: Int64) : Int64 = x + 1L\nf 2L";"let id (x: 'a) : 'a = x\nid 1L";"val a = 1L\na";"val a = [1L,2L]\na";"val a = 1L\nval b = a + 2L\nlet f (x: Int64) : Int64 = b + x\nf a";"val unused = [1L,2L]\n()";"type R = { x: Int64 }\nval r = R { x = 1L }\nr";"type S = A of Int64 | B\nS.A 1L";"let add (x: Int64) (y: Int64) : Int64 = x + y\nlet f (x: Int64) : Int64 = let g = add x in g 2L\nf 1L";"let f (x: Int64) : Int64 = let g (y: Int64) : Int64 = x + y in g 2L\nf 1L";"let recur (x: Int64) : Int64 = if x == 0L then x else recur (x - 1L)\nrecur 1L";"let f (x: Int64) : Int64 = x + 1L";"type Box<'a> = { value: 'a }\nlet id (x: 'a) : 'a = x\nval a = Box { value = id 1L }\na"] in
  let observeInput input=attempt Fun.id (fun ()->Result.map (fun (_,program,_)->
   let env=WrittenChecking.typeCheckEnvironment program in
-  let moduleRegistry=DarkStdlib.buildModuleRegistry () in let empty=P.emptyRegistries moduleRegistry in
+  let moduleRegistry=M.empty in let empty=P.emptyRegistries moduleRegistry in
   let symbols=C.programSymbols program in let generic=SpecializationIdentity.extractGenericFuncDefs program in
   let localSpecs=P.collectLocalSpecs generic program in
   let specialization=Monomorphization.specializeFromSpecs symbols generic localSpecs in
   let modes=[P.Monomorphize None;P.Monomorphize (Some generic);P.ReplaceTypeApps specialization.SpecializationIdentity.specRegistry;P.SpecializeLocalAndReplace K.empty] in
   let baseNames=X.buildBaseFuncNames empty in let catalog=X.buildLambdaLiftFunctionCatalog empty baseNames FunctionIdMap.empty in
+  let context=X.buildContext Platform.LinuxX86_64 (C.emptySymbols ()) env M.empty M.empty K.empty empty baseNames FunctionIdMap.empty in
   let preparations=list (fun mode->
    let phases=ref [] in let record (value:CompilerOptions.passTiming)=phases:=tuple [str value.CompilerOptions.pass;`Bool (value.CompilerOptions.elapsed>=0L)]:: !phases in
    let output=attempt DriverObservation.program (fun ()->P.prepareProgramForAnf mode M.empty M.empty baseNames catalog M.empty (Some record) program) in
-   let phases=List.rev !phases in tuple [output;`List phases;attempt DriverObservation.declaration (fun ()->P.convertTypedDeclarations None mode program)]) modes in
-  let context=X.buildContext Platform.LinuxX86_64 (C.emptySymbols ()) env M.empty M.empty K.empty empty baseNames FunctionIdMap.empty in
+   let phases=List.rev !phases in tuple [output;`List phases;attempt DriverObservation.declaration (fun ()->P.convertTypedDeclarations (Some context) mode program)]) modes in
   let session=new CompilationSession.compilationSession () in
   let run ()=P.convertTypedProgramToUserOnlyWithMode context (P.Monomorphize (Some generic)) env (Some session) None program in
   let first=run () in let firstCount=session#cachedAnfDependencyCount in let second=run () in

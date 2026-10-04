@@ -49,9 +49,9 @@ let conversion (value:R.conversionResult)=SemanticJson.record "ConversionResult"
  "RcSumShapeReg",ProductionANF.memoryModel_rcSumShapeRegistry value.R.rcSumShapeReg;
  "FuncReg",returns value.R.funcReg;"FuncParams",map fields value.R.funcParams;"ModuleRegistry",map SemanticAST.observationModuleFunc value.R.moduleRegistry]
 let user (value:R.userOnlyResult)=SemanticJson.record "UserOnlyResult" [
- "Symbols",symbols value.R.symbols;"UserFunctions",list ProductionANF.aNF_functionDef value.R.userFunctions;
- "OwnershipContracts",ids ownership value.R.ownershipContracts;"ScopeContracts",ids scope value.R.scopeContracts;
- "InertFunctionScopes",set value.R.inertFunctionScopes;"NonInlineableFunctionNames",set value.R.nonInlineableFunctionNames;
+ "Symbols",symbols value.R.symbols;"ScopeContracts",ids scope value.R.scopeContracts;
+ "InertFunctionScopes",set value.R.inertFunctionScopes;"UserFunctions",list ProductionANF.aNF_functionDef value.R.userFunctions;
+ "OwnershipContracts",ids ownership value.R.ownershipContracts;"NonInlineableFunctionNames",set value.R.nonInlineableFunctionNames;
  "MainExpr",ProductionANF.aNF_aExpr value.R.mainExpr;"TypeReg",typeReg value.R.typeReg;"TypeNames",metadata value.R.typeNames;
  "RecordFieldsReg",map fields value.R.recordFieldsReg;"RecordTypeParamsReg",map (list str) value.R.recordTypeParamsReg;
  "VariantLookup",variants value.R.variantLookup;"SumMetadata",sums value.R.sumMetadata;
