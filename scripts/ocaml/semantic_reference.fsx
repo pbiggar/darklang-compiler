@@ -3928,6 +3928,59 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let x64ProgramObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let result f value : JsonNode=
+        let node=JsonObject()
+        node["type"] <- JsonValue.Create "FSharpResult"
+        match value with
+        | Ok v -> node["case"] <- JsonValue.Create "Ok";node["fields"] <- JsonArray([|f v|])
+        | Error e -> node["case"] <- JsonValue.Create "Error";node["fields"] <- JsonArray([|enc e|])
+        node
+    let make id name instructions : LIR.Function =
+        let label=LIR.Label (name+"_entry")
+        let block:LIR.BasicBlock={Label=label;Instrs=instructions;Terminator=LIR.Ret}
+        {Id=AST.functionId id;Name=name;TypedParams=[];CFG=({Entry=label;Blocks=Map.ofList [label,block]}:LIR.CFG);StackSize=32;UsedCalleeSaved=[LIR.X19];CodegenFacts=None}
+    let callee=make 1UL "fn" []
+    let instructions=lirInstructionFixturesWithRegisters source (LIR.Physical LIR.X19) (LIR.FPhysical LIR.D0) (LIR.Imm 1L) AST.TString
+    let dynamic=MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer
+    let child=MemoryModel.RootRelease (8,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (8,[MemoryModel.FieldRelease (0,dynamic)]))
+    let fields=List.init 25 (fun index -> MemoryModel.FieldRelease (index*8,dynamic))
+    let plans=[MemoryModel.RootRelease (200,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (200,fields));MemoryModel.RootRelease (200,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (200,fields,[{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=fields}]));MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease (MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (dynamic,child))));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (dynamic,child));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (dynamic,MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease dynamic)))]
+    let kinds=[LIR.GenericHeap;LIR.GenericHeap;LIR.TaggedList;LIR.DictHeap;LIR.DictHeap]
+    let releaseInstructions=List.map2 (fun kind plan -> LIR.RefCountDec (LIR.Physical LIR.X19,200,kind,Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=None;MemoryModel.RcMetadata.ReleasePlan=Some plan;MemoryModel.RcMetadata.SourceType=Some AST.TString})) kinds plans
+    let catalog=List.map (fun instruction -> [make 0UL "_start" [instruction];callee]) (instructions@releaseInstructions)
+    let saves=make 0UL "_start" [LIR.SaveRegs ([LIR.X2;LIR.X3],[LIR.D2]);LIR.Call (LIR.Physical LIR.X0,AST.functionId 1UL,[]);LIR.RestoreRegs ([LIR.X2;LIR.X3],[LIR.D2])]
+    let catalog=[[];[make 0UL "_start" []];[callee;make 0UL "_start" [LIR.PrintString source]];[saves;callee];[make 0UL "_start" [];make 2UL "_start" []];[make 2UL source []];[make 0UL "_start" [LIR.Mov (LIR.Virtual 0,LIR.Imm 1L)]]]@catalog
+    let variants:LIR.VariantRegistry=Map.ofList ["Option",{TypeParams=[];Variants=[{Name="None";Tag=0;Payload=None;FieldCount=0};{Name="Some";Tag=1;Payload=Some AST.TString;FieldCount=1}]}]
+    let records=Map.ofList ["R",["field",AST.TString]]
+
+    let types=[AST.TString;AST.TBlob;AST.TInt;AST.TList AST.TString;AST.TList (AST.TList AST.TString);AST.TDict (AST.TString,AST.TList AST.TString);AST.TDict (AST.TString,AST.TDict (AST.TString,AST.TList AST.TString));AST.TList (AST.TDict (AST.TString,AST.TList AST.TString));AST.TList (AST.TTuple [AST.TString;AST.TList AST.TString]);AST.TFunction ([AST.TInt64],AST.TString);AST.TStream AST.TString;AST.TTuple [AST.TString;AST.TList AST.TString;AST.TDict (AST.TString,AST.TString)];AST.TRecord ("R",[]);AST.TSum ("Option",[])]
+    let capturedCase typ=let f={callee with TypedParams=[{Reg=LIR.Physical LIR.X0;Type=AST.TTuple [AST.TInternalRawPtr;typ]}]} in [make 0UL "_start" [LIR.ClosureAlloc (LIR.Physical LIR.X19,AST.functionId 1UL,[]);LIR.RefCountInc (LIR.Physical LIR.X19,8,LIR.ClosureHeap,None);LIR.RefCountDec (LIR.Physical LIR.X19,8,LIR.ClosureHeap,None)];f]
+    let captured=List.map capturedCase types
+    let slots=List.map (fun typ->[make 0UL "_start" [LIR.RawSlotInit (LIR.Physical LIR.X19,LIR.Physical LIR.X20,LIR.Physical LIR.X21,typ)];callee]) types
+    let releasedCase typ=
+        let sums=rcInternalCall<MemoryModel.RcSumShapeRegistry> "X64CodeGenTypes" "rcSumShapeRegistryFromVariantRegistry" [|box variants|]
+        match rcInternalCall<MemoryModel.RcReleasePlan option> "X64ReleaseSelection" "tryRcReleasePlanOfType" [|box records;box sums;box typ|] with
+        | Some (MemoryModel.RootRelease (size,kind,_) as plan)->
+            let kind=match kind with MemoryModel.GenericHeap->LIR.GenericHeap|MemoryModel.TaggedList->LIR.TaggedList|MemoryModel.DictHeap->LIR.DictHeap|MemoryModel.ClosureHeap->LIR.ClosureHeap|MemoryModel.StreamHeap->LIR.StreamHeap
+            Some [make 0UL "_start" [LIR.RefCountDec (LIR.Physical LIR.X19,size,kind,Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=None;ReleasePlan=Some plan;SourceType=Some typ})];callee]
+        | _ -> None
+    let released=List.choose releasedCase types
+    let cli=List.map (fun op->[make 0UL "_start" [LIR.CliNative (LIR.Physical LIR.X19,op,[])];callee]) [LIR.GetArgv;LIR.GetEnvironmentPacked;LIR.DirectoryCurrent;LIR.GetEnv;LIR.Execute;LIR.RunProcess;LIR.SpawnProcess;LIR.ProcessIO;LIR.TerminateProcess]
+    let missing=[make 0UL "_start" [LIR.ClosureAlloc (LIR.Physical LIR.X19,AST.functionId UInt64.MaxValue,[])]]
+    let catalog=catalog@captured@slots@released@cli@[missing]
+    let code enabled xs=
+        let pool=X86_64_Resolve.collectStringPool xs
+        let encoded=X86_64_Resolve.resolveAndEncode xs |> result (fun (r:X86_64_Resolve.ResolveResult)->
+            let patched=X86_64_Resolve.patchDataLabels r (X86_64_Resolve.dataLabelOffsets 120 r.MachineCode.Length pool) 120
+            result (fun (r:X86_64_Resolve.ResolveResult)->tuple [enc r.MachineCode;enc (Binary_Generation_ELF_X86_64.createExecutableWithPools r.MachineCode pool LiteralPool.emptyFloatPool enabled 0)]) patched)
+        tuple [enc xs;enc pool;encoded]
+    let enabledCase enabled=mapNodes (fun functions->try tuple [enc false;result (code enabled) (CodeGen_X86_64.translateProgram (LIR.Program (functions,variants,records)) enabled)] with ex -> tuple [enc true;enc ex.Message]) catalog
+    mapNodes enabledCase [false;true]
+
 let x64FunctionObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -6485,6 +6538,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "x64-program" -> x64ProgramObservation source
         | "x64-functions" -> x64FunctionObservation source
         | "x64-process" -> x64ProcessObservation source
         | "x64-native-effects" -> x64NativeEffectObservation source

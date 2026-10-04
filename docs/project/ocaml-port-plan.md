@@ -1663,3 +1663,22 @@ frames, calls, graph fallthrough, integer/bit/float branches (including NaNs),
 unreachable blocks and nested argv access. Coverage is 295/391 pairs; source
 comment coverage is complete. Program assembly, driver/library, runners/corpus
 and final acceptance remain open.
+
+Complete x64 program assembly now discovers runtime dependencies, closes list
+helper dependencies, merges planned list/dictionary helpers, selects typed
+and dynamic releases, collects closure/recursive metadata and emits functions
+and process/error helpers in source order. Full instructions, errors, pools,
+resolved code and ELF bytes match F# exactly across 319,183,182 JSON bytes
+(SHA256 2ca1af9aa32c082cc47a2e1db2215e2403c98b16c573487fc6c05c0a7fc4a631).
+Cases cover all instruction variants, typed slots, nested lifetime plans,
+closure capture types, metadata failures, conditional CLI helpers, duplicate
+functions and both leak settings. Source generation of the unused dynamic-key
+list helper is retained, including its label-counter effects. The warning-free
+build passes 508/508 unit checks, 519/519 ARM64 executions and 6080/6080 x64
+executions. The 12 new integrated x64 programs run register allocation through
+program assembly and ELF generation for arithmetic, float bits, strings,
+heap/RC/list/dictionary operations, argv, captured child output, closure calls
+and automatic child cleanup. Float presentation awaits the stdlib formatter
+through the driver; emitted formatter calls are fully compared. Coverage is
+296/391 pairs; source comment coverage is complete. Driver/library,
+runners/corpus and final acceptance remain open.

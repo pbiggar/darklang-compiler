@@ -1100,6 +1100,47 @@ let x64FunctionChecks ()=
  check ~args:["nested"] ~extra:(X64Process.generateCliArgvHelper ()) "6" 32 [L.X19;L.X20] [block "entry" [L.CliNative (r L.X19,L.GetArgv,[L.Imm 0L]);L.HeapLoad (a,r L.X19,8)] L.Ret];
  !total
 [@@warning "-42"]
+let x64ProgramChecks ()=
+ let reg n=LIR.Virtual n in
+ let make instrs=
+  let label=LIR.Label "pipeline-entry" in
+  let block={LIR.label;instrs;terminator=LIR.Ret} in
+  {LIR.id=AST.functionId 0L;name="_start";typedParams=[];cfg={LIR.entry=label;blocks=LIR.LabelMap.singleton label block};stackSize=0;usedCalleeSaved=[];codegenFacts=None} in
+ let dynamic=MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer in
+ let fields=List.init 25 (fun index -> MemoryModel.FieldRelease (index*8,dynamic)) in
+ let plan=MemoryModel.RootRelease (200,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (200,fields)) in
+ let metadata plan=Some {MemoryModel.releasePlanCacheKey=None;releasePlan=Some plan;sourceType=Some AST.TString} in
+ let cases=[
+  "42",[LIR.Mov (reg 0,LIR.Imm 42L);LIR.PrintInt64NoNewline (reg 0)];
+  "42",[LIR.Mov (reg 0,LIR.Imm 20L);LIR.Mov (reg 1,LIR.Imm 22L);LIR.Add (reg 2,reg 0,LIR.Reg (reg 1));LIR.PrintInt64NoNewline (reg 2)];
+  "hé😀4609434218613702656",[LIR.StdoutWrite (0,LIR.StringSymbol "hé😀",false);LIR.FLoad (LIR.FVirtual 0,1.5);LIR.FloatToBits (reg 0,LIR.FVirtual 0);LIR.PrintInt64NoNewline (reg 0)];
+  "42",[LIR.HeapAlloc (reg 0,8);LIR.HeapStore (reg 0,0,LIR.Imm 42L,Some AST.TInt64);LIR.HeapLoad (reg 1,reg 0,0);LIR.PrintInt64NoNewline (reg 1)];
+  "hé😀tail",[LIR.StringConcat (reg 0,LIR.StringSymbol "hé😀",LIR.StringSymbol "tail",[]);LIR.PrintHeapStringNoNewline (reg 0)];
+  "0",[LIR.HeapAlloc (reg 0,200)]@List.init 25 (fun index -> LIR.HeapStore (reg 0,index*8,LIR.Imm 0L,Some AST.TString))@[LIR.RefCountDec (reg 0,200,LIR.GenericHeap,metadata plan);LIR.HeapLoad (reg 1,reg 0,200);LIR.PrintInt64NoNewline (reg 1)];
+  "42",[LIR.Mov (reg 0,LIR.Imm 0L);LIR.RefCountInc (reg 0,8,LIR.TaggedList,None);LIR.RefCountDec (reg 0,8,LIR.TaggedList,metadata (MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease MemoryModel.NoReleasePlan)));LIR.Mov (reg 1,LIR.Imm 42L);LIR.PrintInt64NoNewline (reg 1)];
+  "42",[LIR.Mov (reg 0,LIR.Imm 0L);LIR.RefCountInc (reg 0,16,LIR.DictHeap,None);LIR.RefCountDec (reg 0,16,LIR.DictHeap,metadata (MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,MemoryModel.NoReleasePlan))));LIR.Mov (reg 1,LIR.Imm 42L);LIR.PrintInt64NoNewline (reg 1)]
+ ] in
+
+ let extra=[
+  "argument",[LIR.CliNative (reg 0,LIR.GetArgv,[LIR.Imm 0L]);LIR.StdoutWrite (0,LIR.Reg (reg 0),false)];
+  "42",[LIR.CliNative (reg 0,LIR.Execute,[LIR.StringSymbol "printf 42"]);LIR.HeapLoad (reg 1,reg 0,8);LIR.StdoutWrite (0,LIR.Reg (reg 1),false)];
+  "42",[LIR.ClosureAlloc (reg 0,AST.functionId 1L,[]);LIR.RefCountInc (reg 0,8,LIR.ClosureHeap,None);LIR.SaveRegs ([],[]);LIR.HeapLoad (reg 2,reg 0,0);LIR.ClosureCall (reg 1,reg 2,[]);LIR.RestoreRegs ([],[]);LIR.PrintInt64NoNewline (reg 1);LIR.RefCountDec (reg 0,8,LIR.ClosureHeap,None);LIR.RefCountDec (reg 0,8,LIR.ClosureHeap,None)];
+  "1",[LIR.CliNative (reg 0,LIR.SpawnProcess,[LIR.StringSymbol "exec /bin/sleep 10"]);LIR.Mov (reg 1,LIR.Imm 1L);LIR.PrintInt64NoNewline (reg 1)]
+ ] in
+ let callee={ (make [LIR.Mov (LIR.Physical LIR.X0,LIR.Imm 42L)]) with LIR.id=AST.functionId 1L;name="fn";cfg={LIR.entry=LIR.Label "fn_entry";blocks=LIR.LabelMap.singleton (LIR.Label "fn_entry") {LIR.label=LIR.Label "fn_entry";instrs=[LIR.Mov (LIR.Physical LIR.X0,LIR.Imm 42L)];terminator=LIR.Ret}}} in
+ let checked=function Ok xs->xs|Error e->failwith e in
+ let count=ref 0 in
+ List.iter (fun (expected,instrs)->
+  let functions=List.map (RegisterAllocation.allocateRegisters Platform.X86_64) [make instrs;callee] in
+  let code=checked (CodeGen_X86_64.translateProgram (LIR.Program (functions,StringOrder.Map.empty,StringOrder.Map.empty)) false) in
+  let pool=X86_64_Resolve.collectStringPool code in let r=checked (X86_64_Resolve.resolveAndEncode code) in
+  let r=checked (X86_64_Resolve.patchDataLabels r (X86_64_Resolve.dataLabelOffsets 120 (Bytes.length r.X86_64_Resolve.machineCode) pool) 120) in
+  let image=Binary_Generation_ELF_X86_64.createExecutableWithPools r.X86_64_Resolve.machineCode pool LiteralPool.emptyFloatPool false 0 in
+  let actual=try runImageOn "/opt/dcb/qemu/qemu-x86_64" image ["argument"] "" with Failure e->failwith (Printf.sprintf "x64 program case %d: %s" !count e) in
+  if actual<>expected then failwith (Printf.sprintf "x64 program case %d: expected %S, got %S" !count expected actual);
+  incr count) (cases@extra);
+ !count
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -1107,4 +1148,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks ()+x64MemoryChecks ()+x64BufferChecks ()+x64FileChecks ()+x64IntegerChecks ()+x64NativeEffectChecks ()+x64ProcessChecks ()+x64FunctionChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks ()+x64MemoryChecks ()+x64BufferChecks ()+x64FileChecks ()+x64IntegerChecks ()+x64NativeEffectChecks ()+x64ProcessChecks ()+x64FunctionChecks ()+x64ProgramChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
