@@ -1177,3 +1177,16 @@ process_runtime_main executable retains these execution checks. The build is
 warning-free and comment coverage is complete. Coverage is 254/391 pairs.
 Instruction-family lowering is next; remaining ownership runtime, complete
 runners/corpus checks and final acceptance remain open.
+
+Complete ARM64 floating-point lowering, calls and list-printing context are
+translated with interfaces and all 69 original comment lines. Full results,
+instruction streams, recoverable diagnostics and internal crash outcomes match
+F# across 259,196,302 identical JSON bytes. Fixtures cover every physical and
+reserved/virtual FP register, all scalar operations and fused register choices,
+all floating-immediate encodings and nonfinite values, stack-offset boundaries,
+parallel-move cycles, all GP/FP save pairs, ignored call arguments, unknown
+function IDs, both leak modes and both OS list printers with a 4,097-field tuple.
+The warning-free build passes 508 translated tests and eight ARM64 execution
+checks. Comment coverage is complete. Coverage is 257/391 pairs. Integer
+lowering is next; remaining ownership runtime, complete runners/corpus checks
+and final acceptance remain open.
