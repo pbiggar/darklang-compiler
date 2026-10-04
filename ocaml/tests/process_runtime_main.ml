@@ -946,6 +946,54 @@ let x64IntegerChecks ()=
  List.iter (fun text->check ~exitCode:1 ~errors:text "" (checked (E.emitRuntimeError ctx text));check ~exitCode:1 ~errors:text "" (X64Operands.emitStringLiteral X.R11 text@checked (E.emitRuntimeErrorString ctx (LIR.Physical LIR.X8)))) ["";"hé😀";"a\000b"];
  !total
 [@@warning "-42"]
+let x64NativeEffectChecks ()=
+ let module X=X86_64 in let module E=X64EmitNativeEffects in let total=ref 0 in
+ let ctx={X64CodeGenTypes.functionName="x64-native-effect-execution";stackSize=0;usedCalleeSaved=[];enableLeakCheck=false;recordRegistry=StringOrder.Map.empty;sumShapeRegistry=StringOrder.Map.empty;functionNames=FunctionIdMap.empty} in
+ let checked=function Ok value->value|Error error->failwith error in
+ let setup=[X.SUB_imm (X.RSP,32768l);X.MOV_reg (X.RBP,X.RSP);X.MOV_reg (X.R15,X.RBP);X.LEA (X.R14,X.RBP,8192l)] in
+ let compare reg expected=[X.MOV_reg (X.RAX,reg)]@X64Operands.loadImm64 X.RDX expected@[X.CMP_reg (X.RAX,X.RDX);X.Jcc (X.NE,"failed")] in
+ let pass=X64Operands.genPrintChars ['P'] in
+ let check expected body=
+  let code=[X.Label "_start"]@setup@body@[X.ADD_imm (X.RSP,32768l);X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@[X.Label "failed"]@X64Operands.genPrintChars ['F']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall in
+  let pool=X86_64_Resolve.collectStringPool code in
+  let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let resolved=checked (X86_64_Resolve.patchDataLabels resolved (X86_64_Resolve.dataLabelOffsets 120 (Bytes.length resolved.X86_64_Resolve.machineCode) pool) 120) in
+  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode pool LiteralPool.emptyFloatPool false 0 in
+  let actual=try runImageOn "/opt/dcb/qemu/qemu-x86_64" binary [] "" with Failure e->failwith (Printf.sprintf "x64 native effect case %d: %s" !total e) in
+  if actual<>expected then failwith (Printf.sprintf "x64 native effect case %d: expected %S, got %S" !total expected actual);
+  incr total in
+ let gps=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X19] in
+ List.iter (fun physical->let dest=LIR.Physical physical and reg=X64Operands.lirRegToX86 physical in let cli op args=checked (E.emitCliNative ctx dest op args) in
+  check "P" (X64Operands.loadImm64 reg 42L@checked (E.emitCoverageHit ctx)@compare reg 42L@pass);
+  let saved=[X.RAX;X.RDI;X.RSI;X.RDX;X.RCX;X.R11] |> List.filter (fun r->r<>reg) in
+  let init=List.concat_map (fun r->X64Operands.loadImm64 r 42L) saved in
+  let preservation=List.concat_map (fun r->compare r 42L) (List.filter (fun r->r<>X.RAX && r<>X.RDX) saved) in
+  check "P" (init@checked (E.emitRandomInt64 ctx dest)@preservation@pass);
+  check "P" (checked (E.emitDateTimeNow ctx dest)@[X.CMP_imm (reg,0l);X.Jcc (X.LE,"failed")]@pass);
+  List.iter (fun op->check "P" (cli op []@compare reg 1L@pass)) [LIR.HostOS;LIR.HostArchitecture];
+  check "P" (cli LIR.GetPid []@[X.CMP_imm (reg,0l);X.Jcc (X.LE,"failed")]@pass);
+  check "P" (cli LIR.GetUid []@compare reg (Int64.of_int (Unix.getuid ()))@pass);
+  check "P" (cli LIR.CpuCount []@[X.CMP_imm (reg,0l);X.Jcc (X.LE,"failed")]@pass);
+  check "P" ([X.LEA (X.R11,X.RBP,2000l)]@cli LIR.SecureRandomFill [LIR.Reg (LIR.Physical LIR.X8);LIR.Imm 8L]@compare reg 8L@pass);
+  List.iter (fun socket->let created=cli socket [] in let closed=checked (E.emitCliNative ctx dest LIR.SocketClose [LIR.Reg dest]) in
+   check "P" (created@[X.CMP_imm (reg,0l);X.Jcc (X.LT,"failed")]@closed@compare reg 0L@pass)) [LIR.SocketTcp4;LIR.SocketUdp4];
+  List.iter (fun (op,args)->check "P" ([X.LEA (X.RBX,X.RBP,2000l);X.XOR_reg (X.RAX,X.RAX);X.MOV_store (X.RBX,0l,X.RAX);X.MOV_store (X.RBX,8l,X.RAX)]@cli op args@compare reg (-9L)@pass))
+   [LIR.SocketClose,[LIR.Imm (-1L)];LIR.SocketSend,[LIR.Imm (-1L);LIR.Reg (LIR.Physical LIR.X19)];LIR.SocketReceive,[LIR.Imm (-1L);LIR.Reg (LIR.Physical LIR.X19);LIR.Imm 8L];LIR.SocketConnect4,[LIR.Imm (-1L);LIR.Reg (LIR.Physical LIR.X19)];LIR.SocketReceiveTimeout,[LIR.Imm (-1L);LIR.Reg (LIR.Physical LIR.X19)];LIR.SocketSendTimeout,[LIR.Imm (-1L);LIR.Reg (LIR.Physical LIR.X19)]]) gps;
+ List.iter (fun physical->let delay=LIR.FPhysical physical and reg=X64Operands.lirFRegToX86 physical in List.iter (fun ms->
+  let bits=Int64.bits_of_float ms in
+  check "P" (X64Operands.loadImm64 X.RAX bits@[X.MOVQ_from_gp (reg,X.RAX)]@checked (E.emitSleep ctx 0 delay)@[X.MOVQ_to_gp (X.RAX,reg)]@compare X.RAX bits@pass)) [-1.;0.;0.1;2.]) [LIR.D0;LIR.D14;LIR.D15];
+ let path=Filename.temp_file "port-x64-native-file-" ".bin" in let exclusive=path^".exclusive" in let directory=path^".dir" in
+ Fun.protect ~finally:(fun ()->if Sys.file_exists path then Sys.remove path;if Sys.file_exists exclusive then Sys.remove exclusive;if Sys.file_exists directory then Unix.rmdir directory) (fun ()->
+  Unix.mkdir directory 0o700;
+  List.iter (fun physical->let dest=LIR.Physical physical and reg=X64Operands.lirRegToX86 physical in List.iter (fun (value,expected)->check "P" (checked (E.emitCliNative ctx dest LIR.FileIsDirectory [LIR.StringSymbol value])@compare reg expected@pass)) [path,0L;directory,1L;path^".missing",0L]) gps;
+  check "P" (checked (E.emitCliNative ctx (LIR.Physical LIR.X19) LIR.FileCreateExclusive [LIR.StringSymbol exclusive])@compare X.RBX 0L@pass);
+  if not (Sys.file_exists exclusive) || (Unix.stat exclusive).Unix.st_perm<>0o600 then failwith "x64 exclusive create did not create private file";
+  check "P" (checked (E.emitCliNative ctx (LIR.Physical LIR.X19) LIR.FileCreateExclusive [LIR.StringSymbol exclusive])@compare X.RBX 17L@pass);
+  check "P" (checked (E.emitCliNative ctx (LIR.Physical LIR.X19) LIR.FileCreateExclusive [LIR.StringSymbol (String.make 4096 'a')])@compare X.RBX 36L@pass));
+ check (Unix.gethostname ()) (checked (E.emitCliNative ctx (LIR.Physical LIR.X19) LIR.Hostname [])@[X.MOV_load (X.RAX,X.RBX,0l)]@compare X.RAX 0L@[X.MOV_load (X.RAX,X.RBX,8l)]@checked (X64EmitPrinting.emitPrintHeapStringNoNewline ctx (LIR.Physical LIR.X0)));
+ check "P" (checked (E.emitCliNative ctx (LIR.Physical LIR.X19) LIR.Kill [LIR.Imm 2147483647L;LIR.Imm 0L])@[X.MOV_load (X.RAX,X.RBX,0l)]@compare X.RAX 1L@pass);
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -953,4 +1001,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks ()+x64MemoryChecks ()+x64BufferChecks ()+x64FileChecks ()+x64IntegerChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks ()+x64MemoryChecks ()+x64BufferChecks ()+x64FileChecks ()+x64IntegerChecks ()+x64NativeEffectChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count

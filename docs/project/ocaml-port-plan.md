@@ -1624,3 +1624,19 @@ cycles, closure headers/captures, UTF-8/NUL/EOF/CRLF input/output, conversions
 and exact error exit codes/stderr. Coverage is 290/391 pairs; source comment
 coverage is complete. Remaining x64 native effects/process/runtime assembly,
 driver/library, runners/corpus and final acceptance remain open.
+
+Complete x64 native coverage/random/time/sleep and all 33 CLI operations are
+translated with full interfaces and source comments. Full instruction streams,
+syscall setup, fresh-label order and errors match F# across 26,498,289 canonical
+JSON bytes (SHA256
+e1f7930dc0a13223ccb132262cbb735a07b45ca27371b17686d14c8bbfe3bdc5).
+Cases cover every physical GP/FP register, virtual errors, all operand families,
+argument counts, register aliases, effect-id bounds and both leak settings.
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+4373/4373 x64 executions. The 217 new x64 cases execute syscall results and
+register preservation, socket creation/close and invalid descriptors, sleep,
+exclusive creation/mode/repeated creation/long paths, file/directory detection,
+hostname and signal-zero error probes. Process helper execution follows with
+the complete process owner. Coverage is 291/391 pairs; source comment coverage
+is complete. Remaining x64 process/runtime assembly, driver/library,
+runners/corpus and final acceptance remain open.
