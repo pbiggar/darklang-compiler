@@ -2942,6 +2942,28 @@ let armRuntimeObservation (_source:string) =
     let targets=mapNodes targetObservation [ARM64.targetConfigFor Platform.MacOSARM64;ARM64.targetConfigFor Platform.LinuxARM64]
     tuple [immediates;signed;floats;targets]
 
+let armPrintingObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let attempt f action=try tuple [enc false;f (action ())] with _ -> tuple [enc true]
+    let words xs=xs |> List.mapi (fun idx instr -> ARM64_Encoding.encodeWithLabels instr (idx*4) Map.empty Map.empty Map.empty Map.empty) |> List.toArray |> enc
+    let code (xs:ARM64.Instr list)=tuple [enc xs;attempt id (fun () -> words xs)]
+    let armRegValues=[|ARM64.X0;ARM64.X1;ARM64.X2;ARM64.X3;ARM64.X4;ARM64.X5;ARM64.X6;ARM64.X7;ARM64.X8;ARM64.X9;ARM64.X10;ARM64.X11;ARM64.X12;ARM64.X13;ARM64.X14;ARM64.X15;ARM64.X16;ARM64.X17;ARM64.X18;ARM64.X19;ARM64.X20;ARM64.X21;ARM64.X22;ARM64.X23;ARM64.X24;ARM64.X25;ARM64.X26;ARM64.X27;ARM64.X28;ARM64.X29;ARM64.X30;ARM64.SP|]
+    let context target enabled : ARM64CodeGenTypes.CodeGenContext={Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled};SumShapeRegistry=Map.empty;RecordRegistry=Map.empty;RawSlotInitRetainTargets=None;ClosurePayloadSizes=Map.empty;ClosureCaptureTypes=Map.empty;FunctionNames=FunctionIdMap.empty;FunctionName=source;InstructionSite=source;StackSize=0;UsedCalleeSaved=[];UsedCalleeSavedF=[];HeapOverflowLabel=source;RecordLirOpExpansion=None}
+    let targetObservation target =
+        let simple=mapNodes (fun f -> code (f target)) [ARM64PrintAndExit.generatePrintInt64;ARM64PrintAndExit.generatePrintBool;ARM64PrintAndExit.generatePrintFloat;ARM64PrintAndExit.generateExit;ARM64PrintValues.generatePrintInt64NoExit;ARM64PrintValues.generatePrintUInt64NoExit;ARM64PrintValues.generatePrintInt64ToStderrNoExit;ARM64PrintValues.generatePrintBoolNoExit;ARM64PrintValues.generatePrintInt64NoNewline;ARM64PrintValues.generatePrintUInt64NoNewline;ARM64PrintValues.generatePrintBoolNoNewline;ARM64PrintValues.generatePrintFloatNoNewline;ARM64PrintValues.generatePrintStringNoNewline;ARM64PrintValues.generatePrintBlob;ARM64PrintValues.generateWriteSyscall]
+        let strings=mapNodes (fun len -> attempt code (fun () -> ARM64PrintAndExit.generatePrintString target len)) [-2147483648;-1;0;1;4095;4096;65535;65536;2147483647]
+        let byteLists=[[];[0uy];[255uy];List.init 256 byte;List.init 256 (fun n -> byte (255-n))]@List.map (fun len -> List.init len (fun n -> byte (n%256))) [7;8;15;16;17;31;32;255;256;4095;4096;65536]
+        let chars=mapNodes (fun bytes -> tuple [code (ARM64PrintValues.generatePrintChars target bytes);code (ARM64PrintValues.generatePrintCharsToStderr target bytes)]) byteLists
+        let leak enabled =
+            let ctx=context target enabled
+            let symbolic xs=tuple [enc (xs:ARM64Symbolic.Instr list);attempt enc (fun () -> ARM64_Encoding.encodeSymbolicWithPools xs LiteralPool.emptyStringPool LiteralPool.emptyFloatPool (ARM64.targetOS target) enabled)]
+            tuple [symbolic (ARM64LeakAccounting.generateLeakCounterInc ctx);symbolic (ARM64LeakAccounting.generateLeakCounterDec ctx);mapNodes (fun reg -> symbolic (ARM64LeakAccounting.generateLeakCounterIncIfResultError ctx reg)) (Array.toList armRegValues);symbolic (ARM64LeakAccounting.generateLeakCheckReport ctx)]
+        let leaks=mapNodes leak [false;true]
+        tuple [simple;strings;chars;leaks]
+    mapNodes targetObservation [ARM64.targetConfigFor Platform.MacOSARM64;ARM64.targetConfigFor Platform.LinuxARM64]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -5190,6 +5212,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-printing" -> armPrintingObservation source
         | "arm64-runtime" -> armRuntimeObservation source
         | "arm64-peephole" -> armPeepholeObservation source
         | "arm64-operands" -> armOperandsObservation source

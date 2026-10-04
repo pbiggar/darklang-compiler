@@ -1147,3 +1147,16 @@ three/four-register writes. The warning-free build passes 508/508 translated
 checks, and comment coverage is complete. Coverage is 248/391 pairs. Printing
 and allocation accounting are next; remaining dispatch/ownership runtime,
 complete test tooling, corpus checks and final acceptance remain open.
+
+Complete ARM64 terminating printers, nonterminating value printers and leak
+accounting are translated with interfaces and 402 source comment lines. All
+instructions and encoded-word outcomes match F# across 109,088,151 bytes of
+complete observations: both OS syscall paths, signed/unsigned/boolean/float/
+string/Blob output, stdout/stderr buffers, all byte values, alignment and
+65,536-byte truncation boundaries, negative string-length crashes, and both
+leak options with every result register. Invalid oversized source instruction
+streams are compared in full before their native encoding crash outcomes.
+The warning-free build passes 508/508 tests and complete comment coverage.
+Coverage is 251/391 pairs. Process/argument-vector runtime helpers are next;
+remaining ownership/dispatch, full test tooling/corpus and final acceptance
+remain open.
