@@ -2010,3 +2010,12 @@ fixture sections and new boundary inputs. The warning-free build passes
 604/604 translated unit/fixture checks. Committed coverage is 340/391 pairs;
 all comments in these owners are preserved. Remaining unit/test-tooling pairs,
 full corpus and final acceptance remain open.
+
+The complete symbolic LIR fixture parser now preserves all instruction forms,
+physical/virtual register validation, numeric field widths, original source
+line numbering and explicit final-terminator rules. All 16 comparison requests
+match F# for full parsed programs and diagnostics across 256 LIR inputs, plus
+the 89 existing ANF/MIR comparison inputs. The warning-free native build passes
+604/604 translated unit/fixture checks. Committed coverage is 341/391 pairs;
+reference comments remain complete in these owners. Remaining unit/test-tooling
+pairs, full corpus and final acceptance remain open.

@@ -7707,10 +7707,10 @@ let compilerUnitObservation (source:string) =
 let irParserObservation (source:string) =
     let tuple values=namedArray "tuple" (List.toArray values)
     let enc (value:'a)=encode typeof<'a> (box value)
-    let row (text:string)=tuple [enc text;enc (TestDSL.ANFParser.parseTempId text);enc (TestDSL.ANFParser.parseAtom text);enc (TestDSL.ANFParser.parseOp text);enc (TestDSL.ANFParser.parseCExpr text);enc (TestDSL.ANFParser.parseANF text);enc (TestDSL.MIRParser.parseVReg text);enc (TestDSL.MIRParser.parseOperand text);enc (TestDSL.MIRParser.parseOp text);enc (TestDSL.MIRParser.parseMIR text);enc (TestDSL.MIRParser.parseMIRWithEntryLabel "custom" text)]
+    let row (text:string)=tuple [enc text;enc (TestDSL.ANFParser.parseTempId text);enc (TestDSL.ANFParser.parseAtom text);enc (TestDSL.ANFParser.parseOp text);enc (TestDSL.ANFParser.parseCExpr text);enc (TestDSL.ANFParser.parseANF text);enc (TestDSL.MIRParser.parseVReg text);enc (TestDSL.MIRParser.parseOperand text);enc (TestDSL.MIRParser.parseOp text);enc (TestDSL.MIRParser.parseMIR text);enc (TestDSL.MIRParser.parseMIRWithEntryLabel "custom" text);enc (TestDSL.LIRParser.parsePhysReg text);enc (TestDSL.LIRParser.parseRegister text);enc (TestDSL.LIRParser.parseOperand text);enc (TestDSL.LIRParser.parseLIR text)]
     let fixtures=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/ir_parser_fixtures.json")
     let rows (key:string)=JsonArray(fixtures[key].AsArray() |> Seq.map (fun node->row (node.GetValue<string>())) |> Seq.toArray) :> JsonNode
-    tuple [row source;rows "anf";rows "mir"]
+    tuple [row source;rows "anf";rows "mir";rows "lir"]
 
 let processRequest (line: string) =
     let request = JsonNode.Parse line
