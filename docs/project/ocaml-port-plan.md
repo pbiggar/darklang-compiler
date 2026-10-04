@@ -2019,3 +2019,11 @@ the 89 existing ANF/MIR comparison inputs. The warning-free native build passes
 604/604 translated unit/fixture checks. Committed coverage is 341/391 pairs;
 reference comments remain complete in these owners. Remaining unit/test-tooling
 pairs, full corpus and final acceptance remain open.
+
+The complete IR-format snapshot parser and runner now preserve typed ANF/MIR/LIR
+inputs, case/section validation and exact formatter output. All 16 requests
+match F# for 51 parser-boundary inputs, the four unchanged corpus cases, forced
+formatter failures, file loading, registration and both original DSL unit tests.
+The warning-free native build passes 610/610 translated unit/fixture checks.
+Committed coverage is 344/391 pairs; reference comments remain complete.
+Remaining unit/test-tooling pairs, full corpus and final acceptance remain open.

@@ -7712,6 +7712,19 @@ let irParserObservation (source:string) =
     let rows (key:string)=JsonArray(fixtures[key].AsArray() |> Seq.map (fun node->row (node.GetValue<string>())) |> Seq.toArray) :> JsonNode
     tuple [row source;rows "anf";rows "mir";rows "lir"]
 
+let irSnapshotObservation (source:string) =
+    let tuple values=namedArray "tuple" (List.toArray values)
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let array fn xs=JsonArray(Seq.map fn xs |> Seq.toArray) :> JsonNode
+    let result fn=function Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|fn value|]);node :> JsonNode|Error error->enc (Error error:Result<unit,string>)
+    let runs (value:TestDSL.IRFormatSnapshotFormat.IRFormatSnapshotTest)=array (fun value->tuple [enc value;enc (TestDSL.IRFormatSnapshotTestRunner.runIRFormatSnapshotTest value)]) [value;{value with Expected="mismatch"};{value with Expected=value.Expected+"\n"}]
+    let parsed path content=TestDSL.IRFormatSnapshotFormat.parseIRFormatSnapshotFileContent path content |> result (array (fun value->tuple [enc value;runs value]))
+    let tests values=array (fun (name,run)->let actual=run () in tuple [enc name;enc actual]) values
+    let fixtures=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/ir_snapshot_fixtures.json").AsArray() |> Seq.map (fun node->node.GetValue<string>())
+    let file="src/Tests/formatting/ir/core.irformat"
+    let paths=["missing.irformat";"src/Tests/formatting/ir";file]
+    tuple [parsed source source;array (parsed source) fixtures;parsed file (IO.File.ReadAllText file);array (fun path->enc (TestDSL.IRFormatSnapshotTestRunner.loadIRFormatSnapshotTests path)) paths;tests (TestDSL.IRFormatSnapshotTestRunner.tests (paths |> List.rev |> List.toArray));tests IRFormatSnapshotDSLTests.tests]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7741,6 +7754,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "ir-snapshots" -> irSnapshotObservation source
         | "ir-parsers" -> irParserObservation source
         | "compiler-units" -> compilerUnitObservation source
         | "graphcolor-fixtures" -> graphColorObservation source
