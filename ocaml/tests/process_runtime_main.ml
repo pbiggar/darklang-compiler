@@ -337,16 +337,16 @@ let rcEmissionChecks ()=
  let allocate reg size=instructions (ARM64EmitMemory.emitHeapAlloc baseCtx (LIR.Physical reg) size) in
  let literal=ARM64Operands.loadImmediate in
  let metadata plan=Some {MemoryModel.releasePlanCacheKey=None;releasePlan=Some plan;sourceType=None} in
- let check ctx expected body=
+ let check ?(extra=[]) ctx expected body=
   let dictHelper=ARM64CodeGenTypes.plannedDictDecHelperLabelForReleasePlan in
   let helpers=ARM64DictReferenceCounts.generateDictRefCountIncHelper () @ ARM64DictReferenceCounts.generateDictRefCountDecHelper ARM64CodeGenTypes.dictRefCountDecHelperLabel MemoryModel.NoReleasePlan false false None false false None false false false ctx @ ARM64ClosureReferenceCounts.generateClosureRefCountIncHelper ctx @ ARM64ClosureReferenceCounts.generateClosureRefCountDecHelper dictHelper ctx @ ARM64ClosureReferenceCounts.generateStreamRefCountDecHelper ctx @ ARM64ListReferenceCounts.generateListRefCountIncHelper () @ ARM64ListReferenceCounts.generateNeededListRefCountDecHelpers ctx (StringOrder.Set.singleton ARM64CodeGenTypes.listRefCountDecHelperLabel) StringOrder.Map.empty in
-  let program=ProcessLifecycle.generateHeapInit target @ body @ S.ofARM64List (PrintValues.generatePrintInt64NoNewline target) @ instructions (ARM64EmitInteger.emitExit ctx) @ helpers @ [S.Label "closure_fn";S.RET] @ HeapAllocation.generateHeapOverflowTrapBlock (HeapAllocation.preparedHeapOverflowTrapBody target) ctx.ARM64CodeGenTypes.heapOverflowLabel @ HeapAllocation.generateRuntimeErrorHelper target in
+  let program=ProcessLifecycle.generateHeapInit target @ body @ S.ofARM64List (PrintValues.generatePrintInt64NoNewline target) @ instructions (ARM64EmitInteger.emitExit ctx) @ helpers @ extra @ [S.Label "closure_fn";S.RET] @ HeapAllocation.generateHeapOverflowTrapBlock (HeapAllocation.preparedHeapOverflowTrapBody target) ctx.ARM64CodeGenTypes.heapOverflowLabel @ HeapAllocation.generateRuntimeErrorHelper target in
   let actual=runImage (image program) [] "" in
   if actual<>expected then failwith (Printf.sprintf "RC emission: expected %S, got %S (case %d)" expected actual !total);
   incr total
  in
- let emitInc ctx addr size kind=instructions (ARM64EmitReferenceCounts.emitRefCountInc ctx addr size kind) in
- let emitDec ctx addr size kind metadata=instructions (ARM64EmitReferenceCounts.emitRefCountDec ctx addr size kind metadata) in
+ let emitInc ctx addr size kind=instructions (ARM64Instructions.convertInstr ctx (LIR.RefCountInc (addr,size,kind,None))) in
+ let emitDec ctx addr size kind metadata=instructions (ARM64Instructions.convertInstr ctx (LIR.RefCountDec (addr,size,kind,metadata))) in
  List.iter (fun size ->
   let base=allocate LIR.X19 size in
   check baseCtx "2" (base @ emitInc baseCtx (LIR.Physical LIR.X19) size LIR.GenericHeap @ [S.LDR (S.X0,S.X19,size)]);
@@ -368,15 +368,23 @@ let rcEmissionChecks ()=
   check ctx expected (allocate LIR.X19 16 @ allocate LIR.X20 16 @ literal S.X9 1L @ [S.STR (S.X9,S.X19,0);S.STR (S.X9,S.X20,0);S.STR (S.X20,S.X19,8)] @ emitDec ctx (LIR.Physical LIR.X19) 16 LIR.GenericHeap (metadata boxed) @ [S.LDR (S.X0,S.X20,0)])) ["caller","0";"Darklang.Stdlib.List.foo","1";"Darklang.Stdlib.Dict.foo","0"];
  List.iter (fun (physical,symbolic) -> List.iter (fun count ->
   let base=allocate LIR.X20 16 @ literal S.X9 count @ [S.STR (S.X9,S.X20,0);S.MOV_reg (symbolic,S.X20)] in
-  check baseCtx (Int64.to_string (if count=Int64.max_int then count else Int64.succ count)) (base @ instructions (ARM64EmitReferenceCounts.emitRefCountIncString baseCtx (LIR.Reg (LIR.Physical physical))) @ [S.LDR (S.X0,S.X20,0)]);
-  check baseCtx (Int64.to_string (if count=Int64.max_int then count else Int64.pred count)) (base @ instructions (ARM64EmitReferenceCounts.emitRefCountDecString baseCtx (LIR.Reg (LIR.Physical physical))) @ [S.LDR (S.X0,S.X20,0)])) [1L;2L;Int64.max_int]) [LIR.X0,S.X0;LIR.X12,S.X12;LIR.X13,S.X13;LIR.X14,S.X14;LIR.X15,S.X15;LIR.X19,S.X19];
+  check baseCtx (Int64.to_string (if count=Int64.max_int then count else Int64.succ count)) (base @ instructions (ARM64Instructions.convertInstr baseCtx (LIR.RefCountIncString (LIR.Reg (LIR.Physical physical)))) @ [S.LDR (S.X0,S.X20,0)]);
+  check baseCtx (Int64.to_string (if count=Int64.max_int then count else Int64.pred count)) (base @ instructions (ARM64Instructions.convertInstr baseCtx (LIR.RefCountDecString (LIR.Reg (LIR.Physical physical)))) @ [S.LDR (S.X0,S.X20,0)])) [1L;2L;Int64.max_int]) [LIR.X0,S.X0;LIR.X12,S.X12;LIR.X13,S.X13;LIR.X14,S.X14;LIR.X15,S.X15;LIR.X19,S.X19];
  List.iter (fun value ->
-  let body=literal S.X13 value @ instructions (ARM64EmitReferenceCounts.emitRefCountIncInt baseCtx (LIR.Reg (LIR.Physical LIR.X13))) @ literal S.X15 value @ instructions (ARM64EmitReferenceCounts.emitRefCountDecInt baseCtx (LIR.Reg (LIR.Physical LIR.X15))) @ literal S.X0 42L in
+  let body=literal S.X13 value @ instructions (ARM64Instructions.convertInstr baseCtx (LIR.RefCountIncInt (LIR.Reg (LIR.Physical LIR.X13)))) @ literal S.X15 value @ instructions (ARM64Instructions.convertInstr baseCtx (LIR.RefCountDecInt (LIR.Reg (LIR.Physical LIR.X15)))) @ literal S.X0 42L in
   check baseCtx "42" body) [0L;1L;85L];
  List.iter (fun (kind,size,tag,setup,plan) ->
   let body=allocate LIR.X19 size @ setup @ [S.ADD_imm (S.X19,S.X19,tag)] in
   check baseCtx "1" (body @ emitInc baseCtx (LIR.Physical LIR.X19) size kind @ emitDec baseCtx (LIR.Physical LIR.X19) size kind (metadata plan) @ [S.SUB_imm (S.X19,S.X19,tag);S.LDR (S.X0,S.X19,size)]);
   check baseCtx "0" (body @ emitDec baseCtx (LIR.Physical LIR.X19) size kind (metadata plan) @ [S.SUB_imm (S.X19,S.X19,tag);S.LDR (S.X0,S.X19,size)])) [LIR.TaggedList,8,2,literal S.X9 42L @ [S.STR (S.X9,S.X19,0)],MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease MemoryModel.NoReleasePlan);LIR.DictHeap,16,2,[],MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,MemoryModel.NoReleasePlan));LIR.ClosureHeap,8,0,[S.ADR (S.X9,HeapAllocation.codeLabel "closure_fn");S.STR (S.X9,S.X19,0)],MemoryModel.RootRelease (8,MemoryModel.ClosureHeap,MemoryModel.ClosurePayloadRelease []);LIR.StreamHeap,24,0,literal S.X9 5L @ [S.STR (S.X9,S.X19,0)],MemoryModel.RootRelease (24,MemoryModel.StreamHeap,MemoryModel.NoPayloadRelease)];
+ let nestedPlan=MemoryModel.RootRelease (8,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (8,[MemoryModel.FieldRelease (0,fixed)])) in
+ List.iter (fun (size,plan,owns,isNested,isBoxed) ->
+  let label="outlined-release" in
+  let spec={LIR.releasePlanMemoKeys=LIR.RcReleasePlanMemoKeySet.empty;payloadSize=size;releasePlan=plan;ownsSinglePayloadSum=owns} in
+  let extra=GenericReferenceCounts.generatePlannedGenericRefCountDecHelper label spec baseCtx in
+  let body=allocate LIR.X19 size @ allocate LIR.X20 16 @ literal S.X9 1L @ [S.STR (S.X9,S.X20,0)] @ (if isNested then allocate LIR.X21 8 @ [S.STR (S.X20,S.X21,0);S.STR (S.X21,S.X19,0)] else if isBoxed then [S.STR (S.X9,S.X19,0);S.STR (S.X20,S.X19,8)] else [S.STR (S.X20,S.X19,0)]) @ [S.MOV_reg (S.X0,S.X19);S.BL label] in
+  check ~extra baseCtx "1" (body @ [S.CMP_reg (S.X0,S.X19);S.CSET (S.X0,S.EQ)]);
+  check ~extra baseCtx (if isBoxed && not owns then "1" else "0") (body @ [S.LDR (S.X0,S.X20,0)])) [8,fixed,true,false,false;8,nestedPlan,true,true,false;16,boxed,true,false,true;16,boxed,false,false,true];
  !total
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in

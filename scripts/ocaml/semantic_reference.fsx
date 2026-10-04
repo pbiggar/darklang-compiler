@@ -3893,6 +3893,41 @@ LIR.FloatToString ((reg), (freg));
 LIR.CoverageHit ((3))]
 let lirInstructionFixturesWithOperand source operand = lirInstructionFixturesWithRegisters source (LIR.Virtual 3) (LIR.FVirtual (-1)) operand (AST.TRecord (source,[AST.TInt64;AST.TList AST.TString]))
 let lirInstructionFixtures source = lirInstructionFixturesWithOperand source (LIR.StringSymbol source)
+let armDispatchObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let fps=[LIR.D0;LIR.D1;LIR.D2;LIR.D3;LIR.D4;LIR.D5;LIR.D6;LIR.D7;LIR.D8;LIR.D9;LIR.D10;LIR.D11;LIR.D12;LIR.D13;LIR.D14;LIR.D15]
+    let types=[AST.TInt64;AST.TFloat64;AST.TString;AST.TBlob;AST.TInt;AST.TBool;AST.TChar;AST.TUnit;AST.TNever;AST.TInternalRawPtr;AST.TTuple [AST.TString;AST.TList AST.TInt64];AST.TList AST.TString;AST.TDict (AST.TString,AST.TList AST.TString);AST.TFunction ([AST.TInt64],AST.TString);AST.TStream AST.TString;AST.TRecord ("R",[]);AST.TSum ("S",[])]
+    let reg=LIR.Physical LIR.X19
+    let freg=LIR.FPhysical LIR.D0
+    let fixtures=List.collect (fun reg -> lirInstructionFixturesWithRegisters source reg freg (LIR.Imm 1L) AST.TInt64) (List.map LIR.Physical physical@[LIR.Virtual (-1);LIR.Virtual 0])@List.collect (fun fp -> lirInstructionFixturesWithRegisters source reg fp (LIR.Reg reg) AST.TFloat64) (List.map LIR.FPhysical fps@[LIR.FVirtual (-2000);LIR.FVirtual (-1000);LIR.FVirtual (-1);LIR.FVirtual 0])@List.collect (fun operand -> lirInstructionFixturesWithRegisters source reg freg operand AST.TString) [LIR.Imm Int64.MinValue;LIR.Imm Int64.MaxValue;LIR.Imm 0L;LIR.StringSymbol source;LIR.StringSymbol "";LIR.Reg reg;LIR.StackSlot (-32769);LIR.StackSlot 0;LIR.StackSlot 32768]@List.collect (fun typ -> lirInstructionFixturesWithRegisters source reg freg (LIR.Reg reg) typ) types
+    let dynamic=MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer
+    let fixedPlan=MemoryModel.RootRelease (8,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (8,[MemoryModel.FieldRelease (0,dynamic)]))
+    let plans=[MemoryModel.NoReleasePlan;dynamic;MemoryModel.RecursiveRelease (AST.TRecord ("R",[]));fixedPlan;MemoryModel.RootRelease (8,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (8,[MemoryModel.FieldRelease (0,fixedPlan)]));MemoryModel.RootRelease (16,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (16,[MemoryModel.FieldRelease (8,dynamic)],[{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=[MemoryModel.FieldRelease (8,dynamic)]}]));MemoryModel.RootRelease (16,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (16,[],[{MemoryModel.RcBoxedSumVariantRelease.Tag=0;FieldReleases=[]};{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=[MemoryModel.FieldRelease (8,dynamic)]}]))]
+    let context target enabled : ARM64CodeGenTypes.CodeGenContext={Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled};SumShapeRegistry=Map.ofList ["S",{MemoryModel.RcSumShapeInfo.TypeParams=[];MemoryModel.RcSumShapeInfo.Payloads=[0,None;1,Some AST.TString];MemoryModel.RcSumShapeInfo.UnaryPayloadTags=Set.singleton 1}];RecordRegistry=Map.ofList ["R",["field",AST.TString]];RawSlotInitRetainTargets=None;ClosurePayloadSizes=Map.empty;ClosureCaptureTypes=Map.empty;FunctionNames=FunctionIdMap.ofList [AST.functionId 0UL,source;AST.functionId UInt64.MaxValue,"largest"];FunctionName=source;InstructionSite=source;StackSize=0;UsedCalleeSaved=[];UsedCalleeSavedF=[];HeapOverflowLabel=source;RecordLirOpExpansion=None}
+    let contextCases target enabled =
+        let ctx=context target enabled
+        let dispatch=mapNodes (fun instruction -> call (fun () -> ARM64Instructions.convertInstr ctx instruction)) fixtures
+        let genericPlan plan =
+            let genericSize size =
+                mapNodes (fun owns ->
+                    let spec:LIR.Arm64PlannedGenericDecHelper={ReleasePlanMemoKeys=Set.empty;PayloadSize=size;ReleasePlan=plan;OwnsSinglePayloadSum=owns}
+                    call (fun () -> rcInternalCall<ARM64Symbolic.Instr list> "ARM64GenericReferenceCounts" "generatePlannedGenericRefCountDecHelper" [|box source;box spec;box ctx|])) [false;true]
+            mapNodes genericSize [-2147483648;-32769;-1;0;8;16;248;256;32768;65535;65536;2147483647]
+        let generic=mapNodes genericPlan plans
+        tuple [dispatch;generic]
+    let contexts=mapNodes (fun target -> mapNodes (contextCases target) [false;true]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64]
+    let moduleType=typeof<ARM64CodeGenTypes.CodeGenContext>.Assembly.GetType("ARM64CodeGenTypes")
+    let flags=Reflection.BindingFlags.Static ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+    let prefix=match moduleType.GetProperty("plannedGenericRefCountDecHelperLabelPrefix",flags) with null -> moduleType.GetField("plannedGenericRefCountDecHelperLabelPrefix",flags).GetValue(null) :?> string | prop -> prop.GetValue(null) :?> string
+    let cache=mapNodes (fun label -> mapNodes (fun id ->
+        let key=rcInternalCall<LIR.Function> "ARM64GenericReferenceCounts" "plannedGenericRefCountDecHelperCacheKey" [|box (AST.functionId id);box label|]
+        tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
+    tuple [contexts;cache]
+
 let lirAllocationFixtures (source:string) (regs:LIR.Reg array) (fregs:LIR.FReg array) operand typ : LIR.Instr list =
     let freg=fregs[0]
     [LIR.Mov ((regs[0]), (operand));
@@ -5760,6 +5795,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-dispatch" -> armDispatchObservation source
         | "arm64-rc-emission" -> armRcEmissionObservation source
         | "arm64-release-summary" -> armReleaseSummaryObservation source
         | "arm64-dict-reference" -> armDictReferenceObservation source

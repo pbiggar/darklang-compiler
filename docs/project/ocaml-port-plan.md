@@ -1370,3 +1370,19 @@ nested roots, single-payload sum ownership, shared/static buffers, tagged/null
 integers and list/dict/closure/stream helper calls. Frozen comment coverage is
 complete. Coverage is 269/391 pairs. Exhaustive instruction dispatch and the
 remaining function/program emission, runners/corpus and final acceptance remain.
+
+The exhaustive ARM64 LIR dispatcher and complete outlined generic destruction
+helpers are translated with interfaces and source comments. Complete F# output
+matches across 72,234,978 canonical JSON bytes (SHA256
+84f9c1bf2c1d2f25f574a26af68e78f61e0fb921b75db94ba24670b72e04bdbf). Fixtures
+exercise every LIR instruction family across GP/FP/virtual registers, operand
+boundaries and managed types, both targets/leak settings, recursive print-sum
+dispatch, outlined fixed/nested/boxed plans, borrowed/owned sum semantics and
+complete generic-helper cache keys, including unsigned identities and prefix
+classification with attached codegen facts. The warning-free build passes
+508/508 unit checks and 416/416 real ARM64 executions. RC execution cases now
+route through the common dispatcher; eight additional outlined-helper cases
+verify nested destruction, root/link-register preservation and ownership.
+Comment coverage is complete. Coverage is 271/391 pairs. Block/function lowering
+and final program assembly are next; x64 emission, remaining runners/corpus
+and final acceptance remain open.
