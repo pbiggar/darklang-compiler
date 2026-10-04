@@ -6966,6 +6966,50 @@ let packageObservation (source:string) =
             value
         with ex->enc (Error ex.Message:Result<unit,string>)) |> Seq.toArray |> fun cases->JsonArray(cases) :> JsonNode
 
+let contextsObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let list f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let attempt action =
+        try let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|action ()|]);node :> JsonNode
+        with ex -> encode typeof<Result<unit,string>> (box (Error ex.Message:Result<unit,string>))
+    let fid n=AST.functionId (uint64 n)
+    let names=["declared";"module";"base";"wrapper";"middle";"cycle";"other";"Builtin.pmEvaluateValue"]
+    let symbols=names |> List.fold (fun symbols name->CheckedAST.internFunction name symbols |> snd) (CheckedAST.emptySymbols ())
+    let registries=AST_to_ANF.buildRegistries symbols Map.empty [] Map.empty []
+    let registries={registries with FunctionIds=CheckedAST.functionIds symbols;FunctionNames=CheckedAST.functionNames symbols;FuncParams=Map.ofList ["declared",["x",AST.TInt64;"y",AST.TString];"module",["ignored",AST.TBool]];ModuleRegistry=Map.ofList ["module",{AST.ModuleFunc.Name="module";TypeParams=["a"];ParamTypes=[AST.TVar "a"];ReturnType=AST.TList (AST.TVar "a")}];TypeReg=Map.ofList ["R",{TypeRegistries.RecordTypeInfo.TypeParams=[];Fields=[source,AST.TString]}];RecordFieldsReg=Map.ofList ["R",[source,AST.TString]];VariantLookup=Map.ofList ["S.A",("S",[],0,[]);"S.B",("S",[],1,[AST.TString])]}
+    let baseNames=Set.ofList ["declared";"module";"base"]
+    let returnTypes=FunctionIdMap.ofList [fid 0,("declared",AST.TInt64);fid 1,("module",AST.TBool);AST.functionId UInt64.MaxValue,(source,AST.TString)]
+    let mkGeneric name dependencies =
+        let id=CheckedAST.tryFindFunctionId name symbols |> Option.get
+        let func:CheckedAST.FunctionDef={Id=id;Name=name;TypeParams=["a"];Params=CheckedAST.checkedParams (AST.NonEmptyList.singleton (AST.bindingId 0,AST.TVar "a"));ReturnType=CheckedAST.checkedType (AST.TVar "a");Body=CheckedAST.Local (AST.bindingId 0);Recursion=None}
+        let artifact:SpecializationIdentity.GenericFunctionArtifact={Symbols=symbols;Function=func;DirectDependencies=Set.ofList (List.map fid dependencies)}
+        name,artifact
+    let generic=Map.ofList [mkGeneric "wrapper" [6];mkGeneric "middle" [9];mkGeneric "cycle" [7];mkGeneric "other" [7;99]]
+    let checked input=attempt (fun ()->
+        match WrittenParsing.parse LibParser.Validation.Script input |> Result.bind (fun parsed->WrittenChecking.checkSourceUnitsWithBase None true false [parsed]) with
+        | Error message -> failwith message
+        | Ok (_,program,written) ->
+            let env=WrittenChecking.typeCheckEnvironment program
+            let checkedValues=rcInternalCall<Map<string,CompilationContexts.CheckedValueArtifact>> "CompilationContexts" "checkedValueArtifacts" [|box program|]
+            let values=checkedValues |> Map.map (fun _ value->value.BindingCursor,value.Type,sprintf "%A" value.Body) |> enc
+            let targets=[Platform.LinuxX86_64;Platform.ARM64Backend Platform.LinuxARM64;Platform.ARM64Backend Platform.MacOSARM64]
+            let contexts=list (fun target->
+                let context=rcInternalCall<CompilationContexts.PipelineContext> "CompilationContexts" "buildContext" [|box target;box symbols;box env;box checkedValues;box generic;box (Map.ofList [("module",[AST.TString]),"module_str"]:SpecializationIdentity.SpecRegistry);box registries;box baseNames;box returnTypes|]
+                let describe (ctx:CompilationContexts.PipelineContext)=tuple [enc ctx.Target;enc (CheckedAST.functionIds ctx.Symbols);enc (CheckedAST.functionNames ctx.Symbols);enc ctx.BaseFuncNames;enc ctx.LambdaLiftFunctions;enc ctx.LambdaLiftTypeReg;enc ctx.LambdaLiftVariantLookup;enc ctx.ProjectedMirRegistries;enc ctx.ReturnTypes;enc ctx.PackageCatalogGenericCallers;enc ctx.Registries.FunctionIds;enc ctx.Registries.FunctionNames;enc ctx.Registries.FuncReg;enc ({ctx.TypeCheckEnv with FunctionCatalog=env.FunctionCatalog}=env);enc (ctx.GenericFuncDefs=generic);enc (ctx.SpecRegistry=Map.ofList [("module",[AST.TString]),"module_str"]);enc (ctx.CheckedValues=checkedValues);enc (ctx.TypeCheckEnv.FunctionCatalog=CheckedAST.functionCatalog ctx.Symbols);enc (ctx.WrittenEnvironment |> Option.forall (fun environment->environment=rcInternalCall<WrittenChecking.Environment> "WrittenChecking" "includeAllocatedFunctions" [|box ctx.Symbols;box written|]));enc ({ctx.Registries with FunctionIds=registries.FunctionIds;FunctionNames=registries.FunctionNames;FuncReg=registries.FuncReg}=registries)]
+                let make id name returnType : ANF.Function={Id=id;Name=name;TypedParams=[{ANF.TypedParam.Id=ANF.TempId 0;Type=AST.TString}];ReturnType=returnType;ReturnOwnership=ANF.BorrowedReturn;Body=ANF.Return (ANF.StringLiteral source)}
+                let functions=[make (fid 3) "module" AST.TString;make (fid 4) "base" AST.TBool;make (fid 20) ("generated_"+source) AST.TInt64;make (fid 20) ("generated_"+source) AST.TString]
+                let update (funcs:ANF.Function list) (ctx:CompilationContexts.PipelineContext)=rcInternalCall<CompilationContexts.PipelineContext> "CompilationContexts" "includeCompiledFunctions" [|box funcs;box ctx|]
+                let updated=update functions {context with WrittenEnvironment=Some written}
+                tuple [describe context;enc (context.WrittenEnvironment.IsNone);describe updated;enc updated.WrittenEnvironment.IsSome;describe (update functions updated);describe (update [] context)]) targets
+            tuple [values;contexts])
+    let catalogs=list (fun names->attempt (fun ()->rcInternalCall<LiftFunctions.FunctionCatalog> "CompilationContexts" "buildLambdaLiftFunctionCatalog" [|box registries;box names;box returnTypes|] |> enc)) [Set.empty;baseNames;Set.singleton "missing"]
+    let baseTests=rcInternalCall<Set<string>> "CompilationContexts" "buildBaseFuncNames" [|box registries|] |> enc
+    let merged=rcInternalCall<FunctionIdMap<string*AST.SemanticType>> "CompilationContexts" "mergeReturnTypes" [|box returnTypes;box (FunctionIdMap.ofList [fid 1,(source,AST.TString);fid 8,("new",AST.TBool)])|] |> enc
+    let intrinsicNames=rcInternalCall<Set<string>> "CompilationContexts" "get_packageCatalogFunctionNames" [||] |> enc
+    let callers=list (fun defs->rcInternalCall<Set<string>> "CompilationContexts" "buildPackageCatalogGenericCallers" [|box defs|] |> enc) [Map.empty;generic;Map.remove "middle" generic;Map.add "cycle" (mkGeneric "cycle" [7;5] |> snd) generic]
+    tuple [baseTests;catalogs;merged;intrinsicNames;callers;checked source;list checked ["()";"val a = 1L\nval b = \"é😀\"\na";"type R = { x: Int64 }\nval r = R { x = 1L }\nr";"val a = [1L,2L]\na"]]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -6995,6 +7039,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "compilation-contexts" -> contextsObservation source
         | "package-manager" -> packageObservation source
         | "ast-pretty" -> astPrettyObservation source
         | "compilation-session" -> sessionObservation source

@@ -1766,3 +1766,18 @@ malformed JSON parser diagnostics still require the final host-boundary audit.
 The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
 6080/6080 x64 executions. Coverage is 303/391 pairs; source comment coverage
 is complete. Driver/library, runners/corpus and final acceptance remain open.
+
+Complete compilation contexts now assemble declared/module/base lambda-lift
+signatures, unsigned return-type overlays, fixed-point generic package-catalog
+callers, checked value artifacts, lifted type metadata and MIR registries.
+Generated functions update symbols, checking catalogs, written environments,
+function registries and return types while retaining declared signature metadata.
+Sixteen source observations match F# across all three targets, repeated/empty
+function overlays, missing-identity failures, package-call cycles, concrete
+specialization registries and checked scalar/record/list values. The empty case
+compares 433,822 complete canonical JSON bytes (SHA256
+20fd4b5022317790cc62db3291880c06368fe50296b7e9da272b99c99c4fad28).
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+6080/6080 x64 executions. Coverage is 304/391 pairs; source comment coverage
+is complete. Remaining driver/library, runners/corpus and final acceptance
+remain open.
