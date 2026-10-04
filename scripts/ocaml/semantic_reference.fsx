@@ -4051,6 +4051,130 @@ let anfOutputPlanning source =
         encode typeof<Result<ANF.Function list,string> list list> (box (["entry";"ordinary";"missing"] |> List.map (fun entry -> [AST.TString;AST.TList AST.TInt64] |> List.map (fun typ -> PrintInsertion.insertPrintInEntry ids entry typ functions))))
         encode typeof<Result<ANF.Function list,string> list list> (box (["entry";"ordinary";"missing"] |> List.map (fun entry -> [false;true] |> List.map (fun tupleWords -> PrintInsertion.insertRootWordProbeInEntry functionNames entry tupleWords functions))))|]
 
+let anfOperationFixtures (source:string) (atom:ANF.Atom) typ : ANF.CExpr list = [(ANF.Atom ((atom))); (ANF.TypedAtom ((atom), (typ))); (ANF.Prim ((ANF.Add), (atom), (atom))); (ANF.UnaryPrim ((ANF.Neg), (atom))); (ANF.IfValue ((atom), (atom), (atom))); (ANF.Call ((AST.functionId 7UL), [(atom); (atom)])); (ANF.BorrowedCall ((AST.functionId 7UL), [(atom); (atom)])); (ANF.TailCall ((AST.functionId 7UL), [(atom); (atom)])); (ANF.IndirectCall ((atom), [(atom); (atom)])); (ANF.IndirectTailCall ((atom), [(atom); (atom)])); (ANF.ClosureAlloc ((AST.functionId 7UL), [(atom); (atom)])); (ANF.ClosureCall ((atom), [(atom); (atom)])); (ANF.ClosureTailCall ((atom), [(atom); (atom)])); (ANF.TupleAlloc ([(atom); (atom)])); (ANF.TupleGet ((atom), (3))); (ANF.RecordAlloc (({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(typ); (typ)]; ANF.RecordDescriptor.Fields = [((source), (typ)); ((source), (typ))]; ANF.RecordDescriptor.ValueType = (typ)} : ANF.RecordDescriptor), [(atom); (atom)])); (ANF.RecordGet (({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(typ); (typ)]; ANF.RecordDescriptor.Fields = [((source), (typ)); ((source), (typ))]; ANF.RecordDescriptor.ValueType = (typ)} : ANF.RecordDescriptor), (atom), (3))); (ANF.RecordClone (({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(typ); (typ)]; ANF.RecordDescriptor.Fields = [((source), (typ)); ((source), (typ))]; ANF.RecordDescriptor.ValueType = (typ)} : ANF.RecordDescriptor), (atom), [(atom); (atom)])); (ANF.RecordReuse (({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(typ); (typ)]; ANF.RecordDescriptor.Fields = [((source), (typ)); ((source), (typ))]; ANF.RecordDescriptor.ValueType = (typ)} : ANF.RecordDescriptor), ({ANF.RecordDescriptor.SourceTypeName = (source); ANF.RecordDescriptor.RuntimeTypeName = (source); ANF.RecordDescriptor.TypeArgs = [(typ); (typ)]; ANF.RecordDescriptor.Fields = [((source), (typ)); ((source), (typ))]; ANF.RecordDescriptor.ValueType = (typ)} : ANF.RecordDescriptor), (atom), [(atom); (atom)])); (ANF.StringConcat ((atom), (atom), [(atom); (atom)])); (ANF.CanonicalBufferEq ((MemoryModel.Utf8String), (atom), (atom))); (ANF.RefCountInc ((atom), (3), (MemoryModel.GenericHeap), (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey = (Some ((source))); MemoryModel.RcMetadata.ReleasePlan = (Some ((MemoryModel.NoReleasePlan))); MemoryModel.RcMetadata.SourceType = (Some ((typ)))} : MemoryModel.RcMetadata))))); (ANF.RefCountDec ((atom), (3), (MemoryModel.GenericHeap), (Some (({MemoryModel.RcMetadata.ReleasePlanCacheKey = (Some ((source))); MemoryModel.RcMetadata.ReleasePlan = (Some ((MemoryModel.NoReleasePlan))); MemoryModel.RcMetadata.SourceType = (Some ((typ)))} : MemoryModel.RcMetadata))))); (ANF.Print ((atom), (typ))); (ANF.StdoutWrite ((atom), (true))); (ANF.StdinReadLine); (ANF.RuntimeError ((source))); (ANF.RuntimeErrorString ((atom))); (ANF.FileReadBlob ((atom))); (ANF.FileExists ((atom))); (ANF.FileWriteBlob ((atom), (atom))); (ANF.FileAppendText ((atom), (atom))); (ANF.FileDelete ((atom))); (ANF.FileCreateDirectory ((atom))); (ANF.FileSetExecutable ((atom))); (ANF.FileWriteFromPtr ((atom), (atom), (atom))); (ANF.FloatSqrt ((atom))); (ANF.FloatAbs ((atom))); (ANF.FloatNeg ((atom))); (ANF.Int64ToFloat ((atom))); (ANF.FloatToInt64 ((atom))); (ANF.FloatToBits ((atom))); (ANF.RawAlloc ((atom))); (ANF.MappedAlloc ((atom))); (ANF.RawFree ((atom))); (ANF.MappedFree ((atom))); (ANF.RawGet ((atom), (atom), (Some ((typ))))); (ANF.RawTake ((atom), (atom), (Some ((typ))))); (ANF.RawGetByte ((atom), (atom))); (ANF.RawWriteWord ((atom), (atom), (atom))); (ANF.RawWriteByte ((atom), (atom), (atom))); (ANF.RawSlotInit ((atom), (atom), (atom), (typ))); (ANF.StringToRawPtr ((atom))); (ANF.RawPtrToString ((atom))); (ANF.BlobToRawPtr ((atom))); (ANF.RawPtrToBlob ((atom))); (ANF.RawPtrToInt128 ((atom))); (ANF.RawPtrToUInt128 ((atom))); (ANF.DictToRawPtr ((atom))); (ANF.RawPtrToDict ((atom), (atom), (typ))); (ANF.ListToRawPtr ((atom))); (ANF.FixedBlockToRawPtr ((atom))); (ANF.RawPtrToList ((atom), (atom), (typ))); (ANF.RefCountIncString ((atom))); (ANF.RefCountDecString ((atom))); (ANF.RefCountIncBlob ((atom))); (ANF.RefCountDecBlob ((atom))); (ANF.RefCountIncInt ((atom))); (ANF.RefCountDecInt ((atom))); (ANF.RandomInt64); (ANF.DateTimeNow); (ANF.Sleep ((atom))); (ANF.CliNative ((ANF.Execute), [(atom); (atom)])); (ANF.FloatToString ((atom)))]
+
+let anfMIRObservation (source:string)=
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let attempt action=enc (try Ok (action ()) with error -> Error error.Message)
+    let state (b:ANF_to_MIR.CFGBuilder)=tuple [enc b.Blocks;enc b.Joins;enc b.JoinIncoming;enc b.SelfTailIncoming;enc b.LabelGen;enc b.RegGen;enc b.SourceTempIdMax;enc b.ExtraTypeMap;enc b.FloatRegs;enc b.ClosureFuncs;enc b.ExprIdGen;enc b.CoverageMapping]
+    let id n=ANF.TempId n
+    let v n=ANF.Var (id n)
+    let fid n=AST.functionId (uint64 n)
+    let types=[AST.TUnit;AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TBool;AST.TFloat64;AST.TString;AST.TBlob;AST.TList AST.TFloat64;AST.TTuple [AST.TInt64;AST.TFloat64];AST.TFunction ([AST.TInt64],AST.TFloat64);AST.TSum (source,[AST.TFloat64]);AST.TRecord (source,[])]
+    let atoms=[ANF.UnitLiteral;ANF.IntLiteral (ANF.UInt64 UInt64.MaxValue);ANF.BoolLiteral false;ANF.StringLiteral source;ANF.FloatLiteral (-0.);v 3;ANF.FuncRef (fid 7)]
+    let typeReg=Map.ofList [source,["a",AST.TInt64;"b",AST.TFloat64]]
+    let names=FunctionIdMap.ofList [fid 0,"_start";fid 1,source;fid 7,"callee"]
+    let typeMap typ=ANF.TypeMap.ofSeq [id 0,typ;id 1,typ;id 2,typ;id 3,typ;id 4,typ;id 5,typ;id 6,typ]
+    let builder typ coverage : ANF_to_MIR.CFGBuilder={Blocks=Map.empty;Joins=Map.empty;JoinIncoming=Map.empty;SelfTailIncoming=[];LabelGen=MIR.LabelGen 0;RegGen=MIR.RegGen 4000;TypeById=typeMap typ;SourceTempIdMax=6;ExtraTypeMap=Map.empty;TypeReg=typeReg;ReturnTypeReg=FunctionIdMap.ofList [fid 1,typ;fid 7,typ];FunctionNames=names;FuncId=fid 1;FuncName=source;ParamRegs=[MIR.VReg 0;MIR.VReg 1];FloatRegs=(if typ=AST.TFloat64 then Set.ofList [0;1;3] else Set.empty);ClosureFuncs=Map.empty;EnableCoverage=coverage;ExprIdGen=ANF.initialExprIdGen;CoverageMapping=ANF.emptyCoverageMapping}
+    let wrapResult (case:string) (value:JsonNode) =
+        let node=JsonObject()
+        node["type"] <- JsonValue.Create "FSharpResult"
+        node["case"] <- JsonValue.Create case
+        node["fields"] <- JsonArray([|value|])
+        node :> JsonNode
+    let lower b typ expr prefix =
+        try
+            let value =
+                match ANF_to_MIR.convertExpr typ expr (MIR.Label (source+"_input")) prefix b with
+                | Ok (exit,after) -> wrapResult "Ok" (tuple [enc exit;state after])
+                | Error message -> wrapResult "Error" (enc message)
+            wrapResult "Ok" value
+        with error -> wrapResult "Error" (enc error.Message)
+    let operations=types |> List.map (fun typ -> atoms |> List.map (fun atom -> anfOperationFixtures source atom typ |> List.map (fun operation ->
+        let expr=ANF.Let (id 6,operation,ANF.Return (v 6))
+        tuple [enc (ANF_to_MIR.maxTempIdInCExpr operation);enc (ANF_to_MIR.cexprDescription operation);enc (ANF_to_MIR.cexprProducesFloat (builder typ false).FloatRegs (builder typ false).ReturnTypeReg operation);[false;true] |> List.map (fun coverage -> lower (builder typ coverage) typ expr [MIR.Mov (MIR.VReg 5,MIR.Int64Const 17L,Some AST.TInt64)]) |> list]) |> list) |> list) |> list
+    let flows=types |> List.map (fun typ ->
+        let param:ANF.TypedParam={Id=id 4;Type=typ}
+        let leaf n=ANF.Return (v n)
+        let jump n=ANF.Jump (id 4,v n)
+        let tail args rest=ANF.Let (id 5,ANF.TailCall (fid 1,args),rest)
+        let dec kind rest=ANF.Let (id 6,ANF.RefCountDec (v 0,16,kind,None),rest)
+        let flows=[ANF.If (v 3,leaf 0,leaf 1);ANF.If (v 3,ANF.If (v 3,leaf 0,leaf 1),leaf 3);ANF.Join (param,leaf 4,ANF.If (v 3,jump 0,jump 1));
+            ANF.Join (param,ANF.Join ({ANF.TypedParam.Id=id 5;Type=typ},ANF.Return (v 5),ANF.Jump (id 5,v 4)),ANF.If (v 3,jump 0,jump 1));ANF.Join (param,leaf 4,leaf 0);ANF.Jump (id 99,v 0);
+            tail [v 1;v 0] (ANF.Return (v 5));tail [ANF.FloatLiteral (-0.);ANF.IntLiteral (ANF.Int64 7L)] (ANF.Return (v 5));
+            dec MemoryModel.GenericHeap (tail [v 0;v 0] (dec MemoryModel.GenericHeap (ANF.Return (v 5))));
+            ANF.If (v 3,tail [v 1;v 0] (ANF.Return (v 5)),leaf 0);ANF.If (v 3,tail [v 1;v 0] (ANF.Return (v 5)),tail [v 0;v 1] (ANF.Return (v 5)));
+            tail [v 0;v 1] (ANF.Let (id 6,ANF.RefCountDecString (v 0),ANF.Let (id 6,ANF.RefCountDecBlob (v 1),ANF.Let (id 6,ANF.RefCountDecInt (v 3),ANF.Return (v 5)))));
+            tail [v 0;v 1] (ANF.Let (id 6,ANF.RefCountDec (ANF.UnitLiteral,16,MemoryModel.GenericHeap,None),ANF.Return (v 5)));tail [v 0;v 1] (ANF.Return ANF.UnitLiteral)]
+        flows |> List.map (fun expr -> tuple [enc (ANF_to_MIR.maxTempIdInAExpr expr);[false;true] |> List.map (fun coverage -> lower (builder typ coverage) typ expr []) |> list;
+            [false;true] |> List.map (fun enabled ->
+                let func:ANF.Function={Id=fid 1;Name=source;TypedParams=[{ANF.TypedParam.Id=id 0;Type=typ};{ANF.TypedParam.Id=id 1;Type=typ}];ReturnType=typ;ReturnOwnership=ANF.OwnedReturn;Body=expr}
+                attempt (fun () -> SSAANF.convertFunction (ANF_to_MIR.maxTempIdInFunction func) (typeMap typ) func |> Result.bind (fun ssa -> ANF_to_MIR.convertSSAANFFunction (if enabled then SSATailCallDetection.detect FunctionIdMap.empty ssa else ssa) (typeMap typ) typeReg (builder typ true).ReturnTypeReg names true))) |> list]) |> list) |> list
+    let helpers=types |> List.map (fun typ ->
+        let b=builder typ true
+        let missing={b with TypeById=ANF.TypeMap.empty}
+        let extra={missing with ExtraTypeMap=Map.ofList [id 3,typ;id 99,AST.TFloat64];FloatRegs=Set.empty}
+        [b;missing;extra] |> List.map (fun b -> tuple [(atoms@[v (-1);v 99]) |> List.map (fun atom -> attempt (fun () -> ANF_to_MIR.atomType b atom)) |> list;
+            [MIR.Int64Const 0L;MIR.BoolConst true;MIR.FloatSymbol (BitConverter.Int64BitsToDouble 0xfff8000000000000L);MIR.StringSymbol source;MIR.FuncAddr (fid 7);MIR.Register (MIR.VReg 3);MIR.Register (MIR.VReg 99)] |> List.map (fun operand -> attempt (fun () -> ANF_to_MIR.operandType b operand)) |> list;
+            atoms |> List.map (fun atom -> enc (ANF_to_MIR.atomToOperand b atom)) |> list]) |> list) |> list
+    let ownership=[0;1;2;3] |> List.map (fun aliasMode ->
+        let aliases=match aliasMode with 0 -> [] | 1 -> [MIR.Mov (MIR.VReg 2,MIR.Register (MIR.VReg 0),None)] | 2 -> [MIR.Mov (MIR.VReg 3,MIR.Register (MIR.VReg 2),None);MIR.Mov (MIR.VReg 2,MIR.Register (MIR.VReg 0),None)] | _ -> [MIR.Mov (MIR.VReg 2,MIR.Register (MIR.VReg 3),None);MIR.Mov (MIR.VReg 3,MIR.Register (MIR.VReg 2),None)]
+        [0..15] |> List.map (fun mask ->
+            let cleanup=([0;1;2;3] |> List.choose (fun n -> if mask &&& (1 <<< n)=0 then None else Some (MIR.RefCountDec (MIR.VReg n,16,MIR.GenericHeap,None)))) @ [MIR.RefCountDecString (MIR.Register (MIR.VReg 0));MIR.RefCountDecBlob (MIR.Register (MIR.VReg 1));MIR.RefCountDecInt (MIR.Register (MIR.VReg 2))]
+            [0..255] |> List.map (fun argCode ->
+                let args=List.init 4 (fun n -> match (argCode >>> (n*2)) &&& 3 with 0 -> MIR.Int64Const 0L | k -> MIR.Register (MIR.VReg k))
+                let incs,decs=ANF_to_MIR.transferOverlappingArgOwnership args cleanup aliases
+                let before,rest=ANF_to_MIR.collectPreSelfTailCallCleanup (List.rev cleanup@aliases)
+                tuple [enc incs;enc decs;tuple [enc before;enc rest]]) |> list) |> list) |> list
+    let registryInputs=[[];["Some",("Option",["a"],1,[AST.TVar "a"]);"None",("Option",["a"],0,[])];
+        ["X.Some",("X",[],3,[AST.TInt64]);"Some",("X",["wrong"],9,[]);"Y.Some",("Y",[],2,[AST.TString;AST.TFloat64]);"Other",("Z",[],0,[])];
+        ["A.One",("A",["a"],0,[]);"A.Two",("A",["b"],1,[])];["One",("A",["a"],0,[]);"Two",("A",[],1,[])];
+        [source+".V",(source,[],Int32.MinValue,[AST.TInt64]);source+".W",(source,[],Int32.MaxValue,[AST.TInt64;AST.TString])]]
+    let registries=registryInputs |> List.map (fun entries -> attempt (fun () -> ANF_to_MIR.buildVariantRegistry (Map.ofList entries))) |> list
+    let program typ expr : ANF.Function={Id=fid 1;Name=source;TypedParams=[{ANF.TypedParam.Id=id 0;Type=typ};{ANF.TypedParam.Id=id 1;Type=typ}];ReturnType=typ;ReturnOwnership=ANF.OwnedReturn;Body=expr}
+    let observeProgram typ shape =
+        let body =
+            match shape with
+            | 0 -> ANF.Return (v 0)
+            | 1 -> ANF.If (ANF.BoolLiteral true,ANF.Return (ANF.FloatLiteral (-0.)),ANF.Return (v 0))
+            | 2 -> ANF.Let (id 5,ANF.Call (fid 7,[v 0;v 1]),ANF.Return (v 5))
+            | _ -> ANF.Let (id 5,ANF.TailCall (fid 1,[v 1;v 0]),ANF.Return (v 5))
+        let funcs=[program typ body]
+        let prog=ANF.Program (funcs,ANF.Return (ANF.IntLiteral (ANF.Int64 9L)))
+        let externalTypes=FunctionIdMap.ofList [fid 7,("callee",typ);fid 1,(source,AST.TString)]
+        let returns=ANF_to_MIR.buildReturnTypeReg funcs externalTypes
+        let variants=Map.ofList (List.item 1 registryInputs)
+        [false;true] |> List.map (fun coverage ->
+            let whole=attempt (fun () -> ANF_to_MIR.toMIR prog (typeMap typ) typeReg AST.TInt64 variants typeReg coverage externalTypes names)
+            let only=attempt (fun () -> ANF_to_MIR.toMIRFunctionsOnly prog (typeMap typ) typeReg variants typeReg coverage externalTypes names)
+            let traced=[false;true] |> List.map (fun projected -> [false;true] |> List.map (fun enabled ->
+                let phases=ResizeArray<JsonNode>()
+                let recorder name duration=phases.Add(tuple [enc name;enc (Double.IsFinite duration && duration>=0.)])
+                let projection=if projected then Some (Map.empty,Map.empty) else None
+                let result=attempt (fun () -> ANF_to_MIR.toMIRFunctionsOnlyWithTrace (Some recorder) projection FunctionIdMap.empty enabled prog (typeMap typ) typeReg variants typeReg coverage returns names)
+                let directPhases=ResizeArray<JsonNode>()
+                let directRecorder name duration=directPhases.Add(tuple [enc name;enc (duration=0.)])
+                let direct=attempt (fun () -> ResultList.mapResults (fun func -> SSAANF.convertFunction (ANF_to_MIR.maxTempIdInFunction func) (typeMap typ) func) funcs |> Result.bind (fun ssa -> ANF_to_MIR.toMIRSSAFunctionsOnlyWithTrace (Some directRecorder) projection FunctionIdMap.empty enabled ssa (typeMap typ) typeReg variants typeReg coverage returns names))
+                tuple [result;list (List.ofSeq phases);direct;list (List.ofSeq directPhases)]) |> list) |> list
+            tuple [whole;only;traced]) |> list
+    let programs=types |> List.map (fun typ -> [0;1;2;3] |> List.map (observeProgram typ) |> list) |> list
+    let ssaGraphs=[AST.TInt64;AST.TFloat64;AST.TString] |> List.map (fun typ -> [0;1;2;3;4;5;6] |> List.map (fun style -> [0;1] |> List.map (fun entry ->
+        let label n=SSAANF.Label n
+        let param n : ANF.TypedParam={Id=id n;Type=typ}
+        let block n parameters operations terminator : SSAANF.Block={Label=label n;Parameters=parameters;Operations=operations;Terminator=terminator}
+        let blocks =
+            match style with
+            | 0 -> [label 0,block 0 [] [] (SSAANF.Return (v 0))]
+            | 1 -> [label 0,block 0 [] [] (SSAANF.Branch (ANF.BoolLiteral true,label 1,label 2));label 1,block 1 [] [] (SSAANF.Jump (label 3,[ANF.FloatLiteral (-0.);v 0]));label 2,block 2 [] [] (SSAANF.Jump (label 3,[ANF.FloatLiteral (BitConverter.Int64BitsToDouble 0xfff8000000000000L);v 1]));label 3,block 3 [param 4;param 5] [] (SSAANF.Return (v 4))]
+            | 2 -> [label 0,block 0 [] [] (SSAANF.Jump (label 1,[v 0]));label 1,block 1 [param 4] [id 5,ANF.Atom (v 4)] (SSAANF.Branch (ANF.BoolLiteral true,label 2,label 3));label 2,block 2 [] [] (SSAANF.Jump (label 1,[v 5]));label 3,block 3 [] [] (SSAANF.Return (v 4))]
+            | 3 -> [label 0,block 0 [] [] (SSAANF.Jump (label 1,[]));label 1,block 1 [param 4] [] (SSAANF.Return (v 4))]
+            | 4 -> [label 0,block 0 [] [] (SSAANF.Jump (label 99,[]))]
+            | 5 -> [label 0,block 0 [] [id 6,ANF.RefCountInc (v 0,16,MemoryModel.GenericHeap,None);id 6,ANF.RefCountIncString (v 0);id 6,ANF.RefCountIncBlob (v 1);id 6,ANF.RefCountIncInt (v 0);id 5,ANF.TailCall (fid 1,[v 1;v 0])] (SSAANF.Return (v 5))]
+            | _ -> []
+        let func : SSAANF.Function={Id=fid 1;Name=source;TypedParams=[param 0;param 1];ReturnType=typ;ReturnOwnership=ANF.OwnedReturn;Entry=label entry;Blocks=Map.ofList blocks;FreshValueTypes=Map.ofList [id 5,typ;id 6,AST.TUnit]}
+        [false;true] |> List.map (fun coverage -> attempt (fun () -> ANF_to_MIR.convertSSAANFFunction func (typeMap typ) typeReg (builder typ false).ReturnTypeReg names coverage)) |> list) |> list) |> list) |> list
+    let intrinsics=["Builtin.pmFindValuesByValueType";"Builtin.pmGetLocationsByValue";"__raw_get_str";"__raw_take_str";"__stream_to_rawptr_x";"__raw_slot_init_x";"__hash_x";"__key_eq_x";"__empty_dict_x";"__dict_is_null_x";"__dict_get_tag_x";"__dict_to_rawptr_x";"__rawptr_to_dict_x";"__list_is_null_x";"__list_get_tag_x";"__list_to_rawptr_x";"__rawptr_to_list_x";source] |> List.map (fun name -> attempt (fun () -> ANF_to_MIR.tryGetIntrinsicReturnType name)) |> list
+    let binOps=[ANF.Add;ANF.Sub;ANF.Mul;ANF.Div;ANF.Mod;ANF.Shl;ANF.Shr;ANF.BitAnd;ANF.BitOr;ANF.BitXor;ANF.Eq;ANF.Neq;ANF.Lt;ANF.Gt;ANF.Lte;ANF.Gte;ANF.And;ANF.Or]
+    let unaryOps=[ANF.Neg;ANF.Not;ANF.BitNot]
+    let cliOps=[ANF.Execute;ANF.RunProcess;ANF.HostOS;ANF.HostArchitecture;ANF.Hostname;ANF.GetEnv;ANF.GetEnvironmentPacked;ANF.SetEnv;ANF.UnsetEnv;ANF.DirectoryCurrent;ANF.DirectoryListPacked;ANF.FileIsDirectory;ANF.FileCreateExclusive;ANF.GetArgv;ANF.Kill;ANF.GetPid;ANF.GetUid;ANF.CpuCount;ANF.SpawnProcess;ANF.ProcessIO;ANF.TerminateProcess;ANF.SocketTcp4;ANF.SocketTcp6;ANF.SocketUdp4;ANF.SocketUdp6;ANF.SocketConnect4;ANF.SocketConnect6;ANF.SocketSend;ANF.SocketReceive;ANF.SocketReceiveTimeout;ANF.SocketSendTimeout;ANF.SocketClose;ANF.SecureRandomFill]
+    let operatorCase typ atom =
+        let operations=(binOps |> List.map (fun op -> ANF.Prim (op,atom,v 0))) @ (binOps |> List.map (fun op -> ANF.Prim (op,v 0,atom))) @ (unaryOps |> List.map (fun op -> ANF.UnaryPrim (op,atom))) @ (cliOps |> List.map (fun op -> ANF.CliNative (op,[atom;v 0])))
+        operations |> List.map (fun op -> tuple [enc (ANF_to_MIR.cexprDescription op);enc (ANF_to_MIR.maxTempIdInCExpr op);enc (ANF_to_MIR.cexprProducesFloat (builder typ false).FloatRegs (builder typ false).ReturnTypeReg op);lower (builder typ true) typ (ANF.Let (id 6,op,ANF.Return (v 6))) []]) |> list
+    let operatorCases=types |> List.map (fun typ -> atoms |> List.map (operatorCase typ) |> list) |> list
+    tuple [operations;flows;helpers;ownership;registries;programs;ssaGraphs;intrinsics;operatorCases;enc (List.map ANF_to_MIR.convertBinOp binOps);enc (List.map ANF_to_MIR.convertUnaryOp unaryOps);enc (List.map ANF_to_MIR.convertCliOperation cliOps)]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -4079,6 +4203,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "anf-mir" -> anfMIRObservation source
         | "register-allocation" -> registerAllocationObservation source
         | "lir-peephole" -> peepholeObservation source
         | "callee-clobbers" -> calleeClobberObservation source

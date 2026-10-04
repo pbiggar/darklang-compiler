@@ -957,3 +957,17 @@ iteration limits are preserved. The warning-free build passes 437/437 native
 unit/DSL checks. Coverage is 211/391 pairs. Register-allocation orchestration
 is next; lowering/emission, remaining tooling/ownership tests, full corpus
 checks and final acceptance remain open.
+
+ANF-to-MIR lowering and all nine original pass-local tests are fully translated
+with explicit interfaces and original comments. Full observations match F# for
+all 74 ANF operation constructors across 21 types and seven atom families,
+21,756 expression lowerings, 10,584 additional binary/unary/CLI lowerings,
+294 nested/terminal/join/self-tail expressions with coverage and SSA conversion,
+16,384 ownership-transfer combinations, missing/refined type environments,
+84 explicit SSA graph variants, canonical and inconsistent variant registries,
+and 1,680 whole-program/functions-only/trace calls. Float phi materialization,
+entry retains, caller metadata, tail-call captures, lexical scope, failure order,
+registry projection and trace phase semantics match. The warning-free build
+passes 456/456 native unit/DSL checks. Coverage is 215/391 pairs. MIR-to-LIR
+instruction selection is next; emission, remaining tooling/ownership tests,
+full corpus checks and final acceptance remain open.
