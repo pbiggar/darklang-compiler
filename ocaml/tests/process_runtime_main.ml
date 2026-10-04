@@ -793,6 +793,42 @@ let x64MemoryChecks ()=
   check (initialize@checked (E.emitRawSlotInit ctx (LIR.Physical LIR.X19) (LIR.Physical LIR.X1) (LIR.Physical valuePhysical) typ)@[X.MOV_load (X.RAX,X.RBP,Int32.of_int (2000+size))]@compare X.RAX 2L@[X.MOV_load (X.RAX,X.RBP,3000l);X.SUB_reg (X.RAX,X.RBP)]@compare X.RAX (Int64.of_int (2000+tag))) helpers) [AST.TString,0,0,1L,[];AST.TBlob,0,0,1L,[];AST.TInt,0,0,1L,[];AST.TTuple [AST.TInt64],8,0,0L,[];AST.TList AST.TInt64,8,2,0L,listHelper;AST.TDict (AST.TString,AST.TInt64),16,2,0L,dictHelper;AST.TFunction ([],AST.TUnit),8,0,0L,closureHelper]) [LIR.X0;LIR.X7;LIR.X8;LIR.X6];
  !total
 [@@warning "-42"]
+let x64BufferChecks ()=
+ let module X=X86_64 in let module E=X64EmitBuffers in let total=ref 0 in
+ let ctx={X64CodeGenTypes.functionName="x64-buffer-execution";stackSize=0;usedCalleeSaved=[];enableLeakCheck=false;recordRegistry=StringOrder.Map.empty;sumShapeRegistry=StringOrder.Map.empty;functionNames=FunctionIdMap.empty} in
+ let checked=function Ok value->value|Error error->failwith error in
+ let setup=[X.SUB_imm (X.RSP,32768l);X.MOV_reg (X.RBP,X.RSP);X.MOV_reg (X.R15,X.RBP);X.LEA (X.R14,X.RBP,4096l)] in
+ let check expected body=
+  let code=[X.Label "_start"]@setup@body@[X.ADD_imm (X.RSP,32768l);X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@[X.Label "failed"]@X64Operands.genPrintChars ['F']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@X64Operands.genOomHandler ()@X64Operands.genRuntimeErrorHandler () in
+  let pool=X86_64_Resolve.collectStringPool code in
+  let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let resolved=checked (X86_64_Resolve.patchDataLabels resolved (X86_64_Resolve.dataLabelOffsets 120 (Bytes.length resolved.X86_64_Resolve.machineCode) pool) 120) in
+  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode pool LiteralPool.emptyFloatPool false 0 in
+  let actual=try runImageOn "/opt/dcb/qemu/qemu-x86_64" binary [] "" with Failure e->failwith (Printf.sprintf "x64 buffer case %d: %s" !total e) in
+  if actual<>expected then failwith (Printf.sprintf "x64 buffer case %d: expected %S, got %S" !total expected actual);
+  incr total in
+ let result physical expected=let reg=X64Operands.lirRegToX86 physical in [X.MOV_reg (X.RAX,reg)]@X64Operands.loadImm64 X.RDX (if expected then 1L else 0L)@[X.CMP_reg (X.RAX,X.RDX);X.Jcc (X.NE,"failed")]@X64Operands.genPrintChars ['P'] in
+ let gps=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X19] in
+ let pairs=["","";"","a";"a","a";"a","b";"1234567","1234567";"12345678","12345678";"12345678","12345679";"123456789","123456789";"123456789","123456780";"hé😀","hé😀";"hé😀","hé😃";"a\000b","a\000c"] in
+ List.iter (fun dest->List.iter (fun kind->List.iter (fun (left,right)->
+  check "P" (checked (E.emitCanonicalBufferEq ctx kind (LIR.Physical dest) (LIR.StringSymbol left) (LIR.StringSymbol right))@result dest (left=right))) pairs) [MemoryModel.Utf8String;MemoryModel.NullableUtf8String;MemoryModel.GraphemeCluster;MemoryModel.NullableGraphemeCluster]) gps;
+ List.iter (fun dest->List.iter (fun kind->List.iter (fun same->
+  let inputs=[X.XOR_reg (X.RDI,X.RDI)]@(if same then [X.XOR_reg (X.RSI,X.RSI)] else X64Operands.emitStringLiteral X.RSI "") in
+  check "P" (inputs@checked (E.emitCanonicalBufferEq ctx kind (LIR.Physical dest) (LIR.Reg (LIR.Physical LIR.X1)) (LIR.Reg (LIR.Physical LIR.X2)))@result dest same)) [false;true]) [MemoryModel.NullableUtf8String;MemoryModel.NullableGraphemeCluster]) gps;
+ let print physical=let reg=X64Operands.lirRegToX86 physical in [X.MOV_reg (X.RAX,reg)]@checked (X64EmitPrinting.emitPrintHeapStringNoNewline ctx (LIR.Physical LIR.X0)) in
+ List.iter (fun dest->List.iter (fun (left,right)->check (left^right) (checked (E.emitStringConcat ctx (LIR.Physical dest) (LIR.StringSymbol left) (LIR.StringSymbol right) [])@print dest)) pairs) gps;
+ List.iter (fun dest->List.iter (fun leftPhysical->let leftReg=X64Operands.lirRegToX86 leftPhysical in
+  let init=X64Operands.emitStringLiteral leftReg "hé😀"@X64Operands.emitStringLiteral X.RDX "tail" in
+  check "hé😀tail" (init@checked (E.emitStringConcat ctx (LIR.Physical dest) (LIR.Reg (LIR.Physical leftPhysical)) (LIR.Reg (LIR.Physical LIR.X7)) [])@print dest);
+  check "hé😀tail" (init@checked (E.emitStringConcat ctx (LIR.Physical dest) (LIR.Reg (LIR.Physical leftPhysical)) (LIR.StringSymbol "tail") [])@print dest);
+  check "tailhé😀" (init@checked (E.emitStringConcat ctx (LIR.Physical dest) (LIR.StringSymbol "tail") (LIR.Reg (LIR.Physical leftPhysical)) [])@print dest)) [LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X8;LIR.X19]) gps;
+ List.iter (fun dest->List.iter (fun strings->match strings with first::second::rest->check (String.concat "" strings) (checked (E.emitStringConcat ctx (LIR.Physical dest) (LIR.StringSymbol first) (LIR.StringSymbol second) (List.map (fun x->LIR.StringSymbol x) rest))@print dest) | _->assert false) [["";"";""];["hé😀";"tail";"終"];["a\000b";"";"c"];List.init 12 (fun index->string_of_int index)]) gps;
+ List.iter (fun dest->
+  let init=X64Operands.emitStringLiteral X.RAX "first"@[X.MOV_store (X.RBP,8l,X.RAX)]@X64Operands.emitStringLiteral X.RDX "second" in
+  check "firstsecondtail" (init@checked (E.emitStringConcat ctx (LIR.Physical dest) (LIR.StackSlot 8) (LIR.Reg (LIR.Physical LIR.X7)) [LIR.StringSymbol "tail"])@print dest);
+  check "firstsecond" (init@checked (E.emitStringConcat ctx (LIR.Physical dest) (LIR.StackSlot 8) (LIR.Reg (LIR.Physical LIR.X7)) [])@print dest)) gps;
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -800,4 +836,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks ()+x64MemoryChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks ()+x64RcEmissionChecks ()+x64MemoryChecks ()+x64BufferChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count

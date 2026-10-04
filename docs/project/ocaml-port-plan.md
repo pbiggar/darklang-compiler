@@ -1578,3 +1578,17 @@ word/byte/float/string/function stores, mapped allocation/free and retained
 buffer/fixed/list/dict/closure slots, including scratch aliases. Coverage is
 287/391 pairs; comment coverage is complete. Remaining x64 modules,
 driver/library, runners/corpus and final acceptance remain open.
+
+Complete x64 canonical-buffer equality and binary/many string concatenation
+are translated with full interfaces and source comments. Full instructions,
+source-ordered label allocation and error text match F# across 55,810,412
+canonical JSON bytes (SHA256
+5849183df288a03bc403f1238cabb6f4afd583c6b961e671166e14e079e5400e).
+Cases cover all GP destinations, register overlaps, virtual errors, stack
+boundaries, nullable kinds, UTF-16 strings, invalid operands and leak settings.
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+2316/2316 x64 executions. The 940 new x64 cases execute word/byte comparison,
+null guards, binary/many copies, embedded NUL/Unicode/empty strings, stack
+operands and overlapping caller/callee/scratch registers. Coverage is 288/391
+pairs; comment coverage is complete. Remaining x64 modules, driver/library,
+runners/corpus and final acceptance remain open.

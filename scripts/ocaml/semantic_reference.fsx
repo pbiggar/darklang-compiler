@@ -3928,6 +3928,29 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let x64BufferEmissionObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f () : Result<X86_64.Instr list,string>)] with ex -> tuple [enc true;enc ex.Message]
+    let invoke ctx name args=rcInternalCall<Result<X86_64.Instr list,string>> "X64EmitBuffers" name (Array.append [|ctx|] args)
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let gps=List.map LIR.Physical physical@[LIR.Virtual (-1);LIR.Virtual 0;LIR.Virtual 2147483647]
+    let selected=List.map LIR.Physical [LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X8;LIR.X19]
+    let operands=List.map LIR.Reg gps@List.map LIR.StackSlot [-2147483648;-1;0;8;2147483647]@[LIR.Imm Int64.MinValue;LIR.Imm 0L;LIR.Imm Int64.MaxValue;LIR.FloatImm (-0.);LIR.FloatImm nan;LIR.FloatSymbol 0.1;LIR.StringSymbol source;LIR.StringSymbol "hé😀";LIR.StringSymbol (String [|char 0xd800;char 97;char 0xdc00|]);LIR.FuncAddr (AST.functionId UInt64.MaxValue)]
+    let kinds=[MemoryModel.Utf8String;MemoryModel.NullableUtf8String;MemoryModel.GraphemeCluster;MemoryModel.NullableGraphemeCluster]
+    let ctxType=typeof<LIR.Instr>.Assembly.GetType("X64CodeGenTypes+FuncCtx")
+    let context enabled=FSharpValue.MakeRecord(ctxType,[|box source;box 32;box [LIR.X19;LIR.X20];box enabled;box (Map.empty:LIR.RecordRegistry);box (Map.empty:MemoryModel.RcSumShapeRegistry);box (FunctionIdMap.empty:FunctionIdMap<string>)|],Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+    let ctx=context false
+    let eq dest left right kind =call (fun ()->invoke ctx "emitCanonicalBufferEq" [|box kind;box dest;box left;box right|])
+    let equality=mapNodes (fun dest->mapNodes (fun left->mapNodes (fun right->mapNodes (eq dest left right) kinds) [left;LIR.Reg dest;LIR.Reg (LIR.Physical LIR.X8);LIR.StringSymbol source;LIR.Imm 0L]) operands) selected
+    let binary dest left right =call (fun ()->invoke ctx "emitStringConcat" [|box dest;box left;box right;box ([]:LIR.Operand list)|])
+    let concat=mapNodes (fun dest->mapNodes (fun left->mapNodes (binary dest left) [left;LIR.Reg (LIR.Physical LIR.X8);LIR.StringSymbol source]) operands) gps
+    let manyCase enabled dest operand rest =call (fun ()->invoke (context enabled) "emitStringConcat" [|box dest;box operand;box (LIR.StringSymbol source);box rest|])
+    let many=mapNodes (fun enabled->mapNodes (fun dest->mapNodes (fun operand->mapNodes (manyCase enabled dest operand) [[LIR.StringSymbol "hé😀"];[operand;LIR.Reg dest];[LIR.StackSlot (-1);LIR.StringSymbol ""];List.init 12 (fun _->LIR.StringSymbol source)]) operands) [LIR.Physical LIR.X0;LIR.Physical LIR.X8;LIR.Physical LIR.X19;LIR.Virtual (-1)]) [false;true]
+    let enabled=mapNodes (fun kind->call (fun ()->invoke (context true) "emitCanonicalBufferEq" [|box kind;box (LIR.Physical LIR.X0);box (LIR.StringSymbol source);box (LIR.StringSymbol "hé😀")|])) kinds
+    tuple [equality;concat;many;enabled]
+
 let x64MemoryEmissionObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -6264,6 +6287,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "x64-buffer-emission" -> x64BufferEmissionObservation source
         | "x64-memory-emission" -> x64MemoryEmissionObservation source
         | "x64-rc-emission" -> x64RcEmissionObservation source
         | "x64-dict-reference" -> x64DictReferenceObservation source
