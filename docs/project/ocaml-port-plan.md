@@ -1921,3 +1921,20 @@ The warning-free core build passes 508/508 unit checks, 519/519 ARM64 executions
 and 6080/6080 x64 executions. Coverage is 317/391 committed pairs, and all
 reference comments are preserved. The CLI, remaining unit/test-tooling pairs
 and full corpus/final acceptance remain open.
+
+The complete native CLI now handles compilation/execution, stdin and file
+inputs, batch manifests, keep-going, JSON reports, package-server validation
+and scoped IR output. All 16 bounded comparison groups match F# across 378
+argument arrays, 48 manifest inputs, full compilation outputs and captured
+diagnostics. Native expression execution and a four-item mixed-success batch
+also match the reference; all three successful batch executables are identical
+in their entirety. File decoding and write errors, URI canonicalization and
+report escaping retain the frozen host behavior. The warning-free build passes
+521/521 translated unit tests, 519/519 ARM64 executions and 6080/6080 x64
+executions. Coverage is 319/391 pairs, including all 13 original CLI unit tests;
+reference comment coverage is complete. The F# short-flag parser recursively
+re-expands an unrecognized single-letter flag (or bare -o) forever. Following
+the plan's incidental-bug rule, the native parser returns its unknown-flag
+diagnostic for those inputs; terminating reference cases retain exact parity.
+The remaining unit/test-tooling pairs, full corpus and final acceptance remain
+open.

@@ -3,6 +3,19 @@
  (libraries dark_compiler yojson zarith str)
  (flags (:standard -w @a-42 -warn-error +a-42)))
 
+; Keep CLI helpers private in production while observing their full boundaries.
+(rule
+ (targets InstrumentedProgram.ml)
+ (deps ../lib/Program.ml)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/Program.ml})))))
+(rule
+ (targets InstrumentedProgram.mli)
+ (deps ../lib/Program.mli)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/Program.mli})
+   (echo "val readSourceFile : string -> (string,string) result\nval readBatchManifest : string -> (batchCompileItem * batchCompileItem list,string) result\nval compileWithStdlib : CompilationContexts.stdlibResult -> string -> string -> verbosityLevel -> cliOptions -> (unit,string) result\nval reportJson : batchReportItem -> string\nval writeBatchReport : string -> batchReportItem list -> (unit,string) result\nval roundMilliseconds : float -> float\n")))))
+
 (rule
  (targets InstrumentedARMPeephole.ml)
  (deps ../lib/backend/arm64/Peephole.ml)

@@ -46,6 +46,7 @@ let rec encoder (typ: Type) : obj -> JsonNode =
         let fn : obj -> JsonNode =
             if typ = typeof<unit> then fun _ -> null
             elif typ = typeof<string> then fun value -> encodeString (unbox<string> value)
+            elif typ = typeof<Uri> then fun value -> JsonValue.Create ((unbox<Uri> value).AbsoluteUri)
             elif typ = typeof<bool> then fun value -> JsonValue.Create (unbox<bool> value)
             elif typ = typeof<float> then fun value -> scalar "float64" ((uint64 (BitConverter.DoubleToInt64Bits (unbox<float> value))).ToString("x16"))
             elif typ = typeof<single> then fun value -> scalar "float32" ((uint32 (BitConverter.SingleToInt32Bits (unbox<single> value))).ToString("x8"))
@@ -7555,6 +7556,62 @@ let coreContextsObservation (input:string) =
                 tuple [preamble value;list compiled ["()";"add 2L";"id 3L";"saved"];outcome (fun (_,program,_)->driverProgram program) (WrittenParsing.parse LibParser.Validation.Script "()" |> Result.bind (fun parsed->WrittenChecking.checkSourceUnitsWithBase value.Context.WrittenEnvironment allowInternal false [parsed]))]) report;enc phases]) (preambles ())
     else outcome (fun (report,repeated,phases)->tuple [outcome described (if (case-32)%2=0 then report else repeated);(if bucket=0 then enc phases else null)]) (specializations ())
 
+let cliObservation (input:string) =
+    let request=JsonNode.Parse input
+    let bucket=request["bucket"].GetValue<int>()
+    let enc value=closureAnalysisEncode value
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let list f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let outcome f value=match value with Error error->enc (Error error:Result<unit,string>)|Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|f value|]);node :> JsonNode
+    let selected f xs=xs |> List.mapi (fun index value->index,value) |> List.filter (fun (index,_)->index%16=bucket) |> list (fun (index,value)->tuple [enc index;f value])
+    let capture action=
+        use stdout=new IO.StringWriter()
+        use stderr=new IO.StringWriter()
+        let originalOut=Console.Out
+        let originalError=Console.Error
+        Console.SetOut stdout
+        Console.SetError stderr
+        try let value=action() in value,stdout.ToString(),stderr.ToString()
+        finally Console.SetOut originalOut;Console.SetError originalError
+    let normalize (value:string)=
+        value.Split('\n') |> Array.map (fun line->
+            if Text.RegularExpressions.Regex.IsMatch(line,"^        [0-9]+(\\.[0-9]+)?ms$") then "        <duration>ms"
+            elif Text.RegularExpressions.Regex.IsMatch(line,"^  ✓ Compilation complete \\([0-9]+(\\.[0-9]+)?ms\\)$") then "  ✓ Compilation complete (<duration>ms)"
+            else line) |> String.concat "\n"
+    let read path=if IO.File.Exists path then Some(IO.File.ReadAllText path) else None
+    let fixtures=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/cli_fixtures.json")
+    let root="TestResults/ocaml-migration/cli-observation"
+    IO.Directory.CreateDirectory root |> ignore
+    let parsed=selected (fun (node:JsonNode)->
+        let args=node.AsArray() |> Seq.map (fun value->value.GetValue<string>()) |> Seq.toArray
+        let parsed=Program.parseArgs args
+        tuple [enc parsed;enc (parsed |> Result.bind Program.validateOptions);enc (Program.parseBatchArgs args);enc (Program.parseCommand args);enc (parsed |> Result.map Program.buildCompilerOptions)]) (List.ofSeq (fixtures["arguments"].AsArray()))
+    let manifests=selected (fun (index,(text:string))->
+        let path=IO.Path.Combine(root,"manifest-"+string index+".json")
+        IO.File.WriteAllText(path,text)
+        rcInternalCall<Result<Program.BatchCompileItem*Program.BatchCompileItem list,string>> "Program" "readBatchManifest" [|box path|] |> enc) (fixtures["manifests"].AsArray() |> Seq.mapi (fun index value->index,value.GetValue<string>()) |> List.ofSeq)
+    let fast=selected (fun args->let code,stdout,stderr=capture (fun ()->Program.main (Array.ofList args)) in tuple [enc code;enc stdout;enc stderr]) [["--help"];["--version"];[];["--unknown"];["missing-file.dark"];["--dump-function=map";"file"]]
+    let stdlib,_=stdlibCompilationBase.Value
+    let texts=["()";"42L";"true";"let id (x: 'a) : 'a = x\nid 3L";"Darklang.Stdlib.List.length [1L,2L]";"\"12.3ms é😀\"";"unknown 1L";"let broken ="]
+    let cases=texts |> List.collect (fun source->[false;true] |> List.collect (fun expression->[0;1;2;3] |> List.map (fun profile->source,expression,profile)))
+    let compiled=outcome (fun stdlib->selected (fun (source,expression,profile)->
+        let privateRoot=IO.Path.Combine(root,"reference")
+        IO.Directory.CreateDirectory privateRoot |> ignore
+        let output=IO.Path.Combine(privateRoot,"output-"+string bucket+".out")
+        let dump=IO.Path.Combine(privateRoot,"dump-"+string bucket+".ir")
+        for path in [output;dump] do if IO.File.Exists path then IO.File.Delete path
+        let verbosity=if profile=0 then Program.Normal elif profile=1 then Program.VeryVerbose else Program.Quiet
+        let cli={Program.defaultOptions with Argument=Some "fixture.dark";IsExpression=expression;Verbosity=verbosity;OutputFile=Some output;DumpANF=profile=1;DumpMIR=profile=2;DumpLIR=profile=3;DumpIRSummary=profile<>0;DumpIROutput=(if profile>=2 then Some dump else None)}
+        let report,stdout,stderr=capture (fun ()->rcInternalCall<Result<unit,string>> "Program" "compileWithStdlib" [|box stdlib;box source;box output;box verbosity;box cli|])
+        let normalized value=normalize value |> fun text->text.Replace(privateRoot,"<output>",StringComparison.Ordinal)
+        let binary=if IO.File.Exists output then Some(IO.File.ReadAllBytes output) else None
+        tuple [enc report;enc (normalized stdout);enc (normalized stderr);enc binary;enc (read dump |> Option.map normalized)]) cases) stdlib
+    let reports=selected (fun (index,milliseconds)->
+        let report:Program.BatchReportItem={kind="source";name="é😀 <&>\"+";source="a.dark";output="a.out";status="failed";error="message\nline";milliseconds=milliseconds}
+        let path=IO.Path.Combine(root,"report-reference-"+string index+".jsonl")
+        tuple [enc (JsonSerializer.Serialize report);rcInternalCall<Result<unit,string>> "Program" "writeBatchReport" [|box path;box [report]|] |> enc;enc (read path)]) (List.indexed [0.;-0.;0.001;33.125;15000.])
+    tuple [parsed;manifests;fast;compiled;reports]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7584,6 +7641,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "cli" -> cliObservation source
         | "core-contexts" -> coreContextsObservation source
         | "stdlib-compilation" -> stdlibCompilationObservation source
         | "execution" -> executionObservation source
