@@ -58,3 +58,13 @@ CAMLprim value dark_monotonic_milliseconds(value unit) {
   CAMLreturn(caml_copy_double((double)timestamp.tv_sec * 1000.0 +
                              (double)timestamp.tv_nsec / 1000000.0));
 }
+
+/* Unix Stopwatch timestamps use nanosecond ticks; keep integer precision. */
+CAMLprim value dark_monotonic_ticks(value unit) {
+  CAMLparam1(unit);
+  struct timespec timestamp;
+  if (clock_gettime(CLOCK_MONOTONIC, &timestamp) != 0)
+    caml_failwith("Unable to read monotonic clock");
+  CAMLreturn(caml_copy_int64((int64_t)timestamp.tv_sec * INT64_C(1000000000) +
+                            (int64_t)timestamp.tv_nsec));
+}

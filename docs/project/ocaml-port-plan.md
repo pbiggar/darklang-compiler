@@ -1386,3 +1386,22 @@ verify nested destruction, root/link-register preservation and ownership.
 Comment coverage is complete. Coverage is 271/391 pairs. Block/function lowering
 and final program assembly are next; x64 emission, remaining runners/corpus
 and final acceptance remain open.
+
+Complete ARM64 block and function lowering is translated with full interfaces
+and source comments. Stable results match F# across 14,594,807 identical JSON
+bytes (SHA256 cc4d8b71fbb886f9dcd45314ecc1f01aa290fc56ab986e0bd4d4d2ccda357a1b).
+Fixtures cover every terminator and LIR instruction family, fallthrough,
+register/bit/condition boundaries, malformed and unreachable graphs, stack
+frames, saved GP/FP registers, attached facts, heap traps, entry initialization,
+coverage and leak options on both targets. Profiling callback names, opcode and
+RC detail strings, instruction counts and order are compared completely; variable
+elapsed times are checked separately for nonnegative values. Native clock ticks
+match the verified nanosecond frequency of the F# reference host.
+
+The warning-free build passes 508/508 translated unit checks and 495/495 real
+ARM64 executions. The 79 new cases exercise frame boundaries, branch outcomes,
+signed/unsigned conditions, bit tests, heap allocation, calls and tail calls.
+Call fixtures explicitly move X0 into their result register, as allocated LIR
+requires. Source comment coverage is complete. Coverage is 273/391 pairs.
+Function preparation and final ARM64 program assembly are next; x64 emission,
+remaining runners/corpus and final acceptance remain open.

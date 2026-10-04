@@ -386,10 +386,49 @@ let rcEmissionChecks ()=
   check ~extra baseCtx "1" (body @ [S.CMP_reg (S.X0,S.X19);S.CSET (S.X0,S.EQ)]);
   check ~extra baseCtx (if isBoxed && not owns then "1" else "0") (body @ [S.LDR (S.X0,S.X20,0)])) [8,fixed,true,false,false;8,nestedPlan,true,true,false;16,boxed,true,false,true;16,boxed,false,false,true];
  !total
+let functionLoweringChecks ()=
+ let target=ARM64.targetConfigFor Platform.LinuxARM64 in
+ let ctx={ (Semantic_observation.ARMPrintingObservation.context "_start" target false) with ARM64CodeGenTypes.functionNames=FunctionIdMap.ofList [AST.functionId 0L,"_start";AST.functionId 1L,"fn";AST.functionId 2L,"tail_target"]} in
+ let trap=HeapAllocation.preparedHeapOverflowTrapBody target in
+ let total=ref 0 in
+ let label name=LIR.Label name in
+ let block name instrs terminator={LIR.label=label name;instrs;terminator} in
+ let func id name stack saved blocks=
+  let scoped (LIR.Label value)=label (name^"_"^value) in
+  let terminator = function LIR.Ret->LIR.Ret|LIR.Jump target->LIR.Jump (scoped target)|LIR.Branch (reg,a,b)->LIR.Branch (reg,scoped a,scoped b)|LIR.BranchZero (reg,a,b)->LIR.BranchZero (reg,scoped a,scoped b)|LIR.BranchBitZero (reg,bit,a,b)->LIR.BranchBitZero (reg,bit,scoped a,scoped b)|LIR.BranchBitNonZero (reg,bit,a,b)->LIR.BranchBitNonZero (reg,bit,scoped a,scoped b)|LIR.CondBranch (condition,a,b)->LIR.CondBranch (condition,scoped a,scoped b) in
+  let blocks=List.map (fun (b:LIR.basicBlock) -> {b with LIR.label=scoped b.LIR.label;terminator=terminator b.LIR.terminator}) blocks in
+  {LIR.id=AST.functionId id;LIR.name=name;typedParams=[];cfg={LIR.entry=scoped (label "entry");blocks=LIR.LabelMap.of_seq (List.to_seq (List.map (fun (b:LIR.basicBlock) -> b.LIR.label,b) blocks))};stackSize=stack;usedCalleeSaved=saved;codegenFacts=None} in
+ let check expected functions=
+  let program=List.concat_map (fun f -> instructions (ARM64Functions.convertFunction trap ctx f)) functions @ HeapAllocation.generateRuntimeErrorHelper target in
+  let actual=runImage (image program) [] "" in
+  if actual<>expected then failwith (Printf.sprintf "function lowering: expected %S, got %S (case %d)" expected actual !total);
+  incr total
+ in
+ let reg=LIR.Physical LIR.X19 in
+ let print value=block "value" [LIR.Mov (reg,LIR.Imm value);LIR.PrintInt64NoNewline reg] LIR.Ret in
+ List.iter (fun stack -> List.iter (fun saved -> check "42" [func 0L "_start" stack saved [block "entry" [LIR.Mov (reg,LIR.Imm 42L);LIR.PrintInt64NoNewline reg] LIR.Ret]]) [[];[LIR.X19;LIR.X20]]) [0;16;32;128];
+ let branch initial terminator expected=
+  check expected [func 0L "_start" 16 [LIR.X19] [block "entry" [LIR.Mov (reg,LIR.Imm initial);LIR.Cmp (reg,LIR.Imm 0L)] terminator;{(print 42L) with LIR.label=label "yes"};{(print 7L) with LIR.label=label "no"}]]
+ in
+ List.iter (fun initial ->
+  branch initial (LIR.Branch (reg,label "yes",label "no")) (if initial=0L then "7" else "42");
+  branch initial (LIR.BranchZero (reg,label "yes",label "no")) (if initial=0L then "42" else "7")) [0L;1L;-1L];
+ List.iter (fun bit -> List.iter (fun initial ->
+  let isSet=Int64.logand initial (Int64.shift_left 1L bit)<>0L in
+  branch initial (LIR.BranchBitZero (reg,bit,label "yes",label "no")) (if isSet then "7" else "42");
+  branch initial (LIR.BranchBitNonZero (reg,bit,label "yes",label "no")) (if isSet then "42" else "7")) [0L;1L;Int64.min_int;-1L]) [0;31;32;63];
+ List.iter (fun initial -> List.iter (fun (condition,taken) -> branch initial (LIR.CondBranch (condition,label "yes",label "no")) (if taken then "42" else "7")) [LIR.EQ,initial=0L;LIR.NE,initial<>0L;LIR.LT,initial<0L;LIR.GT,initial>0L;LIR.LE,initial<=0L;LIR.GE,initial>=0L;LIR.ULT,false;LIR.UGT,initial<>0L;LIR.ULE,initial=0L;LIR.UGE,true]) [-1L;0L;1L];
+ let root instrs=func 0L "_start" 32 [LIR.X19] [block "entry" instrs LIR.Ret] in
+ check "42" [root [LIR.HeapAlloc (reg,8);LIR.HeapStore (reg,0,LIR.Imm 42L,Some AST.TInt64);LIR.HeapLoad (LIR.Physical LIR.X20,reg,0);LIR.PrintInt64NoNewline (LIR.Physical LIR.X20)]];
+ let returnBlock=block "entry" [LIR.Mov (LIR.Physical LIR.X0,LIR.Imm 42L)] LIR.Ret in
+ check "42" [root [LIR.Call (reg,AST.functionId 1L,[]);LIR.Mov (reg,LIR.Reg (LIR.Physical LIR.X0));LIR.PrintInt64NoNewline reg];func 1L "fn" 16 [LIR.X19] [returnBlock]];
+ check "42" [root [LIR.Call (reg,AST.functionId 1L,[]);LIR.Mov (reg,LIR.Reg (LIR.Physical LIR.X0));LIR.PrintInt64NoNewline reg];func 1L "fn" 16 [LIR.X19] [block "entry" [LIR.TailCall (AST.functionId 2L,[])] LIR.Ret];func 2L "tail_target" 0 [] [returnBlock]];
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
  let effects=[Some "hé😀",false,0,"","hé😀";Some "",true,0,"","\n";None,false,1,"hello\nignored","hello";None,true,1,"hé😀\r\n","hé😀\n";None,false,1,"tail","tail";None,true,1,"","\n";None,true,2,"first\nsecond\n","first\nsecond\n";None,false,1,"a\000b\n","a\000b";None,false,1,"\n","";None,false,1,"a\rb\r\n","a\rb"] in
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
- let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks () in
+ let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count

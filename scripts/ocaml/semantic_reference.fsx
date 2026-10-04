@@ -3928,6 +3928,48 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let armFunctionObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let label name=LIR.Label name
+    let block name instructions terminator : LIR.BasicBlock={Label=label name;Instrs=instructions;Terminator=terminator}
+    let cfg entry (blocks:LIR.BasicBlock list) : LIR.CFG={Entry=label entry;Blocks=Map.ofList (blocks |> List.map (fun block -> block.Label,block))}
+    let func name cfg stack saved : LIR.Function={Id=AST.functionId 0UL;Name=name;TypedParams=[];CFG=cfg;StackSize=stack;UsedCalleeSaved=saved;CodegenFacts=None}
+    let regs=[LIR.Physical LIR.X0;LIR.Physical LIR.X19;LIR.Physical LIR.X30;LIR.Physical LIR.SP;LIR.Virtual (-1);LIR.Virtual 0]
+    let conditions=[LIR.EQ;LIR.NE;LIR.LT;LIR.GT;LIR.LE;LIR.GE;LIR.ULT;LIR.UGT;LIR.ULE;LIR.UGE]
+    let terminators=[LIR.Ret;LIR.Jump (label "a");LIR.Jump (label "missing")]@List.collect (fun reg -> [LIR.Branch (reg,label "a",label "b");LIR.BranchZero (reg,label "a",label "b")]@List.collect (fun bit -> [LIR.BranchBitZero (reg,bit,label "a",label "b");LIR.BranchBitNonZero (reg,bit,label "a",label "b")]) [-1;0;31;32;63;64;255]) regs@List.map (fun condition -> LIR.CondBranch (condition,label "a",label "b")) conditions
+    let instructions=lirInstructionFixturesWithRegisters source (LIR.Physical LIR.X19) (LIR.FPhysical LIR.D0) (LIR.Imm 1L) AST.TInt64
+    let blocks=List.map (fun instruction -> block source [instruction] LIR.Ret) instructions@[block source [] LIR.Ret;block source [LIR.Mov (LIR.Virtual 0,LIR.Imm 1L);LIR.RefCountInc (LIR.Physical LIR.X19,8,LIR.GenericHeap,Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=None;MemoryModel.RcMetadata.ReleasePlan=None;MemoryModel.RcMetadata.SourceType=Some AST.TString});LIR.Exit] LIR.Ret]
+    let graphs=List.map (fun terminator -> cfg source [block source [] terminator;block "a" [] LIR.Ret;block "b" [] LIR.Ret]) terminators@[cfg "missing" [];cfg source [];cfg source [block source [] (LIR.Jump (label "missing"))];cfg source [block source [] (LIR.Jump (label "a"));block "a" [] (LIR.Jump (label source))];cfg source [block source [] LIR.Ret;block "unreachable" [LIR.HeapAlloc (LIR.Physical LIR.X19,8)] LIR.Ret]]
+    let observing (ctx:ARM64CodeGenTypes.CodeGenContext) action=
+        let trace=ref []
+        let record (name:string) (opcode:string) (detail:string) (count:int) (ticks:int64)=trace.Value<-(name,opcode,detail,count,ticks>=0L)::trace.Value
+        let result=call (fun () -> action {ctx with RecordLirOpExpansion=Some record})
+        tuple [result;enc (List.rev trace.Value)]
+    let terms=mapNodes (fun terminator -> mapNodes (fun next -> call (fun () -> ARM64Blocks.convertTerminator "epilogue" next terminator)) [None;Some "a";Some "b";Some "epilogue"]) terminators
+    let context target leak coverage : ARM64CodeGenTypes.CodeGenContext={Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=leak;EnableCoverage=coverage;CoverageExprCount=3};SumShapeRegistry=Map.empty;RecordRegistry=Map.empty;RawSlotInitRetainTargets=None;ClosurePayloadSizes=Map.empty;ClosureCaptureTypes=Map.empty;FunctionNames=FunctionIdMap.ofList [AST.functionId 0UL,source;AST.functionId 1UL,"fn";AST.functionId UInt64.MaxValue,"largest"];FunctionName=source;InstructionSite=source;StackSize=0;UsedCalleeSaved=[];UsedCalleeSavedF=[];HeapOverflowLabel=source;RecordLirOpExpansion=None}
+    let contextCases target leak coverage=
+        let ctx=context target leak coverage
+        let loweredBlocks=mapNodes (fun currentBlock -> mapNodes (fun next -> observing ctx (fun ctx -> ARM64Blocks.convertBlock ctx "epilogue" next currentBlock)) [None;Some (block "a" [] LIR.Ret);Some (block "b" [] LIR.Ret)]) blocks
+        let loweredGraphs=mapNodes (fun graph -> observing ctx (fun ctx -> ARM64Blocks.convertCFG ctx "epilogue" graph)) graphs
+        let trap=rcInternalCall<ARM64Symbolic.Instr list> "ARM64HeapAllocation" "preparedHeapOverflowTrapBody" [|box target|]
+        let allFunctions=mapNodes (fun block ->
+            let f=func source (cfg source [block]) 0 []
+            tuple [observing ctx (fun ctx -> ARM64Functions.convertFunction trap ctx f);observing ctx (fun ctx -> ARM64Functions.convertFunction trap ctx (LIR.attachFunctionCodegenFacts f))]) blocks
+        let frameName name=
+            let frameStack stack=
+                let frameSaved saved=
+                    let f=func name (cfg source [block source [] LIR.Ret]) stack saved
+                    mapNodes (fun facts -> observing ctx (fun ctx -> ARM64Functions.convertFunction trap ctx {f with CodegenFacts=facts})) [None;Some (LIR.analyzeFunctionCodegenFacts f);Some {(LIR.analyzeFunctionCodegenFacts f) with Arm64UsedCalleeSavedF=[LIR.D8;LIR.D15]}]
+                mapNodes frameSaved [[];[LIR.X19;LIR.X20];[LIR.X0;LIR.SP]]
+            mapNodes frameStack [-1;0;8;16;32;32768]
+        let frames=mapNodes frameName [source;"_start";"Darklang.Stdlib.List.fn"]
+        tuple [loweredBlocks;loweredGraphs;allFunctions;frames]
+    let contexts=mapNodes (fun target -> mapNodes (fun leak -> mapNodes (contextCases target leak) [false;true]) [false;true]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64]
+    tuple [terms;contexts]
+
 let lirAllocationFixtures (source:string) (regs:LIR.Reg array) (fregs:LIR.FReg array) operand typ : LIR.Instr list =
     let freg=fregs[0]
     [LIR.Mov ((regs[0]), (operand));
@@ -5795,6 +5837,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-functions" -> armFunctionObservation source
         | "arm64-dispatch" -> armDispatchObservation source
         | "arm64-rc-emission" -> armRcEmissionObservation source
         | "arm64-release-summary" -> armReleaseSummaryObservation source
