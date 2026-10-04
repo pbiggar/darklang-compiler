@@ -7238,6 +7238,26 @@ let nativePipelineObservation (input:string) =
         tuple [output;JsonArray(phases.ToArray()) :> JsonNode]
     tuple [list (fun functions->list (fun target->list (fun options->list (fun split->list (fun cached->list (fun node->node) (select (fun ()->run functions target options split cached))) [false;true]) [false;true]) options) [Platform.LinuxX86_64;Platform.ARM64Backend Platform.LinuxARM64;Platform.ARM64Backend Platform.MacOSARM64]) fixtures]
 
+let preambleAnalysisObservation (source:string) =
+    let enc value=closureAnalysisEncode value
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let list f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let outcome f value=match value with Error error->enc (Error error:Result<unit,string>)|Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|f value|]);node :> JsonNode
+    let attempt f action=outcome f (try action () with ex->Error ex.Message)
+    let baseSource="let inherited (x: Int64) : Int64 = x + 1L\nval saved = 4L\n()"
+    let fixture=WrittenParsing.parse LibParser.Validation.Script baseSource |> Result.bind (fun parsed->WrittenChecking.checkSourceUnitsWithBase None true false [parsed])
+    attempt id (fun ()->fixture |> Result.map (fun (_,program,written)->
+        let env=WrittenChecking.typeCheckEnvironment program
+        let symbols=CheckedAST.programSymbols program
+        let typeDefs,functions,_=AST_to_ANF.splitTopLevels program |> Result.defaultWith failwith
+        let registries=AST_to_ANF.buildRegistries symbols Map.empty typeDefs (AST_to_ANF.buildAliasRegistry typeDefs) functions
+        let context=rcInternalCall<CompilationContexts.PipelineContext> "CompilationContexts" "buildContext" [|box Platform.LinuxX86_64;box symbols;box env;box (rcInternalCall<Map<string,CompilationContexts.CheckedValueArtifact>> "CompilationContexts" "checkedValueArtifacts" [|box program|]);box (SpecializationIdentity.extractGenericFuncDefs program);box (Map.empty:SpecializationIdentity.SpecRegistry);box registries;box (rcInternalCall<Set<string>> "CompilationContexts" "buildBaseFuncNames" [|box registries|]);box (rcInternalCall<FunctionIdMap<string*AST.SemanticType>> "SourcePreparation" "extractReturnTypes" [|box registries.FuncReg|])|]
+        let make writtenEnvironment:CompilationContexts.StdlibResult={TypedAST=program;Context={context with WrittenEnvironment=writtenEnvironment};AllocatedFunctions=[];CallGraphSummaries=FunctionIdMap.empty;StdlibCallGraph=FunctionIdMap.empty;StdlibANFFunctions=Map.empty;StdlibANFOptimizationCandidates=Map.empty;StdlibInlineCandidates=FunctionIdMap.empty;StdlibANFCallGraph=FunctionIdMap.empty;StdlibTypeMap=ANF.TypeMap.empty}
+        let inputs=[source;"()";"inherited 1L";"saved";"let newer (x: Int64) : Int64 = inherited x";"val local = saved + 1L";"let id (x: 'a) : 'a = x";"type R = { x: Int64 }";"inherited \"bad\"";"let broken =";"let newer (x: Int64) : Int64 = x\nnewer 2L"]
+        list (fun writtenEnvironment->let stdlib=make writtenEnvironment in list (fun allowInternal->list (fun input->outcome (fun (analysis:CompilationContexts.PreambleAnalysis)->
+            let expected=CheckingTypes.mergeTypeCheckEnv env (WrittenChecking.typeCheckEnvironment analysis.TypedAST)
+            tuple [driverProgram analysis.TypedAST;enc (analysis.TypeCheckEnv=expected);enc (analysis.GenericFuncDefs=SpecializationIdentity.extractGenericFuncDefs analysis.TypedAST);enc analysis.WrittenEnvironment.IsSome;outcome (fun (_,program,_)->driverProgram program) (WrittenParsing.parse LibParser.Validation.Script "()" |> Result.bind (fun parsed->WrittenChecking.checkSourceUnitsWithBase analysis.WrittenEnvironment allowInternal false [parsed]))]) (PreambleAnalysis.analyzePreamble allowInternal stdlib input)) inputs) [false;true]) [None;Some written]))
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7267,6 +7287,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "preamble-analysis" -> preambleAnalysisObservation source
         | "native-pipeline" -> nativePipelineObservation source
         | "source-preparation" -> sourcePreparationObservation source
         | "value-rendering" -> valueRenderingObservation source

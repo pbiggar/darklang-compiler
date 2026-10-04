@@ -1851,3 +1851,14 @@ The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
 6080/6080 x64 executions. Coverage is 308/391 pairs; source comment coverage
 is complete. Remaining driver/library, runners/corpus and final acceptance
 remain open.
+
+Complete preamble analysis now checks reusable interpreter source against an
+optional inherited written environment, merges its checked type environment,
+and extracts generic declarations while retaining the returned checking
+environment for subsequent sources. Sixteen probes compare complete checked
+programs, public symbol catalogs, inheritance and environment reuse, generic
+definitions, both internal-access settings, and parse/type errors against F#.
+All observations match. The warning-free build passes 508/508 unit checks,
+519/519 ARM64 executions and 6080/6080 x64 executions. Coverage is 309/391
+pairs; all reference comments are preserved. Remaining driver/library,
+runners/corpus and final acceptance remain open.
