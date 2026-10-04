@@ -1055,3 +1055,31 @@ ELF with exit status 42. The build is warning-free; frozen comment coverage has
 zero missing lines. Coverage is 229/391 pairs. Mach-O generation is next;
 remaining emission/runtime/tooling/ownership tests, full corpus checks and final
 acceptance remain open.
+
+Complete Mach-O generation and all 19 original ARM64 binary tests are
+translated with interfaces and source comments. Whole unmodified images and
+all load-command serializers match F# across 301,895,860 bytes of observations,
+including literal pools, coverage/leak layouts, UTF-8 truncation and segment
+capacity errors. Migration-only copies receive the same UUID entropy input
+before generation; production retains fresh UUIDs in .NET Guid byte order.
+Production UUID v4/variant bits, uniqueness and stability of every other byte
+are checked independently. The frozen source itself emits different observable
+UUID bytes on each run, so ordinary live-run Mach-O byte equality is impossible;
+controlled-entropy comparisons do not establish that stronger final acceptance
+claim or normalize executable bytes. This limitation must remain explicit at
+final acceptance.
+
+The native suite passes 508/508 checks, including generated x64 ELF execution
+and ARM64 ELF execution through the exact Docker-pinned QEMU 11.1.1 revision
+c3d48b7d1e89604920e5b81b91140c2ad39a1943. QEMU is built in the VM workspace,
+with both Linux-user targets and the instruction-count plugin. Ubuntu snapshot
+20260828T000000Z development packages were extracted locally and verified
+against their package-index SHA256 values; Meson 1.11.1 and Ninja 1.13.2 are
+local build dependencies. The VM cannot install at /opt/dcb/qemu, so the
+workspace-only exec-path preload maps that fixed prefix to the pinned build;
+scripts/ocaml/vm_qemu_exec.c records the adapter without changing compiler or
+test paths. Native tests use PORT_QEMU_DIRECTORY=<toolchains>/qemu/build and
+LD_PRELOAD=<toolchains>/qemu-deps/exec-path.so. The warning-free build and frozen
+comment check pass. Coverage is 231/391 pairs. Instruction lowering and runtime
+emission are next; remaining tooling/ownership tests, full corpus checks and
+final acceptance remain open.

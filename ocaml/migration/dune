@@ -840,3 +840,14 @@
  (deps ../lib/passes/lir/RegisterAllocation.ml)
  (action (with-stdout-to %{targets}
   (progn (echo "open Dark_compiler") (cat %{dep:../lib/passes/lir/RegisterAllocation.ml})))))
+
+(rule
+ (targets ControlledMachO.ml)
+ (deps ../lib/backend/arm64/Binary_Generation_MachO.ml control_macho_uuid.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:control_macho_uuid.py} %{dep:../lib/backend/arm64/Binary_Generation_MachO.ml}))))
+(rule
+ (targets ControlledMachO.mli)
+ (deps ../lib/backend/arm64/Binary_Generation_MachO.mli)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/arm64/Binary_Generation_MachO.mli})))))
