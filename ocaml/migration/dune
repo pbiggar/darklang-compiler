@@ -3,6 +3,18 @@
  (libraries dark_compiler yojson zarith)
  (flags (:standard -w @a-42 -warn-error +a-42)))
 
+(rule
+ (targets InstrumentedARMPeephole.ml)
+ (deps ../lib/backend/arm64/Peephole.ml)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/arm64/Peephole.ml})))))
+(rule
+ (targets InstrumentedARMPeephole.mli)
+ (deps ../lib/backend/arm64/Peephole.mli)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/arm64/Peephole.mli})
+   (echo "type registerLifetimeStep=Unrelated|Overwritten|ReadOrControlFlow\nval registerLifetimeStep : Symbolic.reg -> Symbolic.instr -> registerLifetimeStep\nval overwrittenBeforeReadOrEnd : Symbolic.reg -> Symbolic.instr list -> bool\nval invertCondition : ARM64.condition -> ARM64.condition\n")))))
+
 ; Instrument the complete production implementation from the same source.
 ; Private catalogs remain private in the production library; only this migration
 ; build appends typed encoders after the real implementation's definitions.

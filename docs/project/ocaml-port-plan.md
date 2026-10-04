@@ -1124,3 +1124,14 @@ warning-free, all 508 native checks pass, and comment coverage is complete.
 Coverage is 239/391 pairs. ARM64 machine peephole optimization is next;
 remaining instruction/runtime emission, tooling/ownership tests, full corpus
 checks and final acceptance remain open.
+
+Complete ARM64 machine peephole optimization is translated with its interface
+and all 42 source comment lines. Whole symbolic streams match F# for all 98
+instruction constructors, every GP lifetime classification, conservative
+control-flow barriers, both BIC forms and alias guards, shifts/extensions with
+live temporary suffixes, all condition inversions, paired GP/FP store alignment
+boundaries and single-pass ordering. The full observation comparison passes;
+the warning-free native build passes 508/508 translated tests. Comment coverage
+has zero missing lines. Coverage is 240/391 pairs. ARM64 runtime instruction
+generators are next; instruction dispatch, ownership runtime, complete test
+runners and corpus/final acceptance remain open.
