@@ -2001,3 +2001,12 @@ All 16 complete registration/result observations match F#. The warning-free
 build passes 604/604 translated unit/fixture checks. Coverage is 338/391 pairs;
 reference comments remain complete. Remaining unit/test-tooling pairs, full
 corpus and final acceptance remain open.
+
+The complete ANF and MIR fixture parsers now preserve the original regex
+capture order, Unicode digit/whitespace classes, numeric widths, escape
+decoding and terminator/line diagnostics. All 16 comparison requests match
+F# for complete parsed IR and every public parsing boundary across 89 frozen
+fixture sections and new boundary inputs. The warning-free build passes
+604/604 translated unit/fixture checks. Committed coverage is 340/391 pairs;
+all comments in these owners are preserved. Remaining unit/test-tooling pairs,
+full corpus and final acceptance remain open.

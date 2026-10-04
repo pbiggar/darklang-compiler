@@ -16,6 +16,7 @@ let rec requests () =
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
         | "macho-images" -> Semantic_observation.MachOObservation.observe source
+        | "ir-parsers" -> IRParserObservation.observe source
         | "compiler-units" -> CompilerUnitObservation.observe source
         | "graphcolor-fixtures" -> GraphColorObservation.observe source
         | "test-framework" -> TestFrameworkObservation.observe source

@@ -7704,6 +7704,14 @@ let compilerUnitObservation (source:string) =
     let prepared=match stdlib with Error error->enc (Error error:Result<unit,string>)|Ok stdlib->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|tuple [tests (JsonPlanningTests.tests stdlib);tests (StdlibOptimizationTests.tests stdlib)]|]);node :> JsonNode
     tuple [enc source;tests ChordalGraphTests.tests;enc (ChordalGraphTests.runAllTests ());tests SSALivenessTests.tests;enc (SSALivenessTests.runAll ());tests TypeCheckingTests.tests;enc (TypeCheckingTests.runAll ());prepared;tests RuntimeDataLayoutTests.tests;tests X86_64ResolveTests.tests;tests LambdaLiftingTests.tests;tests MonomorphizationTests.tests;tests IRPrinterTests.tests;enc (IRPrinterTests.runAll ());tests IRSymbolTests.tests;enc (IRSymbolTests.runAll ());tests DeadCodeEliminationTests.tests;enc (DeadCodeEliminationTests.runAll ());JsonArray(lirInstructionFixtures source |> List.map (fun instr->enc (sprintf "%A" instr)) |> List.toArray) :> JsonNode]
 
+let irParserObservation (source:string) =
+    let tuple values=namedArray "tuple" (List.toArray values)
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let row (text:string)=tuple [enc text;enc (TestDSL.ANFParser.parseTempId text);enc (TestDSL.ANFParser.parseAtom text);enc (TestDSL.ANFParser.parseOp text);enc (TestDSL.ANFParser.parseCExpr text);enc (TestDSL.ANFParser.parseANF text);enc (TestDSL.MIRParser.parseVReg text);enc (TestDSL.MIRParser.parseOperand text);enc (TestDSL.MIRParser.parseOp text);enc (TestDSL.MIRParser.parseMIR text);enc (TestDSL.MIRParser.parseMIRWithEntryLabel "custom" text)]
+    let fixtures=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/ir_parser_fixtures.json")
+    let rows (key:string)=JsonArray(fixtures[key].AsArray() |> Seq.map (fun node->row (node.GetValue<string>())) |> Seq.toArray) :> JsonNode
+    tuple [row source;rows "anf";rows "mir"]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7733,6 +7741,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "ir-parsers" -> irParserObservation source
         | "compiler-units" -> compilerUnitObservation source
         | "graphcolor-fixtures" -> graphColorObservation source
         | "test-framework" -> testFrameworkObservation source
