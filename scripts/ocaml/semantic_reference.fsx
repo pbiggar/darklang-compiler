@@ -7180,6 +7180,64 @@ let sourcePreparationObservation (source:string) =
     let extract=list (fun typ->attempt enc (fun ()->let returns=unbox<FunctionIdMap<string*AST.SemanticType>> (invoke "extractReturnTypes" [|box (FunctionIdMap.ofList [AST.functionId 7UL,(source,typ)])|]) in let empty=unbox<AST_to_ANF.Registries> (invoke "emptyRegistries" [|box (Map.empty:AST.ModuleRegistry)|]) in Ok {empty with FuncReg=returns})) [AST.TFunction ([AST.TInt64],AST.TString);AST.TString]
     tuple [list observeInput fixtures;inheritedTests;cycles;extract]
 
+// Complete scheduled LIR and published facts for every target, grouping and cache policy.
+let nativePipelineObservation (input:string) =
+    use request=JsonDocument.Parse input
+    let source=request.RootElement.GetProperty("text").GetString()
+    let bucket=request.RootElement.GetProperty("bucket").GetInt32()
+    let enc value=closureAnalysisEncode value
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let list f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let outcome f value=match value with Error error->enc (Error error:Result<unit,string>)|Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|f value|]);node :> JsonNode
+    let attempt f action=outcome f (try action () with ex->Error ex.Message)
+    let mutable caseIndex=0
+    let select action=let index=caseIndex in caseIndex<-caseIndex+1;if index % 16=bucket then [tuple [enc index;action ()]] else []
+    let fid n=AST.functionId (uint64 n)
+    let id n=ANF.TempId n
+    let var n=ANF.Var (id n)
+    let int n=ANF.IntLiteral (ANF.Int64 n)
+    let func n name parameters returnType body:ANF.Function={Id=fid n;Name=name;TypedParams=parameters |> List.map (fun (n,typ)->{ANF.TypedParam.Id=id n;Type=typ});ReturnType=returnType;ReturnOwnership=ANF.OwnedReturn;Body=body}
+    let callee=func 100 "constant" [] AST.TInt64 (ANF.Return (int 42L))
+    let identity=func 200 "identity" [20,AST.TInt64] AST.TInt64 (ANF.Return (var 20))
+    let caller=func 300 ("caller_"+source) [] AST.TInt64 (ANF.Let (id 30,ANF.Call (fid 100,[]),ANF.Let (id 31,ANF.Call (fid 200,[var 30]),ANF.Return (var 31))))
+    let recursive n other=func n "recursive" [10,AST.TInt64;11,AST.TBool] AST.TInt64 (ANF.If (var 11,ANF.Return (var 10),ANF.Let (id 12,ANF.Call (fid other,[var 10;ANF.BoolLiteral true]),ANF.Return (var 12))))
+    let duplicate n value=func n "duplicate" [] AST.TInt64 (ANF.Return (int value))
+    let stringFunc=func 400 "string" [] AST.TString (ANF.Return (ANF.StringLiteral source))
+    let floatFunc=func 500 "float" [50,AST.TFloat64] AST.TFloat64 (ANF.Let (id 51,ANF.Prim (ANF.Add,var 50,ANF.FloatLiteral 1.5),ANF.Return (var 51)))
+    let externalCaller=func 700 "external_caller" [] AST.TInt64 (ANF.Let (id 70,ANF.Call (fid 600,[]),ANF.Return (var 70)))
+    let optionsBase={CompilerOptions.defaultOptions with DisableInlining=true}
+    let options=[optionsBase;{optionsBase with DisableMIROpt=true};{optionsBase with DisableMIRSCCP=true};{optionsBase with DisableMIRCSE=true};{optionsBase with DisableMIRLICM=true};{optionsBase with DisableMIRDCE=true};{optionsBase with DisableLIRPeephole=true};{optionsBase with DisableTCO=true};{optionsBase with EnableCoverage=true}]
+    let fixtures=[[];[caller;identity;callee];[recursive 800 900;recursive 900 800];[duplicate 401 1L;duplicate 402 2L];[stringFunc;floatFunc];[externalCaller]]
+    let empty=rcInternalCall<AST_to_ANF.Registries> "SourcePreparation" "emptyRegistries" [|box (Map.empty:AST.ModuleRegistry)|]
+    let flags=Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+    let owner=typeof<AST.SemanticType>.Assembly.GetType("NativePipeline")
+    let lower=owner.GetMethod("lowerToAllocatedLirWithKnownGroups",flags ||| Reflection.BindingFlags.Static)
+    let summary (value:CompilationCacheIdentity.FunctionSummary)=tuple [value.Version |> Option.map (fun version->version.Unit,version.Function,version.Target,version.Options,version.Body) |> enc;enc (rcInternalCall<CompilationCacheIdentity.FunctionSummaryFacts> "CompilationCacheIdentity" "summaryFacts" [|box value|])]
+    let optionObj (typ:Type) value=FSharpType.GetUnionCases(typ,flags) |> Array.find (fun item->item.Name="Some") |> fun item->FSharpValue.MakeUnion(item,[|value|],flags)
+    let run (functions:ANF.Function list) target (options:CompilerOptions.CompilerOptions) split cached=
+        let signatures=functions |> List.map (fun func->func.Id,(func.Name,AST.TFunction (func.TypedParams |> List.map (fun param->param.Type),func.ReturnType))) |> fun signatures->signatures@[fid 600,("external",AST.TFunction ([],AST.TInt64))] |> FunctionIdMap.ofList
+        let names=signatures |> FunctionIdMap.map (fun _ (name,_)->name)
+        let registries={empty with FuncReg=signatures;FunctionNames=names;FunctionIds=TypeRegistries.functionIdsFromNames names}
+        let phases=ResizeArray<JsonNode>()
+        let record (value:CompilerOptions.PassTiming)=phases.Add(tuple [enc value.Pass;enc (value.Elapsed.Ticks>=0L)])
+        use session=new CompilationSession.CompilationSession()
+        let caches=if cached then
+                       let record=cacheIdentityRecord "FunctionCompilationCaches" [|box (fun key generate->session.OptimizeMirFunction key generate);box (fun arch func generate->session.AllocateLirFunction arch func generate);box (fun func summaries generate->session.AllocateCallAwareLirFunction func summaries generate)|]
+                       optionObj (lower.GetParameters().[6].ParameterType) record
+                   else null
+        let releaseCache:ARM64CodeGenTypes.ReleasePlanSummaryCache option=if cached then Some (fun unique key plan generate->session.Arm64ReleasePlanSummary unique key plan generate) else None
+        let externalSummary={CompilationCacheIdentity.unknownSummary with Purity={ObservableEffects=false;ReadsMutableState=false;MayTrap=false;MayDiverge=false};ConstantReturn=Some (AST.TInt64,MIR.Int64Const 17L)}
+        let externalSummaries=FunctionIdMap.ofList [fid 600,externalSummary]
+        let output=attempt (fun (funcs,summaries)->tuple [enc funcs;list (fun (id,value)->tuple [enc id;summary value]) (FunctionIdMap.toList summaries)]) (fun ()->
+            rcInternalCall<Result<ANF.Function list*SSAANF.Function list*ANF.TypeMap,string>> "ANFPipeline" "buildAnf" [|box 0;box options;box (Diagnostics.Stopwatch.StartNew());box registries;box 1000UL;box InliningCommon.defaultConfig;box (FunctionIdMap.empty:FunctionIdMap<InliningCommon.FunctionInfo>);box (Map.empty:Map<string,ANF.Function>);box (Set.empty<AST.FunctionId>);box functions;box (FunctionIdMap.empty:FunctionIdMap<OwnedIR.CallSignature>);box false;box (None:CompilerOptions.PassTimingRecorder option)|]
+            |> Result.bind (fun (_,ssa,typeMap)->
+                let groups=if split then List.map (fun func->[func],typeMap) ssa else [ssa,typeMap]
+                let args=[|box externalSummaries;box target;box 0;box options;box (Diagnostics.Stopwatch.StartNew());box (Some record:CompilerOptions.PassTimingRecorder option);caches;box releaseCache;box source;box groups;box registries;box (None:(MIR.VariantRegistry*MIR.RecordRegistry) option);box (FunctionIdMap.ofList [fid 600,("external",AST.TInt64)])|]
+                try unbox<Result<LIR.Function list*FunctionIdMap<CompilationCacheIdentity.FunctionSummary>,string>> (lower.Invoke(null,args))
+                with :? Reflection.TargetInvocationException as ex when not (isNull ex.InnerException) -> raise ex.InnerException))
+        tuple [output;JsonArray(phases.ToArray()) :> JsonNode]
+    tuple [list (fun functions->list (fun target->list (fun options->list (fun split->list (fun cached->list (fun node->node) (select (fun ()->run functions target options split cached))) [false;true]) [false;true]) options) [Platform.LinuxX86_64;Platform.ARM64Backend Platform.LinuxARM64;Platform.ARM64Backend Platform.MacOSARM64]) fixtures]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7209,6 +7267,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "native-pipeline" -> nativePipelineObservation source
         | "source-preparation" -> sourcePreparationObservation source
         | "value-rendering" -> valueRenderingObservation source
         | "anf-pipeline" -> anfPipelineObservation source

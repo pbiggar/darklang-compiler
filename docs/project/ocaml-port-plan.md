@@ -1834,3 +1834,20 @@ identical JSON bytes (SHA256 acce677b9d89cba05a04c2c75938099f41b8a13f7b257d05766
 pairs; source comment coverage is complete. Process spawning uses explicit
 native descriptors; its full host-boundary audit follows with execution.
 Remaining driver/library, runners/corpus and final acceptance remain open.
+
+The complete native pipeline now lowers each SSA function group to MIR, schedules
+exact function nodes callee-first, publishes purity/constant-return/target-write
+summaries, optimizes MIR/LIR, plans ARM64 release helpers and allocates registers
+with relevant callee write facts. It validates stage coverage, finalization order,
+summary versions and emitted function multiplicity, then restores original
+function order with per-name queues. Sixteen text probes each cover all 648
+combinations of six function fixtures, three targets, nine option sets, split/
+combined groups and enabled/disabled compilation caches. Recursive groups,
+duplicate names, scalar/string/float returns and supplied external facts all
+reach successful lowering. Full allocated LIR, attached codegen facts, published
+function versions/summaries and timing pass order match F# in all 256 bounded
+groups, comparing 154,152,820 complete observation bytes (audit SHA256 d9a18c273a6f11046afbee5570aea1b875242f6a782ec89e77bc105e278458f0).
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+6080/6080 x64 executions. Coverage is 308/391 pairs; source comment coverage
+is complete. Remaining driver/library, runners/corpus and final acceptance
+remain open.
