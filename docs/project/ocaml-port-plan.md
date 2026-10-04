@@ -1938,3 +1938,16 @@ the plan's incidental-bug rule, the native parser returns its unknown-flag
 diagnostic for those inputs; terminating reference cases retain exact parity.
 The remaining unit/test-tooling pairs, full corpus and final acceptance remain
 open.
+
+The native test-runner foundations now include synchronized progress display,
+shared ANSI colors, complete result/timing state and both generic file/unit
+suite execution helpers. All 16 comparison requests match F# for progress
+bytes, callback order, stored failures/timings, pass aggregation and filtering,
+thresholded timing columns, stable time ordering, expected/actual details,
+empty suites and mixed success/failure presentation. Duration formatting matches
+the frozen custom decimal formatter across 620 tick-boundary inputs, including
+negative values rounding to zero and half-rounding. Numerical running durations
+are excluded only from their known presentation fields. The warning-free build
+passes 523/523 translated unit tests, including both original progress tests.
+Coverage is 323/391 pairs; source comments remain complete. The remaining unit
+and test-tooling pairs, full corpus and final acceptance remain open.

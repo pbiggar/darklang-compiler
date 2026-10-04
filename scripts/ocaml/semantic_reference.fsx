@@ -7612,6 +7612,75 @@ let cliObservation (input:string) =
         tuple [enc (JsonSerializer.Serialize report);rcInternalCall<Result<unit,string>> "Program" "writeBatchReport" [|box path;box [report]|] |> enc;enc (read path)]) (List.indexed [0.;-0.;0.001;33.125;15000.])
     tuple [parsed;manifests;fast;compiled;reports]
 
+let testFrameworkObservation (source:string) =
+    let tuple values=namedArray "tuple" (List.toArray values)
+    let str=encodeString
+    let number (value:int)=JsonValue.Create value :> JsonNode
+    let ticks (value:TimeSpan)=JsonValue.Create (string value.Ticks) :> JsonNode
+    let boolean (value:bool)=JsonValue.Create value :> JsonNode
+    let optional fn=function None->encode typeof<int option> (box None)|Some value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpOption";node["case"]<-JsonValue.Create "Some";node["fields"]<-JsonArray([|fn value|]);node :> JsonNode
+    let array fn xs=JsonArray(Seq.map fn xs |> Seq.toArray) :> JsonNode
+    let details (value:TestFramework.FailedTestInfo)=tuple [str value.File;str value.Name;str value.Message;array str value.Details]
+    let timing (value:TestFramework.TestTiming)=tuple [str value.Name;ticks value.TotalTime;optional ticks value.CompileTime;optional ticks value.RuntimeTime]
+    let entries (value:TestFramework.PassTimingSection)=tuple [str value.Title;array (fun (entry:TestFramework.PassTimingEntry)->tuple [optional str entry.Number;str entry.Name;ticks entry.Elapsed]) value.Entries]
+    let map fn values=values |> Map.toList |> array (fun (key,value)->tuple [str key;fn value])
+    let snapshot (state:TestFramework.TestRunState) completed=tuple [number state.Passed;number state.Failed;array details state.FailedTests;array timing state.Timings;map ticks state.PassTimings;map number state.PassTimingCounts;array str state.PassTimingOrder;array number completed]
+    let capture action=
+        let oldOut,oldErr=Console.Out,Console.Error
+        use stdout=new IO.StringWriter(Globalization.CultureInfo.InvariantCulture)
+        use stderr=new IO.StringWriter(Globalization.CultureInfo.InvariantCulture)
+        Console.SetOut stdout;Console.SetError stderr
+        try let value=action () in Console.Out.Flush();Console.Error.Flush();value,stdout.ToString(),stderr.ToString()
+        finally Console.SetOut oldOut;Console.SetError oldErr
+    let normalize (value:string)=
+        let value=Text.RegularExpressions.Regex.Replace(value,"Completed in -?[0-9]+(\\.[0-9]+)?[ms]+","Completed in <duration>")
+        Text.RegularExpressions.Regex.Replace(value,"\\([0-9]+(\\.[0-9]+)?[ms]+\\)","(<duration>)")
+    let fixtures=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/framework_fixtures.json")
+    let names=fixtures["names"].AsArray() |> Seq.map (fun node->node.GetValue<string>()) |> List.ofSeq
+    let time (value:float)=TimeSpan.FromMilliseconds value
+    let formatted=fixtures["ticks"].AsArray() |> array (fun node->let value=TimeSpan.FromTicks(Int64.Parse(node.GetValue<string>())) in tuple [ticks value;str (TestFramework.formatTime value)])
+    let stateRows=[false;true] |> array (fun reporter->
+        let completed=ResizeArray<int>()
+        let state=TestFramework.createStateWithProgressReporter (if reporter then Some completed.Add else None)
+        let fail name:TestFramework.FailedTestInfo={File="fixture";Name=name;Message="message";Details=[source;"line"]}
+        TestFramework.recordResults state 2 1 [fail "first"]
+        TestFramework.recordResults state 0 0 []
+        TestFramework.recordTiming state {Name=source;TotalTime=time 175.;CompileTime=Some(time 100.);RuntimeTime=Some(time 25.)}
+        names@[source;"Parse";source] |> List.iteri (fun index name->TestFramework.recordPassTiming state {Pass=name;Elapsed=time (float(index%7)*25.)})
+        TestFramework.recordResults state 1 2 [fail "second";fail "third"]
+        let before=snapshot state completed
+        let raised=try TestFramework.recordResults state -1 0 [];false with _->true
+        tuple [boolean reporter;before;boolean raised;snapshot state completed])
+    let columns=[0;1;2;3] |> array (fun variant->
+        let values=names |> List.mapi (fun index name->name,time (if variant=0 then 0. elif variant=1 then 49.999 elif variant=2 then 50. else float(index%4)*75.)) |> Map.ofList
+        let filtered=TestFramework.filterPassTimingsForOverhead values
+        let timings:TestFramework.TestTiming list=[{Name="first";TotalTime=time 500.;CompileTime=None;RuntimeTime=Some(time 150.)};{Name="second";TotalTime=time 500.;CompileTime=Some(time 300.);RuntimeTime=None};{Name="third";TotalTime=time 300.;CompileTime=None;RuntimeTime=Some(time 75.)}]
+        let breakdown=TestFramework.calculateUnaccountedTimeBreakdown (time 12500.) values timings
+        tuple [map ticks values;map ticks filtered;ticks (TestFramework.calculatePassTimingsTotal values);ticks (TestFramework.calculatePassTimingsTotalForOverhead values);tuple [ticks breakdown.Unaccounted;ticks breakdown.Runtime;ticks breakdown.Overhead];[-1.;0.;49.999;50.;1000.] |> array (fun unknown->let result=TestFramework.buildPassTimingColumns values (List.rev names) (time unknown) in tuple [array entries result.Ordered;array entries result.ByTime])])
+    let progress=[-2;0;1;3;20] |> array (fun total->[-2;0;1;4;21] |> array (fun count->[-1;0;2] |> array (fun failed->
+        let state=ProgressBar.create source total
+        state.Completed<-count;state.Failed<-failed
+        let (),stdout,stderr=capture (fun ()->ProgressBar.update state;ProgressBar.increment state false;ProgressBar.increment state true;ProgressBar.finish state)
+        tuple [number total;number count;number failed;str stdout;str stderr;number state.Completed;number state.Failed])))
+    let expected=[None;Some "";Some source;Some "expected\n\nlast\n"] |> array (fun expected->[None;Some "";Some "actual\n\nlast\n"] |> array (fun actual->let result,stdout,stderr=capture (fun ()->TestFramework.addExpectedActualDetails expected actual) in tuple [array str result;str stdout;str stderr]))
+    let symbols:TestFramework.OutputSymbols={Pass="PASS";Fail="FAIL";SectionPrefix="→"}
+    let unitSuites=[false;true] |> array (fun enabled->
+        let completed=ResizeArray<int>()
+        let state=TestFramework.createStateWithProgressReporter (Some completed.Add)
+        let suites:TestFramework.UnitTestSuite array=if enabled then [|{Name=source;Tests=["works",(fun ()->Ok ());"fails",(fun ()->Error "failure\nsecond")]};{Name="empty";Tests=[]};{Name="final";Tests=["works",(fun ()->Ok ())]}|] else [||]
+        let (),stdout,stderr=capture (fun ()->TestFramework.runUnitTestSuites state symbols "Unit tests" source suites)
+        tuple [number state.Passed;number state.Failed;array details state.FailedTests;array (fun (timing:TestFramework.TestTiming)->str timing.Name) state.Timings;array number completed;str(normalize stdout);str stderr])
+    let fileSuites=[false;true] |> array (fun enabled->
+        let completed=ResizeArray<int>()
+        let state=TestFramework.createStateWithProgressReporter (Some completed.Add)
+        let files=if enabled then [|"good";"bad";"good2"|] else [||]
+        let handle success progress path name _elapsed value:TestFramework.FileSuiteSummary=
+            ProgressBar.increment progress success
+            {Passed=(if success then 2 else 0);Failed=(if success then 0 else 1);FailedTests=(if success then [] else [{File=path;Name=name;Message=value;Details=[source]}])}
+        let (),stdout,stderr=capture (fun ()->TestFramework.runFileSuite state symbols "Files" source files (fun name->"Test "+name) (fun name->"File "+name) (fun path->if path="bad" then Error "bad input" else Ok "works") (handle true) (handle false))
+        tuple [number state.Passed;number state.Failed;array details state.FailedTests;array (fun (timing:TestFramework.TestTiming)->str timing.Name) state.Timings;array number completed;str(normalize stdout);str stderr])
+    tuple [formatted;stateRows;columns;progress;expected;unitSuites;fileSuites;array str [Colors.reset;Colors.green;Colors.red;Colors.yellow;Colors.white;Colors.cyan;Colors.gray;Colors.bold]]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7641,6 +7710,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "test-framework" -> testFrameworkObservation source
         | "cli" -> cliObservation source
         | "core-contexts" -> coreContextsObservation source
         | "stdlib-compilation" -> stdlibCompilationObservation source
