@@ -1963,3 +1963,13 @@ The warning-free build passes 541/541 translated unit/fixture checks, including
 both original graph DSL unit tests. Coverage is 326/391 pairs, with complete
 reference comments. Remaining unit/test-tooling pairs, full corpus and final
 acceptance remain open.
+
+The original JSON-planning, prebuilt-stdlib optimization, writable ELF counter
+layout, x64 label-resolution/execution, lambda-lifting, monomorphization and
+MIR-printer unit suites now run natively with unchanged assertions. All 16
+comparison requests match their complete F# test registration and result
+diagnostics; the forward-call executable exits with 42, all eight counter
+layout cases pass and the shared stdlib retains its original optimization
+assertion. The warning-free build passes 562/562 translated unit/fixture checks.
+Coverage is 333/391 pairs; all reference comments are preserved. Remaining unit
+and test-tooling pairs, full corpus and final acceptance remain open.

@@ -7696,6 +7696,14 @@ let graphColorObservation (source:string) =
     let tests=TestDSL.GraphColorTestRunner.tests [|"missing.graphcolor";"src/Tests/algorithms/graph-color/coloring.graphcolor"|] |> array (fun (name,run)->let actual=run () in tuple [enc name;enc actual])
     tuple [observed;corpus;loads;tests]
 
+let compilerUnitObservation (source:string) =
+    let tuple values=namedArray "tuple" (List.toArray values)
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tests values=JsonArray(values |> List.map (fun (name,run)->let outcome=run () in tuple [enc name;enc outcome]) |> List.toArray) :> JsonNode
+    let stdlib,_=stdlibCompilationBase.Value
+    let prepared=match stdlib with Error error->enc (Error error:Result<unit,string>)|Ok stdlib->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|tuple [tests (JsonPlanningTests.tests stdlib);tests (StdlibOptimizationTests.tests stdlib)]|]);node :> JsonNode
+    tuple [enc source;prepared;tests RuntimeDataLayoutTests.tests;tests X86_64ResolveTests.tests;tests LambdaLiftingTests.tests;tests MonomorphizationTests.tests;tests IRPrinterTests.tests;enc (IRPrinterTests.runAll ())]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7725,6 +7733,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "compiler-units" -> compilerUnitObservation source
         | "graphcolor-fixtures" -> graphColorObservation source
         | "test-framework" -> testFrameworkObservation source
         | "cli" -> cliObservation source
