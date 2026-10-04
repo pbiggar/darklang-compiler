@@ -874,3 +874,14 @@
  (deps ../lib/backend/x64/X64Operands.mli)
  (action (with-stdout-to %{targets}
   (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/x64/X64Operands.mli}) (echo "val resolveFreg : LIR.fReg -> (X86_64.fReg,string) result\nval emitStringByteCopy : X86_64.reg -> X86_64.reg -> bytes -> X86_64.instr list\n")))))
+
+(rule
+ (targets ControlledEmit.ml)
+ (deps ../lib/backend/arm64/Emit.ml control_emit.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:control_emit.py} %{dep:../lib/backend/arm64/Emit.ml}))))
+(rule
+ (targets ControlledEmit.mli)
+ (deps ../lib/backend/arm64/Emit.mli)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/arm64/Emit.mli})))))

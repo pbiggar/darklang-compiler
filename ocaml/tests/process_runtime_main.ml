@@ -425,10 +425,46 @@ let functionLoweringChecks ()=
  check "42" [root [LIR.Call (reg,AST.functionId 1L,[]);LIR.Mov (reg,LIR.Reg (LIR.Physical LIR.X0));LIR.PrintInt64NoNewline reg];func 1L "fn" 16 [LIR.X19] [block "entry" [LIR.TailCall (AST.functionId 2L,[])] LIR.Ret];func 2L "tail_target" 0 [] [returnBlock]];
  !total
 [@@warning "-42"]
+let programPipelineChecks ()=
+ let target=ARM64.targetConfigFor Platform.LinuxARM64 in
+ let reg n=LIR.Virtual n in
+ let make instrs=
+  let label=LIR.Label "pipeline-entry" in
+  let block={LIR.label;instrs;terminator=LIR.Ret} in
+  {LIR.id=AST.functionId 0L;name="_start";typedParams=[];cfg={LIR.entry=label;blocks=LIR.LabelMap.singleton label block};stackSize=0;usedCalleeSaved=[];codegenFacts=None} in
+ let dynamic=MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer in
+ let fields=List.init 25 (fun index -> MemoryModel.FieldRelease (index*8,dynamic)) in
+ let plan=MemoryModel.RootRelease (200,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (200,fields)) in
+ let metadata plan=Some {MemoryModel.releasePlanCacheKey=None;releasePlan=Some plan;sourceType=Some AST.TString} in
+ let cases=[
+  "42",[LIR.Mov (reg 0,LIR.Imm 42L);LIR.PrintInt64NoNewline (reg 0)];
+  "42",[LIR.Mov (reg 0,LIR.Imm 20L);LIR.Mov (reg 1,LIR.Imm 22L);LIR.Add (reg 2,reg 0,LIR.Reg (reg 1));LIR.PrintInt64NoNewline (reg 2)];
+  "hé😀1.5",[LIR.StdoutWrite (0,LIR.StringSymbol "hé😀",false);LIR.FLoad (LIR.FVirtual 0,1.5);LIR.PrintFloatNoNewline (LIR.FVirtual 0)];
+  "42",[LIR.HeapAlloc (reg 0,8);LIR.HeapStore (reg 0,0,LIR.Imm 42L,Some AST.TInt64);LIR.HeapLoad (reg 1,reg 0,0);LIR.PrintInt64NoNewline (reg 1)];
+  "hé😀tail",[LIR.StringConcat (reg 0,LIR.StringSymbol "hé😀",LIR.StringSymbol "tail",[]);LIR.PrintHeapStringNoNewline (reg 0)];
+  "0",[LIR.HeapAlloc (reg 0,200)]@List.init 25 (fun index -> LIR.HeapStore (reg 0,index*8,LIR.Imm 0L,Some AST.TString))@[LIR.RefCountDec (reg 0,200,LIR.GenericHeap,metadata plan);LIR.HeapLoad (reg 1,reg 0,200);LIR.PrintInt64NoNewline (reg 1)];
+  "42",[LIR.Mov (reg 0,LIR.Imm 0L);LIR.RefCountInc (reg 0,8,LIR.TaggedList,None);LIR.RefCountDec (reg 0,8,LIR.TaggedList,metadata (MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease MemoryModel.NoReleasePlan)));LIR.Mov (reg 1,LIR.Imm 42L);LIR.PrintInt64NoNewline (reg 1)];
+  "42",[LIR.Mov (reg 0,LIR.Imm 0L);LIR.RefCountInc (reg 0,16,LIR.DictHeap,None);LIR.RefCountDec (reg 0,16,LIR.DictHeap,metadata (MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,MemoryModel.NoReleasePlan))));LIR.Mov (reg 1,LIR.Imm 42L);LIR.PrintInt64NoNewline (reg 1)]
+ ] in
+ let total=ref 0 in
+ List.iter (fun mode -> List.iter (fun (expected,body) ->
+  let LIR.Program (functions,variants,records)=ARM64PrepareFunctions.prepareARM64Program (LIR.Program ([make body],StringOrder.Map.empty,StringOrder.Map.empty)) in
+  let functions=List.map (RegisterAllocation.allocateRegisters Platform.ARM64) functions in
+  let options={ARM64CodeGenTypes.defaultOptions with ARM64CodeGenTypes.disableFreeList=mode=2} in
+  let functionCache _ generate=generate () and helperCache _ generate=generate () and groupCache _ _ generate=generate () in
+  let groups=if mode=2 then [{Backend_Arm64_CodeGen.contextIdentity=Obj.repr (ref ());reusableAcrossCompilations=true;functions}] else [] in
+  let generated=match Backend_Arm64_CodeGen.generateARM64WithOptionsAndCaches target options None None (if mode=0 then None else Some functionCache) None (if mode=2 then Some groupCache else None) groups None (if mode=0 then None else Some helperCache) [] None None (LIR.Program (functions,variants,records)) with Ok generated->generated|Error error->failwith error in
+  let preparePart _ generate=generate () and prepareGroup _ generate=generate () in
+  let emitted=Emit.emitBinary generated Platform.Linux false (Some preparePart) (Some prepareGroup) None in
+  let actual=runImage emitted.Emit.binary [] "" in
+  if actual<>expected then failwith (Printf.sprintf "program pipeline: expected %S, got %S (case %d)" expected actual !total);
+  incr total) cases) [0;1;2];
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
  let effects=[Some "hé😀",false,0,"","hé😀";Some "",true,0,"","\n";None,false,1,"hello\nignored","hello";None,true,1,"hé😀\r\n","hé😀\n";None,false,1,"tail","tail";None,true,1,"","\n";None,true,2,"first\nsecond\n","first\nsecond\n";None,false,1,"a\000b\n","a\000b";None,false,1,"\n","";None,false,1,"a\rb\r\n","a\rb"] in
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
- let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks () in
+ let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count

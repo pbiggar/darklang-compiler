@@ -12,7 +12,12 @@ def prepare(destination, original):
         subprocess.run([sys.executable, str(ROOT / "ocaml/migration/control_macho_uuid.py"),
                         str(ROOT / "src/DarkCompiler/backend/arm64/Binary_Generation_MachO.fs")],
                        check=True, stdout=output)
-    reference = original.read_text()
+    controlled_emit = destination / "ControlledEmit.fsx"
+    with controlled_emit.open("w") as output:
+        subprocess.run([sys.executable, str(ROOT / "ocaml/migration/control_emit.py"),
+                        str(ROOT / "src/DarkCompiler/backend/arm64/Emit.fs")],
+                       check=True, stdout=output)
+    reference = original.read_text().replace("ARM64_Emit.emitBinary", "ControlledEmit.emitBinary")
     # Process observations also generate complete Mach-O images. Route their
     # entropy input through the full controlled implementation before emission.
     reference = reference.replace("Binary_Generation_MachO.createExecutableWithPools",
@@ -23,6 +28,7 @@ def prepare(destination, original):
     lines = reference.splitlines(keepends=True)
     position = max(n for n, line in enumerate(lines) if line.startswith('#r "')) + 1
     lines.insert(position, '#load "' + str(controlled.resolve()) + '"\n')
+    lines.insert(position + 1, '#load "' + str(controlled_emit.resolve()) + '"\n')
     reference = ''.join(lines)
     observation = (ROOT / "scripts/ocaml/macho_observation.fsx.inc").read_text()
     reference = reference.replace("let jsonOutputOptions", observation + "\nlet jsonOutputOptions", 1)

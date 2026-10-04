@@ -1419,3 +1419,30 @@ The warning-free build passes 508/508 translated checks. The preceding 495/495
 ARM64 executions remain the current execution checkpoint. Comment coverage is
 complete. Coverage is 274/391 pairs. Complete ARM64 program assembly is next;
 x64 emission, remaining runners/corpus and final acceptance remain open.
+
+Complete ARM64 program assembly and binary emission are translated with full
+interfaces and all source comments. Generated chunks, complete flattened
+instructions, helper cache keys, metadata summaries, refinement/function/group
+cache arguments, expansion metadata and phase order match F# across 52,559,177
+identical JSON bytes (SHA256
+0f0902554135a4c7029d3b846bbe78ddb6eb077723775e227d84d7e67b921861). Cases cover
+every LIR instruction family, both targets/leak settings, supplied registries
+and summaries, reusable groups, entry ordering, missing preparation, invalid
+group order, cache failures, recursive dependencies and expensive generic plans.
+
+Complete emitter results and chunk/group preparation callbacks match across
+1,627,294 identical JSON bytes (SHA256
+ab349dc220777530238aded4ba47fddb1b16e09515a581ff21cfc0b7e07c43fa). Linux
+ELF bytes are compared completely. Complete Mach-O bytes are compared with
+identical UUID entropy supplied to full migration-only implementations before
+emission; production retains fresh UUID generation. No emitted bytes are masked
+or rewritten. Varying profiling durations are validated separately.
+
+The warning-free build passes 508/508 translated unit checks and 519/519 native
+ARM64 executions. The 24 new executions use the complete preparation, register
+allocation, program assembly and production emitter pipeline across uncached,
+function/helper-cached and reusable group modes, including integer arithmetic,
+UTF-8 strings/floats, heap load/store, string concatenation, outlined destruction
+and nullable list/dict roots. Comment coverage is complete. Coverage is 276/391
+pairs. X64 emission, driver/library entry points, remaining runners/corpus and
+final acceptance remain open.

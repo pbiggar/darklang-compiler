@@ -3928,6 +3928,85 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let armProgramObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let result value=enc (value |> Result.map (fun generated -> CodeGen.generatedProgramChunks generated,CodeGen.generatedProgramInstructions generated))
+    let call f=try tuple [enc false;result (f ())] with _ -> tuple [enc true]
+    let make id name instructions : LIR.Function =
+        let label=LIR.Label (name+"_entry")
+        let block:LIR.BasicBlock={Label=label;Instrs=instructions;Terminator=LIR.Ret}
+        {Id=AST.functionId id;Name=name;TypedParams=[];CFG=({Entry=label;Blocks=Map.ofList [label,block]}:LIR.CFG);StackSize=32;UsedCalleeSaved=[LIR.X19];CodegenFacts=None}
+    let callee=make 1UL "fn" []
+    let instructions=lirInstructionFixturesWithRegisters source (LIR.Physical LIR.X19) (LIR.FPhysical LIR.D0) (LIR.Imm 1L) AST.TString
+    let dynamic=MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer
+    let child=MemoryModel.RootRelease (8,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (8,[MemoryModel.FieldRelease (0,dynamic)]))
+    let fields=List.init 25 (fun index -> MemoryModel.FieldRelease (index*8,dynamic))
+    let plans=[MemoryModel.RootRelease (200,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (200,fields));MemoryModel.RootRelease (200,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (200,fields,[{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=fields}]));MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease (MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (dynamic,child))));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (dynamic,child));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (dynamic,MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease dynamic)))]
+    let kinds=[LIR.GenericHeap;LIR.GenericHeap;LIR.TaggedList;LIR.DictHeap;LIR.DictHeap]
+    let releaseInstructions=List.map2 (fun kind plan -> LIR.RefCountDec (LIR.Physical LIR.X19,200,kind,Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=None;MemoryModel.RcMetadata.ReleasePlan=Some plan;MemoryModel.RcMetadata.SourceType=Some AST.TString})) kinds plans
+    let catalog=List.map (fun instruction -> [make 0UL "_start" [instruction];callee]) (instructions@releaseInstructions)
+    let saves=make 0UL "_start" [LIR.SaveRegs ([LIR.X2;LIR.X3],[LIR.D2]);LIR.Call (LIR.Physical LIR.X0,AST.functionId 1UL,[]);LIR.RestoreRegs ([LIR.X2;LIR.X3],[LIR.D2])]
+    let catalog=[[];[make 0UL "_start" []];[callee;make 0UL "_start" [LIR.PrintString source]];[saves;callee];[make 0UL "_start" [];make 2UL "_start" []];[make 2UL source []];[make 0UL "_start" [LIR.Mov (LIR.Virtual 0,LIR.Imm 1L)]]]@catalog
+    let variants:LIR.VariantRegistry=Map.ofList ["Option",{TypeParams=[];Variants=[{Name="None";Tag=0;Payload=None;FieldCount=0};{Name="Some";Tag=1;Payload=Some AST.TString;FieldCount=1}]}]
+    let records=Map.ofList ["R",["field",AST.TString]]
+    let run target leak mode functions =
+        let trace:JsonNode list ref=ref []
+        let add value=trace.Value<-value::trace.Value
+        let identity=obj()
+        let phase name (elapsed:float)=add (tuple [enc "phase";enc name;enc (elapsed>=0.0)])
+        let expand name opcode detail count (ticks:int64)=add (tuple [enc "expand";enc name;enc opcode;enc detail;enc count;enc (ticks>=0L)])
+        let functionCache (func:LIR.Function) generate=add (tuple [enc "function";enc func]);if mode=4 then Error "cached function failure" else generate ()
+        let refinementCache (func:LIR.Function) (writes:FunctionIdMap<ARM64CalleeClobbers.Writes>) generate=add (tuple [enc "refine";enc func;enc writes]);generate ()
+        let metadataCache _ (funcs:LIR.Function list) generate=add (tuple [enc "metadata-input";enc funcs]);let value:ARM64CodeGenTypes.Arm64ProgramMetadata=generate () in add (tuple [enc "metadata-output";enc value]);value
+        let helperCache (key:CodeGen.HelperCacheKey) generate=add (tuple [enc "helper";enc key]);generate ()
+        let groupCache _ (funcs:LIR.Function list) generate=add (tuple [enc "group";enc funcs]);generate ()
+        let action () =
+            let prepared=ARM64PrepareFunctions.prepareARM64Program (LIR.Program (functions,variants,records))
+            let (LIR.Program (preparedFunctions,_,_))=prepared
+            let sorted=match List.partition (fun (func:LIR.Function) -> func.Name="_start") preparedFunctions with first::_,rest -> first::rest | [],_ -> preparedFunctions
+            let groups:CodeGen.FunctionGroup list=if mode=2 || mode=3 then List.mapi (fun index func -> {ContextIdentity=identity;ReusableAcrossCompilations=index%2=0;Functions=[func]}) (if mode=3 then List.rev sorted else sorted) else []
+            let metadataGroups:CodeGen.MetadataGroup list=if mode=2 then List.map (fun func -> {ContextIdentity=identity;Functions=[func]}) preparedFunctions else []
+            let options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=leak;DisableFreeList=mode=2}
+            CodeGen.generateARM64WithOptionsAndCaches target options (if mode=2 then Some (rcInternalCall<MemoryModel.RcSumShapeRegistry> "ARM64CodeGenTypes" "rcSumShapeRegistryFromVariantRegistry" [|box variants|]) else None) (if mode=2 then Some FunctionIdMap.empty else None) (if mode=0 then None else Some functionCache) (if mode=0 then None else Some refinementCache) (if mode=2 || mode=3 then Some groupCache else None) groups (if mode=0 then None else Some metadataCache) (if mode=0 then None else Some helperCache) metadataGroups (Some expand) (Some phase) prepared
+        let output=call action
+        tuple [output;JsonArray(List.rev trace.Value |> List.toArray) :> JsonNode]
+    let cases=mapNodes (fun target -> mapNodes (fun leak -> mapNodes (fun functions -> mapNodes (fun mode -> run target leak mode functions) [0;1;2]) catalog) [false;true]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64]
+    let failures=mapNodes (fun functions -> mapNodes (fun mode -> run (ARM64.targetConfigFor Platform.LinuxARM64) false mode functions) [3;4]) (List.take 7 catalog)
+    let unprepared=mapNodes (fun functions -> mapNodes (fun target -> call (fun () -> CodeGen.generateARM64 target (LIR.Program (functions,variants,records)))) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64]) (List.take 7 catalog)
+    tuple [cases;failures;unprepared]
+
+let armEmitObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let make id name instructions : LIR.Function =
+        let label=LIR.Label (name+"_entry")
+        let block:LIR.BasicBlock={Label=label;Instrs=instructions;Terminator=LIR.Ret}
+        {Id=AST.functionId id;Name=name;TypedParams=[];CFG=({Entry=label;Blocks=Map.ofList [label,block]}:LIR.CFG);StackSize=32;UsedCalleeSaved=[LIR.X19];CodegenFacts=None}
+    let callee=make 1UL "fn" []
+    mapNodes (fun os -> mapNodes (fun mode ->
+        let target=ARM64.targetConfigFor (if os=Platform.Linux then Platform.LinuxARM64 else Platform.MacOSARM64)
+        let trace:JsonNode list ref=ref []
+        let add value=trace.Value<-value::trace.Value
+        let phase name (elapsed:float)=add (tuple [enc "phase";enc name;enc (elapsed>=0.0)])
+        let preparePart (instructions:ARM64Symbolic.Instr list) generate=add (tuple [enc "part";enc instructions]);generate ()
+        let prepareGroup (instructions:ARM64Symbolic.Instr list list) generate=add (tuple [enc "parts";enc instructions]);generate ()
+        let functionCache _ generate=generate ()
+        let helperCache _ generate=generate ()
+        let groupCache _ _ generate=generate ()
+        let emit () =
+            let prepared=ARM64PrepareFunctions.prepareARM64Program (LIR.Program ([make 0UL "_start" [LIR.PrintString source;LIR.FLoad (LIR.FPhysical LIR.D0,1.5);LIR.PrintFloatNoNewline (LIR.FPhysical LIR.D0)];callee],Map.empty,Map.empty))
+            let (LIR.Program (functions,_,_))=prepared
+            let groups:CodeGen.FunctionGroup list=if mode=2 then [{ContextIdentity=obj();ReusableAcrossCompilations=true;Functions=functions}] else []
+            match CodeGen.generateARM64WithOptionsAndCaches target ARM64CodeGenTypes.defaultOptions None None (if mode=0 then None else Some functionCache) None (if mode=2 then Some groupCache else None) groups None (if mode=0 then None else Some helperCache) [] None None prepared with
+            | Error error -> failwith error
+            | Ok generated -> ARM64_Emit.emitBinary generated os false (Some preparePart) (Some prepareGroup) (Some phase)
+        let output=call emit
+        tuple [output;JsonArray(List.rev trace.Value |> List.toArray) :> JsonNode]) [0;1;2]) [Platform.Linux;Platform.MacOS]
+
 let armPrepareObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -5872,6 +5951,8 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-program" -> armProgramObservation source
+        | "arm64-emit" -> armEmitObservation source
         | "arm64-prepare" -> armPrepareObservation source
         | "arm64-functions" -> armFunctionObservation source
         | "arm64-dispatch" -> armDispatchObservation source
