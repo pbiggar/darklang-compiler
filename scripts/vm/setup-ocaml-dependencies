@@ -37,6 +37,20 @@ if [[ ! -x "$root/native/bin/pkg-config" ]]; then
   tar --no-same-owner -xf "$root/downloads/pkg-config-0.29.2.tar.gz" -C "$root"
   (cd "$root/pkg-config-0.29.2"; ./configure --prefix="$root/native" --with-internal-glib; make -j1; make install) > "$root/pkg-config-build.log" 2>&1
 fi
+# SQLite host cache: extract the same Noble development/runtime pair without root.
+if [[ ! -f "$root/native/include/sqlite3.h" || ! -f "$root/native/lib/libsqlite3.so.0" ]]; then
+  fetch sqlite-dev-3.45.1.deb d23577c43936fedd8c4fa1337a6e960a6e71e94ac164d7a15c46ea96bf21265d \
+    https://archive.ubuntu.com/ubuntu/pool/main/s/sqlite3/libsqlite3-dev_3.45.1-1ubuntu2_amd64.deb
+  fetch sqlite-runtime-3.45.1.deb 6ea94c8a822551187cef0085073910eeae0a7525cfec4415171942c7019c68af \
+    https://archive.ubuntu.com/ubuntu/pool/main/s/sqlite3/libsqlite3-0_3.45.1-1ubuntu2_amd64.deb
+  mkdir -p "$root/sqlite-host-deps" "$root/native/include" "$root/native/lib"
+  dpkg-deb -x "$root/downloads/sqlite-dev-3.45.1.deb" "$root/sqlite-host-deps"
+  dpkg-deb -x "$root/downloads/sqlite-runtime-3.45.1.deb" "$root/sqlite-host-deps"
+  cp "$root/sqlite-host-deps/usr/include/sqlite3.h" "$root/native/include/"
+  cp -a "$root/sqlite-host-deps/usr/lib/x86_64-linux-gnu/"libsqlite3.so* "$root/native/lib/"
+fi
+# The development image supplies ICU and libcurl headers/libraries, on both
+# host architectures. These bindings are compiler dependencies only.
 fetch opam a59184447f881005dae70b2ae455c3a7e9549834a41c635c49a5a28235eca758 \
   https://github.com/ocaml/opam/releases/download/2.6.0/opam-2.6.0-x86_64-linux
 chmod +x "$root/downloads/opam"

@@ -1749,3 +1749,20 @@ The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
 6080/6080 x64 executions. Coverage is 302/391 pairs; source comment coverage
 is complete. Package resolution, driver/library, runners/corpus and final
 acceptance remain open.
+
+The complete hosted package resolver now renders ProgramTypes types, patterns,
+expressions and declarations, traverses dependencies, selects name prefixes,
+resolves names/hashes, and maintains the persistent SQLite response cache.
+Native compiler host bindings retain HTTP client cookies, redirects, timeout,
+charset aliases/BOM handling and replacement decoding; generated executables
+remain independent of these libraries. Sixteen local observations compare all
+787 renderer/cache/content cases per input, including Unicode, missing and
+unsupported cache statuses, quoted charset aliases, and warm hash fetches.
+The empty observation matches 67,248 complete canonical JSON bytes (SHA256
+4f091c5e20c6a09850aab5f818e58b959d652e6b300122abb6e5c975044c5145).
+FSI explicitly loads the deployed SQLite assemblies/native asset for its local
+cache oracle. Hosted network tests remain deferred by the accepted plan;
+malformed JSON parser diagnostics still require the final host-boundary audit.
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+6080/6080 x64 executions. Coverage is 303/391 pairs; source comment coverage
+is complete. Driver/library, runners/corpus and final acceptance remain open.

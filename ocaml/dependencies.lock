@@ -14,3 +14,7 @@ zarith.1.14
 
 # Native default-culture prefix checks use ICU 74.2, matching the frozen
 # Linux .NET oracle. The Noble development image installs libicu-dev.
+
+# Package response caches use SQLite 3.45.1 (Noble), with libcurl for HTTP.
+# Docker supplies libsqlite3-dev and libcurl4-openssl-dev. The rootless VM
+# bootstrap checksum-pins the SQLite development/runtime packages.

@@ -2,6 +2,11 @@
 #r "../../bin/DarkCompiler/Debug/net11.0/DarkCompiler.dll"
 #r "../../bin/Tests/Debug/net11.0/Tests.dll"
 
+#r "../../bin/DarkCompiler/Debug/net11.0/SQLitePCLRaw.core.dll"
+#r "../../bin/DarkCompiler/Debug/net11.0/SQLitePCLRaw.provider.e_sqlite3.dll"
+#r "../../bin/DarkCompiler/Debug/net11.0/SQLitePCLRaw.batteries_v2.dll"
+#r "../../bin/DarkCompiler/Debug/net11.0/Microsoft.Data.Sqlite.dll"
+
 open System
 open System.Globalization
 open System.Text.Json
@@ -6891,6 +6896,76 @@ let astPrettyObservation (source:string) =
     let declarations=mapNodes print [ [];[definition "A.f"];[definition "A.f";AST.ValueDef (AST.UncheckedValueDef ("A.v",literal));AST.ValueDef (AST.CheckedValueDef ("A.checked",AST.TString,literal));AST.TypeDef (AST.RecordDef ("A.R",[],[]));AST.TypeDef (AST.SumTypeDef ("A.S",[],[]));AST.TypeDef (AST.TypeAlias ("A.T",[],AST.TUnit))];[definition "A.f";definition "B.g"];[definition "A.f";AST.Expression ([],literal)];[definition source];[AST.ValueDef (AST.CheckedValueDef (source,AST.TString,literal))] ]
     tuple [precedence;caseTexts;letTexts;expressionTexts;typeTexts;declarations]
 
+let packageObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let flags=Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+    let kindType=typeof<PackageManager.Config>.Assembly.GetType("PackageManager+ItemKind")
+    let kind name=FSharpType.GetUnionCases(kindType,flags) |> Array.find (fun case->case.Name=name) |> fun case->FSharpValue.MakeUnion(case,[||],flags)
+    let fetchType=typeof<PackageManager.Config>.Assembly.GetType("PackageManager+FetchResult")
+    let fetched name fields=FSharpType.GetUnionCases(fetchType,flags) |> Array.find (fun case->case.Name=name) |> fun case->FSharpValue.MakeUnion(case,fields,flags)
+    let call name args=rcInternalCall<obj> "PackageManager" name args
+    let encodeObject (value:obj)=encode (value.GetType()) value
+    let cached source=
+        let path=IO.Path.Combine("TestResults/ocaml-migration",IO.Path.GetRandomFileName()+".sqlite3")
+        let config:PackageManager.Config={Server=PackageManager.defaultServer;CachePath=path}
+        try
+            let events=ResizeArray<JsonNode>()
+            let read key=events.Add(encodeObject (call "cacheRead" [|box config;box key|]))
+            let write key value=events.Add(encodeObject (call "cacheWrite" [|box config;box key;value|]))
+            read "key"
+            write "key" (fetched "Found" [|box source|])
+            read "key"
+            write "key" (fetched "Missing" [||])
+            read "key"
+            write source (fetched "Found" [|box "body\000λ"|])
+            read source
+            let connectionType=Reflection.Assembly.Load("Microsoft.Data.Sqlite").GetType("Microsoft.Data.Sqlite.SqliteConnection")
+            let connection=Activator.CreateInstance(connectionType,[|box ("Data Source="+path)|])
+            try
+                connectionType.GetMethod("Open",[||]).Invoke(connection,[||]) |> ignore
+                let command=connectionType.GetMethod("CreateCommand",[||]).Invoke(connection,[||])
+                try
+                    command.GetType().GetProperty("CommandText").SetValue(command,"INSERT INTO package_responses(cache_key,status,body) VALUES ('bad',500,'body')")
+                    command.GetType().GetMethod("ExecuteNonQuery",[||]).Invoke(command,[||]) |> ignore
+                finally (command:?>IDisposable).Dispose()
+            finally (connection:?>IDisposable).Dispose()
+            read "bad"
+            write "https://matter.darklang.com/cached" (fetched "Found" [|box source|])
+            write "https://matter.darklang.com/missing" (fetched "Missing" [||])
+            use client=new Net.Http.HttpClient()
+            events.Add(encodeObject (call "fetchByHash" [|box client;box config;box "/cached"|]))
+            events.Add(encodeObject (call "fetchByHash" [|box client;box config;box "/missing"|]))
+            JsonArray(Array.ofSeq events) :> JsonNode
+        finally if IO.File.Exists path then IO.File.Delete path
+    JsonNode.Parse(source).AsArray() |> Seq.map (fun case->
+        try
+            let text (name:string)=case[name].GetValue<string>()
+            let strings (name:string)=case[name].AsArray() |> Seq.map (fun value->value.GetValue<string>()) |> Seq.toList
+            let json ()=text "json"
+            let element ()=JsonDocument.Parse(json(),JsonDocumentOptions(MaxDepth=512)).RootElement
+            let value=
+                match text "op" with
+                | "renderType"|"renderLetPattern"|"renderMatchPattern"|"infixText"|"locationName"|"resolvedName" as name->call name [|box (element ())|] |> encodeObject
+                | "parseHashJson"|"dependencyRefs" as name->call name [|box (json ())|] |> encodeObject
+                | "renderExpr"->call "renderExpr" [|box (strings "params");box (text "self");box (element ())|] |> encodeObject
+                | "parseLocatedEntity"->call "parseLocatedEntity" [|kind (text "kind");box (text "hash");box (json ())|] |> encodeObject
+                | "renderEntity"->
+                    let entityType=typeof<PackageManager.Config>.Assembly.GetType("PackageManager+LocatedEntity")
+                    let entity=FSharpValue.MakeRecord(entityType,[|kind (text "kind");box (text "hash");box (text "location");box (json ())|],flags)
+                    call "renderEntity" [|entity|] |> encodeObject
+                | "candidatePrefixes"->let known=strings "known" in call "candidatePrefixes" [|box (fun name->List.contains name known);box (strings "names")|] |> encodeObject
+                | "defaults"->let config=PackageManager.defaultConfig () in tuple [enc PackageManager.defaultServer.AbsoluteUri;enc (PackageManager.defaultCachePath ());enc config.Server.AbsoluteUri;enc config.CachePath]
+                | "cache"->cached (text "text")
+                | "content"->
+                    let bytes=Convert.FromHexString(text "bytes")
+                    use content=new Net.Http.ByteArrayContent(bytes)
+                    if not (isNull case["charset"]) then content.Headers.TryAddWithoutValidation("Content-Type","application/json; charset="+text "charset") |> ignore
+                    enc (content.ReadAsStringAsync().GetAwaiter().GetResult())
+                | other->failwith ("Unknown package observation "+other)
+            value
+        with ex->enc (Error ex.Message:Result<unit,string>)) |> Seq.toArray |> fun cases->JsonArray(cases) :> JsonNode
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -6920,6 +6995,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "package-manager" -> packageObservation source
         | "ast-pretty" -> astPrettyObservation source
         | "compilation-session" -> sessionObservation source
         | "json-planning" -> jsonPlanningObservation source
