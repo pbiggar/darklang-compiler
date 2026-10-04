@@ -1007,3 +1007,16 @@ and unresolved branch templates are preserved. The warning-free build passes
 456/456 native checks. Coverage is 220/391 pairs. ARM64 encoding and backend
 resolution/emission are next; remaining tooling/ownership tests, full corpus
 checks and final acceptance remain open.
+
+Complete ARM64 encoding and symbolic literal collection are translated with
+explicit interfaces and original comments. Full observations match F# for
+87,232 concrete instructions through word/list/prepared-chunk entrypoints,
+12,096 rotated logical masks, 1,048 float-immediate selections, all 32 GP/FP
+register encodings, 616 label resolutions including offset overflow and missing
+labels, 11 chunk groups across pool/platform/leak configurations, six concrete
+streams, and 200 leak-counter placements. Local/cross-chunk fixups, duplicate
+labels, first-use literal order, signed zero/NaN bits, unresolved templates and
+exact diagnostics match. The warning-free build passes 456/456 native checks.
+Coverage is 222/391 committed pairs. x64 resolution verification and original
+backend tests are next; remaining emission/tooling/ownership tests, full corpus
+checks and final acceptance remain open.

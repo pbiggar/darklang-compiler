@@ -15,6 +15,7 @@ let rec requests () =
         | "written-source" -> Semantic_observation.SemanticJson.writtenSource source
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
+        | "arm64-encoding" -> Semantic_observation.ARMEncodingObservation.observe source
         | "x64-encoding" -> Semantic_observation.X64EncodingObservation.observe source
         | "machine-isa" -> Semantic_observation.MachineISAObservation.observe source
         | "mir-lir" -> Semantic_observation.MIRLIRObservation.observe source
