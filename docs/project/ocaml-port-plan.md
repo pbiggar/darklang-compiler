@@ -1217,3 +1217,21 @@ pointer writes, deletion and missing-file results. The build is warning-free
 and comment coverage is complete. Coverage is 259/391 pairs. Buffer lowering
 is next; remaining ownership/dispatch, full runners/corpus and final acceptance
 remain open.
+
+Complete ARM64 canonical buffer equality and binary/multi-part string
+concatenation are translated with interfaces and all 75 source comment lines.
+Whole results, instruction selections and exact structural operand diagnostics
+match F# across 99,432,230 canonical JSON bytes. Fixtures cover all four buffer
+kinds, every physical-register role and temporary alias, invalid operands,
+stack boundaries, both leak modes, ordered concat trees, UTF-8/NUL/surrogate
+literals and signed/nonfinite/unsigned-ID error formatting. The source observer
+uses explicitly typed reflection arguments so empty operand lists have the
+same runtime type as production calls.
+
+All 508 translated tests and 141 real ARM64 process executions pass. The 112
+new buffer checks execute distinct heap-buffer comparisons at word/byte
+boundaries, nullable pointers, binary and multi-part concatenation, Unicode,
+embedded NUL and byte-distinct normalized/non-normalized text. The build is
+warning-free and comment coverage is complete. Coverage is 260/391 pairs.
+Memory lowering is next; remaining ownership/dispatch, complete runners/corpus
+and final acceptance remain open.

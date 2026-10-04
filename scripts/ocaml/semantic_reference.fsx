@@ -3161,6 +3161,31 @@ let armFileEmissionObservation (source:string) =
      tuple [fullPaths;fullDestinations;writing;writingPaths;pointers;pointerRoles]
     in mapNodes (fun target -> mapNodes (fun enabled -> observeContext target enabled) [false;true]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64]
 
+let armBufferEmissionObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let fid value=AST.functionId (uint64 value)
+    let nth xs i=List.item i xs
+    let bitsFloat value=System.BitConverter.Int64BitsToDouble value
+    let context source target enabled : ARM64CodeGenTypes.CodeGenContext={Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled};SumShapeRegistry=Map.empty;RecordRegistry=Map.empty;RawSlotInitRetainTargets=None;ClosurePayloadSizes=Map.empty;ClosureCaptureTypes=Map.empty;FunctionNames=FunctionIdMap.empty;FunctionName=source;InstructionSite=source;StackSize=0;UsedCalleeSaved=[];UsedCalleeSavedF=[];HeapOverflowLabel=source;RecordLirOpExpansion=None}
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let buffer_emitCanonicalBufferEq (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:MemoryModel.CanonicalBufferKind) (arg2:LIR.Reg) (arg3:LIR.Operand) (arg4:LIR.Operand) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitBuffers" "emitCanonicalBufferEq" [|box arg0;box arg1;box arg2;box arg3;box arg4|]
+    let buffer_emitStringConcat (arg0:ARM64CodeGenTypes.CodeGenContext) (arg1:LIR.Reg) (arg2:LIR.Operand) (arg3:LIR.Operand) (arg4:LIR.Operand list) = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitBuffers" "emitStringConcat" [|box arg0;box arg1;box arg2;box arg3;box arg4|]
+    let target=ARM64.targetConfigFor Platform.LinuxARM64 in
+    let ctx=context source target false in
+    let gps=List.map (fun p -> LIR.Physical p) physical@List.map (fun n -> LIR.Virtual n) [-1;0;2147483647] in
+    let selected=List.map (fun p -> LIR.Physical p) [LIR.X8;LIR.X9;LIR.X11;LIR.X14;LIR.X19;LIR.SP]@[LIR.Virtual (-1)] in
+    let strings=List.map (fun text -> LIR.StringSymbol text) [source;"";"hé😀";"a\000b";String [|char 0xd800;char 97;char 0xdc00|]] in
+    let floats=[0.;-0.;0.1;infinity;Double.NegativeInfinity;nan;bitsFloat 1L;Double.MaxValue] in
+    let operands=List.map (fun reg -> LIR.Reg reg) gps@strings@List.map (fun offset -> LIR.StackSlot offset) [-2147483648;-4096;-4095;-257;-256;-1;0;255;256;4095;4096;2147483647]@List.map (fun n -> LIR.Imm n) [Int64.MinValue;-1L;0L;Int64.MaxValue]@List.collect (fun value -> [LIR.FloatImm value;LIR.FloatSymbol value]) floats@List.map (fun id -> LIR.FuncAddr (fid id)) [0L;1L;-1L] in
+    let kinds=[MemoryModel.Utf8String;MemoryModel.NullableUtf8String;MemoryModel.GraphemeCluster;MemoryModel.NullableGraphemeCluster] in
+    let equality=mapNodes (fun kind -> mapNodes (fun dest -> mapNodes (fun left -> mapNodes (fun right -> call (fun () -> buffer_emitCanonicalBufferEq ctx kind dest left right)) [left;LIR.Reg dest;LIR.Reg (LIR.Physical LIR.X8);LIR.Reg (LIR.Physical LIR.X9);LIR.StringSymbol source;LIR.Imm 0L]) operands) selected) kinds in
+    let equalityDestinations=mapNodes (fun dest -> mapNodes (fun kind -> mapNodes (fun left -> mapNodes (fun right -> call (fun () -> buffer_emitCanonicalBufferEq ctx kind dest left right)) [LIR.Reg dest;left;LIR.Reg (LIR.Physical LIR.X9);LIR.StringSymbol source]) [LIR.Reg dest;LIR.Reg (LIR.Physical LIR.X8);LIR.Reg (LIR.Physical LIR.X11);LIR.StringSymbol source]) kinds) gps in
+    let concat=mapNodes (fun enabled -> let ctx=context source target enabled in tuple [mapNodes (fun dest -> mapNodes (fun left -> mapNodes (fun right -> call (fun () -> buffer_emitStringConcat ctx dest left right [])) [left;LIR.Reg dest;LIR.Reg (LIR.Physical LIR.X9);LIR.Reg (LIR.Physical LIR.X11);LIR.StringSymbol source]) operands) selected;mapNodes (fun dest -> mapNodes (fun left -> mapNodes (fun right -> call (fun () -> buffer_emitStringConcat ctx dest left right [])) [left;LIR.Reg dest;LIR.Reg (LIR.Physical LIR.X14);LIR.StringSymbol source]) [LIR.Reg dest;LIR.Reg (LIR.Physical LIR.X9);LIR.Reg (LIR.Physical LIR.X11);LIR.StringSymbol source]) gps;mapNodes (fun dest -> mapNodes (fun operand -> tuple [call (fun () -> buffer_emitStringConcat ctx dest operand (LIR.StringSymbol source) [LIR.StringSymbol "tail"]);call (fun () -> buffer_emitStringConcat ctx dest (LIR.StringSymbol source) operand [LIR.StringSymbol "tail"]);call (fun () -> buffer_emitStringConcat ctx dest (LIR.StringSymbol source) (LIR.StringSymbol "") [operand]);call (fun () -> buffer_emitStringConcat ctx dest (LIR.StringSymbol source) (LIR.Reg dest) [LIR.StackSlot 0;operand;LIR.StringSymbol source])]) operands) selected;mapNodes (fun dest -> mapNodes (fun count -> call (fun () -> buffer_emitStringConcat ctx dest (LIR.StringSymbol source) (LIR.StringSymbol "é") (List.init count (fun n -> nth strings (n % List.length strings))))) [1;2;3;4;8;17;65]) gps]) [false;true] in
+    tuple [equality;equalityDestinations;concat]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -5409,6 +5434,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-buffer-emission" -> armBufferEmissionObservation source
         | "arm64-file-emission" -> armFileEmissionObservation source
         | "arm64-integer-emission" -> armIntegerEmissionObservation source
         | "arm64-emission-basics" -> armBasicEmissionObservation source

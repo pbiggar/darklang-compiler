@@ -1,4 +1,4 @@
-(* Execute real ARM64 argument retrieval and presentation effects. *)
+(* Execute real ARM64 argument, presentation, file and buffer effects. *)
 open Dark_compiler
 module S=Symbolic
 let image instructions=
@@ -78,10 +78,34 @@ let filesystemChecks ()=
   if Sys.file_exists path then failwith "FileDelete did not remove file";
   execute "1" true false (fun ctx -> instructions (ARM64EmitFiles.emitFileReadBlob ctx dest (LIR.StringSymbol missing)));
   11)
+let bufferChecks ()=
+ let target=ARM64.targetConfigFor Platform.LinuxARM64 in
+ let ctx=Semantic_observation.ARMPrintingObservation.context "buffer-check" target false in
+ let expect expected body=
+  let actual=runImage (image (ProcessLifecycle.generateHeapInit target @ body @ instructions (ARM64EmitInteger.emitExit ctx))) [] "" in
+  if actual<>expected then failwith (Printf.sprintf "buffer execution: expected %S, got %S" expected actual)
+ in
+ let counter=ref 0 in
+ let check expected body=incr counter;expect expected body in
+ let kinds=[MemoryModel.Utf8String;MemoryModel.NullableUtf8String;MemoryModel.GraphemeCluster;MemoryModel.NullableGraphemeCluster] in
+ List.iter (fun kind ->
+  List.iter (fun (left,right,equal) ->
+   let copies=instructions (ARM64EmitBuffers.emitStringConcat ctx (LIR.Physical LIR.X19) (LIR.StringSymbol left) (LIR.StringSymbol "") []) @ instructions (ARM64EmitBuffers.emitStringConcat ctx (LIR.Physical LIR.X20) (LIR.StringSymbol right) (LIR.StringSymbol "") []) in
+   check (if equal then "1" else "0") (copies @ instructions (ARM64EmitBuffers.emitCanonicalBufferEq ctx kind (LIR.Physical LIR.X21) (LIR.Reg (LIR.Physical LIR.X19)) (LIR.Reg (LIR.Physical LIR.X20))) @ [S.MOV_reg (S.X0,S.X21)] @ S.ofARM64List (PrintValues.generatePrintInt64NoNewline target)))
+   (List.concat_map (fun count -> let text=String.make count 'a' in [text,text,true;text,text^"b",false;text,"b"^text,false]) [0;1;7;8;9;16;17] @ ["hé😀","hé😀",true;"a\000b","a\000b",true;"é","é",false])) kinds;
+ List.iter (fun kind -> List.iter (fun (left,right,equal) ->
+  check (if equal then "1" else "0") (ARM64Operands.loadImmediate S.X19 left @ ARM64Operands.loadImmediate S.X20 right @ instructions (ARM64EmitBuffers.emitCanonicalBufferEq ctx kind (LIR.Physical LIR.X21) (LIR.Reg (LIR.Physical LIR.X19)) (LIR.Reg (LIR.Physical LIR.X20))) @ [S.MOV_reg (S.X0,S.X21)] @ S.ofARM64List (PrintValues.generatePrintInt64NoNewline target))) [0L,0L,true;0L,1L,false;1L,0L,false]) [MemoryModel.NullableUtf8String;MemoryModel.NullableGraphemeCluster];
+ List.iter (fun parts -> match parts with
+ | first::second::remaining ->
+  List.iter (fun dynamic ->
+   let setup,left,right=if dynamic then HeapAllocation.loadStringLiteralPointer S.X19 first @ HeapAllocation.loadStringLiteralPointer S.X20 second,LIR.Reg (LIR.Physical LIR.X19),LIR.Reg (LIR.Physical LIR.X20) else [],LIR.StringSymbol first,LIR.StringSymbol second in
+   check (String.concat "" parts) (setup @ instructions (ARM64EmitBuffers.emitStringConcat ctx (LIR.Physical LIR.X21) left right (List.map (fun part -> LIR.StringSymbol part) remaining)) @ instructions (ARM64EmitInteger.emitStdoutWrite ctx 0 (LIR.Reg (LIR.Physical LIR.X21)) false))) [false;true]
+ | [] | [_] -> failwith "concat execution fixture requires two parts") [["";""];["hé";"😀"];["a\000";"b"];["";"a";"";"é";"😀"];List.init 20 (fun n -> string_of_int n)];
+ !counter
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
  let effects=[Some "hé😀",false,0,"","hé😀";Some "",true,0,"","\n";None,false,1,"hello\nignored","hello";None,true,1,"hé😀\r\n","hé😀\n";None,false,1,"tail","tail";None,true,1,"","\n";None,true,2,"first\nsecond\n","first\nsecond\n";None,false,1,"a\000b\n","a\000b";None,false,1,"\n","";None,false,1,"a\rb\r\n","a\rb"] in
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
- let count=List.length argvCases+List.length effects+filesystemChecks () in
+ let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count
