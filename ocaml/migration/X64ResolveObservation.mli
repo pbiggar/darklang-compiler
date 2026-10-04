@@ -1,2 +1,1 @@
 val observe : string -> Yojson.Basic.t
-val bytes : bytes -> Yojson.Basic.t

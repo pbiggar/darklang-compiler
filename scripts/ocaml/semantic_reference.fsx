@@ -2334,6 +2334,50 @@ let armEncodingObservation (source:string) =
     let leakLabels=mapNodes (fun os -> mapNodes (fun offset -> mapNodes (fun codeSize -> mapNodes (fun (fpSize,spSize) -> enc (ARM64_Encoding.computeLeakCounterLabel os offset codeSize fpSize spSize)) [0,0;8,16;24,64;65536,65536]) [0;4;7;65535;Int32.MaxValue]) [0;120;792;65536;Int32.MaxValue]) [Platform.Linux;Platform.MacOS]
     tuple [instructions;logical;floats;helperRegs;labels;chunks;concrete;leakLabels]
 
+let x64ResolveObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let mapNodes action values=values |> List.map action |> list
+    let unionNode (typ:string) (case:string) fields : JsonNode =
+        let node=JsonObject()
+        node["type"] <- JsonValue.Create typ
+        node["case"] <- JsonValue.Create case
+        node["fields"] <- JsonArray(Array.ofList fields)
+        node
+    let attempt action=try unionNode "FSharpResult" "Ok" [action ()] with ex -> unionNode "FSharpResult" "Error" [enc ex.Message]
+    let labels=[source;"target";"_leak_count";X86_64.stringLiteralLabel source;"missing"]
+    let graphs label=[[];[X86_64.RET];[X86_64.Label label;X86_64.CALL label;X86_64.JMP label;X86_64.Jcc (X86_64.EQ,label);X86_64.LEA_rip (X86_64.R12,label);X86_64.RET];
+        [X86_64.CALL label;X86_64.MOV_imm32 (X86_64.RAX,42);X86_64.Label label;X86_64.RET];[X86_64.JMP "target";X86_64.Label label;X86_64.Jcc (X86_64.NP,"target");X86_64.Label "target";X86_64.LEA_rip (X86_64.R8,label);X86_64.CALL "unknown";X86_64.CALL "unknown";X86_64.RET];
+        [X86_64.Label label;X86_64.Label label;X86_64.LEA_index (X86_64.RAX,X86_64.RBX,X86_64.RSP,3,0)];[X86_64.CALL label;X86_64.CALL "missing";X86_64.JMP label;X86_64.LEA_rip (X86_64.RSI,X86_64.stringLiteralLabel source)];
+        [X86_64.LEA_rip (X86_64.RDI,X86_64.stringLiteralLabel "");X86_64.LEA_rip (X86_64.RAX,X86_64.stringLiteralLabel source);X86_64.LEA_rip (X86_64.R8,X86_64.stringLiteralLabel "é");X86_64.LEA_rip (X86_64.R8,X86_64.stringLiteralLabel source)];[X86_64.LEA_index (X86_64.RAX,X86_64.RBX,X86_64.RSP,3,0)];[X86_64.Label label;X86_64.LEA_index (X86_64.RAX,X86_64.RBP,X86_64.RCX,3,0)]]
+    let graphObservation label instrs =
+        let resolution () =
+            match X86_64_Resolve.resolveAndEncode instrs with
+            | Error msg -> enc (Error msg : Result<X86_64_Resolve.ResolveResult,string>)
+            | Ok resolvedValue ->
+                let pristine=Array.copy resolvedValue.MachineCode
+                let before=enc resolvedValue
+                let patch (dataLabels,codeOffset) =
+                    let input={resolvedValue with MachineCode=Array.copy pristine}
+                    let outcome=X86_64_Resolve.patchDataLabels input dataLabels codeOffset
+                    tuple [enc dataLabels;enc codeOffset;enc outcome;enc input.MachineCode]
+                let patches=mapNodes patch [Map.empty,0;Map.ofList [label,120;"target",65535;"unknown",128;"missing",0;X86_64.stringLiteralLabel source,256;X86_64.stringLiteralLabel "",264;X86_64.stringLiteralLabel "é",280],120;X86_64_Resolve.dataLabelOffsets 120 pristine.Length (X86_64_Resolve.collectStringPool instrs),120;Map.ofList [label,Int32.MinValue],Int32.MaxValue]
+                tuple [before;patches]
+        tuple [enc instrs;enc (X86_64_Resolve.collectStringPool instrs);attempt resolution]
+    let graphCases=mapNodes (fun label -> mapNodes (graphObservation label) (graphs label)) labels
+    let pools=[LiteralPool.emptyStringPool;LiteralPool.createStringPool [source];LiteralPool.createStringPool ["";"1234567";"12345678";"123456789";"é";source];X86_64_Resolve.collectStringPool [X86_64.LEA_rip (X86_64.RAX,X86_64.stringLiteralLabel source);X86_64.LEA_rip (X86_64.RDI,X86_64.stringLiteralLabel source)]]
+    let layoutObservation pool codeOffset codeSize =
+        let offsets=X86_64_Resolve.dataLabelOffsets codeOffset codeSize pool
+        tuple [enc offsets;mapNodes (fun label -> enc (X86_64_Resolve.requireLabelPosition label offsets)) labels]
+    let layouts=mapNodes (fun pool -> tuple [enc pool;mapNodes (fun codeOffset -> mapNodes (layoutObservation pool codeOffset) [0;1;7;8;65535;Int32.MaxValue]) [0;120;4096;Int32.MinValue;Int32.MaxValue]]) pools
+    let patchObservation offset value =
+        let bytes=Array.init 24 (fun n -> byte (n+64))
+        X86_64_Resolve.patchRel32 bytes offset value
+        enc (offset,value,bytes)
+    let patches=mapNodes (fun offset -> mapNodes (patchObservation offset) [Int32.MinValue;-65536;-129;-128;-1;0;1;127;128;65536;Int32.MaxValue]) [0;1;8;20]
+    tuple [graphCases;layouts;patches]
+
 let jsonOutputOptions = System.Text.Json.JsonSerializerOptions(MaxDepth=65536,Encoder=System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
 let anfScalarOptimization source =
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -4788,6 +4832,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "x64-resolve" -> x64ResolveObservation source
         | "arm64-encoding" -> armEncodingObservation source
         | "x64-encoding" -> x64EncodingObservation source
         | "machine-isa" -> machineISAObservation source

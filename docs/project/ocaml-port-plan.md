@@ -1020,3 +1020,15 @@ exact diagnostics match. The warning-free build passes 456/456 native checks.
 Coverage is 222/391 committed pairs. x64 resolution verification and original
 backend tests are next; remaining emission/tooling/ownership tests, full corpus
 checks and final acceptance remain open.
+
+Complete x64 label resolution and deferred data patching are translated with
+explicit interfaces and original comments. Full records, bytes and diagnostics
+match F# for 50 instruction streams (forward/backward branches, every fixup
+kind, duplicate/undefined labels, repeated references and invalid instruction
+ordering), deferred patches including partial mutation on errors, 120 data
+layouts with 600 required-label queries, and 44 signed rel32 byte patches.
+First-use string collection, the canonical empty buffer, fixup order, alias
+labels, integer overflow and counter alignment are preserved. The warning-free
+build passes 456/456 native checks. Coverage is 223/391 pairs. Original ARM64
+encoding tests and their DSL parser are next; remaining emission/tooling/
+ownership tests, full corpus checks and final acceptance remain open.
