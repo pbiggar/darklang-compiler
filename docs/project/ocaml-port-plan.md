@@ -1355,3 +1355,18 @@ key/value buffers, shared/static buffers, repeated collision entries, generic
 payloads, nested list/dict/closure/stream values and specialized tuple/sum values.
 Frozen comment coverage is complete. Coverage is 268/391 pairs. Instruction-level
 RC emission, remaining dispatch/runners/corpus and final acceptance remain open.
+
+Complete ARM64 reference-count instruction emission is translated with its
+interface and every original comment. Full results match F# across 58,012,318
+identical JSON bytes (SHA256
+c5cc09d294d54777148f785560cac2565ce4cde478ce7d29367f36fc8d19c630): all GP
+and virtual-register diagnostics, signed payload-size boundaries, every RC
+kind, missing and structural metadata, nested fixed/boxed/recursive payloads,
+caller-owned sum behavior, dynamic-buffer scratch aliases and tagged-int guards,
+both targets and leak settings. The warning-free build passes 508/508 unit
+checks and 408/408 ARM64 executions. The 84 new execution checks cover generic
+root lifetime/free-list boundaries, inline field traversal with scratch sources,
+nested roots, single-payload sum ownership, shared/static buffers, tagged/null
+integers and list/dict/closure/stream helper calls. Frozen comment coverage is
+complete. Coverage is 269/391 pairs. Exhaustive instruction dispatch and the
+remaining function/program emission, runners/corpus and final acceptance remain.
