@@ -920,3 +920,15 @@
  (action (with-stdout-to %{targets}
   (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/x64/runtime/FieldReferenceCounts.mli})
    (echo "val genFieldReleases : (AST.semanticType -> string) -> bool -> X64CodeGenTypes.funcCtx -> MemoryModel.rcFieldRelease list -> X86_64.instr list\nval genBoxedSumVariantFieldReleases : (AST.semanticType -> string) -> bool -> X64CodeGenTypes.funcCtx -> MemoryModel.rcBoxedSumVariantRelease list -> X86_64.instr list\nval genFixedBlockFieldReleases : (AST.semanticType -> string) -> bool -> X64CodeGenTypes.funcCtx -> MemoryModel.rcReleasePlan option -> X86_64.instr list\nval genFixedBlockFieldRelease : (AST.semanticType -> string) -> bool -> X64CodeGenTypes.funcCtx -> int -> int -> MemoryModel.rcReleasePlan -> X86_64.instr list\nval genRefCountDecGenericWithPlanUsing : (AST.semanticType -> string) -> bool -> X64CodeGenTypes.funcCtx -> X86_64.reg -> int -> MemoryModel.rcReleasePlan option -> X86_64.instr list\nval genRefCountDecStream : X64CodeGenTypes.funcCtx -> X86_64.reg -> MemoryModel.rcMetadata option -> X86_64.instr list\n")))))
+
+(rule
+ (targets InstrumentedX64ListReferenceCounts.ml)
+ (deps ../lib/backend/x64/runtime/X64ListReferenceCounts.ml)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/x64/runtime/X64ListReferenceCounts.ml})))))
+(rule
+ (targets InstrumentedX64ListReferenceCounts.mli)
+ (deps ../lib/backend/x64/runtime/X64ListReferenceCounts.mli)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/x64/runtime/X64ListReferenceCounts.mli})
+   (echo "val generateListRefCountDecHelperWith : string -> bool -> LIR.recordRegistry -> MemoryModel.rcSumShapeRegistry -> listLeafPayloadRelease -> X86_64.instr list\nval listLeafPayloadNeedsDictDecHelper : listLeafPayloadRelease -> bool\nval listLeafPayloadNeedsDictListValueDecHelper : listLeafPayloadRelease -> bool\nval listLeafPayloadNeedsClosureDecHelper : listLeafPayloadRelease -> bool\n")))))

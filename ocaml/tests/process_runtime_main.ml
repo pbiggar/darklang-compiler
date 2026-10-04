@@ -618,6 +618,55 @@ let x64ClosureReferenceChecks ()=
  check ([X.XOR_reg (X.RAX,X.RAX);X.CALL X64ReleaseSelection.closureRefCountIncHelperLabel;X.XOR_reg (X.RAX,X.RAX);X.CALL X64ReleaseSelection.closureRefCountDecHelperLabel]) (helpers 8 []);
  !total
 [@@warning "-42"]
+let x64ListReferenceChecks ()=
+ let module X=X86_64 in
+ let module E=Semantic_observation.InstrumentedX64ListReferenceCounts in
+ let total=ref 0 in let checked=function Ok value->value|Error error->failwith error in
+ let check body helpers=
+  let code=[X.Label "_start"]@body@X64Operands.genPrintChars ['P']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@[X.Label "failed"]@X64Operands.genPrintChars ['F']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@helpers@[X.Label "closed_fn";X.RET] in
+  let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0 in
+  let actual=runImageOn "/opt/dcb/qemu/qemu-x86_64" binary [] "" in
+  if actual<>"P" then failwith (Printf.sprintf "x64 list ownership failed at case %d" !total);
+  incr total in
+ let compare reg expected=X64Operands.loadImm64 X.RCX expected@[X.CMP_reg (reg,X.RCX);X.Jcc (X.NE,"failed")] in
+ let setup=[X.SUB_imm (X.RSP,4096l);X.MOV_reg (X.RBP,X.RSP);X.MOV_reg (X.R15,X.RSP);X.LEA (X.R14,X.RSP,4096l);X.XOR_reg (X.RCX,X.RCX)]@List.init 32 (fun index->X.MOV_store (X.RBP,Int32.of_int (index*8),X.RCX))@[X.MOV_imm32 (X.R12,123l);X.MOV_imm32 (X.R13,456l)] in
+ let node offset size count value= X64Operands.loadImm64 X.RCX value@[X.MOV_store (X.RBP,Int32.of_int offset,X.RCX)]@X64Operands.loadImm64 X.RCX count@[X.MOV_store (X.RBP,Int32.of_int (offset+size),X.RCX)] in
+ let pointer reg offset tag=[X.LEA (reg,X.RBP,Int32.of_int offset);X.ADD_imm (reg,Int32.of_int tag)] in
+ let preserves=compare X.R12 123L@compare X.R13 456L in
+ let finish=[X.ADD_imm (X.RSP,4096l)] in
+ let helper leaf=E.generateListRefCountDecHelperWith "list_helper" false StringOrder.Map.empty StringOrder.Map.empty leaf in
+ List.iter (fun tag->List.iter (fun count->
+  let size=if tag=1 then 32 else if tag=3 then 24 else 8 in
+  let expected=if tag>=1 && tag<=3 then Int64.succ count else count in
+  check (setup@node 400 size count 0L@pointer X.RAX 400 tag@[X.CALL X64ListReferenceCounts.listRefCountIncHelperLabel;X.MOV_load (X.RAX,X.RBP,Int32.of_int (400+size))]@compare X.RAX expected@finish) (X64ListReferenceCounts.generateListRefCountIncHelper ())) [0L;1L;Int64.max_int]) [0;1;2;3;4;5;6;7];
+ List.iter (fun (tag,size)->List.iter (fun count->
+  let children=if tag=1 then [16;24] else if tag=3 then [8;16] else [] in
+  let zeroes=[X.XOR_reg (X.RCX,X.RCX)]@List.map (fun offset->X.MOV_store (X.RBP,Int32.of_int (400+offset),X.RCX)) children in
+  let free=[X.MOV_load (X.RAX,X.R15,Int32.of_int size)]@(if count=1L then [X.LEA (X.RCX,X.RBP,400l);X.CMP_reg (X.RAX,X.RCX);X.Jcc (X.NE,"failed")] else compare X.RAX 0L) in
+  check (setup@node 400 size count 0L@zeroes@pointer X.RAX 400 tag@[X.CALL "list_helper";X.MOV_load (X.RAX,X.RBP,Int32.of_int (400+size))]@compare X.RAX (Int64.pred count)@free@preserves@finish) (helper E.NoLeafPayloadRelease)) [0L;1L;2L]) [1,32;2,8;3,24];
+ List.iter (fun (kind,count)->
+  let value=if kind=0 then [X.XOR_reg (X.RCX,X.RCX)] else if kind=1 then [X.MOV_imm32 (X.RCX,1l)] else [X.LEA (X.RCX,X.RBP,800l)] in
+  List.iter (fun leaf->
+   let expected=if kind<2 || count=Int64.max_int then count else Int64.pred count in
+   check (setup@node 400 8 1L 0L@X64Operands.loadImm64 X.RAX count@[X.MOV_store (X.RBP,800l,X.RAX)]@value@[X.MOV_store (X.RBP,400l,X.RCX)]@pointer X.RAX 400 2@[X.CALL "list_helper";X.MOV_load (X.RAX,X.RBP,800l)]@compare X.RAX expected@preserves@finish) (helper leaf)) (if kind=1 then [E.DynamicIntLeafPayload] else [E.DynamicBufferLeafPayload;E.DynamicIntLeafPayload])) [0,1L;1,3L;2,1L;2,3L;2,Int64.max_int];
+ List.iter (fun tag->
+  let size=if tag=1 then 32 else 24 in
+  let childOffsets=if tag=1 then [16;24] else [8;16] in
+  let children=List.mapi (fun index offset->node (600+index*40) 8 1L 0L@pointer X.RCX (600+index*40) 2@[X.MOV_store (X.RBP,Int32.of_int (400+offset),X.RCX)]) childOffsets |> List.concat in
+  check (setup@node 400 size 1L 0L@children@pointer X.RAX 400 tag@[X.CALL "list_helper";X.MOV_load (X.RAX,X.RBP,608l)]@compare X.RAX 0L@[X.MOV_load (X.RAX,X.RBP,648l)]@compare X.RAX 0L@preserves@finish) (helper E.NoLeafPayloadRelease)) [1;3];
+ List.iter (fun value->check (setup@X64Operands.loadImm64 X.RAX value@[X.CALL "list_helper"]@preserves@finish) (helper E.NoLeafPayloadRelease)) [0L;1L;2L;3L;4L;5L;6L;7L];
+ List.iter (fun where->let addr=if where=0 then [X.LEA (X.RAX,X.R15,-8l)] else [X.MOV_reg (X.RAX,X.R14)] in
+  check (setup@addr@[X.ADD_imm (X.RAX,2l);X.CALL "list_helper"]@preserves@finish) (helper E.NoLeafPayloadRelease)) [0;1];
+ let tuplePlan=MemoryModel.RootRelease (16,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (16,[])) in
+ check (setup@node 400 8 1L 0L@node 800 16 1L 0L@pointer X.RCX 800 0@[X.MOV_store (X.RBP,400l,X.RCX)]@pointer X.RAX 400 2@[X.CALL "list_helper";X.MOV_load (X.RAX,X.RBP,816l)]@compare X.RAX 0L@preserves@finish) (helper (E.FixedBlockPlannedLeafPayload (16,tuplePlan)));
+ let nested=helper E.ListLeafPayload in
+ check (setup@node 400 8 1L 0L@node 800 8 1L 0L@pointer X.RCX 800 2@[X.MOV_store (X.RBP,400l,X.RCX)]@pointer X.RAX 400 2@[X.CALL "list_helper";X.MOV_load (X.RAX,X.RBP,808l)]@compare X.RAX 0L@preserves@finish) nested;
+ let closureSizes=StringOrder.Map.singleton "closed_fn" 8 in
+ let closure=X64ClosureReferenceCounts.generateClosureRefCountDecHelper false StringOrder.Map.empty StringOrder.Map.empty closureSizes StringOrder.Map.empty in
+ check (setup@node 400 8 1L 0L@node 800 8 1L 0L@[X.LEA_rip (X.RCX,"closed_fn");X.MOV_store (X.RBP,800l,X.RCX)]@pointer X.RCX 800 0@[X.MOV_store (X.RBP,400l,X.RCX)]@pointer X.RAX 400 2@[X.CALL "list_helper";X.MOV_load (X.RAX,X.RBP,808l)]@compare X.RAX 0L@preserves@finish) (helper E.ClosureLeafPayload@closure);
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -625,4 +674,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count

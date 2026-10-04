@@ -3928,6 +3928,37 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let x64ListReferenceObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call encoder f=try tuple [enc false;encoder (f ())] with ex -> tuple [enc true;enc ex.Message]
+    let invoke name args=rcInternalCall "X64ListReferenceCounts" name args
+    let leafType=typeof<LIR.Instr>.Assembly.GetType("X64ListReferenceCounts+ListLeafPayloadRelease")
+    let flags=Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+    let leaf name fields=FSharpValue.MakeUnion(FSharpType.GetUnionCases(leafType,flags) |> Array.find (fun case->case.Name=name),fields,flags)
+    let kinds=[MemoryModel.GenericHeap;MemoryModel.StreamHeap;MemoryModel.TaggedList;MemoryModel.DictHeap;MemoryModel.ClosureHeap] in
+    let operations=[MemoryModel.DynamicStringBuffer;MemoryModel.DynamicBlobBuffer;MemoryModel.DynamicIntBuffer]@List.collect (fun kind -> List.map (fun size -> MemoryModel.FixedSizeRoot (size,kind)) [-2147483648;-1;0;8;2147483647]) kinds in
+    let simple=[MemoryModel.NoReleasePlan;MemoryModel.RecursiveRelease (AST.TRecord (source,[]))]@List.map (fun operation -> MemoryModel.DynamicBufferRelease operation) operations@List.collect (fun kind -> [MemoryModel.RootRelease (8,kind,MemoryModel.NoPayloadRelease);MemoryModel.RootRelease (8,kind,MemoryModel.FixedBlockPayloadRelease (8,[]));MemoryModel.RootRelease (8,kind,MemoryModel.BoxedSumPayloadRelease (8,[],[]));MemoryModel.RootRelease (8,kind,MemoryModel.ClosurePayloadRelease [])]) kinds in
+    let listPlans=List.map (fun plan -> MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease plan)) simple in
+    let dictPlans=List.collect (fun value -> [MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,value));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer,value));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (value,MemoryModel.NoReleasePlan))]) (simple@listPlans) in
+    let fields=[MemoryModel.FieldRelease (0,MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer);MemoryModel.FieldRelease (8,MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease MemoryModel.NoReleasePlan));MemoryModel.FieldRelease (16,MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,MemoryModel.NoReleasePlan)))] in
+    let rich=List.collect (fun size -> List.collect (fun fields -> [MemoryModel.RootRelease (size,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (size,fields));MemoryModel.RootRelease (size,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (size,fields,[{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=fields}]))]) [fields;List.rev fields;[MemoryModel.FieldRelease (8,MemoryModel.NoReleasePlan)]@fields;fields@[MemoryModel.FieldRelease (8,MemoryModel.NoReleasePlan)];[MemoryModel.FieldRelease (8,MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer)];[]]) [8;16;24;256] in
+    let plans=simple@rich in
+
+    let planned=List.mapi (fun index p->"planned-"+string index,(16,p)) plans |> Map.ofList
+    let leaves=List.map (fun name->leaf name [||]) ["NoLeafPayloadRelease";"ListLeafPayload";"ClosureLeafPayload";"DictLeafPayload";"DictListLeafPayload";"DynamicBufferLeafPayload";"DynamicIntLeafPayload"]@[leaf "RecursivePlannedLeafPayload" [|box (AST.TRecord (source,[]))|]]@List.collect (fun p->[leaf "FixedBlockPlannedLeafPayload" [|box 16;box p|];leaf "PlannedListLeafPayload" [|box p|];leaf "PlannedDictLeafPayload" [|box p|]]) plans
+    let specs=typeof<LIR.Instr>.Assembly.GetType("X64ListReferenceCounts").GetProperty("listRefCountDecHelperSpecs",Reflection.BindingFlags.Static ||| flags).GetValue(null)
+    let declarations=encode (specs.GetType()) specs
+    let labels=(specs :?> System.Collections.IEnumerable) |> Seq.cast<obj> |> Seq.map (fun entry->FSharpValue.GetTupleFields(entry).[0] :?> string) |> Seq.toList
+    let direct=mapNodes (fun enabled->mapNodes (fun value->
+        let emitted=call enc (fun ()->invoke "generateListRefCountDecHelperWith" [|box source;box enabled;box (Map.empty:LIR.RecordRegistry);box (Map.empty:MemoryModel.RcSumShapeRegistry);value|] : X86_64.Instr list)
+        tuple [emitted;call enc (fun ()->invoke "listLeafPayloadNeedsDictDecHelper" [|value|] : bool);call enc (fun ()->invoke "listLeafPayloadNeedsDictListValueDecHelper" [|value|] : bool);call enc (fun ()->invoke "listLeafPayloadNeedsClosureDecHelper" [|value|] : bool)]) leaves) [false;true]
+    let selections=mapNodes (fun mask->let needed=labels |> List.indexed |> List.choose (fun (index,label)->if mask &&& (1 <<< index)<>0 then Some label else None) |> Set.ofList in tuple [call enc (fun ()->invoke "generateNeededListRefCountDecHelpers" [|box needed;box (Map.empty:Map<string,int*MemoryModel.RcReleasePlan>);box false;box (Map.empty:LIR.RecordRegistry);box (Map.empty:MemoryModel.RcSumShapeRegistry)|] : X86_64.Instr list);enc (invoke "selectedListRefCountDecHelpersNeedDictDecHelper" [|box needed|] : bool);enc (invoke "selectedListRefCountDecHelpersNeedDictListValueDecHelper" [|box needed|] : bool);enc (invoke "selectedListRefCountDecHelpersNeedClosureDecHelper" [|box needed|] : bool)]) [0..127]
+    let plannedCases=mapNodes (fun enabled->mapNodes (fun names->call enc (fun ()->invoke "generateNeededListRefCountDecHelpers" [|box (Set.ofList names);box planned;box enabled;box (Map.empty:LIR.RecordRegistry);box (Map.empty:MemoryModel.RcSumShapeRegistry)|] : X86_64.Instr list)) [[];["missing"];Map.toList planned |> List.map fst;(Map.toList planned |> List.map fst)@labels]) [false;true]
+    let incLabel=typeof<LIR.Instr>.Assembly.GetType("X64ListReferenceCounts").GetProperty("listRefCountIncHelperLabel",Reflection.BindingFlags.Static ||| flags).GetValue(null) :?> string
+    tuple [declarations;direct;selections;plannedCases;enc incLabel;call enc (fun ()->invoke "generateListRefCountIncHelper" [||] : X86_64.Instr list)]
+
 let x64ClosureReferenceObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -6132,6 +6163,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "x64-list-reference" -> x64ListReferenceObservation source
         | "x64-closure-reference" -> x64ClosureReferenceObservation source
         | "x64-field-reference" -> x64FieldReferenceObservation source
         | "x64-release-selection" -> x64ReleaseSelectionObservation source

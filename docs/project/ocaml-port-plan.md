@@ -1520,3 +1520,18 @@ The 51 new x64 cases exercise closure retains, refcount wraparound, null roots,
 shared/unique closures, static/tagged/dynamic captures, nested fixed blocks
 and free-list boundaries. Coverage is 283/391 pairs; comment coverage is complete.
 Remaining x64 modules, driver/library, runners/corpus and final acceptance remain.
+
+Complete x64 tagged-list retain and iterative destruction are translated with
+full interfaces, every payload-release variant and all source comments. Full
+instructions, typed helper declarations, payload dependency predicates and all
+128 static helper subsets match F# across 82,908,054 identical JSON bytes
+(SHA256 ab6613096800ab11320aec29932d4dcf7bd2318db19541a403e540c06288b742).
+Cases also cover planned fixed/list/dict/recursive payload helpers, nested
+release plans, leak settings and missing/selected planned dependencies. The
+warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+731/731 x64 executions. The 57 new x64 cases execute all tag boundaries,
+refcount wraparound, null/shared/unique nodes, heap bounds, iterative child
+traversal, static/tagged/dynamic payloads, nested list/closure/fixed payloads
+and callee-saved register restoration. Coverage is 284/391 pairs; source comment
+coverage is complete. Remaining x64 modules, driver/library, runners/corpus and
+final acceptance remain open.
