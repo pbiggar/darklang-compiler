@@ -1862,3 +1862,16 @@ All observations match. The warning-free build passes 508/508 unit checks,
 519/519 ARM64 executions and 6080/6080 x64 executions. Coverage is 309/391
 pairs; all reference comments are preserved. Remaining driver/library,
 runners/corpus and final acceptance remain open.
+
+Complete package catalog materialization now parses source units with entry
+ownership validation, finds direct and generic package lookup reachability,
+and emits concrete evaluator, runtime-type lookup and branch/location functions.
+Generated checked bodies and public symbol catalogs match F# on all 16 probes
+across nine reachable/no-op programs and eight catalogs. Fixtures exercise
+multiple result types, first-seen grouping and branch order, parameterized
+runtime types, unavailable/failed values, duplicate hashes and invalid evaluator
+values. Source ownership, entry requirements and malformed source also match.
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+6080/6080 x64 executions. Coverage is 310/391 pairs; all reference comments are
+preserved. Remaining driver/library, runners/corpus and final acceptance remain
+open.

@@ -7258,6 +7258,47 @@ let preambleAnalysisObservation (source:string) =
             let expected=CheckingTypes.mergeTypeCheckEnv env (WrittenChecking.typeCheckEnvironment analysis.TypedAST)
             tuple [driverProgram analysis.TypedAST;enc (analysis.TypeCheckEnv=expected);enc (analysis.GenericFuncDefs=SpecializationIdentity.extractGenericFuncDefs analysis.TypedAST);enc analysis.WrittenEnvironment.IsSome;outcome (fun (_,program,_)->driverProgram program) (WrittenParsing.parse LibParser.Validation.Script "()" |> Result.bind (fun parsed->WrittenChecking.checkSourceUnitsWithBase analysis.WrittenEnvironment allowInternal false [parsed]))]) (PreambleAnalysis.analyzePreamble allowInternal stdlib input)) inputs) [false;true]) [None;Some written]))
 
+let packageCatalogObservation (source:string) =
+    let enc value=closureAnalysisEncode value
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let list f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let outcome f value=match value with Error error->enc (Error error:Result<unit,string>)|Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|f value|]);node :> JsonNode
+    let attempt f action=outcome f (try action () with ex->Error ex.Message)
+    let hashName="Darklang.LanguageTools.ProgramTypes.Hash"
+    let locationName="Darklang.LanguageTools.ProgramTypes.PackageLocation"
+    let runtimeName="Darklang.LanguageTools.RuntimeTypes.ValueType"
+    let optionName="Darklang.Stdlib.Option.Option"
+    let hashType=AST.TSum(hashName,[])
+    let runtimeType=AST.TSum(runtimeName,[])
+    let optionType typ=AST.TSum(optionName,[typ])
+    let fn name typeParams params returnType body=AST.FunctionDef {Name=name;TypeParams=typeParams;Params=AST.NonEmptyList.fromList params;ReturnType=returnType;Body=body;Recursion=None}
+    let call name args=AST.applyNamed name (AST.NonEmptyList.fromList args)
+    let typedCall name typ args=AST.applyNamedWithTypes name [typ] (AST.NonEmptyList.fromList args)
+    let constructor name case fields=AST.Constructor(AST.UnresolvedConstructor(Some name),case,fields)
+    let hash value=constructor hashName "Hash" [AST.StringLiteral value]
+    let baseProgram=AST.Program [AST.TypeDef(AST.SumTypeDef(hashName,[],[{Name="Hash";Fields=[AST.TString]}]));AST.TypeDef(AST.RecordDef(locationName,[],["owner",AST.TString;"modules",AST.TList AST.TString;"name",AST.TString]));AST.TypeDef(AST.SumTypeDef(runtimeName,[],[{Name="Dummy";Fields=[]}]));AST.TypeDef(AST.SumTypeDef(optionName,["a"],[{Name="None";Fields=[]};{Name="Some";Fields=[AST.TVar "a"]}]));fn "Darklang.LanguageTools.ProgramTypes.hashToString" [] ["value",hashType] AST.TString (AST.StringLiteral "hash");fn "Darklang.LanguageTools.RuntimeTypes.__isCustomTypeWithNoTypeArguments" [] ["value",runtimeType;"hash",AST.TString] AST.TBool (AST.BoolLiteral false);fn "wrap" ["a"] ["hash",hashType] (optionType(AST.TVar "a")) (typedCall "Builtin.pmEvaluateValue" (AST.TVar "a") [AST.Var "hash"]);AST.Expression([],AST.UnitLiteral)]
+    let fixture=TypeChecking.checkProgramWithEnv baseProgram |> Result.mapError CheckingDiagnostics.typeErrorToString
+    let catalogs=
+        let location:CompilationContexts.CatalogPackageLocation={VisibleInBranches=["branch";"other";"branch"];Owner=source;Modules=["A";"B"];Name="value"}
+        let entry valueHash runtimeHash arguments resultType state:CompilationContexts.PackageValueCatalogEntry={ValueHash=valueHash;RuntimeType={Hash=runtimeHash;TypeArguments=arguments};Locations=[location;{location with VisibleInBranches=["branch"];Name="second"}];Evaluator={ResultType=resultType;State=state}}
+        let a=entry "a" "r1" [] AST.TInt64 (CompilationContexts.Available(AST.Int64Literal 7L))
+        let b=entry "b" "r1" [] AST.TInt64 CompilationContexts.Unavailable
+        let c=entry "c" "r2" [] AST.TString (CompilationContexts.Available(AST.StringLiteral source))
+        [[];[a];[a;b;c];[c;b;a];[a;{b with Evaluator={ResultType=AST.TInt64;State=CompilationContexts.EvaluationFailure}}];[a;{a with Locations=[]}];[{a with Evaluator={ResultType=AST.TInt64;State=CompilationContexts.Available(AST.StringLiteral "wrong")}}];[entry "generic" "r1" [{Hash="arg";TypeArguments=[]}] AST.TInt64 (CompilationContexts.Available(AST.Int64Literal 9L));a;c]] |> List.map CompilationContexts.PackageValueCatalog
+    let catalogOutputs=attempt id (fun ()->fixture |> Result.map (fun (_,baseProgram,env)->
+        let symbols=CheckedAST.programSymbols baseProgram
+        let typeDefs,functions,_=AST_to_ANF.splitTopLevels baseProgram |> Result.defaultWith failwith
+        let registries=AST_to_ANF.buildRegistries symbols env.ModuleRegistry typeDefs (AST_to_ANF.buildAliasRegistry typeDefs) functions
+        let context=rcInternalCall<CompilationContexts.PipelineContext> "CompilationContexts" "buildContext" [|box Platform.LinuxX86_64;box symbols;box env;box (Map.empty:Map<string,CompilationContexts.CheckedValueArtifact>);box (SpecializationIdentity.extractGenericFuncDefs baseProgram);box (Map.empty:SpecializationIdentity.SpecRegistry);box registries;box (rcInternalCall<Set<string>> "CompilationContexts" "buildBaseFuncNames" [|box registries|]);box (rcInternalCall<FunctionIdMap<string*AST.SemanticType>> "SourcePreparation" "extractReturnTypes" [|box registries.FuncReg|])|]
+        let valueType=constructor runtimeName "Dummy" []
+        let evalInt=typedCall "Builtin.pmEvaluateValue" AST.TInt64 [hash "a"]
+        let evalString=typedCall "Builtin.pmEvaluateValue" AST.TString [hash "c"]
+        let inputs=[AST.UnitLiteral;call "Builtin.pmFindValuesByValueType" [valueType];call "Builtin.pmGetLocationsByValue" [AST.StringLiteral "branch";hash "a"];evalInt;evalString;AST.Let(AST.LPVariable "first",evalInt,evalString);AST.Let(AST.LPVariable "found",call "Builtin.pmFindValuesByValueType" [valueType],evalInt);AST.Let(AST.LPVariable "locations",call "Builtin.pmGetLocationsByValue" [AST.StringLiteral "branch";hash "a"],evalInt);typedCall "wrap" AST.TInt64 [hash "a"]]
+        list (fun expr->let checked=TypeChecking.checkProgramWithBaseEnv env (AST.Program[AST.Expression([],expr)]) |> Result.mapError CheckingDiagnostics.typeErrorToString in outcome (fun (_,program,_)->tuple [driverProgram program;list (fun catalog->attempt driverProgram (fun ()->rcInternalCall<Result<CheckedAST.Program,string>> "PackageCatalog" "materializePackageValueCatalog" [|box context;box AST.defaultWarningSettings;box catalog;box program|])) catalogs]) checked) inputs))
+    let unit name purpose text:CompilationContexts.SourceUnit={Name=name;Purpose=purpose;Source=text}
+    let parseOutputs=list (fun allowInternal->list (fun requireEntry->list (fun units->outcome (fun parsed->outcome (fun (_,program,_)->driverProgram program) (WrittenChecking.checkSourceUnitsWithBase None allowInternal requireEntry parsed)) (PackageCatalog.parseWrittenSourceProgram allowInternal requireEntry (AST.NonEmptyList.fromList units))) [[unit "input.dark" NameSyntax.SourceUnitPurpose.Executable source];[unit "library.dark" NameSyntax.SourceUnitPurpose.Library "let f (x: Int64) : Int64 = x";unit "main.dark" NameSyntax.SourceUnitPurpose.Executable "f 1L"];[unit "a.dark" NameSyntax.SourceUnitPurpose.Executable "()";unit "b.dark" NameSyntax.SourceUnitPurpose.Executable "()"];[unit "bad name" NameSyntax.SourceUnitPurpose.Executable "()"];[unit "library.dark" NameSyntax.SourceUnitPurpose.Library "1L"]]) [false;true]) [false;true]
+    tuple [catalogOutputs;parseOutputs]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7287,6 +7328,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "package-catalog" -> packageCatalogObservation source
         | "preamble-analysis" -> preambleAnalysisObservation source
         | "native-pipeline" -> nativePipelineObservation source
         | "source-preparation" -> sourcePreparationObservation source

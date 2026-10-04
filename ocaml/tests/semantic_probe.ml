@@ -16,6 +16,7 @@ let rec requests () =
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
         | "macho-images" -> Semantic_observation.MachOObservation.observe source
+        | "package-catalog" -> Semantic_observation.PackageCatalogObservation.observe source
         | "preamble-analysis" -> Semantic_observation.PreambleAnalysisObservation.observe source
         | "native-pipeline" -> Semantic_observation.NativePipelineObservation.observe source
         | "source-preparation" -> Semantic_observation.SourcePreparationObservation.observe source
