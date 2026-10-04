@@ -6633,6 +6633,62 @@ let cacheIdentityObservation (source:string) =
     let overlays=rcInternalCall<MIR.VariantRegistry*MIR.RecordRegistry> "CompilationCacheIdentity" "projectMirRegistryOverlay" [|box baseVariants;box baseRecords;box variants;box localRecords|]
     tuple [references;allocated;versionMatrix;mapNodes summary summaries;summaryMatrix;merged;callAware;groupMatrix;armGroupMatrix;chunkMatrix;chunkGroupMatrix;objectMatrix;mirMatrix;anfMatrix;configMatrix;helperMatrix;enc overlays]
 
+let jsonPlanningObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let attempt action=try encode typeof<Result<CheckedAST.Program,string>> (box (Ok (action ()):Result<CheckedAST.Program,string>)) with ex->encode typeof<Result<CheckedAST.Program,string>> (box (Error ex.Message:Result<CheckedAST.Program,string>))
+    let emptyEnv=match WrittenParsing.parse LibParser.Validation.Script "()" |> Result.bind (fun parsed->WrittenChecking.checkSourceUnitsWithBase None true false [parsed]) with Ok (_,program,_)->WrittenChecking.typeCheckEnvironment program|Error message->failwith message
+    let records=Map.ofList ["R",([],["z",AST.TInt64;"a",AST.TString;"field",AST.TBool]);"Box",(["a"],["value",AST.TVar "a"]);"Node",([],["value",AST.TInt64;"children",AST.TList (AST.TRecord ("Node",[]))]);"Darklang.LanguageTools.RuntimeTypes.NameResolution",(["a"],["originalName",AST.TList AST.TString;"resolved",AST.TSum ("Darklang.Stdlib.Result.Result",[AST.TVar "a";AST.TUnit])])]
+    let sums=Map.ofList ["Choice",([],["Many",2,[AST.TString;AST.TInt64];"Zero",0,[];"One",1,[AST.TBool]]);"GSum",(["a"],["Pair",3,[AST.TVar "a";AST.TList (AST.TVar "a")]]);"Tree",([],["Empty",0,[];"Branch",1,[AST.TInt64;AST.TList (AST.TSum ("Tree",[]))]])]
+    let standard=["Darklang.Stdlib.Result.Result",["Ok";"Error"];"Darklang.Stdlib.Option.Option",["None";"Some"];"Darklang.LanguageTools.RuntimeTypes.Hash",["Hash"];"Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName",["Package"];"Darklang.LanguageTools.RuntimeTypes.TypeReference",["TUnit";"TBool";"TInt8";"TUInt8";"TInt16";"TUInt16";"TInt32";"TUInt32";"TInt64";"TUInt64";"TInt128";"TUInt128";"TInt";"TFloat";"TChar";"TString";"TBlob";"TUuid";"TDateTime";"TList";"TDict";"TTuple";"TFn";"TCustomType";"TVariable"];"Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part",["Root";"Index";"Field"];"Darklang.Stdlib.Json.ParseError.ParseError",["CantMatchWithType";"EnumMissingField";"EnumExtraField";"RecordMissingField";"RecordDuplicateField";"EnumInvalidCasename";"EnumTooManyCases";"NotJson"];"Darklang.Stdlib.Json.InternalEnumObject",["EnumNoFields";"EnumOneField";"EnumManyFields"]]
+    let serializeId,symbols=CheckedAST.internFunction "Darklang.Stdlib.Json.serialize" (CheckedAST.emptySymbols ())
+    let parseId,symbols=CheckedAST.internFunction "Darklang.Stdlib.Json.parse" symbols
+    let userId,symbols=CheckedAST.internFunction "user" symbols
+    let symbols=standard |> List.fold (fun symbols (owner,cases)->cases |> List.indexed |> List.fold (fun symbols (tag,name)->CheckedAST.internConstructor owner name tag symbols |> snd) symbols) symbols
+    let symbols=sums |> Map.fold (fun symbols owner (_,variants)->variants |> List.fold (fun symbols (name,tag,_)->CheckedAST.internConstructor owner name tag symbols |> snd) symbols) symbols
+    let symbols=records |> Map.fold (fun symbols owner (_,fields)->fields |> List.indexed |> List.fold (fun symbols (index,(name,_))->CheckedAST.internField owner name index symbols |> snd) symbols) symbols
+    let indexedTypeReg:CheckingTypes.IndexedTypeRegistry=records |> Map.map (fun _ (typeParams,fields)->{Fields=fields;FieldTypes=Map.ofList fields;TypeParams=typeParams})
+    let indexedSumTypeReg:CheckingTypes.IndexedSumTypeRegistry=sums |> Map.map (fun _ (typeParams,variants)->{TypeParams=typeParams;Variants=variants |> List.map (fun (name,tag,fields)->{Name=name;Tag=tag;Fields=fields})})
+    let env={emptyEnv with IndexedTypeReg=indexedTypeReg;IndexedSumTypeReg=indexedSumTypeReg;AliasReg=Map.ofList ["Alias",([],AST.TRecord ("R",[]));"Chain",([],AST.TRecord ("Alias",[]));"GenericAlias",(["x"],AST.TSum ("GSum",[AST.TVar "x"]));"Uuid",([],AST.TString);"DateTime",([],AST.TString)]}
+    let types=[AST.TUnit;AST.TBool;AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TFloat64;AST.TString;AST.TChar;AST.TDateTime;AST.TSum ("Uuid",[]);AST.TRecord ("Uuid",[]);AST.TRecord ("DateTime",[]);AST.TList AST.TString;AST.TList (AST.TList AST.TInt64);AST.TTuple [AST.TInt64;AST.TString;AST.TBool];AST.TTuple [AST.TTuple [AST.TInt64;AST.TString];AST.TBool];AST.TTuple [AST.TInt64;AST.TTuple [AST.TString;AST.TBool]];AST.TDict (AST.TString,AST.TList AST.TInt64);AST.TRecord ("R",[]);AST.TRecord ("Box",[AST.TString]);AST.TRecord ("Node",[]);AST.TSum ("Choice",[]);AST.TSum ("GSum",[AST.TString]);AST.TSum ("Tree",[]);AST.TRecord ("Alias",[]);AST.TRecord ("Chain",[]);AST.TSum ("GenericAlias",[AST.TInt64]);AST.TRecord ("Box",[]);AST.TSum ("GSum",[]);AST.TRecord (source,[]);AST.TBlob;AST.TInternalRawPtr;AST.TNever;AST.TStream AST.TInt64;AST.TVar source;AST.TFunction ([AST.TInt64],AST.TString);AST.TDict (AST.TInt64,AST.TString);AST.TTuple [];AST.TTuple [AST.TString]]
+    let program parse typ=
+        let inputId,symbols=CheckedAST.allocateBinding "input" symbols
+        let inputType=if parse then AST.TString else typ
+        let returnType=if parse then AST.TSum ("Darklang.Stdlib.Result.Result",[typ;AST.TSum ("Darklang.Stdlib.Json.ParseError.ParseError",[])]) else AST.TString
+        let call=CheckedAST.TypeApp ((if parse then parseId else serializeId),[CheckedAST.checkedType typ],AST.NonEmptyList.singleton (CheckedAST.Local inputId))
+        let fn:CheckedAST.FunctionDef={Id=userId;Name="user";TypeParams=[];Params=CheckedAST.checkedParams (AST.NonEmptyList.singleton (inputId,inputType));ReturnType=CheckedAST.checkedType returnType;Body=call;Recursion=None}
+        rcInternalCall<CheckedAST.Program> "CheckedAST" "programFromCheckedParts" [|box symbols;box [CheckedAST.FunctionDef fn]|]
+    let nested=
+        let inputId,nestedSymbols=CheckedAST.allocateBinding "input" symbols
+        let bindingId,nestedSymbols=CheckedAST.allocateBinding "local" nestedSymbols
+        let literal=CheckedAST.Local inputId
+        let serialize typ=CheckedAST.TypeApp (serializeId,[CheckedAST.checkedType typ],AST.NonEmptyList.singleton literal)
+        let parse typ=CheckedAST.TypeApp (parseId,[CheckedAST.checkedType typ],AST.NonEmptyList.singleton (CheckedAST.StringLiteral source))
+        let value=serialize AST.TString
+        let other=serialize (AST.TRecord ("R",[]))
+        let parsed=parse (AST.TList AST.TString)
+        let makeTuple values=CheckedAST.TupleLiteral (CheckedAST.tupleElementsOfList values)
+        let owner=CheckedAST.tryFindTypeId "R" nestedSymbols |> Option.get
+        let field name=CheckedAST.tryFindFieldId "R" name nestedSymbols |> Option.get
+        let complete=match CheckedAST.completeRecordFields owner 3 [field "z",value;field "a",other;field "field",parsed] with Ok value->value|Error message->failwith message
+        let constructorId=CheckedAST.tryFindConstructorId "Choice" "Many" nestedSymbols |> Option.get
+        let case:CheckedAST.MatchCase={Patterns=AST.NonEmptyList.singleton CheckedAST.PWildcard;Guard=Some value;Body=other}
+        let wrappers=[makeTuple [value;other;parsed;value];CheckedAST.InterpolatedString [CheckedAST.StringText source;CheckedAST.StringExpr value;CheckedAST.StringExpr other];CheckedAST.BinOp (AST.Add,value,other);CheckedAST.UnaryOp (AST.Not,value);CheckedAST.Let (CheckedAST.LPVariable bindingId,value,other);CheckedAST.If (value,other,parsed);CheckedAST.Sequence (value,other);CheckedAST.Call (userId,AST.NonEmptyList.fromList [value;other]);CheckedAST.TypeApp (userId,[CheckedAST.checkedType AST.TString],AST.NonEmptyList.fromList [value;other]);CheckedAST.TupleAccess (makeTuple [value;other],0);CheckedAST.DictLiteral (CheckedAST.checkedType AST.TString,CheckedAST.checkedType AST.TString,[value,other]);CheckedAST.RecordLiteral ({TypeId=owner;TypeArgs=[]},complete);CheckedAST.RecordUpdate (literal,[field "a",value;field "z",other]);CheckedAST.RecordAccess (value,field "a");CheckedAST.Constructor ({TypeId=AST.constructorIdOwner constructorId;ConstructorId=constructorId;TypeArgs=[]},[value;other]);CheckedAST.Match (value,AST.NonEmptyList.singleton case);CheckedAST.ListLiteral [value;other];CheckedAST.Lambda (AST.NonEmptyList.singleton {Pattern=CheckedAST.LPVariable bindingId;Type=CheckedAST.checkedType AST.TString},None,value);CheckedAST.Apply (value,AST.NonEmptyList.singleton other);CheckedAST.IndirectApply (value,AST.NonEmptyList.singleton other);CheckedAST.Closure (userId,[value;other]);CheckedAST.BoundaryRender (userId,value)]
+        mapNodes (fun body->attempt (fun ()->let fn:CheckedAST.FunctionDef={Id=userId;Name="user";TypeParams=[];Params=CheckedAST.checkedParams (AST.NonEmptyList.singleton (inputId,AST.TString));ReturnType=CheckedAST.checkedType AST.TString;Body=body;Recursion=None} in JsonPlanning.rewriteProgram env (rcInternalCall<CheckedAST.Program> "CheckedAST" "programFromCheckedParts" [|box nestedSymbols;box [CheckedAST.FunctionDef fn;CheckedAST.Expression parsed]|]))) wrappers
+    let observations=mapNodes (fun parse->mapNodes (fun typ->attempt (fun ()->JsonPlanning.rewriteProgram env (program parse typ))) types) [false;true]
+    use session=new JsonPlanning.PlanningSession()
+    let snapshot ()=tuple [enc session.Count;enc session.HitCount;enc session.MissCount]
+    let cached pass parse typ=tuple [attempt (fun ()->JsonPlanning.rewriteProgramWithSession (Some session) pass (program parse typ));snapshot ()]
+    let cachedAll=mapNodes (fun parse->mapNodes (fun typ->cached env parse typ) types) [false;true]
+    let repeated=mapNodes (fun parse->mapNodes (fun typ->cached env parse typ) [AST.TString;AST.TRecord ("R",[]);AST.TSum ("Tree",[]);AST.TList AST.TInt64]) [false;true]
+    let changed={env with IndexedTypeReg=Map.add "R" {TypeParams=[];Fields=["z",AST.TList AST.TBool;"a",AST.TString;"field",AST.TBool];FieldTypes=Map.ofList ["z",AST.TList AST.TBool;"a",AST.TString;"field",AST.TBool]} env.IndexedTypeReg}
+    let changedCases=mapNodes (fun parse->cached changed parse (AST.TRecord ("R",[]))) [false;true]
+    (session:>IDisposable).Dispose()
+    let disposed=mapNodes (fun parse->cached env parse AST.TString) [false;true]
+    let unchanged=attempt (fun ()->JsonPlanning.rewriteProgram env (rcInternalCall<CheckedAST.Program> "CheckedAST" "programFromCheckedParts" [|box symbols;box [CheckedAST.Expression (CheckedAST.StringLiteral source)]|]))
+    tuple [observations;cachedAll;repeated;changedCases;disposed;unchanged;nested]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -6662,6 +6718,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "json-planning" -> jsonPlanningObservation source
         | "cache-identity" -> cacheIdentityObservation source
         | "driver-diagnostics" -> driverDiagnosticsObservation source
         | "x64-program" -> x64ProgramObservation source

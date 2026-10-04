@@ -1707,3 +1707,17 @@ portable output. The warning-free build passes 508/508 unit checks, 519/519
 ARM64 executions and 6080/6080 x64 executions. Coverage is 299/391 pairs; source
 comment coverage is complete. JSON planning, cache/session integration,
 driver/library, runners/corpus and final acceptance remain open.
+
+The complete JSON planning pass now generates monomorphic serializer/decoder
+functions for primitives, nested tuples, lists, dictionaries, records and sums,
+including generic substitutions, recursive declarations, aliases, detailed
+parse-error bodies and unsupported-type behavior. It preserves UTF-16 plan
+keys/names, symbol/binding allocation order, mixed-call planning, complete
+expression traversal and session lifecycle. Empty and Unicode observations
+match F#; the empty case compares 16,384,580 identical JSON bytes (SHA256
+cb78efe4a091f4a1d136c654b88a83be5a9550060a8502300fe9c9870ff7a638). Full generated programs/catalogs and cache hit/miss/count
+behavior are compared, including changed same-named record shapes and disposal.
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+6080/6080 x64 executions. Coverage is 300/391 pairs; source comment coverage
+is complete. Compilation sessions, driver/library, runners/corpus and final
+acceptance remain open.

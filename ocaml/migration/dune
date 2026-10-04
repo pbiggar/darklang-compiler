@@ -16,6 +16,16 @@
    (echo "type registerLifetimeStep=Unrelated|Overwritten|ReadOrControlFlow\nval registerLifetimeStep : Symbolic.reg -> Symbolic.instr -> registerLifetimeStep\nval overwrittenBeforeReadOrEnd : Symbolic.reg -> Symbolic.instr list -> bool\nval invertCondition : ARM64.condition -> ARM64.condition\n")))))
 
 ; Instrument the complete production implementation from the same source.
+(rule
+ (targets InstrumentedJsonPlanning.ml)
+ (deps ../lib/frontend/JsonPlanning.ml instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/JsonPlanning.ml}))))
+(rule
+ (targets InstrumentedJsonPlanning.mli)
+ (deps ../lib/frontend/JsonPlanning.mli instrument_checking.py)
+ (action (with-stdout-to %{targets}
+  (run python3 %{dep:instrument_checking.py} %{dep:../lib/frontend/JsonPlanning.mli}))))
 ; Private catalogs remain private in the production library; only this migration
 ; build appends typed encoders after the real implementation's definitions.
 (rule
