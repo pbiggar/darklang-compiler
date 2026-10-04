@@ -1032,3 +1032,16 @@ labels, integer overflow and counter alignment are preserved. The warning-free
 build passes 456/456 native checks. Coverage is 223/391 pairs. Original ARM64
 encoding tests and their DSL parser are next; remaining emission/tooling/
 ownership tests, full corpus checks and final acceptance remain open.
+
+The complete ARM64 instruction/encoding fixture parsers and all 14 original
+encoding unit tests are translated with explicit interfaces and original
+comments. Full parsing observations match F# for 1,412 instruction inputs
+(8,472 parses across single/program/error modes), register/condition validity,
+Unicode whitespace/digits, lazy regex captures, immediate/offset overflow, hex
+parsing, error sections and ASSERT-DIFFERENT handling. All 15 unchanged
+.arm64enc fixtures parse identically and execute successfully through the
+native encoder. The full pass-test runner remains a separate pending inventory
+component. The warning-free build passes 485/485 native unit/DSL checks.
+Coverage is 226/391 pairs. Whole ELF images and original binary tests are next;
+remaining emission/runtime/tooling/ownership tests, full corpus checks and
+final acceptance remain open.

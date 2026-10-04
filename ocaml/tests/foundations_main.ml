@@ -1,7 +1,8 @@
 [@@@warning "-42"]
 (* foundations_main.ml - Execute foundation tests before runner integration. *)
 let () =
-  if Array.to_list Sys.argv = [Sys.argv.(0); "--dsl-probe"] then DSL_probe.run ()
+  if Array.to_list Sys.argv = [Sys.argv.(0); "--arm64-dsl-probe"] then ARMDSL_probe.run ()
+  else if Array.to_list Sys.argv = [Sys.argv.(0); "--dsl-probe"] then DSL_probe.run ()
   else if Array.to_list Sys.argv = [Sys.argv.(0); "--probe"] then
     Foundation_probe.run ()
   else begin
@@ -15,6 +16,31 @@ let () =
           path ^ ": " ^ test.TypeCheckingFormat.name, (fun () ->
             let result = TypeCheckingTestRunner.runTypeCheckingTest test in
             if result.TypeCheckingTestRunner.success then Ok () else Error result.TypeCheckingTestRunner.message)) tests) in
+  let armEncodingCorpus =
+    Sys.readdir "src/Tests/passes/arm64enc" |> Array.to_list |> List.sort String.compare
+    |> List.filter (fun path -> Filename.check_suffix path ".arm64enc")
+    |> List.map (fun path -> path, (fun () ->
+      let content=TestFileIO.readAllText (Filename.concat "src/Tests/passes/arm64enc" path) in
+      match ARM64EncodingFormat.parseARM64EncodingTest content with
+      | Error message -> Error message
+      | Ok test ->
+        let open Dark_compiler in
+        match test.ARM64EncodingFormat.expectation with
+        | ARM64EncodingFormat.EncodingErrorContaining expected ->
+          let rec check=function [] -> Ok () | instr::rest ->
+            (try ignore (ARM64_Encoding.encode instr);Error "Expected encoding error"
+             with Failure message | Invalid_argument message -> if HostText.contains message expected then check rest else Error message) in
+          check test.ARM64EncodingFormat.instructions
+        | ARM64EncodingFormat.EncodesTo expected ->
+          (try let rec encode=function [] -> Ok [] | instr::rest -> match ARM64_Encoding.encode instr with
+            | [word] -> Result.map (fun words -> word::words) (encode rest)
+            | words -> Error (Printf.sprintf "Expected one machine word, got %d" (List.length words)) in
+            match encode test.ARM64EncodingFormat.instructions with
+            | Error message -> Error message
+            | Ok actual when actual<>expected -> Error "Machine word mismatch"
+            | Ok actual when test.ARM64EncodingFormat.assertDifferent && List.length (List.sort_uniq Int32.compare actual)<>List.length actual -> Error "ASSERT-DIFFERENT failed"
+            | Ok _ -> Ok ()
+           with Failure message | Invalid_argument message -> Error message))) in
   let rcTests =
     let open Dark_compiler in
     let open ANF in
@@ -37,7 +63,7 @@ let () =
       |> List.filter (fun path -> Filename.check_suffix path ".syntax")
       |> List.map (Filename.concat "src/Tests/syntax") |> Array.of_list in
     List.map (fun (name, run) -> name, run ())
-      (rcTests @ ANFToMIRTests.tests @ PhiResolutionTests.tests @ LIRPeepholeTests.tests @ LIRLayoutTests.tests @ MIROptimizeTests.tests @ SSAConstructionTests.tests @ SSAInliningTests.tests @ SSAOptimizationTests.tests @ MemoryShapeTests.tests @ ANFOptimizeTests.tests @ TailCallDetectionTests.tests @ HIRConstructionTests.tests @ OwnershipVariantSchedulingTests.tests @ OwnershipVariantMaterializationTests.tests @ OwnershipVariantSelectionTests.tests @ OwnedFunctionGroupInferenceTests.tests @ OwnedFunctionGroupTests.tests @ WholeFunctionOwnershipTests.tests @ RecursiveOwnershipInferenceTests.tests @ OwnershipUniquenessInferenceTests.tests @ OwnedHIRVerificationTests.tests @ HIRVerificationTests.tests @ BitsetTests.tests @ PlatformTests.tests @ TestRunnerArgsTests.tests @ ParserTests.tests @ NameResolutionTests.tests
+      (rcTests @ armEncodingCorpus @ ARM64EncodingTests.tests @ ANFToMIRTests.tests @ PhiResolutionTests.tests @ LIRPeepholeTests.tests @ LIRLayoutTests.tests @ MIROptimizeTests.tests @ SSAConstructionTests.tests @ SSAInliningTests.tests @ SSAOptimizationTests.tests @ MemoryShapeTests.tests @ ANFOptimizeTests.tests @ TailCallDetectionTests.tests @ HIRConstructionTests.tests @ OwnershipVariantSchedulingTests.tests @ OwnershipVariantMaterializationTests.tests @ OwnershipVariantSelectionTests.tests @ OwnedFunctionGroupInferenceTests.tests @ OwnedFunctionGroupTests.tests @ WholeFunctionOwnershipTests.tests @ RecursiveOwnershipInferenceTests.tests @ OwnershipUniquenessInferenceTests.tests @ OwnedHIRVerificationTests.tests @ HIRVerificationTests.tests @ BitsetTests.tests @ PlatformTests.tests @ TestRunnerArgsTests.tests @ ParserTests.tests @ NameResolutionTests.tests
        @ typing @ TypeCheckingFormatTests.tests @ TypeCheckingTestRunnerTests.tests
        @ SyntaxTestRunner.tests syntax @ FormattingRoundtripTests.tests [|"src/Tests/formatting-roundtrip/compiler.roundtrip"|])
   in

@@ -2378,6 +2378,33 @@ let x64ResolveObservation (source:string) =
     let patches=mapNodes (fun offset -> mapNodes (patchObservation offset) [Int32.MinValue;-65536;-129;-128;-1;0;1;127;128;65536;Int32.MaxValue]) [0;1;8;20]
     tuple [graphCases;layouts;patches]
 
+let armDSLObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let mapNodes action values=values |> List.map action |> list
+    let registers=["";"X0";"X18";"X31";"SP";"x1";"\u2000X19\u00a0";source] @ ([0..31] |> List.map (fun n -> "X"+string n))
+    let conditions=["EQ";"NE";"LT";"GT";"LE";"GE";"LO";"HI";"LS";"HS";"";source]
+    let numbers=["";"0";"-0";"1";"-1";"+1";"4095";"4096";"65535";"65536";"-32768";"32767";"32768";"2147483647";"2147483648";"999999999999999999999999";"٠";"१२";"1_0";"0x10"]
+    let ops=["MOVZ";"MOVN";"MOVK";"ADD_imm";"SUB_imm";"SVC";"STP";"STP_pre";"LDP";"LDP_post";"STR";"STUR";"LDR";"LDUR"]
+    let instruction name reg value =
+        match name with
+        | "MOVZ" | "MOVN" | "MOVK" -> name+"("+reg+", "+value+", "+value+")"
+        | "ADD_imm" | "SUB_imm" -> name+"("+reg+", X1, "+value+")"
+        | "SVC" -> name+"("+value+")"
+        | "STP" | "STP_pre" | "LDP" | "LDP_post" -> name+"("+reg+", X1, SP, "+value+")"
+        | _ -> name+"("+reg+", SP, "+value+")"
+    let cases=
+        (ops |> List.collect (fun op -> ["X0";"X18";"SP";"bad"] |> List.collect (fun reg -> numbers |> List.map (instruction op reg)))) @
+        (registers |> List.collect (fun reg -> ["ADD_reg("+reg+", X1, X2)";"SUB_reg(X1, "+reg+", X2)";"MUL(X1, X2, "+reg+")";"SDIV("+reg+", X1, X2)";"UDIV(X1, "+reg+", X2)";"MOV_reg("+reg+", X1)";"B_cond_label("+reg+", target)"])) @
+        [source;"RET";"ret";" RET ";"RET\n";"B_label(a,b)";"BL(a\nb)";"BL(a\rb)";"MOVZ(X0,\u20001,\u00a02)";"ADD_reg(X0,, X1)";"ADD_reg(X0, X1,X2,X3)";"MOVZ(X0, 0, 0)tail"]
+    let parses=mapNodes (fun line -> tuple [enc line;mapNodes (fun n -> enc (TestDSL.ARM64Parser.parseInstruction n line)) [0;1;-1;Int32.MaxValue];enc (TestDSL.ARM64Parser.parseARM64 line);enc (TestDSL.ARM64Parser.parseARM64ForEncodingError line)]) cases
+    let formats=[source;"";"---INPUT-ARM64---\nRET\n";"---INPUT-ARM64---\nRET\n---OUTPUT-HEX---\n0xD65F03C0\n";"---INPUT-ARM64---\nADD_imm(X0, X1, 4096)\n---EXPECT-ERROR---\nimm12\n";"---INPUT-ARM64---\nRET\n---OUTPUT-HEX---\n0xD65F03C0\n---EXPECT-ERROR---\nerror\n"] @ (["true";"FALSE";"maybe";""] |> List.map (fun value -> "---INPUT-ARM64---\nRET\n---OUTPUT-HEX---\n0xD65F03C0\n---ASSERT-DIFFERENT---\n"+value))
+    let paths=System.IO.Directory.GetFiles("src/Tests/passes/arm64enc","*.arm64enc") |> Array.map System.IO.Path.GetFileName |> Array.sortWith (fun left right -> String.CompareOrdinal(left,right)) |> Array.toList
+    let fixtures=mapNodes (fun path -> enc (path,TestDSL.ARM64EncodingFormat.parseARM64EncodingTest (System.IO.File.ReadAllText (System.IO.Path.Combine("src/Tests/passes/arm64enc",path))))) paths
+    let hexes=mapNodes (fun value -> enc (TestDSL.ARM64EncodingFormat.parseHexValue value)) ["";"0x";"0X0";"0xFFFFFFFF";"0x100000000";"0x00000000000000000001";"0x-1";"0x 1";" 0xd65F03c0 ";"0xé";source]
+    tuple [mapNodes (fun value -> enc (TestDSL.ARM64Parser.parseReg value)) registers;mapNodes (fun value -> enc (TestDSL.ARM64Parser.parseCond value |> Result.map (fun cond -> ARM64.B_cond_label (cond,"")))) conditions;parses;mapNodes (fun content -> enc (TestDSL.ARM64EncodingFormat.parseARM64EncodingTest content)) formats;fixtures;hexes]
+
 let jsonOutputOptions = System.Text.Json.JsonSerializerOptions(MaxDepth=65536,Encoder=System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
 let anfScalarOptimization source =
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -4832,6 +4859,7 @@ let processRequest (line: string) =
                 WrittenFormatter.syntaxKey parsed, printed, reparsed)
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
+        | "arm64-dsl" -> armDSLObservation source
         | "x64-resolve" -> x64ResolveObservation source
         | "arm64-encoding" -> armEncodingObservation source
         | "x64-encoding" -> x64EncodingObservation source
