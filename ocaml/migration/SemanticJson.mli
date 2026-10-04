@@ -23,3 +23,6 @@ val union : string -> string -> Yojson.Basic.t list -> Yojson.Basic.t
 val record : string -> (string * Yojson.Basic.t) list -> Yojson.Basic.t
 
 val typeDefinition : Dark_compiler.WrittenTypes.typeDefinition -> Yojson.Basic.t
+val tuple : Yojson.Basic.t list -> Yojson.Basic.t
+val unsigned64 : int64 -> string
+val option : ('a -> Yojson.Basic.t) -> 'a option -> Yojson.Basic.t

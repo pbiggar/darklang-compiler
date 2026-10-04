@@ -7095,6 +7095,91 @@ let valueRenderingObservation (source:string) =
         rewrite (rewrite program))) types
     tuple [rendered;primitive;reused;boundaries;dictionaryKeys]
 
+// Complete public preparation results and lifecycle contracts; numerical timings vary.
+let driverSymbols (symbols:CheckedAST.Symbols) =
+    let enc value=closureAnalysisEncode value
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    tuple [enc (CheckedAST.bindingCursor symbols);enc (CheckedAST.nextFunctionOrdinal symbols);enc (CheckedAST.functionIds symbols);enc (CheckedAST.functionNames symbols);enc (CheckedAST.semanticMetadata symbols)]
+let driverProgram (program:CheckedAST.Program) =
+    let enc value=closureAnalysisEncode value
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let tops=CheckedAST.programTopLevels program |> List.map (function
+        | CheckedAST.Expression expr -> tuple [enc "Expression";enc (sprintf "%A" expr)]
+        | CheckedAST.FunctionDef func -> tuple [enc "FunctionDef";enc func.Id;enc func.Name;enc func.TypeParams;enc (CheckedAST.functionParameterTypes func |> AST.NonEmptyList.toList |> List.map (fun (id,typ)->sprintf "%A" (CheckedAST.Local id),typ));enc (CheckedAST.functionReturnType func);enc (sprintf "%A" func.Body);enc (func.Recursion |> Option.map CheckedAST.semanticRecursiveMember)]
+        | CheckedAST.ValueDef value -> tuple [enc "ValueDef";enc value.Name;enc (sprintf "%A" (CheckedAST.Local value.Id));enc (CheckedAST.semanticType value.Type);enc (sprintf "%A" value.Body)]
+        | CheckedAST.TypeDef (id,definition) ->
+            let ordinal=FSharpValue.GetUnionFields(box id,typeof<AST.TypeId>,Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic) |> snd |> Array.head |> unbox<int>
+            tuple [enc "TypeDef";enc ordinal;enc (CheckedAST.semanticTypeDef definition)])
+    tuple [driverSymbols (CheckedAST.programSymbols program);JsonArray(Array.ofList tops) :> JsonNode]
+let sourcePreparationObservation (source:string) =
+    let enc value=closureAnalysisEncode value
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let list f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let outcome f value=match value with Error error->enc (Error error:Result<unit,string>)|Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|f value|]);node :> JsonNode
+    let attempt f action=outcome f (try action () with ex->Error ex.Message)
+    let flags=Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static
+    let owner=typeof<AST.SemanticType>.Assembly.GetType("SourcePreparation")
+    let invoke name args =
+        try owner.GetMethod(name,flags).Invoke(null,args)
+        with :? Reflection.TargetInvocationException as ex when not (isNull ex.InnerException) -> raise ex.InnerException
+    let modeType=owner.GetMethod("prepareProgramForAnf",flags).GetParameters().[0].ParameterType
+    let mode case fields=FSharpType.GetUnionCases(modeType,flags) |> Array.find (fun item->item.Name=case) |> fun item->FSharpValue.MakeUnion(item,fields,flags)
+    let resultObj f (value:obj)=
+        let case,fields=FSharpValue.GetUnionFields(value,value.GetType(),flags)
+        if case.Name="Error" then enc (Error (unbox<string> fields[0]):Result<unit,string>)
+        else let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|f fields[0]|]);node :> JsonNode
+    let attemptObj f action=try resultObj f (action ()) with ex->enc (Error ex.Message:Result<unit,string>)
+    let declaration (value:obj)=
+        let field name = let property=value.GetType().GetProperty(name,Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Instance) in property.GetValue value
+        tuple [driverSymbols (unbox (field "Symbols"));encode ((field "Functions").GetType()) (field "Functions");encode ((field "Registries").GetType()) (field "Registries");encode ((field "LocalReturnTypes").GetType()) (field "LocalReturnTypes")]
+    let user (value:AST_to_ANF.UserOnlyResult)=
+        let node=enc value :?> JsonObject
+        let fields=node["fields"] :?> JsonArray
+        (fields[0] :?> JsonArray)[1]<-driverSymbols value.Symbols
+        node :> JsonNode
+    let fixtures=[source;"()";"1L";"let f (x: Int64) : Int64 = x + 1L\nf 2L";"let id (x: 'a) : 'a = x\nid 1L";"val a = 1L\na";"val a = [1L,2L]\na";"val a = 1L\nval b = a + 2L\nlet f (x: Int64) : Int64 = b + x\nf a";"val unused = [1L,2L]\n()";"type R = { x: Int64 }\nval r = R { x = 1L }\nr";"type S = A of Int64 | B\nS.A 1L";"let add (x: Int64) (y: Int64) : Int64 = x + y\nlet f (x: Int64) : Int64 = let g = add x in g 2L\nf 1L";"let f (x: Int64) : Int64 = let g (y: Int64) : Int64 = x + y in g 2L\nf 1L";"let recur (x: Int64) : Int64 = if x == 0L then x else recur (x - 1L)\nrecur 1L";"let f (x: Int64) : Int64 = x + 1L";"type Box<'a> = { value: 'a }\nlet id (x: 'a) : 'a = x\nval a = Box { value = id 1L }\na"]
+    let parse input=WrittenParsing.parse LibParser.Validation.Script input |> Result.bind (fun parsed->WrittenChecking.checkSourceUnitsWithBase None true false [parsed])
+    let observeInput input=attempt id (fun ()->parse input |> Result.map (fun (_,program,_)->
+        let env=WrittenChecking.typeCheckEnvironment program
+        let moduleRegistry=Stdlib.buildModuleRegistry ()
+        let empty=unbox<AST_to_ANF.Registries> (invoke "emptyRegistries" [|box moduleRegistry|])
+        let symbols=CheckedAST.programSymbols program
+        let generic=SpecializationIdentity.extractGenericFuncDefs program
+        let localSpecs=unbox<Set<SpecializationIdentity.SpecKey>> (invoke "collectLocalSpecs" [|box generic;box program|])
+        let specialization=Monomorphization.specializeFromSpecs symbols generic localSpecs
+        let modes=[mode "Monomorphize" [|box (None:SpecializationIdentity.GenericFuncDefs option)|];mode "Monomorphize" [|box (Some generic)|];mode "ReplaceTypeApps" [|box specialization.SpecRegistry|];mode "SpecializeLocalAndReplace" [|box (Map.empty:SpecializationIdentity.SpecRegistry)|]]
+        let baseNames=rcInternalCall<Set<string>> "CompilationContexts" "buildBaseFuncNames" [|box empty|]
+        let catalog=rcInternalCall<LiftFunctions.FunctionCatalog> "CompilationContexts" "buildLambdaLiftFunctionCatalog" [|box empty;box baseNames;box (FunctionIdMap.empty:FunctionIdMap<string*AST.SemanticType>)|]
+        let preparations=list (fun mode->
+            let phases=ResizeArray<JsonNode>()
+            let record (value:CompilerOptions.PassTiming)=phases.Add(tuple [enc value.Pass;enc (value.Elapsed.Ticks>=0L)])
+            let output=attemptObj (fun value->driverProgram (unbox value)) (fun ()->invoke "prepareProgramForAnf" [|mode;box (Map.empty:TypeRegistries.TypeRegistry);box (Map.empty:LoweringPrimitives.VariantLookup);box baseNames;box catalog;box (Map.empty:Map<string,CompilationContexts.CheckedValueArtifact>);box (Some record:CompilerOptions.PassTimingRecorder option);box program|])
+            let phases=JsonArray(phases.ToArray()) :> JsonNode
+            tuple [output;phases;attemptObj declaration (fun ()->invoke "convertTypedDeclarations" [|box (None:CompilationContexts.PipelineContext option);mode;box program|])]) modes
+        let context=rcInternalCall<CompilationContexts.PipelineContext> "CompilationContexts" "buildContext" [|box Platform.LinuxX86_64;box (CheckedAST.emptySymbols ());box env;box (Map.empty:Map<string,CompilationContexts.CheckedValueArtifact>);box (Map.empty:SpecializationIdentity.GenericFuncDefs);box (Map.empty:SpecializationIdentity.SpecRegistry);box empty;box baseNames;box (FunctionIdMap.empty:FunctionIdMap<string*AST.SemanticType>)|]
+        use session=new CompilationSession.CompilationSession()
+        let run ()=unbox<Result<AST_to_ANF.UserOnlyResult*obj,string>> (invoke "convertTypedProgramToUserOnlyWithMode" [|box context;mode "Monomorphize" [|box (Some generic)|];box env;box (Some session);box (None:CompilerOptions.PassTimingRecorder option);box program|])
+        let first=run ()
+        let firstCount=typeof<CompilationSession.CompilationSession>.GetProperty("CachedAnfDependencyCount").GetValue session |> unbox<int>
+        let second=run ()
+        let secondCount=typeof<CompilationSession.CompilationSession>.GetProperty("CachedAnfDependencyCount").GetValue session |> unbox<int>
+        let same=match first,second with Ok (_,a),Ok (_,b)->Object.ReferenceEquals(a,b)|_->false
+        let converted=tuple [outcome (fun (value,_)->user value) first;outcome (fun (value,_)->user value) second;enc firstCount;enc secondCount;enc same]
+        tuple [driverProgram program;attempt driverProgram (fun ()->Ok (unbox (invoke "materializeProgramValues" [|box program|])));preparations;attemptObj (fun value->encode (value.GetType()) value) (fun ()->invoke "convertTypedProgramToConversionResult" [|box moduleRegistry;box program|]);converted]))
+    let id,symbols=CheckedAST.internValue "inherited" (CheckedAST.emptySymbols ())
+    let inherited:Map<string,CompilationContexts.CheckedValueArtifact>=Map.ofList ["inherited",{BindingCursor=17;Type=AST.TString;Body=CheckedAST.StringLiteral source};"second",{BindingCursor=31;Type=AST.TInt64;Body=CheckedAST.Int64Literal 42L}]
+    let inheritedTests=list (fun tops->
+        let phases=ResizeArray<string>()
+        let record (value:CompilerOptions.PassTiming)=phases.Add value.Pass
+        let output=unbox<CheckedAST.Program> (invoke "importInheritedValues" [|box (Some record:CompilerOptions.PassTimingRecorder option);box inherited;box (checkedProgramFromParts symbols tops)|])
+        tuple [driverProgram output;enc (List.ofSeq phases)]) [[CheckedAST.Expression (CheckedAST.Local id)];[CheckedAST.ValueDef {Id=id;Name="inherited";Type=CheckedAST.checkedType AST.TString;Body=CheckedAST.StringLiteral "local"};CheckedAST.Expression (CheckedAST.Local id)];[]]
+    let a,symbols=CheckedAST.internValue "a" symbols
+    let b,symbols=CheckedAST.internValue "b" symbols
+    let value name id body=CheckedAST.ValueDef {Id=id;Name=name;Type=CheckedAST.checkedType AST.TInt64;Body=body}
+    let cycles=list (fun body->attempt driverProgram (fun ()->Ok (unbox (invoke "materializeProgramValues" [|box (checkedProgramFromParts symbols [value "a" a (CheckedAST.Local b);value "b" b body;CheckedAST.Expression (CheckedAST.Local a)])|])))) [CheckedAST.Local a;CheckedAST.Int64Literal 2L;CheckedAST.Local b]
+    let extract=list (fun typ->attempt enc (fun ()->let returns=unbox<FunctionIdMap<string*AST.SemanticType>> (invoke "extractReturnTypes" [|box (FunctionIdMap.ofList [AST.functionId 7UL,(source,typ)])|]) in let empty=unbox<AST_to_ANF.Registries> (invoke "emptyRegistries" [|box (Map.empty:AST.ModuleRegistry)|]) in Ok {empty with FuncReg=returns})) [AST.TFunction ([AST.TInt64],AST.TString);AST.TString]
+    tuple [list observeInput fixtures;inheritedTests;cycles;extract]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7124,6 +7209,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "source-preparation" -> sourcePreparationObservation source
         | "value-rendering" -> valueRenderingObservation source
         | "anf-pipeline" -> anfPipelineObservation source
         | "compilation-contexts" -> contextsObservation source
