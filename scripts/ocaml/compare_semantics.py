@@ -169,7 +169,7 @@ def read_observation_pair(processes, directory):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--audit-name", help="Separate audit directory for an independent verification run")
-    parser.add_argument("--stage", default="tokens", choices=["arm64-emission-basics", "arm64-process", "arm64-printing", "arm64-runtime", "arm64-peephole", "arm64-operands", "x64-operands", "macho-images", "elf-images", "arm64-dsl", "x64-resolve", "arm64-encoding", "x64-encoding", "machine-isa", "mir-lir", "anf-mir", "register-allocation", "lir-peephole", "callee-clobbers", "block-allocation", "instruction-allocation", "phi-resolution", "spill-operands", "float-allocation", "register-coloring", "allocation-foundations", "lir-tree", "lir-foundations", "ir-printers", "mir-sccp", "mir-loops", "mir-cse", "mir-ssa", "mir-foundations", "ssa-inlining", "ssa-specialization", "rc-insertion", "expression-lowering", "anf-output-planning", "anf-scalar-optimization", "tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies", "materialize-helpers", "declarations", "record-checking", "binary-checking", "stdlib-catalog", "lambda-checking", "call-checking", "match-checking", "expression-checking", "function-checking", "program-checking", "written-types", "written-patterns", "written-checking", "checked-preparation", "anf", "preparation-registries", "memory-planning", "lowering-primitives", "type-substitution", "inline-lambdas", "checked-structural-format", "checked-display", "closure-analysis", "closure-comparisons", "lift-expressions", "lift-functions", "monomorphization", "lowering-types", "lowering-operators", "lowering-aggregates", "atom-lowering"])
+    parser.add_argument("--stage", default="tokens", choices=["arm64-integer-emission", "arm64-emission-basics", "arm64-process", "arm64-printing", "arm64-runtime", "arm64-peephole", "arm64-operands", "x64-operands", "macho-images", "elf-images", "arm64-dsl", "x64-resolve", "arm64-encoding", "x64-encoding", "machine-isa", "mir-lir", "anf-mir", "register-allocation", "lir-peephole", "callee-clobbers", "block-allocation", "instruction-allocation", "phi-resolution", "spill-operands", "float-allocation", "register-coloring", "allocation-foundations", "lir-tree", "lir-foundations", "ir-printers", "mir-sccp", "mir-loops", "mir-cse", "mir-ssa", "mir-foundations", "ssa-inlining", "ssa-specialization", "rc-insertion", "expression-lowering", "anf-output-planning", "anf-scalar-optimization", "tokens", "parser-support", "patterns", "types", "bindings", "parameters", "effects", "ast", "validated", "rendered", "written-source", "names", "ast-helpers", "formatter", "dsl", "resolution", "checking-diagnostics", "free-variables", "function-map", "checked-ast", "checking-types", "unification", "structural-format", "comparison-planning", "structural-helpers", "helper-dependencies", "materialize-helpers", "declarations", "record-checking", "binary-checking", "stdlib-catalog", "lambda-checking", "call-checking", "match-checking", "expression-checking", "function-checking", "program-checking", "written-types", "written-patterns", "written-checking", "checked-preparation", "anf", "preparation-registries", "memory-planning", "lowering-primitives", "type-substitution", "inline-lambdas", "checked-structural-format", "checked-display", "closure-analysis", "closure-comparisons", "lift-expressions", "lift-functions", "monomorphization", "lowering-types", "lowering-operators", "lowering-aggregates", "atom-lowering"])
     parser.add_argument("--probes-only", action="store_true")
     parser.add_argument("--batch-size", type=int, default=0,
                         help="Compare restartable batches; reuse only matching source snapshots")
@@ -218,8 +218,9 @@ def main():
             runner.write_text(content)
         completed = 0
         combined = {name: [] for name in ("fsharp", "ocaml")}
-        for offset in range(0, len(corpus), args.batch_size):
-            limit = min(args.batch_size, len(corpus) - offset)
+        end = min(len(corpus), args.offset + args.limit) if args.limit else len(corpus)
+        for offset in range(args.offset, end, args.batch_size):
+            limit = min(args.batch_size, end - offset)
             directory = output / "batches" / f"{offset}-{limit}"
             marker = directory / "complete.json"
             expected = {"snapshot": identity, "offset": offset, "limit": limit}
@@ -246,10 +247,10 @@ def main():
             for name in combined:
                 combined[name].extend(rows[name])
             completed += limit
-            print(f"Verified {args.stage}: {completed}/{len(corpus)}", flush=True)
+            print(f"Verified {args.stage}: {completed}/{end - args.offset}", flush=True)
         for name, rows in combined.items():
             (output / f"{name}.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
-        print(f"Complete {args.stage} parity: {completed}/{len(corpus)} source observations match", flush=True)
+        print(f"Complete {args.stage} parity: {completed}/{end - args.offset} source observations match", flush=True)
         return 0
     if args.limit:
         corpus = corpus[args.offset:args.offset + args.limit]

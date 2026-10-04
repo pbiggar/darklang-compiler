@@ -3054,6 +3054,82 @@ let armBasicEmissionObservation (source:string) =
     let largeTuple=mapNodes (fun target -> let ctx=context source target false in mapNodes (fun newline -> symbolic (printList ctx ARM64.X19 (AST.TTuple (List.init 4097 (fun _ -> AST.TUnit))) newline)) [false;true]) [ARM64.targetConfigFor Platform.MacOSARM64;target] in
     tuple [call (fun () -> fp_emitFPhi ctx);unary;binary;fused;fusedVirtual;comparisons;loads;spills;conversions;argumentMoves;calls;saves;fpPairs;printing;largeTuple]
 
+let armIntegerEmissionObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let fid value=AST.functionId (uint64 value)
+    let nth xs i=List.item i xs
+    let context source target enabled : ARM64CodeGenTypes.CodeGenContext={Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled};SumShapeRegistry=Map.empty;RecordRegistry=Map.empty;RawSlotInitRetainTargets=None;ClosurePayloadSizes=Map.empty;ClosureCaptureTypes=Map.empty;FunctionNames=FunctionIdMap.empty;FunctionName=source;InstructionSite=source;StackSize=0;UsedCalleeSaved=[];UsedCalleeSavedF=[];HeapOverflowLabel=source;RecordLirOpExpansion=None}
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let fpPhysical=[LIR.D0;LIR.D1;LIR.D2;LIR.D3;LIR.D4;LIR.D5;LIR.D6;LIR.D7;LIR.D8;LIR.D9;LIR.D10;LIR.D11;LIR.D12;LIR.D13;LIR.D14;LIR.D15]
+    let int_emitPhi arg0 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitPhi" [|box arg0|]
+    let int_emitMov arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitMov" [|box arg0;box arg1;box arg2|]
+    let int_emitStore arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitStore" [|box arg0;box arg1;box arg2|]
+    let int_emitAdd arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitAdd" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitSub arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitSub" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitMul arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitMul" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitSdiv arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitSdiv" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitUdiv arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitUdiv" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitMsub arg0 arg1 arg2 arg3 arg4 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitMsub" [|box arg0;box arg1;box arg2;box arg3;box arg4|]
+    let int_emitMadd arg0 arg1 arg2 arg3 arg4 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitMadd" [|box arg0;box arg1;box arg2;box arg3;box arg4|]
+    let int_emitCmp arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitCmp" [|box arg0;box arg1;box arg2|]
+    let int_emitCset arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitCset" [|box arg0;box arg1;box arg2|]
+    let int_emitSelect arg0 arg1 arg2 arg3 arg4 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitSelect" [|box arg0;box arg1;box arg2;box arg3;box arg4|]
+    let int_emitAnd arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitAnd" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitAnd_imm arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitAnd_imm" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitOrr arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitOrr" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitEor arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitEor" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitLsl arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitLsl" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitLsr arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitLsr" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitAsr arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitAsr" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitLsl_imm arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitLsl_imm" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitLsr_imm arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitLsr_imm" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitAsr_imm arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitAsr_imm" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitNeg arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitNeg" [|box arg0;box arg1;box arg2|]
+    let int_emitMvn arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitMvn" [|box arg0;box arg1;box arg2|]
+    let int_emitSxtb arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitSxtb" [|box arg0;box arg1;box arg2|]
+    let int_emitSxth arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitSxth" [|box arg0;box arg1;box arg2|]
+    let int_emitSxtw arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitSxtw" [|box arg0;box arg1;box arg2|]
+    let int_emitUxtb arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitUxtb" [|box arg0;box arg1;box arg2|]
+    let int_emitUxth arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitUxth" [|box arg0;box arg1;box arg2|]
+    let int_emitUxtw arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitUxtw" [|box arg0;box arg1;box arg2|]
+    let int_emitClosureAlloc arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitClosureAlloc" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitTailArgMoves arg0 arg1 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitTailArgMoves" [|box arg0;box arg1|]
+    let int_emitArgMoves arg0 arg1 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitArgMoves" [|box arg0;box arg1|]
+    let int_emitExit arg0 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitExit" [|box arg0|]
+    let int_emitStdoutWrite arg0 arg1 arg2 arg3 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitStdoutWrite" [|box arg0;box arg1;box arg2;box arg3|]
+    let int_emitStdinReadLine arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitStdinReadLine" [|box arg0;box arg1;box arg2|]
+    let int_emitRuntimeError arg0 arg1 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitRuntimeError" [|box arg0;box arg1|]
+    let int_emitRuntimeErrorString arg0 arg1 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitRuntimeErrorString" [|box arg0;box arg1|]
+    let int_emitInt64ToFloat arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitInt64ToFloat" [|box arg0;box arg1;box arg2|]
+    let int_emitGpToFp arg0 arg1 arg2 = rcInternalCall<Result<ARM64Symbolic.Instr list,string>> "ARM64EmitInteger" "emitGpToFp" [|box arg0;box arg1;box arg2|]
+    let ctx={ (context source (ARM64.targetConfigFor Platform.LinuxARM64) false) with FunctionNames=FunctionIdMap.ofList [fid 0L,source;fid (-1L),"largest"] } in
+    let gps=List.map (fun p -> LIR.Physical p) physical@List.map (fun n -> LIR.Virtual n) [-1;0;1;2147483647] in
+    let fps=List.map (fun p -> LIR.FPhysical p) fpPhysical@List.map (fun n -> LIR.FVirtual n) [-2001;-2000;-1001;-1000;-1;0;1;2147483647] in
+    let values=[Int64.MinValue;Int64.MaxValue;-65536L;-4096L;-4L;-1L;0L;1L;4095L;4096L;65535L;65536L;0x123456789abcdef0L] in
+    let offsets=[-2147483648;-65536;-4096;-4095;-257;-256;-1;0;255;256;4095;4096;65535;2147483647] in
+    let operands=List.map (fun value -> LIR.Imm value) values@List.map (fun reg -> LIR.Reg reg) gps@List.map (fun offset -> LIR.StackSlot offset) offsets@[LIR.FloatImm 0.;LIR.FloatImm (-0.);LIR.FloatImm infinity;LIR.FloatSymbol nan;LIR.StringSymbol source;LIR.FuncAddr (fid 0L);LIR.FuncAddr (fid 1L);LIR.FuncAddr (fid (-1L))] in
+    let unary=mapNodes (fun dest -> mapNodes (fun src -> mapNodes (fun f -> call (fun () -> f ctx dest src)) [int_emitNeg;int_emitMvn;int_emitSxtb;int_emitSxth;int_emitSxtw;int_emitUxtb;int_emitUxth;int_emitUxtw]) gps) gps in
+    let moves=mapNodes (fun dest -> mapNodes (fun src -> call (fun () -> int_emitMov ctx dest src)) operands) gps in
+    let arithmetic=mapNodes (fun dest -> mapNodes (fun left -> mapNodes (fun right -> tuple [call (fun () -> int_emitAdd ctx dest left right);call (fun () -> int_emitSub ctx dest left right)]) operands) gps) gps in
+    let comparisons=mapNodes (fun left -> mapNodes (fun right -> call (fun () -> int_emitCmp ctx left right)) operands) gps in
+    let binary=mapNodes (fun dest -> mapNodes (fun left -> mapNodes (fun right -> mapNodes (fun f -> call (fun () -> f ctx dest left right)) [int_emitMul;int_emitSdiv;int_emitUdiv;int_emitAnd;int_emitOrr;int_emitEor;int_emitLsl;int_emitLsr;int_emitAsr]) [dest;left;LIR.Physical LIR.X0;LIR.Physical LIR.X9;LIR.Physical LIR.X27;LIR.Physical LIR.SP;LIR.Virtual (-1)]) gps) gps in
+    let fused=mapNodes (fun dest -> mapNodes (fun a -> mapNodes (fun b -> mapNodes (fun c -> tuple [call (fun () -> int_emitMadd ctx dest a b c);call (fun () -> int_emitMsub ctx dest a b c)]) [dest;a;b;LIR.Physical LIR.X9;LIR.Virtual (-1)]) [a;LIR.Physical LIR.X0;LIR.Physical LIR.X27;LIR.Virtual (-1)]) gps) gps in
+    let immediate=mapNodes (fun dest -> mapNodes (fun src -> tuple [mapNodes (fun shift -> mapNodes (fun f -> call (fun () -> f ctx dest src shift)) [int_emitLsl_imm;int_emitLsr_imm;int_emitAsr_imm]) [-2147483648;-1;0;1;31;32;63;64;2147483647];mapNodes (fun value -> call (fun () -> int_emitAnd_imm ctx dest src value)) values]) gps) gps in
+    let conditions=[LIR.EQ;LIR.NE;LIR.LT;LIR.GT;LIR.LE;LIR.GE;LIR.ULT;LIR.UGT;LIR.ULE;LIR.UGE] in
+    let selection=mapNodes (fun dest -> mapNodes (fun cond -> tuple [call (fun () -> int_emitCset ctx dest cond);mapNodes (fun a -> mapNodes (fun b -> call (fun () -> int_emitSelect ctx dest a b cond)) [dest;a;LIR.Physical LIR.X0;LIR.Physical LIR.X9;LIR.Virtual (-1)]) gps]) conditions) gps in
+    let stores=mapNodes (fun src -> mapNodes (fun offset -> call (fun () -> int_emitStore ctx offset src)) offsets) gps in
+    let captures=[[];[LIR.Imm 0L];[LIR.Imm Int64.MinValue;LIR.Imm Int64.MaxValue;LIR.Reg (LIR.Physical LIR.X0);LIR.Reg (LIR.Physical LIR.X15);LIR.FuncAddr (fid 0L)]]@List.map (fun operand -> [operand]) operands@[List.init 4100 (fun _ -> LIR.Imm 1L)] in
+    let allocations=mapNodes (fun enabled -> let ctx={ctx with Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled}} in mapNodes (fun dest -> mapNodes (fun id -> mapNodes (fun captured -> call (fun () -> int_emitClosureAlloc ctx dest (fid id) captured)) captures) [0L;1L;-1L]) gps) [false;true] in
+    let parallelMoves=List.collect (fun dest -> List.map (fun src -> [dest,src]) operands) physical @ List.collect (fun count -> List.map (fun shift -> List.init count (fun n -> nth physical (n % 30),LIR.Reg (LIR.Physical (nth physical ((n+shift) % 30))))) [0;1;2;7;29]) [0;1;2;3;4;8;16;30;31]@[[LIR.X0,LIR.Reg (LIR.Physical LIR.X1);LIR.X0,LIR.Reg (LIR.Physical LIR.X2)];[LIR.X9,LIR.Imm Int64.MaxValue;LIR.X0,LIR.Reg (LIR.Physical LIR.X9)]] in
+    let arguments=mapNodes (fun moved -> tuple [call (fun () -> int_emitArgMoves ctx moved);call (fun () -> int_emitTailArgMoves ctx moved)]) parallelMoves in
+    let effects=mapNodes (fun target -> mapNodes (fun enabled -> let ctx={ctx with Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled}} in tuple [call (fun () -> int_emitExit ctx);mapNodes (fun effectId -> tuple [mapNodes (fun value -> mapNodes (fun newline -> call (fun () -> int_emitStdoutWrite ctx effectId value newline)) [false;true]) operands;mapNodes (fun reg -> call (fun () -> int_emitStdinReadLine ctx effectId reg)) gps]) [-2147483648;-1;0;2147483647]]) [false;true]) [ARM64.targetConfigFor Platform.MacOSARM64;ARM64.targetConfigFor Platform.LinuxARM64] in
+    let errors=tuple [call (fun () -> int_emitRuntimeError ctx source);mapNodes (fun reg -> call (fun () -> int_emitRuntimeErrorString ctx reg)) gps] in
+    let conversions=mapNodes (fun dest -> mapNodes (fun src -> tuple [call (fun () -> int_emitInt64ToFloat ctx dest src);call (fun () -> int_emitGpToFp ctx dest src)]) gps) fps in
+    tuple [call (fun () -> int_emitPhi ctx);unary;moves;arithmetic;comparisons;binary;fused;immediate;selection;stores;allocations;arguments;effects;errors;conversions]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -5302,6 +5378,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-integer-emission" -> armIntegerEmissionObservation source
         | "arm64-emission-basics" -> armBasicEmissionObservation source
         | "arm64-process" -> armProcessObservation source
         | "arm64-printing" -> armPrintingObservation source

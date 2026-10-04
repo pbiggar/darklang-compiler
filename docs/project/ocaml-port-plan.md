@@ -1190,3 +1190,17 @@ The warning-free build passes 508 translated tests and eight ARM64 execution
 checks. Comment coverage is complete. Coverage is 257/391 pairs. Integer
 lowering is next; remaining ownership runtime, complete runners/corpus checks
 and final acceptance remain open.
+
+Complete ARM64 integer lowering is translated with its interface and all 40
+original comment lines. All 41 emitters match full F# result/instruction
+observations across 258,734,437 identical JSON bytes: integer arithmetic and conditions, immediate and stack boundaries,
+all GP alias roles, fused arithmetic, shifts/extensions, GP/FP conversion,
+closure captures and overflow-sized payloads, parallel argument cycles,
+runtime errors, and stdin/stdout/exit on both OS targets and leak modes.
+The warning-free build passes 508 translated tests. Eighteen real ARM64 process
+executions also pass, adding presentation checks for Unicode, CRLF stripping,
+EOF, repeated reads, newline handling and embedded NUL bytes. The restartable
+comparison runner now respects requested batch offsets/limits and its saved
+Mach-O reference loader is verified. Comment coverage is complete. Coverage
+is 258/391 pairs. File emission is next; remaining instruction families,
+ownership runtime, complete runners/corpus and final acceptance remain open.
