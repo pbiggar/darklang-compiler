@@ -3928,6 +3928,31 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let x64DictReferenceObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f () : X86_64.Instr list)] with ex -> tuple [enc true;enc ex.Message]
+    let invoke name args=rcInternalCall<X86_64.Instr list> "X64DictReferenceCounts" name args
+    let kinds=[MemoryModel.GenericHeap;MemoryModel.StreamHeap;MemoryModel.TaggedList;MemoryModel.DictHeap;MemoryModel.ClosureHeap] in
+    let operations=[MemoryModel.DynamicStringBuffer;MemoryModel.DynamicBlobBuffer;MemoryModel.DynamicIntBuffer]@List.collect (fun kind -> List.map (fun size -> MemoryModel.FixedSizeRoot (size,kind)) [-2147483648;-1;0;8;2147483647]) kinds in
+    let simple=[MemoryModel.NoReleasePlan;MemoryModel.RecursiveRelease (AST.TRecord (source,[]))]@List.map (fun operation -> MemoryModel.DynamicBufferRelease operation) operations@List.collect (fun kind -> [MemoryModel.RootRelease (8,kind,MemoryModel.NoPayloadRelease);MemoryModel.RootRelease (8,kind,MemoryModel.FixedBlockPayloadRelease (8,[]));MemoryModel.RootRelease (8,kind,MemoryModel.BoxedSumPayloadRelease (8,[],[]));MemoryModel.RootRelease (8,kind,MemoryModel.ClosurePayloadRelease [])]) kinds in
+    let listPlans=List.map (fun plan -> MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease plan)) simple in
+    let dictPlans=List.collect (fun value -> [MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,value));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer,value));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (value,MemoryModel.NoReleasePlan))]) (simple@listPlans) in
+    let fields=[MemoryModel.FieldRelease (0,MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer);MemoryModel.FieldRelease (8,MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease MemoryModel.NoReleasePlan));MemoryModel.FieldRelease (16,MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,MemoryModel.NoReleasePlan)))] in
+    let rich=List.collect (fun size -> List.collect (fun fields -> [MemoryModel.RootRelease (size,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (size,fields));MemoryModel.RootRelease (size,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (size,fields,[{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=fields}]))]) [fields;List.rev fields;[MemoryModel.FieldRelease (8,MemoryModel.NoReleasePlan)]@fields;fields@[MemoryModel.FieldRelease (8,MemoryModel.NoReleasePlan)];[MemoryModel.FieldRelease (8,MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer)];[]]) [8;16;24;256] in
+    let plans=simple@rich in
+
+    let child=MemoryModel.RootRelease (16,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (16,[MemoryModel.FieldRelease (0,MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer);MemoryModel.FieldRelease (8,MemoryModel.RecursiveRelease (AST.TRecord (source,[])))]))
+    let keys=[MemoryModel.NoReleasePlan;MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer;MemoryModel.DynamicBufferRelease MemoryModel.DynamicIntBuffer;MemoryModel.RootRelease (8,MemoryModel.ClosureHeap,MemoryModel.NoPayloadRelease);child;MemoryModel.RecursiveRelease (AST.TRecord (source,[]))]
+    let generate key dynamic listValue dictValue closure stream fixedValue enabled=invoke "generateDictRefCountDecHelper" [|box source;box key;box dynamic;box listValue;box dictValue;box closure;box stream;box fixedValue;box enabled;box (Map.empty:LIR.RecordRegistry);box (Map.empty:MemoryModel.RcSumShapeRegistry)|]
+    let keyCases=mapNodes (fun enabled->mapNodes (fun p->call (fun ()->generate p (None:MemoryModel.RcOperation option) false (None:string option) false false (None:(int*MemoryModel.RcReleasePlan) option) enabled)) plans) [false;true]
+    let planned=mapNodes (fun enabled->mapNodes (fun key->mapNodes (fun value->call (fun ()->invoke "generatePlannedDictRefCountDecHelper" [|box source;box (MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (key,value)));box enabled;box (Map.empty:LIR.RecordRegistry);box (Map.empty:MemoryModel.RcSumShapeRegistry)|])) plans) keys) [false;true]
+    let flags=mapNodes (fun enabled->mapNodes (fun mask->mapNodes (fun dynamic->mapNodes (fun fixedValue->call (fun ()->generate child dynamic (mask &&& 1<>0) (if mask &&& 2<>0 then Some "custom-dict" else None) (mask &&& 4<>0) (mask &&& 8<>0) fixedValue enabled)) [None;Some (16,child);Some (16,MemoryModel.RecursiveRelease (AST.TSum (source,[])))]) [None;Some MemoryModel.DynamicStringBuffer;Some MemoryModel.DynamicIntBuffer]) [0..15]) [false;true]
+    let sizes=mapNodes (fun size->call (fun ()->generate child (None:MemoryModel.RcOperation option) false (None:string option) false false (Some (size,child)) false)) [-2147483648;-1;0;8;255;256;2147483647]
+    let invalid=mapNodes (fun p->call (fun ()->invoke "generatePlannedDictRefCountDecHelper" [|box source;box p;box false;box (Map.empty:LIR.RecordRegistry);box (Map.empty:MemoryModel.RcSumShapeRegistry)|])) plans
+    tuple [call (fun ()->invoke "generateDictRefCountIncHelper" [||]);keyCases;planned;flags;sizes;invalid]
+
 let x64ListReferenceObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -6163,6 +6188,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "x64-dict-reference" -> x64DictReferenceObservation source
         | "x64-list-reference" -> x64ListReferenceObservation source
         | "x64-closure-reference" -> x64ClosureReferenceObservation source
         | "x64-field-reference" -> x64FieldReferenceObservation source

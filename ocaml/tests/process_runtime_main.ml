@@ -667,6 +667,48 @@ let x64ListReferenceChecks ()=
  check (setup@node 400 8 1L 0L@node 800 8 1L 0L@[X.LEA_rip (X.RCX,"closed_fn");X.MOV_store (X.RBP,800l,X.RCX)]@pointer X.RCX 800 0@[X.MOV_store (X.RBP,400l,X.RCX)]@pointer X.RAX 400 2@[X.CALL "list_helper";X.MOV_load (X.RAX,X.RBP,808l)]@compare X.RAX 0L@preserves@finish) (helper E.ClosureLeafPayload@closure);
  !total
 [@@warning "-42"]
+let x64DictReferenceChecks ()=
+ let module X=X86_64 in let total=ref 0 in
+ let checked=function Ok value->value|Error error->failwith error in
+ let check body helpers=
+  let code=[X.Label "_start"]@body@X64Operands.genPrintChars ['P']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@[X.Label "failed"]@X64Operands.genPrintChars ['F']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@helpers in
+  let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0 in
+  let actual=runImageOn "/opt/dcb/qemu/qemu-x86_64" binary [] "" in
+  if actual<>"P" then failwith (Printf.sprintf "x64 dict ownership failed at case %d" !total);
+  incr total in
+ let compare reg expected=X64Operands.loadImm64 X.RCX expected@[X.CMP_reg (reg,X.RCX);X.Jcc (X.NE,"failed")] in
+ let setup=[X.SUB_imm (X.RSP,4096l);X.MOV_reg (X.RBP,X.RSP);X.MOV_reg (X.R15,X.RSP);X.LEA (X.R14,X.RSP,4096l);X.XOR_reg (X.RCX,X.RCX)]@List.init 32 (fun index->X.MOV_store (X.RBP,Int32.of_int (index*8),X.RCX)) in
+ let finish=[X.ADD_imm (X.RSP,4096l)] in
+ let pointer reg offset tag=[X.LEA (reg,X.RBP,Int32.of_int offset);X.ADD_imm (reg,Int32.of_int tag)] in
+ let node offset size count word=X64Operands.loadImm64 X.RCX word@[X.MOV_store (X.RBP,Int32.of_int offset,X.RCX)]@X64Operands.loadImm64 X.RCX count@[X.MOV_store (X.RBP,Int32.of_int (offset+size),X.RCX)] in
+ let popcount word=let rec loop word count=if word=0L then count else loop (Int64.logand word (Int64.pred word)) (count+1) in loop word 0 in
+ let helper key dynamic=X64DictReferenceCounts.generateDictRefCountDecHelper "dict_helper" key dynamic false None false false None false StringOrder.Map.empty StringOrder.Map.empty in
+ let plain=helper MemoryModel.NoReleasePlan None in
+ List.iter (fun tag->List.iter (fun word->List.iter (fun count->
+  let kind=tag land 3 in let size=if kind=1 then 8+8*popcount word else if kind=3 then 40 else 16 in
+  let actualWord=if kind=3 then 2L else word in
+  let expected=if kind=0 then count else Int64.succ count in
+  check (setup@node 400 size count actualWord@pointer X.RAX 400 tag@[X.CALL X64ReleaseSelection.dictRefCountIncHelperLabel;X.MOV_load (X.RAX,X.RBP,Int32.of_int (400+size))]@compare X.RAX expected@finish) (X64DictReferenceCounts.generateDictRefCountIncHelper ())) [0L;1L;Int64.max_int]) [0L;1L;3L;Int64.min_int;-1L]) [0;1;2;3;4;5;6;7];
+ List.iter (fun (tag,size,word)->List.iter (fun count->
+  let children=if tag=1 then [X.XOR_reg (X.RCX,X.RCX)]@List.init (popcount word) (fun index->X.MOV_store (X.RBP,Int32.of_int (408+index*8),X.RCX)) else [] in
+  let free=[X.MOV_load (X.RAX,X.R15,Int32.of_int size)]@(if count=1L && size<256 then [X.LEA (X.RCX,X.RBP,400l);X.CMP_reg (X.RAX,X.RCX);X.Jcc (X.NE,"failed")] else compare X.RAX 0L) in
+  check (setup@node 400 size count word@children@pointer X.RAX 400 tag@[X.CALL "dict_helper";X.MOV_load (X.RAX,X.RBP,Int32.of_int (400+size))]@compare X.RAX (Int64.pred count)@free@finish) plain) [0L;1L;2L]) [1,8,0L;1,24,3L;1,256,0x7fffffffL;1,520,-1L;2,16,0L;3,8,0L;3,40,2L;3,280,17L];
+ let dynamic=MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer in
+ List.iter (fun rootCount->List.iter (fun childCount->List.iter (fun tagged->
+  let key=if tagged then MemoryModel.DynamicBufferRelease MemoryModel.DynamicIntBuffer else dynamic in
+  let op=if tagged then MemoryModel.DynamicIntBuffer else MemoryModel.DynamicStringBuffer in
+  let initial=setup@node 400 16 rootCount 0L@X64Operands.loadImm64 X.RCX childCount@[X.MOV_store (X.RBP,800l,X.RCX);X.MOV_store (X.RBP,840l,X.RCX)]@(if tagged then [X.MOV_imm32 (X.RCX,1l)] else pointer X.RCX 800 0)@[X.MOV_store (X.RBP,400l,X.RCX)]@(if tagged then [X.MOV_imm32 (X.RCX,1l)] else pointer X.RCX 840 0)@[X.MOV_store (X.RBP,408l,X.RCX)]@pointer X.RAX 400 2 in
+  let expected=if rootCount=1L && not tagged && childCount<>Int64.max_int then Int64.pred childCount else childCount in
+  check (initial@[X.CALL "dict_helper";X.MOV_load (X.RAX,X.RBP,800l)]@compare X.RAX expected@[X.MOV_load (X.RAX,X.RBP,840l)]@compare X.RAX expected@finish) (helper key (Some op))) [false;true]) [1L;3L;Int64.max_int]) [1L;2L];
+ let initial=setup@node 400 40 1L 2L@List.concat_map (fun (field,child)->X64Operands.loadImm64 X.RCX 3L@[X.MOV_store (X.RBP,Int32.of_int child,X.RCX)]@pointer X.RCX child 0@[X.MOV_store (X.RBP,Int32.of_int field,X.RCX)]) [408,800;416,840;424,880;432,920]@pointer X.RAX 400 3 in
+ check (initial@[X.CALL "dict_helper"]@List.concat_map (fun offset->[X.MOV_load (X.RAX,X.RBP,Int32.of_int offset)]@compare X.RAX 2L) [800;840;880;920]@finish) (helper dynamic (Some MemoryModel.DynamicStringBuffer));
+ let children=List.concat_map (fun (field,child)->node child 16 1L 0L@pointer X.RCX child 2@[X.MOV_store (X.RBP,Int32.of_int field,X.RCX)]) [408,800;416,840] in
+ check (setup@node 400 24 1L 3L@children@pointer X.RAX 400 1@[X.CALL "dict_helper";X.MOV_load (X.RAX,X.RBP,816l)]@compare X.RAX 0L@[X.MOV_load (X.RAX,X.RBP,856l)]@compare X.RAX 0L@finish) plain;
+ List.iter (fun value->check (setup@X64Operands.loadImm64 X.RAX value@[X.CALL "dict_helper"]@finish) plain) [0L;1L;2L;3L;4L;5L;6L;7L];
+ List.iter (fun where->let addr=if where=0 then [X.LEA (X.RAX,X.R15,-8l)] else [X.MOV_reg (X.RAX,X.R14)] in check (setup@addr@[X.ADD_imm (X.RAX,2l);X.CALL "dict_helper"]@finish) plain) [0;1];
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -674,4 +716,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks ()+x64ClosureReferenceChecks ()+x64ListReferenceChecks ()+x64DictReferenceChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count

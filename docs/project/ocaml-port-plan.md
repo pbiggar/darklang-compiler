@@ -1535,3 +1535,18 @@ traversal, static/tagged/dynamic payloads, nested list/closure/fixed payloads
 and callee-saved register restoration. Coverage is 284/391 pairs; source comment
 coverage is complete. Remaining x64 modules, driver/library, runners/corpus and
 final acceptance remain open.
+
+Complete x64 HAMT retain, iterative destruction and planned dictionary helpers
+are translated with full interfaces and source comments. Full instructions,
+source-ordered nested helper generation and unsupported-plan error text match
+F# across 57,220,955 identical JSON bytes (SHA256
+a106f6837acab0c53c43b73ecb4e023f62e74ad1ab0b1f522dbdaadd80ea8298).
+Cases cover both leak settings, every key/value release family, payload-size
+boundaries and combinations of dynamic/list/dict/closure/stream/fixed release
+flags. The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions
+and 899/899 x64 executions. The 168 new x64 cases exercise bitmap popcounts,
+low-two-bit tag variants, null/shared/unique roots, collision payload loops,
+static/tagged/dynamic key/value buffers, child traversal, free-list boundaries
+and heap bounds. Coverage is 285/391 pairs; source comment coverage is complete.
+Remaining x64 instructions/process runtime/program assembly, driver/library,
+runners/corpus and final acceptance remain open.
