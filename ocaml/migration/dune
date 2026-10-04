@@ -885,3 +885,14 @@
  (deps ../lib/backend/arm64/Emit.mli)
  (action (with-stdout-to %{targets}
   (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/arm64/Emit.mli})))))
+
+(rule
+ (targets InstrumentedX64Printing.ml)
+ (deps ../lib/backend/x64/runtime/X64Printing.ml)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/x64/runtime/X64Printing.ml})))))
+(rule
+ (targets InstrumentedX64Printing.mli)
+ (deps ../lib/backend/x64/runtime/X64Printing.mli)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../lib/backend/x64/runtime/X64Printing.mli}) (echo "val genPrintInt64AndExit : X86_64.reg -> X86_64.instr list\nval genPrintBoolAndExit : X86_64.reg -> X86_64.instr list\n")))))

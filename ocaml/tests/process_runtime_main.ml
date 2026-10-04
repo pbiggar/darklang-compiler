@@ -498,6 +498,39 @@ let x64CallFloatChecks ()=
   check body X.RAX (Int64.bits_of_float 2.) []) [[LIR.D0,LIR.FPhysical LIR.D1;LIR.D1,LIR.FPhysical LIR.D0];[LIR.D0,LIR.FPhysical LIR.D1;LIR.D1,LIR.FPhysical LIR.D2;LIR.D2,LIR.FPhysical LIR.D0]];
  !total
 [@@warning "-42"]
+let x64PrintingChecks ()=
+ let module X=X86_64 in
+ let ctx={X64CodeGenTypes.functionName="x64-printing-execution";stackSize=0;usedCalleeSaved=[];enableLeakCheck=false;recordRegistry=StringOrder.Map.empty;sumShapeRegistry=StringOrder.Map.empty;functionNames=FunctionIdMap.empty} in
+ let checked=function Ok value->value|Error error->failwith error in
+ let total=ref 0 in
+ let check expected body=
+  let code=[X.Label "_start"]@body@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall in
+  let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0 in
+  let actual=runImageOn "/opt/dcb/qemu/qemu-x86_64" binary [] "" in
+  if actual<>expected then failwith (Printf.sprintf "x64 printing: expected %S, got %S (case %d)" expected actual !total);
+  incr total in
+ List.iter (fun reg -> List.iter (fun value -> List.iter (fun newline ->
+  let setup=X64Operands.loadImm64 (X64Operands.lirRegToX86 reg) value in
+  let signed=if newline then X64EmitPrinting.emitPrintInt64 else X64EmitPrinting.emitPrintInt64NoNewline in
+  let unsigned=if newline then X64EmitPrinting.emitPrintUInt64 else X64EmitPrinting.emitPrintUInt64NoNewline in
+  check (Int64.to_string value^(if newline then "\n" else "")) (setup@checked (signed ctx (LIR.Physical reg)));
+  check (Printf.sprintf "%Lu" value^(if newline then "\n" else "")) (setup@checked (unsigned ctx (LIR.Physical reg)))) [false;true]) [0L;1L;-1L;10L;Int64.min_int;Int64.max_int]) [LIR.X0;LIR.X2;LIR.X1;LIR.X4;LIR.X6;LIR.X19];
+ List.iter (fun value ->
+  let setup=X64Operands.loadImm64 X.RAX value in
+  check (if value=0L then "false\n" else "true\n") (setup@checked (X64EmitPrinting.emitPrintBool ctx (LIR.Physical LIR.X0)));
+  check "" (setup@checked (X64EmitPrinting.emitPrintBoolNoNewline ctx (LIR.Physical LIR.X0)))) [0L;1L;-1L];
+ List.iter (fun text -> check (text^"\n") (checked (X64EmitPrinting.emitPrintString ctx text))) ["";"hé😀";String.make 7 'a';String.make 8 'a';String.make 9 'a'];
+ List.iter (fun length -> let text=String.init length (fun index -> Char.chr ((index*73+255) land 255)) in check text (checked (X64EmitPrinting.emitPrintChars ctx (List.of_seq (String.to_seq text))))) [0;1;7;8;9;31;32;33;65];
+ List.iter (fun reg -> List.iter (fun newline ->
+  let text="hé😀" in let data=Bytes.make 8 '\000' in Bytes.blit_string text 0 data 0 (String.length text);
+  let actualReg=X64Operands.lirRegToX86 reg in
+  let setup=[X.SUB_imm (X.RSP,32l)]@X64Operands.loadImm64 X.RAX 1L@[X.MOV_store (X.RSP,0l,X.RAX)]@X64Operands.loadImm64 X.RAX (Int64.of_int (String.length text))@[X.MOV_store (X.RSP,8l,X.RAX)]@X64Operands.loadImm64 X.RAX (Bytes.get_int64_le data 0)@[X.MOV_store (X.RSP,16l,X.RAX);X.MOV_reg (actualReg,X.RSP)] in
+  let emit=if newline then X64EmitPrinting.emitPrintHeapString else X64EmitPrinting.emitPrintHeapStringNoNewline in
+  check (text^(if newline then "\n" else "")) (setup@checked (emit ctx (LIR.Physical reg))@[X.ADD_imm (X.RSP,32l)])) [false;true]) [LIR.X0;LIR.X2;LIR.X6;LIR.X19;LIR.X7];
+ check "heap" (X64Printing.genHeapInit ()@X64Operands.genPrintChars ['h';'e';'a';'p']);
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -505,4 +538,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count

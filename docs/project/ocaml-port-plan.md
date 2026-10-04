@@ -1462,3 +1462,19 @@ move cycles and direct/indirect/closure return destinations and scratch aliases.
 The execution harness supplies RDI=0 before the source exit syscall helper.
 Comment coverage is complete. Coverage is 278/391 pairs. Remaining x64 runtime
 and instruction families, driver/library, runners/corpus and acceptance remain.
+
+Complete x64 printing support and printing instruction emission are translated
+with full interfaces and all source comments, including private support routines
+and the frozen reference's legacy behavior boundaries. Full instruction lists
+and diagnostic results match across 1,082,296 identical JSON bytes (SHA256
+5266f07105df1b9cb755f454e73877776c7eec69059cda59d8d54a7204352d0d), including
+all GP mappings/virtual diagnostics, FP call setup, signed/unsigned and boolean
+printers, static/dynamic strings, byte sequences, UTF-16 replacement behavior,
+heap initialization and source-ordered generated labels. No labels are renamed.
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+413/413 x64 executions. The 175 new x64 cases validate signed/unsigned limits,
+newlines, source boolean behavior, UTF-8 and byte output, dynamic string scratch
+and RDX aliases, and real mmap heap startup. Integer fixtures respect the
+printer's RCX stack-cursor reservation. Coverage is 280/391 pairs; source comment
+coverage is complete. Remaining x64 runtime/instructions, driver/library,
+runners/corpus and final acceptance remain open.

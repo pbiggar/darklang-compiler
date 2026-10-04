@@ -3928,6 +3928,29 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let x64PrintingObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let regs=List.map LIR.Physical physical@[LIR.Virtual (-1);LIR.Virtual 0]
+    let ctxType=typeof<LIR.Instr>.Assembly.GetType("X64CodeGenTypes+FuncCtx")
+    let ctx=FSharpValue.MakeRecord(ctxType,[|box source;box 32;box ([]:LIR.PhysReg list);box false;box (Map.empty:LIR.RecordRegistry);box (Map.empty:MemoryModel.RcSumShapeRegistry);box (FunctionIdMap.empty:FunctionIdMap<string>)|],Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+    let emit name args=rcInternalCall<Result<X86_64.Instr list,string>> "X64EmitPrinting" name (Array.append [|ctx|] args)
+    let runtime name args=rcInternalCall<X86_64.Instr list> "X64Printing" name args
+    let registerCases=mapNodes (fun reg ->
+        let noFields:(string*AST.SemanticType) list=["field",AST.TString]
+        let variants:(string*int*AST.SemanticType option) list=[source,0,Some AST.TString]
+        let calls=[(fun () -> emit "emitPrintInt64" [|box reg|]);(fun () -> emit "emitPrintUInt64" [|box reg|]);(fun () -> emit "emitPrintInt64NoNewline" [|box reg|]);(fun () -> emit "emitPrintUInt64NoNewline" [|box reg|]);(fun () -> emit "emitPrintBool" [|box reg|]);(fun () -> emit "emitPrintBoolNoNewline" [|box reg|]);(fun () -> emit "emitPrintHeapString" [|box reg|]);(fun () -> emit "emitPrintHeapStringNoNewline" [|box reg|]);(fun () -> emit "emitPrintList" [|box reg;box AST.TString|]);(fun () -> emit "emitPrintSum" [|box reg;box variants|]);(fun () -> emit "emitPrintRecord" [|box reg;box source;box noFields|]);(fun () -> emit "emitPrintBlob" [|box reg|])]
+        mapNodes call calls) regs
+    let fpCases=mapNodes (fun freg -> mapNodes call [(fun () -> emit "emitPrintFloat" [|box freg|]);(fun () -> emit "emitPrintFloatNoNewline" [|box freg|])]) (List.map LIR.FPhysical [LIR.D0;LIR.D1;LIR.D14;LIR.D15]@[LIR.FVirtual (-1);LIR.FVirtual 0])
+    let texts=mapNodes (fun text -> call (fun () -> emit "emitPrintString" [|box text|])) [source;"";"hé😀";String('a',7);String('a',8);String('a',9);String([|char 0xd800;'a';char 0xdc00|])]
+    let chars=mapNodes (fun length -> call (fun () -> emit "emitPrintChars" [|box (List.init length (fun index -> byte ((index*73+255) &&& 255)))|])) ([0..33]@[63;64;65])
+    let runtimeCases=mapNodes (fun reg -> mapNodes call [(fun () -> Ok (runtime "genPrintInt64" [|box reg;box true|]));(fun () -> Ok (runtime "genPrintInt64" [|box reg;box false|]));(fun () -> Ok (runtime "genPrintUInt64" [|box reg;box true|]));(fun () -> Ok (runtime "genPrintUInt64" [|box reg;box false|]));(fun () -> Ok (runtime "genPrintInt64AndExit" [|box reg|]));(fun () -> Ok (runtime "genPrintBoolAndExit" [|box reg|]))]) [X86_64.RAX;X86_64.RBX;X86_64.RCX;X86_64.RDX;X86_64.RSI;X86_64.RDI;X86_64.RBP;X86_64.RSP;X86_64.R8;X86_64.R9;X86_64.R10;X86_64.R11;X86_64.R12;X86_64.R13;X86_64.R14;X86_64.R15]
+    let heap=call (fun () -> Ok (runtime "genHeapInit" [||]))
+    tuple [registerCases;fpCases;texts;chars;runtimeCases;heap]
+
 let x64CallFloatObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -5985,6 +6008,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "x64-printing" -> x64PrintingObservation source
         | "x64-call-float" -> x64CallFloatObservation source
         | "arm64-program" -> armProgramObservation source
         | "arm64-emit" -> armEmitObservation source
