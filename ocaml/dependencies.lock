@@ -11,3 +11,6 @@ uuseg.16.0.0
 uutf.1.0.4
 yojson.3.0.0
 zarith.1.14
+
+# Native default-culture prefix checks use ICU 74.2, matching the frozen
+# Linux .NET oracle. The Noble development image installs libicu-dev.

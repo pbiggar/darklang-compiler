@@ -112,6 +112,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       less \
       libatomic1 \
       libglib2.0-0t64 \
+      libicu-dev \
       libssl3t64 \
       libstdc++6 \
       python3 \

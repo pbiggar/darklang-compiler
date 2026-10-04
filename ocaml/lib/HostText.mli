@@ -10,3 +10,4 @@ val isLetterUnit : int -> bool
 val isDigitUnit : int -> bool
 val isUpperUnit : int -> bool
 val graphemeClusters : string -> string list
+val startsWithCurrentCulture : string -> string -> bool

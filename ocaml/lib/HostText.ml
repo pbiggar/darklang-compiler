@@ -167,3 +167,6 @@ let graphemeClusters text =
         let nextRegional = if current = `RI then regionalCount + 1 else 0 in
         scan (Some current) nextRegional nextEmojiRun nextEmojiZwj start reversed rest
   in scan None 0 false false 0 [] characters
+
+external startsWithUnits : int array -> int array -> bool = "dark_starts_with_current_culture"
+let startsWithCurrentCulture text prefix=startsWithUnits (utf16Units text) (utf16Units prefix)

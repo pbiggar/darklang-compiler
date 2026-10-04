@@ -14,3 +14,8 @@ depends: [
   "uunf" {= "16.0.0"}
   "uuseg" {= "16.0.0"}
 ]
+
+depexts: [
+  ["libicu-dev"] {os-distribution = "ubuntu" | os-distribution = "debian"}
+  ["icu4c"] {os = "macos"}
+]

@@ -1097,3 +1097,30 @@ execution tests), and comment coverage has zero missing lines. Coverage is
 235/391 pairs. Corresponding ARM64 code-generation helpers are next; remaining
 instruction/runtime emission, tooling/ownership tests, full corpus checks and
 final acceptance remain open.
+
+Complete ARM64 operand materialization, frame generation, code-generation
+contexts/planning and checked heap-allocation helpers are translated with
+interfaces and source comments. Full observations match F# across 224,009,277
+bytes of canonical JSON: every physical register, reserved/virtual float IDs,
+41,472 immediate selections, 262,368 stack-offset selections, CLI operands,
+paired/odd GP/FP saves including signed-offset overflow, whole prologues and
+epilogues, both target syscall/error paths, all allocation register pairs,
+default options/constants, function identities, sum registries, nominal/helper
+labels, release-plan cost thresholds and slot-init retain selection. Internal
+crash presence is compared while native exception text is permitted by the
+acceptance contract. Recoverable result values and diagnostics remain exact.
+
+The ownership-name prefix helper uses .NET's default culture comparison rather
+than ordinal comparison. Its Unicode-ignorable behavior is retained through a
+native ICU collation-element adapter, with .NET source attribution recorded in
+ocaml/THIRD_PARTY_NOTICES.md. The adapter links directly to ICU and introduces
+no F#/.NET bridge; generated executables retain their native dependency-free
+layout. ICU 74.2 matches the frozen Linux oracle. The development Docker image
+and opam external dependencies include ICU headers/libraries. In the restricted
+VM, headers and linker symlinks are extracted into the local development sysroot;
+builds set C_INCLUDE_PATH=<toolchains>/qemu-deps/sysroot/usr/include and
+LIBRARY_PATH=<toolchains>/qemu-deps/sysroot/usr/lib/x86_64-linux-gnu. The build is
+warning-free, all 508 native checks pass, and comment coverage is complete.
+Coverage is 239/391 pairs. ARM64 machine peephole optimization is next;
+remaining instruction/runtime emission, tooling/ownership tests, full corpus
+checks and final acceptance remain open.
