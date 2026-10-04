@@ -1904,3 +1904,20 @@ The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
 6080/6080 x64 executions. Coverage is 312/391 pairs and reference comment coverage
 is complete. macOS code-signing execution requires its target host during final
 acceptance; remaining driver/library, runners/corpus and acceptance remain open.
+
+Complete stdlib compilation, explicit generic specialization, both reusable
+preamble compilation APIs, compiler reachability, user compilation and the
+compiler-library request boundary now run entirely in OCaml. The 64 base
+comparison groups match F# for full typed declarations, registries, allocated
+LIR, versioned summaries, optimized ANF/candidates, both call graphs, inlining
+metadata, dense type maps, timing pass order and complete executable bytes for
+repeated cached/uncached user requests. All 928 additional groups match for
+empty/declaration/generic/value/record preambles, both internal-access settings,
+precomputed specialization, subsequent checking and compiled source reuse,
+scalar/record/sum standard-library specialization and repeated specialization.
+The comparison is divided into bounded requests after the initial combined
+observation exceeded VM memory; every case and artifact remains included.
+The warning-free core build passes 508/508 unit checks, 519/519 ARM64 executions
+and 6080/6080 x64 executions. Coverage is 317/391 committed pairs, and all
+reference comments are preserved. The CLI, remaining unit/test-tooling pairs
+and full corpus/final acceptance remain open.

@@ -317,6 +317,7 @@ type typeMap = {firstId : int; types : AST.semanticType option array}
 let int32Add left right = Int32.to_int (Int32.add (Int32.of_int left) (Int32.of_int right))
 let int32Sub left right = Int32.to_int (Int32.sub (Int32.of_int left) (Int32.of_int right))
 module TypeMap = struct
+ let snapshot types=types.firstId,Array.copy types.types
  module IdMap = Map.Make(Int)
  let empty = {firstId = 0; types = [||]}
  let tryFind (TempId id) types =

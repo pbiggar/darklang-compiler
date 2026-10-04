@@ -714,7 +714,7 @@
       "source": "src/DarkCompiler/driver/Reachability.fs",
       "kind": "compiler",
       "sha256": "20288fac09637c4a3771eaa646332d6ff5b6eaa0129c77cc98a9a18f31a00fef",
-      "owner": "ocaml/lib/driver/Reachability.ml"
+      "owner": "ocaml/lib/driver/CompilerReachability.ml"
     },
     {
       "source": "src/DarkCompiler/driver/SourcePreparation.fs",

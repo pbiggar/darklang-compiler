@@ -7384,6 +7384,177 @@ let executionObservation (source:string) =
                     raw.Add(byte '|')
     tuple [captured;wrappers;enc (Text.Encoding.UTF8.GetString(raw.ToArray()))]
 
+let stdlibCompilationBase=lazy (
+    let phases=ResizeArray<string>()
+    let record (value:CompilerOptions.PassTiming)=phases.Add value.Pass
+    StdlibCompilation.buildStdlibWithTrace Platform.LinuxX86_64 (Some record),List.ofSeq phases)
+let stdlibCompilationObservation (input:string) =
+    let request=JsonNode.Parse input
+    let bucket=request["bucket"].GetValue<int>()
+    let enc value=closureAnalysisEncode value
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let list f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let outcome f value=match value with Error error->enc (Error error:Result<unit,string>)|Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|f value|]);node :> JsonNode
+    let attempt f action=outcome f (try action () with ex->Error ex.Message)
+    let selected encoder values=values |> List.mapi (fun index value->index,value) |> List.filter (fun (index,_)->index % 64=bucket) |> list (fun (index,value)->tuple [enc index;encoder value])
+    let typeMap (value:ANF.TypeMap)=
+        let flags=Reflection.BindingFlags.Instance ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+        tuple [enc (unbox<int> (typeof<ANF.TypeMap>.GetProperty("FirstId",flags).GetValue value));enc (unbox<AST.SemanticType option array> (typeof<ANF.TypeMap>.GetProperty("Types",flags).GetValue value))]
+    let stdlib,phases=stdlibCompilationBase.Value
+    attempt id (fun ()->stdlib |> Result.map (fun (stdlib:CompilationContexts.StdlibResult)->
+        let summary (value:CompilationCacheIdentity.FunctionSummary)=tuple [value.Version |> Option.map (fun version->version.Unit,version.Function,version.Target,version.Options,version.Body) |> enc;enc (rcInternalCall<CompilationCacheIdentity.FunctionSummaryFacts> "CompilationCacheIdentity" "summaryFacts" [|box value|])]
+        let graph values=selected (fun (id,calls)->
+            let fields=JsonArray([|JsonArray([|JsonValue.Create("Ids") :> JsonNode;enc (Set.toList calls)|]) :> JsonNode|])
+            let node=JsonObject()
+            node["record"]<-JsonValue.Create "Calls"
+            node["fields"]<-fields
+            tuple [enc id;node]) (FunctionIdMap.toList values)
+        let anf values=selected (fun (name,func)->tuple [enc name;enc func]) (Map.toList values)
+        let describe (stdlib:CompilationContexts.StdlibResult)=tuple [
+            (if bucket=0 then tuple [driverProgram stdlib.TypedAST;driverSymbols stdlib.Context.Symbols;enc stdlib.Context.Registries;typeMap stdlib.StdlibTypeMap;enc (Set.toList (CompilerReachability.getAllStdlibFunctionNamesFromStdlib stdlib))] else null)
+            selected enc stdlib.AllocatedFunctions
+            selected (fun (id,value)->tuple [enc id;summary value]) (FunctionIdMap.toList stdlib.CallGraphSummaries)
+            anf stdlib.StdlibANFFunctions
+            anf stdlib.StdlibANFOptimizationCandidates
+            graph stdlib.StdlibCallGraph
+            graph stdlib.StdlibANFCallGraph
+            selected (fun (id,(info:InliningCommon.FunctionInfo))->tuple [enc id;enc info.Func;enc (Set.toList info.Calls);enc info.Size;enc info.IsRecursive;enc info.HasClosures;enc info.HasTailCalls;enc info.IsExternal]) (FunctionIdMap.toList stdlib.StdlibInlineCandidates)]
+        let texts=["()";"1L";"true";"let f (x: Int64) : Int64 = x + 1L\nf 2L";"let id (x: 'a) : 'a = x\nid 3L";"Darklang.Stdlib.List.length [1L,2L]";"unknown 1L";"let broken ="]
+        let cases=texts |> List.collect (fun source->[CompilerOptions.FullProgram;CompilerOptions.TestExpression] |> List.collect (fun mode->[false;true] |> List.map (fun cached->source,mode,cached)))
+        let compiled=selected (fun (source,mode,cached)->
+            let session=if cached then Some(new CompilationSession.CompilationSession()) else None
+            let compile()=
+                let phases=ResizeArray<string>()
+                let record (value:CompilerOptions.PassTiming)=phases.Add value.Pass
+                let request:CompilationContexts.CompileRequest={Context=CompilationContexts.StdlibOnly stdlib;Mode=mode;Sources=AST.NonEmptyList.singleton {Name="input.dark";Purpose=NameSyntax.SourceUnitPurpose.Executable;Source=source};AllowInternal=false;Verbosity=0;Options=CompilerOptions.defaultOptions;PackageValues=CompilationContexts.emptyPackageValueCatalog;PackageManager=None;PassTimingRecorder=Some record;Session=session}
+                let report=CompilerLibrary.compile request
+                tuple [outcome enc report.Result;enc (report.CompileTime.Ticks>=0L);enc (List.ofSeq phases)]
+            let first=compile()
+            let second=compile()
+            tuple [first;second;outcome (fun names->enc (Set.toList names)) (CompilerReachability.getReachableStdlibFunctionsFromStdlib stdlib source)]) cases
+        tuple [describe stdlib;(if bucket=0 then enc phases else null);compiled]))
+
+let coreContextsSpecializations=System.Collections.Generic.Dictionary<int,Result<CompilationContexts.StdlibResult,string>*Result<CompilationContexts.StdlibResult,string>*string list>()
+let coreContextsFixtures case=
+    let stdlib,_=stdlibCompilationBase.Value
+    let preambles ()=stdlib |> Result.map (fun (stdlib:CompilationContexts.StdlibResult)->
+        let sources=["";" \n\t";"let add (x: Int64) : Int64 = x + 1L";"let id (x: 'a) : 'a = x";"val saved = 4L\nlet add (x: Int64) : Int64 = x + saved";"type R = { x: Int64 }\nlet same (x: R) : Bool = x == x";"let broken =";"let bad (x: Int64) : String = x"]
+        sources |> List.collect (fun source->[false;true] |> List.collect (fun allowInternal->[false;true] |> List.map (fun fromAnalysis->fun ()->
+            let phases=ResizeArray<string>()
+            let record (value:CompilerOptions.PassTiming)=phases.Add value.Pass
+            let report=try
+                            if not fromAnalysis then PreambleCompilation.buildPreambleContext allowInternal stdlib source "preamble.dark" Map.empty (Some record)
+                            else PreambleAnalysis.analyzePreamble allowInternal stdlib source |> Result.bind (fun analysis->
+                                let specs=if Map.containsKey "id" analysis.GenericFuncDefs then Set.singleton ("id",[AST.TInt64]) else Set.empty
+                                let generic=Map.fold (fun acc name value->Map.add name value acc) stdlib.Context.GenericFuncDefs analysis.GenericFuncDefs
+                                let specialization=Monomorphization.specializeFromSpecs (CheckedAST.programSymbols analysis.TypedAST) generic specs
+                                PreambleCompilation.buildPreambleContextFromAnalysis stdlib analysis specialization "preamble.dark" Map.empty (Some record))
+                       with ex->Error ex.Message
+            source,allowInternal,fromAnalysis,report,List.ofSeq phases))) |> fun cases->(List.item case cases) ())
+    let specializations ()=
+      let index=(case-32)/2
+      match coreContextsSpecializations.TryGetValue index with
+      | true,value->Ok value
+      | _->
+       let result=stdlib |> Result.map (fun (stdlib:CompilationContexts.StdlibResult)->
+         let record="Port.Record"
+         let sum="Port.Sum"
+         let info:TypeRegistries.RecordTypeInfo={TypeParams=[];Fields=["x",AST.TInt64;"s",AST.TString]}
+         let externalTypes=Map.ofList [record,info]
+         let externalVariants=Map.ofList [sum+".A",(sum,[],0,[]);sum+".B",(sum,[],1,[AST.TInt64])]
+         let cases=[[];["Darklang.Stdlib.List.length",[AST.TInt64]];["Darklang.Stdlib.List.reverse",[AST.TString]];["Darklang.Stdlib.List.map",[AST.TInt64;AST.TString]];["Darklang.Stdlib.List.reverse",[AST.TRecord(record,[])]];["Darklang.Stdlib.List.reverse",[AST.TSum(sum,[])]];["missing",[AST.TInt64]]]
+         cases |> List.map (fun specs->fun ()->
+             let specs=Set.ofList specs
+             let phases=ResizeArray<string>()
+             let record (value:CompilerOptions.PassTiming)=phases.Add value.Pass
+             let report=try StdlibCompilation.buildStdlibSpecializations stdlib specs externalTypes externalVariants (Some record) with ex->Error ex.Message
+             let repeated=report |> Result.bind (fun value->try StdlibCompilation.buildStdlibSpecializations value specs externalTypes externalVariants None with ex->Error ex.Message)
+             report,repeated,List.ofSeq phases) |> fun cases->(List.item ((case-32)/2) cases) ())
+       match result with Ok value->coreContextsSpecializations.Add(index,value)|Error _->()
+       result
+    preambles,specializations
+
+let coreContextsObservation (input:string) =
+    let request=JsonNode.Parse input
+    let bucket=request["bucket"].GetValue<int>()
+    let case=request["case"].GetValue<int>()
+    let enc value=closureAnalysisEncode value
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let list f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let outcome f value=match value with Error error->enc (Error error:Result<unit,string>)|Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|f value|]);node :> JsonNode
+    let selected encoder values=values |> List.mapi (fun index value->index,value) |> List.filter (fun (index,_)->index % 64=bucket) |> list (fun (index,value)->tuple [enc index;encoder value])
+    let map f values=let node=JsonObject() in node["map"]<-list (fun (key,value)->tuple [enc key;f value]) (Map.toList values);node :> JsonNode
+    let ids f values=
+        let node=JsonObject()
+        let content=JsonObject()
+        content["map"]<-list (fun (key,value)->tuple [enc (AST.functionIdValue key);f value]) (FunctionIdMap.toList values)
+        node["type"]<-JsonValue.Create "FunctionIdMap"
+        node["case"]<-JsonValue.Create "FunctionIdMap"
+        node["fields"]<-JsonArray([|content :> JsonNode|])
+        node :> JsonNode
+    let typeMap (value:ANF.TypeMap)=
+        let flags=Reflection.BindingFlags.Instance ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+        tuple [enc (unbox<int> (typeof<ANF.TypeMap>.GetProperty("FirstId",flags).GetValue value));enc (unbox<AST.SemanticType option array> (typeof<ANF.TypeMap>.GetProperty("Types",flags).GetValue value))]
+    let generic (values:SpecializationIdentity.GenericFuncDefs)=
+        let cached=ResizeArray<CheckedAST.Symbols*int>()
+        let catalogs=ResizeArray<JsonNode>()
+        let keys=ResizeArray<string>()
+        let catalog symbols=
+            match cached |> Seq.tryFind (fun (old,_)->Object.ReferenceEquals(old,symbols)) with
+            | Some(_,index)->index
+            | None->
+                let encoded=driverSymbols symbols
+                let key=encoded.ToJsonString()
+                let index=match keys |> Seq.tryFindIndex ((=) key) with Some index->index|None->let index=keys.Count in keys.Add key;catalogs.Add encoded;index
+                cached.Add(symbols,index)
+                index
+        let artifacts=map (fun (item:SpecializationIdentity.GenericFunctionArtifact)->
+            let index=catalog item.Symbols
+            tuple [enc index;driverProgram (rcInternalCall<CheckedAST.Program> "CheckedAST" "programFromCheckedParts" [|box (CheckedAST.emptySymbols());box [CheckedAST.FunctionDef item.Function]|]);enc (Set.toList item.DirectDependencies)]) values
+        tuple [list (fun (node:JsonNode)->node.DeepClone()) (List.ofSeq catalogs);artifacts]
+    let env (value:CheckingTypes.TypeCheckEnv)=tuple [
+        enc value.TypeReg
+        map (fun (info:CheckingTypes.RecordTypeInfo)->tuple [enc info.Fields;enc info.FieldTypes;enc info.TypeParams]) value.IndexedTypeReg
+        enc value.RecordTypeNames
+        enc value.VariantLookup
+        map (fun (info:CheckingTypes.SumTypeInfo)->tuple [enc info.TypeParams;list (fun (variant:CheckingTypes.SumVariantInfo)->tuple [enc variant.Name;enc variant.Tag;enc variant.Fields]) info.Variants]) value.IndexedSumTypeReg
+        enc value.SumTypeNames
+        enc value.FuncEnv
+        enc value.Values
+        enc value.FuncParamNames
+        tuple [enc value.GenericFuncReg.Functions;enc value.GenericFuncReg.RequireExplicitTypeArgsForBareCalls]
+        enc value.GenericFuncDefs
+        enc value.ModuleRegistry
+        enc value.AliasReg]
+    let context (value:CompilationContexts.PipelineContext)=tuple [
+        driverSymbols value.Symbols;enc value.Target;env value.TypeCheckEnv
+        map (fun (item:CompilationContexts.CheckedValueArtifact)->tuple [enc item.BindingCursor;enc item.Type;enc (sprintf "%A" item.Body)]) value.CheckedValues
+        generic value.GenericFuncDefs;enc value.SpecRegistry;enc value.Registries;enc value.BaseFuncNames
+        tuple [enc value.LambdaLiftFunctions.Params;enc value.LambdaLiftFunctions.ReturnTypes;enc value.LambdaLiftFunctions.GenericDefs]
+        enc value.LambdaLiftTypeReg;enc value.LambdaLiftVariantLookup;enc value.ProjectedMirRegistries;enc value.ReturnTypes;enc value.PackageCatalogGenericCallers
+        enc (value.TypeCheckEnv.FunctionCatalog=CheckedAST.functionCatalog value.Symbols)
+        enc (value.TypeCheckEnv.TypeCatalog=CheckedAST.typeCatalog value.Symbols)
+        enc value.WrittenEnvironment.IsSome]
+    let summary (value:CompilationCacheIdentity.FunctionSummary)=tuple [value.Version |> Option.map (fun version->version.Unit,version.Function,version.Target,version.Options,version.Body) |> enc;enc (rcInternalCall<CompilationCacheIdentity.FunctionSummaryFacts> "CompilationCacheIdentity" "summaryFacts" [|box value|])]
+    let graph values=list (fun (id,calls)->tuple [enc id;enc (Set.toList calls)]) (FunctionIdMap.toList values)
+    let preamble (value:CompilationContexts.PreambleContext)=tuple [context value.Context;enc value.ANFFunctions;typeMap value.TypeMap;enc value.SymbolicFunctions;ids summary value.CallGraphSummaries;graph value.SymbolicCallGraph]
+    let described (value:CompilationContexts.StdlibResult)=tuple [
+        (if bucket=0 then tuple [driverProgram value.TypedAST;context value.Context;typeMap value.StdlibTypeMap] else null)
+        selected enc value.AllocatedFunctions
+        selected (fun (id,value)->tuple [enc id;summary value]) (FunctionIdMap.toList value.CallGraphSummaries)
+        selected (fun (name,func)->tuple [enc name;enc func]) (Map.toList value.StdlibANFFunctions)
+        selected (fun (name,func)->tuple [enc name;enc func]) (Map.toList value.StdlibANFOptimizationCandidates)
+        selected (fun (id,calls)->tuple [enc id;enc (Set.toList calls)]) (FunctionIdMap.toList value.StdlibCallGraph)
+        selected (fun (id,calls)->tuple [enc id;enc (Set.toList calls)]) (FunctionIdMap.toList value.StdlibANFCallGraph)
+        selected (fun (id,(info:InliningCommon.FunctionInfo))->tuple [enc id;enc info.Func;enc (Set.toList info.Calls);enc info.Size;enc info.IsRecursive;enc info.HasClosures;enc info.HasTailCalls;enc info.IsExternal]) (FunctionIdMap.toList value.StdlibInlineCandidates)]
+    let preambles,specializations=coreContextsFixtures case
+    if case<32 then outcome (fun (source,allowInternal,fromAnalysis,report,phases)->tuple [enc source;enc allowInternal;enc fromAnalysis;outcome (fun (stdlib,value)->
+                let compiled source=
+                    let request:CompilationContexts.CompileRequest={Context=CompilationContexts.StdlibWithPreamble(stdlib,value);Mode=CompilerOptions.TestExpression;Sources=AST.NonEmptyList.singleton {Name="user.dark";Purpose=NameSyntax.SourceUnitPurpose.Executable;Source=source};AllowInternal=allowInternal;Verbosity=0;Options=CompilerOptions.defaultOptions;PackageValues=CompilationContexts.emptyPackageValueCatalog;PackageManager=None;PassTimingRecorder=None;Session=None}
+                    outcome enc (CompilerLibrary.compile request).Result
+                tuple [preamble value;list compiled ["()";"add 2L";"id 3L";"saved"];outcome (fun (_,program,_)->driverProgram program) (WrittenParsing.parse LibParser.Validation.Script "()" |> Result.bind (fun parsed->WrittenChecking.checkSourceUnitsWithBase value.Context.WrittenEnvironment allowInternal false [parsed]))]) report;enc phases]) (preambles ())
+    else outcome (fun (report,repeated,phases)->tuple [outcome described (if (case-32)%2=0 then report else repeated);(if bucket=0 then enc phases else null)]) (specializations ())
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7413,6 +7584,8 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "core-contexts" -> coreContextsObservation source
+        | "stdlib-compilation" -> stdlibCompilationObservation source
         | "execution" -> executionObservation source
         | "binary-output" -> binaryOutputObservation source
         | "package-catalog" -> packageCatalogObservation source
