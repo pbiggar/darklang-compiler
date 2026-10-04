@@ -2964,6 +2964,24 @@ let armPrintingObservation (source:string) =
         tuple [simple;strings;chars;leaks]
     mapNodes targetObservation [ARM64.targetConfigFor Platform.MacOSARM64;ARM64.targetConfigFor Platform.LinuxARM64]
 
+let armProcessObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let context target enabled : ARM64CodeGenTypes.CodeGenContext={Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled};SumShapeRegistry=Map.empty;RecordRegistry=Map.empty;RawSlotInitRetainTargets=None;ClosurePayloadSizes=Map.empty;ClosureCaptureTypes=Map.empty;FunctionNames=FunctionIdMap.empty;FunctionName=source;InstructionSite=source;StackSize=0;UsedCalleeSaved=[];UsedCalleeSavedF=[];HeapOverflowLabel=source;RecordLirOpExpansion=None}
+    let options target enabled =
+        let ctx=context target enabled
+        let labels=[source;"argv";"hé😀";"nul\000label";String([|char 0xd800;'a';char 0xdc00|])]
+        let argv label=rcInternalCall<ARM64Symbolic.Instr list> "ARM64ProcessLifecycle" "generateCliArgvHelper" [|box ctx;box label|]
+        let groups=[[ARM64ProcessLifecycle.generateHeapInit target];List.map argv labels;[rcInternalCall<ARM64Symbolic.Instr list> "ARM64ExecuteProcess" "generateLinuxCliExecuteHelper" [||]];[rcInternalCall<ARM64Symbolic.Instr list> "ARM64RunProcess" "generateLinuxCliRunProcessHelper" [||]];[rcInternalCall<ARM64Symbolic.Instr list> "ARM64ProcessLifecycle" "generateLinuxCliSpawnProcessHelper" [||]];[rcInternalCall<ARM64Symbolic.Instr list> "ARM64ProcessLifecycle" "generateLinuxCliProcessLifecycleHelpers" [|box ctx|]]]
+        let code xs=
+            let sp,fp=ARM64_Resolve.collectPools xs
+            let words=ARM64_Encoding.encodeSymbolicWithPools xs sp fp (ARM64.targetOS target) enabled
+            let image=match ARM64.targetOS target with Platform.Linux -> Binary_Generation_ELF.createExecutableWithPools words sp fp enabled | Platform.MacOS -> Binary_Generation_MachO.createExecutableWithPools words sp fp enabled
+            tuple [enc xs;enc sp;enc fp;enc words;enc image]
+        tuple [mapNodes (mapNodes code) groups;code (List.concat (List.concat groups))]
+    mapNodes (fun target -> mapNodes (options target) [false;true]) [ARM64.targetConfigFor Platform.MacOSARM64;ARM64.targetConfigFor Platform.LinuxARM64]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -5212,6 +5230,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-process" -> armProcessObservation source
         | "arm64-printing" -> armPrintingObservation source
         | "arm64-runtime" -> armRuntimeObservation source
         | "arm64-peephole" -> armPeepholeObservation source

@@ -1160,3 +1160,20 @@ The warning-free build passes 508/508 tests and complete comment coverage.
 Coverage is 251/391 pairs. Process/argument-vector runtime helpers are next;
 remaining ownership/dispatch, full test tooling/corpus and final acceptance
 remain open.
+
+Complete ARM64 heap initialization, positional arguments, shell execution,
+argv execution/pipelines and tracked process lifecycle helpers are translated
+with interfaces and all 89 source comment lines. Full symbolic instructions,
+literal pools, machine words and ELF/Mach-O images match F# across 34,427,044
+bytes of canonical observations for both OS layouts, both leak options,
+combined helpers and Unicode/NUL/isolated-surrogate argument-helper labels.
+Mach-O comparison continues to use the documented shared UUID entropy input
+in complete migration-only copies, without output normalization.
+
+All 508 translated tests pass, and eight additional native ARM64 executables
+pass through pinned QEMU: heap setup and root-frame argument retrieval for
+present, empty, Unicode, negative-index and missing arguments. The separate
+process_runtime_main executable retains these execution checks. The build is
+warning-free and comment coverage is complete. Coverage is 254/391 pairs.
+Instruction-family lowering is next; remaining ownership runtime, complete
+runners/corpus checks and final acceptance remain open.

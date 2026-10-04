@@ -13,6 +13,10 @@ def prepare(destination, original):
                         str(ROOT / "src/DarkCompiler/backend/arm64/Binary_Generation_MachO.fs")],
                        check=True, stdout=output)
     reference = original.read_text()
+    # Process observations also generate complete Mach-O images. Route their
+    # entropy input through the full controlled implementation before emission.
+    reference = reference.replace("Binary_Generation_MachO.createExecutableWithPools",
+                                  "ControlledMachO.createExecutableWithPools")
     for line in reference.splitlines():
         if line.startswith('#r "') or line.startswith('#load "'):
             reference = reference.replace(line, line.split('"')[0] + '"' + str((original.parent / line.split('"')[1]).resolve()) + '"')

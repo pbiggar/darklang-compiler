@@ -1,7 +1,7 @@
 (include_subdirs unqualified)
 (executable
  (name foundations_main)
- (modules (:standard \ text_probe semantic_probe float_probe))
+ (modules (:standard \ text_probe semantic_probe float_probe process_runtime_main))
  (libraries dark_compiler semantic_observation yojson str)
  (flags (:standard -w @a -warn-error @a)))
 
@@ -21,4 +21,10 @@
  (name float_probe)
  (modules float_probe)
  (libraries dark_compiler yojson)
+ (flags (:standard -w @a -warn-error @a)))
+
+(executable
+ (name process_runtime_main)
+ (modules process_runtime_main)
+ (libraries dark_compiler semantic_observation unix)
  (flags (:standard -w @a -warn-error @a)))
