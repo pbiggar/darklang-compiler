@@ -15,7 +15,23 @@ if [[ ! -x "$root/dotnet/dotnet" ]]; then
 fi
 python3 "$repo/scripts/vm/materialize-links.py" "$root/downloads/dotnet.tar.gz" "$root/dotnet"
 gcc -shared -fPIC "$repo/scripts/vm/compat.c" -ldl -pthread -o "$root/vm-compat.so"
-if [[ ! -x "$ocaml_prefix/bin/ocamlopt" ]]; then
+# A version check alone accepts builds whose configure probes disabled Unix
+# operations needed by opam and Dune. Exercise those operations before reuse.
+cat > "$root/ocaml/unix-smoke.ml" <<'ML'
+let () =
+  ignore (Unix.realpath ".");
+  let child = Unix.create_process "/bin/true" [|"/bin/true"|]
+    Unix.stdin Unix.stdout Unix.stderr in
+  match snd (Unix.waitpid [] child) with
+  | Unix.WEXITED 0 -> ()
+  | _ -> failwith "OCaml Unix process smoke check failed"
+ML
+ocaml_unix_works () {
+  [[ -x "$ocaml_prefix/bin/ocaml" ]] &&
+    env -u LD_PRELOAD "$ocaml_prefix/bin/ocaml" -I +unix unix.cma \
+      "$root/ocaml/unix-smoke.ml" > "$root/ocaml-unix-smoke.log" 2>&1
+}
+if ! ocaml_unix_works; then
   curl -fL --retry 2 -o "$root/downloads/ocaml.tar.gz" \
     "https://github.com/ocaml/ocaml/archive/refs/tags/$ocaml_version.tar.gz"
   echo 'ae47728d0a876665ccc7b745e3a8d8c9ca5ba63c4f7a11d4db6cdbd1dbeef4bb  '"$root/downloads/ocaml.tar.gz" | sha256sum --check
@@ -28,6 +44,7 @@ if [[ ! -x "$ocaml_prefix/bin/ocamlopt" ]]; then
     env -u LD_PRELOAD make install > "$root/ocaml-install.log" 2>&1
   )
 fi
+ocaml_unix_works
 python3 - "$root" "$ocaml_prefix" <<'PY'
 import pathlib, shlex, sys
 root = pathlib.Path(sys.argv[1])

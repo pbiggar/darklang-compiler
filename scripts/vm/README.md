@@ -12,6 +12,29 @@ source /absolute/writable/toolchains/activate
 ./build --ai
 ```
 
+The installer checks `Unix.realpath` and child-process creation/waiting before
+reusing OCaml. If a previous configure run omitted these Unix operations, it
+rebuilds the toolchain instead of accepting its version number alone.
+
+Restore the pinned native dependencies and emulators with:
+
+```bash
+bash scripts/vm/setup-ocaml-dependencies /absolute/writable/toolchains
+bash scripts/vm/setup-qemu /absolute/writable/toolchains
+export OCAMLPATH=/absolute/writable/toolchains/opam/port-5.5.1/lib
+export C_INCLUDE_PATH=/absolute/writable/toolchains/qemu-deps/sysroot/usr/include
+export LIBRARY_PATH=/absolute/writable/toolchains/qemu-deps/sysroot/usr/lib/x86_64-linux-gnu
+env -u LD_PRELOAD /absolute/writable/toolchains/opam/port-5.5.1/bin/dune build --root ocaml -j1
+```
+
+QEMU uses the exact Docker-pinned revision, Meson 1.11.1, Ninja 1.13.2 and
+Ubuntu snapshot 20260828T000000Z development packages. Package downloads are
+checked against the snapshot index SHA256 values and extracted locally. Both
+Linux-user targets and the instruction-count plugin are built. Native execution
+tests use `PORT_QEMU_DIRECTORY=/absolute/writable/toolchains/qemu/build` and
+`LD_PRELOAD=/absolute/writable/toolchains/qemu-deps/exec-path.so` to map the
+existing `/opt/dcb/qemu/` executable paths into the workspace.
+
 The setup needs Bash, Python 3, curl, tar, GCC, and make. All installations,
 caches, temporary files, and full OCaml build logs stay in the supplied
 directory. OCaml is built serially. The script materializes .NET SDK archive

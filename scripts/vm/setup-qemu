@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Reproduce the Docker-pinned Linux-user emulators and instruction-count plugin.
+set -euo pipefail
+repo=$(cd "$(dirname "$0")/../.." && pwd)
+root=${1:?Usage: scripts/vm/setup-qemu ABSOLUTE_TOOLCHAIN_DIRECTORY}
+case "$root" in /*) ;; *) echo 'Use an absolute directory' >&2; exit 1;; esac
+revision=c3d48b7d1e89604920e5b81b91140c2ad39a1943
+qemu_root="$root/qemu-deps"
+mkdir -p "$root/tmp" "$qemu_root/python" "$qemu_root/sysroot"
+export TMPDIR="$root/tmp"
+unset LD_PRELOAD
+python3 "$repo/scripts/vm/setup-native-packages.py" "$root"
+python3 -m pip install --target "$qemu_root/python" meson==1.11.1 ninja==1.13.2
+if [[ ! -d "$root/qemu/.git" ]]; then
+  git clone --filter=blob:none --no-checkout https://github.com/qemu/qemu.git "$root/qemu"
+fi
+git -C "$root/qemu" checkout --detach "$revision"
+[[ $(git -C "$root/qemu" rev-parse HEAD) == "$revision" ]]
+export PATH="$qemu_root/python/bin:$qemu_root/sysroot/usr/bin:$PATH"
+export PYTHONPATH="$qemu_root/python"
+export LD_LIBRARY_PATH="$qemu_root/sysroot/usr/lib/x86_64-linux-gnu"
+export PKG_CONFIG_LIBDIR="$qemu_root/sysroot/usr/lib/x86_64-linux-gnu/pkgconfig:$qemu_root/sysroot/usr/share/pkgconfig"
+export PKG_CONFIG_SYSROOT_DIR="$qemu_root/sysroot"
+mkdir -p "$root/qemu/build"
+cd "$root/qemu/build"
+if [[ ! -f build.ninja ]]; then
+  ../configure --target-list=aarch64-linux-user,x86_64-linux-user --enable-plugins \
+    --disable-system --disable-docs --disable-tools --python="$(command -v python3)" \
+    > "$root/qemu-configure.log" 2>&1
+fi
+ninja -j2 qemu-aarch64 qemu-x86_64 tests/tcg/plugins/libinsn.so > "$root/qemu-build.log" 2>&1
+cc -shared -fPIC "$repo/scripts/ocaml/vm_qemu_exec.c" -ldl -o "$qemu_root/exec-path.so"
+./qemu-aarch64 --version
+./qemu-x86_64 --version
+test -s tests/tcg/plugins/libinsn.so
