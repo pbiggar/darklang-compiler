@@ -3339,6 +3339,45 @@ let armListReferenceObservation (source:string) =
      tuple [staticHelpers;planned;ordered]) [false;true]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64] in
     tuple [call (fun () -> listRC_generateListRefCountIncHelper ());specs;contexts]
 
+let armClosureReferenceObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let code (xs:ARM64Symbolic.Instr list)=enc xs
+    let plan (value:MemoryModel.RcReleasePlan)=enc value
+    let option _ (value:MemoryModel.RcReleasePlan option)=enc value
+    let call encode f=try tuple [enc false;encode (f ())] with _ -> tuple [enc true]
+    let context source target enabled : ARM64CodeGenTypes.CodeGenContext={Target=target;Options={ARM64CodeGenTypes.defaultOptions with EnableLeakCheck=enabled};SumShapeRegistry=Map.empty;RecordRegistry=Map.empty;RawSlotInitRetainTargets=None;ClosurePayloadSizes=Map.empty;ClosureCaptureTypes=Map.empty;FunctionNames=FunctionIdMap.empty;FunctionName=source;InstructionSite=source;StackSize=0;UsedCalleeSaved=[];UsedCalleeSavedF=[];HeapOverflowLabel=source;RecordLirOpExpansion=None}
+    let closure_generateClosureRefCountIncHelper (arg0:ARM64CodeGenTypes.CodeGenContext) = rcInternalCall<ARM64Symbolic.Instr list> "ARM64ClosureReferenceCounts" "generateClosureRefCountIncHelper" [|box arg0|]
+    let closure_tryRcReleasePlanOfType (arg0:LIR.RecordRegistry) (arg1:MemoryModel.RcSumShapeRegistry) (arg2:AST.SemanticType) = rcInternalCall<MemoryModel.RcReleasePlan option> "ARM64ClosureReferenceCounts" "tryRcReleasePlanOfType" [|box arg0;box arg1;box arg2|]
+    let closure_rcMetadataReleasePlan (arg0:MemoryModel.RcMetadata option) = rcInternalCall<MemoryModel.RcReleasePlan option> "ARM64ClosureReferenceCounts" "rcMetadataReleasePlan" [|box arg0|]
+    let closure_requiredRcMetadataReleasePlan (arg0:string) (arg1:MemoryModel.RcMetadata option) = rcInternalCall<MemoryModel.RcReleasePlan> "ARM64ClosureReferenceCounts" "requiredRcMetadataReleasePlan" [|box arg0;box arg1|]
+    let closure_generateRecursiveNominalRefCountDecHelper (arg0:(MemoryModel.RcReleasePlan -> string)) (arg1:ARM64CodeGenTypes.CodeGenContext) (arg2:AST.SemanticType) = rcInternalCall<ARM64Symbolic.Instr list> "ARM64ClosureReferenceCounts" "generateRecursiveNominalRefCountDecHelper" [|box arg0;box arg1;box arg2|]
+    let closure_generateClosureRefCountDecHelper (arg0:(MemoryModel.RcReleasePlan -> string)) (arg1:ARM64CodeGenTypes.CodeGenContext) = rcInternalCall<ARM64Symbolic.Instr list> "ARM64ClosureReferenceCounts" "generateClosureRefCountDecHelper" [|box arg0;box arg1|]
+    let closure_generateStreamRefCountDecHelper (arg0:ARM64CodeGenTypes.CodeGenContext) = rcInternalCall<ARM64Symbolic.Instr list> "ARM64ClosureReferenceCounts" "generateStreamRefCountDecHelper" [|box arg0|]
+    let records=Map.ofList ["R",["a",AST.TString;"b",AST.TList AST.TBlob;"c",AST.TDict (AST.TInt64,AST.TInt64)];"Rec",["next",AST.TRecord ("Rec",[])];"Child",["x",AST.TTuple [AST.TString;AST.TList AST.TString]];"Large",List.init 35 (fun index -> string index,AST.TString)] in
+    let info payloads unary:MemoryModel.RcSumShapeInfo={TypeParams=[];Payloads=payloads;UnaryPayloadTags=Set.ofList unary} in
+    let sums=Map.ofList ["None",info [] [];"Nullable",info [0,None;1,Some AST.TString] [1];"S",info [0,None;1,Some (AST.TTuple [AST.TString;AST.TList AST.TString]);65536,Some (AST.TRecord ("Child",[]))] [];"RecSum",info [0,None;1,Some (AST.TTuple [AST.TString;AST.TSum ("RecSum",[])] )] []] in
+    let primitives=[AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TBool;AST.TFloat64;AST.TString;AST.TBlob;AST.TChar;AST.TDateTime;AST.TUnit;AST.TNever;AST.TInternalRawPtr;AST.TVar source;AST.TInferenceVar (source,source);AST.TFunction ([AST.TString],AST.TBool);AST.TRecord ("missing",[]);AST.TRecord ("R",[]);AST.TRecord ("Rec",[]);AST.TRecord ("Child",[]);AST.TRecord ("Large",[]);AST.TSum ("missing",[]);AST.TSum ("None",[]);AST.TSum ("Nullable",[]);AST.TSum ("S",[]);AST.TSum ("RecSum",[]);AST.TTuple [];AST.TTuple [AST.TString;AST.TList AST.TString]] in
+    let types=primitives@List.collect (fun typ -> [AST.TList typ;AST.TList (AST.TList typ);AST.TStream typ;AST.TDict (AST.TInt64,typ);AST.TDict (AST.TString,typ);AST.TTuple [typ;AST.TString];AST.TTuple [AST.TTuple [typ;AST.TBlob];AST.TTuple [AST.TList typ;AST.TDict (AST.TString,typ)]]]) primitives in
+    let captures=[]::types::(List.init 4095 (fun _ -> AST.TUnit)@[AST.TString])::List.map (fun typ -> [typ]) types in
+    let observing f=
+     let trace=ref [] in
+     let count=ref 0 in
+     let select plan=trace:=plan:: !trace;count.Value <- count.Value+1;"dict-"+string !count in
+     let result=call code (fun () -> f select) in
+     tuple [result;mapNodes plan (List.rev !trace)]
+    in
+    let contexts=mapNodes (fun target -> mapNodes (fun enabled ->
+     let ctx={ (context source target enabled) with RecordRegistry=records;SumShapeRegistry=sums } in
+     let helpers=tuple [call code (fun () -> closure_generateClosureRefCountIncHelper ctx);call code (fun () -> closure_generateStreamRefCountDecHelper ctx);observing (fun select -> closure_generateClosureRefCountDecHelper select ctx);mapNodes (fun typ -> observing (fun select -> closure_generateRecursiveNominalRefCountDecHelper select ctx typ)) types] in
+     let sizeCases=mapNodes (fun size -> let ctx={ctx with ClosurePayloadSizes=Map.ofList ["😀",size;"",8;source,24;"a",size]} in tuple [call code (fun () -> closure_generateClosureRefCountIncHelper ctx);observing (fun select -> closure_generateClosureRefCountDecHelper select ctx)]) [-2147483648;-65536;-32769;-32768;-1;0;8;16;248;255;256;32767;32768;65535;65536;2147483647] in
+     let captureCases=mapNodes (fun captureTypes -> let ctx={ctx with ClosureCaptureTypes=Map.ofList [source,captureTypes;"😀",[];"",[AST.TInt;AST.TRecord ("missing",[])]];ClosurePayloadSizes=Map.ofList [source,(List.length captureTypes+1)*8]} in observing (fun select -> closure_generateClosureRefCountDecHelper select ctx)) captures in
+     tuple [helpers;sizeCases;captureCases]) [false;true]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64] in
+    let typed=mapNodes (fun typ -> call (option plan) (fun () -> closure_tryRcReleasePlanOfType records sums typ)) types in
+    let metadata:MemoryModel.RcMetadata option list=[None;Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=None;ReleasePlan=None;SourceType=None}]@List.choose (fun typ -> try match closure_tryRcReleasePlanOfType records sums typ with None -> None | Some releasePlan -> Some (Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=Some source;ReleasePlan=Some releasePlan;SourceType=Some typ}) with _ -> None) types in
+    tuple [contexts;typed;mapNodes (fun meta -> tuple [call (option plan) (fun () -> closure_rcMetadataReleasePlan meta);call plan (fun () -> closure_requiredRcMetadataReleasePlan source meta)]) metadata]
+
 let lirConstructorFixtures (source:string) =
     let enc (value:'a) = encode typeof<'a> (box value)
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -5587,6 +5626,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-closure-reference" -> armClosureReferenceObservation source
         | "arm64-list-reference" -> armListReferenceObservation source
         | "arm64-native-effects" -> armNativeEffectObservation source
         | "arm64-print-emission" -> armPrintingEmissionObservation source

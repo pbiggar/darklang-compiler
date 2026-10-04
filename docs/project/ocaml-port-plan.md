@@ -1305,3 +1305,19 @@ inputs, structural child traversal, size-class free-list recycling and string/
 blob leaf destruction. The build is warning-free and comment coverage is
 complete. Coverage is 264/391 pairs. Closure/stream lifetime helpers are next;
 remaining dispatch, complete runners/corpus and final acceptance remain open.
+
+Complete closure retain/destruction, recursive nominal payload destruction and
+stream-close helpers are translated, with the full metadata interface and
+original comment. Full ordered instructions, plans, metadata failures and dict
+selection callback traces match F# across 20,350,885 canonical JSON bytes. The
+fixtures cover every scalar/aggregate family, missing records/sums, recursive
+records/sums, nested captures, UTF-16 ordinal function ordering, payload-size
+boundaries, capture offset truncation, both targets and leak settings.
+
+All 508 translated tests and 273 real ARM64 process executions pass. Thirty-nine
+new checks execute size-selected retain/destruction, shared/null closures,
+dynamic and tagged captures, list and tuple captures, recursive record chains,
+stream close callbacks, already-closed/shared streams and root/capture release.
+The warning-free build and complete source comment coverage are verified.
+Coverage is 265/391 pairs. Release selection and HAMT lifetime helpers are next;
+complete instruction dispatch, runners/corpus and final acceptance remain open.

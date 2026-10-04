@@ -231,10 +231,57 @@ let listReferenceChecks ()=
   check label "0" (body @ [S.LDR (S.X0,S.X20,0)]);
   check label "1" (body @ [S.LDR (S.X0,S.X27,8);S.CMP_reg (S.X0,S.X19);S.CSET (S.X0,S.EQ)])) [ARM64CodeGenTypes.listRefCountDecStringHelperLabel;ARM64CodeGenTypes.listRefCountDecBlobHelperLabel];
  !total
+let closureReferenceChecks ()=
+ let target=ARM64.targetConfigFor Platform.LinuxARM64 in
+ let baseCtx=Semantic_observation.ARMPrintingObservation.context "closure-rc-check" target false in
+ let total=ref 0 in
+ let allocate reg size=instructions (ARM64EmitMemory.emitHeapAlloc baseCtx (LIR.Physical reg) size) in
+ let literal reg value=ARM64Operands.loadImmediate reg value in
+ let fn reg name=[S.ADR (S.X9,HeapAllocation.codeLabel name);S.STR (S.X9,reg,0)] in
+ let print=S.ofARM64List (PrintValues.generatePrintInt64NoNewline target) in
+ let dec=ARM64CodeGenTypes.closureRefCountDecHelperLabel in
+ let inc=ARM64CodeGenTypes.closureRefCountIncHelperLabel in
+ let check ctx expected body extra=
+  let dictHelper=ARM64CodeGenTypes.plannedDictDecHelperLabelForReleasePlan in
+  let helpers=ARM64ClosureReferenceCounts.generateClosureRefCountIncHelper ctx @ ARM64ClosureReferenceCounts.generateClosureRefCountDecHelper dictHelper ctx @ ARM64ClosureReferenceCounts.generateStreamRefCountDecHelper ctx @ ARM64ListReferenceCounts.generateListRefCountIncHelper () @ ARM64ListReferenceCounts.generateNeededListRefCountDecHelpers ctx (StringOrder.Set.of_list [ARM64CodeGenTypes.listRefCountDecHelperLabel;ARM64CodeGenTypes.listRefCountDecStringHelperLabel;ARM64CodeGenTypes.listRefCountDecBlobHelperLabel]) StringOrder.Map.empty in
+  let program=ProcessLifecycle.generateHeapInit target @ body @ print @ instructions (ARM64EmitInteger.emitExit ctx) @ helpers @ extra @ [S.Label "closure_fn";S.RET;S.Label "close_fn";S.ADD_imm (S.X22,S.X22,1);S.RET] @ HeapAllocation.generateHeapOverflowTrapBlock (HeapAllocation.preparedHeapOverflowTrapBody target) ctx.ARM64CodeGenTypes.heapOverflowLabel @ HeapAllocation.generateRuntimeErrorHelper target in
+  let actual=runImage (image program) [] "" in
+  if actual<>expected then failwith (Printf.sprintf "closure lifetime: expected %S, got %S" expected actual);
+  incr total
+ in
+ List.iter (fun size ->
+  let ctx={baseCtx with ARM64CodeGenTypes.closurePayloadSizes=StringOrder.Map.singleton "closure_fn" size} in
+  let base=allocate LIR.X19 size @ fn S.X19 "closure_fn" in
+  check ctx "2" (base @ [S.MOV_reg (S.X0,S.X19);S.BL inc;S.LDR (S.X0,S.X19,size)]) [];
+  check ctx "1" (base @ [S.MOV_reg (S.X0,S.X19);S.BL inc;S.MOV_reg (S.X0,S.X19);S.BL dec;S.LDR (S.X0,S.X19,size)]) [];
+  check ctx "0" (base @ [S.MOV_reg (S.X0,S.X19);S.BL dec;S.LDR (S.X0,S.X19,size)]) [];
+  check ctx (if size<256 then "1" else "0") (base @ [S.MOV_reg (S.X0,S.X19);S.BL dec;S.LDR (S.X0,S.X27,if size<256 then size else 248)] @ (if size<256 then [S.CMP_reg (S.X0,S.X19);S.CSET (S.X0,S.EQ)] else [])) []) [8;16;24;248;256;264];
+ check baseCtx "0" (literal S.X0 0L @ [S.BL inc;S.BL dec]) [];
+ List.iter (fun typ ->
+  let ctx={baseCtx with ARM64CodeGenTypes.closurePayloadSizes=StringOrder.Map.singleton "closure_fn" 16;closureCaptureTypes=StringOrder.Map.singleton "closure_fn" [typ]} in
+  let dynamic=allocate LIR.X19 16 @ fn S.X19 "closure_fn" @ allocate LIR.X20 16 @ literal S.X9 1L @ [S.STR (S.X9,S.X20,0);S.STR (S.X20,S.X19,8);S.MOV_reg (S.X0,S.X19);S.BL dec;S.LDR (S.X0,S.X20,0)] in
+  check ctx "0" dynamic []) [AST.TString;AST.TBlob;AST.TChar;AST.TInt];
+ let taggedCtx={baseCtx with ARM64CodeGenTypes.closurePayloadSizes=StringOrder.Map.singleton "closure_fn" 16;closureCaptureTypes=StringOrder.Map.singleton "closure_fn" [AST.TInt]} in
+ check taggedCtx "0" (allocate LIR.X19 16 @ fn S.X19 "closure_fn" @ literal S.X9 85L @ [S.STR (S.X9,S.X19,8);S.MOV_reg (S.X0,S.X19);S.BL dec;S.LDR (S.X0,S.X19,16)]) [];
+ let listCtx={taggedCtx with ARM64CodeGenTypes.closureCaptureTypes=StringOrder.Map.singleton "closure_fn" [AST.TList AST.TString]} in
+ check listCtx "0" (allocate LIR.X19 16 @ fn S.X19 "closure_fn" @ allocate LIR.X20 8 @ literal S.X9 42L @ [S.STR (S.X9,S.X20,0);S.ADD_imm (S.X9,S.X20,2);S.STR (S.X9,S.X19,8);S.MOV_reg (S.X0,S.X19);S.BL dec;S.LDR (S.X0,S.X20,8)]) [];
+ let tupleCtx={taggedCtx with ARM64CodeGenTypes.closureCaptureTypes=StringOrder.Map.singleton "closure_fn" [AST.TTuple [AST.TString]]} in
+ check tupleCtx "0" (allocate LIR.X19 16 @ fn S.X19 "closure_fn" @ allocate LIR.X20 8 @ allocate LIR.X21 16 @ literal S.X9 1L @ [S.STR (S.X9,S.X21,0);S.STR (S.X21,S.X20,0);S.STR (S.X20,S.X19,8);S.MOV_reg (S.X0,S.X19);S.BL dec;S.LDR (S.X0,S.X21,0)]) [];
+ let recursiveType=AST.TRecord ("Node",[]) in
+ let recursiveCtx={baseCtx with ARM64CodeGenTypes.recordRegistry=StringOrder.Map.singleton "Node" ["next",recursiveType]} in
+ let helper=ARM64CodeGenTypes.recursiveNominalRefCountDecHelperLabel recursiveType in
+ let recursiveHelper=ARM64ClosureReferenceCounts.generateRecursiveNominalRefCountDecHelper ARM64CodeGenTypes.plannedDictDecHelperLabelForReleasePlan recursiveCtx recursiveType in
+ check recursiveCtx "0" (allocate LIR.X19 8 @ allocate LIR.X20 8 @ [S.STR (S.X20,S.X19,0);S.MOV_reg (S.X0,S.X19);S.BL helper;S.LDR (S.X0,S.X19,8);S.LDR (S.X9,S.X20,8);S.ADD_reg (S.X0,S.X0,S.X9)]) recursiveHelper;
+ List.iter (fun (state,shared,expected) ->
+  let body=allocate LIR.X19 24 @ allocate LIR.X20 8 @ fn S.X20 "closure_fn" @ allocate LIR.X21 8 @ fn S.X21 "close_fn" @ literal S.X9 (Int64.of_int state) @ [S.STR (S.X9,S.X19,0);S.STR (S.X20,S.X19,8);S.STR (S.X21,S.X19,16)] @ (if shared then literal S.X9 2L @ [S.STR (S.X9,S.X19,24)] else []) @ literal S.X22 0L @ [S.MOV_reg (S.X0,S.X19);S.BL ARM64CodeGenTypes.streamRefCountDecHelperLabel] in
+  check baseCtx expected (body @ [S.MOV_reg (S.X0,S.X22)]) [];
+  check baseCtx (if shared then "3" else "0") (body @ [S.LDR (S.X0,S.X19,24);S.LDR (S.X9,S.X20,8);S.ADD_reg (S.X0,S.X0,S.X9);S.LDR (S.X9,S.X21,8);S.ADD_reg (S.X0,S.X0,S.X9)]) []) [0,false,"1";5,false,"0";0,true,"0"];
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
  let effects=[Some "hé😀",false,0,"","hé😀";Some "",true,0,"","\n";None,false,1,"hello\nignored","hello";None,true,1,"hé😀\r\n","hé😀\n";None,false,1,"tail","tail";None,true,1,"","\n";None,true,2,"first\nsecond\n","first\nsecond\n";None,false,1,"a\000b\n","a\000b";None,false,1,"\n","";None,false,1,"a\rb\r\n","a\rb"] in
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
- let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks () in
+ let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count
