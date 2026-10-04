@@ -1235,3 +1235,22 @@ embedded NUL and byte-distinct normalized/non-normalized text. The build is
 warning-free and comment coverage is complete. Coverage is 260/391 pairs.
 Memory lowering is next; remaining ownership/dispatch, complete runners/corpus
 and final acceptance remain open.
+
+Complete ARM64 heap, mapped and raw memory lowering is translated with its
+interface and all 115 source comment lines. Whole results, instruction streams
+and diagnostics match F# across 28,277,897 canonical JSON bytes: free-list/leak
+options, both mmap syscall targets, signed alignment/offset truncation bounds,
+all register alias roles, heap stores/loads, exact signed/quiet/signaling NaN
+pool bits, cold record/sum/recursive ownership planning, cached and missing
+retain targets, dynamic buffers, list/dict/closure roots and generic payload
+sizes. NaN fixtures explicitly supply the same bit patterns to both observers.
+
+The warning-free build passes 508 translated tests and 161 real ARM64 process
+executions. Twenty new memory checks execute heap stores/refcount placement,
+raw word/byte operations, byte truncation, free-list reuse, mmap/munmap,
+dynamic/static/generic ownership increments, tagged immediate guards and cached
+no-retain decisions. The execution fixtures include the complete overflow trap
+and runtime-error helper so all emitted branches resolve. Comment coverage is
+complete. Coverage is 261/391 pairs. Aggregate/value printing lowering is next;
+remaining ownership/dispatch, complete runners/corpus and final acceptance
+remain open.
