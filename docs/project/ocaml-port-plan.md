@@ -1045,3 +1045,13 @@ component. The warning-free build passes 485/485 native unit/DSL checks.
 Coverage is 226/391 pairs. Whole ELF images and original binary tests are next;
 remaining emission/runtime/tooling/ownership tests, full corpus checks and
 final acceptance remain open.
+
+Both complete ELF generators and all four original x64 binary tests are
+translated with explicit interfaces and source comments. Full image bytes match
+F# across ARM64/x64 code lengths, entry-offset boundaries, UTF-8 string pools,
+signed-zero/NaN float pools, serializers, alignment, coverage and leak counters.
+The native suite passes 489/489 checks, including execution of a generated x64
+ELF with exit status 42. The build is warning-free; frozen comment coverage has
+zero missing lines. Coverage is 229/391 pairs. Mach-O generation is next;
+remaining emission/runtime/tooling/ownership tests, full corpus checks and final
+acceptance remain open.

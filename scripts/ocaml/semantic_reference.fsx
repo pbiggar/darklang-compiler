@@ -2405,6 +2405,47 @@ let armDSLObservation (source:string) =
     let hexes=mapNodes (fun value -> enc (TestDSL.ARM64EncodingFormat.parseHexValue value)) ["";"0x";"0X0";"0xFFFFFFFF";"0x100000000";"0x00000000000000000001";"0x-1";"0x 1";" 0xd65F03c0 ";"0xé";source]
     tuple [mapNodes (fun value -> enc (TestDSL.ARM64Parser.parseReg value)) registers;mapNodes (fun value -> enc (TestDSL.ARM64Parser.parseCond value |> Result.map (fun cond -> ARM64.B_cond_label (cond,"")))) conditions;parses;mapNodes (fun content -> enc (TestDSL.ARM64EncodingFormat.parseARM64EncodingTest content)) formats;fixtures;hexes]
 
+let elfObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple values=namedArray "tuple" (Array.ofList values)
+    let list values=JsonArray(Array.ofList values) :> JsonNode
+    let mapNodes action values=values |> List.map action |> list
+    let unionNode (typ:string) (case:string) fields : JsonNode =
+        let node=JsonObject()
+        node["type"] <- JsonValue.Create typ
+        node["case"] <- JsonValue.Create case
+        node["fields"] <- JsonArray(Array.ofList fields)
+        node
+    let attempt action=try unionNode "FSharpResult" "Ok" [enc (action ())] with ex -> unionNode "FSharpResult" "Error" [enc ex.Message]
+    let stringPools=[[];[""];[source;"é";"a";"1234567";"12345678";"123456789";source];["😀";"é";"";source]] |> List.map LiteralPool.createStringPool
+    let floatPools=[[];[0.0;-0.0;1.0;Double.PositiveInfinity;BitConverter.Int64BitsToDouble 0x7ff8000000000001L;-0.0];[1.0;2.0;1.0]] |> List.map LiteralPool.createFloatPool
+    let codeCases=[0;1;2;3;4;7;8;17] |> List.map (fun length -> Array.init length (fun n -> 0xd65f03c0u ^^^ uint32 (n*1024)))
+    let literalData=mapNodes (fun sp -> mapNodes (fun fp -> tuple [enc sp;attempt (fun () -> Binary_Generation_ELF.createStringData sp);attempt (fun () -> Binary_Generation_ELF.createFloatData fp)]) floatPools) stringPools
+    let imageObservation words =
+        let machineCode=words |> Array.map Binary_Generation_ELF.uint32ToBytes |> Array.concat
+        let stringObservation sp = tuple [attempt (fun () -> Binary_Generation_ELF.createExecutableWithStrings words sp);
+            mapNodes (fun fp -> tuple [attempt (fun () -> Binary_Generation_ELF.createExecutableWithPools words sp fp false);mapNodes (fun entry -> attempt (fun () -> Binary_Generation_ELF_X86_64.createExecutableWithPools machineCode sp fp false entry)) [-1;0;1;Int32.MinValue;Int32.MaxValue]]) floatPools]
+        tuple [enc machineCode;attempt (fun () -> Binary_Generation_ELF.createExecutable words);mapNodes stringObservation stringPools]
+    let images=mapNodes imageObservation codeCases
+    let instrumentedObservation words =
+        let machineCode=words |> Array.map Binary_Generation_ELF.uint32ToBytes |> Array.concat
+        mapNodes (fun sp -> mapNodes (fun fp -> tuple [attempt (fun () -> Binary_Generation_ELF.createExecutableWithPools words sp fp true);attempt (fun () -> Binary_Generation_ELF_X86_64.createExecutableWithPools machineCode sp fp true 0);mapNodes (fun count -> mapNodes (fun leak -> attempt (fun () -> Binary_Generation_ELF.createExecutableWithCoverage words sp fp count leak)) [false;true]) [0;1;9]]) [LiteralPool.emptyFloatPool;floatPools[1]]) [LiteralPool.emptyStringPool;stringPools[2]]
+    let instrumented=mapNodes instrumentedObservation [codeCases[0];codeCases[3]]
+    let alignmentObservation length =
+        let code=Array.init length (fun i -> byte ((i*23) &&& 255))
+        mapNodes (fun sp -> mapNodes (fun fp -> attempt (fun () -> Binary_Generation_ELF_X86_64.createExecutableWithPools code sp fp false 3)) floatPools) stringPools
+    let x64Alignment=mapNodes alignmentObservation [0..16]
+    let primitives=tuple [mapNodes (fun value -> enc (Binary_Generation_ELF.uint16ToBytes value)) [0us;1us;255us;256us;65535us];mapNodes (fun value -> enc (Binary_Generation_ELF.uint32ToBytes value)) [0u;1u;0x80000000u;0x7fffffffu;0xffffffffu];mapNodes (fun value -> enc (Binary_Generation_ELF.uint64ToBytes value)) [0UL;1UL;0x8000000000000000UL;0x7fffffffffffffffUL;0xffffffffffffffffUL]]
+    let headerObservation value =
+        let h : Binary_ELF.Elf64Header={Ident=Binary_ELF.createIdent ();Type=65535us;Machine=Binary_ELF.EM_AARCH64;Version=uint32 value;Entry=value;PhOff=value;ShOff=value;Flags=uint32 value;EhSize=64us;PhEntSize=56us;PhNum=1us;ShEntSize=0us;ShNum=0us;ShStrNdx=0us}
+        let ph : Binary_ELF.Elf64ProgramHeader={Type=uint32 value;Flags=uint32 value;Offset=value;VAddr=value;PAddr=value;FileSize=value;MemSize=value;Align=value}
+        let binaryObservation count codeSize =
+            let b : Binary_ELF.ElfBinary={Header=h;ProgramHeaders=List.init count (fun _ -> ph);MachineCode=Array.init codeSize (fun n -> byte (n &&& 255));StringData=System.Text.Encoding.UTF8.GetBytes "raw-data"}
+            enc (Binary_Generation_ELF.serializeElf b)
+        tuple [enc (Binary_Generation_ELF.serializeElf64Header h);enc (Binary_Generation_ELF.serializeElf64ProgramHeader ph);mapNodes (fun count -> mapNodes (binaryObservation count) [0;1;7;8;15]) [0;1;2;3]]
+    let headerCases=mapNodes headerObservation [0UL;1UL;0x8000000000000000UL;0x7fffffffffffffffUL;0xffffffffffffffffUL]
+    tuple [literalData;images;instrumented;x64Alignment;primitives;headerCases]
+
 let jsonOutputOptions = System.Text.Json.JsonSerializerOptions(MaxDepth=65536,Encoder=System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping)
 let anfScalarOptimization source =
     let tuple values = namedArray "tuple" (Array.ofList values)
@@ -4860,6 +4901,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "elf-images" -> elfObservation source
         | "x64-resolve" -> x64ResolveObservation source
         | "arm64-encoding" -> armEncodingObservation source
         | "x64-encoding" -> x64EncodingObservation source
