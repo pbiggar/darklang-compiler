@@ -1405,3 +1405,17 @@ Call fixtures explicitly move X0 into their result register, as allocated LIR
 requires. Source comment coverage is complete. Coverage is 273/391 pairs.
 Function preparation and final ARM64 program assembly are next; x64 emission,
 remaining runners/corpus and final acceptance remain open.
+
+Complete ARM64 function preparation is translated with its interface and source
+comments. Full prepared functions, registries and helper identity maps match F#
+across 26,285,766 canonical JSON bytes (SHA256
+f4a0488add4859733609bff00372b56fb416f721934d0e67a512bcc979b338ce). Cases
+cover cheap/expensive fixed and boxed releases, fingerprinted/structural memo
+keys, shared sibling plans, stdlib ownership, list/dict dependencies, raw-slot
+planning, absent facts, existing helper identities, unsigned ID limits, repeated
+preparation and explicit program preparation. Cache callback arguments and phase
+order are fully compared; varying phase durations are validated separately.
+The warning-free build passes 508/508 translated checks. The preceding 495/495
+ARM64 executions remain the current execution checkpoint. Comment coverage is
+complete. Coverage is 274/391 pairs. Complete ARM64 program assembly is next;
+x64 emission, remaining runners/corpus and final acceptance remain open.

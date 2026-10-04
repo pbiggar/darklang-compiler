@@ -3928,6 +3928,41 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let armPrepareObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f ())] with _ -> tuple [enc true]
+    let dynamic=MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer
+    let fields=List.init 25 (fun index -> MemoryModel.FieldRelease (index*8,dynamic))
+    let plans=[MemoryModel.NoReleasePlan;MemoryModel.RootRelease (8,MemoryModel.GenericHeap,MemoryModel.NoPayloadRelease);MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease dynamic);MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (dynamic,dynamic));MemoryModel.RootRelease (200,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (200,fields));MemoryModel.RootRelease (200,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (200,fields,[{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=fields}]));MemoryModel.RecursiveRelease (AST.TRecord (source,[]))]
+    let make id name instructions attached =
+        let block:LIR.BasicBlock={Label=LIR.Label "entry";Instrs=instructions;Terminator=LIR.Ret}
+        let func:LIR.Function={Id=AST.functionId id;Name=name;TypedParams=[];CFG=({Entry=block.Label;Blocks=Map.ofList [block.Label,block]}:LIR.CFG);StackSize=0;UsedCalleeSaved=[];CodegenFacts=None}
+        if attached then LIR.attachFunctionCodegenFacts func else func
+    let metadata plan key=Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=key;MemoryModel.RcMetadata.ReleasePlan=Some plan;MemoryModel.RcMetadata.SourceType=Some AST.TString}
+    let functions=List.collect (fun plan -> List.collect (fun key -> List.map (fun name -> make 3UL name [LIR.RefCountDec (LIR.Virtual 0,200,LIR.GenericHeap,metadata plan key);LIR.RefCountDec (LIR.Virtual 1,200,LIR.GenericHeap,metadata plan key);LIR.RefCountDec (LIR.Virtual 2,8,LIR.TaggedList,metadata plan key);LIR.RefCountInc (LIR.Virtual 0,8,LIR.ClosureHeap,None);LIR.RawSlotInit (LIR.Virtual 3,LIR.Virtual 4,LIR.Virtual 5,AST.TRecord ("R",[]))] true) [source;"Darklang.Stdlib.List.fn";"Darklang.Stdlib.Dict.fn"]) [None;Some source;Some "hé😀"]) plans
+    let records=Map.ofList ["R",["field",AST.TString]]
+    let run batch highest known =
+        let trace=ref []
+        let phases=ref []
+        let cache (staticDeps:bool) (key:string) (plan:MemoryModel.RcReleasePlan) (generate:unit->LIR.Arm64ReleasePlanSummary)=trace.Value<-(staticDeps,key,plan)::trace.Value;generate ()
+        let phase (name:string) (elapsed:float)=phases.Value<-(name,elapsed>=0.0)::phases.Value
+        let result=call (fun () -> ARM64PrepareFunctions.prepareARM64FunctionsForAllocationWithCache (Some cache) (Some phase) records Map.empty (AST.functionId highest) known batch)
+        tuple [result;enc (List.rev trace.Value);enc (List.rev phases.Value)]
+    let individual=mapNodes (fun func -> tuple [call (fun () -> ARM64PrepareFunctions.attachARM64CodegenFactsToFunctions [func]);call (fun () -> ARM64PrepareFunctions.attachARM64CodegenFactsToFunctionsWithCache None records Map.empty [func]);call (fun () -> ARM64PrepareFunctions.prepareARM64FunctionsForAllocation [func]);run [func] 3UL Map.empty]) functions
+    let expensive=List.item 36 functions
+    let sibling={expensive with Id=AST.functionId 4UL;Name=source+"_sibling"}
+    let batches=[[];[expensive;sibling];[sibling;expensive];functions;[make 0UL source [] false];[make 0UL source [] true]]
+    let knownCases=[Map.empty;Map.ofList [source,AST.functionId 17UL];Map.ofList ["a",AST.functionId 0x8000000000000000UL;"z",AST.functionId 0x7fffffffffffffffUL]]
+    let boundaries=mapNodes (fun batch -> mapNodes (fun highest -> mapNodes (fun known -> run batch highest known) knownCases) [0UL;4UL;0x7fffffffffffffffUL;0x8000000000000000UL;UInt64.MaxValue]) batches
+    let reuse=mapNodes (fun batch ->
+        let _,known=ARM64PrepareFunctions.prepareARM64FunctionsForAllocationWithCache None None records Map.empty (AST.functionId 4UL) Map.empty batch
+        run batch 100UL known) [[];[expensive;sibling]]
+    let variants:LIR.VariantRegistry=Map.ofList ["Choice",{TypeParams=[];Variants=[{Name="A";Tag=0;Payload=None;FieldCount=0};{Name="B";Tag=1;Payload=Some AST.TString;FieldCount=1}]}]
+    let programs=mapNodes (fun batch -> mapNodes (fun variants -> call (fun () -> ARM64PrepareFunctions.prepareARM64Program (LIR.Program (batch,variants,records)))) [Map.empty;variants]) batches
+    tuple [individual;boundaries;reuse;programs]
+
 let armFunctionObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -5837,6 +5872,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "arm64-prepare" -> armPrepareObservation source
         | "arm64-functions" -> armFunctionObservation source
         | "arm64-dispatch" -> armDispatchObservation source
         | "arm64-rc-emission" -> armRcEmissionObservation source
