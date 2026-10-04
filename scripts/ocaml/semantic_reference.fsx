@@ -3928,6 +3928,47 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let x64MemoryEmissionObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call f=try tuple [enc false;enc (f () : Result<X86_64.Instr list,string>)] with ex -> tuple [enc true;enc ex.Message]
+    let invoke ctx name args=rcInternalCall<Result<X86_64.Instr list,string>> "X64EmitMemory" name (Array.append [|ctx|] args)
+    let physical=[LIR.X0;LIR.X1;LIR.X2;LIR.X3;LIR.X4;LIR.X5;LIR.X6;LIR.X7;LIR.X8;LIR.X9;LIR.X10;LIR.X11;LIR.X12;LIR.X13;LIR.X14;LIR.X15;LIR.X16;LIR.X17;LIR.X19;LIR.X20;LIR.X21;LIR.X22;LIR.X23;LIR.X24;LIR.X25;LIR.X26;LIR.X27;LIR.X29;LIR.X30;LIR.SP]
+    let gps=List.map LIR.Physical physical@[LIR.Virtual (-1);LIR.Virtual 0;LIR.Virtual 2147483647]
+    let selected=List.map LIR.Physical [LIR.X0;LIR.X3;LIR.X6;LIR.X7;LIR.X8;LIR.X19;LIR.SP]@[LIR.Virtual (-1)]
+    let sizes=[-2147483648;-65536;-32769;-1;0;1;7;8;9;16;248;255;256;4095;4096;32767;32768;65535;65536;2147483647]
+    let operands=List.map LIR.Reg gps@List.map LIR.StackSlot sizes@List.map LIR.Imm [Int64.MinValue;-1L;0L;4096L;Int64.MaxValue]@[LIR.FloatImm 0.;LIR.FloatImm (-0.);LIR.FloatImm nan;LIR.FloatImm infinity;LIR.FloatImm 0.1;LIR.FloatSymbol (-0.);LIR.FloatSymbol (BitConverter.Int64BitsToDouble (int64 0xfff8000000000000UL));LIR.FloatSymbol (BitConverter.Int64BitsToDouble (int64 0x7ff8000000000001UL));LIR.FloatSymbol (BitConverter.Int64BitsToDouble (int64 0x7ff0000000000001UL));LIR.StringSymbol source;LIR.StringSymbol "hé😀";LIR.StringSymbol (String [|char 0xd800;char 97;char 0xdc00|]);LIR.FuncAddr (AST.functionId 0UL);LIR.FuncAddr (AST.functionId 1UL);LIR.FuncAddr (AST.functionId UInt64.MaxValue)]
+    let types=[AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TBool;AST.TFloat64;AST.TString;AST.TBlob;AST.TChar;AST.TDateTime;AST.TUnit;AST.TNever;AST.TInternalRawPtr;AST.TVar source;AST.TInferenceVar (source,source);AST.TList AST.TString;AST.TStream AST.TString;AST.TDict (AST.TString,AST.TInt64);AST.TFunction ([AST.TInt64],AST.TBool);AST.TRecord ("R",[]);AST.TRecord ("missing",[]);AST.TRecord ("Rec",[]);AST.TSum ("S",[]);AST.TSum ("missing",[]);AST.TTuple [];AST.TTuple [AST.TInt64;AST.TString;AST.TList AST.TString]]
+    let records:LIR.RecordRegistry=Map.ofList ["R",["a",AST.TInt64;"b",AST.TString];"Rec",["next",AST.TRecord ("Rec",[])]]
+    let sums:MemoryModel.RcSumShapeRegistry=Map.ofList ["S",{MemoryModel.RcSumShapeInfo.TypeParams=[];Payloads=[0,None;1,Some AST.TString];UnaryPayloadTags=Set.singleton 1}]
+    let names=FunctionIdMap.ofList [AST.functionId 0UL,source;AST.functionId UInt64.MaxValue,"largest"]
+    let ctxType=typeof<LIR.Instr>.Assembly.GetType("X64CodeGenTypes+FuncCtx")
+    let context enabled=FSharpValue.MakeRecord(ctxType,[|box source;box 32;box [LIR.X19];box enabled;box records;box sums;box names|],Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+    let ctx=context false
+    let allocations=mapNodes (fun enabled->
+        let ctx=context enabled
+        let heaps=mapNodes (fun dest->mapNodes (fun size->call (fun ()->invoke ctx "emitHeapAlloc" [|box dest;box size|])) sizes) gps
+        let raws=mapNodes (fun dest->mapNodes (fun size->call (fun ()->invoke ctx "emitRawAlloc" [|box dest;box size|])) gps) gps
+        let frees=mapNodes (fun reg->call (fun ()->invoke ctx "emitRawFree" [|box reg|])) gps
+        let mapped=mapNodes (fun dest->mapNodes (fun size->call (fun ()->invoke ctx "emitMappedAlloc" [|box dest;box size|])) gps) gps
+        let unmapped=mapNodes (fun reg->call (fun ()->invoke ctx "emitMappedFree" [|box reg|])) gps
+        tuple [heaps;raws;frees;mapped;unmapped]) [false;true]
+    let heapCase addr =
+        let stores=mapNodes (fun operand->call (fun ()->invoke ctx "emitHeapStore" [|box addr;box 0;box operand|])) operands
+        let offsetCase offset =
+            let stores=mapNodes (fun operand->call (fun ()->invoke ctx "emitHeapStore" [|box addr;box offset;box operand|])) [LIR.Reg addr;LIR.Reg (LIR.Physical LIR.X8);LIR.Imm Int64.MinValue;LIR.StringSymbol source;LIR.StackSlot 0]
+            let loads=mapNodes (fun dest->call (fun ()->invoke ctx "emitHeapLoad" [|box dest;box addr;box offset|])) gps
+            tuple [stores;loads]
+        let offsets=mapNodes offsetCase sizes
+        tuple [stores;offsets]
+    let heap=mapNodes heapCase selected
+    let rawCase a b c = mapNodes call [(fun ()->invoke ctx "emitRawGet" [|box a;box b;box c|]);(fun ()->invoke ctx "emitRawGetByte" [|box a;box b;box c|]);(fun ()->invoke ctx "emitRawWriteWord" [|box a;box b;box c|]);(fun ()->invoke ctx "emitRawWriteByte" [|box a;box b;box c|])]
+    let raw=mapNodes (fun a->mapNodes (fun b->mapNodes (rawCase a b) [a;b;LIR.Physical LIR.X3;LIR.Physical LIR.X8;LIR.Virtual (-1)]) gps) gps
+    let slotCase ptr offset value typ =call (fun ()->invoke ctx "emitRawSlotInit" [|box ptr;box offset;box value;box typ|])
+    let slots=mapNodes (fun ptr->mapNodes (fun offset->mapNodes (fun value->mapNodes (slotCase ptr offset value) types) selected) [ptr;LIR.Physical LIR.X3;LIR.Physical LIR.X8]) selected
+    tuple [allocations;heap;raw;slots]
+
 let x64RcEmissionObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -6223,6 +6264,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "x64-memory-emission" -> x64MemoryEmissionObservation source
         | "x64-rc-emission" -> x64RcEmissionObservation source
         | "x64-dict-reference" -> x64DictReferenceObservation source
         | "x64-list-reference" -> x64ListReferenceObservation source

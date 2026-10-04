@@ -1564,3 +1564,17 @@ checking count changes, helper calls and register aliases. Coverage is 286/391
 pairs; source comment coverage is complete. Remaining x64 instructions/process
 runtime/program assembly, driver/library, runners/corpus and final acceptance
 remain open.
+
+Complete x64 heap/mapped/raw allocation, loads, stores, byte access and owned
+slot initialization are translated with full interfaces and source comments.
+Full instructions, fresh-label order, register aliases, unsupported operands
+and error text match F# across 25,334,756 canonical JSON bytes (SHA256
+d1689f2f9295f7ec64030b74f82aaf185cf8c4e13d4fcde74e7ce94752f34378).
+Cases cover all GP registers, virtual errors, size/displacement boundaries,
+UTF-16 strings, NaN payloads, ownership types and both leak settings. The
+warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+1376/1376 x64 executions. The 177 new x64 cases execute bump/free-list paths,
+word/byte/float/string/function stores, mapped allocation/free and retained
+buffer/fixed/list/dict/closure slots, including scratch aliases. Coverage is
+287/391 pairs; comment coverage is complete. Remaining x64 modules,
+driver/library, runners/corpus and final acceptance remain open.
