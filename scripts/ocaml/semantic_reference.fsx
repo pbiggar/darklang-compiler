@@ -3928,6 +3928,57 @@ let armDispatchObservation (source:string) =
         tuple [enc key;enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey key);enc (ARM64GenericReferenceCounts.isPlannedGenericRefCountDecHelperCacheKey (LIR.attachFunctionCodegenFacts key))]) [0UL;1UL;0x8000000000000000UL;UInt64.MaxValue]) [source;"";prefix;prefix+"hé😀";"\000"+prefix]
     tuple [contexts;cache]
 
+let x64FieldReferenceObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple xs=namedArray "tuple" (Array.ofList xs)
+    let mapNodes f xs=JsonArray(xs |> List.map f |> List.toArray) :> JsonNode
+    let call encoder f=try tuple [enc false;encoder (f ())] with ex -> tuple [enc true;enc ex.Message]
+    let invoke name args=rcInternalCall "X64FieldReferenceCounts" name args
+    let kinds=[MemoryModel.GenericHeap;MemoryModel.StreamHeap;MemoryModel.TaggedList;MemoryModel.DictHeap;MemoryModel.ClosureHeap] in
+    let operations=[MemoryModel.DynamicStringBuffer;MemoryModel.DynamicBlobBuffer;MemoryModel.DynamicIntBuffer]@List.collect (fun kind -> List.map (fun size -> MemoryModel.FixedSizeRoot (size,kind)) [-2147483648;-1;0;8;2147483647]) kinds in
+    let simple=[MemoryModel.NoReleasePlan;MemoryModel.RecursiveRelease (AST.TRecord (source,[]))]@List.map (fun operation -> MemoryModel.DynamicBufferRelease operation) operations@List.collect (fun kind -> [MemoryModel.RootRelease (8,kind,MemoryModel.NoPayloadRelease);MemoryModel.RootRelease (8,kind,MemoryModel.FixedBlockPayloadRelease (8,[]));MemoryModel.RootRelease (8,kind,MemoryModel.BoxedSumPayloadRelease (8,[],[]));MemoryModel.RootRelease (8,kind,MemoryModel.ClosurePayloadRelease [])]) kinds in
+    let listPlans=List.map (fun plan -> MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease plan)) simple in
+    let dictPlans=List.collect (fun value -> [MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,value));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer,value));MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (value,MemoryModel.NoReleasePlan))]) (simple@listPlans) in
+    let fields=[MemoryModel.FieldRelease (0,MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer);MemoryModel.FieldRelease (8,MemoryModel.RootRelease (8,MemoryModel.TaggedList,MemoryModel.TaggedListPayloadRelease MemoryModel.NoReleasePlan));MemoryModel.FieldRelease (16,MemoryModel.RootRelease (16,MemoryModel.DictHeap,MemoryModel.DictPayloadRelease (MemoryModel.NoReleasePlan,MemoryModel.NoReleasePlan)))] in
+    let rich=List.collect (fun size -> List.collect (fun fields -> [MemoryModel.RootRelease (size,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (size,fields));MemoryModel.RootRelease (size,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (size,fields,[{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=fields}]))]) [fields;List.rev fields;[MemoryModel.FieldRelease (8,MemoryModel.NoReleasePlan)]@fields;fields@[MemoryModel.FieldRelease (8,MemoryModel.NoReleasePlan)];[MemoryModel.FieldRelease (8,MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer)];[]]) [8;16;24;256] in
+    let plans=simple@listPlans@dictPlans@rich in
+    let records=Map.ofList ["R",["a",AST.TString;"b",AST.TList AST.TBlob;"c",AST.TDict (AST.TInt64,AST.TInt64)];"Rec",["next",AST.TRecord ("Rec",[])];"Child",["x",AST.TTuple [AST.TString;AST.TList AST.TString]];"Large",List.init 35 (fun index -> string index,AST.TString)] in
+    let info payloads unary:MemoryModel.RcSumShapeInfo={TypeParams=[];Payloads=payloads;UnaryPayloadTags=Set.ofList unary} in
+    let sums=Map.ofList ["None",info [] [];"Nullable",info [0,None;1,Some AST.TString] [1];"S",info [0,None;1,Some (AST.TTuple [AST.TString;AST.TList AST.TString]);65536,Some (AST.TRecord ("Child",[]))] [];"RecSum",info [0,None;1,Some (AST.TTuple [AST.TString;AST.TSum ("RecSum",[])] )] []] in
+    let primitives=[AST.TInt8;AST.TInt16;AST.TInt32;AST.TInt64;AST.TInt128;AST.TInt;AST.TUInt8;AST.TUInt16;AST.TUInt32;AST.TUInt64;AST.TUInt128;AST.TBool;AST.TFloat64;AST.TString;AST.TBlob;AST.TChar;AST.TDateTime;AST.TUnit;AST.TNever;AST.TInternalRawPtr;AST.TVar source;AST.TInferenceVar (source,source);AST.TFunction ([AST.TString],AST.TBool);AST.TRecord ("missing",[]);AST.TRecord ("R",[]);AST.TRecord ("Rec",[]);AST.TRecord ("Child",[]);AST.TRecord ("Large",[]);AST.TSum ("missing",[]);AST.TSum ("None",[]);AST.TSum ("Nullable",[]);AST.TSum ("S",[]);AST.TSum ("RecSum",[]);AST.TTuple [];AST.TTuple [AST.TString;AST.TList AST.TString]] in
+    let types=primitives@List.collect (fun typ -> [AST.TList typ;AST.TList (AST.TList typ);AST.TStream typ;AST.TDict (AST.TInt64,typ);AST.TDict (AST.TString,typ);AST.TTuple [typ;AST.TString];AST.TTuple [AST.TTuple [typ;AST.TBlob];AST.TTuple [AST.TList typ;AST.TDict (AST.TString,typ)]]]) primitives in
+
+
+    let child=MemoryModel.RootRelease (16,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (16,[MemoryModel.FieldRelease (0,MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer);MemoryModel.FieldRelease (8,MemoryModel.RecursiveRelease (AST.TRecord (source,[])))]))
+    let releaseFields=List.mapi (fun index p->MemoryModel.FieldRelease (index*8,p)) (simple@listPlans@[child])
+    let variants:MemoryModel.RcBoxedSumVariantRelease list=[{MemoryModel.RcBoxedSumVariantRelease.Tag=0;FieldReleases=[]};{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=releaseFields};{MemoryModel.RcBoxedSumVariantRelease.Tag=1;FieldReleases=[MemoryModel.FieldRelease (-1,child)]};{MemoryModel.RcBoxedSumVariantRelease.Tag=2147483647;FieldReleases=[MemoryModel.FieldRelease (8,MemoryModel.RecursiveRelease (AST.TSum (source,[])))]}]
+    let plans=plans@[child;MemoryModel.RootRelease (32,MemoryModel.GenericHeap,MemoryModel.FixedBlockPayloadRelease (32,releaseFields));MemoryModel.RootRelease (32,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (32,[],variants))]
+    let observing f=
+        let trace=ResizeArray<AST.SemanticType>()
+        let select typ=trace.Add typ;"callback-"+string trace.Count
+        let result=call enc (fun ()->f select : X86_64.Instr list)
+        tuple [result;mapNodes enc (Seq.toList trace)]
+    let ctxType=typeof<LIR.Instr>.Assembly.GetType("X64CodeGenTypes+FuncCtx")
+    let cases=mapNodes (fun enabled->
+        let ctx=FSharpValue.MakeRecord(ctxType,[|box source;box 32;box [LIR.X19];box enabled;box records;box sums;box (FunctionIdMap.empty:FunctionIdMap<string>)|],Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic)
+        let workers=mapNodes (fun preserve->
+            let fields=mapNodes (fun fs->observing (fun select->invoke "genFieldReleases" [|box select;box preserve;ctx;box fs|])) [ [];releaseFields;List.rev releaseFields]
+            let variantCases=mapNodes (fun vs->observing (fun select->invoke "genBoxedSumVariantFieldReleases" [|box select;box preserve;ctx;box vs|])) [ [];variants;List.rev variants;[{MemoryModel.RcBoxedSumVariantRelease.Tag=0;FieldReleases=[]}]]
+            let planned=mapNodes (fun p->mapNodes observing [(fun select->invoke "genFixedBlockFieldReleases" [|box select;box preserve;ctx;box (Some p)|]);(fun select->invoke "genFixedBlockFieldRelease" [|box select;box preserve;ctx;box (-1);box 16;box p|]);(fun select->invoke "genRefCountDecGenericWithPlanUsing" [|box select;box preserve;ctx;box X86_64.R8;box 16;box (Some p)|])]) plans
+            tuple [fields;variantCases;planned]) [false;true]
+        let registerCases=mapNodes (fun reg->mapNodes (fun size->mapNodes (call enc) [(fun ()->invoke "genRefCountIncGeneric" [|box reg;box size|] : X86_64.Instr list);(fun ()->invoke "genRefCountDecGenericWithPlan" [|ctx;box reg;box size;box (None:MemoryModel.RcReleasePlan option)|]);(fun ()->invoke "genRefCountDecGeneric" [|ctx;box reg;box size;box (Some ({MemoryModel.RcMetadata.ReleasePlanCacheKey=Some source;ReleasePlan=Some child;SourceType=Some AST.TString}:MemoryModel.RcMetadata))|]);(fun ()->invoke "genRefCountDecStream" [|ctx;box reg;box (None:MemoryModel.RcMetadata option)|])]) [-2147483648;-1;0;8;24;255;256;2147483647]) [X86_64.RAX;X86_64.RBX;X86_64.RCX;X86_64.RDX;X86_64.RSI;X86_64.RDI;X86_64.RBP;X86_64.RSP;X86_64.R8;X86_64.R9;X86_64.R10;X86_64.R11;X86_64.R12;X86_64.R13;X86_64.R14;X86_64.R15]
+        let recursive=mapNodes (fun typ->call enc (fun ()->invoke "generateRecursiveNominalRefCountDecHelper" [|box enabled;box records;box sums;box typ|] : X86_64.Instr list)) types
+        tuple [workers;registerCases;recursive;call enc (fun ()->invoke "generateStreamRefCountDecHelper" [|ctx|] : X86_64.Instr list)]) [false;true]
+    let metadata p : MemoryModel.RcMetadata option=Some {MemoryModel.RcMetadata.ReleasePlanCacheKey=None;ReleasePlan=Some p;SourceType=None}
+    let func instructions : LIR.Function =
+        let label=LIR.Label "entry"
+        let block:LIR.BasicBlock={Label=label;Instrs=instructions;Terminator=LIR.Ret}
+        {Id=AST.functionId 0UL;Name=source;TypedParams=[];CFG=({Entry=label;Blocks=Map.ofList [label,block]}:LIR.CFG);StackSize=0;UsedCalleeSaved=[];CodegenFacts=None}
+    let dec p=LIR.RefCountDec (LIR.Virtual 0,16,LIR.GenericHeap,metadata p)
+    let batches=[[];[func []];[func (List.map dec plans)];[func (List.map (fun p->LIR.RefCountInc (LIR.Virtual 0,16,LIR.GenericHeap,metadata p)) plans)];[func (List.map dec (List.rev plans));func (List.map dec plans)]]
+    let recursiveTypes=mapNodes (fun fs->call enc (fun ()->invoke "recursiveReleaseTypesInFunctions" [|box fs|] : Set<AST.SemanticType>)) batches
+    tuple [cases;recursiveTypes]
+
 let x64ReleaseSelectionObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let tuple xs=namedArray "tuple" (Array.ofList xs)
@@ -6051,6 +6102,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "x64-field-reference" -> x64FieldReferenceObservation source
         | "x64-release-selection" -> x64ReleaseSelectionObservation source
         | "x64-printing" -> x64PrintingObservation source
         | "x64-call-float" -> x64CallFloatObservation source

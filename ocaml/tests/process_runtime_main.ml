@@ -551,6 +551,41 @@ let x64ReleaseSelectionChecks ()=
   check body) ([1L,0;Int64.max_int,2;1L,2;2L,2;17L,2]@(if tagged then [17L,1] else []))) [false;true]) [-16;0;8;24];
  !total
 [@@warning "-42"]
+let x64FieldReferenceChecks ()=
+ let module X=X86_64 in
+ let module E=Semantic_observation.InstrumentedX64FieldReferenceCounts in
+ let ctx={X64CodeGenTypes.functionName="x64-fixed-execution";stackSize=0;usedCalleeSaved=[];enableLeakCheck=false;recordRegistry=StringOrder.Map.empty;sumShapeRegistry=StringOrder.Map.empty;functionNames=FunctionIdMap.empty} in
+ let checked=function Ok value->value|Error error->failwith error in
+ let total=ref 0 in
+ let check body extra=
+  let code=[X.Label "_start"]@body@X64Operands.genPrintChars ['P']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@[X.Label "failed"]@X64Operands.genPrintChars ['F']@[X.MOV_imm32 (X.RDI,0l)]@X64Operands.genExitSyscall@extra in
+  let resolved=checked (X86_64_Resolve.resolveAndEncode code) in
+  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0 in
+  let actual=runImageOn "/opt/dcb/qemu/qemu-x86_64" binary [] "" in
+  if actual<>"P" then failwith (Printf.sprintf "x64 fixed release failed at case %d" !total);
+  incr total in
+ let compare reg expected=X64Operands.loadImm64 X.RCX expected@[X.CMP_reg (reg,X.RCX);X.Jcc (X.NE,"failed")] in
+ let setup size count=[X.SUB_imm (X.RSP,1024l);X.LEA (X.RBP,X.RSP,64l);X.LEA (X.R15,X.RSP,512l)]@X64Operands.loadImm64 X.RCX count@[X.MOV_store (X.RBP,Int32.of_int size,X.RCX);X.XOR_reg (X.RCX,X.RCX);X.MOV_store (X.R15,Int32.of_int size,X.RCX)] in
+ List.iter (fun reg->List.iter (fun size->List.iter (fun count->List.iter (fun isNull->
+  let initial=setup size count@(if isNull then [X.XOR_reg (reg,reg)] else [X.MOV_reg (reg,X.RBP)]) in
+  let expected=if isNull then count else Int64.pred count in
+  let pointerCheck=if isNull then compare reg 0L else [X.CMP_reg (reg,X.RBP);X.Jcc (X.NE,"failed")] in
+  let freed=not isNull && count=1L && size<256 in
+  let freeCheck=[X.MOV_load (X.RAX,X.R15,Int32.of_int size)]@(if freed then [X.CMP_reg (X.RAX,X.RBP);X.Jcc (X.NE,"failed")] else compare X.RAX 0L) in
+  check (initial@FieldReferenceCounts.genRefCountDecGenericWithPlan ctx reg size None@pointerCheck@[X.MOV_load (X.RAX,X.RBP,Int32.of_int size)]@compare X.RAX expected@freeCheck@[X.ADD_imm (X.RSP,1024l)]) []) [false;true]) [0L;1L;2L]) [8;16;24;256]) [X.RAX;X.RBX;X.RDX;X.R8;X.R10;X.R11];
+ List.iter (fun reg->List.iter (fun count->
+  check (setup 16 count@[X.MOV_reg (reg,X.RBP)]@FieldReferenceCounts.genRefCountIncGeneric reg 16@[X.CMP_reg (reg,X.RBP);X.Jcc (X.NE,"failed");X.MOV_load (X.RAX,X.RBP,16l)]@compare X.RAX (Int64.succ count)@[X.ADD_imm (X.RSP,1024l)]) []) [0L;1L;Int64.max_int]) [X.RAX;X.RDX;X.R8;X.R10;X.R11];
+ List.iter (fun tag->
+  let child=MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer in
+  let plan=MemoryModel.RootRelease (16,MemoryModel.GenericHeap,MemoryModel.BoxedSumPayloadRelease (16,[],[{MemoryModel.tag=1;fieldReleases=[MemoryModel.FieldRelease (8,child)]}])) in
+  let initial=setup 16 1L@X64Operands.loadImm64 X.RCX (Int64.of_int tag)@[X.MOV_store (X.RBP,0l,X.RCX);X.LEA (X.RAX,X.RSP,400l);X.MOV_store (X.RBP,8l,X.RAX);X.MOV_imm32 (X.RCX,2l);X.MOV_store (X.RAX,0l,X.RCX);X.MOV_reg (X.RAX,X.RBP)] in
+  check (initial@FieldReferenceCounts.genRefCountDecGenericWithPlan ctx X.RAX 16 (Some plan)@[X.MOV_load (X.RAX,X.RSP,400l)]@compare X.RAX (if tag=1 then 1L else 2L)@[X.ADD_imm (X.RSP,1024l)]) []) [0;1;2];
+ List.iter (fun state->List.iter (fun count->
+  let initial=setup 24 count@[X.MOV_imm32 (X.RCX,Int32.of_int state);X.MOV_store (X.RBP,0l,X.RCX);X.LEA (X.RAX,X.RSP,400l);X.MOV_store (X.RBP,16l,X.RAX);X.LEA_rip (X.RCX,"close_callback");X.MOV_store (X.RAX,0l,X.RCX);X.XOR_reg (X.R12,X.R12);X.MOV_reg (X.RAX,X.RBP)] in
+  let expected=if count=1L && state<>5 then 1L else 0L in
+  check (initial@E.genRefCountDecStream ctx X.RAX None@compare X.R12 expected@[X.MOV_load (X.RAX,X.RBP,24l)]@compare X.RAX (Int64.pred count)@[X.ADD_imm (X.RSP,1024l)]) [X.Label "close_callback";X.ADD_imm (X.R12,1l);X.MOV_imm32 (X.RDX,123l);X.RET]) [1L;2L]) [0;5];
+ !total
+[@@warning "-42"]
 let ()=
  let argvCases=[0,[],"N";(-1),["first"],"N";0,["first";"second"],"first";1,["first";"second"],"second";2,["first";"second"],"N";0,[""],"";0,["hé😀"],"hé😀";2147483647,["first"],"N"] in
  List.iter (fun (index,args,expected) -> let actual=runImage (binary index) args "" in if actual<>expected then failwith (Printf.sprintf "argv[%d]: expected %S, got %S" index expected actual)) argvCases;
@@ -558,4 +593,4 @@ let ()=
  List.iter (fun (literal,newline,reads,input,expected) -> let actual=runImage (presentationBinary literal newline reads) [] input in if actual<>expected then failwith (Printf.sprintf "presentation input %S: expected %S, got %S" input expected actual)) effects;
  let count=List.length argvCases+List.length effects+filesystemChecks ()+bufferChecks ()+memoryChecks ()+printingChecks ()+nativeEffectChecks ()+listReferenceChecks ()+closureReferenceChecks ()+dictReferenceChecks ()+rcEmissionChecks ()+functionLoweringChecks ()+programPipelineChecks () in
  Printf.printf "%d/%d native ARM64 process executions passed\n" count count;
- let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count
+ let x64Count=x64CallFloatChecks ()+x64PrintingChecks ()+x64ReleaseSelectionChecks ()+x64FieldReferenceChecks () in Printf.printf "%d/%d native x64 process executions passed\n" x64Count x64Count

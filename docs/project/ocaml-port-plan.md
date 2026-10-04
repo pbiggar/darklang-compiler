@@ -1490,3 +1490,18 @@ shared/unique dynamic buffer fields at positive, zero and negative offsets,
 checking refcounts and parent preservation. Coverage is 281/391 pairs; source
 comment coverage is complete. Remaining x64 runtime/instructions, driver/library,
 runners/corpus and final acceptance remain open.
+
+Complete x64 field, fixed-block, recursive and stream reference counting is
+translated with its full interface and all source comments. Full instruction
+lists, ordered recursive callback arguments, metadata scans and error text match
+F# across 22,626,574 identical JSON bytes (SHA256
+cf9498592d60f2d5915135c014012389ed354de0676717f611181c758337b7ea).
+Cases include all GP registers, payload and displacement boundaries, both
+scratch-preservation modes, nested fields, duplicate variant tags, recursive
+record/sum shapes, stream finalization and recursive dependency scanning.
+The warning-free build passes 508/508 unit checks, 519/519 ARM64 executions and
+623/623 x64 executions. The 166 new x64 executions check register preservation,
+null/shared/unique roots, free-list boundaries, increment wraparound, boxed
+variant release and stream close callback ordering/idempotence. Coverage is
+282/391 pairs; source comment coverage is complete. Remaining x64 modules,
+driver/library, runners/corpus and final acceptance remain open.
