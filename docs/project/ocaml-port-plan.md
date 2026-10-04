@@ -1973,3 +1973,14 @@ layout cases pass and the shared stdlib retains its original optimization
 assertion. The warning-free build passes 562/562 translated unit/fixture checks.
 Coverage is 333/391 pairs; all reference comments are preserved. Remaining unit
 and test-tooling pairs, full corpus and final acceptance remain open.
+
+The complete symbolic-IR and LIR function-reachability unit suites now preserve
+all original assertions for sequential function identities, symbolic operands,
+missing entries, native shift masks, allocated float-store temporaries, list
+tag masks, function-address setup and reachable-function input order. Their
+complete registration/results and all typed LIR instruction fixture formatting
+match F# on 16 requests. Native failure descriptions use typed LIR formatting
+without reflection or JSON conversion. The warning-free build passes 572/572
+translated unit/fixture checks. Coverage is 335/391 pairs; reference comments
+remain complete. Remaining unit/test-tooling pairs, full corpus and final
+acceptance remain open.
