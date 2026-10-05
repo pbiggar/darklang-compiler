@@ -2027,3 +2027,13 @@ formatter failures, file loading, registration and both original DSL unit tests.
 The warning-free native build passes 610/610 translated unit/fixture checks.
 Committed coverage is 344/391 pairs; reference comments remain complete.
 Remaining unit/test-tooling pairs, full corpus and final acceptance remain open.
+
+The complete symbolic ARM64 fixture parser now preserves every original
+instruction form, numeric operand range, code/data/string/float label reference
+and public diagnostic boundary. All 16 comparison requests match F# across
+335 symbolic inputs and the previous 345 ANF/MIR/LIR inputs. Comparisons retain
+floating-point bits, including signed zero, NaN, infinity, underflow and decimal
+rounding boundaries. Original MOVN/SUBS/CMP error forwarding is retained. The
+warning-free build passes 610/610 translated unit/fixture checks. Coverage is
+345/391 committed pairs; reference comments remain complete. Remaining unit
+and test-tooling pairs, full corpus and final acceptance remain open.
