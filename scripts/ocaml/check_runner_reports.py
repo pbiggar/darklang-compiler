@@ -62,6 +62,7 @@ def check_timings(report):
     require(summary["passed"] + summary["failed"] == summary["total"],
             "outcome counters are inconsistent")
     require(summary["failed"] == 0, "suite contains failed tests")
+    require(summary["total"] > 0, "suite did not select any tests")
     require(isinstance(report["tests"], list), "tests must be an array")
     contracts = Counter()
     for test in report["tests"]:
