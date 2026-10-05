@@ -29,12 +29,22 @@ class AcceptanceTests(unittest.TestCase):
             (directory / filename).write_bytes(data)
         (directory / f"{index}.json").write_text(json.dumps({
             "kind": "compile", "request": request or ["source", "options"],
-            "binary": filename, "error": error,
+            "binary": filename, "error": error.encode("utf-16-be").hex() if error is not None else None,
         }))
 
     def compare(self):
         with contextlib.redirect_stdout(io.StringIO()):
             return acceptance.compare(self.root)
+
+    def test_inference_identity_renaming_preserves_diagnostic(self):
+        def encoded(value):
+            return value.encode("utf-16-be").hex()
+        self.assertEqual(
+            acceptance.error_identity(encoded('#infer:a$scope$0:' + '1' * 32)),
+            acceptance.error_identity(encoded('#infer:a$scope$0:' + '2' * 32)))
+        self.assertNotEqual(
+            acceptance.error_identity(encoded('#infer:a:' + '1' * 32 + ' #infer:a:' + '1' * 32)),
+            acceptance.error_identity(encoded('#infer:a:' + '2' * 32 + ' #infer:a:' + '3' * 32)))
 
     def test_parallel_order_does_not_change_comparison(self):
         for index, value in enumerate((b"first", b"second", b"first")):

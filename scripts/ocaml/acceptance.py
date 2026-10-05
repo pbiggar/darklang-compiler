@@ -101,6 +101,7 @@ def prepare(destination, native_only=False):
                     digest.update(str(filename.stat().st_mode & 0o777).encode() + b"\0")
                     digest.update(hashlib.sha256(filename.read_bytes()).digest())
             native_source_identity = digest.hexdigest()
+        control_batch_paths(copy, side)
         events = destination / (side + "-events")
         events.mkdir()
         if side == "reference":
@@ -161,6 +162,52 @@ OPTION_FIELDS = [
     "DisableMIRLICM", "DisableLIROpt", "DisableLIRPeephole", "DisableFunctionTreeShaking",
     "EnableCoverage", "EnableLeakCheck", "DumpANF", "DumpMIR", "DumpLIR", "DumpIRSummary",
 ]
+
+
+def control_batch_paths(copy, side):
+    """Supply the same logical filename before synthetic batch names are hashed."""
+    prefix = json.dumps(str(copy) + "/")
+    if side == "reference":
+        path = copy / "src/Tests/test-suite-tooling/Runners/E2ETestRunner.fs"
+        source = path.read_text()
+        site = "let private batchBindingPrefix"
+        helper = f'''let private parityLogicalPath (value: string) =
+    let prefix = {prefix}
+    if value.StartsWith(prefix, System.StringComparison.Ordinal) then "/port-acceptance/" + value.Substring(prefix.Length) else value
+
+'''
+        source = source.replace(site, helper + site, 1)
+        source = source.replace("[prepared.Test.SourceFile; prepared.Test.Name; prepared.EqualitySource]",
+                                "[parityLogicalPath prepared.Test.SourceFile; prepared.Test.Name; prepared.EqualitySource]", 1)
+    else:
+        path = copy / "ocaml/tests/test-suite-tooling/Runners/E2ETestRunner.ml"
+        source = path.read_text()
+        site = "let batchBindingPrefix"
+        helper = f'''let parityLogicalPath value =
+ let prefix = {prefix} in
+ if String.starts_with ~prefix value then "/port-acceptance/" ^ String.sub value (String.length prefix) (String.length value-String.length prefix) else value
+
+'''
+        source = source.replace(site, helper + site, 1)
+        source = source.replace("[prepared.test.sourceFile;prepared.test.name;prepared.equalitySource]",
+                                "[parityLogicalPath prepared.test.sourceFile;prepared.test.name;prepared.equalitySource]", 1)
+    if source == path.read_text() or source.count("parityLogicalPath") != 2:
+        raise ValueError("Batch binding path site changed")
+    path.write_text(source)
+
+
+def error_identity(error):
+    """Alpha-map only fresh internal inference GUIDs, retaining the raw capture."""
+    if error is None:
+        return None
+    text = bytes.fromhex(error).decode("utf-16-be", errors="surrogatepass")
+    identities = {}
+    def replace(match):
+        guid = match.group(2)
+        if guid not in identities:
+            identities[guid] = len(identities)
+        return match.group(1) + f"<identity-{identities[guid]}>"
+    return re.sub(r'(#infer:[^:\r\n"\\]+:)([0-9a-f]{32})', replace, text)
 
 
 def instrument_reference_request(path):
@@ -226,7 +273,7 @@ def load_events(directory):
         key = json.dumps([event["kind"], event["request"]], ensure_ascii=True)
         binary = directory / event["binary"] if event["binary"] else None
         digest = hashlib.sha256(binary.read_bytes()).hexdigest() if binary else None
-        groups[key].append((digest, event["error"], binary, path))
+        groups[key].append((digest, error_identity(event["error"]), binary, path))
     if not groups:
         raise ValueError(f"No captured invocations in {directory}")
     return groups
@@ -259,7 +306,7 @@ def compare(destination):
             for digest, _, binary, _ in b:
                 if binary and originals[digest].read_bytes() != binary.read_bytes():
                     raise ValueError("SHA256 collision: complete executable bytes differ")
-    report = {"invocations":dict(totals),"request_groups":len(left),"failures":failures}
+    report = {"diagnostic_identity_policy":"alpha-map fresh #infer GUIDs; preserve all other text and identity sharing", "invocations":dict(totals),"request_groups":len(left),"failures":failures}
     (destination / "comparison.json").write_text(json.dumps(report,indent=2)+"\n")
     print(f"Captured invocations: {dict(totals)}; mismatching groups: {len(failures)}")
     print(f"Full comparison: {destination / 'comparison.json'}")

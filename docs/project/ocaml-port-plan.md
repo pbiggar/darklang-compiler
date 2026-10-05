@@ -2497,3 +2497,33 @@ all three original parsing assertions pass. Port allocation, text, SCC and
 bitset regression checks also pass. Complete host byte and report comparison
 is being rerun before source retirement; physical ARM64/macOS CI must pass
 before final acceptance. Valgrind and fuzzing remain deferred.
+
+
+## Fresh Linux x64 release acceptance (2026-10-05)
+
+The final fresh paired run passed 10,760/10,760 checks in each implementation:
+F# 265.5 seconds and native OCaml 258.5 seconds (informational timings).
+Complete capture matches all 1,655 emitted ELF images and 1,665 compiler results,
+including a CLI rejection check. All 10,347 timed test contracts, batching
+counters, and profile schema-10 fields match. Five CLI checks (help, version,
+unknown flag, unsupported target, and invalid expression) match stdout, stderr
+and exit status. All 34 tracked Bash scripts pass ShellCheck's error checks.
+The optional targeted benchmark driver builds warning-free and compiled and
+executed an expression through the native CLI.
+The final uninstrumented checkout also passes 10,760/10,760 checks through the
+default `./run-tests --ai` launcher in 222.8 seconds.
+
+Synthetic E2E batch function names hash their fixture paths. The disposable
+collector supplies the same logical path before that hash is computed, rather
+than rewriting generated source names afterward. Two rejected generic calls
+include random GUIDs in internal #infer identities. Their diagnostic comparison
+alpha-maps only those GUIDs, preserving display names, identity sharing and all
+other message text; both original diagnostics remain in the raw captures.
+Executable byte comparison has no exceptions or normalization.
+
+Commit fe660eb5 was pushed only to codex/ocaml-port; main was untouched. The
+GitHub token accepted repository-content writes but rejected the new workflow
+for missing Workflows write permission. The complete Linux x64/Linux ARM64/macOS
+ARM64 CI workflow remains prepared locally. Physical ARM64/macOS acceptance and
+F# source retirement therefore remain pending; do not claim final all-target
+acceptance from the Linux x64 results.

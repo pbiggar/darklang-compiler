@@ -3,6 +3,12 @@
   "oracle": "df9dae7e1647275f6bc9104618f20ef84a7251be",
   "entries": [
     {
+      "source": "DarkCompiler.sln",
+      "kind": "project",
+      "sha256": "d0d805d63a78b29902752fb3889e13287e88792deaea61eefee14859197fb23c",
+      "owner": "ocaml/dune-project"
+    },
+    {
       "source": "Dockerfile",
       "kind": "entrypoint",
       "sha256": "23d9c63ced735b02a4cc9236dbe193b3cdb9e922603f98d2fd2fbb130a14eb94",
@@ -73,6 +79,12 @@
       "kind": "compiler",
       "sha256": "15a62f4e2f2ebc4c7d6984586f3b3bea0018c7f044269b2b1f1a8c59885f5292",
       "owner": "ocaml/lib/Crash.ml"
+    },
+    {
+      "source": "src/DarkCompiler/DarkCompiler.fsproj",
+      "kind": "project",
+      "sha256": "ca61f2e9b96beaeeb0eed976b255ee15779be15f177539f2ac00e5dd95b899c7",
+      "owner": "ocaml/lib/dune"
     },
     {
       "source": "src/DarkCompiler/FunctionIdMap.fs",
@@ -2890,9 +2902,9 @@
     },
     {
       "source": "src/Tests/Tests.fsproj",
-      "kind": "test-input",
+      "kind": "project",
       "sha256": "8111a12f4722c8afaad54fb348f4e99c1791c4e994a7b48426d6186f7abde2ee",
-      "owner": "src/Tests/Tests.fsproj"
+      "owner": "ocaml/tests/dune"
     },
     {
       "source": "src/Tests/algorithms/graph-color/coloring.graphcolor",
