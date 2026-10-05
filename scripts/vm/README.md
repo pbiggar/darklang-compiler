@@ -50,12 +50,12 @@ either runner. Omitting `--ocaml` continues to select the temporary F# oracle
 until replacement acceptance is complete.
 
 The same Dune build also produces the standalone native compiler at
-`ocaml/_build/default/cli/dark_main.exe`. It passes command-line arguments to
+`ocaml/_build/default/bin/dark.exe`. It passes command-line arguments to
 the ported `Program.main` directly and requires no .NET runtime. Run it after
 activating the native VM environment, for example:
 
 ```bash
-ocaml/_build/default/cli/dark_main.exe -r -e '1L + 2L'
+ocaml/_build/default/bin/dark.exe -r -e '1L + 2L'
 ```
 
 The setup needs Bash, Python 3, curl, tar, GCC, and make. All installations,

@@ -2377,7 +2377,7 @@ production test launcher runs there with help output identical to the reference.
 The independent progress-bar report run matches both reference outcomes, all
 eight timed record contracts and the schema-10 profile structure.
 
-Added a standalone `ocaml/cli/dark_main` interface, implementation and Dune
+Validated the existing `ocaml/bin/dark` interface, implementation and Dune
 executable that delegates directly to the already-ported `Program.main`.
 It has no F# bridge or .NET runtime dependency. Help, version and unknown-option
 output/exit codes match the reference. Compiling `1L + 2L` through each actual
