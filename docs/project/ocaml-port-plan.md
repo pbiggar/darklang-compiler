@@ -2265,3 +2265,22 @@ The fresh `dune-rc-contracts` graph builds with warnings as errors
 match F# (`rc-contracts-complete-parity.log`). Coverage is 389/391 complete
 pairs with zero missing source comment lines. X86_64CodeGenTests and the main
 TestRunner remain, followed by full E2E/executable parity and final cutover.
+
+### Complete x64 code generation contracts (390 pairs)
+
+Ported X86_64CodeGenTests, including all 37 public tests, its 36 original
+registrations, complete variant inference/metadata preparation, ELF execution
+helpers and all original dynamic tuple/record/sum payload case arrays. Contracts
+cover layout, missing/invalid CFG diagnostics, string storage and stack operands,
+raw-slot ownership, CLI/syscalls, nanosleep retries, float parallel moves and
+aliases, planned recursive release helpers, collision nodes and closure captures.
+All source comments remain accounted for.
+
+The fresh `dune-x64-contracts` graph builds with warnings as errors
+(`x64-contracts-build1.log`). The native suite passes 1199/1199
+(`x64-contracts-native.log`), including the unregistered public nested-sum
+contract. All 16 complete compiler-unit observation buckets match F#
+(`x64-contracts-complete-parity.log`). Inventory is 390/391 complete pairs,
+including 273/273 compiler owners, with zero missing reference comment lines.
+Only the main TestRunner owner remains untranslated. Full unchanged-suite and
+whole-executable acceptance, profiling/count checks and final cutover remain open.
