@@ -2057,3 +2057,15 @@ move arrow follows the original regex. The warning-free build passes 648/648
 translated unit/fixture checks. Coverage is 350/391 pairs; reference comments
 remain complete. Remaining unit/test-tooling pairs, full corpus and final
 acceptance remain open.
+
+The complete executable LIR parser and runner now preserve typed expectations,
+x64 codegen failures, executable entry CFG construction, data-label fixups,
+leak-check options and captured process results. All 16 requests match F# for
+47 boundary inputs, 26 unchanged x64 fixtures, forced failures, file loading,
+registration, four original DSL tests and the shared Linux ARM64 execution
+path. Process capture drains both streams, preserves Unicode/CRLF and enforces
+the original 10-second deadline with descendant cleanup. Three focused host
+process checks pass alongside the original suites. The warning-free build
+passes 681/681 translated unit/fixture checks. Coverage is 353/391 pairs; all
+source comments remain complete. Remaining unit/test-tooling pairs, full
+corpus and final acceptance remain open.
