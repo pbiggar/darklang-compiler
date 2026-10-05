@@ -2,7 +2,7 @@
 (library
  (name dark_compiler)
  (libraries unix uutf uucp uunf uuseg zarith yojson)
- (foreign_stubs (language c) (names host_identity host_collation host_package_io host_execution))
+ (foreign_stubs (language c) (names host_identity host_collation host_package_io host_execution host_string_order))
  (c_library_flags -licui18n -licuuc -lsqlite3 -lcurl)
  ; Shared field names are part of the frozen syntax schema. Warning 42 only
  ; concerns compatibility with OCaml before 4.01; this port pins 5.5.1.
