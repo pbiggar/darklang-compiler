@@ -2322,3 +2322,22 @@ The eleven additional LIR DSL checks remain in the migration foundation suite
 as dslTests; the production tests registration again contains exactly the
 original thirty LIR peephole checks. Main-runner validation and complete-suite
 acceptance continue separately.
+
+### Complete main suite runner (391 pairs)
+
+Ported the complete TestRunner owner and all reference comments. The production
+entrypoint is a separate tests_main launcher, so renaming the executable does
+not disable execution. It includes the original ordered suite registrations,
+fixture discovery and upstream gates, parallel unit/E2E orchestration, shared
+contexts and bounded batching, session/cache accounting, structured failures,
+quiet/AI capture, coverage, timings and schema-10 codegen profile JSON.
+
+The fresh native graph is warning-free. Help output, including the renamed
+Tests executable, matches the oracle exactly. Quiet-mode progress-bar checks
+return success (`runner-quiet-progress.log`) and all 38 unchanged process E2E
+checks pass (`runner-cli-process-fixed.log`). Inventory is now 391/391 complete
+interface/implementation pairs, including every compiler and test owner;
+reference comment coverage remains zero missing lines. The current full native
+run reports the original 1045-unit registration count. Full-suite execution,
+complete every-invocation executable-byte parity and final cutover are still
+acceptance work; source translation completeness alone does not close them.
