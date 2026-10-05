@@ -2200,3 +2200,20 @@ stdin with simultaneous stdout/stderr and environment overrides, closed stdin,
 and process-group timeout cleanup. Inventory is 376/391 and the reference
 comment audit reports zero missing comments. These checks do not replace the
 remaining full 10760-test corpus, whole-executable byte parity or final cutover.
+
+### Source-unit and catalog integration contracts (380 pairs)
+
+Ported ProgramStructureTests and ValueSearchCatalogTests, plus the complete
+ARM64 fixture owner and planning-boundary tests. Their unchanged contracts
+cover ordered source composition, duplicate definitions, relative module
+lookup, entry validation, redeclared carried stdlib functions, transitive
+stdlib specialization, immutable package-value catalog filtering/evaluation,
+Int8 package values, codegen preconditions and opcode cost attribution.
+
+The fresh `dune-integration-runners` graph builds with warnings as errors
+(`integration-runners-build3.log`). The expanded compiler-unit observations
+match F# in all 16 complete buckets (`integration-runners-complete-parity.log`),
+including registration and complete result diagnostics. The expanded native
+unit suite passes 1043/1043 (`integration-runners-native.log`). Coverage is
+380/391 pairs with zero missing reference comments. Remaining test owners,
+the full E2E corpus, whole-executable byte parity and final cutover remain open.
