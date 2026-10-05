@@ -174,7 +174,7 @@ operands once, and produces `false` for `==` (`true` for `!=`).
 | `ocaml/lib/frontend/TypeChecking.ml` | Pure declaration validation, nominal resolution, generic/recursive typing, arity, equality |
 | `ocaml/lib/frontend/ValueRendering.ml` | Public enum rendering |
 | `ocaml/lib/passes/anf/AST_to_ANF.ml` | Resolved construction and once-only ordered payload evaluation |
-| `src/DarkCompiler/Runtime.fs` | Shared native runtime support used by generated rendering and equality paths |
+| `ocaml/lib/backend/arm64/runtime/PrintValues.ml`, `ocaml/lib/backend/x64/runtime/X64Printing.ml` | Native generated rendering support |
 | `ocaml/lib/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 consumption of shared sum metadata |
 | `ocaml/lib/backend/x64/CodeGen_X86_64.ml` | x64 consumption of shared sum metadata |
 

@@ -1,5 +1,0 @@
-// PackageManager.PickContext.dark - canonical empty package-selection context.
-
-module Darklang.LanguageTools.PackageManager.PickContext
-
-val empty = Darklang.LanguageTools.PackageManager.PickContext { currentModule = [] }

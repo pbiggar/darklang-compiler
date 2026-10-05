@@ -88,7 +88,7 @@ These generate syscalls or special code sequences.
 
 ### Dark Functions
 
-Defined in modular `src/DarkCompiler/stdlib/*.dark` files and compiled like
+Defined in modular `ocaml/share/stdlib/*.dark` files and compiled like
 user code:
 
 ```dark
@@ -276,7 +276,7 @@ Uses platform-specific random source:
 
 1. **Compilation start**: Load intrinsic module signatures from
    `ocaml/lib/DarkStdlib.ml`
-   and the ordered Dark stdlib source files from `src/DarkCompiler/stdlib/`
+   and the ordered Dark stdlib source files from `ocaml/share/stdlib/`
 2. **Parse**: Parse stdlib definitions
 3. **Combine**: Merge with user program
 4. **Type check**: Stdlib + user code together
@@ -289,7 +289,7 @@ Stdlib functions are only included if called (dead code elimination).
 | File | Purpose |
 |------|---------|
 | `ocaml/lib/DarkStdlib.ml` | Intrinsic module definitions |
-| `src/DarkCompiler/stdlib/*.dark` | Dark stdlib implementations |
+| `ocaml/share/stdlib/*.dark` | Dark stdlib implementations |
 | `ocaml/lib/CompilerLibrary.ml` | Stdlib loading logic |
 
 ## Generic Function Monomorphization
@@ -304,7 +304,7 @@ Creates `Stdlib.List.map_i64_String` specialized function.
 
 ## Adding New Stdlib Functions
 
-1. **Dark function**: Add to the appropriate file in `src/DarkCompiler/stdlib/`
+1. **Dark function**: Add to the appropriate file in `ocaml/share/stdlib/`
 2. **Intrinsic**: Add to `ocaml/lib/DarkStdlib.ml` + implement in codegen
 
 See `docs/contributing/workflow.md` for details.

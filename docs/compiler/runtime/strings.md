@@ -59,7 +59,7 @@ Unicode helpers are layered on top of the byte representation:
 
 Higher-level stdlib functions such as `repeat`, `join`, `trim`, `split`,
 `replace`, `first`, `last`, `dropFirst`, `dropLast`, `head`, `padStart`, and
-`padEnd` are implemented in `src/DarkCompiler/stdlib/String.dark`.
+`padEnd` are implemented in `ocaml/share/stdlib/String.dark`.
 
 Public byte-oriented traversal is available for parsers that retain UTF-8 byte
 offsets: `byteLength`, `byteSlice`, `byteRangesEqual`, and `byteIndexOfFrom`.
@@ -122,4 +122,4 @@ reuse work remain:
 | `ocaml/lib/passes/anf/RefCountInsertion.ml` | string lifetime insertion |
 | `ocaml/lib/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 string allocation and RC |
 | `ocaml/lib/backend/x64/CodeGen_X86_64.ml` | x64 string allocation and RC |
-| `src/DarkCompiler/stdlib/String.dark` | stdlib string functions |
+| `ocaml/share/stdlib/String.dark` | stdlib string functions |

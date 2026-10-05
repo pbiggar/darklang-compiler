@@ -37,9 +37,10 @@ def insert_wrapper(path, name, wrapper):
 def native_capture(directory):
     return f'''(* Migration-only raw artifact capture; absent from production graphs. *)
 let directory = {json.dumps(str(directory))}
+let run = HostGuid.newGuidN ()
 let counter = Atomic.make 0
 let record kind request binary error =
- let id = Printf.sprintf "%d-%08d" (Unix.getpid ()) (Atomic.fetch_and_add counter 1) in
+ let id = Printf.sprintf "%s-%08d" run (Atomic.fetch_and_add counter 1) in
  let filename = Option.map (fun bytes ->
   let name = id ^ ".bin" in
   Out_channel.with_open_bin (Filename.concat directory name) (fun output -> Out_channel.output_bytes output bytes); name) binary in
@@ -54,9 +55,10 @@ def reference_capture(directory):
     return f'''// Migration-only raw artifact capture; absent from production graphs.
 module ParityCapture
 let directory = {json.dumps(str(directory))}
+let private run = System.Guid.NewGuid().ToString("N")
 let mutable private counter = 0
 let record (kind: string) (request: string list) (binary: byte array option) (error: string option) =
-    let id = sprintf "%d-%08d" System.Environment.ProcessId (System.Threading.Interlocked.Increment(&counter))
+    let id = sprintf "%s-%08d" run (System.Threading.Interlocked.Increment(&counter))
     let filename = binary |> Option.map (fun bytes ->
         let name = id + ".bin"
         System.IO.File.WriteAllBytes(System.IO.Path.Combine(directory, name), bytes)
@@ -67,7 +69,61 @@ let record (kind: string) (request: string list) (binary: byte array option) (er
 '''
 
 
-def prepare(destination, native_only=False):
+def emulate_arm64(copy, side, qemu):
+    """Select ARM64 in disposable runners and execute its ELF files with QEMU."""
+    def replace(path, old, new):
+        source = path.read_text()
+        if source.count(old) != 1:
+            raise ValueError(f"ARM64 migration patch site changed in {path}: {old}")
+        path.write_text(source.replace(old, new))
+
+    qemu_literal = json.dumps(str(qemu))
+    if side == "reference":
+        tests = copy / "src/Tests/test-suite-tooling"
+        replace(tests / "TestRunner.fs", "            match Platform.detectHostTarget () with",
+                "            match Ok (Platform.ARM64Backend Platform.LinuxARM64) with")
+        replace(tests / "Runners/E2ETestRunner.fs",
+                "Platform.archFor hostTarget = Platform.archFor target ->",
+                "Platform.archFor hostTarget = Platform.archFor target || target = Platform.ARM64Backend Platform.LinuxARM64 ->")
+        replace(copy / "src/DarkCompiler/driver/SourcePreparation.fs",
+                "    try Ok (Process.Start(info))\n    with ex -> Error ex.Message",
+                f'''    try
+        let isArmElf =
+            if File.Exists(info.FileName) then
+                use input = File.OpenRead(info.FileName)
+                if input.Length < 20L then false
+                else
+                    let bytes = Array.zeroCreate<byte> 20
+                    input.ReadExactly(bytes)
+                    bytes.[0..3] = [|127uy;69uy;76uy;70uy|] && bytes.[18] = 183uy && bytes.[19] = 0uy
+            else false
+        if isArmElf then
+            info.ArgumentList.Insert(0, info.FileName)
+            info.FileName <- {qemu_literal}
+        Ok (Process.Start(info))
+    with ex -> Error ex.Message''')
+    else:
+        tests = copy / "ocaml/tests/test-suite-tooling"
+        replace(tests / "TestRunner.ml", "TestRunnerArgs.Host->(match Platform.detectHostTarget () with",
+                "TestRunnerArgs.Host->(match Ok (Platform.ARM64Backend Platform.LinuxARM64) with")
+        replace(tests / "Runners/E2ETestRunner.ml",
+                "Platform.archFor host=Platform.archFor target ->",
+                "Platform.archFor host=Platform.archFor target || target=Platform.ARM64Backend Platform.LinuxARM64 ->")
+        path = copy / "ocaml/lib/driver/SourcePreparation.ml"
+        replace(path, "let tryStartProcess info=try", "let parityOriginalTryStartProcess info=try")
+        with path.open("a") as output:
+            output.write(f'''
+let tryStartProcess info =
+ let isArmElf = try In_channel.with_open_bin info.fileName (fun input ->
+   match In_channel.really_input_string input 20 with
+   | Some bytes -> String.sub bytes 0 4 = "\\127ELF" && Char.code bytes.[18] = 183 && Char.code bytes.[19] = 0
+   | None -> false) with Sys_error _ -> false in
+ let info = if isArmElf then {{info with fileName={qemu_literal};arguments=info.fileName::info.arguments}} else info in
+ parityOriginalTryStartProcess info
+''')
+
+
+def prepare(destination, native_only=False, qemu=None):
     if destination.exists() and not native_only:
         raise ValueError(f"Destination already exists: {destination}")
     destination.mkdir(parents=True, exist_ok=True)
@@ -144,6 +200,8 @@ def prepare(destination, native_only=False):
             # Migration probes also consume this already-controlled serializer.
             controller = copy / "ocaml/migration/control_macho_uuid.py"
             controller.write_text(controller.read_text().replace('old = "let hex=HostGuid.newGuidN () in"', f'old = \'let hex="{UUID}" in\''))
+        if qemu is not None:
+            emulate_arm64(copy, side, qemu)
     (destination / "inputs.json").write_text(json.dumps({
         "oracle": ORACLE,
         "native_parent": subprocess.check_output(["git","rev-parse","HEAD"],cwd=ROOT,text=True).strip(),
@@ -151,6 +209,7 @@ def prepare(destination, native_only=False):
         "controlled_macho_uuid": UUID,
         "controlled_source_root": "/port-acceptance/",
         "inventory_sha256": hashlib.sha256((ROOT / "ocaml/inventory.json").read_bytes()).hexdigest(),
+        "emulated_arm64_qemu": str(qemu) if qemu is not None else None,
     }, indent=2) + "\n")
     print(f"Prepared disposable compilation graphs at {destination}")
 
@@ -317,11 +376,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command",choices=("prepare","prepare-native","compare"))
     parser.add_argument("--directory",type=Path,required=True)
+    parser.add_argument("--emulate-arm64",type=Path,metavar="QEMU_AARCH64",
+                        help="prepare disposable Linux ARM64 runners using this QEMU executable")
     args = parser.parse_args()
     destination = args.directory.resolve()
     try:
+        qemu = args.emulate_arm64.resolve() if args.emulate_arm64 else None
+        if qemu is not None and (args.command == "compare" or not qemu.is_file() or sys.platform != "linux"):
+            raise ValueError("--emulate-arm64 requires a QEMU executable and Linux graph preparation")
         if args.command in ("prepare", "prepare-native"):
-            prepare(destination, args.command == "prepare-native")
+            prepare(destination, args.command == "prepare-native", qemu)
             return 0
         return int(compare(destination))
     except (OSError,ValueError,subprocess.CalledProcessError) as error:

@@ -1,5 +1,12 @@
 # Differential compiler fuzzing
 
+Fuzzing is deferred during the OCaml replacement, as agreed in the
+[migration plan](../project/ocaml-port-plan.md). `./fuzz` now reports that status
+without building or launching anything. The F# fuzzer, reducer, controller and
+their tests were retired with the compiler sources; retrieve them from commit
+`df9dae7e1647275f6bc9104618f20ef84a7251be` in Git history when implementing the
+native replacement. The design below documents that historical workflow.
+
 The F# fuzzer generates valid expressions directly as the compiler's
 `AST.Expr`, formats them with `ASTPrettyPrinter`, and compares the compiled
 native result with `darklang-interpreter eval`. The interpreter is the semantic

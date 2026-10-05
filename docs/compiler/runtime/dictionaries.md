@@ -14,7 +14,7 @@ The public contract was revalidated against these exact revisions:
   `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
 - historical compiler starting point:
   `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`, specifically
-  `src/DarkCompiler/stdlib/Dict.dark`, `__HAMT.dark`, and
+  `ocaml/share/stdlib/Dict.dark`, `__HAMT.dark`, and
   `ocaml/lib/DarkStdlib.ml:150-166`
 - DCB1 report `8a402797` was starting evidence only; retained findings were
   checked again against the current compiler and interpreter revisions above.
@@ -33,8 +33,8 @@ language-visible contract. Ahead-of-time compilation and the HAMT layout are
 compiler implementation details.
 
 Current source evidence at the compiler comparison point is
-`src/DarkCompiler/stdlib/Dict.dark:9-216` for the public wrappers and ordered
-higher-order operations, `src/DarkCompiler/stdlib/__HAMT.dark:10-60` for the
+`ocaml/share/stdlib/Dict.dark:9-216` for the public wrappers and ordered
+higher-order operations, `ocaml/share/stdlib/__HAMT.dark:10-60` for the
 private generic storage boundary, `ocaml/lib/frontend/interpreter/Parser.ml:2034-2035`
 for the empty value, `ocaml/lib/frontend/checking/EqualityHelpers.ml`
 for content equality, `ocaml/lib/frontend/ValueRendering.ml`
@@ -125,7 +125,7 @@ both native architectures.
 
 ## Private generic HAMT
 
-`src/DarkCompiler/stdlib/__HAMT.dark` remains a generic persistent Hash Array
+`ocaml/share/stdlib/__HAMT.dark` remains a generic persistent Hash Array
 Mapped Trie. Compiler-owned consumers such as Unicode tables use private
 `Stdlib.Dict.__*` helpers for Int64 and other key types. User code cannot name
 these helpers.
@@ -159,11 +159,11 @@ the concrete type-directed release plan, including collision payloads.
 The contract is anchored in:
 
 - `ocaml/lib/DarkStdlib.ml` for native intrinsic registration
-- `src/DarkCompiler/Runtime.fs` and architecture code generation for native
+- `ocaml/lib/backend/arm64/runtime/` and `ocaml/lib/backend/x64/runtime/` for native
   allocation, output, and failure behavior
 - `ocaml/lib/frontend/TypeChecking.ml` for public typing and equality
-- `src/DarkCompiler/stdlib/Dict.dark` for the public module
-- `src/DarkCompiler/stdlib/__HAMT.dark` for private generic storage
+- `ocaml/share/stdlib/Dict.dark` for the public module
+- `ocaml/share/stdlib/__HAMT.dark` for private generic storage
 - `src/Tests/e2e/dict_parity.e2e` and pinned upstream Dict/edict cases for the
   language boundary
 - `src/Tests/e2e/stdlib-internal/dict-hamt.e2e`, refcounting tests, and

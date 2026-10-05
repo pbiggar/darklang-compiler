@@ -3,8 +3,8 @@
 Purpose: specify the accepted migration requirements, comparison strategy,
 delivery sequence, and task-specific workflow.
 
-Status: revised following user review, 2026-10-01. Implementation is in progress;
-see the recorded migration checkpoints below.
+Status: native OCaml replacement completed locally, 2026-10-05. See the final
+local acceptance checkpoint and the explicit macOS host coverage limit below.
 
 ## Scope and baseline
 
@@ -183,7 +183,7 @@ verify the capability; ongoing profiling is optional.
 | 6 | MIR construction/verification/optimization, call-graph scheduling, LIR lowering/peepholes, allocation, tree shaking | IRs, clobber summaries, spills, register choices, and function order match |
 | 7 | Linux x86-64 backend: runtime generators, instruction selection, encoding, resolution, native emission | Complete generated files match byte for byte on that target |
 | 8 | Remaining target support, driver/session behavior, stdlib builds, package functionality, CLI, all remaining unit/test-tooling coverage | Complete replacement covers existing targets; external-service testing remains explicitly deferred |
-| 9 | Adapt build/run scripts, Docker and CI; run final complete parity checks and Valgrind capability verification; switch default compiler and delete replaced F# sources | All applicable tests pass, generated binaries match exactly, Valgrind instrumentability verified, no F# dependency |
+| 9 | Adapt build/run scripts and Docker; run final complete local parity checks; switch default compiler and delete replaced F# sources | All applicable local tests pass, generated binaries match exactly, no F# dependency; CI and Valgrind checks deferred by the user |
 
 Interfaces precede implementations within each phase. Driver and test hooks
 may be ported early where needed to exercise the current component; their
@@ -2527,3 +2527,56 @@ for missing Workflows write permission. The complete Linux x64/Linux ARM64/macOS
 ARM64 CI workflow remains prepared locally. Physical ARM64/macOS acceptance and
 F# source retirement therefore remain pending; do not claim final all-target
 acceptance from the Linux x64 results.
+
+## Local completion workflow (2026-10-05)
+
+The user explicitly excluded CI. The proposed GitHub Actions workflow was
+removed; no workflow token permission is required. Finish using local host
+acceptance, ARM64 execution under the pinned QEMU emulator, and the existing
+Mach-O emission comparisons. This Linux workspace cannot verify macOS process
+execution or Apple code signing; report that host coverage limit rather than
+making CI a prerequisite for completing the replacement. Valgrind, fuzzing and
+external-service testing remain deferred.
+
+## Final local replacement acceptance (2026-10-05)
+
+Both complete Linux ARM64 suites pass 10,806/10,806 applicable tests under the
+pinned QEMU emulator (F# 319.4 seconds; OCaml 413.3 seconds, informational).
+All 1,672 compiler results match, including all 1,468 successful complete ARM64
+ELF outputs and 204 rejections. Five direct ELF and six direct Mach-O serializer
+observations also match. The reports preserve all batching counters and 10,393
+timed test contracts. The production runner's flags are unchanged; a new
+`acceptance.py prepare --emulate-arm64 QEMU_AARCH64 --directory PATH` option
+performs target selection and process routing only in disposable graphs.
+Capture files now include a fresh run identity, preventing PID reuse or VM
+process namespaces from overwriting an earlier compiler invocation.
+
+A local macOS-target CLI batch compares 36 complete compilation results. Three
+small programs (arithmetic, negative literal, and a function call) produce
+identical complete 16,384-byte unsigned Mach-O files. Four invalid file-entry
+types preserve their rejection diagnostics. All 29 canonical Dark benchmarks
+hit the same fixed 16 KiB text-segment capacity limit in both frozen F# and
+OCaml; this pre-existing issue is recorded in `known-issues.md`. The disposable
+CLI writer skips Apple signing on Linux, without changing emitted bytes.
+Native macOS execution and Apple signing remain unverified in this workspace.
+
+After local acceptance, 600 replaced files were retired: the 391 original
+compiler/test source files, three F# project files, 202 duplicate stdlib/Unicode
+assets, and the compiler-dependent fuzzer and its two controller/reducer tests.
+All existing Dark test fixtures remain byte-identical; stdlib/Unicode contents
+remain byte-identical under `ocaml/share/`. The parser's Apache license and
+provenance note moved beside its OCaml sources. Fuzzing remains deferred and
+`./fuzz` reports that status. Frozen F# can still be materialized from Git by the
+migration collector; the compiler, default build and test runner have no F#
+implementation or runtime dependency.
+
+The final uninstrumented native build succeeds after source retirement, and
+`./run-tests --ai --timings-json=TestResults/ocaml-acceptance/retired-source-timings.json`
+passes 10,760/10,760 tests in 247.0 seconds. The inventory still verifies all
+391 implementation/interface pairs and every frozen fixture/share hash. The
+comment audit reports zero missing reference lines, all seven acceptance-gate
+checks pass, and all 34 tracked Bash scripts pass ShellCheck's error checks.
+No new CI workflow is added.
+The reusable ARM64 preparation command was checked again from fresh graphs
+after source retirement: both implementations pass the nine factorial cases,
+with all four compilation captures and all fifteen timed test contracts equal.

@@ -80,8 +80,8 @@ function or input size where possible. For a hot fixed-point pass, separately
 measure analysis, rewriting, equality checks, and iterations rather than
 assuming the whole pass is expensive for one reason.
 
-If phase timers cannot explain the cost, use .NET CPU sampling and allocation
-tracing, for example with `dotnet-trace` when available. Capture stacks around
+If phase timers cannot explain the cost, use native CPU sampling (for example
+`perf` on Linux) and OCaml `Gc.Memprof` allocation sampling. Capture stacks around
 the focused workload and identify compiler callers behind generic collection
 operations. CPU samples show where execution spends time; allocation samples
 show where objects are created. Neither alone proves how much elapsed time a

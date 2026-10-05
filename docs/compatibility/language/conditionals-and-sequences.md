@@ -23,7 +23,8 @@ Compiler ownership is split between the canonical
 [AST-to-ANF lowering](../../../ocaml/lib/passes/anf/AST_to_ANF.ml). The ANF `If`
 is converted to a typed shared result register and CFG join in
 [ANF-to-MIR](../../../ocaml/lib/passes/anf/ANF_to_MIR.ml). Runtime output support
-in [Runtime.fs](../../../src/DarkCompiler/Runtime.fs) makes selected results observable;
+in [PrintValues.ml](../../../ocaml/lib/backend/arm64/runtime/PrintValues.ml) and
+[X64Printing.ml](../../../ocaml/lib/backend/x64/runtime/X64Printing.ml) makes selected results observable;
 focused failures use the existing compiler-generated runtime-error operation,
 whose callable contract is outside this work item.
 

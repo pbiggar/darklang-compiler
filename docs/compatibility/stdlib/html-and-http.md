@@ -13,7 +13,7 @@ The interpreter baseline is
 `packages/darklang/stdlib/http.dark:4-259`; executable behavior is pinned by
 `backend/testfiles/execution/stdlib/html.dark` and `http.dark` at the same
 revision. The compiler implementation is in
-`src/DarkCompiler/stdlib/Html.dark`, `Http.dark`, and `HttpRequest.dark`, loaded
+`ocaml/share/stdlib/Html.dark`, `Http.dark`, and `HttpRequest.dark`, loaded
 after Blob by `ocaml/lib/driver/StdlibCompilation.ml`.
 
 ## Compatibility matrix

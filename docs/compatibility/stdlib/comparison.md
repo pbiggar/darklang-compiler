@@ -108,7 +108,7 @@ darklang/dark revision. At the interpreter revision,
 `backend/src/Builtins/Builtins.Pure/Libs/Uuid.fs:43-47` delegates validation to
 `System.Guid.TryParse`. A focused probe of that same call established the
 observable X-format rules retained in compiler source
-`src/DarkCompiler/stdlib/Uuid.dark:50-143`: Unicode whitespace is ignored,
+`ocaml/share/stdlib/Uuid.dark:50-143`: Unicode whitespace is ignored,
 leading zeroes and short fields are accepted, the second and third UInt32
 components contribute their low 16 bits, and overflowing UInt32 or byte fields
 return `BadFormat`. Focused same-source cases are in
@@ -143,14 +143,14 @@ post-specialization orchestration in `ocaml/lib/CompilerLibrary.ml` at
 native code through `ocaml/lib/passes/mir/MIR_to_LIR.ml`.
 Semantic Dict equality is lowered in the type checker through the public
 String-keyed `Dict.toList` mapping view at
-`src/DarkCompiler/stdlib/Dict.dark:111-113`,
+`ocaml/share/stdlib/Dict.dark:111-113`,
 using the layout and key helpers exposed from `ocaml/lib/DarkStdlib.ml`.
 Float conditions and architecture-specific integer conditions remain in the
 shared MIR-to-LIR pass and the ARM64/x64 backends. Focused executable evidence
 is in `src/Tests/e2e/comparison-parity.e2e`, alongside the existing
 `equality.e2e` and `interpreter_behavior_parity.e2e` suites.
 
-The root wrappers are `src/DarkCompiler/stdlib/NoModule.dark`, loaded by
+The root wrappers are `ocaml/share/stdlib/NoModule.dark`, loaded by
 `driver/StdlibCompilation.fs`. Separate stdlib specialization merges user
 record/sum metadata before materializing structural helpers in
 `driver/StdlibCompilation.fs`; the indexed record view is built in

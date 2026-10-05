@@ -1,5 +1,0 @@
-// HttpServerValues.dark - upstream default HTTP request body limit.
-
-module Darklang.Stdlib.HttpServer.Config
-
-val defaultMaxBodyBytes = 31457280

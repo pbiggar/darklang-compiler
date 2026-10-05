@@ -26,7 +26,7 @@ list, tuple, record, sum, or dictionary.
 
 Arithmetic, shifts, infinite two's-complement bitwise operations, decimal
 parsing/formatting, and fixed-width conversions are implemented in the internal
-target-neutral `src/DarkCompiler/stdlib/__Integer.dark` layer. Both native
+target-neutral `ocaml/share/stdlib/__Integer.dark` layer. Both native
 backends therefore share semantics. Decimal strings are allocated only at text
 boundaries; arithmetic does not parse or rebuild decimal text.
 

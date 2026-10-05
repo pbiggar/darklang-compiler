@@ -77,7 +77,7 @@ carried by a typed ANF/MIR/LIR sleep operation and lowered to blocking
 `nanosleep` on Linux ARM64, Linux x86_64, and macOS ARM64. The native timeout is
 normalized into seconds and nanoseconds, and interruption resumes with the
 remaining timeout. This replaces the compiler baseline's observable shell
-execution at `src/DarkCompiler/stdlib/CliPosix.dark:29-30`; it does not add a
+execution at `ocaml/share/stdlib/CliPosix.dark:29-30`; it does not add a
 public compiler extension. The full revision-pinned comparison is in
 [Option, Result, and Retry compatibility](stdlib/option-result-retry.md).
 
@@ -98,7 +98,7 @@ Native interpreter behavior is in
 `backend/src/Builtins/Builtins.Cli/Libs/Execution.fs:25-427`,
 `Posix.fs:343-545,945-1052,1305-1398`, and `Stdin.fs:15-386`.
 
-The compiler public wrappers are in the `src/DarkCompiler/stdlib/Cli*.dark`
+The compiler public wrappers are in the `ocaml/share/stdlib/Cli*.dark`
 module files.
 The registry is `ocaml/lib/DarkStdlib.ml`; typed lowering starts in
 `passes/anf/AST_to_ANF.fs`, passes through `ir/anf/ANF.fs`, `ir/mir/MIR.fs`, and `ir/lir/LIR.fs`, and

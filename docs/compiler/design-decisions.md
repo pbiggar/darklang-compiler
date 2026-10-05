@@ -198,7 +198,7 @@ Leaf Node:
 
 **Current status**: Phase 4 in progress - named bitwise functions and popcount
 implemented, raw memory intrinsics added, HAMT helper functions in
-`src/DarkCompiler/stdlib/`. Public symbolic bitwise syntax is not part of the
+`ocaml/share/stdlib/`. Public symbolic bitwise syntax is not part of the
 language.
 
 ## Test-Driven Development

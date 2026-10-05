@@ -218,7 +218,7 @@ The test executable still provides opt-in JSON compiler profiling. Build it
 first with `./build --ai`, then run:
 
 ```bash
-scripts/dotnet-host bin/Tests/Debug/net11.0/Tests.dll --ai --filter=json \
+./run-tests --ai --filter=json \
   --timings-json=/tmp/json-timings.json \
   --codegen-profile-json=/tmp/json-codegen.json
 ```
