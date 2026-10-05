@@ -22,7 +22,12 @@ let addHash hash value = wrap32 (Int32.logxor (Int32.mul (Int32.of_int hash) 397
 let idHash id =
   let ordinal = AST.functionIdValue id in
   wrap32 (Int32.logxor (Int64.to_int32 ordinal) (Int64.to_int32 (Int64.shift_right_logical ordinal 32)))
-let stringHash value = Hashtbl.hash (HostText.utf16Units value)
+(* OCaml hashes a string's complete bytes, but only a bounded number of array
+   elements. Hashing decoded unit arrays made long shared-prefix function
+   names collide, defeating the source's name-indexed cache fast path. These
+   function-key equality contracts compare the complete stored strings, so
+   the runtime-local byte hash is congruent with equality without decoding. *)
+let stringHash value = Hashtbl.hash value
 let optionEqual equal left right = match left, right with
   | None, None -> true | Some left, Some right -> equal left right
   | None, Some _ | Some _, None -> false

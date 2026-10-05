@@ -1,5 +1,5 @@
 ; Port-specific equivalence and allocation regression checks, outside oracle counts.
-(executable
- (name host_text_regression)
+(executables
+ (names host_text_regression cache_regression)
  (libraries dark_compiler)
  (flags (:standard -w @a -warn-error @a)))

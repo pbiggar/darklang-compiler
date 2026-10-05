@@ -1,17 +1,26 @@
 (* CompilationSession.fs - Own bounded compilation caches and their explicit session lifetime. *)
 module C=CompilationCacheIdentity
 module F=SpecializationIdentity.FunctionSet
-(* Dictionary keys use the source's equality contracts. Preserve insertion
-   order for observable metrics; replacing an entry retains its position. *)
-type ('key,'value) cache={equals:'key->'key->bool;mutable entries:('key*'value) list}
-let cache equals={equals;entries=[]}
-let find cache key=List.find_map (fun (existing,value)->if cache.equals existing key then Some value else None) cache.entries
-let store cache key value=
- let rec replace=function []->[key,value]|(existing,_)::rest when cache.equals existing key->(existing,value)::rest|entry::rest->entry::replace rest in cache.entries<-replace cache.entries
-let clear cache=cache.entries<-[]
+(* Dictionary keys retain the source's equality contracts. Hashes only narrow
+   the candidate bucket: collisions still require full equality. Keep reverse
+   insertion order independently for metrics, and update cells in place so a
+   store does not copy the entire cache. Reference-only small context tables
+   deliberately omit hashing rather than deriving an unstable address hash. *)
+type ('key,'value) cache={equals:'key->'key->bool;hash:('key->int) option;
+ mutable entries:('key*'value ref) list;buckets:(int,('key*'value ref) list) Hashtbl.t}
+let cache ?hash equals={equals;hash;entries=[];buckets=Hashtbl.create 127}
+let findCell cache key=
+ let candidates=match cache.hash with None->cache.entries|Some hash->Option.value ~default:[] (Hashtbl.find_opt cache.buckets (hash key)) in
+ List.find_map (fun (existing,value)->if cache.equals existing key then Some value else None) candidates
+let find cache key=Option.map (fun value-> !value) (findCell cache key)
+let store cache key value=match findCell cache key with
+ | Some cell->cell:=value
+ | None->let entry=key,ref value in cache.entries<-entry::cache.entries;
+   Option.iter (fun hash->let code=hash key in let bucket=Option.value ~default:[] (Hashtbl.find_opt cache.buckets code) in Hashtbl.replace cache.buckets code (entry::bucket)) cache.hash
+let clear cache=cache.entries<-[];Hashtbl.clear cache.buckets
 let count cache=List.length cache.entries
-let contextEntries contexts identity equals=match find contexts identity with Some entries->entries|None->let entries=cache equals in store contexts identity entries;entries
-let nestedCount contexts=List.fold_left (fun sum (_,entries)->sum+count entries) 0 contexts.entries
+let contextEntries ?hash contexts identity equals=match find contexts identity with Some entries->entries|None->let entries=cache ?hash equals in store contexts identity entries;entries
+let nestedCount contexts=List.fold_left (fun sum (_,entries)->sum+count !entries) 0 contexts.entries
 let token ()=Obj.repr (ref ())
 let addCount left right=Int32.to_int (Int32.add (Int32.of_int left) (Int32.of_int right))
 let increment count=count:=addCount !count 1
@@ -19,10 +28,13 @@ class compilationSession ?(collectCodegenMetrics=false) () =
  let jsonPlanning=new JsonPlanning.planningSession in
  let anfDependenciesByContext=cache (==) in
  let compiledDependenciesByIdentity=cache (==) in
- let optimizedMirFunctions=cache C.mirOptimizationKeyNameHashComparer.C.equals in
- let allocatedLirFunctions=cache C.allocatedLirFunctionKeyNameHashComparer.C.equals in
- let callAwareLirFunctions=cache C.callAwareLirFunctionKeyComparer.C.equals in
- let refinedLirFunctions=cache C.callAwareLirFunctionKeyComparer.C.equals in
+ let optimizedMirFunctions=cache ~hash:C.mirOptimizationKeyNameHashComparer.C.getHashCode C.mirOptimizationKeyNameHashComparer.C.equals in
+ let allocatedLirFunctions=cache ~hash:C.allocatedLirFunctionKeyNameHashComparer.C.getHashCode C.allocatedLirFunctionKeyNameHashComparer.C.equals in
+ (* A name hash is stable for these immutable function objects; identity and
+    callee summaries remain part of equality, never just the hash or name. *)
+ let callAwareHash (key:C.callAwareLirFunctionKey)=Hashtbl.hash key.C.base.LIR.name in
+ let callAwareLirFunctions=cache ~hash:callAwareHash C.callAwareLirFunctionKeyComparer.C.equals in
+ let refinedLirFunctions=cache ~hash:callAwareHash C.callAwareLirFunctionKeyComparer.C.equals in
  let reachableStdlibFunctionsByContext=cache (==) in
  let stdlibFunctionInventoryByContext=cache (==) in
  let reachableStdlibNamesByRootAndContext=cache (==) in
@@ -47,7 +59,7 @@ class compilationSession ?(collectCodegenMetrics=false) () =
  let arm64EmissionChunkGroups=cache (==) in
  let arm64ReleasePlanSummaries=cache (=) in
  let arm64CodegenMetrics=ref [] in
- let arm64LirOpMetrics=cache (=) in
+ let arm64LirOpMetrics=cache ~hash:Hashtbl.hash (=) in
  let arm64CodegenHitCount=ref 0 and arm64CodegenMissCount=ref 0 in
  let arm64ReleasePlanSummaryHitCount=ref 0 and arm64ReleasePlanSummaryMissCount=ref 0 in
  let anfDependencyHitCount=ref 0 and anfDependencyMissCount=ref 0 in
@@ -66,13 +78,13 @@ class compilationSession ?(collectCodegenMetrics=false) () =
  method arm64GenericReleaseHelperContextIdentity=arm64GenericReleaseHelperContextIdentity
  method convertAnfDependencies (contextIdentity:Obj.t) (key:C.anfDependencyKey) (convert:unit->(AST_to_ANF.functionConversion,string) result)=
   if disposed then Result.map (fun converted->converted,token ()) (convert ()) else
-  let entries=contextEntries anfDependenciesByContext contextIdentity C.anfDependencyKeyNameHashComparer.C.equals in
+  let entries=contextEntries ~hash:C.anfDependencyKeyNameHashComparer.C.getHashCode anfDependenciesByContext contextIdentity C.anfDependencyKeyNameHashComparer.C.equals in
   match find entries key with
   | Some result->increment anfDependencyHitCount;result
   | None->let result=Result.map (fun converted->converted,token ()) (convert ()) in store entries key result;increment anfDependencyMissCount;result
  method compileDependencies (dependencyIdentity:Obj.t) (config:C.compiledDependencyConfig) (compile:unit->(LIR.functionDef list*C.functionSummary FunctionIdMap.t,string) result)=
   if disposed || config.C.options.CompilerOptions.enableCoverage then compile () else
-  let entries=contextEntries compiledDependenciesByIdentity dependencyIdentity C.compiledDependencyConfigComparer.C.equals in
+  let entries=contextEntries ~hash:C.compiledDependencyConfigComparer.C.getHashCode compiledDependenciesByIdentity dependencyIdentity C.compiledDependencyConfigComparer.C.equals in
   match find entries config with
   | Some result->increment compiledDependencyHitCount;result
   | None->let result=compile () in store entries config result;increment compiledDependencyMissCount;result
@@ -113,7 +125,7 @@ class compilationSession ?(collectCodegenMetrics=false) () =
    let reachable=F.fold (fun root reachable->let fromRoot=match find roots root with Some names->names|None->let names=DeadCodeElimination.findReachable stdlibCallGraph (F.singleton root) in store roots root names;names in F.union reachable fromRoot) directCalls F.empty in
    let inventory=match find stdlibFunctionInventoryByContext contextIdentity with
     | Some inventory->inventory
-    | None->let inventory=cache (=) in List.iteri (fun index (func:LIR.functionDef)->store inventory func.LIR.id (index,func)) stdlibFunctions;store stdlibFunctionInventoryByContext contextIdentity inventory;inventory in
+    | None->let inventory=cache ~hash:Hashtbl.hash (=) in List.iteri (fun index (func:LIR.functionDef)->store inventory func.LIR.id (index,func)) stdlibFunctions;store stdlibFunctionInventoryByContext contextIdentity inventory;inventory in
    let functions=F.elements reachable |> List.filter_map (find inventory) |> List.stable_sort (fun (a,_) (b,_)->compare a b) |> List.map snd in
    store context directCalls functions;increment stdlibReachabilityMissCount;functions
  method projectMirRegistries (contextIdentity:Obj.t) baseRegistries localVariantLookup localRecordFields=
@@ -148,7 +160,7 @@ class compilationSession ?(collectCodegenMetrics=false) () =
    else if func.LIR.name="__dark_compiler_program_entry" then contextIdentity
    else if Option.fold ~none:false ~some:(fun facts->MemoryPlanning.SemanticTypeSet.is_empty facts.LIR.rawSlotInitTypes || Option.is_some facts.LIR.arm64RawSlotInitRetainTargets) func.LIR.codegenFacts then arm64RegistryIndependentFunctionContextIdentity
    else contextIdentity in
-  let structuralEntries=contextEntries arm64FunctionsByContext contextIdentity (fun (left,target,options) (right,otherTarget,otherOptions)->target=otherTarget && options=otherOptions && C.lirFunctionEquals left right) in
+  let structuralEntries=contextEntries ~hash:(fun ((func:LIR.functionDef),target,options)->Hashtbl.hash (func.LIR.name,target,options)) arm64FunctionsByContext contextIdentity (fun (left,target,options) (right,otherTarget,otherOptions)->target=otherTarget && options=otherOptions && C.lirFunctionEquals left right) in
   let references=contextEntries arm64FunctionsByReferenceAndContext contextIdentity (==) in
   let key=func,target,options in
   let targetOptions=target,options in
@@ -176,7 +188,7 @@ class compilationSession ?(collectCodegenMetrics=false) () =
  method arm64Helpers (contextIdentity:Obj.t) target (options:ARM64CodeGenTypes.codeGenOptions) (helperKey:Backend_Arm64_CodeGen.helperCacheKey) (generate:unit->Symbolic.instr list)=
   if disposed || options.ARM64CodeGenTypes.enableCoverage then generate () else
   let contextIdentity=if helperKey.Backend_Arm64_CodeGen.recursiveReleaseTypes=[] && helperKey.Backend_Arm64_CodeGen.closureCaptureTypes=[] then arm64RegistryIndependentHelperContextIdentity else contextIdentity in
-  let entries=contextEntries arm64HelpersByContext contextIdentity C.arm64HelperCacheKeyComparer.C.equals in
+  let entries=contextEntries ~hash:C.arm64HelperCacheKeyComparer.C.getHashCode arm64HelpersByContext contextIdentity C.arm64HelperCacheKeyComparer.C.equals in
   let key:C.arm64HelperCacheKey={C.target;options;helper=helperKey} in
   match find entries key with Some instructions->increment arm64HelperHitCount;instructions
   | None->let instructions=generate () in store entries key instructions;increment arm64HelperMissCount;instructions
@@ -195,7 +207,7 @@ class compilationSession ?(collectCodegenMetrics=false) () =
  method cachedArm64MetadataGroupCount=if disposed then 0 else nestedCount arm64MetadataGroupsByContext
  method cachedArm64FunctionGroupCount=if disposed then 0 else nestedCount arm64FunctionGroupsByContext
  method cachedArm64EmissionChunkCount=if disposed then 0 else count arm64EmissionChunks+count arm64EmissionChunkGroups
- method cachedArm64ReleasePlanSummaryCount=if disposed then 0 else List.fold_left (fun count (_,entries)->count+List.length entries) 0 arm64ReleasePlanSummaries.entries
+ method cachedArm64ReleasePlanSummaryCount=if disposed then 0 else List.fold_left (fun count (_,entries)->count+List.length !entries) 0 arm64ReleasePlanSummaries.entries
  method cachedJsonPlanCount=jsonPlanning#count
  method jsonPlanHitCount=jsonPlanning#hitCount
  method jsonPlanMissCount=jsonPlanning#missCount
@@ -223,8 +235,8 @@ class compilationSession ?(collectCodegenMetrics=false) () =
  method arm64ReleasePlanSummaryHitCount= !arm64ReleasePlanSummaryHitCount
  method arm64ReleasePlanSummaryMissCount= !arm64ReleasePlanSummaryMissCount
  method arm64CodegenMetrics=List.rev !arm64CodegenMetrics
- method arm64LirOpMetrics=List.map (fun ((functionName,opcode,detail),(occurrences,symbolicInstructionCount,ticks))->
-  {CompilerOptions.functionName;opcode;detail;occurrences;symbolicInstructionCount;elapsed=HostTimeSpan.fromSeconds (Int64.to_float ticks/.1000000000.)}) arm64LirOpMetrics.entries
+ method arm64LirOpMetrics=List.map (fun ((functionName,opcode,detail),value)->let occurrences,symbolicInstructionCount,ticks= !value in
+  {CompilerOptions.functionName;opcode;detail;occurrences;symbolicInstructionCount;elapsed=HostTimeSpan.fromSeconds (Int64.to_float ticks/.1000000000.)}) (List.rev arm64LirOpMetrics.entries)
  method dispose=
   jsonPlanning#dispose;
   clear anfDependenciesByContext;
