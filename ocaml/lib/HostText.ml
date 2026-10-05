@@ -1,37 +1,4 @@
 (* HostText.ml - Retain Unicode and UTF-16 semantics at host text boundaries. *)
-let foldUtf8 f initial text =
-  Uutf.String.fold_utf_8
-    (fun state _ -> function
-      | `Uchar character -> f state character
-      | `Malformed _ -> invalid_arg "Malformed UTF-8 host text") initial text
-let lowerInvariant text =
-  let buffer = Buffer.create (String.length text) in
-  foldUtf8
-    (fun () character ->
-      (* The frozen Linux oracle uses ICU 74 / Unicode 15.1. Newly assigned
-         Unicode 16/17 letters must retain their oracle casing behavior. *)
-      let mapping = match Uucp.Age.age character with
-        | `Version (major, minor) when (major, minor) <= (15, 1) -> Uucp.Case.Map.to_lower character
-        | _ -> `Self
-      in
-      let lower = match mapping with
-        | `Uchars [lower] -> lower
-        | `Self | `Uchars _ -> character
-      in
-      Uutf.Buffer.add_utf_8 buffer lower)
-    () text;
-  Buffer.contents buffer
-let trim text =
-  let first = ref (String.length text) in
-  let last = ref 0 in
-  Uutf.String.fold_utf_8
-    (fun () offset -> function
-      | `Uchar character when not (Uucp.White.is_white_space character) ->
-          first := min !first offset;
-          last := offset + Uchar.utf_8_byte_length character
-      | `Uchar _ -> ()
-      | `Malformed _ -> invalid_arg "Malformed UTF-8 host text") () text;
-  if !last = 0 then "" else String.sub text !first (!last - !first)
 let contains text pattern =
   let length = String.length pattern in
   let rec scan index =
@@ -98,6 +65,36 @@ let ofUtf16Units units =
       end
     end
   in append 0; Buffer.contents buffer
+let trim text =
+  let units = utf16Units text in
+  let whitespace unit = Uchar.is_valid unit && Uucp.White.is_white_space (Uchar.of_int unit) in
+  let first = ref 0 and last = ref (Array.length units) in
+  while !first < !last && whitespace units.(!first) do incr first done;
+  while !last > !first && whitespace units.(!last - 1) do decr last done;
+  ofUtf16Units (Array.sub units !first (!last - !first))
+let lowerInvariant text =
+  let units = utf16Units text in
+  let buffer = Buffer.create (String.length text) in
+  let rec lower index =
+    if index < Array.length units then begin
+      let unit = units.(index) in
+      let paired = unit >= 0xd800 && unit <= 0xdbff && index + 1 < Array.length units
+        && units.(index + 1) >= 0xdc00 && units.(index + 1) <= 0xdfff in
+      let scalar = if paired then 0x10000 + ((unit - 0xd800) lsl 10) + units.(index + 1) - 0xdc00 else unit in
+      if not (Uchar.is_valid scalar) then Buffer.add_string buffer (ofUtf16Units [|unit|])
+      else begin
+        let character = Uchar.of_int scalar in
+        (* The frozen Linux oracle uses ICU 74 / Unicode 15.1. Newly assigned
+           Unicode 16/17 letters must retain their oracle casing behavior. *)
+        let mapping = match Uucp.Age.age character with
+          | `Version version when version <= (15, 1) -> Uucp.Case.Map.to_lower character
+          | _ -> `Self in
+        let mapped = match mapping with `Uchars [mapped] -> mapped | `Self | `Uchars _ -> character in
+        Uutf.Buffer.add_utf_8 buffer mapped
+      end;
+      lower (index + if paired then 2 else 1)
+    end in
+  lower 0; Buffer.contents buffer
 let normalize text =
   let units = utf16Units text in
   let rec validate index =

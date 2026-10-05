@@ -2116,3 +2116,37 @@ copy-on-write and allocation budgets. All 16 full compiler-unit observations
 match F#. The warning-free build passes 771/771 translated checks. This
 checkpoint has 363/391 complete owner pairs; source comments remain complete.
 Remaining unit/test-tooling pairs, full corpus and final acceptance remain open.
+
+The complete reference-count release format and runner now preserve managed
+shape construction, register/root placement, checked Int64 arithmetic and
+native leak-checked execution. All 121 unchanged fixtures succeed on ARM64
+and x64, and all 16 full source observations match, including generated LIR,
+metadata, registration and 188 parser boundaries. All four original release
+DSL tests and all three original syntax DSL tests now run natively.
+
+Host text trimming and invariant casing preserve lone UTF-16 surrogates as
+well as supplementary scalars. The complete host-text comparison matches F#
+on 198,816 strings across 16 observations, including every BMP code unit in
+three contexts and supplementary/surrogate boundaries.
+
+All 17 original compilation-session cache-contract tests pass on ARM64 and
+all six applicable tests pass on x64. Complete results and platform-specific
+registration tables match F#. All 61 region-contract laws, 24 call-facts and
+specialization-handoff tests, six script-policy tests and the stdlib-source
+invariant are translated. Their complete 92 results match F# on 16 requests;
+all 16 full compiler-unit observations also match.
+
+The original x64 helper-dependency closure exposed an OCaml representation
+hazard: structural equality of balanced set trees can fail to converge even
+when their elements are equal. The translation now uses logical set equality,
+matching F# without changing the algorithm. A focused reproduction confirms
+the old loop failure. Repeated nested-list JSON compilation now terminates;
+both OCaml ELF outputs match both F# outputs byte for byte at 509,992 bytes
+(SHA256 5d6c11e83fe74732458df76b2e6444e4404e9d4fe0005ec5770b1f693545d3bb).
+The VM QEMU adapter also routes .NET's pinned-path existence checks; both
+pinned QEMU 11.1.1 targets are found and execute through their original paths.
+
+The warning-free native build passes 997/997 translated checks. This
+checkpoint has 372/391 complete owner pairs; all reference comments remain
+complete. The remaining 19 unit/test-tooling pairs, full E2E corpus, executable
+comparison coverage and final replacement/packaging acceptance remain open.

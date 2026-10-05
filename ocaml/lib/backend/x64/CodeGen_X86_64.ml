@@ -558,7 +558,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
         let nextLabels =
             Set.union selectedLabels (listHelperDependenciesForLabels selectedLabels)
         in
-        if nextLabels = selectedLabels then
+        if Set.equal nextLabels selectedLabels then
             selectedLabels
         else
             closeListHelperDependencies nextLabels

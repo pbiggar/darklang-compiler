@@ -7696,13 +7696,17 @@ let graphColorObservation (source:string) =
     let tests=TestDSL.GraphColorTestRunner.tests [|"missing.graphcolor";"src/Tests/algorithms/graph-color/coloring.graphcolor"|] |> array (fun (name,run)->let actual=run () in tuple [enc name;enc actual])
     tuple [observed;corpus;loads;tests]
 
-let compilerUnitObservation (source:string) =
+let compilerUnitFixed=lazy (
     let tuple values=namedArray "tuple" (List.toArray values)
     let enc (value:'a)=encode typeof<'a> (box value)
     let tests values=JsonArray(values |> List.map (fun (name,run)->let outcome=run () in tuple [enc name;enc outcome]) |> List.toArray) :> JsonNode
     let stdlib,_=stdlibCompilationBase.Value
-    let prepared=match stdlib with Error error->enc (Error error:Result<unit,string>)|Ok stdlib->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|tuple [tests (JsonPlanningTests.tests stdlib);tests (StdlibOptimizationTests.tests stdlib)]|]);node :> JsonNode
-    tuple [enc source;tests ASTToANFTests.tests;tests ListHIRTests.tests;tests ChordalGraphTests.tests;enc (ChordalGraphTests.runAllTests ());tests SSALivenessTests.tests;enc (SSALivenessTests.runAll ());tests TypeCheckingTests.tests;enc (TypeCheckingTests.runAll ());prepared;tests RuntimeDataLayoutTests.tests;tests X86_64ResolveTests.tests;tests LambdaLiftingTests.tests;tests MonomorphizationTests.tests;tests IRPrinterTests.tests;enc (IRPrinterTests.runAll ());tests IRSymbolTests.tests;enc (IRSymbolTests.runAll ());tests DeadCodeEliminationTests.tests;enc (DeadCodeEliminationTests.runAll ());JsonArray(lirInstructionFixtures source |> List.map (fun instr->enc (sprintf "%A" instr)) |> List.toArray) :> JsonNode]
+    let prepared=match stdlib with Error error->enc (Error error:Result<unit,string>)|Ok stdlib->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|tuple [tests (JsonPlanningTests.tests stdlib);tests (StdlibOptimizationTests.tests stdlib);tests (CompilationSessionTests.tests Platform.LinuxX86_64 stdlib)]|]);node :> JsonNode
+    [tests StdlibSourceTests.tests;tests ScriptHelperTests.tests;tests ASTToANFTests.tests;tests ListHIRTests.tests;tests SyntaxDSLTests.tests;tests ChordalGraphTests.tests;enc (ChordalGraphTests.runAllTests ());tests SSALivenessTests.tests;enc (SSALivenessTests.runAll ());tests TypeCheckingTests.tests;enc (TypeCheckingTests.runAll ());prepared;tests RuntimeDataLayoutTests.tests;tests X86_64ResolveTests.tests;tests LambdaLiftingTests.tests;tests MonomorphizationTests.tests;tests IRPrinterTests.tests;enc (IRPrinterTests.runAll ());tests IRSymbolTests.tests;enc (IRSymbolTests.runAll ());tests DeadCodeEliminationTests.tests;enc (DeadCodeEliminationTests.runAll ())])
+let compilerUnitObservation (source:string) =
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let fixedRows=compilerUnitFixed.Value |> List.map (fun (value:JsonNode)->value.DeepClone())
+    namedArray "tuple" (List.toArray ([enc source] @ fixedRows @ [JsonArray(lirInstructionFixtures source |> List.map (fun instr->enc (sprintf "%A" instr)) |> List.toArray) :> JsonNode]))
 
 let irParserObservation (source:string) =
     let tuple values=namedArray "tuple" (List.toArray values)
@@ -7933,6 +7937,61 @@ let optimizationRunnerObservation (source:string) =
     let prepared=match optimizationRunnerPreparedCache.Value with Some value->value.DeepClone()|None->let value=prepare () in optimizationRunnerPreparedCache.Value<-Some value;value.DeepClone()
     tuple [enc (TestDSL.OptimizationTestRunner.normalizeIR source);normalized;prepared]
 
+let sessionUnitPrepared=lazy (
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple values=namedArray "tuple" (List.toArray values)
+    let array fn xs=JsonArray(Seq.map fn xs |> Seq.toArray) :> JsonNode
+    let tests values=array (fun (name,run)->let outcome=run () in tuple [enc name;enc outcome]) values
+    let row target=
+        match StdlibCompilation.buildStdlib target with
+        | Error error->enc (Error error:Result<unit,string>)
+        | Ok stdlib->
+            let node=JsonObject()
+            node["type"]<-JsonValue.Create "FSharpResult"
+            node["case"]<-JsonValue.Create "Ok"
+            node["fields"]<-JsonArray([|tuple [tests (CompilationSessionTests.tests target stdlib);array (fun target->CompilationSessionTests.tests target stdlib |> array (fst >> enc)) [Platform.ARM64Backend Platform.MacOSARM64;Platform.ARM64Backend Platform.LinuxARM64;Platform.LinuxX86_64]]|])
+            node :> JsonNode
+    array row [Platform.ARM64Backend Platform.LinuxARM64;Platform.LinuxX86_64])
+let sessionUnitObservation (source:string)=namedArray "tuple" [|encode typeof<string> (box source);sessionUnitPrepared.Value.DeepClone()|]
+
+let rcReleaseFixed=lazy (
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let tuple values=namedArray "tuple" (List.toArray values)
+    let array fn xs=JsonArray(Seq.map fn xs |> Seq.toArray) :> JsonNode
+    let result fn=function Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|fn value|]);node :> JsonNode|Error error->enc (Error error:Result<unit,string>)
+    let flags=Reflection.BindingFlags.Static ||| Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic
+    let buildMethod=typeof<TestDSL.RCReleaseFormat.RCReleaseTest>.Assembly.GetType("TestDSL.RCReleaseTestRunner").GetMethod("buildProgram",flags)
+    let build value=buildMethod.Invoke(null,[|box value|]) |> unbox<Result<LIR.Program * TestDSL.RCReleaseFormat.PreservedRegister list,string>>
+    let fixtures=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/rc_release_fixtures.json")
+    let content=fixtures["format"].AsArray() |> Seq.map (fun (node:JsonNode)->node.AsArray() |> Seq.map (fun (value:JsonNode)->char (value.GetValue<int>())) |> Seq.toArray |> String) |> Seq.toList
+    let row content=TestDSL.RCReleaseFormat.parseRCReleaseFileContent "boundary.rcrelease" content |> result (array (fun value->tuple [enc value;enc (build value)]))
+    let targets=[Platform.ARM64Backend Platform.LinuxARM64;Platform.LinuxX86_64]
+    let path="src/Tests/backend/reference-release/reference-count.rcrelease"
+    let corpus=TestDSL.RCReleaseTestRunner.loadRCReleaseTests path |> result (array (fun value->tuple [enc value;enc (build value);array (fun target->enc (TestDSL.RCReleaseTestRunner.runRCReleaseTest target value)) targets]))
+    let paths=["missing.rcrelease";"src/Tests/backend/reference-release";path]
+    let tests values=array (fun (name,run)->let actual=run () in tuple [enc name;enc actual]) values
+    tuple [array row content;corpus;array (fun path->enc (TestDSL.RCReleaseTestRunner.loadRCReleaseTests path)) paths;array (fun target->tuple [tests (RCReleaseDSLTests.tests target);tests (TestDSL.RCReleaseTestRunner.tests target [|"missing.rcrelease"|]);TestDSL.RCReleaseTestRunner.tests target (paths |> List.rev |> List.toArray) |> array (fst >> enc)]) targets])
+let rcReleaseObservation (source:string)=namedArray "tuple" [|encode typeof<Result<TestDSL.RCReleaseFormat.RCReleaseTest list,string>> (box (TestDSL.RCReleaseFormat.parseRCReleaseFileContent source source));rcReleaseFixed.Value.DeepClone()|]
+
+let hostUtf16TextObservation (source:string) =
+    let bucket=int source
+    let enc (value:string)=encode typeof<string> (box value)
+    let tuple values=namedArray "tuple" (List.toArray values)
+    let array fn xs=JsonArray(Seq.map fn xs |> Seq.toArray) :> JsonNode
+    let row units=
+        let text=String(units |> List.map char |> List.toArray)
+        tuple [enc text;enc (text.Trim());enc (text.ToLowerInvariant())]
+    let bmp=[0..4095] |> array (fun index->let unit=index*16+bucket in array row [[unit];[9;32;unit;32;0xa0];[0xd800;unit;0xdc00]])
+    let scalarUnits value=let offset=value-0x10000 in [0xd800+(offset >>> 10);0xdc00+(offset &&& 1023)]
+    let supplemental=[0..127] |> array (fun index->let value=0x10000+(index*16+bucket)*512 in row (scalarUnits value))
+    let cases=[[0xd800;0xdc00];[0xd801;0xdc00];[0xdbff;0xdfff];[0xd800;65;0xdc00];[0xd800;0xd800;0xdc00];[0xdc00;0xd800;0xdc00];[0x0130;0x0131;0x0049;0x212a;0x1c89;0xa7cb];[0x03a3;0x03c2;0x0307];[0x00a0;0x1680;0x2000;0x2028;0x2029;0x202f;0x205f;0x3000];[]]
+    tuple [bmp;supplemental;array row cases]
+
+let repositoryUnitObservation (source:string)=
+    let tests=StdlibSourceTests.tests @ ScriptHelperTests.tests @ RegionContractTests.tests @ OwnershipCallFactsTests.tests
+    let rows=tests |> List.map (fun (name,run)->namedArray "tuple" [|closureAnalysisEncode name;closureAnalysisEncode (run ())|])
+    namedArray "tuple" [|closureAnalysisEncode source;JsonArray(Array.ofList rows) :> JsonNode|]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7962,6 +8021,10 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "repository-units" -> repositoryUnitObservation source
+        | "host-utf16-text" -> hostUtf16TextObservation source
+        | "rc-release" -> rcReleaseObservation source
+        | "session-unit-tests" -> sessionUnitObservation source
         | "optimization-runner" -> optimizationRunnerObservation source
         | "optimization-format" -> optimizationFormatObservation source
         | "encoding-fixtures" -> encodingObservation source
