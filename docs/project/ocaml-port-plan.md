@@ -2231,3 +2231,20 @@ match F# (`arm64-contracts-complete-parity.log`), and the native suite passes
 1074/1074 (`arm64-contracts-native.log`). Coverage is 383/391 pairs with zero
 missing source comments. Allocation tests, complete ARM64 registration, RC/x64
 unit owners, main runner and final acceptance remain open.
+
+### Complete ARM64 allocation and registration (385 pairs)
+
+Ported all 44 AllocationTests and the complete 77-test ARM64CodeGenTests
+registration owner. The original checks cover Linux/macOS sleep ABI handling,
+tagged retain/release pointers, peepholes and float immediates, large string
+lengths, allocation overflow paths, enum slots, and typed list/dictionary/sum
+helpers. All source comments are preserved.
+
+The fresh `dune-arm64-allocation` graph builds with warnings as errors
+(`arm64-allocation-build1.log`). The native suite passes 1118/1118
+(`arm64-allocation-native.log`), and all 16 complete compiler-unit observation
+buckets match F# (`arm64-allocation-complete-parity.log`). Inventory is 385/391
+pairs with zero missing reference comment lines. The six remaining owners are
+the RC registration and its three ownership test modules, x64 registration and
+test contracts, and the main test runner. Full E2E/executable parity and final
+cutover remain open.
