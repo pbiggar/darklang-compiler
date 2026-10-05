@@ -1,7 +1,7 @@
 (* Match only the regex constructs used by fixture parsers; preserve .NET order and classes. *)
 [@@@warning "-4"]
 open Dark_compiler
-type characterClass=Dot | Digit | Space | Characters of string
+type characterClass=Dot | Digit | Space | Characters of string | Except of string
 type token=Literal of string | Repeat of characterClass * int * bool | Capture of token list | Alternatives of token list list
 let literal text=Literal text
 let space=Repeat (Space,0,true)
@@ -15,7 +15,8 @@ let matched tokens source=
  let classMatches kind value=match kind with
  |Dot->value<>10|Digit->HostText.isDigitUnit value
  |Space->Uchar.is_valid value && Uucp.White.is_white_space (Uchar.of_int value)
- |Characters chars->Array.exists ((=) value) (HostText.utf16Units chars) in
+ |Characters chars->Array.exists ((=) value) (HostText.utf16Units chars)
+ |Except chars->not (Array.exists ((=) value) (HostText.utf16Units chars)) in
  let rec run tokens at captures continuation=match tokens with
  |[]->continuation at captures
  |Literal text::rest->

@@ -7873,6 +7873,25 @@ let lirExecutionObservation (source:string) =
     let cross=TestDSL.LIRExecutionTestRunner.loadLIRExecutionTests file |> result (array (fun value->tuple [enc value;enc (execute value)]))
     tuple [parsed source source;array (parsed source) fixtures;parsed file (IO.File.ReadAllText file);array (fun path->enc (TestDSL.LIRExecutionTestRunner.loadLIRExecutionTests path)) paths;tests (TestDSL.LIRExecutionTestRunner.tests (paths |> List.rev |> List.toArray));tests LIRExecutionDSLTests.tests;cross]
 
+let encodingObservation (source:string) =
+    let tuple values=namedArray "tuple" (List.toArray values)
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let array fn xs=JsonArray(Seq.map fn xs |> Seq.toArray) :> JsonNode
+    let result fn=function Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|fn value|]);node :> JsonNode|Error error->enc (Error error:Result<unit,string>)
+    let x64Runs (value:TestDSL.X86_64EncodingFormat.X64EncodingTest)=array (fun value->tuple [enc value;enc (TestDSL.X86_64EncodingTestRunner.runX64EncodingTest value)]) [value;{value with Expectation=TestDSL.X86_64EncodingFormat.ResolvesTo (Some (Text.Encoding.UTF8.GetBytes "mismatch"),["wrong";"a";"b";"c";"d"])};{value with Expectation=TestDSL.X86_64EncodingFormat.ResolvesTo (None,["wrong";"a";"b";"c";"d"])};{value with Expectation=TestDSL.X86_64EncodingFormat.ResolutionErrorContaining "mismatch"}]
+    let armRuns (value:TestDSL.ARM64EncodingFormat.ARM64EncodingTest)=
+        let wrong=match value.Expectation with TestDSL.ARM64EncodingFormat.EncodesTo values->TestDSL.ARM64EncodingFormat.EncodesTo (List.map (fun value->value ^^^ 1u) values)|TestDSL.ARM64EncodingFormat.EncodingErrorContaining _->TestDSL.ARM64EncodingFormat.EncodingErrorContaining "mismatch"
+        array (fun value->tuple [enc value;enc (TestDSL.ARM64EncodingTestRunner.runARM64EncodingTest value)]) [value;{value with Expectation=wrong};{value with Expectation=TestDSL.ARM64EncodingFormat.EncodingErrorContaining "mismatch"}]
+    let parsed path content=TestDSL.X86_64EncodingFormat.parseX64EncodingFileContent path content |> result (array (fun value->tuple [enc value;x64Runs value]))
+    let tests values=array (fun (name,run)->let actual=run () in tuple [enc name;enc actual]) values
+    let fixtures=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/encoding_fixtures.json")
+    let file="src/Tests/passes/x64enc/encoding.x64enc"
+    let paths=["missing.x64enc";"src/Tests/passes/x64enc";file]
+    let armFiles=IO.Directory.GetFiles("src/Tests/passes/arm64enc","*.arm64enc") |> Array.sort |> Array.toList
+    let mismatches=[0,ARM64.RET,0u,UInt32.MaxValue;1,ARM64.MOVZ (ARM64.X0,1us,0),0x80000000u,0x7fffffffu]
+    let display=TestDSL.X86_64EncodingTestRunner.loadX64EncodingTests file |> result (fun values->tuple [array (fun count->let cases=List.truncate count values in enc $"{cases}") [0;1;2;3;4;5;32];array (fun value->let cases=[value] in enc $"{cases}") values])
+    tuple [enc (TestDSL.X86_64Parser.parseX64 source);array (fun (value:JsonNode)->enc (TestDSL.X86_64Parser.parseX64 (value.GetValue<string>()))) (fixtures["parser"].AsArray());parsed source source;array (fun (value:JsonNode)->parsed source (value.GetValue<string>())) (fixtures["format"].AsArray());parsed file (IO.File.ReadAllText file);array (fun path->enc (TestDSL.X86_64EncodingTestRunner.loadX64EncodingTests path)) paths;tests (TestDSL.X86_64EncodingTestRunner.tests (paths |> List.rev |> List.toArray));tests EncodingDSLTests.tests;array (fun path->TestDSL.ARM64EncodingTestRunner.loadARM64EncodingTest path |> result (fun value->tuple [enc value;armRuns value])) (armFiles@["missing.arm64enc";"src/Tests/passes/arm64enc"]);enc (TestDSL.ARM64EncodingTestRunner.formatMismatches mismatches);enc (TestDSL.ARM64EncodingTestRunner.formatMismatches []);array (fun values->enc (TestDSL.ARM64EncodingTestRunner.hasAllDifferent values)) [[];[0u];[0u;1u];[0u;1u;0u];[0x80000000u;0x7fffffffu;UInt32.MaxValue]];display]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7902,6 +7921,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "encoding-fixtures" -> encodingObservation source
         | "lir-execution" -> lirExecutionObservation source
         | "parallel-moves" -> parallelMoveObservation source
         | "pass-runner" -> passRunnerObservation source

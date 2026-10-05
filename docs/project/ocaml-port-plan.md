@@ -2069,3 +2069,16 @@ process checks pass alongside the original suites. The warning-free build
 passes 681/681 translated unit/fixture checks. Coverage is 353/391 pairs; all
 source comments remain complete. Remaining unit/test-tooling pairs, full
 corpus and final acceptance remain open.
+
+The complete x64 fixture instruction parser, encoding format, x64 and ARM64
+encoding runners and original three encoding DSL tests now run natively. All
+16 full observations match F# across 319 instruction-parser inputs, 34
+encoding boundary inputs, 32 unchanged x64 cases, 15 unchanged ARM64 files,
+forced byte/fixup failures and every fixture's typed record diagnostic.
+Invariant casing retains the frozen ICU behavior, including dotless i and
+simple Greek casing. Long diagnostic byte arrays retain original layout and
+line breaks. The existing structural-format stage also matches F# on all 16
+requests. The warning-free build passes 716/716 translated unit/fixture
+checks, including 100,000-byte output streams and process timeout cleanup.
+Coverage is 358/391 pairs; reference comments remain complete. Remaining
+unit/test-tooling pairs, full corpus and final acceptance remain open.

@@ -3,7 +3,7 @@
    e97978f46154b95fa87612bc655b54189cbd441d. Copyright (c) Microsoft Corporation.
    MIT license: ocaml/THIRD_PARTY_NOTICES.md. Reflection is replaced by typed
    values; fitting, precedence, limits, UTF-16 widths, and raw quotes are retained. *)
-type value = StructuralValue.value = Scalar of string | Text of string | Union of string * value list | Sequence of value list | Tuple of value list | Record of (string * value) list
+type value = StructuralValue.value = Scalar of string | Text of string | Union of string * value list | Sequence of value list | Array of value list | Tuple of value list | Record of (string * value) list
 (* A joint is unbreakable, breakable, or already broken at its indentation. *)
 type joint = Unbreakable | Breakable of int | Broken of int
 (* Either juxtaposition flag suppresses a space between neighboring leaves. *)
@@ -89,6 +89,15 @@ let format value =
        | _ when remaining <= 0 -> [word "..."]
        | item :: rest -> let item = valueLayout depth 3 item in item :: consume (remaining - 1) rest in
      bracket "[" "]" (separated ";" (first :: consume 99 rest))
+   | Array [] -> count (); word "[||]"
+   | Array (first :: rest) ->
+     let first = valueLayout depth 3 first in
+     let rec consume remaining = function
+       | _ when !size <= 0 -> [word "..."]
+       | [] -> []
+       | _ when remaining <= 0 -> [word "..."]
+       | item :: rest -> let item = valueLayout depth 3 item in item :: consume (remaining - 1) rest in
+     bracket "[|" "|]" (separated ";" (first :: consume 99 rest))
    | Record fields ->
      let fields = List.map (fun (name, value) -> count (); let value = valueLayout depth 3 value in break 1 (join (word name) (word "=")) value) fields in
      let body = match fields with [] -> empty | first :: rest -> List.fold_left (fun acc value -> node acc value (Broken 0)) first rest in

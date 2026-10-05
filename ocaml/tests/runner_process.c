@@ -39,3 +39,9 @@ CAMLprim value dark_runner_spawn(value request) {
   Store_field(result,0,Val_int(error ? -1 : pid));Store_field(result,1,message);
   CAMLreturn(result);
 }
+
+/* .NET invariant casing applies simple ICU casing and preserves dotless i. */
+#include <unicode/uchar.h>
+CAMLprim value dark_runner_upper_scalar(value scalar) {
+  int code=Int_val(scalar);return Val_int(code==0x131 ? code : u_toupper(code));
+}

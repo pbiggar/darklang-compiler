@@ -16,33 +16,9 @@ let () =
           path ^ ": " ^ test.TypeCheckingFormat.name, (fun () ->
             let result = TypeCheckingTestRunner.runTypeCheckingTest test in
             if result.TypeCheckingTestRunner.success then Ok () else Error result.TypeCheckingTestRunner.message)) tests) in
-  let armEncodingCorpus =
-    Sys.readdir "src/Tests/passes/arm64enc" |> Array.to_list |> List.sort String.compare
-    |> List.filter (fun path -> Filename.check_suffix path ".arm64enc")
-    |> List.map (fun path -> path, (fun () ->
-      let content=TestFileIO.readAllText (Filename.concat "src/Tests/passes/arm64enc" path) in
-      match ARM64EncodingFormat.parseARM64EncodingTest content with
-      | Error message -> Error message
-      | Ok test ->
-        let open Dark_compiler in
-        match test.ARM64EncodingFormat.expectation with
-        | ARM64EncodingFormat.EncodingErrorContaining expected ->
-          let rec check=function [] -> Ok () | instr::rest ->
-            (try ignore (ARM64_Encoding.encode instr);Error "Expected encoding error"
-             with Failure message | Invalid_argument message -> if HostText.contains message expected then check rest else Error message) in
-          check test.ARM64EncodingFormat.instructions
-        | ARM64EncodingFormat.EncodesTo expected ->
-          (try let rec encode=function [] -> Ok [] | instr::rest -> match ARM64_Encoding.encode instr with
-            | [word] -> Result.map (fun words -> word::words) (encode rest)
-            | words -> Error (Printf.sprintf "Expected one machine word, got %d" (List.length words)) in
-            match encode test.ARM64EncodingFormat.instructions with
-            | Error message -> Error message
-            | Ok actual when actual<>expected -> Error "Machine word mismatch"
-            | Ok actual when test.ARM64EncodingFormat.assertDifferent && List.length (List.sort_uniq Int32.compare actual)<>List.length actual -> Error "ASSERT-DIFFERENT failed"
-            | Ok _ -> Ok ()
-           with Failure message | Invalid_argument message -> Error message))) in
+  let armEncodingCorpus=Sys.readdir "src/Tests/passes/arm64enc" |> Array.to_list |> List.sort Dark_compiler.StringOrder.compare |> List.filter (fun path->Filename.check_suffix path ".arm64enc") |> List.map (fun path->path,(fun ()->match ARM64EncodingTestRunner.loadARM64EncodingTest (Filename.concat "src/Tests/passes/arm64enc" path) with Error error->Error error|Ok test->let result=ARM64EncodingTestRunner.runARM64EncodingTest test in if result.TestOutcome.success then Ok () else Error result.TestOutcome.message)) in
   let processChecks=[
-    "Runner capture drains both large streams",(fun ()->match TestProcess.capture "/bin/sh" ["-c";"i=0; while [ $i -lt 10000 ]; do printf a; printf b >&2; i=$((i+1)); done; exit 17"] 10000 with Ok (17,stdout,stderr) when stdout=String.make 10000 'a' && stderr=String.make 10000 'b'->Ok ()|Ok _->Error "Captured process output or exit code differs"|Error error->Error error);
+    "Runner capture drains both large streams",(fun ()->match TestProcess.capture "/bin/sh" ["-c";"printf '%100000s' a; printf '%100000s' b >&2; exit 17"] 10000 with Ok (17,stdout,stderr) when stdout=String.make 99999 ' '^"a" && stderr=String.make 99999 ' '^"b"->Ok ()|Ok _->Error "Captured process output or exit code differs"|Error error->Error error);
     "Runner capture preserves UTF-8 and CRLF",(fun ()->match TestProcess.capture "/bin/sh" ["-c";"printf 'é😀\\r\\n'; printf 'err\\r\\n' >&2"] 10000 with Ok (0,"é😀\r\n","err\r\n")->Ok ()|Ok _->Error "Captured text differs"|Error error->Error error);
     "Runner capture times out descendants",(fun ()->match TestProcess.capture "/bin/sh" ["-c";"sleep 30 & wait"] 100 with Error "Execution timed out after 100ms"->Ok ()|Error error->Error error|Ok _->Error "Expected a process timeout")
   ] in
@@ -72,7 +48,7 @@ let () =
       |> List.filter (fun path -> Filename.check_suffix path ".syntax")
       |> List.map (Filename.concat "src/Tests/syntax") |> Array.of_list in
     List.map (fun (name, run) -> name, run ())
-      (rcTests @ processChecks @ LIRExecutionDSLTests.tests @ LIRExecutionTestRunner.tests [|"src/Tests/backend/x64/basic.lirexec"|] @ ParallelMoveDSLTests.tests @ ParallelMoveTestRunner.tests [|"src/Tests/algorithms/parallel-moves/arm64.parallelmoves"|] @ passCorpus @ PassTestRunnerTests.tests @ IRFormatSnapshotDSLTests.tests @ IRFormatSnapshotTestRunner.tests [|"src/Tests/formatting/ir/core.irformat"|] @ ChordalGraphTests.tests @ SSALivenessTests.tests @ TypeCheckingTests.tests @ IRSymbolTests.tests @ DeadCodeEliminationTests.tests @ stdlibTests @ RuntimeDataLayoutTests.tests @ X86_64ResolveTests.tests @ LambdaLiftingTests.tests @ MonomorphizationTests.tests @ IRPrinterTests.tests @ GraphColorDSLTests.tests @ GraphColorTestRunner.tests [|"src/Tests/algorithms/graph-color/coloring.graphcolor"|] @ ProgressBarTests.tests @ ProgramCliTests.tests @ ARM64BinaryTests.tests @ X86_64BinaryTests.tests @ armEncodingCorpus @ ARM64EncodingTests.tests @ ANFToMIRTests.tests @ PhiResolutionTests.tests @ LIRPeepholeTests.tests @ LIRLayoutTests.tests @ MIROptimizeTests.tests @ SSAConstructionTests.tests @ SSAInliningTests.tests @ SSAOptimizationTests.tests @ MemoryShapeTests.tests @ ANFOptimizeTests.tests @ TailCallDetectionTests.tests @ HIRConstructionTests.tests @ OwnershipVariantSchedulingTests.tests @ OwnershipVariantMaterializationTests.tests @ OwnershipVariantSelectionTests.tests @ OwnedFunctionGroupInferenceTests.tests @ OwnedFunctionGroupTests.tests @ WholeFunctionOwnershipTests.tests @ RecursiveOwnershipInferenceTests.tests @ OwnershipUniquenessInferenceTests.tests @ OwnedHIRVerificationTests.tests @ HIRVerificationTests.tests @ BitsetTests.tests @ PlatformTests.tests @ TestRunnerArgsTests.tests @ ParserTests.tests
+      (rcTests @ EncodingDSLTests.tests @ X86_64EncodingTestRunner.tests [|"src/Tests/passes/x64enc/encoding.x64enc"|] @ processChecks @ LIRExecutionDSLTests.tests @ LIRExecutionTestRunner.tests [|"src/Tests/backend/x64/basic.lirexec"|] @ ParallelMoveDSLTests.tests @ ParallelMoveTestRunner.tests [|"src/Tests/algorithms/parallel-moves/arm64.parallelmoves"|] @ passCorpus @ PassTestRunnerTests.tests @ IRFormatSnapshotDSLTests.tests @ IRFormatSnapshotTestRunner.tests [|"src/Tests/formatting/ir/core.irformat"|] @ ChordalGraphTests.tests @ SSALivenessTests.tests @ TypeCheckingTests.tests @ IRSymbolTests.tests @ DeadCodeEliminationTests.tests @ stdlibTests @ RuntimeDataLayoutTests.tests @ X86_64ResolveTests.tests @ LambdaLiftingTests.tests @ MonomorphizationTests.tests @ IRPrinterTests.tests @ GraphColorDSLTests.tests @ GraphColorTestRunner.tests [|"src/Tests/algorithms/graph-color/coloring.graphcolor"|] @ ProgressBarTests.tests @ ProgramCliTests.tests @ ARM64BinaryTests.tests @ X86_64BinaryTests.tests @ armEncodingCorpus @ ARM64EncodingTests.tests @ ANFToMIRTests.tests @ PhiResolutionTests.tests @ LIRPeepholeTests.tests @ LIRLayoutTests.tests @ MIROptimizeTests.tests @ SSAConstructionTests.tests @ SSAInliningTests.tests @ SSAOptimizationTests.tests @ MemoryShapeTests.tests @ ANFOptimizeTests.tests @ TailCallDetectionTests.tests @ HIRConstructionTests.tests @ OwnershipVariantSchedulingTests.tests @ OwnershipVariantMaterializationTests.tests @ OwnershipVariantSelectionTests.tests @ OwnedFunctionGroupInferenceTests.tests @ OwnedFunctionGroupTests.tests @ WholeFunctionOwnershipTests.tests @ RecursiveOwnershipInferenceTests.tests @ OwnershipUniquenessInferenceTests.tests @ OwnedHIRVerificationTests.tests @ HIRVerificationTests.tests @ BitsetTests.tests @ PlatformTests.tests @ TestRunnerArgsTests.tests @ ParserTests.tests
        @ typing @ TypeCheckingFormatTests.tests @ TypeCheckingTestRunnerTests.tests
        @ SyntaxTestRunner.tests syntax @ FormattingRoundtripTests.tests [|"src/Tests/formatting-roundtrip/compiler.roundtrip"|])
   in
