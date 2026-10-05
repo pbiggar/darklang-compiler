@@ -6,13 +6,19 @@ external signalNumber : int -> int = "dark_execution_signal_number"
 exception TimedOut
 let exitCode=function Unix.WEXITED code->code|Unix.WSIGNALED signal|Unix.WSTOPPED signal->128+signalNumber signal
 let decode text=HostPackageIO.decodeContent (if String.starts_with ~prefix:"\000\000\254\255" text then Some "text/plain; charset=utf-32be" else None) text
-let close fd=try Unix.close fd with Unix.Unix_error _->()
+(* A descriptor number may be reused by a concurrent suite immediately after
+   close. Retire it before closing so final cleanup only owns live descriptors. *)
+let own descriptors=
+ let opened=ref descriptors in
+ let close fd=if List.mem fd !opened then (opened:=List.filter ((<>) fd) !opened;try Unix.close fd with Unix.Unix_error _->()) in
+ close,(fun ()->List.iter close !opened)
 let kill pid=try Unix.kill (-pid) Sys.sigkill with Unix.Unix_error _->()
 let rec wait pid=try snd (Unix.waitpid [] pid) with Unix.Unix_error (Unix.EINTR,_,_)->wait pid
 let capture file arguments timeout=
  let stdoutRead,stdoutWrite=Unix.pipe ~cloexec:true () in let stderrRead,stderrWrite=Unix.pipe ~cloexec:true () in
+ let close,cleanup=own [stdoutRead;stdoutWrite;stderrRead;stderrWrite] in
  let child=ref None in
- Fun.protect ~finally:(fun ()->List.iter close [stdoutRead;stdoutWrite;stderrRead;stderrWrite];Option.iter (fun pid->kill pid;ignore (wait pid)) !child) (fun ()->
+ Fun.protect ~finally:(fun ()->cleanup ();Option.iter (fun pid->kill pid;ignore (wait pid)) !child) (fun ()->
  let pid,error=spawn (file,Array.of_list (file::arguments),Unix.environment (),Unix.stdin,stdoutWrite,stderrWrite) in
  if pid<0 then Error ("Execution failed: An error occurred trying to start process '"^file^"' with working directory '"^Sys.getcwd ()^"'. "^error) else (
  child:=Some pid;close stdoutWrite;close stderrWrite;List.iter Unix.set_nonblock [stdoutRead;stderrRead];
@@ -32,12 +38,13 @@ let capture file arguments timeout=
 let captureWithInputAndEnvironment file arguments overrides input timeout=
  let stdinRead,stdinWrite=Unix.pipe ~cloexec:true () in
  let stdoutRead,stdoutWrite=Unix.pipe ~cloexec:true () in let stderrRead,stderrWrite=Unix.pipe ~cloexec:true () in
+ let close,cleanup=own [stdinRead;stdinWrite;stdoutRead;stdoutWrite;stderrRead;stderrWrite] in
  let environment=Array.to_list (Unix.environment ()) |> List.filter_map (fun entry->match String.index_opt entry '=' with
   |None->None|Some i->Some (String.sub entry 0 i,String.sub entry (i+1) (String.length entry-i-1))) |> StringOrder.Map.of_list in
  let environment=List.fold_left (fun env (name,value)->StringOrder.Map.add name value env) environment overrides
   |> StringOrder.Map.bindings |> List.map (fun (name,value)->name^"="^value) |> Array.of_list in
  let child=ref None in
- Fun.protect ~finally:(fun ()->List.iter close [stdinRead;stdinWrite;stdoutRead;stdoutWrite;stderrRead;stderrWrite];Option.iter (fun pid->kill pid;ignore (wait pid)) !child) (fun ()->
+ Fun.protect ~finally:(fun ()->cleanup ();Option.iter (fun pid->kill pid;ignore (wait pid)) !child) (fun ()->
  let pid,error=spawn (file,Array.of_list (file::arguments),environment,stdinRead,stdoutWrite,stderrWrite) in
  if pid<0 then Error ("Execution failed: An error occurred trying to start process '"^file^"' with working directory '"^Sys.getcwd ()^"'. "^error) else (
  child:=Some pid;close stdinRead;close stdoutWrite;close stderrWrite;

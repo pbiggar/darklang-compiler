@@ -11,8 +11,11 @@ let streamText bytes=
  HostPackageIO.decodeContent encoding bytes
 let captured info input=
  let stdinRead,stdinWrite=Unix.pipe ~cloexec:true () in let stdoutRead,stdoutWrite=Unix.pipe ~cloexec:true () in let stderrRead,stderrWrite=Unix.pipe ~cloexec:true () in
- let close fd=try Unix.close fd with Unix.Unix_error _->() in
- let cleanup ()=List.iter close [stdinRead;stdinWrite;stdoutRead;stdoutWrite;stderrRead;stderrWrite] in
+ (* Parallel test execution can reuse closed descriptor numbers. Cleanup must
+    only close descriptors still owned by this capture, never retired numbers. *)
+ let opened=ref [stdinRead;stdinWrite;stdoutRead;stdoutWrite;stderrRead;stderrWrite] in
+ let close fd=if List.mem fd !opened then (opened:=List.filter ((<>) fd) !opened;try Unix.close fd with Unix.Unix_error _->()) in
+ let cleanup ()=List.iter close !opened in
  Fun.protect ~finally:cleanup (fun ()->
   let info={info with SourcePreparation.stdin=stdinRead;stdout=stdoutWrite;stderr=stderrWrite} in
   (* Retry up to 3 times with small delay if we get "Text file busy". *)

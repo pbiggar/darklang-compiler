@@ -2284,3 +2284,20 @@ contract. All 16 complete compiler-unit observation buckets match F#
 including 273/273 compiler owners, with zero missing reference comment lines.
 Only the main TestRunner owner remains untranslated. Full unchanged-suite and
 whole-executable acceptance, profiling/count checks and final cutover remain open.
+
+### Parallel process-capture descriptor ownership
+
+The first complete native main-runner execution exposed a descriptor-lifetime
+race: both capture implementations closed completed pipe ends, then closed the
+same descriptor numbers again during final cleanup. Concurrent suites could
+reuse those numbers for unrelated open files. A focused concurrent capture/file
+churn regression reproduced EBADF against the previous native libraries.
+
+CompilerExecution and TestProcess now retire each descriptor from their owned
+set before closing it; final cleanup only closes still-owned descriptors. The
+complete native graph builds with warnings as errors and no warnings, and the
+regression passes all 480 concurrent captures across inherited-stdin, finite-
+stdin and compiler execution paths (`process-capture-after.log` and
+`process-capture-replay.log`). The tracked check_process_capture.py reproduces
+that check against an existing native Dune build. The unchanged full suite is
+being rerun; this checkpoint does not claim full E2E acceptance.
