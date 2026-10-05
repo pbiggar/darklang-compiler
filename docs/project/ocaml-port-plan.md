@@ -2248,3 +2248,20 @@ pairs with zero missing reference comment lines. The six remaining owners are
 the RC registration and its three ownership test modules, x64 registration and
 test contracts, and the main test runner. Full E2E/executable parity and final
 cutover remain open.
+
+### Complete ANF ownership contracts and registration (389 pairs)
+
+Ported CleanupTests, TransferTests, CallTests and RefCountInsertionTests with
+all source comments and all 83 original registrations. These include all 44
+newly translated cleanup/call/transfer checks: fresh raw-slot ownership,
+alias/branch aggregate adoption, static sentinels, borrowed-call results,
+recursive accumulator transfers, closure results, canonical sum metadata,
+record/boxed-sum retain-before-release ordering and typed recursive back-edges.
+The complete registration replaces the earlier partial RC list.
+
+The fresh `dune-rc-contracts` graph builds with warnings as errors
+(`rc-contracts-build1.log`). The expanded native suite passes 1162/1162
+(`rc-contracts-native.log`); all 16 complete compiler-unit observation buckets
+match F# (`rc-contracts-complete-parity.log`). Coverage is 389/391 complete
+pairs with zero missing source comment lines. X86_64CodeGenTests and the main
+TestRunner remain, followed by full E2E/executable parity and final cutover.
