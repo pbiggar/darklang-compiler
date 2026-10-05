@@ -10,7 +10,7 @@ let churn ()=protect (fun ()->while Atomic.get running do
  done)
 let check condition message=if not condition then failwith message
 let capture ()=protect (fun ()->for _=1 to 120 do
- match TestProcess.capture "/bin/sh" ["-c";"printf output; printf error >&2; exit 17"] 10000 with
+ match TestProcess.capture "/bin/sh" ["-c";"sleep 0.08; printf output; printf error >&2; exit 17"] 10000 with
  |Ok (code,out,err)->check (code=17 && out="output" && err="error") "Process output/status changed"
  |Error message->failwith message
  done)
@@ -19,7 +19,9 @@ let captureInput ()=protect (fun ()->for _=1 to 120 do
  |Ok (code,out,err)->check (code=17 && out="input" && err="error") "Process input/output/status changed"
  |Error message->failwith message
  done)
-let binary=In_channel.with_open_bin "/bin/true" (fun channel->Bytes.of_string (In_channel.input_all channel))
+(* Keep the binary writer open long enough to overlap a child spawn. Linux
+   permits trailing ELF padding, and the child must not inherit that writer. *)
+let binary=Bytes.cat (In_channel.with_open_bin "/bin/true" (fun channel->Bytes.of_string (In_channel.input_all channel))) (Bytes.make (16*1024*1024) '\000')
 let execute ()=protect (fun ()->for _=1 to 120 do
  let result=CompilerExecution.execute Platform.LinuxX86_64 0 binary in
  check (result.CompilerOptions.exitCode=0) ("Compiler execution failed: "^result.CompilerOptions.stderr)

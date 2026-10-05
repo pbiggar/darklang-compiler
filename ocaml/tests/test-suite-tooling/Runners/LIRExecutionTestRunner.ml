@@ -24,7 +24,7 @@ let patchDeferredLabels stringPool (resolved:X86_64_Resolve.resolveResult)=
 let writeAndRun target binary=
  let path=Filename.concat (Filename.get_temp_dir_name ()) (HostGuid.newGuidN ()) in
  Fun.protect ~finally:(fun ()->SourcePreparation.tryDeleteFile path) (fun ()->try
- let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_CREAT;Unix.O_TRUNC] 0o666 in
+ let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_CLOEXEC;Unix.O_CREAT;Unix.O_TRUNC] 0o666 in
  Fun.protect ~finally:(fun ()->Unix.close fd) (fun ()->let rec write offset=if offset<Bytes.length binary then let count=Unix.write fd binary offset (Bytes.length binary-offset) in write (offset+count) in write 0;Unix.fsync fd);
  let permissions=(Unix.stat path).Unix.st_perm in Unix.chmod path (permissions lor 0o100);
  let file,args=match target,Platform.detectArch () with

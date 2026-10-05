@@ -10,9 +10,9 @@ let probe=function O.NoNativeLayoutProbe->SemanticJson.union "NativeLayoutProbe"
 let options (o:O.compilerOptions)=SemanticJson.record "CompilerOptions" ["DisableFreeList",`Bool o.O.disableFreeList;"DisableANFOpt",`Bool o.O.disableANFOpt;"DisableANFConstFolding",`Bool o.O.disableANFConstFolding;"DisableANFConstProp",`Bool o.O.disableANFConstProp;"DisableANFCopyProp",`Bool o.O.disableANFCopyProp;"DisableANFDCE",`Bool o.O.disableANFDCE;"DisableANFStrengthReduction",`Bool o.O.disableANFStrengthReduction;"DisableInlining",`Bool o.O.disableInlining;"DisableTCO",`Bool o.O.disableTCO;"DisableMIROpt",`Bool o.O.disableMIROpt;"DisableMIRSCCP",`Bool o.O.disableMIRSCCP;"DisableMIRCSE",`Bool o.O.disableMIRCSE;"DisableMIRDCE",`Bool o.O.disableMIRDCE;"DisableMIRLICM",`Bool o.O.disableMIRLICM;"DisableLIROpt",`Bool o.O.disableLIROpt;"DisableLIRPeephole",`Bool o.O.disableLIRPeephole;"DisableFunctionTreeShaking",`Bool o.O.disableFunctionTreeShaking;"EnableCoverage",`Bool o.O.enableCoverage;"EnableLeakCheck",`Bool o.O.enableLeakCheck;"NativeLayoutProbe",probe o.O.nativeLayoutProbe;"Warnings",SemanticJson.union "WarningSettings" "WarningSettings" [];"DumpANF",`Bool o.O.dumpANF;"DumpMIR",`Bool o.O.dumpMIR;"DumpLIR",`Bool o.O.dumpLIR;"DumpFunction",(match o.O.dumpFunction with None->option None|Some s->option (Some (SemanticJson.string s)));"DumpIRSummary",`Bool o.O.dumpIRSummary]
 let capture action=
  let path=Filename.temp_file "port-diagnostics-" ".txt" in
- let saved=Unix.dup Unix.stdout in
+ let saved=Unix.dup ~cloexec:true Unix.stdout in
  Fun.protect ~finally:(fun ()->flush stdout;Unix.dup2 saved Unix.stdout;Unix.close saved;Sys.remove path) (fun ()->
-  let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_TRUNC] 0 in flush stdout;Unix.dup2 fd Unix.stdout;Unix.close fd;
+  let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_CLOEXEC;Unix.O_TRUNC] 0 in flush stdout;Unix.dup2 fd Unix.stdout;Unix.close fd;
   action ();flush stdout;let channel=open_in_bin path in let value=In_channel.input_all channel in close_in channel;SemanticJson.string value)
 let observe source=
  let defaults=tuple [options O.defaultOptions;`Bool (O.defaultWarningSettings=AST.defaultWarningSettings)] in

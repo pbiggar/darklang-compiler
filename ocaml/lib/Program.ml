@@ -221,10 +221,10 @@ let sourceDescription (options:cliOptions)=if options.isExpression then "<expres
 *)
 let withIRDumpOutput (options:cliOptions) compile=
  match options.dumpIROutput with None->Ok (compile ())|Some path->
- let writer=try Ok (Unix.openfile path [Unix.O_WRONLY;Unix.O_CREAT;Unix.O_TRUNC] 0o666) with exn->Error ("Failed to open IR dump '"^path^"': "^HostFile.errorMessage path exn) in
+ let writer=try Ok (Unix.openfile path [Unix.O_WRONLY;Unix.O_CLOEXEC;Unix.O_CREAT;Unix.O_TRUNC] 0o666) with exn->Error ("Failed to open IR dump '"^path^"': "^HostFile.errorMessage path exn) in
  let* writer=writer in
  Fun.protect ~finally:(fun ()->Unix.close writer) (fun ()->
- flush stdout;let original=Unix.dup Unix.stdout in
+ flush stdout;let original=Unix.dup ~cloexec:true Unix.stdout in
  let result=Fun.protect ~finally:(fun ()->flush stdout;Unix.dup2 original Unix.stdout;Unix.close original) (fun ()->Unix.dup2 writer Unix.stdout;compile ()) in
  try flush stdout;Ok result with exn->Error ("Failed to write IR dump to '"^path^"': "^HostFile.errorMessage path exn))
 let selectedTarget=function HostTarget->Platform.detectHostTarget ()|ExplicitTarget target->Ok target

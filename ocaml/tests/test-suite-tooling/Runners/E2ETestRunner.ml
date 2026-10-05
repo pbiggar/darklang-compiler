@@ -369,7 +369,7 @@ let tryExecuteBinary target arguments environment stdin binary =
         let path=Filename.temp_file "dark-e2e-cross-" ".elf" in
         Fun.protect ~finally:(fun ()->SourcePreparation.tryDeleteFile path) (fun ()->
           try
-            let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_TRUNC] 0o600 in
+            let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_CLOEXEC;Unix.O_TRUNC] 0o600 in
             Fun.protect ~finally:(fun ()->Unix.close fd) (fun ()->
               let rec write offset=if offset<Bytes.length binary then let n=Unix.write fd binary offset (Bytes.length binary-offset) in write (offset+n) in write 0;Unix.fsync fd);
             let stat=Unix.stat path in Unix.chmod path (stat.Unix.st_perm lor 0o100);

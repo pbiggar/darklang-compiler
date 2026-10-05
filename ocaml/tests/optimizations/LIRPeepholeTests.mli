@@ -31,3 +31,5 @@ val testBooleanNotBranchSwapsSuccessors : unit -> testResult
 val testConditionalBranchKeepsBooleanUsedInSuccessor : unit -> testResult
 val testOptimizeCFGRejectsMissingSuccessorLabel : unit -> testResult
 val tests : (string * (unit -> testResult)) list
+(* Additional migration checks derived from the unchanged optimization DSL. *)
+val dslTests : (string * (unit -> testResult)) list

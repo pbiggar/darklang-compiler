@@ -49,9 +49,9 @@ let batch (value:P.batchCliOptions)=SemanticJson.record "BatchCliOptions" ["Targ
 let command=function P.SingleCommand value->SemanticJson.union "CliCommand" "SingleCommand" [options value]|P.BatchCommand value->SemanticJson.union "CliCommand" "BatchCommand" [batch value]
 let capture action=
  let out=Filename.temp_file "cli-output" ".txt" in let err=Filename.temp_file "cli-error" ".txt" in
- let savedOut=Unix.dup Unix.stdout in let savedErr=Unix.dup Unix.stderr in
+ let savedOut=Unix.dup ~cloexec:true Unix.stdout in let savedErr=Unix.dup ~cloexec:true Unix.stderr in
  Fun.protect ~finally:(fun ()->flush stdout;flush stderr;Unix.dup2 savedOut Unix.stdout;Unix.dup2 savedErr Unix.stderr;Unix.close savedOut;Unix.close savedErr;Sys.remove out;Sys.remove err) (fun ()->
- let attach path target=let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_TRUNC] 0 in Unix.dup2 fd target;Unix.close fd in
+ let attach path target=let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_CLOEXEC;Unix.O_TRUNC] 0 in Unix.dup2 fd target;Unix.close fd in
  flush stdout;flush stderr;attach out Unix.stdout;attach err Unix.stderr;
  let value=action () in flush stdout;flush stderr;
  value,In_channel.with_open_bin out In_channel.input_all,In_channel.with_open_bin err In_channel.input_all)

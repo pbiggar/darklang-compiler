@@ -2301,3 +2301,24 @@ stdin and compiler execution paths (`process-capture-after.log` and
 `process-capture-replay.log`). The tracked check_process_capture.py reproduces
 that check against an existing native Dune build. The unchanged full suite is
 being rerun; this checkpoint does not claim full E2E acceptance.
+
+### Non-inherited fixture writers and shared VM paths
+
+Concurrent fixture execution also exposed inherited binary writers: Unix's
+openfile defaults to keep-on-exec, unlike the reference FileStream. A 16 MiB
+padded executable/capture regression reproduces Text file busy with the previous
+native graph. Native binary writers, report/capture writers and saved capture
+descriptors now use atomic close-on-exec creation. All 480 concurrent captures
+pass with the padded writer (`process-inheritance-after.log`); the full graph
+build is warning-free (`runner-inheritance-fix-build.log`).
+
+The first E2E failure was cli_process_host_input.e2e's concurrent marker fixture.
+Its /tmp path worked under the F# VM adapter, but native execution had replaced
+that adapter with the QEMU-only adapter. The generated activate-native script
+now retains both, and the differential harness preserves inherited adapters.
+All 38 unchanged process E2E checks pass (`runner-cli-process-fixed.log`).
+
+The eleven additional LIR DSL checks remain in the migration foundation suite
+as dslTests; the production tests registration again contains exactly the
+original thirty LIR peephole checks. Main-runner validation and complete-suite
+acceptance continue separately.

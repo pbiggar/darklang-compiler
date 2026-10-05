@@ -37,7 +37,8 @@ let captured info input=
 let writeTemp binary=
  let path=Filename.concat (Filename.get_temp_dir_name ()) (HostGuid.newGuidN ()) in
  (* Write and flush to disk to minimize (but not eliminate) "Text file busy" race. *)
- let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_CREAT;Unix.O_TRUNC] 0o666 in
+ (* FileStream does not inherit its writer into concurrently spawned children. *)
+ let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_CLOEXEC;Unix.O_CREAT;Unix.O_TRUNC] 0o666 in
  Fun.protect ~finally:(fun ()->Unix.close fd) (fun ()->let rec write offset=if offset<Bytes.length binary then let count=Unix.write fd binary offset (Bytes.length binary-offset) in write (offset+count) in write 0;Unix.fsync fd);
  path
 let permissions path=let stat=Unix.stat path in Unix.chmod path (stat.Unix.st_perm lor 0o100)

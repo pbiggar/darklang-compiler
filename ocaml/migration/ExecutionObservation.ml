@@ -5,9 +5,9 @@ let tuple=SemanticJson.tuple
 let list f xs=`List (List.map f xs)
 let str=SemanticJson.string
 let capture action=
- let path=Filename.temp_file "execution-log" ".txt" in let saved=Unix.dup Unix.stdout in
+ let path=Filename.temp_file "execution-log" ".txt" in let saved=Unix.dup ~cloexec:true Unix.stdout in
  Fun.protect ~finally:(fun ()->flush stdout;Unix.dup2 saved Unix.stdout;Unix.close saved;Sys.remove path) (fun ()->
- let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_TRUNC] 0 in flush stdout;Unix.dup2 fd Unix.stdout;Unix.close fd;
+ let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_CLOEXEC;Unix.O_TRUNC] 0 in flush stdout;Unix.dup2 fd Unix.stdout;Unix.close fd;
  let result=action () in flush stdout;let text=In_channel.with_open_bin path In_channel.input_all in
  let text=Str.global_replace (Str.regexp "[0-9]+\\(\\.[0-9]+\\)?ms") "<duration>ms" text in result,text)
 let clean text=Str.global_replace (Str.regexp (String.concat "" (List.init 32 (fun _->"[0-9a-f]")))) "<temporary-id>" text

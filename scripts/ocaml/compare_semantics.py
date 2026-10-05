@@ -317,7 +317,10 @@ def main():
                     toolchains = ROOT.parent / "toolchains"
                     adapter = str(toolchains / "qemu-deps/exec-path.so")
                     environment["PORT_QEMU_DIRECTORY"] = str(toolchains / "qemu/build")
-                    environment["LD_PRELOAD"] = (environment.get("LD_PRELOAD", "") + ":" + adapter).lstrip(":") if name == "fsharp" else adapter
+                    # Native fixture children need the same /tmp mapping as
+                    # the oracle, in addition to the pinned QEMU path adapter.
+                    preloads = [*environment.get("LD_PRELOAD", "").split(":"), adapter]
+                    environment["LD_PRELOAD"] = ":".join(dict.fromkeys(p for p in preloads if p))
                 if name == "fsharp" and args.stage == "package-manager":
                     # FSI loads referenced assemblies without the application's
                     # runtime asset graph. Give the oracle its deployed SQLite

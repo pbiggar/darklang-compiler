@@ -69,6 +69,11 @@ lines = [f"export {key}={shlex.quote(str(value))}" for key, value in values.item
 lines += ['ulimit -s 65536']
 lines += [f'export PATH={shlex.quote(str(pathlib.Path(sys.argv[2]) / "bin"))}:{shlex.quote(str(root / "dotnet"))}:"$PATH"']
 (root / "activate").write_text("# Source this file before building in the VM.\n" + "\n".join(lines) + "\n")
+(root / "activate-native").write_text(
+    "# Source this file before executing native tests in the restricted VM.\n"
+    + f"source {shlex.quote(str(root / 'activate'))}\n"
+    + f"export PORT_QEMU_DIRECTORY={shlex.quote(str(root / 'qemu/build'))}\n"
+    + f"export LD_PRELOAD={shlex.quote(str(root / 'qemu-deps/exec-path.so'))}:\"$LD_PRELOAD\"\n")
 PY
 source "$root/activate"
 dotnet --version

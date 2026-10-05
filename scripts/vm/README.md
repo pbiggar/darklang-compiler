@@ -4,7 +4,7 @@ This setup is for the restricted Linux x86-64 VM used to restart the OCaml
 port. It installs the exact .NET SDK pinned in `global.json` (including F#)
 and OCaml 5.5.1, with its source and compiler libraries. This is the upstream stable version selected for the accepted migration plan.
 Build OCaml and its C dependencies without the .NET compatibility preload;
-apply the preload only when executing the .NET oracle.
+apply the VM compatibility preload when executing the oracle or native tests.
 
 ```bash
 bash scripts/vm/setup-port-toolchains /absolute/writable/toolchains
@@ -30,10 +30,12 @@ env -u LD_PRELOAD /absolute/writable/toolchains/opam/port-5.5.1/bin/dune build -
 QEMU uses the exact Docker-pinned revision, Meson 1.11.1, Ninja 1.13.2 and
 Ubuntu snapshot 20260828T000000Z development packages. Package downloads are
 checked against the snapshot index SHA256 values and extracted locally. Both
-Linux-user targets and the instruction-count plugin are built. Native execution
-tests use `PORT_QEMU_DIRECTORY=/absolute/writable/toolchains/qemu/build` and
-`LD_PRELOAD=/absolute/writable/toolchains/qemu-deps/exec-path.so` to map the
-existing `/opt/dcb/qemu/` executable paths into the workspace.
+Linux-user targets and the instruction-count plugin are built. Before native
+execution tests, source `/absolute/writable/toolchains/activate-native`. This
+maps the existing `/opt/dcb/qemu/` executable paths into the workspace and
+retains the `/tmp` adapter for fixture subprocesses. Replacing the compatibility
+preload with the QEMU adapter alone leaves hardcoded `/tmp` fixtures unable to
+create their files. Both adapters are VM-only; native builds still unset them.
 
 The setup needs Bash, Python 3, curl, tar, GCC, and make. All installations,
 caches, temporary files, and full OCaml build logs stay in the supplied

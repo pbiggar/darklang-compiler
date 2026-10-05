@@ -11,9 +11,9 @@ let str=SemanticJson.string
 let result f=function Ok value->SemanticJson.union "FSharpResult" "Ok" [f value]|Error message->SemanticJson.union "FSharpResult" "Error" [str message]
 let attempt f action=result f (try action () with Failure message|Invalid_argument message->Error message)
 let capture action=
- let path=Filename.temp_file "binary-output-log" ".txt" in let saved=Unix.dup Unix.stdout in
+ let path=Filename.temp_file "binary-output-log" ".txt" in let saved=Unix.dup ~cloexec:true Unix.stdout in
  Fun.protect ~finally:(fun ()->flush stdout;Unix.dup2 saved Unix.stdout;Unix.close saved;Sys.remove path) (fun ()->
- let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_TRUNC] 0 in flush stdout;Unix.dup2 fd Unix.stdout;Unix.close fd;
+ let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_CLOEXEC;Unix.O_TRUNC] 0 in flush stdout;Unix.dup2 fd Unix.stdout;Unix.close fd;
  let result=action () in flush stdout;let text=In_channel.with_open_bin path In_channel.input_all in
  let text=Str.global_replace (Str.regexp "[0-9]+\\(\\.[0-9]+\\)?ms") "<duration>ms" text in tuple [result;str text])
 let observe input=

@@ -329,4 +329,4 @@ let tests = [
     ("LIR peephole rejects missing successor labels", testOptimizeCFGRejectsMissingSuccessorLabel);
 ]
 
-let tests=tests @ List.map (fun (name,input,expected) -> "lir-peepholes.liropt: "^name,(fun () -> check "Existing LIR DSL expectation differs" ((optimizeFunction (fixture "_start" input)).cfg.blocks |> LabelMap.find (Label "entry") |> fun block -> block.instrs) expected)) dslFixtures
+let dslTests=List.map (fun (name,input,expected) -> "lir-peepholes.liropt: "^name,(fun () -> check "Existing LIR DSL expectation differs" ((optimizeFunction (fixture "_start" input)).cfg.blocks |> LabelMap.find (Label "entry") |> fun block -> block.instrs) expected)) dslFixtures
