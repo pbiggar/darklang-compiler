@@ -58,8 +58,15 @@ values = {
     "DOTNET_PROCESSOR_COUNT": "1",
     "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
     "LD_PRELOAD": root / "vm-compat.so",
+    "C_INCLUDE_PATH": f"{root / 'native/include'}:{root / 'qemu-deps/sysroot/usr/include'}",
+    "LIBRARY_PATH": f"{root / 'native/lib'}:{root / 'qemu-deps/sysroot/usr/lib/x86_64-linux-gnu'}",
+    "LD_LIBRARY_PATH": f"{root / 'native/lib'}:{root / 'qemu-deps/sysroot/usr/lib/x86_64-linux-gnu'}",
 }
 lines = [f"export {key}={shlex.quote(str(value))}" for key, value in values.items()]
+# The full migration oracle is a large FSI compilation unit. A fresh VM's
+# 8 MiB initial stack can overflow while compiling it; retain a bounded 64 MiB
+# stack for reference compilation and the procfs-free stack-discovery adapter.
+lines += ['ulimit -s 65536']
 lines += [f'export PATH={shlex.quote(str(pathlib.Path(sys.argv[2]) / "bin"))}:{shlex.quote(str(root / "dotnet"))}:"$PATH"']
 (root / "activate").write_text("# Source this file before building in the VM.\n" + "\n".join(lines) + "\n")
 PY

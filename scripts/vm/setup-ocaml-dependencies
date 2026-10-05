@@ -7,11 +7,21 @@ case "$root" in /*) ;; *) echo 'Use an absolute directory' >&2; exit 1;; esac
 source "$root/activate"
 # CoreCLR's procfs workaround must not alter native configure probes.
 unset LD_PRELOAD
+# Restore the host ABI headers/runtimes before native dependency probes.
+python3 "$repo/scripts/vm/setup-native-packages.py" "$root" > "$root/native-packages.log" 2>&1
 mkdir -p "$root/downloads" "$root/native"
 export PATH="$root/native/bin:$PATH"
 export C_INCLUDE_PATH="$root/native/include"
 export LIBRARY_PATH="$root/native/lib"
 export PKG_CONFIG_PATH="$root/native/lib/pkgconfig"
+# The frozen Noble sysroot already provides pkgconf when QEMU setup ran first.
+# Its CLI also satisfies opam's conf-pkg-config probe. Prefer it on minimal
+# VMs where the bundled old GLib's printf configure probes cannot run reliably.
+if [[ -x "$root/qemu-deps/sysroot/usr/bin/pkgconf" ]]; then
+  export LD_LIBRARY_PATH="$root/qemu-deps/sysroot/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+  mkdir -p "$root/native/bin"
+  ln -sf "$root/qemu-deps/sysroot/usr/bin/pkgconf" "$root/native/bin/pkg-config"
+fi
 fetch () {
   local archive=$1 checksum=$2 url=$3
   if [[ ! -f "$root/downloads/$archive" ]]; then

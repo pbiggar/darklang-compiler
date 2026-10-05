@@ -2150,3 +2150,14 @@ The warning-free native build passes 997/997 translated checks. This
 checkpoint has 372/391 complete owner pairs; all reference comments remain
 complete. The remaining 19 unit/test-tooling pairs, full E2E corpus, executable
 comparison coverage and final replacement/packaging acceptance remain open.
+
+A replacement VM reset the scratch checkout after the 372-pair checkpoint.
+The remote branch still contains that complete checkpoint. Recovery restored
+OCaml 5.5.1, Dune 3.24.2, every pinned opam dependency, the frozen .NET SDK and
+both QEMU 11.1.1 Linux-user targets with the instruction-count plugin. The F#
+build succeeds. The setup now extracts runtime libraries as well as headers
+from the frozen Noble snapshot, reuses its pkgconf for native dependency
+probes and activates the required include/library paths. The full FSI oracle
+needs a 64 MiB initial stack on this VM; its source remains unchanged in
+production, and the replayable activation records the limit. Lost uncommitted
+E2E-format work is being reconstructed and verified before its next commit.
