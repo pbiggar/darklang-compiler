@@ -2341,3 +2341,18 @@ reference comment coverage remains zero missing lines. The current full native
 run reports the original 1045-unit registration count. Full-suite execution,
 complete every-invocation executable-byte parity and final cutover are still
 acceptance work; source translation completeness alone does not close them.
+
+### Repeatable full-run report comparison
+
+Added `scripts/ocaml/check_runner_reports.py` to compare independently produced
+reference/native timing reports. It requires matching passing outcome totals,
+all E2E batching counters and every timed test ID with its optional field
+contract, preserving duplicate occurrences. It validates finite timing values,
+pass invocation records and optional paired schema-10 profile reports; numerical
+timing and cache values are deliberately not equality inputs.
+
+The checker accepts the complete reference report (10760 outcomes and 10347
+timed records) and rejects injected failures, nonfinite timings, unexpected test
+fields and incomplete profile records. This establishes the checker itself;
+the complete corrected native run remains in progress and its eventual report
+must be checked independently before recording a full-suite pass.
