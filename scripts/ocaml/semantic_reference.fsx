@@ -7702,7 +7702,7 @@ let compilerUnitObservation (source:string) =
     let tests values=JsonArray(values |> List.map (fun (name,run)->let outcome=run () in tuple [enc name;enc outcome]) |> List.toArray) :> JsonNode
     let stdlib,_=stdlibCompilationBase.Value
     let prepared=match stdlib with Error error->enc (Error error:Result<unit,string>)|Ok stdlib->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|tuple [tests (JsonPlanningTests.tests stdlib);tests (StdlibOptimizationTests.tests stdlib)]|]);node :> JsonNode
-    tuple [enc source;tests ASTToANFTests.tests;tests ChordalGraphTests.tests;enc (ChordalGraphTests.runAllTests ());tests SSALivenessTests.tests;enc (SSALivenessTests.runAll ());tests TypeCheckingTests.tests;enc (TypeCheckingTests.runAll ());prepared;tests RuntimeDataLayoutTests.tests;tests X86_64ResolveTests.tests;tests LambdaLiftingTests.tests;tests MonomorphizationTests.tests;tests IRPrinterTests.tests;enc (IRPrinterTests.runAll ());tests IRSymbolTests.tests;enc (IRSymbolTests.runAll ());tests DeadCodeEliminationTests.tests;enc (DeadCodeEliminationTests.runAll ());JsonArray(lirInstructionFixtures source |> List.map (fun instr->enc (sprintf "%A" instr)) |> List.toArray) :> JsonNode]
+    tuple [enc source;tests ASTToANFTests.tests;tests ListHIRTests.tests;tests ChordalGraphTests.tests;enc (ChordalGraphTests.runAllTests ());tests SSALivenessTests.tests;enc (SSALivenessTests.runAll ());tests TypeCheckingTests.tests;enc (TypeCheckingTests.runAll ());prepared;tests RuntimeDataLayoutTests.tests;tests X86_64ResolveTests.tests;tests LambdaLiftingTests.tests;tests MonomorphizationTests.tests;tests IRPrinterTests.tests;enc (IRPrinterTests.runAll ());tests IRSymbolTests.tests;enc (IRSymbolTests.runAll ());tests DeadCodeEliminationTests.tests;enc (DeadCodeEliminationTests.runAll ());JsonArray(lirInstructionFixtures source |> List.map (fun instr->enc (sprintf "%A" instr)) |> List.toArray) :> JsonNode]
 
 let irParserObservation (source:string) =
     let tuple values=namedArray "tuple" (List.toArray values)
@@ -7902,6 +7902,37 @@ let optimizationFormatObservation (source:string) =
     let tests values=array (fun (name,run)->let actual=run () in tuple [enc name;enc actual]) values
     tuple [enc source;array row (fixtures@corpus@["missing.opt";"src/Tests/optimization"]);tests OptimizationFormatTests.tests;enc (OptimizationFormatTests.runAll ())]
 
+let optimizationRunnerPreparedCache:JsonNode option ref=ref None
+let optimizationRunnerObservation (source:string) =
+    let tuple values=namedArray "tuple" (List.toArray values)
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let array fn xs=JsonArray(Seq.map fn xs |> Seq.toArray) :> JsonNode
+    let result fn=function Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|fn value|]);node :> JsonNode|Error error->enc (Error error:Result<unit,string>)
+    let normalizationRoot=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/optimization_runner_fixtures.json")
+    let normalization=normalizationRoot["normalization"].AsArray() |> Seq.map (fun (node:JsonNode)->node.AsArray() |> Seq.map (fun (value:JsonNode)->char (value.GetValue<int>())) |> Seq.toArray |> String) |> Seq.toList
+    let normalized=array (fun value->tuple [enc value;enc (TestDSL.OptimizationTestRunner.normalizeIR value)]) normalization
+    let stdlib,_=stdlibCompilationBase.Value
+    let prepare ()=stdlib |> result (fun stdlib->
+        let sources=["1L + 2L";"let f (x: Int64) : Int64 = x + 1L";"\"t42 __closure_99\"";"let x = (1L, \"two\")\nx";"if true then 1L else 2L";"missing_name";"let =";""]
+        let compile source=array (fun stage->
+            let phases=ResizeArray<string>()
+            let record (value:CompilerOptions.PassTiming)=phases.Add value.Pass
+            let fn=match stage with TestDSL.OptimizationFormat.ANF->TestDSL.OptimizationTestRunner.getOptimizedANF|TestDSL.OptimizationFormat.MIR->TestDSL.OptimizationTestRunner.getOptimizedMIR|TestDSL.OptimizationFormat.LIR->TestDSL.OptimizationTestRunner.getOptimizedLIR|_->failwith "unexpected source stage"
+            let output=fn stdlib (Some record) source
+            tuple [enc output;enc (List.ofSeq phases)]) [TestDSL.OptimizationFormat.ANF;TestDSL.OptimizationFormat.MIR;TestDSL.OptimizationFormat.LIR]
+        let run stage input expected=TestDSL.OptimizationTestRunner.runOptimizationTest stdlib None {TestDSL.OptimizationFormat.Name="boundary";Input=input;ExpectedIR=expected;Stage=stage;SourceFile="boundary.opt"} |> enc
+        let stages=[TestDSL.OptimizationFormat.ANF;TestDSL.OptimizationFormat.MIR;TestDSL.OptimizationFormat.LIR;TestDSL.OptimizationFormat.DirectLIR;TestDSL.OptimizationFormat.DirectARM64;TestDSL.OptimizationFormat.DirectLIR2X64]
+        let boundaries=array (fun stage->array (fun (input,expected)->run stage input expected) [TestDSL.OptimizationFormat.Source "","";TestDSL.OptimizationFormat.Source "bad","bad";TestDSL.OptimizationFormat.Source "Ret","bad";TestDSL.OptimizationFormat.Source "bad","Ret";TestDSL.OptimizationFormat.Source "Ret","Ret";TestDSL.OptimizationFormat.Source "Ret","MOV_reg(RAX, RDI)";TestDSL.OptimizationFormat.Source "MOV_reg(X0, X1)","MOV_reg(X0, X1)";TestDSL.OptimizationFormat.StdlibFunction "missing_function",""]) stages
+        let corpus=[TestDSL.OptimizationFormat.ANF,"anf.opt";TestDSL.OptimizationFormat.MIR,"mir.opt";TestDSL.OptimizationFormat.LIR,"lir.opt";TestDSL.OptimizationFormat.DirectLIR,"lir-peepholes.liropt";TestDSL.OptimizationFormat.DirectARM64,"arm64-peepholes.arm64opt";TestDSL.OptimizationFormat.DirectLIR2X64,"x64-selection.lir2x64"]
+        let rows=array (fun (stage,file)->
+            let path="src/Tests/optimization/"+file
+            let run filter=TestDSL.OptimizationTestRunner.runTestFile stdlib None filter stage path |> enc
+            let forced=TestDSL.OptimizationFormat.parseTestFile stage path |> result (array (fun test->let wrong={test with ExpectedIR="mismatch"} in tuple [enc wrong;enc (TestDSL.OptimizationTestRunner.runOptimizationTest stdlib None wrong)]))
+            tuple [enc path;run (fun _->true);run (fun _->false);run (fun test->test.Name.Length % 2=0);forced]) corpus
+        tuple [array (fun source->tuple [enc source;compile source]) sources;boundaries;rows;array (fun stage->enc (TestDSL.OptimizationTestRunner.runTestFile stdlib None (fun _->true) stage "missing.opt")) stages;array (fun name->enc (TestDSL.OptimizationTestRunner.getOptimizedStdlibANF stdlib name)) ["missing_function";"Darklang.Stdlib.String.__asciiWhitespace";"Darklang.Stdlib.Int64.__powerLoop"]])
+    let prepared=match optimizationRunnerPreparedCache.Value with Some value->value.DeepClone()|None->let value=prepare () in optimizationRunnerPreparedCache.Value<-Some value;value.DeepClone()
+    tuple [enc (TestDSL.OptimizationTestRunner.normalizeIR source);normalized;prepared]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7931,6 +7962,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "optimization-runner" -> optimizationRunnerObservation source
         | "optimization-format" -> optimizationFormatObservation source
         | "encoding-fixtures" -> encodingObservation source
         | "lir-execution" -> lirExecutionObservation source

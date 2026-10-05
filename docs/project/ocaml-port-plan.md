@@ -2100,3 +2100,19 @@ compiler-unit observations match F#. The warning-free native build passes
 732/732 translated checks. Coverage is 361/391 owner pairs; all reference
 comments remain complete. Remaining unit/test-tooling pairs, full corpus and
 final acceptance remain open.
+
+The complete optimization runner now preserves source/stdlib pipelines,
+synthetic entries, phase ordering, direct LIR/ARM64 comparisons and contiguous
+x64 instruction selection. All 362 unchanged optimization cases pass and all
+16 complete source observations match, including filtered runs, forced
+mismatches, 45 normalization boundaries and supplementary Unicode. Temporary
+normalization now rejoins UTF-16 surrogate pairs before returning UTF-8 text.
+The observation harness reuses the complete immutable fixture result between
+requests, retaining every compared field and running all fixtures once.
+
+All 39 original List HIR tests now run natively, preserving transitive scope
+proofs, branch cleanup, ownership validation, alias protection, runtime
+copy-on-write and allocation budgets. All 16 full compiler-unit observations
+match F#. The warning-free build passes 771/771 translated checks. This
+checkpoint has 363/391 complete owner pairs; source comments remain complete.
+Remaining unit/test-tooling pairs, full corpus and final acceptance remain open.
