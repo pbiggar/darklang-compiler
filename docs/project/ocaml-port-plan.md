@@ -2161,3 +2161,20 @@ probes and activates the required include/library paths. The full FSI oracle
 needs a 64 MiB initial stack on this VM; its source remains unchanged in
 production, and the replayable activation records the limit. Lost uncommitted
 E2E-format work is being reconstructed and verified before its next commit.
+
+The complete E2E format owner is restored and translated, including source
+locations, scoped preambles, function-line maps, multiline continuation,
+compile-error directives, process contracts and every optimization flag. All
+321 unchanged original E2E source files match F# in complete parsed records.
+The 16 full observations also match on 203 private grammar inputs and 20
+additional file boundaries; those temporary files are recreated from the
+tracked manifest on a fresh workspace. Source comments remain complete.
+
+The ICU host adapter now preserves the frozen .NET suffix algorithm as well
+as its prefix algorithm. All 16 source observations match across 3,145,728 BMP
+prefix/suffix comparisons plus supplementary and quoting/accent boundaries.
+The warning-free recovered native build passes 997/997 translated checks, and
+all 16 complete compiler-unit observations match F#. This checkpoint has
+373/391 complete owner pairs. The remaining 18 pairs, complete native E2E
+runner/suite, full executable comparison coverage and final acceptance remain
+open.

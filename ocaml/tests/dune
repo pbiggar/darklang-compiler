@@ -1,7 +1,7 @@
 (include_subdirs unqualified)
 (executable
  (name foundations_main)
- (modules (:standard \ text_probe semantic_probe float_probe process_runtime_main TestRunnerColors ProgressBar TestFramework TestCapture Common TestFileIO TestOutcome GraphColorFormat GraphColorTestRunner TestFrameworkObservation GraphColorObservation CompilerUnitObservation IRParserObservation IRSnapshotObservation PassRunnerObservation ParallelMoveObservation LIRExecutionObservation EncodingObservation OptimizationFormatObservation OptimizationRunnerObservation JsonPlanningTests StdlibOptimizationTests RuntimeDataLayoutTests X86_64ResolveTests LambdaLiftingTests MonomorphizationTests IRPrinterTests X86_64BinaryTests IRSymbolTests DeadCodeEliminationTests LIRTestFormatting ANFTestFormatting TypeCheckingTests ResolutionTestFormatting ChordalGraphTests SSALivenessTests IRFormatSnapshotDSLTests PassTestRunnerTests ParallelMoveDSLTests LIRExecutionDSLTests EncodingDSLTests OptimizationFormatTests ASTToANFTests ListHIRTests CompilationSessionTests SyntaxDSLTests RCReleaseDSLTests StdlibSourceTests ScriptHelperTests RepositoryTestFiles RegionContractTests OwnershipCallFactsTests OwnershipTestFormatting TestIds DSLPattern ANFParser MIRParser LIRParser IRFormatSnapshotFormat IRFormatSnapshotTestRunner ARM64Parser ARM64SymbolicParser PassTestRunner ParallelMoveFormat ParallelMoveTestRunner LIRExecutionFormat LIRExecutionTestRunner TestProcess ARM64EncodingFormat X86_64Parser X86_64EncodingFormat X86_64EncodingTestRunner ARM64EncodingTestRunner OptimizationFormat OptimizationTestRunner SyntaxFormat SyntaxTestRunner RCReleaseFormat RCReleaseTestRunner SessionUnitObservation RCReleaseObservation HostUtf16TextObservation RepositoryUnitObservation))
+ (modules (:standard \ text_probe semantic_probe float_probe process_runtime_main TestRunnerColors ProgressBar TestFramework TestCapture Common TestFileIO TestOutcome GraphColorFormat GraphColorTestRunner TestFrameworkObservation GraphColorObservation CompilerUnitObservation IRParserObservation IRSnapshotObservation PassRunnerObservation ParallelMoveObservation LIRExecutionObservation EncodingObservation OptimizationFormatObservation OptimizationRunnerObservation JsonPlanningTests StdlibOptimizationTests RuntimeDataLayoutTests X86_64ResolveTests LambdaLiftingTests MonomorphizationTests IRPrinterTests X86_64BinaryTests IRSymbolTests DeadCodeEliminationTests LIRTestFormatting ANFTestFormatting TypeCheckingTests ResolutionTestFormatting ChordalGraphTests SSALivenessTests IRFormatSnapshotDSLTests PassTestRunnerTests ParallelMoveDSLTests LIRExecutionDSLTests EncodingDSLTests OptimizationFormatTests ASTToANFTests ListHIRTests CompilationSessionTests SyntaxDSLTests RCReleaseDSLTests StdlibSourceTests ScriptHelperTests RepositoryTestFiles RegionContractTests OwnershipCallFactsTests OwnershipTestFormatting TestIds DSLPattern ANFParser MIRParser LIRParser IRFormatSnapshotFormat IRFormatSnapshotTestRunner ARM64Parser ARM64SymbolicParser PassTestRunner ParallelMoveFormat ParallelMoveTestRunner LIRExecutionFormat LIRExecutionTestRunner TestProcess ARM64EncodingFormat X86_64Parser X86_64EncodingFormat X86_64EncodingTestRunner ARM64EncodingTestRunner OptimizationFormat OptimizationTestRunner SyntaxFormat SyntaxTestRunner RCReleaseFormat RCReleaseTestRunner E2EFormat ObservedE2EFormat SessionUnitObservation RCReleaseObservation HostUtf16TextObservation RepositoryUnitObservation E2EFormatObservation HostAffixObservation))
  (libraries dark_compiler semantic_observation runner_support compiler_unit_support yojson str)
  (flags (:standard -w @a -warn-error @a)))
 
@@ -13,7 +13,7 @@
 
 (executable
  (name semantic_probe)
- (modules semantic_probe TestFrameworkObservation GraphColorObservation CompilerUnitObservation IRParserObservation IRSnapshotObservation PassRunnerObservation ParallelMoveObservation LIRExecutionObservation EncodingObservation OptimizationFormatObservation OptimizationRunnerObservation SessionUnitObservation RCReleaseObservation HostUtf16TextObservation RepositoryUnitObservation)
+ (modules semantic_probe TestFrameworkObservation GraphColorObservation CompilerUnitObservation IRParserObservation IRSnapshotObservation PassRunnerObservation ParallelMoveObservation LIRExecutionObservation EncodingObservation OptimizationFormatObservation OptimizationRunnerObservation SessionUnitObservation RCReleaseObservation HostUtf16TextObservation RepositoryUnitObservation E2EFormatObservation HostAffixObservation)
  (libraries dark_compiler semantic_observation runner_support compiler_unit_support yojson)
  (flags (:standard -w @a -warn-error @a)))
 
@@ -33,7 +33,7 @@
  (name runner_support)
  (wrapped false)
  (foreign_stubs (language c) (names runner_process))
- (modules TestRunnerColors ProgressBar TestFramework TestCapture Common TestFileIO TestOutcome GraphColorFormat GraphColorTestRunner TestIds DSLPattern ANFParser MIRParser LIRParser IRFormatSnapshotFormat IRFormatSnapshotTestRunner ARM64Parser ARM64SymbolicParser PassTestRunner ParallelMoveFormat ParallelMoveTestRunner LIRExecutionFormat LIRExecutionTestRunner TestProcess ARM64EncodingFormat X86_64Parser X86_64EncodingFormat X86_64EncodingTestRunner ARM64EncodingTestRunner OptimizationFormat OptimizationTestRunner SyntaxFormat SyntaxTestRunner RCReleaseFormat RCReleaseTestRunner)
+ (modules TestRunnerColors ProgressBar TestFramework TestCapture Common TestFileIO TestOutcome GraphColorFormat GraphColorTestRunner TestIds DSLPattern ANFParser MIRParser LIRParser IRFormatSnapshotFormat IRFormatSnapshotTestRunner ARM64Parser ARM64SymbolicParser PassTestRunner ParallelMoveFormat ParallelMoveTestRunner LIRExecutionFormat LIRExecutionTestRunner TestProcess ARM64EncodingFormat X86_64Parser X86_64EncodingFormat X86_64EncodingTestRunner ARM64EncodingTestRunner OptimizationFormat OptimizationTestRunner SyntaxFormat SyntaxTestRunner RCReleaseFormat RCReleaseTestRunner E2EFormat ObservedE2EFormat)
  (libraries dark_compiler threads)
  (flags (:standard -w @a -warn-error @a)))
 
@@ -43,3 +43,37 @@
  (modules JsonPlanningTests StdlibOptimizationTests RuntimeDataLayoutTests X86_64ResolveTests LambdaLiftingTests MonomorphizationTests IRPrinterTests X86_64BinaryTests IRSymbolTests DeadCodeEliminationTests LIRTestFormatting ANFTestFormatting TypeCheckingTests ResolutionTestFormatting ChordalGraphTests SSALivenessTests IRFormatSnapshotDSLTests PassTestRunnerTests ParallelMoveDSLTests LIRExecutionDSLTests EncodingDSLTests OptimizationFormatTests ASTToANFTests ListHIRTests CompilationSessionTests SyntaxDSLTests RCReleaseDSLTests StdlibSourceTests ScriptHelperTests RepositoryTestFiles RegionContractTests OwnershipCallFactsTests OwnershipTestFormatting)
  (libraries dark_compiler runner_support)
  (flags (:standard -w @a -warn-error @a)))
+
+(rule
+ (targets ObservedE2EFormat.ml)
+ (deps test-suite-tooling/TestDSL/E2EFormat.ml)
+ (action (copy %{deps} %{targets})))
+(rule
+ (targets ObservedE2EFormat.mli)
+ (deps test-suite-tooling/TestDSL/E2EFormat.mli)
+ (action (with-stdout-to %{targets} (progn (cat %{deps}) (echo "val extractFuncName : string -> string option
+val parseStringLiteral : string -> (string,string) result
+val parseTripleQuotedStringLiteral : string -> (string,string) result
+val parseAnyStringLiteral : string -> (string,string) result
+val stripOuterParens : string -> string
+val tryParseBuiltinErrorExpectation : string -> (string option,string) result option
+val parseAttribute : string -> (string*string,string) result
+val splitBySpacesRespectingQuotes : string -> string list
+val findCommentStartOutsideQuotes : string -> int option
+val isExpectationStart : string -> bool
+val stripQuotedContent : string -> string
+val isExpectationCandidate : string -> bool
+val isAttributeKey : string -> bool
+val parseSimpleStdout : string -> (string,string) result
+val hasUnclosedDelimiters : string -> bool
+val isIncompleteExpectationHead : string -> bool
+val isIdentifierPathHead : string -> bool
+val hasClosingParenTest : string -> bool
+val findSeparatorIndexAndCount : string -> int option*int
+val countPotentialSeparators : string -> int
+val findSeparatorIndex : string -> int option
+val isTestLine : string -> bool
+val stripComment : string -> string
+val parseCompileErrorDirective : int -> string -> (string option,string) result
+val parseMultilineTest : string -> int -> string -> string -> int StringMap.t -> (e2eTest,string) result
+")))))

@@ -167,3 +167,5 @@ let graphemeClusters text =
 
 external startsWithUnits : int array -> int array -> bool = "dark_starts_with_current_culture"
 let startsWithCurrentCulture text prefix=startsWithUnits (utf16Units text) (utf16Units prefix)
+external endsWithUnits : int array -> int array -> bool = "dark_ends_with_current_culture"
+let endsWithCurrentCulture text suffix=endsWithUnits (utf16Units text) (utf16Units suffix)

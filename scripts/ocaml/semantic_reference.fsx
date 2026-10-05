@@ -7992,6 +7992,63 @@ let repositoryUnitObservation (source:string)=
     let rows=tests |> List.map (fun (name,run)->namedArray "tuple" [|closureAnalysisEncode name;closureAnalysisEncode (run ())|])
     namedArray "tuple" [|closureAnalysisEncode source;JsonArray(Array.ofList rows) :> JsonNode|]
 
+let e2eFormatType=typeof<TestDSL.E2EFormat.E2ETest>.Assembly.GetType("TestDSL.E2EFormat")
+let e2eFormatMethods=
+    ["extractFuncName";"parseStringLiteral";"parseTripleQuotedStringLiteral";"parseAnyStringLiteral";"stripOuterParens";"tryParseBuiltinErrorExpectation";"parseAttribute";"splitBySpacesRespectingQuotes";"findCommentStartOutsideQuotes";"isExpectationStart";"stripQuotedContent";"isExpectationCandidate";"isAttributeKey";"parseSimpleStdout";"hasUnclosedDelimiters";"isIncompleteExpectationHead";"isIdentifierPathHead";"hasClosingParenTest";"findSeparatorIndexAndCount";"countPotentialSeparators";"findSeparatorIndex";"isTestLine";"stripComment";"parseCompileErrorDirective";"parseMultilineTest"] |> List.map (fun name->let method=e2eFormatType.GetMethod(name,Reflection.BindingFlags.Public ||| Reflection.BindingFlags.NonPublic ||| Reflection.BindingFlags.Static) in if isNull method then failwith ("Missing E2E helper: "+name) else name,method) |> Map.ofList
+let e2eFormatCall<'a> name (args:obj array) : 'a=e2eFormatMethods[name].Invoke(null,args) |> unbox<'a>
+let e2eFormatObservation (source:string)=
+    let enc (v:'a)=encode typeof<'a> (box v)
+    let tuple xs=namedArray "tuple" (List.toArray xs)
+    let array f xs=JsonArray(Seq.map f xs |> Seq.toArray) :> JsonNode
+    let guarded f=try f () with _->let o=JsonObject() in o["internalException"]<-JsonValue.Create true;o :> JsonNode
+    let data=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/e2e_format_fixtures.json")
+    let files=data["files"].AsArray() |> Seq.map (fun v->v.GetValue<string>()) |> Seq.toList
+    let fixtures=data["fixtures"].AsArray() |> Seq.map (fun v->v["path"].GetValue<string>()) |> Seq.toList
+    let inputs=data["inputs"].AsArray() |> Seq.map (fun v->String(v.AsArray() |> Seq.map (fun u->char (u.GetValue<int>())) |> Seq.toArray)) |> Seq.toList
+    let bucket=int source
+    let selected xs=xs |> List.indexed |> List.choose (fun (i,v)->if i%16=bucket then Some v else None)
+    let row s=tuple [enc s;array id [
+        guarded (fun ()->enc (e2eFormatCall<string option> "extractFuncName" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<Result<string,string>> "parseStringLiteral" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<Result<string,string>> "parseTripleQuotedStringLiteral" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<Result<string,string>> "parseAnyStringLiteral" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<string> "stripOuterParens" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<Result<string option,string> option> "tryParseBuiltinErrorExpectation" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<Result<string*string,string>> "parseAttribute" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<string list> "splitBySpacesRespectingQuotes" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<int option> "findCommentStartOutsideQuotes" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<bool> "isExpectationStart" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<string> "stripQuotedContent" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<bool> "isExpectationCandidate" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<bool> "isAttributeKey" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<Result<string,string>> "parseSimpleStdout" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<bool> "hasUnclosedDelimiters" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<bool> "isIncompleteExpectationHead" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<bool> "isIdentifierPathHead" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<bool> "hasClosingParenTest" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<int option*int> "findSeparatorIndexAndCount" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<int> "countPotentialSeparators" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<int option> "findSeparatorIndex" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<bool> "isTestLine" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<string> "stripComment" [|box s|]));
+        guarded (fun ()->enc (e2eFormatCall<Result<string option,string>> "parseCompileErrorDirective" [|box 7;box s|]));
+        guarded (fun ()->enc (e2eFormatCall<Result<TestDSL.E2EFormat.E2ETest,string>> "parseMultilineTest" [|box s;box 7;box "boundary.e2e";box "def f(x) = x";box (Map.empty<string,int>)|]))]]
+    let file path=tuple [enc path;enc (TestDSL.E2EFormat.parseE2ETestFile path);enc (TestDSL.E2EFormat.parseE2ETest path)]
+    tuple [array file ((selected (files@fixtures))@["missing.e2e";"src/Tests"]);array row (selected inputs)]
+
+let hostAffixObservation (source:string)=
+    let enc (v:'a)=encode typeof<'a> (box v)
+    let tuple xs=namedArray "tuple" (List.toArray xs)
+    let array f xs=JsonArray(Seq.map f xs |> Seq.toArray) :> JsonNode
+    let bucket=int source
+    let patterns=["";"\"";"\"\"\"";"(";")";"def ";"a";"\u0301"]
+    let row units=
+        let s=String(units |> List.map char |> List.toArray)
+        array (fun (p:string)->tuple [enc (s.StartsWith(p));enc (s.EndsWith(p))]) patterns
+    let bmp=[0..4095] |> array (fun index->let u=index*16+bucket in array row [[u];[97;u;97];[0xd800;u;0xdc00]])
+    let cases=[[];[34];[34;34];[34;34;34];[34;0x301];[0x301;34];[97;0x301];[0x301;97];[0;97;0];[0xd800;0xdc00]]
+    tuple [array enc patterns;bmp;array row cases]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -8021,6 +8078,8 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "host-affixes" -> hostAffixObservation source
+        | "e2e-format" -> e2eFormatObservation source
         | "repository-units" -> repositoryUnitObservation source
         | "host-utf16-text" -> hostUtf16TextObservation source
         | "rc-release" -> rcReleaseObservation source

@@ -26,7 +26,7 @@ static void culture_locale(char *buffer, size_t capacity) {
     memcpy(buffer,environment,length);buffer[length]='\0';
     if (!strcmp(buffer,"C") || !strcmp(buffer,"POSIX")) buffer[0]='\0';
 }
-CAMLprim value dark_starts_with_current_culture(value source_units,value pattern_units) {
+static value current_culture_affix(value source_units,value pattern_units,int suffix) {
     CAMLparam2(source_units,pattern_units);
     mlsize_t source_length=Wosize_val(source_units),pattern_length=Wosize_val(pattern_units);
     if (pattern_length==0) CAMLreturn(Val_true);
@@ -49,14 +49,14 @@ CAMLprim value dark_starts_with_current_culture(value source_units,value pattern
         int move_pattern=1,move_source=1;
         int32_t pattern_element=0,source_element=0;
         while (U_SUCCESS(error)) {
-            if (move_pattern) pattern_element=ucol_next(pattern_iterator,&error);
-            if (move_source) source_element=ucol_next(source_iterator,&error);
+            if (move_pattern) pattern_element=suffix ? ucol_previous(pattern_iterator,&error) : ucol_next(pattern_iterator,&error);
+            if (move_source) source_element=suffix ? ucol_previous(source_iterator,&error) : ucol_next(source_iterator,&error);
             move_pattern=1;move_source=1;
             if (pattern_element==UCOL_NULLORDER) {
                 /* A following accent is part of the final source character;
                  * an ignorable following element does not extend that character.
                  */
-                result=source_element==UCOL_NULLORDER || source_element==0 ||
+                result=suffix || source_element==UCOL_NULLORDER || source_element==0 ||
                     (((uint32_t)source_element & 0xffff0000u)!=0 || ((uint32_t)source_element & 0x0000ff00u)==0);
                 break;
             }
@@ -71,4 +71,10 @@ CAMLprim value dark_starts_with_current_culture(value source_units,value pattern
     free(pattern);free(source);
     if (U_FAILURE(error)) caml_failwith("ICU prefix comparison failed");
     CAMLreturn(Val_bool(result));
+}
+CAMLprim value dark_starts_with_current_culture(value source_units,value pattern_units) {
+    return current_culture_affix(source_units,pattern_units,0);
+}
+CAMLprim value dark_ends_with_current_culture(value source_units,value pattern_units) {
+    return current_culture_affix(source_units,pattern_units,1);
 }
