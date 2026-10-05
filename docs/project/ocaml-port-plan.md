@@ -2047,3 +2047,13 @@ The original 15 pass-runner unit tests are retained. The warning-free build
 passes 638/638 translated unit/fixture checks. Coverage is 347/391 pairs;
 reference comments remain complete. Remaining unit/test-tooling pairs, full
 corpus and final acceptance remain open.
+
+The complete parallel-move fixture parser and runner now preserve destination
+and operand validation, ordered sections, whole symbolic instruction sequences
+and exact lowering diagnostics. All 16 requests match F# across 51 boundary
+inputs, eight unchanged fixtures, forced output mismatches, file loading,
+registration and both original DSL unit tests. Optional whitespace around the
+move arrow follows the original regex. The warning-free build passes 648/648
+translated unit/fixture checks. Coverage is 350/391 pairs; reference comments
+remain complete. Remaining unit/test-tooling pairs, full corpus and final
+acceptance remain open.

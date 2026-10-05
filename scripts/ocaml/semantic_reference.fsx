@@ -7843,6 +7843,19 @@ let passRunnerObservation (source:string) =
     let tests=array (fun (name,run)->let actual=run () in tuple [enc name;enc actual]) PassTestRunnerTests.tests
     tuple [array row (paths@["missing.pass";"src/Tests/passes";"scripts/ocaml/pass_runner_fixtures.json"]);array runs paths;machine;extras;tests;enc (PassTestRunnerTests.runAll ())]
 
+let parallelMoveObservation (source:string) =
+    let tuple values=namedArray "tuple" (List.toArray values)
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let array fn xs=JsonArray(Seq.map fn xs |> Seq.toArray) :> JsonNode
+    let result fn=function Ok value->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|fn value|]);node :> JsonNode|Error error->enc (Error error:Result<unit,string>)
+    let runs (value:TestDSL.ParallelMoveFormat.ParallelMoveTest)=array (fun value->tuple [enc value;enc (TestDSL.ParallelMoveTestRunner.runParallelMoveTest value)]) [value;{value with Expected=[ARM64Symbolic.RET]};{value with Expected=ARM64Symbolic.Label "included"::value.Expected}]
+    let parsed path content=TestDSL.ParallelMoveFormat.parseParallelMoveFileContent path content |> result (array (fun value->tuple [enc value;runs value]))
+    let tests values=array (fun (name,run)->let actual=run () in tuple [enc name;enc actual]) values
+    let fixtures=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/parallel_move_fixtures.json").AsArray() |> Seq.map (fun node->node.GetValue<string>())
+    let file="src/Tests/algorithms/parallel-moves/arm64.parallelmoves"
+    let paths=["missing.parallelmoves";"src/Tests/algorithms/parallel-moves";file]
+    tuple [parsed source source;array (parsed source) fixtures;parsed file (IO.File.ReadAllText file);array (fun path->enc (TestDSL.ParallelMoveTestRunner.loadParallelMoveTests path)) paths;tests (TestDSL.ParallelMoveTestRunner.tests (paths |> List.rev |> List.toArray));tests ParallelMoveDSLTests.tests]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7872,6 +7885,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "parallel-moves" -> parallelMoveObservation source
         | "pass-runner" -> passRunnerObservation source
         | "ir-snapshots" -> irSnapshotObservation source
         | "ir-parsers" -> irParserObservation source
