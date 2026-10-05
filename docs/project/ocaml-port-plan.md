@@ -2389,3 +2389,33 @@ This validates the standalone entrypoint; it does not replace the remaining
 every-invocation byte comparison gate. The complete corrected native suite is
 still running independently, with all original unit checks passed and no E2E
 failures reported so far.
+
+### Complete original native host suite passes
+
+The corrected native production runner completes successfully:
+`10760/10760 passed in 8778.2s` (`runner-fixed-full-native-suite.log`).
+This includes every original 1045 registered unit check, 434 other suite checks
+and all 9281 enabled E2E checks; none of the original fixtures were changed.
+The 2589 original upstream exclusions remain the reference exclusions.
+
+`scripts/ocaml/check_runner_reports.py` confirms all 10760 outcome totals,
+every one of the 10347 timed test contracts (including duplicate IDs and
+optional timing-field presence), all batching counters and schema-10 profile
+structure against the fresh F# reference reports. Both runners use batch size
+8192, with 8178 eligible cases, 1577 physical executions, 392 shared batches,
+8096 batched logical cases and largest batch 297. Conditional positive-overhead
+timing rows and numerical duration/cache values vary and are not equality
+inputs. Native execution took about 146 minutes versus the reference's 244
+seconds, a 36-fold wall-time regression; the accepted plan permits compiler
+performance regressions.
+
+The standard native Dune graph builds without warnings or errors. The already-
+built production suite is available through `./run-tests --ocaml --ai`; its
+help and the existing `ocaml/bin/dark` CLI help/version/error behavior match
+the reference. The existing native compiler launcher also independently emits
+and executes the identical complete 4040-byte ELF described above.
+
+Runner functional validation is complete. Complete every-invocation executable
+byte comparison, final profiling-capability review and replacement packaging/
+default-script/source-deletion acceptance remain separate gates. A passing
+whole suite does not establish those gates by itself.
