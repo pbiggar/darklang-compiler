@@ -2419,3 +2419,52 @@ Runner functional validation is complete. Complete every-invocation executable
 byte comparison, final profiling-capability review and replacement packaging/
 default-script/source-deletion acceptance remain separate gates. A passing
 whole suite does not establish those gates by itself.
+
+### Native performance remediation
+
+At the user's request, compiler latency was investigated before continuing the
+remaining acceptance gates. OCaml allocation sampling and temporary CPU timer
+sampling were kept in ignored artifacts; production profiling callbacks and
+the frozen F# source, stdlib and fixture inputs were not changed.
+
+The principal port regressions were allocating full UTF-16 arrays for every
+string-map comparison and replacing hash-indexed compilation dictionaries with
+linear lists. Cache equality normalized complete CFGs on every scanned entry,
+making session growth quadratic. Hashing decoded arrays with OCaml's bounded
+default hash additionally collapsed shared-prefix function names into the same
+bucket. Allocation-free ordinal comparison, hash-indexed buckets with full
+equality checks, full-string hashing and in-place cache updates restore the
+intended behavior. Cache insertion order remains preserved for metrics.
+
+CPU sampling then identified pairwise recursive-group discovery as the remaining
+cold-start hotspot. Iterative component discovery now retains the original
+source-order group/member identities without computing every root's closure.
+OCaml 5.5 bit-count/trailing-zero intrinsics replace boxed bit-by-bit loops.
+Port-specific `dune runtest` checks protect Unicode/WTF-8 ordering, malformed
+input rejection, allocation bounds, cache collisions/options/structural reuse,
+component equivalence on 750 random graphs and 50,000-node chain/cycle traversal.
+These checks are separate from the frozen production test inventory.
+
+Measurements on the same VM:
+
+| Workload | Before | After |
+| --- | ---: | ---: |
+| Fresh CLI, `1L + 2L` | 100.6 s | 10.1 s |
+| Full original native suite | 8778.2 s | 264.9 s |
+| Standard-library cumulative allocation | 490.7 GB | 7.9 GB |
+| Isolated 1024-key cache probe | 133.7 s / 819.1 GB | 0.026 s / 29 MB |
+
+The final native suite passes all 10760 original checks, including all 9281
+enabled E2E cases. Every batching count and all 10347 timed test contracts match
+the reference; schema-10 profiles validate and all native cache counters are
+unchanged. The full F# reference took 243.8 seconds. These shared-host timings
+establish removal of the large regression, not a precise native/reference
+performance ranking or an uncontended benchmark gate. The final native reports
+are `perf-final-full-timings.json` and `perf-final-full-profile.json` under the
+ignored migration artifacts.
+
+Generated-program execution was not the source of the 36-fold suite slowdown.
+Both the 4040-byte arithmetic ELF and an 11176-byte list/lambda ELF remain
+byte-identical to F# and produce identical runtime output. This focused proof
+does not replace the still-open every-invocation byte acceptance gate or the
+remaining packaging/default-script/source-deletion work.
