@@ -1,4 +1,0 @@
-(executable
- (name dark_main)
- (libraries dark_compiler)
- (flags (:standard -w @a -warn-error @a)))
