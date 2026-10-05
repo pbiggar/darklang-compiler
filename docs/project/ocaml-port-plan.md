@@ -2178,3 +2178,25 @@ all 16 complete compiler-unit observations match F#. This checkpoint has
 373/391 complete owner pairs. The remaining 18 pairs, complete native E2E
 runner/suite, full executable comparison coverage and final acceptance remain
 open.
+
+### Complete E2E execution and memory-layout runners (376 pairs)
+
+Ported E2ETestRunner, MemoryLayoutTestRunner and all 32 E2EFormatTests with
+all reference comments. The runner includes equality synthesis, shared suite
+preamble contexts and specialization, deterministic batch source and bitmasks,
+expectation diagnostics, package-manager cache fixtures, process inputs and
+explicit cross-target execution. TestProcess now supports finite stdin and
+environment overrides while draining both streams and enforcing the deadline.
+
+The fresh `dune-e2e-runner4` graph builds with warnings treated as errors
+(`e2e-runner-build5.log`). Complete preparation and expectation observations
+for all 321 unchanged E2E source files plus encoded fixtures match F# in all
+16 buckets (`e2e-runner-complete-parity2.log`). Generated batch text and chunk
+boundary/invalid bitmask observations are included. The expanded native unit
+suite passes 1029/1029 (`e2e-runner-native2.log`), including all 32 unchanged
+E2E format units. All 68 unchanged x64 memory-layout fixtures pass
+(`e2e-runner-memory-layout-native.log`). Independent process checks pass large
+stdin with simultaneous stdout/stderr and environment overrides, closed stdin,
+and process-group timeout cleanup. Inventory is 376/391 and the reference
+comment audit reports zero missing comments. These checks do not replace the
+remaining full 10760-test corpus, whole-executable byte parity or final cutover.

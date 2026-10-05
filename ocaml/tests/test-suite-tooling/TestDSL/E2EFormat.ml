@@ -664,4 +664,3 @@ let parseE2ETestFile path =
         errorExpectation=Some CompileError;expectedErrorMessage;skipReason=None}) parsed in
   match orphaned with [] -> Ok normalized | line::_ -> Error ("Line "^string_of_int (line-1)^": #compileerror must immediately precede a test")
 let parseE2ETest _path = Error "Old format no longer supported - use parseE2ETestFile instead"
-

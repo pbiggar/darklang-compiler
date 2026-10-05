@@ -16,6 +16,7 @@ let rec requests () =
         | "formatter" -> Semantic_observation.SemanticJson.formatter source
         | "ast-helpers" -> Semantic_observation.SemanticJson.astHelpers source
         | "macho-images" -> Semantic_observation.MachOObservation.observe source
+        | "e2e-runner" -> E2ERunnerObservation.observe source
         | "e2e-format" -> E2EFormatObservation.observe source
         | "host-affixes" -> HostAffixObservation.observe source
         | "repository-units" -> RepositoryUnitObservation.observe source

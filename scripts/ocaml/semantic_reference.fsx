@@ -8036,6 +8036,29 @@ let e2eFormatObservation (source:string)=
     let file path=tuple [enc path;enc (TestDSL.E2EFormat.parseE2ETestFile path);enc (TestDSL.E2EFormat.parseE2ETest path)]
     tuple [array file ((selected (files@fixtures))@["missing.e2e";"src/Tests"]);array row (selected inputs)]
 
+let e2eRunnerObservation (source:string)=
+    let enc (v:'a)=encode typeof<'a> (box v)
+    let tuple xs=namedArray "tuple" (List.toArray xs)
+    let array f xs=JsonArray(Seq.map f xs |> Seq.toArray) :> JsonNode
+    let guarded f=try f () with _->let o=JsonObject() in o["internalException"]<-JsonValue.Create true;o :> JsonNode
+    let data=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/e2e_format_fixtures.json")
+    let files=data["files"].AsArray() |> Seq.map (fun v->v.GetValue<string>()) |> Seq.toList
+    let fixtures=data["fixtures"].AsArray() |> Seq.map (fun v->v["path"].GetValue<string>()) |> Seq.toList
+    let bucket=int source
+    let selected xs=xs |> List.indexed |> List.choose (fun (i,v)->if i%16=bucket then Some v else None)
+    let zero=TimeSpan.Zero
+    let runs=[TestDSL.E2ETestRunner.CompileFailed(1,"compile failure",zero);TestDSL.E2ETestRunner.CompileFailed(0,"",zero)] @
+             ([0,"true\n","";0,"false\n","";0,"true\r\n","";0,"true\n\n","";1,"","Uncaught exception: a";139,"","";
+               0,"Result.Error(\"a\")\n","";0," true \n","";0,"true\n","leaks: 0\n";0,"true\n","leaks: 5\r\n";
+               0,"true\n","note\nleaks: 3\n";0,"true\n","leaks: ٥\n";0,"é😀\r\n","err\r\n"]
+              |> List.map (fun (code,stdout,stderr)->TestDSL.E2ETestRunner.Ran(code,stdout,stderr,zero,zero)))
+    let tests xs=array (fun test->tuple [enc (TestDSL.E2ETestRunner.tryPrepareBatchTest test |> Option.map (fun p->p.EqualitySource));array (fun run->TestDSL.E2ETestRunner.evaluateExpectations test run |> Result.map (fun _->()) |> Result.mapError (fun e->e.Message) |> enc) runs]) xs
+    let file path=tuple [enc path;guarded (fun ()->match TestDSL.E2EFormat.parseE2ETestFile path with Ok xs->let o=JsonObject() in o["type"]<-JsonValue.Create "FSharpResult";o["case"]<-JsonValue.Create "Ok";o["fields"]<-JsonArray([|tests xs|]);o :> JsonNode|Error e->enc (Error e:Result<unit,string>));
+                         guarded (fun ()->TestDSL.E2EFormat.parseE2ETestFile path |> Result.map (fun tests->let xs=tests |> List.choose TestDSL.E2ETestRunner.tryPrepareBatchTest in TestDSL.E2ETestRunner.buildBatchSource (List.truncate 65 xs)) |> enc)]
+    let counts=[0;1;3;31;32;33;63;64;65;8192;8193]
+    let outputs=["";"0\n";"5\n";"8\n";"-1\n";"4294967295\n";"4294967296\n";"+5\n";" 5 \r\n";"5\u0000\n";"(2147483649, 2, 1)\n";"(0,0,0)\n";"(0,0,2)\n";"ignored\n5\n";"5\n \n";"(0,0)\n";"５\n";"0x5\n"]
+    tuple [array file (selected (files@fixtures));array (fun count->tuple [enc count;array (fun text->tuple [enc text;enc (TestDSL.E2ETestRunner.tryParseBatchBoolResults count text)]) outputs]) (selected counts)]
+
 let hostAffixObservation (source:string)=
     let enc (v:'a)=encode typeof<'a> (box v)
     let tuple xs=namedArray "tuple" (List.toArray xs)
@@ -8079,6 +8102,7 @@ let processRequest (line: string) =
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
         | "host-affixes" -> hostAffixObservation source
+        | "e2e-runner" -> e2eRunnerObservation source
         | "e2e-format" -> e2eFormatObservation source
         | "repository-units" -> repositoryUnitObservation source
         | "host-utf16-text" -> hostUtf16TextObservation source
