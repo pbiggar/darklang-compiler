@@ -67,17 +67,24 @@ let[@warning "-4"] attachRecursiveGroups program =
  let functions = List.filter_map (function C.FunctionDef func -> Some func | _ -> None) topLevels in
  let names = S.of_list (List.map (fun (func : C.functionDef) -> func.C.name) functions) in
  let graph = M.of_list (List.map (fun (func : C.functionDef) -> let dependencies = SpecializationIdentity.directDependencies func.C.body |> SpecializationIdentity.FunctionSet.elements |> List.filter_map (fun id -> C.functionName id symbols) |> S.of_list |> S.inter names in func.C.name, dependencies) functions) in
- let reachableFrom root =
-  let rec visit pending visited = match pending with [] -> visited | name :: rest when S.mem name visited -> visit rest visited | name :: rest -> let next = Option.value (M.find_opt name graph) ~default:S.empty in visit (S.elements next @ rest) (S.add name visited) in
-  visit (S.elements (Option.value (M.find_opt root graph) ~default:S.empty)) S.empty in
- let reachability = M.of_list (List.map (fun (func : C.functionDef) -> func.C.name, reachableFrom func.C.name) functions) in
  let required key inventory = match M.find_opt key inventory with Some value -> value | None -> Crash.crash ("Missing recursive function '" ^ key ^ "'") in
- let mutuallyReachable left right = S.mem right (required left reachability) && S.mem left (required right reachability) in
+ (* Mutual reachability defines an SCC, but materializing every root's closure
+    and partitioning the entire remaining catalog for each function is quadratic.
+    Classify once, then restore source order for both groups and their members:
+    graph traversal order must never change semantic identities. *)
+ let indices=M.of_list (List.mapi (fun index (func:C.functionDef)->func.C.name,index) functions) in
+ let edges=Array.of_list (List.map (fun (func:C.functionDef)->S.elements (required func.C.name graph) |> List.map (fun name->required name indices)) functions) in
+ let components=StronglyConnectedComponents.classify edges in
+ let members=Array.make (Array.length components) [] in
+ List.iteri (fun index func->let component=components.(index) in members.(component)<-func::members.(component)) functions;
+ let emitted=Array.make (Array.length components) false in
+ let orderedGroups=List.mapi (fun index _->components.(index)) functions |> List.filter_map (fun component->
+   if emitted.(component) then None else (emitted.(component)<-true;Some (List.rev members.(component)))) in
  let sourceOrdinals = M.of_list (List.filter_map (function index, C.FunctionDef definition -> Some (definition.C.name, index + 1) | _ -> None) (List.mapi (fun index value -> index, value) topLevels)) in
  let rec groups ordinal remaining resolved = match remaining with
  | [] -> resolved
- | (first : C.functionDef) :: rest ->
-   let sameGroup, later = List.partition (fun (candidate : C.functionDef) -> mutuallyReachable first.C.name candidate.C.name) rest in
+ | [] :: _ -> Crash.crash "Recursive component has no members"
+ | ((first : C.functionDef) :: sameGroup) :: later ->
    let availability = if sameGroup <> [] then AST.MutualRecursiveMember else if S.mem first.C.name (required first.C.name graph) then AST.SelfRecursiveMember else AST.CompletedGroupMember in
    let resolved = List.fold_left (fun resolved (groupIndex, (definition : C.functionDef)) ->
     let sourceOrdinal = required definition.C.name sourceOrdinals in
@@ -86,7 +93,7 @@ let[@warning "-4"] attachRecursiveGroups program =
     let functionType = AST.TFunction (List.map snd (NonEmptyList.toList (C.functionParameterTypes definition)), C.functionReturnType definition) in
     let checkedMember : C.recursiveMember = {C.resolved = resolvedMember; monomorphicType = C.checkedType functionType} in M.add definition.C.name checkedMember resolved) resolved (List.mapi (fun index value -> index, value) (first :: sameGroup)) in
    groups (ordinal + 1) later resolved in
- let resolved = groups 0 functions M.empty in
+ let resolved = groups 0 orderedGroups M.empty in
  C.programFromCheckedParts (symbols, List.map (function C.FunctionDef definition -> C.FunctionDef {definition with C.recursion = M.find_opt definition.C.name resolved} | other -> other) topLevels)
 (* Check annotated, nongeneric functions and sequential values directly from
    WrittenTypes. The production entry point is switched only after declaration

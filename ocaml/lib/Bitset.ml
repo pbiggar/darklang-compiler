@@ -108,12 +108,9 @@ let intersects left right =
   requireMatchingWordCount "intersection" left right;
   Array.exists2 (fun a b -> Int64.logand a b <> 0L) left right
 
-let trailingZeroCount word =
-  let rec loop index remaining =
-    if Int64.logand remaining 1L <> 0L then index
-    else loop (index + 1) (Int64.shift_right_logical remaining 1)
-  in
-  loop 0 word
+(* OCaml 5.5 supplies the same intrinsic as .NET BitOperations. Scanning by
+   recursive boxed shifts allocated for every zero bit in allocation graphs. *)
+let trailingZeroCount = Int64.trailing_zeros
 
 let iterIndices bits f =
   Array.iteri
@@ -126,17 +123,7 @@ let iterIndices bits f =
       done)
     bits
 
-let count bits =
-  let total = ref 0 in
-  Array.iter
-    (fun initial ->
-      let word = ref initial in
-      while !word <> 0L do
-        word := Int64.logand !word (Int64.sub !word 1L);
-        incr total
-      done)
-    bits;
-  !total
+let count bits = Array.fold_left (fun total word->total+Int64.popcount word) 0 bits
 
 let indicesToList bits =
   let acc = ref [] in
