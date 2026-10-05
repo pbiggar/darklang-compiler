@@ -2082,3 +2082,12 @@ requests. The warning-free build passes 716/716 translated unit/fixture
 checks, including 100,000-byte output streams and process timeout cleanup.
 Coverage is 358/391 pairs; reference comments remain complete. Remaining
 unit/test-tooling pairs, full corpus and final acceptance remain open.
+
+The complete optimization fixture parser and all four original format unit
+tests now preserve source/stdlib inputs, all six IR stages, CRLF handling,
+last-section overrides and ordered aggregate diagnostics. All 16 requests
+match F# across 39 parser-boundary files, all six unchanged optimization corpus
+files parsed under every stage, missing/directory paths, registration and
+runAll. The warning-free native build passes 720/720 translated unit/fixture
+checks. Coverage is 360/391 pairs; all source comments remain complete.
+Remaining unit/test-tooling pairs, full corpus and final acceptance remain open.

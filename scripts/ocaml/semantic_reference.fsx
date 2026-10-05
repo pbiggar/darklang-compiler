@@ -7892,6 +7892,16 @@ let encodingObservation (source:string) =
     let display=TestDSL.X86_64EncodingTestRunner.loadX64EncodingTests file |> result (fun values->tuple [array (fun count->let cases=List.truncate count values in enc $"{cases}") [0;1;2;3;4;5;32];array (fun value->let cases=[value] in enc $"{cases}") values])
     tuple [enc (TestDSL.X86_64Parser.parseX64 source);array (fun (value:JsonNode)->enc (TestDSL.X86_64Parser.parseX64 (value.GetValue<string>()))) (fixtures["parser"].AsArray());parsed source source;array (fun (value:JsonNode)->parsed source (value.GetValue<string>())) (fixtures["format"].AsArray());parsed file (IO.File.ReadAllText file);array (fun path->enc (TestDSL.X86_64EncodingTestRunner.loadX64EncodingTests path)) paths;tests (TestDSL.X86_64EncodingTestRunner.tests (paths |> List.rev |> List.toArray));tests EncodingDSLTests.tests;array (fun path->TestDSL.ARM64EncodingTestRunner.loadARM64EncodingTest path |> result (fun value->tuple [enc value;armRuns value])) (armFiles@["missing.arm64enc";"src/Tests/passes/arm64enc"]);enc (TestDSL.ARM64EncodingTestRunner.formatMismatches mismatches);enc (TestDSL.ARM64EncodingTestRunner.formatMismatches []);array (fun values->enc (TestDSL.ARM64EncodingTestRunner.hasAllDifferent values)) [[];[0u];[0u;1u];[0u;1u;0u];[0x80000000u;0x7fffffffu;UInt32.MaxValue]];display]
 
+let optimizationFormatObservation (source:string) =
+    let tuple values=namedArray "tuple" (List.toArray values)
+    let enc (value:'a)=encode typeof<'a> (box value)
+    let array fn xs=JsonArray(Seq.map fn xs |> Seq.toArray) :> JsonNode
+    let fixtures=JsonNode.Parse(IO.File.ReadAllText "scripts/ocaml/optimization_format_fixtures.json").AsArray() |> Seq.map (fun node->node["path"].GetValue<string>()) |> Seq.toList
+    let corpus=IO.Directory.GetFiles "src/Tests/optimization" |> Array.sort |> Array.toList
+    let row path=tuple [enc path;array (fun stage->enc (TestDSL.OptimizationFormat.parseTestFile stage path)) [TestDSL.OptimizationFormat.ANF;TestDSL.OptimizationFormat.MIR;TestDSL.OptimizationFormat.LIR;TestDSL.OptimizationFormat.DirectLIR;TestDSL.OptimizationFormat.DirectARM64;TestDSL.OptimizationFormat.DirectLIR2X64]]
+    let tests values=array (fun (name,run)->let actual=run () in tuple [enc name;enc actual]) values
+    tuple [enc source;array row (fixtures@corpus@["missing.opt";"src/Tests/optimization"]);tests OptimizationFormatTests.tests;enc (OptimizationFormatTests.runAll ())]
+
 let processRequest (line: string) =
     let request = JsonNode.Parse line
     let stage = request["stage"].GetValue<string>()
@@ -7921,6 +7931,7 @@ let processRequest (line: string) =
             encode typeof<Result<string * string * (string * string) option,string>> (box formatted)
         | "lowering-aggregates" -> loweringAggregates source
         | "arm64-dsl" -> armDSLObservation source
+        | "optimization-format" -> optimizationFormatObservation source
         | "encoding-fixtures" -> encodingObservation source
         | "lir-execution" -> lirExecutionObservation source
         | "parallel-moves" -> parallelMoveObservation source
