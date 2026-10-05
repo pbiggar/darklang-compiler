@@ -49,6 +49,15 @@ For an independently built Dune graph, add
 either runner. Omitting `--ocaml` continues to select the temporary F# oracle
 until replacement acceptance is complete.
 
+The same Dune build also produces the standalone native compiler at
+`ocaml/_build/default/cli/dark_main.exe`. It passes command-line arguments to
+the ported `Program.main` directly and requires no .NET runtime. Run it after
+activating the native VM environment, for example:
+
+```bash
+ocaml/_build/default/cli/dark_main.exe -r -e '1L + 2L'
+```
+
 The setup needs Bash, Python 3, curl, tar, GCC, and make. All installations,
 caches, temporary files, and full OCaml build logs stay in the supplied
 directory. OCaml is built serially. The script materializes .NET SDK archive

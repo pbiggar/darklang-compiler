@@ -2369,3 +2369,23 @@ The launcher's native and reference help output match exactly. Shell syntax and
 all three invalid-build selection boundaries pass; VM execution instructions
 include the required combined compatibility adapters. The full native suite
 continues independently without modifying its active build graph.
+
+### Standard native build and compiler entrypoint
+
+The standard `ocaml/_build` graph builds with zero diagnostics, and the native
+production test launcher runs there with help output identical to the reference.
+The independent progress-bar report run matches both reference outcomes, all
+eight timed record contracts and the schema-10 profile structure.
+
+Added a standalone `ocaml/cli/dark_main` interface, implementation and Dune
+executable that delegates directly to the already-ported `Program.main`.
+It has no F# bridge or .NET runtime dependency. Help, version and unknown-option
+output/exit codes match the reference. Compiling `1L + 2L` through each actual
+CLI produces identical entire 4040-byte ELF executables (SHA256
+`25e6cab2aac2a5f0fd10ca382ed70a2a3436841ba4210f08baacc0a5db6d8b2f`);
+both execute with exit zero, stdout `3\n` and empty stderr.
+
+This validates the standalone entrypoint; it does not replace the remaining
+every-invocation byte comparison gate. The complete corrected native suite is
+still running independently, with all original unit checks passed and no E2E
+failures reported so far.
