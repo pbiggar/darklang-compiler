@@ -2217,3 +2217,17 @@ including registration and complete result diagnostics. The expanded native
 unit suite passes 1043/1043 (`integration-runners-native.log`). Coverage is
 380/391 pairs with zero missing reference comments. Remaining test owners,
 the full E2E corpus, whole-executable byte parity and final cutover remain open.
+
+### ARM64 release, control flow and destruction contracts (383 pairs)
+
+Ported the complete ReleasePlanningTests, ControlFlowTests and DestructionTests
+owners, preserving all reference comments and all 31 original registrations.
+Their contracts cover cached release outlining and ownership policy, allocator
+liveness, return transfers, RC instruction costs, entry argument transfers,
+recursive list/dictionary/sum cleanup, nested payloads and closure captures.
+The fresh `dune-arm64-contracts` graph builds with warnings as errors
+(`arm64-contracts-build1.log`), all 16 expanded compiler-unit observation buckets
+match F# (`arm64-contracts-complete-parity.log`), and the native suite passes
+1074/1074 (`arm64-contracts-native.log`). Coverage is 383/391 pairs with zero
+missing source comments. Allocation tests, complete ARM64 registration, RC/x64
+unit owners, main runner and final acceptance remain open.

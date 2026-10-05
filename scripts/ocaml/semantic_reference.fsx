@@ -7696,13 +7696,46 @@ let graphColorObservation (source:string) =
     let tests=TestDSL.GraphColorTestRunner.tests [|"missing.graphcolor";"src/Tests/algorithms/graph-color/coloring.graphcolor"|] |> array (fun (name,run)->let actual=run () in tuple [enc name;enc actual])
     tuple [observed;corpus;loads;tests]
 
+let arm64ContractTests=[
+ "LIR ARM64 codegen reports missing entry block",ARM64ControlFlowTests.testReportsMissingEntryBlock;
+ "ARM64 compact record fields start at offset zero",ARM64ReleasePlanningTests.testCompactRecordFieldsStartAtOffsetZero;
+ "Generated ARM64 entry uses allocator transfers only",ARM64ControlFlowTests.testGeneratedEntryUsesAllocatorTransfersOnly;
+ "ARM64 UInt64 runtime zero branches target digit handlers",ARM64ControlFlowTests.testPrintUInt64RuntimeZeroBranches;
+ "ARM64 UInt64 runtime preserves trailing newline",ARM64ControlFlowTests.testPrintUInt64RuntimePreservesNewline;
+ "ARM64 branch false edge falls through",ARM64ControlFlowTests.testBranchFalseEdgeFallsThrough;
+ "ARM64 common-return transfer cost",ARM64ControlFlowTests.testSharedReturnTransferCost;
+ "ARM64 dynamic buffer RC instruction cost",ARM64ControlFlowTests.testDynamicBufferRcInstructionCost;
+ "ARM64 primitive list payload preservation cost",ARM64ControlFlowTests.testPrimitiveListPayloadPreservationCost;
+ "Small generic release plan remains inline",ARM64ReleasePlanningTests.testSmallGenericReleasePlanRemainsInline;
+ "Expensive generic release is prepared as a call",ARM64ReleasePlanningTests.testExpensiveGenericReleaseIsPreparedAsCall;
+ "Generic release helper preserves cached instructions",ARM64ReleasePlanningTests.testGenericReleaseHelperPreservesCachedInstructions;
+ "Outlined generic release uses allocator liveness",ARM64ReleasePlanningTests.testOutlinedGenericReleaseUsesAllocatorLiveness;
+ "Generic release helpers preserve ownership policy",ARM64ReleasePlanningTests.testGenericReleaseHelpersPreserveOwnershipPolicy;
+ "Dict list value planned helper releases collision payloads",ARM64DestructionTests.testDictListValuePlannedHelperReleasesCollisionPayloads;
+ "Dict tuple value planned helper releases collision payloads",ARM64DestructionTests.testDictTupleValuePlannedHelperReleasesCollisionPayloads;
+ "Dict string key tuple value planned helper releases collision payloads",ARM64DestructionTests.testDictStringKeyTupleValuePlannedHelperReleasesCollisionPayloads;
+ "Generic fixed-block nested bytes field uses release plan",ARM64DestructionTests.testGenericFixedBlockNestedBytesFieldUsesReleasePlan;
+ "Planned list generic leaf release reloads block pointer",ARM64DestructionTests.testPlannedListGenericLeafReleaseReloadsBlockPointer;
+ "Planned list nested generic release preserves block pointer",ARM64DestructionTests.testPlannedListNestedGenericReleasePreservesBlockPointer;
+ "Planned list tuple payload uses planned helper",ARM64DestructionTests.testPlannedListTuplePayloadUsesPlannedHelper;
+ "Planned list record payload uses planned helper",ARM64DestructionTests.testPlannedListRecordPayloadUsesPlannedHelper;
+ "Planned list record nested string-dict uses planned list helper",ARM64DestructionTests.testPlannedListRecordNestedStringDictUsesPlannedListHelper;
+ "Planned list tuple5 payload uses planned helper",ARM64DestructionTests.testPlannedListTuple5PayloadUsesPlannedHelper;
+ "Planned list record5 payload uses planned helper",ARM64DestructionTests.testPlannedListRecord5PayloadUsesPlannedHelper;
+ "Generic fixed-block nested immediate field releases child root",ARM64DestructionTests.testGenericFixedBlockNestedImmediateFieldReleasesChildRoot;
+ "Generic fixed-block nested mixed boxed-sum bytes payload uses variant dispatch",ARM64DestructionTests.testGenericFixedBlockNestedMixedBoxedSumBytesPayloadUsesVariantDispatch;
+ "Generic mixed boxed-sum payload dispatch skips remaining cases",ARM64DestructionTests.testGenericMixedBoxedSumPayloadDispatchSkipsRemainingCases;
+ "Recursive-sum release skips variants without managed fields",ARM64DestructionTests.testRecursiveSumReleaseSkipsVariantWithoutManagedFields;
+ "Closure capture nested fixed-block bytes field uses release plan",ARM64DestructionTests.testClosureCaptureNestedFixedBlockBytesFieldUsesReleasePlan;
+ "Closure capture boxed-sum bytes payload uses release plan",ARM64DestructionTests.testClosureCaptureBoxedSumBytesPayloadUsesReleasePlan;
+]
 let compilerUnitFixed=lazy (
     let tuple values=namedArray "tuple" (List.toArray values)
     let enc (value:'a)=encode typeof<'a> (box value)
     let tests values=JsonArray(values |> List.map (fun (name,run)->let outcome=run () in tuple [enc name;enc outcome]) |> List.toArray) :> JsonNode
     let stdlib,_=stdlibCompilationBase.Value
     let prepared=match stdlib with Error error->enc (Error error:Result<unit,string>)|Ok stdlib->let node=JsonObject() in node["type"]<-JsonValue.Create "FSharpResult";node["case"]<-JsonValue.Create "Ok";node["fields"]<-JsonArray([|tuple [tests (ProgramStructureTests.tests stdlib);tests (ValueSearchCatalogTests.tests stdlib);tests (JsonPlanningTests.tests stdlib);tests (StdlibOptimizationTests.tests stdlib);tests (CompilationSessionTests.tests Platform.LinuxX86_64 stdlib)]|]);node :> JsonNode
-    [tests ["ARM64 codegen rejects unprepared facts",ARM64PlanningBoundaryTests.testRejectsUnpreparedCodegenFacts;"ARM64 codegen attributes LIR opcode expansion",ARM64PlanningBoundaryTests.testLirOpExpansionRecorderAttributesGeneratedInstructions];tests StdlibSourceTests.tests;tests ScriptHelperTests.tests;tests ASTToANFTests.tests;tests ListHIRTests.tests;tests SyntaxDSLTests.tests;tests ChordalGraphTests.tests;enc (ChordalGraphTests.runAllTests ());tests SSALivenessTests.tests;enc (SSALivenessTests.runAll ());tests TypeCheckingTests.tests;enc (TypeCheckingTests.runAll ());prepared;tests RuntimeDataLayoutTests.tests;tests X86_64ResolveTests.tests;tests LambdaLiftingTests.tests;tests MonomorphizationTests.tests;tests IRPrinterTests.tests;enc (IRPrinterTests.runAll ());tests IRSymbolTests.tests;enc (IRSymbolTests.runAll ());tests DeadCodeEliminationTests.tests;enc (DeadCodeEliminationTests.runAll ())])
+    [tests arm64ContractTests;tests ["ARM64 codegen rejects unprepared facts",ARM64PlanningBoundaryTests.testRejectsUnpreparedCodegenFacts;"ARM64 codegen attributes LIR opcode expansion",ARM64PlanningBoundaryTests.testLirOpExpansionRecorderAttributesGeneratedInstructions];tests StdlibSourceTests.tests;tests ScriptHelperTests.tests;tests ASTToANFTests.tests;tests ListHIRTests.tests;tests SyntaxDSLTests.tests;tests ChordalGraphTests.tests;enc (ChordalGraphTests.runAllTests ());tests SSALivenessTests.tests;enc (SSALivenessTests.runAll ());tests TypeCheckingTests.tests;enc (TypeCheckingTests.runAll ());prepared;tests RuntimeDataLayoutTests.tests;tests X86_64ResolveTests.tests;tests LambdaLiftingTests.tests;tests MonomorphizationTests.tests;tests IRPrinterTests.tests;enc (IRPrinterTests.runAll ());tests IRSymbolTests.tests;enc (IRSymbolTests.runAll ());tests DeadCodeEliminationTests.tests;enc (DeadCodeEliminationTests.runAll ())])
 let compilerUnitObservation (source:string) =
     let enc (value:'a)=encode typeof<'a> (box value)
     let fixedRows=compilerUnitFixed.Value |> List.map (fun (value:JsonNode)->value.DeepClone())
