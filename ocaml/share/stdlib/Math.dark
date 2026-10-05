@@ -1,0 +1,161 @@
+// Stdlib.Math.dark - portable deterministic Float mathematics.
+
+module Darklang.Stdlib.Math
+
+val pi = 3.141592653589793
+val tau = 6.283185307179586
+
+val e = 2.718281828459045
+let degrees (angleInDegrees: Float) : Float =
+    (angleInDegrees * Stdlib.Math.pi) / 180.0
+
+let turns (angleInTurns: Float) : Float = Stdlib.Math.tau * angleInTurns
+let radians (angleInRadians: Float) : Float = angleInRadians
+
+let __sinKernel (value: Float) : Float =
+    let squared = value * value in
+    value
+    + value
+        * squared
+        * (-0.16666666666666632
+            + squared
+                * (0.00833333333332249
+                    + squared
+                        * (-0.0001984126982985795
+                            + squared
+                                * (0.0000027557313707070068
+                                    + squared
+                                        * (-0.000000025050760253406863
+                                            + squared * 0.000000000158969099521155)))))
+
+let __cosKernel (value: Float) : Float =
+    let squared = value * value in
+    1.0
+        - 0.5 * squared
+    + squared
+        * squared
+        * (0.0416666666666666
+            + squared
+                * (-0.001388888888887411
+                    + squared
+                        * (0.00002480158728947673
+                            + squared
+                                * (-0.00000027557314351390664
+                                    + squared
+                                        * (0.000000002087572321298175
+                                            + squared * -0.000000000011359647557788194)))))
+
+let __quadrant (value: Float) : Int =
+    Stdlib.Float.round (value / (Stdlib.Math.pi / 2.0))
+
+let __quadrantRemainder (value: Float) (quadrant: Int) : Float =
+    let quadrantFloat = Stdlib.Int.toFloat quadrant in
+    let high = value - quadrantFloat * 1.5707963267341256 in
+    high - quadrantFloat * 0.00000000006077100506506192
+
+let __quadrantIndex (quadrant: Int) : Int64 =
+    match Stdlib.Int.remainder quadrant (Stdlib.Int.fromInt64 4L) with
+    | Error message -> Builtin.testRuntimeError message
+    | Ok remainder ->
+        let normalized = if Stdlib.Int.lessThan remainder (Stdlib.Int.fromInt64 0L) then Stdlib.Int.add remainder (Stdlib.Int.fromInt64 4L) else remainder in
+        match Stdlib.Int.toInt64 normalized with
+        | Some value -> value
+        | None -> Builtin.testRuntimeError "Math quadrant was not representable as Int64"
+
+let sin (value: Float) : Float =
+    if value == 0.0 then value
+    else if Stdlib.Float.isNaN value || Stdlib.Float.__isInfinite value then Stdlib.Float.__nan ()
+    else
+        let quadrant = Stdlib.Math.__quadrant value in
+        let reduced = Stdlib.Math.__quadrantRemainder value quadrant in
+        match Stdlib.Math.__quadrantIndex quadrant with
+        | 0L -> Stdlib.Math.__sinKernel reduced
+        | 1L -> Stdlib.Math.__cosKernel reduced
+        | 2L -> 0.0 - Stdlib.Math.__sinKernel reduced
+        | _ -> 0.0 - Stdlib.Math.__cosKernel reduced
+
+let cos (value: Float) : Float =
+    if Stdlib.Float.isNaN value || Stdlib.Float.__isInfinite value then Stdlib.Float.__nan ()
+    else
+        let quadrant = Stdlib.Math.__quadrant value in
+        let reduced = Stdlib.Math.__quadrantRemainder value quadrant in
+        match Stdlib.Math.__quadrantIndex quadrant with
+        | 0L -> Stdlib.Math.__cosKernel reduced
+        | 1L -> 0.0 - Stdlib.Math.__sinKernel reduced
+        | 2L -> 0.0 - Stdlib.Math.__cosKernel reduced
+        | _ -> Stdlib.Math.__sinKernel reduced
+
+let tan (value: Float) : Float = Stdlib.Math.sin value / Stdlib.Math.cos value
+
+let __atanSeries (value: Float) (squared: Float) (term: Float) (index: Int64) (remaining: Int64) (total: Float) : Float =
+    if remaining == 0L then total
+    else
+        let nextTerm = 0.0 - term * squared in
+        Stdlib.Math.__atanSeries value squared nextTerm (index + 1L) (remaining - 1L) (total + nextTerm / Stdlib.Int64.toFloat (index * 2L + 1L))
+
+let __atanPositive (value: Float) : Float =
+    if value > 1.0 then Stdlib.Math.pi / 2.0 - Stdlib.Math.__atanPositive (1.0 / value)
+    else if value > 0.41421356237309503 then
+        Stdlib.Math.pi / 4.0 + Stdlib.Math.__atanPositive ((value - 1.0) / (value + 1.0))
+    else Stdlib.Math.__atanSeries value (value * value) value 1L 28L value
+
+let atan (value: Float) : Float =
+    if Stdlib.Float.isNaN value then value
+    else if value == 0.0 then value
+    else if Stdlib.Float.__isInfinite value then
+        if value < 0.0 then 0.0 - Stdlib.Math.pi / 2.0 else Stdlib.Math.pi / 2.0
+    else if value < 0.0 then 0.0 - Stdlib.Math.__atanPositive (0.0 - value)
+    else Stdlib.Math.__atanPositive value
+
+let atan2 (y: Float) (x: Float) : Float =
+    if Stdlib.Float.isNaN x || Stdlib.Float.isNaN y then Stdlib.Float.__nan ()
+    else if Stdlib.Float.__isInfinite y && Stdlib.Float.__isInfinite x then
+        if y > 0.0 then
+            if x > 0.0 then Stdlib.Math.pi / 4.0 else 3.0 * Stdlib.Math.pi / 4.0
+        else if x > 0.0 then 0.0 - Stdlib.Math.pi / 4.0
+        else 0.0 - 3.0 * Stdlib.Math.pi / 4.0
+    else if Stdlib.Float.__isInfinite y then
+        if y > 0.0 then Stdlib.Math.pi / 2.0 else 0.0 - Stdlib.Math.pi / 2.0
+    else if Stdlib.Float.__isInfinite x then
+        if x > 0.0 then if Stdlib.Float.__isNegative y then -0.0 else 0.0
+        else if Stdlib.Float.__isNegative y then 0.0 - Stdlib.Math.pi else Stdlib.Math.pi
+    else if x > 0.0 then Stdlib.Math.atan (y / x)
+    else if x < 0.0 then
+        if Stdlib.Float.__isNegative y then Stdlib.Math.atan (y / x) - Stdlib.Math.pi
+        else Stdlib.Math.atan (y / x) + Stdlib.Math.pi
+    else if y > 0.0 then Stdlib.Math.pi / 2.0
+    else if y < 0.0 then 0.0 - Stdlib.Math.pi / 2.0
+    else if Stdlib.Float.__isNegative x then
+        if Stdlib.Float.__isNegative y then 0.0 - Stdlib.Math.pi else Stdlib.Math.pi
+    else y
+
+let asin (value: Float) : Stdlib.Option.Option<Float> =
+    if Stdlib.Float.isNaN value || value < -1.0 || value > 1.0 then None
+    else if value == 1.0 then Some (Stdlib.Math.pi / 2.0)
+    else if value == -1.0 then Some (0.0 - Stdlib.Math.pi / 2.0)
+    else if value == 0.0 then Some value
+    else Some (Stdlib.Math.atan2 value (Stdlib.Float.sqrt (1.0 - value * value)))
+
+let acos (value: Float) : Stdlib.Option.Option<Float> =
+    if Stdlib.Float.isNaN value || value < -1.0 || value > 1.0 then None
+    else if value == 1.0 then Some 0.0
+    else if value == -1.0 then Some Stdlib.Math.pi
+    else Some (Stdlib.Math.atan2 (Stdlib.Float.sqrt (1.0 - value * value)) value)
+
+let cosh (value: Float) : Float =
+    if Stdlib.Float.isNaN value then value
+    else
+        let magnitude = Stdlib.Float.absoluteValue value in
+        let positive = Stdlib.Float.__exp magnitude in
+        (positive + 1.0 / positive) / 2.0
+
+let sinh (value: Float) : Float =
+    if value == 0.0 || Stdlib.Float.isNaN value then value
+    else
+        let magnitude = Stdlib.Float.absoluteValue value in
+        let positive = Stdlib.Float.__exp magnitude in
+        let result = (positive - 1.0 / positive) / 2.0 in
+        if value < 0.0 then 0.0 - result else result
+
+// Compatibility with I@04fbe9: mathTanh dispatches to System.Math.Sinh.
+let tanh (value: Float) : Float = Stdlib.Math.sinh value

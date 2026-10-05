@@ -77,7 +77,7 @@ The Dark implementations are in
 shortest-path selection, and stable location ties are covered at
 `src/Tests/e2e/upstream/stdlib/language-tools/pickLocation.dark:28-159`. The
 catalog-backed native test at
-`src/Tests/compiler-passes/ValueSearchCatalogTests.fs:51-180` covers type
+`ocaml/tests/compiler-passes/ValueSearchCatalogTests.ml:51-180` covers type
 identity, namespace filtering, location choice, branch visibility,
 lookup/evaluation failures, static result validation, and result order.
 
@@ -88,7 +88,7 @@ database. The compiler intentionally does not acquire that service: it has no
 content-addressed package traversal or ordinary top-level value initialization,
 as documented in `name-resolution.md:81-101`. Instead, each `CompileRequest`
 contains an explicit immutable `PackageValueCatalog` snapshot
-(`src/DarkCompiler/driver/Contexts.fs`). This catalog is compiler-only
+(`ocaml/lib/driver/CompilationContexts.ml`). This catalog is compiler-only
 machinery, not a new Dark-visible package model.
 
 The snapshot records value hash, recursive custom-type identity, branch-visible

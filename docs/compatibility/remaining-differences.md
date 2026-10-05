@@ -72,5 +72,5 @@ intentionally absent network host from its shared preamble. A disabled file
 must not be treated as proof that its entire feature is missing.
 
 The authoritative live denysets remain in
-`src/Tests/test-suite-tooling/TestRunner.fs`. When a gap closes, enable its
+`ocaml/tests/test-suite-tooling/TestRunner.ml`. When a gap closes, enable its
 unchanged upstream case before removing it from this ledger.

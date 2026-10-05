@@ -2468,3 +2468,32 @@ Both the 4040-byte arithmetic ELF and an 11176-byte list/lambda ELF remain
 byte-identical to F# and produce identical runtime output. This focused proof
 does not replace the still-open every-invocation byte acceptance gate or the
 remaining packaging/default-script/source-deletion work.
+
+
+## Native release acceptance work (2026-10-05)
+
+The compiler and test launchers now default to the pinned native OCaml/Dune
+build. All 202 stdlib and Unicode assets are installed under the package's
+share directory with frozen hashes. An installed compiler has compiled and
+executed an expression from outside the checkout. Docker and CI build the
+native graph; .NET remains optional for historical migration acceptance and
+independent F# benchmark orchestration, with no compiler assembly reference.
+The targeted benchmark driver now uses the native CLI and reports cold-process
+compile time in schema 2 rather than warm-session time in schema 1.
+
+The new disposable acceptance collector intercepts every ELF/Mach-O serializer
+and CompilerLibrary result. It supplies identical Mach-O UUID entropy and
+source-root inputs before compilation, compares the complete raw images, and
+enforces request identities, diagnostics and duplicate invocation counts.
+No generated executable is normalized. Linux ELF execution is inapplicable on
+macOS; only that one ARM64 binary execution test is omitted there, in both the
+native runner and disposable frozen oracle. Mach-O generation and native macOS
+execution remain required in the CI matrix. All existing DSL fixtures remain
+unchanged.
+
+The first fresh native acceptance run exposed a unit helper that used an
+uncreated migration-results directory. It now uses the system temp directory;
+all three original parsing assertions pass. Port allocation, text, SCC and
+bitset regression checks also pass. Complete host byte and report comparison
+is being rerun before source retirement; physical ARM64/macOS CI must pass
+before final acceptance. Valgrind and fuzzing remain deferred.

@@ -8,7 +8,7 @@ open X64Operands
 *)
 type funcCtx={functionName:string;stackSize:int;usedCalleeSaved:LIR.physReg list;enableLeakCheck:bool;recordRegistry:LIR.recordRegistry;sumShapeRegistry:MemoryModel.rcSumShapeRegistry;functionNames:string FunctionIdMap.t}
 let functionName (ctx:funcCtx) functionId =
- match FunctionIdMap.tryFind functionId ctx.functionNames with Some name -> name | None -> failwith (Printf.sprintf "x64 code generation: missing function name for identity %s" (Printf.sprintf "%Lu" (AST.functionIdValue functionId)))
+ match FunctionIdMap.tryFind functionId ctx.functionNames with Some name -> name | None -> Crash.crash (Printf.sprintf "x64 code generation: missing function name for identity %s" (Printf.sprintf "%Lu" (AST.functionIdValue functionId)))
 let rcSumShapeRegistryFromVariantRegistry variantRegistry =
  StringOrder.Map.map (fun (typeVariants:LIR.typeVariants) ->
  let sorted=List.stable_sort (fun (left:LIR.variantInfo) (right:LIR.variantInfo) -> Int.compare left.LIR.tag right.LIR.tag) typeVariants.LIR.variants in

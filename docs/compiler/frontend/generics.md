@@ -101,8 +101,8 @@ Type substitution walks the AST and replaces type variables with concrete types:
 
 ## Related Files
 
-- `src/DarkCompiler/passes/preparation/Monomorphization.fs` - Reachable specialization solving and type-application replacement.
-- `src/DarkCompiler/passes/preparation/PrepareFunctions.fs` - Program specialization entry points.
-- `src/DarkCompiler/frontend/TypeChecking.fs` - Generic type validation
-- `src/DarkCompiler/AST.fs` - `TVar`, `TypeApp` type definitions
+- `ocaml/lib/passes/preparation/Monomorphization.ml` - Reachable specialization solving and type-application replacement.
+- `ocaml/lib/passes/preparation/PrepareFunctions.ml` - Program specialization entry points.
+- `ocaml/lib/frontend/TypeChecking.ml` - Generic type validation
+- `ocaml/lib/AST.ml` - `TVar`, `TypeApp` type definitions
 - `src/Tests/e2e/generics.e2e` - Test cases

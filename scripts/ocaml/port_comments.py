@@ -3,6 +3,7 @@
 import argparse
 import json
 import re
+import subprocess
 from collections import defaultdict
 from pathlib import Path
 
@@ -114,7 +115,10 @@ def main():
         owner = ROOT / entry['owner']
         if owner not in contents:
             continue
-        source = (ROOT / entry['source']).read_text()
+        source_path = ROOT / entry['source']
+        # Retired implementation sources remain the unchanged historical oracle.
+        source = source_path.read_text() if source_path.is_file() else subprocess.check_output(
+            ['git', 'show', manifest['oracle'] + ':' + entry['source']], cwd=ROOT, text=True)
         lines = source.splitlines()
         declarations = [(i, match[1]) for i, line in enumerate(lines) if (match := DECL.match(line))]
         for line, comment in line_comments(source):

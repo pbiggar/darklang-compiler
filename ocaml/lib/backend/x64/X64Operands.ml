@@ -89,7 +89,7 @@ let lirRegToX86 = function
  | LIR.X29 -> X86_64.RBP
  | LIR.X30 -> X86_64.RAX
  | LIR.SP -> X86_64.RSP
- | (LIR.X22 | LIR.X23 | LIR.X24 | LIR.X25 | LIR.X26 | LIR.X27) as reg -> failwith ("lirRegToX86: invalid x64 physical register "^physName reg)
+ | (LIR.X22 | LIR.X23 | LIR.X24 | LIR.X25 | LIR.X26 | LIR.X27) as reg -> Crash.crash ("lirRegToX86: invalid x64 physical register "^physName reg)
 let resolvePhysReg context reg =
  match invalidX64PhysRegReason reg with Some reason -> Error (context^": invalid x64 physical register "^physName reg^": "^reason) | None -> Ok (lirRegToX86 reg)
 (*
@@ -133,14 +133,14 @@ let loadImm64 dest value =
 let scratch=X86_64.R11
 let arithmeticTempExcluding excluded =
  let candidates=[X86_64.R11;X86_64.RCX;X86_64.R10;X86_64.RAX;X86_64.RDX;X86_64.RDI;X86_64.RSI;X86_64.R8;X86_64.R9;X86_64.RBX;X86_64.R12;X86_64.R13] in
- match List.find_opt (fun candidate -> not (List.mem candidate excluded)) candidates with Some temp -> temp | None -> failwith "x64 arithmetic lowering could not find a temporary register"
+ match List.find_opt (fun candidate -> not (List.mem candidate excluded)) candidates with Some temp -> temp | None -> Crash.crash "x64 arithmetic lowering could not find a temporary register"
 let allFloatRegs=[X86_64.XMM0;X86_64.XMM1;X86_64.XMM2;X86_64.XMM3;X86_64.XMM4;X86_64.XMM5;X86_64.XMM6;X86_64.XMM7;X86_64.XMM8;X86_64.XMM9;X86_64.XMM10;X86_64.XMM11;X86_64.XMM12;X86_64.XMM13;X86_64.XMM14;X86_64.XMM15]
 (*
    Borrow an XMM register for a short lowering sequence without reserving one
    globally from allocation. The 16-byte slot preserves stack alignment.
 *)
 let withPreservedFloatScratch excluded build =
- let temp=match List.find_opt (fun candidate -> not (List.mem candidate excluded)) allFloatRegs with Some temp -> temp | None -> failwith "x64 float lowering has no scratch register" in
+ let temp=match List.find_opt (fun candidate -> not (List.mem candidate excluded)) allFloatRegs with Some temp -> temp | None -> Crash.crash "x64 float lowering has no scratch register" in
  [X86_64.SUB_imm (X86_64.RSP,16l);X86_64.MOVSD_store (X86_64.RSP,0l,temp)]@build temp@[X86_64.MOVSD_load (temp,X86_64.RSP,0l);X86_64.ADD_imm (X86_64.RSP,16l)]
 (*
    Heap bump pointer register (codegen-internal, reserved; not allocatable).

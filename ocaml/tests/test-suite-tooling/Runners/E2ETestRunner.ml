@@ -285,7 +285,7 @@ let buildSuiteContexts stdlib tests passTimingRecorder =
             |> Result.map snd |> Result.map_error (fun e->"Preamble build error ("^plan.spec.sourceFile^"): "^e)
         | Some _ ->
             (let* analysis=analyzePreambleForPlan specialized plan.spec plan.tests in
-            let analysis=match analysis with Some a -> a | None -> failwith "A nonempty preamble disappeared during specialization" in
+            let analysis=match analysis with Some a -> a | None -> Crash.crash "A nonempty preamble disappeared during specialization" in
             let specs=SI.SpecMap.fold (fun key _ acc->SI.SpecSet.add key acc) plan.specialization.SI.specRegistry SI.SpecSet.empty in
             let specialization=Monomorphization.specializeFromSpecs (CheckedAST.programSymbols analysis.CC.typedAST) analysis.CC.genericFuncDefs specs in
             PreambleCompilation.buildPreambleContextFromAnalysis specialized analysis specialization plan.spec.sourceFile plan.spec.functionLineMap recorder)

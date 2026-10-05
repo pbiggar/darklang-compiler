@@ -1,0 +1,15 @@
+// Stdlib.Bool.dark - Stdlib.Bool definitions
+//
+// Split from stdlib.dark for modular stdlib loading.
+
+module Darklang.Stdlib.Bool
+
+// Stdlib.Bool - Boolean operations
+
+let and (a: Bool) (b: Bool) : Bool = a && b
+
+let or (a: Bool) (b: Bool) : Bool = a || b
+
+let xor (a: Bool) (b: Bool) : Bool = if a then Stdlib.Bool.not b else b
+
+let toString (b: Bool) : String = if b then "true" else "false"

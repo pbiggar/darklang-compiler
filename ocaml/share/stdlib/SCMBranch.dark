@@ -1,0 +1,6 @@
+// SCM.Branch.dark - branch values required by language-tool APIs.
+
+module Darklang.SCM.Branch
+
+val mainBranchId = UUID (1Z)
+val mainBranchName = "main"

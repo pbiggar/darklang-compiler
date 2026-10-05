@@ -1,6 +1,6 @@
 # Darklang Compiler
 
-A pure-functional F# compiler for Darklang. It emits native ARM64 (macOS and
+A native OCaml compiler for Darklang. It emits native ARM64 (macOS and
 Linux) and Linux x86_64 binaries directly, without an external assembler or
 linker.
 

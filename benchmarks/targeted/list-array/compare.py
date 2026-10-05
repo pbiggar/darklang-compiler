@@ -23,6 +23,14 @@ CASES = {
 }
 
 
+def compiler_artifact(repository):
+    native = repository / "ocaml/_build/default/bin/dark.exe"
+    if native.is_file():
+        return native
+    # An explicitly supplied historical checkout may contain the old compiler.
+    return repository / "bin/DarkCompiler/Debug/net11.0/DarkCompiler.dll"
+
+
 def checked(command, cwd):
     result = subprocess.run(command, cwd=cwd, text=True, capture_output=True, timeout=180)
     if result.returncode:
@@ -87,7 +95,7 @@ def main():
         report["compilers"][label] = {
             "commit": checked(["git", "rev-parse", "HEAD"], repository).stdout.strip(),
             "dirty": bool(checked(["git", "status", "--porcelain"], repository).stdout),
-            "assembly_sha256": hashlib.sha256((repository / "bin/DarkCompiler/Debug/net11.0/DarkCompiler.dll").read_bytes()).hexdigest(),
+            "compiler_sha256": hashlib.sha256(compiler_artifact(repository).read_bytes()).hexdigest(),
         }
     with tempfile.TemporaryDirectory(prefix="list-array-bench-") as temporary:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -100,8 +108,8 @@ def main():
                 for label, repository in roots.items()
             }
             for label, repository in roots.items():
-                assembly = repository / "bin/DarkCompiler/Debug/net11.0/DarkCompiler.dll"
-                if hashlib.sha256(assembly.read_bytes()).hexdigest() != report["compilers"][label]["assembly_sha256"]:
+                assembly = compiler_artifact(repository)
+                if hashlib.sha256(assembly.read_bytes()).hexdigest() != report["compilers"][label]["compiler_sha256"]:
                     raise RuntimeError(f"{label} compiler changed during measurement; rebuild before comparing")
             measurements["source_sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
             measurements["instruction_ratio"] = measurements["candidate"]["instructions"] / measurements["baseline"]["instructions"]

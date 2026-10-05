@@ -1,7 +1,7 @@
 (* Locate the checked-out repository for source and tooling policy tests. *)
 open Dark_compiler
 let rec rootFrom path=
- if Sys.file_exists (Filename.concat path "src/DarkCompiler/stdlib") then Some path else
+ if Sys.file_exists (Filename.concat path "ocaml/share/stdlib") && Sys.file_exists (Filename.concat path "src/Tests") then Some path else
  let parent=Filename.dirname path in if parent=path then None else rootFrom parent
 let repoRoot=match rootFrom (Filename.dirname (HostFile.absolutePath Sys.executable_name)) with Some path->path|None->match rootFrom (Sys.getcwd ()) with Some path->path|None->HostFile.absolutePath "."
 let scriptPath relative=Filename.concat repoRoot relative

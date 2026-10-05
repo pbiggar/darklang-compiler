@@ -1,0 +1,8 @@
+// HttpClientValues.dark - upstream constant HTTP content-type headers.
+
+module Darklang.Stdlib.HttpClient.ContentType
+
+val form = ("content-type", "application/x-www-form-urlencoded")
+val json = ("content-type", "application/json")
+val plainText = ("content-type", "text/plain; charset=utf-8")
+val html = ("content-type", "text/html; charset=utf-8")

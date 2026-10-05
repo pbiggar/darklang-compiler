@@ -1,0 +1,88 @@
+// Stdlib.Tls13Certificate.dark - bounded TLS 1.3 certificate flight framing.
+
+module Darklang.Stdlib.Tls13Certificate
+
+type Entry = { der: Blob, extensions: Blob }
+type Certificate = { entries: List<Stdlib.Tls13Certificate.Entry> }
+type CertificateVerify = { algorithm: Int64, signature: Blob }
+
+let __read16 (data: Blob) (offset: Int64) : Int64 =
+  Stdlib.Blob.__getByte data offset * 256L + Stdlib.Blob.__getByte data (offset + 1L)
+
+let __read24 (data: Blob) (offset: Int64) : Int64 =
+  Stdlib.Blob.__getByte data offset * 65536L
+  + Stdlib.Blob.__getByte data (offset + 1L) * 256L
+  + Stdlib.Blob.__getByte data (offset + 2L)
+
+let __entries (data: Blob) (position: Int64) (end_: Int64) (count: Int64)
+              (acc: List<Stdlib.Tls13Certificate.Entry>)
+              : Stdlib.Result.Result<List<Stdlib.Tls13Certificate.Entry>, String> =
+  if position == end_ then
+    if count == 0L then Error "TLS certificate list is empty"
+    else Ok (Stdlib.List.reverse acc)
+  else if count == 8L || position + 3L > end_ then Error "Invalid TLS certificate list"
+  else
+    let certificateLength = Stdlib.Tls13Certificate.__read24 data position in
+    let certificateStart = position + 3L in
+    let certificateEnd = certificateStart + certificateLength in
+    if certificateLength == 0L || certificateLength > 65536L
+       || certificateEnd + 2L > end_ then Error "Invalid TLS certificate list"
+    else
+      let extensionLength = Stdlib.Tls13Certificate.__read16 data certificateEnd in
+      let extensionStart = certificateEnd + 2L in
+      let next = extensionStart + extensionLength in
+      if extensionLength > 16384L || next > end_ then Error "Invalid TLS certificate list"
+      else
+        let der = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 certificateStart)
+                    (Stdlib.Int.fromInt64 certificateLength) in
+        let extensions = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 extensionStart)
+                           (Stdlib.Int.fromInt64 extensionLength) in
+        Stdlib.Tls13Certificate.__entries data next end_ (count + 1L)
+          (Stdlib.List.push acc (Stdlib.Tls13Certificate.Entry { der = der, extensions = extensions }))
+
+let parseCertificate (handshake: Blob)
+                     : Stdlib.Result.Result<Stdlib.Tls13Certificate.Certificate, String> =
+  let length = Stdlib.Blob.__byteLength handshake in
+  if length < 8L || length > 524288L || Stdlib.Blob.__getByte handshake 0L != 11L
+     || Stdlib.Tls13Certificate.__read24 handshake 1L != length - 4L
+     || Stdlib.Blob.__getByte handshake 4L != 0L then
+    Error "Invalid TLS Certificate message"
+  else
+    let listLength = Stdlib.Tls13Certificate.__read24 handshake 5L in
+    if listLength != length - 8L then Error "Invalid TLS Certificate message"
+    else
+      match Stdlib.Tls13Certificate.__entries handshake 8L length 0L [] with
+      | Error error -> Error error
+      | Ok entries -> Ok (Stdlib.Tls13Certificate.Certificate { entries = entries })
+
+let parseCertificateVerify (handshake: Blob)
+                           : Stdlib.Result.Result<Stdlib.Tls13Certificate.CertificateVerify, String> =
+  let length = Stdlib.Blob.__byteLength handshake in
+  if length < 8L || length > 1032L || Stdlib.Blob.__getByte handshake 0L != 15L
+     || Stdlib.Tls13Certificate.__read24 handshake 1L != length - 4L then
+    Error "Invalid TLS CertificateVerify message"
+  else
+    let algorithm = Stdlib.Tls13Certificate.__read16 handshake 4L in
+    let signatureLength = Stdlib.Tls13Certificate.__read16 handshake 6L in
+    if ((algorithm == 2052L && signatureLength >= 256L && signatureLength <= 1024L)
+        || (algorithm == 1027L && signatureLength >= 70L && signatureLength <= 72L))
+       && signatureLength == length - 8L then
+      Ok (Stdlib.Tls13Certificate.CertificateVerify {
+            algorithm = algorithm,
+            signature = Stdlib.Blob.slice handshake (Stdlib.Int.fromInt64 8L)
+                          (Stdlib.Int.fromInt64 signatureLength) })
+    else
+      Error "Invalid TLS CertificateVerify message"
+
+let certificateVerifyInput (transcript: Blob) : Blob =
+  // RFC 8446 section 4.4.3: context separation precedes the transcript hash.
+  let prefix = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 64 (32L)) in
+  Stdlib.Blob.concat
+    [prefix, Stdlib.String.toBlob "TLS 1.3, server CertificateVerify",
+     Stdlib.Blob.__fromInt64List [0L], Stdlib.Crypto.sha256 transcript]
+
+let certificateVerifyInput384 (transcript: Blob) : Blob =
+  let prefix = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 64 (32L)) in
+  Stdlib.Blob.concat
+    [prefix, Stdlib.String.toBlob "TLS 1.3, server CertificateVerify",
+     Stdlib.Blob.__fromInt64List [0L], Stdlib.Crypto.sha384 transcript]

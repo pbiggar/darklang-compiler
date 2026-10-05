@@ -15,7 +15,7 @@ The public contract was revalidated against these exact revisions:
 - historical compiler starting point:
   `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`, specifically
   `src/DarkCompiler/stdlib/Dict.dark`, `__HAMT.dark`, and
-  `src/DarkCompiler/Stdlib.fs:150-166`
+  `ocaml/lib/DarkStdlib.ml:150-166`
 - DCB1 report `8a402797` was starting evidence only; retained findings were
   checked again against the current compiler and interpreter revisions above.
 
@@ -35,10 +35,10 @@ compiler implementation details.
 Current source evidence at the compiler comparison point is
 `src/DarkCompiler/stdlib/Dict.dark:9-216` for the public wrappers and ordered
 higher-order operations, `src/DarkCompiler/stdlib/__HAMT.dark:10-60` for the
-private generic storage boundary, `src/DarkCompiler/frontend/interpreter/Parser.fs:2034-2035`
-for the empty value, `src/DarkCompiler/frontend/checking/EqualityHelpers.fs`
-for content equality, `src/DarkCompiler/frontend/ValueRendering.fs`
-for canonical rendering, and `src/DarkCompiler/Stdlib.fs:145-166` for the raw
+private generic storage boundary, `ocaml/lib/frontend/interpreter/Parser.ml:2034-2035`
+for the empty value, `ocaml/lib/frontend/checking/EqualityHelpers.ml`
+for content equality, `ocaml/lib/frontend/ValueRendering.ml`
+for canonical rendering, and `ocaml/lib/DarkStdlib.ml:145-166` for the raw
 internal intrinsics. Interpreter evidence at the pinned revision is
 `packages/darklang/stdlib/dict.dark:4-127`,
 `backend/src/Builtins/Builtins.Pure/Libs/Dict.fs:18-306`, and
@@ -158,10 +158,10 @@ the concrete type-directed release plan, including collision payloads.
 
 The contract is anchored in:
 
-- `src/DarkCompiler/Stdlib.fs` for native intrinsic registration
+- `ocaml/lib/DarkStdlib.ml` for native intrinsic registration
 - `src/DarkCompiler/Runtime.fs` and architecture code generation for native
   allocation, output, and failure behavior
-- `src/DarkCompiler/frontend/TypeChecking.fs` for public typing and equality
+- `ocaml/lib/frontend/TypeChecking.ml` for public typing and equality
 - `src/DarkCompiler/stdlib/Dict.dark` for the public module
 - `src/DarkCompiler/stdlib/__HAMT.dark` for private generic storage
 - `src/Tests/e2e/dict_parity.e2e` and pinned upstream Dict/edict cases for the

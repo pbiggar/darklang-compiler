@@ -20,7 +20,7 @@ let selectedCandidate selected = selected.candidate
 let selectedTargetBoundary selected = selected.targetBoundary
 let selectedCallSignature selected = selected.callSignature
 let identityBoundaries (CandidateIdentity boundaries) = NonEmptyList.toList boundaries
-let nonEmpty context values = match NonEmptyList.tryFromList values with Some values -> values | None -> failwith context
+let nonEmpty context values = match NonEmptyList.tryFromList values with Some values -> values | None -> Crash.crash context
 let compareCallSignature (first : O.callSignature) (second : O.callSignature) =
  let parameter = function O.UnmanagedCallParameter -> 0 | O.BorrowedCallParameter -> 1 | O.ConsumedCallParameter -> 2 | O.UniqueCallParameter -> 3 in
  let result = function O.UnmanagedCallResult -> 0, 0 | O.BorrowedCallResult index -> 1, index | O.ProducedCallResult -> 2, 0 | O.UniqueProducedCallResult -> 3, 0 in
@@ -33,7 +33,7 @@ let compareCandidateIdentity first second =
    let order = StringOrder.compare name otherName in if order <> 0 then order else
    let order = compareCallSignature signature otherSignature in if order <> 0 then order else compare rest other in
  compare (identityBoundaries first) (identityBoundaries second)
-let firstCandidate group = match G.candidates group with head :: _ -> head | [] -> failwith "Inferred ownership group has no candidates"
+let firstCandidate group = match G.candidates group with head :: _ -> head | [] -> Crash.crash "Inferred ownership group has no candidates"
 let functionNames group = List.map (fun (boundary : 'id G.functionBoundary) -> boundary.InferRecursiveOwnership.name) (G.candidateBoundaries (firstCandidate group))
 (*
    Index inferred groups by every function they contain. A recursive group maps
@@ -63,12 +63,12 @@ let comparePreference first second =
  let order = Int.compare result otherResult in if order <> 0 then order else let order = Int.compare count otherCount in if order <> 0 then order else compareCandidateIdentity identity otherIdentity
 module Make (Identity : O.Identity) = struct
  module Verify = VerifyOwnership.Make (Identity)
- let callSignature (boundary : Identity.t G.functionBoundary) = match Verify.callSignatureOfFunction boundary.InferRecursiveOwnership.ownership with Ok signature -> signature | Error _ -> failwith "Verifier-proven ownership candidate has an invalid call boundary"
+ let callSignature (boundary : Identity.t G.functionBoundary) = match Verify.callSignatureOfFunction boundary.InferRecursiveOwnership.ownership with Ok signature -> signature | Error _ -> Crash.crash "Verifier-proven ownership candidate has an invalid call boundary"
  let candidateIdentity candidate = CandidateIdentity (nonEmpty "Ownership variant candidate has no function boundaries"
   (List.map (fun (boundary : Identity.t G.functionBoundary) -> boundary.InferRecursiveOwnership.name, callSignature boundary) (G.candidateBoundaries candidate) |> List.stable_sort (fun (first, _) (second, _) -> StringOrder.compare first second)))
  let targetCandidate target candidate =
   match List.find_opt (fun (boundary : Identity.t G.functionBoundary) -> boundary.InferRecursiveOwnership.name = target) (G.candidateBoundaries candidate) with
-  | None -> failwith "Inferred ownership candidates disagree on their function group"
+  | None -> Crash.crash "Inferred ownership candidates disagree on their function group"
   | Some boundary -> let signature = callSignature boundary in {identity = candidateIdentity candidate; candidate; boundary; signature; requiredUniqueArguments = requiredUniqueArguments signature}
 (*
    Select the best inferred group candidate applicable to the call's proven
@@ -89,7 +89,7 @@ module Make (Identity : O.Identity) = struct
        let candidates = List.map (targetCandidate site.target) (G.candidates group) in
        match candidates with
        | head :: _ when not (sameTransferShape site.established head.signature) -> Error (InconsistentEstablishedBoundary site.target)
-       | [] -> failwith "Inferred ownership group has no candidates"
+       | [] -> Crash.crash "Inferred ownership group has no candidates"
        | _ ->
          let applicable = List.filter (fun candidate -> sameTransferShape site.established candidate.signature && preservesEstablishedResult site.established candidate.signature && S.subset candidate.requiredUniqueArguments site.uniqueArguments) candidates |> List.stable_sort comparePreference in
          match applicable with [] -> Ok (EstablishedBoundary site.established) | selected :: _ -> Ok (InferredVariant {identity = selected.identity; candidate = selected.candidate; targetBoundary = selected.boundary; callSignature = selected.signature})

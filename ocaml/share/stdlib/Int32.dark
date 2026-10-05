@@ -1,0 +1,126 @@
+// Stdlib.Int32.dark - Stdlib.Int32 definitions
+//
+// Split from stdlib.dark for modular stdlib loading.
+
+module Darklang.Stdlib.Int32
+
+type ParseError = BadFormat | OutOfRange
+
+// Stdlib.Int32 - Integer operations
+
+let add (a: Int32) (b: Int32) : Int32 = a + b
+
+let subtract (a: Int32) (b: Int32) : Int32 = a - b
+
+let multiply (a: Int32) (b: Int32) : Int32 = a * b
+
+let divide (a: Int32) (b: Int32) : Int32 =
+    if b == 0l then Builtin.crash "Cannot divide by 0"
+    else if a == -2147483648l && b == -1l then -2147483648l
+    else a / b
+
+let max (a: Int32) (b: Int32) : Int32 = if a > b then a else b
+
+let min (a: Int32) (b: Int32) : Int32 = if a < b then a else b
+
+let mod (a: Int32) (b: Int32) : Int32 =
+    if b == 0l then Builtin.crash "Cannot evaluate modulus against 0"
+    else if b < 0l then Builtin.crash "Cannot evaluate modulus against a negative number"
+    else a % b
+let remainder (a: Int32) (b: Int32) : Stdlib.Result.Result<Int32, String> =
+    if b == 0l then Error "Cannot divide by 0"
+    else if b == -1l then Ok 0l
+    else Ok (a - ((a / b) * b))
+
+let absoluteValue (a: Int32) : Int32 = if a < 0l then 0l - a else a
+
+let negate (a: Int32) : Int32 = 0l - a
+
+let __powerLoop (base: Int32) (exponent: Int32) (result: Int32) : Int32 =
+    if exponent == 0l then result
+    else
+        let next = if (exponent % 2l) == 1l then result * base else result in
+        Stdlib.Int32.__powerLoop (base * base) (exponent / 2l) next
+let power (base: Int32) (exponent: Int32) : Int32 =
+    if exponent < 0l then Builtin.crash "Cannot raise integer to a negative exponent"
+    else Stdlib.Int32.__powerLoop base exponent 1l
+
+let clamp (value: Int32) (limitA: Int32) (limitB: Int32) : Int32 =
+    let lower = Stdlib.Int32.min limitA limitB in
+    let upper = Stdlib.Int32.max limitA limitB in
+    Stdlib.Int32.max lower (Stdlib.Int32.min upper value)
+
+let greaterThan (a: Int32) (b: Int32) : Bool = a > b
+
+let greaterThanOrEqualTo (a: Int32) (b: Int32) : Bool = a >= b
+
+let lessThan (a: Int32) (b: Int32) : Bool = a < b
+
+let lessThanOrEqualTo (a: Int32) (b: Int32) : Bool = a <= b
+
+// Count number of set bits (population count)
+// Uses parallel bit counting algorithm (SWAR)
+let __popcount (x: Int32) : Int32 =
+    let mask1 = 1431655765l in
+    let mask2 = 858993459l in
+    let mask3 = 252645135l in
+    let mask4 = 63l in
+    let x = x - Stdlib.Int32.bitwiseAnd (Stdlib.Int32.shiftRight x 1l) mask1 in
+    let x = Stdlib.Int32.bitwiseAnd x mask2 + Stdlib.Int32.bitwiseAnd (Stdlib.Int32.shiftRight x 2l) mask2 in
+    let x = Stdlib.Int32.bitwiseAnd (x + Stdlib.Int32.shiftRight x 4l) mask3 in
+    let x = x + Stdlib.Int32.shiftRight x 8l in
+    let x = x + Stdlib.Int32.shiftRight x 16l in
+    Stdlib.Int32.bitwiseAnd x mask4
+
+// Convert a single digit (0l-9l) to its string representation
+let __digitToString (n: Int32) : String =
+    match n with
+    | 0l -> "0"
+    | 1l -> "1"
+    | 2l -> "2"
+    | 3l -> "3"
+    | 4l -> "4"
+    | 5l -> "5"
+    | 6l -> "6"
+    | 7l -> "7"
+    | 8l -> "8"
+    | 9l -> "9"
+    | _ -> Builtin.crash "Stdlib.Int32.__digitToString expected a digit from 0 to 9"
+
+// Convert an integer to its string representation
+let toString (n: Int32) : String =
+    if n < 0l then
+        if n < -9l then
+            let quotient = n / 10l in
+            Stdlib.Int32.toString quotient ++ Stdlib.Int32.__digitToString (0l - (n - (quotient * 10l)))
+        else "-" ++ Stdlib.Int32.__digitToString (0l - n)
+    else if n < 10l then Stdlib.Int32.__digitToString n
+    else Stdlib.Int32.toString (n / 10l) ++ Stdlib.Int32.__digitToString (n % 10l)
+
+// Sum all integers in a list
+let sum (list: List<Int32>) : Int32 =
+    Stdlib.List.fold list 0l (fun acc x -> acc + x)
+
+let __fromIntUnchecked (value: Int) : Int32 =
+    match Stdlib.Int.toInt32 value with
+    | Some result -> result
+    | None -> Builtin.crash "Internal Int32 conversion invariant failed"
+let random (start: Int32) (finish: Int32) : Int32 = Stdlib.Int32.__fromIntUnchecked (Stdlib.Int.random (Stdlib.Int.fromInt32 start) (Stdlib.Int.fromInt32 finish))
+let toFloat (value: Int32) : Float = Stdlib.Int.toFloat (Stdlib.Int.fromInt32 value)
+let sqrt (value: Int32) : Float = Stdlib.Float.sqrt (Stdlib.Int32.toFloat value)
+let parse (value: String) : Stdlib.Result.Result<Int32, Stdlib.Int32.ParseError> =
+    match Stdlib.Int.parse value with
+    | Error _ -> Error Stdlib.Int32.ParseError.BadFormat
+    | Ok parsed ->
+        match Stdlib.Int.toInt32 parsed with
+        | None -> Error Stdlib.Int32.ParseError.OutOfRange
+        | Some result -> Ok result
+let fromInt8 (value: Int8) : Int32 = Stdlib.Int32.__fromIntUnchecked (Stdlib.Int.fromInt8 value)
+let fromUInt8 (value: UInt8) : Int32 = Stdlib.Int32.__fromIntUnchecked (Stdlib.Int.fromUInt8 value)
+let fromInt16 (value: Int16) : Int32 = Stdlib.Int32.__fromIntUnchecked (Stdlib.Int.fromInt16 value)
+let fromUInt16 (value: UInt16) : Int32 = Stdlib.Int32.__fromIntUnchecked (Stdlib.Int.fromUInt16 value)
+let fromUInt32 (value: UInt32) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32 (Stdlib.Int.fromUInt32 value)
+let fromInt64 (value: Int64) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32 (Stdlib.Int.fromInt64 value)
+let fromUInt64 (value: UInt64) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32 (Stdlib.Int.fromUInt64 value)
+let fromInt128 (value: Int128) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32 (Stdlib.Int.fromInt128 value)
+let fromUInt128 (value: UInt128) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32 (Stdlib.Int.fromUInt128 value)

@@ -2,7 +2,7 @@
 
 End-to-end `.e2e` tests remain the default for language behavior. Focused
 fixture formats cover repetitive syntax, encoding, algorithm, formatting, and
-small executable-backend cases without requiring a new F# test function for
+small executable-backend cases without requiring a new OCaml test function for
 every input.
 
 ## Optimization fixtures
@@ -92,7 +92,7 @@ Every case uses the canonical parser and can assert an exact formatted result
 with `EXPECTED`, a structural AST roundtrip with `ROUNDTRIP`, or a parser
 diagnostic substring with `EXPECT-ERROR`.
 
-Use F# tests when the assertion depends on a particular internal AST shape or
+Use OCaml tests when the assertion depends on a particular internal AST shape or
 test-runner behavior rather than syntax acceptance, formatting, or roundtrips.
 
 ## x64 encoding and resolution fixtures
@@ -121,7 +121,7 @@ one instruction per output word. They also support `EXPECT-ERROR`, which checks
 that every listed instruction is rejected by the encoder with the requested
 diagnostic substring.
 
-Keep direct F# tests for internal helper APIs and programs that require richer
+Keep direct OCaml tests for internal helper APIs and programs that require richer
 binary layout or execution setup. Run all fixtures and unit tests with
 `./build --ai && ./run-tests --ai`.
 
@@ -191,7 +191,7 @@ assert `EXPECT-SAME`, MCS coverage with `EXPECT-MCS-ORDERING: all`, and the MCS
 profile's exact `EXPECT-SELECTION-CHECKS`. `PREFER` specifies phi preference
 pairs; `MOVE-PREFER` specifies higher-priority copy-coalescing pairs.
 
-Keep direct F# tests for graph construction from real CFGs, liveness behavior,
+Keep direct OCaml tests for graph construction from real CFGs, liveness behavior,
 and collection of preferences from compiler instructions.
 
 ## Parallel-move fixtures
@@ -234,7 +234,7 @@ return 18446744073709551615
 
 `IR` accepts `anf`, `mir`, or `lir`. Compact string literals use
 `str[...]` with `\\`, `\"`, `\n`, `\r`, and `\t` escapes; ANF also accepts
-`u64[...]`. Use direct F# construction when a formatting assertion depends on
+`u64[...]`. Use direct OCaml construction when a formatting assertion depends on
 multi-block CFG ordering or an IR shape the compact parsers intentionally do
 not model.
 
@@ -267,7 +267,7 @@ and process expectations cannot be combined in one case.
 The supported LIR subset covers scalar moves/arithmetic, integer and heap-string
 printing, fixed-block allocation/load/store/refcount operations, raw
 allocation/free, string concatenation and refcounts, and random integers. Keep
-direct F# tests for multi-block CFGs, condition-state isolation across
+direct OCaml tests for multi-block CFGs, condition-state isolation across
 translations, malformed compiler data,
 type/variant/record metadata, and ownership tests whose correctness depends on
 rich nested runtime shapes.
@@ -310,7 +310,7 @@ of the form `X0 = 123` to verify that releasing the root does not clobber live
 registers. These checks run on both backends; choose placements that express a
 valid preservation requirement on each architecture.
 
-Keep direct F# tests for collision-node dictionary layouts, malformed or mixed
+Keep direct OCaml tests for collision-node dictionary layouts, malformed or mixed
 variant metadata, release-helper selection and instruction-shape assertions,
 special named-function contexts, and tests that require multiple independently
 live managed objects or noncanonical heap layouts.

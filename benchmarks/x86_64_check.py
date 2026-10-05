@@ -78,7 +78,7 @@ def validate_qemu_version(banner: str) -> None:
 
 def toolchains(repository: Path) -> dict[str, str]:
     versions = {
-        "dotnet": tool_version(repository, [str(repository / "scripts/dotnet-host"), "--version"]),
+        "ocaml": tool_version(repository, ["ocamlopt", "-version"]),
         "rustc": tool_version(repository, ["rustc", "--version"]),
         "x86_64_linker": tool_version(repository, ["x86_64-linux-gnu-gcc", "--version"]),
         "qemu": tool_version(repository, ["/opt/dcb/qemu/qemu-x86_64", "--version"]),
@@ -90,7 +90,7 @@ def toolchains(repository: Path) -> dict[str, str]:
 
 
 def build_dark(repository: Path, name: str, output: Path) -> str | None:
-    compiler = repository / "bin" / "DarkCompiler" / "Debug" / "net11.0" / "DarkCompiler.dll"
+    compiler = repository / "ocaml" / "_build" / "default" / "bin" / "dark.exe"
     source = repository / "benchmarks" / "problems" / name / "dark" / "main.dark"
     if not compiler.is_file():
         return "compiler output is missing"
@@ -99,7 +99,6 @@ def build_dark(repository: Path, name: str, output: Path) -> str | None:
     output.parent.mkdir(parents=True, exist_ok=True)
     result = command_result(
         [
-            str(repository / "scripts/dotnet-host"),
             str(compiler),
             "--emit-result",
             "--target=linux-x86_64",
@@ -471,7 +470,7 @@ def main() -> int:
     record_parser.add_argument("--refresh-rust", action="store_true")
     args = parser.parse_args()
     repository = Path.cwd().resolve()
-    if not (repository / "src" / "DarkCompiler" / "DarkCompiler.fsproj").is_file():
+    if not (repository / "ocaml" / "dune-project").is_file():
         parser.error("run from the C4D repository root")
     try:
         if args.action == "record" and args.initialize and args.refresh_rust:

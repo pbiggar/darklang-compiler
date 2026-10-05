@@ -52,4 +52,4 @@ value across the backedge.
 higher-arity calls, generics, managed arguments, and floating-point arguments.
 `src/Tests/e2e/tco-refcounting.e2e` covers cleanup and constant-stack managed
 loops. Focused cleanup-ordering tests live in
-`src/Tests/compiler-passes/TailCallDetectionTests.fs`.
+`ocaml/tests/compiler-passes/TailCallDetectionTests.ml`.

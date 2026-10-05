@@ -1,0 +1,94 @@
+// CliFileSystem.dark - upstream-compatible filesystem values and wrappers.
+
+module Stdlib.Cli.FileSystem
+
+type FileError =
+  | NotFound
+  | OsAccessDenied
+  | Other of String
+
+let __decodePackedPathsFrom (packed: String) (offset: Int64) (start: Int64) (paths: List<String>) : List<String> =
+    if offset >= Stdlib.String.__byteLength packed then Stdlib.List.reverse paths
+    else if Stdlib.String.__byteAtUnchecked packed offset == 0L then
+        let path = Stdlib.String.__byteSlice packed start offset in
+        Stdlib.Cli.FileSystem.__decodePackedPathsFrom packed (offset + 1L) (offset + 1L) (Stdlib.List.push paths path)
+    else
+        Stdlib.Cli.FileSystem.__decodePackedPathsFrom packed (offset + 1L) start paths
+
+let __decodePackedPaths (packed: String) : List<String> =
+    Stdlib.Cli.FileSystem.__decodePackedPathsFrom packed 0L 0L []
+
+let currentDirectory () : String = Builtin.directoryCurrent ()
+
+let listDirectory (path: String) : List<String> = Builtin.directoryList path
+
+let pathExists (path: String) : Bool = Builtin.fileExists path
+
+let isDirectory (path: String) : Bool = Builtin.fileIsDirectory path
+
+let deleteFile (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.FileSystem.FileError> =
+    Builtin.fileDelete path
+
+let appendToFile (path: String) (content: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.FileSystem.FileError> =
+    Builtin.fileAppendText path content
+
+let getDirectoryContents (path: String) : List<String> =
+    let currentDir = Stdlib.Cli.FileSystem.currentDirectory () in
+    let fullPath =
+        if Stdlib.String.startsWith path "/" then path
+        else
+            let normalizedPath =
+                if Stdlib.String.startsWith path "./" then Stdlib.String.dropFirst path 2
+                else path in
+            $"{currentDir}/{normalizedPath}" in
+    Stdlib.Cli.FileSystem.listDirectory fullPath
+    |> Stdlib.List.map (fun fullFilePath ->
+        match Stdlib.String.split fullFilePath "/" with
+        | [] -> fullFilePath
+        | parts ->
+            match Stdlib.List.last parts with
+            | Some filename -> filename
+            | None -> fullFilePath)
+
+let isDirectoryAtPath (dirPath: String) (fileName: String) : Bool =
+    let currentDir = Stdlib.Cli.FileSystem.currentDirectory () in
+    let normalizedDirPath =
+        if Stdlib.String.startsWith dirPath "/" then dirPath
+        else if Stdlib.String.startsWith dirPath "./" then
+            $"{currentDir}/{Stdlib.String.dropFirst dirPath 2}"
+        else $"{currentDir}/{dirPath}" in
+    Stdlib.Cli.FileSystem.isDirectory $"{normalizedDirPath}/{fileName}"
+
+let readFile (path: String) : Stdlib.Result.Result<Blob, Stdlib.Cli.FileSystem.FileError> =
+    Builtin.fileRead path
+
+let overwriteFile (path: String) (content: Blob) : Stdlib.Result.Result<Unit, Stdlib.Cli.FileSystem.FileError> =
+    Builtin.fileWrite content path
+
+let __createDirectoryRecursive (path: String) : Stdlib.Result.Result<Unit, String> =
+    if path == "" || path == "/" || Stdlib.Cli.FileSystem.pathExists path then Ok (())
+    else
+        match Stdlib.Cli.FileSystem.__createDirectoryRecursive (Stdlib.Cli.Path.parent path) with
+        | Error error -> Error error
+        | Ok (()) ->
+            match Stdlib.File.createDirectory path with
+            | Ok (()) -> Ok (())
+            | Error error ->
+                if Stdlib.Cli.FileSystem.pathExists path then Ok (()) else Error error
+
+let writeFile (path: String) (content: Blob) : Stdlib.Result.Result<Unit, String> =
+    let parentDir = Stdlib.Cli.Path.parent path in
+    let mkdirResult = Stdlib.Cli.FileSystem.__createDirectoryRecursive parentDir in
+    match mkdirResult with
+    | Error error -> Error error
+    | Ok (()) ->
+        Stdlib.Cli.FileSystem.overwriteFile path content
+        |> Stdlib.Result.mapError Stdlib.Cli.FileSystem.FileError.toString
+
+let readFileAsString (path: String) : Stdlib.Result.Result<String, Stdlib.Cli.FileSystem.FileError> =
+    match Stdlib.Cli.FileSystem.readFile path with
+    | Ok blob ->
+        match Stdlib.String.fromBlob blob with
+        | Some value -> Ok value
+        | None -> Error (Stdlib.Cli.FileSystem.FileError.Other "File contents are not valid UTF-8")
+    | Error error -> Error error

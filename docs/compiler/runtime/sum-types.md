@@ -169,14 +169,14 @@ operands once, and produces `false` for `==` (`true` for `!=`).
 
 | File | Responsibility |
 |---|---|
-| `src/DarkCompiler/frontend/interpreter/Parser.fs` | Canonical Dark declaration grammar, field shape, constructor reference syntax |
-| `src/DarkCompiler/AST.fs` | Enum field shape, unresolved/resolved references, canonical runtime identity |
-| `src/DarkCompiler/frontend/TypeChecking.fs` | Pure declaration validation, nominal resolution, generic/recursive typing, arity, equality |
-| `src/DarkCompiler/frontend/ValueRendering.fs` | Public enum rendering |
-| `src/DarkCompiler/passes/anf/AST_to_ANF.fs` | Resolved construction and once-only ordered payload evaluation |
+| `ocaml/lib/frontend/interpreter/Parser.ml` | Canonical Dark declaration grammar, field shape, constructor reference syntax |
+| `ocaml/lib/AST.ml` | Enum field shape, unresolved/resolved references, canonical runtime identity |
+| `ocaml/lib/frontend/TypeChecking.ml` | Pure declaration validation, nominal resolution, generic/recursive typing, arity, equality |
+| `ocaml/lib/frontend/ValueRendering.ml` | Public enum rendering |
+| `ocaml/lib/passes/anf/AST_to_ANF.ml` | Resolved construction and once-only ordered payload evaluation |
 | `src/DarkCompiler/Runtime.fs` | Shared native runtime support used by generated rendering and equality paths |
-| `src/DarkCompiler/backend/arm64/CodeGen.fs` | ARM64 consumption of shared sum metadata |
-| `src/DarkCompiler/backend/x64/CodeGen.fs` | x64 consumption of shared sum metadata |
+| `ocaml/lib/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 consumption of shared sum metadata |
+| `ocaml/lib/backend/x64/CodeGen_X86_64.ml` | x64 consumption of shared sum metadata |
 
 ## Test matrix
 

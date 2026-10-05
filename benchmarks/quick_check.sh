@@ -178,18 +178,18 @@ fi
 
 if [ -z "$PREBUILT_DIR" ]; then
     if [ "$QUIET_MODE" = true ]; then
-        if ! COMPILER_BUILD_OUTPUT=$(dotnet build "$PROJECT_ROOT/src/DarkCompiler/DarkCompiler.fsproj" --verbosity quiet 2>&1); then
+        if ! COMPILER_BUILD_OUTPUT=$("$PROJECT_ROOT/build" --ai 2>&1); then
             printf '%s\n' "$COMPILER_BUILD_OUTPUT"
             pretty_fail "Dark compiler build failed"
             exit 1
         fi
-    elif ! dotnet build "$PROJECT_ROOT/src/DarkCompiler/DarkCompiler.fsproj" --verbosity quiet; then
+    elif ! "$PROJECT_ROOT/build" --ai; then
         pretty_fail "Dark compiler build failed"
         exit 1
     fi
-    COMPILER_DLL="$PROJECT_ROOT/bin/DarkCompiler/Debug/net11.0/DarkCompiler.dll"
-    if [ ! -f "$COMPILER_DLL" ]; then
-        pretty_fail "Dark compiler output is missing: $COMPILER_DLL"
+    COMPILER_EXE="$PROJECT_ROOT/ocaml/_build/default/bin/dark.exe"
+    if [ ! -f "$COMPILER_EXE" ]; then
+        pretty_fail "Dark compiler output is missing: $COMPILER_EXE"
         exit 1
     fi
 fi
@@ -311,7 +311,7 @@ for bench in $BENCHMARKS; do
     fi
 
     NEEDS_BUILD=false
-    if [ "$FORCE_BUILD" = true ] || [ ! -x "$QUICK_BIN" ] || [ "$QUICK_DARK" -nt "$QUICK_BIN" ] || [ "$COMPILER_DLL" -nt "$QUICK_BIN" ]; then
+    if [ "$FORCE_BUILD" = true ] || [ ! -x "$QUICK_BIN" ] || [ "$QUICK_DARK" -nt "$QUICK_BIN" ] || [ "$COMPILER_EXE" -nt "$QUICK_BIN" ]; then
         NEEDS_BUILD=true
     fi
     if [ "$NEEDS_BUILD" = true ] && ! "$PROJECT_ROOT/dark" --emit-result "$QUICK_DARK" -o "$QUICK_BIN" -q 2>/dev/null; then

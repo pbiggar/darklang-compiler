@@ -1,0 +1,96 @@
+// Unicode.Data generated lookup index shard.
+// DO NOT EDIT. Regenerate with scripts/generate_unicode_tables.py.
+
+module Unicode.Data
+
+let contextualCasing () : List<(Int64 * List<Int64> * List<Int64> * List<Int64> * String)> =
+    [
+        (931L, [962L], [931L], [931L], "Final_Sigma"),
+        (775L, [775L], [], [], "lt After_Soft_Dotted"),
+        (73L, [105L, 775L], [73L], [73L], "lt More_Above"),
+        (74L, [106L, 775L], [74L], [74L], "lt More_Above"),
+        (302L, [303L, 775L], [302L], [302L], "lt More_Above"),
+        (204L, [105L, 775L, 768L], [204L], [204L], "lt"),
+        (205L, [105L, 775L, 769L], [205L], [205L], "lt"),
+        (296L, [105L, 775L, 771L], [296L], [296L], "lt"),
+        (304L, [105L], [304L], [304L], "tr"),
+        (304L, [105L], [304L], [304L], "az"),
+        (775L, [], [775L], [775L], "tr After_I"),
+        (775L, [], [775L], [775L], "az After_I"),
+        (73L, [305L], [73L], [73L], "tr Not_Before_Dot"),
+        (73L, [305L], [73L], [73L], "az Not_Before_Dot"),
+        (105L, [105L], [304L], [304L], "tr"),
+        (105L, [105L], [304L], [304L], "az")
+    ]
+
+let __lowercaseLookupGroup2 (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table11.__lowercaseChunk8 ()) 0L key 6L 19L valueIndex with
+    | Some value -> Some value
+    | None ->
+        match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table12.__lowercaseChunk9 ()) 0L key 6L 19L valueIndex with
+        | Some value -> Some value
+        | None ->
+            match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table13.__lowercaseChunk10 ()) 0L key 6L 19L valueIndex with
+            | Some value -> Some value
+            | None ->
+                match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table14.__lowercaseChunk11 ()) 0L key 6L 19L valueIndex with
+                | Some value -> Some value
+                | None ->
+                    None
+
+let __lowercaseLookupGroup1 (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table07.__lowercaseChunk4 ()) 0L key 6L 19L valueIndex with
+    | Some value -> Some value
+    | None ->
+        match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table08.__lowercaseChunk5 ()) 0L key 6L 19L valueIndex with
+        | Some value -> Some value
+        | None ->
+            match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table09.__lowercaseChunk6 ()) 0L key 6L 19L valueIndex with
+            | Some value -> Some value
+            | None ->
+                match Unicode.Data.__lookupMappingValueIn (Unicode.Data.Table10.__lowercaseChunk7 ()) 0L key 6L 19L valueIndex with
+                | Some value -> Some value
+                | None ->
+                    None
+
+let __generalCategoryLookupGroup1 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupRangeIn (Unicode.Data.Table19.__generalCategoryChunk4 ()) 0L codepoint 14L with
+    | Some value -> Some value
+    | None ->
+        match Unicode.Data.__lookupRangeIn (Unicode.Data.Table20.__generalCategoryChunk5 ()) 0L codepoint 14L with
+        | Some value -> Some value
+        | None ->
+            match Unicode.Data.__lookupRangeIn (Unicode.Data.Table21.__generalCategoryChunk6 ()) 0L codepoint 14L with
+            | Some value -> Some value
+            | None ->
+                match Unicode.Data.__lookupRangeIn (Unicode.Data.Table22.__generalCategoryChunk7 ()) 0L codepoint 14L with
+                | Some value -> Some value
+                | None ->
+                    None
+
+let __generalCategoryLookupGroup6 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__lookupRangeIn (Unicode.Data.Table39.__generalCategoryChunk24 ()) 0L codepoint 14L with
+    | Some value -> Some value
+    | None ->
+        match Unicode.Data.__lookupRangeIn (Unicode.Data.Table40.__generalCategoryChunk25 ()) 0L codepoint 14L with
+        | Some value -> Some value
+        | None ->
+            match Unicode.Data.__lookupRangeIn (Unicode.Data.Table41.__generalCategoryChunk26 ()) 0L codepoint 14L with
+            | Some value -> Some value
+            | None ->
+                None
+
+let __extendedPictographicLookup (codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__extendedPictographicLookupGroup0 codepoint with
+    | Some value -> Some value
+    | None ->
+        None
+
+let __combiningClassLookup (codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Unicode.Data.__combiningClassLookupGroup0 codepoint with
+    | Some value -> Some value
+    | None ->
+        None
+
+let lookupUppercaseAt (codepoint: Int64) (index: Int64) : Stdlib.Option.Option<Int64> = Unicode.Data.__uppercaseLookup codepoint index
+let isCaseIgnorable (codepoint: Int64) : Bool = Stdlib.Option.isSome (Unicode.Data.__caseIgnorableLookup codepoint)

@@ -27,7 +27,7 @@ and `backend/testfiles/execution/stdlib/list.dark` at the stamped revision.
 
 Compiler evidence is anchored in:
 
-- `src/DarkCompiler/frontend/interpreter/Parser.fs` for canonical source parsing
+- `ocaml/lib/frontend/interpreter/Parser.ml` for canonical source parsing
   and AST normalization;
 - `AST.fs`, `frontend/TypeChecking.fs`, and `passes/anf/AST_to_ANF.fs` for the
   canonical list form, homogeneous typing, private typed equality, native

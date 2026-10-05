@@ -32,7 +32,7 @@ type codeGenContext={target:ARM64.targetConfig;options:codeGenOptions;sumShapeRe
 *)
 let defaultOptions={disableFreeList=false;enableCoverage=false;coverageExprCount=0;enableLeakCheck=false}
 let functionName (ctx:codeGenContext) functionId =
- match FunctionIdMap.tryFind functionId ctx.functionNames with Some name -> name | None -> failwith (Printf.sprintf "ARM64 code generation: missing function name for identity %Lu" (AST.functionIdValue functionId))
+ match FunctionIdMap.tryFind functionId ctx.functionNames with Some name -> name | None -> Crash.crash (Printf.sprintf "ARM64 code generation: missing function name for identity %Lu" (AST.functionIdValue functionId))
 let rcSumShapeRegistryFromVariantRegistry variantRegistry =
  StringOrder.Map.map (fun (typeVariants:LIR.typeVariants) ->
  let sorted=List.stable_sort (fun (left:LIR.variantInfo) (right:LIR.variantInfo) -> Int.compare left.LIR.tag right.LIR.tag) typeVariants.LIR.variants in

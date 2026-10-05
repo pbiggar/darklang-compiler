@@ -1,0 +1,111 @@
+// Stdlib.UInt64.dark - Stdlib.UInt64 definitions
+//
+// Split from stdlib.dark for modular stdlib loading.
+
+module Darklang.Stdlib.UInt64
+
+type ParseError = BadFormat | OutOfRange
+
+// Stdlib.UInt64 - Integer operations
+
+let add (a: UInt64) (b: UInt64) : UInt64 = a + b
+
+let subtract (a: UInt64) (b: UInt64) : UInt64 = a - b
+
+let multiply (a: UInt64) (b: UInt64) : UInt64 = a * b
+
+let divide (a: UInt64) (b: UInt64) : UInt64 = if b == 0UL then Builtin.crash "Cannot divide by 0" else a / b
+
+let max (a: UInt64) (b: UInt64) : UInt64 = if a > b then a else b
+
+let min (a: UInt64) (b: UInt64) : UInt64 = if a < b then a else b
+
+let mod (a: UInt64) (b: UInt64) : UInt64 = if b == 0UL then Builtin.crash "Cannot evaluate modulus against 0" else a % b
+
+
+
+let __powerLoop (base: UInt64) (exponent: UInt64) (result: UInt64) : UInt64 =
+    if exponent == 0UL then result
+    else
+        let next = if (exponent % 2UL) == 1UL then result * base else result in
+        Stdlib.UInt64.__powerLoop (base * base) (exponent / 2UL) next
+let power (base: UInt64) (exponent: UInt64) : UInt64 = Stdlib.UInt64.__powerLoop base exponent 1UL
+
+let clamp (value: UInt64) (limitA: UInt64) (limitB: UInt64) : UInt64 =
+    let lower = Stdlib.UInt64.min limitA limitB in
+    let upper = Stdlib.UInt64.max limitA limitB in
+    Stdlib.UInt64.max lower (Stdlib.UInt64.min upper value)
+
+let greaterThan (a: UInt64) (b: UInt64) : Bool = a > b
+
+let greaterThanOrEqualTo (a: UInt64) (b: UInt64) : Bool = a >= b
+
+let lessThan (a: UInt64) (b: UInt64) : Bool = a < b
+
+let lessThanOrEqualTo (a: UInt64) (b: UInt64) : Bool = a <= b
+
+// Count number of set bits (population count)
+// Uses parallel bit counting algorithm (SWAR)
+let __popcount (x: UInt64) : UInt64 =
+    let mask1 = 6148914691236517205UL in
+    let mask2 = 3689348814741910323UL in
+    let mask3 = 1085102592571150095UL in
+    let mult = 72340172838076673UL in
+    let x = x - Stdlib.UInt64.bitwiseAnd (Stdlib.UInt64.shiftRight x 1UL) mask1 in
+    let x = Stdlib.UInt64.bitwiseAnd x mask2 + Stdlib.UInt64.bitwiseAnd (Stdlib.UInt64.shiftRight x 2UL) mask2 in
+    let x = Stdlib.UInt64.bitwiseAnd (x + Stdlib.UInt64.shiftRight x 4UL) mask3 in
+    Stdlib.UInt64.shiftRight (x * mult) 56UL
+
+// Convert a single digit (0UL-9UL) to its string representation
+let __digitToString (n: UInt64) : String =
+    match n with
+    | 0UL -> "0"
+    | 1UL -> "1"
+    | 2UL -> "2"
+    | 3UL -> "3"
+    | 4UL -> "4"
+    | 5UL -> "5"
+    | 6UL -> "6"
+    | 7UL -> "7"
+    | 8UL -> "8"
+    | 9UL -> "9"
+    | _ -> "?"
+
+// Convert an integer to its string representation
+let toString (n: UInt64) : String =
+    if Stdlib.UInt64.shiftRight n 63UL == 1UL then
+        let quotient = Stdlib.UInt64.shiftRight n 1UL / 5UL in
+        let remainder = n - (quotient * 10UL) in
+        // Decimal fragments are ASCII and therefore already closed under NFC.
+        __string_concat_raw (Stdlib.UInt64.toString quotient) (Stdlib.UInt64.__digitToString remainder)
+    else if n < 10UL then Stdlib.UInt64.__digitToString n
+    else __string_concat_raw (Stdlib.UInt64.toString (n / 10UL)) (Stdlib.UInt64.__digitToString (n % 10UL))
+
+// Sum all integers in a list
+let sum (list: List<UInt64>) : UInt64 =
+    Stdlib.List.fold list 0UL (fun acc x -> acc + x)
+
+let __fromIntUnchecked (value: Int) : UInt64 =
+    match Stdlib.Int.toUInt64 value with
+    | Some result -> result
+    | None -> Builtin.crash "Internal UInt64 conversion invariant failed"
+let random (start: UInt64) (finish: UInt64) : UInt64 = Stdlib.UInt64.__fromIntUnchecked (Stdlib.Int.random (Stdlib.Int.fromUInt64 start) (Stdlib.Int.fromUInt64 finish))
+let toFloat (value: UInt64) : Float = Stdlib.Int.toFloat (Stdlib.Int.fromUInt64 value)
+let sqrt (value: UInt64) : Float = Stdlib.Float.sqrt (Stdlib.UInt64.toFloat value)
+let fromFloat (value: Float) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64 (Stdlib.Float.round value)
+let parse (value: String) : Stdlib.Result.Result<UInt64, Stdlib.UInt64.ParseError> =
+    match Stdlib.Int.parse value with
+    | Error _ -> Error Stdlib.UInt64.ParseError.BadFormat
+    | Ok parsed ->
+        match Stdlib.Int.toUInt64 parsed with
+        | None -> Error Stdlib.UInt64.ParseError.OutOfRange
+        | Some result -> Ok result
+let fromInt8 (value: Int8) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64 (Stdlib.Int.fromInt8 value)
+let fromUInt8 (value: UInt8) : UInt64 = Stdlib.UInt64.__fromIntUnchecked (Stdlib.Int.fromUInt8 value)
+let fromInt16 (value: Int16) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64 (Stdlib.Int.fromInt16 value)
+let fromUInt16 (value: UInt16) : UInt64 = Stdlib.UInt64.__fromIntUnchecked (Stdlib.Int.fromUInt16 value)
+let fromInt32 (value: Int32) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64 (Stdlib.Int.fromInt32 value)
+let fromUInt32 (value: UInt32) : UInt64 = Stdlib.UInt64.__fromIntUnchecked (Stdlib.Int.fromUInt32 value)
+let fromInt64 (value: Int64) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64 (Stdlib.Int.fromInt64 value)
+let fromInt128 (value: Int128) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64 (Stdlib.Int.fromInt128 value)
+let fromUInt128 (value: UInt128) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64 (Stdlib.Int.fromUInt128 value)

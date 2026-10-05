@@ -49,7 +49,7 @@ let codeSign target verbosity start path=
   if verbosity>=1 then Output.println "    • Code signing (adhoc)...";
   let signStart=elapsed start in
   match captured (info "codesign" ["-s";"-";path] []) O.Closed with
-  |Error error->failwith error
+  |Error error->Crash.crash error
   |Ok (code,_,stderr)->if code<>0 then Some ("Code signing failed: "^stderr) else (detail verbosity (elapsed start-.signStart);None))
  else (if verbosity>=1 then Output.println "    • Code signing skipped (not required on Linux)";None)
 let beginExecution verbosity=if verbosity>=1 then (Output.println "";Output.println "  Execution:";Output.println "    • Writing binary to temp file...")

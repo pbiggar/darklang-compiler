@@ -1,4 +1,5 @@
 (executable
  (name dark)
+ (public_name dark)
  (libraries dark_compiler)
  (flags (:standard -w @a-42 -warn-error +a-42)))

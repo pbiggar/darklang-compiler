@@ -65,7 +65,7 @@ and parseInfixRhs grammar state minimum first next =
               modules = [({WT.range = opRange; name = "Stdlib"}, opRange); ({WT.range = opRange; name = "List"}, opRange)];
               fn = {WT.range = opRange; name = "append"} } in
             WT.EApply (range, WT.EFnName (opRange, name), [], [!left; right])
-        | _ -> WT.EInfix (range, (opRange, Option.get (infixOf operator)), !left, right));
+        | _ -> WT.EInfix (range, (opRange, (match infixOf operator with Some infix -> infix | None -> Crash.crash "Validated precedence operator has no infix operation")), !left, right));
         stop := next
     | _ -> more := false
   done;

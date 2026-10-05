@@ -5,29 +5,36 @@ document is the short CLI reference.
 
 ## Build
 
+The compiler uses OCaml 5.5.1, Dune 3.24.2 and the exact packages in
+`ocaml/dependencies.lock`. The development image provisions this toolchain.
+For a restricted Linux VM, follow [the workspace setup](../scripts/vm/README.md).
+On a normal host, create an opam switch for OCaml 5.5.1, install the locked
+packages, and activate that switch before building. The compiler also needs
+GMP, ICU, SQLite and libcurl development libraries; macOS uses Homebrew.
+
 ```bash
-./build --ai                       # Bounded output for automated work
-./build                            # Human-readable minimal build output
-./build --ai -- src/DarkCompiler/DarkCompiler.fsproj
+./build --ai                 # Bounded output for automated work
+./build                      # Native compiler and test runner
+./build --ai -- -j 2          # Arguments after -- go to dune build
 ```
 
-Arguments after `--` are passed to `dotnet build`. Complete failed AI build
-logs are retained under `TestResults/ai/`.
+Failed automated build logs are retained under `TestResults/ai/`.
+The compiler and test runner do not require .NET.
 
-The development image installs both .NET 10 and .NET 11 in the default host.
-The repository pins the .NET 11 release-candidate SDK and targets `net11.0`;
-.NET 10 remains installed so existing worktrees and binaries continue to run.
-`allowPrerelease` is required until .NET 11 reaches general availability, when
-the repository can move to the stable .NET 11 feature band.
+To install the compiler and its unchanged Dark standard library:
 
-The development image also builds OCaml 5.5.1 from a checksum-pinned source
-archive, including its native compiler and compiler libraries, for the OCaml
-port. For a restricted VM without the development image, use
-[`scripts/vm/setup-port-toolchains`](../scripts/vm/README.md).
+```bash
+dune install --root ocaml --prefix /absolute/install/prefix
+/absolute/install/prefix/bin/dark --help
+```
+
+The installed executable finds its data under `share/dark_compiler/` and can
+run from outside the source checkout. Generated Dark programs remain standalone
+native executables.
 
 ## Test
 
-`./run-tests` never invokes a .NET/F# project build. Run `./build --ai` first,
+`./run-tests` never invokes a build. Run `./build --ai` first,
 and run it again after changing source or project files so the test binary is
 current.
 
@@ -133,8 +140,7 @@ require `--dump-anf`, `--dump-mir`, `--dump-lir`, or `-vvv`.
 ## Clean
 
 ```bash
-dotnet clean
-# Or manually: rm -rf obj bin
+dune clean --root ocaml
 ```
 
 ## Inspecting produced binaries

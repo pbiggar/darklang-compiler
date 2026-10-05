@@ -66,7 +66,7 @@ module Make (Identity : O.Identity) = struct
  module Verify = VerifyOwnership.Make (Identity)
  module Ownership = Verify.Ownership
  type materializationError = GroupingFailed of OwnedFunctionGroups.groupingError | InvalidOriginalProgram of Verification.verificationError | MissingGroupMember of string | GroupMembershipMismatch of string | BoundaryMismatch of string | MissingCallSite of O.callSiteIdentity | DuplicateCallSite of O.callSiteIdentity | StaleCallSite of O.callSiteIdentity | MixedRecursiveCandidate of O.callSiteIdentity | SymbolCollision of string | InvalidMaterializedProgram of Verification.verificationError
- let verifiedCallSignature boundary = match Verify.callSignatureOfFunction boundary with Ok signature -> signature | Error _ -> failwith "Materialized ownership boundary has no valid call signature"
+ let verifiedCallSignature boundary = match Verify.callSignatureOfFunction boundary with Ok signature -> signature | Error _ -> Crash.crash "Materialized ownership boundary has no valid call signature"
  let ownershipSemantics plan (source : 'leaf Ownership.semantics) =
   let registry = F.ofList (List.map (fun memberDefinition -> memberDefinition.functionDef.O.definition.H.id, verifiedCallSignature memberDefinition.functionDef.O.ownership) (members plan)) in
   {source with Ownership.callOwnership = (fun call -> match F.tryFind call.H.target registry with Some signature -> Some signature | None -> source.Ownership.callOwnership call)}
@@ -113,7 +113,7 @@ module Make (Identity : O.Identity) = struct
   let* _, groups = List.fold_left (fun result (identity, candidate) -> let* generatedIds, groups = result in
    let suffix = symbolSuffix identity in let boundaries = List.stable_sort (fun (first : Identity.t G.functionBoundary) second -> StringOrder.compare first.R.name second.R.name) (G.candidateBoundaries candidate) in
    let symbols = F.ofList (List.map (fun (boundary : Identity.t G.functionBoundary) ->
-    let originalId = match M.find_opt boundary.R.name definitionsByName with Some definition -> definition.O.definition.H.id | None -> failwith "Ownership boundary definition is absent" in originalId, M.find (boundary.R.name ^ suffix) cloneIds) boundaries) in
+    let originalId = match M.find_opt boundary.R.name definitionsByName with Some definition -> definition.O.definition.H.id | None -> Crash.crash "Ownership boundary definition is absent" in originalId, M.find (boundary.R.name ^ suffix) cloneIds) boundaries) in
    let rewrite (call : H.functionCall) = match F.tryFind call.H.target symbols with Some symbol -> {call with H.target = symbol} | None -> call in
    let* generatedIds, members = List.fold_left (fun result (boundary : Identity.t G.functionBoundary) -> let* generatedIds, members = result in
     match M.find_opt boundary.R.name definitionsByName with None -> Error (MissingGroupMember boundary.R.name) | Some original ->
@@ -121,7 +121,7 @@ module Make (Identity : O.Identity) = struct
      let clone = {O.ownership = boundary.R.ownership; definition = {H.id = cloneId; name; body = rewriteCalls rewrite original.O.definition.H.body}} in
      if M.mem name definitionsByName || F.exists (fun _ reservedName -> reservedName = name) reservedFunctions || F.containsKey cloneId reservedFunctions || F.containsKey cloneId definitionsById || FS.mem cloneId generatedIds || Option.is_some (hir.VerifyOwnedHIR.callSignature clone.O.definition.H.id) || Option.is_some (semantics.Ownership.callOwnership (boundaryCall clone)) then Error (SymbolCollision name)
      else Ok (FS.add cloneId generatedIds, {original = original.O.definition.H.id; functionDef = clone} :: members)) (Ok (generatedIds, [])) boundaries in
-   let members = match NonEmptyList.tryFromList (List.rev members) with Some members -> members | None -> failwith "Selected ownership candidate has no members" in
+   let members = match NonEmptyList.tryFromList (List.rev members) with Some members -> members | None -> Crash.crash "Selected ownership candidate has no members" in
    Ok (generatedIds, {identity; members} :: groups)) (Ok (FS.empty, [])) (IdentityMap.bindings selections) in Ok (List.rev groups)
 (*
    Requests address calls in the supplied original definitions. A recursive
@@ -137,7 +137,7 @@ module Make (Identity : O.Identity) = struct
   let* groups = cloneGroups hir semantics reservedFunctions definitions requests in
   let targets = TargetMap.of_list (List.concat_map (fun group -> List.map (fun (memberDefinition : (_, _) specializedFunction) -> (group.identity, memberDefinition.original), memberDefinition.functionDef.O.definition.H.id) (NonEmptyList.toList group.members)) groups) in
   let rewrites = List.filter_map (fun request -> match request.selection with S.EstablishedBoundary _ -> None | S.InferredVariant selected ->
-   let target = match TargetMap.find_opt (S.selectedIdentity selected, request.call.H.target) targets with Some target -> target | None -> failwith "Validated ownership selection has no materialized target" in
+   let target = match TargetMap.find_opt (S.selectedIdentity selected, request.call.H.target) targets with Some target -> target | None -> Crash.crash "Validated ownership selection has no materialized target" in
    Some {site = site request; original = request.call; specialized = {request.call with H.target}; ownership = S.selectedCallSignature selected}) requests |> List.stable_sort (fun first second -> SiteOrder.compare first.site second.site) in
   let bySite = SiteMap.of_list (List.map (fun rewrite -> rewrite.site, rewrite.specialized) rewrites) in
   let rewrittenCallers = FS.of_list (List.map (fun rewrite -> rewrite.site.O.caller) rewrites) in

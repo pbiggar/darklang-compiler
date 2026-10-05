@@ -20,7 +20,7 @@ let rec blockCalls (block : ('leaf, 'id) O.block) =
  | O.Evaluate (HIR.Branch (_, _, yes, no)) -> let yes = blockCalls yes in let no = blockCalls no in S.union calls (S.union yes no)
  | O.Evaluate (HIR.Leaf _ | HIR.ScalarBinding _) | O.Dup _ | O.Drop _ -> calls) S.empty block.O.body.HIR.operations
 type dfsFrame = Enter of int64 | Exit of int64
-let adjacent adjacency name = match NMap.find_opt name adjacency with Some targets -> targets | None -> failwith "Owned function call graph lost a definition"
+let adjacent adjacency name = match NMap.find_opt name adjacency with Some targets -> targets | None -> Crash.crash "Owned function call graph lost a definition"
 let prependInOrder wrap values tail = List.fold_left (fun pending value -> wrap value :: pending) tail (List.rev values)
 let finishOrder vertices adjacency =
  let rec visit pending visited finished = match pending with
@@ -33,7 +33,7 @@ let reverseAdjacency vertices sourceIndex adjacency =
  let empty = NMap.of_list (List.map (fun name -> name, []) vertices) in
  let reversed = NMap.fold (fun caller targets reversed -> List.fold_left (fun reversed callee -> match NMap.find_opt callee reversed with
   | Some callers -> NMap.add callee (caller :: callers) reversed
-  | None -> failwith "Owned function reverse call graph lost a definition") reversed targets) adjacency empty in
+  | None -> Crash.crash "Owned function reverse call graph lost a definition") reversed targets) adjacency empty in
  NMap.map (List.stable_sort (fun first second -> Int.compare (sourceIndex first) (sourceIndex second))) reversed
 let stronglyConnectedComponents vertices sourceIndex adjacency =
  let reverse = reverseAdjacency vertices sourceIndex adjacency in
@@ -49,39 +49,39 @@ let stronglyConnectedComponents vertices sourceIndex adjacency =
 type nameComponent = {index : int; members : int64 list; dependencies : ISet.t}
 let orderedNames vertices adjacency =
  let vertexNames = NSet.of_list vertices in
- if NSet.cardinal vertexNames <> List.length vertices then failwith "Function call graph contains duplicate definitions";
+ if NSet.cardinal vertexNames <> List.length vertices then Crash.crash "Function call graph contains duplicate definitions";
  let sourcePositions = NMap.of_list (List.mapi (fun index name -> name, index) vertices) in
- let sourceIndex name = match NMap.find_opt name sourcePositions with Some index -> index | None -> failwith "Function call graph lost its source position" in
+ let sourceIndex name = match NMap.find_opt name sourcePositions with Some index -> index | None -> Crash.crash "Function call graph lost its source position" in
  let sortNames = List.stable_sort (fun first second -> Int.compare (sourceIndex first) (sourceIndex second)) in
  let graph = NMap.of_list (List.map (fun name ->
   let targets = Option.value ~default:[] (NMap.find_opt name adjacency) in
   name, sortNames (NSet.elements (NSet.of_list (List.filter (fun target -> NSet.mem target vertexNames) targets)))) vertices) in
  let discovered = stronglyConnectedComponents vertices sourceIndex graph |> List.map (fun names ->
   let members = sortNames (NSet.elements names) in match members with
-  | head :: _ -> sourceIndex head, members, names | [] -> failwith "Function SCC discovery returned an empty component")
+  | head :: _ -> sourceIndex head, members, names | [] -> Crash.crash "Function SCC discovery returned an empty component")
   |> List.stable_sort (fun (first, _, _) (second, _, _) -> Int.compare first second) in
  let ownerByName = NMap.of_list (List.concat_map (fun (index, _, names) -> List.map (fun name -> name, index) (NSet.elements names)) discovered) in
  let components = List.map (fun (index, members, _) ->
   let dependencies = List.fold_left (fun dependencies target -> match NMap.find_opt target ownerByName with
    | Some dependency when dependency <> index -> ISet.add dependency dependencies
-   | Some _ -> dependencies | None -> failwith "Function dependency lost its component") ISet.empty (List.concat_map (adjacent graph) members) in
+   | Some _ -> dependencies | None -> Crash.crash "Function dependency lost its component") ISet.empty (List.concat_map (adjacent graph) members) in
   {index; members; dependencies}) discovered in
  let byIndex = IMap.of_list (List.map (fun groupInfo -> groupInfo.index, groupInfo) components) in
  let dependents = List.fold_left (fun dependents caller -> ISet.fold (fun dependency dependents -> match IMap.find_opt dependency dependents with
   | Some callers -> IMap.add dependency (ISet.add caller.index callers) dependents
-  | None -> failwith "Function dependency target lost its component") caller.dependencies dependents)
+  | None -> Crash.crash "Function dependency target lost its component") caller.dependencies dependents)
   (IMap.of_list (List.map (fun groupInfo -> groupInfo.index, ISet.empty) components)) components in
  let unresolved = IMap.of_list (List.map (fun groupInfo -> groupInfo.index, ISet.cardinal groupInfo.dependencies) components) in
  let ready = IMap.fold (fun index count ready -> if count = 0 then ISet.add index ready else ready) unresolved ISet.empty in
  let rec order remaining unresolved ready ordered =
   if remaining = 0 then List.rev ordered else match ISet.min_elt_opt ready with
-  | None -> failwith "Function SCC condensation graph contains a cycle"
+  | None -> Crash.crash "Function SCC condensation graph contains a cycle"
   | Some selectedIndex ->
-    let selected = match IMap.find_opt selectedIndex byIndex with Some groupInfo -> groupInfo | None -> failwith "Function ordering lost a ready component" in
-    let selectedDependents = match IMap.find_opt selectedIndex dependents with Some values -> values | None -> failwith "Function ordering lost dependent components" in
+    let selected = match IMap.find_opt selectedIndex byIndex with Some groupInfo -> groupInfo | None -> Crash.crash "Function ordering lost a ready component" in
+    let selectedDependents = match IMap.find_opt selectedIndex dependents with Some values -> values | None -> Crash.crash "Function ordering lost dependent components" in
     let unresolved, ready = ISet.fold (fun dependent (unresolved, ready) -> match IMap.find_opt dependent unresolved with
      | Some count when count > 0 -> let next = count - 1 in let ready = if next = 0 then ISet.add dependent ready else ready in IMap.add dependent next unresolved, ready
-     | _ -> failwith "Function dependency count became invalid") selectedDependents (unresolved, ISet.remove selectedIndex ready) in
+     | _ -> Crash.crash "Function dependency count became invalid") selectedDependents (unresolved, ISet.remove selectedIndex ready) in
     order (remaining - 1) unresolved ready (selected.members :: ordered) in
  order (List.length components) unresolved ready []
 (*
@@ -93,18 +93,18 @@ let orderedFunctionIds vertices adjacency =
  let identityByName = NMap.of_list (List.map (fun id -> AST.functionIdValue id, id) vertices) in
  let namedAdjacency = NMap.of_list (List.map (fun (id, targets) -> AST.functionIdValue id, List.map AST.functionIdValue targets) (F.toList adjacency)) in
  orderedNames (List.map AST.functionIdValue vertices) namedAdjacency |> List.map (List.map (fun name -> match NMap.find_opt name identityByName with
- | Some id -> id | None -> failwith "Function SCC lost its canonical identity"))
+ | Some id -> id | None -> Crash.crash "Function SCC lost its canonical identity"))
 let groups definitions names callsByFunction adjacency =
  let definitionsByName = F.ofList (List.map (fun (definition : ('leaf, 'id) O.functionDef) -> definition.O.definition.HIR.id, definition) definitions) in
  orderedFunctionIds (List.map (fun (definition : ('leaf, 'id) O.functionDef) -> definition.O.definition.HIR.id) definitions) adjacency |> List.map (fun memberNames ->
   let componentNames = S.of_list memberNames in
-  let members = List.map (fun name -> match F.tryFind name definitionsByName with Some definition -> definition | None -> failwith "Owned function SCC lost its definition") memberNames in
+  let members = List.map (fun name -> match F.tryFind name definitionsByName with Some definition -> definition | None -> Crash.crash "Owned function SCC lost its definition") memberNames in
   let calls = List.fold_left (fun calls (definition : ('leaf, 'id) O.functionDef) -> match F.tryFind definition.O.definition.HIR.id callsByFunction with
-   | Some targets -> S.union calls targets | None -> failwith "Owned function SCC lost its call set") S.empty members in
+   | Some targets -> S.union calls targets | None -> Crash.crash "Owned function SCC lost its call set") S.empty members in
   match members with
   | memberHead :: memberTail -> let headName = memberHead.O.definition.HIR.id in
     Group (memberHead, memberTail, S.cardinal componentNames > 1 || S.mem headName calls, S.diff (S.inter calls names) componentNames, S.diff calls names)
-  | [] -> failwith "Owned function SCC partition produced an empty component")
+  | [] -> Crash.crash "Owned function SCC partition produced an empty component")
 (*
    Partition mutually visible owned functions into call-graph SCCs. Groups are
    callee-first; independent groups retain the source order of their earliest

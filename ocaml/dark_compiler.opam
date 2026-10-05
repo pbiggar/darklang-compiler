@@ -16,6 +16,7 @@ depends: [
 ]
 
 depexts: [
-  ["libicu-dev"] {os-distribution = "ubuntu" | os-distribution = "debian"}
-  ["icu4c"] {os = "macos"}
+  ["libicu-dev" "libgmp-dev" "libsqlite3-dev" "libcurl4-openssl-dev" "pkg-config"]
+    {os-distribution = "ubuntu" | os-distribution = "debian"}
+  ["icu4c" "gmp" "sqlite" "curl" "pkg-config"] {os = "macos"}
 ]

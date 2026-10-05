@@ -1,0 +1,273 @@
+// Stdlib.Uuid.dark - Stdlib.Uuid definitions
+//
+// Split from stdlib.dark for modular stdlib loading.
+
+module Darklang.Stdlib.Uuid
+
+// The canonical surface mirrors darklang/dark at
+// 04fbe9dcc995c6188757d583e273cbd30a3e2d3d. UUID is represented by the
+// root UUID(UInt128) sum rather than by a String alias.
+
+type ParseError = | BadFormat
+
+let __isHexByte (byte: Int64) : Bool =
+    (byte >= 48L && byte <= 57L) ||
+    (byte >= 65L && byte <= 70L) ||
+    (byte >= 97L && byte <= 102L)
+
+// System.Guid.TryParse, the pinned interpreter implementation, recognizes
+// the X-format marker case-insensitively.
+let __hasHexPrefixAt (s: String) (index: Int64) : Bool =
+    Stdlib.String.__byteAtUnchecked s index == 48L &&
+    (Stdlib.String.__byteAtUnchecked s (index + 1L) == 120L || Stdlib.String.__byteAtUnchecked s (index + 1L) == 88L)
+
+let __hasHexAt (s: String) (index: Int64) (count: Int64) : Bool =
+    if count == 0L then
+        true
+    else
+        let byte = Stdlib.String.__byteAtUnchecked s index in
+        Stdlib.Uuid.__isHexByte byte && Stdlib.Uuid.__hasHexAt s (index + 1L) (count - 1L)
+
+let __isHyphenated (s: String) : Bool =
+    Stdlib.String.__byteLength s == 36L &&
+    Stdlib.String.__byteAtUnchecked s 8L == 45L &&
+    Stdlib.String.__byteAtUnchecked s 13L == 45L &&
+    Stdlib.String.__byteAtUnchecked s 18L == 45L &&
+    Stdlib.String.__byteAtUnchecked s 23L == 45L &&
+    Stdlib.Uuid.__hasHexAt s 0L 8L &&
+    Stdlib.Uuid.__hasHexAt s 9L 4L &&
+    Stdlib.Uuid.__hasHexAt s 14L 4L &&
+    Stdlib.Uuid.__hasHexAt s 19L 4L &&
+    Stdlib.Uuid.__hasHexAt s 24L 12L
+
+let __hyphenatedDigits (s: String) : String =
+    Stdlib.String.__byteSlice s 0L 8L ++
+    Stdlib.String.__byteSlice s 9L 13L ++
+    Stdlib.String.__byteSlice s 14L 18L ++
+    Stdlib.String.__byteSlice s 19L 23L ++
+    Stdlib.String.__byteSlice s 24L 36L
+
+// Guid's X format is a sequence of hexadecimal integer components. Its parser
+// ignores Unicode whitespace and leading zeroes. The first three components
+// parse as UInt32; components two and three contribute their low 16 bits. The
+// remaining eight components must fit in a byte.
+let __removeXWhitespace (parts: List<String>) (acc: String) : String =
+    match parts with
+    | [] -> acc
+    | head :: tail ->
+        Stdlib.Uuid.__removeXWhitespace tail (if Stdlib.String.__egcWhitespace head then acc else acc ++ head)
+
+let __xHexEnd (s: String) (index: Int64) : Int64 =
+    if index == Stdlib.String.__byteLength s then index
+    else if Stdlib.Uuid.__isHexByte (Stdlib.String.__byteAtUnchecked s index) then
+        Stdlib.Uuid.__xHexEnd s (index + 1L)
+    else index
+
+let __dropLeadingZeroesAt (digits: String) (index: Int64) : String =
+    if index == Stdlib.String.__byteLength digits then ""
+    else if Stdlib.String.__byteAtUnchecked digits index == 48L then
+        Stdlib.Uuid.__dropLeadingZeroesAt digits (index + 1L)
+    else Stdlib.String.__byteSlice digits index (Stdlib.String.__byteLength digits)
+
+let __normalizeXField (digits: String) (maxWidth: Int64) (outputWidth: Int64) : Stdlib.Option.Option<String> =
+    if Stdlib.String.__byteLength digits == 0L then None
+    else
+        let significant = Stdlib.Uuid.__dropLeadingZeroesAt digits 0L in
+        let significantLength = Stdlib.String.__byteLength significant in
+        if significantLength > maxWidth then None
+        else if significantLength > outputWidth then
+            Some (Stdlib.String.__byteSlice significant (significantLength - outputWidth) significantLength)
+        else Some (Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 (outputWidth - significantLength)) ++ significant)
+
+let __xFields (s: String) (index: Int64) (fieldIndex: Int64) (acc: String) : Stdlib.Option.Option<String> =
+    let length = Stdlib.String.__byteLength s in
+    if index + 2L > length || Stdlib.Uuid.__hasHexPrefixAt s index == false then None
+    else
+        let digitsStart = index + 2L in
+        let digitsEnd = Stdlib.Uuid.__xHexEnd s digitsStart in
+        let maxWidth = if fieldIndex <= 2L then 8L else 2L in
+        let outputWidth = if fieldIndex == 0L then 8L else if fieldIndex <= 2L then 4L else 2L in
+        match Stdlib.Uuid.__normalizeXField (Stdlib.String.__byteSlice s digitsStart digitsEnd) maxWidth outputWidth with
+        | None -> None
+        | Some digits ->
+            let nextAcc = acc ++ digits in
+            if fieldIndex == 10L then
+                if digitsEnd + 2L == length &&
+                   Stdlib.String.__byteAtUnchecked s digitsEnd == 125L &&
+                   Stdlib.String.__byteAtUnchecked s (digitsEnd + 1L) == 125L then Some nextAcc
+                else None
+            else if digitsEnd >= length || Stdlib.String.__byteAtUnchecked s digitsEnd != 44L then None
+            else if fieldIndex == 2L then
+                if digitsEnd + 1L < length && Stdlib.String.__byteAtUnchecked s (digitsEnd + 1L) == 123L then
+                    Stdlib.Uuid.__xFields s (digitsEnd + 2L) (fieldIndex + 1L) nextAcc
+                else None
+            else Stdlib.Uuid.__xFields s (digitsEnd + 1L) (fieldIndex + 1L) nextAcc
+
+let __xDigits (s: String) : Stdlib.Option.Option<String> =
+    let compact = Stdlib.Uuid.__removeXWhitespace (Stdlib.String.__toGraphemes s) "" in
+    if Stdlib.String.__byteLength compact > 0L && Stdlib.String.__byteAtUnchecked compact 0L == 123L then
+        Stdlib.Uuid.__xFields compact 1L 0L ""
+    else None
+
+let __hexDigitUInt64 (byte: Int64) : UInt64 =
+    match byte with
+
+    | 48L -> 0UL
+    | 49L -> 1UL
+    | 50L -> 2UL
+    | 51L -> 3UL
+    | 52L -> 4UL
+
+    | 53L -> 5UL
+    | 54L -> 6UL
+    | 55L -> 7UL
+    | 56L -> 8UL
+    | 57L -> 9UL
+
+    | 65L -> 10UL
+    | 66L -> 11UL
+    | 67L -> 12UL
+    | 68L -> 13UL
+    | 69L -> 14UL
+    | 70L -> 15UL
+
+    | 97L -> 10UL
+    | 98L -> 11UL
+    | 99L -> 12UL
+    | 100L -> 13UL
+    | 101L -> 14UL
+    | 102L -> 15UL
+    | _ -> Builtin.crash "Internal UUID hexadecimal digit invariant failed"
+
+let __hexWordAt (digits: String) (index: Int64) (endIndex: Int64) (value: UInt64) : UInt64 =
+    if index == endIndex then value
+    else Stdlib.Uuid.__hexWordAt digits (index + 1L) endIndex (Stdlib.UInt64.shiftLeft value 4UL + Stdlib.Uuid.__hexDigitUInt64 (Stdlib.String.__byteAtUnchecked digits index))
+
+let __parseDigits (digits: String) : Stdlib.Result.Result<Uuid, Stdlib.Uuid.ParseError> =
+    let high = Stdlib.Uuid.__hexWordAt digits 0L 16L 0UL in
+    let low = Stdlib.Uuid.__hexWordAt digits 16L 32L 0UL in
+    Ok (UUID (Stdlib.UInt128.__fromWords low high))
+
+let parse (value: String) : Stdlib.Result.Result<Uuid, Stdlib.Uuid.ParseError> =
+    let s = Stdlib.String.trim value in
+    let length = Stdlib.String.__byteLength s in
+    if length == 32L && Stdlib.Uuid.__hasHexAt s 0L 32L then Stdlib.Uuid.__parseDigits s
+    else if Stdlib.Uuid.__isHyphenated s then Stdlib.Uuid.__parseDigits (Stdlib.Uuid.__hyphenatedDigits s)
+    else if length == 38L && ((Stdlib.String.__byteAtUnchecked s 0L == 123L && Stdlib.String.__byteAtUnchecked s 37L == 125L) || (Stdlib.String.__byteAtUnchecked s 0L == 40L && Stdlib.String.__byteAtUnchecked s 37L == 41L)) then
+        let inner = Stdlib.String.__byteSlice s 1L 37L in
+        if Stdlib.Uuid.__isHyphenated inner then Stdlib.Uuid.__parseDigits (Stdlib.Uuid.__hyphenatedDigits inner) else Error Stdlib.Uuid.ParseError.BadFormat
+    else
+        match Stdlib.Uuid.__xDigits s with
+        | Some digits -> Stdlib.Uuid.__parseDigits digits
+        | None -> Error Stdlib.Uuid.ParseError.BadFormat
+
+// Helper: convert nibble (0-15) to hex char
+let __nibbleToHex (n: Int64) : String =
+    match n with
+
+    | 0L -> "0"
+    | 1L -> "1"
+    | 2L -> "2"
+    | 3L -> "3"
+
+    | 4L -> "4"
+    | 5L -> "5"
+    | 6L -> "6"
+    | 7L -> "7"
+
+    | 8L -> "8"
+    | 9L -> "9"
+    | 10L -> "a"
+    | 11L -> "b"
+
+    | 12L -> "c"
+    | 13L -> "d"
+    | 14L -> "e"
+    | 15L -> "f"
+    | _ -> Builtin.testRuntimeError "Invalid UUID hex nibble"
+
+let __nibbleToHexUInt64 (n: UInt64) : String =
+    match n with
+
+    | 0UL -> "0"
+    | 1UL -> "1"
+    | 2UL -> "2"
+    | 3UL -> "3"
+
+    | 4UL -> "4"
+    | 5UL -> "5"
+    | 6UL -> "6"
+    | 7UL -> "7"
+
+    | 8UL -> "8"
+    | 9UL -> "9"
+    | 10UL -> "a"
+    | 11UL -> "b"
+
+    | 12UL -> "c"
+    | 13UL -> "d"
+    | 14UL -> "e"
+    | 15UL -> "f"
+    | _ -> Builtin.crash "Internal UUID hexadecimal nibble invariant failed"
+
+// Helper: convert byte (from int64 at shift position) to 2 hex chars
+let __byteToHex (value: Int64) (shift: Int64) : String =
+    let byte = Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight value shift) 255L in
+    let hi = Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight byte 4L) 15L in
+    let lo = Stdlib.Int64.bitwiseAnd byte 15L in
+    Stdlib.Uuid.__nibbleToHex hi ++ Stdlib.Uuid.__nibbleToHex lo
+
+let __wordToHex (value: UInt64) (remaining: Int64) (acc: String) : String =
+    if remaining == 0L then acc
+    else Stdlib.Uuid.__wordToHex (Stdlib.UInt64.shiftRight value 4UL) (remaining - 1L) (Stdlib.Uuid.__nibbleToHexUInt64 (Stdlib.UInt64.bitwiseAnd value 15UL) ++ acc)
+
+/// Stringify UUID values as 8-4-4-4-12 lower-case hexadecimal digits.
+let toString (uuid: Uuid) : String =
+    match uuid with
+    | UUID value ->
+        let hex = Stdlib.Uuid.__wordToHex (Stdlib.UInt128.__high value) 16L "" ++ Stdlib.Uuid.__wordToHex (Stdlib.UInt128.__low value) 16L "" in
+        Stdlib.String.__byteSlice hex 0L 8L ++ "-" ++ Stdlib.String.__byteSlice hex 8L 12L ++ "-" ++
+        Stdlib.String.__byteSlice hex 12L 16L ++ "-" ++ Stdlib.String.__byteSlice hex 16L 20L ++ "-" ++
+        Stdlib.String.__byteSlice hex 20L 32L
+
+// Generate UUID v4: xxxxxxxx-xxxx-4xxx-Nxxx-xxxxxxxxxxxx
+// where N is 8, 9, a, or b (variant bits)
+let generate () : Uuid =
+    let high = Stdlib.Int64.random (-9223372036854775808L) 9223372036854775807L in
+    let low = Stdlib.Int64.random (-9223372036854775808L) 9223372036854775807L in
+    // Set version (4) in byte 6: clear upper nibble, set to 4
+    // Using XOR since we cleared the bits first with AND
+    // Mask -61441 = 0xFFFFFFFFFFFF0FFF (clears bits 12-15)
+    // Version 16384 = 0x4000 (sets bit 14 for version 4)
+    let highWithVersion = Stdlib.Int64.bitwiseXor (Stdlib.Int64.bitwiseAnd high (-61441L)) 16384L in
+    // Set variant (10xx) in byte 8: clear upper 2 bits, set to 10
+    // Mask 4611686018427387903 = 0x3FFFFFFFFFFFFFFF (clears top 2 bits)
+    // Variant -9223372036854775808 = 0x8000000000000000 (sets top bit)
+    let lowWithVariant = Stdlib.Int64.bitwiseXor (Stdlib.Int64.bitwiseAnd low 4611686018427387903L) (-9223372036854775808L) in
+    // Format: 8-4-4-4-12 hex chars
+    // bytes 0-3 (bits 32-63 of high)
+    let text = Stdlib.Uuid.__byteToHex highWithVersion 56L ++
+    Stdlib.Uuid.__byteToHex highWithVersion 48L ++
+    Stdlib.Uuid.__byteToHex highWithVersion 40L ++
+    Stdlib.Uuid.__byteToHex highWithVersion 32L ++ "-" ++
+    // bytes 4-5 (bits 16-31 of high)
+    Stdlib.Uuid.__byteToHex highWithVersion 24L ++
+    Stdlib.Uuid.__byteToHex highWithVersion 16L ++ "-" ++
+    // bytes 6-7 (bits 0-15 of high) - contains version
+    Stdlib.Uuid.__byteToHex highWithVersion 8L ++
+    Stdlib.Uuid.__byteToHex highWithVersion 0L ++ "-" ++
+    // bytes 8-9 (bits 48-63 of low) - contains variant
+    Stdlib.Uuid.__byteToHex lowWithVariant 56L ++
+    Stdlib.Uuid.__byteToHex lowWithVariant 48L ++ "-" ++
+    // bytes 10-15 (bits 0-47 of low)
+    Stdlib.Uuid.__byteToHex lowWithVariant 40L ++
+    Stdlib.Uuid.__byteToHex lowWithVariant 32L ++
+    Stdlib.Uuid.__byteToHex lowWithVariant 24L ++
+    Stdlib.Uuid.__byteToHex lowWithVariant 16L ++
+    Stdlib.Uuid.__byteToHex lowWithVariant 8L ++
+    Stdlib.Uuid.__byteToHex lowWithVariant 0L in
+    match Stdlib.Uuid.parse text with
+    | Ok uuid -> uuid
+    | Error _ -> Builtin.testRuntimeError "Generated UUID was not canonical"
+
+// =============================================================================

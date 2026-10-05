@@ -23,7 +23,7 @@ comparison unless it changes an observable result.
 The enabled interpreter truth tables are
 `src/Tests/e2e/upstream/stdlib/option.dark:288,291,294,297` and
 `result.dark:223,227,231,235,240,244,248,252`. They are gated in
-`src/Tests/test-suite-tooling/TestRunner.fs:513-514`. The additional focused
+`ocaml/tests/test-suite-tooling/TestRunner.ml:513-514`. The additional focused
 file is deliberately source-compatible with both implementations so argument
 order, distinct payloads, callback counts, termination, and result propagation
 can be compared without separate fixtures.

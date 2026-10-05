@@ -1,0 +1,438 @@
+// X509Chain.dark - bounded X.509 path checks before HTTPS identity is trusted.
+
+module Darklang.Stdlib.X509Chain
+
+type Extensions = {
+  isCA: Bool,
+  pathLength: Stdlib.Option.Option<Int64>,
+  keyUsage: Stdlib.Option.Option<(Bool * Bool)>,
+  serverAuth: Stdlib.Option.Option<Bool>,
+  basicSeen: Bool,
+  usageSeen: Bool,
+  ekuSeen: Bool
+}
+
+type Certificate = {
+  raw: Blob, tbs: Blob, issuer: Blob, subject: Blob, spki: Blob,
+  signature: Blob, signatureHash: Int64,
+  notBefore: Int64, notAfter: Int64,
+  extensions: Stdlib.X509Chain.Extensions
+}
+
+type VerifiedLeaf = { spki: Blob }
+
+val __emptyExtensions = Stdlib.X509Chain.Extensions {
+  isCA = false, pathLength = None, keyUsage = None,
+  serverAuth = None, basicSeen = false, usageSeen = false, ekuSeen = false }
+
+let __sameAt (a: Blob) (b: Blob) (index: Int64) : Bool =
+  if index == Stdlib.Blob.__byteLength a then true
+  else if Stdlib.Blob.__getByte a index != Stdlib.Blob.__getByte b index then false
+  else Stdlib.X509Chain.__sameAt a b (index + 1L)
+
+let __same (a: Blob) (b: Blob) : Bool =
+  Stdlib.Blob.__byteLength a == Stdlib.Blob.__byteLength b &&
+  Stdlib.X509Chain.__sameAt a b 0L
+
+let __raw (data: Blob) (start: Int64) (item: Stdlib.X509Identity.Tlv) : Blob =
+  Stdlib.X509Identity.__slice data start item.end_
+
+let __algorithm (data: Blob) (item: Stdlib.X509Identity.Tlv)
+  : Stdlib.Result.Result<Int64, String> =
+  match Stdlib.X509Identity.__expect data item.content item.end_ 6L with
+  | Error _ -> Error "Invalid X.509 signature algorithm"
+  | Ok oid ->
+      let encoded = Stdlib.Blob.toHex
+                      (Stdlib.X509Identity.__slice data oid.content oid.end_) in
+      let hash =
+        if encoded == "2A864886F70D01010B" then 256L
+        else if encoded == "2A864886F70D01010C" then 384L
+        else if encoded == "2A8648CE3D040302" then 1256L
+        else 0L in
+      if hash == 0L then Error "Unsupported X.509 signature algorithm"
+      else if hash == 1256L then
+        if oid.end_ == item.end_ then Ok hash
+        else Error "Invalid X.509 signature algorithm"
+      else
+        match Stdlib.X509Identity.__expect data oid.end_ item.end_ 5L with
+        | Ok nullValue ->
+            if nullValue.content == nullValue.end_ && nullValue.end_ == item.end_
+            then Ok hash else Error "Invalid X.509 signature algorithm"
+        | Error _ -> Error "Invalid X.509 signature algorithm"
+
+let __basic (data: Blob) (octets: Stdlib.X509Identity.Tlv)
+  : Stdlib.Result.Result<(Bool * Stdlib.Option.Option<Int64>), String> =
+  match Stdlib.X509Identity.__expect data octets.content octets.end_ 48L with
+  | Error _ -> Error "Invalid X.509 basic constraints"
+  | Ok sequence ->
+      if sequence.end_ != octets.end_ then Error "Invalid X.509 basic constraints"
+      else if sequence.content == sequence.end_ then Ok ((false, None))
+      else
+        match Stdlib.X509Identity.__expect data sequence.content sequence.end_ 1L with
+        | Error _ -> Error "Invalid X.509 basic constraints"
+        | Ok flag ->
+            if flag.end_ - flag.content != 1L ||
+               Stdlib.Blob.__getByte data flag.content != 255L then
+              Error "Invalid X.509 CA flag"
+            else if flag.end_ == sequence.end_ then Ok ((true, None))
+            else
+              match Stdlib.X509Identity.__expect data flag.end_ sequence.end_ 2L with
+              | Error _ -> Error "Invalid X.509 path length"
+              | Ok number ->
+                  if number.end_ != sequence.end_ || number.end_ - number.content != 1L ||
+                     Stdlib.Blob.__getByte data number.content > 8L then
+                    Error "Invalid X.509 path length"
+                  else Ok ((true, Some (Stdlib.Blob.__getByte data number.content)))
+
+let __usage (data: Blob) (octets: Stdlib.X509Identity.Tlv)
+  : Stdlib.Result.Result<(Bool * Bool), String> =
+  match Stdlib.X509Identity.__expect data octets.content octets.end_ 3L with
+  | Error _ -> Error "Invalid X.509 key usage"
+  | Ok bits ->
+      let length = bits.end_ - bits.content in
+      if bits.end_ != octets.end_ || length < 2L || length > 3L then
+        Error "Invalid X.509 key usage"
+      else
+        let unused = Stdlib.Blob.__getByte data bits.content in
+        let last = Stdlib.Blob.__getByte data (bits.end_ - 1L) in
+        if unused > 7L ||
+           Stdlib.Int64.bitwiseAnd last ((Stdlib.Int64.shiftLeft 1L unused) - 1L) != 0L then
+          Error "Invalid X.509 key usage"
+        else
+          let first = Stdlib.Blob.__getByte data (bits.content + 1L) in
+          Ok ((Stdlib.Int64.bitwiseAnd first 128L != 0L,
+               Stdlib.Int64.bitwiseAnd first 4L != 0L))
+
+let __ekuEntries (data: Blob) (position: Int64) (end_: Int64) (server: Bool)
+  : Stdlib.Result.Result<Bool, String> =
+  if position == end_ then Ok server
+  else
+    match Stdlib.X509Identity.__expect data position end_ 6L with
+    | Error _ -> Error "Invalid X.509 extended key usage"
+    | Ok oid ->
+        let value = Stdlib.Blob.toHex
+                      (Stdlib.X509Identity.__slice data oid.content oid.end_) in
+        Stdlib.X509Chain.__ekuEntries data oid.end_ end_
+          (server || value == "2B06010505070301")
+
+let __eku (data: Blob) (octets: Stdlib.X509Identity.Tlv)
+  : Stdlib.Result.Result<Bool, String> =
+  match Stdlib.X509Identity.__expect data octets.content octets.end_ 48L with
+  | Error _ -> Error "Invalid X.509 extended key usage"
+  | Ok sequence ->
+      if sequence.end_ != octets.end_ || sequence.content == sequence.end_ then
+        Error "Invalid X.509 extended key usage"
+      else Stdlib.X509Chain.__ekuEntries data sequence.content sequence.end_ false
+
+let __extension (data: Blob) (item: Stdlib.X509Identity.Tlv)
+  (state: Stdlib.X509Chain.Extensions)
+  : Stdlib.Result.Result<Stdlib.X509Chain.Extensions, String> =
+  match Stdlib.X509Identity.__expect data item.content item.end_ 6L with
+  | Error _ -> Error "Invalid X.509 extension"
+  | Ok oid ->
+      let encoded = Stdlib.Blob.toHex
+                      (Stdlib.X509Identity.__slice data oid.content oid.end_) in
+      match Stdlib.X509Identity.__tlv data oid.end_ item.end_ with
+      | Error _ -> Error "Invalid X.509 extension"
+      | Ok next ->
+          let hasCritical = next.tag == 1L in
+          let critical = hasCritical && next.end_ - next.content == 1L &&
+                         Stdlib.Blob.__getByte data next.content == 255L in
+          let valueStart = if hasCritical then next.end_ else oid.end_ in
+          if hasCritical && Stdlib.Bool.not critical then Error "Invalid X.509 critical flag"
+          else
+            match Stdlib.X509Identity.__expect data valueStart item.end_ 4L with
+            | Error _ -> Error "Invalid X.509 extension value"
+            | Ok octets ->
+              if octets.end_ != item.end_ then Error "Trailing X.509 extension data"
+              else if encoded == "551D13" then
+                if state.basicSeen then Error "Duplicate X.509 basic constraints"
+                else
+                  match Stdlib.X509Chain.__basic data octets with
+                  | Error error -> Error error
+                  | Ok ((isCA, pathLength)) ->
+                    if isCA && Stdlib.Bool.not critical then Error "X.509 CA constraint must be critical"
+                    else Ok (Stdlib.X509Chain.Extensions {
+                      isCA = isCA, pathLength = pathLength,
+                      keyUsage = state.keyUsage, serverAuth = state.serverAuth,
+                      basicSeen = true, usageSeen = state.usageSeen, ekuSeen = state.ekuSeen })
+              else if encoded == "551D0F" then
+                if state.usageSeen then Error "Duplicate X.509 key usage"
+                else
+                  match Stdlib.X509Chain.__usage data octets with
+                  | Error error -> Error error
+                  | Ok usage -> Ok (Stdlib.X509Chain.Extensions {
+                      isCA = state.isCA, pathLength = state.pathLength,
+                      keyUsage = Some usage, serverAuth = state.serverAuth,
+                      basicSeen = state.basicSeen, usageSeen = true, ekuSeen = state.ekuSeen })
+              else if encoded == "551D25" then
+                if state.ekuSeen then Error "Duplicate X.509 extended key usage"
+                else
+                  match Stdlib.X509Chain.__eku data octets with
+                  | Error error -> Error error
+                  | Ok serverAuth -> Ok (Stdlib.X509Chain.Extensions {
+                      isCA = state.isCA, pathLength = state.pathLength,
+                      keyUsage = state.keyUsage, serverAuth = Some serverAuth,
+                      basicSeen = state.basicSeen, usageSeen = state.usageSeen, ekuSeen = true })
+              else if critical && encoded != "551D11" then
+                Error "Unsupported critical X.509 extension"
+              else Ok state
+
+let __extensions (data: Blob) (position: Int64) (end_: Int64)
+  (state: Stdlib.X509Chain.Extensions) (seen: List<String>)
+  : Stdlib.Result.Result<Stdlib.X509Chain.Extensions, String> =
+  if position == end_ then Ok state
+  else
+    match Stdlib.X509Identity.__expect data position end_ 48L with
+    | Error error -> Error error
+    | Ok item ->
+        match Stdlib.X509Identity.__expect data item.content item.end_ 6L with
+        | Error error -> Error error
+        | Ok oid ->
+          let encoded = Stdlib.Blob.toHex
+                          (Stdlib.X509Identity.__slice data oid.content oid.end_) in
+          if Stdlib.List.member seen encoded then Error "Duplicate X.509 extension"
+          else
+            match Stdlib.X509Chain.__extension data item state with
+            | Error error -> Error error
+            | Ok next -> Stdlib.X509Chain.__extensions data item.end_ end_ next
+                           (Stdlib.List.push seen encoded)
+
+let __findExtensions (data: Blob) (position: Int64) (end_: Int64)
+  : Stdlib.Result.Result<Stdlib.X509Chain.Extensions, String> =
+  if position == end_ then Ok Stdlib.X509Chain.__emptyExtensions
+  else
+    match Stdlib.X509Identity.__expect data position end_ 163L with
+    | Error error -> Error error
+    | Ok wrapper ->
+      match Stdlib.X509Identity.__expect data wrapper.content wrapper.end_ 48L with
+      | Error error -> Error error
+      | Ok sequence ->
+        if wrapper.end_ != end_ || sequence.end_ != wrapper.end_ then
+          Error "Invalid X.509 extension list"
+        else Stdlib.X509Chain.__extensions data sequence.content sequence.end_
+               Stdlib.X509Chain.__emptyExtensions []
+
+let __parsedTbs (data: Blob) (tbsStart: Int64)
+  (tbs: Stdlib.X509Identity.Tlv) (outerAlgorithm: Blob) (signature: Blob)
+  : Stdlib.Result.Result<Stdlib.X509Chain.Certificate, String> =
+  match Stdlib.X509Identity.__expect data tbs.content tbs.end_ 160L with
+  | Error _ -> Error "X.509 v3 certificate required"
+  | Ok version ->
+    let encoded = Stdlib.Blob.toHex
+                    (Stdlib.X509Identity.__slice data version.content version.end_) in
+    if encoded != "020102" then Error "X.509 v3 certificate required"
+    else
+      match Stdlib.X509Identity.__expect data version.end_ tbs.end_ 2L with
+      | Error error -> Error error
+      | Ok serial ->
+        match Stdlib.X509Identity.__expect data serial.end_ tbs.end_ 48L with
+        | Error error -> Error error
+        | Ok algorithm ->
+          if Stdlib.Bool.not (Stdlib.X509Chain.__same
+               (Stdlib.X509Chain.__raw data serial.end_ algorithm) outerAlgorithm) then
+            Error "X.509 signature algorithm mismatch"
+          else
+            match Stdlib.X509Chain.__algorithm data algorithm with
+            | Error error -> Error error
+            | Ok signatureHash ->
+              match Stdlib.X509Identity.__expect data algorithm.end_ tbs.end_ 48L with
+              | Error error -> Error error
+              | Ok issuer ->
+                match Stdlib.X509Identity.__expect data issuer.end_ tbs.end_ 48L with
+                | Error error -> Error error
+                | Ok validity ->
+                  match Stdlib.X509Identity.__expect data validity.end_ tbs.end_ 48L with
+                  | Error error -> Error error
+                  | Ok subject ->
+                    match Stdlib.X509Identity.__expect data subject.end_ tbs.end_ 48L with
+                    | Error error -> Error error
+                    | Ok spki ->
+                      match Stdlib.X509Identity.__validity data validity with
+                      | Error error -> Error error
+                      | Ok ((notBefore, notAfter)) ->
+                        match Stdlib.X509Chain.__findExtensions data spki.end_ tbs.end_ with
+                        | Error error -> Error error
+                        | Ok extensions ->
+                          Ok (Stdlib.X509Chain.Certificate {
+                            raw = data,
+                            tbs = Stdlib.X509Chain.__raw data tbsStart tbs,
+                            issuer = Stdlib.X509Chain.__raw data algorithm.end_ issuer,
+                            subject = Stdlib.X509Chain.__raw data validity.end_ subject,
+                            spki = Stdlib.X509Chain.__raw data subject.end_ spki,
+                            signature = signature, signatureHash = signatureHash,
+                            notBefore = notBefore, notAfter = notAfter,
+                            extensions = extensions })
+
+let parse (data: Blob) : Stdlib.Result.Result<Stdlib.X509Chain.Certificate, String> =
+  let length = Stdlib.Blob.__byteLength data in
+  if length < 16L || length > 65536L then Error "Invalid X.509 certificate size"
+  else
+    match Stdlib.X509Identity.__expect data 0L length 48L with
+    | Error error -> Error error
+    | Ok outer ->
+      if outer.end_ != length then Error "Trailing X.509 certificate data"
+      else
+        match Stdlib.X509Identity.__expect data outer.content outer.end_ 48L with
+        | Error error -> Error error
+        | Ok tbs ->
+          match Stdlib.X509Identity.__expect data tbs.end_ outer.end_ 48L with
+          | Error error -> Error error
+          | Ok algorithm ->
+            match Stdlib.X509Identity.__expect data algorithm.end_ outer.end_ 3L with
+            | Error error -> Error error
+            | Ok signature ->
+              if signature.end_ != outer.end_ ||
+                 signature.end_ - signature.content < 2L ||
+                 Stdlib.Blob.__getByte data signature.content != 0L then
+                Error "Invalid X.509 signature"
+              else
+                Stdlib.X509Chain.__parsedTbs data outer.content tbs
+                  (Stdlib.X509Chain.__raw data tbs.end_ algorithm)
+                  (Stdlib.X509Identity.__slice data
+                    (signature.content + 1L) signature.end_)
+
+let __validAt (certificate: Stdlib.X509Chain.Certificate) (now: Int64) : Bool =
+  now >= certificate.notBefore && now <= certificate.notAfter
+
+let __caAllowed (certificate: Stdlib.X509Chain.Certificate)
+  (caBelow: Int64) : Bool =
+  let ext = certificate.extensions in
+  let usageAllowed =
+    match ext.keyUsage with
+    | None -> true
+    | Some ((_digital, sign)) -> sign in
+  let ekuAllowed =
+    match ext.serverAuth with
+    | None -> true
+    | Some server -> server in
+  let pathAllowed =
+    match ext.pathLength with
+    | None -> true
+    | Some limit -> caBelow <= limit in
+  ext.basicSeen && ext.isCA && usageAllowed && ekuAllowed && pathAllowed
+
+let __signedBy (child: Stdlib.X509Chain.Certificate)
+  (parent: Stdlib.X509Chain.Certificate) : Bool =
+  if Stdlib.Bool.not (Stdlib.X509Chain.__same child.issuer parent.subject) then false
+  else if child.signatureHash == 1256L then
+    match Stdlib.P256.verifySha256 parent.spki child.tbs child.signature with
+    | Ok valid -> valid
+    | Error _ -> false
+  else
+    match Stdlib.RsaSpki.parse parent.spki with
+    | Error _ -> false
+    | Ok key ->
+      match Stdlib.RsaPkcs1.verify child.signatureHash key.modulus key.exponent
+              child.tbs child.signature with
+      | Ok valid -> valid
+      | Error _ -> false
+
+let __sameRange (data: Blob) (start: Int64) (end_: Int64)
+  (expected: Blob) (index: Int64) : Bool =
+  if end_ - start != Stdlib.Blob.__byteLength expected then false
+  else if index == end_ - start then true
+  else if Stdlib.Blob.__getByte data (start + index) !=
+          Stdlib.Blob.__getByte expected index then false
+  else Stdlib.X509Chain.__sameRange data start end_ expected (index + 1L)
+
+// Most trust roots cannot issue this certificate. Check only the bounded
+// subject field before allocating and validating the complete root.
+let __anchorSubjectMatches (data: Blob) (issuer: Blob) : Bool =
+  let length = Stdlib.Blob.__byteLength data in
+  match Stdlib.X509Identity.__expect data 0L length 48L with
+  | Error _ -> false
+  | Ok outer ->
+    match Stdlib.X509Identity.__expect data outer.content outer.end_ 48L with
+    | Error _ -> false
+    | Ok tbs ->
+      match Stdlib.X509Identity.__expect data tbs.content tbs.end_ 160L with
+      | Error _ -> false
+      | Ok version ->
+        match Stdlib.X509Identity.__expect data version.end_ tbs.end_ 2L with
+        | Error _ -> false
+        | Ok serial ->
+          match Stdlib.X509Identity.__expect data serial.end_ tbs.end_ 48L with
+          | Error _ -> false
+          | Ok algorithm ->
+            match Stdlib.X509Identity.__expect data algorithm.end_ tbs.end_ 48L with
+            | Error _ -> false
+            | Ok name ->
+              match Stdlib.X509Identity.__expect data name.end_ tbs.end_ 48L with
+              | Error _ -> false
+              | Ok validity ->
+                match Stdlib.X509Identity.__expect data validity.end_ tbs.end_ 48L with
+                | Error _ -> false
+                | Ok subject ->
+                  Stdlib.X509Chain.__sameRange data validity.end_ subject.end_
+                    issuer 0L
+
+let __trustedRoot (current: Stdlib.X509Chain.Certificate)
+  (roots: List<Blob>) (now: Int64) (caBelow: Int64) : Bool =
+  match roots with
+  | [] -> false
+  | root :: rest ->
+    let identical = Stdlib.X509Chain.__same current.raw root in
+    if Stdlib.Bool.not identical &&
+       Stdlib.Bool.not (Stdlib.X509Chain.__anchorSubjectMatches root current.issuer) then
+      Stdlib.X509Chain.__trustedRoot current rest now caBelow
+    else match Stdlib.X509Chain.parse root with
+    | Error _ -> Stdlib.X509Chain.__trustedRoot current rest now caBelow
+    | Ok anchor ->
+      let subordinateCAs =
+        if identical then caBelow
+        else if current.extensions.isCA then caBelow + 1L
+        else caBelow in
+      if Stdlib.X509Chain.__validAt anchor now &&
+         Stdlib.X509Chain.__caAllowed anchor subordinateCAs &&
+         (identical ||
+          Stdlib.X509Chain.__signedBy current anchor) then true
+      else Stdlib.X509Chain.__trustedRoot current rest now caBelow
+
+let __walk (current: Stdlib.X509Chain.Certificate) (remaining: List<Blob>)
+  (roots: List<Blob>) (now: Int64) (caBelow: Int64) (depth: Int64) : Bool =
+  if depth > 8L || Stdlib.Bool.not (Stdlib.X509Chain.__validAt current now) then false
+  else if Stdlib.X509Chain.__trustedRoot current roots now caBelow then true
+  else
+    match remaining with
+    | [] -> false
+    | next :: rest ->
+      match Stdlib.X509Chain.parse next with
+      | Error _ -> false
+      | Ok parent ->
+        let subordinateCAs =
+          if current.extensions.isCA then caBelow + 1L else caBelow in
+        Stdlib.X509Chain.__caAllowed parent subordinateCAs &&
+        Stdlib.X509Chain.__signedBy current parent &&
+        Stdlib.X509Chain.__walk parent rest roots now subordinateCAs (depth + 1L)
+
+let verifyAt (chain: List<Blob>) (roots: List<Blob>) (host: String)
+  (date: DateTime) : Stdlib.Result.Result<Stdlib.X509Chain.VerifiedLeaf, String> =
+  match chain with
+  | [] -> Error "TLS certificate chain is empty"
+  | leaf :: rest ->
+    match Stdlib.X509Chain.parse leaf with
+    | Error error -> Error error
+    | Ok parsed ->
+      let ext = parsed.extensions in
+      let usageAllowed =
+        match ext.keyUsage with
+        | None -> true
+        | Some ((digital, _sign)) -> digital in
+      let ekuAllowed =
+        match ext.serverAuth with
+        | None -> true
+        | Some server -> server in
+      if ext.isCA || Stdlib.Bool.not usageAllowed || Stdlib.Bool.not ekuAllowed then
+        Error "X.509 leaf is not authorized for TLS server authentication"
+      else
+        match Stdlib.X509Identity.parseUnverifiedLeaf leaf with
+        | Error error -> Error error
+        | Ok identity ->
+          match Stdlib.X509Identity.checkUnverifiedHostnameAt identity host date with
+          | Error error -> Error error
+          | Ok () ->
+            let now = Stdlib.X509Identity.__dateNumber date in
+            if Stdlib.X509Chain.__walk parsed rest roots now 0L 0L then
+              Ok (Stdlib.X509Chain.VerifiedLeaf { spki = parsed.spki })
+            else Error "X.509 certificate chain is not trusted"

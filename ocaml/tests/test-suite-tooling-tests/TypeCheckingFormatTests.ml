@@ -8,7 +8,7 @@ open Dark_compiler
 open TypeCheckingFormat
 type testResult = (unit, string) result
 let withTempFile content test =
- let path = Filename.concat "TestResults/ocaml-migration" (HostGuid.newGuidN () ^ ".typecheck") in
+ let path = Filename.temp_file "dark-typechecking-" ".typecheck" in
  Out_channel.with_open_bin path (fun channel -> output_string channel content);
  Fun.protect ~finally:(fun () -> if Sys.file_exists path then Sys.remove path) (fun () -> test path)
 let testParsesSlashSlashInsideStringLiteral () =

@@ -29,9 +29,9 @@ def main() -> int:
 
     root = Path(__file__).resolve().parents[3]
     compiler = root / "dark"
-    compiler_dll = root / "bin/DarkCompiler/Debug/net11.0/DarkCompiler.dll"
+    compiler_binary = root / "ocaml/_build/default/bin/dark.exe"
     source = Path(__file__).with_name("program.dark")
-    if not compiler_dll.is_file():
+    if not compiler_binary.is_file():
         raise SystemExit("compiler is not built; run ./build --ai first")
 
     wall_samples_ms: list[float] = []

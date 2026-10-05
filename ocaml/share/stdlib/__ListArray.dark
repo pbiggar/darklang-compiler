@@ -1,0 +1,108 @@
+// __ListArray.dark - Checked construction and copy-on-write Int64 array kernels.
+// Constructors establish runtime bounds. ListHIR owns retain/release decisions;
+// traversal kernels neither allocate nor release buffers.
+
+module Darklang.Stdlib.List
+
+// Source fusion uses this identity as a typed marker. List-region extraction
+// removes it before ANF; a conservative fallback retains ordinary List values.
+let __arrayOwnershipBoundary_i64 (value: List<Int64>) : List<Int64> = value
+
+// The mapping's private prefix and the common array layout cost 40 bytes.
+// Check before narrowing Int or multiplying a machine-sized length by eight.
+let __arrayRepeatLength (count: Int) : Int64 =
+    if count <= 0 then 0L
+    else if count > 1152921504606846970 then Builtin.crash "Out of heap memory"
+    else Stdlib.Int.__toInt64Unchecked count
+
+let __arrayAllocate (length: Int64) : RawPtr =
+    if length < 0L || length > 1152921504606846970L then Builtin.crash "Out of heap memory"
+    else
+        let capacity = if length <= 28L then 28L else length in
+        let rcOffset = 24L + capacity * 8L in
+        let buffer = if length <= 28L then __raw_alloc 256L else __mapped_alloc (rcOffset + 8L) in
+        let _ = __raw_write_word buffer 0L length in
+        let _ = __raw_write_word buffer 8L capacity in
+        let _ = __raw_write_word buffer 16L 0L in
+        let _ = __raw_write_word buffer rcOffset 1L in
+        buffer
+
+let __arrayRetain (buffer: RawPtr) : Unit =
+    let capacity = __raw_get<Int64> buffer 8L in
+    let rcOffset = 24L + capacity * 8L in
+    let rc = __raw_get<Int64> buffer rcOffset in
+    __raw_write_word buffer rcOffset (rc + 1L)
+
+// This boundary keeps conditional cleanup out of each region continuation.
+// ListHIR's intrinsic supplies the exact fixed-block RC release metadata.
+let __arrayRelease (buffer: RawPtr) : Unit =
+    let length = __raw_get<Int64> buffer 0L in
+    let capacity = __raw_get<Int64> buffer 8L in
+    let rcOffset = 24L + capacity * 8L in
+    let rc = __raw_get<Int64> buffer rcOffset in
+    if rc > 1L then __raw_write_word buffer rcOffset (rc - 1L)
+    else if length <= 28L then __list_array_release_small buffer
+    else __mapped_free buffer
+
+let __arrayFill (buffer: RawPtr) (index: Int64) (length: Int64) (value: Int64) : Unit =
+    if index >= length then ()
+    else
+        let _ = __raw_write_word buffer (24L + index * 8L) value in
+        Stdlib.List.__arrayFill buffer (index + 1L) length value
+
+let __arrayRepeat (count: Int) (value: Int64) : RawPtr =
+    let length = Stdlib.List.__arrayRepeatLength count in
+    let buffer = Stdlib.List.__arrayAllocate length in
+    let _ = Stdlib.List.__arrayFill buffer 0L length value in
+    let _ = __raw_write_word buffer 16L length in
+    buffer
+
+let __arrayMap (buffer: RawPtr) (index: Int64) (length: Int64) (fn: Int64 -> Int64) : Unit =
+    if index >= length then ()
+    else
+        let offset = 24L + index * 8L in
+        let value = __raw_get<Int64> buffer offset in
+        let mapped = fn value in
+        let _ = __raw_write_word buffer offset mapped in
+        Stdlib.List.__arrayMap buffer (index + 1L) length fn
+
+let __arrayReverse (buffer: RawPtr) (left: Int64) (right: Int64) : Unit =
+    if left >= right then ()
+    else
+        let leftOffset = 24L + left * 8L in
+        let rightOffset = 24L + right * 8L in
+        let a = __raw_get<Int64> buffer leftOffset in
+        let b = __raw_get<Int64> buffer rightOffset in
+        let _ = __raw_write_word buffer leftOffset b in
+        let _ = __raw_write_word buffer rightOffset a in
+        Stdlib.List.__arrayReverse buffer (left + 1L) (right - 1L)
+
+let __arrayCopy (source: RawPtr) (destination: RawPtr) (index: Int64) (length: Int64) : Unit =
+    if index >= length then ()
+    else
+        let offset = 24L + index * 8L in
+        let value = __raw_get<Int64> source offset in
+        let _ = __raw_write_word destination offset value in
+        Stdlib.List.__arrayCopy source destination (index + 1L) length
+
+// Consume one ownership unit. Exclusive storage is returned directly; shared
+// storage is copied before the consumed unit is removed from the source.
+let __arrayPrepareMutation (source: RawPtr) : RawPtr =
+    let length = __raw_get<Int64> source 0L in
+    let capacity = __raw_get<Int64> source 8L in
+    let rcOffset = 24L + capacity * 8L in
+    let rc = __raw_get<Int64> source rcOffset in
+    if rc == 1L then source
+    else
+        let destination = Stdlib.List.__arrayAllocate length in
+        let _ = Stdlib.List.__arrayCopy source destination 0L length in
+        let _ = __raw_write_word destination 16L length in
+        let _ = __raw_write_word source rcOffset (rc - 1L) in
+        destination
+
+let __arrayFold (buffer: RawPtr) (index: Int64) (length: Int64) (acc: Int64) (fn: Int64 -> Int64 -> Int64) : Int64 =
+    if index >= length then acc
+    else
+        let value = __raw_get<Int64> buffer (24L + index * 8L) in
+        let next = fn acc value in
+        Stdlib.List.__arrayFold buffer (index + 1L) length next fn

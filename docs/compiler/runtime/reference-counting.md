@@ -33,8 +33,8 @@ non-retaining `RawWriteWord` and removes the producer's pending release.
 
 ## Ownership Insertion
 
-`src/DarkCompiler/passes/anf/RefCountInsertion.fs` verifies ownership contracts;
-`src/DarkCompiler/passes/anf/ownership/SSARefCountInsertion.fs` inserts retains
+`ocaml/lib/passes/anf/RefCountInsertion.ml` verifies ownership contracts;
+`ocaml/lib/passes/anf/ownership/RcSSARefCountInsertion.ml` inserts retains
 and releases after SSA construction and escape analysis.
 
 The `passes/anf/ownership/` modules separate type facts, return/alias analysis,

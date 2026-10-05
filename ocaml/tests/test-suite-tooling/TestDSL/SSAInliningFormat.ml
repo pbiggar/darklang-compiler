@@ -38,7 +38,7 @@ let matched pattern text =
  let regex = Str.regexp (Buffer.contents output) in
  if Str.string_match regex text 0 then Some (Array.of_list (text :: List.map (fun index -> try Str.matched_group index text with Not_found -> "") captures)) else None
 let group values index = values.(index)
-let parse32 text = match HostText.tryParseInt32 text with Some value -> Int32.to_int value | None -> failwith "Value was either too large or too small for an Int32."
+let parse32 text = match HostText.tryParseInt32 text with Some value -> Int32.to_int value | None -> raise (Failure "Value was either too large or too small for an Int32.")
 let add left right = Int32.to_int (Int32.add (Int32.of_int left) (Int32.of_int right))
 let mul left right = Int32.to_int (Int32.mul (Int32.of_int left) (Int32.of_int right))
 let temp text = match matched {|^t(\d+)$|} (HostText.trim text) with Some values -> A.TempId (parse32 (group values 1)) | None -> problem ("expected a temp ID, got '" ^ text ^ "'")

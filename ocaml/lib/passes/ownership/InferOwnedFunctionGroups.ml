@@ -19,12 +19,12 @@ let candidates (Group (head, tail, _, _, _)) = head :: tail
 let isRecursive (Group (_, _, recursive, _, _)) = recursive
 let internalDependencies (Group (_, _, _, dependencies, _)) = dependencies
 let externalTargets (Group (_, _, _, _, targets)) = targets
-let nonEmpty context values = match values with head :: tail -> {NonEmptyList.head; tail} | [] -> failwith context
+let nonEmpty context values = match values with head :: tail -> {NonEmptyList.head; tail} | [] -> Crash.crash context
 let inferredGroup discovered = function
  | head :: tail -> Group (head, tail, G.isRecursive discovered, G.internalDependencies discovered, G.externalTargets discovered)
- | [] -> failwith "Ownership uniqueness inference returned no group candidates"
+ | [] -> Crash.crash "Ownership uniqueness inference returned no group candidates"
 let singletonCandidate id name ownership = Candidate ({R.id; name; ownership}, [])
-let recursiveCandidate boundary = match R.boundaryToList boundary with head :: tail -> Candidate (head, tail) | [] -> failwith "Recursive ownership inference returned an empty boundary"
+let recursiveCandidate boundary = match R.boundaryToList boundary with head :: tail -> Candidate (head, tail) | [] -> Crash.crash "Recursive ownership inference returned an empty boundary"
 (*
    Recursive edges are implementation details of an atomic SCC candidate, not
    independent external demands. Materialization rewrites them when the group
@@ -45,8 +45,8 @@ module Make (Identity : O.Identity) = struct
   match definitions, G.isRecursive discovered with
   | [definition], false -> Uniqueness.infer semantics definition |> Result.map (fun inferred -> List.map (singletonCandidate definition.O.definition.HIR.id definition.O.definition.HIR.name) (Uniqueness.toList inferred)) |> wrap
   | head :: tail, true -> Recursive.infer semantics {NonEmptyList.head; tail} |> Result.map (fun inferred -> List.map recursiveCandidate (R.toList inferred)) |> wrap
-  | _ :: _, false -> failwith "Owned function discovery produced a nonrecursive multi-function group"
-  | [], _ -> failwith "Owned function discovery returned an empty group"
+  | _ :: _, false -> Crash.crash "Owned function discovery produced a nonrecursive multi-function group"
+  | [], _ -> Crash.crash "Owned function discovery returned an empty group"
 (*
    Discover proof groups without inferring any variants. A function maps back
    to its complete SCC so a later concrete call demand can be solved atomically.
@@ -69,8 +69,8 @@ module Make (Identity : O.Identity) = struct
    measure recordTiming (inferenceLabel discovered) (fun () -> match definitions, G.isRecursive discovered with
    | [definition], false -> Uniqueness.inferDemand semantics uniqueArguments definition |> Result.map (Option.map (singletonCandidate definition.O.definition.HIR.id definition.O.definition.HIR.name)) |> wrap
    | head :: tail, true -> Recursive.inferDemand semantics target uniqueArguments {NonEmptyList.head; tail} |> Result.map (Option.map recursiveCandidate) |> wrap
-   | _ :: _, false -> failwith "Owned function discovery produced a nonrecursive multi-function group"
-   | [], _ -> failwith "Owned function discovery returned an empty group")
+   | _ :: _, false -> Crash.crash "Owned function discovery produced a nonrecursive multi-function group"
+   | [], _ -> Crash.crash "Owned function discovery returned an empty group")
  let inferDemand semantics program target uniqueArguments = inferDemandWithTrace None semantics program target uniqueArguments
 (*
    Discover callee-first owned-HIR SCCs and infer every nondominated uniqueness

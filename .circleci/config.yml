@@ -3,7 +3,7 @@ version: 2.1
 # CI for the Dark compiler.
 #
 # The devcontainer image in Dockerfile is the source of truth for the
-# toolchain (dotnet 10, qemu, etc). CI builds that image and runs the
+# pinned OCaml toolchain and native dependencies. CI builds that image and runs the
 # full test suite inside it, so CI and local dev match exactly.
 
 jobs:
@@ -26,16 +26,13 @@ jobs:
               tail -f /dev/null
       - run:
           name: Fix workspace ownership
-          command: docker exec -u root dark-ci chown -R dark:dark /workspace
-      - run:
-          name: Restore packages
-          command: docker exec dark-ci dotnet restore
+          command: docker exec -u root dark-ci chown -R agent:agent /workspace
       - run:
           name: Build (debug)
-          command: docker exec dark-ci dotnet build --verbosity quiet
+          command: docker exec dark-ci ./build --ai
       - run:
           name: Run test suite
-          command: docker exec dark-ci ./run-tests
+          command: docker exec dark-ci ./run-tests --ai
           no_output_timeout: 15m
 
 workflows:

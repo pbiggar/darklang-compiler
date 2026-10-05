@@ -114,15 +114,15 @@ let calculateCommandsSize (binary:Binary.machOBinary) =
 *)
 let serializeMachO (binary:Binary.machOBinary) =
  let headerSize=32 in let commandsSize=Int32.to_int (calculateCommandsSize binary) in let dataStart=add headerSize commandsSize in
- let codeOffset=match binary.Binary.textSegmentCommand.Binary.sections with section::_ -> Int32.to_int section.Binary.offset | [] -> failwith "MachO: TextSegmentCommand has no sections" in
+ let codeOffset=match binary.Binary.textSegmentCommand.Binary.sections with section::_ -> Int32.to_int section.Binary.offset | [] -> Crash.crash "MachO: TextSegmentCommand has no sections" in
  let paddingBeforeCode=sub codeOffset dataStart in
- if paddingBeforeCode<0 then failwith (Printf.sprintf "MachO: code offset %d is before end of load commands %d" codeOffset dataStart);
+ if paddingBeforeCode<0 then Crash.crash (Printf.sprintf "MachO: code offset %d is before end of load commands %d" codeOffset dataStart);
  let paddingBefore=Bytes.make paddingBeforeCode '\000' in
  let textSegmentSize=Int64.to_int32 binary.Binary.textSegmentCommand.Binary.fileSize |> Int32.to_int in
  let codeSize=Bytes.length binary.Binary.machineCode in let alignedDataStart=(add (add codeOffset codeSize) 7) land (lnot 7) in
  let alignmentPadding=Bytes.make (sub (sub alignedDataStart codeOffset) codeSize) '\000' in
  let stringSize=Bytes.length binary.Binary.stringData in let paddingAfterCode=sub (sub textSegmentSize alignedDataStart) stringSize in
- if paddingAfterCode<0 then failwith (Printf.sprintf "MachO: __TEXT file size %d is too small for code and data ending at %d" textSegmentSize (add alignedDataStart stringSize));
+ if paddingAfterCode<0 then Crash.crash (Printf.sprintf "MachO: __TEXT file size %d is too small for code and data ending at %d" textSegmentSize (add alignedDataStart stringSize));
  let paddingAfter=Bytes.make paddingAfterCode '\000' in
  Bytes.concat Bytes.empty [serializeMachHeader binary.Binary.header;serializeSegmentCommand64 binary.Binary.pageZeroCommand;serializeSegmentCommand64 binary.Binary.textSegmentCommand;serializeSegmentCommand64 binary.Binary.linkeditSegmentCommand;serializeDylinkerCommand binary.Binary.dylinkerCommand;serializeDylibCommand binary.Binary.dylibCommand;serializeSymtabCommand binary.Binary.symtabCommand;serializeDysymtabCommand binary.Binary.dysymtabCommand;serializeUuidCommand binary.Binary.uuidCommand;serializeBuildVersionCommand binary.Binary.buildVersionCommand;serializeMainCommand binary.Binary.mainCommand;paddingBefore;binary.Binary.machineCode;alignmentPadding;binary.Binary.stringData;paddingAfter]
 (*

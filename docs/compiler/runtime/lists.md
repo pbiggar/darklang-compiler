@@ -86,7 +86,7 @@ private compiler implementation surface.
 ## Lowering and Reference Counting
 
 List literals are built directly in
-`src/DarkCompiler/passes/anf/AST_to_ANF.fs`; they do not call a sequence of public
+`ocaml/lib/passes/anf/AST_to_ANF.ml`; they do not call a sequence of public
 list functions. Metadata uses `RawWriteWord`, while element and child edges use
 typed `RawSlotInit<T>` so the backends retain managed ownership.
 
@@ -103,9 +103,9 @@ garbage collector.
 |---|---|
 | `src/DarkCompiler/stdlib/__SkewList.dark` | representation and primitive operations |
 | `src/DarkCompiler/stdlib/List.dark` | public list functions |
-| `src/DarkCompiler/passes/anf/AST_to_ANF.fs` | literal and pattern lowering |
-| `src/DarkCompiler/passes/anf/RefCountInsertion.fs` | list lifetime insertion |
-| `src/DarkCompiler/backend/arm64/CodeGen.fs` | ARM64 ownership helpers |
-| `src/DarkCompiler/backend/x64/CodeGen.fs` | x64 ownership helpers |
+| `ocaml/lib/passes/anf/AST_to_ANF.ml` | literal and pattern lowering |
+| `ocaml/lib/passes/anf/RefCountInsertion.ml` | list lifetime insertion |
+| `ocaml/lib/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 ownership helpers |
+| `ocaml/lib/backend/x64/CodeGen_X86_64.ml` | x64 ownership helpers |
 
 for the current memory-management task breakdown.

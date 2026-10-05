@@ -12,6 +12,7 @@ if [ "$#" -ne 2 ]; then
 fi
 
 cd "$PROJECT_ROOT"
+"$PROJECT_ROOT/build" --quiet
 
 dotnet run \
     --project "$SCRIPT_DIR/TargetedBenchmarks.fsproj" \

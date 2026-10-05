@@ -20,7 +20,7 @@ let dominates (first : ('leaf, 'id) O.functionDef list) (second : ('leaf, 'id) O
  | (first : ('leaf, 'id) O.functionDef) :: firstRest, (second : ('leaf, 'id) O.functionDef) :: secondRest ->
    let boundaryNoWorse, boundaryStrict = U.boundaryRelation first.O.ownership second.O.ownership in
    compare (noWorse && boundaryNoWorse) (strictlyBetter || boundaryStrict) firstRest secondRest
- | _ -> failwith "Uniqueness group variants changed function count" in
+ | _ -> Crash.crash "Uniqueness group variants changed function count" in
  compare true false first second
 let variants (functions : ('leaf, 'id) O.functionDef list) =
  List.fold_left (fun groups (functionDefinition : ('leaf, 'id) O.functionDef) ->
@@ -31,7 +31,7 @@ let rec variantsWithTarget target targetOwnership (functions : ('leaf, 'id) O.fu
    let boundaries = if functionDefinition.O.definition.HIR.id = target then Seq.return targetOwnership else U.signatureSequence functionDefinition.O.ownership in
    Seq.flat_map (fun ownership -> Seq.map (fun group -> {functionDefinition with O.ownership} :: group) (variantsWithTarget target targetOwnership rest)) boundaries ()
 let boundary = function
- | [] -> failwith "Ownership uniqueness inference produced an empty function group"
+ | [] -> Crash.crash "Ownership uniqueness inference produced an empty function group"
  | head :: tail ->
    let functionBoundary (functionDefinition : ('leaf, 'id) O.functionDef) = {id = functionDefinition.O.definition.HIR.id; name = functionDefinition.O.definition.HIR.name; ownership = functionDefinition.O.ownership} in
    GroupBoundary (functionBoundary head, List.map functionBoundary tail)
@@ -62,12 +62,12 @@ module Make (Identity : O.Identity) = struct
    match nondominated, firstFailure with
    | head :: tail, _ -> Ok (Candidates (boundary head, List.map boundary tail))
    | [], Some error -> Error (Uniqueness.NoVerifiedFunctionGroup error)
-   | [], None -> failwith "Ownership uniqueness inference generated no function-group candidates"
+   | [], None -> Crash.crash "Ownership uniqueness inference generated no function-group candidates"
  let inferDemand semantics target uniqueArguments definitions =
   let definitions = AST.NonEmptyList.toList definitions in
   let candidateSemantics = withCandidateGroupSemantics semantics definitions in
   let targetDefinition = match List.find_opt (fun (definition : ('leaf, Identity.t) O.functionDef) -> definition.O.definition.HIR.id = target) definitions with
-   | Some definition -> definition | None -> failwith "Recursive ownership demand target is outside its function group" in
+   | Some definition -> definition | None -> Crash.crash "Recursive ownership demand target is outside its function group" in
   Ok (Seq.find_map (fun candidate -> match Verify.verifyFunctions candidateSemantics candidate with Ok () -> Some (boundary candidate) | Error _ -> None)
    (U.demandedSignatures uniqueArguments targetDefinition.O.ownership |> Seq.flat_map (fun targetOwnership -> variantsWithTarget target targetOwnership definitions) |> Seq.take U.maximumVariants))
 end

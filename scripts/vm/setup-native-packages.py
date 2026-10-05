@@ -4,6 +4,7 @@ from pathlib import Path
 import hashlib,lzma,subprocess,urllib.request,concurrent.futures,sys
 root=Path(sys.argv[1])
 (root/"downloads").mkdir(parents=True,exist_ok=True)
+(root/"qemu-deps/sysroot").mkdir(parents=True,exist_ok=True)
 base='https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/'
 for filename,suite in [('ubuntu-base-packages.xz','noble'),('ubuntu-packages.xz','noble-updates')]:
  path=root/'downloads'/filename

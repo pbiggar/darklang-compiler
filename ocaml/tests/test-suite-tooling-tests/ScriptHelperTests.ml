@@ -4,13 +4,17 @@ open Dark_compiler
 module R=RepositoryTestFiles
 type testResult=(unit,string) result
 let (let*)=Result.bind
-let compilerSourceFiles ()=R.filesUnder "src/DarkCompiler" ".fs"
-let testToolingSourceFiles ()=R.filesUnder "src/Tests/test-suite-tooling" ".fs"
+let compilerSourceFiles ()=R.filesUnder "ocaml/lib" ".ml"
+let testToolingSourceFiles ()=R.filesUnder "ocaml/tests/test-suite-tooling" ".ml"
 let findTextUsesIn needle sourceFiles=
  let* reversed=Array.fold_left (fun result path->let* accumulated=result in let* text=R.readFile path in Ok (if HostText.contains text needle then path::accumulated else accumulated)) (Ok []) (sourceFiles ()) in Ok (List.rev reversed)
 let testCompilerAvoidsFailwith ()=
  let* paths=findTextUsesIn "failwith" compilerSourceFiles in
- let offenders=List.filter (fun path->Filename.basename path<>"Crash.fs") paths |> List.map R.relativePath in if offenders=[] then Ok () else Error ("Unexpected failwith usage in compiler: "^String.concat ", " offenders)
+ (* Host adapters preserve exceptions from the reference's JSON, encoding and
+    duration APIs. Their callers convert recoverable failures to results;
+    compiler invariants must use Crash.crash. *)
+ let hostBoundaries=["Crash.ml";"HostBatchJson.ml";"HostJson.ml";"HostPackageIO.ml";"HostTimeSpan.ml"] in
+ let offenders=List.filter (fun path->not (List.mem (Filename.basename path) hostBoundaries)) paths |> List.map R.relativePath in if offenders=[] then Ok () else Error ("Unexpected failwith usage in compiler: "^String.concat ", " offenders)
 let testTestToolingAvoidsFailwith ()=
  let* paths=findTextUsesIn "failwith" testToolingSourceFiles in let offenders=List.map R.relativePath paths in if offenders=[] then Ok () else Error ("Unexpected failwith usage in test tooling: "^String.concat ", " offenders)
 let testCompilerAvoidsOptionGet ()=

@@ -6,7 +6,7 @@ module R=RepositoryTestFiles
 module M=StringOrder.Map
 type testResult=(unit,string) result
 let (let*)=Result.bind
-let stdlibFiles ()=let dir=R.scriptPath "src/DarkCompiler/stdlib" in try Ok (R.filesUnder "src/DarkCompiler/stdlib" ".dark") with exn->Error ("Failed to list stdlib files in "^dir^": "^HostFile.errorMessage dir exn)
+let stdlibFiles ()=let dir=R.scriptPath "ocaml/share/stdlib" in try Ok (R.filesUnder "ocaml/share/stdlib" ".dark") with exn->Error ("Failed to list stdlib files in "^dir^": "^HostFile.errorMessage dir exn)
 let definitionName line=
  let units=HostText.utf16Units line in let count=Array.length units in
  let white c=Uchar.is_valid c && Uucp.White.is_white_space (Uchar.of_int c) in

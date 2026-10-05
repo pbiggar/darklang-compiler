@@ -12,7 +12,7 @@
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-COMPILER_DIR="${REPO_ROOT}/src/DarkCompiler"
+COMPILER_DIR="${REPO_ROOT}/ocaml/lib"
 RESULTS_DIR="${SCRIPT_DIR}/results"
 CHECKPOINT_FILE="${RESULTS_DIR}/checkpoint.txt"
 SITES_FILE="${RESULTS_DIR}/mutation_sites.txt"
@@ -21,7 +21,7 @@ REPORT_FILE="${RESULTS_DIR}/report.txt"
 
 # Timeouts
 BUILD_TIMEOUT=60
-TEST_TIMEOUT=120
+TEST_TIMEOUT=600
 
 # Counters
 TOTAL_MUTATIONS=0
@@ -77,7 +77,7 @@ should_skip_file() {
     local basename
     basename=$(basename "$1")
     case "$basename" in
-        *Test*.fs|IRPrinter.fs|Binary.fs|Binary_ELF.fs|Binary_MachO.fs|Output.fs|Platform.fs)
+        *Test*.ml|IRPrinter.fs|Binary.fs|Binary_ELF.fs|Binary_MachO.fs|Output.fs|Platform.fs)
             return 0 ;;
     esac
     return 1
@@ -109,7 +109,7 @@ find_mutation_sites() {
 
     # Get list of files
     local files
-    mapfile -t files < <(find "$COMPILER_DIR" -name "*.fs" 2>/dev/null)
+    mapfile -t files < <(find "$COMPILER_DIR" -name "*.ml" 2>/dev/null)
     local file_count=0
 
     for file in "${files[@]}"; do
@@ -231,19 +231,16 @@ restore_file() {
 # Run tests for a mutation
 run_mutation_test() {
     # Build
-    if ! timeout "$BUILD_TIMEOUT" dotnet build "${SCRIPT_DIR}/../src/Tests/Tests.fsproj" \
-        -c Release --nologo -v q > /dev/null 2>&1; then
+    if ! timeout "$BUILD_TIMEOUT" "${REPO_ROOT}/build" --ai > /dev/null 2>&1; then
         echo "BUILD_FAILURE"
         return
     fi
 
-    # Find test executable (output goes to bin/ at project root, not src/Tests/bin/)
-    local test_dll="${SCRIPT_DIR}/../bin/Tests/Release/net11.0/Tests.dll"
-    local dotnet_host="${SCRIPT_DIR}/../scripts/dotnet-host"
-    [[ ! -f "$test_dll" ]] && { echo "BUILD_FAILURE"; return; }
+    # Execute the already-built native runner.
+    [[ ! -x "${REPO_ROOT}/ocaml/_build/default/tests/tests_main.exe" ]] && { echo "BUILD_FAILURE"; return; }
 
     # Run tests
-    if timeout "$TEST_TIMEOUT" "$dotnet_host" "$test_dll" > /dev/null 2>&1; then
+    if timeout "$TEST_TIMEOUT" "${REPO_ROOT}/run-tests" --quiet > /dev/null 2>&1; then
         echo "SURVIVED"
     else
         local rc=$?

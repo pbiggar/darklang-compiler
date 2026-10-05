@@ -35,7 +35,7 @@ and parsePipe grammar state index =
     if tok state (!current + 1) = TLParen && Option.is_some (infixOf (tok state (!current + 2))) && tok state (!current + 3) = TRParen &&
       (canStartAtom (tok state (!current + 4)) || isNegLitArg state (!current + 4)) then begin
       let opRange = rng state (!current + 2) in
-      let infix = Option.get (infixOf (tok state (!current + 2))) in
+      let infix = (match infixOf (tok state (!current + 2)) with Some infix -> infix | None -> Crash.crash "Validated pipe operator has no infix operation") in
       let argument, stop = grammar.parseInfix state (!current + 4) in
       RevBuffer.add parts (pipeRange, WT.EPipeInfix (span opRange (WT.exprRange argument), (opRange, infix), argument));
       current := if stop > !current then stop else !current + 1

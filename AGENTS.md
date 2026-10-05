@@ -30,10 +30,11 @@ this repository and takes precedence where it is stricter.
   utility work are not exceptions. If a separate worktree cannot be created,
   stop and ask for direction instead of working in the primary checkout.
 
-## F# conventions
+## OCaml conventions
 
-- Use functional constructs: no mutation, exceptions, `exit`, or throwing
-  lookup helpers.
+- Preserve functional compiler algorithms and explicit interfaces. Localized
+  parser, cache and host-I/O mutation is permitted. Do not use partial
+  lookup helpers; host adapters may preserve caught host-API exceptions.
 - Use `Option` only for semantic absence and `Result` for recoverable failure.
 - Model invalid states out of existence; complete migrations and remove
   superseded representations rather than adding defaults or shims.
@@ -67,10 +68,10 @@ this repository and takes precedence where it is stricter.
   file-purpose comment.
 - Use command-line flags rather than environment variables; use `python3` for
   scripts.
-- Build the .NET/F# projects with `./build --ai`; it keeps automated output
+- Build the pinned native Dune graph with `./build --ai`; it keeps automated output
   bounded and retains complete failure logs under `TestResults/ai/`.
 - `./run-tests` only executes an already-built test binary; it must never invoke
-  a .NET/F# project build. Run `./build --ai` first, and rebuild after changing
+  a build. Run `./build --ai` first, and rebuild after changing
   source or project files before treating a test result as current.
 - Before declaring a task branch ready, run the complete already-built host
   test suite with `./run-tests --ai`. Full-suite timing measurements are

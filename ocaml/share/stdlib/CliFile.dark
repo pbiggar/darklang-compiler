@@ -1,0 +1,115 @@
+// Stdlib.Cli.File.dark - Portable path-pattern matching used by CLI workflows.
+// Ported from darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+
+module Darklang.Stdlib.Cli.File
+
+let __segmentMatchesNoStar (pattern: String) (path: String) (patternIndex: Int64) (pathIndex: Int64) : Bool =
+    let patternLength = Stdlib.String.__byteLength pattern in
+    let pathLength = Stdlib.String.__byteLength path in
+    if patternIndex == patternLength then pathIndex == pathLength
+    else
+        let patternByte = Stdlib.String.__byteAtUnchecked pattern patternIndex in
+        if patternByte == 63L then
+            pathIndex < pathLength
+            && Stdlib.Cli.File.__segmentMatchesNoStar pattern path (patternIndex + 1L) (pathIndex + 1L)
+        else
+            pathIndex < pathLength
+            && patternByte == Stdlib.String.__byteAtUnchecked path pathIndex
+            && Stdlib.Cli.File.__segmentMatchesNoStar pattern path (patternIndex + 1L) (pathIndex + 1L)
+
+let __chunkMatchesAt (chunk: String) (path: String) (chunkIndex: Int64) (pathIndex: Int64) : Bool =
+    if chunkIndex == Stdlib.String.__byteLength chunk then true
+    else if pathIndex >= Stdlib.String.__byteLength path then false
+    else
+        let chunkByte = Stdlib.String.__byteAtUnchecked chunk chunkIndex in
+        let pathByte = Stdlib.String.__byteAtUnchecked path pathIndex in
+        (chunkByte == 63L || chunkByte == pathByte)
+        && Stdlib.Cli.File.__chunkMatchesAt chunk path (chunkIndex + 1L) (pathIndex + 1L)
+
+let __findChunk (chunk: String) (path: String) (pathIndex: Int64) : Int64 =
+    if pathIndex + Stdlib.String.__byteLength chunk > Stdlib.String.__byteLength path then -1L
+    else if Stdlib.Cli.File.__chunkMatchesAt (chunk ++ "") (path ++ "") 0L pathIndex then pathIndex
+    else Stdlib.Cli.File.__findChunk chunk path (pathIndex + 1L)
+
+let __allEmpty (parts: List<String>) : Bool =
+    match parts with
+    | [] -> true
+    | part :: rest -> part == "" && Stdlib.Cli.File.__allEmpty rest
+
+let __matchStarParts (parts: List<String>) (path: String) (pathIndex: Int64) (anchoredStart: Bool) (anchoredEnd: Bool) : Bool =
+    match parts with
+    | [] -> if anchoredEnd then pathIndex == Stdlib.String.__byteLength path else true
+    | part :: rest ->
+        if part == "" then
+            Stdlib.Cli.File.__matchStarParts rest path pathIndex false anchoredEnd
+        else
+            let found =
+                if anchoredStart then
+                    if Stdlib.Cli.File.__chunkMatchesAt (part ++ "") (path ++ "") 0L pathIndex then pathIndex else -1L
+                else Stdlib.Cli.File.__findChunk (part ++ "") (path ++ "") pathIndex in
+            if found < 0L then false
+            else
+                let nextIndex = found + Stdlib.String.__byteLength part in
+                if Stdlib.Cli.File.__allEmpty rest then
+                    if anchoredEnd then nextIndex == Stdlib.String.__byteLength path else true
+                else
+                    Stdlib.Cli.File.__matchStarParts rest path nextIndex false anchoredEnd
+
+let __segmentMatches (pattern: String) (path: String) (patternIndex: Int64) (pathIndex: Int64) : Bool =
+    match Stdlib.String.__byteIndexOf pattern "*" with
+    | None -> Stdlib.Cli.File.__segmentMatchesNoStar pattern path patternIndex pathIndex
+    | Some _ ->
+        let parts = Stdlib.String.split pattern "*" in
+        let anchoredStart = Stdlib.Bool.not (Stdlib.String.startsWith pattern "*") in
+        let anchoredEnd = Stdlib.Bool.not (Stdlib.String.endsWith pattern "*") in
+        Stdlib.Cli.File.__matchStarParts parts path pathIndex anchoredStart anchoredEnd
+
+let __copySegments (segments: List<String>) : List<String> =
+    match segments with
+    | [] -> []
+    | head :: tail -> Stdlib.List.push (Stdlib.Cli.File.__copySegments tail) (head ++ "")
+
+let globMatchSegments (patternSegments: List<String>) (pathSegments: List<String>) : Bool =
+    match patternSegments with
+    | [] -> Stdlib.List.length pathSegments == 0
+    | patternHead :: patternTail ->
+        if patternHead == "**" then
+            if Stdlib.Cli.File.globMatchSegments (Stdlib.Cli.File.__copySegments patternTail) (Stdlib.Cli.File.__copySegments pathSegments) then true
+            else
+                match pathSegments with
+                | [] -> false
+                | _pathHead :: pathTail ->
+                    Stdlib.Cli.File.globMatchSegments (Stdlib.Cli.File.__copySegments patternSegments) (Stdlib.Cli.File.__copySegments pathTail)
+        else
+            match pathSegments with
+            | [] -> false
+            | pathHead :: pathTail ->
+                Stdlib.Cli.File.__segmentMatches patternHead pathHead 0L 0L
+                && Stdlib.Cli.File.globMatchSegments patternTail pathTail
+
+let __tempError (errno: Int64) : Stdlib.Cli.Posix.Error =
+    let message =
+        if errno == 2L then "No such file or directory"
+        else if errno == 13L then "Permission denied"
+        else if errno == 17L then "File exists"
+        else if errno == 28L then "No space left on device"
+        else if errno == 36L then "File name too long"
+        else "Temporary file creation failed" in
+    Stdlib.Cli.Posix.Error { errno = Stdlib.Int.fromInt64 errno, message = message }
+
+let __createTempFrom (prefix: String) (attempts: Int64) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
+    if attempts == 0L then Error (Stdlib.Cli.File.__tempError 17L)
+    else
+        let path = prefix ++ Stdlib.Int64.toString (Stdlib.Int.__randomInt64Word ()) in
+        let errno = Stdlib.Cli.__createExclusive path in
+        if errno == 0L then Ok path
+        else if errno == 17L then Stdlib.Cli.File.__createTempFrom prefix (attempts - 1L)
+        else Error (Stdlib.Cli.File.__tempError errno)
+
+/// Atomically create a private temporary file and return its path.
+let createTemp () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
+    let prefix =
+        match Stdlib.Cli.Env.get "TMPDIR" with
+        | Some directory -> directory ++ "/dark-tmp-"
+        | None -> "/tmp/dark-tmp-" in
+    Stdlib.Cli.File.__createTempFrom prefix 100L

@@ -109,12 +109,12 @@ ownership planning do not add record syntax.
 
 | File | Purpose |
 | --- | --- |
-| `src/DarkCompiler/AST.fs` | nominal record references and public expressions |
-| `src/DarkCompiler/frontend/interpreter/Parser.fs` | canonical interpreter-compatible grammar |
-| `src/DarkCompiler/frontend/TypeChecking.fs` | metadata, substitution, validation |
-| `src/DarkCompiler/frontend/ValueRendering.fs` | record rendering |
-| `src/DarkCompiler/passes/anf/AST_to_ANF.fs` | record allocation, clone, and projection |
-| `src/DarkCompiler/ir/anf/ANF.fs` | descriptors and ownership shapes |
+| `ocaml/lib/AST.ml` | nominal record references and public expressions |
+| `ocaml/lib/frontend/interpreter/Parser.ml` | canonical interpreter-compatible grammar |
+| `ocaml/lib/frontend/TypeChecking.ml` | metadata, substitution, validation |
+| `ocaml/lib/frontend/ValueRendering.ml` | record rendering |
+| `ocaml/lib/passes/anf/AST_to_ANF.ml` | record allocation, clone, and projection |
+| `ocaml/lib/ir/anf/ANF.ml` | descriptors and ownership shapes |
 | `src/Tests/e2e/records.e2e` | public behavior regressions |
 
 See [record parity](../../compatibility/language/records.md) for revision-stamped evidence.

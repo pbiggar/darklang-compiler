@@ -1,0 +1,37 @@
+// Stdlib.Http.Request - frozen query accessors for canonical HTTP request values.
+
+module Darklang.Stdlib.Http.Request
+
+let __queryParamPair (param: String) : (String * String) =
+    match Stdlib.String.split param "=" with
+    | [key, value] -> (key, value)
+    | _ -> (param, "")
+
+let queryParams (req: Stdlib.Http.Request) : List<(String * String)> =
+    match Stdlib.String.split req.url "?" with
+    | [] -> []
+    | _ :: queryParts ->
+        Stdlib.List.map (Stdlib.String.split (Stdlib.String.join queryParts "") "&") Stdlib.Http.Request.__queryParamPair
+
+let __matchingValue (key: String) (pair: (String * String)) : Stdlib.Option.Option<String> =
+    let (pairKey, value) = pair in
+    if pairKey == key then Some value else None
+
+let queryParam (req: Stdlib.Http.Request) (key: String) : Stdlib.Option.Option<String> =
+    let found = Stdlib.List.filterMap (Stdlib.Http.Request.queryParams req) (Stdlib.Http.Request.__matchingValue key) in
+    match found with
+    | [] -> None
+    | [value] -> Some value
+    | values -> Some (Stdlib.String.join values ",")
+
+/// The value of `key`, matched case-insensitively as HTTP requires.
+let header
+    (req: Stdlib.Http.Request)
+    (key: String)
+    : Stdlib.Option.Option<String> =
+    let wanted = Stdlib.String.toLowercase key in
+    req.headers
+    |> Stdlib.List.filterMap (fun pair ->
+        let (k, v) = pair in
+        if Stdlib.String.toLowercase k == wanted then Some v else None)
+    |> Stdlib.List.head

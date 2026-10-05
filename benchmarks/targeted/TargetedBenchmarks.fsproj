@@ -7,12 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="BenchmarkHost.fs" />
     <Compile Include="JsonPerformanceBenchmarks.fs" />
     <Compile Include="Integer128PerformanceBenchmarks.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="../../src/DarkCompiler/DarkCompiler.fsproj" />
-  </ItemGroup>
 </Project>

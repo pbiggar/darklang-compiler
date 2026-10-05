@@ -113,10 +113,13 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       libatomic1 \
       libglib2.0-0t64 \
       libicu-dev \
+      libgmp-dev \
       libcurl4-openssl-dev \
       libsqlite3-dev \
       libssl3t64 \
       libstdc++6 \
+      opam \
+      pkg-config \
       python3 \
       python3-venv \
       shellcheck \
@@ -148,7 +151,15 @@ ENV DOTNET_CLI_HOME=/home/agent
 ENV DOTNET_MULTILEVEL_LOOKUP=0
 ENV CARGO_HOME=/usr/local/cargo
 ENV RUSTUP_HOME=/usr/local/rustup
-ENV PATH=/opt/ocaml/bin:/usr/share/dotnet:/home/agent/.dotnet/tools:/home/agent/.local/bin:/usr/local/cargo/bin:$PATH
+ENV PATH=/home/agent/.opam/dark/bin:/opt/ocaml/bin:/usr/share/dotnet:/home/agent/.dotnet/tools:/home/agent/.local/bin:/usr/local/cargo/bin:$PATH
+
+# Native compiler dependencies use a pinned switch. .NET serves unrelated
+# F# benchmark references and the historical migration oracle only.
+RUN opam init --bare --disable-sandboxing --yes && \
+    opam switch create dark ocaml-system.5.5.1 --yes
+RUN --mount=type=bind,source=ocaml/dependencies.lock,target=/tmp/native-dependencies.lock \
+    sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' /tmp/native-dependencies.lock | \
+    xargs opam install --switch=dark --yes --jobs=1 --no-depexts
 
 # Fail the image build if either compiler is unavailable or the SDK pin drifts.
 RUN dotnet --version | grep -Fx '11.0.100-rc.1.26425.128' && \

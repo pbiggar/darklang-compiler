@@ -46,7 +46,7 @@ let boundaryRelation (first : 'id O.functionSignature) (second : 'id O.functionS
  let rec compareParameters noStronger strictlyBetter first second = match first, second with
  | [], [] -> noStronger, strictlyBetter
  | first :: firstRest, second :: secondRest -> compareParameters (noStronger && parameterStrength first <= parameterStrength second) (strictlyBetter || parameterStrength first < parameterStrength second) firstRest secondRest
- | _ -> failwith "Uniqueness variants changed function parameter arity" in
+ | _ -> Crash.crash "Uniqueness variants changed function parameter arity" in
  let parametersNoStronger, strictlyWeakerParameters = compareParameters true false first.O.parameters second.O.parameters in
  let resultNoWeaker = resultStrength first.O.result >= resultStrength second.O.result in
  let strictlyBetter = strictlyWeakerParameters || resultStrength first.O.result > resultStrength second.O.result in
@@ -95,7 +95,7 @@ module Make (Identity : O.Identity) = struct
    match nondominated, firstFailure with
    | head :: tail, _ -> Ok (Candidates (head, tail))
    | [], Some error -> Error (NoVerifiedBoundary error)
-   | [], None -> failwith "Ownership uniqueness inference generated no boundary candidates"
+   | [], None -> Crash.crash "Ownership uniqueness inference generated no boundary candidates"
  let inferDemand semantics uniqueArguments (functionDefinition : ('leaf, Identity.t) O.functionDef) =
   let root = functionDefinition.O.definition.HIR.body in
   if callsTarget functionDefinition.O.definition.HIR.id root then Error (RecursiveFunctionRequiresGroupInference functionDefinition.O.definition.HIR.id)

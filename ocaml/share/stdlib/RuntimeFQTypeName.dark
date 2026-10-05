@@ -1,0 +1,5 @@
+// RuntimeFQTypeName.dark - canonical content-addressed runtime type name.
+
+module Darklang.LanguageTools.RuntimeTypes.FQTypeName
+
+type FQTypeName = Package of Darklang.LanguageTools.RuntimeTypes.Hash

@@ -18,7 +18,7 @@ def git(*args):
 
 
 def kind(path):
-    if path.startswith("src/DarkCompiler/stdlib/"):
+    if path.startswith("src/DarkCompiler/") and path.endswith(".dark"):
         return "stdlib"
     if path.startswith("src/DarkCompiler/") and path.endswith(".fs"):
         return "compiler"
@@ -158,6 +158,8 @@ OWNER_OVERRIDES = {
 def owner(path):
     if path in OWNER_OVERRIDES:
         return OWNER_OVERRIDES[path]
+    if kind(path) == "stdlib":
+        return "ocaml/share/" + path[len("src/DarkCompiler/"):]
     if kind(path) == "compiler":
         return "ocaml/lib/" + path[len("src/DarkCompiler/"):-3] + ".ml"
     if kind(path) == "test-source":
@@ -188,8 +190,11 @@ def verify(require_complete):
     for entry in manifest["entries"]:
         source = ROOT / entry["source"]
         if fixture(entry["source"]):
-            if not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest() != entry["sha256"]:
-                errors.append(f"Frozen input changed: {entry['source']}")
+            destination = ROOT / entry["owner"]
+            if not destination.is_file() or hashlib.sha256(destination.read_bytes()).hexdigest() != entry["sha256"]:
+                errors.append(f"Frozen input changed: {entry['owner']}")
+            if source != destination and source.is_file() and hashlib.sha256(source.read_bytes()).hexdigest() != entry["sha256"]:
+                errors.append(f"Frozen reference input changed: {entry['source']}")
         if entry["kind"] in ("compiler", "test-source"):
             implementation_count += 1
             implementation = ROOT / entry["owner"]

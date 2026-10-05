@@ -349,7 +349,7 @@ let peepholeOptimize (instrs:Symbolic.instr list) =
                 match extension with
                 | Symbolic.UXTB _ -> ARM64.ExtendUXTB | Symbolic.UXTH _ -> ARM64.ExtendUXTH | Symbolic.UXTW _ -> ARM64.ExtendUXTW
                 | Symbolic.SXTB _ -> ARM64.ExtendSXTB | Symbolic.SXTH _ -> ARM64.ExtendSXTH | Symbolic.SXTW _ -> ARM64.ExtendSXTW
-                | _ -> failwith "ARM64 extension combine received a non-extension"
+                | _ -> Crash.crash "ARM64 extension combine received a non-extension"
             in optimize (Symbolic.ADD_extended (dest, baseReg, src, extend) :: acc) rest
 
 

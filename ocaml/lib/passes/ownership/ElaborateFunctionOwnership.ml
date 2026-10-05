@@ -64,10 +64,10 @@ let convergeBoundaries dialect (definitions : 'block H.functionDef list) =
  let groups = OwnedFunctionGroups.orderedFunctionIds (List.map (fun (definition : 'block H.functionDef) -> definition.H.id) definitions) (F.map (fun _ calls -> FS.elements calls) callsByFunction) in
  let definitionsById = F.ofList (List.map (fun (definition : 'block H.functionDef) -> definition.H.id, definition) definitions) in
  let boundaryState group boundaries = F.ofList (List.map (fun (definition : 'block H.functionDef) -> match F.tryFind definition.H.id boundaries with
-  | Some boundary -> definition.H.id, boundary | None -> failwith "Whole-function ownership group lost its boundary") group) in
+  | Some boundary -> definition.H.id, boundary | None -> Crash.crash "Whole-function ownership group lost its boundary") group) in
  let updateSignatures boundaries signatures group = List.fold_left (fun result (definition : 'block H.functionDef) ->
   let* signatures = result in match F.tryFind definition.H.id boundaries with
-  | None -> failwith "Inferred ownership group lost its boundary"
+  | None -> Crash.crash "Inferred ownership group lost its boundary"
   | Some boundary -> (match V.callSignatureOfFunction boundary with Error error -> Error (InvalidFunctionBoundary (definition.H.id, error)) | Ok signature -> Ok (F.add definition.H.id signature signatures))) (Ok signatures) group in
  let inferGroup (boundaries, signatures) group =
   let ownership = resolveCall dialect.externalCallOwnership signatures in
@@ -77,17 +77,17 @@ let convergeBoundaries dialect (definitions : 'block H.functionDef list) =
  let convergeGroup state group =
   let rec loop seen ((boundaries, _) as state) =
    let current = boundaryState group boundaries |> F.toList in
-   if List.mem current seen then failwith "Recursive whole-function ownership boundary inference did not converge"
+   if List.mem current seen then Crash.crash "Recursive whole-function ownership boundary inference did not converge"
    else let* ((nextBoundaries, _) as next) = inferGroup state group in
     if F.toList (boundaryState group nextBoundaries) = current then Ok next else loop (current :: seen) next in
   loop [] state in
  let* initialSignatures = signatureRegistry initial in
  let* boundaries, signatures = List.fold_left (fun result ids -> let* state = result in
-  let group = List.map (fun id -> match F.tryFind id definitionsById with Some definition -> definition | None -> failwith "Whole-function ownership group lost its definition") ids in
+  let group = List.map (fun id -> match F.tryFind id definitionsById with Some definition -> definition | None -> Crash.crash "Whole-function ownership group lost its definition") ids in
   match group with
-  | [definition] -> let recursive = match F.tryFind definition.H.id callsByFunction with Some calls -> FS.mem definition.H.id calls | None -> failwith "Whole-function ownership group lost its call set" in
+  | [definition] -> let recursive = match F.tryFind definition.H.id callsByFunction with Some calls -> FS.mem definition.H.id calls | None -> Crash.crash "Whole-function ownership group lost its call set" in
     if recursive then convergeGroup state group else inferGroup state group
-  | _ :: _ -> convergeGroup state group | [] -> failwith "Whole-function ownership SCC discovery returned an empty group") (Ok (initial, initialSignatures)) groups in
+  | _ :: _ -> convergeGroup state group | [] -> Crash.crash "Whole-function ownership SCC discovery returned an empty group") (Ok (initial, initialSignatures)) groups in
  Ok (boundaries, resolveCall dialect.externalCallOwnership signatures)
 let collectDefinitions dialect ownership (definition : 'block H.functionDef) =
  let rec block acc source = List.fold_left (fun result operation -> let* acc = result in
@@ -137,12 +137,12 @@ let elaborateFunction dialect ownership (boundary : H.valueId O.functionSignatur
       let* borrowed, consumed = callInputs dialect signature call in
       let definitions = match signature.O.result, managedId dialect call.H.result with (O.ProducedCallResult | O.UniqueProducedCallResult), Some id -> S.singleton id | _ -> S.empty in
       Ok (borrowed, consumed, definitions))
-    | H.Branch _ -> failwith "Whole-function ownership: branch handled separately" in
+    | H.Branch _ -> Crash.crash "Whole-function ownership: branch handled separately" in
     let* borrowed, consumed, definitions = operationOwnership in
     let uses = S.union borrowed (S.of_list consumed) in let before = S.union uses (S.diff live definitions) in
     let consumedSet = S.of_list consumed in let lastBorrowed = S.diff (S.diff uses live) consumedSet in
     let unusedDefinitions = S.diff definitions live in
-    let evaluation = match operation with H.Leaf leaf -> H.Leaf leaf | H.ScalarBinding (output, operand) -> H.ScalarBinding (output, operand) | H.Call call -> H.Call call | H.Branch _ -> failwith "Whole-function ownership: branch handled separately" in
+    let evaluation = match operation with H.Leaf leaf -> H.Leaf leaf | H.ScalarBinding (output, operand) -> H.ScalarBinding (output, operand) | H.Call call -> H.Call call | H.Branch _ -> Crash.crash "Whole-function ownership: branch handled separately" in
     let steps = dups consumed live @ [O.Evaluate evaluation] @ drops (S.union lastBorrowed unusedDefinitions) in
     Ok (steps @ tail, before)) body.H.operations (Ok ([], liveAfter)) in
   Ok ({O.body = {H.parameters = body.H.parameters; operations; result = body.H.result}}, before) in
@@ -157,7 +157,7 @@ let elaborateFunctionsWithTrace recordTiming dialect definitions =
  let* boundaries, ownership = measure "Ownership detail: Boundary inference" (fun () -> convergeBoundaries dialect definitions) in
  let* functions = measure "Ownership detail: Ownership elaboration" (fun () -> List.fold_left (fun result (definition : 'block H.functionDef) ->
   let* functions = result in match F.tryFind definition.H.id boundaries with
-  | None -> failwith "Whole-function ownership boundary disappeared during elaboration"
+  | None -> Crash.crash "Whole-function ownership boundary disappeared during elaboration"
   | Some boundary -> let* owned = elaborateFunction dialect ownership boundary definition in Ok (owned :: functions)) (Ok []) definitions) in
  let scalarIds (operand : H.operand) = CheckedAST.BindingIdMap.bindings operand.H.inputs |> List.filter_map (fun (_, value) -> managedId dialect value) |> S.of_list in
  let ownershipSemantics : 'leaf Ownership.semantics = {Ownership.leaf = dialect.leafOwnership; leafUniqueness = dialect.leafUniqueness; callOwnership = ownership;

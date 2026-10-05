@@ -104,8 +104,8 @@ type CExpr =
 
 ## Code Generation
 
-From `src/DarkCompiler/backend/arm64/CodeGen.fs` and
-`src/DarkCompiler/backend/x64/CodeGen.fs`:
+From `ocaml/lib/backend/arm64/Backend_Arm64_CodeGen.ml` and
+`ocaml/lib/backend/x64/CodeGen_X86_64.ml`:
 
 1. **ClosureAlloc**: Allocates tuple on heap, stores function address and captures
 2. **ClosureCall**: Loads function pointer from closure[0], passes closure as hidden first arg
@@ -167,8 +167,8 @@ in add(10)(32)  // 42
 |------|---------|
 | `passes/preparation/ClosureAnalysis.fs` and `LiftFunctions.fs` | Lambda analysis and lifting |
 | `ir/anf/ANF.fs` | ClosureAlloc, ClosureCall, ClosureTailCall types |
-| `src/DarkCompiler/backend/arm64/runtime/ClosureReferenceCounts.fs` | ARM64 closure lifetime helpers |
-| `src/DarkCompiler/backend/x64/runtime/ClosureReferenceCounts.fs` | x64 closure lifetime helpers |
+| `ocaml/lib/backend/arm64/runtime/ARM64ClosureReferenceCounts.ml` | ARM64 closure lifetime helpers |
+| `ocaml/lib/backend/x64/runtime/X64ClosureReferenceCounts.ml` | x64 closure lifetime helpers |
 
 ## Tests
 

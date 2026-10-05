@@ -18,8 +18,8 @@ annotations; let bindings have optional annotations.
 ## Type representations
 
 Source type syntax is defined in
-`src/DarkCompiler/frontend/interpreter/WrittenTypes.fs`. Resolved semantic
-types are defined in `src/DarkCompiler/AST.fs`:
+`ocaml/lib/frontend/interpreter/WrittenTypes.ml`. Resolved semantic
+types are defined in `ocaml/lib/AST.ml`:
 
 ```fsharp
 type SemanticType =
@@ -209,8 +209,8 @@ type TypeError =
 
 | File | Purpose |
 |------|---------|
-| `src/DarkCompiler/frontend/TypeChecking.fs` | Main type checker |
-| `src/DarkCompiler/AST.fs` | Type definitions |
+| `ocaml/lib/frontend/TypeChecking.ml` | Main type checker |
+| `ocaml/lib/AST.ml` | Type definitions |
 
 ## Key Functions
 

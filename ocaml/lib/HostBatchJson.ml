@@ -36,10 +36,10 @@ let[@warning "-4"] parse text=
   let start= !cursor in
   let target=match expected with AnyValue->None|ManifestArray->Some "Program+BatchManifestItem[]"|ManifestItem->Some "Program+BatchManifestItem"|StringField->Some "System.String" in
   let incompatible=match expected,text.[!cursor] with ManifestArray,'{'|ManifestItem,'['|StringField,('['|'{')->true|_->false in
-  if incompatible then conversion path (start+1) (Option.get target);
+  if incompatible then conversion path (start+1) ((match target with Some target -> target | None -> Crash.crash "JSON conversion has no expected target type"));
   let complete ((node,_,stop) as token)=
    let compatible=match expected,node with AnyValue,_|ManifestArray,(`Null|`Array _)|ManifestItem,(`Null|`Object _)|StringField,(`Null|`String _)->true|_->false in
-   if compatible then token else conversion path stop (Option.get target) in
+   if compatible then token else conversion path stop ((match target with Some target -> target | None -> Crash.crash "JSON conversion has no expected target type")) in
   complete (match text.[!cursor] with
   |'"'->let text=stringToken path (expected=StringField) in `String text,start,!cursor
   |'{'->incr cursor;space ();let rec fields reversed=

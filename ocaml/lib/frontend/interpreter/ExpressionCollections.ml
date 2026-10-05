@@ -30,7 +30,7 @@ let parseParen parseExpr state index =
       | TAt ->
           let name = {WT.range = opRange; modules = [({WT.range = opRange; name = "Stdlib"}, opRange); ({WT.range = opRange; name = "List"}, opRange)]; fn = {WT.range = opRange; name = "append"}} in
           WT.EApply (range, WT.EFnName (opRange, name), [], [a; b])
-      | _ -> WT.EInfix (range, (opRange, Option.get (infixOf operator)), a, b) in
+      | _ -> WT.EInfix (range, (opRange, (match infixOf operator with Some infix -> infix | None -> Crash.crash "Validated operator section has no infix operation")), a, b) in
     WT.ELambda (range, [WT.LPVariable (zero, "a"); WT.LPVariable (zero, "b")], body, zero, zero), index + 3
   else withStmtColExact state (rng state (index + 1)).start.column (fun () ->
     let first, next = parseExpr state (index + 1) in

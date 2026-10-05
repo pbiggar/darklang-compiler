@@ -307,12 +307,12 @@ if [ "$QUIET_MODE" != true ]; then
     pretty_info "Building current Dark compiler..."
 fi
 if [ "$QUIET_MODE" = true ]; then
-    if ! dotnet build "$PROJECT_ROOT/src/DarkCompiler/DarkCompiler.fsproj" --no-incremental --verbosity quiet >"$LOG_DIR/compiler-build.log" 2>&1; then
+    if ! "$PROJECT_ROOT/build" --ai >"$LOG_DIR/compiler-build.log" 2>&1; then
         cat "$LOG_DIR/compiler-build.log"
         pretty_fail "Dark compiler build failed"
         exit 1
     fi
-elif ! dotnet build "$PROJECT_ROOT/src/DarkCompiler/DarkCompiler.fsproj" --no-incremental --verbosity quiet; then
+elif ! "$PROJECT_ROOT/build" --ai; then
     pretty_fail "Dark compiler build failed"
     exit 1
 fi

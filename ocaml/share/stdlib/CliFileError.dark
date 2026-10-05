@@ -1,0 +1,9 @@
+// CliFileError.dark - render upstream-compatible filesystem errors.
+
+module Stdlib.Cli.FileSystem.FileError
+
+let toString (error: Stdlib.Cli.FileSystem.FileError) : String =
+    match error with
+    | NotFound -> "File not found"
+    | OsAccessDenied -> "Permission denied"
+    | Other message -> message

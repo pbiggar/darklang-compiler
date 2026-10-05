@@ -1,0 +1,106 @@
+// Stdlib.UInt16.dark - Stdlib.UInt16 definitions
+//
+// Split from stdlib.dark for modular stdlib loading.
+
+module Darklang.Stdlib.UInt16
+
+type ParseError = BadFormat | OutOfRange
+
+// Stdlib.UInt16 - Integer operations
+
+let add (a: UInt16) (b: UInt16) : UInt16 = a + b
+
+let subtract (a: UInt16) (b: UInt16) : UInt16 = a - b
+
+let multiply (a: UInt16) (b: UInt16) : UInt16 = a * b
+
+let divide (a: UInt16) (b: UInt16) : UInt16 = if b == 0us then Builtin.crash "Cannot divide by 0" else a / b
+
+let max (a: UInt16) (b: UInt16) : UInt16 = if a > b then a else b
+
+let min (a: UInt16) (b: UInt16) : UInt16 = if a < b then a else b
+
+let mod (a: UInt16) (b: UInt16) : UInt16 = if b == 0us then Builtin.crash "Cannot evaluate modulus against 0" else a % b
+
+
+
+let __powerLoop (base: UInt16) (exponent: UInt16) (result: UInt16) : UInt16 =
+    if exponent == 0us then result
+    else
+        let next = if (exponent % 2us) == 1us then result * base else result in
+        Stdlib.UInt16.__powerLoop (base * base) (exponent / 2us) next
+let power (base: UInt16) (exponent: UInt16) : UInt16 = Stdlib.UInt16.__powerLoop base exponent 1us
+
+let clamp (value: UInt16) (limitA: UInt16) (limitB: UInt16) : UInt16 =
+    let lower = Stdlib.UInt16.min limitA limitB in
+    let upper = Stdlib.UInt16.max limitA limitB in
+    Stdlib.UInt16.max lower (Stdlib.UInt16.min upper value)
+
+let greaterThan (a: UInt16) (b: UInt16) : Bool = a > b
+
+let greaterThanOrEqualTo (a: UInt16) (b: UInt16) : Bool = a >= b
+
+let lessThan (a: UInt16) (b: UInt16) : Bool = a < b
+
+let lessThanOrEqualTo (a: UInt16) (b: UInt16) : Bool = a <= b
+
+// Count number of set bits (population count)
+// Uses parallel bit counting algorithm (SWAR)
+let __popcount (x: UInt16) : UInt16 =
+    let mask1 = 21845us in
+    let mask2 = 13107us in
+    let mask3 = 3855us in
+    let mask4 = 31us in
+    let x = x - Stdlib.UInt16.bitwiseAnd (Stdlib.UInt16.shiftRight x 1us) mask1 in
+    let x = Stdlib.UInt16.bitwiseAnd x mask2 + Stdlib.UInt16.bitwiseAnd (Stdlib.UInt16.shiftRight x 2us) mask2 in
+    let x = Stdlib.UInt16.bitwiseAnd (x + Stdlib.UInt16.shiftRight x 4us) mask3 in
+    let x = x + Stdlib.UInt16.shiftRight x 8us in
+    Stdlib.UInt16.bitwiseAnd x mask4
+
+// Convert a single digit (0us-9us) to its string representation
+let __digitToString (n: UInt16) : String =
+    match n with
+    | 0us -> "0"
+    | 1us -> "1"
+    | 2us -> "2"
+    | 3us -> "3"
+    | 4us -> "4"
+    | 5us -> "5"
+    | 6us -> "6"
+    | 7us -> "7"
+    | 8us -> "8"
+    | 9us -> "9"
+    | _ -> "?"
+
+// Convert an integer to its string representation
+let toString (n: UInt16) : String =
+    if n < 10us then Stdlib.UInt16.__digitToString n
+    else Stdlib.UInt16.toString (n / 10us) ++ Stdlib.UInt16.__digitToString (n % 10us)
+
+// Sum all integers in a list
+let sum (list: List<UInt16>) : UInt16 =
+    Stdlib.List.fold list 0us (fun acc x -> acc + x)
+
+let __fromIntUnchecked (value: Int) : UInt16 =
+    match Stdlib.Int.toUInt16 value with
+    | Some result -> result
+    | None -> Builtin.crash "Internal UInt16 conversion invariant failed"
+let random (start: UInt16) (finish: UInt16) : UInt16 = Stdlib.UInt16.__fromIntUnchecked (Stdlib.Int.random (Stdlib.Int.fromUInt16 start) (Stdlib.Int.fromUInt16 finish))
+let toFloat (value: UInt16) : Float = Stdlib.Int.toFloat (Stdlib.Int.fromUInt16 value)
+let sqrt (value: UInt16) : Float = Stdlib.Float.sqrt (Stdlib.UInt16.toFloat value)
+let parse (value: String) : Stdlib.Result.Result<UInt16, Stdlib.UInt16.ParseError> =
+    match Stdlib.Int.parse value with
+    | Error _ -> Error Stdlib.UInt16.ParseError.BadFormat
+    | Ok parsed ->
+        match Stdlib.Int.toUInt16 parsed with
+        | None -> Error Stdlib.UInt16.ParseError.OutOfRange
+        | Some result -> Ok result
+let fromInt8 (value: Int8) : Stdlib.Option.Option<UInt16> = Stdlib.Int.toUInt16 (Stdlib.Int.fromInt8 value)
+let fromUInt8 (value: UInt8) : UInt16 = Stdlib.UInt16.__fromIntUnchecked (Stdlib.Int.fromUInt8 value)
+let fromInt16 (value: Int16) : Stdlib.Option.Option<UInt16> = Stdlib.Int.toUInt16 (Stdlib.Int.fromInt16 value)
+let fromInt32 (value: Int32) : Stdlib.Option.Option<UInt16> = Stdlib.Int.toUInt16 (Stdlib.Int.fromInt32 value)
+let fromUInt32 (value: UInt32) : Stdlib.Option.Option<UInt16> = Stdlib.Int.toUInt16 (Stdlib.Int.fromUInt32 value)
+let fromInt64 (value: Int64) : Stdlib.Option.Option<UInt16> = Stdlib.Int.toUInt16 (Stdlib.Int.fromInt64 value)
+let fromUInt64 (value: UInt64) : Stdlib.Option.Option<UInt16> = Stdlib.Int.toUInt16 (Stdlib.Int.fromUInt64 value)
+let fromInt128 (value: Int128) : Stdlib.Option.Option<UInt16> = Stdlib.Int.toUInt16 (Stdlib.Int.fromInt128 value)
+let fromUInt128 (value: UInt128) : Stdlib.Option.Option<UInt16> = Stdlib.Int.toUInt16 (Stdlib.Int.fromUInt128 value)

@@ -15,7 +15,7 @@ let loadStdlib ()=
  let load filename=
   let executable=if Filename.is_relative Sys.executable_name then Filename.concat (Sys.getcwd ()) Sys.executable_name else Sys.executable_name in
   let directory=Filename.dirname executable in
-  let candidates=[Filename.concat directory filename;Filename.concat directory ("../../../../src/DarkCompiler/"^filename);Filename.concat (Sys.getcwd ()) ("src/DarkCompiler/"^filename)] in
+  let candidates=[Filename.concat directory ("../share/"^filename);Filename.concat directory ("../share/dark_compiler/"^filename);Filename.concat directory filename;Filename.concat directory ("../../../../share/"^filename);Filename.concat (Sys.getcwd ()) ("ocaml/share/"^filename)] in
   match List.find_opt Sys.file_exists candidates with
   |None->Error ("Could not find "^filename^" in any of: "^String.concat ", " candidates)
   |Some path->let text=In_channel.with_open_bin path In_channel.input_all in

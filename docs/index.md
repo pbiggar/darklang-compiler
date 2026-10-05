@@ -12,7 +12,7 @@ grouped by purpose; each subject has one canonical source.
 ## Contributing
 
 - [Implementation workflow](contributing/workflow.md)
-- [F# coding guidelines](contributing/coding-guidelines.md)
+- [OCaml coding guidelines](contributing/coding-guidelines.md)
 - [Test DSLs](contributing/testing.md)
 - [Differential compiler fuzzing](contributing/fuzzing.md)
 - [Verification and performance gates](contributing/verification.md)

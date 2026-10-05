@@ -4,6 +4,11 @@ These diagnostic suites isolate compiler/runtime subsystems. They are separate
 from the audited application workloads in `../problems`, do not participate in
 the canonical `full` profile, and never update its baselines.
 
+The optional F# benchmark driver invokes the native OCaml compiler CLI; it has
+no compiler-assembly dependency. It alone requires .NET. Schema version 2
+reports cold compiler process time, including stdlib setup, rather than the
+former warm in-process session time. Do not compare that field to schema 1.
+
 Run one suite and write its measurements to a JSON file:
 
 ```bash

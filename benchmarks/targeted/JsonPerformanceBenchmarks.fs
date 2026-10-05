@@ -162,41 +162,15 @@ let private nestedCase : BenchmarkCase =
 
 let private cases = [| scalarCase; flatRecordCase; collectionCase; nestedCase |]
 
-let private compile
-    (stdlib: CompilerLibrary.StdlibResult)
-    (session: CompilerLibrary.CompilationSession)
-    (enableLeakCheck: bool)
-    (name: string)
-    (source: string)
-    : Result<CompilerLibrary.CompileReport * byte array, string> =
-    let request : CompilerLibrary.CompileRequest = {
-        Context = CompilerLibrary.StdlibOnly stdlib
-        Mode = CompilerLibrary.TestExpression
-        Sources =
-            AST.NonEmptyList.singleton {
-                CompilerLibrary.SourceUnit.Name = $"JsonPerformanceBenchmarks/{name}.dark"
-                Purpose = NameSyntax.SourceUnitPurpose.Executable
-                Source = source
-            }
-        AllowInternal = true
-        Verbosity = 0
-        Options = { CompilerLibrary.defaultOptions with EnableLeakCheck = enableLeakCheck }
-        PackageValues = CompilerLibrary.emptyPackageValueCatalog
-        PackageManager = None
-        PassTimingRecorder = None
-        Session = Some session
-    }
-    let report = CompilerLibrary.compile request
-    match report.Result with
-    | Ok binary -> Ok (report, binary)
-    | Error error -> Error error
+let private compile (enableLeakCheck: bool) (name: string) (source: string) =
+    BenchmarkHost.compile enableLeakCheck name source
 
 let private executeAndValidate
-    (target: Platform.Target)
+    (target: string)
     (expected: string)
     (binary: byte array)
-    : Result<CompilerLibrary.ExecutionOutput, string> =
-    let result = CompilerLibrary.executeCaptured target 0 CompilerLibrary.Closed binary
+    : Result<BenchmarkHost.ExecutionOutput, string> =
+    let result = BenchmarkHost.executeCaptured target binary
     if result.ExitCode <> 0 then
         Error $"execution exited {result.ExitCode}: {result.Stderr.Trim()}"
     elif result.Stdout.Trim() <> expected then
@@ -205,12 +179,10 @@ let private executeAndValidate
         Ok result
 
 let private measureCase
-    (stdlib: CompilerLibrary.StdlibResult)
-    (session: CompilerLibrary.CompilationSession)
     (sampleCount: int)
     (benchmark: BenchmarkCase)
     : Result<BenchmarkResult, string> =
-    compile stdlib session false benchmark.Name (benchmark.Source benchmark.Iterations)
+    compile false benchmark.Name (benchmark.Source benchmark.Iterations)
     |> Result.bind (fun (report, binary) ->
         let expected = benchmark.Expected benchmark.Iterations
         executeAndValidate report.Target expected binary
@@ -224,8 +196,7 @@ let private measureCase
                         |> Result.map (fun execution -> execution.RuntimeTime.TotalMilliseconds :: samples)))
                 (Ok [])
             |> Result.bind (fun reversedSamples ->
-                use leakSession = new CompilerLibrary.CompilationSession()
-                compile stdlib leakSession true benchmark.Name (benchmark.Source 1L)
+                compile true benchmark.Name (benchmark.Source 1L)
                 |> Result.bind (fun (leakReport, leakBinary) ->
                     executeAndValidate leakReport.Target (benchmark.Expected 1L) leakBinary
                     |> Result.map (fun leakExecution ->
@@ -248,43 +219,37 @@ let private measureCase
 
 let run (outputPath: string) : int =
     let sampleCount = 7
-    match Platform.detectHostTarget () with
+    match BenchmarkHost.detectHostTarget () with
     | Error error ->
         Console.Error.WriteLine($"JSON_BENCHMARK_ERROR {error}")
         1
     | Ok target ->
-        match CompilerLibrary.buildStdlib target with
+        let results =
+            cases
+            |> Array.fold
+                (fun state benchmark ->
+                    state
+                    |> Result.bind (fun measured ->
+                        Console.Error.WriteLine($"JSON_BENCHMARK measuring {benchmark.Name}")
+                        measureCase sampleCount benchmark
+                        |> Result.map (fun result -> result :: measured)))
+                (Ok [])
+        match results with
         | Error error ->
             Console.Error.WriteLine($"JSON_BENCHMARK_ERROR {error}")
             1
-        | Ok stdlib ->
-            use session = new CompilerLibrary.CompilationSession()
-            let results =
-                cases
-                |> Array.fold
-                    (fun state benchmark ->
-                        state
-                        |> Result.bind (fun measured ->
-                            Console.Error.WriteLine($"JSON_BENCHMARK measuring {benchmark.Name}")
-                            measureCase stdlib session sampleCount benchmark
-                            |> Result.map (fun result -> result :: measured)))
-                    (Ok [])
-            match results with
-            | Error error ->
-                Console.Error.WriteLine($"JSON_BENCHMARK_ERROR {error}")
-                1
-            | Ok reversedResults ->
-                let payload = {
-                    schema_version = 1
-                    compiler_commit = gitCommit ()
-                    target = string target
-                    samples_per_case = sampleCount
-                    benchmarks = reversedResults |> List.rev |> List.toArray
-                }
-                let directory = Path.GetDirectoryName(outputPath)
-                if not (String.IsNullOrWhiteSpace(directory)) then
-                    Directory.CreateDirectory(directory) |> ignore
-                let options = JsonSerializerOptions(WriteIndented = true)
-                File.WriteAllText(outputPath, JsonSerializer.Serialize(payload, options))
-                Console.Error.WriteLine($"JSON_BENCHMARK wrote {outputPath}")
-                if payload.benchmarks |> Array.forall (fun result -> result.leak_check_passed) then 0 else 1
+        | Ok reversedResults ->
+            let payload = {
+                schema_version = 2
+                compiler_commit = gitCommit ()
+                target = string target
+                samples_per_case = sampleCount
+                benchmarks = reversedResults |> List.rev |> List.toArray
+            }
+            let directory = Path.GetDirectoryName(outputPath)
+            if not (String.IsNullOrWhiteSpace(directory)) then
+                Directory.CreateDirectory(directory) |> ignore
+            let options = JsonSerializerOptions(WriteIndented = true)
+            File.WriteAllText(outputPath, JsonSerializer.Serialize(payload, options))
+            Console.Error.WriteLine($"JSON_BENCHMARK wrote {outputPath}")
+            if payload.benchmarks |> Array.forall (fun result -> result.leak_check_passed) then 0 else 1

@@ -1,92 +1,52 @@
-#!/bin/bash
-# build - Build the Dark compiler and tests with optional bounded output.
-
+#!/usr/bin/env bash
+# build - Build the native compiler and tests with bounded automated output.
 set -uo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
-
-MODE="normal"
+MODE=normal
 BUILD_ARGS=()
-
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --ai)
-            MODE="ai"
-            shift
-            ;;
-        --quiet)
-            MODE="quiet"
-            shift
-            ;;
+        --ai) MODE=ai; shift ;;
+        --quiet) MODE=quiet; shift ;;
         --help|-h)
-            echo "Usage: ./build [--ai|--quiet] [-- DOTNET_BUILD_ARGS...]"
-            echo "  --ai     Print bounded status/diagnostics and retain the full failed log"
+            echo "Usage: ./build [--ai|--quiet] [-- DUNE_BUILD_ARGS...]"
+            echo "  --ai     Print bounded diagnostics and retain the full failed log"
             echo "  --quiet  Print only a failure status"
-            exit 0
-            ;;
-        --)
-            shift
-            BUILD_ARGS+=("$@")
-            break
-            ;;
-        *)
-            BUILD_ARGS+=("$1")
-            shift
-            ;;
+            exit 0 ;;
+        --) shift; BUILD_ARGS+=("$@"); break ;;
+        *) BUILD_ARGS+=("$1"); shift ;;
     esac
 done
-
-COMMON_ARGS=(
-    -m
-    /nodeReuse:false
-    --disable-build-servers
-    --configfile "$SCRIPT_DIR/NuGet.Config"
-)
-
 run_build() {
-    timeout 120 dotnet build "${BUILD_ARGS[@]}" "${COMMON_ARGS[@]}" "$@"
+    if ! command -v dune >/dev/null || ! command -v ocamlc >/dev/null; then
+        echo "OCaml 5.5.1 and Dune 3.24.2 are required; activate the pinned opam switch." >&2
+        return 1
+    fi
+    if [[ $(ocamlc -version) != 5.5.1 || $(dune --version) != 3.24.2 ]]; then
+        echo "Toolchain differs from the pinned OCaml 5.5.1 / Dune 3.24.2 versions." >&2
+        return 1
+    fi
+    dune build --root "$SCRIPT_DIR/ocaml" "${BUILD_ARGS[@]}"
 }
-
-print_reproduction() {
-    printf 'reproduce: ./build --ai'
-    if [[ ${#BUILD_ARGS[@]} -gt 0 ]]; then
-        printf ' --'
-        printf ' %q' "${BUILD_ARGS[@]}"
-    fi
-    printf '\n'
-}
-
-if [[ "$MODE" == "ai" ]]; then
-    mkdir -p "$SCRIPT_DIR/TestResults/ai"
-    BUILD_OUTPUT="$SCRIPT_DIR/TestResults/ai/build-$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
-    echo "building"
-    if run_build --verbosity quiet >"$BUILD_OUTPUT" 2>&1; then
-        rm -f "$BUILD_OUTPUT"
-        echo "build success"
-        exit 0
-    fi
-
-    echo "build failed"
-    echo "essential diagnostics:"
-    DIAGNOSTICS="$({ grep -E '(: error |Build FAILED|Unhandled exception|error [A-Z][A-Z0-9]+:)' "$BUILD_OUTPUT" || true; } \
-        | awk '!seen[$0]++' \
-        | sed -n '1,12p' \
-        | cut -c1-512)"
-    if [[ -n "$DIAGNOSTICS" ]]; then
-        printf '%s\n' "$DIAGNOSTICS"
-    else
-        tail -n 12 "$BUILD_OUTPUT" | cut -c1-512
-    fi
-    echo "full output: ${BUILD_OUTPUT#"$SCRIPT_DIR/"}"
-    print_reproduction
-    exit 1
-elif [[ "$MODE" == "quiet" ]]; then
-    if run_build --verbosity quiet >/dev/null 2>&1; then
-        exit 0
-    fi
-    echo "build failed"
-    exit 1
+if [[ "$MODE" == normal ]]; then
+    run_build
 else
-    run_build --verbosity minimal
+    mkdir -p TestResults/ai
+    BUILD_OUTPUT="TestResults/ai/build-$(date -u +%Y%m%dT%H%M%SZ)-$$.log"
+    [[ "$MODE" != ai ]] || echo building
+    if run_build >"$BUILD_OUTPUT" 2>&1; then
+        rm -f "$BUILD_OUTPUT"
+        [[ "$MODE" != ai ]] || echo "build success"
+        exit 0
+    fi
+    echo "build failed"
+    if [[ "$MODE" == ai ]]; then
+        tail -n 16 "$BUILD_OUTPUT" | cut -c1-512
+        echo "full output: $BUILD_OUTPUT"
+        printf 'reproduce: ./build --ai'
+        if [[ ${#BUILD_ARGS[@]} -gt 0 ]]; then printf ' --'; printf ' %q' "${BUILD_ARGS[@]}"; fi
+        printf '\n'
+    fi
+    exit 1
 fi
