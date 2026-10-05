@@ -1,0 +1,15 @@
+[
+  "src/Tests/passes/anf2mir/complex.anf2mir",
+  "src/Tests/passes/anf2mir/nested_let.anf2mir",
+  "src/Tests/passes/anf2mir/simple_binop.anf2mir",
+  "src/Tests/passes/anf2mir/simple_return.anf2mir",
+  "src/Tests/passes/lir2arm64/stur_ldur.lir2arm64",
+  "src/Tests/passes/lir2arm64/sub_imm_encoding.lir2arm64",
+  "src/Tests/passes/mir2lir/add_immediate.mir2lir",
+  "src/Tests/passes/mir2lir/add_registers.mir2lir",
+  "src/Tests/passes/mir2lir/complex_expression.mir2lir",
+  "src/Tests/passes/mir2lir/divide.mir2lir",
+  "src/Tests/passes/mir2lir/multiply.mir2lir",
+  "src/Tests/passes/mir2lir/simple_ret.mir2lir",
+  "src/Tests/passes/mir2lir/subtract.mir2lir"
+]

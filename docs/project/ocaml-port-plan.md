@@ -2037,3 +2037,13 @@ rounding boundaries. Original MOVN/SUBS/CMP error forwarding is retained. The
 warning-free build passes 610/610 translated unit/fixture checks. Coverage is
 345/391 committed pairs; reference comments remain complete. Remaining unit
 and test-tooling pairs, full corpus and final acceptance remain open.
+
+The complete ANF→MIR, MIR→LIR and LIR→ARM64 pass runner now preserves
+typed fixture loading, whole-program equality, compiler errors and exact
+expected/actual diagnostics. All 16 complete observations match F# across
+13 unchanged pass fixtures, forced mismatches, all ARM64 register roles and
+98 instruction forms, numeric boundaries and code/data/string/float labels.
+The original 15 pass-runner unit tests are retained. The warning-free build
+passes 638/638 translated unit/fixture checks. Coverage is 347/391 pairs;
+reference comments remain complete. Remaining unit/test-tooling pairs, full
+corpus and final acceptance remain open.
