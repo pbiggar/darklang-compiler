@@ -2091,3 +2091,12 @@ files parsed under every stage, missing/directory paths, registration and
 runAll. The warning-free native build passes 720/720 translated unit/fixture
 checks. Coverage is 360/391 pairs; all source comments remain complete.
 Remaining unit/test-tooling pairs, full corpus and final acceptance remain open.
+
+The complete original AST-to-ANF unit suite now runs natively. Its 12 tests
+preserve constructor payload lookup, lambda analysis, first-class function
+lowering, synthetic/mangled types, erased and typed list ownership, nullary
+calls, parameter allocation order and overlay registry merging. All 16 full
+compiler-unit observations match F#. The warning-free native build passes
+732/732 translated checks. Coverage is 361/391 owner pairs; all reference
+comments remain complete. Remaining unit/test-tooling pairs, full corpus and
+final acceptance remain open.
