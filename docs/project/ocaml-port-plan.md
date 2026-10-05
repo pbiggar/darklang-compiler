@@ -2356,3 +2356,16 @@ timed records) and rejects injected failures, nonfinite timings, unexpected test
 fields and incomplete profile records. This establishes the checker itself;
 the complete corrected native run remains in progress and its eventual report
 must be checked independently before recording a full-suite pass.
+
+### Native production runner launcher
+
+`./run-tests --ocaml` now executes the already-built production OCaml runner;
+`--ocaml-build-dir=PATH` selects a separate Dune graph. Existing runner flags
+pass through unchanged. Missing executables, empty build paths and a native
+build path without the native selector fail before execution and never trigger
+a build. The temporary F# reference remains the default pending acceptance.
+
+The launcher's native and reference help output match exactly. Shell syntax and
+all three invalid-build selection boundaries pass; VM execution instructions
+include the required combined compatibility adapters. The full native suite
+continues independently without modifying its active build graph.

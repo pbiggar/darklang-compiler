@@ -37,6 +37,18 @@ retains the `/tmp` adapter for fixture subprocesses. Replacing the compatibility
 preload with the QEMU adapter alone leaves hardcoded `/tmp` fixtures unable to
 create their files. Both adapters are VM-only; native builds still unset them.
 
+Run the already-built native production suite through the repository launcher:
+
+```bash
+source /absolute/writable/toolchains/activate-native
+./run-tests --ocaml --ai --target=linux-x86_64
+```
+
+For an independently built Dune graph, add
+`--ocaml-build-dir=/absolute/path/to/build-directory`. The launcher never builds
+either runner. Omitting `--ocaml` continues to select the temporary F# oracle
+until replacement acceptance is complete.
+
 The setup needs Bash, Python 3, curl, tar, GCC, and make. All installations,
 caches, temporary files, and full OCaml build logs stay in the supplied
 directory. OCaml is built serially. The script materializes .NET SDK archive

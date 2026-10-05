@@ -6,13 +6,50 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+RUNNER="reference"
+OCAML_BUILD_DIR="$SCRIPT_DIR/ocaml/_build"
+OCAML_BUILD_DIR_SELECTED=false
+TEST_ARGS=()
+for ARG in "$@"; do
+    case "$ARG" in
+        --ocaml)
+            RUNNER="ocaml"
+            ;;
+        --ocaml-build-dir=*)
+            OCAML_BUILD_DIR="${ARG#--ocaml-build-dir=}"
+            OCAML_BUILD_DIR_SELECTED=true
+            if [[ -z "$OCAML_BUILD_DIR" ]]; then
+                echo "Error: --ocaml-build-dir requires a directory." >&2
+                exit 1
+            fi
+            ;;
+        *)
+            TEST_ARGS+=("$ARG")
+            ;;
+    esac
+done
+
+# Expected-error cases can terminate either the test host or generated native
+# programs abnormally. Keep OS crash dumps from dirtying the worktree.
+ulimit -c 0
+if [[ "$RUNNER" == "ocaml" ]]; then
+    TEST_EXE="$OCAML_BUILD_DIR/default/tests/tests_main.exe"
+    if [[ ! -x "$TEST_EXE" ]]; then
+        echo "Error: Native test executable not found at $TEST_EXE" >&2
+        echo "Build the OCaml project with Dune before running tests." >&2
+        exit 1
+    fi
+    exec "$TEST_EXE" "${TEST_ARGS[@]}"
+fi
+if $OCAML_BUILD_DIR_SELECTED; then
+    echo "Error: --ocaml-build-dir requires --ocaml." >&2
+    exit 1
+fi
+
 TEST_DLL="$SCRIPT_DIR/bin/Tests/Debug/net11.0/Tests.dll"
 if [ ! -f "$TEST_DLL" ]; then
     echo "Error: Test assembly not found at $TEST_DLL"
     echo "Run './build --ai' first."
     exit 1
 fi
-# Expected-error cases can terminate either the test host or generated native
-# programs abnormally. Keep OS crash dumps from dirtying the worktree.
-ulimit -c 0
-exec "$SCRIPT_DIR/scripts/dotnet-host" "$TEST_DLL" "$@"
+exec "$SCRIPT_DIR/scripts/dotnet-host" "$TEST_DLL" "${TEST_ARGS[@]}"
