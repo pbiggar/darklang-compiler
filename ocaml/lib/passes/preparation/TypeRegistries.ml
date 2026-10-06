@@ -60,8 +60,9 @@ let tryFindConstructorTag id (_ : typeNameRegistry) = Some (AST.constructorRunti
 let tryFindFieldIndex id (_ : typeNameRegistry) = Some (AST.fieldRuntimeIndex id)
 let listHeadUnsafeFunction ids typ =
  let resolve name = match M.find_opt name ids with Some id -> id | None -> Crash.crash ("List pattern helper '" ^ name ^ "' is absent from the function registry") in
- (* Json.InternalValueView is an Int64 offset pair, not a managed string. *)
- let accessor = match typ with AST.TInt64 -> Some "Darklang.Stdlib.Json.__viewListHead" | AST.TTuple [AST.TString; AST.TInt64] -> Some "Darklang.Stdlib.Json.__viewFieldListHead" | _ -> None in
+ (* Int64 payloads, including JSON views, need no ownership wrapper. JSON
+    field tuples still need the typed accessor to retain their string. *)
+ let accessor = match typ with AST.TTuple [AST.TString; AST.TInt64] -> Some "Darklang.Stdlib.Json.__viewFieldListHead" | _ -> None in
  match accessor with
  | Some name when M.mem name ids -> resolve name, false
  | _ when typ = AST.TFloat64 -> resolve "Darklang.Stdlib.List.__headUnsafeFloat", false
