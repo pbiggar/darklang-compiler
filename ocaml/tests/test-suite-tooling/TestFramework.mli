@@ -9,7 +9,7 @@ type passTimingSection={title:string;entries:passTimingEntry list}
 type passTimingColumns={ordered:passTimingSection list;byTime:passTimingSection list}
 type unaccountedTimeBreakdown={unaccounted:HostTimeSpan.t;runtime:HostTimeSpan.t;overhead:HostTimeSpan.t}
 type fileSuiteSummary={passed:int;failed:int;failedTests:failedTestInfo list}
-type testRunState={mutable passed:int;mutable failed:int;failedTests:failedTestInfo Queue.t;timings:testTiming Queue.t;mutable passTimings:HostTimeSpan.t StringOrder.Map.t;mutable passTimingCounts:int StringOrder.Map.t;passTimingOrder:string Queue.t;completedTestReporter:(int -> unit) option}
+type testRunState={mutable passed:int;mutable failed:int;failedTests:failedTestInfo Queue.t;timings:testTiming Queue.t;mutable passTimings:HostTimeSpan.t StringOrder.Map.t;mutable passTimingCounts:int StringOrder.Map.t;mutable overheadPassTimingTotal:HostTimeSpan.t;passTimingOrder:string Queue.t;completedTestReporter:(int -> unit) option}
 type outputSymbols={pass:string;fail:string;sectionPrefix:string}
 val testRuntimeTimingName : string
 val createStateWithProgressReporter : (int -> unit) option -> testRunState

@@ -49,6 +49,11 @@ let isUpper = property (fun character -> Uucp.Gc.general_category character = `L
 let graphemeClusters text =
   fold (fun () _ -> ()) () text;
   Uuseg_string.fold_utf_8 `Grapheme_cluster (fun reversed cluster -> cluster :: reversed) [] text |> List.rev
+let firstGrapheme text =
+  let exception First of string in
+  try ignore (Uuseg_string.fold_utf_8 `Grapheme_cluster
+    (fun () cluster -> raise (First cluster)) () text); None
+  with First cluster -> Some cluster
 let startsWith text prefix = String.starts_with ~prefix text
 let endsWith text suffix = String.ends_with ~suffix text
 let tryParseInt32 text =

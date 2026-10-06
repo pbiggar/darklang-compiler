@@ -20,4 +20,27 @@ let testCallAndExecute ()=
  match X86_64_Resolve.resolveAndEncode instructions with Error error->Error ("Resolution failed: "^error)|Ok result->
  let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools result.X86_64_Resolve.machineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0 in
  match X86_64BinaryTests.runElfBinary binary with Error error->Error error|Ok exitCode->if exitCode=42 then Ok () else Error (Printf.sprintf "Expected exit code 42, got %d" exitCode)
-let tests=["Require label position rejects missing _start",testRequireLabelPositionRejectsMissingStart;"CALL + execute",testCallAndExecute]
+(* Reusing unpatched templates must preserve code/data relocations when the
+   next executable has different label names and instruction positions. *)
+let testCachedEncodingRelocations ()=
+ let session=new CompilationSession.compilationSession () in
+ Fun.protect ~finally:(fun ()->session#dispose) (fun ()->
+  let encode=session#encodeX64Instruction in
+  let instructions name padding=padding @ [LEA_rip (R11,"_leak_count");CALL name;
+   Jcc (EQ,name);JMP name;Label name;RET] in
+  let first=instructions "first" [] in
+  let second=instructions "second" [MOV_imm32 (RDI,42l)] in
+  let resolve encode instructions=Result.bind (X86_64_Resolve.resolveAndEncodeWith encode instructions) (fun resolved->
+   let pool=X86_64_Resolve.collectStringPool instructions in
+   let labels=X86_64_Resolve.dataLabelOffsets 120 (Bytes.length resolved.X86_64_Resolve.machineCode) pool in
+   X86_64_Resolve.patchDataLabels resolved labels 120) in
+  match resolve encode first with Error error->Error error|Ok firstResolved->
+  let original=Bytes.copy firstResolved.X86_64_Resolve.machineCode in
+  match resolve encode second,resolve X86_64_Encoding.encodeInstruction second,
+    resolve X86_64_Encoding.encodeInstruction first with
+  | Ok cached,Ok uncached,Ok freshFirst when cached=uncached && firstResolved=freshFirst
+     && original=firstResolved.X86_64_Resolve.machineCode->Ok ()
+  | Error error,_,_|_,Error error,_|_,_,Error error->Error error
+  | _->Error "Cached instruction templates changed code/data relocations or an earlier executable")
+let tests=["Require label position rejects missing _start",testRequireLabelPositionRejectsMissingStart;
+ "CALL + execute",testCallAndExecute;"cached encoding preserves code and data relocations",testCachedEncodingRelocations]

@@ -355,9 +355,10 @@ let runTestsWithProgressReporter completedTestReporter args=
  let addCount name n=cacheCounts:=M.add name (count name+n) !cacheCounts in
  let stats={logicalTests=0;eligibleTests=0;executions=0;batchExecutions=0;batchedTests=0;largestBatch=0} in
  let recordTiming=F.recordTiming runState and recordResults=F.recordResults runState and recordPassTiming=F.recordPassTiming runState in
- let passTimingTotal ()=F.calculatePassTimingsTotalForOverhead runState.F.passTimings in
+ let passTimingTotal ()=runState.F.overheadPassTimingTotal in
  let mergeRunState (target:F.testRunState) (source:F.testRunState)=
   let previous=target.F.passed+target.F.failed in
+  target.F.overheadPassTimingTotal<-Int64.add target.F.overheadPassTimingTotal source.F.overheadPassTimingTotal;
   target.F.passed<-target.F.passed+source.F.passed;target.F.failed<-target.F.failed+source.F.failed;
   Queue.iter (fun value->Queue.add value target.F.failedTests) source.F.failedTests;
   Queue.iter (fun value->Queue.add value target.F.timings) source.F.timings;

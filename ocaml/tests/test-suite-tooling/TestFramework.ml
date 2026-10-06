@@ -16,13 +16,24 @@ type passTimingColumns={ordered:passTimingSection list;byTime:passTimingSection 
 type unaccountedTimeBreakdown={unaccounted:HostTimeSpan.t;runtime:HostTimeSpan.t;overhead:HostTimeSpan.t}
 (* Summary of per-file test suite results *)
 type fileSuiteSummary={passed:int;failed:int;failedTests:failedTestInfo list}
-type testRunState={mutable passed:int;mutable failed:int;failedTests:failedTestInfo Queue.t;timings:testTiming Queue.t;mutable passTimings:HostTimeSpan.t M.t;mutable passTimingCounts:int M.t;passTimingOrder:string Queue.t;completedTestReporter:(int -> unit) option}
+type testRunState={mutable passed:int;mutable failed:int;failedTests:failedTestInfo Queue.t;timings:testTiming Queue.t;mutable passTimings:HostTimeSpan.t M.t;mutable passTimingCounts:int M.t;mutable overheadPassTimingTotal:HostTimeSpan.t;passTimingOrder:string Queue.t;completedTestReporter:(int -> unit) option}
 type outputSymbols={pass:string;fail:string;sectionPrefix:string}
 let testRuntimeTimingName="Test Runtime"
-let createStateWithProgressReporter completedTestReporter={passed=0;failed=0;failedTests=Queue.create ();timings=Queue.create ();passTimings=M.empty;passTimingCounts=M.empty;passTimingOrder=Queue.create ();completedTestReporter}
+let accountsForOverhead name=
+ let overlapTimingNames=["Unit Test Suite Execution";"Start Function Compilation";"E2E Suite Execution";"Verification Suite Execution";"JSON Planning";"ARM64 Codegen Metadata";"ARM64 Codegen Functions";"ARM64 Codegen Helpers";"ARM64 Codegen Assembly";"ARM64 Codegen Peephole"] in
+ let starts=String.starts_with in
+ not (List.mem name overlapTimingNames)
+ && not (List.exists (fun prefix->starts ~prefix name) ["Ownership detail: ";"AST -> ANF detail: ";"AST -> ANF function: ";"Stdlib detail: ";"TypeCheck: ";"AST -> ANF Preparation: ";"AST -> ANF ";"ANF -> MIR ";"SSA: ";"MIR -> LIR ";"RegAlloc: "])
+ && not (List.mem name ["Value Rendering";"ANF Higher-Order Specialization";"ANF Direct-Call Specialization"])
+ && not (starts ~prefix:"Reference Count " name && name<>"Reference Count Insertion")
+ && not (starts ~prefix:"MIR " name && name<>"MIR Optimizations" && name<>"MIR -> LIR")
+ && not (starts ~prefix:"ARM64 " name && name<>"ARM64 Function Metadata Planning" && name<>"ARM64 Emit")
+let createStateWithProgressReporter completedTestReporter={passed=0;failed=0;failedTests=Queue.create ();timings=Queue.create ();passTimings=M.empty;passTimingCounts=M.empty;overheadPassTimingTotal=HostTimeSpan.zero;passTimingOrder=Queue.create ();completedTestReporter}
 let createState ()=createStateWithProgressReporter None
 let recordTiming state timing=Queue.add timing state.timings
 let recordPassTiming state (timing:CompilerOptions.passTiming)=
+ if accountsForOverhead timing.CompilerOptions.pass then
+  state.overheadPassTimingTotal<-Int64.add state.overheadPassTimingTotal timing.CompilerOptions.elapsed;
  if not (M.mem timing.CompilerOptions.pass state.passTimings) then Queue.add timing.CompilerOptions.pass state.passTimingOrder;
  let existing=Option.value ~default:HostTimeSpan.zero (M.find_opt timing.CompilerOptions.pass state.passTimings) in
  state.passTimings<-M.add timing.CompilerOptions.pass (Int64.add existing timing.CompilerOptions.elapsed) state.passTimings;
@@ -52,15 +63,7 @@ let formatDecimal places value=
  (if value<0. then "-" else "")^formatted
 let formatTime elapsed=if HostTimeSpan.totalMilliseconds elapsed<1000. then formatDecimal 0 (HostTimeSpan.totalMilliseconds elapsed)^"ms" else formatDecimal 2 (HostTimeSpan.totalSeconds elapsed)^"s"
 let calculatePassTimingsTotal passTimings=M.fold (fun _ elapsed acc->Int64.add acc elapsed) passTimings HostTimeSpan.zero
-let filterPassTimingsForOverhead passTimings=
- let overlapTimingNames=["Unit Test Suite Execution";"Start Function Compilation";"E2E Suite Execution";"Verification Suite Execution";"JSON Planning";"ARM64 Codegen Metadata";"ARM64 Codegen Functions";"ARM64 Codegen Helpers";"ARM64 Codegen Assembly";"ARM64 Codegen Peephole"] in
- let starts=String.starts_with in
- M.filter (fun name _->not (List.mem name overlapTimingNames)
- && not (List.exists (fun prefix->starts ~prefix name) ["Ownership detail: ";"AST -> ANF detail: ";"AST -> ANF function: ";"Stdlib detail: ";"TypeCheck: ";"AST -> ANF Preparation: ";"AST -> ANF ";"ANF -> MIR ";"SSA: ";"MIR -> LIR ";"RegAlloc: "])
- && not (List.mem name ["Value Rendering";"ANF Higher-Order Specialization";"ANF Direct-Call Specialization"])
- && not (starts ~prefix:"Reference Count " name && name<>"Reference Count Insertion")
- && not (starts ~prefix:"MIR " name && name<>"MIR Optimizations" && name<>"MIR -> LIR")
- && not (starts ~prefix:"ARM64 " name && name<>"ARM64 Function Metadata Planning" && name<>"ARM64 Emit")) passTimings
+let filterPassTimingsForOverhead passTimings=M.filter (fun name _->accountsForOverhead name) passTimings
 let calculatePassTimingsTotalForOverhead timings=calculatePassTimingsTotal (filterPassTimingsForOverhead timings)
 let calculateUnaccountedTimeBreakdown totalTime passTimings timings=
  let unaccounted=Int64.sub totalTime (calculatePassTimingsTotalForOverhead passTimings) in

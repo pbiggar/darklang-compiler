@@ -40,19 +40,19 @@ let patchRel32 machineCode patchOffset rel =
  Bytes.set machineCode (add patchOffset 2) relBytes.(2);
  Bytes.set machineCode (add patchOffset 3) relBytes.(3)
 type encodeState = {labelPositions:int StringOrder.Map.t;fixups:fixup list;offset:int;encodedChunks:bytes list}
-let addFixup (state:encodeState) instr patchOffsetFromInstrStart targetLabel =
- let bytes=X86_64_Encoding.encodeInstruction instr in
+let addFixup encode (state:encodeState) instr patchOffsetFromInstrStart targetLabel =
+ let bytes=encode instr in
  {state with fixups={patchOffset=add state.offset patchOffsetFromInstrStart;nextInstrOffset=add state.offset (Bytes.length bytes);targetLabel}::state.fixups;offset=add state.offset (Bytes.length bytes);encodedChunks=bytes::state.encodedChunks}
-let addEncodedInstruction (state:encodeState) instr =
- let bytes=X86_64_Encoding.encodeInstruction instr in
+let addEncodedInstruction encode (state:encodeState) instr =
+ let bytes=encode instr in
  {state with offset=add state.offset (Bytes.length bytes);encodedChunks=bytes::state.encodedChunks}
-let encodeInstruction (state:encodeState) instr = match instr with
+let encodeInstruction encode (state:encodeState) instr = match instr with
  | Label name -> if StringOrder.Map.mem name state.labelPositions then Error ("Duplicate label: "^name) else Ok {state with labelPositions=StringOrder.Map.add name state.offset state.labelPositions}
- | CALL label -> Ok (addFixup state instr 1 label)
- | JMP label -> Ok (addFixup state instr 1 label)
- | Jcc (_,label) -> Ok (addFixup state instr 2 label)
- | LEA_rip (_,label) -> Ok (addFixup state instr 3 label)
- | _ -> Ok (addEncodedInstruction state instr)
+ | CALL label -> Ok (addFixup encode state instr 1 label)
+ | JMP label -> Ok (addFixup encode state instr 1 label)
+ | Jcc (_,label) -> Ok (addFixup encode state instr 2 label)
+ | LEA_rip (_,label) -> Ok (addFixup encode state instr 3 label)
+ | _ -> Ok (addEncodedInstruction encode state instr)
 type patchState = {errors:string list}
 (*
    Collect every symbolic string reference in first-use order. The empty string
@@ -76,8 +76,8 @@ let dataLabelOffsets codeFileOffset codeSize (stringPool:LiteralPool.stringPool)
    Pass 2: apply fixups (defer unknown labels for data label patching later)
    rel32 = target - nextInstr
 *)
-let resolveAndEncode instructions =
- let encodeResult=List.fold_left (fun state instr -> Result.bind state (fun state -> encodeInstruction state instr)) (Ok {labelPositions=StringOrder.Map.empty;fixups=[];offset=0;encodedChunks=[]}) instructions in
+let resolveAndEncodeWith encode instructions =
+ let encodeResult=List.fold_left (fun state instr -> Result.bind state (fun state -> encodeInstruction encode state instr)) (Ok {labelPositions=StringOrder.Map.empty;fixups=[];offset=0;encodedChunks=[]}) instructions in
  match encodeResult with
  | Error err -> Error err
  | Ok encodeState ->
@@ -86,6 +86,7 @@ let resolveAndEncode instructions =
  | None -> fixup::deferred
  | Some targetOffset -> let rel=sub targetOffset fixup.nextInstrOffset in patchRel32 result fixup.patchOffset rel;deferred) [] encodeState.fixups in
  Ok {machineCode=result;labelPositions=encodeState.labelPositions;deferredFixups=List.rev deferred}
+let resolveAndEncode instructions=resolveAndEncodeWith X86_64_Encoding.encodeInstruction instructions
 let patchDataLabel dataLabels codeFileOffset machineCode (state:patchState) fixup = match StringOrder.Map.find_opt fixup.targetLabel dataLabels with
  | None -> {errors=("Undefined label: "^fixup.targetLabel)::state.errors}
  | Some fileOffset -> let targetCodeOffset=sub fileOffset codeFileOffset in let rel=sub targetCodeOffset fixup.nextInstrOffset in patchRel32 machineCode fixup.patchOffset rel;state

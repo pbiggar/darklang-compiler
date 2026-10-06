@@ -56,6 +56,7 @@ class compilationSession ?(collectCodegenMetrics=false) () =
  let arm64GenericReleaseHelperContextIdentity=token () in
  let arm64RegistryIndependentHelperContextIdentity=token () in
  let arm64EmissionChunks=cache (==) in
+ let x64InstructionBytes=Hashtbl.create 4096 in
  let arm64EmissionChunkGroups=cache (==) in
  let arm64ReleasePlanSummaries=cache (=) in
  let arm64CodegenMetrics=ref [] in
@@ -75,6 +76,19 @@ class compilationSession ?(collectCodegenMetrics=false) () =
  object
  val mutable disposed=false
  method jsonPlanning=jsonPlanning
+ method encodeX64Instruction instruction=
+  (* Relative targets are patched after assembly and do not affect encoding.
+     Templates stay unpatched; the resolver copies them into each executable. *)
+  let key=(match instruction with
+   | X86_64.CALL _->X86_64.CALL ""
+   | X86_64.JMP _->X86_64.JMP ""
+   | X86_64.Jcc (condition,_)->X86_64.Jcc (condition,"")
+   | X86_64.LEA_rip (register,_)->X86_64.LEA_rip (register,"")
+   | other->other)[@warning "-4"] in
+  if disposed then X86_64_Encoding.encodeInstruction key else
+  match Hashtbl.find_opt x64InstructionBytes key with
+  | Some bytes->bytes
+  | None->let bytes=X86_64_Encoding.encodeInstruction key in Hashtbl.add x64InstructionBytes key bytes;bytes
  method arm64GenericReleaseHelperContextIdentity=arm64GenericReleaseHelperContextIdentity
  method convertAnfDependencies (contextIdentity:Obj.t) (key:C.anfDependencyKey) (convert:unit->(AST_to_ANF.functionConversion,string) result)=
   if disposed then Result.map (fun converted->converted,token ()) (convert ()) else
@@ -255,6 +269,7 @@ class compilationSession ?(collectCodegenMetrics=false) () =
   clear arm64HelpersByContext;
   clear arm64FunctionsByReferenceAndContext;
   clear arm64EmissionChunks;
+  Hashtbl.clear x64InstructionBytes;
   clear arm64EmissionChunkGroups;
   clear arm64ReleasePlanSummaries;
   arm64CodegenMetrics:=[];

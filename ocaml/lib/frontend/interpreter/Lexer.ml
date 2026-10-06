@@ -331,10 +331,13 @@ let tokenize text =
       skipTrivia stop endPosition
     end else index, position
   in
+  (* These are ASCII grammar literals, not source names or Unicode text. *)
   let matchesAt text index =
-    let chars = units text in
-    index + Array.length chars <= length &&
-    let rec equal offset = offset >= Array.length chars || (source.(index + offset) = chars.(offset) && equal (offset + 1)) in equal 0
+    let count = String.length text in
+    index + count <= length &&
+    let rec equal offset = offset >= count ||
+      (source.(index + offset) = Char.code text.[offset] && equal (offset + 1)) in
+    equal 0
   in
   let emit token start stop position =
     let endPosition = advance position start stop in
@@ -445,7 +448,7 @@ let tokenize text =
       let contentEnd =
         if index + 1 >= length then index + 1 else
         let remaining = substring source (index + 1) (length - index - 1) in
-        let first = List.nth_opt (HostText.graphemeClusters remaining) 0 in
+        let first = HostText.firstGrapheme remaining in
         index + 1 + Option.fold ~none:0 ~some:HostText.length first in
       if contentEnd < length && is source contentEnd '\'' then quotedChar ()
       else if typeContext && index + 1 < length && (letter source.(index + 1) || is source (index + 1) '_') then

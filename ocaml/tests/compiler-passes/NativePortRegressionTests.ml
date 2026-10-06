@@ -15,6 +15,11 @@ let textTests=[
  "native Unicode grapheme consistency",(fun () ->
   require (HostText.graphemeClusters "क्ष😀👩‍💻"=["क्ष";"😀";"👩‍💻"])
     "Indic conjunct or emoji segmentation differs from extended graphemes");
+ "native Unicode first grapheme",(fun () ->
+  require (List.for_all (fun text -> HostText.firstGrapheme text =
+    List.nth_opt (HostText.graphemeClusters text) 0)
+    ["";"a";"érest";"क्षrest";"😀rest";"👩‍💻rest";"🇮🇪rest";"\r\nrest"])
+    "First grapheme differs from standard extended grapheme segmentation");
  "native Unicode scalars and normalization",(fun () ->
   require (HostText.scalars "𐐨😀"=[|0x10428;0x1f600|] && HostText.normalize "é"="é"
     && HostText.normalize (HostText.ofScalars [|0xfffe|])=HostText.ofScalars [|0xfffe|]

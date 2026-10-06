@@ -37,7 +37,8 @@ let generateBinary target verbosity (options:CompilerOptions.compilerOptions) el
   if dumpAsm && verbosity>=3 then (Output.println "=== x86-64 Assembly Instructions ===";List.iteri (fun index instr->Output.println ("  "^string_of_int index^": "^MachineDiagnostic.x64 instr)) instructions;Output.println "");
   if verbosity>=1 then Output.println (formatLabel emitLabel "ELF");let start=elapsed () in
   let pool=X86_64_Resolve.collectStringPool instructions in
-  let* resolved=X86_64_Resolve.resolveAndEncode instructions |> Result.map_error (fun error->"x86-64 resolve error: "^error) in
+  let encode=match session with Some (current:CompilationSession.compilationSession)->current#encodeX64Instruction|None->X86_64_Encoding.encodeInstruction in
+  let* resolved=X86_64_Resolve.resolveAndEncodeWith encode instructions |> Result.map_error (fun error->"x86-64 resolve error: "^error) in
   (* Patch data labels (e.g., leak counter) if there are deferred fixups. *)
   let* resolved=(if resolved.X86_64_Resolve.deferredFixups=[] then Ok resolved else let offset=64+56 in let size=Bytes.length resolved.X86_64_Resolve.machineCode in let labels=X86_64_Resolve.dataLabelOffsets offset size pool in X86_64_Resolve.patchDataLabels resolved labels offset) |> Result.map_error (fun error->"x86-64 data label error: "^error) in
   let* entry=X86_64_Resolve.requireLabelPosition "_start" resolved.X86_64_Resolve.labelPositions |> Result.map_error (fun error->"x86-64 resolve error: "^error) in

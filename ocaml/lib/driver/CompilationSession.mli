@@ -1,6 +1,8 @@
 (* CompilationSession.fs - Own bounded compilation caches and their explicit session lifetime. *)
 class compilationSession : ?collectCodegenMetrics:bool -> unit -> object
  method jsonPlanning : JsonPlanning.planningSession
+ (* Returned instruction templates must not be mutated. *)
+ method encodeX64Instruction : X86_64.instr -> bytes
  method arm64GenericReleaseHelperContextIdentity : Obj.t
  method convertAnfDependencies : Obj.t -> CompilationCacheIdentity.anfDependencyKey -> (unit -> (AST_to_ANF.functionConversion,string) result) -> (AST_to_ANF.functionConversion * Obj.t,string) result
  method compileDependencies : Obj.t -> CompilationCacheIdentity.compiledDependencyConfig -> (unit -> (LIR.functionDef list * CompilationCacheIdentity.functionSummary FunctionIdMap.t,string) result) -> (LIR.functionDef list * CompilationCacheIdentity.functionSummary FunctionIdMap.t,string) result

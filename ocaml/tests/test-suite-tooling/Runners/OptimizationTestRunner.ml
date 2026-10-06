@@ -46,7 +46,7 @@ module M=StringOrder.Map
 let (let*)=Result.bind
 let measure recorder name operation=
  let start=HostClock.ticks () in let result=operation () in
- let elapsed=HostTimeSpan.fromTicks (Int64.sub (HostClock.ticks ()) start) in
+ let elapsed=HostTimeSpan.fromTicks (Int64.div (Int64.sub (HostClock.ticks ()) start) 100L) in
  Option.iter (fun record->record {CompilerOptions.pass=name;elapsed}) recorder;result
 type optimizationTestResult=TestOutcome.t={success:bool;message:string;expected:string option;actual:string option}
 let externalReturnTypes=List.map (fun (name,typ)->TestIds.functionIdForName name,(name,typ)) ["__hash_i64",AST.TInt64;"__hash_str",AST.TInt64;"__hash_bool",AST.TInt64;"__key_eq_i64",AST.TBool;"__key_eq_str",AST.TBool;"__key_eq_bool",AST.TBool;"__string_hash",AST.TInt64] |> FunctionIdMap.ofList
