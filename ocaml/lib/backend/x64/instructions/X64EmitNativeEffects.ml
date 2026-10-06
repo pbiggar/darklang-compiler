@@ -274,7 +274,9 @@ let emitCliNative (ctx:X64CodeGenTypes.funcCtx) (dest:LIR.reg) (operation:LIR.cl
                         loads @
                         [X.MOV_load (X.RDX, X.RSI, 8l);
                          X.ADD_imm (X.RSI, 16l)] @
-                        loadImm64 X.RAX (Int64.of_int syscalls.Platform.write) @ [X.SYSCALL] @ finish)
+                        loadImm64 X.R10 (Platform.socketConstantsFor Platform.Linux).Platform.noSignal @
+                        loadImm64 X.R8 0L @ loadImm64 X.R9 0L @
+                        loadImm64 X.RAX (Int64.of_int syscalls.Platform.sendTo) @ [X.SYSCALL] @ finish)
             | LIR.SocketReceive, [descriptor; buffer; length] ->
                 loadSocketArgs [descriptor; buffer; length] [X.RDI; X.RSI; X.RDX]
                 |> Result.map (fun loads ->
@@ -294,6 +296,42 @@ let emitCliNative (ctx:X64CodeGenTypes.funcCtx) (dest:LIR.reg) (operation:LIR.cl
                         loadImm64 X.RAX (Int64.of_int syscalls.Platform.setSockOpt) @
                         [X.SYSCALL] @ finish)
             | _ -> Error "Invalid socket operation arguments")
+        | LIR.SocketBind4 | LIR.SocketListen | LIR.SocketAccept | LIR.SocketCloexec
+        | LIR.SocketReuseAddress | LIR.SocketPoll | LIR.SignalBlock | LIR.SignalRestore
+        | LIR.SignalPending | LIR.SignalWait | LIR.MonotonicTime ->
+            let constants=Platform.socketConstantsFor Platform.Linux in
+            let finish=if destReg=X.RAX then [] else [X.MOV_reg (destReg,X.RAX)] in
+            let emit operands registers setup number=loadSocketArgs operands registers
+                |> Result.map (fun loads -> loads @ setup @ loadImm64 X.RAX (Int64.of_int number) @ [X.SYSCALL] @ finish) in
+            (match operation,args with
+            | LIR.SocketBind4,[descriptor;address] ->
+                emit [descriptor;address] [X.RDI;X.RSI] (loadImm64 X.RDX 16L) syscalls.Platform.bind
+            | LIR.SocketListen,[descriptor] ->
+                emit [descriptor] [X.RDI] (loadImm64 X.RSI 128L) syscalls.Platform.listen
+            | LIR.SocketAccept,[descriptor] ->
+                emit [descriptor] [X.RDI] (loadImm64 X.RSI 0L @ loadImm64 X.RDX 0L) syscalls.Platform.accept
+            | LIR.SocketCloexec,[descriptor] ->
+                emit [descriptor] [X.RDI] (loadImm64 X.RSI 2L @ loadImm64 X.RDX 1L) syscalls.Platform.fcntl
+            | LIR.SocketReuseAddress,[descriptor;enabled] ->
+                emit [descriptor;enabled] [X.RDI;X.R10]
+                    (loadImm64 X.RSI (Int64.of_int constants.Platform.socketLevel) @ loadImm64 X.RDX (Int64.of_int constants.Platform.reuseAddress) @ loadImm64 X.R8 4L) syscalls.Platform.setSockOpt
+            | LIR.SocketPoll,[pollfd;timeout] ->
+                emit [pollfd;timeout] [X.RDI;X.RDX]
+                    (loadImm64 X.RSI 1L @ loadImm64 X.R10 0L @ loadImm64 X.R8 8L) syscalls.Platform.poll
+            | LIR.SignalBlock,[mask;previous] ->
+                emit [mask;previous] [X.RSI;X.RDX]
+                    (loadImm64 X.RDI (Int64.of_int constants.Platform.blockSignal) @ loadImm64 X.R10 8L) syscalls.Platform.signalMask
+            | LIR.SignalRestore,[previous] ->
+                emit [previous] [X.RSI]
+                    (loadImm64 X.RDI (Int64.of_int constants.Platform.restoreSignal) @ loadImm64 X.RDX 0L @ loadImm64 X.R10 8L) syscalls.Platform.signalMask
+            | LIR.SignalPending,[mask] ->
+                emit [mask] [X.RDI] (loadImm64 X.RSI 8L) syscalls.Platform.signalPending
+            | LIR.SignalWait,[mask;info] ->
+                emit [mask;info] [X.RDI;X.RSI]
+                    (loadImm64 X.RDX 0L @ loadImm64 X.R10 8L) syscalls.Platform.signalWait
+            | LIR.MonotonicTime,[time] ->
+                emit [time] [X.RSI] (loadImm64 X.RDI 1L) syscalls.Platform.gettimeofday
+            | _ -> Error "Invalid listener or signal operation arguments")
         | LIR.SocketClose ->
             (match args with
             | [descriptor] ->

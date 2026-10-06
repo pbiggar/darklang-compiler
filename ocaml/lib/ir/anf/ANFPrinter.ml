@@ -89,6 +89,17 @@ let cliOperation = function
  | ANF.SocketReceiveTimeout -> "SocketReceiveTimeout"
  | ANF.SocketSendTimeout -> "SocketSendTimeout"
  | ANF.SocketClose -> "SocketClose"
+ | ANF.SocketBind4 -> "SocketBind4"
+ | ANF.SocketListen -> "SocketListen"
+ | ANF.SocketAccept -> "SocketAccept"
+ | ANF.SocketCloexec -> "SocketCloexec"
+ | ANF.SocketReuseAddress -> "SocketReuseAddress"
+ | ANF.SocketPoll -> "SocketPoll"
+ | ANF.SignalBlock -> "SignalBlock"
+ | ANF.SignalRestore -> "SignalRestore"
+ | ANF.SignalPending -> "SignalPending"
+ | ANF.SignalWait -> "SignalWait"
+ | ANF.MonotonicTime -> "MonotonicTime"
  | ANF.SecureRandomFill -> "SecureRandomFill"
 (*
    Pretty-print ANF complex expression

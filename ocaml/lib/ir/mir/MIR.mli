@@ -74,6 +74,17 @@ type cliOperation =
  | SocketReceiveTimeout
  | SocketSendTimeout
  | SocketClose
+ | SocketBind4
+ | SocketListen
+ | SocketAccept
+ | SocketCloexec
+ | SocketReuseAddress
+ | SocketPoll
+ | SignalBlock
+ | SignalRestore
+ | SignalPending
+ | SignalWait
+ | MonotonicTime
  | SecureRandomFill
 type label = Label of string
 module LabelMap : Map.S with type key = label

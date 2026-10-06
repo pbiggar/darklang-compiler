@@ -65,18 +65,54 @@ The later pure-surface audit is pinned to darklang/dark release `v0.0.35`,
 revision `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. The compiler copies the
 upstream `HttpClient` response and request-error types, `basicAuth`,
 `bearerToken`, and the four `ContentType` header values. The compiler now
-implements buffered `HttpClient.request` and `get` for HTTP and HTTPS in Dark,
+implements buffered `HttpClient.request` and its `get`, `post`, `put`, `options`,
+`delete`, and `head` wrappers for HTTP and HTTPS in Dark,
 using DNS over UDP and a checked resolved address for each native TCP
 connection. `requestTrusted` explicitly allows local addresses. Each request
 closes its connection; redirects and cookies are not automatic. `HttpClient.stream`
 returns headers after parsing them and pulls HTTP or HTTPS body bytes on demand.
-Closing or draining its body stream closes the connection. The remaining method
-wrappers are still pending.
+Closing or draining its body stream closes the connection. `post` and `put`
+accept headers and a Blob body; `options`, `delete`, and `head` accept only a URL
+and send empty headers and bodies, matching the upstream signatures. Focused
+`src/Tests/e2e/http_client_wrappers.e2e` cases cover the wrapper signatures,
+invalid URLs, forwarded header errors, and guest private-address restrictions.
 
 `Stdlib.Http.Request.header` performs the upstream case-insensitive lookup.
 `Stdlib.HttpServer.get` and `post` construct handler records and `getMethod`
-reads that header with the upstream GET default. Starting a server remains a
-host boundary, so `serve` is not present.
+reads that header with the upstream GET default. The remaining pure routing
+helpers are ported too: route parsing and matching, handler selection, path and
+path-parameter lookup, and `routeRequest`. The pinned upstream matcher requires
+equal segment counts even for wildcards: `/files/*path` matches `/files/a`, but
+does not match `/files/a/b`.
+
+`Stdlib.HttpServer.Config.defaults port` supplies the upstream 30 MiB request
+body cap and the three enabled policy flags. `HttpServer.serve config handler
+onListening` now binds a native IPv4 listener, calls `onListening` after a
+successful bind, and serves HTTP/1.1 sequentially until SIGINT or SIGTERM.
+Request URLs retain their raw path and query bytes; actual request methods are
+prepended as `x-http-method`. Forwarded HTTPS canonicalization, optional
+standard Server/HSTS headers, ordered duplicate response headers, HEAD body
+suppression, and stdout request logging are implemented in Dark. An oversized
+declared or chunked body receives 413 before the missing body bytes are read.
+`Expect: 100-continue` is acknowledged only after framing and body-limit checks.
+
+This initial server is developed and verified on Linux ARM64. Linux native
+lowering also exists for x86_64, without a cross-target verification claim.
+macOS serving returns an explicit clock-unavailable error until the monotonic
+clock boundary is implemented there. The listener owns and closes accepted
+connections, and each response closes its connection. Reads and writes have
+10-second monotonic deadlines; headers retain the existing wire parser's line,
+count, and size caps. Configured body limits range from zero through 100 MiB,
+and request wire buffering is capped at the body limit plus 1 MiB for framing.
+Concurrency, IPv6 listeners, persistent connections, response compression,
+interpreter telemetry integration, and server-side TLS remain follow-up work.
+
+`src/Tests/e2e/http_server.e2e` covers routing, configuration, framing limits,
+and listener ownership. `python3 scripts/test_http_server_peer.py` exercises
+the compiled server against local TCP clients, including fragmented and binary
+bodies, 413/400/408/417/500 responses, HEAD, duplicate headers, bind failure,
+reset clients, signal shutdown during a stalled request, rebinding, and
+compiled leak accounting. Its artifacts remain in `TestResults/ai/`.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the

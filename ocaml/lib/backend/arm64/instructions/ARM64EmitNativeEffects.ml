@@ -868,7 +868,10 @@ let emitCliNative (ctx: codeGenContext) (dest: LIR.reg) (operation: LIR.cliOpera
                         fdLoads @ blobLoads @
                         [Symbolic.LDR (Symbolic.X2, Symbolic.X1, 8);
                          Symbolic.ADD_imm (Symbolic.X1, Symbolic.X1, 16);
-                         Symbolic.MOVZ (syscall.ARM64.syscallRegister, syscall.ARM64.numbers.Platform.write, 0);
+                         Symbolic.MOVZ (Symbolic.X4, 0, 0);
+                         Symbolic.MOVZ (Symbolic.X5, 0, 0)] @
+                        loadImmediate Symbolic.X3 (Platform.socketConstantsFor os).Platform.noSignal @
+                        [Symbolic.MOVZ (syscall.ARM64.syscallRegister, syscall.ARM64.numbers.Platform.sendTo, 0);
                          Symbolic.SVC syscall.ARM64.svcImmediate] @ normalize @
                         [Symbolic.MOV_reg (destReg, Symbolic.X0)]))
             | LIR.SocketReceive, [descriptor; buffer; length] ->
@@ -900,6 +903,55 @@ let emitCliNative (ctx: codeGenContext) (dest: LIR.reg) (operation: LIR.cliOpera
                         [Symbolic.MOV_reg (destReg, Symbolic.X0)]))
             | _ -> Error "Invalid socket operation arguments"
             )
+        | LIR.SocketBind4 | LIR.SocketListen | LIR.SocketAccept | LIR.SocketCloexec
+        | LIR.SocketReuseAddress | LIR.SocketPoll | LIR.SignalBlock | LIR.SignalRestore
+        | LIR.SignalPending | LIR.SignalWait | LIR.MonotonicTime ->
+            let syscall=ARM64.targetSyscalls ctx.target in
+            let os=ARM64.targetOS ctx.target in
+            let constants=Platform.socketConstantsFor os in
+            let normalize=if os=Platform.Linux then [] else
+                let doneLabel=Printf.sprintf "__listener_%s_%s_done" ctx.functionName ctx.instructionSite in
+                [Symbolic.B_cond_label (Symbolic.LO,doneLabel);Symbolic.NEG (Symbolic.X0,Symbolic.X0);Symbolic.Label doneLabel] in
+            let rec loadArguments operands registers=match operands,registers with
+                | [],[] -> Ok []
+                | operand::remaining,register::destinations -> loadCliOperand register operand
+                    |> bind (fun loads -> loadArguments remaining destinations |> Result.map (fun tail -> loads @ tail))
+                | _ -> Error "Invalid listener argument registers" in
+            let emit operands registers setup number=loadArguments operands registers
+                |> Result.map (fun loads -> loads @ setup @
+                    [Symbolic.MOVZ (syscall.ARM64.syscallRegister,number,0);Symbolic.SVC syscall.ARM64.svcImmediate] @ normalize @
+                    [Symbolic.MOV_reg (destReg,Symbolic.X0)]) in
+            (match operation,args with
+            | LIR.SocketBind4,[descriptor;address] ->
+                emit [descriptor;address] [Symbolic.X0;Symbolic.X1] (loadImmediate Symbolic.X2 16L) syscall.ARM64.numbers.Platform.bind
+            | LIR.SocketListen,[descriptor] ->
+                emit [descriptor] [Symbolic.X0] (loadImmediate Symbolic.X1 128L) syscall.ARM64.numbers.Platform.listen
+            | LIR.SocketAccept,[descriptor] ->
+                emit [descriptor] [Symbolic.X0] (loadImmediate Symbolic.X1 0L @ loadImmediate Symbolic.X2 0L) syscall.ARM64.numbers.Platform.accept
+            | LIR.SocketCloexec,[descriptor] ->
+                emit [descriptor] [Symbolic.X0] (loadImmediate Symbolic.X1 2L @ loadImmediate Symbolic.X2 1L) syscall.ARM64.numbers.Platform.fcntl
+            | LIR.SocketReuseAddress,[descriptor;enabled] ->
+                emit [descriptor;enabled] [Symbolic.X0;Symbolic.X3]
+                    (loadImmediate Symbolic.X1 (Int64.of_int constants.Platform.socketLevel) @ loadImmediate Symbolic.X2 (Int64.of_int constants.Platform.reuseAddress) @ loadImmediate Symbolic.X4 4L) syscall.ARM64.numbers.Platform.setSockOpt
+            | LIR.SocketPoll,[pollfd;timeout] ->
+                let timeoutLoads=if os=Platform.Linux then loadCliOperand Symbolic.X2 timeout else Ok (loadImmediate Symbolic.X2 100L) in
+                timeoutLoads |> bind (fun loads -> emit [pollfd] [Symbolic.X0]
+                    (loads @ loadImmediate Symbolic.X1 1L @ loadImmediate Symbolic.X3 0L @ loadImmediate Symbolic.X4 8L) syscall.ARM64.numbers.Platform.poll)
+            | LIR.SignalBlock,[mask;previous] ->
+                emit [mask;previous] [Symbolic.X1;Symbolic.X2]
+                    (loadImmediate Symbolic.X0 (Int64.of_int constants.Platform.blockSignal) @ loadImmediate Symbolic.X3 8L) syscall.ARM64.numbers.Platform.signalMask
+            | LIR.SignalRestore,[previous] ->
+                emit [previous] [Symbolic.X1]
+                    (loadImmediate Symbolic.X0 (Int64.of_int constants.Platform.restoreSignal) @ loadImmediate Symbolic.X2 0L @ loadImmediate Symbolic.X3 8L) syscall.ARM64.numbers.Platform.signalMask
+            | LIR.SignalPending,[mask] ->
+                emit [mask] [Symbolic.X0] (loadImmediate Symbolic.X1 8L) syscall.ARM64.numbers.Platform.signalPending
+            | LIR.SignalWait,[mask;info] ->
+                emit [mask;info] [Symbolic.X0;Symbolic.X1]
+                    (loadImmediate Symbolic.X2 0L @ loadImmediate Symbolic.X3 8L) syscall.ARM64.numbers.Platform.signalWait
+            | LIR.MonotonicTime,[time] ->
+                if os=Platform.MacOS then Ok (loadImmediate destReg (-38L))
+                else emit [time] [Symbolic.X1] (loadImmediate Symbolic.X0 1L) syscall.ARM64.numbers.Platform.gettimeofday
+            | _ -> Error "Invalid listener or signal operation arguments")
         | LIR.SocketClose ->
             (match args with
             | [descriptor] ->

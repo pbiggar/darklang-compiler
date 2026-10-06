@@ -1,4 +1,4 @@
-// Network.dark - Typed Dark wrapper for the first native socket operations.
+// Network.dark - Owned native TCP/UDP sockets, listeners, deadlines, and scoped shutdown signals.
 
 module Darklang.Stdlib.Network
 
@@ -34,6 +34,17 @@ let __receive (descriptor: Int64) (buffer: RawPtr) (length: Int64) : Int64 = -38
 let __receiveTimeout (descriptor: Int64) (timeval: RawPtr) : Int64 = -38L
 let __sendTimeout (descriptor: Int64) (timeval: RawPtr) : Int64 = -38L
 let __close (descriptor: Int64) : Int64 = -38L
+let __bind4 (descriptor: Int64) (address: RawPtr) : Int64 = -38L
+let __listen (descriptor: Int64) : Int64 = -38L
+let __accept (descriptor: Int64) : Int64 = -38L
+let __cloexec (descriptor: Int64) : Int64 = -38L
+let __reuseAddress (descriptor: Int64) (enabled: RawPtr) : Int64 = -38L
+let __poll (pollfd: RawPtr) (timeout: RawPtr) : Int64 = -38L
+let __signalBlock (mask: RawPtr) (previous: RawPtr) : Int64 = -38L
+let __signalRestore (previous: RawPtr) : Int64 = -38L
+let __signalPending (mask: RawPtr) : Int64 = -38L
+let __signalWait (mask: RawPtr) (info: RawPtr) : Int64 = -38L
+let __monotonic (time: RawPtr) : Int64 = -38L
 
 let openTcp4 () : Stdlib.Result.Result<Stdlib.Network.Socket, Int64> =
     let descriptor = Stdlib.Network.__tcp4Socket () in
@@ -172,6 +183,174 @@ let writeTcp (connection: Stdlib.Network.TcpConnection) (payload: Blob) : Stdlib
 
 let readTcp (connection: Stdlib.Network.TcpConnection) (length: Int64) : Stdlib.Result.Result<Blob, Int64> =
     connection.read length
+
+let __word (buffer: RawPtr) (offset: Int64) : Int64 = __raw_get buffer offset
+
+let monotonicMillis () : Stdlib.Result.Result<Int64, Int64> =
+    let buffer = __raw_alloc 16L in
+    let code = Stdlib.Network.__monotonic buffer in
+    let result =
+        if code < 0L then Error (0L - code)
+        else
+            let seconds = Stdlib.Network.__word buffer 0L in
+            let nanos = Stdlib.Network.__word buffer 8L in
+            Ok (seconds * 1000L + nanos / 1000000L) in
+    let _ = __raw_free buffer in
+    result
+
+// Signal masks belong to the serving scope and are restored on its last-owner
+// release. Blocking rather than an async handler keeps shutdown state in Dark.
+type ShutdownSignals = { lifecycle: Stream<Unit> }
+
+let shutdownSignals () : Stdlib.Result.Result<Stdlib.Network.ShutdownSignals, Int64> =
+    let mask = __raw_alloc 8L in
+    let previous = __raw_alloc 8L in
+    let _ = __raw_write_word mask 0L 16386L in
+    let _ = __raw_write_word previous 0L 0L in
+    let code = Stdlib.Network.__signalBlock mask previous in
+    let _ = __raw_free mask in
+    if code < 0L then
+        let _ = __raw_free previous in
+        Error (0L - code)
+    else
+        let lifecycle = Stdlib.Stream.__new (fun _ -> Some ()) (fun _ -> let _ = Stdlib.Network.__consumeShutdown false in let _ = Stdlib.Network.__signalRestore previous in __raw_free previous) in
+        Ok (Stdlib.Network.ShutdownSignals { lifecycle = lifecycle })
+
+let __consumeShutdown (seen: Bool) : Stdlib.Result.Result<Bool, Int64> =
+    let mask = __raw_alloc 8L in
+    let _ = __raw_write_word mask 0L 0L in
+    let code = Stdlib.Network.__signalPending mask in
+    let pending = Stdlib.Network.__word mask 0L in
+    let _ = __raw_write_word mask 0L 16386L in
+    if code < 0L then
+        let _ = __raw_free mask in
+        Error (0L - code)
+    else if Stdlib.Int64.bitwiseAnd pending 16386L == 0L then
+        let _ = __raw_free mask in
+        Ok seen
+    else
+        let info = __raw_alloc 128L in
+        let waited = Stdlib.Network.__signalWait mask info in
+        let _ = __raw_free info in
+        let _ = __raw_free mask in
+        if waited < 0L then Error (0L - waited)
+        else Stdlib.Network.__consumeShutdown true
+
+let shutdownRequested (signals: Stdlib.Network.ShutdownSignals) : Stdlib.Result.Result<Bool, Int64> =
+    match Stdlib.Stream.next signals.lifecycle with
+    | None -> Error 9L
+    | Some _ -> Stdlib.Network.__consumeShutdown false
+
+let closeShutdownSignals (signals: Stdlib.Network.ShutdownSignals) : Unit =
+    Stdlib.Stream.close signals.lifecycle
+
+type TcpListener = {
+    lifecycle: Stream<Unit>,
+    accept: Int64 -> Stdlib.Result.Result<Stdlib.Network.TcpConnection, Int64>,
+    wait: Unit -> Stdlib.Result.Result<Bool, Int64>
+}
+
+let __waitReadable (descriptor: Int64) (lifecycle: Stream<Unit>) : Stdlib.Result.Result<Bool, Int64> =
+    match Stdlib.Stream.next lifecycle with
+    | None -> Error 9L
+    | Some _ ->
+        let pollfd = __raw_alloc 8L in
+        let timeout = __raw_alloc 16L in
+        let _ = __raw_write_word pollfd 0L (descriptor + 4294967296L) in
+        let _ = __raw_write_word timeout 0L 0L in
+        let _ = __raw_write_word timeout 8L 100000000L in
+        let code = Stdlib.Network.__poll pollfd timeout in
+        let events = Stdlib.Network.__word pollfd 0L in
+        let _ = __raw_free pollfd in
+        let _ = __raw_free timeout in
+        if code < 0L then Error (0L - code)
+        else if code == 0L then Ok false
+        else if Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight events 48L) 1L == 1L then Ok true
+        else Error 9L
+
+let __writeUntil (descriptor: Int64) (lifecycle: Stream<Unit>) (deadline: Int64) (payload: Blob)
+    : Stdlib.Result.Result<Unit, Int64> =
+    match Stdlib.Stream.next lifecycle with
+    | None -> Error 9L
+    | Some _ ->
+        match Stdlib.Network.monotonicMillis () with
+        | Error code -> Error code
+        | Ok now ->
+            if now >= deadline then Error 110L
+            else if Stdlib.Blob.__byteLength payload == 0L then Ok ()
+            else
+                let sent = Stdlib.Network.__send descriptor payload in
+                if sent == -4L || sent == -11L || sent == -35L then
+                    Stdlib.Network.__writeUntil descriptor lifecycle deadline payload
+                else if sent < 0L then Error (0L - sent)
+                else if sent == 0L then Error 32L
+                else if sent >= Stdlib.Blob.__byteLength payload then Ok ()
+                else
+                    let remaining = Stdlib.Blob.slice payload (Stdlib.Int.fromInt64 sent) (Stdlib.Int.fromInt64 (Stdlib.Blob.__byteLength payload - sent)) in
+                    Stdlib.Network.__writeUntil descriptor lifecycle deadline remaining
+
+let __writeAccepted (descriptor: Int64) (lifecycle: Stream<Unit>) (payload: Blob)
+    : Stdlib.Result.Result<Unit, Int64> =
+    match Stdlib.Network.monotonicMillis () with
+    | Error code -> Error code
+    | Ok now -> Stdlib.Network.__writeUntil descriptor lifecycle (now + 10000L) payload
+
+let __acceptTcp (descriptor: Int64) (lifecycle: Stream<Unit>) (timeoutMs: Int64)
+    : Stdlib.Result.Result<Stdlib.Network.TcpConnection, Int64> =
+    if timeoutMs <= 0L || timeoutMs > 10000L then Error 22L
+    else
+        match Stdlib.Stream.next lifecycle with
+        | None -> Error 9L
+        | Some _ ->
+            match Stdlib.Network.__setTimeout descriptor timeoutMs with
+            | Error code -> Error code
+            | Ok () ->
+                let accepted = Stdlib.Network.__accept descriptor in
+                if accepted < 0L then Error (0L - accepted)
+                else
+                    let owner = Stdlib.Stream.__new (fun _ -> Some ()) (fun _ -> let _ = Stdlib.Network.__close accepted in ()) in
+                    let flags = Stdlib.Network.__cloexec accepted in
+                    let setup =
+                        if flags < 0L then Error (0L - flags)
+                        else Stdlib.Network.__setTimeout accepted timeoutMs in
+                    match setup with
+                    | Error code -> let _ = Stdlib.Stream.close owner in Error code
+                    | Ok () -> Ok (Stdlib.Network.TcpConnection {
+                        lifecycle = owner,
+                        read = Stdlib.Network.__readChunk accepted owner,
+                        write = Stdlib.Network.__writeAccepted accepted owner
+                    })
+
+let listenTcp4 (address: List<Int64>) (port: Int64) : Stdlib.Result.Result<Stdlib.Network.TcpListener, Int64> =
+    if Stdlib.Bool.not (Stdlib.Network.__validAddress false address) || port < 0L || port > 65535L then Error 22L
+    else
+        let descriptor = Stdlib.Network.__tcp4Socket () in
+        if descriptor < 0L then Error (0L - descriptor)
+        else
+            let lifecycle = Stdlib.Stream.__new (fun _ -> Some ()) (fun _ -> let _ = Stdlib.Network.__close descriptor in ()) in
+            let enabled = __raw_alloc 8L in
+            let _ = __raw_write_word enabled 0L 1L in
+            let reused = Stdlib.Network.__reuseAddress descriptor enabled in
+            let _ = __raw_free enabled in
+            let sockaddr = Stdlib.Network.__socketAddress false address port in
+            let bound = if reused < 0L then reused else Stdlib.Network.__bind4 descriptor sockaddr in
+            let _ = __raw_free sockaddr in
+            let listening = if bound < 0L then bound else Stdlib.Network.__listen descriptor in
+            if listening < 0L then
+                let _ = Stdlib.Stream.close lifecycle in
+                Error (0L - listening)
+            else Ok (Stdlib.Network.TcpListener {
+                lifecycle = lifecycle,
+                accept = Stdlib.Network.__acceptTcp descriptor lifecycle,
+                wait = fun _ -> Stdlib.Network.__waitReadable descriptor lifecycle
+            })
+
+let acceptTcp (listener: Stdlib.Network.TcpListener) (timeoutMs: Int64)
+    : Stdlib.Result.Result<Stdlib.Network.TcpConnection, Int64> = listener.accept timeoutMs
+
+let waitListener (listener: Stdlib.Network.TcpListener) : Stdlib.Result.Result<Bool, Int64> = listener.wait ()
+
+let closeListener (listener: Stdlib.Network.TcpListener) : Unit = Stdlib.Stream.close listener.lifecycle
 
 let __udpExchange (descriptor: Int64) (lifecycle: Stream<Unit>) (ipv6: Bool)
     (address: List<Int64>) (port: Int64) (payload: Blob) (timeoutMs: Int64)

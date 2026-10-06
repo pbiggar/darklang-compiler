@@ -90,6 +90,17 @@ let cliOperation = function
  | MIR.SocketReceiveTimeout -> "SocketReceiveTimeout"
  | MIR.SocketSendTimeout -> "SocketSendTimeout"
  | MIR.SocketClose -> "SocketClose"
+ | MIR.SocketBind4 -> "SocketBind4"
+ | MIR.SocketListen -> "SocketListen"
+ | MIR.SocketAccept -> "SocketAccept"
+ | MIR.SocketCloexec -> "SocketCloexec"
+ | MIR.SocketReuseAddress -> "SocketReuseAddress"
+ | MIR.SocketPoll -> "SocketPoll"
+ | MIR.SignalBlock -> "SignalBlock"
+ | MIR.SignalRestore -> "SignalRestore"
+ | MIR.SignalPending -> "SignalPending"
+ | MIR.SignalWait -> "SignalWait"
+ | MIR.MonotonicTime -> "MonotonicTime"
  | MIR.SecureRandomFill -> "SecureRandomFill"
 let prettyPrintCanonicalBufferKind = ANFPrinter.prettyPrintCanonicalBufferKind
 (*

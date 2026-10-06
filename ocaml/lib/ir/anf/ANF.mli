@@ -73,6 +73,17 @@ type cliOperation =
  | SocketReceiveTimeout
  | SocketSendTimeout
  | SocketClose
+ | SocketBind4
+ | SocketListen
+ | SocketAccept
+ | SocketCloexec
+ | SocketReuseAddress
+ | SocketPoll
+ | SignalBlock
+ | SignalRestore
+ | SignalPending
+ | SignalWait
+ | MonotonicTime
  | SecureRandomFill
 type recordDescriptor = {sourceTypeName : string; runtimeTypeName : string; typeArgs : AST.semanticType list; fields : (string * AST.semanticType) list; valueType : AST.semanticType}
 type cExpr =

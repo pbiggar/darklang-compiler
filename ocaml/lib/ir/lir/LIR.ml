@@ -106,6 +106,17 @@ type cliOperation =    | Execute
     | SocketReceiveTimeout
     | SocketSendTimeout
     | SocketClose
+    | SocketBind4
+    | SocketListen
+    | SocketAccept
+    | SocketCloexec
+    | SocketReuseAddress
+    | SocketPoll
+    | SignalBlock
+    | SignalRestore
+    | SignalPending
+    | SignalWait
+    | MonotonicTime
     | SecureRandomFill
 (*
    Basic block label (wrapper type for type safety)

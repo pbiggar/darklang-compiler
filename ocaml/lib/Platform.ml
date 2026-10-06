@@ -93,6 +93,15 @@ type syscallNumbers = {
   socket : int;
   connect : int;
   setSockOpt : int;
+  bind : int;
+  listen : int;
+  accept : int;
+  fcntl : int;
+  poll : int;
+  signalMask : int;
+  signalPending : int;
+  signalWait : int;
+  sendTo : int;
 }
 let macOSARM64SyscallNumbers : syscallNumbers = {
   write = 4;
@@ -112,6 +121,15 @@ let macOSARM64SyscallNumbers : syscallNumbers = {
   socket = 97;
   connect = 98;
   setSockOpt = 105;
+  bind = 104;
+  listen = 106;
+  accept = 30;
+  fcntl = 92;
+  poll = 230;
+  signalMask = 48;
+  signalPending = 52;
+  signalWait = 330;
+  sendTo = 133;
 }
 let linuxARM64SyscallNumbers : syscallNumbers = {
   write = 64;
@@ -131,6 +149,15 @@ let linuxARM64SyscallNumbers : syscallNumbers = {
   socket = 198;
   connect = 203;
   setSockOpt = 208;
+  bind = 200;
+  listen = 201;
+  accept = 202;
+  fcntl = 25;
+  poll = 73;
+  signalMask = 135;
+  signalPending = 136;
+  signalWait = 137;
+  sendTo = 206;
 }
 (*
    open (not openat)
@@ -154,6 +181,15 @@ let linuxX86_64SyscallNumbers : syscallNumbers = {
   socket = 41;
   connect = 42;
   setSockOpt = 54;
+  bind = 49;
+  listen = 50;
+  accept = 43;
+  fcntl = 72;
+  poll = 271;
+  signalMask = 14;
+  signalPending = 127;
+  signalWait = 128;
+  sendTo = 44;
 }
 (*
    Get syscall numbers for the given (OS, Arch) pair.
@@ -170,6 +206,10 @@ type socketConstants = {
   socketLevel : int;
   receiveTimeout : int;
   sendTimeout : int;
+  reuseAddress : int;
+  noSignal : int64;
+  blockSignal : int;
+  restoreSignal : int;
 }
 let socketConstantsFor = function
   | MacOS -> {
@@ -180,6 +220,10 @@ let socketConstantsFor = function
       socketLevel = 65535;
       receiveTimeout = 4102;
       sendTimeout = 4101;
+      reuseAddress = 4;
+      noSignal = 524288L;
+      blockSignal = 1;
+      restoreSignal = 3;
     }
   | Linux -> {
       addressFamily4 = 2;
@@ -189,6 +233,10 @@ let socketConstantsFor = function
       socketLevel = 1;
       receiveTimeout = 20;
       sendTimeout = 21;
+      reuseAddress = 2;
+      noSignal = 16384L;
+      blockSignal = 0;
+      restoreSignal = 2;
     }
 (*
    Check if code signing is required for this platform

@@ -162,6 +162,17 @@ let convertCliOperation (operation : ANF.cliOperation) = (match operation with
 | ANF.SocketReceiveTimeout -> (MIR.SocketReceiveTimeout)
 | ANF.SocketSendTimeout -> (MIR.SocketSendTimeout)
 | ANF.SocketClose -> (MIR.SocketClose)
+| ANF.SocketBind4 -> MIR.SocketBind4
+| ANF.SocketListen -> MIR.SocketListen
+| ANF.SocketAccept -> MIR.SocketAccept
+| ANF.SocketCloexec -> MIR.SocketCloexec
+| ANF.SocketReuseAddress -> MIR.SocketReuseAddress
+| ANF.SocketPoll -> MIR.SocketPoll
+| ANF.SignalBlock -> MIR.SignalBlock
+| ANF.SignalRestore -> MIR.SignalRestore
+| ANF.SignalPending -> MIR.SignalPending
+| ANF.SignalWait -> MIR.SignalWait
+| ANF.MonotonicTime -> MIR.MonotonicTime
 | ANF.SecureRandomFill -> (MIR.SecureRandomFill))
 (*
    Precomputed descriptions for primitive ops (avoids formatting on hot path)
@@ -431,7 +442,7 @@ let inferSimpleCExprDestType builder tempId aliasType = function
 *)
 let operandType builder = function MIR.Int64Const _ | MIR.FuncAddr _ -> AST.TInt64 | MIR.BoolConst _ -> AST.TBool | MIR.FloatSymbol _ -> AST.TFloat64 | MIR.StringSymbol _ -> AST.TString | MIR.Register (MIR.VReg id) -> if IS.mem id builder.floatRegs then AST.TFloat64 else match tryFindTypeById builder id with Some typ -> typ | None -> Crash.crash (Printf.sprintf "operandType: missing type for v%d" id)
 
-let cliOperationName = function ANF.Execute -> "Execute" | ANF.RunProcess -> "RunProcess" | ANF.HostOS -> "HostOS" | ANF.HostArchitecture -> "HostArchitecture" | ANF.Hostname -> "Hostname" | ANF.GetEnv -> "GetEnv" | ANF.GetEnvironmentPacked -> "GetEnvironmentPacked" | ANF.SetEnv -> "SetEnv" | ANF.UnsetEnv -> "UnsetEnv" | ANF.DirectoryCurrent -> "DirectoryCurrent" | ANF.DirectoryListPacked -> "DirectoryListPacked" | ANF.FileIsDirectory -> "FileIsDirectory" | ANF.FileCreateExclusive -> "FileCreateExclusive" | ANF.GetArgv -> "GetArgv" | ANF.Kill -> "Kill" | ANF.GetPid -> "GetPid" | ANF.GetUid -> "GetUid" | ANF.CpuCount -> "CpuCount" | ANF.SpawnProcess -> "SpawnProcess" | ANF.ProcessIO -> "ProcessIO" | ANF.TerminateProcess -> "TerminateProcess" | ANF.SocketTcp4 -> "SocketTcp4" | ANF.SocketTcp6 -> "SocketTcp6" | ANF.SocketUdp4 -> "SocketUdp4" | ANF.SocketUdp6 -> "SocketUdp6" | ANF.SocketConnect4 -> "SocketConnect4" | ANF.SocketConnect6 -> "SocketConnect6" | ANF.SocketSend -> "SocketSend" | ANF.SocketReceive -> "SocketReceive" | ANF.SocketReceiveTimeout -> "SocketReceiveTimeout" | ANF.SocketSendTimeout -> "SocketSendTimeout" | ANF.SocketClose -> "SocketClose" | ANF.SecureRandomFill -> "SecureRandomFill"
+let cliOperationName = function ANF.Execute -> "Execute" | ANF.RunProcess -> "RunProcess" | ANF.HostOS -> "HostOS" | ANF.HostArchitecture -> "HostArchitecture" | ANF.Hostname -> "Hostname" | ANF.GetEnv -> "GetEnv" | ANF.GetEnvironmentPacked -> "GetEnvironmentPacked" | ANF.SetEnv -> "SetEnv" | ANF.UnsetEnv -> "UnsetEnv" | ANF.DirectoryCurrent -> "DirectoryCurrent" | ANF.DirectoryListPacked -> "DirectoryListPacked" | ANF.FileIsDirectory -> "FileIsDirectory" | ANF.FileCreateExclusive -> "FileCreateExclusive" | ANF.GetArgv -> "GetArgv" | ANF.Kill -> "Kill" | ANF.GetPid -> "GetPid" | ANF.GetUid -> "GetUid" | ANF.CpuCount -> "CpuCount" | ANF.SpawnProcess -> "SpawnProcess" | ANF.ProcessIO -> "ProcessIO" | ANF.TerminateProcess -> "TerminateProcess" | ANF.SocketTcp4 -> "SocketTcp4" | ANF.SocketTcp6 -> "SocketTcp6" | ANF.SocketUdp4 -> "SocketUdp4" | ANF.SocketUdp6 -> "SocketUdp6" | ANF.SocketConnect4 -> "SocketConnect4" | ANF.SocketConnect6 -> "SocketConnect6" | ANF.SocketSend -> "SocketSend" | ANF.SocketReceive -> "SocketReceive" | ANF.SocketReceiveTimeout -> "SocketReceiveTimeout" | ANF.SocketSendTimeout -> "SocketSendTimeout" | ANF.SocketClose -> "SocketClose" | ANF.SocketBind4 -> "SocketBind4" | ANF.SocketListen -> "SocketListen" | ANF.SocketAccept -> "SocketAccept" | ANF.SocketCloexec -> "SocketCloexec" | ANF.SocketReuseAddress -> "SocketReuseAddress" | ANF.SocketPoll -> "SocketPoll" | ANF.SignalBlock -> "SignalBlock" | ANF.SignalRestore -> "SignalRestore" | ANF.SignalPending -> "SignalPending" | ANF.SignalWait -> "SignalWait" | ANF.MonotonicTime -> "MonotonicTime" | ANF.SecureRandomFill -> "SecureRandomFill"
 (*
    Generate description for a CExpr (for coverage mapping)
 *)

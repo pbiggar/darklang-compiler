@@ -109,6 +109,17 @@ let prettyPrintCliOperation = function
  | LIR.SocketReceiveTimeout -> "SocketReceiveTimeout"
  | LIR.SocketSendTimeout -> "SocketSendTimeout"
  | LIR.SocketClose -> "SocketClose"
+ | LIR.SocketBind4 -> "SocketBind4"
+ | LIR.SocketListen -> "SocketListen"
+ | LIR.SocketAccept -> "SocketAccept"
+ | LIR.SocketCloexec -> "SocketCloexec"
+ | LIR.SocketReuseAddress -> "SocketReuseAddress"
+ | LIR.SocketPoll -> "SocketPoll"
+ | LIR.SignalBlock -> "SignalBlock"
+ | LIR.SignalRestore -> "SignalRestore"
+ | LIR.SignalPending -> "SignalPending"
+ | LIR.SignalWait -> "SignalWait"
+ | LIR.MonotonicTime -> "MonotonicTime"
  | LIR.SecureRandomFill -> "SecureRandomFill"
 (*
    Pretty-print LIR register

@@ -67,6 +67,12 @@ behavior, and shutdown semantics. Begin with bounded sequential service;
 introduce concurrent connections after their ownership and deadline behavior
 can be tested. Keep routing in Dark.
 
+The first Linux ARM64 server now implements bounded sequential IPv4 HTTP/1.1
+service, configuration, routing, body limits, standard headers, forwarded URL
+canonicalization, request logging, and graceful signal shutdown. See the
+[HTTP compatibility ledger](../compatibility/stdlib/html-and-http.md#additional-pure-http-surfaces)
+for the tested profile and remaining server work.
+
 ## 4. HTTPS
 
 TLS is not an operating-system syscall. An entirely Dark HTTPS client requires

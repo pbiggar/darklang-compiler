@@ -176,7 +176,7 @@ let inferCExprType ctx expr =
    | A.FileIsDirectory -> Some AST.TBool
    | A.HostOS | A.HostArchitecture | A.GetPid | A.GetUid | A.CpuCount | A.SpawnProcess | A.FileCreateExclusive
    | A.SocketTcp4 | A.SocketTcp6 | A.SocketUdp4 | A.SocketUdp6 | A.SocketConnect4 | A.SocketConnect6
-   | A.SocketSend | A.SocketReceive | A.SocketReceiveTimeout | A.SocketSendTimeout | A.SocketClose | A.SecureRandomFill -> Some AST.TInt64)
+   | A.SocketSend | A.SocketReceive | A.SocketReceiveTimeout | A.SocketSendTimeout | A.SocketClose | A.SocketBind4 | A.SocketListen | A.SocketAccept | A.SocketCloexec | A.SocketReuseAddress | A.SocketPoll | A.SignalBlock | A.SignalRestore | A.SignalPending | A.SignalWait | A.MonotonicTime | A.SecureRandomFill -> Some AST.TInt64)
  | A.IfValue (_, yes, _) -> atom yes
  | A.BorrowedCall (func, [value]) when Option.fold ~none:false ~some:(fun (name, _) -> starts "Darklang.Stdlib.List.__headUnsafe" name) (FunctionIdMap.tryFind func ctx.funcReg) ->
    (match atom value with Some (AST.TList elem) -> Some elem | _ -> ret func)

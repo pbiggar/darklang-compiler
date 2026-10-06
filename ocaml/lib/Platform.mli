@@ -21,6 +21,15 @@ type syscallNumbers = {
   socket : int;
   connect : int;
   setSockOpt : int;
+  bind : int;
+  listen : int;
+  accept : int;
+  fcntl : int;
+  poll : int;
+  signalMask : int;
+  signalPending : int;
+  signalWait : int;
+  sendTo : int;
 }
 type socketConstants = {
   addressFamily4 : int;
@@ -30,6 +39,10 @@ type socketConstants = {
   socketLevel : int;
   receiveTimeout : int;
   sendTimeout : int;
+  reuseAddress : int;
+  noSignal : int64;
+  blockSignal : int;
+  restoreSignal : int;
 }
 val detectOS : unit -> (os, string) result
 val detectArch : unit -> (arch, string) result
