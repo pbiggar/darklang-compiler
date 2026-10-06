@@ -58,7 +58,9 @@ module QualifiedOrder = struct
   let rec compareSegments left right = match left, right with
     | [], [] -> 0 | [], _ :: _ -> -1 | _ :: _, [] -> 1
     | x :: xs, y :: ys -> let c = StringOrder.compare x y in if c = 0 then compareSegments xs ys else c
-  let compare left right = compareSegments (qualifiedNameSegments left) (qualifiedNameSegments right)
+  let compare (QualifiedName left) (QualifiedName right) =
+    let c = StringOrder.compare left.NonEmptyList.head right.NonEmptyList.head in
+    if c = 0 then compareSegments left.NonEmptyList.tail right.NonEmptyList.tail else c
 end
 module Names = Map.Make(QualifiedOrder)
 module NameSet = Set.Make(QualifiedOrder)
@@ -98,7 +100,8 @@ let filterCandidates predicate environment =
       changedNames (environment.candidatesByVisibleName, environment.importedCandidatesByVisibleName) in
   {orderedCandidates = ordered; candidatesByVisibleName; importedOrderedCandidates = imported; importedCandidatesByVisibleName}
 let merge baseEnvironment overlayEnvironment =
-  let mergeCandidateMaps base overlay = Names.fold (fun visibleName candidates combined -> Names.add visibleName (candidates @ indexed visibleName combined) combined) overlay base in
+  let mergeCandidateMaps base overlay =
+    Names.union (fun _ baseCandidates overlayCandidates -> Some (overlayCandidates @ baseCandidates)) base overlay in
   {orderedCandidates = overlayEnvironment.orderedCandidates @ baseEnvironment.importedOrderedCandidates;
    candidatesByVisibleName = mergeCandidateMaps baseEnvironment.importedCandidatesByVisibleName overlayEnvironment.candidatesByVisibleName;
    importedOrderedCandidates = overlayEnvironment.importedOrderedCandidates @ baseEnvironment.importedOrderedCandidates;

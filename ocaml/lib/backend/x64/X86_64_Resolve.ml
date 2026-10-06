@@ -33,26 +33,7 @@ let requireLabelPosition label labelPositions=match StringOrder.Map.find_opt lab
    Patch a signed rel32 displacement into already-encoded machine code.
 *)
 let patchRel32 machineCode patchOffset rel =
- let rel=Int32.of_int rel in
- let relBytes=Array.init 4 (fun i -> Char.chr (Int32.to_int (Int32.logand (Int32.shift_right_logical rel (i*8)) 0xffl))) in
- Bytes.set machineCode patchOffset relBytes.(0);
- Bytes.set machineCode (add patchOffset 1) relBytes.(1);
- Bytes.set machineCode (add patchOffset 2) relBytes.(2);
- Bytes.set machineCode (add patchOffset 3) relBytes.(3)
-type encodeState = {labelPositions:int StringOrder.Map.t;fixups:fixup list;offset:int;encodedChunks:bytes list}
-let addFixup encode (state:encodeState) instr patchOffsetFromInstrStart targetLabel =
- let bytes=encode instr in
- {state with fixups={patchOffset=add state.offset patchOffsetFromInstrStart;nextInstrOffset=add state.offset (Bytes.length bytes);targetLabel}::state.fixups;offset=add state.offset (Bytes.length bytes);encodedChunks=bytes::state.encodedChunks}
-let addEncodedInstruction encode (state:encodeState) instr =
- let bytes=encode instr in
- {state with offset=add state.offset (Bytes.length bytes);encodedChunks=bytes::state.encodedChunks}
-let encodeInstruction encode (state:encodeState) instr = match instr with
- | Label name -> if StringOrder.Map.mem name state.labelPositions then Error ("Duplicate label: "^name) else Ok {state with labelPositions=StringOrder.Map.add name state.offset state.labelPositions}
- | CALL label -> Ok (addFixup encode state instr 1 label)
- | JMP label -> Ok (addFixup encode state instr 1 label)
- | Jcc (_,label) -> Ok (addFixup encode state instr 2 label)
- | LEA_rip (_,label) -> Ok (addFixup encode state instr 3 label)
- | _ -> Ok (addEncodedInstruction encode state instr)
+ Bytes.set_int32_le machineCode patchOffset (Int32.of_int rel)
 type patchState = {errors:string list}
 (*
    Collect every symbolic string reference in first-use order. The empty string
@@ -72,20 +53,33 @@ let dataLabelOffsets codeFileOffset codeSize (stringPool:LiteralPool.stringPool)
 (*
    Returns the final machine code bytes and label positions.
    Pass 1: encode all instructions, collect label positions and fixups
-   Concatenate all encoded chunks
+   Copy buffered instruction bytes into the patchable output
    Pass 2: apply fixups (defer unknown labels for data label patching later)
    rel32 = target - nextInstr
 *)
 let resolveAndEncodeWith encode instructions =
- let encodeResult=List.fold_left (fun state instr -> Result.bind state (fun state -> encodeInstruction encode state instr)) (Ok {labelPositions=StringOrder.Map.empty;fixups=[];offset=0;encodedChunks=[]}) instructions in
- match encodeResult with
- | Error err -> Error err
- | Ok encodeState ->
- let result=Bytes.concat Bytes.empty (List.rev encodeState.encodedChunks) in
- let deferred=List.fold_left (fun deferred fixup -> match StringOrder.Map.find_opt fixup.targetLabel encodeState.labelPositions with
- | None -> fixup::deferred
- | Some targetOffset -> let rel=sub targetOffset fixup.nextInstrOffset in patchRel32 result fixup.patchOffset rel;deferred) [] encodeState.fixups in
- Ok {machineCode=result;labelPositions=encodeState.labelPositions;deferredFixups=List.rev deferred}
+ let output=Buffer.create 4096 in
+ let rec loop labelPositions fixups offset = function
+ | [] ->
+  let result=Buffer.to_bytes output in
+  let deferred=List.fold_left (fun deferred fixup -> match StringOrder.Map.find_opt fixup.targetLabel labelPositions with
+   | None -> fixup::deferred
+   | Some targetOffset -> let rel=sub targetOffset fixup.nextInstrOffset in patchRel32 result fixup.patchOffset rel;deferred) [] fixups in
+  Ok {machineCode=result;labelPositions;deferredFixups=List.rev deferred}
+ | Label name::rest ->
+  if StringOrder.Map.mem name labelPositions then Error ("Duplicate label: "^name)
+  else loop (StringOrder.Map.add name offset labelPositions) fixups offset rest
+ | instr::rest ->
+  let bytes=encode instr in
+  let nextOffset=add offset (Bytes.length bytes) in
+  let fixups=match instr with
+   | CALL targetLabel | JMP targetLabel -> {patchOffset=add offset 1;nextInstrOffset=nextOffset;targetLabel}::fixups
+   | Jcc (_,targetLabel) -> {patchOffset=add offset 2;nextInstrOffset=nextOffset;targetLabel}::fixups
+   | LEA_rip (_,targetLabel) -> {patchOffset=add offset 3;nextInstrOffset=nextOffset;targetLabel}::fixups
+   | _ -> fixups in
+  Buffer.add_bytes output bytes;
+  loop labelPositions fixups nextOffset rest in
+ loop StringOrder.Map.empty [] 0 instructions
 let resolveAndEncode instructions=resolveAndEncodeWith X86_64_Encoding.encodeInstruction instructions
 let patchDataLabel dataLabels codeFileOffset machineCode (state:patchState) fixup = match StringOrder.Map.find_opt fixup.targetLabel dataLabels with
  | None -> {errors=("Undefined label: "^fixup.targetLabel)::state.errors}

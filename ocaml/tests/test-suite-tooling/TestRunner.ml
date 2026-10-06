@@ -558,7 +558,8 @@ let runTestsWithProgressReporter completedTestReporter args=
  let totalTime=elapsed totalStart in
  let unaccountedBreakdown=F.calculateUnaccountedTimeBreakdown totalTime runState.F.passTimings (Queue.to_seq runState.F.timings) in
  let knownOrder=queueList runState.F.passTimingOrder in
- let extras=M.bindings runState.F.passTimings |> List.map fst |> List.filter (fun name->not (List.mem name knownOrder)) in
+ let knownNames=StringOrder.Set.of_list knownOrder in
+ let extras=M.bindings runState.F.passTimings |> List.map fst |> List.filter (fun name->not (StringOrder.Set.mem name knownNames)) in
  let orderedPassTimingNames=knownOrder @ extras in
 
  let writeTimingsJson path=

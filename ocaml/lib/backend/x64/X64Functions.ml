@@ -14,14 +14,15 @@ let translateFunction enableLeakCheck recordRegistry sumShapeRegistry functionNa
     at the start of the entry block (e.g., "D1 <- FMov(D0)"). These are
     handled by the FMov case in translateInstr. No extra codegen needed. *)
  let translateBlocks blocks=
-  let rec loop acc indexedBlocks=match indexedBlocks with
+  let ctx={functionName=func.LIR.name;stackSize=func.LIR.stackSize;usedCalleeSaved=func.LIR.usedCalleeSaved;enableLeakCheck;recordRegistry;sumShapeRegistry;functionNames} in
+  let rec loop acc blocks=match blocks with
    | [] -> Ok (List.rev acc |> List.concat)
-   | (block,nextBlock)::rest ->
-    let ctx={functionName=func.LIR.name;stackSize=func.LIR.stackSize;usedCalleeSaved=func.LIR.usedCalleeSaved;enableLeakCheck;recordRegistry;sumShapeRegistry;functionNames} in
+   | block::rest ->
+    let nextBlock=match rest with []->None|next::_->Some next in
     match translateBlock ctx epilogueLabel nextBlock block with
     | Error e -> Error e
     | Ok instrs -> loop (instrs::acc) rest in
-  blocks |> List.mapi (fun index block->block,List.nth_opt blocks (index+1)) |> loop [] in
+  loop [] blocks in
  (* Layout blocks into deterministic fallthrough chains before translation. *)
  let allBlocksResult=LIR.layoutBlocks func.LIR.cfg |> Result.map_error (fun e->"x64 codegen: function "^func.LIR.name^": "^e) in
  match Result.bind allBlocksResult translateBlocks with
