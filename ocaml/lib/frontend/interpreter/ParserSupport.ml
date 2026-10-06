@@ -181,7 +181,7 @@ let docOf state index = if index < state.tokenCount then Option.value ~default:"
 let zeroWidthAtEnd range = {start = range.end_; end_ = range.end_}
 let span first last = {start = first.start; end_ = last.end_}
 let advancePos position text count =
-  let chars = HostText.utf16Units text in
+  let chars = HostText.scalars text in
   let current = ref position in
   for index = 0 to min count (Array.length chars) - 1 do
     current := if chars.(index) = 10 then {row = !current.row + 1; column = 0} else {!current with column = !current.column + 1}
@@ -189,11 +189,11 @@ let advancePos position text count =
   !current
 let splitTrailingRange state index trailingLength =
   let whole = rng state index and text = txt state index in
-  let boundary = advancePos whole.start text (max 0 (Array.length (HostText.utf16Units text) - trailingLength)) in
+  let boundary = advancePos whole.start text (max 0 (HostText.length text - trailingLength)) in
   {start = whole.start; end_ = boundary}, {start = boundary; end_ = whole.end_}
 let literalTextRanges state index delimiter =
   let whole = rng state index and text = txt state index in
-  let length = Array.length (HostText.utf16Units text) and delimiterLength = Array.length (HostText.utf16Units delimiter) in
+  let length = HostText.length text and delimiterLength = HostText.length delimiter in
   let hasClose = length >= delimiterLength * 2 && String.ends_with ~suffix:delimiter text in
   let openEnd = advancePos whole.start text (min delimiterLength length) in
   let contentEnd = advancePos whole.start text (if hasClose then length - delimiterLength else length) in
@@ -213,8 +213,8 @@ let err state code index message = errFull state code index message [] None
 let foundDesc state index =
   if index >= state.tokenCount || tok state index = TEOF then "end of file" else
   let text = String.concat "\\n" (String.split_on_char '\n' (txt state index)) in
-  let chars = HostText.utf16Units text in
-  if Array.length chars > 24 then "'" ^ HostText.ofUtf16Units (Array.sub chars 0 24) ^ "…'" else "'" ^ text ^ "'"
+  let chars = HostText.scalars text in
+  if Array.length chars > 24 then "'" ^ HostText.ofScalars (Array.sub chars 0 24) ^ "…'" else "'" ^ text ^ "'"
 let errExpected state index expected = err state DiagnosticCode.expected index ("expected " ^ expected ^ ", found " ^ foundDesc state index)
 (*
    a missing closing delimiter: point back at its opener
@@ -345,8 +345,8 @@ let parseQualified state index =
     | TIdent name -> {WT.range = rng state index; name}
     | _ -> errExpected state index "an identifier"; {WT.range = rng state index; name = "_"} in
   let rec scan reversed (current : WT.identifier) next =
-    let chars = HostText.utf16Units current.WT.name in
-    let upper = Array.length chars > 0 && HostText.isUpperUnit chars.(0) in
+    let chars = HostText.scalars current.WT.name in
+    let upper = Array.length chars > 0 && HostText.isUpper chars.(0) in
     match tok state next, tok state (next + 1) with
     | TDot, TIdent name when upper -> scan ((current, rng state next) :: reversed) {WT.range = rng state (next + 1); name} (next + 2)
     | _ -> List.rev reversed, current, next in

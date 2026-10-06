@@ -486,7 +486,7 @@ let constructorRuntimeIdentity declaringType caseName =
   | "Darklang.Stdlib.Option.Option", "Some" | "Darklang.Stdlib.Result.Result", "Ok" -> 0
   | "Darklang.Stdlib.Option.Option", "None" | "Darklang.Stdlib.Result.Result", "Error" -> 1
   | _ ->
-      let hash = Array.fold_left (fun hash unit -> Int32.mul (Int32.logxor hash (Int32.of_int unit)) 16777619l) 0x811c9dc5l (HostText.utf16Units (declaringType ^ "." ^ caseName)) in
+      let hash = String.fold_left (fun hash byte -> Int32.mul (Int32.logxor hash (Int32.of_int (Char.code byte))) 16777619l) 0x811c9dc5l (declaringType ^ "." ^ caseName) in
       2 + Int64.to_int (Int64.rem (Int64.logand (Int64.of_int32 hash) 0xffffffffL) 4094L)
 let lambdaParameter pattern = {pattern; sourceAnnotation = None; inferredType = None}
 let typedLambdaVariable name typ = {pattern = LPVariable name; sourceAnnotation = Some typ; inferredType = Some typ}

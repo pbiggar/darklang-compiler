@@ -25,14 +25,7 @@
 let add a b=Int32.to_int (Int32.add (Int32.of_int a) (Int32.of_int b))
 let sub a b=Int32.to_int (Int32.sub (Int32.of_int a) (Int32.of_int b))
 let mul a b=Int32.to_int (Int32.mul (Int32.of_int a) (Int32.of_int b))
-let utf8Bytes str =
- let units=HostText.utf16Units str in let output=Buffer.create (Array.length units) in
- let rec loop index=if index<Array.length units then
- let value=units.(index) in
- if value>=0xd800 && value<=0xdbff && index+1<Array.length units && units.(index+1)>=0xdc00 && units.(index+1)<=0xdfff then
- (Uutf.Buffer.add_utf_8 output (Uchar.of_int (0x10000+((value-0xd800) lsl 10)+units.(index+1)-0xdc00));loop (index+2))
- else (Uutf.Buffer.add_utf_8 output (Uchar.of_int (if value>=0xd800 && value<=0xdfff then 0xfffd else value));loop (index+1)) in
- loop 0;Bytes.of_string (Buffer.contents output)
+let utf8Bytes = Bytes.of_string
 (*
    Helper: Pad string to fixed size with null bytes
 *)
@@ -201,7 +194,9 @@ let createExecutableWithDataBytes machineCode dataBytes enableLeakCheck =
  let pageZeroCommand:Binary.segmentCommand64={Binary.command=Binary.lc_SEGMENT_64;commandSize=Int32.of_int pageZeroCommandSize;segmentName="__PAGEZERO";vmAddress=0L;vmSize=vmBase;fileOffset=0L;fileSize=0L;maxProt=0l;initProt=0l;numSections=0l;flags=0l;sections=[]} in
  let textSection:Binary.section64={Binary.sectionName="__text";segmentName="__TEXT";address=Int64.add vmBase vmCodeOffset;size=codeSize;offset=Int64.to_int32 codeFileOffset;align=2l;relocationOffset=0l;numRelocations=0l;flags=Int32.logor (Int32.logor (Binary.s_REGULAR) (Binary.s_ATTR_PURE_INSTRUCTIONS)) (Binary.s_ATTR_SOME_INSTRUCTIONS);reserved1=0l;reserved2=0l;reserved3=0l} in
  let constSection:Binary.section64={Binary.sectionName="__const";segmentName="__TEXT";address=Int64.add vmBase vmDataOffset;size=dataSize;offset=Int64.to_int32 dataFileOffset;align=3l;relocationOffset=0l;numRelocations=0l;flags=Binary.s_REGULAR;reserved1=0l;reserved2=0l;reserved3=0l} in
- let textSegmentSize=0x4000L in
+ (* Include headers, code and constants, then align to the ARM64 16 KiB page. *)
+ let textEnd=Int64.add dataFileOffset dataSize in
+ let textSegmentSize=Int64.logand (Int64.add textEnd 0x3fffL) (Int64.lognot 0x3fffL) in
  let textSections=if hasData then [textSection;constSection] else [textSection] in
  let textSegmentProt=if enableLeakCheck then Int32.logor (Int32.logor Binary.vm_PROT_READ Binary.vm_PROT_WRITE) Binary.vm_PROT_EXECUTE else Int32.logor Binary.vm_PROT_READ Binary.vm_PROT_EXECUTE in
  let textSegmentCommand:Binary.segmentCommand64={Binary.command=Binary.lc_SEGMENT_64;commandSize=Int32.of_int textSegmentCommandSize;segmentName="__TEXT";vmAddress=vmBase;vmSize=textSegmentSize;fileOffset=0L;fileSize=textSegmentSize;maxProt=textSegmentProt;initProt=textSegmentProt;numSections=Int32.of_int numTextSections;flags=0l;sections=textSections} in

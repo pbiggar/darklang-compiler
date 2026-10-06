@@ -23,7 +23,7 @@ let observe source=
   list (fun reg -> list (fun f -> call (fun () -> f ctx reg)) [E.emitPrintBool;E.emitPrintBlob;E.emitPrintInt64NoNewline;E.emitPrintUInt64NoNewline;E.emitPrintBoolNoNewline;E.emitPrintHeapStringNoNewline;E.emitPrintInt64;E.emitPrintUInt64;E.emitPrintHeapString]) gps;
   list (fun freg -> tuple [call (fun () -> E.emitPrintFloatNoNewline ctx freg);call (fun () -> E.emitPrintFloat ctx freg)]) fps;
   list (fun chars -> call (fun () -> E.emitPrintChars ctx chars)) [[];[0];List.init 256 Fun.id;List.init 257 (fun n -> n land 255)];
-  list (fun text -> call (fun () -> E.emitPrintString ctx text)) [source;"";"hé😀";"a\000b";HostText.ofUtf16Units [|0xd800;97;0xdc00|]];
+  list (fun text -> call (fun () -> E.emitPrintString ctx text)) [source;"";"hé😀";"a\000b";HostText.ofScalars [|0xfffd;0x61;0xfffd|]];
   list (fun reg -> list (fun typ -> call (fun () -> E.emitPrintList ctx reg typ)) types) gps;
   list (fun reg -> list (fun cases -> list (fun transparent -> list (fun failing -> observingSum ctx reg cases transparent failing) [false;true]) [false;true]) variants) [LIR.Physical LIR.X0;LIR.Physical LIR.X19;LIR.SP |> (fun p -> LIR.Physical p);LIR.Virtual (-1)];
   list (fun reg -> list (fun fields -> call (fun () -> E.emitPrintRecord ctx reg source fields)) ([]::List.map (fun typ -> [source,typ]) types@[["a",AST.TInt64;"b",AST.TUInt64;"c",AST.TBool;"d",AST.TFloat64;"e",AST.TString;"f",AST.TChar;"g",AST.TInt128;"h",AST.TUInt128]])) gps;

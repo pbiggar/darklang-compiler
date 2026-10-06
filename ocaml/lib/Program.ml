@@ -153,12 +153,12 @@ let parseArgs argv=
   |("--disable-opt-dce")::rest->resume rest {options with disableFunctionTreeShaking=true}
   |"-"::rest->if Option.is_some options.argument then Error "Cannot specify multiple input sources" else resume rest {options with argument=Some "-"}
   |flag::rest when String.starts_with ~prefix:"-" flag && not (String.starts_with ~prefix:"--" flag) && String.length flag>2->
-   let units=HostText.utf16Units (String.sub flag 1 (String.length flag-1)) |> Array.to_list in
+   let units=HostText.scalars (String.sub flag 1 (String.length flag-1)) |> Array.to_list in
    let rec expand units reversed=match units with
     |[]->List.rev reversed
-    |(114|101|113|118|104 as code)::rest->expand rest (("-"^HostText.ofUtf16Units [|code|])::reversed)
-    |111::(_::_ as value)->List.rev (("-o"^HostText.ofUtf16Units (Array.of_list value))::reversed)
-    |code::_->List.rev (("-"^HostText.ofUtf16Units [|code|])::reversed) in
+    |(114|101|113|118|104 as code)::rest->expand rest (("-"^HostText.ofScalars [|code|])::reversed)
+    |111::(_::_ as value)->List.rev (("-o"^HostText.ofScalars (Array.of_list value))::reversed)
+    |code::_->List.rev (("-"^HostText.ofScalars [|code|])::reversed) in
    flags (expand units []@rest) options verbosity
   |argument::rest when not (String.starts_with ~prefix:"-" argument)->if Option.is_some options.argument then Error ("Unexpected argument: "^argument) else resume rest {options with argument=Some argument}
   |flag::_->Error ("Unknown flag: "^flag)
@@ -255,13 +255,7 @@ let readBatchManifest path=
  if List.exists (fun value->HostText.trim value="") [entry.HostBatchJson.kind;entry.HostBatchJson.name;entry.HostBatchJson.source;entry.HostBatchJson.output] then Error ("Batch manifest '"^path^"' contains an empty kind, name, source, or output") else Ok {kind=entry.HostBatchJson.kind;name=entry.HostBatchJson.name;sourceFile=entry.HostBatchJson.source;outputFile=entry.HostBatchJson.output}) entries in
  (match items with []->Error ("Batch manifest '"^path^"' must contain at least one item")|first::rest->Ok (first,rest))
  with exn->let message=match exn with Failure message|Invalid_argument message->message|_->Printexc.to_string exn in Error ("Failed to parse batch manifest '"^path^"': "^message)
-let jsonString value=
- let buffer=Buffer.create (String.length value+2) in Buffer.add_char buffer '"';
- Array.iter (fun code->match code with
- |8->Buffer.add_string buffer "\\b"|9->Buffer.add_string buffer "\\t"|10->Buffer.add_string buffer "\\n"|12->Buffer.add_string buffer "\\f"|13->Buffer.add_string buffer "\\r"|92->Buffer.add_string buffer "\\\\"
- |code when code<32 || code>126 || List.mem code [34;38;39;43;60;62;96]->Buffer.add_string buffer (Printf.sprintf "\\u%04X" code)
- |code->Buffer.add_char buffer (Char.chr code)) (HostText.utf16Units value);
- Buffer.add_char buffer '"';Buffer.contents buffer
+let jsonString value=Yojson.Basic.to_string (`String value)
 let roundMilliseconds value=
  let scaled=value*.1000. in let lower=Float.floor scaled in let fraction=scaled-.lower in
  (if fraction>0.5 || (fraction=0.5 && mod_float lower 2.<>0.) then lower+.1. else lower) /.1000.

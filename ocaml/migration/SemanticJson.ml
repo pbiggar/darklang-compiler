@@ -5,16 +5,7 @@ let scalar kind value = `Assoc ["kind", `String kind; "value", `String value]
 let union typ case fields = `Assoc ["type", `String typ; "case", `String case; "fields", `List fields]
 let record name fields = `Assoc ["record", `String name; "fields", `List (List.map (fun (name, value) -> `List [`String name; value]) fields)]
 let tuple values = `Assoc ["tuple", `List values]
-let string value =
-  let units = HostText.utf16Units value in
-  let rec unpaired index =
-    if index >= Array.length units then false
-    else if units.(index) >= 0xd800 && units.(index) <= 0xdbff then
-      if index + 1 < Array.length units && units.(index + 1) >= 0xdc00 && units.(index + 1) <= 0xdfff then unpaired (index + 2) else true
-    else if units.(index) >= 0xdc00 && units.(index) <= 0xdfff then true
-    else unpaired (index + 1) in
-  if unpaired 0 then `Assoc ["utf16String", `List (Array.to_list (Array.map (fun unit -> `String (Printf.sprintf "%04x" unit)) units))]
-  else `String value
+let string value = `String value
 let option encode = function None -> union "FSharpOption" "None" [] | Some value -> union "FSharpOption" "Some" [encode value]
 let int32 value = scalar "int32" (string_of_int value)
 let unsigned64 value = if value < 0L then Z.add (Z.of_int64 value) (Z.shift_left Z.one 64) |> Z.to_string else Int64.to_string value
@@ -447,7 +438,7 @@ let names source =
   let qualified = NameSyntax.tryParseLegacySpelling source in
   let qualifiedValue name = tuple [string (NameSyntax.formatQualifiedName name); `List (List.map nameIdentifier (NameSyntax.segments name));
     option (fun (prefix, last) -> tuple [string (NameSyntax.formatQualifiedName prefix); nameIdentifier last]) (NameSyntax.trySplitLast name)] in
-  let scan = if Array.length (HostText.utf16Units source) = 0 then None else Some (NameSyntax.scanOrdinary source 0) in
+  let scan = if Array.length (HostText.scalars source) = 0 then None else Some (NameSyntax.scanOrdinary source 0) in
   let quoted = if String.starts_with ~prefix:"``" source then Some (NameSyntax.scanQuoted source 0) else None in
   `Assoc ["identifier", nameIdentifier identifier; "classify", nameToken (NameSyntax.classify source);
     "bare", `Bool (NameSyntax.isBareIdentifier identifier); "format", string (NameSyntax.formatIdentifier identifier);

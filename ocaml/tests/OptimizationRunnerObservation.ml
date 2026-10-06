@@ -11,7 +11,7 @@ let stdlib=lazy (StdlibCompilation.buildStdlib Platform.LinuxX86_64)
 let preparedCache=ref None
 let observe source=
  let open Yojson.Basic.Util in
- let normalization=Yojson.Basic.from_file "scripts/ocaml/optimization_runner_fixtures.json" |> member "normalization" |> to_list |> List.map (fun value->to_list value |> List.map to_int |> Array.of_list |> HostText.ofUtf16Units) in
+ let normalization=Yojson.Basic.from_file "scripts/ocaml/optimization_runner_fixtures.json" |> member "normalization" |> to_list |> List.map (fun value->to_list value |> List.map to_int |> Array.of_list |> HostText.ofScalars) in
  let normalized=list (fun value->tuple [J.string value;J.string (OptimizationTestRunner.normalizeIR value)]) normalization in
  let prepare ()=result (fun stdlib->
   let sources=["1L + 2L";"let f (x: Int64) : Int64 = x + 1L";"\"t42 __closure_99\"";"let x = (1L, \"two\")\nx";"if true then 1L else 2L";"missing_name";"let =";""] in

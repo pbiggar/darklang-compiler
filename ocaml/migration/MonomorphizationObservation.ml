@@ -20,7 +20,7 @@ let registry values = `Assoc ["map", list (fun (key, value) -> tuple [spec key; 
 let specialization (value : S.specializationResult) = SemanticJson.record "SpecializationResult" ["SpecializedFuncs", list artifact value.S.specializedFuncs; "SpecRegistry", registry value.S.specRegistry; "ExternalSpecs", specs value.S.externalSpecs; "Symbols", C.observationGlobalCatalog value.S.symbols]
 let observe source =
  let types = [[]; [AST.TInt64]; [AST.TList AST.TInt64]; [AST.TVar "a"]; [AST.TStream (AST.TVar "a")]; [AST.TFunction ([AST.TInt64], AST.TBool)]; [AST.TRecord ("R", [])]; [AST.TString; AST.TInt64]] in
- let sourceName = let units = HostText.utf16Units source in HostText.ofUtf16Units (Array.sub units 0 (min 32 (Array.length units))) in
+ let sourceName = let units = HostText.scalars source in HostText.ofScalars (Array.sub units 0 (min 32 (Array.length units))) in
  let names = [InstrumentedLoweringPrimitives.eqHelperDispatchMarker; "__compare"; "__hash"; "__key_eq"; "Dict.fromList"; "Darklang.Stdlib.Dict.fromList"; "Darklang.Stdlib.Dict.empty"; "__raw_get"; "Builtin.pmEvaluateValue"; sourceName; "identity"] in
  let observeProgram program =
   let original = C.programSymbols program in

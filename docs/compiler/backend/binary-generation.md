@@ -15,7 +15,7 @@ control over the binary layout.
 
 ## Why Direct Binary Generation?
 
-1. **No toolchain dependencies** - Works on any system with just the F# runtime
+1. **No toolchain dependencies** - Works with the native compiler executable
 2. **Faster compilation** - No subprocess spawning for as/ld
 3. **Educational value** - Shows exactly how binaries work
 4. **Full control** - Precise control over sections, alignment, metadata
@@ -60,6 +60,15 @@ Implemented for ARM64 in `ocaml/lib/backend/arm64/Binary_Generation_MachO.ml`.
 | LC_LOAD_DYLIB | Required library (libSystem.B.dylib) |
 | LC_BUILD_VERSION | Minimum macOS version |
 | LC_UUID | Unique identifier for binary |
+
+### Segment sizing
+
+The emitter rounds the end of headers, machine code and constant data up to an
+ARM64 16 KiB page boundary. Both `__TEXT` file size and virtual size use that
+extent, and `__LINKEDIT` begins immediately afterward. Larger programs grow by
+whole pages; 16 KiB is the alignment, not a capacity limit. Serializer regressions
+check code preservation, section extents and load-command addresses across page
+boundaries and with large UTF-8 constant pools.
 
 ### Code Signing
 

@@ -46,7 +46,7 @@ let parseContent stage path content=
  let saveCurrentSection state=match state.currentSection with None->state|Some sectionName->{state with sections=Sections.add sectionName (String.concat "\n" (List.rev state.currentContent)) state.sections;currentContent=[]} in
  let parseCompletedTest state=if Sections.is_empty state.sections then state else match parseTest stage path state.sections with Ok test->{state with tests=test::state.tests;sections=Sections.empty}|Error error->{state with sections=Sections.empty;errors=error::state.errors} in
  let startSection sectionName state=let state=saveCurrentSection state in let state=if sectionName=Name then parseCompletedTest state else state in {state with currentSection=Some sectionName;currentContent=[]} in
- let parseLine state line=if String.starts_with ~prefix:"---" line && String.ends_with ~suffix:"---" line && Array.length (HostText.utf16Units line)>6 then
+ let parseLine state line=if String.starts_with ~prefix:"---" line && String.ends_with ~suffix:"---" line && Array.length (HostText.scalars line)>6 then
  let name=String.sub line 3 (String.length line-6) in match tryParseSectionName name with Ok section->startSection section state|Error msg->let state=saveCurrentSection state in {state with currentSection=None;currentContent=[];errors=msg::state.errors}
  else {state with currentContent=line::state.currentContent} in
  let initial={tests=[];sections=Sections.empty;currentSection=None;currentContent=[];errors=[]} in

@@ -5,8 +5,7 @@
 type 'a neList = 'a ParserDependencies.neList
 module Map = struct
   let values groups =
-    (* The sole frontend use groups binding names. F# maps order strings by
-       UTF-16 code units, including supplementary/BMP ordering differences. *)
+    (* Group binding names in the native OCaml string order. *)
     let sorted = List.stable_sort (fun (left, _) (right, _) -> StringOrder.compare left right) groups in
     let rec collect = function
       | [] -> []

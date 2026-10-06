@@ -33,7 +33,7 @@ let parsePhysReg text=match HostText.trim text with
 *)
 let parseRegister text=
  let text=HostText.trim text in
- if HostText.startsWithCurrentCulture text "v" then
+ if HostText.startsWith text "v" then
  match matched [literal "v";Capture [digits]] text with
  |Some groups->Result.map (fun id->Virtual id) (parseInt32Field "virtual register" groups.(1))
  |None->Error ("Invalid virtual register '"^text^"' (expected 'v0', 'v1', etc.)")

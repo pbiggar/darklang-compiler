@@ -569,10 +569,10 @@ let renderDiagnostic source (diagnostic : diagnostic) =
   let lines = Array.of_list (String.split_on_char '\n' source) in
   let snippet range =
     if range.start.row < 0 || range.start.row >= Array.length lines then [] else
-    let original = HostText.utf16Units lines.(range.start.row) in
+    let original = HostText.scalars lines.(range.start.row) in
     let length = ref (Array.length original) in
     while !length > 0 && original.(!length - 1) = 13 do decr length done;
-    let line = HostText.ofUtf16Units (Array.sub original 0 !length) in
+    let line = HostText.ofScalars (Array.sub original 0 !length) in
     let number = string_of_int (range.start.row + 1) in
     let column = max 0 (min range.start.column !length) in
     let width = if range.start.row = range.end_.row then max 1 (min (range.end_.column - range.start.column) (max 1 (!length - column))) else 1 in

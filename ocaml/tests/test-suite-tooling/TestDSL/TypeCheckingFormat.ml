@@ -43,8 +43,8 @@ let isEscapedQuote units index =
    Parse expectation
 *)
 let parseTestLine line lineNumber =
- let units = HostText.utf16Units line in
- let substring units start length = HostText.ofUtf16Units (Array.sub units start length) in
+ let units = HostText.scalars line in
+ let substring units start length = HostText.ofScalars (Array.sub units start length) in
  let rec commentStart index inQuotes =
   if index >= Array.length units - 1 then None
   else if units.(index) = 0x22 && not (isEscapedQuote units index) then commentStart (index + 1) (not inQuotes)
@@ -53,7 +53,7 @@ let parseTestLine line lineNumber =
  let text, comment = match commentStart 0 false with
  | None -> line, None
  | Some index -> HostText.trim (substring units 0 index), Some (HostText.trim (substring units (index + 2) (Array.length units - index - 2))) in
- let units = HostText.utf16Units text in
+ let units = HostText.scalars text in
  let rec separator index inQuotes last =
   if index >= Array.length units then last
   else if units.(index) = 0x22 && not (isEscapedQuote units index) then separator (index + 1) (not inQuotes) last

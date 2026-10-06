@@ -55,5 +55,5 @@ let parseLine lineNumber source=
  unaryReg "PUSH" (fun reg->PUSH reg);unaryReg "POP" (fun reg->POP reg);unaryReg "NEG" (fun reg->NEG reg)] in
  let rec choose=function []->Error ("Invalid x64 instruction '"^line^"'")|parser::rest->match parser () with Error msg->Error msg|Ok (Some instruction)->Ok instruction|Ok None->choose rest in withLine (choose parsers)
 let parseX64 text=
- let lines=Common.normalizeLineEndings text |> String.split_on_char '\n' |> List.mapi (fun index line->index+1,HostText.trim line) |> List.filter (fun (_,line)->line<>"" && not (HostText.startsWithCurrentCulture line "//")) in
+ let lines=Common.normalizeLineEndings text |> String.split_on_char '\n' |> List.mapi (fun index line->index+1,HostText.trim line) |> List.filter (fun (_,line)->line<>"" && not (HostText.startsWith line "//")) in
  if lines=[] then Error "INPUT-X64 contains no instructions" else ResultList.traverse (fun (number,line)->parseLine number line) lines

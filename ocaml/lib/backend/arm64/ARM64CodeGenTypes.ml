@@ -76,7 +76,7 @@ let streamRefCountDecHelperLabel="__dark_stream_refcount_dec_helper"
 *)
 let genericReleaseHelperNodeThreshold=ReleasePlanFingerprint.rcReleasePlanCompactKeyNodeThreshold
 let genericReleasePlanIsExpensive releasePlan=ReleasePlanFingerprint.rcReleasePlanExceedsNodeCount genericReleaseHelperNodeThreshold releasePlan
-let callerOwnsSinglePayloadSum functionName=HostText.startsWithCurrentCulture functionName "Darklang.Stdlib.Dict." || not (HostText.startsWithCurrentCulture functionName "Darklang.Stdlib.")
+let callerOwnsSinglePayloadSum functionName=HostText.startsWith functionName "Darklang.Stdlib.Dict." || not (HostText.startsWith functionName "Darklang.Stdlib.")
 let recursiveNominalRefCountDecHelperLabel sourceType="__dark_recursive_nominal_rc_dec_"^ReleasePlanFingerprint.rcSourceTypeFingerprint sourceType
 let plannedListDecHelperLabelForFingerprint fingerprint=plannedListRefCountDecHelperLabelPrefix^fingerprint
 let plannedListDecHelperLabelForReleasePlan releasePlan=plannedListDecHelperLabelForFingerprint (ReleasePlanFingerprint.rcReleasePlanFingerprint releasePlan)

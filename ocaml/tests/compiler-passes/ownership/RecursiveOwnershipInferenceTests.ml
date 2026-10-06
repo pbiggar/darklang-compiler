@@ -12,7 +12,7 @@ module S = Identity.Set
 type testLeaf = Reuse of string * string
 let value id : H.value = {H.id = H.ValueId id; typ = AST.TList AST.TInt64}
 let unitValue : H.value = {H.id = H.ValueId 100; typ = AST.TUnit}
-let binding name = AST.bindingId (Int32.to_int (List.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (Array.to_list (HostText.utf16Units name))))
+let binding name = AST.bindingId (Int32.to_int (List.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (Array.to_list (HostText.scalars name))))
 let semantics mappings : testLeaf V.semantics =
  let ownershipByValue = H.ValueMap.of_list (List.map (fun ((value : H.value), ownership) -> value.H.id, ownership) mappings) in
  {V.leaf = (fun (Reuse (input, output)) -> {O.inputs = [O.Consumed input]; outputs = [output]});

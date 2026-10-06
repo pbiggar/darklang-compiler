@@ -69,13 +69,13 @@ let normalizeLineEndings text =
    Decode the small, explicit escape alphabet used by text-bearing test DSLs.
 *)
 let parseEscapedText text =
-  let units = HostText.utf16Units text in
+  let units = HostText.scalars text in
   let rec loop index reversed =
-    if index >= Array.length units then Ok (HostText.ofUtf16Units (Array.of_list (List.rev reversed)))
+    if index >= Array.length units then Ok (HostText.ofScalars (Array.of_list (List.rev reversed)))
     else if units.(index) <> 92 then loop (index + 1) (units.(index) :: reversed)
     else if index + 1 >= Array.length units then Error "Escaped text cannot end with a backslash"
     else
       let decoded = match units.(index + 1) with 92 -> Some 92 | 34 -> Some 34 | 110 -> Some 10 | 114 -> Some 13 | 116 -> Some 9 | _ -> None in
       match decoded with Some value -> loop (index + 2) (value :: reversed)
-      | None -> Error ("Unsupported escape sequence '\\" ^ HostText.ofUtf16Units [|units.(index + 1)|] ^ "'") in
+      | None -> Error ("Unsupported escape sequence '\\" ^ HostText.ofScalars [|units.(index + 1)|] ^ "'") in
   loop 0 []

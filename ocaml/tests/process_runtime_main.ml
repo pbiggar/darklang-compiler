@@ -519,7 +519,7 @@ let x64PrintingChecks ()=
  List.iter (fun value ->
   let setup=X64Operands.loadImm64 X.RAX value in
   check (if value=0L then "false\n" else "true\n") (setup@checked (X64EmitPrinting.emitPrintBool ctx (LIR.Physical LIR.X0)));
-  check "" (setup@checked (X64EmitPrinting.emitPrintBoolNoNewline ctx (LIR.Physical LIR.X0)))) [0L;1L;-1L];
+  check (if value=0L then "false" else "true") (setup@checked (X64EmitPrinting.emitPrintBoolNoNewline ctx (LIR.Physical LIR.X0)))) [0L;1L;-1L];
  List.iter (fun text -> check (text^"\n") (checked (X64EmitPrinting.emitPrintString ctx text))) ["";"hé😀";String.make 7 'a';String.make 8 'a';String.make 9 'a'];
  List.iter (fun length -> let text=String.init length (fun index -> Char.chr ((index*73+255) land 255)) in check text (checked (X64EmitPrinting.emitPrintChars ctx (List.of_seq (String.to_seq text))))) [0;1;7;8;9;31;32;33;65];
  List.iter (fun reg -> List.iter (fun newline ->

@@ -7,7 +7,7 @@ let fid = TestIds.functionIdForName
 type testBlock = TestBlock of (H.primitiveContract, testBlock) H.operation H.block
 let value id typ : H.value = {H.id = H.ValueId id; typ}
 let literal typ expression : H.operand = {H.expression; typ; inputs = CheckedAST.BindingIdMap.empty}
-let binding name = HostText.utf16Units name |> Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l |> Int32.to_int |> AST.bindingId
+let binding name = HostText.scalars name |> Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l |> Int32.to_int |> AST.bindingId
 let reference name input typ : H.operand = let id = binding name in {H.expression = CheckedAST.Local id; typ; inputs = CheckedAST.BindingIdMap.singleton id input}
 let namedParameter name value : H.parameter = {H.binding = binding name; value}
 let orderedBlock parameters operations result = TestBlock {H.parameters; operations; result}

@@ -8,14 +8,7 @@ let mul a b=Int32.to_int (Int32.mul (Int32.of_int a) (Int32.of_int b))
 let int16 value=let low=value land 65535 in if low>=32768 then low-65536 else low
 let mapFold action state values=
  let rec go state=function [] -> [],state | value::rest -> let value,next=action state value in let rest,state=go next rest in value::rest,state in go state values
-let utf8Bytes str =
- let units=HostText.utf16Units str in let output=Buffer.create (Array.length units) in
- let rec loop index=if index<Array.length units then
- let value=units.(index) in
- if value>=0xd800 && value<=0xdbff && index+1<Array.length units && units.(index+1)>=0xdc00 && units.(index+1)<=0xdfff then
- (Uutf.Buffer.add_utf_8 output (Uchar.of_int (0x10000+((value-0xd800) lsl 10)+units.(index+1)-0xdc00));loop (index+2))
- else (Uutf.Buffer.add_utf_8 output (Uchar.of_int (if value>=0xd800 && value<=0xdfff then 0xfffd else value));loop (index+1)) in
- loop 0;Bytes.of_string (Buffer.contents output)
+let utf8Bytes = Bytes.of_string
 
 
 

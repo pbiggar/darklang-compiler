@@ -25,9 +25,8 @@ let[@warning "-4"] parse text=
   let raw=String.sub text start (!cursor-start) in
   if not decode then "" else
   try let value=HostJson.string (HostJson.parse raw) in
-  let units=HostText.utf16Units value in
-  let rec paired index=if index=Array.length units then true else if units.(index)>=0xd800 && units.(index)<=0xdbff then index+1<Array.length units && units.(index+1)>=0xdc00 && units.(index+1)<=0xdfff && paired (index+2) else (units.(index)<0xdc00 || units.(index)>0xdfff) && paired (index+1) in
-  if not (paired 0) then conversion path !cursor "System.String";value
+  if not (String.is_valid_utf_8 value) then conversion path !cursor "System.String";
+  value
   with Yojson.Json_error _|Failure _|Invalid_argument _->conversion path !cursor "System.String"
  in
  let rec value expected path depth=

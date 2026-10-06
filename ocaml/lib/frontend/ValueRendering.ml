@@ -21,7 +21,7 @@ let concat symbols=function []->C.StringLiteral ""|first::rest->
     Those boundaries cannot compose under NFC, so retain the native raw
     concat used before public StringConcat acquired normalization. *)
  List.fold_left (fun acc part->call symbols "__string_concat_raw" [acc;part]) first rest
-let stableHash value=Array.fold_left (fun hash ch->Int64.mul (Int64.logxor hash (Int64.of_int ch)) 1099511628211L) 0xcbf29ce484222325L (HostText.utf16Units value)
+let stableHash value=String.fold_left (fun hash byte->Int64.mul (Int64.logxor hash (Int64.of_int (Char.code byte))) 1099511628211L) 0xcbf29ce484222325L value
 let hashed prefix typ=prefix^Printf.sprintf "%016Lx" (stableHash (CheckingDiagnostics.typeToHelperIdentityString typ))
 let rendererName=hashed "__dark_render_value_"
 let listItemsRendererName=hashed "__dark_render_list_items_"
@@ -124,7 +124,7 @@ and renderBody env typ value state=match typ with
   C.StringLiteral "<Blob: ephemeral>",state
  |TInternalRawPtr->call state.symbols "Darklang.Stdlib.Int64.toString" [value],state|TNever->C.StringLiteral "()",state
  |TVar name->Crash.crash ("Unresolved type variable in value renderer: "^name)|TInferenceVar (displayName,_)->Crash.crash ("Unresolved inference variable in value renderer: "^displayName)
-let starts name prefix=HostText.startsWithCurrentCulture name prefix
+let starts name prefix=HostText.startsWith name prefix
 let includeRuntimeFunctions symbols=List.fold_left (fun symbols name->snd (C.internFunction name symbols)) symbols runtimeFunctionNames
 let existingRenderers topLevels=List.filter_map (function C.FunctionDef definition when starts definition.C.name "__dark_render_"->Some (definition.C.name,definition)|_->None) topLevels |> M.of_list
 let rewriteProgram recordMetadata sumMetadata programType program=

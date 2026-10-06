@@ -12,7 +12,7 @@ let observe source=
  let gps=List.map (fun p -> LIR.Physical p) physical@List.map (fun n -> LIR.Virtual n) [-1;0;2147483647] in
  let selected=List.map (fun p -> LIR.Physical p) [LIR.X0;LIR.X1;LIR.X2;LIR.X14;LIR.X15;LIR.X19;LIR.SP]@[LIR.Virtual (-1)] in
  let fps=List.map (fun p -> LIR.FPhysical p) fpPhysical@List.map (fun n -> LIR.FVirtual n) [-2147483648;-2001;-2000;-1003;-1002;-1001;-1000;-2;-1;0;7;8;9999;10000;2147483647] in
- let values=[LIR.Imm Int64.min_int;LIR.Imm Int64.max_int;LIR.Imm (-1L);LIR.Imm 0L;LIR.Imm 4096L;LIR.FloatImm (-0.);LIR.FloatSymbol (Int64.float_of_bits 0xfff8000000000000L);LIR.FuncAddr (AST.functionId (-1L));LIR.StringSymbol source;LIR.StringSymbol "hé😀";LIR.StringSymbol "a\000b";LIR.StringSymbol (HostText.ofUtf16Units [|0xd800;97;0xdc00|])]@List.map (fun n -> LIR.StackSlot n) [-2147483648;-4096;-4095;-257;-256;-1;0;255;256;4095;4096;2147483647]@List.map (fun reg -> LIR.Reg reg) gps in
+ let values=[LIR.Imm Int64.min_int;LIR.Imm Int64.max_int;LIR.Imm (-1L);LIR.Imm 0L;LIR.Imm 4096L;LIR.FloatImm (-0.);LIR.FloatSymbol (Int64.float_of_bits 0xfff8000000000000L);LIR.FuncAddr (AST.functionId (-1L));LIR.StringSymbol source;LIR.StringSymbol "hé😀";LIR.StringSymbol "a\000b";LIR.StringSymbol (HostText.ofScalars [|0xfffd;0x61;0xfffd|])]@List.map (fun n -> LIR.StackSlot n) [-2147483648;-4096;-4095;-257;-256;-1;0;255;256;4095;4096;2147483647]@List.map (fun reg -> LIR.Reg reg) gps in
  list (fun target -> list (fun enabled -> let ctx=ARMPrintingObservation.context source target enabled in tuple [
   list (fun reg -> tuple [call (fun () -> E.emitRandomInt64 ctx reg);call (fun () -> E.emitDateTimeNow ctx reg)]) gps;
   list (fun freg -> list (fun effectId -> call (fun () -> E.emitSleep ctx effectId freg)) [-2147483648;-1;0;2147483647]) fps;

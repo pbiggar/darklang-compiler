@@ -8,7 +8,7 @@
 open Dark_compiler
 type formattingRoundtripCase = {name : string; source : string; sourceFile : string}
 let splitLineComment line =
-  let units = HostText.utf16Units line in
+  let units = HostText.scalars line in
   let rec comment index inString escaped =
     if index >= Array.length units - 1 then None else
     match units.(index), inString, escaped with
@@ -20,8 +20,8 @@ let splitLineComment line =
     | _ -> comment (index + 1) inString false in
   match comment 0 false false with
   | Some index ->
-      let source = HostText.trim (HostText.ofUtf16Units (Array.sub units 0 index)) in
-      let name = HostText.trim (HostText.ofUtf16Units (Array.sub units (index + 2) (Array.length units - index - 2))) in
+      let source = HostText.trim (HostText.ofScalars (Array.sub units 0 index)) in
+      let name = HostText.trim (HostText.ofScalars (Array.sub units (index + 2) (Array.length units - index - 2))) in
       source, (if name = "" then None else Some name)
   | None -> HostText.trim line, None
 let parseFormattingRoundtripFile path =

@@ -49,12 +49,7 @@ let operandText operand=
 
 
 
-let utf8Len value =
- let units=HostText.utf16Units value in
- let rec count index bytes=if index>=Array.length units then bytes else
- let unit=units.(index) in
- if unit>=0xd800 && unit<=0xdbff && index+1<Array.length units && units.(index+1)>=0xdc00 && units.(index+1)<=0xdfff then count (index+2) (bytes+4)
- else count (index+1) (bytes+(if unit<0x80 then 1 else if unit<0x800 then 2 else 3)) in count 0 0
+let utf8Len = String.length
 (*
    Canonical buffers share [refcount:8][length:8][data:N]. Compare the
    representation directly without allocating or calling stdlib code.

@@ -46,8 +46,8 @@ let now ()=Int64.div (HostClock.ticks ()) 100L
 let elapsed start=Int64.sub (now ()) start
 let arrayFilter predicate values=Array.to_list values |> List.filter predicate |> Array.of_list
 let queueList queue=Queue.to_seq queue |> List.of_seq
-let textLength text=Array.length (HostText.utf16Units text)
-let substring text start count=HostText.ofUtf16Units (Array.sub (HostText.utf16Units text) start count)
+let textLength text=Array.length (HostText.scalars text)
+let substring text start count=HostText.ofScalars (Array.sub (HostText.scalars text) start count)
 let truncateName maximum retained text=if textLength text>maximum then substring text 0 retained^"..." else text
 let padRight text width=text^String.make (max 0 (width-textLength text)) ' '
 let padLeft text width=String.make (max 0 (width-textLength text)) ' '^text
@@ -59,9 +59,7 @@ let replace text pattern replacement=
 let aiFailureLimit=5
 let aiMessageCharacterLimit=1200
 let aiDetailsCharacterLimit=2400
-let utf8Replacement text=
- let units=HostText.utf16Units text in
- Array.mapi (fun i code->if code>=0xd800 && code<=0xdbff && not (i+1<Array.length units && units.(i+1)>=0xdc00 && units.(i+1)<=0xdfff) then 0xfffd else if code>=0xdc00 && code<=0xdfff && not (i>0 && units.(i-1)>=0xd800 && units.(i-1)<=0xdbff) then 0xfffd else code) units |> HostText.ofUtf16Units
+let utf8Replacement = HostEncoding.utf8
 let truncateDiagnostic maximum text=
  let text=utf8Replacement text in let maximum=max 0 maximum in let length=textLength text in
  if length<=maximum then text else if maximum=0 then "" else
@@ -122,7 +120,7 @@ let jsonString value=
  Array.iter (fun code->match code with
  |8->Buffer.add_string buffer "\\b"|9->Buffer.add_string buffer "\\t"|10->Buffer.add_string buffer "\\n"|12->Buffer.add_string buffer "\\f"|13->Buffer.add_string buffer "\\r"|92->Buffer.add_string buffer "\\\\"
  |code when code<32 || code>126 || List.mem code [34;38;39;43;60;62;96]->Buffer.add_string buffer (Printf.sprintf "\\u%04X" code)
- |code->Buffer.add_char buffer (Char.chr code)) (HostText.utf16Units value);
+ |code->Buffer.add_char buffer (Char.chr code)) (HostText.scalars value);
  Buffer.add_char buffer '"';Buffer.contents buffer
 type json=JString of string|JInt of int|JFloat of float|JArray of json list|JObject of (string*json) list
 let rec serializeJson indent depth value=
@@ -325,6 +323,7 @@ let runTestsWithProgressReporter completedTestReporter args=
   {F.name="ARM64 Binary Tests";tests=ARM64BinaryTests.tests};
   {F.name="ARM64 CodeGen Tests";tests=ARM64CodeGenTests.tests};
   {F.name="x64 Encoding Fixture Tests";tests=X86_64EncodingTestRunner.tests x64encTestFiles};
+  {F.name="Native Unicode and Mach-O Repairs";tests=NativePortRegressionTests.textTests @ NativePortRegressionTests.machoTests};
   {F.name="x64 Binary Tests";tests=X86_64BinaryTests.tests};
   {F.name="x64 Resolve Tests";tests=X86_64ResolveTests.tests};
   {F.name="x64 CodeGen Tests";tests=X86_64CodeGenTests.tests};
@@ -385,10 +384,10 @@ let runTestsWithProgressReporter completedTestReporter args=
  let disabledUpstreamFiles=["src/Tests/e2e/upstream/cli/app-service-safety.dark";"src/Tests/e2e/upstream/cli/command-completions.dark";"src/Tests/e2e/upstream/cli/deprecation-kinds.dark";"src/Tests/e2e/upstream/cli/include-parsing.dark";"src/Tests/e2e/upstream/cli/outliner.dark";"src/Tests/e2e/upstream/cli/permissions-display.dark";"src/Tests/e2e/upstream/cli/permissions-grammar.dark";"src/Tests/e2e/upstream/cli/tailscale.dark";"src/Tests/e2e/upstream/cli/workbench-repl.dark";"src/Tests/e2e/upstream/cloud/db.dark";"src/Tests/e2e/upstream/language/big.dark";"src/Tests/e2e/upstream/language/builtin-introspection.dark";"src/Tests/e2e/upstream/language/custom-data/values.dark";"src/Tests/e2e/upstream/language/effect-ceiling.dark";"src/Tests/e2e/upstream/language/error-type-names.dark";"src/Tests/e2e/upstream/language/runtime-to-programtypes.dark";"src/Tests/e2e/upstream/scm/branch-identity.dark";"src/Tests/e2e/upstream/scm/commit-hash.dark";"src/Tests/e2e/upstream/scm/conflicts.dark";"src/Tests/e2e/upstream/scm/constraint-kinds.dark";"src/Tests/e2e/upstream/scm/lww.dark";"src/Tests/e2e/upstream/scm/matter-routes.dark";"src/Tests/e2e/upstream/scm/propagation-policy.dark";"src/Tests/e2e/upstream/scm/removal-conflicts.dark";"src/Tests/e2e/upstream/scm/sync-seen-everything.dark";"src/Tests/e2e/upstream/scm/sync-wire.dark";"src/Tests/e2e/upstream/stachu/darklangParser.dark";"src/Tests/e2e/upstream/stachu/parser.dark";"src/Tests/e2e/upstream/stachu/tinyLang.dark";"src/Tests/e2e/upstream/stdlib/crypto.dark";"src/Tests/e2e/upstream/stdlib/earg.dark";"src/Tests/e2e/upstream/stdlib/eself.dark";"src/Tests/e2e/upstream/stdlib/http.dark";"src/Tests/e2e/upstream/stdlib/httpclient.dark";"src/Tests/e2e/upstream/stdlib/json.dark";"src/Tests/e2e/upstream/stdlib/language-tools/parsedFileShape.dark";"src/Tests/e2e/upstream/stdlib/language-tools/pickLocation.dark";"src/Tests/e2e/upstream/stdlib/language-tools/semanticTokenization.dark";"src/Tests/e2e/upstream/stdlib/pretty.dark";"src/Tests/e2e/upstream/stdlib/prettyPrinter.dark";"src/Tests/e2e/upstream/stdlib/sqlite.dark";"src/Tests/e2e/upstream/stdlib/sse.dark";"src/Tests/e2e/upstream/stdlib/stream.dark";"src/Tests/e2e/upstream/stdlib/string.dark"] in
  let disabledUpstreamLines=["src/Tests/e2e/upstream/language/custom-data/aliases.dark",[39;148;149;157;159;175;177];"src/Tests/e2e/upstream/language/custom-data/enums.dark",[7;11;15;17;22;23;24;26;27;28;30;45;65;67;69;74;101;104;109];"src/Tests/e2e/upstream/language/apply/eapply.dark",[120];"src/Tests/e2e/upstream/language/basic/eand.dark",[5;7;11];"src/Tests/e2e/upstream/language/basic/elet.dark",[67];"src/Tests/e2e/upstream/language/basic/eor.dark",[6;16;17];"src/Tests/e2e/upstream/language/basic/estring.dark",[11;17;21;28];"src/Tests/e2e/upstream/language/basic/evariable.dark",[3];"src/Tests/e2e/upstream/language/derror.dark",[2;10;13;15;16;18;19;22;23;32];"src/Tests/e2e/upstream/language/flow-control/eif.dark",[1;12;13;14;20];"src/Tests/e2e/upstream/language/nested-fns.dark",[55;60];"src/Tests/e2e/upstream/stdlib/base64.dark",[7;9;10;11;12;20;21;22;23;24;25;26;27;28;29;33;34;35;36;39;40;43;44;45;46;47];"src/Tests/e2e/upstream/stdlib/dict.dark",[21;30;32;59;61;74;144;145;146;147;159;227;237;242;245;251;273;279;282;311;315;322;327;332;334;351;353;357;387;389;391;394;396;398;400;402;404;406;408];"src/Tests/e2e/upstream/stdlib/float.dark",[45;47;51;55;58;59;64;65;71;73;76;79;81;87;89;106;107;110;111;113;124;125;127;133;134;136;160;173;176;179;242;244;253;255];"src/Tests/e2e/upstream/stdlib/html.dark",[42;44;66;69;72;75;83];"src/Tests/e2e/upstream/stdlib/httpserver.dark",[29;33;37];"src/Tests/e2e/upstream/stdlib/ints/int32.dark",[126];"src/Tests/e2e/upstream/stdlib/ints/int64.dark",[45;60;90;210;368];"src/Tests/e2e/upstream/stdlib/ints/int8.dark",[47];"src/Tests/e2e/upstream/stdlib/list.dark",[22;23;24;53;61;65;71;75;81;87;92;93;101;109;129;130;136;140;161;162;174;180;201;206;216;218;223;224;250;264;269;302;314;346;354];"src/Tests/e2e/upstream/stdlib/math.dark",[27;30];"src/Tests/e2e/upstream/stdlib/nomodule.dark",[302;304;365;366;367;368;369;370;371;372;373;374;375;377;418;419];"src/Tests/e2e/upstream/stdlib/option.dark",[44;75;119;138;148;158;170;176;190;204;211;218;234;242;255;260];"src/Tests/e2e/upstream/stdlib/result.dark",[19;24;57;67;79;85;91;97;110;117;124;139;147;155;178;185;188;277;294]] in
  let normalizePath path=String.map (fun c->if c='\\' then '/' else c) path in
- let pathMatchesSourceFile source suffix=HostText.endsWithCurrentCulture (normalizePath source) suffix in
+ let pathMatchesSourceFile source suffix=HostText.endsWith (normalizePath source) suffix in
  let isDisabledUpstreamFile source=List.exists (pathMatchesSourceFile source) disabledUpstreamFiles in
  let disabledLinesForSourceFile source=List.find_map (fun (suffix,lines)->if pathMatchesSourceFile source suffix then Some lines else None) disabledUpstreamLines in
- let tryParseTestLineNumber name=if HostText.startsWithCurrentCulture name "L" then match String.index_opt name ':' with Some colon when colon>1->Option.map Int32.to_int (HostText.tryParseInt32 (String.sub name 1 (colon-1)))|_->None else None in
+ let tryParseTestLineNumber name=if HostText.startsWith name "L" then match String.index_opt name ':' with Some colon when colon>1->Option.map Int32.to_int (HostText.tryParseInt32 (String.sub name 1 (colon-1)))|_->None else None in
  let applyUpstreamEnablementGate (test:E.e2eTest)=if Option.is_some test.E.skipReason then test else if isDisabledUpstreamFile test.E.sourceFile then {test with E.skipReason=Some "pending upstream support"} else match disabledLinesForSourceFile test.E.sourceFile,tryParseTestLineNumber test.E.name with Some lines,Some line when List.mem line lines->{test with E.skipReason=Some "pending upstream support"}|_->test in
  let loadE2ETests files=
   let tests,errors=Array.fold_left (fun (tests,errors) file->match E.parseE2ETestFile file with Ok parsed->List.rev_append (List.map applyUpstreamEnablementGate parsed) tests,errors|Error msg->tests,(file,msg)::errors) ([],[]) files in Array.of_list (List.rev tests),List.rev errors in
@@ -633,7 +632,7 @@ let runTestsWithProgressReporter completedTestReporter args=
   println (C.bold^C.red^(if more>0 then Printf.sprintf "❌ First %d Failing Tests (of %d total)" displayed (Array.length failures) else Printf.sprintf "❌ Failing Tests (%d)" (Array.length failures))^C.reset);divider C.red;println "";
   for i=0 to displayed-1 do
    let test=failures.(i) in let fileName=if test.F.file="" then "" else Filename.basename test.F.file in
-   let displayName=if fileName<>"" && HostText.startsWithCurrentCulture test.F.name "E2E: L" then "E2E: "^C.cyan^fileName^":"^substring test.F.name 5 (textLength test.F.name-5)^C.reset else if fileName<>"" then C.cyan^fileName^": "^C.reset^C.red^test.F.name else test.F.name in
+   let displayName=if fileName<>"" && HostText.startsWith test.F.name "E2E: L" then "E2E: "^C.cyan^fileName^":"^substring test.F.name 5 (textLength test.F.name-5)^C.reset else if fileName<>"" then C.cyan^fileName^": "^C.reset^C.red^test.F.name else test.F.name in
    println (C.red^string_of_int (i+1)^". "^displayName^C.reset);println ("   "^C.gray^test.F.message^C.reset);List.iter (fun detail->println ("   "^C.gray^detail^C.reset)) test.F.details;println ""
   done;
   if more>0 then (println (C.gray^Printf.sprintf "... and %d more failing test(s)" more^C.reset);println "")
@@ -643,7 +642,7 @@ let runTests args=runTestsWithProgressReporter None args
 let captureOutput run=let result,_,_=TestCapture.run run in result
 let formatFailureDisplayName (test:F.failedTestInfo)=
  let file=if test.F.file="" then "" else Filename.basename test.F.file in
- if file<>"" && HostText.startsWithCurrentCulture test.F.name "E2E: L" then "E2E: "^file^":"^substring test.F.name 5 (textLength test.F.name-5) else if file<>"" then file^": "^test.F.name else test.F.name
+ if file<>"" && HostText.startsWith test.F.name "E2E: L" then "E2E: "^file^":"^substring test.F.name 5 (textLength test.F.name-5) else if file<>"" then file^": "^test.F.name else test.F.name
 let printFailures (state:F.testRunState) limit bounded=
  let failures=Array.of_list (queueList state.F.failedTests) in let display=min limit (Array.length failures) in
  for i=0 to display-1 do let test=failures.(i) in println (Printf.sprintf "%d. %s" (i+1) (formatFailureDisplayName test));

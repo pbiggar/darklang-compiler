@@ -11,12 +11,7 @@ type floatPool = {floats : float array; floatBitsToId : int FloatBitsMap.t}
 let emptyStringPool = {strings = [||]; stringToId = StringOrder.Map.empty}
 let emptyFloatPool = {floats = [||]; floatBitsToId = FloatBitsMap.empty}
 let increment value = Int32.to_int (Int32.add (Int32.of_int value) 1l)
-let utf8Length value =
- let units = HostText.utf16Units value in
- let rec count index length = if index = Array.length units then length else
-  let value = units.(index) in
-  if value >= 0xd800 && value <= 0xdbff && index + 1 < Array.length units && units.(index + 1) >= 0xdc00 && units.(index + 1) <= 0xdfff then count (index + 2) (length + 4)
-  else count (index + 1) (length + if value < 0x80 then 1 else if value < 0x800 then 2 else 3) in count 0 0
+let utf8Length = String.length
 (*
    Build in first-use order without copying a growing array for every literal.
 *)

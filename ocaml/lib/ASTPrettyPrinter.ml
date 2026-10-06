@@ -3,15 +3,14 @@
 open AST
 type literalEscapeContext=StringContent|InterpolatedStringText|CharContent
 let escapeLiteralContent context input=
- let units=HostText.utf16Units input in
+ let units=HostText.scalars input in
  let output=Buffer.create (String.length input) in
  Array.iter (fun c->Buffer.add_string output (match c,context with
- |92,_->"\\\\"|34,(StringContent|InterpolatedStringText)->"\\\""|39,CharContent->"\\'"|10,_->"\\n"|13,_->"\\r"|9,_->"\\t"|0,_->"\\0"|123,InterpolatedStringText->"\\{"|125,InterpolatedStringText->"\\}"|_->HostText.ofUtf16Units [|c|])) units;
- (* Recombine adjacent surrogate code units after per-character escaping. *)
- HostText.ofUtf16Units (HostText.utf16Units (Buffer.contents output))
+ |92,_->"\\\\"|34,(StringContent|InterpolatedStringText)->"\\\""|39,CharContent->"\\'"|10,_->"\\n"|13,_->"\\r"|9,_->"\\t"|0,_->"\\0"|123,InterpolatedStringText->"\\{"|125,InterpolatedStringText->"\\}"|_->HostText.ofScalars [|c|])) units;
+ Buffer.contents output
 let formatFloatLiteral value=
  let raw=HostFloat.roundTrip value in
- if Array.exists HostText.isLetterUnit (HostText.utf16Units raw) || String.contains raw '.' || String.contains raw 'E' || String.contains raw 'e' then raw else raw^".0"
+ if String.exists (fun c -> c = 'N' || c = 'I') raw || String.contains raw '.' || String.contains raw 'E' || String.contains raw 'e' then raw else raw^".0"
 let formatIdentifierSegment name=NameSyntax.formatIdentifier (NameSyntax.identifierFromText name)
 let formatIdentifierPath name=match NameSyntax.tryParseLegacySpelling name with Some parsed->NameSyntax.formatQualifiedName parsed|None->formatIdentifierSegment name
 let join delimiter f values=String.concat delimiter (List.map f values)

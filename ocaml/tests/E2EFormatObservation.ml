@@ -89,7 +89,7 @@ let observe source=
  let data=Yojson.Basic.from_file "scripts/ocaml/e2e_format_fixtures.json" in
  let files=data |> member "files" |> to_list |> List.map to_string in
  let fixtures=data |> member "fixtures" |> to_list |> List.map (fun f->f |> member "path" |> to_string) in
- let inputs=data |> member "inputs" |> to_list |> List.map (fun row -> row |> to_list |> List.map to_int |> Array.of_list |> HostText.ofUtf16Units) in
+ let inputs=data |> member "inputs" |> to_list |> List.map (fun row -> row |> to_list |> List.map to_int |> Array.of_list |> HostText.ofScalars) in
  let bucket=int_of_string source in
  let selected=List.filteri (fun i _->i mod 16=bucket) in
  let row s=J.tuple [J.string s;`List [

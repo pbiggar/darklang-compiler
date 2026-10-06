@@ -8,12 +8,12 @@ type testResult=(unit,string) result
 let (let*)=Result.bind
 let stdlibFiles ()=let dir=R.scriptPath "ocaml/share/stdlib" in try Ok (R.filesUnder "ocaml/share/stdlib" ".dark") with exn->Error ("Failed to list stdlib files in "^dir^": "^HostFile.errorMessage dir exn)
 let definitionName line=
- let units=HostText.utf16Units line in let count=Array.length units in
+ let units=HostText.scalars line in let count=Array.length units in
  let white c=Uchar.is_valid c && Uucp.White.is_white_space (Uchar.of_int c) in
  let start=ref 0 in while !start<count && white units.(!start) do incr start done;
  if !start+4>count || Array.sub units !start 4<>[|100;101;102;32|] then None else
  let from= !start+4 in let finish=ref from in while !finish<count && units.(!finish)<>60 && units.(!finish)<>40 && not (white units.(!finish)) do incr finish done;
- if !finish>from && !finish<count then Some (HostText.ofUtf16Units (Array.sub units from (!finish-from))) else None
+ if !finish>from && !finish<count then Some (HostText.ofScalars (Array.sub units from (!finish-from))) else None
 let duplicateDefinitionsInFile path=
  let* text=R.readFile path in
  let names=String.split_on_char '\n' text |> List.filter_map definitionName in

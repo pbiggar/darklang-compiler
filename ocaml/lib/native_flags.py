@@ -15,13 +15,13 @@ if platform.system() == "Darwin":
         paths.append(str(Path(prefix) / "lib/pkgconfig"))
     environment["PKG_CONFIG_PATH"] = os.pathsep.join(paths + [environment.get("PKG_CONFIG_PATH", "")])
     cflags = shlex.split(subprocess.check_output(
-        ["pkg-config", "--cflags", "icu-i18n", "sqlite3", "libcurl"], env=environment, text=True))
+        ["pkg-config", "--cflags", "icu-uc", "sqlite3", "libcurl"], env=environment, text=True))
     libraries = shlex.split(subprocess.check_output(
-        ["pkg-config", "--libs", "icu-i18n", "sqlite3", "libcurl"], env=environment, text=True))
+        ["pkg-config", "--libs", "icu-uc", "sqlite3", "libcurl"], env=environment, text=True))
 else:
     # Standard development packages, or the VM's explicit include/library paths.
     cflags = []
-    libraries = ["-licui18n", "-licuuc", "-lsqlite3", "-lcurl"]
+    libraries = ["-licuuc", "-lsqlite3", "-lcurl"]
 
 for filename, flags in (("host_cflags.sexp", cflags), ("host_libraries.sexp", libraries)):
     Path(filename).write_text("(" + " ".join(json.dumps(flag) for flag in flags) + ")\n")

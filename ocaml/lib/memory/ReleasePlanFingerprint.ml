@@ -5,9 +5,8 @@ let newRcReleasePlanFingerprintState () = {hash=0xcbf29ce484222325L}
 let addRcReleasePlanFingerprintByte state value = state.hash <- Int64.mul (Int64.logxor state.hash (Int64.of_int value)) 1099511628211L
 let addRcReleasePlanFingerprintInt = addRcReleasePlanFingerprintByte
 let addRcReleasePlanFingerprintString state value =
- let units = HostText.utf16Units value in
- addRcReleasePlanFingerprintInt state (Array.length units);
- Array.iter (addRcReleasePlanFingerprintInt state) units
+ addRcReleasePlanFingerprintInt state (String.length value);
+ String.iter (fun byte -> addRcReleasePlanFingerprintInt state (Char.code byte)) value
 let addRcReleasePlanFingerprintKind state kind = addRcReleasePlanFingerprintByte state (match kind with GenericHeap -> 0 | StreamHeap -> 1 | TaggedList -> 2 | DictHeap -> 3 | ClosureHeap -> 4)
 let finishRcReleasePlanFingerprint state = Printf.sprintf "%016Lx" state.hash
 (*

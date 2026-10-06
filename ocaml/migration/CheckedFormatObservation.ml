@@ -9,7 +9,7 @@ let result encode = function Ok value -> SemanticJson.union "FSharpResult" "Ok" 
 let observeWith format source =
  let program value = C.programTopLevels value |> List.filter_map (function C.FunctionDef value -> Some value.C.body | C.ValueDef value -> Some value.C.body | C.Expression value -> Some value | C.TypeDef _ -> None) |> list (fun value -> str (format value)) in
  let sourceProgram source = result (fun (_, value, _) -> program value) (Result.bind (WrittenParsing.parse Validation.Script source) (fun unit -> W.checkSourceUnitsWithBase None false false [unit])) in
- let seed = Array.fold_left (fun seed value -> Int64.mul (Int64.logxor seed (Int64.of_int value)) 1099511628211L) (-3750763034362895579L) (HostText.utf16Units source) in
+ let seed = String.fold_left (fun seed byte -> Int64.mul (Int64.logxor seed (Int64.of_int (Char.code byte))) 1099511628211L) (-3750763034362895579L) source in
  let bits = ref seed in
  let values = List.init (if source = "" then 10016 else 64) (fun _ ->
   bits := Int64.logxor !bits (Int64.shift_left !bits 13);

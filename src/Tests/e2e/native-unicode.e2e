@@ -1,0 +1,17 @@
+// Source names and literal handling operate on Unicode scalars and graphemes.
+val 𐐨 = 41L
+𐐨 + 1L = 42L
+val name𐐨 = 7L
+name𐐨 = 7L
+"😀𐐨" = "😀𐐨"
+$"😀{Stdlib.Int64.toString 𐐨}क्ष" = "😀41क्ष"
+'क्ष' = 'क्ष'
+'\u0915\u094D\u0937' = 'क्ष'
+Stdlib.String.length "क्ष" = 1
+Stdlib.String.length "क्ष😀" = 2
+"e\u0301" = "é"
+'👩‍💻' = '👩‍💻'
+// Dictionary key mismatches still fail at compilation.
+let dictIdentity (value: Dict<String, Int64>): Dict<String, Int64> = value
+dictIdentity (Dict { 1L: 2L }) = compileerror="Expected TString, got TInt64"
+"\uFFFE" = "\uFFFE"

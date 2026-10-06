@@ -265,11 +265,8 @@ let tryParseMangledTypeWithSumTypeNames sumNames mangled =
   | "rawptr" -> Some AST.TInternalRawPtr
   | _ -> None
  in
- let firstIsLower text =
-  let units = HostText.utf16Units text in
-  if Array.length units = 0 || units.(0) >= 0xd800 && units.(0) <= 0xdfff then false else
-  let character = Uchar.of_int units.(0) in
-  match Uucp.Age.age character with `Version (major, minor) when (major, minor) <= (16, 0) -> Uucp.Gc.general_category character = `Ll | _ -> false in
+ let firstIsLower text = match HostText.first text with
+  | None -> false | Some character -> Uucp.Gc.general_category character = `Ll in
  let rec parseType = function
  | [] -> []
  | "runtime" :: "error" :: rest -> [AST.TNever, rest]

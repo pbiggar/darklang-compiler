@@ -5,7 +5,7 @@
    stay raw.
    Pos, TokenRange, Token
 *)
-(* Lexer.ml - Preserve the oracle's UTF-16 scans, recovery, and literal domains. *)
+(* Lexer.ml - Scan Unicode scalars with parser recovery and normalized literal domains. *)
 open Tokenizer
 (*
    `// …` (and `////…`)
@@ -29,8 +29,8 @@ type spannedToken = {
   token : token; text : string; range : tokenRange;
   docComment : string option; leadingTrivia : trivia list;
 }
-let units = HostText.utf16Units
-let substring source start length = HostText.ofUtf16Units (Array.sub source start length)
+let units = HostText.scalars
+let substring source start length = HostText.ofScalars (Array.sub source start length)
 let is source index character = source.(index) = Char.code character
 (*
    Decode the escape starting at `source[escapeStartIndex]`, which must be `\`.
@@ -38,7 +38,7 @@ let is source index character = source.(index) = Char.code character
    unknown escape letter, short/non-hex Unicode escape, surrogate, or codepoint
    above `0x10FFFF`. `unescape` and the validators share this function so they
    cannot drift.
-   a Unicode scalar value → its UTF-16 string (a surrogate pair above the BMP)
+   a Unicode scalar value → its UTF-8 string
    trailing backslash
    bell
    backspace
@@ -100,9 +100,7 @@ let unescape text =
       match if is source index '\\' then decodeEscape source index else None with
       | Some (count, decoded) -> Buffer.add_string buffer decoded; append (index + count)
       | None ->
-          let count = if source.(index) >= 0xd800 && source.(index) <= 0xdbff &&
-                         index + 1 < Array.length source && source.(index + 1) >= 0xdc00 && source.(index + 1) <= 0xdfff then 2 else 1 in
-          Buffer.add_string buffer (substring source index count); append (index + count)
+          Buffer.add_string buffer (substring source index 1); append (index + 1)
   in append 0; HostText.normalize (Buffer.contents buffer)
 (*
    Does the raw inner text of a regular string/char contain an invalid escape?
@@ -228,8 +226,8 @@ let keyword = function
   | "match" -> TMatch | "with" -> TWith | "fun" -> TFun | "when" -> TWhen
   | "true" -> TTrue | "false" -> TFalse | "_" -> TUnderscore | "___" -> TIdent ""
   | text -> TIdent text
-let letter = HostText.isLetterUnit
-let digit = HostText.isDigitUnit
+let letter = HostText.isLetter
+let digit = HostText.isDigit
 let letterOrDigit value = letter value || digit value
 (*
    `///` doc comments lex as trivia, but their text also lands on the next
@@ -289,7 +287,7 @@ let letterOrDigit value = letter value || digit value
    Escaped char: scan to the closing quote so multi-char escapes decode,
    such as `'\x41'` or `'\U0001F600'`.
    Unescaped char: one extended grapheme cluster, then the closing
-   quote. A grapheme may span multiple UTF-16 code units.
+   quote. A grapheme may span multiple Unicode scalars.
    Unterminated/half-typed char: recover through the grapheme end.
    Unterminated `$'…`: take to end of line.
    Unknown character: record it, skip it, and keep lexing.
@@ -444,19 +442,18 @@ let tokenize text =
       let quotedChar () = match scanString (index + 1) '\'' with
         | Ok stop -> push (TCharLit (unescape (substring source (index + 1) (stop - index - 2)))) stop None
         | Error _ -> let stop = lineEnd (index + 1) in push (TCharLit (unescape (substring source (index + 1) (stop - index - 1)))) stop (Some "unterminated char literal") in
-      if typeContext && index + 1 < length && (letter source.(index + 1) || is source (index + 1) '_') then
+      let contentEnd =
+        if index + 1 >= length then index + 1 else
+        let remaining = substring source (index + 1) (length - index - 1) in
+        let first = List.nth_opt (HostText.graphemeClusters remaining) 0 in
+        index + 1 + Option.fold ~none:0 ~some:HostText.length first in
+      if contentEnd < length && is source contentEnd '\'' then quotedChar ()
+      else if typeContext && index + 1 < length && (letter source.(index + 1) || is source (index + 1) '_') then
         let stop = scanWhile (fun scan -> letterOrDigit source.(scan) || is source scan '_') (index + 1) in
-        if stop < length && is source stop '\'' then quotedChar ()
-        else push (TIdent (substring source (index + 1) (stop - index - 1))) stop None
+        push (TIdent (substring source (index + 1) (stop - index - 1))) stop None
       else if index + 1 < length && is source (index + 1) '\\' then quotedChar ()
-      else
-        let contentEnd =
-          if index + 1 >= length then index + 1 else
-          let remaining = substring source (index + 1) (length - index - 1) in
-          let first = List.nth_opt (HostText.graphemeClusters remaining) 0 in
-          index + 1 + Option.fold ~none:0 ~some:(fun text -> Array.length (units text)) first in
-        if contentEnd < length && is source contentEnd '\'' then push (TCharLit (unescape (substring source (index + 1) (contentEnd - index - 1)))) (contentEnd + 1) None
-        else let stop = min length (max (index + 1) contentEnd) in push (TCharLit (unescape (substring source (index + 1) (stop - index - 1)))) stop (Some "unterminated char literal")
+      else let stop = min length (max (index + 1) contentEnd) in
+        push (TCharLit (unescape (substring source (index + 1) (stop - index - 1)))) stop (Some "unterminated char literal")
     end else if matchesAt "$\"" index then begin
       match scanInterp index with
       | Ok stop -> push TInterpString stop None

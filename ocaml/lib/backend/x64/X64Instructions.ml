@@ -324,8 +324,8 @@ let translateInstr comparisonContext (ctx:X64CodeGenTypes.funcCtx) instr =
     | LIR.PrintList (listPtr, _elemType) ->
         X64EmitPrinting.emitPrintList ctx listPtr _elemType
 
-    | LIR.PrintSum (sumPtr, _variants, _) ->
-        X64EmitPrinting.emitPrintSum ctx sumPtr _variants
+    | LIR.PrintSum (sumPtr, _variants, transparent) ->
+        X64EmitPrinting.emitPrintSum ctx sumPtr _variants transparent
 
     | LIR.PrintRecord (recordPtr, _typeName, _fields) ->
         X64EmitPrinting.emitPrintRecord ctx recordPtr _typeName _fields

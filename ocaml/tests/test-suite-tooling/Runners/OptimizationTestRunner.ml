@@ -63,12 +63,12 @@ let convertTypedProgram (stdlib:CompilationContexts.stdlibResult) recorder typed
 let optimizeContextFromConversionResult (c:AST_to_ANF.conversionResult)=
  {ANFConstants.typeReg=c.AST_to_ANF.recordFieldsReg;recordTypeParams=c.AST_to_ANF.recordTypeParamsReg;sumShapeReg=c.AST_to_ANF.rcSumShapeReg;functionNames=FunctionIdMap.map (fun _ (name,_)->name) c.AST_to_ANF.funcReg;functionIds=FunctionIdMap.toList c.AST_to_ANF.funcReg |> List.map (fun (id,(name,_))->name,id) |> M.of_list}
 let normalizeIR ir=
- let units=HostText.utf16Units ir in
+ let units=HostText.scalars ir in
  let white u=Uchar.is_valid u && Uucp.White.is_white_space (Uchar.of_int u) in
  let lines=ref [] and start=ref 0 in
- let flush finish=let last=ref finish in while !last> !start && white units.(!last-1) do decr last done; if !last> !start then lines:=HostText.ofUtf16Units (Array.sub units !start (!last- !start)):: !lines in
+ let flush finish=let last=ref finish in while !last> !start && white units.(!last-1) do decr last done; if !last> !start then lines:=HostText.ofScalars (Array.sub units !start (!last- !start)):: !lines in
  Array.iteri (fun index u->if u=10 || u=13 then (flush index;start:=index+1)) units;flush (Array.length units);
- let normalized=HostText.utf16Units (String.concat "\n" (List.rev !lines)) in
+ let normalized=HostText.scalars (String.concat "\n" (List.rev !lines)) in
  let size=Array.length normalized in
  let asciiWord u=(u>=65 && u<=90)||(u>=97 && u<=122)||(u>=48 && u<=57)||u=95 in
  let boundaryWord u=if u=0x200c || u=0x200d then true else if not (Uchar.is_valid u) then false else let ch=Uchar.of_int u in match Uucp.Age.age ch with
@@ -77,27 +77,27 @@ let normalizeIR ir=
  let starts arr index text=let ascii=String.length text in index+ascii<=Array.length arr && let rec loop i= i=ascii || (arr.(index+i)=Char.code text.[i] && loop (i+1)) in loop 0 in
  let quotedEnd index=let rec loop pos=if pos>=size then None else if normalized.(pos)=34 then Some (pos+1) else if normalized.(pos)=92 then (if pos+1<size && normalized.(pos+1)<>10 then loop (pos+2) else None) else loop (pos+1) in loop (index+1) in
  let output=Buffer.create (String.length ir) and ids=ref M.empty and next=ref 0 in
- let appendSlice arr pos length=Buffer.add_string output (HostText.ofUtf16Units (Array.sub arr pos length)) in
+ let appendSlice arr pos length=Buffer.add_string output (HostText.ofScalars (Array.sub arr pos length)) in
  let canonical key=match M.find_opt key !ids with Some id->id|None->let id= !next in incr next;ids:=M.add key id !ids;id in
  let rec temps pos=if pos<size then match (if normalized.(pos)=34 then quotedEnd pos else None) with
  |Some finish->appendSlice normalized pos (finish-pos);temps finish
  |None->let prefix=if (pos=0 || not (asciiWord normalized.(pos-1))) && starts normalized pos "TempId " then 7 else if (pos=0 || not (asciiWord normalized.(pos-1))) && normalized.(pos)=116 then 1 else 0 in
    if prefix=0 then (appendSlice normalized pos 1;temps (pos+1)) else
-   let ending=ref (pos+prefix) in while !ending<size && HostText.isDigitUnit normalized.(!ending) do incr ending done;
+   let ending=ref (pos+prefix) in while !ending<size && HostText.isDigit normalized.(!ending) do incr ending done;
    if !ending=pos+prefix || (!ending<size && boundaryWord normalized.(!ending)) then (appendSlice normalized pos 1;temps (pos+1)) else
-   let key=HostText.ofUtf16Units (Array.sub normalized (pos+prefix) (!ending-pos-prefix)) in
+   let key=HostText.ofScalars (Array.sub normalized (pos+prefix) (!ending-pos-prefix)) in
    let id=canonical key in Buffer.add_string output ((if prefix=1 then "t" else "TempId ")^string_of_int id);temps !ending in
  temps 0;
- let arr=HostText.utf16Units (Buffer.contents output) in Buffer.clear output;ids:=M.empty;next:=0;
+ let arr=HostText.scalars (Buffer.contents output) in Buffer.clear output;ids:=M.empty;next:=0;
  let length=Array.length arr in
  let rec closures pos=if pos<length then
  if not (starts arr pos "__closure_") then (appendSlice arr pos 1;closures (pos+1)) else
  let digits=pos+10 in let comparison=starts arr digits "comparison_" in let digitStart=digits+(if comparison then 11 else 0) in
- let ending=ref digitStart in while !ending<length && HostText.isDigitUnit arr.(!ending) do incr ending done;
+ let ending=ref digitStart in while !ending<length && HostText.isDigit arr.(!ending) do incr ending done;
  if !ending=digitStart then (appendSlice arr pos 1;closures (pos+1)) else
- let key=HostText.ofUtf16Units (Array.sub arr pos (!ending-pos)) in let id=canonical key in
+ let key=HostText.ofScalars (Array.sub arr pos (!ending-pos)) in let id=canonical key in
  Buffer.add_string output ("__closure_"^(if comparison then "comparison_" else "")^string_of_int id);closures !ending in
- closures 0;HostText.ofUtf16Units (HostText.utf16Units (Buffer.contents output))
+ closures 0;HostText.ofScalars (HostText.scalars (Buffer.contents output))
 let withoutSyntheticANFMain ir=let suffix="\n\nMain:\nreturn 0" in if Filename.check_suffix ir suffix then String.sub ir 0 (String.length ir-String.length suffix) else ir
 let formatANFForOptimizationTest synthetic program=let formatted=ANFPrinter.formatANF program in if synthetic then withoutSyntheticANFMain formatted else formatted
 let removeSyntheticMIREntry (MIR.Program (functions,variants,records))=MIR.Program (List.filter (fun (f:MIR.functionDef)->f.MIR.name<>"_start") functions,variants,records)

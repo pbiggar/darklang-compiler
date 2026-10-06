@@ -32,7 +32,7 @@ let observe source =
   let float = P.tryFloatIntrinsic name args in let canonical = P.tryCanonicalPrimitiveIntrinsic name args in
   let raw = P.tryRawMemoryIntrinsic resolve (StringOrder.Set.singleton "S") name args in let random = P.tryRandomIntrinsic name args in let date = P.tryDateTimeIntrinsic name args in
   [file; cli; presentation; float; canonical; raw; random; date]) in
- let sourceToken = if Array.length (HostText.utf16Units source) <= 64 && List.length (String.split_on_char '_' source) <= 5 then source else "source" in
+ let sourceToken = if Array.length (HostText.scalars source) <= 64 && List.length (String.split_on_char '_' source) <= 5 then source else "source" in
  let mangled = sourceToken :: [""; "i64"; "runtime_error"; "rawptr"; "R"; "S"; "S_i64"; "R_i64_str"; "a"; "λ"; "𐐨"; "\xE1\xB2\x8A"; "tup"; "tup0"; "tup2_i64_str"; "tup_i64_str"; "tup3_i64"; "fn_i64_to_str"; "fn_to_str"; "fn_i64_to_fn_str_to_bool"; "dict_str_list_i64"; "stream_R_i64"; "a$b"; "R__i64"; "tup2147483648_i64"; "tup+1_i64"] in
  let integers = [Z.neg (Z.shift_left Z.one 127); Z.of_int (-1); Z.zero; Z.one; Z.pred (Z.shift_left Z.one 127); Z.pred (Z.shift_left Z.one 128)] in
  let patterns = [C.PInt64 (-1L); C.PInt8Literal (-128); C.PInt16Literal (-32768); C.PInt32Literal Int32.min_int; C.PUInt8Literal 255; C.PUInt16Literal 65535; C.PUInt32Literal 4294967295L; C.PUInt64Literal (-1L); C.PWildcard; C.PBool true; C.PString source] in

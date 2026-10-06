@@ -77,18 +77,18 @@ let needsEqHelperForResolvedType lookup typ = match canonicalEqualityType lookup
  | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
  | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr | TVar _ | TInferenceVar _ | TStream _ -> false
 let sanitizeHelperNamePrefix text =
- let units = HostText.utf16Units text in
+ let units = HostText.scalars text in
  let length = min 48 (Array.length units) in
- if length = 0 then "type" else HostText.ofUtf16Units (Array.init length (fun index -> let unit = units.(index) in if HostText.isLetterUnit unit || HostText.isDigitUnit unit then unit else 95))
+ if length = 0 then "type" else HostText.ofScalars (Array.init length (fun index -> let unit = units.(index) in if HostText.isLetter unit || HostText.isDigit unit then unit else 95))
 (*
    Stable, deterministic hash used for generated helper function names.
 *)
-let stableHelperNameHash text = Array.fold_left (fun acc unit -> Int64.mul (Int64.logxor acc (Int64.of_int unit)) 1099511628211L) 0xcbf29ce484222325L (HostText.utf16Units text)
+let stableHelperNameHash text = String.fold_left (fun acc byte -> Int64.mul (Int64.logxor acc (Int64.of_int (Char.code byte))) 1099511628211L) 0xcbf29ce484222325L text
 let helperName prefix typ = let name = sanitizeHelperNamePrefix (CheckingDiagnostics.typeToHelperIdentityString typ) in let hash = stableHelperNameHash (HostStructuralFormat.semanticType typ) in Printf.sprintf "%s%s_%016Lx" prefix name hash
 (*
    Name for a concrete structural equality helper.
-   Diagnostic text omits dictionary key types, so it cannot identify a
-   concrete helper: Dict<Int64, String> and Dict<String, String> print alike.
+   Helper identities encode both dictionary types and complete type structure,
+   independently of how user-facing diagnostics are formatted.
 *)
 let eqHelperName typ = helperName "__dark_eq_" typ
 (*

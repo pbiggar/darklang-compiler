@@ -152,9 +152,9 @@ let renderEntity entity=
  with ex->Error ("Could not render package "^entity.location^": "^message ex)
 let candidatePrefixes isKnownName names=names |> List.filter (fun name->not (isKnownName name)) |> List.concat_map (fun name->let parts=String.split_on_char '.' name in List.init (max 0 (List.length parts-1)) (fun index->String.concat "." (List.filteri (fun i _->i<List.length parts-index) parts))) |> distinct
 let escapeDataString text=
- let units=HostText.utf16Units text in let output=Buffer.create (String.length text) in
- let rec utf8 index=if index<Array.length units then let unit=units.(index) in if unit>=0xd800 && unit<=0xdbff && index+1<Array.length units && units.(index+1)>=0xdc00 && units.(index+1)<=0xdfff then (Uutf.Buffer.add_utf_8 output (Uchar.of_int (0x10000+((unit-0xd800)*1024)+units.(index+1)-0xdc00));utf8 (index+2)) else (Uutf.Buffer.add_utf_8 output (if unit>=0xd800 && unit<=0xdfff then Uutf.u_rep else Uchar.of_int unit);utf8 (index+1)) in utf8 0;
- let escaped=Buffer.create (Buffer.length output) in String.iter (fun c->match c with 'A'..'Z'|'a'..'z'|'0'..'9'|'-'|'_'|'.'|'~'->Buffer.add_char escaped c|_->Buffer.add_string escaped (Printf.sprintf "%%%02X" (Char.code c))) (Buffer.contents output);Buffer.contents escaped
+ let escaped=Buffer.create (String.length text) in
+ String.iter (fun c->match c with 'A'..'Z'|'a'..'z'|'0'..'9'|'-'|'_'|'.'|'~'->Buffer.add_char escaped c|_->Buffer.add_string escaped (Printf.sprintf "%%%02X" (Char.code c))) text;
+ Buffer.contents escaped
 let resolveNames config resolutionEnv names=
  let client=HostPackageIO.create () in
  Fun.protect ~finally:(fun ()->HostPackageIO.dispose client) (fun ()->

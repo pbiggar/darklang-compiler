@@ -17,7 +17,7 @@ let ( let* ) = Result.bind
 type leaf = Fresh of H.value [@@warning "-37"]
 let value id : H.value = {H.id = H.ValueId id; typ = AST.TList AST.TInt64}
 let functionId name = TestIds.functionIdForName name
-let binding name = AST.bindingId (Int32.to_int (Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (HostText.utf16Units name)))
+let binding name = AST.bindingId (Int32.to_int (Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (HostText.scalars name)))
 let signature parameters result : H.valueId O.functionSignature = {O.parameters; result}
 let block parameters operations result : (leaf, H.valueId) O.block = {O.body = {H.parameters; operations; result}}
 let parameter value : H.parameter = {H.binding = binding "input"; value}

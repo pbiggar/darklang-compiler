@@ -56,13 +56,13 @@ let replace old replacement source =
   let rec loop i = if i<n then
     if i+m<=n && String.sub source i m=old then (Buffer.add_string b replacement;loop (i+m))
     else (Buffer.add_char b source.[i];loop (i+1)) in loop 0;Buffer.contents b
-let length s=Array.length (HostText.utf16Units s)
-let slice s first count=HostText.ofUtf16Units (Array.sub (HostText.utf16Units s) first count)
+let length s=Array.length (HostText.scalars s)
+let slice s first count=HostText.ofScalars (Array.sub (HostText.scalars s) first count)
 let tail s first=slice s first (length s-first)
 let trimEnd s=
-  let us=HostText.utf16Units s in
+  let us=HostText.scalars s in
   let rec last i=if i>=0 && Uchar.is_valid us.(i) && Uucp.White.is_white_space (Uchar.of_int us.(i)) then last (i-1) else i in
-  HostText.ofUtf16Units (Array.sub us 0 (last (Array.length us-1)+1))
+  HostText.ofScalars (Array.sub us 0 (last (Array.length us-1)+1))
 let isInternalTestFile path =
   let path=replace "\\" "/" path in HostText.contains path "/stdlib-internal/" || HostText.contains path "/verification/"
 let sourceOffset source (position:Tokenizer.pos)=
@@ -81,9 +81,9 @@ let normalizeInlineEntry source =
 let asSingleWrittenExpression (p:WT.sourceFile)=match p.WT.declarations,p.WT.exprsToEval with [],[e] -> Some e | _ -> None
 let isFloatExpectedExpr = function WT.EFloat _ -> true | WT.EApply (_,WT.EFnName (_,name),_,_) when name.WT.fn.WT.name="negate" -> true | _ -> false
 let rewriteParenthesizedStatements source =
-  let us=HostText.utf16Units source in let n=Array.length us in
-  let character u=HostText.ofUtf16Units [|u|] in
-  let concat xs=HostText.ofUtf16Units (HostText.utf16Units (String.concat "" xs)) in
+  let us=HostText.scalars source in let n=Array.length us in
+  let character u=HostText.ofScalars [|u|] in
+  let concat xs=HostText.ofScalars (HostText.scalars (String.concat "" xs)) in
   let rec quoted i escaped rev = if i>=n then concat (List.rev rev),i else
     let c=us.(i) in let rev=character c::rev in
     if escaped then quoted (i+1) false rev
@@ -191,7 +191,7 @@ let reducePreambleSource required source (p:WT.sourceFile) =
         let finish=min (length normalized) (List.fold_left (fun sum line->sum+length line+1) 0 (List.take (last+1) lines)) in
         if finish>start then Some (trimEnd (slice normalized start (finish-start))) else None) p.WT.declarations |> String.concat "\n\n"
 let countLeadingSpaces line=let rec loop i=if i<String.length line && line.[i]=' ' then loop (i+1) else i in loop 0
-let isTopLevelPreambleDefinitionStart s=List.exists (HostText.startsWithCurrentCulture s) ["let ";"val ";"type ";"def "]
+let isTopLevelPreambleDefinitionStart s=List.exists (HostText.startsWith s) ["let ";"val ";"type ";"def "]
 let sanitizePreambleForReducedFallback preamble =
   let rec loop active rev = function
     | [] -> List.rev rev
@@ -254,7 +254,7 @@ let buildSuiteContexts stdlib tests passTimingRecorder =
   let measure name operation =
     let nested=ref HostTimeSpan.zero in
     let recorder=Option.map (fun outer (timing:CompilerOptions.passTiming)->
-      if not (SS.mem timing.CompilerOptions.pass overlapping) && not (List.exists (HostText.startsWithCurrentCulture timing.CompilerOptions.pass)
+      if not (SS.mem timing.CompilerOptions.pass overlapping) && not (List.exists (HostText.startsWith timing.CompilerOptions.pass)
         ["TypeCheck: ";"AST -> ANF Preparation: ";"SSA: ";"RegAlloc: "]) then nested:=Int64.add !nested timing.CompilerOptions.elapsed;
       outer timing) passTimingRecorder in
     let start=nowTicks () in let result=operation recorder in
@@ -348,12 +348,7 @@ let buildCompilerOptions (test:e2eTest) =
     disableMIRLICM=test.disableMIRLICM;disableLIROpt=test.disableLIROpt;disableLIRPeephole=test.disableLIRPeephole;disableFunctionTreeShaking=test.disableFunctionTreeShaking;
     enableCoverage=false;enableLeakCheck=not test.disableLeakCheck;nativeLayoutProbe=CompilerOptions.NoNativeLayoutProbe;
     warnings=CompilerOptions.defaultWarningSettings;dumpANF=false;dumpMIR=false;dumpLIR=false}
-let stdinBytes s =
-  let us=HostText.utf16Units s in
-  let valid i=let u=us.(i) in
-    if u>=0xd800 && u<=0xdbff then i+1<Array.length us && us.(i+1)>=0xdc00 && us.(i+1)<=0xdfff
-    else if u>=0xdc00 && u<=0xdfff then i>0 && us.(i-1)>=0xd800 && us.(i-1)<=0xdbff else true in
-  Bytes.of_string (HostText.ofUtf16Units (Array.mapi (fun i u->if valid i then u else 0xfffd) us))
+let stdinBytes s = Bytes.of_string (HostEncoding.utf8 s)
 let tryExecuteBinary target arguments environment stdin binary =
   let input=match stdin with Closed->CompilerOptions.Closed|Bytes s->CompilerOptions.Bytes (stdinBytes s) in
   match Platform.detectHostTarget () with
@@ -397,7 +392,7 @@ let batchBindingPrefix tests =
   let parts=List.concat_map (fun prepared->[prepared.test.sourceFile;prepared.test.name;prepared.equalitySource]) tests in
   let hash=List.fold_left (fun hash part ->
     Array.fold_left (fun current unit->Int64.mul (Int64.logxor current (Int64.of_int unit)) 1099511628211L)
-      (Int64.mul (Int64.logxor hash 255L) 1099511628211L) (HostText.utf16Units part)) (Int64.of_string "0xcbf29ce484222325") parts in
+      (Int64.mul (Int64.logxor hash 255L) 1099511628211L) (HostText.scalars part)) (Int64.of_string "0xcbf29ce484222325") parts in
   let existing=List.concat_map (fun prepared->StringMap.bindings prepared.test.functionLineMap |> List.map fst) tests |> SS.of_list in
   let rec pick attempt=
     let prefix="e2eBatch"^Printf.sprintf "%016Lx" hash^"_"^(if attempt=0 then "" else string_of_int attempt^"_") in
@@ -430,7 +425,7 @@ let tryParseBatchBoolResults expectedCount stdout =
   | raw::_ when expectedCount>0 && expectedCount<=maxSupportedBatchSize ->
       let line=HostText.trim raw in
       let parts=if expectedChunks=1 then [line] else
-        if HostText.startsWithCurrentCulture line "(" && HostText.endsWithCurrentCulture line ")" then slice line 1 (length line-2) |> String.split_on_char ',' |> List.map HostText.trim else [] in
+        if HostText.startsWith line "(" && HostText.endsWith line ")" then slice line 1 (length line-2) |> String.split_on_char ',' |> List.map HostText.trim else [] in
       let parsed=List.map tryParseInteger64 parts in
       if List.length parsed<>expectedChunks || List.exists Option.is_none parsed then None else
       let masks=List.filter_map Fun.id parsed in

@@ -4,7 +4,7 @@
    reserved words, blank names, quoted identifiers, and qualified segments.
    Stable caller-supplied identity for an independently parsed source unit.
 *)
-(* NameSyntax.ml - UTF-16 identifiers, quoted segments, and module-header extraction. *)
+(* NameSyntax.ml - Unicode scalar identifiers, quoted segments, and module-header extraction. *)
 [@@@warning "-4"]
 type identifier = OrdinaryIdentifier of string | BlankIdentifier
 type qualifiedName = QualifiedName of identifier NonEmptyList.t
@@ -20,8 +20,8 @@ module SourceUnitPurpose = struct type t = Executable | Library | Package end
 type sourceUnitName = SourceUnitName of string
 let sourceUnitName name = if HostText.trim name = "" then Error "Source unit name must not be empty" else Ok (SourceUnitName name)
 let sourceUnitNameText (SourceUnitName name) = name
-let isStartCharacter unit = HostText.isLetterUnit unit || unit = 95
-let isContinueCharacter unit = HostText.isLetterUnit unit || HostText.isDigitUnit unit || unit = 95 || unit = 39
+let isStartCharacter unit = HostText.isLetter unit || unit = 95
+let isContinueCharacter unit = HostText.isLetter unit || HostText.isDigit unit || unit = 95 || unit = 39
 let identifierText = function OrdinaryIdentifier text -> text | BlankIdentifier -> ""
 let identifierFromText text = if text = "" || text = "___" then BlankIdentifier else OrdinaryIdentifier text
 let keywords = ["let", Keyword.Let; "val", Keyword.Val; "in", Keyword.In; "if", Keyword.If; "elif", Keyword.Elif;
@@ -32,7 +32,7 @@ module Words = Set.Make (String)
 let reservedWords = Words.of_list (List.map fst keywords)
 let isBareIdentifier = function
   | BlankIdentifier -> false
-  | OrdinaryIdentifier text -> let units = HostText.utf16Units text in
+  | OrdinaryIdentifier text -> let units = HostText.scalars text in
       Array.length units > 0 && isStartCharacter units.(0) && Array.for_all isContinueCharacter units && not (Words.mem text reservedWords)
 let formatIdentifier = function BlankIdentifier -> "___" | OrdinaryIdentifier text as identifier -> if isBareIdentifier identifier then text else "``" ^ text ^ "``"
 let singleton identifier = QualifiedName (NonEmptyList.singleton identifier)
@@ -51,8 +51,8 @@ let formatQualifiedName name = String.concat "." (List.map formatIdentifier (seg
 *)
 let toLegacySpelling = formatQualifiedName
 let tryParseLegacySpelling spelling =
-  let units = HostText.utf16Units spelling in let length = Array.length units in
-  let slice first last = HostText.ofUtf16Units (Array.sub units first (last - first)) in
+  let units = HostText.scalars spelling in let length = Array.length units in
+  let slice first last = HostText.ofScalars (Array.sub units first (last - first)) in
   let rec quoted first index =
     if index + 1 >= length then None
     else if units.(index) = 96 && units.(index + 1) = 96 then Some (slice first index, index + 2)
@@ -71,16 +71,16 @@ let tryParseLegacySpelling spelling =
         else None in
   loop 0 []
 let scanOrdinary input start =
-  let units = HostText.utf16Units input in
+  let units = HostText.scalars input in
   let rec ending index = if index < Array.length units && isContinueCharacter units.(index) then ending (index + 1) else index in
   let stop = ending (start + 1) in
-  identifierFromText (HostText.ofUtf16Units (Array.sub units start (stop - start))), stop
+  identifierFromText (HostText.ofScalars (Array.sub units start (stop - start))), stop
 let scanQuoted input start =
-  let units = HostText.utf16Units input in
+  let units = HostText.scalars input in
   let rec ending index =
     if index >= Array.length units || units.(index) = 10 || units.(index) = 13 then Error "Unterminated backtick identifier"
     else if index + 1 < Array.length units && units.(index) = 96 && units.(index + 1) = 96 then
-      Ok (identifierFromText (HostText.ofUtf16Units (Array.sub units (start + 2) (index - start - 2))), index + 2)
+      Ok (identifierFromText (HostText.ofScalars (Array.sub units (start + 2) (index - start - 2))), index + 2)
     else ending (index + 1) in
   ending (start + 2)
 let tryExtractModuleHeader source =
@@ -90,8 +90,8 @@ let tryExtractModuleHeader source =
     else begin Buffer.add_char buffer source.[index]; normalize (index + 1) end in
   normalize 0;
   let trimStart text =
-    let units = HostText.utf16Units text in
-    let rec start index = if index < Array.length units && HostText.trim (HostText.ofUtf16Units [|units.(index)|]) = "" then start (index + 1) else index in
+    let units = HostText.scalars text in
+    let rec start index = if index < Array.length units && HostText.trim (HostText.ofScalars [|units.(index)|]) = "" then start (index + 1) else index in
     start 0 in
   let rec find prefix = function
     | [] -> None
@@ -107,7 +107,7 @@ let tryExtractModuleHeader source =
             match List.sort Int.compare (List.map trimStart significant) with
             | indent :: _ when indent > trimStart line ->
                 String.concat "\n" (List.map (fun line -> if HostText.trim line = "" then "" else
-                  let units = HostText.utf16Units line in if Array.length units >= indent then HostText.ofUtf16Units (Array.sub units indent (Array.length units - indent)) else line) rest)
+                  let units = HostText.scalars line in if Array.length units >= indent then HostText.ofScalars (Array.sub units indent (Array.length units - indent)) else line) rest)
             | _ -> ""
             else String.concat "\n" (List.rev prefix @ rest) in
           Option.map (fun name -> name, body) (tryParseLegacySpelling spelling)

@@ -105,7 +105,7 @@ let runLIRProgram program=Result.bind (binaryFor program false true) X86_64Binar
 let generatedCallLabels program=Result.map (List.filter_map (function X.CALL label->Some label|_->None)) (Result.map_error (fun error->"Codegen error: "^error) (translate program false))
 let assertCallsHelper prefix context program=
  let* labels=generatedCallLabels program in
- require (List.exists (fun label->HostText.startsWithCurrentCulture label prefix) labels) (context^" did not call a planned "^(if prefix="__dark_list_rc_dec_plan_" then "list" else "dict")^" helper; calls were "^HostStructuralFormat.format (HostStructuralFormat.Sequence (List.map (fun s->HostStructuralFormat.Text s) labels)))
+ require (List.exists (fun label->HostText.startsWith label prefix) labels) (context^" did not call a planned "^(if prefix="__dark_list_rc_dec_plan_" then "list" else "dict")^" helper; calls were "^HostStructuralFormat.format (HostStructuralFormat.Sequence (List.map (fun s->HostStructuralFormat.Text s) labels)))
 let assertCallsPlannedListHelper=assertCallsHelper "__dark_list_rc_dec_plan_"
 let assertCallsPlannedDictHelper=assertCallsHelper "__dark_dict_rc_dec_plan_"
 let rcMetadata typ:MemoryModel.rcMetadata={MemoryModel.releasePlanCacheKey=None;releasePlan=None;sourceType=Some typ}
@@ -130,7 +130,7 @@ let xInstructions instructions=HostStructuralFormat.format (HostStructuralFormat
 let testStringLiteralUsesStaticStorage ()=
  let program=makeSimpleProgram [ Mov (Physical X1, StringSymbol "pooled") ] Ret in
  let* instrs=CodeGen_X86_64.translateProgram program false in
- require (List.exists (function X.LEA_rip (_,label) when HostText.startsWithCurrentCulture label "__dark_string_literal_"->true|_->false) instrs) "Expected x86 string literal to be loaded from static storage"
+ require (List.exists (function X.LEA_rip (_,label) when HostText.startsWith label "__dark_string_literal_"->true|_->false) instrs) "Expected x86 string literal to be loaded from static storage"
 let testStringLiteralHeapStorePreservesX3 ()=
  let program=makeSimpleProgram [ Mov (Physical X3, Imm 123L); HeapAlloc (Physical X4, 8); HeapStore (Physical X4, 0, StringSymbol "field", Some AST.TString); Mov (Physical X0, Reg (Physical X3)); PrintInt64 (Physical X0) ] Ret in
  let* _,stdout,stderr=runLIRProgramFullWithOptions program false in let output=HostText.trim stdout in
@@ -247,7 +247,7 @@ let testDictRefCountDecDictListValueUsesPlannedHelper ()=
  let program=makeSimpleProgram [RefCountDec (Physical X0,0,DictHeap,Some (rcMetadata typ))] Ret in
  let* labels=generatedCallLabels program in
  let display=HostStructuralFormat.format (HostStructuralFormat.Sequence (List.map (fun s->HostStructuralFormat.Text s) labels)) in
- let* ()=require (List.exists (fun label->HostText.startsWithCurrentCulture label "__dark_dict_rc_dec_plan_") labels) ("Nested dict/list RefCountDec did not call a planned dict helper; calls were "^display) in
+ let* ()=require (List.exists (fun label->HostText.startsWith label "__dark_dict_rc_dec_plan_") labels) ("Nested dict/list RefCountDec did not call a planned dict helper; calls were "^display) in
  require (not (List.mem "__dark_dict_rc_dec_dict_list_value_helper" labels)) ("Nested dict/list RefCountDec still called the dict-list matrix helper; calls were "^display)
 let plannedTuple typ context=makeSimpleProgram [RefCountDec (Physical X0,0,TaggedList,Some (rcMetadata (AST.TList typ)))] Ret |> assertCallsPlannedListHelper context
 let testTaggedListTuplePayloadUsesPlannedHelper ()=plannedTuple (AST.TTuple [AST.TString;AST.TList AST.TInt64;AST.TDict (AST.TInt64,AST.TInt64)]) "Tuple list payload"

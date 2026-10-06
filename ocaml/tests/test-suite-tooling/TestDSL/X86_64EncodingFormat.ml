@@ -34,7 +34,7 @@ let parseHexBytes text=
  let value=Z.of_string_base 16 digits in if Z.compare value (Z.of_int 255)<=0 then Ok (Char.chr (Z.to_int value)) else Error ("Invalid x64 hex byte '"^trimmed^"'")
  else Error ("Invalid x64 hex byte '"^trimmed^"'") in
  if tokens=[] then Error "OUTPUT-HEX requires at least one byte" else let* values=ResultList.traverse parseToken tokens in Ok (Bytes.of_string (String.of_seq (List.to_seq values)))
-let parseFixups text=Common.normalizeLineEndings text |> String.split_on_char '\n' |> List.map HostText.trim |> List.filter (fun line->line<>"" && not (HostText.startsWithCurrentCulture line "//"))
+let parseFixups text=Common.normalizeLineEndings text |> String.split_on_char '\n' |> List.map HostText.trim |> List.filter (fun line->line<>"" && not (HostText.startsWith line "//"))
 let parseCase path sections=
  let* values=toSectionMap sections in let* name=required "NAME" values in let* input=required "INPUT-X64" values in let* instructions=X86_64Parser.parseX64 input in
  let output=optional "OUTPUT-HEX" values and fixups=optional "EXPECT-FIXUPS" values and expectedError=optional "EXPECT-ERROR" values in

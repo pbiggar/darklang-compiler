@@ -5,7 +5,7 @@ module M=StringOrder.Map
 module S=StringOrder.Set
 module K=SpecializationIdentity.SpecMap
 let (let*)=Result.bind
-let preambleError error=let prefix="Reference count insertion error: " in if HostText.startsWithCurrentCulture error prefix then "Preamble RC insertion error: "^String.sub error (String.length prefix) (String.length error-String.length prefix) else "Preamble "^error
+let preambleError error=let prefix="Reference count insertion error: " in if HostText.startsWith error prefix then "Preamble RC insertion error: "^String.sub error (String.length prefix) (String.length error-String.length prefix) else "Preamble "^error
 (* Build preamble with stdlib as base, returning extended context for test compilation.
    Preamble functions go through the full pipeline (parse → typecheck → mono → inline → lift → ANF → RC → TCO).
    The result is built once per file and reused for all tests in that file. *)

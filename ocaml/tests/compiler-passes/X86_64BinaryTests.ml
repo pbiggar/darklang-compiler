@@ -64,4 +64,4 @@ let runElfBinary binary =
 let testExecuteElf () =
  let machineCode=exitProgram 42 in let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools machineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0 in
  match runElfBinary binary with Error err -> Error err | Ok exitCode -> if exitCode=42 then Ok () else Error (Printf.sprintf "Expected exit code 42, got %d" exitCode)
-let tests=["ELF ident helper",testElfIdentHelper;"x64 combined instruction encodings",testCombinedInstructionEncodings;"Generate x86-64 ELF",testGenerateElf;"Execute x86-64 ELF",testExecuteElf]
+let tests=NativePortRegressionTests.printingTests @ ["ELF ident helper",testElfIdentHelper;"x64 combined instruction encodings",testCombinedInstructionEncodings;"Generate x86-64 ELF",testGenerateElf;"Execute x86-64 ELF",testExecuteElf]

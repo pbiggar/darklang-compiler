@@ -4,13 +4,7 @@ let observationScalar kind value = `Assoc ["kind", `String kind; "value", `Strin
 let observationUnion typ case fields = `Assoc ["type", `String typ; "case", `String case; "fields", `List fields]
 let observationTuple values = `Assoc ["tuple", `List values]
 let observationRecord name fields = `Assoc ["record", `String name; "fields", `List (List.map (fun (name, value) -> `List [`String name; value]) fields)]
-let observationString value =
-  let units = HostText.utf16Units value in
-  let rec unpaired index = if index >= Array.length units then false else
-    if units.(index) >= 0xd800 && units.(index) <= 0xdbff then
-      if index + 1 < Array.length units && units.(index + 1) >= 0xdc00 && units.(index + 1) <= 0xdfff then unpaired (index + 2) else true
-    else if units.(index) >= 0xdc00 && units.(index) <= 0xdfff then true else unpaired (index + 1) in
-  if unpaired 0 then `Assoc ["utf16String", `List (Array.to_list (Array.map (fun unit -> `String (Printf.sprintf "%04x" unit)) units))] else `String value
+let observationString value = `String value
 let observationInt value = observationScalar "int32" (string_of_int value)
 let observationOption encode = function None -> observationUnion "FSharpOption" "None" [] | Some value -> observationUnion "FSharpOption" "Some" [encode value]
 let observationResult encode = function Ok value -> observationUnion "FSharpResult" "Ok" [encode value] | Error error -> observationUnion "FSharpResult" "Error" [observationString error]

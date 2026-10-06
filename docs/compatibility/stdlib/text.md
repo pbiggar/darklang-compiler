@@ -40,6 +40,19 @@ Padding has argument order `(value, padWith, goalLength)` and returns
 
 ## Unicode contract
 
+Compiler source handling uses native UTF-8 strings, Uutf decoding/encoding,
+Uucp scalar properties and case mappings, Uunf NFC normalization, and Uuseg
+extended grapheme segmentation (currently pinned to Unicode 16.0.0). Source
+positions count scalars and diagnostics retain complete scalars. Compiler maps
+use OCaml `String.compare`; helper names and fingerprints hash UTF-8 bytes.
+Compiler symbol prefixes use `String.starts_with`/`String.ends_with`, without
+locale-sensitive collation. An Indic conjunct such as `'क्ष'` is accepted as a
+single `Char`, including in parentheses and escaped literal spellings.
+
+These host compiler libraries are separate from the generated Dark runtime
+Unicode tables described below. The runtime's public UTF-16 search-index
+compatibility remains the language contract; compiler scanning does not use it.
+
 The generated tables are pinned to Unicode 17.0.0. They include canonical
 decomposition/composition and exclusions, canonical combining classes,
 grapheme-break and Extended_Pictographic properties, Indic conjunct-break

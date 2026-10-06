@@ -16,8 +16,8 @@ let () =
       let clusters = HostText.graphemeClusters context in
       if clusters <> ["a"; text; "a"] then
         output (`List [`String "scalarGrapheme"; `Int scalar; `List (List.map (fun text -> `String text) clusters)]);
-      if HostText.ofUtf16Units (HostText.utf16Units text) <> text then
-        failwith "UTF-16 roundtrip mismatch"
+      if HostText.ofScalars (HostText.scalars text) <> text then
+        failwith "Unicode scalar roundtrip mismatch"
     end
   done;
   let scalars = [0x61; 0xd; 0xa; 0; 0x301; 0x600; 0x903; 0x1100; 0x1160; 0x11a8;
@@ -30,8 +30,8 @@ let () =
     let segments = HostText.graphemeClusters text in
     output (`List [`String "graphemes"; `String text; `List (List.map (fun segment -> `String segment) segments)])) scalars) scalars;
   for unit = 0 to 0xffff do
-    let letter = HostText.isLetterUnit unit and digit = HostText.isDigitUnit unit in
-    if letter || digit then output (`List [`Int unit; `Bool letter; `Bool digit; `Bool (HostText.isUpperUnit unit)])
+    let letter = HostText.isLetter unit and digit = HostText.isDigit unit in
+    if letter || digit then output (`List [`Int unit; `Bool letter; `Bool digit; `Bool (HostText.isUpper unit)])
   done;
   List.iter (fun text ->
     output (`List [`String text; match HostText.tryParseInt32 text with

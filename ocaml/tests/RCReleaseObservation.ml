@@ -20,7 +20,7 @@ let tests values=list (fun (name,run)->let actual=run () in tuple [J.string name
 let targets=[Platform.ARM64Backend Platform.LinuxARM64;Platform.LinuxX86_64]
 let fixed=lazy (
  let open Yojson.Basic.Util in
- let fixtures=Yojson.Basic.from_file "scripts/ocaml/rc_release_fixtures.json" |> member "format" |> to_list |> List.map (fun value->to_list value |> List.map to_int |> Array.of_list |> HostText.ofUtf16Units) in
+ let fixtures=Yojson.Basic.from_file "scripts/ocaml/rc_release_fixtures.json" |> member "format" |> to_list |> List.map (fun value->to_list value |> List.map to_int |> Array.of_list |> HostText.ofScalars) in
  let row content=result (list (fun value->tuple [test value;program (RCReleaseTestRunner.buildProgram value)])) (parseRCReleaseFileContent "boundary.rcrelease" content) in
  let path="src/Tests/backend/reference-release/reference-count.rcrelease" in
  let corpus=result (list (fun value->tuple [test value;program (RCReleaseTestRunner.buildProgram value);list (fun target->unitResult (RCReleaseTestRunner.runRCReleaseTest target value)) targets])) (RCReleaseTestRunner.loadRCReleaseTests path) in

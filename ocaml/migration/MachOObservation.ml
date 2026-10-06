@@ -12,7 +12,7 @@ let observe source =
  let codeCases=List.map (fun length -> Array.init length (fun n -> Int32.logxor 0xd65f03c0l (Int32.of_int (n*1024)))) [0;1;2;3;7;17;3870;3890;3900;4096] in
  let literals=list (fun sp -> list (fun fp -> let data,labels=M.createStringData sp in tuple [B.bytes data;`Assoc ["map",list (fun (key,value) -> tuple [SemanticJson.string key;SemanticJson.int32 value]) (StringOrder.Map.bindings labels)];B.bytes (M.createFloatData fp)]) floatPools) stringPools in
  let images=list (fun words -> tuple [attempt B.bytes (fun () -> M.createExecutable words);list (fun sp -> tuple [attempt B.bytes (fun () -> M.createExecutableWithStrings words sp);list (fun fp -> list (fun leak -> tuple [attempt B.bytes (fun () -> M.createExecutableWithPools words sp fp leak);list (fun count -> attempt B.bytes (fun () -> M.createExecutableWithCoverage words sp fp count leak)) [0;1;9]]) [false;true]) floatPools]) stringPools]) codeCases in
- let pads=list (fun s -> list (fun n -> attempt B.bytes (fun () -> M.padString s n)) [-10;0;1;2;3;4;5;15;16;32]) [source;"é";"😀";"abcdefghijklmnopqrstuv";HostText.ofUtf16Units [|0xd800;97;0xdc00|]] in
+ let pads=list (fun s -> list (fun n -> attempt B.bytes (fun () -> M.padString s n)) [-10;0;1;2;3;4;5;15;16;32]) [source;"é";"😀";"abcdefghijklmnopqrstuv";HostText.ofScalars [|0xfffd;0x61;0xfffd|]] in
  let primitive=tuple [list (fun v -> B.bytes (M.uint32ToBytes v)) [0l;1l;Int32.min_int;Int32.max_int;-1l];list (fun v -> B.bytes (M.uint64ToBytes v)) [0L;1L;Int64.min_int;Int64.max_int;-1L]] in
  let serializers=list (fun value -> let word=Int64.to_int32 value in
  let machHeader:Binary.machHeader={Binary.magic=word;cpuType=word;cpuSubType=word;fileType=word;numCommands=word;sizeOfCommands=word;flags=word;reserved=word} in

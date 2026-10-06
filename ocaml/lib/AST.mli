@@ -306,7 +306,7 @@ val applyNamedWithTypes : string -> 't list -> 't exprNode nonEmptyList -> 't ex
 val valueDefName : 't valueDefNode -> string
 val valueDefBody : 't valueDefNode -> 't exprNode
 val collidingConstructorCaseNames : 't typeDefNode list -> StringOrder.Set.t
-(* F# structural ordering uses declaration-order cases and UTF-16 string keys. *)
+(* Structural ordering uses declaration-order cases and native string keys. *)
 val compareBindingId : bindingId -> bindingId -> int
 val compareTypeId : typeId -> typeId -> int
 val compareConstructorId : constructorId -> constructorId -> int

@@ -11,7 +11,7 @@ type testBlock = TestBlock of (testLeaf, testBlock) H.operation H.block
 let body (TestBlock block) = block
 let managed id : H.value = {H.id = H.ValueId id; typ = AST.TList AST.TInt64}
 let unitValue id : H.value = {H.id = H.ValueId id; typ = AST.TUnit}
-let binding name = AST.bindingId (Int32.to_int (Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (HostText.utf16Units name)))
+let binding name = AST.bindingId (Int32.to_int (Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (HostText.scalars name)))
 let parameter name value : H.parameter = {H.binding = binding name; value}
 let block parameters operations result = TestBlock {H.parameters; operations; result}
 let definition name parameters operations result : testBlock H.functionDef = {H.id = TestIds.functionIdForName name; name; body = block parameters operations result}

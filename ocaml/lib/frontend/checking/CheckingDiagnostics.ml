@@ -41,10 +41,9 @@ let rec typeToString = function
   | TRecord (name, []) | TSum (name, []) -> name
   | TRecord (name, args) | TSum (name, args) -> name ^ "<" ^ String.concat ", " (List.map typeToString args) ^ ">"
   | TList elem -> "List<" ^ typeToString elem ^ ">" | TStream elem -> "Stream<" ^ typeToString elem ^ ">"
-  | TVar name | TInferenceVar (name, _) -> name | TDict (_, value) -> "Dict<" ^ typeToString value ^ ">"
+  | TVar name | TInferenceVar (name, _) -> name | TDict (key, value) -> "Dict<" ^ typeToString key ^ ", " ^ typeToString value ^ ">"
 (*
-   Generated helpers need the complete semantic type. Diagnostic spelling keeps
-   the historical one-argument Dict form, which omits its key type.
+   Generated helpers and diagnostics both identify the complete semantic type.
 *)
 let rec typeToHelperIdentityString typ =
   let render = typeToHelperIdentityString in match typ with
@@ -69,9 +68,8 @@ let typeErrorToString = function
   | ResolutionFailure error -> NameResolution.errorToString error | GenericError msg -> msg
 let withIndefiniteArticle s =
   if s = "" then s else
-  let unit = (HostText.utf16Units s).(0) in
-  let first = if unit >= 0xd800 && unit <= 0xdfff then unit else (HostText.utf16Units (HostText.lowerInvariant (HostText.ofUtf16Units [|unit|]))).(0) in
-  (if List.mem first [97;101;105;111;117] then "an " else "a ") ^ s
+  let lower = HostText.lowerInvariant s in
+  (if List.mem lower.[0] ['a'; 'e'; 'i'; 'o'; 'u'] then "an " else "a ") ^ s
 let unsigned64 value = Z.to_string (if value < 0L then Z.add (Z.of_int64 value) (Z.shift_left Z.one 64) else Z.of_int64 value)
 let describeIfConditionActual expr actualType = match expr with
   | UnitLiteral -> "Unit (())"

@@ -7,7 +7,7 @@ let word value=`Assoc ["kind",`String "uint32";"value",`String (Printf.sprintf "
 let observe source=
  list (fun target -> list (fun enabled ->
   let ctx=ARMPrintingObservation.context source target enabled in
-  let labels=[source;"argv";"hé😀";"nul\000label";HostText.ofUtf16Units [|0xd800;97;0xdc00|]] in
+  let labels=[source;"argv";"hé😀";"nul\000label";HostText.ofScalars [|0xfffd;0x61;0xfffd|]] in
   let groups=[[ProcessLifecycle.generateHeapInit target];List.map (ProcessLifecycle.generateCliArgvHelper ctx) labels;[ExecuteProcess.generateLinuxCliExecuteHelper ()];[RunProcess.generateLinuxCliRunProcessHelper ()];[ProcessLifecycle.generateLinuxCliSpawnProcessHelper ()];[ProcessLifecycle.generateLinuxCliProcessLifecycleHelpers ctx]] in
   let code xs=
    let sp,fp=ARM64_Resolve.collectPools xs in

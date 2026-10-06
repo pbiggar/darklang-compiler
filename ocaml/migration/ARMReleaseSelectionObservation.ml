@@ -15,7 +15,7 @@ let observe source=
  let fields=[FieldRelease (0,DynamicBufferRelease DynamicStringBuffer);FieldRelease (8,RootRelease (8,TaggedList,TaggedListPayloadRelease NoReleasePlan));FieldRelease (16,RootRelease (16,DictHeap,DictPayloadRelease (NoReleasePlan,NoReleasePlan)))] in
  let rich=List.concat_map (fun size -> List.concat_map (fun fields -> [RootRelease (size,GenericHeap,FixedBlockPayloadRelease (size,fields));RootRelease (size,GenericHeap,BoxedSumPayloadRelease (size,fields,[{tag=1;fieldReleases=fields}]))]) [fields;List.rev fields;[FieldRelease (8,NoReleasePlan)]@fields;fields@[FieldRelease (8,NoReleasePlan)];[FieldRelease (8,DynamicBufferRelease DynamicStringBuffer)];[]]) [8;16;24;256] in
  let plans=simple@listPlans@dictPlans@rich in
- let fingerprints=["";source;"hé😀";"a\000b";HostText.ofUtf16Units [|0xd800;97;0xdc00|]] in
+ let fingerprints=["";source;"hé😀";"a\000b";HostText.ofScalars [|0xfffd;0x61;0xfffd|]] in
  let selected=list (fun plan -> tuple [call SemanticJson.string (fun () -> E.listDecHelperForReleasePlan plan);call SemanticJson.string (fun () -> E.dictDecHelperForReleasePlan plan);list (fun fingerprint -> tuple [call SemanticJson.string (fun () -> E.listDecHelperForElementRelease fingerprint plan);call SemanticJson.string (fun () -> E.dictDecHelperForReleasePlanWithFingerprint fingerprint plan)]) fingerprints]) plans in
  let paired=list (fun key -> list (fun value -> call boolean (fun () -> E.dictPayloadReleaseNeedsPlannedHelper key value)) plans) plans in
  let fieldPlans=List.concat_map (fun offset -> List.map (fun plan -> [FieldRelease (offset,plan)]) simple) [-2147483648;-1;0;8;16;2147483647]@[fields;List.rev fields;[FieldRelease (8,NoReleasePlan)]@fields;fields@[FieldRelease (8,NoReleasePlan)];[]] in

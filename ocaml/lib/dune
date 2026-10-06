@@ -8,7 +8,7 @@
  (libraries unix uutf uucp uunf uuseg zarith yojson)
  (foreign_stubs
   (language c)
-  (names host_identity host_collation host_package_io host_execution host_string_order)
+  (names host_identity host_package_io host_execution)
   (flags (:standard (:include host_cflags.sexp))))
  (c_library_flags (:include host_libraries.sexp))
  ; Shared field names are part of the frozen syntax schema. Warning 42 only

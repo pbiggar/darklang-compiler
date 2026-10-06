@@ -62,10 +62,10 @@ let parseIntOperand lineNum fieldName text=match HostText.tryParseInt32 (HostTex
 type capture = Any | Digits | SignedDigits
 type patternToken = Literal of int | Space | Capture of capture
 let isSpace unit=Uchar.is_valid unit && Uucp.White.is_white_space (Uchar.of_int unit)
-let isDigit=HostText.isDigitUnit
+let isDigit=HostText.isDigit
 let matched prefix fields line =
- let text=HostText.utf16Units line in let length=Array.length text in
- let prefix=Array.to_list (HostText.utf16Units (prefix^"(")) |> List.map (fun c -> Literal c) in
+ let text=HostText.scalars line in let length=Array.length text in
+ let prefix=Array.to_list (HostText.scalars (prefix^"(")) |> List.map (fun c -> Literal c) in
  let rec operands=function [] -> [Literal 41] | [kind] -> [Capture kind;Literal 41] | kind::rest -> Capture kind::Literal 44::Space::operands rest in
  let tokens=prefix@operands fields in
  let rec matchTokens tokens at captures = match tokens with
@@ -77,7 +77,7 @@ let matched prefix fields line =
  | Capture kind::rest ->
  let start=if kind=SignedDigits && at<length && text.(at)=45 then at+1 else at in
  let finish=ref start in while !finish<length && (match kind with Any -> text.(!finish)<>10 | Digits | SignedDigits -> isDigit text.(!finish)) do incr finish done;
- let captureUntil n=HostText.ofUtf16Units (Array.sub text at (n-at)) in
+ let captureUntil n=HostText.ofScalars (Array.sub text at (n-at)) in
  let rec tryLazy n=if n> !finish then None else match matchTokens rest n (captureUntil n::captures) with Some _ as found -> found | None -> tryLazy (n+1) in
  let rec tryGreedy n=if n<=start then None else match matchTokens rest n (captureUntil n::captures) with Some _ as found -> found | None -> tryGreedy (n-1) in
  (match kind with Any -> tryLazy (at+1) | Digits | SignedDigits -> tryGreedy !finish) in

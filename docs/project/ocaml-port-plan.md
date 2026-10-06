@@ -2580,3 +2580,40 @@ No new CI workflow is added.
 The reusable ARM64 preparation command was checked again from fresh graphs
 after source retirement: both implementations pass the nine factorial cases,
 with all four compilation captures and all fifteen timed test contracts equal.
+
+## Native OCaml text and backend repairs (2026-10-06)
+
+The earlier frozen-oracle text equivalence checkpoints are historical. Compiler
+text now uses ordinary UTF-8 strings and the pinned OCaml Unicode libraries:
+Uutf for decoding/replacement/encoding, Uucp for properties and case folding,
+Uunf for NFC, and Uuseg for extended grapheme segmentation. The custom UTF-16 /
+WTF-8 host layer, C identity comparator, custom grapheme rules, and ICU collation
+adapter have been removed. Maps use `String.compare`; symbol fingerprints and
+length-prefixed keys consume UTF-8 bytes. Non-ASCII identity ordering and hashes
+therefore intentionally differ from F#. Supplementary letters are valid bare
+identifiers, diagnostic truncation keeps complete scalars, Indic conjunct
+characters parse both directly and in parentheses, and U+FFFE is accepted by
+normalization. Dark runtime UTF-16 indexing/Char comparison contracts are
+separate and remain unchanged.
+
+Internal symbol prefixes/suffixes are ordinal String predicates. Dictionary
+type diagnostics print both key and value types. Mach-O text segments grow to
+the next 16 KiB page, with load-command and constant-section regression checks.
+The x64 boolean-no-newline and aggregate printing stubs now print and return;
+sum representations and aliased traversal registers have native execution
+coverage. Float printing releases its owned temporary string.
+
+The warning-free `./build --ai -- -j 4` succeeds. The final complete
+`./run-tests --ai` run passes 10,802/10,803 tests in 75.8 seconds. All 43 added
+regressions pass. The sole failure is the existing process-pipe marker test at
+`cli_process_host_input.e2e:L66`; the parent revision independently reproduces
+exactly that failure (37/38 tests in the focused file on both revisions).
+Port-specific `dune runtest --root ocaml -j 4` checks pass for native string
+ordering/allocation, collision-safe caches and component equivalence.
+
+All 29 canonical x64 benchmark ELFs are byte-identical to the branch parent.
+All 29 also compile to unsigned Mach-O images; native macOS execution and Apple
+signing remain unverified. `./benchmarks/run_benchmarks.sh --verify-parent full`
+cannot run because the branch has no x64 full-cachegrind baseline snapshot;
+no timing or instruction-count performance claim replaces that missing gate.
+No CI workflow is added.

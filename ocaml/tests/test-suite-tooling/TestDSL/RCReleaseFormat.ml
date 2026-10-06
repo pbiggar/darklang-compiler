@@ -11,15 +11,15 @@ type rCReleaseTest={name:string;root:managedShape;placement:rootPlacement;source
 type shapeToken=Identifier of string|LeftParen|RightParen|Comma
 let knownSections=StringOrder.Set.of_list ["NAME";"ROOT";"ROOT-REGISTER";"PRESERVE"]
 let tokenizeShape source=
- let units=HostText.utf16Units source in let count=Array.length units in
- let identifierChar c=HostText.isLetterUnit c || HostText.isDigitUnit c || c=45 || c=95 in
+ let units=HostText.scalars source in let count=Array.length units in
+ let identifierChar c=HostText.isLetter c || HostText.isDigit c || c=45 || c=95 in
  let whitespace c=Uchar.is_valid c && Uucp.White.is_white_space (Uchar.of_int c) in
  let rec loop offset tokens=if offset=count then Ok (List.rev tokens) else
  let c=units.(offset) in if whitespace c then loop (offset+1) tokens else
  match c with 40->loop (offset+1) (LeftParen::tokens)|41->loop (offset+1) (RightParen::tokens)|44->loop (offset+1) (Comma::tokens)|_ when identifierChar c->
  let ending=ref offset in while !ending<count && identifierChar units.(!ending) do incr ending done;
- let text=HostText.ofUtf16Units (Array.sub units offset (!ending-offset)) in loop !ending (Identifier text::tokens)
- |_->Error ("Invalid ROOT character '"^HostText.ofUtf16Units [|c|]^"' at offset "^string_of_int offset) in loop 0 []
+ let text=HostText.ofScalars (Array.sub units offset (!ending-offset)) in loop !ending (Identifier text::tokens)
+ |_->Error ("Invalid ROOT character '"^HostText.ofScalars [|c|]^"' at offset "^string_of_int offset) in loop 0 []
 let parseShape source=
  let rec parseOne tokens=
  let parseArguments allowEmpty remaining=

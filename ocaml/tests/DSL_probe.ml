@@ -2,7 +2,7 @@
 open Dark_compiler
 let union typ case fields = `Assoc ["type", `String typ; "case", `String case; "fields", `List fields]
 let text value =
-  let units = HostText.utf16Units value in
+  let units = HostText.scalars value in
   let rec unpaired index = if index >= Array.length units then false
     else if units.(index) >= 0xd800 && units.(index) <= 0xdbff then
       if index + 1 < Array.length units && units.(index + 1) >= 0xdc00 && units.(index + 1) <= 0xdfff then unpaired (index + 2) else true

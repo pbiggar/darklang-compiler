@@ -55,10 +55,10 @@ let parseFloat text=
 *)
 let parseLabelRef text=
  let trimmed=HostText.trim text in
- if HostText.startsWithCurrentCulture trimmed "data:" then Ok (DataLabel (Named (String.sub trimmed 5 (String.length trimmed-5))))
- else if HostText.startsWithCurrentCulture trimmed "str:\"" && String.ends_with ~suffix:"\"" trimmed then
+ if HostText.startsWith trimmed "data:" then Ok (DataLabel (Named (String.sub trimmed 5 (String.length trimmed-5))))
+ else if HostText.startsWith trimmed "str:\"" && String.ends_with ~suffix:"\"" trimmed then
  let inner=String.sub trimmed 5 (String.length trimmed-6) in Ok (DataLabel (StringLiteral (replace "\\\"" "\"" (replace "\\\\" "\\" inner))))
- else if HostText.startsWithCurrentCulture trimmed "float:" then
+ else if HostText.startsWith trimmed "float:" then
  let valueText=String.sub trimmed 6 (String.length trimmed-6) in
  (match parseFloat valueText with Some value->Ok (DataLabel (FloatLiteral value))|None->Error ("Invalid float literal '"^valueText^"'"))
  else Ok (CodeLabel trimmed)

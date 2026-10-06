@@ -20,7 +20,7 @@ let observe source=
   let flags=list (fun mask -> call (fun () -> generate NoReleasePlan mask (Some "dict-target") None)) (List.init 128 Fun.id) in
   let keys=list (fun key -> list (fun mask -> call (fun () -> generate key mask None None)) [0;1]) plans in
   let fixed=list (fun (plan,sizes) -> list (fun size -> call (fun () -> generate NoReleasePlan 0 None (Some (size,plan)))) sizes) (List.map (fun plan -> plan,[16]) plans@List.map (fun plan -> plan,[-2147483648;-65536;-32769;-32768;-1;0;248;255;256;32767;32768;65535;65536;2147483647]) rich) in
-  let labels=list (fun label -> call (fun () -> generate dynamic 0 label None)) [None;Some "";Some source;Some "hé😀";Some (HostText.ofUtf16Units [|0xd800;97;0xdc00|])] in
+  let labels=list (fun label -> call (fun () -> generate dynamic 0 label None)) [None;Some "";Some source;Some "hé😀";Some (HostText.ofScalars [|0xfffd;0x61;0xfffd|])] in
   let planned=list (fun key -> list (fun value -> call (fun () -> E.generatePlannedDictRefCountDecHelper source (RootRelease (16,DictHeap,DictPayloadRelease (key,value))) ctx)) plans) [NoReleasePlan;dynamic;child] in
   let invalid=list (fun plan -> call (fun () -> E.generatePlannedDictRefCountDecHelper source plan ctx)) simple in
   tuple [flags;keys;fixed;labels;planned;invalid]) [false;true]) [ARM64.targetConfigFor Platform.LinuxARM64;ARM64.targetConfigFor Platform.MacOSARM64] in

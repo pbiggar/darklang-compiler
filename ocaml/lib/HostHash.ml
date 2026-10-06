@@ -1,4 +1,4 @@
-(* SHA-256 and .NET UTF-8 replacement semantics for stable ownership clone names. *)
+(* SHA-256 over UTF-8 text for stable ownership clone names. *)
 let roundConstants = [|
  0x428a2f98l;0x71374491l;0xb5c0fbcfl;0xe9b5dba5l;0x3956c25bl;0x59f111f1l;0x923f82a4l;0xab1c5ed5l;
  0xd807aa98l;0x12835b01l;0x243185bel;0x550c7dc3l;0x72be5d74l;0x80deb1fel;0x9bdc06a7l;0xc19bf174l;
@@ -42,17 +42,4 @@ let sha256 bytes =
   for index = 0 to 7 do hash.(index) <- Int32.add hash.(index) state.(index) done
  done;
  Array.to_list hash |> List.map (Printf.sprintf "%08lx") |> String.concat ""
-let sha256Utf8 text =
- let units = HostText.utf16Units text in let buffer = Buffer.create (String.length text) in
- let byte value = Buffer.add_char buffer (Char.chr value) in
- let scalar code =
-  if code <= 0x7f then byte code
-  else if code <= 0x7ff then (byte (0xc0 lor (code lsr 6)); byte (0x80 lor (code land 0x3f)))
-  else if code <= 0xffff then (byte (0xe0 lor (code lsr 12)); byte (0x80 lor ((code lsr 6) land 0x3f)); byte (0x80 lor (code land 0x3f)))
-  else (byte (0xf0 lor (code lsr 18)); byte (0x80 lor ((code lsr 12) land 0x3f)); byte (0x80 lor ((code lsr 6) land 0x3f)); byte (0x80 lor (code land 0x3f))) in
- let rec encode index = if index < Array.length units then
-  let code = units.(index) in
-  if code >= 0xd800 && code <= 0xdbff && index + 1 < Array.length units && units.(index + 1) >= 0xdc00 && units.(index + 1) <= 0xdfff then
-   (scalar (0x10000 + ((code - 0xd800) lsl 10) + units.(index + 1) - 0xdc00); encode (index + 2))
-  else (scalar (if code >= 0xd800 && code <= 0xdfff then 0xfffd else code); encode (index + 1)) in
- encode 0; sha256 (Buffer.contents buffer)
+let sha256Utf8 text = sha256 (HostEncoding.utf8 text)

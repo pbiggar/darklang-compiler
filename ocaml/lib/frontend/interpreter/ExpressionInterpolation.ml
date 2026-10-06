@@ -1,4 +1,4 @@
-(* ExpressionInterpolation.ml - UTF-16 string scans and nested expression diagnostics. *)
+(* ExpressionInterpolation.ml - Unicode scalar string scans and nested expression diagnostics. *)
 [@@@warning "-4"]
 open Tokenizer
 open ParserSupport
@@ -17,7 +17,7 @@ let replaceDoubleBraces text =
 let parseInterpString (parseTokensAt : parseTokensAt) state index =
   let spanned = state.toks.(index) in
   let fullText = spanned.Lexer.text and basePos = spanned.Lexer.range.start in
-  let units = HostText.utf16Units fullText in
+  let units = HostText.scalars fullText in
   let length = Array.length units in
   let starts = RevBuffer.create () in
   RevBuffer.add starts 0;
@@ -34,7 +34,7 @@ let parseInterpString (parseTokensAt : parseTokensAt) state index =
     if !low = 0 then {row = basePos.row; column = basePos.column + column}
     else {row = basePos.row + !low; column} in
   let rangeAt first last = {start = posAt first; end_ = posAt last} in
-  let slice first last = HostText.ofUtf16Units (Array.sub units first (last - first)) in
+  let slice first last = HostText.ofScalars (Array.sub units first (last - first)) in
   let triple = length >= 4 && units.(1) = 34 && units.(2) = 34 && units.(3) = 34 in
   let dollar = rangeAt 0 1 in
   let bodyStart = if triple then 4 else 2 and closeLength = if triple then 3 else 1 in

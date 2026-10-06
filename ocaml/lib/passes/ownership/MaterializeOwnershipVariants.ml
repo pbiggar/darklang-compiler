@@ -39,7 +39,7 @@ let hirContracts plan (source : 'leaf VerifyOwnedHIR.hirContracts) =
    across processes, cultures, request order, and callee-local identities.
 *)
 let symbolSuffix identity =
- let field value = string_of_int (Array.length (HostText.utf16Units value)) ^ ":" ^ value in
+ let field value = string_of_int (String.length value) ^ ":" ^ value in
  let parameter = function O.UnmanagedCallParameter -> "u" | O.BorrowedCallParameter -> "b" | O.ConsumedCallParameter -> "c" | O.UniqueCallParameter -> "q" in
  let result = function O.UnmanagedCallResult -> "u" | O.BorrowedCallResult index -> "b" ^ string_of_int index | O.ProducedCallResult -> "p" | O.UniqueProducedCallResult -> "q" in
  let encoded = S.identityBoundaries identity |> List.map (fun (name, (signature : O.callSignature)) ->

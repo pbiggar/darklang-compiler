@@ -47,13 +47,13 @@ let args values=N.fromList values
 let resolveFunction (env:env) name=match tryFindFunctionId name env.symbols with Some id->id|None->Crash.crash ("Generated JSON function was not interned: "^name)
 let call (env:env) name values=Call (resolveFunction env name,args values)
 let listPush (env:env) elementType list value=TypeApp (resolveFunction env "Darklang.Stdlib.List.push",[checkedType elementType],args [list;value])
-let stableHash value=Array.fold_left (fun hash ch->Int64.mul (Int64.logxor hash (Int64.of_int ch)) 1099511628211L) 0xcbf29ce484222325L (HostText.utf16Units value)
+let stableHash value=String.fold_left (fun hash byte->Int64.mul (Int64.logxor hash (Int64.of_int (Char.code byte))) 1099511628211L) 0xcbf29ce484222325L value
 (* Generated plan names must distinguish structurally different types whose
    public spelling is intentionally flattened (notably nested tuples). Encode
    the union directly: F#'s default union formatting uses reflection, which is
    disproportionately expensive when the same primitive codecs are requested
    by many separate compilations. *)
-let textLength value=Array.length (HostText.utf16Units value)
+let textLength value=String.length value
 let rec structuralTypeKey typ=
  let encodeText tag value=tag^string_of_int (textLength value)^":"^value in
  let encodeTypes tag types=let encoded=List.map structuralTypeKey types |> List.map (fun value->string_of_int (textLength value)^":"^value) |> String.concat "" in tag^string_of_int (List.length types)^":"^encoded in

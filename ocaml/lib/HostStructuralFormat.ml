@@ -2,7 +2,7 @@
    Layout fitting follows FSharp.Core's sformat.fs implementation, blob
    e97978f46154b95fa87612bc655b54189cbd441d. Copyright (c) Microsoft Corporation.
    MIT license: ocaml/THIRD_PARTY_NOTICES.md. Reflection is replaced by typed
-   values; fitting, precedence, limits, UTF-16 widths, and raw quotes are retained. *)
+   values; fitting, precedence, limits, Unicode scalar widths, and raw quotes are retained. *)
 type value = StructuralValue.value = Scalar of string | Text of string | Union of string * value list | Sequence of value list | Array of value list | Tuple of value list | Record of (string * value) list
 (* A joint is unbreakable, breakable, or already broken at its indentation. *)
 type joint = Unbreakable | Breakable of int | Broken of int
@@ -37,7 +37,7 @@ let squash width layout =
  let breaks = {next = 0; outer = 0; stack = Array.make 400 0} in
  let rec fit pos = function
  | Leaf (_, text, _) as layout ->
-   let textWidth = Array.length (HostText.utf16Units text) in
+   let textWidth = HostText.length text in
    let rec fitLeaf pos = if pos + textWidth <= width then layout, pos + textWidth, textWidth else match forceBreak breaks with None -> layout, pos + textWidth, textWidth | Some saving -> fitLeaf (pos - saving) in fitLeaf pos
  | Node (left, right, joint) ->
    let mid = if middle left right then 0 else 1 in
@@ -56,7 +56,7 @@ let squash width layout =
  let layout, _, _ = fit 0 layout in layout
 let show layout =
  let output = Buffer.create 128 and column = ref 0 in
- let add text = Buffer.add_string output text; column := !column + Array.length (HostText.utf16Units text) in
+ let add text = Buffer.add_string output text; column := !column + HostText.length text in
  let rec visit indent = function
  | Leaf (_, text, _) -> add text
  | Node (left, right, Broken offset) -> visit indent left; Buffer.add_char output '\n'; Buffer.add_string output (String.make (indent + offset) ' '); column := indent + offset; visit (indent + offset) right

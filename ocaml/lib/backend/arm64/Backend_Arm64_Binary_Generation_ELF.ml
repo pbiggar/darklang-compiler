@@ -69,14 +69,7 @@ let serializeElf (binary:ELF.elfBinary)=
 let createFloatData (floatPool:LiteralPool.floatPool)=
  let bytes=Bytes.make (mul (Array.length floatPool.LiteralPool.floats) 8) '\000' in
  Array.iteri (fun index floatVal -> writeUInt64LittleEndian bytes (mul index 8) (Int64.bits_of_float floatVal)) floatPool.LiteralPool.floats;bytes
-let utf8Bytes str =
- let units=HostText.utf16Units str in let output=Buffer.create (Array.length units) in
- let rec loop index=if index<Array.length units then
- let value=units.(index) in
- if value>=0xd800 && value<=0xdbff && index+1<Array.length units && units.(index+1)>=0xdc00 && units.(index+1)<=0xdfff then
- (Uutf.Buffer.add_utf_8 output (Uchar.of_int (0x10000+((value-0xd800) lsl 10)+units.(index+1)-0xdc00));loop (index+2))
- else (Uutf.Buffer.add_utf_8 output (Uchar.of_int (if value>=0xd800 && value<=0xdfff then 0xfffd else value));loop (index+1)) in
- loop 0;Bytes.of_string (Buffer.contents output)
+let utf8Bytes = Bytes.of_string
 (*
    Create string data bytes from string pool
    Format: [refcount:8 bytes][length:8 bytes][data:N bytes][padding:P] for each string.

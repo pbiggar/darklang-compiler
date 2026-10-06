@@ -231,13 +231,13 @@ let defaultOptFlags : optFlags = {
   isolated = false;
 }
 
-let units = HostText.utf16Units
-let text = HostText.ofUtf16Units
+let units = HostText.scalars
+let text = HostText.ofScalars
 let length s = Array.length (units s)
 let slice s start count = text (Array.sub (units s) start count)
 let tail s start = slice s start (length s - start)
-let starts = HostText.startsWithCurrentCulture
-let ends = HostText.endsWithCurrentCulture
+let starts = HostText.startsWith
+let ends = HostText.endsWith
 let trim = HostText.trim
 let white u = Uchar.is_valid u && Uucp.White.is_white_space (Uchar.of_int u)
 let trimStart s =
@@ -319,7 +319,7 @@ let findCommentStartOutsideQuotes line =
 let expectationPrefixes = ["exit";"stdout";"stderr";"skip";"no_free_list";"disable_leak_check";"stdin";"exact_bytes";"error";"disable_opt_"]
 let isExpectationStart rest =
   let s=trimStart rest in let us=units s in
-  Array.length us>0 && (HostText.isDigitUnit us.(0) || List.mem us.(0) [45;34;39;40;91] || HostText.isLetterUnit us.(0) || List.exists (starts s) expectationPrefixes)
+  Array.length us>0 && (HostText.isDigit us.(0) || List.mem us.(0) [45;34;39;40;91] || HostText.isLetter us.(0) || List.exists (starts s) expectationPrefixes)
 let stripQuotedContent s =
   let us=units s in
   let rec loop i quoted rev = if i>=Array.length us then text (Array.of_list (List.rev rev))
@@ -357,7 +357,7 @@ let isIdentifierPathHead s =
   let s=trim s in if length s=0 then false else
   let us=units s in
   let rec finish i=if i=Array.length us || List.mem us.(i) [32;9;13;10] then i else finish (i+1) in
-  Array.for_all (fun u -> HostText.isLetterUnit u || HostText.isDigitUnit u || u=95 || u=46) (Array.sub us 0 (finish 0))
+  Array.for_all (fun u -> HostText.isLetter u || HostText.isDigit u || u=95 || u=46) (Array.sub us 0 (finish 0))
 let hasClosingParenTest s =
   let us=units s in
   let rec loop i quoted p b c = if i>=Array.length us then false

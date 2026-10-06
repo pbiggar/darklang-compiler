@@ -24,12 +24,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-host_collation.c adapts the forward, case-sensitive SimpleAffix collation-
-element algorithm from dotnet/runtime,
-src/native/libs/System.Globalization.Native/pal_collation.c (release/11.0).
-The source file used has SHA256 d2a12a800d4bf905ad61d47ace991d64438476161bb4f3f6017dfc37142c7c03.
-This adapter links to ICU directly; it has no .NET runtime dependency.
-
-Copyright (c) .NET Foundation and Contributors.
-Licensed under the MIT license reproduced above.
