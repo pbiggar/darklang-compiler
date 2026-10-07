@@ -133,18 +133,18 @@ identity data in `backend/src/LibExecution/RuntimeTypes.fs` around lines
 `packages/darklang/prettyPrinter/runtimeError.dark` around lines 232-242.
 
 Compiler enforcement and typed comparison plans live in
-`lib/frontend/TypeChecking.ml` (type errors at 47-121,
+`src/frontend/TypeChecking.ml` (type errors at 47-121,
 classification at 1172-1345, helper construction at 5231-5552, and helper
 materialization at 5553-5777). Specialization and structural lowering live in
-`lib/passes/anf/AST_to_ANF.ml` (plan materialization at 26-69 and
+`src/passes/anf/AST_to_ANF.ml` (plan materialization at 26-69 and
 closure identity and AOT layout selection at 2516-3204), with
-post-specialization orchestration in `lib/CompilerLibrary.ml` at
+post-specialization orchestration in `src/CompilerLibrary.ml` at
 832-920. Closure layout reaches
-native code through `lib/passes/mir/MIR_to_LIR.ml`.
+native code through `src/passes/mir/MIR_to_LIR.ml`.
 Semantic Dict equality is lowered in the type checker through the public
 String-keyed `Dict.toList` mapping view at
 `share/stdlib/Dict.dark:111-113`,
-using the layout and key helpers exposed from `lib/DarkStdlib.ml`.
+using the layout and key helpers exposed from `src/DarkStdlib.ml`.
 Float conditions and architecture-specific integer conditions remain in the
 shared MIR-to-LIR pass and the ARM64/x64 backends. Focused executable evidence
 is in `test/fixtures/e2e/comparison-parity.e2e`, alongside the existing

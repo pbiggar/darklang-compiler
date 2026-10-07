@@ -169,14 +169,14 @@ operands once, and produces `false` for `==` (`true` for `!=`).
 
 | File | Responsibility |
 |---|---|
-| `lib/frontend/interpreter/Parser.ml` | Canonical Dark declaration grammar, field shape, constructor reference syntax |
-| `lib/AST.ml` | Enum field shape, unresolved/resolved references, canonical runtime identity |
-| `lib/frontend/TypeChecking.ml` | Pure declaration validation, nominal resolution, generic/recursive typing, arity, equality |
-| `lib/frontend/ValueRendering.ml` | Public enum rendering |
-| `lib/passes/anf/AST_to_ANF.ml` | Resolved construction and once-only ordered payload evaluation |
-| `lib/backend/arm64/runtime/PrintValues.ml`, `lib/backend/x64/runtime/X64Printing.ml` | Native generated rendering support |
-| `lib/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 consumption of shared sum metadata |
-| `lib/backend/x64/CodeGen_X86_64.ml` | x64 consumption of shared sum metadata |
+| `src/frontend/interpreter/Parser.ml` | Canonical Dark declaration grammar, field shape, constructor reference syntax |
+| `src/AST.ml` | Enum field shape, unresolved/resolved references, canonical runtime identity |
+| `src/frontend/TypeChecking.ml` | Pure declaration validation, nominal resolution, generic/recursive typing, arity, equality |
+| `src/frontend/ValueRendering.ml` | Public enum rendering |
+| `src/passes/anf/AST_to_ANF.ml` | Resolved construction and once-only ordered payload evaluation |
+| `src/backend/arm64/runtime/PrintValues.ml`, `src/backend/x64/runtime/X64Printing.ml` | Native generated rendering support |
+| `src/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 consumption of shared sum metadata |
+| `src/backend/x64/CodeGen_X86_64.ml` | x64 consumption of shared sum metadata |
 
 ## Test matrix
 

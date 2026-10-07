@@ -14,7 +14,7 @@ The interpreter baseline is
 `backend/testfiles/execution/stdlib/html.dark` and `http.dark` at the same
 revision. The compiler implementation is in
 `share/stdlib/Html.dark`, `Http.dark`, and `HttpRequest.dark`, loaded
-after Blob by `lib/driver/StdlibCompilation.ml`.
+after Blob by `src/driver/StdlibCompilation.ml`.
 
 ## Compatibility matrix
 

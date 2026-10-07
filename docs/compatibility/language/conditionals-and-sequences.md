@@ -18,13 +18,13 @@ HEAD. Compiler history is reproducible with `git show <revision>:<path>`.
 ## Source map
 
 Compiler ownership is split between the canonical
-[parser](../../../lib/frontend/interpreter/Parser.ml),
-[source checker](../../../lib/frontend/WrittenChecking.ml), and
-[AST-to-ANF lowering](../../../lib/passes/anf/AST_to_ANF.ml). The ANF `If`
+[parser](../../../src/frontend/interpreter/Parser.ml),
+[source checker](../../../src/frontend/WrittenChecking.ml), and
+[AST-to-ANF lowering](../../../src/passes/anf/AST_to_ANF.ml). The ANF `If`
 is converted to a typed shared result register and CFG join in
-[ANF-to-MIR](../../../lib/passes/anf/ANF_to_MIR.ml). Runtime output support
-in [PrintValues.ml](../../../lib/backend/arm64/runtime/PrintValues.ml) and
-[X64Printing.ml](../../../lib/backend/x64/runtime/X64Printing.ml) makes selected results observable;
+[ANF-to-MIR](../../../src/passes/anf/ANF_to_MIR.ml). Runtime output support
+in [PrintValues.ml](../../../src/backend/arm64/runtime/PrintValues.ml) and
+[X64Printing.ml](../../../src/backend/x64/runtime/X64Printing.ml) makes selected results observable;
 focused failures use the existing compiler-generated runtime-error operation,
 whose callable contract is outside this work item.
 

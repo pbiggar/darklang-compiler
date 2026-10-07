@@ -15,7 +15,7 @@ The public contract was revalidated against these exact revisions:
 - historical compiler starting point:
   `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`, specifically
   `share/stdlib/Dict.dark`, `__HAMT.dark`, and
-  `lib/DarkStdlib.ml:150-166`
+  `src/DarkStdlib.ml:150-166`
 - DCB1 report `8a402797` was starting evidence only; retained findings were
   checked again against the current compiler and interpreter revisions above.
 
@@ -35,10 +35,10 @@ compiler implementation details.
 Current source evidence at the compiler comparison point is
 `share/stdlib/Dict.dark:9-216` for the public wrappers and ordered
 higher-order operations, `share/stdlib/__HAMT.dark:10-60` for the
-private generic storage boundary, `lib/frontend/interpreter/Parser.ml:2034-2035`
-for the empty value, `lib/frontend/checking/EqualityHelpers.ml`
-for content equality, `lib/frontend/ValueRendering.ml`
-for canonical rendering, and `lib/DarkStdlib.ml:145-166` for the raw
+private generic storage boundary, `src/frontend/interpreter/Parser.ml:2034-2035`
+for the empty value, `src/frontend/checking/EqualityHelpers.ml`
+for content equality, `src/frontend/ValueRendering.ml`
+for canonical rendering, and `src/DarkStdlib.ml:145-166` for the raw
 internal intrinsics. Interpreter evidence at the pinned revision is
 `packages/darklang/stdlib/dict.dark:4-127`,
 `backend/src/Builtins/Builtins.Pure/Libs/Dict.fs:18-306`, and
@@ -158,10 +158,10 @@ the concrete type-directed release plan, including collision payloads.
 
 The contract is anchored in:
 
-- `lib/DarkStdlib.ml` for native intrinsic registration
-- `lib/backend/arm64/runtime/` and `lib/backend/x64/runtime/` for native
+- `src/DarkStdlib.ml` for native intrinsic registration
+- `src/backend/arm64/runtime/` and `src/backend/x64/runtime/` for native
   allocation, output, and failure behavior
-- `lib/frontend/TypeChecking.ml` for public typing and equality
+- `src/frontend/TypeChecking.ml` for public typing and equality
 - `share/stdlib/Dict.dark` for the public module
 - `share/stdlib/__HAMT.dark` for private generic storage
 - `test/fixtures/e2e/dict_parity.e2e` and pinned upstream Dict/edict cases for the

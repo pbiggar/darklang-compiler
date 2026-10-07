@@ -4,7 +4,7 @@ open Dark_compiler
 module R=RepositoryTestFiles
 type testResult=(unit,string) result
 let (let*)=Result.bind
-let compilerSourceFiles ()=R.filesUnder "lib" ".ml"
+let compilerSourceFiles ()=R.filesUnder "src" ".ml"
 let testToolingSourceFiles ()=R.filesUnder "test/test-suite-tooling" ".ml"
 let findTextUsesIn needle sourceFiles=
  let* reversed=Array.fold_left (fun result path->let* accumulated=result in let* text=R.readFile path in Ok (if HostText.contains text needle then path::accumulated else accumulated)) (Ok []) (sourceFiles ()) in Ok (List.rev reversed)

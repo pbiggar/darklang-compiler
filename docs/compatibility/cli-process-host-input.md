@@ -100,7 +100,7 @@ Native interpreter behavior is in
 
 The compiler public wrappers are in the `share/stdlib/Cli*.dark`
 module files.
-The registry is `lib/DarkStdlib.ml`; typed lowering starts in
+The registry is `src/DarkStdlib.ml`; typed lowering starts in
 `passes/anf/AST_to_ANF.fs`, passes through `ir/anf/ANF.fs`, `ir/mir/MIR.fs`, and `ir/lir/LIR.fs`, and
 ends in both architecture code generators. Focused native evidence is
 `test/fixtures/e2e/cli_process_host_input.e2e`,

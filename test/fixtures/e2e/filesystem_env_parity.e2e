@@ -28,9 +28,9 @@ let root = Stdlib.Cli.Env.getOr "TMPDIR" "." in let path = $"{root}/dark-filesys
 
 let root = Stdlib.Cli.Env.getOr "TMPDIR" "." in let segment = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in let path = $"{root}/dark-filesystem-long-{Stdlib.Int.toString (Stdlib.Cli.Sys.currentPid ())}/{segment}/{segment}/{segment}/value" in Stdlib.Cli.FileSystem.writeFile path (Stdlib.Blob.fromString "long") = Ok (()) isolated=true
 
-Stdlib.Cli.FileSystem.isDirectoryAtPath "." "lib" = true
+Stdlib.Cli.FileSystem.isDirectoryAtPath "." "src" = true
 
-Stdlib.List.member (Stdlib.Cli.FileSystem.getDirectoryContents ".") "lib" = true
+Stdlib.List.member (Stdlib.Cli.FileSystem.getDirectoryContents ".") "src" = true
 
 Stdlib.Cli.Env.getOr "DARK_ENV_MISSING_VALUE" "fallback" = "fallback"
 

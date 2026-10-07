@@ -104,8 +104,8 @@ type CExpr =
 
 ## Code Generation
 
-From `lib/backend/arm64/Backend_Arm64_CodeGen.ml` and
-`lib/backend/x64/CodeGen_X86_64.ml`:
+From `src/backend/arm64/Backend_Arm64_CodeGen.ml` and
+`src/backend/x64/CodeGen_X86_64.ml`:
 
 1. **ClosureAlloc**: Allocates tuple on heap, stores function address and captures
 2. **ClosureCall**: Loads function pointer from closure[0], passes closure as hidden first arg
@@ -167,8 +167,8 @@ in add(10)(32)  // 42
 |------|---------|
 | `passes/preparation/ClosureAnalysis.fs` and `LiftFunctions.fs` | Lambda analysis and lifting |
 | `ir/anf/ANF.fs` | ClosureAlloc, ClosureCall, ClosureTailCall types |
-| `lib/backend/arm64/runtime/ARM64ClosureReferenceCounts.ml` | ARM64 closure lifetime helpers |
-| `lib/backend/x64/runtime/X64ClosureReferenceCounts.ml` | x64 closure lifetime helpers |
+| `src/backend/arm64/runtime/ARM64ClosureReferenceCounts.ml` | ARM64 closure lifetime helpers |
+| `src/backend/x64/runtime/X64ClosureReferenceCounts.ml` | x64 closure lifetime helpers |
 
 ## Tests
 

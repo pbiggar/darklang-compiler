@@ -81,7 +81,7 @@ and `X509.fs`; identity and rendering come from
 `packages/darklang/prettyPrinter/runtimeTypes.dark`. Pinned behavior fixtures
 are `packages/darklang/stdlib/*` plus `backend/tests/Tests/Blob.Tests.fs`.
 
-Compiler type/value registration is in `lib/AST.ml` and
+Compiler type/value registration is in `src/AST.ml` and
 `Stdlib.fs`. Name resolution and equality admission are in
 `frontend/TypeChecking.fs`; value lowering, structural equality, and Blob
 ownership flow through `passes/anf/AST_to_ANF.fs`, ANF/MIR/LIR, reference-count

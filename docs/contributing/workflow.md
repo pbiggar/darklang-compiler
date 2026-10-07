@@ -15,9 +15,9 @@ must preserve standalone executables and the selected target's ABI.
 
 For a new operator, update both the implementation and its `.mli` interface:
 
-1. Add the written syntax in `lib/frontend/interpreter/WrittenTypes` and
+1. Add the written syntax in `src/frontend/interpreter/WrittenTypes` and
    the parser's precedence/normalization handling.
-2. Add the semantic operation to `lib/AST` and resolve it at the written
+2. Add the semantic operation to `src/AST` and resolve it at the written
    and checked frontend boundaries.
 3. Update checked preparation, HIR and ANF lowering where the new operation
    needs a distinct representation or ownership behavior.
@@ -30,7 +30,7 @@ For a new operator, update both the implementation and its `.mli` interface:
 
 For a standard-library feature, add its Dark implementation to
 `share/stdlib/`, add the ordered source registration in
-`lib/driver/StdlibCompilation.ml`, and register the file in the share
+`src/driver/StdlibCompilation.ml`, and register the file in the share
 installation stanza. Public generic uses should rely on inference unless
 explicit type arguments are necessary.
 
@@ -41,7 +41,7 @@ verification gates in [verification.md](verification.md). Use another target
 only when the task explicitly includes it. Keep verbose artifacts under
 `TestResults/`; report bounded failure excerpts and their paths.
 
-Compiler source is in `lib/`, translated unit tests and tooling are in
+Compiler source is in `src/`, translated unit tests and tooling are in
 `test/`, and unchanged language/DSL fixtures remain in `test/fixtures/`.
 The retired F# compiler and its completed migration comparison harness are
 available in Git history. Native regression checks now run with `dune runtest`.

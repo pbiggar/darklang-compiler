@@ -275,7 +275,7 @@ Uses platform-specific random source:
 ## How Stdlib is Included
 
 1. **Compilation start**: Load intrinsic module signatures from
-   `lib/DarkStdlib.ml`
+   `src/DarkStdlib.ml`
    and the ordered Dark stdlib source files from `share/stdlib/`
 2. **Parse**: Parse stdlib definitions
 3. **Combine**: Merge with user program
@@ -288,9 +288,9 @@ Stdlib functions are only included if called (dead code elimination).
 
 | File | Purpose |
 |------|---------|
-| `lib/DarkStdlib.ml` | Intrinsic module definitions |
+| `src/DarkStdlib.ml` | Intrinsic module definitions |
 | `share/stdlib/*.dark` | Dark stdlib implementations |
-| `lib/CompilerLibrary.ml` | Stdlib loading logic |
+| `src/CompilerLibrary.ml` | Stdlib loading logic |
 
 ## Generic Function Monomorphization
 
@@ -305,6 +305,6 @@ Creates `Stdlib.List.map_i64_String` specialized function.
 ## Adding New Stdlib Functions
 
 1. **Dark function**: Add to the appropriate file in `share/stdlib/`
-2. **Intrinsic**: Add to `lib/DarkStdlib.ml` + implement in codegen
+2. **Intrinsic**: Add to `src/DarkStdlib.ml` + implement in codegen
 
 See `docs/contributing/workflow.md` for details.

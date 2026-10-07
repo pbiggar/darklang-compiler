@@ -11,9 +11,9 @@ Interpreter anchors are `packages/darklang/stdlib/stream.dark`,
 `backend/src/LibExecution/RuntimeTypes.fs`,
 `backend/src/LibExecution/Stream.fs`, and
 `backend/tests/Tests/Stream.Tests.fs` at the pinned revision. Compiler anchors
-are `share/stdlib/Stream.dark`, `lib/AST.ml`,
-`lib/frontend/TypeChecking.ml`,
-`lib/passes/anf/RefCountInsertion.ml`, and both
+are `share/stdlib/Stream.dark`, `src/AST.ml`,
+`src/frontend/TypeChecking.ml`,
+`src/passes/anf/RefCountInsertion.ml`, and both
 `backend/{arm64,x64}/CodeGen.fs`.
 
 ## Public operations

@@ -88,7 +88,7 @@ database. The compiler intentionally does not acquire that service: it has no
 content-addressed package traversal or ordinary top-level value initialization,
 as documented in `name-resolution.md:81-101`. Instead, each `CompileRequest`
 contains an explicit immutable `PackageValueCatalog` snapshot
-(`lib/driver/CompilationContexts.ml`). This catalog is compiler-only
+(`src/driver/CompilationContexts.ml`). This catalog is compiler-only
 machinery, not a new Dark-visible package model.
 
 The snapshot records value hash, recursive custom-type identity, branch-visible

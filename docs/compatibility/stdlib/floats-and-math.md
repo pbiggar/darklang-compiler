@@ -23,8 +23,8 @@ interpreter surface is anchored at
 
 The compiler implementation is in `share/stdlib/Float.dark` and
 `share/stdlib/Math.dark`. Public values continue to render through
-`lib/frontend/ValueRendering.ml` and
-`lib/passes/anf/PrintInsertion.ml`, both of which call the same
+`src/frontend/ValueRendering.ml` and
+`src/passes/anf/PrintInsertion.ml`, both of which call the same
 `Stdlib.Float.toString` implementation. Focused executable coverage is in
 `test/fixtures/e2e/stdlib/float.e2e` and `math.e2e`.
 

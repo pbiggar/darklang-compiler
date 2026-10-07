@@ -117,9 +117,9 @@ reuse work remain:
 
 | File | Purpose |
 |---|---|
-| `lib/backend/binary/LiteralPool.ml` | literal string pool |
-| `lib/ir/lir/LIR.ml` | string and dynamic-buffer RC instructions |
-| `lib/passes/anf/RefCountInsertion.ml` | string lifetime insertion |
-| `lib/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 string allocation and RC |
-| `lib/backend/x64/CodeGen_X86_64.ml` | x64 string allocation and RC |
+| `src/backend/binary/LiteralPool.ml` | literal string pool |
+| `src/ir/lir/LIR.ml` | string and dynamic-buffer RC instructions |
+| `src/passes/anf/RefCountInsertion.ml` | string lifetime insertion |
+| `src/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 string allocation and RC |
+| `src/backend/x64/CodeGen_X86_64.ml` | x64 string allocation and RC |
 | `share/stdlib/String.dark` | stdlib string functions |

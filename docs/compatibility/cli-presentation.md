@@ -66,7 +66,7 @@ functions do not add runtime type dispatch to imitate it.
 ## Native implementation anchors
 
 The typed intrinsic registry is
-`lib/DarkStdlib.ml:101-113`. Effect nodes begin at
+`src/DarkStdlib.ml:101-113`. Effect nodes begin at
 the ANF, MIR, and LIR definitions; intrinsic lowering lives in
 `passes/anf/lowering/Primitives.fs`. Both native implementations are under
 `backend/{arm64,x64}/instructions/`. They are separate from the final-result

@@ -22,7 +22,7 @@ control over the binary layout.
 
 ## Mach-O Format (macOS)
 
-Implemented for ARM64 in `lib/backend/arm64/Binary_Generation_MachO.ml`.
+Implemented for ARM64 in `src/backend/arm64/Binary_Generation_MachO.ml`.
 
 ### File Structure
 
@@ -83,8 +83,8 @@ The `-s -` flag performs ad-hoc signing (no certificate needed).
 
 ## ELF Format (Linux)
 
-Implemented for ARM64 in `lib/backend/arm64/Backend_Arm64_Binary_Generation_ELF.ml`
-and for x86-64 in `lib/backend/x64/Binary_Generation_ELF_X86_64.ml`.
+Implemented for ARM64 in `src/backend/arm64/Backend_Arm64_Binary_Generation_ELF.ml`
+and for x86-64 in `src/backend/x64/Binary_Generation_ELF_X86_64.ml`.
 
 ### File Structure
 
