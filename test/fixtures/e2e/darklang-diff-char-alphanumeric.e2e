@@ -1,0 +1,4 @@
+// Rune.IsLetterOrDigit accepts decimal digits, excluding other numeric categories.
+Stdlib.Char.isAlphanumeric '٧' = true
+Stdlib.Char.isAlphanumeric 'Ⅷ' = false
+Stdlib.Char.isAlphanumeric '²' = false

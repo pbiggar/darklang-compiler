@@ -1,0 +1,54 @@
+// Char.dark - native adapters for the interpreter Unicode character builtins.
+
+module Builtin
+
+let charToString (char: Char) : String = char
+
+let charToUppercase (char: Char) : Char =
+    Stdlib.Char.__asChar (Stdlib.String.__Unicode.uppercase (Stdlib.Char.toString char))
+
+let charToLowercase (char: Char) : Char =
+    Stdlib.Char.__asChar (Stdlib.String.__Unicode.lowercase (Stdlib.Char.toString char))
+
+let charIsLetter (char: Char) : Bool =
+    match Stdlib.Char.__firstCodepoint char with
+    | Some codepoint -> Stdlib.String.__Unicode.isLetter codepoint
+    | None -> false
+
+let charIsAlphanumeric (char: Char) : Bool =
+    match Stdlib.Char.__firstCodepoint char with
+    | Some codepoint ->
+        Stdlib.String.__Unicode.isLetter codepoint ||
+        Stdlib.String.__Unicode.generalCategory codepoint == Stdlib.String.__Unicode.__Data.GeneralCategory.Nd
+    | None -> false
+
+let charIsWhitespace (char: Char) : Bool =
+    match Stdlib.Char.__firstCodepoint char with
+    | Some codepoint -> Stdlib.String.__Unicode.isWhitespace codepoint
+    | None -> false
+
+let charToCodepoint (char: Char) : Stdlib.Option.Option<Int> =
+    match Stdlib.String.__toCodepoints (Stdlib.Char.toString char) with
+    | [codepoint] -> Some (Stdlib.Int.fromInt64 codepoint)
+    | _ -> None
+
+let charToAsciiCode (char: Char) : Stdlib.Option.Option<Int> =
+    match Stdlib.Char.__firstCodepoint char with
+    | Some codepoint ->
+        if codepoint >= 0L && codepoint <= 255L then Some (Stdlib.Int.fromInt64 codepoint) else None
+    | None -> None
+
+let charIsLessThan (left: Char) (right: Char) : Bool = Stdlib.Char.__compare left right < 0L
+
+let charIsLessThanOrEqualTo (left: Char) (right: Char) : Bool = Stdlib.Char.__compare left right <= 0L
+
+let charIsGreaterThan (left: Char) (right: Char) : Bool = Stdlib.Char.__compare left right > 0L
+
+let charIsGreaterThanOrEqualTo (left: Char) (right: Char) : Bool = Stdlib.Char.__compare left right >= 0L
+
+let charFromCodepoint (codepoint: Int) : Stdlib.Option.Option<Char> =
+    match Stdlib.Int.toInt64 codepoint with
+    | None -> None
+    | Some value ->
+        if Stdlib.String.__Unicode.isScalar value then Some (Stdlib.Char.__asChar (Stdlib.String.__fromCodepoints ([value])))
+        else None
