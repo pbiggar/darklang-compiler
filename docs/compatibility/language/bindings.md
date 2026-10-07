@@ -20,14 +20,14 @@ evidence only.
 | Public lambdas use unannotated `fun patterns -> body` | `bindings.syntax`; canonical parser probes | `backend/testfiles/execution/language/basic/elambda.dark`; `LibParser/Parser.fs:2044-2071` | Shared |
 | Parameter and return annotations belong to local function declarations | `bindings.syntax`; parser and program-structure tests | `LibParser/Parser.fs` local-function production | Shared |
 | The RHS is outside the new scope and runs before the continuation | `bindings.e2e` rebinding and use-before-binding probes | `LibParser/WrittenTypesToProgramTypes.fs:591-611` | Shared |
-| Duplicate usable names reject the complete let/lambda binder set; `_` names do not bind | duplicate rejection cases in `bindings.syntax`; validator at `AST.fs:213-249` | `LibParser/Validation.fs:81-150,201-216` | Shared |
-| Tuple destructuring commits atomically; mismatch skips the continuation | mismatch and evaluation-order cases in `bindings.e2e`; lowering in `passes/anf/lowering/Aggregates.fs` and `ExpressionLowering.fs` | `LibExecution/ProgramTypesToRuntimeTypes.fs:721-730`; `LibExecution/Interpreter.fs:1882-1898` | Shared |
+| Duplicate usable names reject the complete let/lambda binder set; `_` names do not bind | duplicate rejection cases in `bindings.syntax`; validator at `src/AST.ml:213-249` | `LibParser/Validation.fs:81-150,201-216` | Shared |
+| Tuple destructuring commits atomically; mismatch skips the continuation | mismatch and evaluation-order cases in `bindings.e2e`; lowering in `src/passes/anf/lowering/LoweringAggregates.ml` and `src/passes/anf/lowering/ExpressionLowering.ml` | `LibExecution/ProgramTypesToRuntimeTypes.fs:721-730`; `LibExecution/Interpreter.fs:1882-1898` | Shared |
 | Nearest binders shadow; closures capture the definition-time binding | rebinding and capture cases in `bindings.e2e`; `closures.e2e` | `elet.dark`, `elambda.dark`, and `earg.dark` | Shared |
 | Child-expression bindings do not escape conditions, arms, matches, lambdas, operands, calls, or sequences | scope-isolation cases in `bindings.e2e`; resolver and ANF scope tests | interpreter name binding and evaluator expression frames | Shared |
-| Match-only literal, constructor, list, and record patterns are rejected in bindings | rejection cases in `bindings.syntax` | `Parser.fs:1305-1355` | Shared |
+| Match-only literal, constructor, list, and record patterns are rejected in bindings | rejection cases in `bindings.syntax` | `src/frontend/interpreter/Parser.ml:1305-1355` | Shared |
 
 The representation is one non-recursive `Let` node containing a restricted
-`LetPattern`, RHS, and continuation (`AST.fs:168-181,277`). Lambda parameters
+`LetPattern`, RHS, and continuation (`src/AST.ml:168-181,277`). Lambda parameters
 use the same pattern language. Parsed parameter annotations, inferred types,
 and the optional local-function return annotation remain distinct. Match keeps
 its more expressive `Pattern` type.

@@ -93,7 +93,7 @@ machinery, not a new Dark-visible package model.
 
 The snapshot records value hash, recursive custom-type identity, branch-visible
 locations in their already-prioritized order, and typed evaluator state. During
-compilation, the bridge in `driver/PackageCatalog.fs` discovers reachable
+compilation, the bridge in `src/driver/PackageCatalog.ml` discovers reachable
 `ValueSearch` specializations, retains only entries for their concrete result
 types, and materializes the narrow `pmFindValuesByValueType`,
 `pmGetLocationsByValue`, and concrete `pmEvaluateValue<'a>` functions. The

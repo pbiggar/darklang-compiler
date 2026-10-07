@@ -43,6 +43,7 @@ current.
 ./run-tests --ai --filter=List.map # Filter by test name fragment
 ./run-tests --help               # All options
 dune runtest                    # Native text, cache and component regression checks
+python3 scripts/format-ocaml.py --check # Inspect standard OCaml formatting
 ```
 
 Tests follow the selected development target. With no `--target`, the suite

@@ -30,8 +30,8 @@ For a new operator, update both the implementation and its `.mli` interface:
 
 For a standard-library feature, add its Dark implementation to
 `stdlib/`, add the ordered source registration in
-`src/driver/StdlibCompilation.ml`, and register the file in the share
-installation stanza. Public generic uses should rely on inference unless
+`src/driver/StdlibCompilation.ml`, and regenerate the embedded source registry with
+`scripts/embed-stdlib.py`. Public generic uses should rely on inference unless
 explicit type arguments are necessary.
 
 ## Validate the final change

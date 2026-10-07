@@ -8,22 +8,8 @@
 [Oo]bj/
 [Ll]og/
 
-# Visual Studio / Rider
-.vs/
-.idea/
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
-
-# .NET
-project.lock.json
-project.fragment.lock.json
-artifacts/
-
 # Test results
 TestResults/
-*.trx
 *.coverage
 mutation/results/checkpoint.txt
 mutation/results/mutation_sites.txt
@@ -33,8 +19,6 @@ mutation/results/results.csv
 
 # Output files
 *.exe
-*.dll
-*.pdb
 
 # MacOS
 .DS_Store
@@ -78,3 +62,6 @@ scripts/.unicode_cache/
 # Native Dune build and local opam switch
 /_build/
 /_opam/
+
+# Interrupted mutation backups (restored automatically on exit)
+*.mutation_backup

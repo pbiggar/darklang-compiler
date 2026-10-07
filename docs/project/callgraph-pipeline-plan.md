@@ -40,9 +40,9 @@ the compiler attempts to establish.
 
 ## Current state and problem
 
-`driver/ANFPipeline.fs` runs program-level ANF optimization, inlining,
+`src/driver/ANFPipeline.ml` runs program-level ANF optimization, inlining,
 specialization, escape analysis, and reference-count insertion. Then
-`driver/NativePipeline.fs` advances each `lowerToAllocatedLir` function list
+`src/driver/NativePipeline.ml` advances each `lowerToAllocatedLir` function list
 through ANF-to-MIR, per-function MIR optimization, MIR-to-LIR, LIR optimization,
 and allocation. Stdlib, specializations, dependencies, program functions, and
 `_start` can enter through separate calls. The list boundary therefore controls

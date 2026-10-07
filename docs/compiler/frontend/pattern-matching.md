@@ -11,37 +11,39 @@ variable bindings.
 
 ## Pattern Types
 
-Defined in `AST.fs`:
+Defined in `src/AST.ml`:
 
-```fsharp
-type Pattern =
-    | PUnit
-    | PWildcard
-    | PVar of string
-    | PConstructor of variantName:string * fields:Pattern list
-    | PInt64 of int64
-    | PInt128Literal of System.Int128
-    | PInt8Literal of sbyte
-    | PInt16Literal of int16
-    | PInt32Literal of int32
-    | PUInt8Literal of byte
-    | PUInt16Literal of uint16
-    | PUInt32Literal of uint32
-    | PUInt64Literal of uint64
-    | PUInt128Literal of System.UInt128
-    | PBool of bool
-    | PString of string
-    | PChar of string
-    | PFloat of float
-    | PTuple of Pattern list
-    | PList of Pattern list
-    | PListCons of head:Pattern list * tail:Pattern
-    | POr of Pattern NonEmptyList
+```ocaml
+type pattern =
+  | PUnit
+  | PWildcard
+  | PVar of string
+  | PConstructor of string * pattern list
+  | PResolvedConstructor of string * string * int * pattern list
+  | PInt64 of int64
+  | PBigInt of Z.t
+  | PInt128Literal of Z.t
+  | PInt8Literal of int
+  | PInt16Literal of int
+  | PInt32Literal of int32
+  | PUInt8Literal of int
+  | PUInt16Literal of int
+  | PUInt32Literal of int64
+  | PUInt64Literal of int64
+  | PUInt128Literal of Z.t
+  | PBool of bool
+  | PString of string
+  | PChar of string
+  | PFloat of float
+  | PTuple of pattern list
+  | PList of pattern list
+  | PListCons of pattern list * pattern
+  | POr of pattern nonEmptyList
 ```
 
 ## Match Compilation
 
-Implemented in `passes/anf/lowering/PatternLowering.fs`.
+Implemented in `src/passes/anf/lowering/PatternLowering.ml`.
 
 ### Algorithm
 
@@ -153,14 +155,14 @@ because its guard may be false. Any match that cannot be proved exhaustive is
 rejected with `Non-exhaustive match expression` before ANF lowering; the
 runtime non-exhaustive fallback is therefore unreachable for valid programs.
 
-Irrefutable patterns remain the base case for the coverage proof:
+Unit, wildcard and variable patterns are the direct irrefutable base cases.
+Structural tuple and constructor coverage is proved by the surrounding pattern
+analysis:
 
-```fsharp
-let rec patternAlwaysMatches (pattern: AST.Pattern) : bool =
-    match pattern with
-    | PWildcard | PVar _ -> true
-    | PTuple patterns -> List.forall patternAlwaysMatches patterns
-    | _ -> false
+```ocaml
+let patternAlwaysMatches = function
+  | CheckedAST.PUnit | CheckedAST.PWildcard | CheckedAST.PVariable _ -> true
+  | _ -> false
 ```
 
 ## Guard Clauses
@@ -197,9 +199,9 @@ alternatives with failed-binding rollback),
 `backend/src/LibExecution/ProgramTypesToRuntimeTypes.fs:1009` (pattern then
 guard then body decision order), and `backend/src/LibExecution/Interpreter.fs:1961`
 plus `packages/darklang/prettyPrinter/runtimeError.dark:253` (observable
-non-exhaustive failure). Current compiler anchors are `AST.fs`,
-`frontend/interpreter/Parser.fs`, `frontend/checking/CheckMatches.fs`, and
-`passes/anf/lowering/PatternLowering.fs`.
+non-exhaustive failure). Current compiler anchors are `src/AST.ml`,
+`src/frontend/interpreter/Parser.ml`, `src/frontend/checking/CheckMatches.ml`, and
+`src/passes/anf/lowering/PatternLowering.ml`.
 
 The public grammar accepts unit, literal, variable, wildcard, parenthesized or
 bare tuple, exact list, cons, constructor, nested, guarded, and recursive
@@ -334,8 +336,8 @@ match c with
 
 | File | Purpose |
 |------|---------|
-| `AST.fs` | Pattern type definitions |
-| `passes/anf/lowering/PatternLowering.fs` | Match compilation, exhaustiveness, and binding extraction |
+| `src/AST.ml` | Pattern type definitions |
+| `src/passes/anf/lowering/PatternLowering.ml` | Match compilation, exhaustiveness, and binding extraction |
 
 ## Tests
 

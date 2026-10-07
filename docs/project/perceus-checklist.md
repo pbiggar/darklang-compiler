@@ -10,7 +10,7 @@ representation and safety boundaries are documented in
   variant from the ownership facts at a call site, treat mutually recursive
   functions as one group, and retain the established call when no variant
   applies. Implemented in
-  [SelectOwnershipVariants](../../src/DarkCompiler/passes/ownership/SelectOwnershipVariants.fs)
+  [SelectOwnershipVariants](../../src/passes/ownership/SelectOwnershipVariants.ml)
   with canonical structural identities and ownership-contract tests. Full host
   tests and the parent-relative benchmark gate pass; production scheduling is
   a later slice.
@@ -19,7 +19,7 @@ representation and safety boundaries are documented in
   selected external calls and internal recursive calls consistently. Reject
   incomplete groups and conflicting contracts; return an explicit plan for
   later scheduling and caching. Implementation:
-  [MaterializeOwnershipVariants](../../src/DarkCompiler/passes/ownership/MaterializeOwnershipVariants.fs).
+  [MaterializeOwnershipVariants](../../src/passes/ownership/MaterializeOwnershipVariants.ml).
   The pass verifies both original and materialized programs. Full host tests
   and the parent-relative benchmark gate pass; production scheduling remains a
   later slice.
@@ -34,16 +34,16 @@ representation and safety boundaries are documented in
   ownership-transferring results, and insert duplication and cleanup. Preserve
   compile-time validation, generated result printing, and observable evaluation
   order. Implemented by
-  [AnalyzeFunctionOwnership](../../src/DarkCompiler/passes/ownership/AnalyzeFunctionOwnership.fs)
+  [AnalyzeFunctionOwnership](../../src/passes/ownership/AnalyzeFunctionOwnership.ml)
   and
-  [ElaborateFunctionOwnership](../../src/DarkCompiler/passes/ownership/ElaborateFunctionOwnership.fs);
+  [ElaborateFunctionOwnership](../../src/passes/ownership/ElaborateFunctionOwnership.ml);
   the verified artifact is deliberately discarded before existing ANF lowering,
   so this scheduling slice has no runtime effect.
 - [x] **Schedule specialization across functions.** Connect analysis,
   selection, and materialization; propagate uniqueness information until the
   process stabilizes. Bound generated code and compilation work, and cache
   specializations by their bodies, contracts, and dependencies. Implemented by
-  [ScheduleOwnershipVariants](../../src/DarkCompiler/passes/ownership/ScheduleOwnershipVariants.fs),
+  [ScheduleOwnershipVariants](../../src/passes/ownership/ScheduleOwnershipVariants.ml),
   which is invoked by production whole-function analysis and returns the
   materialization, iteration history, and structural cache descriptors.
   Candidate proof is demand-driven from verified call-site facts: uncalled

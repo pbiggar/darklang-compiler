@@ -38,10 +38,10 @@ Each IR is designed to make specific transformations easier:
 ### Written and checked ASTs
 
 - The copied interpreter parser produces `WrittenTypes`. Validation runs on
-  that source representation before `WrittenChecking.fs` resolves names and
+  that source representation before `src/frontend/WrittenChecking.ml` resolves names and
   types directly into `CheckedAST.Program`.
 - Successful checking constructs the distinct recursive nodes in
-  `CheckedAST.fs`. Required lambda types, typed recursion evidence, canonical
+  `src/CheckedAST.ml`. Required lambda types, typed recursion evidence, canonical
   nominal references, and checked value definitions are structural there,
   rather than optional phase flags.
 - Compiler preparation and ANF lowering accept only `CheckedAST.Program`.
@@ -59,7 +59,7 @@ boundary, storage contract, and remaining general HIR migration.
   - **Monomorphization**: Generate specialized code for each generic instantiation
   - **Lambda lifting**: Convert closures to top-level functions
   - **Reference count insertion**: Add memory management operations
-- Types defined in `ir/anf/ANF.fs`
+- Types defined in `src/ir/anf/ANF.ml`
 
 ### MIR (Mid-level IR)
 
@@ -67,20 +67,20 @@ boundary, storage contract, and remaining general HIR migration.
 - Basic blocks with explicit jumps
 - Platform-independent
 - SSA form for optimizations
-- Types defined in `ir/mir/MIR.fs`
+- Types defined in `src/ir/mir/MIR.ml`
 
 ### LIR (Low-level IR)
 
 - Close to machine instructions but still target-independent
 - Virtual registers (unlimited)
 - Calling convention handling (via `Platform.Arch`)
-- Types defined in `ir/lir/LIR.fs`
+- Types defined in `src/ir/lir/LIR.ml`
 
 ## Memory Management
 
 Uses reference counting (not tracing GC):
 
-1. `SSARefCountInsertion.fs` inserts inc/dec operations in high-level SSA
+1. `src/passes/anf/ownership/RcSSARefCountInsertion.ml` inserts inc/dec operations in high-level SSA
 2. Runtime functions handle actual ref counting
 3. Borrowed calling convention: callers retain ownership
 
@@ -100,9 +100,9 @@ Why ref counting?
 
 - ARM64 (macOS and Linux) and x86_64 (Linux).
 - Direct binary generation — no external assembler or linker:
-  - `backend/arm64/Binary_Generation_MachO.fs` — ARM64 macOS
-  - `backend/arm64/Binary_Generation_ELF.fs`   — ARM64 Linux
-  - `backend/x64/Binary_Generation_ELF.fs`     — x86_64 Linux
+  - `src/backend/arm64/Binary_Generation_MachO.ml` — ARM64 macOS
+  - `src/backend/arm64/Backend_Arm64_Binary_Generation_ELF.ml`   — ARM64 Linux
+  - `src/backend/x64/Binary_Generation_ELF_X86_64.ml`     — x86_64 Linux
 - The host OS/architecture pair is validated once as a `Platform.Target`
   before stdlib construction. Register allocation, backend selection, runtime
   generation, and binary emission receive that target explicitly.

@@ -64,6 +64,10 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
 
 ## OCaml conventions
 
+- The root `.ocamlformat` pins the standard default profile used for the
+  post-port cleanup. To repeat that formatting pass, run
+  `python3 scripts/format-ocaml.py`; use `--check` to inspect without editing.
+
 - Preserve functional compiler algorithms and explicit interfaces. Localized
   parser, cache and host-I/O mutation is permitted. Do not use partial
   lookup helpers; host adapters may preserve caught host-API exceptions.
@@ -111,6 +115,8 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
 - Do not run x64 tests on an ARM64 host unless explicitly testing x64 work.
   Likewise, do not run ARM64 tests on an x64 host unless explicitly testing
   ARM64 work.
+- Run `dune runtest` for native regression and tooling checks as well; the
+  complete host suite does not execute these aliases.
 - Fix compiler warnings and errors before committing.
 - Validate performance against the task branch's parent with
   `./benchmarks/run_benchmarks.sh --verify-parent full`. This performs the full

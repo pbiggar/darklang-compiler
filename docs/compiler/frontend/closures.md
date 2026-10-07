@@ -38,13 +38,13 @@ omitted when the function type is never compared.
 
 ## Lambda Lifting Algorithm
 
-Implemented in `AST_to_ANF.fs`:
+Free-variable analysis is implemented in
+`src/passes/preparation/ClosureAnalysis.ml`:
 
 ### Phase 1: Free Variable Collection
 
-```fsharp
-// freeVars collects variables used but not bound in scope
-let rec freeVars (expr: CheckedAST.Expr) (bound: Set<string>) : Set<string>
+```ocaml
+val freeVars : CheckedAST.expr -> BindingSet.t -> BindingSet.t
 ```
 
 Walk the expression tree, tracking bound variables. A variable is free if it's
@@ -93,13 +93,13 @@ in f(5)
 
 ## ANF Representation
 
-From `ir/anf/ANF.fs`:
+From `src/ir/anf/ANF.ml`:
 
-```fsharp
-type CExpr =
-    | ClosureAlloc of funcName:string * captures:Atom list
-    | ClosureCall of closure:Atom * args:Atom list
-    | ClosureTailCall of closure:Atom * args:Atom list
+```ocaml
+(* Excerpt of ANF.cexpr. *)
+| ClosureAlloc of AST.functionId * atom list
+| ClosureCall of atom * atom list
+| ClosureTailCall of atom * atom list
 ```
 
 ## Code Generation
@@ -165,8 +165,8 @@ in add(10)(32)  // 42
 
 | File | Purpose |
 |------|---------|
-| `passes/preparation/ClosureAnalysis.fs` and `LiftFunctions.fs` | Lambda analysis and lifting |
-| `ir/anf/ANF.fs` | ClosureAlloc, ClosureCall, ClosureTailCall types |
+| `src/passes/preparation/ClosureAnalysis.ml` and `src/passes/preparation/LiftFunctions.ml` | Lambda analysis and lifting |
+| `src/ir/anf/ANF.ml` | ClosureAlloc, ClosureCall, ClosureTailCall types |
 | `src/backend/arm64/runtime/ARM64ClosureReferenceCounts.ml` | ARM64 closure lifetime helpers |
 | `src/backend/x64/runtime/X64ClosureReferenceCounts.ml` | x64 closure lifetime helpers |
 

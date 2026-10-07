@@ -36,7 +36,7 @@ recover semantic declarations for layout and alias registries. Checker
 constructor lookup metadata and ANF/MIR still carry `SemanticType`;
 representation and ABI classification remain separate work.
 
-Before ANF, `ir/hir/HIR.fs` supplies typed value identities and structured
+Before ANF, `src/ir/hir/HIR.ml` supplies typed value identities and structured
 control flow shared by semantic leaf dialects. Primitive contracts expose
 ordered inputs and operands, execution effects, and result alias provenance.
 Block parameters retain both declaration order and source names, so function
@@ -54,12 +54,12 @@ contracts name normalized value inputs, classify unmanaged outputs as
 `NoManagedAlias`, and mark integer division and modulo as potentially failing.
 Managed and call-lowered operations, including string concatenation,
 arbitrary-precision arithmetic, power, and structural equality, remain opaque.
-`passes/hir/VerifyHIR.fs` independently checks definitions, uses, types,
+`src/passes/hir/VerifyHIR.ml` independently checks definitions, uses, types,
 branch results, and alias sources.
-`ir/owned/OwnedIR.fs` supplies ownership-bearing blocks, ordered
+`src/ir/owned/OwnedIR.ml` supplies ownership-bearing blocks, ordered
 `Evaluate`/`Dup`/`Drop` steps, borrow/consume/produce contracts, and managed
 block arguments, checked independently by
-`passes/ownership/VerifyOwnership.fs`. Representation-independent liveness and
+`src/passes/ownership/VerifyOwnership.ml`. Representation-independent liveness and
 destruction proofs live in `analysis/`. The list dialect uses these interfaces
 for closed collection regions, storage selection, and branch-aware ownership.
 Opaque operands still contain checked AST evaluation payloads, but their local
@@ -216,56 +216,55 @@ MIR provides a clean three-address representation:
 
 ### Key Types
 
-```fsharp
-type VReg = VReg of int  // Virtual register
+```ocaml
+type vReg = VReg of int
 
-type Operand =
-    | IntConst of int64
-    | BoolConst of bool
-    | FloatSymbol of float  // Float value (resolved to pool later)
-    | StringSymbol of string // String value (resolved to pool later)
-    | Register of VReg
-    | FuncAddr of AST.FunctionId // Function address
+type operand =
+ | Int64Const of int64
+ | BoolConst of bool
+ | FloatSymbol of float
+ | StringSymbol of string
+ | Register of vReg
+ | FuncAddr of AST.functionId
 
-type Instr =
-    | Mov of dest:VReg * src:Operand
-    | BinOp of dest:VReg * op:BinOp * left:Operand * right:Operand
-    | Call of dest:VReg * funcName:string * args:Operand list
-    | HeapAlloc of dest:VReg * sizeBytes:int
-    | HeapStore of addr:VReg * offset:int * src:Operand
-    | HeapLoad of dest:VReg * addr:VReg * offset:int
-    // ... more instructions
+(* Selected constructors of MIR.instr. *)
+type instr =
+ | Mov of vReg * operand * AST.semanticType option
+ | BinOp of vReg * binOp * operand * operand * AST.semanticType
+ | UnaryOp of vReg * unaryOp * operand
+ | Call of vReg * AST.functionId * operand list * AST.semanticType list * AST.semanticType
+ | TailCall of AST.functionId * operand list * AST.semanticType list * AST.semanticType
+ | IndirectCall of vReg * operand * operand list * AST.semanticType list * AST.semanticType
+ | IndirectTailCall of operand * operand list * AST.semanticType list * AST.semanticType
+ | ClosureAlloc of vReg * AST.functionId * operand list
+ | ClosureCall of vReg * operand * operand list * AST.semanticType list * AST.semanticType
+ | ClosureTailCall of operand * operand list * AST.semanticType list
+ | HeapAlloc of vReg * int
+ | HeapStore of vReg * int * operand * AST.semanticType option
 ```
 
 ### Basic Blocks
 
 MIR organizes code into basic blocks:
 
-```fsharp
-type BasicBlock = {
-    Label: Label
-    Instructions: Instr list
-    Terminator: Terminator
-}
+```ocaml
+type basicBlock = {label : label; instrs : instr list; terminator : terminator}
 
-type Terminator =
-    | Ret of Operand
-    | Jump of Label
-    | Branch of cond:VReg * thenLabel:Label * elseLabel:Label
+type terminator =
+ | Ret of operand
+ | Branch of operand * label * label
+ | Jump of label
 ```
 
 ### CFG Structure
 
-```fsharp
-type CFG = {
-    Entry: Label
-    Blocks: Map<Label, BasicBlock>
-}
+```ocaml
+type cfg = {entry : label; blocks : basicBlock LabelMap.t}
 ```
 
 ### ANF to MIR Transformation
 
-Key transformations in `ANF_to_MIR.fs`:
+Key transformations in `src/passes/anf/ANF_to_MIR.ml`:
 
 1. **Let bindings** → MIR instructions
 2. **If expressions** → Branch + multiple blocks
@@ -310,22 +309,27 @@ LIR prepares code for architecture-specific lowering:
 
 ### Key Types
 
-```fsharp
-type PhysReg = X0 | X1 | ... | X30 | SP
-type PhysFPReg = D0 | D1 | ... | D15
+```ocaml
+type physReg =    | X0 | X1 | X2 | X3 | X4 | X5 | X6 | X7 | X8 | X9
+    | X10 | X11 | X12 | X13 | X14 | X15 | X16 | X17
+    | X19 | X20 | X21 | X22 | X23 | X24 | X25 | X26 | X27
+    | X29
+    | X30
+    | SP
 
-type Reg =
-    | Physical of PhysReg
+type physFPReg =    | D0 | D1 | D2 | D3 | D4 | D5 | D6 | D7
+    | D8 | D9 | D10 | D11 | D12 | D13 | D14 | D15
+
+type reg =    | Physical of physReg
     | Virtual of int
 
-type Operand =
-    | Imm of int64
+type operand =    | Imm of int64
     | FloatImm of float
-    | Reg of Reg
+    | Reg of reg
     | StackSlot of int
     | StringSymbol of string
     | FloatSymbol of float
-    | FuncAddr of string
+    | FuncAddr of AST.functionId
 ```
 
 ### Instructions
@@ -333,26 +337,27 @@ type Operand =
 LIR instructions are close to machine code, but remain target-neutral enough
 for both ARM64 and x86_64 code generators:
 
-```fsharp
-type Instr =
-    | Mov of dest:Reg * src:Operand
-    | Phi of dest:Reg * sources:(Operand * Label) list * valueType:AST.SemanticType option
-    | Add of dest:Reg * left:Reg * right:Operand
-    | Sub of dest:Reg * left:Reg * right:Operand
-    | Mul of dest:Reg * left:Reg * right:Reg
-    | Cmp of left:Reg * right:Operand
-    | Cset of dest:Reg * cond:Condition
-    | Call of dest:Reg * funcName:string * args:Operand list
-    // Floating-point
-    | FPhi of dest:FReg * sources:(FReg * Label) list
-    | FAdd of dest:FReg * left:FReg * right:FReg
-    | FLoad of dest:FReg * floatValue:float
-    // ...
+```ocaml
+(* Selected constructors of LIR.instr. *)
+type instr =    | Mov of reg * operand
+    | Phi of reg * (operand * label) list * AST.semanticType option
+    | Store of int * reg
+    | Add of reg * reg * operand
+    | Sub of reg * reg * operand
+    | Mul of reg * reg * reg
+    | Sdiv of reg * reg * reg
+    | Udiv of reg * reg * reg
+    | Msub of reg * reg * reg * reg
+    | Madd of reg * reg * reg * reg
+    | Cmp of reg * operand
+    | Cset of reg * condition
+    | Select of reg * reg * reg * condition
+    | And of reg * reg * reg
 ```
 
 ### MIR to LIR Transformation
 
-Key transformations in `MIR_to_LIR.fs`:
+Key transformations in `src/passes/mir/MIR_to_LIR.ml`:
 
 1. **Operand constraints**: operations that require registers get explicit
    register operands before code generation
@@ -382,34 +387,28 @@ Key differences from older indexed LIR:
 
 ## Constant Pools
 
-Literal pools are defined in `backend/binary/LiteralPool.fs` and built during
-ARM64 resolution (`backend/arm64/Resolve.fs`) and x64 string resolution
-(`backend/x64/Resolve.fs`). Entries are dense arrays in first-use order, frozen
+Literal pools are defined in `src/backend/binary/LiteralPool.ml` and built during
+ARM64 resolution (`src/backend/arm64/ARM64_Resolve.ml`) and x64 string resolution
+(`src/backend/x64/X86_64_Resolve.ml`). Entries are dense arrays in first-use order, frozen
 once after deduplication. Reverse indexes map values to their array indices;
 float deduplication uses exact bits, preserving signed zero and NaN payloads.
 
 ### String Pool
-```fsharp
-type StringPool = {
-    Strings: (string * int) array   // index → (value, UTF-8 byte length)
-    StringToId: Map<string, int>      // value → index
-}
+```ocaml
+type stringPool = {strings : (string * int) array; stringToId : int StringOrder.Map.t}
 ```
 
 ### Float Pool
-```fsharp
-type FloatPool = {
-    Floats: float array
-    FloatBitsToId: Map<int64, int>
-}
+```ocaml
+type floatPool = {floats : float array; floatBitsToId : int FloatBitsMap.t}
 ```
 
 ## CFG Optimizations
 
 ### SSA Construction (Pass 3)
-`SSAANF.fs` converts final optimized ANF into explicit blocks. Repeated ANF
+`src/ir/anf/SSAANF.ml` converts final optimized ANF into explicit blocks. Repeated ANF
 temporaries receive fresh value IDs, and joins carry typed block arguments.
-`ANF_to_MIR.fs` lowers those arguments directly to MIR phis. Frozen program-wide
+`src/passes/anf/ANF_to_MIR.ml` lowers those arguments directly to MIR phis. Frozen program-wide
 `ANF.TypeMap` metadata uses a dense array with an ID offset and absent slots for
 gaps. MIR lowering shares this table directly. Branch-local type recovery keeps
 persistent environments so independently traversed branches retain their types.
@@ -441,13 +440,13 @@ according to the backend's calling convention and reserved-register rules.
 
 | File | Purpose |
 |------|---------|
-| `ir/mir/MIR.fs` | MIR types |
-| `ir/lir/LIR.fs` | LIR types |
-| `ANF_to_MIR.fs` | ANF → MIR |
-| `MIR_to_LIR.fs` | MIR → LIR |
-| `SSA_Construction.fs` | SSA form |
-| `MIR_Optimize.fs` | MIR optimizations |
-| `RegisterAllocation.fs` | Register allocation and phi resolution |
+| `src/ir/mir/MIR.ml` | MIR types |
+| `src/ir/lir/LIR.ml` | LIR types |
+| `src/passes/anf/ANF_to_MIR.ml` | ANF → MIR |
+| `src/passes/mir/MIR_to_LIR.ml` | MIR → LIR |
+| `src/passes/mir/SSA_Construction.ml` | SSA form |
+| `src/passes/mir/MIR_Optimize.ml` | MIR optimizations |
+| `src/passes/lir/RegisterAllocation.ml` | Register allocation and phi resolution |
 
 ## Example Pipeline
 

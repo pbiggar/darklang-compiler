@@ -31,6 +31,10 @@ jobs:
           name: Build (debug)
           command: docker exec dark-ci ./build --ai
       - run:
+          name: Run native regression checks
+          command: docker exec dark-ci dune runtest
+          no_output_timeout: 15m
+      - run:
           name: Run test suite
           command: docker exec dark-ci ./run-tests --ai
           no_output_timeout: 15m
