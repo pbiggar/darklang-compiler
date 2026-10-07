@@ -1,0 +1,4 @@
+// differential-testing-found.e2e - Minimized language regressions discovered by differential testing.
+
+// A string comparison used twice as a condition must retain its value.
+let test6 = "" != (let test5 = if true then "" else if true then "" else "" in test5 ++ "a") in (if test6 then 0L else -1L) + (if test6 then 0L else -39L) = 0L

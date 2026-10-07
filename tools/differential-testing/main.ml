@@ -1,4 +1,4 @@
-(* main.ml - Seeded fuzz campaigns, replay, and deterministic reduction. *)
+(* main.ml - Seeded differential testing campaigns, replay, and deterministic reduction. *)
 open Dark_compiler
 
 let write path source =
@@ -12,7 +12,7 @@ let main () =
   and depth = ref 6
   and timeout = ref 2000
   and limit = ref None in
-  let artifacts = ref "fuzz-results"
+  let artifacts = ref "differential-test-results"
   and interpreter = ref "darklang-interpreter" in
   let replay = ref None and minimize = ref None and generate = ref None in
   let positive flag assign value =
@@ -56,7 +56,7 @@ let main () =
         "N Write N generated sources without executing" );
     ]
     (fun argument -> raise (Arg.Bad ("Unexpected argument: " ^ argument)))
-    "Native Darklang differential fuzzer";
+    "Native Darklang differential testing";
   let seed =
     match !seed with
     | Some seed -> seed
@@ -180,5 +180,5 @@ let () =
   try exit (main ()) with
   | Sys.Break -> exit 130
   | exception_ ->
-      Printf.eprintf "Fuzzer failed: %s\n%!" (Printexc.to_string exception_);
+      Printf.eprintf "Differential testing failed: %s\n%!" (Printexc.to_string exception_);
       exit 2

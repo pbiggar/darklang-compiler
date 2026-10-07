@@ -9,12 +9,12 @@
  (action (run python3 %{dep:../../scripts/test_install_interpreter.py})))
 (rule
  (alias runtest)
- (deps ../../fuzz ../../scripts/test_fuzz_workflow.py)
- (action (run python3 %{dep:../../scripts/test_fuzz_workflow.py})))
+ (deps ../../differential-test ../../scripts/test_differential_testing_workflow.py)
+ (action (run python3 %{dep:../../scripts/test_differential_testing_workflow.py})))
 (rule
  (alias runtest)
- (deps fuzzer_regression.py)
- (action (run python3 %{dep:fuzzer_regression.py} %{exe:../../tools/fuzzer/main.exe})))
+ (deps differential_testing_regression.py)
+ (action (run python3 %{dep:differential_testing_regression.py} %{exe:../../tools/differential-testing/main.exe})))
 (rule
  (alias runtest)
  (deps standalone_compiler_regression.py)
