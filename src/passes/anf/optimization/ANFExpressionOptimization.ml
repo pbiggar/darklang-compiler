@@ -59,7 +59,10 @@ let compareSizedInt a b =
     | Int32 a, Int32 b -> Int32.compare a b
     | Int64 a, Int64 b | UInt32 a, UInt32 b -> Int64.compare a b
     | UInt64 a, UInt64 b -> Int64.unsigned_compare a b
-    | _ -> assert false
+    | _ ->
+        Crash.crash
+          "ANFExpressionOptimization: equal integer ranks have different \
+           constructors"
 
 let compareAtom a b =
   let rank = function
@@ -83,7 +86,10 @@ let compareAtom a b =
     | Var (TempId a), Var (TempId b) -> Int.compare a b
     | FuncRef a, FuncRef b ->
         Int64.unsigned_compare (AST.functionIdValue a) (AST.functionIdValue b)
-    | _ -> assert false
+    | _ ->
+        Crash.crash
+          "ANFExpressionOptimization: equal atom ranks have different \
+           constructors"
 
 let rec compareList cmp xs ys =
   match (xs, ys) with
@@ -153,7 +159,10 @@ let compareKey a b =
       | RecordProjection (d, a, index), RecordProjection (d', b, index') ->
           thenCompare (compareDescriptor d d') (fun () ->
               thenCompare (compareAtom a b) (fun () -> Int.compare index index'))
-      | _ -> assert false)
+      | _ ->
+          Crash.crash
+            "ANFExpressionOptimization: equal CSE key ranks have different \
+             constructors")
 
 module CSEnv = Map.Make (struct
   type t = cSEKey

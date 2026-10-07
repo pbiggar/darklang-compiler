@@ -413,7 +413,8 @@ let inferCExprType ctx expr =
                           ^ " in TupleAlloc")
                     | A.UnitLiteral | A.IntLiteral _ | A.BoolLiteral _
                     | A.StringLiteral _ | A.FloatLiteral _ ->
-                        assert false))
+                        Crash.crash
+                          "RcTypeFacts: literal atom has no type in TupleAlloc"))
               values))
   | A.RecordAlloc (descriptor, _)
   | A.RecordClone (descriptor, _, _)
@@ -422,15 +423,15 @@ let inferCExprType ctx expr =
   | A.RecordGet (descriptor, _, index) ->
       Option.map snd (tryItem index descriptor.A.fields)
   | A.TupleGet (value, index) -> (
+      if index < 0 then
+        Crash.crash "RcTypeFacts: TupleGet has a negative element index";
       match value with
       | A.Var id -> (
           match tryGetType ctx id with
-          | Some (AST.TTuple types) when index < List.length types ->
-              Some (List.nth types index)
+          | Some (AST.TTuple types) -> tryItem index types
           | Some (AST.TRecord (name, _)) -> (
               match M.find_opt name ctx.typeReg with
-              | Some info when index < List.length info.R.fields ->
-                  Some (snd (List.nth info.R.fields index))
+              | Some info -> Option.map snd (tryItem index info.R.fields)
               | _ -> None)
           | Some (AST.TList elem) -> (
               match index with
