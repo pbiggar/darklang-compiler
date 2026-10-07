@@ -285,6 +285,16 @@ let __consumeFrames (state: Stdlib.Tls13Handshake.ServerFlight) (buffer: Blob)
               Error "Unexpected TLS handshake bytes after Finished"
             else Stdlib.Tls13Handshake.__consumeFrames next frame.remaining
 
+// QUIC supplies CRYPTO bytes after packet authentication and stream ordering.
+// It has no TLS record encryption or record sequence counters.
+let consumeServerHandshake (state: Stdlib.Tls13Handshake.ServerFlight) (bytes: Blob)
+  : Stdlib.Result.Result<Stdlib.Tls13Handshake.ServerFlight, String> =
+  if state.phase == Stdlib.Tls13Handshake.FlightPhase.ServerFinished then
+    Error "TLS server handshake already finished"
+  else
+    let buffered = Stdlib.Blob.concat [state.pending, bytes] in
+    Stdlib.Tls13Handshake.__consumeFrames (Stdlib.Tls13Handshake.__withPending state Stdlib.Blob.empty) buffered
+
 let consumeServerRecord (state: Stdlib.Tls13Handshake.ServerFlight)
   (record: Stdlib.Tls13.Record)
   : Stdlib.Result.Result<Stdlib.Tls13Handshake.ServerFlight, String> =

@@ -1,0 +1,146 @@
+// __QuicFrames.dark - QUIC Initial/Handshake frame codecs with bounded ACK ranges.
+module Darklang.Stdlib.QuicFrames
+
+type Range = { smallest: Int64, largest: Int64 }
+type Ecn = { ect0: Int64, ect1: Int64, ce: Int64 }
+type Ack = { delay: Int64, ranges: List<Stdlib.QuicFrames.Range>, ecn: Stdlib.Option.Option<Stdlib.QuicFrames.Ecn> }
+type Crypto = { offset: Int64, bytes: Blob }
+type Close = { code: Int64, kind: Int64, reason: Blob }
+type Frame = Padding of Int64 | Ping | Ack of Stdlib.QuicFrames.Ack
+           | Crypto of Stdlib.QuicFrames.Crypto | Close of Stdlib.QuicFrames.Close
+type Parsed = { frame: Stdlib.QuicFrames.Frame, next: Int64 }
+type Ranges = { values: List<Stdlib.QuicFrames.Range>, next: Int64 }
+
+let __integer (data: Blob) (position: Int64) : Stdlib.Result.Result<Stdlib.QuicWire.Number, String> =
+  match Stdlib.QuicWire.parseInteger data position with
+  | Ok value -> Ok value
+  | Error _ -> Error "Truncated QUIC frame integer"
+
+let __ranges (data: Blob) (position: Int64) (remaining: Int64) (smallest: Int64)
+  (ranges: List<Stdlib.QuicFrames.Range>) : Stdlib.Result.Result<Stdlib.QuicFrames.Ranges, String> =
+  if remaining == 0L then Ok (Stdlib.QuicFrames.Ranges { values = Stdlib.List.reverse ranges, next = position })
+  else
+    match Stdlib.QuicFrames.__integer data position with
+    | Error message -> Error message
+    | Ok gap ->
+      match Stdlib.QuicFrames.__integer data gap.next with
+      | Error message -> Error message
+      | Ok length ->
+        if gap.value + 2L > smallest then Error "Invalid QUIC ACK range"
+        else
+          let largest = smallest - gap.value - 2L in
+          if length.value > largest then Error "Invalid QUIC ACK range"
+          else Stdlib.QuicFrames.__ranges data length.next (remaining - 1L) (largest - length.value) (Stdlib.List.push ranges (Stdlib.QuicFrames.Range { smallest = largest - length.value, largest = largest }))
+
+let __ack (data: Blob) (position: Int64) (withEcn: Bool) : Stdlib.Result.Result<Stdlib.QuicFrames.Parsed, String> =
+  match Stdlib.QuicFrames.__integer data position with
+  | Error message -> Error message
+  | Ok largest ->
+    match Stdlib.QuicFrames.__integer data largest.next with
+    | Error message -> Error message
+    | Ok delay ->
+      match Stdlib.QuicFrames.__integer data delay.next with
+      | Error message -> Error message
+      | Ok count ->
+        if count.value >= 256L then Error "Too many QUIC ACK ranges"
+        else
+          match Stdlib.QuicFrames.__integer data count.next with
+          | Error message -> Error message
+          | Ok first ->
+            if first.value > largest.value then Error "Invalid QUIC ACK range"
+            else
+              let range = Stdlib.QuicFrames.Range { smallest = largest.value - first.value, largest = largest.value } in
+              match Stdlib.QuicFrames.__ranges data first.next count.value range.smallest [range] with
+              | Error message -> Error message
+              | Ok ranges ->
+                if Stdlib.Bool.not withEcn then Ok (Stdlib.QuicFrames.Parsed {
+                  frame = Ack (Stdlib.QuicFrames.Ack { delay = delay.value, ranges = ranges.values, ecn = None }), next = ranges.next })
+                else
+                  let result =
+                    match Stdlib.QuicFrames.__integer data ranges.next with
+                    | Error message -> Error message
+                    | Ok ect0 ->
+                      match Stdlib.QuicFrames.__integer data ect0.next with
+                      | Error message -> Error message
+                      | Ok ect1 ->
+                        match Stdlib.QuicFrames.__integer data ect1.next with
+                        | Error message -> Error message
+                        | Ok ce -> Ok (Stdlib.QuicFrames.Parsed {
+                            frame = Ack (Stdlib.QuicFrames.Ack { delay = delay.value, ranges = ranges.values,
+                              ecn = Some (Stdlib.QuicFrames.Ecn { ect0 = ect0.value, ect1 = ect1.value, ce = ce.value }) }), next = ce.next }) in
+                  result
+
+let __paddingEnd (data: Blob) (position: Int64) : Int64 =
+  if position < Stdlib.Blob.__byteLength data && Stdlib.Blob.__getByte data position == 0L then
+    Stdlib.QuicFrames.__paddingEnd data (position + 1L)
+  else position
+
+let __frame (data: Blob) (position: Int64) : Stdlib.Result.Result<Stdlib.QuicFrames.Parsed, String> =
+  match Stdlib.QuicFrames.__integer data position with
+  | Error message -> Error message
+  | Ok kind ->
+    if kind.next - position != 1L then Error "Non-minimal QUIC frame type"
+    else if kind.value == 0L then
+      let end_ = Stdlib.QuicFrames.__paddingEnd data kind.next in
+      Ok (Stdlib.QuicFrames.Parsed { frame = Padding (end_ - position), next = end_ })
+    else if kind.value == 1L then Ok (Stdlib.QuicFrames.Parsed { frame = Ping, next = kind.next })
+    else if kind.value == 2L || kind.value == 3L then Stdlib.QuicFrames.__ack data kind.next (kind.value == 3L)
+    else if kind.value == 6L then
+      let result =
+        match Stdlib.QuicFrames.__integer data kind.next with
+        | Error message -> Error message
+        | Ok offset ->
+          match Stdlib.QuicFrames.__integer data offset.next with
+          | Error message -> Error message
+          | Ok length ->
+            if length.value > Stdlib.Blob.__byteLength data - length.next then Error "Truncated QUIC CRYPTO frame"
+            else if offset.value > 4611686018427387903L - length.value then Error "Invalid QUIC CRYPTO range"
+            else Ok (Stdlib.QuicFrames.Parsed {
+              frame = Crypto (Stdlib.QuicFrames.Crypto { offset = offset.value,
+                bytes = Stdlib.Http2Wire.__slice data length.next length.value }), next = length.next + length.value }) in
+      result
+    else if kind.value == 28L then
+      let result =
+        match Stdlib.QuicFrames.__integer data kind.next with
+        | Error message -> Error message
+        | Ok code ->
+          match Stdlib.QuicFrames.__integer data code.next with
+          | Error message -> Error message
+          | Ok trigger ->
+            match Stdlib.QuicFrames.__integer data trigger.next with
+            | Error message -> Error message
+            | Ok length ->
+              if length.value > Stdlib.Blob.__byteLength data - length.next then Error "Truncated QUIC close reason"
+              else Ok (Stdlib.QuicFrames.Parsed { frame = Close (Stdlib.QuicFrames.Close {
+                code = code.value, kind = trigger.value, reason = Stdlib.Http2Wire.__slice data length.next length.value }),
+                next = length.next + length.value }) in
+      result
+    else Error "Frame is not permitted in QUIC handshake packets"
+
+let __scan (data: Blob) (position: Int64) (frames: List<Stdlib.QuicFrames.Frame>)
+  : Stdlib.Result.Result<List<Stdlib.QuicFrames.Frame>, String> =
+  if position == Stdlib.Blob.__byteLength data then Ok (Stdlib.List.reverse frames)
+  else
+    match Stdlib.QuicFrames.__frame data position with
+    | Error message -> Error message
+    | Ok parsed -> Stdlib.QuicFrames.__scan data parsed.next (Stdlib.List.push frames parsed.frame)
+
+let parseHandshake (data: Blob) : Stdlib.Result.Result<List<Stdlib.QuicFrames.Frame>, String> =
+  if Stdlib.Blob.__byteLength data > 4096L then Error "QUIC handshake payload exceeds limit"
+  else if Stdlib.Blob.__byteLength data == 0L then Error "Empty QUIC packet payload"
+  else Stdlib.QuicFrames.__scan data 0L []
+
+let crypto (offset: Int64) (bytes: Blob) : Stdlib.Result.Result<Blob, String> =
+  let size = Stdlib.Blob.__byteLength bytes in
+  if offset < 0L || size > 4096L || offset > 4611686018427387903L - size then Error "Invalid QUIC CRYPTO range"
+  else
+    match Stdlib.QuicWire.integer offset, Stdlib.QuicWire.integer size with
+    | Ok encodedOffset, Ok length -> Ok (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [6L], encodedOffset, length, bytes])
+    | _, _ -> Error "Invalid QUIC CRYPTO range"
+
+// A one-packet ACK never acknowledges gaps. The connection owns received
+// packet tracking, ACK delay, and loss/congestion state.
+let acknowledge (number: Int64) : Stdlib.Result.Result<Blob, String> =
+  match Stdlib.QuicWire.integer number with
+  | Error message -> Error message
+  | Ok encoded -> Ok (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [2L], encoded, Stdlib.Blob.__fromInt64List [0L, 0L, 0L]])

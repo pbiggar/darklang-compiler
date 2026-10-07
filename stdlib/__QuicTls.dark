@@ -1,0 +1,98 @@
+// __QuicTls.dark - TLS 1.3 client handshake processing for authenticated QUIC CRYPTO streams.
+module Darklang.Stdlib.QuicTls
+
+type Handshake = {
+  flight: Stdlib.Tls13Handshake.ServerFlight, shared: Blob,
+  send: Stdlib.QuicCrypto.Keys, receive: Stdlib.QuicCrypto.Keys
+}
+type Authenticated = {
+  send: Stdlib.QuicCrypto.Keys, receive: Stdlib.QuicCrypto.Keys,
+  finished: Blob, parameters: Blob
+}
+
+let start (privateKey: Blob) (clientHello: Blob) (serverHello: Blob)
+  : Stdlib.Result.Result<Stdlib.QuicTls.Handshake, String> =
+  match Stdlib.Tls13.parseServerHello serverHello with
+  | Error _ -> Error "Invalid QUIC TLS ServerHello"
+  | Ok hello ->
+    if hello.cipherSuite != 4865L then Error "QUIC TLS requires AES-128-GCM/SHA-256"
+    else if Stdlib.Blob.__byteLength hello.remaining != 0L then Error "Unexpected QUIC ServerHello bytes"
+    else
+      match Stdlib.X25519.sharedSecret privateKey hello.keyShare with
+      | Error message -> Error message
+      | Ok shared ->
+        match Stdlib.Tls13Handshake.startServerFlight shared clientHello serverHello with
+        | Error message -> Error message
+        | Ok flight ->
+          match Stdlib.QuicCrypto.derive flight.clientHandshakeSecret, Stdlib.QuicCrypto.derive flight.serverHandshakeSecret with
+          | Ok send, Ok receive -> Ok (Stdlib.QuicTls.Handshake { flight = flight, shared = shared, send = send, receive = receive })
+          | _, _ -> Error "QUIC handshake key derivation failed"
+
+let feed (handshake: Stdlib.QuicTls.Handshake) (bytes: Blob)
+  : Stdlib.Result.Result<Stdlib.QuicTls.Handshake, String> =
+  match Stdlib.Tls13Handshake.consumeServerHandshake handshake.flight bytes with
+  | Error message -> Error message
+  | Ok flight -> Ok (Stdlib.QuicTls.Handshake {
+    flight = flight, shared = handshake.shared, send = handshake.send, receive = handshake.receive })
+
+let __parameters (body: Blob) (position: Int64) (seen: List<Int64>) (parameters: Stdlib.Option.Option<Blob>)
+  : Stdlib.Result.Result<Blob, String> =
+  let size = Stdlib.Blob.__byteLength body in
+  if position == size then
+    match parameters with | None -> Error "Missing QUIC transport parameters" | Some bytes -> Ok bytes
+  else if size - position < 4L then Error "Truncated QUIC TLS extension"
+  else if Stdlib.List.length seen >= 64 then Error "Too many QUIC TLS extensions"
+  else
+    let kind = Stdlib.Tls13.__read16 body position in
+    let length = Stdlib.Tls13.__read16 body (position + 2L) in
+    if Stdlib.List.member seen kind then Error "Duplicate QUIC TLS extension"
+    else if length > size - position - 4L then Error "Truncated QUIC TLS extension"
+    else if kind == 57L && (length == 0L || length > 4096L) then Error "Invalid QUIC transport parameters length"
+    else
+      let next = if kind == 57L then Some (Stdlib.Http2Wire.__slice body (position + 4L) length) else parameters in
+      Stdlib.QuicTls.__parameters body (position + 4L + length) (Stdlib.List.push seen kind) next
+
+let __fromTranscript (transcript: Blob) : Stdlib.Result.Result<Blob, String> =
+  match Stdlib.Tls13Handshake.parseHandshakeFrame transcript with
+  | Error _ -> Error "Invalid QUIC TLS transcript"
+  | Ok client ->
+    match Stdlib.Tls13Handshake.parseHandshakeFrame client.remaining with
+    | Error _ -> Error "Invalid QUIC TLS transcript"
+    | Ok server ->
+      match Stdlib.Tls13Handshake.parseHandshakeFrame server.remaining with
+      | Error _ -> Error "Missing QUIC TLS EncryptedExtensions"
+      | Ok extensions ->
+        if extensions.kind != 8L || Stdlib.Blob.__byteLength extensions.body < 2L ||
+           Stdlib.Tls13.__read16 extensions.body 0L != Stdlib.Blob.__byteLength extensions.body - 2L then
+          Error "Invalid QUIC TLS EncryptedExtensions"
+        else Stdlib.QuicTls.__parameters extensions.body 2L [] None
+
+// Certificate path, hostname, CertificateVerify, and server Finished must
+// succeed before application secrets are returned. The connection must still
+// validate authenticated transport parameters against its connection IDs.
+let authenticate (handshake: Stdlib.QuicTls.Handshake) (host: String) (roots: List<Blob>)
+  : Stdlib.Result.Result<Stdlib.QuicTls.Authenticated, String> =
+  if handshake.flight.phase != Stdlib.Tls13Handshake.FlightPhase.ServerFinished ||
+     Stdlib.Blob.__byteLength handshake.flight.pending != 0L then Error "QUIC TLS server handshake is incomplete"
+  else
+    match Stdlib.Tls13Client.__authenticate handshake.flight host roots with
+    | Error message -> Error message
+    | Ok () ->
+      match Stdlib.TlsAlpn.fromTranscript ["h3"] handshake.flight.transcript, Stdlib.QuicTls.__fromTranscript handshake.flight.transcript with
+      | Ok (Some "h3"), Ok parameters ->
+        match Stdlib.Tls13Client.__masterSecret handshake.shared with
+        | Error message -> Error message
+        | Ok master ->
+          let hash = Stdlib.Crypto.sha256 handshake.flight.transcript in
+          match Stdlib.Tls13.hkdfExpandLabel master "c ap traffic" hash 32L,
+                Stdlib.Tls13.hkdfExpandLabel master "s ap traffic" hash 32L,
+                Stdlib.Tls13Handshake.finishedVerifyData handshake.flight.clientHandshakeSecret handshake.flight.transcript with
+          | Ok client, Ok server, Ok verify ->
+            match Stdlib.QuicCrypto.derive client, Stdlib.QuicCrypto.derive server with
+            | Ok send, Ok receive -> Ok (Stdlib.QuicTls.Authenticated {
+              send = send, receive = receive, parameters = parameters,
+              finished = Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [20L, 0L, 0L, 32L], verify] })
+            | _, _ -> Error "QUIC application key derivation failed"
+          | _, _, _ -> Error "QUIC application secret derivation failed"
+      | _, Error message -> Error message
+      | _, _ -> Error "QUIC TLS did not negotiate h3"

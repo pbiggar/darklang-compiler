@@ -155,6 +155,9 @@ __Http2.dark
 __QuicWire.dark
 __QuicCrypto.dark
 __QuicPacket.dark
+__QuicFrames.dark
+__QuicReassembly.dark
+__QuicTls.dark
 __Qpack.dark
 __Http3Wire.dark
 Pretty.dark
