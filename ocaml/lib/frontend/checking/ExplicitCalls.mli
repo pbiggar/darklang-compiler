@@ -1,2 +1,0 @@
-(* ExplicitCalls.mli - Complete explicit type application paths from Expressions.fs. *)
-val check : ExpressionSupport.expressionChecker -> Types.funcParamNameRegistry -> StringOrder.Set.t -> Types.indexedSumTypeRegistry -> Types.typeEnv -> Types.indexedTypeRegistry -> Types.variantLookup -> Types.genericFuncRegistry -> AST.warningSettings -> AST.moduleRegistry -> Types.aliasRegistry -> AST.semanticType option -> string -> AST.semanticType list -> AST.expr NonEmptyList.t -> (AST.semanticType * AST.expr, CheckingDiagnostics.typeError) result

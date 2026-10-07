@@ -1,0 +1,7 @@
+// int128_comparison_bitwise.dark - Targeted compiler workload.
+let benchmark (remaining: Int64) (value: Int128) (checksum: Int64) : Int64 =
+    if remaining <= 0L then checksum
+    else
+        let next = Stdlib.Int128.bitwiseXor (value) (1Q) in
+        benchmark (remaining - 1L) (next) (checksum + (if Stdlib.Int128.greaterThan (next) (value) then 1L else 2L))
+benchmark (__ITERATIONS__L) (0Q) (0L)

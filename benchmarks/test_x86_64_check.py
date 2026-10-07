@@ -26,8 +26,8 @@ class X86_64BuildTests(unittest.TestCase):
     def test_benchmark_sources_use_the_public_parser_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            (root / "ocaml/_build/default/bin").mkdir(parents=True)
-            (root / "ocaml/_build/default/bin/dark.exe").touch()
+            (root / "_build/default/bin").mkdir(parents=True)
+            (root / "_build/default/bin/dark.exe").touch()
             (root / "benchmarks/problems/example/dark").mkdir(parents=True)
             (root / "benchmarks/problems/example/dark/main.dark").touch()
 

@@ -18,8 +18,8 @@ annotations; let bindings have optional annotations.
 ## Type representations
 
 Source type syntax is defined in
-`ocaml/lib/frontend/interpreter/WrittenTypes.ml`. Resolved semantic
-types are defined in `ocaml/lib/AST.ml`:
+`src/frontend/interpreter/WrittenTypes.ml`. Resolved semantic
+types are defined in `src/AST.ml`:
 
 ```fsharp
 type SemanticType =
@@ -209,8 +209,8 @@ type TypeError =
 
 | File | Purpose |
 |------|---------|
-| `ocaml/lib/frontend/TypeChecking.ml` | Main type checker |
-| `ocaml/lib/AST.ml` | Type definitions |
+| `src/frontend/TypeChecking.ml` | Main type checker |
+| `src/AST.ml` | Type definitions |
 
 ## Key Functions
 

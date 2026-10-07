@@ -90,7 +90,7 @@ def toolchains(repository: Path) -> dict[str, str]:
 
 
 def build_dark(repository: Path, name: str, output: Path) -> str | None:
-    compiler = repository / "ocaml" / "_build" / "default" / "bin" / "dark.exe"
+    compiler = repository / "_build" / "default" / "bin" / "dark.exe"
     source = repository / "benchmarks" / "problems" / name / "dark" / "main.dark"
     if not compiler.is_file():
         return "compiler output is missing"

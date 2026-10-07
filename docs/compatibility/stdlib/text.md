@@ -11,7 +11,7 @@ The canonical interpreter declarations are
 `packages/darklang/stdlib/{char,string,regex}.dark`; their managed behavior is
 implemented by `backend/src/Builtins/Builtins.Pure/Libs/{Char,String,Regex}.fs`.
 The compiler surface is implemented in
-`ocaml/share/stdlib/{Char,String,Regex}.dark`, with shared semantics in
+`stdlib/{Char,String,Regex}.dark`, with shared semantics in
 `Unicode.dark` and generated data in `unicode_data.dark`,
 `unicode_data_index/`, and `unicode_data/`. The generated source is split only
 to bound the recursive Dark lexer's stack use; the generator treats the shards
@@ -118,7 +118,7 @@ not source-resolvable; public text behavior is provided only by the parity API.
 - The retained decomposed probe, `String.length("e\u0301")`, returned byte
   length `3` at `C@51093e0`; it returns EGC length `1` in this tree, matching
   `I@04fbe9d`.
-- `src/Tests/e2e/stdlib/text_parity.e2e` covers NFC concatenation, a family emoji
+- `test/fixtures/e2e/stdlib/text_parity.e2e` covers NFC concatenation, a family emoji
   EGC, scalar construction, UTF-16 versus EGC indexes, and regex match/split
   behavior.
 - The pinned upstream `char.dark`, `string.dark`, and `regex.dark` files are

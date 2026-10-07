@@ -18,13 +18,13 @@ HEAD. Compiler history is reproducible with `git show <revision>:<path>`.
 ## Source map
 
 Compiler ownership is split between the canonical
-[parser](../../../ocaml/lib/frontend/interpreter/Parser.ml),
-[source checker](../../../ocaml/lib/frontend/WrittenChecking.ml), and
-[AST-to-ANF lowering](../../../ocaml/lib/passes/anf/AST_to_ANF.ml). The ANF `If`
+[parser](../../../src/frontend/interpreter/Parser.ml),
+[source checker](../../../src/frontend/WrittenChecking.ml), and
+[AST-to-ANF lowering](../../../src/passes/anf/AST_to_ANF.ml). The ANF `If`
 is converted to a typed shared result register and CFG join in
-[ANF-to-MIR](../../../ocaml/lib/passes/anf/ANF_to_MIR.ml). Runtime output support
-in [PrintValues.ml](../../../ocaml/lib/backend/arm64/runtime/PrintValues.ml) and
-[X64Printing.ml](../../../ocaml/lib/backend/x64/runtime/X64Printing.ml) makes selected results observable;
+[ANF-to-MIR](../../../src/passes/anf/ANF_to_MIR.ml). Runtime output support
+in [PrintValues.ml](../../../src/backend/arm64/runtime/PrintValues.ml) and
+[X64Printing.ml](../../../src/backend/x64/runtime/X64Printing.ml) makes selected results observable;
 focused failures use the existing compiler-generated runtime-error operation,
 whose callable contract is outside this work item.
 
@@ -46,7 +46,7 @@ same compiler source exercised through the full language pipeline.
 
 | Area | Pinned interpreter behavior | Compiler behavior | Classification | Probe |
 |---|---|---|---|---|
-| Conditional syntax | `if … then …`, optional `else`, `elif`, and `else if` | Same shapes; `elif` lowers to nested `If` and a missing `else` supplies Unit | matched | [`conditional_sequence_parity.e2e`](../../../src/Tests/e2e/conditional_sequence_parity.e2e), lines 4-5; `testConditionalSequenceSameSourceShape` |
+| Conditional syntax | `if … then …`, optional `else`, `elif`, and `else if` | Same shapes; `elif` lowers to nested `If` and a missing `else` supplies Unit | matched | [`conditional_sequence_parity.e2e`](../../../test/fixtures/e2e/conditional_sequence_parity.e2e), lines 4-5; `testConditionalSequenceSameSourceShape` |
 | Rejected conditional syntax | Missing `then` is a parse error | Same precise parse error after `if` or `elif` | matched | syntax fixtures and the E2E corpus parse contract |
 | Condition type | A non-Boolean condition fails when `JumpByIfFalse` executes | The type checker requires `Bool`, so an otherwise identical failure occurs during compilation | intentional timing divergence: static compiler | E2E condition-type case |
 | Branch result types | Branches may have different runtime value types; only the selected value is produced | Both branches are recursively unified before lowering; heterogeneous arms are rejected | intentional type-system divergence: static compiler | E2E string/Int64 rejection and nested/inferred-list cases |

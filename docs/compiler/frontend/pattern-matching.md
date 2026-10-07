@@ -339,6 +339,6 @@ match c with
 
 ## Tests
 
-- `src/Tests/e2e/adts.e2e` - Constructor patterns
-- `src/Tests/e2e/tuples.e2e` - Tuple patterns
-- `src/Tests/e2e/lists.e2e` - List patterns
+- `test/fixtures/e2e/adts.e2e` - Constructor patterns
+- `test/fixtures/e2e/tuples.e2e` - Tuple patterns
+- `test/fixtures/e2e/lists.e2e` - List patterns

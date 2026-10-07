@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Install Docker-pinned native prerequisites entirely inside a writable Work VM workspace.
+set -euo pipefail
+repo=$(cd "$(dirname "$0")/../.." && pwd)
+root=${1:?Usage: scripts/vm/setup-native-toolchain ABSOLUTE_TOOLCHAIN_DIRECTORY}
+case "$root" in /*) ;; *) echo 'Use an absolute directory' >&2; exit 1 ;; esac
+[[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || { echo 'This rootless bootstrap supports Linux x86-64; use Dockerfile on other hosts.' >&2; exit 1; }
+mkdir -p "$root/downloads" "$root/src" "$root/tmp" "$root/toolchain"
+export TMPDIR="$root/tmp"
+unset LD_PRELOAD
+gcc -shared -fPIC "$repo/scripts/vm/compat.c" -ldl -pthread -o "$root/vm-compat.so"
+fetch() {
+    local name=$1 checksum=$2 url=$3
+    if [[ -f "$root/downloads/$name" ]] && printf '%s  %s\n' "$checksum" "$root/downloads/$name" | sha256sum --check --status; then
+        return
+    fi
+    curl --fail --location --retry 2 --output "$root/downloads/$name.download" "$url"
+    printf '%s  %s\n' "$checksum" "$root/downloads/$name.download" | sha256sum --check
+    mv "$root/downloads/$name.download" "$root/downloads/$name"
+}
+version=5.5.1
+prefix="$root/toolchain/ocaml"
+cat > "$root/unix-smoke.ml" <<'ML'
+let () =
+  ignore (Unix.realpath ".");
+  let child = Unix.create_process "/bin/true" [|"/bin/true"|]
+    Unix.stdin Unix.stdout Unix.stderr in
+  match snd (Unix.waitpid [] child) with
+  | Unix.WEXITED 0 -> ()
+  | _ -> failwith "OCaml Unix process smoke check failed"
+ML
+if ! { [[ -x "$prefix/bin/ocaml" ]] && [[ $("$prefix/bin/ocamlc" -version) == "$version" ]] &&
+    "$prefix/bin/ocaml" -I +unix unix.cma "$root/unix-smoke.ml" > "$root/unix-smoke.log" 2>&1; }; then
+    fetch "ocaml-$version.tar.gz" ae47728d0a876665ccc7b745e3a8d8c9ca5ba63c4f7a11d4db6cdbd1dbeef4bb \
+        "https://github.com/ocaml/ocaml/archive/refs/tags/$version.tar.gz"
+    tar --no-same-owner -xzf "$root/downloads/ocaml-$version.tar.gz" -C "$root/src"
+    (
+        cd "$root/src/ocaml-$version"
+        ./configure --prefix="$prefix" > "$root/ocaml-configure.log" 2>&1
+        # Native compiler processes need stack attributes even when procfs is
+        # unavailable. Keep this adapter out of configure's feature probes.
+        ulimit -s 65536
+        export LD_PRELOAD="$root/vm-compat.so" PORT_VM_TMPDIR="$root/tmp"
+        make -j1 world.opt > "$root/ocaml-build.log" 2>&1
+        make install > "$root/ocaml-install.log" 2>&1
+    )
+fi
+"$prefix/bin/ocaml" -I +unix unix.cma "$root/unix-smoke.ml"
+python3 "$repo/scripts/vm/setup-native-packages.py" "$root" > "$root/native-packages.log" 2>&1
+sysroot="$root/qemu-deps/sysroot"
+export PATH="$prefix/bin:$sysroot/usr/bin:$PATH"
+export C_INCLUDE_PATH="$sysroot/usr/include:$sysroot/usr/include/x86_64-linux-gnu"
+export LIBRARY_PATH="$sysroot/usr/lib/x86_64-linux-gnu"
+export LD_LIBRARY_PATH="$sysroot/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PKG_CONFIG_LIBDIR="$sysroot/usr/lib/x86_64-linux-gnu/pkgconfig:$sysroot/usr/share/pkgconfig"
+export PKG_CONFIG_SYSROOT_DIR="$sysroot"
+fetch opam a59184447f881005dae70b2ae455c3a7e9549834a41c635c49a5a28235eca758 \
+    https://github.com/ocaml/opam/releases/download/2.6.0/opam-2.6.0-x86_64-linux
+chmod +x "$root/downloads/opam"
+export OPAMROOT="$root/opam"
+opam="$root/downloads/opam"
+if [[ ! -f "$OPAMROOT/config" ]]; then
+    "$opam" init --bare --disable-sandboxing --no-setup --yes > "$root/opam-init.log" 2>&1
+fi
+if ! "$opam" switch list --short | rg -x dark >/dev/null; then
+    "$opam" switch create dark ocaml-system.5.5.1 --yes --jobs=1 --no-depexts > "$root/opam-switch.log" 2>&1
+fi
+packages=()
+while IFS= read -r package; do
+    case "$package" in ''|'#'*) ;; *) packages+=("$package");; esac
+done < "$repo/dependencies.lock"
+"$opam" install --switch=dark --yes --jobs=1 --no-depexts "${packages[@]}" > "$root/opam-dependencies.log" 2>&1
+python3 - "$root" "$prefix" <<'PY'
+from pathlib import Path
+import shlex
+import sys
+root, prefix = map(Path, sys.argv[1:])
+sysroot = root / "qemu-deps/sysroot"
+values = {
+    "TMPDIR": root / "tmp",
+    "PORT_VM_TMPDIR": root / "tmp",
+    "OPAMROOT": root / "opam",
+    "OCAMLPATH": root / "opam/dark/lib",
+    "C_INCLUDE_PATH": f"{sysroot}/usr/include:{sysroot}/usr/include/x86_64-linux-gnu",
+    "LIBRARY_PATH": sysroot / "usr/lib/x86_64-linux-gnu",
+    "LD_LIBRARY_PATH": sysroot / "usr/lib/x86_64-linux-gnu",
+    "PKG_CONFIG_LIBDIR": f"{sysroot}/usr/lib/x86_64-linux-gnu/pkgconfig:{sysroot}/usr/share/pkgconfig",
+    "PKG_CONFIG_SYSROOT_DIR": sysroot,
+    "LD_PRELOAD": root / "vm-compat.so",
+}
+lines = ["# Native Work VM environment; unset LD_PRELOAD when building toolchains."]
+lines += [f"export {key}={shlex.quote(str(value))}" for key, value in values.items()]
+paths = [root / "opam/dark/bin", prefix / "bin", sysroot / "usr/bin"]
+lines += ['export PATH=' + ':'.join(shlex.quote(str(path)) for path in paths) + ':"$PATH"']
+(root / "activate").write_text("\n".join(lines) + "\n")
+PY
+source "$root/activate"
+ocamlc -version
+dune --version
+printf 'Activate with: source %q/activate\n' "$root"

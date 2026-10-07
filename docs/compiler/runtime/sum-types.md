@@ -13,7 +13,7 @@ The parity comparison is pinned to:
 
 The historical DCB1 report at `8a402797` was used only to identify candidates.
 Every behavior retained below was checked again in the pinned sources. The
-same-source compiler matrix is `src/Tests/e2e/interpreter/adt_parity.e2e`;
+same-source compiler matrix is `test/fixtures/e2e/interpreter/adt_parity.e2e`;
 declaration failures that occur while an E2E preamble is built are covered by
 focused parser/type-checker tests instead.
 
@@ -169,14 +169,14 @@ operands once, and produces `false` for `==` (`true` for `!=`).
 
 | File | Responsibility |
 |---|---|
-| `ocaml/lib/frontend/interpreter/Parser.ml` | Canonical Dark declaration grammar, field shape, constructor reference syntax |
-| `ocaml/lib/AST.ml` | Enum field shape, unresolved/resolved references, canonical runtime identity |
-| `ocaml/lib/frontend/TypeChecking.ml` | Pure declaration validation, nominal resolution, generic/recursive typing, arity, equality |
-| `ocaml/lib/frontend/ValueRendering.ml` | Public enum rendering |
-| `ocaml/lib/passes/anf/AST_to_ANF.ml` | Resolved construction and once-only ordered payload evaluation |
-| `ocaml/lib/backend/arm64/runtime/PrintValues.ml`, `ocaml/lib/backend/x64/runtime/X64Printing.ml` | Native generated rendering support |
-| `ocaml/lib/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 consumption of shared sum metadata |
-| `ocaml/lib/backend/x64/CodeGen_X86_64.ml` | x64 consumption of shared sum metadata |
+| `src/frontend/interpreter/Parser.ml` | Canonical Dark declaration grammar, field shape, constructor reference syntax |
+| `src/AST.ml` | Enum field shape, unresolved/resolved references, canonical runtime identity |
+| `src/frontend/TypeChecking.ml` | Pure declaration validation, nominal resolution, generic/recursive typing, arity, equality |
+| `src/frontend/ValueRendering.ml` | Public enum rendering |
+| `src/passes/anf/AST_to_ANF.ml` | Resolved construction and once-only ordered payload evaluation |
+| `src/backend/arm64/runtime/PrintValues.ml`, `src/backend/x64/runtime/X64Printing.ml` | Native generated rendering support |
+| `src/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 consumption of shared sum metadata |
+| `src/backend/x64/CodeGen_X86_64.ml` | x64 consumption of shared sum metadata |
 
 ## Test matrix
 

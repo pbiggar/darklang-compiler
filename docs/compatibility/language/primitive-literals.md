@@ -21,7 +21,7 @@ including control escapes, slash, and scalar escapes; rejects surrogates and
 out-of-range scalars; and supports raw triple strings and raw triple
 interpolation. All literal text is normalized to NFC before it enters the AST.
 Focused acceptance and invalid-scalar coverage is in
-`src/Tests/e2e/literal_parity.e2e` and `src/Tests/syntax/literals.syntax`.
+`test/fixtures/e2e/literal_parity.e2e` and `test/fixtures/syntax/literals.syntax`.
 
 Literal lowering remains in `passes/anf/lowering/AtomLowering.fs` and
 `passes/anf/lowering/ExpressionLowering.fs`. The existing

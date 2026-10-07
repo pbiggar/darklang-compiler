@@ -29,7 +29,7 @@ def main() -> int:
 
     root = Path(__file__).resolve().parents[3]
     compiler = root / "dark"
-    compiler_binary = root / "ocaml/_build/default/bin/dark.exe"
+    compiler_binary = root / "_build/default/bin/dark.exe"
     source = Path(__file__).with_name("program.dark")
     if not compiler_binary.is_file():
         raise SystemExit("compiler is not built; run ./build --ai first")

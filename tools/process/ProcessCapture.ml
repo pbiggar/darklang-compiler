@@ -1,0 +1,77 @@
+(* Capture both streams without pipe deadlocks; terminate the child process group on timeout. *)
+[@@@warning "-4-42"]
+open Dark_compiler
+let spawn (file,argv,environment,stdin,stdout,stderr) =
+ try
+  let prog = if String.contains file '/' then file else
+   match Bos.OS.Cmd.find_tool (Bos.Cmd.v file) with
+   | Ok (Some path) -> Fpath.to_string path
+   | Ok None -> raise (Unix.Unix_error (Unix.ENOENT,"spawn",file))
+   | Error (`Msg message) -> invalid_arg message in
+  let pid = Spawn.spawn ~prog ~argv:(Array.to_list argv) ~env:(Spawn.Env.of_list (Array.to_list environment))
+   ~stdin ~stdout ~stderr ~setpgid:Spawn.Pgid.new_process_group () in
+  Ok pid
+ with Unix.Unix_error (error,_,_) -> Error (Unix.error_message error)
+ | Invalid_argument error -> Error error
+exception TimedOut
+let exitCode=function Unix.WEXITED code->code|Unix.WSIGNALED signal|Unix.WSTOPPED signal->128+Sys.signal_to_int signal
+let decode text=ContentEncoding.decodeContent (if String.starts_with ~prefix:"\000\000\254\255" text then Some "text/plain; charset=utf-32be" else None) text
+(* A descriptor number may be reused by a concurrent suite immediately after
+   close. Retire it before closing so final cleanup only owns live descriptors. *)
+let own descriptors=
+ let opened=ref descriptors in
+ let close fd=if List.mem fd !opened then (opened:=List.filter ((<>) fd) !opened;try Unix.close fd with Unix.Unix_error _->()) in
+ close,(fun ()->List.iter close !opened)
+let kill pid=try Unix.kill (-pid) Sys.sigkill with Unix.Unix_error _->()
+let rec wait pid=try snd (Unix.waitpid [] pid) with Unix.Unix_error (Unix.EINTR,_,_)->wait pid
+let capture file arguments timeout=
+ let stdoutRead,stdoutWrite=Spawn.safe_pipe () in let stderrRead,stderrWrite=Spawn.safe_pipe () in
+ let close,cleanup=own [stdoutRead;stdoutWrite;stderrRead;stderrWrite] in
+ let child=ref None in
+ Fun.protect ~finally:(fun ()->cleanup ();Option.iter (fun pid->kill pid;ignore (wait pid)) !child) (fun ()->
+ match spawn (file,Array.of_list (file::arguments),Unix.environment (),Unix.stdin,stdoutWrite,stderrWrite) with
+ | Error error -> Error ("Execution failed: An error occurred trying to start process '"^file^"' with working directory '"^Sys.getcwd ()^"'. "^error)
+ | Ok pid -> (
+ child:=Some pid;close stdoutWrite;close stderrWrite;List.iter Unix.set_nonblock [stdoutRead;stderrRead];
+ let readers=ref [stdoutRead;stderrRead] in let stdout=Buffer.create 4096 and stderr=Buffer.create 4096 in let scratch=Bytes.create 16384 in
+ let deadline=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)+.float_of_int timeout in
+ let rec pump status=
+  let status=match status with Some _->status|None->let waited,status=Unix.waitpid [Unix.WNOHANG] pid in if waited=0 then None else (child:=None;Some status) in
+  match status,!readers with Some status,[]->Ok (exitCode status,decode (Buffer.contents stdout),decode (Buffer.contents stderr))|_->
+  if status=None && (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)>=deadline then raise TimedOut;
+  let delay=if status=None then min 0.05 (max 0. ((deadline-.(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6))/.1000.)) else -1. in
+  let ready,_,_=try Unix.select !readers [] [] delay with Unix.Unix_error (Unix.EINTR,_,_)->[],[],[] in
+  List.iter (fun fd->try let count=Unix.read fd scratch 0 (Bytes.length scratch) in if count=0 then (close fd;readers:=List.filter ((<>) fd) !readers) else Buffer.add_subbytes (if fd=stdoutRead then stdout else stderr) scratch 0 count with Unix.Unix_error ((Unix.EINTR|Unix.EAGAIN|Unix.EWOULDBLOCK),_,_)->()) ready;
+  pump status in
+ try pump None with TimedOut->Error (Printf.sprintf "Execution timed out after %dms" timeout)))
+(* E2E cross-target execution supplies a finite stdin stream and explicit
+   environment overrides. Drain both outputs while delivering the input. *)
+let captureWithInputAndEnvironment file arguments overrides input timeout=
+ let stdinRead,stdinWrite=Spawn.safe_pipe () in
+ let stdoutRead,stdoutWrite=Spawn.safe_pipe () in let stderrRead,stderrWrite=Spawn.safe_pipe () in
+ let close,cleanup=own [stdinRead;stdinWrite;stdoutRead;stdoutWrite;stderrRead;stderrWrite] in
+ let environment=Array.to_list (Unix.environment ()) |> List.filter_map (fun entry->match String.index_opt entry '=' with
+  |None->None|Some i->Some (String.sub entry 0 i,String.sub entry (i+1) (String.length entry-i-1))) |> StringOrder.Map.of_list in
+ let environment=List.fold_left (fun env (name,value)->StringOrder.Map.add name value env) environment overrides
+  |> StringOrder.Map.bindings |> List.map (fun (name,value)->name^"="^value) |> Array.of_list in
+ let child=ref None in
+ Fun.protect ~finally:(fun ()->cleanup ();Option.iter (fun pid->kill pid;ignore (wait pid)) !child) (fun ()->
+ match spawn (file,Array.of_list (file::arguments),environment,stdinRead,stdoutWrite,stderrWrite) with
+ | Error error -> Error ("Execution failed: An error occurred trying to start process '"^file^"' with working directory '"^Sys.getcwd ()^"'. "^error)
+ | Ok pid -> (
+ child:=Some pid;close stdinRead;close stdoutWrite;close stderrWrite;
+ List.iter Unix.set_nonblock [stdoutRead;stderrRead];Unix.set_nonblock stdinWrite;
+ let position=ref 0 and writable=ref (Bytes.length input>0) in if not !writable then close stdinWrite;
+ let readers=ref [stdoutRead;stderrRead] in let stdout=Buffer.create 4096 and stderr=Buffer.create 4096 in let scratch=Bytes.create 16384 in
+ let deadline=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)+.float_of_int timeout in
+ let rec pump status=
+  let status=match status with Some _->status|None->let waited,status=Unix.waitpid [Unix.WNOHANG] pid in if waited=0 then None else (child:=None;Some status) in
+  match status,!readers,!writable with Some status,[],false->Ok (exitCode status,decode (Buffer.contents stdout),decode (Buffer.contents stderr))|_->
+  if status=None && (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)>=deadline then raise TimedOut;
+  let delay=if status=None then min 0.05 (max 0. ((deadline-.(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6))/.1000.)) else -1. in
+  let ready,writing,_=try Unix.select !readers (if !writable then [stdinWrite] else []) [] delay with Unix.Unix_error (Unix.EINTR,_,_)->[],[],[] in
+  List.iter (fun fd->try let count=Unix.read fd scratch 0 (Bytes.length scratch) in if count=0 then (close fd;readers:=List.filter ((<>) fd) !readers) else Buffer.add_subbytes (if fd=stdoutRead then stdout else stderr) scratch 0 count with Unix.Unix_error ((Unix.EINTR|Unix.EAGAIN|Unix.EWOULDBLOCK),_,_)->()) ready;
+  List.iter (fun fd->try let count=Unix.write fd input !position (Bytes.length input- !position) in position:= !position+count;if !position=Bytes.length input then (writable:=false;close fd)
+    with Unix.Unix_error ((Unix.EINTR|Unix.EAGAIN|Unix.EWOULDBLOCK),_,_)->()) writing;
+  pump status in
+ try pump None with TimedOut->Error (Printf.sprintf "Execution timed out after %dms" timeout)))

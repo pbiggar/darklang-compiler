@@ -21,12 +21,12 @@ interpreter surface is anchored at
 `backend/src/Builtins/Builtins.Pure/Libs/Math.fs:13-213`, and
 `backend/src/LibExecution/Builtin.fs:97-104`.
 
-The compiler implementation is in `ocaml/share/stdlib/Float.dark` and
-`ocaml/share/stdlib/Math.dark`. Public values continue to render through
-`ocaml/lib/frontend/ValueRendering.ml` and
-`ocaml/lib/passes/anf/PrintInsertion.ml`, both of which call the same
+The compiler implementation is in `stdlib/Float.dark` and
+`stdlib/Math.dark`. Public values continue to render through
+`src/frontend/ValueRendering.ml` and
+`src/passes/anf/PrintInsertion.ml`, both of which call the same
 `Stdlib.Float.toString` implementation. Focused executable coverage is in
-`src/Tests/e2e/stdlib/float.e2e` and `math.e2e`.
+`test/fixtures/e2e/stdlib/float.e2e` and `math.e2e`.
 
 ## Public surface
 

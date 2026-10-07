@@ -1,0 +1,136 @@
+{
+  "schema_version": 2,
+  "suite": "dark-compiler",
+  "language": "dark",
+  "track": {
+    "id": "x86_64-full-cachegrind",
+    "profile": "full",
+    "architecture": "x86_64",
+    "backend": "cachegrind",
+    "measurement_policy": "cachegrind-ir-v1:cache-sim=no,branch-sim=no,extract=summary-I-refs"
+  },
+  "contract_sha256": "2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861",
+  "generated_at": "2026-10-07T11:50:03+00:00",
+  "compiler": {
+    "commit": "a8f74665d1a6b33228c2b85ed3c6ff93ee4e71cf",
+    "subject": "Make native benchmark test prerequisites portable"
+  },
+  "benchmarks": [
+    {
+      "name": "ackermann",
+      "instructions": 184178128
+    },
+    {
+      "name": "binary_trees",
+      "instructions": 12916641
+    },
+    {
+      "name": "collatz",
+      "instructions": 185401083
+    },
+    {
+      "name": "edigits",
+      "instructions": 123233687
+    },
+    {
+      "name": "factorial",
+      "instructions": 63446
+    },
+    {
+      "name": "fannkuch",
+      "instructions": 435308298
+    },
+    {
+      "name": "fasta",
+      "instructions": 23431795
+    },
+    {
+      "name": "fft",
+      "instructions": 2465221
+    },
+    {
+      "name": "fib",
+      "instructions": 9856188
+    },
+    {
+      "name": "huffman",
+      "instructions": 687600258
+    },
+    {
+      "name": "leibniz",
+      "instructions": 43009535
+    },
+    {
+      "name": "mandelbrot",
+      "instructions": 21677641
+    },
+    {
+      "name": "matmul",
+      "instructions": 71903921
+    },
+    {
+      "name": "merkletrees",
+      "instructions": 3775096
+    },
+    {
+      "name": "myers_diff",
+      "instructions": 284156308
+    },
+    {
+      "name": "nbody",
+      "instructions": 11878516
+    },
+    {
+      "name": "nqueen",
+      "instructions": 10714474
+    },
+    {
+      "name": "nsieve",
+      "instructions": 504794934
+    },
+    {
+      "name": "pisum",
+      "instructions": 1511980
+    },
+    {
+      "name": "primes",
+      "instructions": 3692310
+    },
+    {
+      "name": "quicksort",
+      "instructions": 431665621
+    },
+    {
+      "name": "raytracer",
+      "instructions": 66754325
+    },
+    {
+      "name": "regex_lite",
+      "instructions": 108258533
+    },
+    {
+      "name": "spectral_norm",
+      "instructions": 687911699
+    },
+    {
+      "name": "string_equality",
+      "instructions": 1496122
+    },
+    {
+      "name": "sum_to_n",
+      "instructions": 61844
+    },
+    {
+      "name": "tak",
+      "instructions": 56735194
+    },
+    {
+      "name": "tinytemplate",
+      "instructions": 461239820
+    },
+    {
+      "name": "warden",
+      "instructions": 61010185
+    }
+  ]
+}

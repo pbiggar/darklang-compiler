@@ -1,0 +1,52 @@
+[
+  {
+    "name": "int128_arithmetic",
+    "iterations": 10000,
+    "operations_per_iteration": 2
+  },
+  {
+    "name": "uint128_arithmetic",
+    "iterations": 10000,
+    "operations_per_iteration": 2
+  },
+  {
+    "name": "int128_comparison_bitwise",
+    "iterations": 10000,
+    "operations_per_iteration": 2
+  },
+  {
+    "name": "uint128_comparison_bitwise",
+    "iterations": 100,
+    "operations_per_iteration": 2
+  },
+  {
+    "name": "int128_decimal_conversion",
+    "iterations": 2000,
+    "operations_per_iteration": 2
+  },
+  {
+    "name": "uint128_decimal_conversion",
+    "iterations": 2000,
+    "operations_per_iteration": 2
+  },
+  {
+    "name": "uuid_parse_format",
+    "iterations": 100,
+    "operations_per_iteration": 2
+  },
+  {
+    "name": "uuid_equality",
+    "iterations": 20000,
+    "operations_per_iteration": 2
+  },
+  {
+    "name": "uuid_generation",
+    "iterations": 256,
+    "operations_per_iteration": 2
+  },
+  {
+    "name": "uint128_collection_copy",
+    "iterations": 2000,
+    "operations_per_iteration": 2
+  }
+]

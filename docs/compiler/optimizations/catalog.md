@@ -55,7 +55,7 @@ from Git history.
 
 `passes/anf/SSAOptimization.fs` runs the production fixed point. It uses the
 scalar rewrite and effect facts in `passes/anf/optimization/` and has focused
-plain-text cases in `src/Tests/ssa-optimization/ssa.opt`. These cover:
+plain-text cases in `test/fixtures/ssa-optimization/ssa.opt`. These cover:
 
 - literal folding for float negation, absolute value, square root,
   Int64/Float conversions, Float bit conversion and comparison, string
@@ -148,7 +148,7 @@ branch shapes plus the conservative call and observable-field boundaries.
 
 ## MIR optimization
 
-`passes/mir/MIR_Optimize.fs` and `src/Tests/optimization/mir.opt` own:
+`passes/mir/MIR_Optimize.fs` and `test/fixtures/optimization/mir.opt` own:
 
 - sparse conditional constant propagation over exact integer, Boolean, Float,
   String, Char, DateTime, Unit, and function-symbol values; bounded native

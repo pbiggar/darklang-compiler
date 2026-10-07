@@ -12,7 +12,7 @@
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-COMPILER_DIR="${REPO_ROOT}/ocaml/lib"
+COMPILER_DIR="${REPO_ROOT}/lib"
 RESULTS_DIR="${SCRIPT_DIR}/results"
 CHECKPOINT_FILE="${RESULTS_DIR}/checkpoint.txt"
 SITES_FILE="${RESULTS_DIR}/mutation_sites.txt"
@@ -237,7 +237,7 @@ run_mutation_test() {
     fi
 
     # Execute the already-built native runner.
-    [[ ! -x "${REPO_ROOT}/ocaml/_build/default/tests/tests_main.exe" ]] && { echo "BUILD_FAILURE"; return; }
+    [[ ! -x "${REPO_ROOT}/_build/default/test/tests_main.exe" ]] && { echo "BUILD_FAILURE"; return; }
 
     # Run tests
     if timeout "$TEST_TIMEOUT" "${REPO_ROOT}/run-tests" --quiet > /dev/null 2>&1; then

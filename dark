@@ -2,7 +2,7 @@
 # dark - Run the native Darklang compiler from this checkout.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPILER="$SCRIPT_DIR/ocaml/_build/default/bin/dark.exe"
+COMPILER="$SCRIPT_DIR/_build/default/bin/dark.exe"
 if [[ ! -x "$COMPILER" ]]; then
     echo "Compiler not found. Building..." >&2
     "$SCRIPT_DIR/build" --quiet

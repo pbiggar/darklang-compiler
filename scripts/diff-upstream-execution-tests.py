@@ -295,14 +295,14 @@ def build_patch_text(
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Diff src/Tests/e2e/upstream against darklang/dark "
+            "Diff test/fixtures/e2e/upstream against darklang/dark "
             "backend/testfiles/execution while ignoring expected "
             "Builtin.testDerrorMessage vs error= differences."
         )
     )
     parser.add_argument(
         "--local-dir",
-        default="src/Tests/e2e/upstream",
+        default="test/fixtures/e2e/upstream",
         help="Local directory to compare",
     )
     parser.add_argument(

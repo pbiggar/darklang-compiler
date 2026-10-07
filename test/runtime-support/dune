@@ -1,0 +1,30 @@
+; Private backend helpers for native execution checks, compiled from production sources.
+(include_subdirs no)
+(library
+ (name native_runtime_support)
+ (libraries dark_compiler)
+ (flags (:standard -w @a-42 -warn-error +a-42)))
+
+(rule
+ (targets TestFieldReferenceCounts.ml)
+ (deps ../../src/backend/x64/runtime/FieldReferenceCounts.ml)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../../src/backend/x64/runtime/FieldReferenceCounts.ml})))))
+(rule
+ (targets TestFieldReferenceCounts.mli)
+ (deps ../../src/backend/x64/runtime/FieldReferenceCounts.mli)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../../src/backend/x64/runtime/FieldReferenceCounts.mli})
+   (echo "val genFieldReleases : (AST.semanticType -> string) -> bool -> X64CodeGenTypes.funcCtx -> MemoryModel.rcFieldRelease list -> X86_64.instr list\nval genBoxedSumVariantFieldReleases : (AST.semanticType -> string) -> bool -> X64CodeGenTypes.funcCtx -> MemoryModel.rcBoxedSumVariantRelease list -> X86_64.instr list\nval genFixedBlockFieldReleases : (AST.semanticType -> string) -> bool -> X64CodeGenTypes.funcCtx -> MemoryModel.rcReleasePlan option -> X86_64.instr list\nval genFixedBlockFieldRelease : (AST.semanticType -> string) -> bool -> X64CodeGenTypes.funcCtx -> int -> int -> MemoryModel.rcReleasePlan -> X86_64.instr list\nval genRefCountDecGenericWithPlanUsing : (AST.semanticType -> string) -> bool -> X64CodeGenTypes.funcCtx -> X86_64.reg -> int -> MemoryModel.rcReleasePlan option -> X86_64.instr list\nval genRefCountDecStream : X64CodeGenTypes.funcCtx -> X86_64.reg -> MemoryModel.rcMetadata option -> X86_64.instr list\n")))))
+
+(rule
+ (targets TestListReferenceCounts.ml)
+ (deps ../../src/backend/x64/runtime/X64ListReferenceCounts.ml)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../../src/backend/x64/runtime/X64ListReferenceCounts.ml})))))
+(rule
+ (targets TestListReferenceCounts.mli)
+ (deps ../../src/backend/x64/runtime/X64ListReferenceCounts.mli)
+ (action (with-stdout-to %{targets}
+  (progn (echo "open Dark_compiler\n") (cat %{dep:../../src/backend/x64/runtime/X64ListReferenceCounts.mli})
+   (echo "val generateListRefCountDecHelperWith : string -> bool -> LIR.recordRegistry -> MemoryModel.rcSumShapeRegistry -> listLeafPayloadRelease -> X86_64.instr list\nval listLeafPayloadNeedsDictDecHelper : listLeafPayloadRelease -> bool\nval listLeafPayloadNeedsDictListValueDecHelper : listLeafPayloadRelease -> bool\nval listLeafPayloadNeedsClosureDecHelper : listLeafPayloadRelease -> bool\n")))))

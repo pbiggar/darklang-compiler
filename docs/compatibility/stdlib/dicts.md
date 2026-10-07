@@ -32,7 +32,7 @@ String-keyed by definition and rejects other Dict key types at compile time.
 
 ## Evidence
 
-The unchanged pinned `src/Tests/e2e/upstream/stdlib/dict.dark` file is enabled
+The unchanged pinned `test/fixtures/e2e/upstream/stdlib/dict.dark` file is enabled
 except for individually catalogued diagnostic, unavailable-builtin, invalid-key,
 and numeric-edge cases. Its enabled cases cover primitive widths, tuple, list,
 option, record, enum, nested Dict, and recursively nested keys. The formerly

@@ -48,8 +48,8 @@ value across the backedge.
 
 ## Validation
 
-`src/Tests/e2e/tailcall.e2e` covers direct recursion, argument cycles,
+`test/fixtures/e2e/tailcall.e2e` covers direct recursion, argument cycles,
 higher-arity calls, generics, managed arguments, and floating-point arguments.
-`src/Tests/e2e/tco-refcounting.e2e` covers cleanup and constant-stack managed
+`test/fixtures/e2e/tco-refcounting.e2e` covers cleanup and constant-stack managed
 loops. Focused cleanup-ordering tests live in
-`ocaml/tests/compiler-passes/TailCallDetectionTests.ml`.
+`test/compiler-passes/TailCallDetectionTests.ml`.

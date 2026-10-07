@@ -13,8 +13,8 @@ The interpreter baseline is
 `packages/darklang/stdlib/http.dark:4-259`; executable behavior is pinned by
 `backend/testfiles/execution/stdlib/html.dark` and `http.dark` at the same
 revision. The compiler implementation is in
-`ocaml/share/stdlib/Html.dark`, `Http.dark`, and `HttpRequest.dark`, loaded
-after Blob by `ocaml/lib/driver/StdlibCompilation.ml`.
+`stdlib/Html.dark`, `Http.dark`, and `HttpRequest.dark`, loaded
+after Blob by `src/driver/StdlibCompilation.ml`.
 
 ## Compatibility matrix
 
@@ -36,7 +36,7 @@ pinned surface; void-tag detection is internal to Html serialization.
 
 ## Executable coverage and AOT boundaries
 
-`src/Tests/e2e/html_http.e2e` covers compiler-supported Dark syntax, public records and sums,
+`test/fixtures/e2e/html_http.e2e` covers compiler-supported Dark syntax, public records and sums,
 qualified aliases, every constructor, rendering boundaries, parser quirks,
 request accessors, Blob bodies, every response helper, ordered duplicate
 `Set-Cookie` headers, and Cookie construction. The exact pinned upstream Html
@@ -74,7 +74,7 @@ returns headers after parsing them and pulls HTTP or HTTPS body bytes on demand.
 Closing or draining its body stream closes the connection. `post` and `put`
 accept headers and a Blob body; `options`, `delete`, and `head` accept only a URL
 and send empty headers and bodies, matching the upstream signatures. Focused
-`src/Tests/e2e/http_client_wrappers.e2e` cases cover the wrapper signatures,
+`test/fixtures/e2e/http_client_wrappers.e2e` cases cover the wrapper signatures,
 invalid URLs, forwarded header errors, and guest private-address restrictions.
 
 `Stdlib.Http.Request.header` performs the upstream case-insensitive lookup.
@@ -107,7 +107,7 @@ and request wire buffering is capped at the body limit plus 1 MiB for framing.
 Concurrency, IPv6 listeners, persistent connections, response compression,
 interpreter telemetry integration, and server-side TLS remain follow-up work.
 
-`src/Tests/e2e/http_server.e2e` covers routing, configuration, framing limits,
+`test/fixtures/e2e/http_server.e2e` covers routing, configuration, framing limits,
 and listener ownership. `python3 scripts/test_http_server_peer.py` exercises
 the compiled server against local TCP clients, including fragmented and binary
 bodies, 413/400/408/417/500 responses, HEAD, duplicate headers, bind failure,

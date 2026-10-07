@@ -11,7 +11,7 @@ model, context precedence, diagnostics, and pinned interpreter evidence.
 
 - The compiler is designed to eventually be rewritten in Darklang itself
 - Generate Mach-O/ELF binaries directly without using an assembler or linker
-- Pure functional F# code (no mutation, no exceptions)
+- Functional OCaml algorithms with explicit interfaces and local I/O/cache mutation
 
 ## IR Pipeline
 

@@ -196,6 +196,6 @@ under construction; it is removed when the final coverage step passes.
 ## Related work
 
 - [Compiler pipeline](../compiler/pipeline.md)
-- [SSA boundary migration](ssa-boundary-migration.md): coordinate stage
+- [SSA boundary plan](ssa-boundary-plan.md): coordinate stage
   boundaries so the two migrations do not establish duplicate long-lived IRs.
 - [Verification policy](../contributing/verification.md)

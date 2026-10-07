@@ -1,0 +1,6 @@
+; Explicit cross-target native runtime checks, outside the default host suite.
+(include_subdirs no)
+(executable
+ (name process_runtime_main)
+ (libraries dark_compiler native_runtime_support unix)
+ (flags (:standard -w @a -warn-error @a)))

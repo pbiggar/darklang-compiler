@@ -2,6 +2,7 @@
 
 **
 !Dockerfile
+!dependencies.lock
 !scripts/
 !scripts/install-darklang-interpreter.sh
 !scripts/install-herdr.sh

@@ -1,0 +1,16 @@
+(* ListDisplay.ml - Shared list display helper lookup
+   Centralizes the mapping from list element types to the stdlib display
+   functions that render list values for printing. *)
+let getDisplayStringFunc = function
+ | AST.TInt64 -> Some "Darklang.Stdlib.List.__toDisplayString_i64"
+ | AST.TInt -> Some "Darklang.Stdlib.List.__toDisplayString_int"
+ | AST.TBool -> Some "Darklang.Stdlib.List.__toDisplayString_bool"
+ | AST.TString -> Some "Darklang.Stdlib.List.__toDisplayString_str"
+ | AST.TChar -> Some "Darklang.Stdlib.List.__toDisplayString_char"
+ | AST.TFloat64 -> Some "Darklang.Stdlib.List.__toDisplayString_f64"
+ | AST.TList AST.TInt64 -> Some "Darklang.Stdlib.List.__toDisplayString_list_i64"
+ | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt128
+ | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TUInt128
+ | AST.TBlob | AST.TDateTime | AST.TUnit | AST.TNever
+ | AST.TFunction _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _ | AST.TList _
+ | AST.TStream _ | AST.TVar _ | AST.TInferenceVar _ | AST.TInternalRawPtr | AST.TDict _ -> None

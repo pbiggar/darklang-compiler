@@ -1,85 +1,68 @@
 # Differential compiler fuzzing
 
-Fuzzing is deferred during the OCaml replacement, as agreed in the
-[migration plan](../project/ocaml-port-plan.md). `./fuzz` now reports that status
-without building or launching anything. The F# fuzzer, reducer, controller and
-their tests were retired with the compiler sources; retrieve them from commit
-`df9dae7e1647275f6bc9104618f20ef84a7251be` in Git history when implementing the
-native replacement. The design below documents that historical workflow.
+The native OCaml fuzzer constructs typed compiler ASTs, formats them with
+`ASTPrettyPrinter`, and compares generated native programs with
+`darklang-interpreter eval`. The interpreter defines the expected result;
+the fuzzer contains no evaluator.
 
-The F# fuzzer generates valid expressions directly as the compiler's
-`AST.Expr`, formats them with `ASTPrettyPrinter`, and compares the compiled
-native result with `darklang-interpreter eval`. The interpreter is the semantic
-oracle; the fuzzer does not implement a second evaluator or language model.
+## Campaigns
 
-Run the continuous fuzz-to-E2E workflow from the repository root:
+Build the pinned toolchain and put `darklang-interpreter` on PATH:
 
 ```bash
-./fuzz
+./build --ai
+./scripts/install-darklang-interpreter.sh
+./fuzz --seed 1234 --depth 6 --timeout-ms 2000
 ```
 
-When launched from the primary coordination checkout, the script first creates
-a dedicated campaign worktree from the configured local integration ref and
-continues there before building or writing any artifacts. Campaign and fix
-worktrees are created directly under `/Users/paulbiggar/projects/`.
+`./fuzz` runs until interrupted. It creates a campaign worktree when launched
+from the primary coordination checkout. Before each compilation, it writes
+`current.dark` under its ignored `fuzz-results/` directory. A finding preserves
+the original program and diagnostic, then runs deterministic syntax reduction.
+Every smaller candidate is parsed and executed through both the interpreter
+and compiler. A reduction must preserve the result type and failure category.
+Programs rejected by the interpreter are skipped; a missing or timed-out
+oracle stops the campaign rather than being reported as a compiler discrepancy.
 
-The fuzzer chooses and prints a seed, then generates cases without a fixed case
-limit. Use optional flags when a run needs to be reproducible or tuned:
+The generator covers scalar literals, tuples, lists, dictionaries, records and
+updates, Option/Result patterns, guards, lambdas, generic functions, bounded
+direct and mutual recursion, interpolation, Blob, DateTime, and Stream values.
+The final observation is Int64 or Bool. The reducer operates on the compiler's
+parsed syntax and removes expressions, declarations, match arms and guards.
+Unicode source ranges are converted to byte offsets before splicing.
+
+## Replay and bounded runs
+
+The executable can be used without the interactive controller:
 
 ```bash
-./fuzz --seed 1234 --timeout-ms 5000 --depth 8
+_build/default/tools/fuzzer/main.exe --seed 1234 --limit 100 --artifacts /tmp/fuzz
+_build/default/tools/fuzzer/main.exe --replay /tmp/fuzz/finding.dark
+_build/default/tools/fuzzer/main.exe --minimize /tmp/fuzz/finding.dark
+_build/default/tools/fuzzer/main.exe --generate 100 --seed 1234 --artifacts /tmp/generated
 ```
 
-Before compiling each case, the fuzzer writes its source to the campaign's
-`current.dark`, so an unexpected compiler-process crash still leaves a
-reproducer. When a discrepancy is found, the script preserves the original
-source and diagnostic and always minimizes the source with the deterministic
-AST reducer. It displays the reduced case, the result expected by the
-interpreter, and the compiler's actual result, then asks whether Codex should
-start a fix. The reducer itself is local and deterministic; it does
-not use an AI service or implement a second evaluator.
-It tries replacing expressions with branches, operands, arguments, or match
-bodies, and dropping match arms, guards, dictionary entries, and blocks of
-declarations. Each candidate must preserve the observed result type and
-reproduce the same failure through the interpreter and compiler.
+`--interpreter PATH` selects the oracle. `--generate` writes programs without
+running either implementation. All process timeouts are in milliseconds.
+Replay exits successfully only when both implementations accept the source
+and agree. Minimized sources are written next to the input as `.min.dark`.
 
-If accepted, the controller creates a branch and worktree from the configured
-local integration ref. Non-interactive Codex adds the focused failing E2E test,
-fixes and commits the compiler, then stops without landing. The controller
-checks the clean commit, reruns the full build, tests, and parent-relative
-benchmark gate, builds and publishes the fuzzer, and replays the minimized case.
-It shows the commit, diff summary, and validation logs before asking for
-separate approval to run `./land`. Declining that approval preserves the branch
-and stops the loop. If the start approval is declined, the saved finding remains
-in `fuzz-results/` and the loop continues without changing tracked tests.
+## Approved fixes
 
-After `./land` prints `queued`, the controller fuzzes with the published binary
-from that exact fix. Before creating another fix branch, it waits for the prior
-commit (or a patch-equivalent replay of it) to appear in the configured local
-integration ref. It does not fetch or inspect the merge-train queue. If another
-discrepancy appears first, its minimized source remains saved while the loop
-waits. Each new fix then starts from the updated integration ref, so it contains
-the earlier fix.
+After reduction, the controller shows the source, expected result and actual
+result. It asks before launching Codex in a separate fix worktree. Codex adds a
+failing E2E test, fixes the compiler and commits, without landing.
 
-The generator constructs typed compiler ASTs using all scalar types with
-source literals: the signed and unsigned integer widths, arbitrary-precision
-`Int`, `Bool`, `Float`, `String`, `Char`, and `Unit`. It also combines tuples,
-lists and dictionaries over every literal scalar type, a generated record type
-and function, record updates, `Option` and `Result` constructors, pattern
-matches and guards, lambdas and calls, bounded direct and mutual recursion,
-generic functions with one or two type parameters, interpolation, and `Blob`,
-`DateTime`, and `Stream` values constructed through the standard library. It
-generates variables, `let`, `if`, arithmetic, comparisons, boolean operations,
-and string concatenation. Top-level observations remain `Int64` or `Bool`, whose
-interpreter and native renderings are directly comparable. Other values flow
-through bindings and comparisons. The reducer preserves generated declarations
-while shrinking the expression.
+The controller verifies the clean commit, full build, complete host suite,
+parent-relative benchmark gate and replay. It copies the native fuzzer from
+that exact commit into an isolated runtime directory, shows the review evidence,
+and asks separately before running `./land`. Declining preserves the fix branch.
 
-The interpreter used as the oracle currently rejects some compiler language
-features, including user-defined sum constructors and tuple field access.
-Other source features need an oracle-compatible generation and observation path
-before they can join this differential campaign. Add constructs directly to
-the existing AST generator rather than introducing a parallel language model.
+After a queued handoff, the controller uses that committed runtime for the next
+campaign. Before starting another fix, it waits for the previous commit or a
+patch-equivalent replay to appear in the configured local integration ref.
+It neither fetches nor inspects the merge-train queue.
 
-Every accepted compiler fix starts with a focused failing E2E test before
-changing compiler behavior. The script runs until interrupted with Ctrl-C.
+On ChatGPT Work VMs, direct generation, replay, reduction and campaigns use the
+writable workspace. Local merge-train integration is unavailable; keep fixes
+on their branches for an authorized GitHub handoff.

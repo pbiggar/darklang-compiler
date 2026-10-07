@@ -1,0 +1,4 @@
+(executable
+ (name main)
+ (libraries dark_compiler process_capture)
+ (flags (:standard -w @a-4-42 -warn-error +a-4-42)))

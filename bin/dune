@@ -1,0 +1,10 @@
+(rule
+ (target StandaloneLinkFlags.sexp)
+ (deps ../scripts/compiler-link-flags.py)
+ (action (run python3 %{dep:../scripts/compiler-link-flags.py} %{ocaml-config:system} %{target})))
+(executable
+ (name dark)
+ (public_name dark)
+ (libraries dark_compiler)
+ (link_flags (:standard (:include StandaloneLinkFlags.sexp)))
+ (flags (:standard -w @a-42 -warn-error +a-42)))

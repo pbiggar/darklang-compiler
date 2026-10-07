@@ -1,0 +1,91 @@
+(* RefCountInsertionTests.ml - Register memory and ANF ownership test groups. *)
+[@@@warning "-42"]
+open Dark_compiler
+open ANF
+open RcJoinTests
+let tests =
+[
+      "Join cleanup releases locals at transfer and enclosing owners after continuation", testJoinCleanupPaths;
+      "Join verifier accepts enclosing captures and nested outward transfers", (fun () -> verifyJoin (Let (TempId 2, Atom joinValue, Join (joinParameter, Return (Var (TempId 2)), Join ({id=TempId 3; typ=AST.TBool}, Jump (TempId 1, joinValue), Jump (TempId 3, BoolLiteral true))))));
+      "Join verifier accepts immediate scalar block arguments", (fun () -> verifyJoin (Join ({id=TempId 3; typ=AST.TInt8}, Return joinValue, Jump (TempId 3, IntLiteral (Int8 1)))));
+      "Join verifier rejects branch-local continuation capture", rejectsJoin "outside lexical scope" (Join (joinParameter, Return (Var (TempId 2)), Let (TempId 2, Atom joinValue, Jump (TempId 1, joinValue))));
+      "Join verifier rejects parameter use in entry", rejectsJoin "outside lexical scope" (Join (joinParameter, Return (Var (TempId 1)), Jump (TempId 1, Var (TempId 1))));
+      "Join verifier rejects recursive target", rejectsJoin "target" (Join (joinParameter, Jump (TempId 1, joinValue), Jump (TempId 1, joinValue)));
+      "Join verifier rejects mismatched argument", rejectsJoin "expects" (Join (joinParameter, Return joinValue, Jump (TempId 1, BoolLiteral true)));
+      "Join verifier rejects managed parameter", rejectsJoin "unsupported block argument" (Join ({joinParameter with typ=AST.TString}, Return joinValue, Jump (TempId 1, StringLiteral "value")));
+      "Join verifier rejects returning entry", rejectsJoin "instead of transferring" (Join (joinParameter, Return joinValue, Return joinValue));
+      "Join verifier rejects target shadowing", rejectsJoin "shadows" (Let (TempId 1, Atom joinValue, Join (joinParameter, Return joinValue, Jump (TempId 1, joinValue))));
+  "RcShape supports structural construction and equality", MemoryShapeTests.testRcShapeConstructionAndEquality;
+  "RcShape classifies primitives as immediate", MemoryShapeTests.testRcShapeClassifiesPrimitivesAsImmediate;
+  "RcShape classifies managed integer buffers", MemoryShapeTests.testRcShapeClassifiesManagedIntegerBuffers;
+  "RcShape classifies tuples and records as fixed blocks", MemoryShapeTests.testRcShapeClassifiesTuplesAndRecordsAsFixedBlocks;
+  "RcShape classifies remaining runtime shapes", MemoryShapeTests.testRcShapeClassifiesRemainingRuntimeShapes;
+  "RcShape classifies sums with variant metadata", MemoryShapeTests.testRcShapeClassifiesSumsWithVariantMetadata;
+  "RcShape ownership helpers classify managed roots", MemoryShapeTests.testRcShapeOwnershipHelpersClassifyManagedRoots;
+  "RcShape ownership helpers classify automatic binding decs", MemoryShapeTests.testRcShapeOwnershipHelpersClassifyAutomaticBindingDecs;
+  "RcShape ownership helpers classify borrowed retains", MemoryShapeTests.testRcShapeOwnershipHelpersClassifyBorrowedRetains;
+  "RcShape ownership helpers select root dispatch", MemoryShapeTests.testRcShapeOwnershipHelpersSelectRootDispatch;
+  "RcShape ownership helpers select retain/release operations", MemoryShapeTests.testRcShapeOwnershipHelpersSelectRetainReleaseOperations;
+  "RcShape ownership helpers classify storage", MemoryShapeTests.testRcShapeOwnershipHelpersClassifyStorage;
+  "RcShape ownership helpers classify managed RC roots", MemoryShapeTests.testRcShapeOwnershipHelpersClassifyRootManagement;
+  "RcShape ownership helpers classify ownership-transfer roots", MemoryShapeTests.testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots;
+  "RcShape ownership helpers classify recursive release", MemoryShapeTests.testRcShapeOwnershipHelpersClassifyRecursiveRelease;
+  "RcShape release plan classifies field cleanup", MemoryShapeTests.testRcShapeReleasePlanClassifiesFieldCleanup;
+  "Rc source type fingerprints are structural and stable", MemoryShapeTests.testRcSourceTypeFingerprintIsStructuralAndStable;
+  "Rc release-plan fingerprints are compositional and stable", MemoryShapeTests.testRcReleasePlanFingerprintIsCompositionalAndStable;
+  "Rc release-plan cache keys are compact only for large plans", MemoryShapeTests.testRcReleasePlanCacheKeyOnlyFingerprintsLargePlans;
+  "RcReleasePlan of type uses record metadata", MemoryShapeTests.testRcReleasePlanOfTypeUsesRecordMetadata;
+  "RcReleasePlan of type uses sum payload metadata", MemoryShapeTests.testRcReleasePlanOfTypeUsesSumPayloadMetadata;
+  "RcReleasePlan of type with sums uses variant metadata", MemoryShapeTests.testRcReleasePlanOfTypeWithSumsUsesVariantMetadata;
+  "recursive sum release plan uses typed back-edge", MemoryShapeTests.testRecursiveSumReleasePlanUsesTypedBackEdge;
+  "recursive record release plan uses typed back-edge", MemoryShapeTests.testRecursiveRecordReleasePlanUsesTypedBackEdge;
+  "RcReleasePlan of type classifies remaining root kinds", MemoryShapeTests.testRcReleasePlanOfTypeClassifiesRemainingRootKinds;
+  "RcShape requires record metadata", MemoryShapeTests.testRcShapeRequiresRecordMetadata;
+  "RcShape with sums requires sum metadata", MemoryShapeTests.testRcShapeWithSumsRequiresSumMetadata;
+  "inferCExprType Call returns function return type", RcTypeFactTests.testInferCallReturnsFunctionReturnType;
+  "malformed raw_get intrinsic does not infer Int64", RcTypeFactTests.testMalformedRawGetIntrinsicDoesNotInferInt64;
+  "fresh owned value transfers into raw slot", CleanupTests.testFreshOwnedValueTransfersIntoRawSlot;
+  "raw slot retains value used after initialization", CleanupTests.testRawSlotRetainsValueUsedAfterInitialization;
+  "raw slot retains fresh Stream value", CleanupTests.testRawSlotRetainsFreshStreamValue;
+  "branch-local TempId reuse uses current RC type context", CleanupTests.testBranchLocalTempReuseUsesCurrentTypeContext;
+  "returned aggregate transfers owned value through alias", CleanupTests.testReturnedAggregateTransfersOwnedValueThroughAlias;
+  "returned aggregate transfers owned value through typed alias", CleanupTests.testReturnedAggregateTransfersOwnedValueThroughTypedAlias;
+  "returned aggregate retains ownership-producing Stream alias", CleanupTests.testReturnedAggregateRetainsOwnershipProducingStreamAlias;
+  "returned aggregate transfers owned value after borrowed use", CleanupTests.testReturnedAggregateTransfersOwnedValueAfterBorrowedUse;
+  "explicit release blocks later aggregate transfer", CleanupTests.testExplicitReleaseBlocksLaterAggregateTransfer;
+  "returned aggregate transfers owned value across branches", CleanupTests.testReturnedAggregateTransfersOwnedValueAcrossBranches;
+  "returned aggregate requires every branch to transfer owned value", CleanupTests.testReturnedAggregateRequiresEveryBranchToTransferOwnedValue;
+  "returned aggregate transfers nested owned aliases", CleanupTests.testReturnedAggregateTransfersNestedOwnedAliases;
+  "returned aggregate does not transfer duplicated aliases", CleanupTests.testReturnedAggregateDoesNotTransferDuplicatedAliases;
+  "static string binding skips no-op RC traffic", CleanupTests.testStaticStringBindingSkipsNoOpRcTraffic;
+  "known empty-list binding skips no-op RC traffic", CleanupTests.testKnownEmptyListBindingSkipsNoOpRcTraffic;
+  "aggregate skips retains for known non-RC sentinels", CleanupTests.testAggregateSkipsRetainsForKnownNonRcSentinels;
+  "aggregate skips retain for conditional static string", CleanupTests.testAggregateSkipsRetainForConditionalStaticString;
+  "non-self tailcall does not keep dec after tailcall", CleanupTests.testNonSelfTailCallDoesNotLeaveDecAfterTailCall;
+  "alias return materializes ownership even for borrowed-return function", CleanupTests.testAliasReturnMaterializesOwnershipEvenIfFunctionMarkedBorrowed;
+  "record reuse retains replacement before releasing old child", CleanupTests.testRecordReuseRetainsReplacementBeforeReleasingOldChild;
+  "composite record reuse carries recursive release plan", CleanupTests.testCompositeRecordReuseCarriesRecursiveReleasePlan;
+  "nested record reuse carries recursive release plan", CleanupTests.testNestedRecordReuseCarriesRecursiveReleasePlan;
+  "boxed sum reuse releases source variant before overwrite", CleanupTests.testBoxedSumReuseReleasesSourceVariantBeforeOverwrite;
+  "recursive record reuse carries typed back-edge release plan", CleanupTests.testRecursiveRecordReuseCarriesTypedBackEdgeReleasePlan;
+  "recursive boxed sum reuse carries typed back-edge release plan", CleanupTests.testRecursiveBoxedSumReuseCarriesTypedBackEdgeReleasePlan;
+  "map helper accumulator return transfers ownership without retain", TransferTests.testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator;
+  "map helper self tail-call releases replaced accumulator", TransferTests.testMapHelperSelfTailCallReleasesReplacedAccumulator;
+  "borrowed projection self tail-call args are retained", TransferTests.testBorrowedProjectionSelfTailCallArgsAreRetained;
+  "borrowed projection self-recursive call args are retained", TransferTests.testBorrowedProjectionSelfRecursiveCallArgsAreRetained;
+  "borrowed projection alias self-recursive call args are retained", TransferTests.testBorrowedProjectionAliasSelfRecursiveCallArgsAreRetained;
+  "borrowed projection if-branch self-recursive call args are retained", TransferTests.testBorrowedProjectionIfBranchSelfRecursiveCallArgsAreRetained;
+  "borrowed projection from parameter self-recursive call stays borrowed", TransferTests.testBorrowedProjectionFromParameterSelfRecursiveCallStaysBorrowed;
+  "map helper closure-producing call retains borrowed source", TransferTests.testMapHelperClosureProducingCallRetainsBorrowedSource;
+  "map helper closure source to value keeps source borrowed", TransferTests.testMapHelperClosureSourceToValueKeepsSourceBorrowed;
+  "closure pushBack retains immediate closure-call result", TransferTests.testClosurePushBackRetainsImmediateClosureCallResult;
+  "borrowed call materializes owned local", CallTests.testBorrowedCallMaterializesOwnedLocal;
+  "returned borrowed call materializes ownership", CallTests.testReturnedBorrowedCallMaterializesOwnership;
+  "call returning closure gets auto-dec after use", CallTests.testCallReturningClosureGetsAutoDecAfterUse;
+  "closure call returning closure gets auto-dec after use", CallTests.testClosureCallReturningClosureGetsAutoDecAfterUse;
+  "pure enum binding does not get automatic dec", CallTests.testPureEnumBindingDoesNotGetAutomaticDec;
+  "generic pure enum binding does not get automatic dec", CallTests.testGenericPureEnumBindingDoesNotGetAutomaticDec;
+  "program RC fresh temps follow existing program temps", CallTests.testProgramRcFreshTempsFollowExistingProgramTemps;
+  "program RC rejects drifted ownership contracts", CallTests.testProgramRcRejectsDriftedOwnershipContract;
+  "bare sum type refs are canonicalized for RC source types", CallTests.testBareSumTypeRefsAreCanonicalizedForRcSourceTypes;
+]

@@ -11,7 +11,7 @@ Pinned interpreter evidence is `backend/src/LibParser/Lexer.fs:477-501,
 689-824,905-965`, `backend/src/LibParser/Parser.fs:529-554,1148-1219,
 1305-1355,1917-2038,2511-3054`, and `backend/src/LibParser/GRAMMAR.md:23-33,
 108-111,172-174,224-281`. The compiler parser consumes the identifier contract
-centralized in `ocaml/lib/NameSyntax.ml`.
+centralized in `src/NameSyntax.ml`.
 
 ## Revalidated matrix
 
@@ -72,7 +72,7 @@ boundary.
 - Explicit compiler intrinsic candidates remain classified in
   [name-resolution.md](name-resolution.md). Performance is outside this matrix.
 
-Imported `src/Tests/e2e/upstream/` fixtures remain unchanged as same-source
+Imported `test/fixtures/e2e/upstream/` fixtures remain unchanged as same-source
 evidence. Repository-authored stdlib, E2E, optimization, benchmark, roundtrip,
 and documentation sources use `let`, modules, and apostrophe-prefixed
 declaration parameters.

@@ -15,8 +15,8 @@ evidence only.
 
 | Claim | Compiler probe | Interpreter evidence | Result |
 | --- | --- | --- | --- |
-| `let` accepts optional `in` and a layout continuation | `src/Tests/syntax/bindings.syntax`; `src/Tests/e2e/interpreter/bindings.e2e`; `src/Tests/e2e/interpreter_layout_parity.e2e` | `backend/testfiles/execution/language/basic/elet.dark`; `LibParser/Parser.fs:1357-1443` | Shared: the body is the next line at or left of the `let`, and two lines at the indent of a block are a statement sequence, both recovered from columns before lexing |
-| Let and lambda binders are variable, wildcard, unit, parenthesized, or nested tuple patterns only | `bindings.syntax`; restricted parser in `ocaml/lib/frontend/interpreter/Parser.ml` | dedicated `parseLetPattern`, `LibParser/Parser.fs:1306-1355` | Shared |
+| `let` accepts optional `in` and a layout continuation | `test/fixtures/syntax/bindings.syntax`; `test/fixtures/e2e/interpreter/bindings.e2e`; `test/fixtures/e2e/interpreter_layout_parity.e2e` | `backend/testfiles/execution/language/basic/elet.dark`; `LibParser/Parser.fs:1357-1443` | Shared: the body is the next line at or left of the `let`, and two lines at the indent of a block are a statement sequence, both recovered from columns before lexing |
+| Let and lambda binders are variable, wildcard, unit, parenthesized, or nested tuple patterns only | `bindings.syntax`; restricted parser in `src/frontend/interpreter/Parser.ml` | dedicated `parseLetPattern`, `LibParser/Parser.fs:1306-1355` | Shared |
 | Public lambdas use unannotated `fun patterns -> body` | `bindings.syntax`; canonical parser probes | `backend/testfiles/execution/language/basic/elambda.dark`; `LibParser/Parser.fs:2044-2071` | Shared |
 | Parameter and return annotations belong to local function declarations | `bindings.syntax`; parser and program-structure tests | `LibParser/Parser.fs` local-function production | Shared |
 | The RHS is outside the new scope and runs before the continuation | `bindings.e2e` rebinding and use-before-binding probes | `LibParser/WrittenTypesToProgramTypes.fs:591-611` | Shared |

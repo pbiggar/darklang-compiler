@@ -66,7 +66,7 @@ functions do not add runtime type dispatch to imitate it.
 ## Native implementation anchors
 
 The typed intrinsic registry is
-`ocaml/lib/DarkStdlib.ml:101-113`. Effect nodes begin at
+`src/DarkStdlib.ml:101-113`. Effect nodes begin at
 the ANF, MIR, and LIR definitions; intrinsic lowering lives in
 `passes/anf/lowering/Primitives.fs`. Both native implementations are under
 `backend/{arm64,x64}/instructions/`. They are separate from the final-result
@@ -87,7 +87,7 @@ routed through `stdlib/String.dark:419`; signed selection parsing is aligned at
 ## Revision-stamped probes
 
 The executable matrix is
-`src/Tests/e2e/interpreter/cli_presentation.e2e`. Public prelude probes at
+`test/fixtures/e2e/interpreter/cli_presentation.e2e`. Public prelude probes at
 lines 9-20 cover empty and Unicode strings, embedded/trailing newlines, empty
 and multi-element lists, mixed ordered writes, optimized and unoptimized
 execution, zero stderr, and final Unit suppression. The fixture uses the explicit

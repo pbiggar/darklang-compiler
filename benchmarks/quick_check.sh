@@ -187,7 +187,7 @@ if [ -z "$PREBUILT_DIR" ]; then
         pretty_fail "Dark compiler build failed"
         exit 1
     fi
-    COMPILER_EXE="$PROJECT_ROOT/ocaml/_build/default/bin/dark.exe"
+    COMPILER_EXE="$PROJECT_ROOT/_build/default/bin/dark.exe"
     if [ ! -f "$COMPILER_EXE" ]; then
         pretty_fail "Dark compiler output is missing: $COMPILER_EXE"
         exit 1

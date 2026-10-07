@@ -1,0 +1,89 @@
+// CLI/process/host/input parity tests pinned to darklang/dark
+// 04fbe9dcc995c6188757d583e273cbd30a3e2d3d. Compiler work began at
+// cce6860f02b13d416295ff342341eeeae997f49f.
+
+Stdlib.Cli.Process.shellQuote "it's ready" = "'it'\\''s ready'"
+
+match Stdlib.Cli.OS.getOS () with | Ok Linux -> true | Ok MacOS -> true | _ -> false = true
+
+Stdlib.Cli.Sys.cpuCount () > 0 = true
+Stdlib.Cli.Sys.cpuCount () > 1 = true // test hosts expose more than one CPU; the intrinsic must not return its old constant
+Stdlib.Cli.Sys.currentPid () > 0 = true
+
+// POSIX failures must preserve the kernel errno instead of inferring it from
+// localized command-line utility output.
+match Stdlib.Cli.Posix.kill (Stdlib.Cli.Sys.currentPid ()) 99999 with | Error error -> (error.errno, error.message) | Ok (()) -> (0, "unexpected") = (22, "Invalid argument")
+
+match Stdlib.Cli.Process.exec "printf" (["%s", "direct execution"]) with | Ok output -> output | Error message -> message = "direct execution"
+
+match Stdlib.Cli.Process.run "/definitely/missing/cli-parity" [] with | Error error -> (error.errno, error.message) | Ok _ -> (0, "unexpected") = (2, "No such file or directory")
+
+// Argv execution is a process primitive, not shell evaluation. A broken
+// configured shell must not affect an absolute executable.
+match Stdlib.Cli.Process.run "/usr/bin/printf" (["%s", "native argv"]) with | Ok output -> (output.exitCode, output.stdout, output.stderr) | Error error -> (-1, "", error.message) = (0, "native argv", "") env="SHELL=/definitely/missing"
+
+let outcome = Stdlib.Cli.execute "printf 'stdout'; printf 'stderr' >&2; exit 7" in (outcome.exitCode, outcome.stdout, outcome.stderr) = (7, "stdout", "stderr")
+
+let outcome = Stdlib.Cli.execute "printf 'x\\n\\n'" in outcome.stdout = "x\n\n"
+
+let outcome = Stdlib.Cli.execute "head -c 100000 /dev/zero; head -c 100000 /dev/zero >&2" in (Stdlib.String.length outcome.stdout, Stdlib.String.length outcome.stderr) = (100000, 100000)
+
+let key = Stdlib.Cli.Stdin.KeyRead.KeyRead { key = Stdlib.Cli.Stdin.Key.Key.A, modifiers = Stdlib.Cli.Stdin.Modifiers.Modifiers { alt = true, ctrl = true, shift = true }, keyChar = "A", repeat = 2 } in Stdlib.Cli.Stdin.KeyRead.toString key = stdout="\"ALT+CTRL+SHIFT+A\"\n" stderr=""
+
+let key = Stdlib.Cli.Stdin.readKey () in (Stdlib.Cli.Stdin.Key.toString key.key, key.keyChar, key.repeat) = ("Escape", "", 1)
+
+match Stdlib.Cli.Env.get "PATH" with | Some path -> Stdlib.String.length path > 0 | None -> false = true
+
+Stdlib.Cli.Env.get "DARK_NATIVE_ENV_PROBE" = Some "value  \n" env="DARK_NATIVE_ENV_PROBE=value  \n"
+
+match Stdlib.Cli.Sys.hostname () with | Ok hostname -> Stdlib.String.length hostname > 0 | Error _ -> false = true env="PATH="
+
+match Stdlib.Cli.Sys.currentUser () with | Some user -> user | None -> "missing" = "native user  " env="LOGNAME=native user  " env="USER=native user  " env="PATH="
+
+// Arguments are positional (excluding the executable name) and parse failures
+// remain values at the public CLI boundary.
+match Stdlib.Cli.Args.int64 0 with | Ok value -> value | Error message -> Builtin.testRuntimeError message = 42L arg="42"
+match Stdlib.Cli.Args.int64 0 with | Ok value -> value | Error message -> Builtin.testRuntimeError message = stdout="42\n" stderr="" arg="42"
+
+match Stdlib.Cli.Args.int64 0 with | Error message -> message | Ok _ -> "unexpected" = "invalid Int64 command-line argument at index 0: twelve" arg="twelve"
+
+match Stdlib.Cli.Process.runIn "/" "pwd" [] with | Ok output -> Stdlib.String.trimEnd output.stdout | Error error -> error.message = "/" isolated=true
+
+match Stdlib.Cli.Process.runWithEnv "/bin/sh" (["-c", "printf %s \"$CLI_PARITY_VALUE\""]) ([("CLI_PARITY_VALUE", "inherited")]) with | Ok output -> output.stdout | Error error -> error = "inherited" isolated=true
+
+// Each missing pair used to retain two 1 MiB capture buffers, so resolving
+// both executables late in PATH exhausted the fixed native heap.
+match Stdlib.Cli.Process.pipe "printf" (["abc"]) "tr" (["a-z", "A-Z"]) with | Ok output -> output.stdout | Error error -> error.message = "ABC" isolated=true env="PATH=/definitely/missing/01:/definitely/missing/02:/definitely/missing/03:/definitely/missing/04:/definitely/missing/05:/definitely/missing/06:/definitely/missing/07:/definitely/missing/08:/definitely/missing/09:/definitely/missing/10:/definitely/missing/11:/definitely/missing/12:/definitely/missing/13:/definitely/missing/14:/definitely/missing/15:/definitely/missing/16:/definitely/missing/17:/usr/bin"
+
+match Stdlib.Cli.Process.runIn "/" "/bin/pwd" [] with | Ok output -> Stdlib.String.trimEnd output.stdout | Error error -> error.message = "/" env="SHELL=/definitely/missing" env="PATH="
+
+match Stdlib.Cli.Process.runWithEnv "/bin/sh" (["-c", "printf %s \"$CLI_PARITY_VALUE\""]) ([("CLI_PARITY_VALUE", "native env")]) with | Ok output -> output.stdout | Error error -> error = "native env" env="SHELL=/definitely/missing"
+
+match Stdlib.Cli.Process.pipe "/usr/bin/printf" (["abc"]) "/usr/bin/tr" (["a-z", "A-Z"]) with | Ok output -> output.stdout | Error error -> error.message = "ABC" env="SHELL=/definitely/missing" env="PATH="
+
+// The consumer creates a marker while the producer is alive. A sequential
+// implementation times out first and prints "sequential" instead.
+let marker = $"/tmp/dark-native-pipe-{Stdlib.Int.toString (Stdlib.Cli.Sys.currentPid ())}" in let quoted = Stdlib.Cli.Process.shellQuote marker in let _ = Stdlib.Cli.Process.run "/bin/rm" (["-f", marker]) in match Stdlib.Cli.Process.pipe "/bin/sh" (["-c", $"marker={quoted}; count=0; while [ ! -e \"$marker\" ] && [ $count -lt 100 ]; do /bin/sleep 0.01; count=$((count + 1)); done; if [ -e \"$marker\" ]; then printf concurrent; else printf sequential; fi"]) "/bin/sh" (["-c", $"/usr/bin/touch {quoted}; /bin/cat; /bin/rm -f {quoted}"]) with | Ok output -> output.stdout | Error error -> error.message = "concurrent" env="SHELL=/definitely/missing" env="PATH="
+
+match Stdlib.Cli.Process.runWithTimeout 0 "true" [] with | Error error -> error | Ok _ -> "unexpected" = "timeoutMs must be positive"
+
+match Stdlib.Cli.Process.runWithTimeout 5 "/bin/sh" (["-c", "sleep 1"]) with | Error error -> error | Ok _ -> "unexpected" = "Process timed out"
+
+let handle = Stdlib.Cli.Process.spawn "read line; printf 'reply:%s\\n' \"$line\"" in let result = Stdlib.Cli.Process.communicate handle "hello" in (result.exitCode, result.stdout, result.stderr) = (0, "reply:hello\n", "")
+
+// communicate waits in bounded polling intervals for an input-driven child,
+// and terminate returns all output accumulated over the handle's lifetime.
+let handle = Stdlib.Cli.Process.spawn "read line; sleep 0.3; printf 'later:%s\\n' \"$line\"" in let response = Stdlib.Cli.Process.communicate handle "hello" in let final = Stdlib.Cli.Process.terminate handle in (response.stdout, final.stdout, final.stderr) = ("later:hello\n", "later:hello\n", "")
+
+let handle = Stdlib.Cli.Process.spawn "while read line; do printf 'reply:%s\\n' \"$line\"; done" in let first = Stdlib.Cli.Process.communicate handle "one" in let second = Stdlib.Cli.Process.communicate handle "two" in let final = Stdlib.Cli.Process.terminate handle in (first.stdout, second.stdout, final.stdout) = ("reply:one\n", "reply:two\n", "reply:one\nreply:two\n")
+
+// A live child's response may arrive in pieces; communicate must return both pieces.
+let handle = Stdlib.Cli.Process.spawn "while read line; do printf 'reply:'; sleep 0.03; printf '%s\\n' \"$line\"; done" in let response = Stdlib.Cli.Process.communicate handle "chunked" in let final = Stdlib.Cli.Process.terminate handle in (response.stdout, final.stdout) = ("reply:chunked\n", "reply:chunked\n")
+
+let handle = Stdlib.Cli.Process.spawn "printf started; sleep 10" in let _ = Stdlib.Cli.Posix.sleep 100.0 in let result = Stdlib.Cli.Process.terminate handle in (Stdlib.String.startsWith result.stdout "started", result.stderr) = (true, "")
+
+match Stdlib.Cli.Host.getRuntimeHost () with | Ok _ -> true | Error _ -> false = true
+
+match (Stdlib.Cli.Sys.hostname (), Stdlib.Cli.Sys.os (), Stdlib.Cli.Sys.arch ()) with | (Ok hostname, Ok os, Ok arch) -> Stdlib.String.length hostname > 0 && Stdlib.String.length os > 0 && Stdlib.String.length arch > 0 | _ -> false = true
+
+match Stdlib.Cli.Sys.currentUser () with | Some user -> Stdlib.String.length user > 0 | None -> false = true

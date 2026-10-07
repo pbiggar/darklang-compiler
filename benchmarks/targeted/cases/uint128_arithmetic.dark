@@ -1,0 +1,5 @@
+// uint128_arithmetic.dark - Targeted compiler workload.
+let benchmark (remaining: Int64) (value: UInt128) : UInt128 =
+    if remaining <= 0L then value
+    else benchmark (remaining - 1L) (Stdlib.UInt128.subtract (Stdlib.UInt128.add (value) (3Z)) (2Z))
+benchmark (__ITERATIONS__L) (340282366920938463463374607431768206455Z)

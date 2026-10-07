@@ -1,0 +1,8 @@
+// int128_decimal_conversion.dark - Targeted compiler workload.
+let benchmark (remaining: Int64) (checksum: Int64) : Int64 =
+    if remaining <= 0L then checksum
+    else
+        match Stdlib.Int128.parse ("-170141183460469231731687303715884105728") with
+        | Ok (value) -> benchmark (remaining - 1L) (checksum + Stdlib.String.__byteLength (Stdlib.Int128.toString (value)))
+        | Error (_) -> -1L
+benchmark (__ITERATIONS__L) (0L)

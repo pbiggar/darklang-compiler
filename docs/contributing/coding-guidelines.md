@@ -30,8 +30,9 @@ let load_and_parse path =
 
 Use explicit fixed-width integer operations and `FixedInteger` for Dark numeric
 semantics. OCaml machine integers do not implement every Dark integer width.
-Use the host text/formatting boundaries for reference-compatible source ranges,
-Unicode behavior and diagnostics. Compiler name maps use `StringOrder` and
+Use the shared text and float-formatting utilities for Unicode source ranges
+and precise source literals. Use OCaml libraries directly for I/O, JSON,
+hashing and clocks; keep schema validation beside its consumer. Compiler name maps use `StringOrder` and
 opaque function identities use `FunctionIdMap`.
 
 Preserve ahead-of-time match validation. Exhaustiveness, pattern validity,
@@ -40,8 +41,8 @@ binding consistency, guards and arm result types must fail during compilation.
 ## Checks
 
 Build with `./build --ai`; warnings are errors. Run the already-built host suite
-with `./run-tests --ai`. `dune runtest --root ocaml` runs the additional port
-regression checks and does not replace the original production suite.
+with `./run-tests --ai`. `dune runtest` runs the additional
+regression checks and does not replace the complete host suite.
 
 Create a focused failing E2E before changing observable compiler behavior.
 Test results, diagnostics and language behavior rather than incidental helper

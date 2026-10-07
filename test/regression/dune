@@ -1,0 +1,42 @@
+; Native equivalence and allocation regression checks.
+(rule
+ (alias runtest)
+ (deps ../../scripts/install-darklang-interpreter.sh ../../scripts/test_install_interpreter.py)
+ (action (run python3 %{dep:../../scripts/test_install_interpreter.py})))
+(rule
+ (alias runtest)
+ (deps ../../fuzz ../../scripts/test_fuzz_workflow.py)
+ (action (run python3 %{dep:../../scripts/test_fuzz_workflow.py})))
+(rule
+ (alias runtest)
+ (deps fuzzer_regression.py)
+ (action (run python3 %{dep:fuzzer_regression.py} %{exe:../../tools/fuzzer/main.exe})))
+(rule
+ (alias runtest)
+ (deps standalone_compiler_regression.py)
+ (action (run python3 %{dep:standalone_compiler_regression.py} %{exe:../../bin/dark.exe})))
+(include_subdirs no)
+(executables
+ (names host_text_regression cache_regression component_regression literal_regression package_io_regression package_http_regression)
+ (libraries dark_compiler tls-lwt x509)
+ (flags (:standard -w @a -warn-error @a)))
+
+(rule
+ (alias runtest)
+ (action
+  (progn
+   (run %{exe:package_io_regression.exe})
+   (run %{exe:host_text_regression.exe})
+   (run %{exe:literal_regression.exe})
+   (run %{exe:cache_regression.exe})
+   (run %{exe:component_regression.exe}))))
+
+(rule
+ (alias runtest)
+ (deps cli_manifest_regression.py)
+ (action (run python3 %{dep:cli_manifest_regression.py} %{exe:../../bin/dark.exe})))
+
+(rule
+ (alias runtest)
+ (deps package_http_regression.py)
+ (action (run python3 %{dep:package_http_regression.py} %{exe:package_http_regression.exe})))
