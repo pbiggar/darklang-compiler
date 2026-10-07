@@ -798,7 +798,14 @@ let tokenize text =
           let first = Text.firstGrapheme remaining in
           index + 1 + Option.fold ~none:0 ~some:Text.length first
       in
-      if contentEnd < length && is source contentEnd '\'' then quotedChar ()
+      if
+        contentEnd < length && is source contentEnd '\''
+        && not (is source (index + 1) '\\')
+      then
+        push
+          (TCharLit
+             (unescape (substring source (index + 1) (contentEnd - index - 1))))
+          (contentEnd + 1) None
       else if
         typeContext
         && index + 1 < length
