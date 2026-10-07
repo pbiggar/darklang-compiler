@@ -219,11 +219,14 @@ let syscallNumbersFor = function
   | ARM64Backend LinuxARM64 -> linuxARM64SyscallNumbers
   | LinuxX86_64 -> linuxX86_64SyscallNumbers
 
+(* Mach trap numbers use the negative namespace on Darwin ARM64. *)
+let macOSMachTimebaseInfoTrap = -89L
+
 type socketConstants = {
   addressFamily4 : int;
   addressFamily6 : int;
-  streamCloexec : int64;
-  datagramCloexec : int64;
+  streamType : int64;
+  datagramType : int64;
   socketLevel : int;
   receiveTimeout : int;
   sendTimeout : int;
@@ -238,8 +241,9 @@ let socketConstantsFor = function
       {
         addressFamily4 = 2;
         addressFamily6 = 30;
-        streamCloexec = 268435457L;
-        datagramCloexec = 268435458L;
+        (* Darwin socket() has no SOCK_CLOEXEC flag; emission sets FD_CLOEXEC. *)
+        streamType = 1L;
+        datagramType = 2L;
         socketLevel = 65535;
         receiveTimeout = 4102;
         sendTimeout = 4101;
@@ -252,8 +256,8 @@ let socketConstantsFor = function
       {
         addressFamily4 = 2;
         addressFamily6 = 10;
-        streamCloexec = 524289L;
-        datagramCloexec = 524290L;
+        streamType = 524289L;
+        datagramType = 524290L;
         socketLevel = 1;
         receiveTimeout = 20;
         sendTimeout = 21;

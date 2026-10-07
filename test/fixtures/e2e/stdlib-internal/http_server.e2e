@@ -13,10 +13,13 @@ Stdlib.__Network.listenTcp4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun 
 
 Stdlib.__Network.listenTcp4 [127L, 0L, 0L] 8080L = Error 22L
 Stdlib.__Network.listenTcp4 [127L, 0L, 0L, 1L] 65536L = Error 22L
-match Stdlib.__Network.monotonicMillis (), Stdlib.Cli.OS.getOS () with | Ok now, Ok Linux -> now >= 0L | Error 38L, Ok MacOS -> true | _, _ -> false = true
+match Stdlib.__Network.monotonicMillis () with | Ok now -> now >= 0L | Error _ -> false = true
+match Stdlib.__Network.monotonicMillis () with | Error _ -> false | Ok before -> let _ = Stdlib.Cli.Posix.sleep 20.0 in match Stdlib.__Network.monotonicMillis () with | Ok after -> after >= before + 10L | Error _ -> false = true
 Stdlib.__Network.shutdownSignals () |> Stdlib.Result.map Stdlib.__Network.closeShutdownSignals = stdout="Darklang.Stdlib.Result.Result<Unit, Int64>.Ok(())\n" stderr=""
 Stdlib.HttpServer.serve (Stdlib.HttpServer.Config.Config { port = 8080; maxBodyBytes = -1; injectStandardHeaders = true; canonicalizeFromForwardedProto = true; logRequests = false }) (fun req -> Stdlib.Http.success req.body) (fun _ -> Stdlib.printLine "unexpected listening") = Error "Invalid HTTP server configuration"
 Stdlib.HttpServer.matchRoute "/files/*path" "/files/a" = Stdlib.HttpServer.RouteMatch { matched = true; vars = [("path", "a")] }
 Stdlib.HttpServer.getPathParam (Stdlib.Http.Request { url = "http://localhost/users/42?x=1"; headers = []; body = Stdlib.Blob.empty }) "/users/:id" "id" = Some "42"
 Stdlib.__HttpWire.parseRequestWithLimit 3L (Stdlib.String.toBlob "POST / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nab\r\n2\r\n") = Error (Stdlib.__HttpWire.ParseError.Invalid "HTTP body too large")
 Stdlib.__HttpWire.parseRequestWithLimit 0L (Stdlib.String.toBlob "POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n") |> Stdlib.Result.map (fun request -> Stdlib.Blob.length request.body) = Ok 0
+
+let pollfd = __raw_alloc 8L in let timeout = __raw_alloc 16L in let _ = __raw_write_word pollfd 0L 4294967295L in let _ = __raw_write_word timeout 0L 1L in let _ = __raw_write_word timeout 8L 30000000L in let before = Stdlib.__Network.monotonicMillis () in let code = Stdlib.__Network.__poll pollfd timeout in let after = Stdlib.__Network.monotonicMillis () in let _ = __raw_free pollfd in let _ = __raw_free timeout in match before, after with | Ok start, Ok finish -> code == 0L && finish >= start + 1000L | _, _ -> false = true
