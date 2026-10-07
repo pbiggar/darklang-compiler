@@ -1,5 +1,6 @@
 (* Original LIR cleanup unit tests with unchanged expectations. *)
-type testResult=(unit,string) result
+type testResult = (unit, string) result
+
 val testRemoveSelfMovesFromAllocatedFunction : unit -> testResult
 val testRemoveFloatingCopyBackMovesFromAllocatedFunction : unit -> testResult
 val testFloatingCopyBackKeepsMoveAfterFPhiWritesSource : unit -> testResult
@@ -31,5 +32,6 @@ val testBooleanNotBranchSwapsSuccessors : unit -> testResult
 val testConditionalBranchKeepsBooleanUsedInSuccessor : unit -> testResult
 val testOptimizeCFGRejectsMissingSuccessorLabel : unit -> testResult
 val tests : (string * (unit -> testResult)) list
+
 (* Additional migration checks derived from the unchanged optimization DSL. *)
 val dslTests : (string * (unit -> testResult)) list

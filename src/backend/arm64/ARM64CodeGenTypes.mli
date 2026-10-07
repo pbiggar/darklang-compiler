@@ -1,10 +1,44 @@
-type codeGenOptions={disableFreeList:bool;enableCoverage:bool;coverageExprCount:int;enableLeakCheck:bool}
-type releasePlanSummaryCache=bool -> string -> MemoryModel.rcReleasePlan -> (unit -> LIR.arm64ReleasePlanSummary) -> LIR.arm64ReleasePlanSummary
-type lirOpExpansionRecorder=string -> string -> string -> int -> int64 -> unit
-type codeGenContext={target:ARM64.targetConfig;options:codeGenOptions;sumShapeRegistry:MemoryModel.rcSumShapeRegistry;recordRegistry:LIR.recordRegistry;rawSlotInitRetainTargets:LIR.arm64SlotInitRootRetainTarget option LIR.SemanticTypeMap.t option;closurePayloadSizes:int StringOrder.Map.t;closureCaptureTypes:AST.semanticType list StringOrder.Map.t;functionNames:string FunctionIdMap.t;functionName:string;instructionSite:string;stackSize:int;usedCalleeSaved:LIR.physReg list;usedCalleeSavedF:LIR.physFPReg list;heapOverflowLabel:string;recordLirOpExpansion:lirOpExpansionRecorder option}
+type codeGenOptions = {
+  disableFreeList : bool;
+  enableCoverage : bool;
+  coverageExprCount : int;
+  enableLeakCheck : bool;
+}
+
+type releasePlanSummaryCache =
+  bool ->
+  string ->
+  MemoryModel.rcReleasePlan ->
+  (unit -> LIR.arm64ReleasePlanSummary) ->
+  LIR.arm64ReleasePlanSummary
+
+type lirOpExpansionRecorder = string -> string -> string -> int -> int64 -> unit
+
+type codeGenContext = {
+  target : ARM64.targetConfig;
+  options : codeGenOptions;
+  sumShapeRegistry : MemoryModel.rcSumShapeRegistry;
+  recordRegistry : LIR.recordRegistry;
+  rawSlotInitRetainTargets :
+    LIR.arm64SlotInitRootRetainTarget option LIR.SemanticTypeMap.t option;
+  closurePayloadSizes : int StringOrder.Map.t;
+  closureCaptureTypes : AST.semanticType list StringOrder.Map.t;
+  functionNames : string FunctionIdMap.t;
+  functionName : string;
+  instructionSite : string;
+  stackSize : int;
+  usedCalleeSaved : LIR.physReg list;
+  usedCalleeSavedF : LIR.physFPReg list;
+  heapOverflowLabel : string;
+  recordLirOpExpansion : lirOpExpansionRecorder option;
+}
+
 val defaultOptions : codeGenOptions
 val functionName : codeGenContext -> AST.functionId -> string
-val rcSumShapeRegistryFromVariantRegistry : LIR.variantRegistry -> MemoryModel.rcSumShapeRegistry
+
+val rcSumShapeRegistryFromVariantRegistry :
+  LIR.variantRegistry -> MemoryModel.rcSumShapeRegistry
+
 val leakCounterLabel : string
 val heapOutOfMemoryMessage : string
 val heapMmapSizeBytes : int64
@@ -35,13 +69,39 @@ val genericReleasePlanIsExpensive : MemoryModel.rcReleasePlan -> bool
 val callerOwnsSinglePayloadSum : string -> bool
 val recursiveNominalRefCountDecHelperLabel : AST.semanticType -> string
 val plannedListDecHelperLabelForFingerprint : string -> string
-val plannedListDecHelperLabelForReleasePlan : MemoryModel.rcReleasePlan -> string
+
+val plannedListDecHelperLabelForReleasePlan :
+  MemoryModel.rcReleasePlan -> string
+
 val plannedGenericDecHelperBaseLabelForFingerprint : string -> string
 val specializePlannedGenericDecHelperLabel : bool -> string -> string
 val plannedDictDecHelperLabelForFingerprint : string -> string
-val plannedDictDecHelperLabelForReleasePlan : MemoryModel.rcReleasePlan -> string
-type rcReleasePlanSummary=LIR.arm64ReleasePlanSummary
-type rcHelperRequirements=LIR.arm64RcHelperRequirements
-type arm64ProgramFacts={closurePayloadSizesFromParams:int StringOrder.Map.t;closurePayloadSizesFromAllocs:int FunctionIdMap.t;closureCaptureTypes:AST.semanticType list StringOrder.Map.t;recursiveReleaseTypes:MemoryPlanning.SemanticTypeSet.t;cliArgvHelperLabels:StringOrder.Set.t;needsCliExecuteHelper:bool;needsCliRunProcessHelper:bool;needsCliProcessLifecycleHelpers:bool;needsRuntimeErrorHelper:bool}
-type arm64ProgramMetadata={facts:arm64ProgramFacts;rcHelperRequirements:rcHelperRequirements}
-val slotInitRootRetainTarget : LIR.recordRegistry -> MemoryModel.rcSumShapeRegistry -> AST.semanticType -> LIR.arm64SlotInitRootRetainTarget option
+
+val plannedDictDecHelperLabelForReleasePlan :
+  MemoryModel.rcReleasePlan -> string
+
+type rcReleasePlanSummary = LIR.arm64ReleasePlanSummary
+type rcHelperRequirements = LIR.arm64RcHelperRequirements
+
+type arm64ProgramFacts = {
+  closurePayloadSizesFromParams : int StringOrder.Map.t;
+  closurePayloadSizesFromAllocs : int FunctionIdMap.t;
+  closureCaptureTypes : AST.semanticType list StringOrder.Map.t;
+  recursiveReleaseTypes : MemoryPlanning.SemanticTypeSet.t;
+  cliArgvHelperLabels : StringOrder.Set.t;
+  needsCliExecuteHelper : bool;
+  needsCliRunProcessHelper : bool;
+  needsCliProcessLifecycleHelpers : bool;
+  needsRuntimeErrorHelper : bool;
+}
+
+type arm64ProgramMetadata = {
+  facts : arm64ProgramFacts;
+  rcHelperRequirements : rcHelperRequirements;
+}
+
+val slotInitRootRetainTarget :
+  LIR.recordRegistry ->
+  MemoryModel.rcSumShapeRegistry ->
+  AST.semanticType ->
+  LIR.arm64SlotInitRootRetainTarget option

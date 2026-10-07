@@ -1,106 +1,727 @@
 (* CompilationSessionTests.ml - Cache-contract tests for bounded compiler reuse. *)
 [@@@warning "-4-42"]
+
 open Dark_compiler
-module C=CompilationContexts
-module O=CompilerOptions
-module M=StringOrder.Map
-module S=SpecializationIdentity.FunctionSet
-module L=LIR
-module R=MIR
-module A=ARM64CodeGenTypes
-type testResult=(unit,string) result
-let (let*)=Result.bind
-let withSession operation=let session=new CompilationSession.compilationSession () in Fun.protect ~finally:(fun ()->session#dispose) (fun ()->operation session)
-let compile stdlib session options source=CompilerLibrary.compile {C.context=C.StdlibOnly stdlib;mode=O.TestExpression;sources=NonEmptyList.singleton {C.name="CompilationSessionTests.dark";purpose=NameSyntax.SourceUnitPurpose.Executable;source};allowInternal=false;verbosity=0;options;packageValues=C.emptyPackageValueCatalog;packageManager=None;passTimingRecorder=None;session=Some session}
-let expectCompiled (report:O.compileReport)=match report.O.result with Ok _->Ok ()|Error error->Error error
-let fakeFunction:L.functionDef=let entry=L.Label "cached_function_entry" in {L.id=TestIds.functionIdForName "cached_function";name="cached_function";typedParams=[];cfg={L.entry;blocks=L.LabelMap.singleton entry {L.label=entry;instrs=[];terminator=L.Ret}};stackSize=0;usedCalleeSaved=[];codegenFacts=None}
-let fakeMirFunction:R.functionDef=let entry=R.Label "cached_mir_function_entry" in {R.id=TestIds.functionIdForName "cached_mir_function";name="cached_mir_function";typedParams=[];returnType=AST.TUnit;cfg={R.entry;blocks=R.LabelMap.singleton entry {R.label=entry;instrs=[];terminator=R.Ret (R.Int64Const 0L)}};floatRegs=R.IntSet.empty}
-let testMirOptimizationCacheReusesStructuralFunctions _ ()=withSession (fun session->
- let optimizations=ref 0 in let key:CompilationCacheIdentity.mirOptimizationKey={CompilationCacheIdentity.func=fakeMirFunction;options=MIROptimizationFacts.defaultOptimizeOptions;effectFreeCalls=S.empty} in
- let optimize ()=incr optimizations;MIR_Optimize.optimizeFunctionWithEffectFreeCallsAndTickTrace None S.empty key.CompilationCacheIdentity.options fakeMirFunction in
- let first=session#optimizeMirFunction key optimize in let equivalent={key with CompilationCacheIdentity.func={fakeMirFunction with R.name=fakeMirFunction.R.name}} in let second=session#optimizeMirFunction equivalent optimize in
- if !optimizations=1 && first==second && session#cachedMirOptimizationCount=1 && session#mirOptimizationHitCount=1 && session#mirOptimizationMissCount=1 then Ok () else Error (Printf.sprintf "Expected structurally identical SSA functions to share MIR optimization, got optimizations=%d, cached=%d, hits=%d, misses=%d" !optimizations session#cachedMirOptimizationCount session#mirOptimizationHitCount session#mirOptimizationMissCount))
-let testAllocatedLirFunctionCacheReusesStructuralFunctions _ ()=withSession (fun session->
- let allocations=ref 0 in let allocate ()=incr allocations;{fakeFunction with L.stackSize=16} in let first=session#allocateLirFunction Platform.ARM64 fakeFunction allocate in let equivalent={fakeFunction with L.name=fakeFunction.L.name} in let second=session#allocateLirFunction Platform.ARM64 equivalent allocate in
- if !allocations=1 && first==second && session#cachedAllocatedLirFunctionCount=1 && session#allocatedLirFunctionHitCount=1 && session#allocatedLirFunctionMissCount=1 then Ok () else Error (Printf.sprintf "Expected structurally identical LIR functions to share register allocation, got allocations=%d, cached=%d, hits=%d, misses=%d" !allocations session#cachedAllocatedLirFunctionCount session#allocatedLirFunctionHitCount session#allocatedLirFunctionMissCount))
-let testArm64HitWithNestedJson stdlib ()=withSession (fun session->
- let source="Stdlib.Json.parse<List<List<Int64>>>(\"[[1,2],[3]]\")" in
- let first=expectCompiled (compile stdlib session O.defaultOptions source) in let second=expectCompiled (compile stdlib session O.defaultOptions source) in
- match first,second with Error error,_|_,Error error->Error error|Ok (),Ok ()->
- if session#arm64CodegenHitCount>0 && session#arm64CodegenMissCount>0 && session#arm64ReleasePlanSummaryHitCount>0 && session#arm64ReleasePlanSummaryMissCount>0 && session#jsonPlanHitCount=1 && session#jsonPlanMissCount=1 && session#mirRegistryProjectionHitCount=1 && session#mirRegistryProjectionMissCount=1 && session#arm64FunctionGroupHitCount>0 && session#arm64FunctionGroupMissCount>0 then Ok ()
- else Error (Printf.sprintf "Expected repeated nested JSON compilation to hit all caches, got ARM64 hits=%d, misses=%d; function-group hits=%d, misses=%d; release-plan hits=%d, misses=%d; JSON hits=%d, misses=%d; MIR registry hits=%d, misses=%d" session#arm64CodegenHitCount session#arm64CodegenMissCount session#arm64FunctionGroupHitCount session#arm64FunctionGroupMissCount session#arm64ReleasePlanSummaryHitCount session#arm64ReleasePlanSummaryMissCount session#jsonPlanHitCount session#jsonPlanMissCount session#mirRegistryProjectionHitCount session#mirRegistryProjectionMissCount))
-let testArm64CodegenCacheSegregatesTargetOptionsAndCoverage _ ()=withSession (fun session->
- let macOS=ARM64.targetConfigFor Platform.MacOSARM64 in let linux=ARM64.targetConfigFor Platform.LinuxARM64 in let changed={A.defaultOptions with A.disableFreeList=true} in let coverage={A.defaultOptions with A.enableCoverage=true;coverageExprCount=1} in let context=Obj.repr (ref ()) in let calls=ref 0 in let generate ()=incr calls;Ok [] in let equivalent={fakeFunction with L.name=fakeFunction.L.name} in
- ignore (session#codegenFunction context macOS A.defaultOptions fakeFunction generate);ignore (session#codegenFunction context macOS A.defaultOptions fakeFunction generate);ignore (session#codegenFunction context macOS A.defaultOptions equivalent generate);ignore (session#codegenFunction context linux A.defaultOptions fakeFunction generate);ignore (session#codegenFunction context macOS changed fakeFunction generate);ignore (session#codegenFunction context macOS coverage fakeFunction generate);
- if !calls=4 && session#cachedArm64FunctionCount=3 && session#arm64CodegenHitCount=2 && session#arm64CodegenMissCount=3 then Ok () else Error (Printf.sprintf "Expected reference and structural hits while target/options entries segregate and coverage bypasses the cache, got calls=%d, cached=%d, hits=%d, misses=%d" !calls session#cachedArm64FunctionCount session#arm64CodegenHitCount session#arm64CodegenMissCount))
-let testArm64CodegenMetricsAreOptIn _ ()=
- let ordinary=new CompilationSession.compilationSession () in let profiled=new CompilationSession.compilationSession ~collectCodegenMetrics:true () in
- Fun.protect ~finally:(fun ()->profiled#dispose;ordinary#dispose) (fun ()->let target=ARM64.targetConfigFor Platform.MacOSARM64 in let context=Obj.repr (ref ()) in let generate ()=Ok [Symbolic.RET] in ignore (ordinary#codegenFunction context target A.defaultOptions fakeFunction generate);ignore (profiled#codegenFunction context target A.defaultOptions fakeFunction generate);
- match ordinary#arm64CodegenMetrics,profiled#arm64CodegenMetrics with [],[metric] when metric.O.functionName=fakeFunction.L.name && metric.O.lirInstructionCount=1 && metric.O.symbolicInstructionCount=1->Ok ()|a,b->Error (Printf.sprintf "Expected only the opted-in session to retain one function metric, got ordinary=%d, profiled=%d" (List.length a) (List.length b)))
-let slotFunction name entry=let label=L.Label entry in {fakeFunction with L.id=TestIds.functionIdForName name;name;cfg={L.entry=label;blocks=L.LabelMap.singleton label {L.label;instrs=[L.RawSlotInit (L.Physical L.X0,L.Physical L.X1,L.Physical L.X2,AST.TRecord ("UserRecord",[]))];terminator=L.Ret}}}
-let testArm64CodegenCacheSegregatesCompilationContexts _ ()=withSession (fun session->
- let target=ARM64.targetConfigFor Platform.MacOSARM64 in let firstContext=Obj.repr (ref ()) in let secondContext=Obj.repr (ref ()) in let calls=ref 0 in let generate ()=incr calls;Ok [] in let func=slotFunction "registry_dependent_function" "registry_dependent_entry" |> L.attachFunctionCodegenFacts in let equivalent={func with L.name=func.L.name} in
- ignore (session#codegenFunction firstContext target A.defaultOptions func generate);ignore (session#codegenFunction firstContext target A.defaultOptions equivalent generate);ignore (session#codegenFunction secondContext target A.defaultOptions equivalent generate);
- if !calls=2 && session#cachedArm64FunctionCount=2 && session#arm64CodegenHitCount=1 && session#arm64CodegenMissCount=2 then Ok () else Error (Printf.sprintf "Expected structurally equal functions to reuse only within one registry context, got calls=%d, cached=%d, hits=%d, misses=%d" !calls session#cachedArm64FunctionCount session#arm64CodegenHitCount session#arm64CodegenMissCount))
-let independentCache message (prepare:unit -> L.functionDef)=withSession (fun session->
- let target=ARM64.targetConfigFor Platform.MacOSARM64 in let firstContext=Obj.repr (ref ()) in let secondContext=Obj.repr (ref ()) in let calls=ref 0 in let generate ()=incr calls;Ok [] in let func=prepare () in let equivalent={func with L.name=func.L.name} in
- ignore (session#codegenFunction firstContext target A.defaultOptions func generate);ignore (session#codegenFunction secondContext target A.defaultOptions equivalent generate);
- if !calls=1 && session#cachedArm64FunctionCount=1 && session#arm64CodegenHitCount=1 && session#arm64CodegenMissCount=1 then Ok () else Error (Printf.sprintf "%s, got calls=%d, cached=%d, hits=%d, misses=%d" message !calls session#cachedArm64FunctionCount session#arm64CodegenHitCount session#arm64CodegenMissCount))
-let testArm64CodegenCacheReusesContextIndependentFunctions _ ()=independentCache "Expected registry-independent functions to reuse ARM64 code across compilation contexts" (fun ()->L.attachFunctionCodegenFacts fakeFunction)
-let testArm64CodegenCacheReusesPlannedSlotInitFunctions _ ()=independentCache "Expected planned RawSlotInit functions to reuse ARM64 code across compilation contexts" (fun ()->let func=slotFunction "planned_slot_init_function" "planned_slot_init_entry" in match ARM64PrepareFunctions.prepareARM64Program (L.Program ([func],M.empty,M.singleton "UserRecord" ["value",AST.TString])) with L.Program (func::_,_,_)->func|L.Program ([],_,_)->Crash.crash "Prepared program lost its slot-init function")
-let testArm64EmissionChunkCacheUsesChunkIdentity _ ()=withSession (fun session->
- let instructions=List.init 1 (fun _->Symbolic.MOVZ (ARM64.X0,42,0)) in let equivalent=List.map Fun.id instructions in let preparations=ref 0 in let prepare chunk ()=incr preparations;ARM64_Encoding.prepareSymbolicChunk chunk in
- let first=session#prepareArm64EmissionChunk instructions (prepare instructions) in let repeated=session#prepareArm64EmissionChunk instructions (prepare instructions) in let structural=session#prepareArm64EmissionChunk equivalent (prepare equivalent) in
- if !preparations=2 && first==repeated && first!=structural && session#cachedArm64EmissionChunkCount=2 then Ok () else Error (Printf.sprintf "Expected identity-based prepared chunk reuse, got preparations=%d, cached=%d, repeated=%b, structural=%b" !preparations session#cachedArm64EmissionChunkCount (first==repeated) (first==structural)))
-let testArm64EmissionChunkGroupCacheUsesGroupIdentity _ ()=withSession (fun session->
- let instructions=List.init 2 (fun index->List.init 1 (fun _->if index=0 then Symbolic.MOVZ (ARM64.X0,42,0) else Symbolic.RET)) in let equivalent=List.map (List.map Fun.id) instructions in let preparations=ref 0 in let prepare parts ()=incr preparations;List.map ARM64_Encoding.prepareSymbolicChunk parts |> ARM64_Encoding.combinePreparedChunks in
- let first=session#prepareArm64EmissionChunkGroup instructions (prepare instructions) in let repeated=session#prepareArm64EmissionChunkGroup instructions (prepare instructions) in let structural=session#prepareArm64EmissionChunkGroup equivalent (prepare equivalent) in
- if !preparations=2 && first==repeated && first!=structural && session#cachedArm64EmissionChunkCount=2 then Ok () else Error (Printf.sprintf "Expected identity-based prepared chunk-group reuse, got preparations=%d, cached=%d, repeated=%b, structural=%b" !preparations session#cachedArm64EmissionChunkCount (first==repeated) (first==structural)))
-let testArm64ReleasePlanSummaryCacheConfirmsPlanShape _ ()=withSession (fun session->
- let firstPlan=MemoryModel.NoReleasePlan in let secondPlan=MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer in
- let summary closure stream:L.arm64ReleasePlanSummary={L.listDecHelperLabels=StringOrder.Set.empty;plannedListDecHelpers=M.empty;expensiveGenericDecHelper=None;dictDecHelperLabels=StringOrder.Set.empty;plannedDictDecHelpers=M.empty;needsClosureRcDecHelper=closure;needsStreamRcDecHelper=stream} in
- let firstSummary=summary false false in let secondSummary=summary true false in let staticSummary=summary false true in let generated=ref 0 in let generate result ()=incr generated;result in
- let first=session#arm64ReleasePlanSummary false "shared-key" firstPlan (generate firstSummary) in let second=session#arm64ReleasePlanSummary false "shared-key" secondPlan (generate secondSummary) in let again=session#arm64ReleasePlanSummary false "shared-key" firstPlan (generate secondSummary) in let static=session#arm64ReleasePlanSummary true "shared-key" firstPlan (generate staticSummary) in
- if first=firstSummary && second=secondSummary && again=firstSummary && static=staticSummary && !generated=3 && session#cachedArm64ReleasePlanSummaryCount=3 && session#arm64ReleasePlanSummaryHitCount=1 && session#arm64ReleasePlanSummaryMissCount=3 then Ok () else Error (Printf.sprintf "Expected release-plan cache to confirm complete shapes and segregate static dependencies, got generated=%d, cached=%d, hits=%d, misses=%d" !generated session#cachedArm64ReleasePlanSummaryCount session#arm64ReleasePlanSummaryHitCount session#arm64ReleasePlanSummaryMissCount))
-let testSessionIsolationAndDisposal stdlib ()=
- let first=new CompilationSession.compilationSession () in let second=new CompilationSession.compilationSession () in let source="Stdlib.Json.parse<Int64>(\"42\")" in
- let firstResult=expectCompiled (compile stdlib first O.defaultOptions source) in let secondResult=expectCompiled (compile stdlib second O.defaultOptions source) in first#dispose;
- match firstResult,secondResult with Error error,_|_,Error error->Error error|Ok (),Ok ()->
- if first#cachedArm64FunctionCount=0 && first#cachedMirOptimizationCount=0 && first#cachedAllocatedLirFunctionCount=0 && first#cachedAnfDependencyCount=0 && first#cachedCompiledDependencyCount=0 && first#cachedMirRegistryProjectionCount=0 && first#cachedArm64MetadataGroupCount=0 && first#cachedArm64FunctionGroupCount=0 && first#cachedArm64ReleasePlanSummaryCount=0 && first#cachedJsonPlanCount=0 && second#cachedArm64FunctionCount>0 && second#cachedMirOptimizationCount>0 && second#cachedAllocatedLirFunctionCount>0 && second#cachedAnfDependencyCount>0 && second#cachedCompiledDependencyCount>0 && second#cachedMirRegistryProjectionCount>0 && second#cachedArm64MetadataGroupCount>0 && second#cachedArm64FunctionGroupCount>0 && second#cachedArm64ReleasePlanSummaryCount>0 && second#cachedJsonPlanCount>0 then Ok () else Error (Printf.sprintf "Expected isolated sessions and disposal to release only the first registry, got first=%d, second=%d" first#cachedArm64FunctionCount second#cachedArm64FunctionCount)
-let testJsonPlanCacheSegregatesNominalShapes stdlib ()=withSession (fun session->
- let first="type CachedJsonShape = { value: Int64 }\n"^"Stdlib.Json.parse<CachedJsonShape>(\"{\\\"value\\\":1}\")" in
- let second="type CachedJsonShape = { text: String }\n"^"Stdlib.Json.parse<CachedJsonShape>(\"{\\\"text\\\":\\\"ok\\\"}\")" in
- let a=expectCompiled (compile stdlib session O.defaultOptions first) in let b=expectCompiled (compile stdlib session O.defaultOptions second) in let c=expectCompiled (compile stdlib session O.defaultOptions first) in
- match a,b,c with Error error,_,_|_,Error error,_|_,_,Error error->Error error|Ok (),Ok (),Ok ()->
- if session#cachedJsonPlanCount=2 && session#jsonPlanMissCount=2 && session#jsonPlanHitCount=1 && session#anfDependencyMissCount=2 && session#anfDependencyHitCount=1 && session#compiledDependencyMissCount=2 && session#compiledDependencyHitCount=1 then Ok () else Error (Printf.sprintf "Expected same-named distinct record shapes to segregate every dependency cache, got JSON cached=%d, hits=%d, misses=%d; ANF hits=%d, misses=%d; compiled hits=%d, misses=%d" session#cachedJsonPlanCount session#jsonPlanHitCount session#jsonPlanMissCount session#anfDependencyHitCount session#anfDependencyMissCount session#compiledDependencyHitCount session#compiledDependencyMissCount))
-let repeatedCompilation stdlib session source=
- let* ()=expectCompiled (compile stdlib session O.defaultOptions source) in expectCompiled (compile stdlib session O.defaultOptions source)
-let testJsonDependenciesAreReusedBeforeLowering stdlib ()=withSession (fun session->
- let* ()=repeatedCompilation stdlib session "Stdlib.Json.parse<List<List<Int64>>>(\"[[1,2],[3]]\")" in
- if session#anfDependencyHitCount>0 && session#compiledDependencyHitCount>0 then Ok () else Error (Printf.sprintf "Expected repeated JSON dependencies to bypass conversion and lowering, got ANF hits=%d, compiled hits=%d" session#anfDependencyHitCount session#compiledDependencyHitCount))
-let testDependencyMetadataIsReusedCompositionally stdlib ()=withSession (fun session->let* ()=repeatedCompilation stdlib session "Stdlib.Json.parse<List<Int64>>(\"[1,2,3]\")" in if session#arm64MetadataGroupHitCount>0 then Ok () else Error "Expected cached dependency metadata to be merged without rescanning its functions")
-let testStdlibReachabilityIsReused stdlib ()=withSession (fun session->
- let source name="let "^name^" (value: Int64) : String =\n"^"    if value <= 0L then Stdlib.Int64.toString value\n"^"    else "^name^" (value - 1L)\n\n"^name^" 1L" in
- let* ()=expectCompiled (compile stdlib session O.defaultOptions (source "first_user_function")) in let* ()=expectCompiled (compile stdlib session O.defaultOptions (source "second_user_function")) in
- if session#stdlibReachabilityHitCount>0 && session#stdlibReachabilityMissCount>0 then Ok () else Error (Printf.sprintf "Expected equivalent stdlib roots with different user-local calls to reuse reachability, got hits=%d, misses=%d" session#stdlibReachabilityHitCount session#stdlibReachabilityMissCount))
-let testArm64HelpersAreReused stdlib ()=withSession (fun session->let* ()=repeatedCompilation stdlib session "Stdlib.Json.parse<List<Int64>>(\"[1,2,3]\")" in if session#arm64HelperHitCount>0 && session#arm64HelperMissCount>0 then Ok () else Error (Printf.sprintf "Expected identical helper programs to be reused, got hits=%d, misses=%d" session#arm64HelperHitCount session#arm64HelperMissCount))
-let tests target stdlib=
- let allTests=[
- "compilation session reuses ARM64 code for nested JSON",testArm64HitWithNestedJson stdlib;
- "compilation session segregates ARM64 target options and coverage",testArm64CodegenCacheSegregatesTargetOptionsAndCoverage stdlib;
- "compilation session codegen metrics are opt-in",testArm64CodegenMetricsAreOptIn stdlib;
- "compilation session reuses structural MIR optimizations",testMirOptimizationCacheReusesStructuralFunctions stdlib;
- "compilation session reuses structural LIR allocation",testAllocatedLirFunctionCacheReusesStructuralFunctions stdlib;
- "compilation session segregates ARM64 registry contexts",testArm64CodegenCacheSegregatesCompilationContexts stdlib;
- "compilation session reuses registry-independent ARM64 functions",testArm64CodegenCacheReusesContextIndependentFunctions stdlib;
- "compilation session reuses planned ARM64 slot-init functions",testArm64CodegenCacheReusesPlannedSlotInitFunctions stdlib;
- "compilation session reuses prepared ARM64 chunks by identity",testArm64EmissionChunkCacheUsesChunkIdentity stdlib;
- "compilation session reuses prepared ARM64 chunk groups by identity",testArm64EmissionChunkGroupCacheUsesGroupIdentity stdlib;
- "compilation session confirms ARM64 release-plan cache shapes",testArm64ReleasePlanSummaryCacheConfirmsPlanShape stdlib;
- "compilation session isolates and disposes registries",testSessionIsolationAndDisposal stdlib;
- "compilation session segregates canonical JSON declaration shapes",testJsonPlanCacheSegregatesNominalShapes stdlib;
- "compilation session reuses JSON dependencies before lowering",testJsonDependenciesAreReusedBeforeLowering stdlib;
- "compilation session composes cached dependency metadata",testDependencyMetadataIsReusedCompositionally stdlib;
- "compilation session reuses stdlib reachability",testStdlibReachabilityIsReused stdlib;
- "compilation session reuses identical ARM64 helper programs",testArm64HelpersAreReused stdlib] in
- match target with Platform.ARM64Backend _->allTests|Platform.LinuxX86_64->let exclusions=StringOrder.Set.of_list ["compilation session isolates and disposes registries";"compilation session reuses the stable start trampoline";"compilation session composes cached dependency metadata"] in List.filter (fun (name,_)->not (Text.contains name "ARM64") && not (StringOrder.Set.mem name exclusions)) allTests
+module C = CompilationContexts
+module O = CompilerOptions
+module M = StringOrder.Map
+module S = SpecializationIdentity.FunctionSet
+module L = LIR
+module R = MIR
+module A = ARM64CodeGenTypes
+
+type testResult = (unit, string) result
+
+let ( let* ) = Result.bind
+
+let withSession operation =
+  let session = new CompilationSession.compilationSession () in
+  Fun.protect ~finally:(fun () -> session#dispose) (fun () -> operation session)
+
+let compile stdlib session options source =
+  CompilerLibrary.compile
+    {
+      C.context = C.StdlibOnly stdlib;
+      mode = O.TestExpression;
+      sources =
+        NonEmptyList.singleton
+          {
+            C.name = "CompilationSessionTests.dark";
+            purpose = NameSyntax.SourceUnitPurpose.Executable;
+            source;
+          };
+      allowInternal = false;
+      verbosity = 0;
+      options;
+      packageValues = C.emptyPackageValueCatalog;
+      packageManager = None;
+      passTimingRecorder = None;
+      session = Some session;
+    }
+
+let expectCompiled (report : O.compileReport) =
+  match report.O.result with Ok _ -> Ok () | Error error -> Error error
+
+let fakeFunction : L.functionDef =
+  let entry = L.Label "cached_function_entry" in
+  {
+    L.id = TestIds.functionIdForName "cached_function";
+    name = "cached_function";
+    typedParams = [];
+    cfg =
+      {
+        L.entry;
+        blocks =
+          L.LabelMap.singleton entry
+            { L.label = entry; instrs = []; terminator = L.Ret };
+      };
+    stackSize = 0;
+    usedCalleeSaved = [];
+    codegenFacts = None;
+  }
+
+let fakeMirFunction : R.functionDef =
+  let entry = R.Label "cached_mir_function_entry" in
+  {
+    R.id = TestIds.functionIdForName "cached_mir_function";
+    name = "cached_mir_function";
+    typedParams = [];
+    returnType = AST.TUnit;
+    cfg =
+      {
+        R.entry;
+        blocks =
+          R.LabelMap.singleton entry
+            {
+              R.label = entry;
+              instrs = [];
+              terminator = R.Ret (R.Int64Const 0L);
+            };
+      };
+    floatRegs = R.IntSet.empty;
+  }
+
+let testMirOptimizationCacheReusesStructuralFunctions _ () =
+  withSession (fun session ->
+      let optimizations = ref 0 in
+      let key : CompilationCacheIdentity.mirOptimizationKey =
+        {
+          CompilationCacheIdentity.func = fakeMirFunction;
+          options = MIROptimizationFacts.defaultOptimizeOptions;
+          effectFreeCalls = S.empty;
+        }
+      in
+      let optimize () =
+        incr optimizations;
+        MIR_Optimize.optimizeFunctionWithEffectFreeCallsAndTickTrace None
+          S.empty key.CompilationCacheIdentity.options fakeMirFunction
+      in
+      let first = session#optimizeMirFunction key optimize in
+      let equivalent =
+        {
+          key with
+          CompilationCacheIdentity.func =
+            { fakeMirFunction with R.name = fakeMirFunction.R.name };
+        }
+      in
+      let second = session#optimizeMirFunction equivalent optimize in
+      if
+        !optimizations = 1 && first == second
+        && session#cachedMirOptimizationCount = 1
+        && session#mirOptimizationHitCount = 1
+        && session#mirOptimizationMissCount = 1
+      then Ok ()
+      else
+        Error
+          (Printf.sprintf
+             "Expected structurally identical SSA functions to share MIR \
+              optimization, got optimizations=%d, cached=%d, hits=%d, \
+              misses=%d"
+             !optimizations session#cachedMirOptimizationCount
+             session#mirOptimizationHitCount session#mirOptimizationMissCount))
+
+let testAllocatedLirFunctionCacheReusesStructuralFunctions _ () =
+  withSession (fun session ->
+      let allocations = ref 0 in
+      let allocate () =
+        incr allocations;
+        { fakeFunction with L.stackSize = 16 }
+      in
+      let first =
+        session#allocateLirFunction Platform.ARM64 fakeFunction allocate
+      in
+      let equivalent = { fakeFunction with L.name = fakeFunction.L.name } in
+      let second =
+        session#allocateLirFunction Platform.ARM64 equivalent allocate
+      in
+      if
+        !allocations = 1 && first == second
+        && session#cachedAllocatedLirFunctionCount = 1
+        && session#allocatedLirFunctionHitCount = 1
+        && session#allocatedLirFunctionMissCount = 1
+      then Ok ()
+      else
+        Error
+          (Printf.sprintf
+             "Expected structurally identical LIR functions to share register \
+              allocation, got allocations=%d, cached=%d, hits=%d, misses=%d"
+             !allocations session#cachedAllocatedLirFunctionCount
+             session#allocatedLirFunctionHitCount
+             session#allocatedLirFunctionMissCount))
+
+let testArm64HitWithNestedJson stdlib () =
+  withSession (fun session ->
+      let source = "Stdlib.Json.parse<List<List<Int64>>>(\"[[1,2],[3]]\")" in
+      let first =
+        expectCompiled (compile stdlib session O.defaultOptions source)
+      in
+      let second =
+        expectCompiled (compile stdlib session O.defaultOptions source)
+      in
+      match (first, second) with
+      | Error error, _ | _, Error error -> Error error
+      | Ok (), Ok () ->
+          if
+            session#arm64CodegenHitCount > 0
+            && session#arm64CodegenMissCount > 0
+            && session#arm64ReleasePlanSummaryHitCount > 0
+            && session#arm64ReleasePlanSummaryMissCount > 0
+            && session#jsonPlanHitCount = 1
+            && session#jsonPlanMissCount = 1
+            && session#mirRegistryProjectionHitCount = 1
+            && session#mirRegistryProjectionMissCount = 1
+            && session#arm64FunctionGroupHitCount > 0
+            && session#arm64FunctionGroupMissCount > 0
+          then Ok ()
+          else
+            Error
+              (Printf.sprintf
+                 "Expected repeated nested JSON compilation to hit all caches, \
+                  got ARM64 hits=%d, misses=%d; function-group hits=%d, \
+                  misses=%d; release-plan hits=%d, misses=%d; JSON hits=%d, \
+                  misses=%d; MIR registry hits=%d, misses=%d"
+                 session#arm64CodegenHitCount session#arm64CodegenMissCount
+                 session#arm64FunctionGroupHitCount
+                 session#arm64FunctionGroupMissCount
+                 session#arm64ReleasePlanSummaryHitCount
+                 session#arm64ReleasePlanSummaryMissCount
+                 session#jsonPlanHitCount session#jsonPlanMissCount
+                 session#mirRegistryProjectionHitCount
+                 session#mirRegistryProjectionMissCount))
+
+let testArm64CodegenCacheSegregatesTargetOptionsAndCoverage _ () =
+  withSession (fun session ->
+      let macOS = ARM64.targetConfigFor Platform.MacOSARM64 in
+      let linux = ARM64.targetConfigFor Platform.LinuxARM64 in
+      let changed = { A.defaultOptions with A.disableFreeList = true } in
+      let coverage =
+        { A.defaultOptions with A.enableCoverage = true; coverageExprCount = 1 }
+      in
+      let context = Obj.repr (ref ()) in
+      let calls = ref 0 in
+      let generate () =
+        incr calls;
+        Ok []
+      in
+      let equivalent = { fakeFunction with L.name = fakeFunction.L.name } in
+      ignore
+        (session#codegenFunction context macOS A.defaultOptions fakeFunction
+           generate);
+      ignore
+        (session#codegenFunction context macOS A.defaultOptions fakeFunction
+           generate);
+      ignore
+        (session#codegenFunction context macOS A.defaultOptions equivalent
+           generate);
+      ignore
+        (session#codegenFunction context linux A.defaultOptions fakeFunction
+           generate);
+      ignore
+        (session#codegenFunction context macOS changed fakeFunction generate);
+      ignore
+        (session#codegenFunction context macOS coverage fakeFunction generate);
+      if
+        !calls = 4
+        && session#cachedArm64FunctionCount = 3
+        && session#arm64CodegenHitCount = 2
+        && session#arm64CodegenMissCount = 3
+      then Ok ()
+      else
+        Error
+          (Printf.sprintf
+             "Expected reference and structural hits while target/options \
+              entries segregate and coverage bypasses the cache, got calls=%d, \
+              cached=%d, hits=%d, misses=%d"
+             !calls session#cachedArm64FunctionCount
+             session#arm64CodegenHitCount session#arm64CodegenMissCount))
+
+let testArm64CodegenMetricsAreOptIn _ () =
+  let ordinary = new CompilationSession.compilationSession () in
+  let profiled =
+    new CompilationSession.compilationSession ~collectCodegenMetrics:true ()
+  in
+  Fun.protect
+    ~finally:(fun () ->
+      profiled#dispose;
+      ordinary#dispose)
+    (fun () ->
+      let target = ARM64.targetConfigFor Platform.MacOSARM64 in
+      let context = Obj.repr (ref ()) in
+      let generate () = Ok [ Symbolic.RET ] in
+      ignore
+        (ordinary#codegenFunction context target A.defaultOptions fakeFunction
+           generate);
+      ignore
+        (profiled#codegenFunction context target A.defaultOptions fakeFunction
+           generate);
+      match (ordinary#arm64CodegenMetrics, profiled#arm64CodegenMetrics) with
+      | [], [ metric ]
+        when metric.O.functionName = fakeFunction.L.name
+             && metric.O.lirInstructionCount = 1
+             && metric.O.symbolicInstructionCount = 1 ->
+          Ok ()
+      | a, b ->
+          Error
+            (Printf.sprintf
+               "Expected only the opted-in session to retain one function \
+                metric, got ordinary=%d, profiled=%d"
+               (List.length a) (List.length b)))
+
+let slotFunction name entry =
+  let label = L.Label entry in
+  {
+    fakeFunction with
+    L.id = TestIds.functionIdForName name;
+    name;
+    cfg =
+      {
+        L.entry = label;
+        blocks =
+          L.LabelMap.singleton label
+            {
+              L.label;
+              instrs =
+                [
+                  L.RawSlotInit
+                    ( L.Physical L.X0,
+                      L.Physical L.X1,
+                      L.Physical L.X2,
+                      AST.TRecord ("UserRecord", []) );
+                ];
+              terminator = L.Ret;
+            };
+      };
+  }
+
+let testArm64CodegenCacheSegregatesCompilationContexts _ () =
+  withSession (fun session ->
+      let target = ARM64.targetConfigFor Platform.MacOSARM64 in
+      let firstContext = Obj.repr (ref ()) in
+      let secondContext = Obj.repr (ref ()) in
+      let calls = ref 0 in
+      let generate () =
+        incr calls;
+        Ok []
+      in
+      let func =
+        slotFunction "registry_dependent_function" "registry_dependent_entry"
+        |> L.attachFunctionCodegenFacts
+      in
+      let equivalent = { func with L.name = func.L.name } in
+      ignore
+        (session#codegenFunction firstContext target A.defaultOptions func
+           generate);
+      ignore
+        (session#codegenFunction firstContext target A.defaultOptions equivalent
+           generate);
+      ignore
+        (session#codegenFunction secondContext target A.defaultOptions
+           equivalent generate);
+      if
+        !calls = 2
+        && session#cachedArm64FunctionCount = 2
+        && session#arm64CodegenHitCount = 1
+        && session#arm64CodegenMissCount = 2
+      then Ok ()
+      else
+        Error
+          (Printf.sprintf
+             "Expected structurally equal functions to reuse only within one \
+              registry context, got calls=%d, cached=%d, hits=%d, misses=%d"
+             !calls session#cachedArm64FunctionCount
+             session#arm64CodegenHitCount session#arm64CodegenMissCount))
+
+let independentCache message (prepare : unit -> L.functionDef) =
+  withSession (fun session ->
+      let target = ARM64.targetConfigFor Platform.MacOSARM64 in
+      let firstContext = Obj.repr (ref ()) in
+      let secondContext = Obj.repr (ref ()) in
+      let calls = ref 0 in
+      let generate () =
+        incr calls;
+        Ok []
+      in
+      let func = prepare () in
+      let equivalent = { func with L.name = func.L.name } in
+      ignore
+        (session#codegenFunction firstContext target A.defaultOptions func
+           generate);
+      ignore
+        (session#codegenFunction secondContext target A.defaultOptions
+           equivalent generate);
+      if
+        !calls = 1
+        && session#cachedArm64FunctionCount = 1
+        && session#arm64CodegenHitCount = 1
+        && session#arm64CodegenMissCount = 1
+      then Ok ()
+      else
+        Error
+          (Printf.sprintf "%s, got calls=%d, cached=%d, hits=%d, misses=%d"
+             message !calls session#cachedArm64FunctionCount
+             session#arm64CodegenHitCount session#arm64CodegenMissCount))
+
+let testArm64CodegenCacheReusesContextIndependentFunctions _ () =
+  independentCache
+    "Expected registry-independent functions to reuse ARM64 code across \
+     compilation contexts" (fun () -> L.attachFunctionCodegenFacts fakeFunction)
+
+let testArm64CodegenCacheReusesPlannedSlotInitFunctions _ () =
+  independentCache
+    "Expected planned RawSlotInit functions to reuse ARM64 code across \
+     compilation contexts" (fun () ->
+      let func =
+        slotFunction "planned_slot_init_function" "planned_slot_init_entry"
+      in
+      match
+        ARM64PrepareFunctions.prepareARM64Program
+          (L.Program
+             ( [ func ],
+               M.empty,
+               M.singleton "UserRecord" [ ("value", AST.TString) ] ))
+      with
+      | L.Program (func :: _, _, _) -> func
+      | L.Program ([], _, _) ->
+          Crash.crash "Prepared program lost its slot-init function")
+
+let testArm64EmissionChunkCacheUsesChunkIdentity _ () =
+  withSession (fun session ->
+      let instructions =
+        List.init 1 (fun _ -> Symbolic.MOVZ (ARM64.X0, 42, 0))
+      in
+      let equivalent = List.map Fun.id instructions in
+      let preparations = ref 0 in
+      let prepare chunk () =
+        incr preparations;
+        ARM64_Encoding.prepareSymbolicChunk chunk
+      in
+      let first =
+        session#prepareArm64EmissionChunk instructions (prepare instructions)
+      in
+      let repeated =
+        session#prepareArm64EmissionChunk instructions (prepare instructions)
+      in
+      let structural =
+        session#prepareArm64EmissionChunk equivalent (prepare equivalent)
+      in
+      if
+        !preparations = 2 && first == repeated && first != structural
+        && session#cachedArm64EmissionChunkCount = 2
+      then Ok ()
+      else
+        Error
+          (Printf.sprintf
+             "Expected identity-based prepared chunk reuse, got \
+              preparations=%d, cached=%d, repeated=%b, structural=%b"
+             !preparations session#cachedArm64EmissionChunkCount
+             (first == repeated) (first == structural)))
+
+let testArm64EmissionChunkGroupCacheUsesGroupIdentity _ () =
+  withSession (fun session ->
+      let instructions =
+        List.init 2 (fun index ->
+            List.init 1 (fun _ ->
+                if index = 0 then Symbolic.MOVZ (ARM64.X0, 42, 0)
+                else Symbolic.RET))
+      in
+      let equivalent = List.map (List.map Fun.id) instructions in
+      let preparations = ref 0 in
+      let prepare parts () =
+        incr preparations;
+        List.map ARM64_Encoding.prepareSymbolicChunk parts
+        |> ARM64_Encoding.combinePreparedChunks
+      in
+      let first =
+        session#prepareArm64EmissionChunkGroup instructions
+          (prepare instructions)
+      in
+      let repeated =
+        session#prepareArm64EmissionChunkGroup instructions
+          (prepare instructions)
+      in
+      let structural =
+        session#prepareArm64EmissionChunkGroup equivalent (prepare equivalent)
+      in
+      if
+        !preparations = 2 && first == repeated && first != structural
+        && session#cachedArm64EmissionChunkCount = 2
+      then Ok ()
+      else
+        Error
+          (Printf.sprintf
+             "Expected identity-based prepared chunk-group reuse, got \
+              preparations=%d, cached=%d, repeated=%b, structural=%b"
+             !preparations session#cachedArm64EmissionChunkCount
+             (first == repeated) (first == structural)))
+
+let testArm64ReleasePlanSummaryCacheConfirmsPlanShape _ () =
+  withSession (fun session ->
+      let firstPlan = MemoryModel.NoReleasePlan in
+      let secondPlan =
+        MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer
+      in
+      let summary closure stream : L.arm64ReleasePlanSummary =
+        {
+          L.listDecHelperLabels = StringOrder.Set.empty;
+          plannedListDecHelpers = M.empty;
+          expensiveGenericDecHelper = None;
+          dictDecHelperLabels = StringOrder.Set.empty;
+          plannedDictDecHelpers = M.empty;
+          needsClosureRcDecHelper = closure;
+          needsStreamRcDecHelper = stream;
+        }
+      in
+      let firstSummary = summary false false in
+      let secondSummary = summary true false in
+      let staticSummary = summary false true in
+      let generated = ref 0 in
+      let generate result () =
+        incr generated;
+        result
+      in
+      let first =
+        session#arm64ReleasePlanSummary false "shared-key" firstPlan
+          (generate firstSummary)
+      in
+      let second =
+        session#arm64ReleasePlanSummary false "shared-key" secondPlan
+          (generate secondSummary)
+      in
+      let again =
+        session#arm64ReleasePlanSummary false "shared-key" firstPlan
+          (generate secondSummary)
+      in
+      let static =
+        session#arm64ReleasePlanSummary true "shared-key" firstPlan
+          (generate staticSummary)
+      in
+      if
+        first = firstSummary && second = secondSummary && again = firstSummary
+        && static = staticSummary && !generated = 3
+        && session#cachedArm64ReleasePlanSummaryCount = 3
+        && session#arm64ReleasePlanSummaryHitCount = 1
+        && session#arm64ReleasePlanSummaryMissCount = 3
+      then Ok ()
+      else
+        Error
+          (Printf.sprintf
+             "Expected release-plan cache to confirm complete shapes and \
+              segregate static dependencies, got generated=%d, cached=%d, \
+              hits=%d, misses=%d"
+             !generated session#cachedArm64ReleasePlanSummaryCount
+             session#arm64ReleasePlanSummaryHitCount
+             session#arm64ReleasePlanSummaryMissCount))
+
+let testSessionIsolationAndDisposal stdlib () =
+  let first = new CompilationSession.compilationSession () in
+  let second = new CompilationSession.compilationSession () in
+  let source = "Stdlib.Json.parse<Int64>(\"42\")" in
+  let firstResult =
+    expectCompiled (compile stdlib first O.defaultOptions source)
+  in
+  let secondResult =
+    expectCompiled (compile stdlib second O.defaultOptions source)
+  in
+  first#dispose;
+  match (firstResult, secondResult) with
+  | Error error, _ | _, Error error -> Error error
+  | Ok (), Ok () ->
+      if
+        first#cachedArm64FunctionCount = 0
+        && first#cachedMirOptimizationCount = 0
+        && first#cachedAllocatedLirFunctionCount = 0
+        && first#cachedAnfDependencyCount = 0
+        && first#cachedCompiledDependencyCount = 0
+        && first#cachedMirRegistryProjectionCount = 0
+        && first#cachedArm64MetadataGroupCount = 0
+        && first#cachedArm64FunctionGroupCount = 0
+        && first#cachedArm64ReleasePlanSummaryCount = 0
+        && first#cachedJsonPlanCount = 0
+        && second#cachedArm64FunctionCount > 0
+        && second#cachedMirOptimizationCount > 0
+        && second#cachedAllocatedLirFunctionCount > 0
+        && second#cachedAnfDependencyCount > 0
+        && second#cachedCompiledDependencyCount > 0
+        && second#cachedMirRegistryProjectionCount > 0
+        && second#cachedArm64MetadataGroupCount > 0
+        && second#cachedArm64FunctionGroupCount > 0
+        && second#cachedArm64ReleasePlanSummaryCount > 0
+        && second#cachedJsonPlanCount > 0
+      then Ok ()
+      else
+        Error
+          (Printf.sprintf
+             "Expected isolated sessions and disposal to release only the \
+              first registry, got first=%d, second=%d"
+             first#cachedArm64FunctionCount second#cachedArm64FunctionCount)
+
+let testJsonPlanCacheSegregatesNominalShapes stdlib () =
+  withSession (fun session ->
+      let first =
+        "type CachedJsonShape = { value: Int64 }\n"
+        ^ "Stdlib.Json.parse<CachedJsonShape>(\"{\\\"value\\\":1}\")"
+      in
+      let second =
+        "type CachedJsonShape = { text: String }\n"
+        ^ "Stdlib.Json.parse<CachedJsonShape>(\"{\\\"text\\\":\\\"ok\\\"}\")"
+      in
+      let a = expectCompiled (compile stdlib session O.defaultOptions first) in
+      let b = expectCompiled (compile stdlib session O.defaultOptions second) in
+      let c = expectCompiled (compile stdlib session O.defaultOptions first) in
+      match (a, b, c) with
+      | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
+      | Ok (), Ok (), Ok () ->
+          if
+            session#cachedJsonPlanCount = 2
+            && session#jsonPlanMissCount = 2
+            && session#jsonPlanHitCount = 1
+            && session#anfDependencyMissCount = 2
+            && session#anfDependencyHitCount = 1
+            && session#compiledDependencyMissCount = 2
+            && session#compiledDependencyHitCount = 1
+          then Ok ()
+          else
+            Error
+              (Printf.sprintf
+                 "Expected same-named distinct record shapes to segregate \
+                  every dependency cache, got JSON cached=%d, hits=%d, \
+                  misses=%d; ANF hits=%d, misses=%d; compiled hits=%d, \
+                  misses=%d"
+                 session#cachedJsonPlanCount session#jsonPlanHitCount
+                 session#jsonPlanMissCount session#anfDependencyHitCount
+                 session#anfDependencyMissCount
+                 session#compiledDependencyHitCount
+                 session#compiledDependencyMissCount))
+
+let repeatedCompilation stdlib session source =
+  let* () = expectCompiled (compile stdlib session O.defaultOptions source) in
+  expectCompiled (compile stdlib session O.defaultOptions source)
+
+let testJsonDependenciesAreReusedBeforeLowering stdlib () =
+  withSession (fun session ->
+      let* () =
+        repeatedCompilation stdlib session
+          "Stdlib.Json.parse<List<List<Int64>>>(\"[[1,2],[3]]\")"
+      in
+      if
+        session#anfDependencyHitCount > 0
+        && session#compiledDependencyHitCount > 0
+      then Ok ()
+      else
+        Error
+          (Printf.sprintf
+             "Expected repeated JSON dependencies to bypass conversion and \
+              lowering, got ANF hits=%d, compiled hits=%d"
+             session#anfDependencyHitCount session#compiledDependencyHitCount))
+
+let testDependencyMetadataIsReusedCompositionally stdlib () =
+  withSession (fun session ->
+      let* () =
+        repeatedCompilation stdlib session
+          "Stdlib.Json.parse<List<Int64>>(\"[1,2,3]\")"
+      in
+      if session#arm64MetadataGroupHitCount > 0 then Ok ()
+      else
+        Error
+          "Expected cached dependency metadata to be merged without rescanning \
+           its functions")
+
+let testStdlibReachabilityIsReused stdlib () =
+  withSession (fun session ->
+      let source name =
+        "let " ^ name ^ " (value: Int64) : String =\n"
+        ^ "    if value <= 0L then Stdlib.Int64.toString value\n" ^ "    else "
+        ^ name ^ " (value - 1L)\n\n" ^ name ^ " 1L"
+      in
+      let* () =
+        expectCompiled
+          (compile stdlib session O.defaultOptions
+             (source "first_user_function"))
+      in
+      let* () =
+        expectCompiled
+          (compile stdlib session O.defaultOptions
+             (source "second_user_function"))
+      in
+      if
+        session#stdlibReachabilityHitCount > 0
+        && session#stdlibReachabilityMissCount > 0
+      then Ok ()
+      else
+        Error
+          (Printf.sprintf
+             "Expected equivalent stdlib roots with different user-local calls \
+              to reuse reachability, got hits=%d, misses=%d"
+             session#stdlibReachabilityHitCount
+             session#stdlibReachabilityMissCount))
+
+let testArm64HelpersAreReused stdlib () =
+  withSession (fun session ->
+      let* () =
+        repeatedCompilation stdlib session
+          "Stdlib.Json.parse<List<Int64>>(\"[1,2,3]\")"
+      in
+      if session#arm64HelperHitCount > 0 && session#arm64HelperMissCount > 0
+      then Ok ()
+      else
+        Error
+          (Printf.sprintf
+             "Expected identical helper programs to be reused, got hits=%d, \
+              misses=%d"
+             session#arm64HelperHitCount session#arm64HelperMissCount))
+
+let tests target stdlib =
+  let allTests =
+    [
+      ( "compilation session reuses ARM64 code for nested JSON",
+        testArm64HitWithNestedJson stdlib );
+      ( "compilation session segregates ARM64 target options and coverage",
+        testArm64CodegenCacheSegregatesTargetOptionsAndCoverage stdlib );
+      ( "compilation session codegen metrics are opt-in",
+        testArm64CodegenMetricsAreOptIn stdlib );
+      ( "compilation session reuses structural MIR optimizations",
+        testMirOptimizationCacheReusesStructuralFunctions stdlib );
+      ( "compilation session reuses structural LIR allocation",
+        testAllocatedLirFunctionCacheReusesStructuralFunctions stdlib );
+      ( "compilation session segregates ARM64 registry contexts",
+        testArm64CodegenCacheSegregatesCompilationContexts stdlib );
+      ( "compilation session reuses registry-independent ARM64 functions",
+        testArm64CodegenCacheReusesContextIndependentFunctions stdlib );
+      ( "compilation session reuses planned ARM64 slot-init functions",
+        testArm64CodegenCacheReusesPlannedSlotInitFunctions stdlib );
+      ( "compilation session reuses prepared ARM64 chunks by identity",
+        testArm64EmissionChunkCacheUsesChunkIdentity stdlib );
+      ( "compilation session reuses prepared ARM64 chunk groups by identity",
+        testArm64EmissionChunkGroupCacheUsesGroupIdentity stdlib );
+      ( "compilation session confirms ARM64 release-plan cache shapes",
+        testArm64ReleasePlanSummaryCacheConfirmsPlanShape stdlib );
+      ( "compilation session isolates and disposes registries",
+        testSessionIsolationAndDisposal stdlib );
+      ( "compilation session segregates canonical JSON declaration shapes",
+        testJsonPlanCacheSegregatesNominalShapes stdlib );
+      ( "compilation session reuses JSON dependencies before lowering",
+        testJsonDependenciesAreReusedBeforeLowering stdlib );
+      ( "compilation session composes cached dependency metadata",
+        testDependencyMetadataIsReusedCompositionally stdlib );
+      ( "compilation session reuses stdlib reachability",
+        testStdlibReachabilityIsReused stdlib );
+      ( "compilation session reuses identical ARM64 helper programs",
+        testArm64HelpersAreReused stdlib );
+    ]
+  in
+  match target with
+  | Platform.ARM64Backend _ -> allTests
+  | Platform.LinuxX86_64 ->
+      let exclusions =
+        StringOrder.Set.of_list
+          [
+            "compilation session isolates and disposes registries";
+            "compilation session reuses the stable start trampoline";
+            "compilation session composes cached dependency metadata";
+          ]
+      in
+      List.filter
+        (fun (name, _) ->
+          (not (Text.contains name "ARM64"))
+          && not (StringOrder.Set.mem name exclusions))
+        allTests

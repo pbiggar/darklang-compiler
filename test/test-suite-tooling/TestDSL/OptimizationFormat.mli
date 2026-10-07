@@ -24,8 +24,18 @@
    Parse multiple tests from a single file
    Tests are separated by ---NAME--- sections
 *)
-type irStage=ANF | MIR | LIR | DirectLIR | DirectARM64 | DirectLIR2X64
-type optimizationInput=Source of string | StdlibFunction of string
-type optimizationTest={name:string;input:optimizationInput;expectedIR:string;stage:irStage;sourceFile:string}
-val parseContent : irStage -> string -> string -> (optimizationTest list,string) result
-val parseTestFile : irStage -> string -> (optimizationTest list,string) result
+type irStage = ANF | MIR | LIR | DirectLIR | DirectARM64 | DirectLIR2X64
+type optimizationInput = Source of string | StdlibFunction of string
+
+type optimizationTest = {
+  name : string;
+  input : optimizationInput;
+  expectedIR : string;
+  stage : irStage;
+  sourceFile : string;
+}
+
+val parseContent :
+  irStage -> string -> string -> (optimizationTest list, string) result
+
+val parseTestFile : irStage -> string -> (optimizationTest list, string) result

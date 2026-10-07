@@ -40,11 +40,49 @@
    Load and run tests from a file
 *)
 open Dark_compiler
-type optimizationTestResult=TestOutcome.t={success:bool;message:string;expected:string option;actual:string option}
+
+type optimizationTestResult = TestOutcome.t = {
+  success : bool;
+  message : string;
+  expected : string option;
+  actual : string option;
+}
+
 val normalizeIR : string -> string
-val getOptimizedANF : CompilationContexts.stdlibResult -> CompilerOptions.passTimingRecorder option -> string -> (string,string) result
-val getOptimizedStdlibANF : CompilationContexts.stdlibResult -> string -> (string,string) result
-val getOptimizedMIR : CompilationContexts.stdlibResult -> CompilerOptions.passTimingRecorder option -> string -> (string,string) result
-val getOptimizedLIR : CompilationContexts.stdlibResult -> CompilerOptions.passTimingRecorder option -> string -> (string,string) result
-val runOptimizationTest : CompilationContexts.stdlibResult -> CompilerOptions.passTimingRecorder option -> OptimizationFormat.optimizationTest -> optimizationTestResult
-val runTestFile : CompilationContexts.stdlibResult -> CompilerOptions.passTimingRecorder option -> (OptimizationFormat.optimizationTest -> bool) -> OptimizationFormat.irStage -> string -> ((OptimizationFormat.optimizationTest * optimizationTestResult) list,string) result
+
+val getOptimizedANF :
+  CompilationContexts.stdlibResult ->
+  CompilerOptions.passTimingRecorder option ->
+  string ->
+  (string, string) result
+
+val getOptimizedStdlibANF :
+  CompilationContexts.stdlibResult -> string -> (string, string) result
+
+val getOptimizedMIR :
+  CompilationContexts.stdlibResult ->
+  CompilerOptions.passTimingRecorder option ->
+  string ->
+  (string, string) result
+
+val getOptimizedLIR :
+  CompilationContexts.stdlibResult ->
+  CompilerOptions.passTimingRecorder option ->
+  string ->
+  (string, string) result
+
+val runOptimizationTest :
+  CompilationContexts.stdlibResult ->
+  CompilerOptions.passTimingRecorder option ->
+  OptimizationFormat.optimizationTest ->
+  optimizationTestResult
+
+val runTestFile :
+  CompilationContexts.stdlibResult ->
+  CompilerOptions.passTimingRecorder option ->
+  (OptimizationFormat.optimizationTest -> bool) ->
+  OptimizationFormat.irStage ->
+  string ->
+  ( (OptimizationFormat.optimizationTest * optimizationTestResult) list,
+    string )
+  result

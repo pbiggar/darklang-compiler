@@ -1,1 +1,7 @@
-val createExecutableWithPools : bytes -> LiteralPool.stringPool -> LiteralPool.floatPool -> bool -> int -> bytes
+val createExecutableWithPools :
+  bytes ->
+  LiteralPool.stringPool ->
+  LiteralPool.floatPool ->
+  bool ->
+  int ->
+  bytes

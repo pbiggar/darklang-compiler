@@ -9,10 +9,10 @@
 let mapResults f items =
   let rec loop acc = function
     | [] -> Ok (List.rev acc)
-    | item :: rest ->
+    | item :: rest -> (
         match f item with
         | Error error -> Error error
-        | Ok result -> loop (result :: acc) rest
+        | Ok result -> loop (result :: acc) rest)
   in
   loop [] items
 
@@ -27,10 +27,10 @@ let collectResults f items =
   in
   let rec loop acc = function
     | [] -> Ok (List.rev acc)
-    | item :: rest ->
+    | item :: rest -> (
         match f item with
         | Error error -> Error error
-        | Ok results -> loop (prependReversed results acc) rest
+        | Ok results -> loop (prependReversed results acc) rest)
   in
   loop [] items
 
@@ -38,10 +38,12 @@ let collectResults f items =
    Sequence a list of results, returning the first error
 *)
 let sequenceResults items = mapResults Fun.id items
+
 (*
    Conventional name for result-returning list mapping.
 *)
 let traverse = mapResults
+
 (*
    Turn an optional result into a result containing an optional value.
 *)

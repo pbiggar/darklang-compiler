@@ -3,7 +3,9 @@
    Covers typed shape parsing, invalid placement, and executable release behavior.
 *)
 open Dark_compiler
-type testResult=(unit,string) result
+
+type testResult = (unit, string) result
+
 val testParsesNestedManagedShape : unit -> testResult
 val testRejectsPreserveWithoutRootRegister : unit -> testResult
 val testRejectsInvalidShapeArity : unit -> testResult

@@ -42,23 +42,70 @@
 *)
 open Dark_compiler
 open E2EFormat
-type e2eRun = CompileFailed of int * string * int64 | Ran of int * string * string * int64 * int64
-type e2eFailure = {run:e2eRun;message:string}
-type e2eTestResult = (e2eRun,e2eFailure) result
-type preparedE2EBatchTest = {test:e2eTest;equalitySource:string}
-type e2eBatchExecution = {aggregateRun:e2eRun;results:(e2eTest*e2eTestResult) list}
+
+type e2eRun =
+  | CompileFailed of int * string * int64
+  | Ran of int * string * string * int64 * int64
+
+type e2eFailure = { run : e2eRun; message : string }
+type e2eTestResult = (e2eRun, e2eFailure) result
+type preparedE2EBatchTest = { test : e2eTest; equalitySource : string }
+
+type e2eBatchExecution = {
+  aggregateRun : e2eRun;
+  results : (e2eTest * e2eTestResult) list;
+}
+
 val maxSupportedBatchSize : int
 val tryPrepareBatchTest : e2eTest -> preparedE2EBatchTest option
+
 type preambleContextKey = string * string
+
 val preambleContextKeyForTest : e2eTest -> preambleContextKey
+
 module PreambleContextMap : Map.S with type key = preambleContextKey
-type suiteContext = {preambleContexts:(CompilationContexts.stdlibResult*CompilationContexts.preambleContext) PreambleContextMap.t}
-val buildSuiteContexts : CompilationContexts.stdlibResult -> e2eTest array -> CompilerOptions.passTimingRecorder option -> (suiteContext,string) result
-val executeBinaryForTarget : Platform.target -> bytes -> (CompilerOptions.executionOutput,string) result
+
+type suiteContext = {
+  preambleContexts :
+    (CompilationContexts.stdlibResult * CompilationContexts.preambleContext)
+    PreambleContextMap.t;
+}
+
+val buildSuiteContexts :
+  CompilationContexts.stdlibResult ->
+  e2eTest array ->
+  CompilerOptions.passTimingRecorder option ->
+  (suiteContext, string) result
+
+val executeBinaryForTarget :
+  Platform.target -> bytes -> (CompilerOptions.executionOutput, string) result
+
 val canBatchTogether : preparedE2EBatchTest -> preparedE2EBatchTest -> bool
-val runE2ETestBatchWithPreambleContext : CompilationContexts.stdlibResult -> CompilationContexts.preambleContext -> CompilationSession.compilationSession option -> preparedE2EBatchTest list -> CompilerOptions.passTimingRecorder option -> e2eBatchExecution
-val runE2ETestWithPreambleContext : CompilationContexts.stdlibResult -> CompilationContexts.preambleContext -> CompilationSession.compilationSession option -> e2eTest -> CompilerOptions.passTimingRecorder option -> e2eTestResult
-val runPreparedE2ETestWithPreambleContext : CompilationContexts.stdlibResult -> CompilationContexts.preambleContext -> CompilationSession.compilationSession option -> preparedE2EBatchTest -> CompilerOptions.passTimingRecorder option -> e2eTestResult
+
+val runE2ETestBatchWithPreambleContext :
+  CompilationContexts.stdlibResult ->
+  CompilationContexts.preambleContext ->
+  CompilationSession.compilationSession option ->
+  preparedE2EBatchTest list ->
+  CompilerOptions.passTimingRecorder option ->
+  e2eBatchExecution
+
+val runE2ETestWithPreambleContext :
+  CompilationContexts.stdlibResult ->
+  CompilationContexts.preambleContext ->
+  CompilationSession.compilationSession option ->
+  e2eTest ->
+  CompilerOptions.passTimingRecorder option ->
+  e2eTestResult
+
+val runPreparedE2ETestWithPreambleContext :
+  CompilationContexts.stdlibResult ->
+  CompilationContexts.preambleContext ->
+  CompilationSession.compilationSession option ->
+  preparedE2EBatchTest ->
+  CompilerOptions.passTimingRecorder option ->
+  e2eTestResult
+
 val evaluateExpectations : e2eTest -> e2eRun -> e2eTestResult
 val buildBatchSource : preparedE2EBatchTest list -> string
 val tryParseBatchBoolResults : int -> string -> bool list option

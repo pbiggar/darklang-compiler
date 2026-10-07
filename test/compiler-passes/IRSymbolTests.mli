@@ -1,5 +1,6 @@
 (* Original symbolic pool, function-identity and MIR-to-LIR tests. *)
-type testResult=(unit,string) result
+type testResult = (unit, string) result
+
 val testFunctionIdentitiesDoNotHashCollide : unit -> testResult
 val testFunctionIdentitiesComposeAcrossUnits : unit -> testResult
 val testMirToLirSymbolicOperands : unit -> testResult

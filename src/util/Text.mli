@@ -13,6 +13,7 @@ val isLetter : int -> bool
 val isDigit : int -> bool
 val isUpper : int -> bool
 val graphemeClusters : string -> string list
+
 (* Read only the first cluster of already validated UTF-8 text. *)
 val firstGrapheme : string -> string option
 val startsWith : string -> string -> bool

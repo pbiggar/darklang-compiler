@@ -1,4 +1,5 @@
 type testResult = (unit, string) result
+
 val testLayoutDefersSharedReturn : unit -> testResult
 val testLayoutPreservesOtherReturnShapes : unit -> testResult
 val testLayoutLeavesMissingSuccessorValidationToConsumers : unit -> testResult

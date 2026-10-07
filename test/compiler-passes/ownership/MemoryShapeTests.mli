@@ -1,5 +1,6 @@
 (* MemoryShapeTests.mli - Verify memory shapes and stable recursive release plans. *)
 type testResult = (unit, string) result
+
 val testRcShapeConstructionAndEquality : unit -> testResult
 val testRcShapeClassifiesPrimitivesAsImmediate : unit -> testResult
 val testRcShapeClassifiesManagedIntegerBuffers : unit -> testResult
@@ -10,10 +11,16 @@ val testRcShapeOwnershipHelpersClassifyManagedRoots : unit -> testResult
 val testRcShapeOwnershipHelpersClassifyAutomaticBindingDecs : unit -> testResult
 val testRcShapeOwnershipHelpersClassifyBorrowedRetains : unit -> testResult
 val testRcShapeOwnershipHelpersSelectRootDispatch : unit -> testResult
-val testRcShapeOwnershipHelpersSelectRetainReleaseOperations : unit -> testResult
+
+val testRcShapeOwnershipHelpersSelectRetainReleaseOperations :
+  unit -> testResult
+
 val testRcShapeOwnershipHelpersClassifyStorage : unit -> testResult
 val testRcShapeOwnershipHelpersClassifyRootManagement : unit -> testResult
-val testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots : unit -> testResult
+
+val testRcShapeOwnershipHelpersClassifyOwnershipTransferRoots :
+  unit -> testResult
+
 val testRcShapeOwnershipHelpersClassifyRecursiveRelease : unit -> testResult
 val testRcShapeReleasePlanClassifiesFieldCleanup : unit -> testResult
 val testRcSourceTypeFingerprintIsStructuralAndStable : unit -> testResult

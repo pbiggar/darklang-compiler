@@ -9,8 +9,16 @@
    as an immutable catalog evaluator, never through live package lookup.
 *)
 open Dark_compiler
-type testResult=(unit,string) result
+
+type testResult = (unit, string) result
+
 val testCatalogParity : CompilationContexts.stdlibResult -> unit -> testResult
-val testCatalogRejectsIllTypedAvailableValue : CompilationContexts.stdlibResult -> unit -> testResult
-val testInt8PackageProbeParity : CompilationContexts.stdlibResult -> unit -> testResult
-val tests : CompilationContexts.stdlibResult -> (string * (unit -> testResult)) list
+
+val testCatalogRejectsIllTypedAvailableValue :
+  CompilationContexts.stdlibResult -> unit -> testResult
+
+val testInt8PackageProbeParity :
+  CompilationContexts.stdlibResult -> unit -> testResult
+
+val tests :
+  CompilationContexts.stdlibResult -> (string * (unit -> testResult)) list

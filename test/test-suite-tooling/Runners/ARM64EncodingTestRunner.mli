@@ -10,7 +10,13 @@
    Check each encoding matches expected
    Check if all values are different (if required)
 *)
-val loadARM64EncodingTest : string -> (ARM64EncodingFormat.arm64EncodingTest,string) result
+val loadARM64EncodingTest :
+  string -> (ARM64EncodingFormat.arm64EncodingTest, string) result
+
 val hasAllDifferent : int32 list -> bool
-val formatMismatches : (int*Dark_compiler.ARM64.instr*int32*int32) list -> string
-val runARM64EncodingTest : ARM64EncodingFormat.arm64EncodingTest -> TestOutcome.t
+
+val formatMismatches :
+  (int * Dark_compiler.ARM64.instr * int32 * int32) list -> string
+
+val runARM64EncodingTest :
+  ARM64EncodingFormat.arm64EncodingTest -> TestOutcome.t

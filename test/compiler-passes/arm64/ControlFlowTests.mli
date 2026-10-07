@@ -10,12 +10,13 @@
    Test: malformed ARM64 CFGs should be reported as codegen errors instead of silently dropping the entry.
 *)
 open Dark_compiler
-val testPrintUInt64RuntimeZeroBranches : unit -> (unit,string) result
-val testPrintUInt64RuntimePreservesNewline : unit -> (unit,string) result
-val testBranchFalseEdgeFallsThrough : unit -> (unit,string) result
-val testSharedReturnTransferCost : unit -> (unit,string) result
-val testDynamicBufferRcInstructionCost : unit -> (unit,string) result
-val testPrimitiveListPayloadPreservationCost : unit -> (unit,string) result
-val testGeneratedEntryUsesAllocatorTransfersOnly : unit -> (unit,string) result
-val testReportsMissingEntryBlock : unit -> (unit,string) result
+
+val testPrintUInt64RuntimeZeroBranches : unit -> (unit, string) result
+val testPrintUInt64RuntimePreservesNewline : unit -> (unit, string) result
+val testBranchFalseEdgeFallsThrough : unit -> (unit, string) result
+val testSharedReturnTransferCost : unit -> (unit, string) result
+val testDynamicBufferRcInstructionCost : unit -> (unit, string) result
+val testPrimitiveListPayloadPreservationCost : unit -> (unit, string) result
+val testGeneratedEntryUsesAllocatorTransfersOnly : unit -> (unit, string) result
+val testReportsMissingEntryBlock : unit -> (unit, string) result
 val makeEmptyFunction : string -> LIR.typedLIRParam list -> LIR.functionDef

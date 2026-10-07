@@ -1,2 +1,15 @@
 (* Expressions.mli - Complete recursive expression type checking. *)
-val checkExprWithParamNamesAndSumTypeNames : Types.funcParamNameRegistry -> StringOrder.Set.t -> Types.indexedSumTypeRegistry -> AST.expr -> Types.typeEnv -> Types.indexedTypeRegistry -> Types.variantLookup -> Types.genericFuncRegistry -> AST.warningSettings -> AST.moduleRegistry -> Types.aliasRegistry -> AST.semanticType option -> (AST.semanticType * AST.expr, CheckingDiagnostics.typeError) result
+val checkExprWithParamNamesAndSumTypeNames :
+  Types.funcParamNameRegistry ->
+  StringOrder.Set.t ->
+  Types.indexedSumTypeRegistry ->
+  AST.expr ->
+  Types.typeEnv ->
+  Types.indexedTypeRegistry ->
+  Types.variantLookup ->
+  Types.genericFuncRegistry ->
+  AST.warningSettings ->
+  AST.moduleRegistry ->
+  Types.aliasRegistry ->
+  AST.semanticType option ->
+  (AST.semanticType * AST.expr, CheckingDiagnostics.typeError) result

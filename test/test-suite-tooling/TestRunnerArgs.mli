@@ -1,5 +1,6 @@
 (* TestRunnerArgs.mli - Preserve the test runner's command line contract. *)
 type testTarget = Host | Explicit of Dark_compiler.Platform.target
+
 val parseFilterArg : string array -> string option
 val parseTargetArg : string array -> (testTarget, string) result
 val hasCoverageArg : string array -> bool

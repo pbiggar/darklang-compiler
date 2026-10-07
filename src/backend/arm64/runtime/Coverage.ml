@@ -44,137 +44,93 @@ open Immediates
    Write "/tmp/dark_cov.bin\0" to stack (same as Linux)
    open(path, flags, mode) - macOS uses direct open syscall
 *)
-let generateCoverageFlush (target: ARM64.targetConfig) (coverageExprCount: int) =
-    if coverageExprCount = 0 then
-        []
-    else
-        let os = ARM64.targetOS target in
-        let syscalls = ARM64.targetSyscalls target in
+let generateCoverageFlush (target : ARM64.targetConfig)
+    (coverageExprCount : int) =
+  if coverageExprCount = 0 then []
+  else
+    let os = ARM64.targetOS target in
+    let syscalls = ARM64.targetSyscalls target in
 
+    let writeFlags =
+      match os with Platform.Linux -> 577 | Platform.MacOS -> 1537
+    in
 
-        let writeFlags =
-            match os with
-            | Platform.Linux -> 577
-            | Platform.MacOS -> 1537
-        in
+    let byteCount =
+      Int32.to_int (Int32.mul (Int32.of_int coverageExprCount) 8l)
+    in
 
-
-        let byteCount = Int32.to_int (Int32.mul (Int32.of_int coverageExprCount) 8l) in
-
-        match os with
-        | Platform.Linux ->
-            [
-
-                ARM64.SUB_imm (ARM64.SP, ARM64.SP, 24);
-
-
-
-                ARM64.MOVZ (ARM64.X9, 0x2F74, 0);
-                ARM64.MOVK (ARM64.X9, 0x6D70, 16);
-                ARM64.MOVK (ARM64.X9, 0x642F, 32);
-                ARM64.MOVK (ARM64.X9, 0x7261, 48);
-                ARM64.STR (ARM64.X9, ARM64.SP, 0);
-
-
-                ARM64.MOVZ (ARM64.X9, 0x5F6B, 0);
-                ARM64.MOVK (ARM64.X9, 0x6F63, 16);
-                ARM64.MOVK (ARM64.X9, 0x2E76, 32);
-                ARM64.MOVK (ARM64.X9, 0x6962, 48);
-                ARM64.STR (ARM64.X9, ARM64.SP, 8);
-
-
-                ARM64.MOVZ (ARM64.X9, 0x006E, 0);
-                ARM64.STR (ARM64.X9, ARM64.SP, 16);
-
-
-                ARM64.ADRP (ARM64.X10, Symbolic.coverageDataLabelName);
-                ARM64.ADD_label (ARM64.X10, ARM64.X10, Symbolic.coverageDataLabelName);
-
-
-                ARM64.MOVZ (ARM64.X0, 100, 0);
-                ARM64.NEG (ARM64.X0, ARM64.X0);
-                ARM64.MOV_reg (ARM64.X1, ARM64.SP);
-                ARM64.MOVZ (ARM64.X2, writeFlags, 0);
-                ARM64.MOVZ (ARM64.X3, 420, 0);
-                ARM64.MOVZ (ARM64.X8, syscalls.ARM64.numbers.Platform.open_, 0);
-                ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-                ARM64.TBNZ (ARM64.X0, 63, 6);
-
-
-                ARM64.MOV_reg (ARM64.X11, ARM64.X0);
-
-
-                ARM64.MOV_reg (ARM64.X0, ARM64.X11);
-                ARM64.MOV_reg (ARM64.X1, ARM64.X10);
-            ] @
-            generateLoadNonNegativeIntImmediate ARM64.X2 byteCount @
-            [
-                ARM64.MOVZ (ARM64.X8, syscalls.ARM64.numbers.Platform.write, 0);
-                ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-                ARM64.MOV_reg (ARM64.X0, ARM64.X11);
-                ARM64.MOVZ (ARM64.X8, syscalls.ARM64.numbers.Platform.close, 0);
-                ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-                ARM64.ADD_imm (ARM64.SP, ARM64.SP, 24);
-            ]
-
-        | Platform.MacOS ->
-            [
-
-                ARM64.SUB_imm (ARM64.SP, ARM64.SP, 24);
-
-
-                ARM64.MOVZ (ARM64.X9, 0x2F74, 0);
-                ARM64.MOVK (ARM64.X9, 0x6D70, 16);
-                ARM64.MOVK (ARM64.X9, 0x642F, 32);
-                ARM64.MOVK (ARM64.X9, 0x7261, 48);
-                ARM64.STR (ARM64.X9, ARM64.SP, 0);
-
-                ARM64.MOVZ (ARM64.X9, 0x5F6B, 0);
-                ARM64.MOVK (ARM64.X9, 0x6F63, 16);
-                ARM64.MOVK (ARM64.X9, 0x2E76, 32);
-                ARM64.MOVK (ARM64.X9, 0x6962, 48);
-                ARM64.STR (ARM64.X9, ARM64.SP, 8);
-
-                ARM64.MOVZ (ARM64.X9, 0x006E, 0);
-                ARM64.STR (ARM64.X9, ARM64.SP, 16);
-
-
-                ARM64.ADRP (ARM64.X10, Symbolic.coverageDataLabelName);
-                ARM64.ADD_label (ARM64.X10, ARM64.X10, Symbolic.coverageDataLabelName);
-
-
-                ARM64.MOV_reg (ARM64.X0, ARM64.SP);
-                ARM64.MOVZ (ARM64.X1, writeFlags, 0);
-                ARM64.MOVZ (ARM64.X2, 420, 0);
-                ARM64.MOVZ (ARM64.X16, syscalls.ARM64.numbers.Platform.open_, 0);
-                ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-                ARM64.TBNZ (ARM64.X0, 63, 6);
-
-
-                ARM64.MOV_reg (ARM64.X11, ARM64.X0);
-
-
-                ARM64.MOV_reg (ARM64.X0, ARM64.X11);
-                ARM64.MOV_reg (ARM64.X1, ARM64.X10);
-            ] @
-            generateLoadNonNegativeIntImmediate ARM64.X2 byteCount @
-            [
-                ARM64.MOVZ (ARM64.X16, syscalls.ARM64.numbers.Platform.write, 0);
-                ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-                ARM64.MOV_reg (ARM64.X0, ARM64.X11);
-                ARM64.MOVZ (ARM64.X16, syscalls.ARM64.numbers.Platform.close, 0);
-                ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-                ARM64.ADD_imm (ARM64.SP, ARM64.SP, 24);
-            ]
+    match os with
+    | Platform.Linux ->
+        [
+          ARM64.SUB_imm (ARM64.SP, ARM64.SP, 24);
+          ARM64.MOVZ (ARM64.X9, 0x2F74, 0);
+          ARM64.MOVK (ARM64.X9, 0x6D70, 16);
+          ARM64.MOVK (ARM64.X9, 0x642F, 32);
+          ARM64.MOVK (ARM64.X9, 0x7261, 48);
+          ARM64.STR (ARM64.X9, ARM64.SP, 0);
+          ARM64.MOVZ (ARM64.X9, 0x5F6B, 0);
+          ARM64.MOVK (ARM64.X9, 0x6F63, 16);
+          ARM64.MOVK (ARM64.X9, 0x2E76, 32);
+          ARM64.MOVK (ARM64.X9, 0x6962, 48);
+          ARM64.STR (ARM64.X9, ARM64.SP, 8);
+          ARM64.MOVZ (ARM64.X9, 0x006E, 0);
+          ARM64.STR (ARM64.X9, ARM64.SP, 16);
+          ARM64.ADRP (ARM64.X10, Symbolic.coverageDataLabelName);
+          ARM64.ADD_label (ARM64.X10, ARM64.X10, Symbolic.coverageDataLabelName);
+          ARM64.MOVZ (ARM64.X0, 100, 0);
+          ARM64.NEG (ARM64.X0, ARM64.X0);
+          ARM64.MOV_reg (ARM64.X1, ARM64.SP);
+          ARM64.MOVZ (ARM64.X2, writeFlags, 0);
+          ARM64.MOVZ (ARM64.X3, 420, 0);
+          ARM64.MOVZ (ARM64.X8, syscalls.ARM64.numbers.Platform.open_, 0);
+          ARM64.SVC syscalls.ARM64.svcImmediate;
+          ARM64.TBNZ (ARM64.X0, 63, 6);
+          ARM64.MOV_reg (ARM64.X11, ARM64.X0);
+          ARM64.MOV_reg (ARM64.X0, ARM64.X11);
+          ARM64.MOV_reg (ARM64.X1, ARM64.X10);
+        ]
+        @ generateLoadNonNegativeIntImmediate ARM64.X2 byteCount
+        @ [
+            ARM64.MOVZ (ARM64.X8, syscalls.ARM64.numbers.Platform.write, 0);
+            ARM64.SVC syscalls.ARM64.svcImmediate;
+            ARM64.MOV_reg (ARM64.X0, ARM64.X11);
+            ARM64.MOVZ (ARM64.X8, syscalls.ARM64.numbers.Platform.close, 0);
+            ARM64.SVC syscalls.ARM64.svcImmediate;
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 24);
+          ]
+    | Platform.MacOS ->
+        [
+          ARM64.SUB_imm (ARM64.SP, ARM64.SP, 24);
+          ARM64.MOVZ (ARM64.X9, 0x2F74, 0);
+          ARM64.MOVK (ARM64.X9, 0x6D70, 16);
+          ARM64.MOVK (ARM64.X9, 0x642F, 32);
+          ARM64.MOVK (ARM64.X9, 0x7261, 48);
+          ARM64.STR (ARM64.X9, ARM64.SP, 0);
+          ARM64.MOVZ (ARM64.X9, 0x5F6B, 0);
+          ARM64.MOVK (ARM64.X9, 0x6F63, 16);
+          ARM64.MOVK (ARM64.X9, 0x2E76, 32);
+          ARM64.MOVK (ARM64.X9, 0x6962, 48);
+          ARM64.STR (ARM64.X9, ARM64.SP, 8);
+          ARM64.MOVZ (ARM64.X9, 0x006E, 0);
+          ARM64.STR (ARM64.X9, ARM64.SP, 16);
+          ARM64.ADRP (ARM64.X10, Symbolic.coverageDataLabelName);
+          ARM64.ADD_label (ARM64.X10, ARM64.X10, Symbolic.coverageDataLabelName);
+          ARM64.MOV_reg (ARM64.X0, ARM64.SP);
+          ARM64.MOVZ (ARM64.X1, writeFlags, 0);
+          ARM64.MOVZ (ARM64.X2, 420, 0);
+          ARM64.MOVZ (ARM64.X16, syscalls.ARM64.numbers.Platform.open_, 0);
+          ARM64.SVC syscalls.ARM64.svcImmediate;
+          ARM64.TBNZ (ARM64.X0, 63, 6);
+          ARM64.MOV_reg (ARM64.X11, ARM64.X0);
+          ARM64.MOV_reg (ARM64.X0, ARM64.X11);
+          ARM64.MOV_reg (ARM64.X1, ARM64.X10);
+        ]
+        @ generateLoadNonNegativeIntImmediate ARM64.X2 byteCount
+        @ [
+            ARM64.MOVZ (ARM64.X16, syscalls.ARM64.numbers.Platform.write, 0);
+            ARM64.SVC syscalls.ARM64.svcImmediate;
+            ARM64.MOV_reg (ARM64.X0, ARM64.X11);
+            ARM64.MOVZ (ARM64.X16, syscalls.ARM64.numbers.Platform.close, 0);
+            ARM64.SVC syscalls.ARM64.svcImmediate;
+            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 24);
+          ]
