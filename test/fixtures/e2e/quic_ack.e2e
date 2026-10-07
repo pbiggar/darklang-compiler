@@ -1,0 +1,9 @@
+// quic_ack.e2e - Replay filtering and gap-preserving cumulative ACK encoding.
+Stdlib.QuicAck.encode Stdlib.QuicAck.empty = Error "No QUIC packets to acknowledge"
+Stdlib.QuicAck.receive Stdlib.QuicAck.empty -1L = Error "Invalid QUIC received packet number"
+Stdlib.QuicAck.receive Stdlib.QuicAck.empty 4611686018427387904L = Error "Invalid QUIC received packet number"
+Stdlib.QuicAck.receive Stdlib.QuicAck.empty 3L |> Stdlib.Result.map (fun received -> (received.fresh, received.state.largest, received.state.floor)) = Ok ((true, 3L, 0L))
+Stdlib.QuicAck.receive Stdlib.QuicAck.empty 3L |> Stdlib.Result.andThen (fun received -> Stdlib.QuicAck.receive received.state 3L) |> Stdlib.Result.map (fun received -> received.fresh) = Ok false
+Stdlib.List.fold [3L, 1L, 2L, 0L, 5L, 8L, 7L] (Ok Stdlib.QuicAck.empty) (fun result number -> result |> Stdlib.Result.andThen (fun state -> Stdlib.QuicAck.receive state number |> Stdlib.Result.map (fun received -> received.state))) |> Stdlib.Result.andThen Stdlib.QuicAck.encode |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "020800020100000003"
+Stdlib.QuicAck.receive Stdlib.QuicAck.empty 4096L |> Stdlib.Result.andThen (fun received -> Stdlib.QuicAck.receive received.state 0L) |> Stdlib.Result.map (fun received -> (received.fresh, received.state.floor)) = Ok ((false, 1L))
+Stdlib.QuicAck.receive Stdlib.QuicAck.empty 4611686018427387903L |> Stdlib.Result.andThen (fun received -> Stdlib.QuicAck.receive received.state 4611686018427387902L) |> Stdlib.Result.andThen (fun received -> Stdlib.QuicAck.encode received.state) |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "02FFFFFFFFFFFFFFFF000001"

@@ -171,9 +171,25 @@ ACK ranges, RTT, NewReno congestion, loss, PTO probes, retransmission identity
 and pacing decisions. `quic_application.e2e`, `quic_recovery.e2e` and the
 independent `scripts/test_quic_application_peer.py` and
 `scripts/test_quic_recovery_peer.py` exercise these pure helpers, including
-reordering and duplicate data. They are not yet connected to a production
-UDP connection owner: live reliable streams and advertised-only discovery
-remain implementation work, as do the public HTTP/3 client/server APIs.
+reordering and duplicate data. An owned client connection now joins these
+helpers with source-address and connection-ID checks, cumulative gap-preserving
+ACKs, a bounded replay window, handshake/stream retransmission, shared
+cross-level congestion caps, receive-credit updates, stateless-reset detection
+and authenticated application key updates. The initial receive windows are
+64 KiB per stream and 256 KiB per connection. The connection profile retains
+at most 16 stream owners and 128 issued peer-ID history entries; it does not
+implement migration, session resumption or 0-RTT.
+`python3 scripts/test_quic_client_peer.py` checks live authentication, lost
+Initial/server flights, duplicates, tampering, wrong source addresses and Retry.
+`python3 scripts/test_quic_keys_peer.py` independently checks key generations,
+unchanged header-protection keys, reordered old/new packets, expiry and invalid
+updates. `python3 scripts/test_quic_stream_peer.py` drives these production
+streams through an aioquic HTTP/3 request, a 70-KiB response across the initial
+stream-credit window, trailers, a live application key update and
+request/response loss and reordering, with
+compiled cleanup accounting. This is a QUIC connection layer, not the completed
+HTTP/3 message/API implementation: control-stream and response validation,
+advertised-only discovery and public client/server integration remain work.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the

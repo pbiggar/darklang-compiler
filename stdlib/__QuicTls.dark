@@ -7,6 +7,7 @@ type Handshake = {
 }
 type Authenticated = {
   send: Stdlib.QuicCrypto.Keys, receive: Stdlib.QuicCrypto.Keys,
+  sendSecret: Blob, receiveSecret: Blob,
   finished: Blob, parameters: Stdlib.QuicParameters.Parameters
 }
 
@@ -94,7 +95,7 @@ let authenticate (handshake: Stdlib.QuicTls.Handshake) (host: String) (roots: Li
             | Ok client, Ok server, Ok verify ->
               match Stdlib.QuicCrypto.derive client, Stdlib.QuicCrypto.derive server with
               | Ok send, Ok receive -> Ok (Stdlib.QuicTls.Authenticated {
-                send = send, receive = receive, parameters = parameters,
+                send = send, receive = receive, sendSecret = client, receiveSecret = server, parameters = parameters,
                 finished = Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [20L, 0L, 0L, 32L], verify] })
               | _, _ -> Error "QUIC application key derivation failed"
             | _, _, _ -> Error "QUIC application secret derivation failed"
