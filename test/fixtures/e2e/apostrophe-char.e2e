@@ -1,0 +1,9 @@
+// Apostrophe graphemes use the same unescaped character syntax as other chars.
+''' = '\''
+Stdlib.String.fromChar ''' = "'"
+match ''' with | ''' -> "&#x27;" | _ -> "unchanged" = "&#x27;"
+let apostropheChar () : Char = '''
+apostropheChar () = '\''
+$"apostrophe: {Stdlib.String.fromChar '''}" = "apostrophe: '"
+''́' = '\'́'
+'' = compileerror="unterminated char literal"
