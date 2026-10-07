@@ -1,0 +1,12 @@
+// Interpreter package sources call these builtins directly.
+// Exercise payloads, padding, both alphabets, and malformed input.
+
+Builtin.base64Encode (Stdlib.Blob.fromList [72uy, 101uy, 108uy, 108uy, 111uy]) = "SGVsbG8="
+Builtin.base64Encode (Stdlib.Blob.fromList []) = ""
+Builtin.base64Encode (Stdlib.Blob.fromList [255uy]) = "/w=="
+Builtin.base64UrlEncode (Stdlib.Blob.fromList [255uy]) = "_w=="
+match Builtin.base64Decode "SGVsbG8=" with | Ok bytes -> Stdlib.Blob.toList bytes | Error _ -> [] = [72uy, 101uy, 108uy, 108uy, 111uy]
+match Builtin.base64Decode "_w" with | Ok bytes -> Stdlib.Blob.toList bytes | Error _ -> [] = [255uy]
+match Builtin.base64Decode "" with | Ok bytes -> Stdlib.Blob.toList bytes | Error _ -> [1uy] = []
+Builtin.base64Decode "x" = Stdlib.Result.Result.Error "Not a valid base64 string"
+Builtin.base64Decode "=AAA" = Stdlib.Result.Result.Error "Not a valid base64 string"
