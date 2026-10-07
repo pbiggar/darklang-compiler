@@ -52,17 +52,20 @@ let compile stdlib dependencies path source =
   (CompilerLibrary.compile request).CompilerOptions.result
 
 let metadata parsed =
+  let qualified path (name : WrittenTypes.identifier) =
+    String.concat "." (path @ [ name.WrittenTypes.name ])
+  in
   let names =
     Result.bind (WrittenSource.items parsed) (fun items ->
         let exports =
           List.filter_map
             (function
               | WrittenSource.Function (path, fn) ->
-                  Some (String.concat "." (path @ [ fn.WrittenTypes.name.name ]))
+                  Some (qualified path fn.WrittenTypes.name)
               | WrittenSource.Value (path, value) ->
-                  Some (String.concat "." (path @ [ value.WrittenTypes.name.name ]))
+                  Some (qualified path value.WrittenTypes.name)
               | WrittenSource.Type (path, typ) ->
-                  Some (String.concat "." (path @ [ typ.WrittenTypes.name.name ]))
+                  Some (qualified path typ.WrittenTypes.name)
               | WrittenSource.Expression _ -> None)
             items
         in
