@@ -1,5 +1,10 @@
 # Name resolution parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This document is the checked-in semantic matrix for callable and namespace
 resolution. The comparison is pinned to compiler
 `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and darklang/dark release
@@ -56,7 +61,7 @@ Candidates at the same winning precedence are sorted by rendered identity.
 | `Case` | constructor pattern | cases in several types | scrutinee type selects identity | parity |
 | `T` | type | one user type identity | user type | parity |
 | `A.T` | type | exact qualified user type | user type | parity |
-| repeated declaration | same category and qualified location | source-order overlay | last declaration wins | parity |
+| repeated function/type declaration | same category and qualified location in one source batch | direct declaration prepass | duplicate rejected | current compiler difference; `WrittenDeclarations.ml` |
 | any valid form | any context | two distinct equal-precedence identities not related by overlay | ambiguous, ordered identities | parity classification |
 | any valid form | any context | no category-valid candidate | structured unresolved error | parity classification |
 | empty segment such as `A..f` | any context | n/a | structured invalid-name error | parity classification |
@@ -95,17 +100,23 @@ name`, and `Ambiguous <context> reference`.
 - The canonical parser accepts module headers and blocks and retains their
   module paths through name resolution, then lowers references to deterministic
   qualified backend symbols. The compiler does
-  not load content-addressed packages. Imported compilation environments model
-  the same precedence boundary, but package hashes and dependency traversal
-  remain an intentional, documented program-model divergence.
+  loads hosted package names, hashes, and dependencies at compile time through
+  `src/packages/PackageManager.ml` when `--package-server` is supplied. Imported
+  declarations join the source-checking environment; generated binaries do not
+  consult the service at runtime. Offline catalog snapshots remain a separate
+  mechanism.
 - `val` declarations are first-class program declarations. Top-level, inherited,
   and builtin values resolve in the value namespace, are type-checked once, and
   are materialized once per execution scope as lexical bindings before ANF.
   Upstream constants such as
   `Stdlib.Math.pi`, `Stdlib.List.empty`, and `Stdlib.Blob.empty` are values and
   are referenced without `()`. Qualified values declared in nested user modules
-  remain a compatibility gap recorded in
-  [remaining differences](../remaining-differences.md).
+  are inventoried by qualified name in `WrittenDeclarations.ml` and resolved
+  through `WrittenTypeSupport.resolveValue`. Values are checked in source
+  order. The fresh upstream values probe passes 19/72; its 53 failures reference
+  missing interpreter test-package values such as `UserDefined.stringValue`.
+  The invocation supplies no upstream package server, so it does not test
+  hosted loading. See the current audit for scope and results.
 - Repeated flattened type declarations with the same canonical type identity
   are identity-deduplicated. This preserves existing module-adapter behavior;
   distinct type identities and distinct constructor owners remain ambiguous.

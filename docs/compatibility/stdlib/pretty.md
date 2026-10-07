@@ -1,5 +1,10 @@
 # Pretty-printing parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 The compiler copies `Stdlib.Pretty` from darklang/dark release
 `v0.0.35`, revision `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`.
 
@@ -16,7 +21,11 @@ where inference is ambiguous, and names the internal group constructor
 `PrettyGroup` to avoid collision with `Regex.Group`. The public `group`
 constructor function and observable layouts match upstream.
 
-The unchanged upstream fixture remains gated because its shared helper contains
-a call shape affected by the application-grouping frontend gap. Focused E2E
-coverage renders flat and broken groups, joined and vertically separated
-documents, nesting, Unicode widths, and styled text.
+The unchanged upstream fixture remains whole-file gated. A fresh probe at the
+audited revision passes 34 cases and fails L186: the multiline nested `concat`
+application reports “Expected TUnit, got TFunction”. This reproduces a specific
+application-layout failure after the parser migration. See the
+[current results](../current-audit.md#fresh-probes-of-whole-file-gates).
+Focused E2E coverage in `stdlib/copied_pure_surfaces.e2e` renders flat and broken
+groups, joined and vertically separated documents, nesting, Unicode widths,
+and styled text. Re-enable passing cases after addressing the isolated failure.

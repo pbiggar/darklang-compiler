@@ -1,5 +1,13 @@
 # Stream parity contract
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
+Stream passes 25/25 in the fresh unchanged-source probe, although its whole-file gate remains.
+See the [fresh probes](../current-audit.md#fresh-probes-of-whole-file-gates).
+
 This ledger was revalidated against compiler commit
 `60ed997edae2f59ffeed2f54d539fd1de285bd72` and darklang/dark commit
 `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. DCB1 report commit
