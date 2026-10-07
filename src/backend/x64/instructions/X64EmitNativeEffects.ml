@@ -38,7 +38,14 @@ let emitDateTimeNow (_ctx:X64CodeGenTypes.funcCtx) (dest:LIR.reg) =
 (*  clock_gettime(CLOCK_REALTIME=0, &ts), converted to 100ns Unix ticks. *)
     resolveReg dest
     |> Result.map (fun destReg ->
-        [X.SUB_imm (X.RSP, 16l)]   (*  timespec: tv_sec(8) + tv_nsec(8) *)
+        (* DateTimeNow is not a call barrier in register allocation. Preserve
+           syscall and division registers just as RandomInt64 does. *)
+        let preserved =
+            List.filter ((<>) destReg)
+                [X.RAX; X.RDI; X.RSI; X.RDX; X.RCX; scratch]
+        in
+        List.map (fun reg -> X.PUSH reg) preserved
+        @ [X.SUB_imm (X.RSP, 16l)]   (*  timespec: tv_sec(8) + tv_nsec(8) *)
         @ loadImm64 X.RDI 0L            (*  CLOCK_REALTIME *)
         @ [X.MOV_reg (X.RSI, X.RSP)]
         @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.gettimeofday)
@@ -51,7 +58,8 @@ let emitDateTimeNow (_ctx:X64CodeGenTypes.funcCtx) (dest:LIR.reg) =
         @ [X.IDIV X.RDI;
            X.ADD_reg (scratch, X.RAX);
            X.MOV_reg (destReg, scratch);
-           X.ADD_imm (X.RSP, 16l)])
+           X.ADD_imm (X.RSP, 16l)]
+        @ List.map (fun reg -> X.POP reg) (List.rev preserved))
 let emitSleep (ctx:X64CodeGenTypes.funcCtx) (effectId:int) (delayMs:LIR.fReg) =
     match delayMs with
     | LIR.FPhysical physicalDelay ->
