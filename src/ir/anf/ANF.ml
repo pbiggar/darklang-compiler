@@ -149,6 +149,24 @@ type cliOperation =
   | SignalWait
   | MonotonicTime
   | SecureRandomFill
+  | PosixOpenAt
+  | PosixRead
+  | PosixWrite
+  | PosixClose
+  | PosixSeek
+  | PosixStatAt
+  | PosixGetCwd
+  | PosixChdir
+  | PosixMkdirAt
+  | PosixUnlinkAt
+  | PosixRenameAt
+  | PosixChmodAt
+  | PosixUtimesAt
+  | PosixSetAttributesAt
+  | PosixSymlinkAt
+  | PosixReadlinkAt
+  | PosixFlock
+  | PosixGetDents
 
 (*
    Immutable nominal metadata carried through fixed-block lowering for field

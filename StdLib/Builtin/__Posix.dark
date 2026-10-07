@@ -1,0 +1,169 @@
+// __Posix.dark - Interpreter Builtin POSIX names over typed native primitives.
+module Builtin
+
+let posixGetcwd () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> = Stdlib.Cli.__Posix.__getCurrentDirectory ()
+
+let posixOpenFlag (name: String) : Int =
+    let mac = Stdlib.Cli.__Posix.__mac () in
+    if name == "rdonly" then 0
+    else if name == "wronly" then 1
+    else if name == "rdwr" then 2
+    else if name == "creat" then if mac then 512 else 64
+    else if name == "trunc" then if mac then 1024 else 512
+    else if name == "append" then if mac then 8 else 1024
+    else 0
+
+let posixOpen (path: String) (flags: Int) (mode: Int) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
+    match (Stdlib.Int.toInt64 flags, Stdlib.Int.toInt64 mode) with
+    | (Some flags, Some mode) ->
+        Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__intResult (Stdlib.Cli.__Posix.__openAt fd name (Stdlib.Int64.bitwiseOr flags (Stdlib.Cli.__Posix.__nofollow ())) mode))
+    | _ -> Error (Stdlib.Cli.__Posix.__error 22L)
+
+let posixFdRead (fd: Int) (count: Int) : Stdlib.Result.Result<Blob, Stdlib.Cli.Posix.Error> =
+    match (Stdlib.Int.toInt64 fd, Stdlib.Int.toInt64 count) with
+    | (Some fd, Some count) ->
+        if count < 0L || count > 2147483647L then Error (Stdlib.Cli.__Posix.__error 22L)
+        else
+            let ptr = __raw_alloc (if count == 0L then 1L else count) in
+            let rc = Stdlib.Cli.__Posix.__read fd ptr count in
+            let result = if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc)) else Ok (Stdlib.Cli.__Posix.__bufferBytes ptr 0L rc []) in
+            let _ = __raw_free ptr in
+            result
+    | _ -> Error (Stdlib.Cli.__Posix.__error 22L)
+
+let posixFdWrite (fd: Int) (blob: Blob) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
+    match Stdlib.Int.toInt64 fd with
+    | None -> Error (Stdlib.Cli.__Posix.__error 22L)
+    | Some fd ->
+        let length = Stdlib.Blob.__byteLength blob in
+        let ptr = __raw_alloc (if length == 0L then 1L else length) in
+        let result = Stdlib.Cli.__Posix.__writeFully fd ptr blob 0L in
+        let _ = __raw_free ptr in
+        result
+
+let posixFdSeek (fd: Int) (offset: Int) (whence: Int) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
+    match (Stdlib.Int.toInt64 fd, Stdlib.Int.toInt64 offset, Stdlib.Int.toInt64 whence) with
+    | (Some fd, Some offset, Some whence) -> Stdlib.Cli.__Posix.__intResult (Stdlib.Cli.__Posix.__seek fd offset whence)
+    | _ -> Error (Stdlib.Cli.__Posix.__error 22L)
+
+let posixFdClose (fd: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    match Stdlib.Int.toInt64 fd with
+    | Some fd -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__close fd)
+    | None -> Error (Stdlib.Cli.__Posix.__error 22L)
+
+let posixStat (path: String) : Stdlib.Result.Result<(Int * Int * Int), Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.__Posix.__withStat path Stdlib.Cli.__Posix.__statValues
+
+let posixChdir (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.__Posix.__withDirectory path (fun fd -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__chdir fd))
+
+let posixMkdir (path: String) (mode: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    match Stdlib.Int.toInt64 mode with
+    | None -> Error (Stdlib.Cli.__Posix.__error 22L)
+    | Some mode -> Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__mkdirAt fd name mode))
+
+let posixRmdir (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__unlinkAt fd name (if Stdlib.Cli.__Posix.__mac () then 128L else 512L)))
+
+let posixUnlink (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__unlinkAt fd name 0L))
+
+let posixRename (oldpath: String) (newpath: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.__Posix.__withEntry oldpath (fun fromFd fromName ->
+        Stdlib.Cli.__Posix.__withEntry newpath (fun toFd toName -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__renameAt fromFd fromName toFd toName)))
+
+let posixChmod (path: String) (mode: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    match Stdlib.Int.toInt64 mode with
+    | None -> Error (Stdlib.Cli.__Posix.__error 22L)
+    | Some mode ->
+        if Stdlib.Cli.__Posix.__mac () then
+            Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__chmodAt fd name mode 32L))
+        else Stdlib.Cli.__Posix.__metadataPath path (fun held -> Stdlib.Cli.__Posix.__withCString held (fun ptr -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__chmodAt (Stdlib.Cli.__Posix.__cwdFd ()) ptr mode 0L)))
+
+let posixUtimesNow (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    if Stdlib.Cli.__Posix.__mac () then
+        Stdlib.Cli.__Posix.__withEntry path (fun fd name ->
+            // Darwin's libc utimensat uses setattrlistat. Build its attrlist
+            // and modification/access times explicitly for the kernel ABI.
+            let attrs = __raw_alloc 24L in
+            let _ = __raw_write_word attrs 0L 412316860421L in
+            let _ = __raw_write_word attrs 8L 0L in
+            let _ = __raw_write_word attrs 16L 0L in
+            let times = __raw_alloc 32L in
+            let ticks = Stdlib.DateTime.__toUnixTimeTicks (Stdlib.DateTime.now ()) in
+            let seconds = ticks / 10000000L in
+            let nanos = (ticks % 10000000L) * 100L in
+            let _ = __raw_write_word times 0L seconds in
+            let _ = __raw_write_word times 8L nanos in
+            let _ = __raw_write_word times 16L seconds in
+            let _ = __raw_write_word times 24L nanos in
+            let result = Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__setAttributesAt fd name attrs times 32L 1L) in
+            let _ = __raw_free attrs in
+            let _ = __raw_free times in
+            result)
+    else Stdlib.Cli.__Posix.__metadataPath path (fun held -> Stdlib.Cli.__Posix.__withCString held (fun ptr ->
+        let times = __raw_alloc 32L in
+        let _ = __raw_write_word times 0L 0L in
+        let _ = __raw_write_word times 8L 1073741823L in
+        let _ = __raw_write_word times 16L 0L in
+        let _ = __raw_write_word times 24L 1073741823L in
+        let result = Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__utimesAt (Stdlib.Cli.__Posix.__cwdFd ()) ptr times 0L) in
+        let _ = __raw_free times in
+        result))
+
+let posixSymlink (target: String) (linkpath: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.__Posix.__withCString target (fun targetPtr ->
+        Stdlib.Cli.__Posix.__withEntry linkpath (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__symlinkAt targetPtr fd name)))
+
+let posixReadlink (path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.__Posix.__withEntry path (fun fd name ->
+        let buffer = __raw_alloc 4096L in
+        let rc = Stdlib.Cli.__Posix.__readlinkAt fd name buffer 4096L in
+        let result = if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc)) else Ok (Stdlib.Cli.__Posix.__bufferString buffer 0L rc) in
+        let _ = __raw_free buffer in
+        result)
+
+let posixMkstemp (prefix: String) : Stdlib.Result.Result<(Int * String), Stdlib.Cli.Posix.Error> = Stdlib.Cli.__Posix.__createUnique prefix 100L false
+let posixMkdtemp (prefix: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.__Posix.__createUnique prefix 100L true |> Stdlib.Result.map (fun pair -> let (_, path) = pair in path)
+
+let posixListDir (path: String) : Stdlib.Result.Result<List<String>, Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.__Posix.__withDirectory path (fun fd ->
+        let buffer = __raw_alloc 32768L in
+        let position = __raw_alloc 8L in
+        let _ = __raw_write_word position 0L 0L in
+        let result = Stdlib.Cli.__Posix.__listEntries fd buffer position [] in
+        let _ = __raw_free buffer in
+        let _ = __raw_free position in
+        result)
+
+let posixFlock (fd: Int) (exclusive: Bool) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    match Stdlib.Int.toInt64 fd with
+    | None -> Error (Stdlib.Cli.__Posix.__error 22L)
+    | Some fd -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__flock fd (if exclusive then 2L else 8L))
+
+let posixFileOwner (path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.__Posix.__withStat path (fun ptr ->
+        let uid = Stdlib.Cli.__Posix.__unsigned ptr (if Stdlib.Cli.__Posix.__mac () then 16L else if Stdlib.Cli.__Posix.__x64 () then 28L else 24L) 4L in
+        let uidText = Stdlib.Int64.toString uid in
+        match Stdlib.Cli.FileSystem.readFileAsString "/etc/passwd" with
+        | Ok contents -> Stdlib.Cli.__Posix.__owner (Stdlib.String.splitOnNewline contents) uidText
+        | Error _ -> uidText)
+
+let posixGetenv (name: String) : Stdlib.Option.Option<String> = Stdlib.Cli.Env.get name
+let posixSetenv (name: String) (value: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Env.set name value
+let posixUnsetenv (name: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Env.unset name
+let posixKill (pid: Int) (signal: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    match (Stdlib.Int.toInt64 pid, Stdlib.Int.toInt64 signal) with
+    | (Some pid, Some signal) -> Stdlib.Cli.__kill pid signal |> Stdlib.Result.mapError Stdlib.Cli.Posix.__error
+    | _ -> Error (Stdlib.Cli.__Posix.__error 22L)
+let timeSleep (delayMs: Float) : Unit = Stdlib.Cli.__sleep delayMs
+let posixUname () : Stdlib.Result.Result<(String * String * String), Stdlib.Cli.Posix.Error> =
+    match (Stdlib.Cli.Sys.os (), Stdlib.Cli.Sys.hostname (), Stdlib.Cli.Sys.arch ()) with
+    | (Ok os, Ok hostname, Ok arch) -> Ok (os, hostname, arch)
+    | (Error e, _, _) -> Error e
+    | (_, Error e, _) -> Error e
+    | (_, _, Error e) -> Error e
+
+let posixFnmatch (pattern: String) (str: String) (pathMode: Bool) : Bool =
+    Stdlib.Cli.__Fnmatch.__matches pattern str pathMode 0L 0L

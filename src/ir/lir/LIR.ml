@@ -154,6 +154,24 @@ type cliOperation =
   | SignalWait
   | MonotonicTime
   | SecureRandomFill
+  | PosixOpenAt
+  | PosixRead
+  | PosixWrite
+  | PosixClose
+  | PosixSeek
+  | PosixStatAt
+  | PosixGetCwd
+  | PosixChdir
+  | PosixMkdirAt
+  | PosixUnlinkAt
+  | PosixRenameAt
+  | PosixChmodAt
+  | PosixUtimesAt
+  | PosixSetAttributesAt
+  | PosixSymlinkAt
+  | PosixReadlinkAt
+  | PosixFlock
+  | PosixGetDents
 
 (*
    Basic block label (wrapper type for type safety)

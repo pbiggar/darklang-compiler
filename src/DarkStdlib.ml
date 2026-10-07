@@ -143,6 +143,28 @@ let fileIntrinsicModule : AST.moduleDef =
    Private socket syscalls. The Dark Network module converts signed errno
    results into typed values and owns the descriptors returned here.
 *)
+let posixIntrinsicModule : AST.moduleDef =
+  { AST.name = "Darklang.Stdlib.Cli.__Posix"; functions = [
+    fn "__openAt" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;
+    fn "__read" [] [ TInt64; TInternalRawPtr; TInt64 ] TInt64;
+    fn "__write" [] [ TInt64; TInternalRawPtr; TInt64 ] TInt64;
+    fn "__close" [] [ TInt64 ] TInt64;
+    fn "__seek" [] [ TInt64; TInt64; TInt64 ] TInt64;
+    fn "__statAt" [] [ TInt64; TInternalRawPtr; TInternalRawPtr; TInt64 ] TInt64;
+    fn "__getCwd" [] [ TInternalRawPtr; TInt64 ] TInt64;
+    fn "__chdir" [] [ TInt64 ] TInt64;
+    fn "__mkdirAt" [] [ TInt64; TInternalRawPtr; TInt64 ] TInt64;
+    fn "__unlinkAt" [] [ TInt64; TInternalRawPtr; TInt64 ] TInt64;
+    fn "__renameAt" [] [ TInt64; TInternalRawPtr; TInt64; TInternalRawPtr ] TInt64;
+    fn "__chmodAt" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;
+    fn "__utimesAt" [] [ TInt64; TInternalRawPtr; TInternalRawPtr; TInt64 ] TInt64;
+    fn "__setAttributesAt" [] [ TInt64; TInternalRawPtr; TInternalRawPtr; TInternalRawPtr; TInt64; TInt64 ] TInt64;
+    fn "__symlinkAt" [] [ TInternalRawPtr; TInt64; TInternalRawPtr ] TInt64;
+    fn "__readlinkAt" [] [ TInt64; TInternalRawPtr; TInternalRawPtr; TInt64 ] TInt64;
+    fn "__flock" [] [ TInt64; TInt64 ] TInt64;
+    fn "__getDents" [] [ TInt64; TInternalRawPtr; TInt64; TInternalRawPtr ] TInt64;
+  ] }
+
 let networkIntrinsicModule : AST.moduleDef =
   {
     AST.name = "Darklang.Stdlib.__Network";
@@ -339,6 +361,7 @@ let allModules =
     integerBitwiseModule "UInt64" TUInt64;
     floatIntrinsicModule;
     cliIntrinsicModule;
+    posixIntrinsicModule;
     fileIntrinsicModule;
     networkIntrinsicModule;
     randomModule;

@@ -1,0 +1,4 @@
+// __Error.dark - Convert the existing compiler host boundary's error record.
+module Darklang.Stdlib.Cli.Posix
+let __error (error: Stdlib.Cli.__NativePosixError) : Stdlib.Cli.Posix.Error =
+    Stdlib.Cli.__Posix.__error error.errno

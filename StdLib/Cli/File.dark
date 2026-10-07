@@ -1,115 +1,469 @@
-// Stdlib.Cli.File.dark - Portable path-pattern matching used by CLI workflows.
-// Ported from darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
-
+// Imported from darklang/dark v0.0.35.
 module Darklang.Stdlib.Cli.File
 
-let __segmentMatchesNoStar (pattern: String) (path: String) (patternIndex: Int64) (pathIndex: Int64) : Bool =
-    let patternLength = Stdlib.String.__byteLength pattern in
-    let pathLength = Stdlib.String.__byteLength path in
-    if patternIndex == patternLength then pathIndex == pathLength
-    else
-        let patternByte = Stdlib.String.__byteAtUnchecked pattern patternIndex in
-        if patternByte == 63L then
-            pathIndex < pathLength
-            && Stdlib.Cli.File.__segmentMatchesNoStar pattern path (patternIndex + 1L) (pathIndex + 1L)
-        else
-            pathIndex < pathLength
-            && patternByte == Stdlib.String.__byteAtUnchecked path pathIndex
-            && Stdlib.Cli.File.__segmentMatchesNoStar pattern path (patternIndex + 1L) (pathIndex + 1L)
 
-let __chunkMatchesAt (chunk: String) (path: String) (chunkIndex: Int64) (pathIndex: Int64) : Bool =
-    if chunkIndex == Stdlib.String.__byteLength chunk then true
-    else if pathIndex >= Stdlib.String.__byteLength path then false
-    else
-        let chunkByte = Stdlib.String.__byteAtUnchecked chunk chunkIndex in
-        let pathByte = Stdlib.String.__byteAtUnchecked path pathIndex in
-        (chunkByte == 63L || chunkByte == pathByte)
-        && Stdlib.Cli.File.__chunkMatchesAt chunk path (chunkIndex + 1L) (pathIndex + 1L)
+/// Delete a file.
+let delete (path: String) : Result.Result<Unit, Posix.Error> =
+  Posix.unlink path
 
-let __findChunk (chunk: String) (path: String) (pathIndex: Int64) : Int64 =
-    if pathIndex + Stdlib.String.__byteLength chunk > Stdlib.String.__byteLength path then -1L
-    else if Stdlib.Cli.File.__chunkMatchesAt (chunk ++ "") (path ++ "") 0L pathIndex then pathIndex
-    else Stdlib.Cli.File.__findChunk chunk path (pathIndex + 1L)
 
-let __allEmpty (parts: List<String>) : Bool =
-    match parts with
+/// Check if a file or directory exists at the given path.
+let exists (path: String) : Bool =
+  match Posix.stat path with
+  | Ok _ -> true
+  | Error _ -> false
+
+
+/// Get the size of a file in bytes.
+let size (path: String) : Result.Result<Int, Posix.Error> =
+  match Posix.stat path with
+  // Cleanup?
+  | Ok result -> Stdlib.Result.Result.Ok(result.size)
+  | Error e -> Stdlib.Result.Result.Error e
+
+
+/// Get the last modification time as Unix epoch seconds.
+let getModifiedTime (path: String) : Result.Result<Int, Posix.Error> =
+  match Posix.stat path with
+  | Ok result -> Stdlib.Result.Result.Ok result.mtimeSec
+  | Error e -> Stdlib.Result.Result.Error e
+
+
+/// Copy a file from src to dst, preserving permissions.
+let copy (src: String) (dst: String) : Result.Result<Unit, Posix.Error> =
+  (Posix.stat src)
+  |> Stdlib.Result.andThen (fun srcStat ->
+    let srcMode = Stdlib.Int.bitwiseAnd srcStat.mode 511
+
+    match Posix.openFile src (Posix.OpenFlags.rdonly ()) 0 with
+    | Ok srcFd ->
+      let readResult = Posix.fdReadAll srcFd []
+      let _ = Posix.fdClose srcFd
+
+      match readResult with
+      | Ok bytes ->
+        let flags =
+          Stdlib.Int.bitwiseOr
+            (Stdlib.Int.bitwiseOr
+              (Posix.OpenFlags.wronly ())
+              (Posix.OpenFlags.creat ()))
+            (Posix.OpenFlags.trunc ())
+
+        match Posix.openFile dst flags srcMode with
+        | Ok dstFd ->
+          let writeResult = Posix.fdWrite dstFd bytes
+          let _ = Posix.fdClose dstFd
+
+          match writeResult with
+          | Ok _ -> Stdlib.Result.Result.Ok()
+          | Error e -> Stdlib.Result.Result.Error e
+        | Error e -> Stdlib.Result.Result.Error e
+      | Error e -> Stdlib.Result.Result.Error e
+    | Error e -> Stdlib.Result.Result.Error e)
+
+
+/// Move or rename a file.
+let move (src: String) (dst: String) : Result.Result<Unit, Posix.Error> =
+  Posix.rename src dst
+
+
+/// Read the entire contents of a file as a Blob.
+let readBytes (path: String) : Result.Result<Blob, Posix.Error> =
+  match Posix.openFile path (Posix.OpenFlags.rdonly ()) 0 with
+  | Ok fd ->
+    let result = Posix.fdReadAll fd []
+
+    let _ = Posix.fdClose fd
+    result
+  | Error e -> Stdlib.Result.Result.Error e
+
+
+/// Read the entire contents of a file as a string.
+let readText (path: String) : Result.Result<String, Posix.Error> =
+  match Posix.openFile path (Posix.OpenFlags.rdonly ()) 0 with
+  | Ok fd ->
+    let result = Posix.fdReadAll fd []
+
+    let _ = Posix.fdClose fd
+
+    match result with
+    | Ok blob ->
+      match Stdlib.Blob.toString blob with
+      | Ok s -> Stdlib.Result.Result.Ok s
+      | Error msg ->
+        Stdlib.Result.Result.Error
+          (Posix.Error { errno = -1; message = $"File contents not valid UTF-8: {msg}" })
+    | Error e -> Stdlib.Result.Result.Error e
+  | Error e -> Stdlib.Result.Result.Error e
+
+
+/// Read the entire contents of a file as a list of lines.
+let readLines (path: String) : Result.Result<List<String>, Posix.Error> =
+  (readText path)
+  |> Stdlib.Result.map (fun text -> Stdlib.String.splitOnNewline text)
+
+
+let countNewlines (blob: Blob) : Int =
+  blob
+  |> Stdlib.Blob.toList
+  |> Stdlib.List.fold 0 (fun count byte ->
+    if byte == 10uy then count + 1 else count)
+
+
+let dropThroughFirstNewline (bytes: List<UInt8>) : List<UInt8> =
+  match bytes with
+  | [] -> []
+  | byte :: remaining ->
+    if byte == 10uy then remaining
+    else dropThroughFirstNewline remaining
+
+
+/// Read exactly `count` bytes from `fd`, or fewer only at end of file.
+///
+/// `Posix.fdRead` is one `read(2)` and may legally return fewer bytes than asked for. `readTailChunks`
+/// addresses the file by absolute offset, so a short read there would silently drop bytes out of the middle
+/// of the window and hand back lines that never existed. Loop instead. (`fdReadAll` above loops for the same
+/// reason.)
+let readFully
+  (fd: Int)
+  (count: Int)
+  (acc: List<Blob>)
+  : Result.Result<Blob, Posix.Error> =
+  if count <= 0 then
+    Stdlib.Result.Result.Ok(Stdlib.Blob.concat acc)
+  else
+    (Posix.fdRead fd count)
+    |> Stdlib.Result.andThen (fun chunk ->
+      let received = Stdlib.Blob.length chunk
+      if received == 0 then
+        // EOF: the file is shorter than the caller believed (it was truncated under us, say).
+        Stdlib.Result.Result.Ok(Stdlib.Blob.concat acc)
+      else
+        readFully fd (count - received) (Stdlib.List.append acc [ chunk ]))
+
+
+let readTailChunks
+  (fd: Int)
+  (cursor: Int)
+  (requiredNewlines: Int)
+  (foundNewlines: Int)
+  (chunks: List<Blob>)
+  : Result.Result<(Blob * Bool), Posix.Error> =
+  if cursor <= 0 || foundNewlines >= requiredNewlines then
+    Stdlib.Result.Result.Ok(
+      (Stdlib.Blob.concat chunks, cursor <= 0))
+  else
+    let chunkSize = 1024
+    let start = Stdlib.Int.max 0 (cursor - chunkSize)
+    let bytesToRead = cursor - start
+
+    (Posix.fdSeekFromStart fd start)
+    |> Stdlib.Result.andThen (fun _position ->
+      (readFully fd bytesToRead [])
+      |> Stdlib.Result.andThen (fun chunk ->
+        readTailChunks
+          fd
+          start
+          requiredNewlines
+          (foundNewlines + countNewlines chunk)
+          (Stdlib.List.push chunks chunk)))
+
+
+/// Read the last `count` lines without loading the whole file.
+let readLastLines
+  (path: String)
+  (count: Int)
+  : Result.Result<List<String>, Posix.Error> =
+  if count <= 0 then
+    Stdlib.Result.Result.Ok []
+  else
+    // Sampled before the open, so a file being appended to concurrently (the daemon log, which is the only
+    // caller) yields a slightly stale tail rather than the newest lines. Fine here; surprising elsewhere.
+    (size path)
+    |> Stdlib.Result.andThen (fun fileSize ->
+      match Posix.openFile path (Posix.OpenFlags.rdonly ()) 0 with
+      | Error e -> Stdlib.Result.Result.Error e
+      | Ok fd ->
+        let tailResult =
+          readTailChunks fd fileSize count 0 []
+        let _closed = Posix.fdClose fd
+
+        tailResult
+        |> Stdlib.Result.andThen (fun (blob, startedAtBeginning) ->
+          let bytes =
+            if startedAtBeginning then
+              Stdlib.Blob.toList blob
+            else
+              blob
+              |> Stdlib.Blob.toList
+              |> dropThroughFirstNewline
+
+          match
+            bytes
+            |> Stdlib.Blob.fromList
+            |> Stdlib.Blob.toString
+          with
+          | Error message ->
+            Stdlib.Result.Result.Error
+              (Posix.Error {
+                errno = -1
+                message = $"File contents not valid UTF-8: {message}"
+              })
+          | Ok text ->
+            let lines = Stdlib.String.splitOnNewline text
+            let total = Stdlib.List.length lines
+            if total <= count then
+              Stdlib.Result.Result.Ok lines
+            else
+              Stdlib.Result.Result.Ok
+                (Stdlib.List.drop lines (total - count))))
+
+
+/// Write text to a file, creating it if it doesn't exist or overwriting if it does.
+let writeText (path: String) (content: String) : Result.Result<Unit, Posix.Error> =
+  let flags =
+    Stdlib.Int.bitwiseOr
+      (Stdlib.Int.bitwiseOr
+        (Posix.OpenFlags.wronly ())
+        (Posix.OpenFlags.creat ()))
+      (Posix.OpenFlags.trunc ())
+
+  match Posix.openFile path flags Posix.Modes.defaultFile with
+  | Ok fd ->
+    let blob = Stdlib.String.toBlob content
+    let result = Posix.fdWrite fd blob
+
+    let _ = Posix.fdClose fd
+
+    match result with
+    | Ok _ -> Stdlib.Result.Result.Ok()
+    | Error e -> Stdlib.Result.Result.Error e
+  | Error e -> Stdlib.Result.Result.Error e
+
+
+/// Append text to a file, creating it if it doesn't exist.
+let appendText (path: String) (content: String) : Result.Result<Unit, Posix.Error> =
+  let flags =
+    Stdlib.Int.bitwiseOr
+      (Stdlib.Int.bitwiseOr
+        (Posix.OpenFlags.wronly ())
+        (Posix.OpenFlags.creat ()))
+      (Posix.OpenFlags.append ())
+
+  match Posix.openFile path flags Posix.Modes.defaultFile with
+  | Ok fd ->
+    let blob = Stdlib.String.toBlob content
+    let result = Posix.fdWrite fd blob
+
+    let _ = Posix.fdClose fd
+
+    match result with
+    | Ok _ -> Stdlib.Result.Result.Ok()
+    | Error e -> Stdlib.Result.Result.Error e
+  | Error e -> Stdlib.Result.Result.Error e
+
+
+/// Create a file if it doesn't exist, or update its modification time if it does.
+let touch (path: String) : Result.Result<Unit, Posix.Error> =
+  if exists path then
+    Posix.utimesNow path
+  else
+    let flags =
+      Stdlib.Int.bitwiseOr
+        (Posix.OpenFlags.wronly ())
+        (Posix.OpenFlags.creat ())
+
+    match Posix.openFile path flags Posix.Modes.defaultFile with
+    | Ok fd ->
+      let _ = Posix.fdClose fd
+      Stdlib.Result.Result.Ok()
+    | Error e -> Stdlib.Result.Result.Error e
+
+
+/// Set file permissions (e.g. 493 for 0755).
+let setPermissions (path: String) (mode: Int) : Result.Result<Unit, Posix.Error> =
+  Posix.chmod path mode
+
+
+/// Create a temporary file. Returns the path.
+let createTemp () : Result.Result<String, Posix.Error> =
+  let prefix =
+    match Env.get "TMPDIR" with
+    | Some t -> $"{t}/dark-tmp-"
+    | None -> "/tmp/dark-tmp-"
+
+  (Posix.mkstemp prefix)
+  |> Stdlib.Result.map (fun result ->
+    let _ = Posix.fdClose (Stdlib.Tuple2.first result)
+    Stdlib.Tuple2.second result)
+
+
+/// Create a symbolic link pointing to target.
+let createSymlink
+  (target: String)
+  (linkpath: String)
+  : Result.Result<Unit, Posix.Error> =
+  Posix.symlink target linkpath
+
+
+/// Read the target of a symbolic link.
+let readSymlink (path: String) : Result.Result<String, Posix.Error> =
+  Posix.readlink path
+
+
+/// Check if two files have identical contents (byte comparison).
+let areIdentical (path1: String) (path2: String) : Result.Result<Bool, Posix.Error> =
+  (readBytes path1)
+  |> Stdlib.Result.andThen (fun bytes1 ->
+    (readBytes path2)
+    |> Stdlib.Result.map (fun bytes2 -> bytes1 == bytes2))
+
+
+/// Read a file, apply a transformation function, and write it back.
+let transform
+  (path: String)
+  (fn: String -> String)
+  : Result.Result<Unit, Posix.Error> =
+  (readText path)
+  |> Stdlib.Result.andThen (fun content -> writeText path (fn content))
+
+
+/// Get the owner username of a file.
+let getOwner (path: String) : Result.Result<String, Posix.Error> =
+  Posix.fileOwner path
+
+
+/// Create a temporary file, pass its path to a function, then delete it.
+let withTemp (fn: String -> 'a) : Result.Result<'a, Posix.Error> =
+  (createTemp ())
+  |> Stdlib.Result.map (fun tmpPath ->
+    let result = fn tmpPath
+
+    match delete tmpPath with
+    | Ok _ -> ()
+    | Error e -> Log.warn $"withTemp: failed to clean up {tmpPath}: {e.message}"
+
+    result)
+
+
+/// Write content atomically: writes to a temp file in the same directory, then renames.
+let writeAtomic (path: String) (content: String) : Result.Result<Unit, Posix.Error> =
+  let dir = Path.parent path
+  let prefix = $"{dir}/.tmp-"
+
+  (Posix.mkstemp prefix)
+  |> Stdlib.Result.andThen (fun result ->
+    let fd = Stdlib.Tuple2.first result
+    let tmpPath = Stdlib.Tuple2.second result
+    let blob = Stdlib.String.toBlob content
+    let writeResult = Posix.fdWrite fd blob
+    let _ = Posix.fdClose fd
+
+    match writeResult with
+    | Ok _ -> Posix.rename tmpPath path
+    | Error e ->
+      let _ = Posix.unlink tmpPath
+      Stdlib.Result.Result.Error e)
+
+
+/// Run a function while holding an exclusive lock on a file.
+let withLock (path: String) (fn: Unit -> 'a) : Result.Result<'a, Posix.Error> =
+  let flags =
+    Stdlib.Int.bitwiseOr
+      (Posix.OpenFlags.wronly ())
+      (Posix.OpenFlags.creat ())
+
+  match Posix.openFile path flags Posix.Modes.defaultFile with
+  | Ok fd ->
+    match Posix.flock fd true with
+    | Ok _ ->
+      let result = fn ()
+      let _ = Posix.flock fd false
+      let _ = Posix.fdClose fd
+      Stdlib.Result.Result.Ok result
+    | Error e ->
+      let _ = Posix.fdClose fd
+      Stdlib.Result.Result.Error e
+  | Error e -> Stdlib.Result.Result.Error e
+
+
+/// Recursively match path segments against pattern segments.
+/// Pattern segments may include "**" which matches zero or more path segments.
+/// Other pattern segments are matched with fnmatch (pathMode=true).
+let globMatchSegments
+  (patternSegs: List<String>)
+  (pathSegs: List<String>)
+  : Bool =
+  match patternSegs with
+  | [] ->
+    match pathSegs with
     | [] -> true
-    | part :: rest -> part == "" && Stdlib.Cli.File.__allEmpty rest
-
-let __matchStarParts (parts: List<String>) (path: String) (pathIndex: Int64) (anchoredStart: Bool) (anchoredEnd: Bool) : Bool =
-    match parts with
-    | [] -> if anchoredEnd then pathIndex == Stdlib.String.__byteLength path else true
-    | part :: rest ->
-        if part == "" then
-            Stdlib.Cli.File.__matchStarParts rest path pathIndex false anchoredEnd
-        else
-            let found =
-                if anchoredStart then
-                    if Stdlib.Cli.File.__chunkMatchesAt (part ++ "") (path ++ "") 0L pathIndex then pathIndex else -1L
-                else Stdlib.Cli.File.__findChunk (part ++ "") (path ++ "") pathIndex in
-            if found < 0L then false
-            else
-                let nextIndex = found + Stdlib.String.__byteLength part in
-                if Stdlib.Cli.File.__allEmpty rest then
-                    if anchoredEnd then nextIndex == Stdlib.String.__byteLength path else true
-                else
-                    Stdlib.Cli.File.__matchStarParts rest path nextIndex false anchoredEnd
-
-let __segmentMatches (pattern: String) (path: String) (patternIndex: Int64) (pathIndex: Int64) : Bool =
-    match Stdlib.String.__byteIndexOf pattern "*" with
-    | None -> Stdlib.Cli.File.__segmentMatchesNoStar pattern path patternIndex pathIndex
-    | Some _ ->
-        let parts = Stdlib.String.split pattern "*" in
-        let anchoredStart = Stdlib.Bool.not (Stdlib.String.startsWith pattern "*") in
-        let anchoredEnd = Stdlib.Bool.not (Stdlib.String.endsWith pattern "*") in
-        Stdlib.Cli.File.__matchStarParts parts path pathIndex anchoredStart anchoredEnd
-
-let __copySegments (segments: List<String>) : List<String> =
-    match segments with
-    | [] -> []
-    | head :: tail -> Stdlib.List.push (Stdlib.Cli.File.__copySegments tail) (head ++ "")
-
-let globMatchSegments (patternSegments: List<String>) (pathSegments: List<String>) : Bool =
-    match patternSegments with
-    | [] -> Stdlib.List.length pathSegments == 0
-    | patternHead :: patternTail ->
-        if patternHead == "**" then
-            if Stdlib.Cli.File.globMatchSegments (Stdlib.Cli.File.__copySegments patternTail) (Stdlib.Cli.File.__copySegments pathSegments) then true
-            else
-                match pathSegments with
-                | [] -> false
-                | _pathHead :: pathTail ->
-                    Stdlib.Cli.File.globMatchSegments (Stdlib.Cli.File.__copySegments patternSegments) (Stdlib.Cli.File.__copySegments pathTail)
-        else
-            match pathSegments with
-            | [] -> false
-            | pathHead :: pathTail ->
-                Stdlib.Cli.File.__segmentMatches patternHead pathHead 0L 0L
-                && Stdlib.Cli.File.globMatchSegments patternTail pathTail
-
-let __tempError (errno: Int64) : Stdlib.Cli.Posix.Error =
-    let message =
-        if errno == 2L then "No such file or directory"
-        else if errno == 13L then "Permission denied"
-        else if errno == 17L then "File exists"
-        else if errno == 28L then "No space left on device"
-        else if errno == 36L then "File name too long"
-        else "Temporary file creation failed" in
-    Stdlib.Cli.Posix.Error { errno = Stdlib.Int.fromInt64 errno, message = message }
-
-let __createTempFrom (prefix: String) (attempts: Int64) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
-    if attempts == 0L then Error (Stdlib.Cli.File.__tempError 17L)
+    | _ -> false
+  | patHead :: patTail ->
+    if patHead == "**" then
+      // ** matches zero or more path segments.
+      // Try consuming 0 segments (match rest of pattern against current path),
+      // or skip one path segment and try again with ** still in the pattern.
+      (globMatchSegments patTail pathSegs)
+      || (match pathSegs with
+          | [] -> false
+          | _ :: pathTail -> globMatchSegments patternSegs pathTail)
     else
-        let path = prefix ++ Stdlib.Int64.toString (Stdlib.Int.__randomInt64Word ()) in
-        let errno = Stdlib.Cli.__createExclusive path in
-        if errno == 0L then Ok path
-        else if errno == 17L then Stdlib.Cli.File.__createTempFrom prefix (attempts - 1L)
-        else Error (Stdlib.Cli.File.__tempError errno)
+      match pathSegs with
+      | [] -> false
+      | pathHead :: pathTail ->
+        (Posix.fnmatch patHead pathHead true)
+        && (globMatchSegments patTail pathTail)
 
-/// Atomically create a private temporary file and return its path.
-let createTemp () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
-    let prefix =
-        match Stdlib.Cli.Env.get "TMPDIR" with
-        | Some directory -> directory ++ "/dark-tmp-"
-        | None -> "/tmp/dark-tmp-" in
-    Stdlib.Cli.File.__createTempFrom prefix 100L
+
+/// Find files matching a glob pattern under a base directory.
+/// Supports *, ?, and character classes.
+/// Use ** to match zero or more directories (e.g. "**/*.ts", "src/**/test/**/*.ts").
+let glob (basePath: String) (pattern: String) : Result.Result<List<String>, Posix.Error> =
+  let cleanBase = Path.stripTrailing basePath
+  let patternSegs = Stdlib.String.split pattern "/"
+
+  (Dir.walk cleanBase)
+  |> Stdlib.Result.map (fun allPaths ->
+    allPaths
+    |> Stdlib.List.filter (fun fullPath ->
+      let rel = Stdlib.String.dropFirst fullPath ((Stdlib.String.length cleanBase) + 1)
+      let pathSegs = Stdlib.String.split rel "/"
+      globMatchSegments patternSegs pathSegs))
+
+
+/// Watch a file for changes by polling its modification time.
+/// Calls the callback each time the file changes. Stops when shouldStop returns true.
+/// Returns Error if the file becomes inaccessible.
+let watchLoop
+  (path: String)
+  (intervalMs: Float)
+  (lastMtime: Int)
+  (shouldStop: Unit -> Bool)
+  (fn: Unit -> Unit)
+  : Result.Result<Unit, Posix.Error> =
+  if shouldStop () then
+    Stdlib.Result.Result.Ok()
+  else
+    let _ = Posix.sleep intervalMs
+
+    match getModifiedTime path with
+    | Ok newMtime ->
+      if newMtime != lastMtime then fn ()
+      else ()
+      watchLoop path intervalMs newMtime shouldStop fn
+    | Error e -> Stdlib.Result.Result.Error e
+
+
+/// Watch a file for changes by polling its modification time.
+/// Calls the callback each time the file changes. Stops when shouldStop returns true.
+/// Returns Error if the file becomes inaccessible.
+let watch
+  (path: String)
+  (intervalMs: Float)
+  (shouldStop: Unit -> Bool)
+  (fn: Unit -> Unit)
+  : Result.Result<Unit, Posix.Error> =
+  match getModifiedTime path with
+  | Ok mtime -> watchLoop path intervalMs mtime shouldStop fn
+  | Error e -> Stdlib.Result.Result.Error e
