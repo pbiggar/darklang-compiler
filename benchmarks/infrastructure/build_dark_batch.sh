@@ -33,7 +33,8 @@ if [[ ! -x "$COMPILER" ]]; then
     exit 1
 fi
 
-BATCH_ARGS=(--batch --quiet --)
+# Trusted benchmark inputs use the private positional-argument helper.
+BATCH_ARGS=(--batch --quiet --allow-internal --)
 OUTPUTS=()
 for benchmark in "${BENCHMARKS[@]}"; do
     source_path="$BENCHMARKS_DIR/problems/$benchmark/dark/main.dark"

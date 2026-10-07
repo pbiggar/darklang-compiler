@@ -74,7 +74,7 @@ def main() -> None:
 match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
 | Error _ -> Stdlib.printLine "CA read failed"
 | Ok pem ->
-  match Stdlib.Tls13Client.parsePemBundle pem with
+  match Stdlib.__Tls13Client.parsePemBundle pem with
   | Error message -> Stdlib.printLine message
   | Ok roots ->
     match Stdlib.HttpClient.streamTrustedWithRoots roots "GET" "https://localhost:{port}/" [] Stdlib.Blob.empty with

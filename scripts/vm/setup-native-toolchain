@@ -69,7 +69,9 @@ packages=()
 while IFS= read -r package; do
     case "$package" in ''|'#'*) ;; *) packages+=("$package");; esac
 done < "$repo/dependencies.lock"
-"$opam" install --switch=dark --yes --jobs=1 --no-depexts "${packages[@]}" > "$root/opam-dependencies.log" 2>&1
+# Retain build directories: restricted Work filesystems can leave extracted
+# entries visible during opam's recursive post-install cleanup.
+"$opam" install --switch=dark --yes --jobs=1 --no-depexts --keep-build-dir "${packages[@]}" > "$root/opam-dependencies.log" 2>&1
 python3 - "$root" "$prefix" <<'PY'
 from pathlib import Path
 import shlex

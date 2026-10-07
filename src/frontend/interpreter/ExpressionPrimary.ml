@@ -95,7 +95,7 @@ let parsePrimary grammar state index =
         | _ -> originalModules, originalFinal, afterTypes in
       let fullRange = span (rng state index) final.WT.range in
       let finalUpper = upperName final.WT.name in
-      let braceRecord = finalUpper && tok state next = TLBrace &&
+      let braceRecord = NameSyntax.isUpperIdentifier final.WT.name && tok state next = TLBrace &&
         (match tok state (next + 1), tok state (next + 2) with TRBrace, _ | TIdent _, TEquals -> true | _ -> false) in
       if modules = [] && final.WT.name = "Dict" && tok state next = TLBrace then
         ExpressionCollections.parseDict grammar.parseExpr state final.WT.range next

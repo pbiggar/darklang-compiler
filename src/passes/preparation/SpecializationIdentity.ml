@@ -69,14 +69,18 @@ let importSpecializedFunctions targetSymbols artifacts =
   let imported = match imported with [C.FunctionDef func] -> func | _ -> Crash.crash "Generic function import changed its top-level shape" in symbols, imported :: functions) (targetSymbols, []) artifacts in symbols, List.rev functions
 [@@warning "-4"]
 let mangleTypeVarName name = String.concat "$u" (String.split_on_char '_' name)
+(* Named types may contain __ namespace segments. Escape separators before
+   composing a specialization name so raw intrinsic recovery is lossless. *)
+let mangleNamedTypeName name =
+ String.concat "%5F" (String.split_on_char '_' (String.concat "%25" (String.split_on_char '%' name)))
 (* Convert a type to a string for name mangling *)
 let rec typeToMangledName = function
  | AST.TInt8 -> "i8" | AST.TInt16 -> "i16" | AST.TInt32 -> "i32" | AST.TInt64 -> "i64" | AST.TInt128 -> "i128" | AST.TInt -> "int"
  | AST.TUInt8 -> "u8" | AST.TUInt16 -> "u16" | AST.TUInt32 -> "u32" | AST.TUInt64 -> "u64" | AST.TUInt128 -> "u128" | AST.TBool -> "bool" | AST.TFloat64 -> "f64" | AST.TString -> "str" | AST.TBlob -> "blob" | AST.TChar -> "char" | AST.TDateTime -> "datetime" | AST.TUnit -> "unit" | AST.TNever -> "runtime_error"
  | AST.TFunction (params, ret) -> "fn_" ^ String.concat "_" (List.map typeToMangledName params) ^ "_to_" ^ typeToMangledName ret
  | AST.TTuple types -> "tup" ^ string_of_int (List.length types) ^ "_" ^ String.concat "_" (List.map typeToMangledName types)
- | AST.TRecord (name, []) | AST.TSum (name, []) -> name
- | AST.TRecord (name, args) | AST.TSum (name, args) -> name ^ "_" ^ String.concat "_" (List.map typeToMangledName args)
+ | AST.TRecord (name, []) | AST.TSum (name, []) -> mangleNamedTypeName name
+ | AST.TRecord (name, args) | AST.TSum (name, args) -> mangleNamedTypeName name ^ "_" ^ String.concat "_" (List.map typeToMangledName args)
  | AST.TList typ -> "list_" ^ typeToMangledName typ | AST.TStream typ -> "stream_" ^ typeToMangledName typ
  | AST.TDict (key, value) -> "dict_" ^ typeToMangledName key ^ "_" ^ typeToMangledName value
  | AST.TVar name -> mangleTypeVarName name (* Should not appear after monomorphization *)

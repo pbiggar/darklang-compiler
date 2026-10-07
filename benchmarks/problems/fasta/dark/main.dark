@@ -58,7 +58,7 @@ let makeRandomFasta (n: Int64) (table: List<(Int64 * Float)>) (seed: Int64) (i: 
 // 2n=200000 repeat, 3n=300000 random iub, 5n=500000 random homo
 
 let benchmarkArg (index: Int) : Int64 =
-    match Stdlib.Cli.Args.int64 index with
+    match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
     | Error message -> Builtin.testRuntimeError message
 

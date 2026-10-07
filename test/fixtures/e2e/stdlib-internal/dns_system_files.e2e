@@ -1,0 +1,4 @@
+// dns_system_files.e2e - Resolver configuration uses readable native file contents.
+
+Stdlib.Cli.FileSystem.readFileAsString "/etc/hosts" |> Stdlib.Result.map (fun contents -> contents != "") = Ok true
+Stdlib.__DnsWire.resolve "localhost" 1L |> Stdlib.Result.map (fun addresses -> Stdlib.List.length addresses > 0) = Ok true

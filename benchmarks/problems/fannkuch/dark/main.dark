@@ -93,7 +93,7 @@ let fannkuch (n: Int64) : Int64 =
 
 // The full profile runs the complete n=9 traversal in both Dark and Rust.
 let benchmarkArg (index: Int) : Int64 =
-    match Stdlib.Cli.Args.int64 index with
+    match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
     | Error message -> Builtin.testRuntimeError message
 

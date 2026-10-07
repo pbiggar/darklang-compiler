@@ -1,0 +1,109 @@
+// __HttpConnect.dark - Check resolved IP bytes before opening HTTP transport.
+
+module Darklang.Stdlib.__HttpConnect
+
+type CheckedAddress = { family: Int64, bytes: List<Int64> }
+
+type PolicyError = InvalidAddress | PrivateAddress
+
+type ConnectError = Policy of Stdlib.__HttpConnect.PolicyError | Transport of Int64
+
+let __validBytes (bytes: List<Int64>) : Bool =
+    match bytes with
+    | [] -> true
+    | byte :: rest ->
+        byte >= 0L && byte <= 255L && Stdlib.__HttpConnect.__validBytes rest
+
+let __valid4 (bytes: List<Int64>) : Bool =
+    Stdlib.List.length bytes == 4 && Stdlib.__HttpConnect.__validBytes bytes
+
+let __valid6 (bytes: List<Int64>) : Bool =
+    Stdlib.List.length bytes == 16 && Stdlib.__HttpConnect.__validBytes bytes
+
+let __private4 (bytes: List<Int64>) : Bool =
+    match bytes with
+    | [a, b, c, _] ->
+        a == 0L || a == 10L || a == 127L || a >= 224L ||
+        (a == 100L && b >= 64L && b <= 127L) ||
+        (a == 169L && b == 254L) ||
+        (a == 172L && b >= 16L && b <= 31L) ||
+        (a == 192L && (b == 168L || (b == 0L && c == 0L))) ||
+        (a == 198L && (b == 18L || b == 19L))
+    | _ -> true
+
+let __allZero (bytes: List<Int64>) : Bool =
+    match bytes with
+    | [] -> true
+    | byte :: rest -> byte == 0L && Stdlib.__HttpConnect.__allZero rest
+
+let __ipv4MappedPrivate (bytes: List<Int64>) : Bool =
+    match bytes with
+    | [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 255L, 255L, a, b, c, d] ->
+        Stdlib.__HttpConnect.__private4 [a, b, c, d]
+    | _ -> false
+
+let __private6 (bytes: List<Int64>) : Bool =
+    match bytes with
+    | a :: b :: rest ->
+        a == 255L || a >= 252L ||
+        (a == 254L && b >= 128L && b <= 191L) ||
+        (a == 0L && b == 0L && Stdlib.__HttpConnect.__allZero rest) ||
+        bytes == [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 1L] ||
+        Stdlib.__HttpConnect.__ipv4MappedPrivate bytes
+    | _ -> true
+
+let checkGuest4 (bytes: List<Int64>) : Stdlib.Result.Result<Stdlib.__HttpConnect.CheckedAddress, Stdlib.__HttpConnect.PolicyError> =
+    if Stdlib.Bool.not (Stdlib.__HttpConnect.__valid4 bytes) then Error Stdlib.__HttpConnect.PolicyError.InvalidAddress
+    else if Stdlib.__HttpConnect.__private4 bytes then Error Stdlib.__HttpConnect.PolicyError.PrivateAddress
+    else Ok (Stdlib.__HttpConnect.CheckedAddress { family = 4L, bytes = bytes })
+
+let checkGuest6 (bytes: List<Int64>) : Stdlib.Result.Result<Stdlib.__HttpConnect.CheckedAddress, Stdlib.__HttpConnect.PolicyError> =
+    if Stdlib.Bool.not (Stdlib.__HttpConnect.__valid6 bytes) then Error Stdlib.__HttpConnect.PolicyError.InvalidAddress
+    else if Stdlib.__HttpConnect.__private6 bytes then Error Stdlib.__HttpConnect.PolicyError.PrivateAddress
+    else Ok (Stdlib.__HttpConnect.CheckedAddress { family = 6L, bytes = bytes })
+
+let checkTrusted4 (bytes: List<Int64>) : Stdlib.Result.Result<Stdlib.__HttpConnect.CheckedAddress, Stdlib.__HttpConnect.PolicyError> =
+    if Stdlib.__HttpConnect.__valid4 bytes then
+        Ok (Stdlib.__HttpConnect.CheckedAddress { family = 4L, bytes = bytes })
+    else Error Stdlib.__HttpConnect.PolicyError.InvalidAddress
+
+let checkTrusted6 (bytes: List<Int64>) : Stdlib.Result.Result<Stdlib.__HttpConnect.CheckedAddress, Stdlib.__HttpConnect.PolicyError> =
+    if Stdlib.__HttpConnect.__valid6 bytes then
+        Ok (Stdlib.__HttpConnect.CheckedAddress { family = 6L, bytes = bytes })
+    else Error Stdlib.__HttpConnect.PolicyError.InvalidAddress
+
+let __connect4 (checked: Stdlib.Result.Result<Stdlib.__HttpConnect.CheckedAddress, Stdlib.__HttpConnect.PolicyError>)
+    (port: Int64) (timeoutMs: Int64)
+    : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Stdlib.__HttpConnect.ConnectError> =
+    match checked with
+    | Error policy -> Error (Stdlib.__HttpConnect.ConnectError.Policy policy)
+    | Ok address ->
+        match Stdlib.__Network.connectTcp4 address.bytes port timeoutMs with
+        | Error code -> Error (Stdlib.__HttpConnect.ConnectError.Transport code)
+        | Ok connection -> Ok connection
+
+let __connect6 (checked: Stdlib.Result.Result<Stdlib.__HttpConnect.CheckedAddress, Stdlib.__HttpConnect.PolicyError>)
+    (port: Int64) (timeoutMs: Int64)
+    : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Stdlib.__HttpConnect.ConnectError> =
+    match checked with
+    | Error policy -> Error (Stdlib.__HttpConnect.ConnectError.Policy policy)
+    | Ok address ->
+        match Stdlib.__Network.connectTcp6 address.bytes port timeoutMs with
+        | Error code -> Error (Stdlib.__HttpConnect.ConnectError.Transport code)
+        | Ok connection -> Ok connection
+
+let connectGuest4 (bytes: List<Int64>) (port: Int64) (timeoutMs: Int64)
+    : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Stdlib.__HttpConnect.ConnectError> =
+    Stdlib.__HttpConnect.__connect4 (Stdlib.__HttpConnect.checkGuest4 bytes) port timeoutMs
+
+let connectGuest6 (bytes: List<Int64>) (port: Int64) (timeoutMs: Int64)
+    : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Stdlib.__HttpConnect.ConnectError> =
+    Stdlib.__HttpConnect.__connect6 (Stdlib.__HttpConnect.checkGuest6 bytes) port timeoutMs
+
+let connectTrusted4 (bytes: List<Int64>) (port: Int64) (timeoutMs: Int64)
+    : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Stdlib.__HttpConnect.ConnectError> =
+    Stdlib.__HttpConnect.__connect4 (Stdlib.__HttpConnect.checkTrusted4 bytes) port timeoutMs
+
+let connectTrusted6 (bytes: List<Int64>) (port: Int64) (timeoutMs: Int64)
+    : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Stdlib.__HttpConnect.ConnectError> =
+    Stdlib.__HttpConnect.__connect6 (Stdlib.__HttpConnect.checkTrusted6 bytes) port timeoutMs

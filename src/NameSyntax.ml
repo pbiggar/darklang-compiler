@@ -24,6 +24,12 @@ let isStartCharacter unit = Text.isLetter unit || unit = 95
 let isContinueCharacter unit = Text.isLetter unit || Text.isDigit unit || unit = 95 || unit = 39
 let identifierText = function OrdinaryIdentifier text -> text | BlankIdentifier -> ""
 let identifierFromText text = if text = "" || text = "___" then BlankIdentifier else OrdinaryIdentifier text
+(* A private namespace retains its uppercase role after the reserved __ prefix.
+   Lowercase identifiers still leave .field to the postfix-expression parser. *)
+let isUpperIdentifier name =
+  let units = Text.scalars name in
+  let index = if Array.length units >= 2 && units.(0) = 95 && units.(1) = 95 then 2 else 0 in
+  Array.length units > index && Text.isUpper units.(index)
 let keywords = ["let", Keyword.Let; "val", Keyword.Val; "in", Keyword.In; "if", Keyword.If; "elif", Keyword.Elif;
   "then", Keyword.Then; "else", Keyword.Else; "type", Keyword.Type; "of", Keyword.Of; "match", Keyword.Match;
   "with", Keyword.With; "fun", Keyword.Fun; "when", Keyword.When; "true", Keyword.True; "false", Keyword.False; "_", Keyword.Underscore]

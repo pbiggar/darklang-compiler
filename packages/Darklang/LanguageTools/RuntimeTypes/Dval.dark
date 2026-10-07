@@ -1,0 +1,54 @@
+// Dval.dark - interpreter runtime value and pattern shapes used by error segments.
+
+module Darklang.LanguageTools.RuntimeTypes
+
+type LetPattern =
+  | LPVariable of Int32
+  | LPWildcard
+  | LPUnit
+  | LPTuple of LetPattern * LetPattern * List<LetPattern>
+
+type ApplicableNamedFn =
+  { name: Darklang.LanguageTools.RuntimeTypes.FQFnName.FQFnName,
+    typeArgs: List<Darklang.LanguageTools.RuntimeTypes.TypeReference>,
+    argsSoFar: List<Darklang.LanguageTools.RuntimeTypes.Dval> }
+
+type ApplicableLambda =
+  { exprId: UInt64,
+    closedRegisters: List<(Int32 * Darklang.LanguageTools.RuntimeTypes.Dval)>,
+    typeSymbolTable: Dict<String, Darklang.LanguageTools.RuntimeTypes.TypeReference>,
+    argsSoFar: List<Darklang.LanguageTools.RuntimeTypes.Dval> }
+
+type Applicable =
+  | AppLambda of ApplicableLambda
+  | AppNamedFn of ApplicableNamedFn
+
+type Dval =
+  | DUnit
+  | DBool of Bool
+  | DInt8 of Int8
+  | DUInt8 of UInt8
+  | DInt16 of Int16
+  | DUInt16 of UInt16
+  | DInt32 of Int32
+  | DUInt32 of UInt32
+  | DInt64 of Int64
+  | DUInt64 of UInt64
+  | DInt128 of Int128
+  | DUInt128 of UInt128
+  | DInt of Int
+  | DFloat of Float
+  | DChar of Char
+  | DString of String
+  | DDateTime of DateTime
+  | DUuid of Uuid
+  | DTuple of Dval * Dval * List<Dval>
+  | DList of ValueType * List<Dval>
+  | DDict of ValueType * ValueType * Dict<Dval, Dval>
+  | DRecord of Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName * Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName * List<ValueType> * Dict<String, Dval>
+  | DEnum of Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName * Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName * List<ValueType> * String * List<Dval>
+  | DApplicable of Applicable
+  | DDB of String
+  | DBlobPersistent of String * Int
+  | DBlobEphemeral of Uuid
+  | DStreamStub of ValueType

@@ -8,7 +8,7 @@ module K=SpecializationIdentity.SpecMap
 module F=SpecializationIdentity.FunctionSet
 module Specs=SpecializationIdentity.SpecSet
 let (let*)=Result.bind
-(* Load the stdlib and unicode_data.dark files.
+(* Parse the embedded standard-library sources, including Unicode tables.
    Returns validated interpreter source units in declaration order. *)
 let loadStdlib ()=
  let load (filename,text)=

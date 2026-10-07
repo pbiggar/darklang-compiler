@@ -101,7 +101,7 @@ let repeatRender (remaining: Int64) (spheres: List<Sphere>) (light: Vec3) (size:
     else repeatRender (remaining - 1L) spheres light size ((result + render spheres light size 0L 0L) % 1000000007L)
 
 let benchmarkArg (index: Int) : Int64 =
-    match Stdlib.Cli.Args.int64 index with
+    match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
     | Error message -> Builtin.testRuntimeError message
 

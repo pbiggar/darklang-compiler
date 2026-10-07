@@ -76,8 +76,12 @@ contract.
 The compiler supports integer `/` with truncation toward zero; the interpreter
 uses `/` for Float and named functions for integer division. Private native
 intrinsics and SkewList/HAMT helpers remain implementation details and require
-internal compilation mode. There are no intentionally retained public
-compiler-only standard-library functions, modules, or values.
+internal compilation mode. Compiler support source files use `__` filenames;
+these filenames do not enforce language visibility. The
+[complete source inventory](../compiler/library-sources.md) distinguishes
+interpreter packages, private fragments, native implementation modules, and
+existing compiler extensions such as `Cli.Args`. Source placement alone does
+not establish interpreter API parity.
 
 ## Intentional AOT differences
 

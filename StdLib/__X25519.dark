@@ -1,0 +1,249 @@
+// __X25519.dark - RFC 7748 Montgomery ladder over fixed 16-bit field limbs.
+
+module Darklang.Stdlib.__X25519
+
+// Every field value has exactly 16 little-endian limbs. Products and reduction
+// stay in Int64; no arbitrary-precision operation touches a private scalar.
+type Field = { limbs: List<Int64> }
+type KeyPair = { privateKey: Blob, publicKey: Blob }
+type LadderState = {
+  x2: Stdlib.__X25519.Field,
+  z2: Stdlib.__X25519.Field,
+  x3: Stdlib.__X25519.Field,
+  z3: Stdlib.__X25519.Field,
+  swap: Int64
+}
+
+let __at (limbs: List<Int64>) (index: Int64) : Int64 =
+  match Stdlib.List.getAt limbs (Stdlib.Int.fromInt64 index) with
+  | Some limb -> limb
+  | None -> Builtin.testRuntimeError "Invalid X25519 field shape"
+
+let __field (limbs: List<Int64>) : Stdlib.__X25519.Field =
+  Stdlib.__X25519.Field { limbs = limbs }
+
+let __constant (value: Int64) : Stdlib.__X25519.Field =
+  Stdlib.__X25519.__field (Stdlib.List.push (Stdlib.List.repeatUnsafe 15 0L) value)
+
+let __combine (left: Stdlib.__X25519.Field) (right: Stdlib.__X25519.Field)
+  (subtract: Bool) : Stdlib.__X25519.Field =
+  Stdlib.__X25519.__field
+    (Stdlib.List.map2shortest left.limbs right.limbs
+      (fun a b -> if subtract then a - b else a + b))
+
+let __add (left: Stdlib.__X25519.Field) (right: Stdlib.__X25519.Field)
+  : Stdlib.__X25519.Field =
+  Stdlib.__X25519.__combine left right false
+
+let __subtract (left: Stdlib.__X25519.Field) (right: Stdlib.__X25519.Field)
+  : Stdlib.__X25519.Field =
+  Stdlib.__X25519.__combine left right true
+
+let __convolution (left: List<Int64>) (right: List<Int64>)
+  (position: Int64) (index: Int64) (sum: Int64) : Int64 =
+  if index == 16L then sum
+  else
+    let other = position - index in
+    let next =
+      if other < 0L || other >= 16L then sum
+      else sum + Stdlib.__X25519.__at left index * Stdlib.__X25519.__at right other in
+    Stdlib.__X25519.__convolution left right position (index + 1L) next
+
+let __productLimbs (left: List<Int64>) (right: List<Int64>)
+  (index: Int64) (acc: List<Int64>) : List<Int64> =
+  if index == 16L then Stdlib.List.reverse acc
+  else
+    let low = Stdlib.__X25519.__convolution left right index 0L 0L in
+    let high =
+      if index == 15L then 0L
+      else 38L * Stdlib.__X25519.__convolution left right (index + 16L) 0L 0L in
+    Stdlib.__X25519.__productLimbs left right (index + 1L)
+      (Stdlib.List.push acc (low + high))
+
+let __carryLimbs (source: List<Int64>) (incoming: Int64)
+  (acc: List<Int64>) : List<Int64> =
+  match source with
+  | [] ->
+      match Stdlib.List.reverse acc with
+      | [] -> Builtin.testRuntimeError "Invalid X25519 field shape"
+      | head :: tail -> Stdlib.List.push tail (head + 38L * incoming)
+  | limb :: rest ->
+      let value = limb + incoming + 65536L in
+      let carry = (Stdlib.Int64.shiftRight value 16L) - 1L in
+      let normalized = Stdlib.Int64.bitwiseAnd value 65535L in
+      Stdlib.__X25519.__carryLimbs rest carry (Stdlib.List.push acc normalized)
+
+let __carry (value: Stdlib.__X25519.Field) : Stdlib.__X25519.Field =
+  Stdlib.__X25519.__field (Stdlib.__X25519.__carryLimbs value.limbs 0L [])
+
+let __multiply (left: Stdlib.__X25519.Field) (right: Stdlib.__X25519.Field)
+  : Stdlib.__X25519.Field =
+  let product = Stdlib.__X25519.__field
+                  (Stdlib.__X25519.__productLimbs left.limbs right.limbs 0L []) in
+  Stdlib.__X25519.__carry (Stdlib.__X25519.__carry product)
+
+let __square (value: Stdlib.__X25519.Field) : Stdlib.__X25519.Field =
+  Stdlib.__X25519.__multiply value value
+
+let __swapLimbs (left: List<Int64>) (right: List<Int64>)
+  (bit: Int64) (leftAcc: List<Int64>) (rightAcc: List<Int64>)
+  : (List<Int64> * List<Int64>) =
+  match (left, right) with
+  | ([], []) -> (Stdlib.List.reverse leftAcc, Stdlib.List.reverse rightAcc)
+  | (a :: restA, b :: restB) ->
+      let mask = 0L - bit in
+      let difference = Stdlib.Int64.bitwiseAnd mask (Stdlib.Int64.bitwiseXor a b) in
+      Stdlib.__X25519.__swapLimbs restA restB bit
+        (Stdlib.List.push leftAcc (Stdlib.Int64.bitwiseXor a difference))
+        (Stdlib.List.push rightAcc (Stdlib.Int64.bitwiseXor b difference))
+  | _ -> Builtin.testRuntimeError "Invalid X25519 field shape"
+
+let __swap (left: Stdlib.__X25519.Field) (right: Stdlib.__X25519.Field)
+  (bit: Int64) : (Stdlib.__X25519.Field * Stdlib.__X25519.Field) =
+  let (a, b) = Stdlib.__X25519.__swapLimbs left.limbs right.limbs bit [] [] in
+  (Stdlib.__X25519.__field a, Stdlib.__X25519.__field b)
+
+let __scalarByte (scalar: Blob) (index: Int64) : Int64 =
+  let byte = Stdlib.Blob.__getByte scalar index in
+  if index == 0L then Stdlib.Int64.bitwiseAnd byte 248L
+  else if index == 31L then
+    Stdlib.Int64.bitwiseOr (Stdlib.Int64.bitwiseAnd byte 127L) 64L
+  else byte
+
+let __scalarBit (scalar: Blob) (bit: Int64) : Int64 =
+  Stdlib.Int64.bitwiseAnd
+    (Stdlib.Int64.shiftRight
+      (Stdlib.__X25519.__scalarByte scalar (bit / 8L)) (bit % 8L)) 1L
+
+let __unpack (coordinate: Blob) (index: Int64)
+  (acc: List<Int64>) : Stdlib.__X25519.Field =
+  if index == 16L then Stdlib.__X25519.__field (Stdlib.List.reverse acc)
+  else
+    let value = Stdlib.Blob.__getByte coordinate (index * 2L) +
+                256L * Stdlib.Blob.__getByte coordinate (index * 2L + 1L) in
+    let limb = if index == 15L then Stdlib.Int64.bitwiseAnd value 32767L else value in
+    Stdlib.__X25519.__unpack coordinate (index + 1L) (Stdlib.List.push acc limb)
+
+let __ladder (scalar: Blob) (coordinate: Stdlib.__X25519.Field)
+  (bit: Int64) (state: Stdlib.__X25519.LadderState) : Stdlib.__X25519.LadderState =
+  if bit < 0L then
+    let (x2, x3) = Stdlib.__X25519.__swap state.x2 state.x3 state.swap in
+    let (z2, z3) = Stdlib.__X25519.__swap state.z2 state.z3 state.swap in
+    Stdlib.__X25519.LadderState { x2 = x2, z2 = z2, x3 = x3, z3 = z3, swap = 0L }
+  else
+    let scalarBit = Stdlib.__X25519.__scalarBit scalar bit in
+    let swapBit = Stdlib.Int64.bitwiseXor state.swap scalarBit in
+    let (x2, x3) = Stdlib.__X25519.__swap state.x2 state.x3 swapBit in
+    let (z2, z3) = Stdlib.__X25519.__swap state.z2 state.z3 swapBit in
+    let a = Stdlib.__X25519.__add x2 z2 in
+    let aa = Stdlib.__X25519.__square a in
+    let b = Stdlib.__X25519.__subtract x2 z2 in
+    let bb = Stdlib.__X25519.__square b in
+    let e = Stdlib.__X25519.__subtract aa bb in
+    let c = Stdlib.__X25519.__add x3 z3 in
+    let d = Stdlib.__X25519.__subtract x3 z3 in
+    let da = Stdlib.__X25519.__multiply d a in
+    let cb = Stdlib.__X25519.__multiply c b in
+    let sum = Stdlib.__X25519.__add da cb in
+    let difference = Stdlib.__X25519.__subtract da cb in
+    let next = Stdlib.__X25519.LadderState {
+      x2 = Stdlib.__X25519.__multiply aa bb,
+      z2 = Stdlib.__X25519.__multiply e
+             (Stdlib.__X25519.__add aa
+               (Stdlib.__X25519.__multiply (Stdlib.__X25519.__constant 121665L) e)),
+      x3 = Stdlib.__X25519.__square sum,
+      z3 = Stdlib.__X25519.__multiply coordinate (Stdlib.__X25519.__square difference),
+      swap = scalarBit } in
+    Stdlib.__X25519.__ladder scalar coordinate (bit - 1L) next
+
+let __invert (value: Stdlib.__X25519.Field) (bit: Int64)
+  (acc: Stdlib.__X25519.Field) : Stdlib.__X25519.Field =
+  if bit < 0L then acc
+  else
+    let squared = Stdlib.__X25519.__square acc in
+    let next =
+      if bit == 2L || bit == 4L then squared
+      else Stdlib.__X25519.__multiply squared value in
+    Stdlib.__X25519.__invert value (bit - 1L) next
+
+let __subtractPrime (source: List<Int64>) (index: Int64)
+  (borrow: Int64) (acc: List<Int64>) : (List<Int64> * Int64) =
+  match source with
+  | [] -> (Stdlib.List.reverse acc, borrow)
+  | limb :: rest ->
+      let primeLimb =
+        if index == 0L then 65517L
+        else if index == 15L then 32767L
+        else 65535L in
+      let difference = limb - primeLimb - borrow in
+      let nextBorrow = Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight difference 63L) 1L in
+      Stdlib.__X25519.__subtractPrime rest (index + 1L) nextBorrow
+        (Stdlib.List.push acc (Stdlib.Int64.bitwiseAnd difference 65535L))
+
+let __choose (original: List<Int64>) (candidate: List<Int64>)
+  (chooseCandidate: Int64) : List<Int64> =
+  Stdlib.List.map2shortest original candidate (fun old replacement ->
+    let mask = 0L - chooseCandidate in
+    Stdlib.Int64.bitwiseXor old
+      (Stdlib.Int64.bitwiseAnd mask (Stdlib.Int64.bitwiseXor old replacement)))
+
+let __reduce (source: List<Int64>) : List<Int64> =
+  let (candidate, borrow) = Stdlib.__X25519.__subtractPrime source 0L 0L [] in
+  Stdlib.__X25519.__choose source candidate (1L - borrow)
+
+let __packBytes (limbs: List<Int64>) (acc: List<Int64>) : Blob =
+  match limbs with
+  | [] -> Stdlib.Blob.__fromInt64List (Stdlib.List.reverse acc)
+  | limb :: rest ->
+      Stdlib.__X25519.__packBytes rest
+        (Stdlib.List.push (Stdlib.List.push acc (Stdlib.Int64.bitwiseAnd limb 255L))
+          (Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight limb 8L) 255L))
+
+let __pack (value: Stdlib.__X25519.Field) : Blob =
+  let carried = Stdlib.__X25519.__carry
+                  (Stdlib.__X25519.__carry (Stdlib.__X25519.__carry value)) in
+  Stdlib.__X25519.__packBytes
+    (Stdlib.__X25519.__reduce (Stdlib.__X25519.__reduce carried.limbs)) []
+
+let __orBytes (blob: Blob) (index: Int64) (acc: Int64) : Int64 =
+  if index == 32L then acc
+  else Stdlib.__X25519.__orBytes blob (index + 1L)
+         (Stdlib.Int64.bitwiseOr acc (Stdlib.Blob.__getByte blob index))
+
+let __multiplyPoint (scalar: Blob) (coordinate: Stdlib.__X25519.Field) : Blob =
+  let initial = Stdlib.__X25519.LadderState {
+    x2 = Stdlib.__X25519.__constant 1L,
+    z2 = Stdlib.__X25519.__constant 0L,
+    x3 = coordinate,
+    z3 = Stdlib.__X25519.__constant 1L,
+    swap = 0L } in
+  let result = Stdlib.__X25519.__ladder scalar coordinate 254L initial in
+  let inverse = Stdlib.__X25519.__invert result.z2 253L result.z2 in
+  Stdlib.__X25519.__pack (Stdlib.__X25519.__multiply result.x2 inverse)
+
+let publicKey (privateScalar: Blob) : Stdlib.Result.Result<Blob, String> =
+  if Stdlib.Blob.__byteLength privateScalar != 32L then
+    Error "X25519 scalar must be 32 bytes"
+  else Ok (Stdlib.__X25519.__multiplyPoint privateScalar (Stdlib.__X25519.__constant 9L))
+
+let sharedSecret (privateScalar: Blob) (peerPublicKey: Blob)
+  : Stdlib.Result.Result<Blob, String> =
+  if Stdlib.Blob.__byteLength privateScalar != 32L then
+    Error "X25519 scalar must be 32 bytes"
+  else if Stdlib.Blob.__byteLength peerPublicKey != 32L then
+    Error "X25519 public key must be 32 bytes"
+  else
+    let shared = Stdlib.__X25519.__multiplyPoint privateScalar
+                   (Stdlib.__X25519.__unpack peerPublicKey 0L []) in
+    if Stdlib.__X25519.__orBytes shared 0L 0L == 0L then
+      Error "X25519 shared secret is zero"
+    else Ok shared
+
+let generateKeyPair () : Stdlib.Result.Result<Stdlib.__X25519.KeyPair, String> =
+  match Stdlib.Crypto.secureRandomBytes 32L with
+  | Error message -> Error message
+  | Ok privateKey ->
+      match Stdlib.__X25519.publicKey privateKey with
+      | Error message -> Error message
+      | Ok publicKey ->
+          Ok (Stdlib.__X25519.KeyPair { privateKey = privateKey, publicKey = publicKey })

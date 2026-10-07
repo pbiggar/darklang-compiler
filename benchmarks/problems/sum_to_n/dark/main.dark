@@ -7,7 +7,7 @@ let repeat (n: Int64) (sumInput: Int64) (acc: Int64) : Int64 =
     else repeat (n - 1L) sumInput (sumTo sumInput 0L)
 
 let benchmarkArg (index: Int) : Int64 =
-    match Stdlib.Cli.Args.int64 index with
+    match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
     | Error message -> Builtin.testRuntimeError message
 

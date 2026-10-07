@@ -1,0 +1,33 @@
+// aes256_gcm.e2e - NIST AES-256-GCM empty-message vector and authentication boundary.
+
+(let key = Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000" in
+ let nonce = Stdlib.Blob.fromHex "000000000000000000000000" in
+ match (key, nonce) with
+ | (Ok k, Ok n) ->
+   Stdlib.__AesGcm.encrypt k n Stdlib.Blob.empty Stdlib.Blob.empty
+   |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "bad fixture")
+  = Ok "530F8AFBC74536B9A963B4F1C4CB738B"
+
+(let key = Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000" in
+ let nonce = Stdlib.Blob.fromHex "000000000000000000000000" in
+ let plaintext = Stdlib.Blob.fromHex "00000000000000000000000000000000" in
+ match (key, nonce, plaintext) with
+ | (Ok k, Ok n, Ok p) ->
+   Stdlib.__AesGcm.encrypt k n Stdlib.Blob.empty p
+   |> Stdlib.Result.map Stdlib.Blob.toHex
+ | _ -> Error "bad fixture")
+  = Ok "CEA7403D4D606B6E074EC5D3BAF39D18D0D1C8A799996BF0265B98B5D48AB919"
+
+(let key = Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000000000" in
+ let nonce = Stdlib.Blob.fromHex "000000000000000000000000" in
+ let valid = Stdlib.Blob.fromHex "CEA7403D4D606B6E074EC5D3BAF39D18D0D1C8A799996BF0265B98B5D48AB919" in
+ let tampered = Stdlib.Blob.fromHex "CEA7403D4D606B6E074EC5D3BAF39D18D0D1C8A799996BF0265B98B5D48AB918" in
+ match (key, nonce, valid, tampered) with
+ | (Ok k, Ok n, Ok sealed, Ok changed) ->
+   (Stdlib.__AesGcm.decrypt k n Stdlib.Blob.empty sealed
+    |> Stdlib.Result.map Stdlib.Blob.toHex,
+    Stdlib.__AesGcm.decrypt k n Stdlib.Blob.empty changed
+    |> Stdlib.Result.map Stdlib.Blob.toHex)
+ | _ -> (Error "bad fixture", Error "bad fixture"))
+  = (Ok "00000000000000000000000000000000", Error "AES-GCM authentication failed")

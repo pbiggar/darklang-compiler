@@ -34,7 +34,7 @@ let runApi (remaining: Int64) (left: String) (equal: String) (lengthMismatch: St
         runApi (remaining - 1L) left equal lengthMismatch firstMismatch lastMismatch next
 
 let benchmarkArg (index: Int) : Int64 =
-    match Stdlib.Cli.Args.int64 index with
+    match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
     | Error message -> Builtin.testRuntimeError message
 

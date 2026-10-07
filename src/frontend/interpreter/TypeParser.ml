@@ -3,9 +3,7 @@
 open Tokenizer
 open ParserSupport
 module WT = WrittenTypes
-let upperName name =
-  let units = Text.scalars name in
-  Array.length units > 0 && Text.isUpper units.(0)
+let upperName = NameSyntax.isUpperIdentifier
 let variable range name =
   let tick = { start = range.start; end_ = { range.start with column = range.start.column + 1 } } in
   let nameRange = { start = { range.start with column = range.start.column + 1 }; end_ = range.end_ } in

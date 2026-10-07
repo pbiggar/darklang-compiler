@@ -40,13 +40,6 @@ match Stdlib.Cli.Sys.hostname () with | Ok hostname -> Stdlib.String.length host
 
 match Stdlib.Cli.Sys.currentUser () with | Some user -> user | None -> "missing" = "native user  " env="LOGNAME=native user  " env="USER=native user  " env="PATH="
 
-// Arguments are positional (excluding the executable name) and parse failures
-// remain values at the public CLI boundary.
-match Stdlib.Cli.Args.int64 0 with | Ok value -> value | Error message -> Builtin.testRuntimeError message = 42L arg="42"
-match Stdlib.Cli.Args.int64 0 with | Ok value -> value | Error message -> Builtin.testRuntimeError message = stdout="42\n" stderr="" arg="42"
-
-match Stdlib.Cli.Args.int64 0 with | Error message -> message | Ok _ -> "unexpected" = "invalid Int64 command-line argument at index 0: twelve" arg="twelve"
-
 match Stdlib.Cli.Process.runIn "/" "pwd" [] with | Ok output -> Stdlib.String.trimEnd output.stdout | Error error -> error.message = "/" isolated=true
 
 match Stdlib.Cli.Process.runWithEnv "/bin/sh" (["-c", "printf %s \"$CLI_PARITY_VALUE\""]) ([("CLI_PARITY_VALUE", "inherited")]) with | Ok output -> output.stdout | Error error -> error = "inherited" isolated=true
@@ -87,3 +80,4 @@ match Stdlib.Cli.Host.getRuntimeHost () with | Ok _ -> true | Error _ -> false =
 match (Stdlib.Cli.Sys.hostname (), Stdlib.Cli.Sys.os (), Stdlib.Cli.Sys.arch ()) with | (Ok hostname, Ok os, Ok arch) -> Stdlib.String.length hostname > 0 && Stdlib.String.length os > 0 && Stdlib.String.length arch > 0 | _ -> false = true
 
 match Stdlib.Cli.Sys.currentUser () with | Some user -> Stdlib.String.length user > 0 | None -> false = true
+

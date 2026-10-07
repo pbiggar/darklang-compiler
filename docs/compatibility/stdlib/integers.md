@@ -14,9 +14,9 @@ Integration was revalidated after rebasing at exact compiler revision
 interpreter revision `I@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
 The comparison used a fresh checkout of the interpreter revision, not the DCB1
 report or only the copied fixtures. At that compiler revision, the public
-implementations are `stdlib/Int.dark`, `Int8.dark` through
+implementations are `StdLib/Int.dark`, `Int8.dark` through
 `UInt64.dark`, `Int128.dark`, and `UInt128.dark`; shared arbitrary-width
-primitives and checked conversions are in `stdlib/__Integer.dark`.
+primitives and checked conversions are in `StdLib/Int/__Integer.dark`.
 The matching behavioral probes are the eleven files under
 `test/fixtures/e2e/upstream/stdlib/ints` and `test/fixtures/e2e/int128-wrapping.e2e`.
 
@@ -43,7 +43,7 @@ zero. Their public modules intentionally have no random function, matching the
 pinned interpreter.
 
 The arbitrary-width implementation is in
-`stdlib/__Integer.dark`; public wrappers are in `Int.dark`, the
+`StdLib/Int/__Integer.dark`; public wrappers are in `Int.dark`, the
 eight fixed-width module files, `Int128.dark`, and `UInt128.dark`. The 128-bit
 modules perform limb arithmetic directly and use arbitrary-width values only
 at operations and conversions that require them. Typed representation views

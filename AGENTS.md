@@ -22,17 +22,10 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
   can inspect the repository before cloning; a checkout is needed for edits
   and verification.
 - Use `Dockerfile` and `dependencies.lock` as the toolchain sources of truth.
-  Bootstrap a minimal native environment with
-  `bash scripts/vm/setup-native-toolchain /absolute/writable/toolchains`, then
-  source that directory's `activate` file. This installs the pinned OCaml,
-  Dune and native prerequisites without changing system directories. The bootstrap
-  contains only the native compiler toolchain and its dependencies.
-- Keep downloads, opam state, build logs and a writable `TMPDIR` under that
-  toolchain directory. Build OCaml serially. Do not reuse incomplete downloads
-  or accept the compiler version without checking its Unix operations.
-- Build with `env -u LD_PRELOAD ./build --ai` and run the already-built suite
-  with `./run-tests --ai`. Run `dune runtest` for the additional regression
-  checks. The activation file supplies the VM-only temporary-path adapter.
+  Follow [ChatGPT Work VM setup](docs/contributing/work-vm-setup.md) for the
+  rootless bootstrap, activation, Unix smoke check, verification commands and
+  troubleshooting. Keep toolchains, downloads, opam state, build logs and
+  `TMPDIR` in the writable workspace; build OCaml serially.
 - Commit completed changes locally. The local macOS `./land` workflow is not
   configured in Work: report verification and handoff limitations explicitly,
   and use a GitHub branch/PR only when the user authorizes that handoff.
@@ -75,6 +68,15 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
 
 ## Dark conventions
 
+- Keep standard-library sources in the package directories documented in
+  [source organization](docs/compiler/source-organization.md#standard-library-layout).
+  Register new or moved paths in `library-sources.list`, preserving declaration
+  order. Prefix compiler-only support files and private fragments with `__`,
+  and update the [source inventory](docs/compiler/library-sources.md) against
+  the pinned interpreter, including nested modules. Filename prefixes do not
+  change language visibility. Sources are embedded at build time; do not add a
+  share installation or a runtime dependency on the source tree. Update
+  generators and source-path references when moving generated files.
 - Rely on type inference for module-scoped generic function and value uses.
   Do not write explicit type arguments such as `Stdlib.List.getAt<Int64>`
   unless inference is genuinely ambiguous and the explicit arguments are

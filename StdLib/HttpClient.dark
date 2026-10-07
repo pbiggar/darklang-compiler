@@ -1,0 +1,586 @@
+// HttpClient.dark - copied upstream pure HTTP client types and header helpers.
+
+module Darklang.Stdlib.HttpClient
+
+
+type BadHeader =
+  // Occurs whrn a header key is empty. eg. [ ("", "") ]
+  | EmptyKey
+  | InvalidContentType
+
+type BadUrlDetails =
+  /// Occurs when the URI scheme is not allowed. eg. "ftp://darklang.com"
+  | UnsupportedProtocol
+  /// Occurs when the host is not allowed. eg. "http://0"
+  | InvalidHost
+  /// Occurs when the URI does not conform to the format specified by RFC 2396. eg. "{ ] nonsense ^#( :"
+  | InvalidUri
+  /// Occurs when the request contains invalid headers. eg.A request to "http://google.com" with [("Metadata-Flavor", "Google")] header
+  | InvalidRequest
+
+type RequestError =
+  | BadUrl of Stdlib.HttpClient.BadUrlDetails
+  /// Occurs when the request is cancelled due to a timeout
+  | Timeout
+  | BadHeader of Stdlib.HttpClient.BadHeader
+  /// Occurs when there's an issue connecting to the endpoint or an I/O error. eg. network error, DNS failure, certifivate validation error, etc.
+  | NetworkError
+  /// Occurs when the request method is not invalid.
+  | BadMethod
+
+/// The response from a HTTP request
+type Response =
+  { statusCode: Int
+    headers: List<(String * String)>
+    body: Blob }
+
+
+/// A streaming HTTP response. Headers arrive immediately; `body` is a
+/// lazy `Stream<UInt8>` that pulls bytes as they arrive on the wire.
+/// The underlying HTTP response is released when the stream is
+/// drained to completion or `Stdlib.Stream.close`d.
+type StreamResponse =
+  { statusCode: Int
+    headers: List<(String * String)>
+    body: Stream<UInt8> }
+
+/// Returns an authorization header created using HTTP basic auth.
+let basicAuth
+  (username: String)
+  (password: String)
+  : Stdlib.Result.Result<(String * String), String> =
+  if Stdlib.String.contains username "-" then
+    Stdlib.Result.Result.Error "Username cannot contain a hyphen"
+  else
+    let encoded = Stdlib.String.base64Encode (username ++ ":" ++ password) in
+    Stdlib.Result.Result.Ok(("authorization", "basic " ++ encoded))
+
+/// Returns an authorization header carrying `token`.
+let bearerToken (token: String) : (String * String) =
+  ("authorization", ("bearer " ++ token))
+
+// A single HTTP/1.1 exchange owns one connection. Closing after each response
+// keeps EOF framing unambiguous and avoids sharing a socket across callers.
+let __transportError (code: Int64) : Stdlib.HttpClient.RequestError =
+  if code == 11L || code == 35L || code == 36L || code == 60L ||
+     code == 110L || code == 115L then Stdlib.HttpClient.RequestError.Timeout
+  else Stdlib.HttpClient.RequestError.NetworkError
+
+let __dnsError (error: Stdlib.__DnsWire.ResolveError) : Stdlib.HttpClient.RequestError =
+  match error with
+  | NetworkError code -> Stdlib.HttpClient.__transportError code
+  | _ -> Stdlib.HttpClient.RequestError.NetworkError
+
+let __connect4 (addresses: List<List<Int64>>) (port: Int64) (trusted: Bool)
+  (lastError: Stdlib.HttpClient.RequestError)
+  : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Stdlib.HttpClient.RequestError> =
+  match addresses with
+  | [] -> Error lastError
+  | address :: rest ->
+      let result =
+        if trusted then Stdlib.__HttpConnect.connectTrusted4 address port 1000L
+        else Stdlib.__HttpConnect.connectGuest4 address port 1000L in
+      match result with
+      | Ok connection -> Ok connection
+      | Error error ->
+          match error with
+          | Policy _ -> Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidHost)
+          | Transport code ->
+              Stdlib.HttpClient.__connect4 rest port trusted (Stdlib.HttpClient.__transportError code)
+
+let __connect6 (addresses: List<List<Int64>>) (port: Int64) (trusted: Bool)
+  (lastError: Stdlib.HttpClient.RequestError)
+  : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Stdlib.HttpClient.RequestError> =
+  match addresses with
+  | [] -> Error lastError
+  | address :: rest ->
+      let result =
+        if trusted then Stdlib.__HttpConnect.connectTrusted6 address port 1000L
+        else Stdlib.__HttpConnect.connectGuest6 address port 1000L in
+      match result with
+      | Ok connection -> Ok connection
+      | Error error ->
+          match error with
+          | Policy _ -> Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidHost)
+          | Transport code ->
+              Stdlib.HttpClient.__connect6 rest port trusted (Stdlib.HttpClient.__transportError code)
+
+let __connectDns6 (host: String) (port: Int64) (trusted: Bool)
+  (previous: Stdlib.HttpClient.RequestError)
+  : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Stdlib.HttpClient.RequestError> =
+  match Stdlib.__DnsWire.resolve host 28L with
+  | Ok addresses -> Stdlib.HttpClient.__connect6 addresses port trusted previous
+  | Error error ->
+      match previous with
+      | Timeout -> Error previous
+      | _ -> Error (Stdlib.HttpClient.__dnsError error)
+
+let __connectHost (host: String) (port: Int64) (trusted: Bool)
+  : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Stdlib.HttpClient.RequestError> =
+  let failure = Stdlib.HttpClient.RequestError.NetworkError in
+  if Stdlib.Bool.not trusted &&
+     (host == "localhost" || host == "metadata" ||
+      host == "metadata.google.internal" ||
+      (Stdlib.Bool.not (Stdlib.String.contains host ".") &&
+       Stdlib.Option.isNone (Stdlib.__DnsWire.ipv6 host))) then
+    Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidHost)
+  else
+    match Stdlib.__DnsWire.ipv4 host with
+    | Some address -> Stdlib.HttpClient.__connect4 [address] port trusted failure
+    | None ->
+        match Stdlib.__DnsWire.ipv6 host with
+        | Some address -> Stdlib.HttpClient.__connect6 [address] port trusted failure
+        | None ->
+            match Stdlib.__DnsWire.resolve host 1L with
+            | Ok addresses ->
+                match Stdlib.HttpClient.__connect4 addresses port trusted failure with
+                | Ok connection -> Ok connection
+                | Error error ->
+                    match error with
+                    | BadUrl _ -> Error error
+                    | _ -> Stdlib.HttpClient.__connectDns6 host port trusted error
+            | Error error ->
+                Stdlib.HttpClient.__connectDns6 host port trusted (Stdlib.HttpClient.__dnsError error)
+
+let __emptyHeader (headers: List<(String * String)>) : Bool =
+  match headers with
+  | [] -> false
+  | (name, _) :: rest -> name == "" || Stdlib.HttpClient.__emptyHeader rest
+
+let __connectionHeader (headers: List<(String * String)>) : Bool =
+  match headers with
+  | [] -> false
+  | (name, _) :: rest ->
+      Stdlib.String.toLowercase name == "connection" ||
+      Stdlib.HttpClient.__connectionHeader rest
+
+let __readResponse (connection: Stdlib.__Network.TcpConnection) (method: String)
+  (buffer: Blob) (informational: Int64)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  if Stdlib.Blob.__byteLength buffer > 104923136L then Error Stdlib.HttpClient.RequestError.NetworkError
+  else
+    match Stdlib.__HttpWire.parseResponse method false buffer with
+    | Ok parsed ->
+        if parsed.statusCode == 101L || informational > 8L then Error Stdlib.HttpClient.RequestError.NetworkError
+        else if parsed.statusCode < 200L then
+          Stdlib.HttpClient.__readResponse connection method parsed.remaining (informational + 1L)
+        else
+          Ok (Stdlib.HttpClient.Response {
+            statusCode = Stdlib.Int.fromInt64 parsed.statusCode,
+            headers = parsed.headers,
+            body = parsed.body })
+    | Error error ->
+        match error with
+        | Invalid _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+        | Incomplete ->
+            match Stdlib.__Network.readTcp connection 4096L with
+            | Error code -> Error (Stdlib.HttpClient.__transportError code)
+            | Ok chunk ->
+                if Stdlib.Blob.__byteLength chunk == 0L then
+                  match Stdlib.__HttpWire.parseResponse method true buffer with
+                  | Ok parsed ->
+                      if parsed.statusCode < 200L then Error Stdlib.HttpClient.RequestError.NetworkError
+                      else Ok (Stdlib.HttpClient.Response {
+                        statusCode = Stdlib.Int.fromInt64 parsed.statusCode,
+                        headers = parsed.headers,
+                        body = parsed.body })
+                  | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+                else
+                  Stdlib.HttpClient.__readResponse connection method
+                    (Stdlib.Blob.concat [buffer, chunk]) informational
+
+let __parseSecureResponse (method: String) (buffer: Blob) (informational: Int64)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  if informational > 8L then Error Stdlib.HttpClient.RequestError.NetworkError
+  else
+    match Stdlib.__HttpWire.parseResponse method true buffer with
+    | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+    | Ok parsed ->
+      if parsed.statusCode == 101L then Error Stdlib.HttpClient.RequestError.NetworkError
+      else if parsed.statusCode < 200L then
+        Stdlib.HttpClient.__parseSecureResponse method parsed.remaining (informational + 1L)
+      else Ok (Stdlib.HttpClient.Response {
+        statusCode = Stdlib.Int.fromInt64 parsed.statusCode,
+        headers = parsed.headers, body = parsed.body })
+
+let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
+  (method: String) (urlText: String)
+  (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  let normalizedMethod = Stdlib.String.toUppercase method in
+  if method == "" || Stdlib.Bool.not (Stdlib.__HttpWire.__tokenValid method 0L (Stdlib.String.__byteLength method)) then
+    Error Stdlib.HttpClient.RequestError.BadMethod
+  else
+    if Stdlib.HttpClient.__emptyHeader headers then
+      Error (Stdlib.HttpClient.RequestError.BadHeader Stdlib.HttpClient.BadHeader.EmptyKey)
+    else if Stdlib.HttpClient.__connectionHeader headers then
+      Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
+    else
+      match Stdlib.__HttpWire.parseUrl urlText with
+      | Error message ->
+          if message == "Unsupported URL scheme" ||
+             Stdlib.Bool.not (Stdlib.String.contains urlText "://") && urlText != "" &&
+             Stdlib.Bool.not (Stdlib.String.contains urlText " ") then
+            Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol)
+          else Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidUri)
+      | Ok url ->
+          if url.scheme != "http" && url.scheme != "https" then
+            Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol)
+          else
+            match Stdlib.__HttpWire.serializeRequest normalizedMethod url
+                    (headers @ [("Connection", "close")]) body with
+            | Error _ -> Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
+            | Ok requestBytes ->
+                match Stdlib.HttpClient.__connectHost url.host url.port trusted with
+                | Error error -> Error error
+                | Ok connection ->
+                    let result =
+                      if url.scheme == "https" then
+                        let trust =
+                          match roots with
+                          | None -> Stdlib.__Tls13Client.loadSystemRoots ()
+                          | Some provided -> Ok provided in
+                        match trust with
+                        | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+                        | Ok authorities ->
+                          match Stdlib.__Tls13Client.exchange connection url.host normalizedMethod
+                                  authorities requestBytes with
+                          | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+                          | Ok response -> Stdlib.HttpClient.__parseSecureResponse
+                                             normalizedMethod response 0L
+                      else
+                        match Stdlib.__Network.writeTcp connection requestBytes with
+                        | Error code -> Error (Stdlib.HttpClient.__transportError code)
+                        | Ok () -> Stdlib.HttpClient.__readResponse connection normalizedMethod Stdlib.Blob.empty 0L in
+                    let _ = Stdlib.__Network.closeTcp connection in
+                    result
+
+let request (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__request false None method url headers body
+
+let requestTrusted (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__request true None method url headers body
+
+// Explicit trust roots are useful for a private HTTPS service and local TLS peers.
+let requestTrustedWithRoots (roots: List<Blob>) (method: String) (url: String)
+  (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__request true (Some roots) method url headers body
+
+let get (url: String) (headers: List<(String * String)>)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.request "GET" url headers Stdlib.Blob.empty
+
+let post (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.request "POST" url headers body
+
+let put (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.request "PUT" url headers body
+
+let options (url: String)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.request "OPTIONS" url [] Stdlib.Blob.empty
+
+let delete (url: String)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.request "DELETE" url [] Stdlib.Blob.empty
+
+let head (url: String)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.request "HEAD" url [] Stdlib.Blob.empty
+
+type StreamTransport =
+  | Plain
+  | Secure of Stdlib.__Tls13Client.ApplicationState
+
+type StreamPhase =
+  | Finished
+  | FixedBytes of Int64
+  | UntilEof
+  | ChunkHeader
+  | ChunkBytes of Int64
+  | ChunkTail
+  | Trailers
+
+type StreamBodyState = {
+  connection: Stdlib.__Network.TcpConnection,
+  transport: Stdlib.HttpClient.StreamTransport,
+  buffer: Blob,
+  offset: Int64,
+  phase: Stdlib.HttpClient.StreamPhase,
+  total: Int64,
+  chunks: Int64
+}
+
+type StreamRead = {
+  bytes: Blob,
+  transport: Stdlib.HttpClient.StreamTransport
+}
+
+let __plainStreamRead (connection: Stdlib.__Network.TcpConnection)
+  : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.StreamRead>, Stdlib.HttpClient.RequestError> =
+  match Stdlib.__Network.readTcp connection 4096L with
+  | Error code -> Error (Stdlib.HttpClient.__transportError code)
+  | Ok bytes ->
+    if Stdlib.Blob.__byteLength bytes == 0L then Ok None
+    else Ok (Some (Stdlib.HttpClient.StreamRead {
+      bytes = bytes, transport = Stdlib.HttpClient.StreamTransport.Plain }))
+
+let __secureStreamRead (connection: Stdlib.__Network.TcpConnection)
+  (secure: Stdlib.__Tls13Client.ApplicationState)
+  : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.StreamRead>, Stdlib.HttpClient.RequestError> =
+  match Stdlib.__Tls13Client.readApplicationChunk connection secure with
+  | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+  | Ok result ->
+    match result with
+    | None -> Ok None
+    | Some ((bytes, next)) ->
+      Ok (Some (Stdlib.HttpClient.StreamRead {
+        bytes = bytes, transport = Stdlib.HttpClient.StreamTransport.Secure next }))
+
+let __streamRead (connection: Stdlib.__Network.TcpConnection)
+  (transport: Stdlib.HttpClient.StreamTransport)
+  : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.StreamRead>, Stdlib.HttpClient.RequestError> =
+  match transport with
+  | Plain -> Stdlib.HttpClient.__plainStreamRead connection
+  | Secure secure -> Stdlib.HttpClient.__secureStreamRead connection secure
+
+let __streamHead (connection: Stdlib.__Network.TcpConnection)
+  (transport: Stdlib.HttpClient.StreamTransport) (method: String)
+  (buffer: Blob) (informational: Int64)
+  : Stdlib.Result.Result<(Stdlib.__HttpWire.ParsedResponseHead * Stdlib.HttpClient.StreamTransport),
+                         Stdlib.HttpClient.RequestError> =
+  if Stdlib.Blob.__byteLength buffer > 65536L || informational > 8L then
+    Error Stdlib.HttpClient.RequestError.NetworkError
+  else
+    match Stdlib.__HttpWire.parseResponseHead method buffer with
+    | Ok head ->
+      if head.statusCode == 101L then Error Stdlib.HttpClient.RequestError.NetworkError
+      else if head.statusCode < 200L then
+        Stdlib.HttpClient.__streamHead connection transport method head.remaining
+          (informational + 1L)
+      else Ok ((head, transport))
+    | Error (Invalid _) -> Error Stdlib.HttpClient.RequestError.NetworkError
+    | Error Incomplete ->
+      match Stdlib.HttpClient.__streamRead connection transport with
+      | Error error -> Error error
+      | Ok None -> Error Stdlib.HttpClient.RequestError.NetworkError
+      | Ok (Some read) ->
+        Stdlib.HttpClient.__streamHead connection read.transport method
+          (Stdlib.Blob.concat [buffer, read.bytes]) informational
+
+let __streamState (previous: Stdlib.HttpClient.StreamBodyState)
+  (transport: Stdlib.HttpClient.StreamTransport) (buffer: Blob)
+  (offset: Int64) (phase: Stdlib.HttpClient.StreamPhase)
+  (total: Int64) (chunks: Int64) : Stdlib.HttpClient.StreamBodyState =
+  Stdlib.HttpClient.StreamBodyState {
+    connection = previous.connection, transport = transport, buffer = buffer,
+    offset = offset, phase = phase, total = total, chunks = chunks }
+
+let __streamAvailable (state: Stdlib.HttpClient.StreamBodyState) : Int64 =
+  Stdlib.Blob.__byteLength state.buffer - state.offset
+
+let __streamRemaining (state: Stdlib.HttpClient.StreamBodyState) : Blob =
+  Stdlib.Blob.slice state.buffer (Stdlib.Int.fromInt64 state.offset)
+    (Stdlib.Int.fromInt64 (Stdlib.HttpClient.__streamAvailable state))
+
+let __streamFetch (state: Stdlib.HttpClient.StreamBodyState)
+  : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.StreamBodyState>, String> =
+  match Stdlib.HttpClient.__streamRead state.connection state.transport with
+  | Error _ -> Error "HTTP response stream read failed"
+  | Ok None -> Ok None
+  | Ok (Some read) ->
+    Ok (Some (Stdlib.HttpClient.__streamState state read.transport
+      (Stdlib.Blob.concat [Stdlib.HttpClient.__streamRemaining state, read.bytes])
+      0L state.phase state.total state.chunks))
+
+let __streamByte (state: Stdlib.HttpClient.StreamBodyState) : UInt8 =
+  match Stdlib.UInt8.fromInt64 (Stdlib.Blob.__getByte state.buffer state.offset) with
+  | Some value -> value
+  | None -> Builtin.testRuntimeError "Invalid HTTP response byte"
+
+let __streamStep (state: Stdlib.HttpClient.StreamBodyState)
+  : Stdlib.Option.Option<(UInt8 * Stdlib.HttpClient.StreamBodyState)> =
+  match state.phase with
+  | Finished -> None
+  | FixedBytes remaining ->
+    if remaining == 0L then None
+    else if Stdlib.HttpClient.__streamAvailable state == 0L then
+      match Stdlib.HttpClient.__streamFetch state with
+      | Error message -> Builtin.testRuntimeError message
+      | Ok None -> Builtin.testRuntimeError "HTTP fixed-length response was truncated"
+      | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
+    else
+      let byte = Stdlib.HttpClient.__streamByte state in
+      let next = Stdlib.HttpClient.__streamState state state.transport state.buffer
+                   (state.offset + 1L) (FixedBytes (remaining - 1L))
+                   (state.total + 1L) state.chunks in
+      Some ((byte, next))
+  | UntilEof ->
+    if Stdlib.HttpClient.__streamAvailable state == 0L then
+      match Stdlib.HttpClient.__streamFetch state with
+      | Error message -> Builtin.testRuntimeError message
+      | Ok None -> None
+      | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
+    else if state.total >= 104857600L then
+      Builtin.testRuntimeError "HTTP body too large"
+    else
+      let byte = Stdlib.HttpClient.__streamByte state in
+      let next = Stdlib.HttpClient.__streamState state state.transport state.buffer
+                   (state.offset + 1L) UntilEof (state.total + 1L) state.chunks in
+      Some ((byte, next))
+  | ChunkHeader ->
+    if state.chunks >= 100000L then Builtin.testRuntimeError "Too many HTTP chunks"
+    else
+      match Stdlib.__HttpWire.__line (Stdlib.HttpClient.__streamRemaining state) 0L with
+      | Error (Invalid message) -> Builtin.testRuntimeError message
+      | Error Incomplete ->
+        if Stdlib.HttpClient.__streamAvailable state > 8192L then
+          Builtin.testRuntimeError "HTTP chunk header too long"
+        else
+          match Stdlib.HttpClient.__streamFetch state with
+          | Error message -> Builtin.testRuntimeError message
+          | Ok None -> Builtin.testRuntimeError "HTTP chunk header was truncated"
+          | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
+      | Ok ((line, afterLine)) ->
+        match Stdlib.__HttpWire.__chunkSize line with
+        | Error (Invalid message) -> Builtin.testRuntimeError message
+        | Error Incomplete -> Builtin.testRuntimeError "Invalid HTTP chunk size"
+        | Ok size ->
+          if size + state.total > 104857600L then Builtin.testRuntimeError "HTTP body too large"
+          else
+            let phase = if size == 0L then Trailers else ChunkBytes size in
+            Stdlib.HttpClient.__streamStep
+              (Stdlib.HttpClient.__streamState state state.transport state.buffer
+                (state.offset + afterLine) phase state.total (state.chunks + 1L))
+  | ChunkBytes remaining ->
+    if remaining == 0L then
+      Stdlib.HttpClient.__streamStep
+        (Stdlib.HttpClient.__streamState state state.transport state.buffer
+          state.offset ChunkTail state.total state.chunks)
+    else if Stdlib.HttpClient.__streamAvailable state == 0L then
+      match Stdlib.HttpClient.__streamFetch state with
+      | Error message -> Builtin.testRuntimeError message
+      | Ok None -> Builtin.testRuntimeError "HTTP chunk data was truncated"
+      | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
+    else
+      let byte = Stdlib.HttpClient.__streamByte state in
+      let next = Stdlib.HttpClient.__streamState state state.transport state.buffer
+                   (state.offset + 1L) (ChunkBytes (remaining - 1L))
+                   (state.total + 1L) state.chunks in
+      Some ((byte, next))
+  | ChunkTail ->
+    if Stdlib.HttpClient.__streamAvailable state < 2L then
+      match Stdlib.HttpClient.__streamFetch state with
+      | Error message -> Builtin.testRuntimeError message
+      | Ok None -> Builtin.testRuntimeError "HTTP chunk delimiter was truncated"
+      | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
+    else if Stdlib.Blob.__getByte state.buffer state.offset != 13L ||
+            Stdlib.Blob.__getByte state.buffer (state.offset + 1L) != 10L then
+      Builtin.testRuntimeError "Malformed HTTP chunk"
+    else
+      Stdlib.HttpClient.__streamStep
+        (Stdlib.HttpClient.__streamState state state.transport state.buffer
+          (state.offset + 2L) ChunkHeader state.total state.chunks)
+  | Trailers ->
+    match Stdlib.__HttpWire.__headers (Stdlib.HttpClient.__streamRemaining state) 0L 0L 0L [] with
+    | Ok _ -> None
+    | Error (Invalid message) -> Builtin.testRuntimeError message
+    | Error Incomplete ->
+      if Stdlib.HttpClient.__streamAvailable state > 65536L then
+        Builtin.testRuntimeError "HTTP trailers too large"
+      else
+        match Stdlib.HttpClient.__streamFetch state with
+        | Error message -> Builtin.testRuntimeError message
+        | Ok None -> Builtin.testRuntimeError "HTTP trailers were truncated"
+        | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
+
+let __streamDispose (state: Stdlib.HttpClient.StreamBodyState) : Unit =
+  Stdlib.__Network.closeTcp state.connection
+
+let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
+  (method: String) (urlText: String)
+  (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
+  let normalizedMethod = Stdlib.String.toUppercase method in
+  if method == "" || Stdlib.Bool.not (Stdlib.__HttpWire.__tokenValid method 0L (Stdlib.String.__byteLength method)) then
+    Error Stdlib.HttpClient.RequestError.BadMethod
+  else if Stdlib.HttpClient.__emptyHeader headers then
+    Error (Stdlib.HttpClient.RequestError.BadHeader Stdlib.HttpClient.BadHeader.EmptyKey)
+  else if Stdlib.HttpClient.__connectionHeader headers then
+    Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
+  else
+    match Stdlib.__HttpWire.parseUrl urlText with
+    | Error message ->
+      if message == "Unsupported URL scheme" ||
+         Stdlib.Bool.not (Stdlib.String.contains urlText "://") && urlText != "" &&
+         Stdlib.Bool.not (Stdlib.String.contains urlText " ") then
+        Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol)
+      else Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidUri)
+    | Ok url ->
+      match Stdlib.__HttpWire.serializeRequest normalizedMethod url
+              (headers @ [("Connection", "close")]) body with
+      | Error _ -> Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
+      | Ok requestBytes ->
+        match Stdlib.HttpClient.__connectHost url.host url.port trusted with
+        | Error error -> Error error
+        | Ok connection ->
+          let opened =
+            if url.scheme == "https" then
+              let trust = match roots with
+                          | Some provided -> Ok provided
+                          | None -> Stdlib.__Tls13Client.loadSystemRoots () in
+              match trust with
+              | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+              | Ok authorities ->
+                match Stdlib.__Tls13Client.beginExchange connection url.host authorities requestBytes with
+                | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+                | Ok secure -> Ok (Stdlib.HttpClient.StreamTransport.Secure secure)
+            else if url.scheme == "http" then
+              match Stdlib.__Network.writeTcp connection requestBytes with
+              | Error code -> Error (Stdlib.HttpClient.__transportError code)
+              | Ok () -> Ok Stdlib.HttpClient.StreamTransport.Plain
+            else Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol) in
+          match opened with
+          | Error error ->
+            let _ = Stdlib.__Network.closeTcp connection in
+            Error error
+          | Ok transport ->
+            match Stdlib.HttpClient.__streamHead connection transport normalizedMethod
+                    Stdlib.Blob.empty 0L with
+            | Error error ->
+              let _ = Stdlib.__Network.closeTcp connection in
+              Error error
+            | Ok ((head, nextTransport)) ->
+              let phase = match head.mode with
+                          | NoBody -> Stdlib.HttpClient.StreamPhase.Finished
+                          | Fixed length -> Stdlib.HttpClient.StreamPhase.FixedBytes length
+                          | Chunked -> Stdlib.HttpClient.StreamPhase.ChunkHeader
+                          | UntilClose -> Stdlib.HttpClient.StreamPhase.UntilEof in
+              let initial = Stdlib.HttpClient.StreamBodyState {
+                connection = connection, transport = nextTransport,
+                buffer = head.remaining, offset = 0L,
+                phase = phase, total = 0L, chunks = 0L } in
+              let stream = Stdlib.Stream.__fromProducer initial
+                             Stdlib.HttpClient.__streamStep
+                             Stdlib.HttpClient.__streamDispose in
+              Ok (Stdlib.HttpClient.StreamResponse {
+                statusCode = Stdlib.Int.fromInt64 head.statusCode,
+                headers = head.headers, body = stream })
+
+let stream (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__stream false None method url headers body
+
+let streamTrusted (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__stream true None method url headers body
+
+let streamTrustedWithRoots (roots: List<Blob>) (method: String) (url: String)
+  (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__stream true (Some roots) method url headers body

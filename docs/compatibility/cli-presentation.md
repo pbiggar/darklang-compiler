@@ -73,14 +73,14 @@ the ANF, MIR, and LIR definitions; intrinsic lowering lives in
 print instructions and participate in optimization, liveness, allocation, and
 IR printing as ordered effects.
 
-The root presentation source is `stdlib/Print.dark:3-15`, loaded immediately
+The root presentation source is `StdLib/Print.dark:3-15`, loaded immediately
 after List by `driver/StdlibCompilation.fs`. Its `printLines` composition uses
-the portable ordered recursion at `stdlib/List.dark:441-446`; no native list
+the portable ordered recursion at `StdLib/List.dark:441-446`; no native list
 traversal was added. The package load order is recorded in `CompilerLibrary.fs` and the
-adapted sources are `stdlib/CliColor.dark`, `CliLog.dark`, `CliProgress.dark`,
-`CliPrompt.dark`, `CliSpinner.dark`, and `CliTable.dark`. EGC measurement is
-routed through `stdlib/String.dark:419`; signed selection parsing is aligned at
-`stdlib/Int.dark:405`. Unit suppression is in
+adapted sources are `StdLib/Cli/UI/Colors.dark`, `StdLib/Cli/Log.dark`, `StdLib/Cli/UI/Progress.dark`,
+`StdLib/Cli/UI/Prompt.dark`, `StdLib/Cli/UI/Spinner.dark`, and `StdLib/Cli/UI/Table.dark`. EGC measurement is
+routed through `StdLib/String.dark:419`; signed selection parsing is aligned at
+`StdLib/Int.dark:405`. Unit suppression is in
 `passes/anf/PrintInsertion.fs`, and CLI execution is coordinated by
 `driver/Execution.fs` and `Program.fs`.
 

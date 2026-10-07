@@ -1,0 +1,89 @@
+// tls13_sha384_kdf.e2e - SHA-384 HKDF vectors for the AES-256-GCM TLS profile.
+
+(let salt = Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F" in
+ let ikm = Stdlib.Blob.fromHex "0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B" in
+ match (salt, ikm) with
+ | (Ok s, Ok i) -> Stdlib.__Tls13.hkdfExtract384 s i |> Stdlib.Blob.toHex
+ | _ -> "bad fixture")
+  = "9EC1ACCF6E69AF659370F3FDE47A6CCE33177DB448D4788EBF7A0AD44A171B6664DD69D9359E260653EF7099A93ECA74"
+
+(let prk = Stdlib.Blob.fromHex "9EC1ACCF6E69AF659370F3FDE47A6CCE33177DB448D4788EBF7A0AD44A171B6664DD69D9359E260653EF7099A93ECA74" in
+ match prk with
+ | Ok key -> Stdlib.__Tls13.hkdfExpand384 key (Stdlib.String.toBlob "dark tls sha384") 42L
+             |> Stdlib.Result.map Stdlib.Blob.toHex
+ | Error _ -> Error "bad fixture")
+  = Ok "1000115B73C016818B74A92B2E28468249557DFD7B6D0638FC7C425046DC0277026EDA588E357766F0B4"
+
+(let secret = Stdlib.Blob.fromHex "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000" in
+ match secret with
+ | Error _ -> Error "bad fixture"
+ | Ok s ->
+   match Stdlib.__Tls13.trafficKeys384 s with
+   | Error message -> Error message
+   | Ok keys ->
+     match Stdlib.__Tls13.sealRecord keys 23L (Stdlib.String.toBlob "sha384 record") with
+     | Error message -> Error message
+     | Ok sealed ->
+       match Stdlib.__Tls13.parseRecord sealed.bytes with
+       | Error _ -> Error "record parse failed"
+       | Ok record ->
+         Stdlib.__Tls13.openRecord keys record
+         |> Stdlib.Result.map (fun opened -> Stdlib.Blob.toHex opened.content))
+  = Ok "736861333834207265636F7264"
+
+(match Stdlib.Blob.fromHex "020000560303000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F00130200002E002B0002030400330024001D0020202122232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F" with
+ | Error _ -> Error (Stdlib.__Tls13.RecordError.Invalid "fixture")
+ | Ok bytes ->
+   match Stdlib.__Tls13.parseServerHello bytes with
+   | Error error -> Error error
+   | Ok hello -> Ok hello.cipherSuite)
+  = Ok 4866L
+
+(let shared = Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F"
+ let client = Stdlib.Blob.fromHex "01000000"
+ let server = Stdlib.Blob.fromHex "02000000"
+ match (shared, client, server) with
+ | (Ok secret, Ok ch, Ok sh) ->
+   match Stdlib.__Tls13Handshake.deriveHandshakeSecrets384 secret ch sh with
+   | Error message -> Error message
+   | Ok keys ->
+     match Stdlib.__Tls13Handshake.finishedVerifyData384 keys.server keys.transcript with
+     | Error message -> Error message
+     | Ok verify -> Ok ((Stdlib.Blob.toHex keys.client,
+                         Stdlib.Blob.toHex keys.server, Stdlib.Blob.toHex verify))
+ | _ -> Error "Invalid fixture")
+  = Ok (("9920E97799758A84BBFC01D12A78767487597B8F3704C2C6402428FDACE6E5693D01DCB0AC00F544AB8D772B4F94F701",
+         "24563691242DE0254AFFCF8DB190C1346F767E32A3111CCAEE4D30779E6200CEDC0FEA3DE404802E9E8877D178F50846",
+         "011317842A0590902C958734B8309A22D51A1D01B806B0C4335AF5D88454B149A08E2D9B8AFF2972AA1AB4232EBEF1DA"))
+
+(let transcript = Stdlib.Blob.fromHex "01000000" in
+ match transcript with
+ | Error _ -> "fixture"
+ | Ok bytes ->
+   let input = Stdlib.__Tls13Certificate.certificateVerifyInput384 bytes in
+   let hash = Stdlib.Blob.slice input 98 48 in
+   Stdlib.Blob.toHex hash)
+  = "7210AF19145EC2A8E250A7FE8E9EEEAC1301E524DAAB82366C36BE614DC35402A289101E48CAD61C45337F2F32C14FDC"
+
+(let shared = Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F"
+ let client = Stdlib.Blob.fromHex "01000000"
+ let server = Stdlib.Blob.fromHex "02000000"
+ match (shared, client, server) with
+ | (Ok secret, Ok ch, Ok sh) ->
+   match Stdlib.__Tls13Handshake.startServerFlightForSuite secret ch sh 4866L with
+   | Error message -> Error message
+   | Ok flight -> Ok ((flight.cipherSuite, Stdlib.Blob.length flight.serverKeys.key,
+                       Stdlib.Blob.length flight.serverHandshakeSecret))
+ | _ -> Error "Invalid fixture")
+  = Ok ((4866L, 32, 48))
+
+(let shared = Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F"
+ let client = Stdlib.Blob.fromHex "01000000"
+ let server = Stdlib.Blob.fromHex "02000000"
+ match (shared, client, server) with
+ | (Ok secret, Ok ch, Ok sh) ->
+   match Stdlib.__Tls13Handshake.startServerFlightForSuite secret ch sh 4868L with
+   | Error message -> Error message
+   | Ok _ -> Error "Unexpected cipher accepted"
+ | _ -> Error "Invalid fixture")
+  = Error "Unsupported TLS cipher suite"

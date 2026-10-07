@@ -1,0 +1,37 @@
+// ValueType.dark - Minimal canonical runtime value-type declarations in Dark syntax.
+
+module Darklang.LanguageTools.RuntimeTypes
+
+type KnownType =
+  | KTUnit
+  | KTBool
+  | KTInt8
+  | KTUInt8
+  | KTInt16
+  | KTUInt16
+  | KTInt32
+  | KTUInt32
+  | KTInt64
+  | KTUInt64
+  | KTInt128
+  | KTUInt128
+  | KTInt
+  | KTFloat
+  | KTChar
+  | KTString
+  | KTUuid
+  | KTDateTime
+  | KTBlob
+  | KTStream of Darklang.LanguageTools.RuntimeTypes.ValueType
+  | KTTuple of Darklang.LanguageTools.RuntimeTypes.ValueType * Darklang.LanguageTools.RuntimeTypes.ValueType * List<Darklang.LanguageTools.RuntimeTypes.ValueType>
+  | KTList of Darklang.LanguageTools.RuntimeTypes.ValueType
+  | KTDict of Darklang.LanguageTools.RuntimeTypes.ValueType * Darklang.LanguageTools.RuntimeTypes.ValueType
+  | KTFn of List<Darklang.LanguageTools.RuntimeTypes.ValueType> * Darklang.LanguageTools.RuntimeTypes.ValueType
+  | KTCustomType of
+    Darklang.LanguageTools.RuntimeTypes.FQTypeName.FQTypeName *
+    typeArgs: List<Darklang.LanguageTools.RuntimeTypes.ValueType>
+  | KTDB of Darklang.LanguageTools.RuntimeTypes.ValueType
+
+type ValueType =
+  | Unknown
+  | Known of Darklang.LanguageTools.RuntimeTypes.KnownType

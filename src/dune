@@ -1,8 +1,9 @@
 (include_subdirs unqualified)
 (rule
  (target EmbeddedStdlib.ml)
- (deps ../scripts/embed-stdlib.py (source_tree ../stdlib))
- (action (run python3 %{dep:../scripts/embed-stdlib.py} ../stdlib %{target})))
+ (deps ../scripts/embed-stdlib.py ../library-sources.list
+  (source_tree ../StdLib) (source_tree ../packages))
+ (action (run python3 %{dep:../scripts/embed-stdlib.py} .. %{target})))
 (rule
  (target BuildPlatform.ml)
  (action (with-stdout-to %{target}

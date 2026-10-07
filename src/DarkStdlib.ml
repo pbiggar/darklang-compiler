@@ -1,7 +1,7 @@
 (*
    DarkStdlib.ml - Standard Library Module Definitions
    Defines intrinsic Stdlib module signatures used directly by the compiler.
-   Non-intrinsic stdlib functions are loaded from stdlib/*.dark.
+   Non-intrinsic stdlib functions are embedded from library-sources.list.
 *)
 (* DarkStdlib.ml - Standard Library Module Definitions. *)
 open! AST
@@ -83,7 +83,7 @@ let fileIntrinsicModule : AST.moduleDef = {AST.name = "Darklang.Stdlib.File"; fu
    Private socket syscalls. The Dark Network module converts signed errno
    results into typed values and owns the descriptors returned here.
 *)
-let networkIntrinsicModule : AST.moduleDef = {AST.name = "Darklang.Stdlib.Network"; functions = [
+let networkIntrinsicModule : AST.moduleDef = {AST.name = "Darklang.Stdlib.__Network"; functions = [
   fn "__tcp4Socket" [] [] (TInt64);
   fn "__close" [] [TInt64] (TInt64);
 ]}

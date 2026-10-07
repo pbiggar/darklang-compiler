@@ -1,0 +1,7 @@
+// Private namespace parsing and access remain available to library tests.
+
+Stdlib.String.__Unicode.normalize "e\u0301" = Ok "é"
+let inspect (keys: Stdlib.__Tls13.TrafficKeys) : Int64 = keys.sequence in inspect (Stdlib.__Tls13.TrafficKeys { key = Stdlib.Blob.empty, iv = Stdlib.Blob.empty, sequence = 7L, cipherSuite = 0L }) = 7L
+Stdlib.__Tls13.RecordError.Invalid "hidden" = Stdlib.__Tls13.RecordError.Invalid "hidden"
+Stdlib.List.__TAG_EMPTY () = 0L
+Stdlib.List.length [Stdlib.__Tls13.TrafficKeys { key = Stdlib.Blob.empty, iv = Stdlib.Blob.empty, sequence = 7L, cipherSuite = 0L }] = 1

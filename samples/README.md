@@ -6,7 +6,7 @@ Build and run the standalone Dark program:
 
 ```sh
 ./build --ai
-./dark samples/http-fetch.dark -o /tmp/http-fetch
+./dark --allow-internal samples/internal/http-fetch.dark -o /tmp/http-fetch
 /tmp/http-fetch https://example.com/
 ```
 

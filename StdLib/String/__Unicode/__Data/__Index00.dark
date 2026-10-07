@@ -1,0 +1,95 @@
+// Stdlib.String.__Unicode.__Data generated lookup index shard.
+// DO NOT EDIT. Regenerate with scripts/generate_unicode_tables.py.
+
+module Darklang.Stdlib.String.__Unicode.__Data
+
+let __generalCategoryLookup (codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__generalCategoryLookupGroup0 codepoint with
+    | Some value -> Some value
+    | None ->
+        match Stdlib.String.__Unicode.__Data.__generalCategoryLookupGroup1 codepoint with
+        | Some value -> Some value
+        | None ->
+            match Stdlib.String.__Unicode.__Data.__generalCategoryLookupGroup2 codepoint with
+            | Some value -> Some value
+            | None ->
+                match Stdlib.String.__Unicode.__Data.__generalCategoryLookupGroup3 codepoint with
+                | Some value -> Some value
+                | None ->
+                    match Stdlib.String.__Unicode.__Data.__generalCategoryLookupGroup4 codepoint with
+                    | Some value -> Some value
+                    | None ->
+                        match Stdlib.String.__Unicode.__Data.__generalCategoryLookupGroup5 codepoint with
+                        | Some value -> Some value
+                        | None ->
+                            match Stdlib.String.__Unicode.__Data.__generalCategoryLookupGroup6 codepoint with
+                            | Some value -> Some value
+                            | None ->
+                                None
+
+let __uppercaseLookupGroup1 (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table58.__uppercaseChunk4 ()) 0L key 6L 25L valueIndex with
+    | Some value -> Some value
+    | None ->
+        match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table59.__uppercaseChunk5 ()) 0L key 6L 25L valueIndex with
+        | Some value -> Some value
+        | None ->
+            match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table60.__uppercaseChunk6 ()) 0L key 6L 25L valueIndex with
+            | Some value -> Some value
+            | None ->
+                match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table61.__uppercaseChunk7 ()) 0L key 6L 25L valueIndex with
+                | Some value -> Some value
+                | None ->
+                    None
+
+let __generalCategoryLookupGroup2 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table23.__generalCategoryChunk8 ()) 0L codepoint 14L with
+    | Some value -> Some value
+    | None ->
+        match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table24.__generalCategoryChunk9 ()) 0L codepoint 14L with
+        | Some value -> Some value
+        | None ->
+            match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table25.__generalCategoryChunk10 ()) 0L codepoint 14L with
+            | Some value -> Some value
+            | None ->
+                match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table26.__generalCategoryChunk11 ()) 0L codepoint 14L with
+                | Some value -> Some value
+                | None ->
+                    None
+
+let __lookupMappingValueIn (data: String) (index: Int64) (key: Int64) (keyWidth: Int64) (recordWidth: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    if index >= Stdlib.String.__byteLength data then None
+    else
+        let found = Stdlib.String.__Unicode.__Data.__hex data index keyWidth 0L in
+        if found == key then
+            let length = Stdlib.String.__Unicode.__Data.__hex data (index + keyWidth) 1L 0L in
+            if valueIndex < length then Some (Stdlib.String.__Unicode.__Data.__hex data (index + keyWidth + 1L + valueIndex * 6L) 6L 0L) else None
+        else if found > key then None
+        else Stdlib.String.__Unicode.__Data.__lookupMappingValueIn data (index + recordWidth) key keyWidth recordWidth valueIndex
+
+let __casedLookupGroup0 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table48.__casedChunk0 ()) 0L codepoint 14L with
+    | Some value -> Some value
+    | None ->
+        match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table49.__casedChunk1 ()) 0L codepoint 14L with
+        | Some value -> Some value
+        | None ->
+            None
+
+let __canonicalCompositionLookup (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__canonicalCompositionLookupGroup0 key valueIndex with
+    | Some value -> Some value
+    | None ->
+        match Stdlib.String.__Unicode.__Data.__canonicalCompositionLookupGroup1 key valueIndex with
+        | Some value -> Some value
+        | None ->
+            None
+
+let __casedLookup (codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__casedLookupGroup0 codepoint with
+    | Some value -> Some value
+    | None ->
+        None
+
+let isExtendedPictographic (codepoint: Int64) : Bool = Stdlib.Option.isSome (Stdlib.String.__Unicode.__Data.__extendedPictographicLookup codepoint)
+let isCased (codepoint: Int64) : Bool = Stdlib.Option.isSome (Stdlib.String.__Unicode.__Data.__casedLookup codepoint)
