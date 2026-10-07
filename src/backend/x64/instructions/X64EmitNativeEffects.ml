@@ -283,8 +283,8 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
             operation = LIR.SocketUdp4 || operation = LIR.SocketUdp6
           in
           let kind =
-            if isUdp then constants.Platform.datagramCloexec
-            else constants.Platform.streamCloexec
+            if isUdp then constants.Platform.datagramType
+            else constants.Platform.streamType
           in
           let protocol = if isUdp then 17L else 6L in
           Ok

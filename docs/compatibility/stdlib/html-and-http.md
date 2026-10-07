@@ -98,9 +98,10 @@ declared or chunked body receives 413 before the missing body bytes are read.
 
 This initial server is developed and verified on Linux ARM64. Linux native
 lowering also exists for x86_64, without a cross-target verification claim.
-macOS serving returns an explicit clock-unavailable error until the monotonic
-clock boundary is implemented there. The listener owns and closes accepted
-connections, and each response closes its connection. Reads and writes have
+macOS ARM64 lowering now reads Mach absolute ticks with their queried timebase,
+sets close-on-exec through `fcntl` after socket creation, and converts listener
+poll timeouts to Darwin milliseconds. Native macOS execution remains
+unverified. The listener owns and closes accepted connections, and each response closes its connection. Reads and writes have
 10-second monotonic deadlines; headers retain the existing wire parser's line,
 count, and size caps. Configured body limits range from zero through 100 MiB,
 and request wire buffering is capped at the body limit plus 1 MiB for framing.
